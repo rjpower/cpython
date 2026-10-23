@@ -1,0 +1,19 @@
+--- a/src/c/_cffi_backend.c
++++ b/src/c/_cffi_backend.c
+@@ -4518,8 +4518,14 @@
+         }
+         PyErr_Clear();
+ #endif
+-        if (!PyArg_ParseTuple(args, "et|i:load_library",
+-                     Py_FileSystemDefaultEncoding, &filename_or_null, &flags))
++        /* CPython 3.16 removed Py_FileSystemDefaultEncoding. */
++        PyObject *encoding = PyConfig_Get("filesystem_encoding");
++        if (encoding == NULL)
++            return NULL;
++        int parsed = PyArg_ParseTuple(args, "et|i:load_library",
++                     PyUnicode_AsUTF8(encoding), &filename_or_null, &flags);
++        Py_DECREF(encoding);
++        if (!parsed)
+             return NULL;
+         *p_printable_filename = PyUnicode_AsUTF8(s);
+         if (*p_printable_filename == NULL) {

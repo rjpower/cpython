@@ -17,3 +17,12 @@ Entries are appended in order; each milestone is also a commit.
   - Benchmark results go to `boil/bench/` as JSON plus a short summary.
 - Machine: 16 cores, 62 GiB, gcc 15.2. LLVM 21 runtime libs present but no
   `clang-21` binary; installing `clang-21 llvm-21` for the JIT baseline.
+- Ports tree landed (`ports/`, about 1000 lines of driver). Verbs: `build`,
+  `check`, `bench`. Six ports pass `check` against the baseline interpreter:
+  six, attrs, pycparser, markupsafe (C speedups), pyyaml (pure loader only,
+  no libyaml headers on the host), cffi (ABI mode). One patch so far: cffi
+  needs `PyConfig_Get("filesystem_encoding")` because 3.16 removed
+  `Py_FileSystemDefaultEncoding` (10 patch lines). Everything is keyed by
+  `abi_id` in `ports/sdk.json`, currently `cpython-3.16-refcnt-v0`.
+  Host has no OpenSSL headers, so the target interpreter has no `ssl`; the
+  host fetches `build_requires` wheels and the build venv installs offline.

@@ -1,0 +1,9 @@
+{
+  "name": "cpython",
+  "default_variant": "default",
+  "variants": {
+    "default": {"configure": []},
+    "jit": {"configure": ["--enable-experimental-jit"]},
+    "ft": {"configure": ["--disable-gil"]}
+  }
+}

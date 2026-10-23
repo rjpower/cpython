@@ -26,3 +26,10 @@ Entries are appended in order; each milestone is also a commit.
   `abi_id` in `ports/sdk.json`, currently `cpython-3.16-refcnt-v0`.
   Host has no OpenSSL headers, so the target interpreter has no `ssl`; the
   host fetches `build_requires` wheels and the build venv installs offline.
+- Design note `boil/design/02-tagged-values.md` landed. Decisions: JSC-style
+  NaN-boxing of `_PyStackRef` now (raw pointers, doubles offset by 2^49,
+  int32 at `0xFFFE_...`), inline floats in Phase 1, NaN stays boxed, value
+  identity for inline ints and floats, internal loop indices move to their
+  own region. Measured today's costs with `perf stat`: an int add is 164
+  instructions per iteration, a float add 130. Seven-step sequence with an
+  overhead gate at step 2. Coordinator decisions recorded in section 12.

@@ -48,9 +48,26 @@ extern "C" {
 
    Note that it is unsafe to borrow a _PyStackRef and then do normal
    CPython refcounting operations on it!
+
+  Tagged indices
+
+  A _PyStackRef can also hold an interpreter-internal index instead of an
+  object: the position of a virtual iterator in the FOR_ITER family
+  (null_or_index) and the saved lasti during exception unwinding. They are
+  created with PyStackRef_TagIndex(), read with PyStackRef_UntagIndex() and
+  tested with PyStackRef_IsTaggedIndex(). A tagged index is not a Python
+  object: it never reaches Python code, must not be converted to a
+  PyObject *, and is skipped by the GC. It is also distinct from the inline
+  Python ints planned in boil/design/02-tagged-values.md, which gives
+  indices and ints separate encodings.
+
+  For now a tagged index is encoded as (i << Py_TAGGED_SHIFT) | Py_INDEX_TAG,
+  in both the normal and the Py_STACKREF_DEBUG builds. Bit 0 is set, so in
+  the normal builds CLOSE and DUP skip it as they skip any reference whose
+  count is not on the object.
 */
 
-#define Py_INT_TAG 3
+#define Py_INDEX_TAG 3
 #define Py_TAG_INVALID 2
 #define Py_TAG_REFCNT 1
 #define Py_TAG_BITS 3
@@ -151,16 +168,16 @@ PyStackRef_IsNone(_PyStackRef ref)
 }
 
 static inline bool
-PyStackRef_IsTaggedInt(_PyStackRef ref)
+PyStackRef_IsTaggedIndex(_PyStackRef ref)
 {
-    return (ref.index & Py_TAG_BITS) == Py_INT_TAG;
+    return (ref.index & Py_TAG_BITS) == Py_INDEX_TAG;
 }
 
 static inline PyObject *
 _PyStackRef_AsPyObjectBorrow(_PyStackRef ref, const char *filename, int linenumber)
 {
     assert(!PyStackRef_IsError(ref));
-    assert(!PyStackRef_IsTaggedInt(ref));
+    assert(!PyStackRef_IsTaggedIndex(ref));
     _Py_stackref_record_borrow(ref, filename, linenumber);
     return _Py_stackref_get_object(ref);
 }
@@ -215,7 +232,7 @@ _PyStackRef_CLOSE(_PyStackRef ref, const char *filename, int linenumber)
 {
     assert(!PyStackRef_IsError(ref));
     assert(!PyStackRef_IsNull(ref));
-    if (PyStackRef_IsTaggedInt(ref)) {
+    if (PyStackRef_IsTaggedIndex(ref)) {
         return;
     }
     PyObject *obj = _Py_stackref_close(ref, filename, linenumber);
@@ -242,7 +259,7 @@ _PyStackRef_DUP(_PyStackRef ref, const char *filename, int linenumber)
 {
     assert(!PyStackRef_IsError(ref));
     assert(!PyStackRef_IsNull(ref));
-    if (PyStackRef_IsTaggedInt(ref)) {
+    if (PyStackRef_IsTaggedIndex(ref)) {
         return ref;
     }
     PyObject *obj = _Py_stackref_get_object(ref);
@@ -265,7 +282,7 @@ static inline _PyStackRef
 _PyStackRef_DupImmortal(_PyStackRef ref, const char *filename, int linenumber)
 {
     assert(!PyStackRef_IsError(ref));
-    assert(!PyStackRef_IsTaggedInt(ref));
+    assert(!PyStackRef_IsTaggedIndex(ref));
     assert(!PyStackRef_RefcountOnObject(ref));
     PyObject *obj = _Py_stackref_get_object(ref);
     assert(_Py_IsImmortal(obj));
@@ -278,7 +295,7 @@ _PyStackRef_CLOSE_SPECIALIZED(_PyStackRef ref, destructor destruct, const char *
 {
     assert(!PyStackRef_IsError(ref));
     assert(!PyStackRef_IsNull(ref));
-    assert(!PyStackRef_IsTaggedInt(ref));
+    assert(!PyStackRef_IsTaggedIndex(ref));
     PyObject *obj = _Py_stackref_close(ref, filename, linenumber);
     assert(Py_REFCNT(obj) > 0);
     if (PyStackRef_RefcountOnObject(ref)) {
@@ -292,7 +309,7 @@ _PyStackRef_Borrow(_PyStackRef ref, const char *filename, int linenumber)
 {
     assert(!PyStackRef_IsError(ref));
     assert(!PyStackRef_IsNull(ref));
-    if (PyStackRef_IsTaggedInt(ref)) {
+    if (PyStackRef_IsTaggedIndex(ref)) {
         return ref;
     }
     PyObject *obj = _Py_stackref_get_object(ref);
@@ -325,7 +342,7 @@ static inline bool
 PyStackRef_IsHeapSafe(_PyStackRef ref)
 {
     if ((ref.index & Py_TAG_BITS) != Py_TAG_REFCNT || PyStackRef_IsNull(ref)) {
-        // Tagged ints and ERROR are included.
+        // Tagged indices and ERROR are included.
         return true;
     }
 
@@ -367,17 +384,17 @@ _PyStackRef_FromPyObjectNewMortal(PyObject *obj, const char *filename, int linen
 
 extern int PyStackRef_Is(_PyStackRef a, _PyStackRef b);
 
-extern bool PyStackRef_IsTaggedInt(_PyStackRef ref);
+extern bool PyStackRef_IsTaggedIndex(_PyStackRef ref);
 
-extern intptr_t PyStackRef_UntagInt(_PyStackRef ref);
+extern intptr_t PyStackRef_UntagIndex(_PyStackRef ref);
 
-extern _PyStackRef PyStackRef_TagInt(intptr_t i);
+extern _PyStackRef PyStackRef_TagIndex(intptr_t i);
 
-/* Increments a tagged int, but does not check for overflow */
-extern _PyStackRef PyStackRef_IncrementTaggedIntNoOverflow(_PyStackRef ref);
+/* Increments a tagged index, but does not check for overflow */
+extern _PyStackRef PyStackRef_IncrementTaggedIndexNoOverflow(_PyStackRef ref);
 
 extern bool
-PyStackRef_IsNullOrInt(_PyStackRef ref);
+PyStackRef_IsNullOrIndex(_PyStackRef ref);
 
 #else
 
@@ -426,36 +443,36 @@ static inline bool
 PyStackRef_IsValid(_PyStackRef ref)
 {
     /* Invalid values are ERROR and NULL */
-    return ref.bits >= Py_INT_TAG;
+    return ref.bits > Py_TAG_INVALID;
 }
 
 static inline bool
-PyStackRef_IsTaggedInt(_PyStackRef i)
+PyStackRef_IsTaggedIndex(_PyStackRef i)
 {
-    return (i.bits & Py_TAG_BITS) == Py_INT_TAG;
+    return (i.bits & Py_TAG_BITS) == Py_INDEX_TAG;
 }
 
 static inline _PyStackRef
-PyStackRef_TagInt(intptr_t i)
+PyStackRef_TagIndex(intptr_t i)
 {
     assert(Py_ARITHMETIC_RIGHT_SHIFT(intptr_t, (intptr_t)(((uintptr_t)i) << Py_TAGGED_SHIFT),
                                      Py_TAGGED_SHIFT) == i);
-    return (_PyStackRef){ .bits = ((((uintptr_t)i) << Py_TAGGED_SHIFT) | Py_INT_TAG) };
+    return (_PyStackRef){ .bits = ((((uintptr_t)i) << Py_TAGGED_SHIFT) | Py_INDEX_TAG) };
 }
 
 static inline intptr_t
-PyStackRef_UntagInt(_PyStackRef i)
+PyStackRef_UntagIndex(_PyStackRef i)
 {
-    assert(PyStackRef_IsTaggedInt(i));
+    assert(PyStackRef_IsTaggedIndex(i));
     intptr_t val = (intptr_t)i.bits;
     return Py_ARITHMETIC_RIGHT_SHIFT(intptr_t, val, Py_TAGGED_SHIFT);
 }
 
 
 static inline _PyStackRef
-PyStackRef_IncrementTaggedIntNoOverflow(_PyStackRef ref)
+PyStackRef_IncrementTaggedIndexNoOverflow(_PyStackRef ref)
 {
-    assert((ref.bits & Py_TAG_BITS) == Py_INT_TAG); // Is tagged int
+    assert((ref.bits & Py_TAG_BITS) == Py_INDEX_TAG); // Is tagged index
     assert((ref.bits & (~Py_TAG_BITS)) != (INTPTR_MAX & (~Py_TAG_BITS))); // Isn't about to overflow
     return (_PyStackRef){ .bits = ref.bits + (1 << Py_TAGGED_SHIFT) };
 }
@@ -489,7 +506,7 @@ static const _PyStackRef PyStackRef_NULL = { .bits = PyStackRef_NULL_BITS };
 #define PyStackRef_IsNone(REF) ((REF).bits == (((uintptr_t)&_Py_NoneStruct) | Py_TAG_REFCNT))
 #endif
 
-#define PyStackRef_IsNullOrInt(stackref) (PyStackRef_IsNull(stackref) || PyStackRef_IsTaggedInt(stackref))
+#define PyStackRef_IsNullOrIndex(stackref) (PyStackRef_IsNull(stackref) || PyStackRef_IsTaggedIndex(stackref))
 
 #if defined(Py_DEBUG) && !defined(Py_GIL_DISABLED)
 
@@ -532,7 +549,7 @@ PyStackRef_RefcountOnObject(_PyStackRef ref)
 static inline PyObject *
 PyStackRef_AsPyObjectBorrow(_PyStackRef ref)
 {
-    assert(!PyStackRef_IsTaggedInt(ref));
+    assert(!PyStackRef_IsTaggedIndex(ref));
     return BITS_TO_PTR_MASKED(ref);
 }
 
@@ -547,7 +564,7 @@ static inline PyObject *
 PyStackRef_AsPyObjectSteal(_PyStackRef ref)
 {
     assert(!PyStackRef_IsNull(ref));
-    assert(!PyStackRef_IsTaggedInt(ref));
+    assert(!PyStackRef_IsTaggedIndex(ref));
     if (PyStackRef_RefcountOnObject(ref)) {
         return BITS_TO_PTR(ref);
     }
@@ -740,9 +757,6 @@ PyStackRef_XCLOSE(_PyStackRef ref)
 
 static inline PyTypeObject *
 PyStackRef_TYPE(_PyStackRef stackref) {
-    if (PyStackRef_IsTaggedInt(stackref)) {
-        return &PyLong_Type;
-    }
     return Py_TYPE(PyStackRef_AsPyObjectBorrow(stackref));
 }
 
@@ -755,7 +769,7 @@ PyStackRef_TYPE(_PyStackRef stackref) {
 #define STACKREF_CHECK_FUNC(T) \
     static inline bool \
     PyStackRef_ ## T ## Check(_PyStackRef stackref) { \
-        if (PyStackRef_IsTaggedInt(stackref)) { \
+        if (PyStackRef_IsTaggedIndex(stackref)) { \
             return false; \
         } \
         return Py ## T ## _Check(PyStackRef_AsPyObjectBorrow(stackref)); \
@@ -770,9 +784,6 @@ STACKREF_CHECK_FUNC(Function)
 static inline bool
 PyStackRef_LongCheck(_PyStackRef stackref)
 {
-    if (PyStackRef_IsTaggedInt(stackref)) {
-        return true;
-    }
     return PyLong_Check(PyStackRef_AsPyObjectBorrow(stackref));
 }
 
@@ -855,7 +866,7 @@ _Py_TryXGetStackRef(PyObject **src, _PyStackRef *out)
 // Like Py_VISIT but for _PyStackRef fields
 #define _Py_VISIT_STACKREF(ref)                                         \
     do {                                                                \
-        if (!PyStackRef_IsNullOrInt(ref)) {                             \
+        if (!PyStackRef_IsNullOrIndex(ref)) {                           \
             int vret = _PyGC_VisitStackRef(&(ref), visit, arg);         \
             if (vret)                                                   \
                 return vret;                                            \

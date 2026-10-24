@@ -268,30 +268,30 @@ _Py_stackref_report_leaks(PyInterpreterState *interp)
     }
 }
 
-_PyStackRef PyStackRef_TagInt(intptr_t i)
+_PyStackRef PyStackRef_TagIndex(intptr_t i)
 {
     assert(Py_ARITHMETIC_RIGHT_SHIFT(intptr_t, (i << Py_TAGGED_SHIFT), Py_TAGGED_SHIFT) == i);
-    return (_PyStackRef){ .index = (i << Py_TAGGED_SHIFT) | Py_INT_TAG };
+    return (_PyStackRef){ .index = (i << Py_TAGGED_SHIFT) | Py_INDEX_TAG };
 }
 
 intptr_t
-PyStackRef_UntagInt(_PyStackRef i)
+PyStackRef_UntagIndex(_PyStackRef i)
 {
-    assert(PyStackRef_IsTaggedInt(i));
+    assert(PyStackRef_IsTaggedIndex(i));
     intptr_t val = (intptr_t)i.index;
     return Py_ARITHMETIC_RIGHT_SHIFT(intptr_t, val, Py_TAGGED_SHIFT);
 }
 
 bool
-PyStackRef_IsNullOrInt(_PyStackRef ref)
+PyStackRef_IsNullOrIndex(_PyStackRef ref)
 {
-    return PyStackRef_IsNull(ref) || PyStackRef_IsTaggedInt(ref);
+    return PyStackRef_IsNull(ref) || PyStackRef_IsTaggedIndex(ref);
 }
 
 _PyStackRef
-PyStackRef_IncrementTaggedIntNoOverflow(_PyStackRef ref)
+PyStackRef_IncrementTaggedIndexNoOverflow(_PyStackRef ref)
 {
-    assert(PyStackRef_IsTaggedInt(ref));
+    assert(PyStackRef_IsTaggedIndex(ref));
     assert((ref.index & (~Py_TAG_BITS)) != (INTPTR_MAX & (~Py_TAG_BITS))); // Isn't about to overflow
     return (_PyStackRef){ .index = ref.index + (1 << Py_TAGGED_SHIFT) };
 }

@@ -6386,7 +6386,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
-                assert(PyStackRef_IsTaggedInt(null_or_index));
+                assert(PyStackRef_IsTaggedIndex(null_or_index));
                 #ifdef Py_GIL_DISABLED
                 if (!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
@@ -6403,8 +6403,8 @@
                 PyObject *list_o = PyStackRef_AsPyObjectBorrow(iter);
                 assert(Py_TYPE(list_o) == &PyList_Type);
                 STAT_INC(FOR_ITER, hit);
-                if ((size_t)PyStackRef_UntagInt(null_or_index) >= (size_t)PyList_GET_SIZE(list_o)) {
-                    null_or_index = PyStackRef_TagInt(-1);
+                if ((size_t)PyStackRef_UntagIndex(null_or_index) >= (size_t)PyList_GET_SIZE(list_o)) {
+                    null_or_index = PyStackRef_TagIndex(-1);
                     JUMPBY(oparg + 1);
                     stack_pointer[-1] = null_or_index;
                     DISPATCH();
@@ -6421,7 +6421,7 @@
                 STAT_INC(FOR_ITER, hit);
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
-                int result = _PyList_GetItemRefNoLock((PyListObject *)list_o, PyStackRef_UntagInt(null_or_index), &next);
+                int result = _PyList_GetItemRefNoLock((PyListObject *)list_o, PyStackRef_UntagIndex(null_or_index), &next);
                 _PyFrame_StackPointerInvalidate(frame);
                 if (result < 0) {
                     UPDATE_MISS_STATS(FOR_ITER);
@@ -6429,15 +6429,15 @@
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
                 if (result == 0) {
-                    null_or_index = PyStackRef_TagInt(-1);
+                    null_or_index = PyStackRef_TagIndex(-1);
                     JUMPBY(oparg + 1);
                     stack_pointer[-1] = null_or_index;
                     DISPATCH();
                 }
                 #else
-                next = PyStackRef_FromPyObjectNew(PyList_GET_ITEM(list_o, PyStackRef_UntagInt(null_or_index)));
+                next = PyStackRef_FromPyObjectNew(PyList_GET_ITEM(list_o, PyStackRef_UntagIndex(null_or_index)));
                 #endif
-                null_or_index = PyStackRef_IncrementTaggedIntNoOverflow(null_or_index);
+                null_or_index = PyStackRef_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             stack_pointer[-1] = null_or_index;
             stack_pointer[0] = next;
@@ -6538,7 +6538,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
-                assert(PyStackRef_IsTaggedInt(null_or_index));
+                assert(PyStackRef_IsTaggedIndex(null_or_index));
             }
             // _ITER_JUMP_TUPLE
             {
@@ -6546,8 +6546,8 @@
                 (void)tuple_o;
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
                 STAT_INC(FOR_ITER, hit);
-                if ((size_t)PyStackRef_UntagInt(null_or_index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
-                    null_or_index = PyStackRef_TagInt(-1);
+                if ((size_t)PyStackRef_UntagIndex(null_or_index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
+                    null_or_index = PyStackRef_TagIndex(-1);
                     JUMPBY(oparg + 1);
                     stack_pointer[-1] = null_or_index;
                     DISPATCH();
@@ -6557,10 +6557,10 @@
             {
                 PyObject *tuple_o = PyStackRef_AsPyObjectBorrow(iter);
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
-                uintptr_t i = PyStackRef_UntagInt(null_or_index);
+                uintptr_t i = PyStackRef_UntagIndex(null_or_index);
                 assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
                 next = PyStackRef_FromPyObjectNew(PyTuple_GET_ITEM(tuple_o, i));
-                null_or_index = PyStackRef_IncrementTaggedIntNoOverflow(null_or_index);
+                null_or_index = PyStackRef_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             stack_pointer[-1] = null_or_index;
             stack_pointer[0] = next;
@@ -6597,7 +6597,7 @@
             {
                 iter = stack_pointer[-2];
                 PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
-                Py_ssize_t index = PyStackRef_UntagInt(null_or_index);
+                Py_ssize_t index = PyStackRef_UntagIndex(null_or_index);
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 _PyObjectIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
@@ -6611,7 +6611,7 @@
                     JUMPBY(oparg + 1);
                     DISPATCH();
                 }
-                null_or_index = PyStackRef_TagInt(index);
+                null_or_index = PyStackRef_TagIndex(index);
                 next = PyStackRef_FromPyObjectSteal(next_o);
             }
             stack_pointer[-1] = null_or_index;
@@ -6858,7 +6858,7 @@
             }
             // _PUSH_TAGGED_ZERO
             {
-                zero = PyStackRef_TagInt(0);
+                zero = PyStackRef_TagIndex(0);
             }
             stack_pointer[0] = zero;
             stack_pointer += 1;
@@ -10985,7 +10985,7 @@
             PyObject *exc = PyStackRef_AsPyObjectSteal(exc_st);
             assert(oparg >= 0 && oparg <= 2);
             if (oparg) {
-                frame->instr_ptr = _PyFrame_GetBytecode(frame) + PyStackRef_UntagInt(values[0]);
+                frame->instr_ptr = _PyFrame_GetBytecode(frame) + PyStackRef_UntagIndex(values[0]);
             }
             assert(exc && PyExceptionInstance_Check(exc));
             stack_pointer += -1;
@@ -11499,7 +11499,7 @@
                 null_or_index = nos;
                 iter = stack_pointer[-3];
                 PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
-                Py_ssize_t index = PyStackRef_UntagInt(null_or_index);
+                Py_ssize_t index = PyStackRef_UntagIndex(null_or_index);
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 _PyObjectIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
@@ -11515,7 +11515,7 @@
                     DISPATCH();
                 }
                 next = PyStackRef_FromPyObjectSteal(next_o);
-                null_or_index = PyStackRef_TagInt(index);
+                null_or_index = PyStackRef_TagIndex(index);
             }
             stack_pointer[-2] = null_or_index;
             stack_pointer[-1] = next;
@@ -13161,7 +13161,7 @@
             if (tb == NULL) {
                 tb = Py_None;
             }
-            assert(PyStackRef_IsTaggedInt(lasti));
+            assert(PyStackRef_IsTaggedIndex(lasti));
             (void)lasti;
             PyObject* res_o;
             {
@@ -13348,7 +13348,7 @@ JUMP_TO_LABEL(error);
             }
             if (lasti) {
                 int frame_lasti = _PyInterpreterFrame_LASTI(frame);
-                _PyStackRef lasti = PyStackRef_TagInt(frame_lasti);
+                _PyStackRef lasti = PyStackRef_TagIndex(frame_lasti);
                 _PyFrame_StackPush(frame, lasti);
             }
             PyObject *exc = _PyErr_GetRaisedException(tstate);

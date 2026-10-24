@@ -1114,8 +1114,8 @@ _PyEval_GetIter(_PyStackRef iterable, _PyStackRef *index_or_null, int yield_from
 {
     PyTypeObject *tp = PyStackRef_TYPE(iterable);
     if (tp->_tp_iteritem != NULL) {
-        /* Leave iterable on stack and pushed tagged 0 */
-        *index_or_null = PyStackRef_TagInt(0);
+        /* Leave iterable on stack and push tagged index 0 */
+        *index_or_null = PyStackRef_TagIndex(0);
         return iterable;
     }
     *index_or_null = PyStackRef_NULL;
@@ -3647,8 +3647,8 @@ _PyStackRef _PyForIter_VirtualIteratorNext(PyThreadState* tstate, _PyInterpreter
 {
     PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
     _PyStackRef index = *index_ptr;
-    if (PyStackRef_IsTaggedInt(index)) {
-        intptr_t i = PyStackRef_UntagInt(index);
+    if (PyStackRef_IsTaggedIndex(index)) {
+        intptr_t i = PyStackRef_UntagIndex(index);
         assert(i >= 0);
         _PyObjectIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, i);
         i = next_index.index;
@@ -3656,7 +3656,7 @@ _PyStackRef _PyForIter_VirtualIteratorNext(PyThreadState* tstate, _PyInterpreter
         if (next == NULL) {
             return i < 0 ? PyStackRef_ERROR : PyStackRef_NULL;
         }
-        *index_ptr = PyStackRef_TagInt(i);
+        *index_ptr = PyStackRef_TagIndex(i);
         return PyStackRef_FromPyObjectSteal(next);
     }
     PyObject *next = (*Py_TYPE(iter_o)->tp_iternext)(iter_o);

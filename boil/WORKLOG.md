@@ -87,3 +87,13 @@ Entries are appended in order; each milestone is also a commit.
   unrelated benchmarks mark it as noise. Kept as `*.noisy.json`; the real
   measurement runs on an idle machine before the next code commit.
   Rule from here: benchmark only when no build or test run is active.
+- Tagged-values step 1 landed: internal loop and `lasti` indices are now
+  `PyStackRef_*Index` with `Py_INDEX_TAG`; `Py_INT_TAG` is free for real
+  ints. Pure rename plus three header tightenings (`PyStackRef_TYPE` and
+  `LongCheck` no longer claim an index is an int). Full suite passes on
+  default; debug and free-threaded targeted sets pass.
+  Finding: the `Py_STACKREF_DEBUG` build is broken upstream before any test
+  runs: `take_ownership` in `Python/frame.c` closes the source frame's
+  executable ref and restores it on the wrong frame (from GH-127875), and
+  `BINARY_OP_INPLACE_ADD_UNICODE` steals a borrowed local (gh-131527).
+  The tag design relies on that build as a checker, so step 2 fixes both.

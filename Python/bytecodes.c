@@ -1479,7 +1479,7 @@ dummy_func(
 
         replaced op(_SEND_VIRTUAL, (iter, null_or_index, none -- iter, null_or_index, next)) {
             PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
-            Py_ssize_t index = PyStackRef_UntagInt(null_or_index);
+            Py_ssize_t index = PyStackRef_UntagIndex(null_or_index);
             _PyObjectIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
             PyObject *next_o = next_index.object;
             index = next_index.index;
@@ -1494,7 +1494,7 @@ dummy_func(
             }
             DEAD(none);
             next = PyStackRef_FromPyObjectSteal(next_o);
-            null_or_index = PyStackRef_TagInt(index);
+            null_or_index = PyStackRef_TagIndex(index);
         }
 
         macro(SEND_VIRTUAL) =
@@ -1608,7 +1608,7 @@ dummy_func(
 
             assert(oparg >= 0 && oparg <= 2);
             if (oparg) {
-                frame->instr_ptr = _PyFrame_GetBytecode(frame) + PyStackRef_UntagInt(values[0]);
+                frame->instr_ptr = _PyFrame_GetBytecode(frame) + PyStackRef_UntagIndex(values[0]);
             }
             assert(exc && PyExceptionInstance_Check(exc));
             _PyErr_SetRaisedException(tstate, exc);
@@ -3247,7 +3247,7 @@ dummy_func(
         }
 
         op(_PUSH_TAGGED_ZERO, ( -- zero)) {
-            zero = PyStackRef_TagInt(0);
+            zero = PyStackRef_TagIndex(0);
         }
 
         macro(GET_ITER_VIRTUAL) =
@@ -3302,7 +3302,7 @@ dummy_func(
 
         replaced op(_FOR_ITER_VIRTUAL, (iter, null_or_index -- iter, null_or_index, next)) {
             PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
-            Py_ssize_t index = PyStackRef_UntagInt(null_or_index);
+            Py_ssize_t index = PyStackRef_UntagIndex(null_or_index);
             _PyObjectIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
             PyObject *next_o = next_index.object;
             index = next_index.index;
@@ -3314,7 +3314,7 @@ dummy_func(
                 JUMPBY(oparg + 1);
                 DISPATCH();
             }
-            null_or_index = PyStackRef_TagInt(index);
+            null_or_index = PyStackRef_TagIndex(index);
             next = PyStackRef_FromPyObjectSteal(next_o);
         }
 
@@ -3340,7 +3340,7 @@ dummy_func(
         op(_ITER_CHECK_LIST, (iter, null_or_index -- iter, null_or_index)) {
             PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
             EXIT_IF(Py_TYPE(iter_o) != &PyList_Type);
-            assert(PyStackRef_IsTaggedInt(null_or_index));
+            assert(PyStackRef_IsTaggedIndex(null_or_index));
 #ifdef Py_GIL_DISABLED
             EXIT_IF(!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o));
 #endif
@@ -3356,8 +3356,8 @@ dummy_func(
             PyObject *list_o = PyStackRef_AsPyObjectBorrow(iter);
             assert(Py_TYPE(list_o) == &PyList_Type);
             STAT_INC(FOR_ITER, hit);
-            if ((size_t)PyStackRef_UntagInt(null_or_index) >= (size_t)PyList_GET_SIZE(list_o)) {
-                null_or_index = PyStackRef_TagInt(-1);
+            if ((size_t)PyStackRef_UntagIndex(null_or_index) >= (size_t)PyList_GET_SIZE(list_o)) {
+                null_or_index = PyStackRef_TagIndex(-1);
                 /* Jump forward oparg, then skip following END_FOR instruction */
                 JUMPBY(oparg + 1);
                 DISPATCH();
@@ -3372,20 +3372,20 @@ dummy_func(
             assert(_Py_IsOwnedByCurrentThread(list_o) ||
                    _PyObject_GC_IS_SHARED(list_o));
             STAT_INC(FOR_ITER, hit);
-            int result = _PyList_GetItemRefNoLock((PyListObject *)list_o, PyStackRef_UntagInt(null_or_index), &next);
+            int result = _PyList_GetItemRefNoLock((PyListObject *)list_o, PyStackRef_UntagIndex(null_or_index), &next);
             // A negative result means we lost a race with another thread
             // and we need to take the slow path.
             DEOPT_IF(result < 0);
             if (result == 0) {
-                null_or_index = PyStackRef_TagInt(-1);
+                null_or_index = PyStackRef_TagIndex(-1);
                 /* Jump forward oparg, then skip following END_FOR instruction */
                 JUMPBY(oparg + 1);
                 DISPATCH();
             }
 #else
-            next = PyStackRef_FromPyObjectNew(PyList_GET_ITEM(list_o, PyStackRef_UntagInt(null_or_index)));
+            next = PyStackRef_FromPyObjectNew(PyList_GET_ITEM(list_o, PyStackRef_UntagIndex(null_or_index)));
 #endif
-            null_or_index = PyStackRef_IncrementTaggedIntNoOverflow(null_or_index);
+            null_or_index = PyStackRef_IncrementTaggedIndexNoOverflow(null_or_index);
         }
 
         macro(FOR_ITER_LIST) =
@@ -3397,7 +3397,7 @@ dummy_func(
         op(_ITER_CHECK_TUPLE, (iter, null_or_index -- iter, null_or_index)) {
             PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
             EXIT_IF(Py_TYPE(iter_o) != &PyTuple_Type);
-            assert(PyStackRef_IsTaggedInt(null_or_index));
+            assert(PyStackRef_IsTaggedIndex(null_or_index));
         }
 
         replaced op(_ITER_JUMP_TUPLE, (iter, null_or_index -- iter, null_or_index)) {
@@ -3405,8 +3405,8 @@ dummy_func(
             (void)tuple_o;
             assert(Py_TYPE(tuple_o) == &PyTuple_Type);
             STAT_INC(FOR_ITER, hit);
-            if ((size_t)PyStackRef_UntagInt(null_or_index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
-                null_or_index = PyStackRef_TagInt(-1);
+            if ((size_t)PyStackRef_UntagIndex(null_or_index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
+                null_or_index = PyStackRef_TagIndex(-1);
                 /* Jump forward oparg, then skip following END_FOR instruction */
                 JUMPBY(oparg + 1);
                 DISPATCH();
@@ -3416,10 +3416,10 @@ dummy_func(
         op(_ITER_NEXT_TUPLE, (iter, null_or_index -- iter, null_or_index, next)) {
             PyObject *tuple_o = PyStackRef_AsPyObjectBorrow(iter);
             assert(Py_TYPE(tuple_o) == &PyTuple_Type);
-            uintptr_t i = PyStackRef_UntagInt(null_or_index);
+            uintptr_t i = PyStackRef_UntagIndex(null_or_index);
             assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
             next = PyStackRef_FromPyObjectNew(PyTuple_GET_ITEM(tuple_o, i));
-            null_or_index = PyStackRef_IncrementTaggedIntNoOverflow(null_or_index);
+            null_or_index = PyStackRef_IncrementTaggedIndexNoOverflow(null_or_index);
         }
 
         macro(FOR_ITER_TUPLE) =
@@ -3541,7 +3541,7 @@ dummy_func(
             if (tb == NULL) {
                 tb = Py_None;
             }
-            assert(PyStackRef_IsTaggedInt(lasti));
+            assert(PyStackRef_IsTaggedIndex(lasti));
             (void)lasti; // Shut up compiler warning if asserts are off
             PyObject* res_o;
             {
@@ -5394,7 +5394,7 @@ dummy_func(
             }
             if (lasti) {
                 int frame_lasti = _PyInterpreterFrame_LASTI(frame);
-                _PyStackRef lasti = PyStackRef_TagInt(frame_lasti);
+                _PyStackRef lasti = PyStackRef_TagIndex(frame_lasti);
                 _PyFrame_StackPush(frame, lasti);
             }
 

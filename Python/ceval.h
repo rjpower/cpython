@@ -159,8 +159,8 @@ dump_item(_PyStackRef item)
         printf("<INVALID>");
         return;
     }
-    if (PyStackRef_IsTaggedInt(item)) {
-        printf("%" PRId64, (int64_t)PyStackRef_UntagInt(item));
+    if (PyStackRef_IsTaggedIndex(item)) {
+        printf("%" PRId64, (int64_t)PyStackRef_UntagIndex(item));
         return;
     }
     PyObject *obj = PyStackRef_AsPyObjectBorrow(item);

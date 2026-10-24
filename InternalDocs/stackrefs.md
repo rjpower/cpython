@@ -1,7 +1,7 @@
 # Stack references (`_PyStackRef`)
 
 Stack references are the interpreter's tagged representation of values on the evaluation stack.
-They carry metadata to track ownership and support optimizations such as tagged small ints.
+They carry metadata to track ownership and can hold interpreter-internal indices without a heap object.
 
 ## Shape and tagging
 
@@ -9,7 +9,7 @@ They carry metadata to track ownership and support optimizations such as tagged 
 - Tag bits distinguish three cases:
   - `Py_TAG_REFCNT` unset - reference count lives on the pointed-to object.
   - `Py_TAG_REFCNT` set - ownership is "borrowed" (no refcount to drop on close) or the object is immortal.
-  - `Py_INT_TAG` set - tagged small integer stored directly in the stackref (no heap allocation).
+  - `Py_INDEX_TAG` set - interpreter-internal index stored directly in the stackref (no heap allocation).
 - Special constants: `PyStackRef_NULL`, `PyStackRef_ERROR`, and embedded `None`/`True`/`False`.
 
 In GIL builds, most objects carry their refcount; tagged borrowed refs skip decref on close. In free
@@ -56,11 +56,14 @@ The interpreter can push borrowed references directly. For example, `LOAD_FAST_B
 variable as a borrowed `_PyStackRef`, avoiding both INCREF and DECREF for the temporary lifetime on
 the evaluation stack.
 
-## Tagged integers on the stack
+## Tagged indices on the stack
 
-Small ints can be stored inline with `Py_INT_TAG`, so no heap object is involved. Helpers like
-`PyStackRef_TagInt`, `PyStackRef_UntagInt`, and `PyStackRef_IncrementTaggedIntNoOverflow` operate on
-these values. Type checks use `PyStackRef_IsTaggedInt` and `PyStackRef_LongCheck`.
+The interpreter stores two kinds of internal index inline with `Py_INDEX_TAG`: the position of a
+virtual iterator in the `FOR_ITER` family and the saved `lasti` during exception unwinding.
+`PyStackRef_TagIndex`, `PyStackRef_UntagIndex`, and `PyStackRef_IncrementTaggedIndexNoOverflow`
+create and update them, and `PyStackRef_IsTaggedIndex` tests for them. A tagged index is not a
+Python object: it never reaches Python code, never converts to a `PyObject*`, and is skipped by the
+GC. It is distinct from the inline Python ints planned in `boil/design/02-tagged-values.md`.
 
 ## Free threading considerations
 

@@ -123,3 +123,9 @@ Entries are appended in order; each milestone is also a commit.
   instruction) and measure it the same way; and proceed with the IR, whose
   static borrow bit removes the `Borrow` cost that dominates the NaN-box
   overhead, before revisiting inline floats.
+- The `Py_STACKREF_DEBUG` build works again as a checker: four fixes landed
+  (`take_ownership` executable handoff, `_BINARY_OP_INPLACE_ADD_UNICODE`
+  close-before-steal from gh-131527, `PyAPI_FUNC` on the debug index
+  helpers, and a checker allowance for the one place where a borrowed
+  local legitimately outlives its slot's close: `framelocalsproxy_setitem`
+  with `f_overwritten_fast_locals`). Targeted tests pass in that build.

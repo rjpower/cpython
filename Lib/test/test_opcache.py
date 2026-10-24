@@ -1472,8 +1472,13 @@ class TestSpecializer(TestBase):
                 self.assertEqual(c, 0.5)
 
         binary_op_add_extend()
-        self.assert_specialized(binary_op_add_extend, "BINARY_OP_EXTEND")
-        self.assert_no_opcode(binary_op_add_extend, "BINARY_OP")
+        # Float arithmetic takes an int operand.
+        if int_producers:
+            for opname in ("BINARY_OP_ADD_FLOAT", "BINARY_OP_SUBTRACT_FLOAT",
+                           "BINARY_OP_MULTIPLY_FLOAT", "BINARY_OP_TRUEDIV_FLOAT"):
+                self.assert_specialized(binary_op_add_extend, opname)
+            self.assert_no_opcode(binary_op_add_extend, "BINARY_OP")
+        self.assert_no_opcode(binary_op_add_extend, "BINARY_OP_EXTEND")
 
         def binary_op_add_extend_sequences():
             l1 = [1, 2]
@@ -1560,8 +1565,26 @@ class TestSpecializer(TestBase):
                 self.assertEqual(a, 10)
 
         binary_op_bitwise_extend()
-        self.assert_specialized(binary_op_bitwise_extend, "BINARY_OP_EXTEND")
-        self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP")
+        if int_producers:
+            for opname in ("BINARY_OP_AND_INT", "BINARY_OP_OR_INT", "BINARY_OP_XOR_INT"):
+                self.assert_specialized(binary_op_bitwise_extend, opname)
+            self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP")
+        self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP_EXTEND")
+
+        def binary_op_int_division_and_shifts():
+            for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+                a, b = -7, 2
+                self.assertEqual(a // b, -4)
+                self.assertEqual(a % b, 1)
+                self.assertEqual(a << b, -28)
+                self.assertEqual(a >> b, -2)
+
+        binary_op_int_division_and_shifts()
+        if int_producers:
+            for opname in ("BINARY_OP_FLOOR_DIVIDE_INT", "BINARY_OP_REMAINDER_INT",
+                           "BINARY_OP_LSHIFT_INT", "BINARY_OP_RSHIFT_INT"):
+                self.assert_specialized(binary_op_int_division_and_shifts, opname)
+            self.assert_no_opcode(binary_op_int_division_and_shifts, "BINARY_OP")
 
     @cpython_only
     @requires_specialization
@@ -2540,8 +2563,8 @@ class TestFeedback(TestBase):
     def test_operand_versions(self):
         _testcapi = import_module("_testcapi")
 
-        def add(a, b):
-            return a + b
+        def mul(a, b):
+            return a * b
 
         def g():
             pass
@@ -2550,12 +2573,12 @@ class TestFeedback(TestBase):
             return f()
 
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
-            add(1, 2.0)
+            mul("ab", 3)
             call(g)
-        [(kind, state, lhs, rhs, _)] = self.feedback(add, "BINARY_OP")
+        [(kind, state, lhs, rhs, _)] = self.feedback(mul, "BINARY_OP")
         self.assertEqual((kind, state), ("BINARY", "MONO"))
-        self.assertEqual(lhs, _testcapi.type_get_version(int))
-        self.assertEqual(rhs, _testcapi.type_get_version(float))
+        self.assertEqual(lhs, _testcapi.type_get_version(str))
+        self.assertEqual(rhs, _testcapi.type_get_version(int))
         [(kind, state, func_version, callable_type, _)] = self.feedback(call, "CALL")
         self.assertEqual((kind, state), ("CALL", "MONO"))
         self.assertNotEqual(func_version, 0)

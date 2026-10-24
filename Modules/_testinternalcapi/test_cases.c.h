@@ -118,73 +118,42 @@
             next_instr += 6;
             INSTRUCTION_STATS(BINARY_OP_ADD_FLOAT);
             static_assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5, "incorrect cache size");
-            _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
             _PyStackRef l;
             _PyStackRef r;
-            // _GUARD_TOS_FLOAT
-            {
-                value = stack_pointer[-1];
-                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
-                    JUMP_TO_PREDICTED(BINARY_OP);
-                }
-                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
-                if (!PyFloat_CheckExact(value_o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
-                    JUMP_TO_PREDICTED(BINARY_OP);
-                }
-            }
-            // _GUARD_NOS_FLOAT
-            {
-                left = stack_pointer[-2];
-                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
-                    JUMP_TO_PREDICTED(BINARY_OP);
-                }
-                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-                if (!PyFloat_CheckExact(left_o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
-                    JUMP_TO_PREDICTED(BINARY_OP);
-                }
-            }
+            _PyStackRef value;
             /* Skip 5 cache entries */
             // _BINARY_OP_ADD_FLOAT
             {
-                right = value;
-                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
-                assert(PyFloat_CheckExact(left_o));
-                assert(PyFloat_CheckExact(right_o));
+                right = stack_pointer[-1];
+                left = stack_pointer[-2];
+                double a, b;
+                if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
                 STAT_INC(BINARY_OP, hit);
-                double dres =
-                ((PyFloatObject *)left_o)->ob_fval +
-                ((PyFloatObject *)right_o)->ob_fval;
-                PyObject *d = PyFloat_FromDouble(dres);
-                if (d == NULL) {
+                res = PyStackRef_FromDouble(a + b);
+                if (PyStackRef_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(d);
                 l = left;
                 r = right;
             }
-            // _POP_TOP_FLOAT
+            // _POP_TOP_NUMBER
             {
                 value = r;
-                assert(PyFloat_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
-                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyFloat_ExactDealloc);
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
-            // _POP_TOP_FLOAT
+            // _POP_TOP_NUMBER
             {
                 value = l;
-                assert(PyFloat_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
-                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyFloat_ExactDealloc);
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
             stack_pointer[-2] = res;
             stack_pointer += -1;
@@ -349,6 +318,71 @@
             DISPATCH();
         }
 
+        TARGET(BINARY_OP_AND_INT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = BINARY_OP_AND_INT;
+            (void)(opcode);
+            #endif
+            _Py_CODEUNIT* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 6;
+            INSTRUCTION_STATS(BINARY_OP_AND_INT);
+            static_assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5, "incorrect cache size");
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            // _GUARD_TOS_INT
+            {
+                value = stack_pointer[-1];
+                if (!PyStackRef_IsCompactInt(value)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+            }
+            // _GUARD_NOS_INT
+            {
+                left = stack_pointer[-2];
+                if (!PyStackRef_IsCompactInt(left)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+            }
+            /* Skip 5 cache entries */
+            // _BINARY_OP_AND_INT
+            {
+                right = value;
+                STAT_INC(BINARY_OP, hit);
+                res = PyStackRef_FromInt32(PyStackRef_CompactIntValue(left) & PyStackRef_CompactIntValue(right));
+                if (PyStackRef_IsNull(res)) {
+                    JUMP_TO_LABEL(error);
+                }
+                l = left;
+                r = right;
+            }
+            // _POP_TOP_INT
+            {
+                value = r;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            // _POP_TOP_INT
+            {
+                value = l;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            stack_pointer[-2] = res;
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
         TARGET(BINARY_OP_EXTEND) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_EXTEND;
@@ -439,6 +473,87 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            DISPATCH();
+        }
+
+        TARGET(BINARY_OP_FLOOR_DIVIDE_INT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = BINARY_OP_FLOOR_DIVIDE_INT;
+            (void)(opcode);
+            #endif
+            _Py_CODEUNIT* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 6;
+            INSTRUCTION_STATS(BINARY_OP_FLOOR_DIVIDE_INT);
+            static_assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5, "incorrect cache size");
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            // _GUARD_TOS_INT
+            {
+                value = stack_pointer[-1];
+                if (!PyStackRef_IsCompactInt(value)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+            }
+            // _GUARD_NOS_INT
+            {
+                left = stack_pointer[-2];
+                if (!PyStackRef_IsCompactInt(left)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+            }
+            /* Skip 5 cache entries */
+            // _BINARY_OP_FLOOR_DIVIDE_INT
+            {
+                right = value;
+                int32_t b = PyStackRef_CompactIntValue(right);
+                if (b == 0) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+                int32_t a = PyStackRef_CompactIntValue(left);
+                STAT_INC(BINARY_OP, hit);
+                if (b == -1) {
+                    res = a == INT32_MIN ? _PyStackRef_BoxInt64(-(int64_t)a) : PyStackRef_FromInt32(-a);
+                }
+                else {
+                    int32_t quotient = a / b;
+                    if (a % b != 0 && (a ^ b) < 0) {
+                        quotient--;
+                    }
+                    res = PyStackRef_FromInt32(quotient);
+                }
+                if (PyStackRef_IsNull(res)) {
+                    JUMP_TO_LABEL(error);
+                }
+                l = left;
+                r = right;
+            }
+            // _POP_TOP_INT
+            {
+                value = r;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            // _POP_TOP_INT
+            {
+                value = l;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            stack_pointer[-2] = res;
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
             DISPATCH();
         }
 
@@ -533,6 +648,89 @@
             DISPATCH();
         }
 
+        TARGET(BINARY_OP_LSHIFT_INT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = BINARY_OP_LSHIFT_INT;
+            (void)(opcode);
+            #endif
+            _Py_CODEUNIT* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 6;
+            INSTRUCTION_STATS(BINARY_OP_LSHIFT_INT);
+            static_assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5, "incorrect cache size");
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            // _GUARD_TOS_INT
+            {
+                value = stack_pointer[-1];
+                if (!PyStackRef_IsCompactInt(value)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+            }
+            // _GUARD_NOS_INT
+            {
+                left = stack_pointer[-2];
+                if (!PyStackRef_IsCompactInt(left)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+            }
+            /* Skip 5 cache entries */
+            // _BINARY_OP_LSHIFT_INT
+            {
+                right = value;
+                int32_t b = PyStackRef_CompactIntValue(right);
+                if (b < 0) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+                int32_t a = PyStackRef_CompactIntValue(left);
+                STAT_INC(BINARY_OP, hit);
+                if (b < 32) {
+                    int64_t shifted = (int64_t)((uint64_t)(int64_t)a << b);
+                    res = (int32_t)shifted == shifted
+                    ? PyStackRef_FromInt32((int32_t)shifted)
+                : _PyStackRef_BoxInt64(shifted);
+                }
+                else if (a == 0) {
+                    res = PyStackRef_FromInt32(0);
+                }
+                else {
+                    res = _PyStackRef_LshiftInt32(a, b);
+                }
+                if (PyStackRef_IsNull(res)) {
+                    JUMP_TO_LABEL(error);
+                }
+                l = left;
+                r = right;
+            }
+            // _POP_TOP_INT
+            {
+                value = r;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            // _POP_TOP_INT
+            {
+                value = l;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            stack_pointer[-2] = res;
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
         TARGET(BINARY_OP_MULTIPLY_FLOAT) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_MULTIPLY_FLOAT;
@@ -544,73 +742,42 @@
             next_instr += 6;
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_FLOAT);
             static_assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5, "incorrect cache size");
-            _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
             _PyStackRef l;
             _PyStackRef r;
-            // _GUARD_TOS_FLOAT
-            {
-                value = stack_pointer[-1];
-                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
-                    JUMP_TO_PREDICTED(BINARY_OP);
-                }
-                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
-                if (!PyFloat_CheckExact(value_o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
-                    JUMP_TO_PREDICTED(BINARY_OP);
-                }
-            }
-            // _GUARD_NOS_FLOAT
-            {
-                left = stack_pointer[-2];
-                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
-                    JUMP_TO_PREDICTED(BINARY_OP);
-                }
-                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-                if (!PyFloat_CheckExact(left_o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
-                    JUMP_TO_PREDICTED(BINARY_OP);
-                }
-            }
+            _PyStackRef value;
             /* Skip 5 cache entries */
             // _BINARY_OP_MULTIPLY_FLOAT
             {
-                right = value;
-                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
-                assert(PyFloat_CheckExact(left_o));
-                assert(PyFloat_CheckExact(right_o));
+                right = stack_pointer[-1];
+                left = stack_pointer[-2];
+                double a, b;
+                if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
                 STAT_INC(BINARY_OP, hit);
-                double dres =
-                ((PyFloatObject *)left_o)->ob_fval *
-                ((PyFloatObject *)right_o)->ob_fval;
-                PyObject *d = PyFloat_FromDouble(dres);
-                if (d == NULL) {
+                res = PyStackRef_FromDouble(a * b);
+                if (PyStackRef_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(d);
                 l = left;
                 r = right;
             }
-            // _POP_TOP_FLOAT
+            // _POP_TOP_NUMBER
             {
                 value = r;
-                assert(PyFloat_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
-                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyFloat_ExactDealloc);
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
-            // _POP_TOP_FLOAT
+            // _POP_TOP_NUMBER
             {
                 value = l;
-                assert(PyFloat_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
-                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyFloat_ExactDealloc);
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
             stack_pointer[-2] = res;
             stack_pointer += -1;
@@ -667,6 +834,225 @@
                 else {
                     res = PyStackRef_FromInt32(product);
                 }
+                if (PyStackRef_IsNull(res)) {
+                    JUMP_TO_LABEL(error);
+                }
+                l = left;
+                r = right;
+            }
+            // _POP_TOP_INT
+            {
+                value = r;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            // _POP_TOP_INT
+            {
+                value = l;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            stack_pointer[-2] = res;
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(BINARY_OP_OR_INT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = BINARY_OP_OR_INT;
+            (void)(opcode);
+            #endif
+            _Py_CODEUNIT* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 6;
+            INSTRUCTION_STATS(BINARY_OP_OR_INT);
+            static_assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5, "incorrect cache size");
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            // _GUARD_TOS_INT
+            {
+                value = stack_pointer[-1];
+                if (!PyStackRef_IsCompactInt(value)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+            }
+            // _GUARD_NOS_INT
+            {
+                left = stack_pointer[-2];
+                if (!PyStackRef_IsCompactInt(left)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+            }
+            /* Skip 5 cache entries */
+            // _BINARY_OP_OR_INT
+            {
+                right = value;
+                STAT_INC(BINARY_OP, hit);
+                res = PyStackRef_FromInt32(PyStackRef_CompactIntValue(left) | PyStackRef_CompactIntValue(right));
+                if (PyStackRef_IsNull(res)) {
+                    JUMP_TO_LABEL(error);
+                }
+                l = left;
+                r = right;
+            }
+            // _POP_TOP_INT
+            {
+                value = r;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            // _POP_TOP_INT
+            {
+                value = l;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            stack_pointer[-2] = res;
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(BINARY_OP_REMAINDER_INT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = BINARY_OP_REMAINDER_INT;
+            (void)(opcode);
+            #endif
+            _Py_CODEUNIT* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 6;
+            INSTRUCTION_STATS(BINARY_OP_REMAINDER_INT);
+            static_assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5, "incorrect cache size");
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            // _GUARD_TOS_INT
+            {
+                value = stack_pointer[-1];
+                if (!PyStackRef_IsCompactInt(value)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+            }
+            // _GUARD_NOS_INT
+            {
+                left = stack_pointer[-2];
+                if (!PyStackRef_IsCompactInt(left)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+            }
+            /* Skip 5 cache entries */
+            // _BINARY_OP_REMAINDER_INT
+            {
+                right = value;
+                int32_t b = PyStackRef_CompactIntValue(right);
+                if (b == 0) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+                int32_t a = PyStackRef_CompactIntValue(left);
+                STAT_INC(BINARY_OP, hit);
+                int32_t remainder = 0;
+                if (b != -1) {
+                    remainder = a % b;
+                    if (remainder != 0 && (remainder ^ b) < 0) {
+                        remainder += b;
+                    }
+                }
+                res = PyStackRef_FromInt32(remainder);
+                if (PyStackRef_IsNull(res)) {
+                    JUMP_TO_LABEL(error);
+                }
+                l = left;
+                r = right;
+            }
+            // _POP_TOP_INT
+            {
+                value = r;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            // _POP_TOP_INT
+            {
+                value = l;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            stack_pointer[-2] = res;
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(BINARY_OP_RSHIFT_INT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = BINARY_OP_RSHIFT_INT;
+            (void)(opcode);
+            #endif
+            _Py_CODEUNIT* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 6;
+            INSTRUCTION_STATS(BINARY_OP_RSHIFT_INT);
+            static_assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5, "incorrect cache size");
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            // _GUARD_TOS_INT
+            {
+                value = stack_pointer[-1];
+                if (!PyStackRef_IsCompactInt(value)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+            }
+            // _GUARD_NOS_INT
+            {
+                left = stack_pointer[-2];
+                if (!PyStackRef_IsCompactInt(left)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+            }
+            /* Skip 5 cache entries */
+            // _BINARY_OP_RSHIFT_INT
+            {
+                right = value;
+                int32_t b = PyStackRef_CompactIntValue(right);
+                if (b < 0) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+                int32_t a = PyStackRef_CompactIntValue(left);
+                STAT_INC(BINARY_OP, hit);
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                res = PyStackRef_FromInt32(Py_ARITHMETIC_RIGHT_SHIFT(int32_t, a, b < 31 ? b : 31));
+                _PyFrame_StackPointerInvalidate(frame);
                 if (PyStackRef_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
@@ -1355,73 +1741,42 @@
             next_instr += 6;
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_FLOAT);
             static_assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5, "incorrect cache size");
-            _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
             _PyStackRef l;
             _PyStackRef r;
-            // _GUARD_TOS_FLOAT
-            {
-                value = stack_pointer[-1];
-                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
-                    JUMP_TO_PREDICTED(BINARY_OP);
-                }
-                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
-                if (!PyFloat_CheckExact(value_o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
-                    JUMP_TO_PREDICTED(BINARY_OP);
-                }
-            }
-            // _GUARD_NOS_FLOAT
-            {
-                left = stack_pointer[-2];
-                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
-                    JUMP_TO_PREDICTED(BINARY_OP);
-                }
-                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-                if (!PyFloat_CheckExact(left_o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
-                    JUMP_TO_PREDICTED(BINARY_OP);
-                }
-            }
+            _PyStackRef value;
             /* Skip 5 cache entries */
             // _BINARY_OP_SUBTRACT_FLOAT
             {
-                right = value;
-                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
-                assert(PyFloat_CheckExact(left_o));
-                assert(PyFloat_CheckExact(right_o));
+                right = stack_pointer[-1];
+                left = stack_pointer[-2];
+                double a, b;
+                if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
                 STAT_INC(BINARY_OP, hit);
-                double dres =
-                ((PyFloatObject *)left_o)->ob_fval -
-                ((PyFloatObject *)right_o)->ob_fval;
-                PyObject *d = PyFloat_FromDouble(dres);
-                if (d == NULL) {
+                res = PyStackRef_FromDouble(a - b);
+                if (PyStackRef_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(d);
                 l = left;
                 r = right;
             }
-            // _POP_TOP_FLOAT
+            // _POP_TOP_NUMBER
             {
                 value = r;
-                assert(PyFloat_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
-                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyFloat_ExactDealloc);
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
-            // _POP_TOP_FLOAT
+            // _POP_TOP_NUMBER
             {
                 value = l;
-                assert(PyFloat_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
-                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyFloat_ExactDealloc);
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
             stack_pointer[-2] = res;
             stack_pointer += -1;
@@ -1502,6 +1857,130 @@
             DISPATCH();
         }
 
+        TARGET(BINARY_OP_TRUEDIV_FLOAT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = BINARY_OP_TRUEDIV_FLOAT;
+            (void)(opcode);
+            #endif
+            _Py_CODEUNIT* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 6;
+            INSTRUCTION_STATS(BINARY_OP_TRUEDIV_FLOAT);
+            static_assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5, "incorrect cache size");
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
+            /* Skip 5 cache entries */
+            // _BINARY_OP_TRUEDIV_FLOAT
+            {
+                right = stack_pointer[-1];
+                left = stack_pointer[-2];
+                double a, b;
+                if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+                if (b == 0.0) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+                STAT_INC(BINARY_OP, hit);
+                res = PyStackRef_FromDouble(a / b);
+                if (PyStackRef_IsNull(res)) {
+                    JUMP_TO_LABEL(error);
+                }
+                l = left;
+                r = right;
+            }
+            // _POP_TOP_NUMBER
+            {
+                value = r;
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
+            }
+            // _POP_TOP_NUMBER
+            {
+                value = l;
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
+            }
+            stack_pointer[-2] = res;
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(BINARY_OP_XOR_INT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = BINARY_OP_XOR_INT;
+            (void)(opcode);
+            #endif
+            _Py_CODEUNIT* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 6;
+            INSTRUCTION_STATS(BINARY_OP_XOR_INT);
+            static_assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5, "incorrect cache size");
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            // _GUARD_TOS_INT
+            {
+                value = stack_pointer[-1];
+                if (!PyStackRef_IsCompactInt(value)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+            }
+            // _GUARD_NOS_INT
+            {
+                left = stack_pointer[-2];
+                if (!PyStackRef_IsCompactInt(left)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    assert(_PyOpcode_Deopt[opcode] == (BINARY_OP));
+                    JUMP_TO_PREDICTED(BINARY_OP);
+                }
+            }
+            /* Skip 5 cache entries */
+            // _BINARY_OP_XOR_INT
+            {
+                right = value;
+                STAT_INC(BINARY_OP, hit);
+                res = PyStackRef_FromInt32(PyStackRef_CompactIntValue(left) ^ PyStackRef_CompactIntValue(right));
+                if (PyStackRef_IsNull(res)) {
+                    JUMP_TO_LABEL(error);
+                }
+                l = left;
+                r = right;
+            }
+            // _POP_TOP_INT
+            {
+                value = r;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            // _POP_TOP_INT
+            {
+                value = l;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            stack_pointer[-2] = res;
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
         TARGET(BINARY_SLICE) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_SLICE;
@@ -1525,88 +2004,30 @@
                 stop = stack_pointer[-1];
                 start = stack_pointer[-2];
                 container = stack_pointer[-3];
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-3]))) {
-                    container = PyStackRef_Box(container);
-                    if (PyStackRef_IsInline(container)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_SLICE);
-                    stack_pointer[-3] = container;
-                }
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
-                    start = PyStackRef_Box(start);
-                    if (PyStackRef_IsInline(start)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_SLICE);
-                    stack_pointer[-2] = start;
-                }
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
-                    stop = PyStackRef_Box(stop);
-                    if (PyStackRef_IsInline(stop)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_SLICE);
-                    stack_pointer[-1] = stop;
-                }
-                PyObject *container_o = PyStackRef_AsPyObjectBorrow(container);
-                PyObject *start_o = PyStackRef_AsPyObjectBorrow(start);
-                PyObject *stop_o = PyStackRef_AsPyObjectBorrow(stop);
-                PyObject *res_o;
-                if (PyList_CheckExact(container_o)) {
-                    _PyFrame_SetStackPointer(frame, stack_pointer);
-                    _PyFrame_StackPointerValidate(frame);
-                    res_o = _PyList_BinarySlice(container_o, start_o, stop_o);
-                    _PyFrame_StackPointerInvalidate(frame);
-                }
-                else if (PyTuple_CheckExact(container_o)) {
-                    _PyFrame_SetStackPointer(frame, stack_pointer);
-                    _PyFrame_StackPointerValidate(frame);
-                    res_o = _PyTuple_BinarySlice(container_o, start_o, stop_o);
-                    _PyFrame_StackPointerInvalidate(frame);
-                }
-                else if (PyUnicode_CheckExact(container_o)) {
-                    _PyFrame_SetStackPointer(frame, stack_pointer);
-                    _PyFrame_StackPointerValidate(frame);
-                    res_o = _PyUnicode_BinarySlice(container_o, start_o, stop_o);
-                    _PyFrame_StackPointerInvalidate(frame);
-                }
-                else {
-                    PyObject *slice = PySlice_New(start_o, stop_o, NULL);
-                    if (slice == NULL) {
-                        res_o = NULL;
-                    }
-                    else {
-                        _PyFrame_SetStackPointer(frame, stack_pointer);
-                        _PyFrame_StackPointerValidate(frame);
-                        res_o = PyObject_GetItem(container_o, slice);
-                        _PyFrame_StackPointerInvalidate(frame);
-                        assert(stack_pointer == _PyFrame_GetStackPointer(frame));
-                        _PyFrame_StackPointerValidate(frame);
-                        Py_DECREF(slice);
-                        _PyFrame_StackPointerInvalidate(frame);
-                    }
-                }
                 _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                PyObject *res_o = _PyEval_BinarySlice(container, start, stop);
+                _PyFrame_StackPointerInvalidate(frame);
+                assert(stack_pointer == _PyFrame_GetStackPointer(frame));
                 _PyFrame_StackPointerValidate(frame);
                 _PyStackRef tmp = stop;
                 stop = PyStackRef_NULL;
                 stack_pointer[-1] = stop;
-                _PyStackRef_CLOSE_POINTER(tmp);
+                PyStackRef_CLOSE(tmp);
                 _PyFrame_StackPointerInvalidate(frame);
                 assert(stack_pointer == _PyFrame_GetStackPointer(frame));
                 _PyFrame_StackPointerValidate(frame);
                 tmp = start;
                 start = PyStackRef_NULL;
                 stack_pointer[-2] = start;
-                _PyStackRef_CLOSE_POINTER(tmp);
+                PyStackRef_CLOSE(tmp);
                 _PyFrame_StackPointerInvalidate(frame);
                 assert(stack_pointer == _PyFrame_GetStackPointer(frame));
                 _PyFrame_StackPointerValidate(frame);
                 tmp = container;
                 container = PyStackRef_NULL;
                 stack_pointer[-3] = container;
-                _PyStackRef_CLOSE_POINTER(tmp);
+                PyStackRef_CLOSE(tmp);
                 _PyFrame_StackPointerInvalidate(frame);
                 stack_pointer += -3;
                 ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -3632,29 +4053,21 @@
             {
                 cls = stack_pointer[-1];
                 instance = stack_pointer[-2];
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
-                    instance = PyStackRef_Box(instance);
-                    if (PyStackRef_IsInline(instance)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_ISINSTANCE);
-                    stack_pointer[-2] = instance;
-                }
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
-                    cls = PyStackRef_Box(cls);
-                    if (PyStackRef_IsInline(cls)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_ISINSTANCE);
-                    stack_pointer[-1] = cls;
-                }
                 STAT_INC(CALL, hit);
-                PyObject *inst_o = PyStackRef_AsPyObjectBorrow(instance);
-                PyObject *cls_o = PyStackRef_AsPyObjectBorrow(cls);
-                _PyFrame_SetStackPointer(frame, stack_pointer);
-                _PyFrame_StackPointerValidate(frame);
-                int retval = PyObject_IsInstance(inst_o, cls_o);
-                _PyFrame_StackPointerInvalidate(frame);
+                int retval;
+                if (PyStackRef_IsInline(instance) || PyStackRef_IsInline(cls)) {
+                    _PyFrame_SetStackPointer(frame, stack_pointer);
+                    _PyFrame_StackPointerValidate(frame);
+                    retval = _PyEval_IsInstanceStackRef(instance, cls);
+                    _PyFrame_StackPointerInvalidate(frame);
+                }
+                else {
+                    _PyFrame_SetStackPointer(frame, stack_pointer);
+                    _PyFrame_StackPointerValidate(frame);
+                    retval = PyObject_IsInstance(PyStackRef_AsPyObjectBorrow(instance),
+                        PyStackRef_AsPyObjectBorrow(cls));
+                    _PyFrame_StackPointerInvalidate(frame);
+                }
                 if (retval < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -3663,13 +4076,13 @@
                 ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
-                _PyStackRef_CLOSE_POINTER(cls);
+                PyStackRef_CLOSE(cls);
                 _PyFrame_StackPointerInvalidate(frame);
                 stack_pointer += -1;
                 ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
-                _PyStackRef_CLOSE_POINTER(instance);
+                PyStackRef_CLOSE(instance);
                 _PyFrame_StackPointerInvalidate(frame);
                 stack_pointer += -2;
                 ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -4248,14 +4661,14 @@
                 if (len_i < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                PyObject *res_o = PyLong_FromSsize_t(len_i);
-                assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
-                if (res_o == NULL) {
+                res = len_i <= INT32_MAX && tstate->interp->opt_config.tagged_values_enabled
+                ? PyStackRef_FromInt32((int32_t)len_i)
+            : _PyStackRef_BoxInt64(len_i);
+                if (PyStackRef_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
                 a = arg;
                 c = callable;
-                res = PyStackRef_FromPyObjectSteal(res_o);
             }
             // _POP_TOP
             {
@@ -5866,13 +6279,7 @@
             // _GUARD_TOS_FLOAT
             {
                 value = stack_pointer[-1];
-                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
-                    UPDATE_MISS_STATS(COMPARE_OP);
-                    assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
-                    JUMP_TO_PREDICTED(COMPARE_OP);
-                }
-                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
-                if (!PyFloat_CheckExact(value_o)) {
+                if (!PyStackRef_FloatCheckExact(value)) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -5881,13 +6288,7 @@
             // _GUARD_NOS_FLOAT
             {
                 left = stack_pointer[-2];
-                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
-                    UPDATE_MISS_STATS(COMPARE_OP);
-                    assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
-                    JUMP_TO_PREDICTED(COMPARE_OP);
-                }
-                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-                if (!PyFloat_CheckExact(left_o)) {
+                if (!PyStackRef_FloatCheckExact(left)) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -5897,11 +6298,9 @@
             // _COMPARE_OP_FLOAT
             {
                 right = value;
-                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 STAT_INC(COMPARE_OP, hit);
-                double dleft = PyFloat_AS_DOUBLE(left_o);
-                double dright = PyFloat_AS_DOUBLE(right_o);
+                double dleft = PyStackRef_FloatValue(left);
+                double dright = PyStackRef_FloatValue(right);
                 int sign_ish = COMPARISON_BIT(dleft, dright);
                 l = left;
                 r = right;
@@ -5910,14 +6309,14 @@
             // _POP_TOP_FLOAT
             {
                 value = r;
-                assert(PyFloat_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
-                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyFloat_ExactDealloc);
+                assert(PyStackRef_FloatCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
             }
             // _POP_TOP_FLOAT
             {
                 value = l;
-                assert(PyFloat_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
-                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyFloat_ExactDealloc);
+                assert(PyStackRef_FloatCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
             }
             stack_pointer[-2] = res;
             stack_pointer += -1;
@@ -10584,6 +10983,28 @@
             DISPATCH();
         }
 
+        TARGET(LOAD_CONST_INLINE_FLOAT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = LOAD_CONST_INLINE_FLOAT;
+            (void)(opcode);
+            #endif
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_CONST_INLINE_FLOAT);
+            static_assert(0 == 0, "incorrect cache size");
+            _PyStackRef value;
+            PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
+            _PyFrame_SetStackPointer(frame, stack_pointer);
+            _PyFrame_StackPointerValidate(frame);
+            assert(PyFloat_CheckExact(obj) && !isnan(PyFloat_AS_DOUBLE(obj)));
+            _PyFrame_StackPointerInvalidate(frame);
+            value = PyStackRef_FromDoubleNotNaN(PyFloat_AS_DOUBLE(obj));
+            stack_pointer[0] = value;
+            stack_pointer += 1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
         TARGET(LOAD_CONST_INLINE_INT) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_CONST_INLINE_INT;
@@ -13663,74 +14084,37 @@
                 start = stack_pointer[-2];
                 container = stack_pointer[-3];
                 v = stack_pointer[-4];
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-4]))) {
-                    v = PyStackRef_Box(v);
-                    if (PyStackRef_IsInline(v)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_SLICE);
-                    stack_pointer[-4] = v;
-                }
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-3]))) {
-                    container = PyStackRef_Box(container);
-                    if (PyStackRef_IsInline(container)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_SLICE);
-                    stack_pointer[-3] = container;
-                }
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
-                    start = PyStackRef_Box(start);
-                    if (PyStackRef_IsInline(start)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_SLICE);
-                    stack_pointer[-2] = start;
-                }
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
-                    stop = PyStackRef_Box(stop);
-                    if (PyStackRef_IsInline(stop)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_SLICE);
-                    stack_pointer[-1] = stop;
-                }
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
-                PyObject *slice = _PyBuildSlice_ConsumeRefs(_PyStackRef_AsPyObjectStealPointer(start),
-                    _PyStackRef_AsPyObjectStealPointer(stop),
-                    Py_None);
+                int err = _PyEval_StoreSlice(v, container, start, stop);
                 _PyFrame_StackPointerInvalidate(frame);
-                int err;
-                if (slice == NULL) {
-                    err = 1;
-                }
-                else {
-                    stack_pointer += -2;
-                    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-                    _PyFrame_SetStackPointer(frame, stack_pointer);
-                    _PyFrame_StackPointerValidate(frame);
-                    err = PyObject_SetItem(PyStackRef_AsPyObjectBorrow(container), slice, PyStackRef_AsPyObjectBorrow(v));
-                    _PyFrame_StackPointerInvalidate(frame);
-                    assert(stack_pointer == _PyFrame_GetStackPointer(frame));
-                    _PyFrame_StackPointerValidate(frame);
-                    Py_DECREF(slice);
-                    _PyFrame_StackPointerInvalidate(frame);
-                    stack_pointer += 2;
-                }
-                _PyFrame_SetStackPointer(frame, stack_pointer);
+                assert(stack_pointer == _PyFrame_GetStackPointer(frame));
                 _PyFrame_StackPointerValidate(frame);
-                _PyStackRef tmp = container;
+                _PyStackRef tmp = stop;
+                stop = PyStackRef_NULL;
+                stack_pointer[-1] = stop;
+                PyStackRef_CLOSE(tmp);
+                _PyFrame_StackPointerInvalidate(frame);
+                assert(stack_pointer == _PyFrame_GetStackPointer(frame));
+                _PyFrame_StackPointerValidate(frame);
+                tmp = start;
+                start = PyStackRef_NULL;
+                stack_pointer[-2] = start;
+                PyStackRef_CLOSE(tmp);
+                _PyFrame_StackPointerInvalidate(frame);
+                assert(stack_pointer == _PyFrame_GetStackPointer(frame));
+                _PyFrame_StackPointerValidate(frame);
+                tmp = container;
                 container = PyStackRef_NULL;
                 stack_pointer[-3] = container;
-                _PyStackRef_CLOSE_POINTER(tmp);
+                PyStackRef_CLOSE(tmp);
                 _PyFrame_StackPointerInvalidate(frame);
                 assert(stack_pointer == _PyFrame_GetStackPointer(frame));
                 _PyFrame_StackPointerValidate(frame);
                 tmp = v;
                 v = PyStackRef_NULL;
                 stack_pointer[-4] = v;
-                _PyStackRef_CLOSE_POINTER(tmp);
+                PyStackRef_CLOSE(tmp);
                 _PyFrame_StackPointerInvalidate(frame);
                 stack_pointer += -4;
                 ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -14091,23 +14475,24 @@
             /* Skip 2 cache entries */
             // _TO_BOOL
             {
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
-                    value = PyStackRef_Box(value);
-                    if (PyStackRef_IsInline(value)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(TO_BOOL);
-                    stack_pointer[-1] = value;
+                int err;
+                if (PyStackRef_IsInlineInt(value)) {
+                    err = PyStackRef_InlineInt(value) != 0;
                 }
-                _PyFrame_SetStackPointer(frame, stack_pointer);
-                _PyFrame_StackPointerValidate(frame);
-                int err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
-                _PyFrame_StackPointerInvalidate(frame);
+                else if (PyStackRef_IsInlineFloat(value)) {
+                    err = PyStackRef_InlineFloat(value) != 0.0;
+                }
+                else {
+                    _PyFrame_SetStackPointer(frame, stack_pointer);
+                    _PyFrame_StackPointerValidate(frame);
+                    err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
+                    _PyFrame_StackPointerInvalidate(frame);
+                }
                 stack_pointer += -1;
                 ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
-                _PyStackRef_CLOSE_POINTER(value);
+                PyStackRef_CLOSE(value);
                 _PyFrame_StackPointerInvalidate(frame);
                 if (err < 0) {
                     JUMP_TO_LABEL(error);
@@ -14441,6 +14826,11 @@
                 }
                 else if (PyStackRef_IsInlineFloat(value)) {
                     res = PyStackRef_FromDoubleNotNaN(-PyStackRef_InlineFloat(value));
+                }
+                else if (PyStackRef_FloatCheckExact(value) &&
+                     tstate->interp->opt_config.tagged_values_enabled)
+                {
+                    res = PyStackRef_FromDouble(-PyStackRef_FloatValue(value));
                 }
                 else {
                     _PyFrame_SetStackPointer(frame, stack_pointer);

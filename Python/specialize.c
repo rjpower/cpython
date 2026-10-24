@@ -84,10 +84,10 @@ _PyFb_BlockSize(const _Py_CODEUNIT *code, Py_ssize_t size)
 }
 
 #ifdef Py_STACKREF_INLINE_VALUES
-// Rewrite loads of int constants that fit in an inline int to the forms
+// Rewrite loads of int and float constants that can be inline to the forms
 // that push them inline. Instrumentation restores the boxing forms.
 static void
-quicken_int_constants(PyCodeObject *co, _Py_CODEUNIT *instructions)
+quicken_constants(PyCodeObject *co, _Py_CODEUNIT *instructions)
 {
     assert(co->_co_monitoring == NULL);
     Py_ssize_t size = Py_SIZE(co);
@@ -101,10 +101,14 @@ quicken_int_constants(PyCodeObject *co, _Py_CODEUNIT *instructions)
         if (opcode == LOAD_SMALL_INT) {
             instructions[i].op.code = LOAD_SMALL_INT_INLINE;
         }
-        else if (opcode == LOAD_CONST &&
-                 _PyLong_CheckExactAndCompact(PyTuple_GET_ITEM(co->co_consts, oparg)))
-        {
-            instructions[i].op.code = LOAD_CONST_INLINE_INT;
+        else if (opcode == LOAD_CONST) {
+            PyObject *value = PyTuple_GET_ITEM(co->co_consts, oparg);
+            if (_PyLong_CheckExactAndCompact(value)) {
+                instructions[i].op.code = LOAD_CONST_INLINE_INT;
+            }
+            else if (PyFloat_CheckExact(value) && !isnan(PyFloat_AS_DOUBLE(value))) {
+                instructions[i].op.code = LOAD_CONST_INLINE_FLOAT;
+            }
         }
         oparg = 0;
         i += _PyOpcode_Caches[opcode];
@@ -119,7 +123,7 @@ _PyCode_Quicken(PyCodeObject *co, _Py_CODEUNIT *instructions, int enable_counter
 {
 #ifdef Py_STACKREF_INLINE_VALUES
     if (_PyInterpreterState_GET()->opt_config.tagged_values_enabled) {
-        quicken_int_constants(co, instructions);
+        quicken_constants(co, instructions);
     }
 #endif
     if (co->_co_feedback == NULL) {
@@ -576,11 +580,12 @@ fb_begin_call(_Py_CODEUNIT *instr, PyTypeObject *callable_type)
    an object's type. BINARY_OP inspects objects deeply, so it boxes inline
    operands for the duration. */
 
-/* May the specializer choose an instruction that makes inline ints?
-   PYTHON_TAGGED_VALUES=0 says no, so that every int stays boxed. Without
-   inline values, those instructions make boxes and are always allowed. */
+/* May the specializer choose an instruction that makes inline ints or
+   floats? PYTHON_TAGGED_VALUES=0 says no, so that every value stays boxed.
+   Without inline values, those instructions make boxes and are always
+   allowed. */
 static bool
-int_producers_allowed(void)
+inline_producers_allowed(void)
 {
 #ifdef Py_STACKREF_INLINE_VALUES
     return _PyInterpreterState_GET()->opt_config.tagged_values_enabled;
@@ -2400,15 +2405,6 @@ binary_op_fail_kind(int oparg, PyObject *lhs, PyObject *rhs)
 
 /** Binary Op Specialization Extensions */
 
-/* long-long */
-
-static inline int
-is_compactlong(PyObject *v)
-{
-    return PyLong_CheckExact(v) &&
-           _PyLong_IsCompact((PyLongObject *)v);
-}
-
 #define SEQ_INT_MULTIPLY_ACTION(NAME, REPEAT, SEQ, COUNT) \
     static PyObject * \
     (NAME)(PyObject *lhs, PyObject *rhs) \
@@ -2427,125 +2423,7 @@ SEQ_INT_MULTIPLY_ACTION(tuple_int_multiply, _PyTuple_Repeat,   lhs, rhs)
 SEQ_INT_MULTIPLY_ACTION(int_tuple_multiply, _PyTuple_Repeat,   rhs, lhs)
 #undef SEQ_INT_MULTIPLY_ACTION
 
-static int
-compactlongs_guard(PyObject *lhs, PyObject *rhs)
-{
-    return (is_compactlong(lhs) && is_compactlong(rhs));
-}
-
-#define BITWISE_LONGS_ACTION(NAME, OP) \
-    static PyObject * \
-    (NAME)(PyObject *lhs, PyObject *rhs) \
-    { \
-        Py_ssize_t rhs_val = _PyLong_CompactValue((PyLongObject *)rhs); \
-        Py_ssize_t lhs_val = _PyLong_CompactValue((PyLongObject *)lhs); \
-        return PyLong_FromSsize_t(lhs_val OP rhs_val); \
-    }
-BITWISE_LONGS_ACTION(compactlongs_or, |)
-BITWISE_LONGS_ACTION(compactlongs_and, &)
-BITWISE_LONGS_ACTION(compactlongs_xor, ^)
-#undef BITWISE_LONGS_ACTION
-
-/* float-long */
-
-static inline int
-float_compactlong_guard(PyObject *lhs, PyObject *rhs)
-{
-    return (
-        PyFloat_CheckExact(lhs) &&
-        !isnan(PyFloat_AS_DOUBLE(lhs)) &&
-        PyLong_CheckExact(rhs) &&
-        _PyLong_IsCompact((PyLongObject *)rhs)
-    );
-}
-
-static inline int
-nonzero_float_compactlong_guard(PyObject *lhs, PyObject *rhs)
-{
-    return (
-        float_compactlong_guard(lhs, rhs) && !_PyLong_IsZero((PyLongObject*)rhs)
-    );
-}
-
-#define FLOAT_LONG_ACTION(NAME, OP) \
-    static PyObject * \
-    (NAME)(PyObject *lhs, PyObject *rhs) \
-    { \
-        double lhs_val = PyFloat_AS_DOUBLE(lhs); \
-        Py_ssize_t rhs_val = _PyLong_CompactValue((PyLongObject *)rhs); \
-        return PyFloat_FromDouble(lhs_val OP rhs_val); \
-    }
-FLOAT_LONG_ACTION(float_compactlong_add, +)
-FLOAT_LONG_ACTION(float_compactlong_subtract, -)
-FLOAT_LONG_ACTION(float_compactlong_multiply, *)
-FLOAT_LONG_ACTION(float_compactlong_true_div, /)
-#undef FLOAT_LONG_ACTION
-
-/*  long-float */
-
-static inline int
-compactlong_float_guard(PyObject *lhs, PyObject *rhs)
-{
-    return (
-        PyLong_CheckExact(lhs) &&
-        _PyLong_IsCompact((PyLongObject *)lhs) &&
-        PyFloat_CheckExact(rhs) &&
-        !isnan(PyFloat_AS_DOUBLE(rhs))
-    );
-}
-
-static inline int
-nonzero_compactlong_float_guard(PyObject *lhs, PyObject *rhs)
-{
-    return (
-        compactlong_float_guard(lhs, rhs) && PyFloat_AS_DOUBLE(rhs) != 0.0
-    );
-}
-
-#define LONG_FLOAT_ACTION(NAME, OP) \
-    static PyObject * \
-    (NAME)(PyObject *lhs, PyObject *rhs) \
-    { \
-        double rhs_val = PyFloat_AS_DOUBLE(rhs); \
-        Py_ssize_t lhs_val = _PyLong_CompactValue((PyLongObject *)lhs); \
-        return PyFloat_FromDouble(lhs_val OP rhs_val); \
-    }
-LONG_FLOAT_ACTION(compactlong_float_add, +)
-LONG_FLOAT_ACTION(compactlong_float_subtract, -)
-LONG_FLOAT_ACTION(compactlong_float_multiply, *)
-LONG_FLOAT_ACTION(compactlong_float_true_div, /)
-#undef LONG_FLOAT_ACTION
-
 static _PyBinaryOpSpecializationDescr binaryop_extend_descrs[] = {
-    /* long-long arithmetic: guards also check _PyLong_IsCompact, so
-       type alone is not sufficient to eliminate the guard. */
-    {NB_OR, compactlongs_guard, compactlongs_or, &PyLong_Type, 1, NULL, NULL},
-    {NB_AND, compactlongs_guard, compactlongs_and, &PyLong_Type, 1, NULL, NULL},
-    {NB_XOR, compactlongs_guard, compactlongs_xor, &PyLong_Type, 1, NULL, NULL},
-    {NB_INPLACE_OR, compactlongs_guard, compactlongs_or, &PyLong_Type, 1, NULL, NULL},
-    {NB_INPLACE_AND, compactlongs_guard, compactlongs_and, &PyLong_Type, 1, NULL, NULL},
-    {NB_INPLACE_XOR, compactlongs_guard, compactlongs_xor, &PyLong_Type, 1, NULL, NULL},
-
-    /* float-long arithmetic: guards also check NaN and compactness. */
-    {NB_ADD, float_compactlong_guard, float_compactlong_add, &PyFloat_Type, 1, NULL, NULL},
-    {NB_SUBTRACT, float_compactlong_guard, float_compactlong_subtract, &PyFloat_Type, 1, NULL, NULL},
-    {NB_TRUE_DIVIDE, nonzero_float_compactlong_guard, float_compactlong_true_div, &PyFloat_Type, 1, NULL, NULL},
-    {NB_MULTIPLY, float_compactlong_guard, float_compactlong_multiply, &PyFloat_Type, 1, NULL, NULL},
-    {NB_INPLACE_ADD, float_compactlong_guard, float_compactlong_add, &PyFloat_Type, 1, NULL, NULL},
-    {NB_INPLACE_SUBTRACT, float_compactlong_guard, float_compactlong_subtract, &PyFloat_Type, 1, NULL, NULL},
-    {NB_INPLACE_TRUE_DIVIDE, nonzero_float_compactlong_guard, float_compactlong_true_div, &PyFloat_Type, 1, NULL, NULL},
-    {NB_INPLACE_MULTIPLY, float_compactlong_guard, float_compactlong_multiply, &PyFloat_Type, 1, NULL, NULL},
-
-    /* long-float arithmetic: guards also check NaN and compactness. */
-    {NB_ADD, compactlong_float_guard, compactlong_float_add, &PyFloat_Type, 1, NULL, NULL},
-    {NB_SUBTRACT, compactlong_float_guard, compactlong_float_subtract, &PyFloat_Type, 1, NULL, NULL},
-    {NB_TRUE_DIVIDE, nonzero_compactlong_float_guard, compactlong_float_true_div, &PyFloat_Type, 1, NULL, NULL},
-    {NB_MULTIPLY, compactlong_float_guard, compactlong_float_multiply, &PyFloat_Type, 1, NULL, NULL},
-    {NB_INPLACE_ADD, compactlong_float_guard, compactlong_float_add, &PyFloat_Type, 1, NULL, NULL},
-    {NB_INPLACE_SUBTRACT, compactlong_float_guard, compactlong_float_subtract, &PyFloat_Type, 1, NULL, NULL},
-    {NB_INPLACE_TRUE_DIVIDE, nonzero_compactlong_float_guard, compactlong_float_true_div, &PyFloat_Type, 1, NULL, NULL},
-    {NB_INPLACE_MULTIPLY, compactlong_float_guard, compactlong_float_multiply, &PyFloat_Type, 1, NULL, NULL},
-
     /* list-list concatenation: _PyList_Concat always allocates a new list */
     {NB_ADD, NULL, _PyList_Concat, &PyList_Type, 1, &PyList_Type, &PyList_Type},
     /* tuple-tuple concatenation: _PyTuple_Concat has a zero-length shortcut
@@ -2614,12 +2492,23 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
 {
     _PyFbBinary *fb = fb_begin_binary(instr, Py_TYPE(lhs), Py_TYPE(rhs));
     fb->descr = NULL;
-    bool compact_ints = int_producers_allowed() &&
+    bool producers = inline_producers_allowed();
+    bool compact_ints = producers &&
         PyStackRef_IsCompactInt(lhs_st) && PyStackRef_IsCompactInt(rhs_st);
+    // Two floats, or a float and a compact int.
+    bool floats = producers && PyStackRef_FloatOperandsCheck(lhs_st, rhs_st);
 
     switch (oparg) {
         case NB_ADD:
         case NB_INPLACE_ADD:
+            if (compact_ints) {
+                specialize(instr, BINARY_OP_ADD_INT);
+                return;
+            }
+            if (floats) {
+                specialize(instr, BINARY_OP_ADD_FLOAT);
+                return;
+            }
             if (!Py_IS_TYPE(lhs, Py_TYPE(rhs))) {
                 break;
             }
@@ -2635,40 +2524,82 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
                 specialize(instr, BINARY_OP_ADD_UNICODE);
                 return;
             }
-            if (compact_ints) {
-                specialize(instr, BINARY_OP_ADD_INT);
-                return;
-            }
-            if (PyFloat_CheckExact(lhs)) {
-                specialize(instr, BINARY_OP_ADD_FLOAT);
-                return;
-            }
             break;
         case NB_MULTIPLY:
         case NB_INPLACE_MULTIPLY:
-            if (!Py_IS_TYPE(lhs, Py_TYPE(rhs))) {
-                break;
-            }
             if (compact_ints) {
                 specialize(instr, BINARY_OP_MULTIPLY_INT);
                 return;
             }
-            if (PyFloat_CheckExact(lhs)) {
+            if (floats) {
                 specialize(instr, BINARY_OP_MULTIPLY_FLOAT);
                 return;
             }
             break;
         case NB_SUBTRACT:
         case NB_INPLACE_SUBTRACT:
-            if (!Py_IS_TYPE(lhs, Py_TYPE(rhs))) {
-                break;
-            }
             if (compact_ints) {
                 specialize(instr, BINARY_OP_SUBTRACT_INT);
                 return;
             }
-            if (PyFloat_CheckExact(lhs)) {
+            if (floats) {
                 specialize(instr, BINARY_OP_SUBTRACT_FLOAT);
+                return;
+            }
+            break;
+        case NB_TRUE_DIVIDE:
+        case NB_INPLACE_TRUE_DIVIDE:
+            if (floats && PyStackRef_NumberAsDouble(rhs_st) != 0.0) {
+                specialize(instr, BINARY_OP_TRUEDIV_FLOAT);
+                return;
+            }
+            break;
+        case NB_FLOOR_DIVIDE:
+        case NB_INPLACE_FLOOR_DIVIDE:
+            if (compact_ints && PyStackRef_CompactIntValue(rhs_st) != 0) {
+                specialize(instr, BINARY_OP_FLOOR_DIVIDE_INT);
+                return;
+            }
+            break;
+        case NB_REMAINDER:
+        case NB_INPLACE_REMAINDER:
+            if (compact_ints && PyStackRef_CompactIntValue(rhs_st) != 0) {
+                specialize(instr, BINARY_OP_REMAINDER_INT);
+                return;
+            }
+            break;
+        case NB_AND:
+        case NB_INPLACE_AND:
+            if (compact_ints) {
+                specialize(instr, BINARY_OP_AND_INT);
+                return;
+            }
+            break;
+        case NB_OR:
+        case NB_INPLACE_OR:
+            if (compact_ints) {
+                specialize(instr, BINARY_OP_OR_INT);
+                return;
+            }
+            break;
+        case NB_XOR:
+        case NB_INPLACE_XOR:
+            if (compact_ints) {
+                specialize(instr, BINARY_OP_XOR_INT);
+                return;
+            }
+            break;
+        case NB_LSHIFT:
+        case NB_INPLACE_LSHIFT:
+            if (compact_ints && PyStackRef_CompactIntValue(rhs_st) >= 0) {
+                specialize(instr, BINARY_OP_LSHIFT_INT);
+                return;
+            }
+            break;
+        case NB_RSHIFT:
+        case NB_INPLACE_RSHIFT:
+            if (compact_ints && PyStackRef_CompactIntValue(rhs_st) >= 0) {
+                specialize(instr, BINARY_OP_RSHIFT_INT);
                 return;
             }
             break;
@@ -2980,7 +2911,7 @@ _Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _Py_CODEUNIT
     fb_begin_unary(instr, tp);
 
     if (PyStackRef_IsNull(null_or_index)) {
-        if (tp == &PyRangeIter_Type && int_producers_allowed()) {
+        if (tp == &PyRangeIter_Type && inline_producers_allowed()) {
 #ifdef Py_GIL_DISABLED
             // Only specialize for uniquely referenced iterators, so that we know
             // they're only referenced by this one thread. This is more limiting

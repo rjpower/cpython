@@ -100,10 +100,11 @@ typedef struct _object_stats {
     uint64_t type_cache_too_big;
     uint64_t type_cache_invalidations;
     uint64_t type_cache_resizes;
-    /* Inline stack values (boil/design/02-tagged-values.md): ints created,
-       and boxes made of each kind of value; array boxes are those made for
-       C code that takes a stackref array (calls and BUILD_*) */
+    /* Inline stack values (boil/design/02-tagged-values.md): ints and
+       floats created, and boxes made of each kind of value; array boxes are
+       those made for C code that takes a stackref array (calls and BUILD_*) */
     uint64_t inline_ints_created;
+    uint64_t inline_floats_created;
     uint64_t inline_int_boxes;
     uint64_t inline_float_boxes;
     uint64_t inline_array_boxes;

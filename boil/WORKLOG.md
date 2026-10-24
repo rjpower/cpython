@@ -204,3 +204,17 @@ Entries are appended in order; each milestone is also a commit.
   History flaw to fix at the final cleanup: the 36 tier-2 file deletions sit
   in the design-notes commit `ac60a9c3c73` instead of the deletion commit,
   a side effect of the soft reset; rewrite when the tree is clean.
+- Tagged-values steps 5 and 6 landed: inline floats (`LOAD_CONST_INLINE_FLOAT`,
+  ADD/SUB/MUL/TRUEDIV_FLOAT with int-to-double promotion, UNARY_NEGATIVE,
+  COMPARE_OP_FLOAT, NaN always boxed) and the wider int set (`//`, `%`,
+  `&`, `|`, `^`, `<<`, `>>`, slices with inline bounds on list/tuple/str
+  without a slice object, CALL_LEN producing inline, CALL_ISINSTANCE on
+  inline args). BINARY_OP_EXTEND loses its int/float and bitwise entries.
+  Micro loops: float add 139 to 79, truediv 205 to 83, int `//` 325 to 86,
+  int `<<` 484 to 86. Benchmarks against the inline-int commit in
+  instructions: spectral_norm -26.4, fannkuch -8.7, nbody -5.7, chaos -4.9,
+  nqueens -2.5, float -2.1, go -0.9, richards -0.4 percent. Freelist
+  allocations: spectral_norm 4.04M to 0.09M, nbody 5.47M to 2.17M. Heap
+  stores still box (nbody's list stores, float's slot stores). Full suite
+  green with and without the switch; all ports pass (abi
+  `cpython-3.16-refcnt-v0-tagged2`).

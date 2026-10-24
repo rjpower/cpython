@@ -231,6 +231,7 @@ print_object_stats(FILE *out, ObjectStats *stats)
     fprintf(out, "Object method cache invalidations: %" PRIu64 "\n", stats->type_cache_invalidations);
     fprintf(out, "Object method cache resizes: %" PRIu64 "\n", stats->type_cache_resizes);
     fprintf(out, "Object inline ints created: %" PRIu64 "\n", stats->inline_ints_created);
+    fprintf(out, "Object inline floats created: %" PRIu64 "\n", stats->inline_floats_created);
     fprintf(out, "Object inline int boxes: %" PRIu64 "\n", stats->inline_int_boxes);
     fprintf(out, "Object inline float boxes: %" PRIu64 "\n", stats->inline_float_boxes);
     fprintf(out, "Object inline array boxes: %" PRIu64 "\n", stats->inline_array_boxes);
@@ -355,6 +356,7 @@ merge_object_stats(ObjectStats *dest, const ObjectStats *src)
     dest->type_cache_invalidations += src->type_cache_invalidations;
     dest->type_cache_resizes += src->type_cache_resizes;
     dest->inline_ints_created += src->inline_ints_created;
+    dest->inline_floats_created += src->inline_floats_created;
     dest->inline_int_boxes += src->inline_int_boxes;
     dest->inline_float_boxes += src->inline_float_boxes;
     dest->inline_array_boxes += src->inline_array_boxes;

@@ -88,11 +88,24 @@ converts stackref arrays boxes their elements (`_PyStackRef_BoxArray`, `_PyStack
 C code that needs an object for a stackref it does not own uses `PyStackRef_AsPyObjectNewBoxed`.
 
 Inline ints are made by `LOAD_SMALL_INT_INLINE` and `LOAD_CONST_INLINE_INT`, to which
-`_PyCode_Quicken` rewrites loads of compact int constants, by `BINARY_OP_ADD_INT`,
-`BINARY_OP_SUBTRACT_INT` and `BINARY_OP_MULTIPLY_INT`, which box a result that overflows int32, by
-`FOR_ITER_RANGE` and by `UNARY_NEGATIVE` of an inline int. The int guards accept an inline int or a
-compact int object, and the instructions after them read either with
-`PyStackRef_CompactIntValue`. `PYTHON_TAGGED_VALUES=0` turns the producers off.
+`_PyCode_Quicken` rewrites loads of compact int constants, by the `BINARY_OP_*_INT`
+specializations for `+`, `-`, `*`, `//`, `%`, `&`, `|`, `^`, `<<` and `>>`, which box a result
+that does not fit in 32 bits, by `FOR_ITER_RANGE`, by `CALL_LEN` and by `UNARY_NEGATIVE` of an
+inline int. The int guards accept an inline int or a compact int object, and the instructions
+after them read either with `PyStackRef_CompactIntValue`.
+
+Inline floats are made by `LOAD_CONST_INLINE_FLOAT`, to which `_PyCode_Quicken` rewrites loads of
+float constants other than NaN, by `BINARY_OP_ADD_FLOAT`, `BINARY_OP_SUBTRACT_FLOAT`,
+`BINARY_OP_MULTIPLY_FLOAT` and `BINARY_OP_TRUEDIV_FLOAT`, and by `UNARY_NEGATIVE` of an exact
+float. The `BINARY_OP_*_FLOAT` instructions accept two floats, inline or boxed, or a float other
+than NaN and a compact int, which they convert to a double. `PyStackRef_FromDouble` boxes a NaN
+result, so every NaN is an object with its own identity, as before. `COMPARE_OP_FLOAT`, `TO_BOOL`,
+`BINARY_SLICE`, `STORE_SLICE` and `CALL_ISINSTANCE` read inline values without boxing them.
+Instructions that store into the heap, such as `STORE_ATTR` and `LIST_APPEND`, box them.
+
+`PYTHON_TAGGED_VALUES=0` turns the producers off: the constants stay boxed and the specializer
+does not choose the producing `BINARY_OP` and `FOR_ITER` specializations, and `CALL_LEN` and
+`UNARY_NEGATIVE` box their results.
 
 ## Free threading considerations
 

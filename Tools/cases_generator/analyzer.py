@@ -662,6 +662,14 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyStackRef_BoxArray",
     "PyStackRef_FromDoubleNotNaN",
     "PyStackRef_InlineFloat",
+    "PyStackRef_FloatCheckExact",
+    "PyStackRef_FloatValue",
+    "PyStackRef_FloatOperandsCheck",
+    "PyStackRef_NumberAsDouble",
+    "PyStackRef_FloatOperandValues",
+    # Allocate an int or float; see PyStackRef_Box below.
+    "PyStackRef_FromDouble",
+    "_PyStackRef_LshiftInt32",
     # Boxing allocates an int or float, which runs no Python code and
     # cannot start a collection.
     "PyStackRef_Box",

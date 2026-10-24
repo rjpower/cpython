@@ -3812,6 +3812,50 @@ adjust_slice_indexes(PyListObject *lst,
     return slicelength;
 }
 
+/* The step 1 case of assigning to a slice in list_ass_subscript_lock_held(),
+   for start and stop that are not yet adjusted to the list's length. */
+static int
+list_store_slice_lock_held(PyListObject *self, Py_ssize_t start, Py_ssize_t stop,
+                           PyObject *value)
+{
+    PyObject *seq;
+    /* protect against a[::-1] = a */
+    if (self == (PyListObject *)value) {
+        seq = list_slice_lock_held(self, 0, Py_SIZE(self));
+    }
+    else {
+        seq = PySequence_Fast(value, "must assign iterable to extended slice");
+    }
+    if (seq == NULL) {
+        return -1;
+    }
+    adjust_slice_indexes(self, &start, &stop, 1);
+    int res = list_ass_slice_lock_held(self, start, stop, seq);
+    Py_DECREF(seq);
+    return res;
+}
+
+int
+_PyList_StoreSlice(PyObject *op, Py_ssize_t start, Py_ssize_t stop, PyObject *value)
+{
+    assert(PyList_Check(op));
+    assert(value != NULL);
+    PyListObject *self = (PyListObject *)op;
+    int res;
+#ifdef Py_GIL_DISABLED
+    if (PyList_CheckExact(value)) {
+        Py_BEGIN_CRITICAL_SECTION2(self, value);
+        res = list_store_slice_lock_held(self, start, stop, value);
+        Py_END_CRITICAL_SECTION2();
+        return res;
+    }
+#endif
+    Py_BEGIN_CRITICAL_SECTION(self);
+    res = list_store_slice_lock_held(self, start, stop, value);
+    Py_END_CRITICAL_SECTION();
+    return res;
+}
+
 static int
 list_ass_subscript_lock_held(PyObject *_self, PyObject *item, PyObject *value)
 {

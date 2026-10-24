@@ -98,6 +98,7 @@ def always_true(tkn: Token | None) -> bool:
 
 NON_ESCAPING_DEALLOCS = {
     "_PyFloat_ExactDealloc",
+    "_PyFloat_OrLongExactDealloc",
     "_PyLong_ExactDealloc",
     "_PyUnicode_ExactDealloc",
 }

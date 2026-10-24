@@ -2960,6 +2960,207 @@ _PyEval_UnpackIndices(PyObject *start, PyObject *stop,
     return 1;
 }
 
+/* Inline values in BINARY_SLICE, STORE_SLICE and CALL_ISINSTANCE
+
+   An int or float operand may be inline (see pycore_stackref.h). Bounds that
+   are inline ints or None slice a list, tuple or str without boxes, and
+   isinstance() of an inline value against a type needs no box. Other
+   operands are boxed for the duration of the call. */
+
+/* The bounds of a slice with no step, as PySlice_Unpack() gives them, if
+   start and stop are each an inline int or None, and one is an inline int. */
+static bool
+inline_slice_bounds(_PyStackRef start, _PyStackRef stop,
+                    Py_ssize_t *istart, Py_ssize_t *istop)
+{
+    if (!PyStackRef_IsInlineInt(start) && !PyStackRef_IsInlineInt(stop)) {
+        return false;
+    }
+    if (PyStackRef_IsInlineInt(start)) {
+        *istart = PyStackRef_InlineInt(start);
+    }
+    else if (PyStackRef_IsNone(start)) {
+        *istart = 0;
+    }
+    else {
+        return false;
+    }
+    if (PyStackRef_IsInlineInt(stop)) {
+        *istop = PyStackRef_InlineInt(stop);
+    }
+    else if (PyStackRef_IsNone(stop)) {
+        *istop = PY_SSIZE_T_MAX;
+    }
+    else {
+        return false;
+    }
+    return true;
+}
+
+/* Store in *box a new box if ref holds an inline value, else NULL. Return a
+   borrowed reference to the object ref holds or to the box, or NULL with an
+   exception set if boxing fails. */
+static PyObject *
+borrow_or_box(_PyStackRef ref, PyObject **box)
+{
+    if (PyStackRef_IsInline(ref)) {
+        *box = PyStackRef_AsPyObjectNewBoxed(ref);
+        return *box;
+    }
+    *box = NULL;
+    return PyStackRef_AsPyObjectBorrow(ref);
+}
+
+static PyObject *
+binary_slice(PyObject *container, PyObject *start, PyObject *stop)
+{
+    if (PyList_CheckExact(container)) {
+        return _PyList_BinarySlice(container, start, stop);
+    }
+    if (PyTuple_CheckExact(container)) {
+        return _PyTuple_BinarySlice(container, start, stop);
+    }
+    if (PyUnicode_CheckExact(container)) {
+        return _PyUnicode_BinarySlice(container, start, stop);
+    }
+    PyObject *slice = PySlice_New(start, stop, NULL);
+    if (slice == NULL) {
+        return NULL;
+    }
+    PyObject *res = PyObject_GetItem(container, slice);
+    Py_DECREF(slice);
+    return res;
+}
+
+// container[start:stop], for BINARY_SLICE.
+PyObject *
+_PyEval_BinarySlice(_PyStackRef container_st, _PyStackRef start_st, _PyStackRef stop_st)
+{
+    Py_ssize_t start, stop;
+    if (PyStackRef_IsPointerSpace(container_st) &&
+        inline_slice_bounds(start_st, stop_st, &start, &stop))
+    {
+        PyObject *container = PyStackRef_AsPyObjectBorrow(container_st);
+        if (PyList_CheckExact(container)) {
+            PySlice_AdjustIndices(PyList_GET_SIZE(container), &start, &stop, 1);
+            return PyList_GetSlice(container, start, stop);
+        }
+        if (PyTuple_CheckExact(container)) {
+            PySlice_AdjustIndices(PyTuple_GET_SIZE(container), &start, &stop, 1);
+            return PyTuple_GetSlice(container, start, stop);
+        }
+        if (PyUnicode_CheckExact(container)) {
+            PySlice_AdjustIndices(PyUnicode_GET_LENGTH(container), &start, &stop, 1);
+            return PyUnicode_Substring(container, start, stop);
+        }
+    }
+    PyObject *container_box, *start_box = NULL, *stop_box = NULL, *res = NULL;
+    PyObject *container = borrow_or_box(container_st, &container_box);
+    if (container == NULL) {
+        goto done;
+    }
+    PyObject *start_o = borrow_or_box(start_st, &start_box);
+    if (start_o == NULL) {
+        goto done;
+    }
+    PyObject *stop_o = borrow_or_box(stop_st, &stop_box);
+    if (stop_o == NULL) {
+        goto done;
+    }
+    res = binary_slice(container, start_o, stop_o);
+done:
+    Py_XDECREF(container_box);
+    Py_XDECREF(start_box);
+    Py_XDECREF(stop_box);
+    return res;
+}
+
+// container[start:stop] = v, for STORE_SLICE. Return 0, or -1 with an
+// exception set.
+int
+_PyEval_StoreSlice(_PyStackRef v_st, _PyStackRef container_st,
+                   _PyStackRef start_st, _PyStackRef stop_st)
+{
+    Py_ssize_t start, stop;
+    if (PyStackRef_IsPointerSpace(v_st) && PyStackRef_IsPointerSpace(container_st) &&
+        PyList_CheckExact(PyStackRef_AsPyObjectBorrow(container_st)) &&
+        inline_slice_bounds(start_st, stop_st, &start, &stop))
+    {
+        return _PyList_StoreSlice(PyStackRef_AsPyObjectBorrow(container_st), start, stop,
+                                  PyStackRef_AsPyObjectBorrow(v_st));
+    }
+    PyObject *v_box, *container_box = NULL, *start_box = NULL, *stop_box = NULL;
+    int err = -1;
+    PyObject *v = borrow_or_box(v_st, &v_box);
+    if (v == NULL) {
+        goto done;
+    }
+    PyObject *container = borrow_or_box(container_st, &container_box);
+    if (container == NULL) {
+        goto done;
+    }
+    PyObject *start_o = borrow_or_box(start_st, &start_box);
+    if (start_o == NULL) {
+        goto done;
+    }
+    PyObject *stop_o = borrow_or_box(stop_st, &stop_box);
+    if (stop_o == NULL) {
+        goto done;
+    }
+    PyObject *slice = PySlice_New(start_o, stop_o, NULL);
+    if (slice == NULL) {
+        goto done;
+    }
+    err = PyObject_SetItem(container, slice, v);
+    Py_DECREF(slice);
+done:
+    Py_XDECREF(v_box);
+    Py_XDECREF(container_box);
+    Py_XDECREF(start_box);
+    Py_XDECREF(stop_box);
+    return err;
+}
+
+/* isinstance(inst, cls), for CALL_ISINSTANCE when inst or cls may be inline.
+   An int or float has no __class__ of its own, so against an exact type, or
+   a tuple of them, the answer is that of PyObject_IsInstance(), whose
+   object_isinstance() then tests the subtype relation alone. */
+int
+_PyEval_IsInstanceStackRef(_PyStackRef inst_st, _PyStackRef cls_st)
+{
+    if (PyStackRef_IsInline(inst_st) && PyStackRef_IsPointerSpace(cls_st)) {
+        PyTypeObject *type = PyStackRef_TYPE(inst_st);
+        PyObject *cls = PyStackRef_AsPyObjectBorrow(cls_st);
+        if (PyType_CheckExact(cls)) {
+            return PyType_IsSubtype(type, (PyTypeObject *)cls);
+        }
+        if (PyTuple_CheckExact(cls)) {
+            Py_ssize_t n = PyTuple_GET_SIZE(cls);
+            Py_ssize_t i = 0;
+            for (; i < n && PyType_CheckExact(PyTuple_GET_ITEM(cls, i)); i++) {
+                if (PyType_IsSubtype(type, (PyTypeObject *)PyTuple_GET_ITEM(cls, i))) {
+                    return 1;
+                }
+            }
+            if (i == n) {
+                return 0;
+            }
+        }
+    }
+    PyObject *inst_box, *cls_box = NULL;
+    int res = -1;
+    PyObject *inst = borrow_or_box(inst_st, &inst_box);
+    if (inst != NULL) {
+        PyObject *cls = borrow_or_box(cls_st, &cls_box);
+        if (cls != NULL) {
+            res = PyObject_IsInstance(inst, cls);
+        }
+    }
+    Py_XDECREF(inst_box);
+    Py_XDECREF(cls_box);
+    return res;
+}
+
 PyObject *
 _PyEval_ImportName(PyThreadState *tstate, PyObject *builtins,
             PyObject *globals, PyObject *locals, PyObject *name,

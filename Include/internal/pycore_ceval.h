@@ -321,6 +321,9 @@ PyAPI_FUNC(int)
 _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args);
 PyAPI_FUNC(_PyStackRef) _PyEval_GetIter(_PyStackRef iterable, _PyStackRef *null_or_index, int yield_from);
 PyAPI_FUNC(int) _PyEval_StoreName(PyThreadState *tstate, _PyStackRef v, PyObject *name, PyObject* ns);
+PyAPI_FUNC(PyObject *) _PyEval_BinarySlice(_PyStackRef container, _PyStackRef start, _PyStackRef stop);
+PyAPI_FUNC(int) _PyEval_StoreSlice(_PyStackRef v, _PyStackRef container, _PyStackRef start, _PyStackRef stop);
+PyAPI_FUNC(int) _PyEval_IsInstanceStackRef(_PyStackRef inst, _PyStackRef cls);
 
 /*
  * Indicate whether a special method of given 'oparg' can use the (improved)

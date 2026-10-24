@@ -308,6 +308,7 @@ dummy_func(
         // _PyCode_Quicken() rewrites constant loads to the inline forms.
         family(LOAD_CONST, 0) = {
             LOAD_CONST_INLINE_INT,
+            LOAD_CONST_INLINE_FLOAT,
         };
 
         inst(LOAD_CONST, (-- value)) {
@@ -321,6 +322,14 @@ dummy_func(
             assert(_PyLong_CheckExactAndCompact(obj));
             value = PyStackRef_FromInt32((int32_t)_PyLong_CompactValue((PyLongObject *)obj));
             ERROR_IF(PyStackRef_IsNull(value));
+        }
+
+        // The constant is an exact float other than NaN. Only builds with
+        // inline values quicken to this.
+        inst(LOAD_CONST_INLINE_FLOAT, (-- value)) {
+            PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
+            assert(PyFloat_CheckExact(obj) && !isnan(PyFloat_AS_DOUBLE(obj)));
+            value = PyStackRef_FromDoubleNotNaN(PyFloat_AS_DOUBLE(obj));
         }
 
         family(LOAD_SMALL_INT, 0) = {
@@ -384,9 +393,15 @@ dummy_func(
             PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
         }
 
-        op(_POP_TOP_FLOAT, (value --)) {
-            assert(PyFloat_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+        inline_ok op(_POP_TOP_FLOAT, (value --)) {
+            assert(PyStackRef_FloatCheckExact(value));
             PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
+        }
+
+        // An operand of float arithmetic, a float or an int.
+        inline_ok op(_POP_TOP_NUMBER, (value --)) {
+            assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+            PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
         }
 
         op(_POP_TOP_UNICODE, (value --)) {
@@ -465,6 +480,8 @@ dummy_func(
 
         // Inline values are negated without a box. Only -INT32_MIN
         // overflows; negating a float that is not NaN gives one that is not.
+        // The negation of a float object is inline too, unless it is NaN or
+        // PYTHON_TAGGED_VALUES=0.
         inline_ok op(_UNARY_NEGATIVE, (value -- res, v)) {
             if (PyStackRef_IsInlineInt(value)) {
                 int32_t i = PyStackRef_InlineInt(value);
@@ -477,6 +494,11 @@ dummy_func(
             }
             else if (PyStackRef_IsInlineFloat(value)) {
                 res = PyStackRef_FromDoubleNotNaN(-PyStackRef_InlineFloat(value));
+            }
+            else if (PyStackRef_FloatCheckExact(value) &&
+                     tstate->interp->opt_config.tagged_values_enabled)
+            {
+                res = PyStackRef_FromDouble(-PyStackRef_FloatValue(value));
             }
             else {
                 PyObject *res_o = PyNumber_Negative(PyStackRef_AsPyObjectBorrow(value));
@@ -518,8 +540,19 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        op(_TO_BOOL, (value -- res)) {
-            int err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
+        // Floats do not specialize, so inline values are tested here
+        // without a box.
+        inline_ok op(_TO_BOOL, (value -- res)) {
+            int err;
+            if (PyStackRef_IsInlineInt(value)) {
+                err = PyStackRef_InlineInt(value) != 0;
+            }
+            else if (PyStackRef_IsInlineFloat(value)) {
+                err = PyStackRef_InlineFloat(value) != 0.0;
+            }
+            else {
+                err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
+            }
             PyStackRef_CLOSE(value);
             ERROR_IF(err < 0);
             res = err ? PyStackRef_True : PyStackRef_False;
@@ -638,9 +671,17 @@ dummy_func(
             BINARY_OP_MULTIPLY_INT,
             BINARY_OP_ADD_INT,
             BINARY_OP_SUBTRACT_INT,
+            BINARY_OP_FLOOR_DIVIDE_INT,
+            BINARY_OP_REMAINDER_INT,
+            BINARY_OP_AND_INT,
+            BINARY_OP_OR_INT,
+            BINARY_OP_XOR_INT,
+            BINARY_OP_LSHIFT_INT,
+            BINARY_OP_RSHIFT_INT,
             BINARY_OP_MULTIPLY_FLOAT,
             BINARY_OP_ADD_FLOAT,
             BINARY_OP_SUBTRACT_FLOAT,
+            BINARY_OP_TRUEDIV_FLOAT,
             BINARY_OP_ADD_UNICODE,
             BINARY_OP_SUBSCR_LIST_INT,
             BINARY_OP_SUBSCR_LIST_SLICE,
@@ -735,82 +776,230 @@ dummy_func(
         macro(BINARY_OP_SUBTRACT_INT) =
             _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_SUBTRACT_INT + _POP_TOP_INT + _POP_TOP_INT;
 
-        op(_GUARD_NOS_FLOAT, (left, unused -- left, unused)) {
-            PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-            EXIT_IF(!PyFloat_CheckExact(left_o));
-        }
-
-        op(_GUARD_TOS_FLOAT, (value -- value)) {
-            PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
-            EXIT_IF(!PyFloat_CheckExact(value_o));
-        }
-
-        pure op(_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)) {
-            PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-            PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
-            assert(PyFloat_CheckExact(left_o));
-            assert(PyFloat_CheckExact(right_o));
-
+        // Python's // rounds the quotient towards minus infinity and % takes
+        // the sign of the divisor, where C truncates. Division by zero
+        // exits, and BINARY_OP raises. Only INT32_MIN // -1 overflows int32,
+        // and dividing by -1 is done apart because it traps in C.
+        inline_ok pure op(_BINARY_OP_FLOOR_DIVIDE_INT, (left, right -- res, l, r)) {
+            int32_t b = PyStackRef_CompactIntValue(right);
+            EXIT_IF(b == 0);
+            int32_t a = PyStackRef_CompactIntValue(left);
             STAT_INC(BINARY_OP, hit);
-            double dres =
-                ((PyFloatObject *)left_o)->ob_fval *
-                ((PyFloatObject *)right_o)->ob_fval;
-            PyObject *d = PyFloat_FromDouble(dres);
-            if (d == NULL) {
+            if (b == -1) {
+                res = a == INT32_MIN ? _PyStackRef_BoxInt64(-(int64_t)a) : PyStackRef_FromInt32(-a);
+            }
+            else {
+                int32_t quotient = a / b;
+                if (a % b != 0 && (a ^ b) < 0) {
+                    quotient--;
+                }
+                res = PyStackRef_FromInt32(quotient);
+            }
+            if (PyStackRef_IsNull(res)) {
                 ERROR_NO_POP();
             }
-            res = PyStackRef_FromPyObjectSteal(d);
             l = left;
             r = right;
             INPUTS_DEAD();
         }
 
-        pure op(_BINARY_OP_ADD_FLOAT, (left, right -- res, l, r)) {
-            PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-            PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
-            assert(PyFloat_CheckExact(left_o));
-            assert(PyFloat_CheckExact(right_o));
-
+        inline_ok pure op(_BINARY_OP_REMAINDER_INT, (left, right -- res, l, r)) {
+            int32_t b = PyStackRef_CompactIntValue(right);
+            EXIT_IF(b == 0);
+            int32_t a = PyStackRef_CompactIntValue(left);
             STAT_INC(BINARY_OP, hit);
-            double dres =
-                ((PyFloatObject *)left_o)->ob_fval +
-                ((PyFloatObject *)right_o)->ob_fval;
-            PyObject *d = PyFloat_FromDouble(dres);
-            if (d == NULL) {
+            int32_t remainder = 0;
+            if (b != -1) {
+                remainder = a % b;
+                if (remainder != 0 && (remainder ^ b) < 0) {
+                    remainder += b;
+                }
+            }
+            res = PyStackRef_FromInt32(remainder);
+            if (PyStackRef_IsNull(res)) {
                 ERROR_NO_POP();
             }
-            res = PyStackRef_FromPyObjectSteal(d);
             l = left;
             r = right;
             INPUTS_DEAD();
         }
 
-        pure op(_BINARY_OP_SUBTRACT_FLOAT, (left, right -- res, l, r)) {
-            PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-            PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
-            assert(PyFloat_CheckExact(left_o));
-            assert(PyFloat_CheckExact(right_o));
-
+        // Ints behave as infinite two's complement under &, | and ^, so the
+        // result for int32 operands is the int32 result.
+        inline_ok pure op(_BINARY_OP_AND_INT, (left, right -- res, l, r)) {
             STAT_INC(BINARY_OP, hit);
-            double dres =
-                ((PyFloatObject *)left_o)->ob_fval -
-                ((PyFloatObject *)right_o)->ob_fval;
-            PyObject *d = PyFloat_FromDouble(dres);
-            if (d == NULL) {
+            res = PyStackRef_FromInt32(PyStackRef_CompactIntValue(left) & PyStackRef_CompactIntValue(right));
+            if (PyStackRef_IsNull(res)) {
                 ERROR_NO_POP();
             }
-            res = PyStackRef_FromPyObjectSteal(d);
+            l = left;
+            r = right;
+            INPUTS_DEAD();
+        }
+
+        inline_ok pure op(_BINARY_OP_OR_INT, (left, right -- res, l, r)) {
+            STAT_INC(BINARY_OP, hit);
+            res = PyStackRef_FromInt32(PyStackRef_CompactIntValue(left) | PyStackRef_CompactIntValue(right));
+            if (PyStackRef_IsNull(res)) {
+                ERROR_NO_POP();
+            }
+            l = left;
+            r = right;
+            INPUTS_DEAD();
+        }
+
+        inline_ok pure op(_BINARY_OP_XOR_INT, (left, right -- res, l, r)) {
+            STAT_INC(BINARY_OP, hit);
+            res = PyStackRef_FromInt32(PyStackRef_CompactIntValue(left) ^ PyStackRef_CompactIntValue(right));
+            if (PyStackRef_IsNull(res)) {
+                ERROR_NO_POP();
+            }
+            l = left;
+            r = right;
+            INPUTS_DEAD();
+        }
+
+        // A negative shift count exits, and BINARY_OP raises. A shift of
+        // fewer than 32 places fits in int64; a longer one of anything but 0
+        // makes a long int.
+        inline_ok pure op(_BINARY_OP_LSHIFT_INT, (left, right -- res, l, r)) {
+            int32_t b = PyStackRef_CompactIntValue(right);
+            EXIT_IF(b < 0);
+            int32_t a = PyStackRef_CompactIntValue(left);
+            STAT_INC(BINARY_OP, hit);
+            if (b < 32) {
+                int64_t shifted = (int64_t)((uint64_t)(int64_t)a << b);
+                res = (int32_t)shifted == shifted
+                    ? PyStackRef_FromInt32((int32_t)shifted)
+                    : _PyStackRef_BoxInt64(shifted);
+            }
+            else if (a == 0) {
+                res = PyStackRef_FromInt32(0);
+            }
+            else {
+                res = _PyStackRef_LshiftInt32(a, b);
+            }
+            if (PyStackRef_IsNull(res)) {
+                ERROR_NO_POP();
+            }
+            l = left;
+            r = right;
+            INPUTS_DEAD();
+        }
+
+        // Python's >> rounds towards minus infinity, as an arithmetic shift
+        // does; shifting an int32 by 31 places or more leaves its sign.
+        inline_ok pure op(_BINARY_OP_RSHIFT_INT, (left, right -- res, l, r)) {
+            int32_t b = PyStackRef_CompactIntValue(right);
+            EXIT_IF(b < 0);
+            int32_t a = PyStackRef_CompactIntValue(left);
+            STAT_INC(BINARY_OP, hit);
+            res = PyStackRef_FromInt32(Py_ARITHMETIC_RIGHT_SHIFT(int32_t, a, b < 31 ? b : 31));
+            if (PyStackRef_IsNull(res)) {
+                ERROR_NO_POP();
+            }
+            l = left;
+            r = right;
+            INPUTS_DEAD();
+        }
+
+        macro(BINARY_OP_FLOOR_DIVIDE_INT) =
+            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_FLOOR_DIVIDE_INT + _POP_TOP_INT + _POP_TOP_INT;
+
+        macro(BINARY_OP_REMAINDER_INT) =
+            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_REMAINDER_INT + _POP_TOP_INT + _POP_TOP_INT;
+
+        macro(BINARY_OP_AND_INT) =
+            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_AND_INT + _POP_TOP_INT + _POP_TOP_INT;
+
+        macro(BINARY_OP_OR_INT) =
+            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_OR_INT + _POP_TOP_INT + _POP_TOP_INT;
+
+        macro(BINARY_OP_XOR_INT) =
+            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_XOR_INT + _POP_TOP_INT + _POP_TOP_INT;
+
+        macro(BINARY_OP_LSHIFT_INT) =
+            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_LSHIFT_INT + _POP_TOP_INT + _POP_TOP_INT;
+
+        macro(BINARY_OP_RSHIFT_INT) =
+            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_RSHIFT_INT + _POP_TOP_INT + _POP_TOP_INT;
+
+        // The float guards accept an inline float or an exact float object,
+        // and the uops after them read either with PyStackRef_FloatValue().
+        inline_ok op(_GUARD_NOS_FLOAT, (left, unused -- left, unused)) {
+            EXIT_IF(!PyStackRef_FloatCheckExact(left));
+        }
+
+        inline_ok op(_GUARD_TOS_FLOAT, (value -- value)) {
+            EXIT_IF(!PyStackRef_FloatCheckExact(value));
+        }
+
+        // Float arithmetic takes two floats, or a float and a compact int,
+        // each inline or boxed (see PyStackRef_FloatOperandsCheck()). The
+        // test and the reads are one step, so that two inline floats get a
+        // path of their own. The result is inline unless it is NaN.
+        inline_ok pure op(_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)) {
+            double a, b;
+            EXIT_IF(!PyStackRef_FloatOperandValues(left, right, &a, &b));
+            STAT_INC(BINARY_OP, hit);
+            res = PyStackRef_FromDouble(a * b);
+            if (PyStackRef_IsNull(res)) {
+                ERROR_NO_POP();
+            }
+            l = left;
+            r = right;
+            INPUTS_DEAD();
+        }
+
+        inline_ok pure op(_BINARY_OP_ADD_FLOAT, (left, right -- res, l, r)) {
+            double a, b;
+            EXIT_IF(!PyStackRef_FloatOperandValues(left, right, &a, &b));
+            STAT_INC(BINARY_OP, hit);
+            res = PyStackRef_FromDouble(a + b);
+            if (PyStackRef_IsNull(res)) {
+                ERROR_NO_POP();
+            }
+            l = left;
+            r = right;
+            INPUTS_DEAD();
+        }
+
+        inline_ok pure op(_BINARY_OP_SUBTRACT_FLOAT, (left, right -- res, l, r)) {
+            double a, b;
+            EXIT_IF(!PyStackRef_FloatOperandValues(left, right, &a, &b));
+            STAT_INC(BINARY_OP, hit);
+            res = PyStackRef_FromDouble(a - b);
+            if (PyStackRef_IsNull(res)) {
+                ERROR_NO_POP();
+            }
+            l = left;
+            r = right;
+            INPUTS_DEAD();
+        }
+
+        // Division by zero exits, and BINARY_OP raises.
+        inline_ok pure op(_BINARY_OP_TRUEDIV_FLOAT, (left, right -- res, l, r)) {
+            double a, b;
+            EXIT_IF(!PyStackRef_FloatOperandValues(left, right, &a, &b));
+            EXIT_IF(b == 0.0);
+            STAT_INC(BINARY_OP, hit);
+            res = PyStackRef_FromDouble(a / b);
+            if (PyStackRef_IsNull(res)) {
+                ERROR_NO_POP();
+            }
             l = left;
             r = right;
             INPUTS_DEAD();
         }
 
         macro(BINARY_OP_MULTIPLY_FLOAT) =
-            _GUARD_TOS_FLOAT + _GUARD_NOS_FLOAT + unused/5 + _BINARY_OP_MULTIPLY_FLOAT + _POP_TOP_FLOAT + _POP_TOP_FLOAT;
+            unused/5 + _BINARY_OP_MULTIPLY_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;
         macro(BINARY_OP_ADD_FLOAT) =
-            _GUARD_TOS_FLOAT + _GUARD_NOS_FLOAT + unused/5 + _BINARY_OP_ADD_FLOAT + _POP_TOP_FLOAT + _POP_TOP_FLOAT;
+            unused/5 + _BINARY_OP_ADD_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;
         macro(BINARY_OP_SUBTRACT_FLOAT) =
-            _GUARD_TOS_FLOAT + _GUARD_NOS_FLOAT + unused/5 + _BINARY_OP_SUBTRACT_FLOAT + _POP_TOP_FLOAT + _POP_TOP_FLOAT;
+            unused/5 + _BINARY_OP_SUBTRACT_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;
+        macro(BINARY_OP_TRUEDIV_FLOAT) =
+            unused/5 + _BINARY_OP_TRUEDIV_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;
 
         pure op(_BINARY_OP_ADD_UNICODE, (left, right -- res, l, r)) {
             PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
@@ -919,30 +1108,10 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        op(_BINARY_SLICE, (container, start, stop -- res)) {
-            PyObject *container_o = PyStackRef_AsPyObjectBorrow(container);
-            PyObject *start_o = PyStackRef_AsPyObjectBorrow(start);
-            PyObject *stop_o = PyStackRef_AsPyObjectBorrow(stop);
-            PyObject *res_o;
-            if (PyList_CheckExact(container_o)) {
-                res_o = _PyList_BinarySlice(container_o, start_o, stop_o);
-            }
-            else if (PyTuple_CheckExact(container_o)) {
-                res_o = _PyTuple_BinarySlice(container_o, start_o, stop_o);
-            }
-            else if (PyUnicode_CheckExact(container_o)) {
-                res_o = _PyUnicode_BinarySlice(container_o, start_o, stop_o);
-            }
-            else {
-                PyObject *slice = PySlice_New(start_o, stop_o, NULL);
-                if (slice == NULL) {
-                    res_o = NULL;
-                }
-                else {
-                    res_o = PyObject_GetItem(container_o, slice);
-                    Py_DECREF(slice);
-                }
-            }
+        // Inline bounds slice a list, tuple or str without boxes or a slice
+        // object; see _PyEval_BinarySlice().
+        inline_ok op(_BINARY_SLICE, (container, start, stop -- res)) {
+            PyObject *res_o = _PyEval_BinarySlice(container, start, stop);
             DECREF_INPUTS();
             ERROR_IF(res_o == NULL);
             res = PyStackRef_FromPyObjectSteal(res_o);
@@ -957,18 +1126,10 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        op(_STORE_SLICE, (v, container, start, stop -- )) {
-            PyObject *slice = _PyBuildSlice_ConsumeRefs(PyStackRef_AsPyObjectSteal(start),
-                                                        PyStackRef_AsPyObjectSteal(stop),
-                                                        Py_None);
-            int err;
-            if (slice == NULL) {
-                err = 1;
-            }
-            else {
-                err = PyObject_SetItem(PyStackRef_AsPyObjectBorrow(container), slice, PyStackRef_AsPyObjectBorrow(v));
-                Py_DECREF(slice);
-            }
+        // Inline bounds store to a list slice without boxes or a slice
+        // object; see _PyEval_StoreSlice().
+        inline_ok op(_STORE_SLICE, (v, container, start, stop -- )) {
+            int err = _PyEval_StoreSlice(v, container, start, stop);
             DECREF_INPUTS();
             ERROR_IF(err);
         }
@@ -2923,13 +3084,10 @@ dummy_func(
         macro(COMPARE_OP_STR) =
             _GUARD_TOS_UNICODE + _GUARD_NOS_UNICODE + unused/1 + _COMPARE_OP_STR + _POP_TOP_UNICODE + _POP_TOP_UNICODE;
 
-        op(_COMPARE_OP_FLOAT, (left, right -- res, l, r)) {
-            PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-            PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
-
+        inline_ok op(_COMPARE_OP_FLOAT, (left, right -- res, l, r)) {
             STAT_INC(COMPARE_OP, hit);
-            double dleft = PyFloat_AS_DOUBLE(left_o);
-            double dright = PyFloat_AS_DOUBLE(right_o);
+            double dleft = PyStackRef_FloatValue(left);
+            double dright = PyStackRef_FloatValue(right);
             // 1 if NaN, 2 if <, 4 if >, 8 if ==; this matches low four bits of the oparg
             int sign_ish = COMPARISON_BIT(dleft, dright);
             l = left;
@@ -4431,15 +4589,16 @@ dummy_func(
             if (len_i < 0) {
                 ERROR_NO_POP();
             }
-            PyObject *res_o = PyLong_FromSsize_t(len_i);
-            assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
-            if (res_o == NULL) {
+            // The length is inline unless PYTHON_TAGGED_VALUES=0.
+            res = len_i <= INT32_MAX && tstate->interp->opt_config.tagged_values_enabled
+                ? PyStackRef_FromInt32((int32_t)len_i)
+                : _PyStackRef_BoxInt64(len_i);
+            if (PyStackRef_IsNull(res)) {
                 ERROR_NO_POP();
             }
             a = arg;
             c = callable;
             INPUTS_DEAD();
-            res = PyStackRef_FromPyObjectSteal(res_o);
         }
 
         op(_GUARD_CALLABLE_ISINSTANCE, (callable, unused, unused, unused -- callable, unused, unused, unused)) {
@@ -4448,12 +4607,17 @@ dummy_func(
             EXIT_IF(callable_o != interp->callable_cache.isinstance);
         }
 
-        op(_CALL_ISINSTANCE, (callable, null, instance, cls -- res)) {
+        inline_ok op(_CALL_ISINSTANCE, (callable, null, instance, cls -- res)) {
             /* isinstance(o, o2) */
             STAT_INC(CALL, hit);
-            PyObject *inst_o = PyStackRef_AsPyObjectBorrow(instance);
-            PyObject *cls_o = PyStackRef_AsPyObjectBorrow(cls);
-            int retval = PyObject_IsInstance(inst_o, cls_o);
+            int retval;
+            if (PyStackRef_IsInline(instance) || PyStackRef_IsInline(cls)) {
+                retval = _PyEval_IsInstanceStackRef(instance, cls);
+            }
+            else {
+                retval = PyObject_IsInstance(PyStackRef_AsPyObjectBorrow(instance),
+                                             PyStackRef_AsPyObjectBorrow(cls));
+            }
             if (retval < 0) {
                 ERROR_NO_POP();
             }

@@ -411,3 +411,29 @@ _PyStackRef_BoxInt64(int64_t value)
     }
     return PyStackRef_FromPyObjectSteal(op);
 }
+
+_PyStackRef
+_PyStackRef_LshiftInt32(int32_t value, int32_t shift)
+{
+    assert(shift >= 0);
+    PyObject *op = PyLong_FromLong(value);
+    if (op == NULL) {
+        return PyStackRef_NULL;
+    }
+    PyObject *res = _PyLong_Lshift(op, shift);
+    Py_DECREF(op);
+    if (res == NULL) {
+        return PyStackRef_NULL;
+    }
+    return PyStackRef_FromPyObjectSteal(res);
+}
+
+_PyStackRef
+_PyStackRef_BoxDouble(double value)
+{
+    PyObject *op = PyFloat_FromDouble(value);
+    if (op == NULL) {
+        return PyStackRef_NULL;
+    }
+    return PyStackRef_FromPyObjectSteal(op);
+}

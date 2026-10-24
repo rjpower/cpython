@@ -2984,6 +2984,31 @@ stackref_box_roundtrip(PyObject *self, PyObject *arg)
     }
     return PyStackRef_AsPyObjectSteal(boxed);
 }
+
+// The names of the frame's local variables that hold inline values.
+static PyObject *
+inline_locals(PyObject *self, PyObject *frame)
+{
+    if (!PyFrame_Check(frame)) {
+        PyErr_SetString(PyExc_TypeError, "argument must be a frame");
+        return NULL;
+    }
+    _PyInterpreterFrame *f = ((PyFrameObject *)frame)->f_frame;
+    PyCodeObject *co = _PyFrame_GetCode(f);
+    PyObject *names = PySet_New(NULL);
+    if (names == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i < co->co_nlocalsplus; i++) {
+        if (PyStackRef_IsInline(f->localsplus[i]) &&
+            PySet_Add(names, PyTuple_GET_ITEM(co->co_localsplusnames, i)) < 0)
+        {
+            Py_DECREF(names);
+            return NULL;
+        }
+    }
+    return names;
+}
 #endif
 
 #ifdef __EMSCRIPTEN__
@@ -3438,6 +3463,7 @@ static PyMethodDef module_functions[] = {
     {"incref_decref_delayed", incref_decref_delayed, METH_O},
 #ifdef Py_STACKREF_INLINE_VALUES
     {"stackref_box_roundtrip", stackref_box_roundtrip, METH_O},
+    {"inline_locals", inline_locals, METH_O},
 #endif
     GET_NEXT_DICT_KEYS_VERSION_METHODDEF
 #ifdef __EMSCRIPTEN__

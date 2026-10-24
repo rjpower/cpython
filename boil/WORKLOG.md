@@ -79,3 +79,11 @@ Entries are appended in order; each milestone is also a commit.
   also fails on the baseline. Debug and free-threaded builds pass their
   targeted sets. `jit_unwind.c`, `jit_publish.c` and the perf trampolines
   are kept for our own tiers. The ports recipe loses its `jit` variant.
+- Added `boil/tools/pyperf_run.sh`: seeds the pyperformance venv with the
+  host `uv` (the target interpreter has no ssl, so its pip cannot reach
+  PyPI) and runs the plan's subset. A first neutrality run of the
+  post-deletion build landed at 1.044 geomean, but it ran while two agents
+  were compiling and testing with 16 jobs; outliers of 0.81 and 1.63 on
+  unrelated benchmarks mark it as noise. Kept as `*.noisy.json`; the real
+  measurement runs on an idle machine before the next code commit.
+  Rule from here: benchmark only when no build or test run is active.

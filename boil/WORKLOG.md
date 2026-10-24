@@ -33,3 +33,11 @@ Entries are appended in order; each milestone is also a commit.
   own region. Measured today's costs with `perf stat`: an int add is 164
   instructions per iteration, a float add 130. Seven-step sequence with an
   overhead gate at step 2. Coordinator decisions recorded in section 12.
+- Design note `boil/design/01-internal-ir.md` landed. Decisions: 64-bit IR
+  words (16-bit handler index plus three 16-bit fields, optional second
+  word), 15-bit slots with a borrow bit, one typed feedback block per code
+  object with seven kinds absorbing all 15 inline-cache structs, lazy
+  lowering at first execution, in-place quickening of the handler field.
+  Measured maxima on the stdlib: 803 slots per frame, 32 percent of
+  instructions specialisable. Nine-step sequence; step 1 deletes tier 2 and
+  the copy-and-patch JIT. Coordinator decisions in section 10.

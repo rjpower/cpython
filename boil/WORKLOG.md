@@ -129,3 +129,10 @@ Entries are appended in order; each milestone is also a commit.
   helpers, and a checker allowance for the one place where a borrowed
   local legitimately outlives its slot's close: `framelocalsproxy_setitem`
   with `f_overwritten_fast_locals`). Targeted tests pass in that build.
+- Low-bit int tag prototype (`boil/tagged-lowbit-prototype`): +2.5 percent
+  instructions against step 1 versus +5.8 for NaN-box; `Borrow`, `CLOSE`,
+  `DUP` unchanged from step 1. Remaining cost is box-in-place address
+  taking (spills), guard exits and code growth. Decision recorded in design
+  note 02 section 13: Phase 1 uses the low-bit tag with floats boxed; two
+  generator fixes (by-value boxing, unlikely branch) run next on that
+  branch, then it rebases onto main after the feedback vector lands.

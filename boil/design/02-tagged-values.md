@@ -508,3 +508,36 @@ audit them. Plan item 1z, the register IR, is not affected: its frame slots are
 Sequencing change: tier 2 and the copy-and-patch JIT are removed as their own
 step before step 2 of section 10, so the new encoding never has to be taught
 to code we are deleting.
+
+## 13. Coordinator decisions after measurement (2026-10-23, later)
+
+Step 2 was built twice and measured in instructions and time against the
+step 1 binary on richards, go, nqueens and chaos with no inline producers:
+
+| encoding | instructions, `-l 1` | per loop | time geomean |
+|---|---|---|---|
+| NaN-box (section 2.1) | +5.8% | +7.7% | 1.047 |
+| low-bit int tag, floats boxed | +2.5% | +3.3% | not yet timed |
+
+The NaN-box cost is structural while refcount borrows are dynamic:
+`PyStackRef_Borrow` cannot be `or $1` when bit 0 of an inline float is a
+mantissa bit, and that macro runs on every `LOAD_FAST_BORROW`. The low-bit
+encoding keeps `Borrow`, `CLOSE`, `DUP` and `Is` at their step 1 cost; what
+remains is box-in-place sites that take the address of a local and force
+spills, guard exits (`test $4; jne`), and code growth defeating inlining.
+
+Decisions:
+
+1. **Phase 1 encoding is the low-bit int tag.** Low 3 bits: `000` owned
+   pointer, `001` borrowed or immortal pointer, `010` error, `011` index
+   (`(i << 3) | 3`), `101` inline int32 in bits 32 to 63. No inline floats in
+   Phase 1 (option (a) of section 2.4). Inline floats return when borrows are
+   static (the register IR's borrow bit) or in Phase 2.
+2. **The subset property is relaxed** to: every encoding fact lives behind
+   the predicates in `pycore_stackref.h`, so the Phase 2 re-encoding is a
+   header change plus re-measurement, not a rewrite of handlers.
+3. **Before landing step 2:** emit boxing by value (`x = PyStackRef_Box(x)`)
+   so no address is taken, mark the inline branch unlikely, and re-measure.
+   The gate stays at 2 percent instructions with 3 percent accepted.
+4. **Guards** stay generated. With producers, an int guard becomes the inline
+   test itself and gets cheaper than today's `ob_type` load and compare.

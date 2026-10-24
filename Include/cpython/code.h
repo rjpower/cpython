@@ -38,6 +38,18 @@ typedef struct {
 #define _PyCode_DEF_THREAD_LOCAL_BYTECODE()
 #endif
 
+#ifdef Py_IR_INTERP
+/* The register IR of the code object, which holds the feedback (see
+   Include/internal/pycore_ir.h); _PyIR_LowerStub until first executed. */
+#define _PyCode_DEF_FEEDBACK() \
+    struct _PyIRBlock *_co_ir;
+#else
+/* Typed feedback of co_code_adaptive, which stores it after the code units;
+   NULL if no instruction has inline cache units. */
+#define _PyCode_DEF_FEEDBACK() \
+    struct _PyFbBlock *_co_feedback;
+#endif
+
 // To avoid repeating ourselves in deepfreeze.py, all PyCodeObject members are
 // defined in this macro:
 #define _PyCode_DEF(SIZE) {                                                    \
@@ -104,9 +116,7 @@ typedef struct {
        Type is a void* to keep the format private in codeobject.c to force     \
        people to go through the proper APIs. */                                \
     void *co_extra;                                                            \
-    /* Typed feedback of co_code_adaptive, which stores it after the code      \
-       units; NULL if no instruction has inline cache units. */                \
-    struct _PyFbBlock *_co_feedback;                                           \
+    _PyCode_DEF_FEEDBACK()                                                     \
     _PyCode_DEF_THREAD_LOCAL_BYTECODE()                                        \
     char co_code_adaptive[(SIZE)];                                             \
 }

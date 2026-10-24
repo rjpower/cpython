@@ -1,0 +1,868 @@
+"""Generate the register IR interpreter.
+
+Reads the instruction definitions from Python/bytecodes.c, the source of the
+stack interpreter too, and writes
+
+- Python/generated_ir_cases.c.h, one handler per instruction, #included in
+  ceval.c when Py_IR_INTERP is defined;
+- Python/ir_targets.h, the computed-goto and tail-call tables, indexed by
+  handler.
+
+Design note boil/design/01-internal-ir.md describes the IR, and
+Include/internal/pycore_ir.h the word layout. In short, an instruction is one
+or two 64-bit words: a 16-bit handler index and three 16-bit fields A, B and C,
+and for two-word formats a 32-bit field D and a 32-bit field F. A field names a
+frame slot (slot << 1, with IR_BORROW in bit 0), the feedback entry (its
+distance from the instruction in words), the oparg or the jump distance in
+words. An IR_EXT word in front widens A, B and C to 32 bits.
+
+The format of each instruction follows from its stack effect:
+
+- Register style: every input is a scalar, there are at most three of them,
+  and no uop is annotated `window`. The fields name the first new output
+  (`dst`) and the inputs, bottom first, then the feedback entry and the oparg.
+- Window style: the instructions with array inputs, more than three inputs or
+  the `window` annotation. Field A names the slot of the deepest input.
+
+Then the feedback entry and the oparg follow, in fields B and C. If three fields
+do not hold them all, the oparg moves into the entry's arg field, or the
+instruction takes a second word with the oparg in D and the entry in F. For a
+jump the oparg is the distance to the target in words, so bodies such as
+JUMPBY(oparg + 1) need no change.
+
+Invariants:
+
+- The handler index of an instruction with an opcode is its opcode. IR-only
+  handlers (annotation `ir_only`) follow from 256.
+- Members of a family share the format of the family, and INSTRUMENTED_X that
+  of X, so specialisation and instrumentation rewrite only the handler field.
+  INSTRUMENTED_LINE and INSTRUMENTED_INSTRUCTION take no format: they run
+  another handler on the same fields.
+- In the 1:1 form of step 4, the temporary at depth d lives in slot
+  nlocalsplus + d, where the stack interpreter keeps it, and handlers keep
+  stack_pointer. A register field equals that canonical slot unless it carries
+  IR_BORROW, which debug builds check at every dispatch. Handlers read an
+  input through its field only where the family lets the lowering absorb a
+  LOAD_FAST_BORROW, that is where every member converts the input to an object
+  first; there the borrow tag is set statically after the object check.
+- Instruction macros of the DSL (generators_common.STACK_INSTRUCTION_MACROS)
+  expand to the IR forms of IR_INSTRUCTION_MACROS.
+"""
+
+import argparse
+from dataclasses import dataclass, field
+
+from analyzer import (
+    Analysis,
+    CodeSection,
+    Instruction,
+    Uop,
+    Skip,
+    Flush,
+    StackItem,
+    analysis_error,
+    analyze_files,
+)
+from generators_common import (
+    DEFAULT_INPUT,
+    ROOT,
+    Emitter,
+    TokenIterator,
+    write_header,
+)
+from cwriter import CWriter
+from lexer import Token
+from stack import Local, PointerOffset, Stack, Storage, get_stack_effect
+from tier1_generator import (
+    UNKNOWN_OPCODE_HANDLER,
+    declare_variables,
+    stack_read_later,
+)
+from typing import TextIO
+
+DEFAULT_OUTPUT = ROOT / "Python/generated_ir_cases.c.h"
+DEFAULT_TARGETS_OUTPUT = ROOT / "Python/ir_targets.h"
+
+INSTRUCTION_START_MARKER = "/* BEGIN INSTRUCTIONS */"
+INSTRUCTION_END_MARKER = "/* END INSTRUCTIONS */"
+LABEL_START_MARKER = "/* BEGIN LABELS */"
+LABEL_END_MARKER = "/* END LABELS */"
+
+FIRST_IR_ONLY_HANDLER = 256
+
+# Field names: the C variables that dispatch fills from word 0.
+FIELDS = ("A", "B", "C")
+FIELD_VARS = {"A": "ir_a", "B": "ir_b", "C": "ir_c"}
+
+# The IR forms of the instruction macros (see STACK_INSTRUCTION_MACROS).
+IR_INSTRUCTION_MACROS = {
+    "FB_COUNTER": "((_PyFbHeader *)fb)",
+    "FB_BRANCH": "((_PyFbHeader *)fb)->history",
+    "FB_HEADER_OF": "_PyIR_FbHeaderOf(frame, {0}, {1})",
+    "INSTR_OPCODE": "IR_HANDLER(*{0p})",
+    "INSTR_OPARG": "_PyIR_Oparg(frame, {0})",
+    "INSTRUCTION_SIZE_OF": "{size}u",
+    "RETURN_TO_CALLER": "LOAD_IP(_PyIR_YieldReturnOffset(frame))",
+    "INSTR_OFFSET_OF": "_PyFrame_InstrOffset(frame, {0})",
+    "INSTR_START_OF": "_PyFrame_InstrStartOffset(frame, {0})",
+    "INSTR_AT_OFFSET": "_PyFrame_InstrAt(frame, {0})",
+    "CURRENT_OFFSET": "_PyFrame_InstrOffset(frame, next_instr - 1)",
+    "INSTR_INDEX": "({0} - _PyFrame_IRWords(frame))",
+    "INSTR_IN": "(_PyFrame_IRWords(frame) + ({1}))",
+    "ORIGINAL_HANDLER": "_PyIR_OriginalHandler(frame, this_instr, {0})",
+}
+
+# Roles and locations, as in pycore_ir.h.
+ROLE_NONE, ROLE_IN0, ROLE_DST, ROLE_BASE, ROLE_FB, ROLE_IMM = (
+    "_PyIR_ROLE_NONE", "_PyIR_ROLE_IN0", "_PyIR_ROLE_DST",
+    "_PyIR_ROLE_BASE", "_PyIR_ROLE_FB", "_PyIR_ROLE_IMM")
+LOC_NONE, LOC_A, LOC_B, LOC_C, LOC_D, LOC_F, LOC_FBARG = (
+    "_PyIR_LOC_NONE", "_PyIR_LOC_A", "_PyIR_LOC_B", "_PyIR_LOC_C",
+    "_PyIR_LOC_D", "_PyIR_LOC_F", "_PyIR_LOC_FBARG")
+
+
+@dataclass
+class IRFormat:
+    "The word layout shared by a family, see the module docstring"
+    group: str                      # the family head, or the instruction
+    window: bool
+    nwords: int
+    roles: list[str]                # roles of fields A, B and C
+    inputs: list[str]               # register style: input names, bottom first
+    n_inputs: int                   # register style: scalar inputs
+    dst_offset: int | None          # slot of dst, from the stack pointer before
+    borrow_mask: int                # bit k: input k may carry IR_BORROW
+    imm: str                        # where the oparg lives (LOC_*)
+    fb: str                         # where the feedback distance lives
+    jumps: bool                     # the oparg is a jump distance in words
+    popped: str                     # window style: inputs, as a C expression
+    no_fold: bool = False
+    transparent: bool = False       # see is_transparent()
+
+    def field_of(self, role: str) -> str | None:
+        for name, r in zip(FIELDS, self.roles):
+            if r == role:
+                return name
+        return None
+
+    def input_field(self, k: int) -> str:
+        return FIELDS[self.roles.index(f"{ROLE_IN0} + {k}")]
+
+
+# An instruction named PREFIX + X, for an instruction X, shares the format of
+# X: the instrumented twins, and the handlers that the lowering puts in place
+# of an absorbed load.
+SHARED_FORMAT_PREFIXES = ("INSTRUMENTED_", "IR_ABSORBED_")
+
+
+def is_transparent(inst: Instruction) -> bool:
+    """Whether inst runs another handler on the same fields: it has no stack
+    effect, oparg or feedback, and ends in DISPATCH_GOTO()."""
+    uops = [part for part in inst.parts if isinstance(part, Uop)]
+    if inst.properties.oparg or uses_feedback(inst):
+        return False
+    if any(uop.stack.inputs or uop.stack.outputs for uop in uops):
+        return False
+    return any(tkn.text == "DISPATCH_GOTO"
+               for uop in uops for tkn in uop.body.tokens())
+
+
+def uses_feedback(inst: Instruction) -> bool:
+    "Whether the instruction names its feedback entry"
+    for part in inst.parts:
+        if not isinstance(part, Uop):
+            continue
+        if any(cache.name != "unused" for cache in part.caches):
+            return True
+        for tkn in part.body.tokens():
+            if tkn.kind == "IDENTIFIER" and tkn.text in ("FB_COUNTER", "FB_BRANCH"):
+                return True
+    return False
+
+
+@dataclass
+class Entry:
+    "An item on the abstract stack of external_io()"
+    external: int                   # index of the external input, or -1
+    item: StackItem
+    aliased: bool = False           # assigned from an input, `out = in;`
+
+
+def passed_through(uop: Uop, j: int) -> int | None:
+    """The index of the input of uop that its output j passes through.
+
+    A named output passes through the input of the same name. An `unused`
+    output is not written, so it keeps what the input at its position held,
+    provided that no array lies below it."""
+    inputs, outputs = uop.stack.inputs, uop.stack.outputs
+    name = outputs[j].name
+    if name != "unused":
+        for i, item in enumerate(inputs):
+            if item.name == name:
+                return i
+        return None
+    if j < len(inputs) and not any(
+            item.is_array() for item in inputs[:j + 1] + outputs[:j + 1]):
+        return j
+    return None
+
+
+def external_io(inst: Instruction) -> tuple[list[StackItem], list[Entry]]:
+    """The inputs that inst takes from the stack, bottom first, and the
+    entries it leaves there, which name an input when it passes through."""
+    stack: list[Entry] = []
+    external: list[StackItem] = []   # top first
+    for part in inst.parts:
+        if not isinstance(part, Uop):
+            continue
+        popped: list[Entry] = []    # top first
+        for item in reversed(part.stack.inputs):
+            if stack:
+                entry = stack.pop()
+            else:
+                entry = Entry(len(external), item)
+                external.append(item)
+            popped.append(entry)
+        popped.reverse()
+        for j, item in enumerate(part.stack.outputs):
+            i = passed_through(part, j)
+            if i is not None:
+                stack.append(popped[i])
+            else:
+                stack.append(Entry(-1, item, item.name in part.aliased_outputs))
+    n = len(external)
+    inputs = list(reversed(external))
+    outputs = [
+        Entry(n - 1 - e.external if e.external >= 0 else -1, e.item, e.aliased)
+        for e in stack
+    ]
+    return inputs, outputs
+
+
+def assigns_to(uop: Uop, name: str) -> bool:
+    "Whether the body of uop assigns to the variable name"
+    tokens = list(uop.body.tokens())
+    return any(
+        tkn.text == name and nxt.kind == "EQUALS"
+        and prev.kind not in ("ARROW", "PERIOD")
+        for prev, tkn, nxt in zip(tokens, tokens[1:], tokens[2:])
+    )
+
+
+def classify_inputs(inst: Instruction, n_inputs: int) -> list[str]:
+    """How inst first relies on each input, bottom first.
+
+    "object" if a uop converts the input to an object (or asserts that it is
+    one) before any uop consumes or reassigns it, "raw" if a uop consumes or
+    reassigns it first, "unused" if no uop reads it. A uop that passes the
+    input through unchanged only inspects it, which does not depend on the
+    borrow tag, so it does not decide."""
+    result = ["unused"] * n_inputs
+    settled = [False] * n_inputs
+    stack: list[int] = []  # external index (bottom first) or -1
+    depth = n_inputs        # external inputs not yet reached
+    for part in inst.parts:
+        if not isinstance(part, Uop):
+            continue
+        popped: list[int] = []      # top first
+        kept = {item.name for item in part.stack.outputs}
+        for item in reversed(part.stack.inputs):
+            if stack:
+                ext = stack.pop()
+            else:
+                depth -= 1
+                ext = depth
+            if ext >= 0 and item.is_array():
+                # The array covers an unknown number of external inputs
+                for k in range(n_inputs):
+                    if not settled[k]:
+                        settled[k] = True
+                        result[k] = "raw"
+            elif ext >= 0 and not settled[ext] and item.used:
+                if not part.properties.inline_ok and (
+                        item.name in part.object_inputs
+                        or item.name in part.asserted_objects):
+                    settled[ext] = True
+                    result[ext] = "object"
+                elif item.name not in kept or assigns_to(part, item.name):
+                    settled[ext] = True
+                    result[ext] = "raw"
+                else:
+                    result[ext] = "raw"  # unless a later uop decides
+            popped.append(ext)
+        popped.reverse()
+        for j in range(len(part.stack.outputs)):
+            i = passed_through(part, j)
+            stack.append(popped[i] if i is not None else -1)
+    return result
+
+
+def group_name(inst: Instruction, analysis: Analysis) -> str:
+    "The instruction whose format inst shares"
+    if inst.family is not None:
+        return inst.family.name
+    for prefix in SHARED_FORMAT_PREFIXES:
+        base = inst.name.removeprefix(prefix)
+        if base != inst.name and base in analysis.instructions:
+            return group_name(analysis.instructions[base], analysis)
+    return inst.name
+
+
+def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
+    return {**analysis.instructions, **analysis.ir_only}
+
+
+def handler_ids(analysis: Analysis) -> dict[str, int]:
+    "Handler index of each instruction"
+    ids = {name: inst.opcode for name, inst in analysis.instructions.items()}
+    for i, name in enumerate(sorted(analysis.ir_only)):
+        ids[name] = FIRST_IR_ONLY_HANDLER + i
+    return ids
+
+
+def get_popped(inst: Instruction) -> str:
+    stack = get_stack_effect(inst)
+    return (-stack.base_offset).to_c()
+
+
+def first_new_output(outputs: list[Entry], n_inputs: int) -> int | None:
+    """The offset from the stack pointer before the instruction of the slot
+    of its first new output, if no array lies below it."""
+    for j, e in enumerate(outputs):
+        if e.item.is_array():
+            return None
+        if e.external < 0:
+            return j - n_inputs
+    return None
+
+
+def compute_format(group: str, members: list[Instruction]) -> IRFormat:
+    """The format of a group; members[0] is its head.
+
+    Members may read different numbers of inputs, as INSTRUMENTED_END_FOR
+    reads two that END_FOR leaves alone. Their inputs are aligned at the top
+    of the stack, and the fields cover the member that reads deepest."""
+    head = members[0]
+    io = {m.name: external_io(m) for m in members}
+    deepest = max(members, key=lambda m: len(io[m.name][0]))
+    inputs = io[deepest.name][0]
+    n_inputs = len(inputs)
+    # Members that pass their first outputs through write later slots, which
+    # follow dst. Members that push a frame and no outputs write none.
+    new_outputs = [
+        first_new_output(io[m.name][1], len(io[m.name][0])) for m in members
+    ]
+    dst_offset = min((o for o in new_outputs if o is not None), default=None)
+    window = any(m.properties.window for m in members) or any(
+        item.is_array() for m in members for item in io[m.name][0])
+    if not window:
+        n_slots = n_inputs + (dst_offset is not None)
+        window = n_slots > 3
+    for m, m_dst in zip(members, new_outputs):
+        if not window and m_dst is not None and m.properties.switches_frame:
+            # Outputs that follow the switch belong to another frame
+            raise analysis_error(
+                f"{m.name} switches frames and pushes outputs; "
+                "annotate it `window`", m.where)
+    jumps = any(m.properties.jumps for m in members)
+    has_fb = any(uses_feedback(m) for m in members)
+    has_imm = any(m.properties.oparg for m in members)
+    no_fold = any(m.properties.no_fold for m in members) or any(
+        e.aliased for m in members for e in io[m.name][1])
+    fields: list[str] = []
+    names: list[str] = []
+    borrow_mask = 0
+    if window:
+        fields.append(ROLE_BASE)
+        n_inputs = 0
+        dst_offset = None
+    else:
+        if dst_offset is not None:
+            fields.append(ROLE_DST)
+        for k, item in enumerate(inputs):
+            fields.append(f"{ROLE_IN0} + {k}")
+            names.append(item.name)
+        uses: list[list[str]] = []
+        passthrough: set[int] = set()
+        for m in members:
+            m_inputs, m_outputs = io[m.name]
+            shift = n_inputs - len(m_inputs)
+            uses.append(["unused"] * shift + classify_inputs(m, len(m_inputs)))
+            passthrough |= {e.external + shift for e in m_outputs if e.external >= 0}
+        for k in range(n_inputs):
+            if k in passthrough:
+                continue
+            if all(u[k] in ("object", "unused") for u in uses) and any(
+                    u[k] == "object" for u in uses):
+                borrow_mask |= 1 << k
+    imm = LOC_NONE
+    fb = LOC_NONE
+    nwords = 1
+    tail = (1 if has_fb else 0) + (1 if has_imm else 0)
+    if len(fields) + tail <= 3:
+        if has_fb:
+            fb = FIELDS[len(fields)]
+            fields.append(ROLE_FB)
+        if has_imm:
+            imm = FIELDS[len(fields)]
+            fields.append(ROLE_IMM)
+    elif has_fb and has_imm and not jumps and len(fields) + 1 <= 3:
+        # The oparg moves into the entry's arg field
+        fb = FIELDS[len(fields)]
+        fields.append(ROLE_FB)
+        imm = LOC_FBARG
+    else:
+        nwords = 2
+        if has_fb:
+            fb = LOC_F
+        if has_imm:
+            imm = LOC_D
+    loc = {"A": LOC_A, "B": LOC_B, "C": LOC_C}
+    fb = loc.get(fb, fb)
+    imm = loc.get(imm, imm)
+    roles = fields + [ROLE_NONE] * (3 - len(fields))
+    return IRFormat(
+        group=group, window=window, nwords=nwords, roles=roles, inputs=names,
+        n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
+        imm=imm, fb=fb, jumps=jumps, popped=get_popped(deepest), no_fold=no_fold,
+    )
+
+
+def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
+    "The format of every instruction, by name"
+    insts = all_instructions(analysis)
+    groups: dict[str, list[Instruction]] = {}
+    transparent = {name for name, inst in insts.items() if is_transparent(inst)}
+    for name in sorted(insts):
+        inst = insts[name]
+        if name in transparent:
+            continue
+        group = group_name(inst, analysis)
+        groups.setdefault(group, []).append(inst)
+    formats: dict[str, IRFormat] = {}
+    for group, members in groups.items():
+        # The head first: its stack effect defines the family's
+        head = insts[group]
+        members = [head] + [m for m in members if m is not head]
+        fmt = compute_format(group, members)
+        for m in members:
+            formats[m.name] = fmt
+    for name in sorted(transparent):
+        formats[name] = IRFormat(
+            group=name, window=False, nwords=1, roles=[ROLE_NONE] * 3,
+            inputs=[], n_inputs=0, dst_offset=None, borrow_mask=0,
+            imm=LOC_NONE, fb=LOC_NONE, jumps=False, popped="0",
+            transparent=True)
+    return formats
+
+
+def field_expr(loc: str) -> str:
+    "The C expression of the field at loc, in a handler"
+    return {
+        LOC_A: "ir_a",
+        LOC_B: "ir_b",
+        LOC_C: "ir_c",
+        LOC_D: "IR_D(this_instr[1])",
+        LOC_F: "IR_F(this_instr[1])",
+    }[loc]
+
+
+class IRStack(Stack):
+    """A stack that reads the external inputs at the offsets of field_inputs
+    through their fields, the SlotStack of the design note. An offset leaves
+    field_inputs when the handler writes the canonical slot, which then holds
+    the current value."""
+
+    def __init__(self, field_inputs: dict[int, str] | None = None) -> None:
+        super().__init__()
+        self.field_inputs = dict(field_inputs or {})
+
+    def copy(self) -> "IRStack":
+        other = super().copy()
+        assert isinstance(other, IRStack)
+        other.field_inputs = dict(self.field_inputs)
+        return other
+
+    def field_of(self, var: StackItem, memory_offset: PointerOffset) -> str | None:
+        offset = memory_offset.as_int()
+        if var.is_array() or offset is None:
+            return None
+        return self.field_inputs.get(offset)
+
+    def load(self, var: StackItem, memory_offset: PointerOffset) -> str:
+        field = self.field_of(var, memory_offset)
+        if field is not None:
+            return f"IR_SLOT({FIELD_VARS[field]})"
+        return super().load(var, memory_offset)
+
+    def pop(self, var: StackItem, out: CWriter) -> Local:
+        local = super().pop(var, out)
+        if local.memory_offset is not None and var.used and local.ir_field is None:
+            local.ir_field = self.field_of(var, local.memory_offset)
+        return local
+
+    def save_variables(self, out: CWriter) -> None:
+        var_offset = self.base_offset
+        for var in self.variables:
+            if var.in_local and not var.memory_offset and not var.is_array():
+                offset = var_offset.as_int()
+                if offset is not None:
+                    self.field_inputs.pop(offset, None)
+            var_offset = var_offset.push(var.item)
+        super().save_variables(out)
+
+    def merge(self, other: Stack, out: CWriter) -> None:
+        super().merge(other, out)
+        assert isinstance(other, IRStack)
+        for offset in list(self.field_inputs):
+            if offset not in other.field_inputs:
+                del self.field_inputs[offset]
+
+
+class IREmitter(Emitter):
+    "Emits handler bodies for the register IR"
+
+    instruction_macros = IR_INSTRUCTION_MACROS
+
+    def __init__(self, out: CWriter, analysis: Analysis,
+                 formats: dict[str, IRFormat]):
+        super().__init__(out, analysis.labels)
+        self.formats = formats
+        self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
+
+    def expand_instruction_macro(self, tkn: Token, args: list[list[Token]],
+                                 inst: Instruction | None) -> str:
+        if tkn.text == "INSTRUCTION_SIZE_OF":
+            if len(args) != 1 or len(args[0]) != 1:
+                raise analysis_error("INSTRUCTION_SIZE_OF takes a family", tkn)
+            family = args[0][0].text
+            if family not in self.formats:
+                raise analysis_error(f"No instruction {family}", tkn)
+            return f"{self.formats[family].nwords}u"
+        return super().expand_instruction_macro(tkn, args, inst)
+
+    def ir_instruction_size(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        assert inst is not None
+        self.out.emit(f" {self.formats[inst.name].nwords}u ")
+        return True
+
+    def emit_object_inputs(
+        self, uop: Uop, storage: Storage, inst: Instruction | None, stack_read_later: bool
+    ) -> None:
+        """Inputs read through a field: check, box and tag as borrowed when
+        the field carries IR_BORROW. A box goes back to the slot the field
+        names, which owns it then, a local for an IR_BORROW field."""
+        kept = {item.name for item in uop.stack.outputs}
+        for var in storage.inputs:
+            if var.ir_field is None or var.known_object:
+                continue
+            f = FIELD_VARS[var.ir_field]
+            converts = not uop.properties.inline_ok and (
+                var.name in uop.object_inputs or var.name in uop.asserted_objects)
+            if not converts:
+                if var.name in kept and not assigns_to(uop, var.name):
+                    continue  # An inspection, see classify_inputs()
+                assert inst is not None
+                raise analysis_error(
+                    f"{inst.name}: input '{var.name}' may carry IR_BORROW "
+                    f"but {uop.name} consumes it as is", inst.where)
+            if var.name not in uop.asserted_objects:
+                self.out.start_line()
+                if uop.is_guard():
+                    self.emit(f"if (Py_UNLIKELY(!PyStackRef_IsPointerSpace({var.name}))) {{\n")
+                    self.emit_jump_to_predicted(inst)
+                else:
+                    self.emit(f"if (Py_UNLIKELY(PyStackRef_IsInline({var.name}))) {{\n")
+                    self.emit(f"{var.name} = PyStackRef_Box({var.name});\n")
+                    self.emit(f"if (PyStackRef_IsInline({var.name})) {{\n")
+                    storage.stack.copy().flush(self.out)
+                    self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
+                    self.emit("}\n")
+                    if inst is not None:
+                        self.emit(f"BOX_STAT_INC({inst.name});\n")
+                    self.emit(f"IR_SLOT({f}) = {var.name};\n")
+                self.emit("}\n")
+            self.out.start_line()
+            self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f});\n")
+            var.known_object = True
+        super().emit_object_inputs(uop, storage, inst, stack_read_later)
+
+
+def write_uop(
+    uop: Uop | Skip | Flush,
+    emitter: IREmitter,
+    stack: Stack,
+    inst: Instruction,
+    braces: bool,
+) -> tuple[bool, Stack]:
+    if isinstance(uop, Skip):
+        return True, stack
+    if isinstance(uop, Flush):
+        emitter.emit(f"// flush\n")
+        stack.flush(emitter.out)
+        return True, stack
+    emitter.out.start_line()
+    if braces:
+        emitter.out.emit(f"// {uop.name}\n")
+        emitter.emit("{\n")
+    storage = Storage.for_uop(stack, uop, emitter.out)
+    for cache in uop.caches:
+        if cache.name != "unused":
+            if cache.size == 4:
+                value = f"PyObject *{cache.name} = (PyObject *)fb->{cache.name};"
+            else:
+                value = f"uint32_t {cache.name} = fb->{cache.name};"
+            emitter.emit(value + "\n")
+            if inst.family is None:
+                emitter.emit(f"(void){cache.name};\n")
+    emitter.emit_object_inputs(uop, storage, inst, stack_read_later(inst, uop))
+    reachable, storage = emitter.emit_tokens(uop, storage, inst, False)
+    if braces:
+        emitter.out.start_line()
+        emitter.emit("}\n")
+    return reachable, storage.stack
+
+
+def feedback_type(fmt: IRFormat) -> str:
+    "The entry type of a format: that of its group, see pycore_feedback.h"
+    return f"_PyFb_{fmt.group}"
+
+
+def needs_this(inst: Instruction, fmt: IRFormat) -> bool:
+    if inst.properties.needs_this or fmt.nwords == 2:
+        return True
+    if fmt.fb != LOC_NONE and (uses_feedback(inst) or
+                               (inst.properties.oparg and fmt.imm == LOC_FBARG)):
+        return True
+    for part in inst.parts:
+        if isinstance(part, Uop):
+            for tkn in part.body.tokens():
+                if tkn.kind == "IDENTIFIER" and tkn.text in ("DEOPT_IF", "EXIT_IF"):
+                    return True
+    return False
+
+
+def emit_field_checks(fmt: IRFormat, out: CWriter) -> None:
+    """Debug checks that each slot field names its canonical slot, given as
+    an offset from stack_pointer, or for an input carries IR_BORROW."""
+    if fmt.transparent:
+        return
+    for name, role in zip(FIELDS, fmt.roles):
+        f = FIELD_VARS[name]
+        if role == ROLE_DST:
+            out.emit(f"IR_CHECK_SLOT({f}, {fmt.dst_offset});\n")
+        elif role == ROLE_BASE:
+            base = f"-{fmt.popped}" if fmt.popped.isdigit() else f"-({fmt.popped})"
+            out.emit(f"IR_CHECK_SLOT({f}, {base});\n")
+        elif role.startswith(ROLE_IN0):
+            k = int(role.split("+")[1])
+            out.emit(f"IR_CHECK_INPUT({f}, {k - fmt.n_inputs}, {fmt.n_inputs});\n")
+
+
+def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
+                      outfile: TextIO, lines: bool) -> None:
+    out = CWriter(outfile, 2, lines)
+    emitter = IREmitter(out, analysis, formats)
+    out.emit("\n")
+    for name, inst in sorted(all_instructions(analysis).items()):
+        fmt = formats[name]
+        out.emit("\n")
+        out.emit(f"TARGET({name}) {{\n")
+        out.emit(f"#if _Py_TAIL_CALL_INTERP\n")
+        out.emit(f"int opcode = {name};\n")
+        out.emit(f"(void)(opcode);\n")
+        out.emit(f"#endif\n")
+        this = needs_this(inst, fmt)
+        if inst.properties.needs_prev:
+            out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
+        if this and not inst.is_target:
+            out.emit(f"_PyIRWord* const this_instr = next_instr;\n")
+            out.emit("(void)this_instr;\n")
+        if not inst.properties.no_save_ip:
+            out.emit(f"frame->instr_ptr = next_instr;\n")
+        out.emit(f"next_instr += {fmt.nwords};\n")
+        out.emit(f"INSTRUCTION_STATS({name});\n")
+        if inst.is_target:
+            out.emit(f"PREDICTED_{name}:;\n")
+            if this:
+                out.emit(f"_PyIRWord* const this_instr = next_instr - {fmt.nwords};\n")
+                out.emit("(void)this_instr;\n")
+        use_fb = fmt.fb != LOC_NONE and (
+            uses_feedback(inst) or (inst.properties.oparg and fmt.imm == LOC_FBARG))
+        if use_fb:
+            out.emit(f"{feedback_type(fmt)} *fb = ({feedback_type(fmt)} *)"
+                     f"IR_FB(this_instr, {field_expr(fmt.fb)});\n")
+        if inst.properties.oparg:
+            if fmt.imm == LOC_FBARG:
+                out.emit("int oparg = (int)((_PyFbHeader *)fb)->arg;\n")
+            else:
+                out.emit(f"int oparg = (int){field_expr(fmt.imm)};\n")
+            out.emit("(void)oparg;\n")
+        emit_field_checks(fmt, out)
+        if inst.properties.uses_opcode:
+            out.emit(f"opcode = {name};\n")
+        declare_variables(inst, out)
+        field_inputs: dict[int, str] = {}
+        for k in range(fmt.n_inputs):
+            if fmt.borrow_mask & (1 << k):
+                field_inputs[k - fmt.n_inputs] = fmt.input_field(k)
+        stack: Stack = IRStack(field_inputs)
+        insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
+        reachable = True
+        for part in inst.parts:
+            reachable, stack = write_uop(part, emitter, stack, inst, insert_braces)
+        out.start_line()
+        if reachable:
+            stack.flush(out)
+            out.emit("DISPATCH();\n")
+        out.start_line()
+        out.emit("}")
+        out.emit("\n")
+
+
+def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
+    emitter.emit("\n")
+    for name, label in analysis.labels.items():
+        emitter.emit(f"LABEL({name})\n")
+        storage = Storage(IRStack(), [], [], 0, False)
+        if label.spilled:
+            storage.spilled = 1
+            storage.stack.physical_sp = None
+        emitter.emit_tokens(label, storage, None)
+        emitter.emit("\n\n")
+
+
+def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
+                lines: bool) -> None:
+    formats = compute_formats(analysis)
+    write_header(__file__, filenames, outfile)
+    outfile.write(f"""
+#ifndef Py_IR_INTERP
+#  error "this header is the interpreter of the register IR (Py_IR_INTERP)"
+#endif
+#if !_Py_TAIL_CALL_INTERP
+#if !USE_COMPUTED_GOTOS
+    dispatch_opcode:
+        switch (opcode)
+#endif
+        {{
+#endif /* _Py_TAIL_CALL_INTERP */
+            {INSTRUCTION_START_MARKER}
+""")
+    generate_ir_cases(analysis, formats, outfile, lines)
+    outfile.write(f"""
+            {INSTRUCTION_END_MARKER}
+#if !_Py_TAIL_CALL_INTERP
+#if USE_COMPUTED_GOTOS
+        _unknown_opcode:
+#else
+        default:
+#endif
+            /* Tell C compilers not to hold the opcode variable in the loop.
+               next_instr points the current instruction without TARGET(). */
+            opcode = IR_HANDLER(*next_instr);
+            {UNKNOWN_OPCODE_HANDLER}
+
+        }}
+
+        /* This should never be reached. Every opcode should end with DISPATCH()
+           or goto error. */
+        Py_UNREACHABLE();
+#endif /* _Py_TAIL_CALL_INTERP */
+        {LABEL_START_MARKER}
+""")
+    out = CWriter(outfile, 2, lines)
+    emitter = IREmitter(out, analysis, formats)
+    generate_ir_labels(analysis, emitter)
+    outfile.write(f"{LABEL_END_MARKER}\n")
+
+
+def function_proto(name: str) -> str:
+    return f"static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_{name}(TAIL_CALL_PARAMS)"
+
+
+def generate_ir_targets(filenames: list[str], analysis: Analysis,
+                        outfile: TextIO) -> None:
+    "The dispatch tables, indexed by handler"
+    ids = handler_ids(analysis)
+    n = FIRST_IR_ONLY_HANDLER + len(analysis.ir_only)
+    write_header(__file__, filenames, outfile)
+    out = CWriter(outfile, 0, False)
+    targets = ["&&_unknown_opcode,\n"] * n
+    for name, i in ids.items():
+        targets[i] = f"&&TARGET_{name},\n"
+    out.emit("#if !_Py_TAIL_CALL_INTERP\n")
+    out.emit(f"static void *opcode_targets[{n}] = {{\n")
+    for target in targets:
+        out.emit(target)
+    out.emit("};\n")
+    out.emit("#else /* _Py_TAIL_CALL_INTERP */\n")
+    out.emit(f"static py_tail_call_funcptr instruction_funcptr_handler_table[{n}];\n")
+    out.emit("\n")
+    for name in analysis.labels:
+        out.emit(f"{function_proto(name)};\n")
+    out.emit("\n")
+    for name in sorted(ids):
+        out.emit(f"{function_proto(name)};\n")
+    out.emit("\n")
+    out.emit(function_proto("UNKNOWN_OPCODE"))
+    out.emit(" {\n")
+    out.emit("int opcode = IR_HANDLER(*next_instr);\n")
+    out.emit(UNKNOWN_OPCODE_HANDLER)
+    out.emit("}\n")
+    out.emit("\n")
+    out.emit(f"static py_tail_call_funcptr instruction_funcptr_handler_table[{n}] = {{\n")
+    by_index = {i: name for name, i in ids.items()}
+    for i in range(n):
+        name = by_index.get(i, "UNKNOWN_OPCODE")
+        out.emit(f"[{i}] = _TAIL_CALL_{name},\n")
+    out.emit("};\n")
+    out.emit("#endif /* _Py_TAIL_CALL_INTERP */\n")
+
+
+def generate_ir_from_files(filenames: list[str], outfilename: str,
+                           lines: bool) -> None:
+    data = analyze_files(filenames)
+    with open(outfilename, "w") as outfile:
+        generate_ir(filenames, data, outfile, lines)
+
+
+arg_parser = argparse.ArgumentParser(
+    description="Generate the handlers of the register IR interpreter.",
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
+
+arg_parser.add_argument(
+    "-o", "--output", type=str, help="Generated code", default=DEFAULT_OUTPUT
+)
+
+arg_parser.add_argument(
+    "-t", "--targets", type=str, help="Generated dispatch tables",
+    default=DEFAULT_TARGETS_OUTPUT
+)
+
+arg_parser.add_argument(
+    "-l", "--emit-line-directives", help="Emit #line directives", action="store_true"
+)
+
+arg_parser.add_argument(
+    "input", nargs=argparse.REMAINDER, help="Instruction definition file(s)"
+)
+
+
+if __name__ == "__main__":
+    args = arg_parser.parse_args()
+    if len(args.input) == 0:
+        args.input.append(DEFAULT_INPUT)
+    data = analyze_files(args.input)
+    with open(args.output, "w") as outfile:
+        generate_ir(args.input, data, outfile, args.emit_line_directives)
+    with open(args.targets, "w") as outfile:
+        generate_ir_targets(args.input, data, outfile)

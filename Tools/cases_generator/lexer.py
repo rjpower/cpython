@@ -233,6 +233,9 @@ annotations = {
     "tier1",
     "no_save_ip",
     "inline_ok",
+    "window",
+    "no_fold",
+    "ir_only",
 }
 
 __all__ = []

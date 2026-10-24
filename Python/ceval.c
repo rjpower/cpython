@@ -773,7 +773,7 @@ _Py_VectorCallInstrumentation_StackRefSteal(
     _PyStackRef kwnames,
     bool call_instrumentation,
     _PyInterpreterFrame* frame,
-    _Py_CODEUNIT* this_instr,
+    _PyInstr* this_instr,
     PyThreadState* tstate)
 {
     PyObject* res;
@@ -1045,6 +1045,21 @@ int _Py_CheckRecursiveCallPy(
     return 0;
 }
 
+#ifdef Py_IR_INTERP
+/* The value that a frame returns or yields to the entry frame lands in
+ * entry.stack[0], localsplus[1] of the entry frame. */
+static_assert(offsetof(_PyEntryFrame, stack) ==
+              offsetof(_PyInterpreterFrame, localsplus) + sizeof(_PyStackRef),
+              "the entry frame's stack must follow localsplus[0]");
+
+static const _PyIRWord _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS[] = {
+    /* Put a NOP at the start, so that the IP points into
+    * the code, rather than before it */
+    IR_WORD(NOP, 0, 0, 0),
+    IR_WORD(INTERPRETER_EXIT, IR_SLOT_FIELD(1), 0, 0),  /* reached on return */
+    IR_WORD(INTERPRETER_EXIT, IR_SLOT_FIELD(1), 0, 0),  /* reached on yield */
+};
+#else
 static const _Py_CODEUNIT _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS[] = {
     /* Put a NOP at the start, so that the IP points into
     * the code, rather than before it */
@@ -1055,8 +1070,9 @@ static const _Py_CODEUNIT _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS[] = {
     { .op.code = RESUME, .op.arg = RESUME_OPARG_DEPTH1_MASK | RESUME_AT_FUNC_START },
     { .op.code = CACHE, .op.arg = 0 } /* RESUME's CACHE */
 };
+#endif
 
-const _Py_CODEUNIT *_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR = (_Py_CODEUNIT*)&_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
+const _PyInstr *_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR = (_PyInstr*)&_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
 
 
 PyObject **
@@ -1107,8 +1123,13 @@ _PyObjectArray_Free(PyObject **array, PyObject **scratch)
 #endif
 
 #if _Py_TAIL_CALL_INTERP
+#ifdef Py_IR_INTERP
+#include "ir_targets.h"
+#include "generated_ir_cases.c.h"
+#else
 #include "opcode_targets.h"
 #include "generated_cases.c.h"
+#endif
 #endif
 
 
@@ -1261,13 +1282,21 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 
 #if USE_COMPUTED_GOTOS && !_Py_TAIL_CALL_INTERP
 /* Import the static jump table */
+#ifdef Py_IR_INTERP
+#include "ir_targets.h"
+#else
 #include "opcode_targets.h"
+#endif
 #endif
 
 #ifdef Py_STATS
     int lastopcode = 0;
 #endif
-#if !_Py_TAIL_CALL_INTERP
+#if !_Py_TAIL_CALL_INTERP && defined(Py_IR_INTERP)
+    int opcode;        /* Current handler */
+    uint32_t ir_a, ir_b, ir_c;  /* Its fields A, B and C */
+    assert(tstate->current_frame == NULL || tstate->current_frame->stackpointer != NULL);
+#elif !_Py_TAIL_CALL_INTERP
     uint8_t opcode;    /* Current opcode */
     int oparg;         /* Current opcode argument, if any */
     assert(tstate->current_frame == NULL || tstate->current_frame->stackpointer != NULL);
@@ -1282,7 +1311,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 
     /* Local "register" variables.
      * These are cached values from the frame and code object.  */
-    _Py_CODEUNIT *next_instr;
+    _PyInstr *next_instr;
     _PyStackRef *stack_pointer;
     entry.stack[0] = PyStackRef_NULL;
 #ifdef Py_STACKREF_DEBUG
@@ -1296,7 +1325,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     entry.frame.f_builtins = (PyObject*)0xaaa4;
 #endif
     entry.frame.f_executable = PyStackRef_None;
-    entry.frame.instr_ptr = (_Py_CODEUNIT *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS + 1;
+    entry.frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS + 1;
     entry.frame.stackpointer = entry.stack;
     entry.frame.owner = FRAME_OWNED_BY_INTERPRETER;
     entry.frame.visited = 0;
@@ -1315,7 +1344,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
         if (_Py_EnterRecursivePy(tstate)) {
             goto early_exit;
         }
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GIL_DISABLED) && !defined(Py_IR_INTERP)
         /* Load thread-local bytecode */
         if (frame->tlbc_index != ((_PyThreadStateImpl *)tstate)->tlbc_index) {
             _Py_CODEUNIT *bytecode =
@@ -1336,9 +1365,9 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
         _PyFrame_StackPointerInvalidate(frame);
 #if _Py_TAIL_CALL_INTERP
 #   if Py_STATS
-        return _TAIL_CALL_error(frame, stack_pointer, tstate, next_instr, 0, lastopcode);
+        return _TAIL_CALL_error(frame, stack_pointer, tstate, next_instr, TAIL_CALL_NO_OPERANDS, lastopcode);
 #   else
-        return _TAIL_CALL_error(frame, stack_pointer, tstate, next_instr, 0);
+        return _TAIL_CALL_error(frame, stack_pointer, tstate, next_instr, TAIL_CALL_NO_OPERANDS);
 #   endif
 #else
         goto error;
@@ -1347,13 +1376,17 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 
 #if _Py_TAIL_CALL_INTERP
 #   if Py_STATS
-        return _TAIL_CALL_start_frame(frame, NULL, tstate, NULL, 0, lastopcode);
+        return _TAIL_CALL_start_frame(frame, NULL, tstate, NULL, TAIL_CALL_NO_OPERANDS, lastopcode);
 #   else
-        return _TAIL_CALL_start_frame(frame, NULL, tstate, NULL, 0);
+        return _TAIL_CALL_start_frame(frame, NULL, tstate, NULL, TAIL_CALL_NO_OPERANDS);
 #   endif
 #else
     goto start_frame;
-#   include "generated_cases.c.h"
+#   ifdef Py_IR_INTERP
+#       include "generated_ir_cases.c.h"
+#   else
+#       include "generated_cases.c.h"
+#   endif
 #endif
 
 
@@ -2398,7 +2431,7 @@ Error:
 
 void
 _PyEval_MonitorRaise(PyThreadState *tstate, _PyInterpreterFrame *frame,
-              _Py_CODEUNIT *instr)
+              _PyInstr *instr)
 {
     if (no_tools_for_local_event(tstate, frame, PY_MONITORING_EVENT_RAISE)) {
         return;

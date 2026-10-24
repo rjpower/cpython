@@ -203,9 +203,9 @@ dummy_func(
                 _Py_CODEUNIT *bytecode =
                     _PyEval_GetExecutableCode(tstate, _PyFrame_GetCode(frame));
                 ERROR_IF(bytecode == NULL);
-                ptrdiff_t off = this_instr - _PyFrame_GetBytecode(frame);
+                ptrdiff_t off = INSTR_INDEX(this_instr);
                 frame->tlbc_index = ((_PyThreadStateImpl *)tstate)->tlbc_index;
-                frame->instr_ptr = bytecode + off;
+                frame->instr_ptr = INSTR_IN(bytecode, off);
                 // Make sure this_instr gets reset correctly for any uops that
                 // follow
                 next_instr = frame->instr_ptr;
@@ -529,7 +529,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_TO_BOOL, (value -- value)) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_ToBool(value, next_instr);
@@ -1030,8 +1030,8 @@ dummy_func(
             assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(right)));
 
             int next_oparg;
-            assert(next_instr->op.code == STORE_FAST);
-            next_oparg = next_instr->op.arg;
+            assert(INSTR_OPCODE(next_instr) == STORE_FAST);
+            next_oparg = INSTR_OPARG(next_instr);
             _PyStackRef *target_local = &GETLOCAL(next_oparg);
             assert(PyUnicode_CheckExact(left_o));
             EXIT_IF(PyStackRef_AsPyObjectBorrow(*target_local) != left_o);
@@ -1356,7 +1356,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_STORE_SUBSCR, (container, sub -- container, sub)) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_StoreSubscr(container, sub, next_instr);
@@ -1506,7 +1506,7 @@ dummy_func(
         // The stack effect here is a bit misleading.
         // retval is popped from the stack, but res
         // is pushed to a different frame, the callers' frame.
-        op(_RETURN_VALUE, (retval -- res)) {
+        window op(_RETURN_VALUE, (retval -- res)) {
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
             _PyStackRef temp = retval;
             DEAD(retval);
@@ -1599,7 +1599,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_SEND, (receiver, unused, unused -- receiver, unused, unused)) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_Send(receiver, next_instr);
@@ -1610,7 +1610,7 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        tier1 op(_SEND, (receiver, null_or_index, v -- receiver, null_or_index, retval)) {
+        tier1 window op(_SEND, (receiver, null_or_index, v -- receiver, null_or_index, retval)) {
             PyObject *receiver_o = PyStackRef_AsPyObjectBorrow(receiver);
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
             if (!IS_PEP523_HOOKED(tstate) &&
@@ -1747,7 +1747,7 @@ dummy_func(
             _GUARD_3OS_ASYNC_GEN_ASEND +
             _SEND_ASYNC_GEN;
 
-        op(_YIELD_VALUE, (retval -- value)) {
+        window op(_YIELD_VALUE, (retval -- value)) {
             // NOTE: It's important that YIELD_VALUE never raises an exception!
             // The compiler treats any exception raised here as a failed close()
             // or throw() call.
@@ -1773,14 +1773,14 @@ dummy_func(
             assert(INLINE_CACHE_ENTRIES_SEND == INLINE_CACHE_ENTRIES_FOR_ITER);
             #ifdef Py_DEBUG
             if (!PyStackRef_IsNone(frame->f_executable)) {
-                Py_ssize_t i = frame->instr_ptr - _PyFrame_GetBytecode(frame);
+                Py_ssize_t i = INSTR_OFFSET_OF(frame->instr_ptr);
                 assert(i >= 0 && i <= INT_MAX);
                 int opcode = _Py_GetBaseCodeUnit(_PyFrame_GetCode(frame), (int)i).op.code;
                 assert(opcode == SEND || opcode == FOR_ITER);
             }
             #endif
             RELOAD_STACK();
-            LOAD_IP(1 + INLINE_CACHE_ENTRIES_SEND);
+            RETURN_TO_CALLER();
             value = temp;
             LLTRACE_RESUME_FRAME();
         }
@@ -1821,7 +1821,7 @@ dummy_func(
 
             assert(oparg >= 0 && oparg <= 2);
             if (oparg) {
-                frame->instr_ptr = _PyFrame_GetBytecode(frame) + PyStackRef_UntagIndex(values[0]);
+                frame->instr_ptr = INSTR_AT_OFFSET(PyStackRef_UntagIndex(values[0]));
             }
             assert(exc && PyExceptionInstance_Check(exc));
             _PyErr_SetRaisedException(tstate, exc);
@@ -1829,7 +1829,7 @@ dummy_func(
             goto exception_unwind;
         }
 
-        tier1 op(_END_ASYNC_FOR, (awaitable_st, exc_st -- )) {
+        tier1 window op(_END_ASYNC_FOR, (awaitable_st, exc_st -- )) {
             JUMPBY(0); // Pretend jump as we need source offset for monitoring
             (void)oparg;
             PyObject *exc = PyStackRef_AsPyObjectBorrow(exc_st);
@@ -1848,7 +1848,7 @@ dummy_func(
         }
 
         tier1 op(_MONITOR_END_ASYNC_FOR, ( -- )) {
-            assert((next_instr-oparg)->op.code == END_SEND || (next_instr-oparg)->op.code >= MIN_INSTRUMENTED_OPCODE);
+            assert(INSTR_OPCODE(next_instr-oparg) == END_SEND || INSTR_OPCODE(next_instr-oparg) >= MIN_INSTRUMENTED_OPCODE);
             INSTRUMENTED_JUMP(next_instr-oparg, this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);
         }
 
@@ -1917,7 +1917,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_UNPACK_SEQUENCE, (seq -- seq)) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_UnpackSequence(seq, next_instr, oparg);
@@ -2002,7 +2002,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_STORE_ATTR, (v, owner -- v, owner)) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 if (!PyStackRef_IsNull(v)) {
                     PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
@@ -2092,7 +2092,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_LOAD_GLOBAL, ( -- )) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                 next_instr = this_instr;
@@ -2516,7 +2516,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_LOAD_SUPER_ATTR, (global_super_st, class_st, unused -- global_super_st, class_st, unused)) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             int load_method = oparg & 1;
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
@@ -2658,7 +2658,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_LOAD_ATTR, (owner -- owner)) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                 next_instr = this_instr;
@@ -3043,7 +3043,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_COMPARE_OP, (left, right -- left, right)) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_CompareOp(left, right, next_instr, oparg);
@@ -3165,7 +3165,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_CONTAINS_OP, (left, right -- left, right)) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_ContainsOp(left, right, next_instr);
@@ -3330,16 +3330,16 @@ dummy_func(
             assert(PyStackRef_BoolCheck(cond));
             int flag = PyStackRef_IsFalse(cond);
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(this_instr[1].cache, flag);
-            JUMPBY(flag ? oparg : next_instr->op.code == NOT_TAKEN);
+            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
+            JUMPBY(flag ? oparg : INSTR_OPCODE(next_instr) == NOT_TAKEN);
         }
 
         replaced op(_POP_JUMP_IF_TRUE, (cond -- )) {
             assert(PyStackRef_BoolCheck(cond));
             int flag = PyStackRef_IsTrue(cond);
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(this_instr[1].cache, flag);
-            JUMPBY(flag ? oparg : next_instr->op.code == NOT_TAKEN);
+            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
+            JUMPBY(flag ? oparg : INSTR_OPCODE(next_instr) == NOT_TAKEN);
         }
 
         op(_IS_NONE, (value -- b)) {
@@ -3431,7 +3431,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_GET_ITER, (iterable -- iterable)) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_GetIter(iterable, next_instr);
@@ -3495,7 +3495,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_FOR_ITER, (iter, null_or_index -- iter, null_or_index)) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_ForIter(iter, null_or_index, next_instr, oparg);
@@ -3818,7 +3818,7 @@ dummy_func(
             NOP,
         };
 
-        inst(PUSH_EXC_INFO, (exc -- prev_exc, new_exc)) {
+        window inst(PUSH_EXC_INFO, (exc -- prev_exc, new_exc)) {
 
             _PyErr_StackItem *exc_info = tstate->exc_info;
             if (exc_info->exc_value != NULL) {
@@ -3949,7 +3949,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_CALL, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_Call(callable, self_or_null, next_instr, oparg + !PyStackRef_IsNull(self_or_null));
@@ -4384,7 +4384,7 @@ dummy_func(
                 _PyEval_FrameClearAndPop(tstate, shim);
                 ERROR_NO_POP();
             }
-            frame->return_offset = 1 + INLINE_CACHE_ENTRIES_CALL;
+            frame->return_offset = INSTRUCTION_SIZE_OF(CALL);
             /* Account for pushing the extra frame.
              * We don't check recursion depth here,
              * as it will be checked after start_frame */
@@ -4973,7 +4973,7 @@ dummy_func(
                 if (new_frame == NULL) {
                     ERROR_NO_POP();
                 }
-                assert(INSTRUCTION_SIZE == 1 + INLINE_CACHE_ENTRIES_CALL_KW);
+                assert(INSTRUCTION_SIZE == INSTRUCTION_SIZE_OF(CALL_KW));
                 frame->return_offset = INSTRUCTION_SIZE;
                 DISPATCH_INLINED(new_frame);
             }
@@ -5073,7 +5073,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_CALL_KW, (callable, self_or_null, unused[oparg], unused -- callable, self_or_null, unused[oparg], unused)) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_CallKw(callable, next_instr, oparg + !PyStackRef_IsNull(self_or_null));
@@ -5215,7 +5215,7 @@ dummy_func(
                     if (new_frame == NULL) {
                         ERROR_NO_POP();
                     }
-                    assert(INSTRUCTION_SIZE == 1 + INLINE_CACHE_ENTRIES_CALL_FUNCTION_EX);
+                    assert(INSTRUCTION_SIZE == INSTRUCTION_SIZE_OF(CALL_FUNCTION_EX));
                     frame->return_offset = INSTRUCTION_SIZE;
                     DISPATCH_INLINED(new_frame);
                 }
@@ -5235,7 +5235,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_CALL_FUNCTION_EX, (func, unused, unused, unused -- func, unused, unused, unused)) {
         #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_CallFunctionEx(func, next_instr);
@@ -5356,7 +5356,7 @@ dummy_func(
             *ptr = attr;
         }
 
-        inst(RETURN_GENERATOR, (-- res)) {
+        window inst(RETURN_GENERATOR, (-- res)) {
             assert(PyStackRef_FunctionCheck(frame->f_funcobj));
             PyFunctionObject *func = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(frame->f_funcobj);
             PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func);
@@ -5432,7 +5432,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs)) {
             #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
@@ -5474,7 +5474,7 @@ dummy_func(
             int original_opcode = 0;
             if (tstate->tracing) {
                 PyCodeObject *code = _PyFrame_GetCode(frame);
-                int index = (int)(this_instr - _PyFrame_GetBytecode(frame));
+                int index = (int)(INSTR_START_OF(this_instr));
                 original_opcode = code->_co_monitoring->lines->data[index*code->_co_monitoring->lines->bytes_per_entry];
                 next_instr = this_instr;
             } else {
@@ -5493,9 +5493,9 @@ dummy_func(
             if (_PyFb_HasEntry(original_opcode)) {
                 /* Prevent the underlying instruction from specializing
                 * and overwriting the instrumentation. */
-                PAUSE_ADAPTIVE_COUNTER(_PyFb_Header(next_instr));
+                PAUSE_ADAPTIVE_COUNTER(FB_HEADER_OF(next_instr, original_opcode));
             }
-            opcode = original_opcode;
+            opcode = ORIGINAL_HANDLER(original_opcode);
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
@@ -5506,10 +5506,10 @@ dummy_func(
             ERROR_IF(next_opcode < 0);
             next_instr = this_instr;
             if (_PyFb_HasEntry(next_opcode)) {
-                PAUSE_ADAPTIVE_COUNTER(_PyFb_Header(next_instr));
+                PAUSE_ADAPTIVE_COUNTER(FB_HEADER_OF(next_instr, next_opcode));
             }
             assert(next_opcode > 0 && next_opcode < 256);
-            opcode = next_opcode;
+            opcode = ORIGINAL_HANDLER(next_opcode);
             DISPATCH_GOTO();
         }
 
@@ -5535,7 +5535,7 @@ dummy_func(
             assert(PyStackRef_BoolCheck(cond));
             int jump = PyStackRef_IsTrue(cond);
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(this_instr[1].cache, jump);
+            RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 INSTRUMENTED_JUMP(this_instr, next_instr + oparg, PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
@@ -5545,7 +5545,7 @@ dummy_func(
             assert(PyStackRef_BoolCheck(cond));
             int jump = PyStackRef_IsFalse(cond);
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(this_instr[1].cache, jump);
+            RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 INSTRUMENTED_JUMP(this_instr, next_instr + oparg, PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
@@ -5553,7 +5553,7 @@ dummy_func(
 
         inst(INSTRUMENTED_POP_JUMP_IF_NONE, (unused/1, value -- )) {
             int jump = PyStackRef_IsNone(value);
-            RECORD_BRANCH_TAKEN(this_instr[1].cache, jump);
+            RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 DEAD(value);
                 INSTRUMENTED_JUMP(this_instr, next_instr + oparg, PY_MONITORING_EVENT_BRANCH_RIGHT);
@@ -5565,7 +5565,7 @@ dummy_func(
 
         inst(INSTRUMENTED_POP_JUMP_IF_NOT_NONE, (unused/1, value -- )) {
             int jump = !PyStackRef_IsNone(value);
-            RECORD_BRANCH_TAKEN(this_instr[1].cache, jump);
+            RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 PyStackRef_CLOSE(value);
                 INSTRUMENTED_JUMP(this_instr, next_instr + oparg, PY_MONITORING_EVENT_BRANCH_RIGHT);
@@ -5577,8 +5577,8 @@ dummy_func(
 
         tier1 inst(EXTENDED_ARG, ( -- )) {
             assert(oparg);
-            opcode = next_instr->op.code;
-            oparg = oparg << 8 | next_instr->op.arg;
+            opcode = INSTR_OPCODE(next_instr);
+            oparg = oparg << 8 | INSTR_OPARG(next_instr);
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
@@ -5591,6 +5591,35 @@ dummy_func(
         tier1 inst(RESERVED, (--)) {
             assert(0 && "Executing RESERVED instruction.");
             Py_FatalError("Executing RESERVED instruction.");
+        }
+
+        /* Handlers of the register IR only (Include/internal/pycore_ir.h).
+         * They have no opcode, and the stack interpreter does not see them. */
+
+        // The one word of a code object that has not been lowered yet.
+        ir_only inst(IR_LOWER, ( -- )) {
+            int err = _PyIR_LowerFrame(tstate, frame);
+            ERROR_IF(err < 0);
+            next_instr = frame->instr_ptr;
+            DISPATCH();
+        }
+
+        // The high halves of fields A, B and C of the next word.
+        ir_only inst(IR_EXT, ( -- )) {
+            IR_EXTEND_FIELDS();
+            PRE_DISPATCH_GOTO();
+            DISPATCH_GOTO();
+        }
+
+        /* A load whose consumer reads the local through an IR_BORROW
+         * field.  The canonical slot holds NULL. */
+        ir_only inst(IR_ABSORBED_LOAD_FAST_BORROW, ( -- value)) {
+            value = PyStackRef_NULL;
+        }
+
+        ir_only inst(IR_ABSORBED_LOAD_FAST_BORROW_LOAD_FAST_BORROW, ( -- value1, value2)) {
+            value1 = PyStackRef_NULL;
+            value2 = PyStackRef_NULL;
         }
 
         op(_SAVE_RETURN_OFFSET, (--)) {
@@ -5635,7 +5664,7 @@ dummy_func(
 
         spilled label(exception_unwind) {
             /* We can't use frame->instr_ptr here, as RERAISE may have set it */
-            int offset = INSTR_OFFSET()-1;
+            int offset = CURRENT_OFFSET();
             int level, handler, lasti;
             int handled = get_exception_handler(_PyFrame_GetCode(frame), offset, &level, &handler, &lasti);
             if (handled == 0) {
@@ -5669,7 +5698,7 @@ dummy_func(
                 Python main loop. */
             PyObject *exc = _PyErr_GetRaisedException(tstate);
             _PyFrame_StackPush(frame, PyStackRef_FromPyObjectSteal(exc));
-            next_instr = _PyFrame_GetBytecode(frame) + handler;
+            next_instr = INSTR_AT_OFFSET(handler);
 
             int err = monitor_handled(tstate, frame, next_instr, exc);
             if (err < 0) {

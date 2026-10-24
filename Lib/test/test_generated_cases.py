@@ -1,4 +1,5 @@
 import contextlib
+import io
 import os
 import sys
 import tempfile
@@ -29,8 +30,11 @@ skip_if_different_mount_drives()
 
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
+    import analyzer
     from analyzer import StackItem
     from cwriter import CWriter
+    import ir_generator
+    import ir_metadata_generator
     import parser
     from stack import Local, Stack
     import tier1_generator
@@ -2245,6 +2249,505 @@ class TestGeneratedCases(unittest.TestCase):
         }
         """
         self.run_cases_test(input, output)
+
+
+class TestIRCases(unittest.TestCase):
+    """The register IR backend: ir_generator.py and ir_metadata_generator.py"""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.maxDiff = None
+        fd, self.temp_input_filename = tempfile.mkstemp(suffix=".c")
+        os.close(fd)
+
+    def tearDown(self) -> None:
+        os.remove(self.temp_input_filename)
+        super().tearDown()
+
+    def analyze(self, input: str):
+        with open(self.temp_input_filename, "w") as temp_input:
+            temp_input.write(parser.BEGIN_MARKER)
+            temp_input.write(input)
+            temp_input.write(parser.END_MARKER)
+        with handle_stderr():
+            return analyzer.analyze_files([self.temp_input_filename])
+
+    def formats(self, input: str):
+        return ir_generator.compute_formats(self.analyze(input))
+
+    def run_ir_test(self, input: str, expected: str):
+        analysis = self.analyze(input)
+        out = io.StringIO()
+        ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
+        _, rest = out.getvalue().split(ir_generator.INSTRUCTION_START_MARKER)
+        instructions, _ = rest.split(ir_generator.INSTRUCTION_END_MARKER)
+        self.assertEqual(instructions.strip(), expected.strip())
+
+    def test_register_style(self):
+        # Inputs that are only used as objects are read through their fields
+        # and may be borrowed locals.
+        input = """
+        inst(OP, (left, right -- res)) {
+            PyObject *l = PyStackRef_AsPyObjectBorrow(left);
+            PyObject *r = PyStackRef_AsPyObjectBorrow(right);
+            PyObject *o = SPAM(l, r);
+            DECREF_INPUTS();
+            ERROR_IF(o == NULL);
+            res = PyStackRef_FromPyObjectSteal(o);
+        }
+    """
+        output = """
+        TARGET(OP) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP;
+            (void)(opcode);
+            #endif
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(OP);
+            IR_CHECK_SLOT(ir_a, -2);
+            IR_CHECK_INPUT(ir_b, -2, 2);
+            IR_CHECK_INPUT(ir_c, -1, 2);
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            right = IR_SLOT(ir_c);
+            left = IR_SLOT(ir_b);
+            if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
+                left = PyStackRef_Box(left);
+                if (PyStackRef_IsInline(left)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(OP);
+                IR_SLOT(ir_b) = left;
+            }
+            left = IR_BORROW_KNOWN(left, ir_b);
+            if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
+                right = PyStackRef_Box(right);
+                if (PyStackRef_IsInline(right)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(OP);
+                IR_SLOT(ir_c) = right;
+            }
+            right = IR_BORROW_KNOWN(right, ir_c);
+            PyObject *l = PyStackRef_AsPyObjectBorrow(left);
+            PyObject *r = PyStackRef_AsPyObjectBorrow(right);
+            PyObject *o = SPAM(l, r);
+            _PyFrame_SetStackPointer(frame, stack_pointer);
+            _PyFrame_StackPointerValidate(frame);
+            _PyStackRef tmp = right;
+            right = PyStackRef_NULL;
+            stack_pointer[-1] = right;
+            _PyStackRef_CLOSE_POINTER(tmp);
+            _PyFrame_StackPointerInvalidate(frame);
+            assert(stack_pointer == _PyFrame_GetStackPointer(frame));
+            _PyFrame_StackPointerValidate(frame);
+            tmp = left;
+            left = PyStackRef_NULL;
+            stack_pointer[-2] = left;
+            _PyStackRef_CLOSE_POINTER(tmp);
+            _PyFrame_StackPointerInvalidate(frame);
+            stack_pointer += -2;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            if (o == NULL) {
+                JUMP_TO_LABEL(error);
+            }
+            res = PyStackRef_FromPyObjectSteal(o);
+            stack_pointer[0] = res;
+            stack_pointer += 1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+    """
+        self.run_ir_test(input, output)
+        fmt = self.formats(input)["OP"]
+        self.assertFalse(fmt.window)
+        self.assertEqual(fmt.roles, [ir_generator.ROLE_DST,
+                                     f"{ir_generator.ROLE_IN0} + 0",
+                                     f"{ir_generator.ROLE_IN0} + 1"])
+        self.assertEqual(fmt.dst_offset, -2)
+        self.assertEqual(fmt.borrow_mask, 0b11)
+
+    def test_borrow_mask(self):
+        input = """
+        inst(OP_PASS, (value -- value, res)) {
+            res = SPAM(PyStackRef_AsPyObjectBorrow(value));
+        }
+        inst(OP_OBJ, (value -- res)) {
+            res = SPAM(PyStackRef_AsPyObjectBorrow(value));
+            PyStackRef_CLOSE(value);
+        }
+        inst(OP_FAMILY, (value -- res)) {
+            res = SPAM(PyStackRef_AsPyObjectBorrow(value));
+            PyStackRef_CLOSE(value);
+        }
+        inst(OP_FAMILY_RAW, (value -- res)) {
+            res = SPAM_RAW(value);
+            PyStackRef_CLOSE(value);
+        }
+        family(OP_FAMILY, 0) = { OP_FAMILY_RAW };
+    """
+        formats = self.formats(input)
+        self.assertEqual(formats["OP_OBJ"].borrow_mask, 1)
+        # An input that stays on the stack is not borrowed: the stack slot
+        # of a borrowed local holds NULL.
+        self.assertEqual(formats["OP_PASS"].borrow_mask, 0)
+        self.assertEqual(formats["OP_PASS"].dst_offset, 0)
+        # A member that consumes the input raw denies the whole family.
+        self.assertEqual(formats["OP_FAMILY"].borrow_mask, 0)
+        self.assertIs(formats["OP_FAMILY_RAW"], formats["OP_FAMILY"])
+
+    def test_unused_outputs_pass_through(self):
+        input = """
+        op(_GUARD, (nos, unused -- nos, unused)) {
+            EXIT_IF(!PyStackRef_IsObject(nos));
+        }
+        op(_USE, (left, right -- left, res)) {
+            res = SPAM(PyStackRef_AsPyObjectBorrow(right));
+            PyStackRef_CLOSE(right);
+        }
+        macro(OP) = _GUARD + _USE;
+    """
+        fmt = self.formats(input)["OP"]
+        self.assertEqual(fmt.inputs, ["nos", "unused"])
+        self.assertEqual(fmt.dst_offset, -1)
+        self.assertEqual(fmt.borrow_mask, 0b10)
+
+    def test_window_style(self):
+        # An array input selects the window style: A names the deepest
+        # input, which the handler binds through stack_pointer.
+        input = """
+        inst(OP, (callable, args[oparg] -- res)) {
+            res = SPAM(callable, args, oparg);
+            INPUTS_DEAD();
+        }
+    """
+        output = """
+        TARGET(OP) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP;
+            (void)(opcode);
+            #endif
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(OP);
+            int oparg = (int)ir_b;
+            (void)oparg;
+            IR_CHECK_SLOT(ir_a, -(1 + oparg));
+            _PyStackRef callable;
+            _PyStackRef *args;
+            _PyStackRef res;
+            args = &stack_pointer[-oparg];
+            callable = stack_pointer[-1 - oparg];
+            res = SPAM(callable, args, oparg);
+            stack_pointer[-1 - oparg] = res;
+            stack_pointer += -oparg;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+    """
+        self.run_ir_test(input, output)
+        fmt = self.formats(input)["OP"]
+        self.assertTrue(fmt.window)
+        self.assertEqual(fmt.roles, [ir_generator.ROLE_BASE,
+                                     ir_generator.ROLE_IMM,
+                                     ir_generator.ROLE_NONE])
+        self.assertEqual(fmt.imm, ir_generator.LOC_B)
+
+    def test_window_selection(self):
+        input = """
+        inst(OP_FOUR, (a, b, c -- res)) {
+            res = SPAM(a, b, c);
+            INPUTS_DEAD();
+        }
+        inst(OP_THREE, (a, b, c --)) {
+            SPAM(a, b, c);
+            INPUTS_DEAD();
+        }
+        window inst(OP_ANNOTATED, (value -- res)) {
+            res = SPAM(value);
+            INPUTS_DEAD();
+        }
+        window inst(OP_SWITCH, (value -- res)) {
+            frame = SPAM(value);
+            res = PyStackRef_NULL;
+            INPUTS_DEAD();
+        }
+    """
+        formats = self.formats(input)
+        # Three inputs and a destination need more than three fields
+        self.assertTrue(formats["OP_FOUR"].window)
+        self.assertFalse(formats["OP_THREE"].window)
+        self.assertEqual(formats["OP_THREE"].n_inputs, 3)
+        self.assertTrue(formats["OP_ANNOTATED"].window)
+        self.assertTrue(formats["OP_SWITCH"].window)
+
+    def test_frame_switch_needs_window(self):
+        # The outputs of an instruction that switches frames land in the
+        # other frame, where the fields name no slots.
+        input = """
+        inst(OP, (value -- res)) {
+            frame = SPAM(value);
+            res = PyStackRef_NULL;
+            INPUTS_DEAD();
+        }
+    """
+        with self.assertRaisesRegex(SyntaxError, "OP switches frames"):
+            self.formats(input)
+
+    def test_feedback_mapping(self):
+        # A family shares one format. With a destination, an input and a
+        # feedback entry, the oparg moves into the entry's arg field, and
+        # cache effects read the entry.
+        input = """
+        specializing op(_SPECIALIZE_OP, (counter/1, owner -- owner)) {
+            _PyFbHeader *feedback = FB_COUNTER();
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
+        }
+        op(_OP, (owner -- res)) {
+            PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
+            res = SPAM(o, oparg);
+            DECREF_INPUTS();
+        }
+        macro(OP) = _SPECIALIZE_OP + _OP;
+        op(_GUARD, (type_version/2, owner -- owner)) {
+            EXIT_IF(Py_TYPE(PyStackRef_AsPyObjectBorrow(owner))->tp_version_tag != type_version);
+        }
+        macro(OP_SPECIALIZED) = unused/1 + _GUARD + _OP;
+        family(OP, INLINE_CACHE_ENTRIES_OP) = { OP_SPECIALIZED };
+    """
+        output = """
+        TARGET(OP) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP;
+            (void)(opcode);
+            #endif
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(OP);
+            PREDICTED_OP:;
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(this_instr, ir_c);
+            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            (void)oparg;
+            IR_CHECK_SLOT(ir_a, -1);
+            IR_CHECK_INPUT(ir_b, -1, 1);
+            _PyStackRef owner;
+            _PyStackRef res;
+            // _SPECIALIZE_OP
+            {
+                uint32_t counter = fb->counter;
+                (void)counter;
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+            }
+            // _OP
+            {
+                owner = IR_SLOT(ir_b);
+                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
+                    owner = PyStackRef_Box(owner);
+                    if (PyStackRef_IsInline(owner)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(OP);
+                    IR_SLOT(ir_b) = owner;
+                }
+                owner = IR_BORROW_KNOWN(owner, ir_b);
+                PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
+                res = SPAM(o, oparg);
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                _PyStackRef tmp = owner;
+                owner = res;
+                stack_pointer[-1] = owner;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                _PyFrame_StackPointerInvalidate(frame);
+            }
+            DISPATCH();
+        }
+
+        TARGET(OP_SPECIALIZED) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP_SPECIALIZED;
+            (void)(opcode);
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(OP_SPECIALIZED);
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(this_instr, ir_c);
+            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            (void)oparg;
+            IR_CHECK_SLOT(ir_a, -1);
+            IR_CHECK_INPUT(ir_b, -1, 1);
+            _PyStackRef owner;
+            _PyStackRef res;
+            // _GUARD
+            {
+                owner = IR_SLOT(ir_b);
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(OP);
+                    assert(_PyOpcode_Deopt[opcode] == (OP));
+                    JUMP_TO_PREDICTED(OP);
+                }
+                owner = IR_BORROW_KNOWN(owner, ir_b);
+                if (Py_TYPE(PyStackRef_AsPyObjectBorrow(owner))->tp_version_tag != type_version) {
+                    UPDATE_MISS_STATS(OP);
+                    assert(_PyOpcode_Deopt[opcode] == (OP));
+                    JUMP_TO_PREDICTED(OP);
+                }
+            }
+            // _OP
+            {
+                PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
+                res = SPAM(o, oparg);
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                _PyStackRef tmp = owner;
+                owner = res;
+                stack_pointer[-1] = owner;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                _PyFrame_StackPointerInvalidate(frame);
+            }
+            DISPATCH();
+        }
+    """
+        self.run_ir_test(input, output)
+        fmt = self.formats(input)["OP_SPECIALIZED"]
+        self.assertEqual(fmt.group, "OP")
+        self.assertEqual(fmt.fb, ir_generator.LOC_C)
+        self.assertEqual(fmt.imm, ir_generator.LOC_FBARG)
+
+    def test_two_words(self):
+        # Two inputs, a destination, an oparg and an entry take word 1.
+        input = """
+        inst(OP, (counter/1, left, right -- res)) {
+            _PyFbHeader *feedback = FB_COUNTER();
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            res = SPAM(left, right, oparg);
+            INPUTS_DEAD();
+        }
+    """
+        output = """
+        TARGET(OP) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP;
+            (void)(opcode);
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 2;
+            INSTRUCTION_STATS(OP);
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(this_instr, IR_F(this_instr[1]));
+            int oparg = (int)IR_D(this_instr[1]);
+            (void)oparg;
+            IR_CHECK_SLOT(ir_a, -2);
+            IR_CHECK_INPUT(ir_b, -2, 2);
+            IR_CHECK_INPUT(ir_c, -1, 2);
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            right = stack_pointer[-1];
+            left = stack_pointer[-2];
+            uint32_t counter = fb->counter;
+            (void)counter;
+            _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            res = SPAM(left, right, oparg);
+            stack_pointer[-2] = res;
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+    """
+        self.run_ir_test(input, output)
+        fmt = self.formats(input)["OP"]
+        self.assertEqual(fmt.nwords, 2)
+        self.assertEqual((fmt.imm, fmt.fb), (ir_generator.LOC_D, ir_generator.LOC_F))
+
+    def test_jump(self):
+        input = """
+        inst(OP, (cond --)) {
+            int flag = PyStackRef_IsFalse(cond);
+            DEAD(cond);
+            JUMPBY(flag ? oparg : 0);
+        }
+    """
+        fmt = self.formats(input)["OP"]
+        self.assertTrue(fmt.jumps)
+        self.assertEqual(fmt.roles[:2], [f"{ir_generator.ROLE_IN0} + 0",
+                                         ir_generator.ROLE_IMM])
+
+    def test_ext(self):
+        # IR_EXT has no stack effect, oparg or entry and dispatches to the
+        # next word without TARGET bookkeeping of its own: it is transparent.
+        input = """
+        ir_only inst(IR_EXT, ( -- )) {
+            IR_EXTEND_FIELDS();
+            PRE_DISPATCH_GOTO();
+            DISPATCH_GOTO();
+        }
+    """
+        output = """
+        TARGET(IR_EXT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = IR_EXT;
+            (void)(opcode);
+            #endif
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(IR_EXT);
+            IR_EXTEND_FIELDS();
+            PRE_DISPATCH_GOTO();
+            DISPATCH_GOTO();
+        }
+    """
+        self.run_ir_test(input, output)
+        self.assertTrue(self.formats(input)["IR_EXT"].transparent)
+
+    def test_metadata(self):
+        # IR-only handlers follow the opcodes in name order. An absorbed load
+        # shares the format of the load and stands for it in co_code.
+        input = """
+        inst(LOAD, ( -- value)) {
+            value = PyStackRef_DUP(GETLOCAL(oparg));
+        }
+        ir_only inst(IR_EXT, ( -- )) {
+            IR_EXTEND_FIELDS();
+            PRE_DISPATCH_GOTO();
+            DISPATCH_GOTO();
+        }
+        ir_only inst(IR_ABSORBED_LOAD, ( -- value)) {
+            value = PyStackRef_NULL;
+        }
+    """
+        analysis = self.analyze(input)
+        out = io.StringIO()
+        ir_metadata_generator.generate_ir_metadata(
+            [self.temp_input_filename], analysis, out)
+        lines = [line.strip() for line in out.getvalue().splitlines()]
+        load = ("{ .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, "
+                "_PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, "
+                ".fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = 0, "
+                ".borrow_mask = 0x0, .shadow = LOAD }")
+        for expected in [
+            "#define IR_ABSORBED_LOAD                               256",
+            "#define IR_EXT                                         257",
+            "#define IR_NUM_HANDLERS                                258",
+            f"[LOAD] = {load},",
+            f"[IR_ABSORBED_LOAD] = {load},",
+            "[IR_EXT] = { .nwords = 1, .flags = _PyIR_TRANSPARENT, "
+            ".roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, "
+            ".imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, "
+            ".dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = IR_EXT },",
+            '[IR_EXT - 256] = "IR_EXT",',
+        ]:
+            self.assertIn(expected, lines)
 
 
 if __name__ == "__main__":

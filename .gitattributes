@@ -77,6 +77,7 @@ Doc/data/stable_abi.dat                             generated
 Doc/library/token-list.inc                          generated
 Include/internal/pycore_ast.h                       generated
 Include/internal/pycore_ast_state.h                 generated
+Include/internal/pycore_ir_metadata.h               generated
 Include/internal/pycore_opcode.h                    generated
 Include/internal/pycore_opcode_metadata.h           generated
 Include/internal/pycore_*_generated.h               generated
@@ -106,7 +107,9 @@ Parser/token.c                                      generated
 Programs/test_frozenmain.h                          generated
 Python/Python-ast.c                                 generated
 Python/generated_cases.c.h                          generated
+Python/generated_ir_cases.c.h                       generated
 Python/opcode_targets.h                             generated
+Python/ir_targets.h                                 generated
 Python/slots_generated.c                            generated
 Python/stdlib_module_names.h                        generated
 Tools/peg_generator/pegen/grammar_parser.py         generated

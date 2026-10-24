@@ -79,12 +79,24 @@
 #define INSTRUCTION_STATS(op) ((void)0)
 #endif
 
-#ifdef Py_STATS
-#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate, _Py_CODEUNIT *next_instr, int oparg, int lastopcode
-#   define TAIL_CALL_ARGS frame, stack_pointer, tstate, next_instr, oparg, lastopcode
+/* The operands that dispatch decodes: the oparg, or for the register IR
+ * fields A, B and C of word 0 (Include/internal/pycore_ir.h). */
+#ifdef Py_IR_INTERP
+#   define TAIL_CALL_OPERANDS uint32_t ir_a, uint32_t ir_b, uint32_t ir_c
+#   define TAIL_CALL_OPERAND_ARGS ir_a, ir_b, ir_c
+#   define TAIL_CALL_NO_OPERANDS 0, 0, 0
 #else
-#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate, _Py_CODEUNIT *next_instr, int oparg
-#   define TAIL_CALL_ARGS frame, stack_pointer, tstate, next_instr, oparg
+#   define TAIL_CALL_OPERANDS int oparg
+#   define TAIL_CALL_OPERAND_ARGS oparg
+#   define TAIL_CALL_NO_OPERANDS 0
+#endif
+
+#ifdef Py_STATS
+#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
+#   define TAIL_CALL_ARGS frame, stack_pointer, tstate, next_instr, TAIL_CALL_OPERAND_ARGS, lastopcode
+#else
+#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS
+#   define TAIL_CALL_ARGS frame, stack_pointer, tstate, next_instr, TAIL_CALL_OPERAND_ARGS
 #endif
 
 #if _Py_TAIL_CALL_INTERP
@@ -117,12 +129,12 @@
 #   ifdef Py_STATS
 #       define JUMP_TO_PREDICTED(name) \
             do { \
-                Py_MUSTTAIL return (_TAIL_CALL_##name)(frame, stack_pointer, tstate, this_instr, oparg, lastopcode); \
+                Py_MUSTTAIL return (_TAIL_CALL_##name)(frame, stack_pointer, tstate, this_instr, TAIL_CALL_OPERAND_ARGS, lastopcode); \
             } while (0)
 #   else
 #       define JUMP_TO_PREDICTED(name) \
             do { \
-                Py_MUSTTAIL return (_TAIL_CALL_##name)(frame, stack_pointer, tstate, this_instr, oparg); \
+                Py_MUSTTAIL return (_TAIL_CALL_##name)(frame, stack_pointer, tstate, this_instr, TAIL_CALL_OPERAND_ARGS); \
             } while (0)
 #   endif
 #    define LABEL(name) TARGET(name)
@@ -141,7 +153,10 @@
 #endif
 
 /* PRE_DISPATCH_GOTO() does lltrace if enabled. Normally a no-op */
-#ifdef Py_DEBUG
+#if defined(Py_DEBUG) && defined(Py_IR_INTERP)
+#define PRE_DISPATCH_GOTO() if (frame->lltrace >= 5) { \
+    lltrace_instruction(frame, stack_pointer, next_instr, opcode, ir_a, ir_b, ir_c); }
+#elif defined(Py_DEBUG)
 #define PRE_DISPATCH_GOTO() if (frame->lltrace >= 5) { \
     lltrace_instruction(frame, stack_pointer, next_instr, opcode, oparg); }
 #else
@@ -176,12 +191,21 @@ do { \
         DISPATCH_GOTO(); \
     }
 
+#ifdef Py_IR_INTERP
+#define DISPATCH_SAME_OPARG() \
+    { \
+        opcode = IR_HANDLER(*next_instr); \
+        PRE_DISPATCH_GOTO(); \
+        DISPATCH_GOTO(); \
+    }
+#else
 #define DISPATCH_SAME_OPARG() \
     { \
         opcode = next_instr->op.code; \
         PRE_DISPATCH_GOTO(); \
         DISPATCH_GOTO(); \
     }
+#endif
 
 #define DISPATCH_INLINED(NEW_FRAME)                              \
     do {                                                         \
@@ -210,6 +234,17 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 
 /* Code access macros */
 
+#ifdef Py_IR_INTERP
+/* In words: the IR has no bytecode offsets but those of its pcmap. */
+#define INSTR_OFFSET() ((int)(next_instr - _PyFrame_IRWords(frame)))
+#define NEXTOPARG()  do { \
+        _PyIRWord word = *next_instr; \
+        opcode = IR_HANDLER(word); \
+        ir_a = IR_A(word); \
+        ir_b = IR_B(word); \
+        ir_c = IR_C(word); \
+    } while (0)
+#else
 /* The integer overflow is checked by an assertion below. */
 #define INSTR_OFFSET() ((int)(next_instr - _PyFrame_GetBytecode(frame)))
 #define NEXTOPARG()  do { \
@@ -217,6 +252,7 @@ GETITEM(PyObject *v, Py_ssize_t i) {
         opcode = word.op.code; \
         oparg = word.op.arg; \
     } while (0)
+#endif
 
 /* JUMPBY makes the generator identify the instruction as a jump. SKIP_OVER is
  * for advancing to the next instruction, taking into account cache entries
@@ -241,7 +277,16 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 #define GETLOCAL(i)     (frame->localsplus[i])
 
 
-#ifdef Py_STATS
+#if defined(Py_STATS) && defined(Py_IR_INTERP)
+#define UPDATE_MISS_STATS(INSTNAME)                              \
+    do {                                                         \
+        STAT_INC(opcode, miss);                                  \
+        STAT_INC((INSTNAME), miss);                              \
+        if (ADAPTIVE_COUNTER_TRIGGERS(_PyIR_FbHeaderOf(frame, this_instr, opcode))) { \
+            STAT_INC((INSTNAME), deopt);                         \
+        }                                                        \
+    } while (0)
+#elif defined(Py_STATS)
 #define UPDATE_MISS_STATS(INSTNAME)                              \
     do {                                                         \
         STAT_INC(opcode, miss);                                  \
@@ -366,7 +411,7 @@ static void dtrace_function_return(_PyInterpreterFrame *);
 // for an exception handler, displaying the traceback, and so on
 #define INSTRUMENTED_JUMP(src, dest, event) \
 do { \
-    _Py_CODEUNIT *_dest = (dest); \
+    _PyInstr *_dest = (dest); \
     if (tstate->tracing) {\
         next_instr = _dest; \
     } else { \
@@ -441,9 +486,15 @@ check_periodics_at_end(PyThreadState *tstate, _PyInterpreterFrame *frame) {
         // Do not handle pending interrupts if the previous instruction was LOAD_SPECIAL
         // This may also not handle interrupts if a cache looks like LOAD_SPECIAL,
         // but this is benign as we won't skip periodic checks indefinitely.
+#ifdef Py_IR_INTERP
+        if (IR_HANDLER(frame->instr_ptr[-1]) == LOAD_SPECIAL) {
+            return 0;
+        }
+#else
         if (frame->instr_ptr[-1].op.code == LOAD_SPECIAL) {
             return 0;
         }
+#endif
         return _Py_HandlePending(tstate);
     }
     return 0;
@@ -481,3 +532,71 @@ gen_try_set_executing(PyGenObject *gen)
 
 #define CALL_TP_ITERITEM_NO_ESCAPE(ITER, INDEX) \
     Py_TYPE(ITER)->_tp_iteritem((ITER), (INDEX))
+
+#ifdef Py_IR_INTERP
+/* Operands of the register IR handlers (Tools/cases_generator/ir_generator.py).
+ * F is a field variable, ir_a, ir_b or ir_c. */
+
+static_assert(IR_BORROW == Py_TAG_REFCNT,
+              "IR_BORROW must be the tag of a borrowed reference");
+
+/* The slot that a slot field names, an lvalue. */
+#define IR_SLOT(F) (frame->localsplus[IR_SLOT_INDEX(F)])
+
+/* REF, read through field F and known to be a pointer, borrowed if F
+ * carries IR_BORROW. */
+#ifdef Py_STACKREF_DEBUG
+#  define IR_BORROW_KNOWN(REF, F) (((F) & IR_BORROW) ? PyStackRef_Borrow(REF) : (REF))
+#else
+#  define IR_BORROW_KNOWN(REF, F) \
+    ((_PyStackRef){ .bits = (REF).bits | ((F) & IR_BORROW) })
+#endif
+
+/* The feedback entry at distance F from the instruction. */
+#define IR_FB(INSTR, F) ((void *)((INSTR) + (F)))
+
+/* Step 4 keeps every temporary in its canonical slot, at OFF from
+ * stack_pointer.  An input of N may instead carry IR_BORROW and name a
+ * local; its canonical slot then holds NULL. */
+#ifdef Py_DEBUG
+#  define IR_CHECK_SLOT(F, OFF) \
+    assert(((F) & IR_BORROW) == 0 && &IR_SLOT(F) == &stack_pointer[(OFF)])
+#  define IR_CHECK_INPUT(F, OFF, N) \
+    assert(((F) & IR_BORROW) \
+           ? (PyStackRef_IsNull(stack_pointer[(OFF)]) && \
+              (int)IR_SLOT_INDEX(F) < _PyFrame_GetCode(frame)->co_nlocalsplus) \
+           : &IR_SLOT(F) == &stack_pointer[(OFF)])
+#else
+#  define IR_CHECK_SLOT(F, OFF) ((void)0)
+#  define IR_CHECK_INPUT(F, OFF, N) ((void)0)
+#endif
+
+/* IR_EXT: widen the fields with its own and go on to the next word. */
+#define IR_EXTEND_FIELDS() \
+    do { \
+        _PyIRWord word_ = *next_instr; \
+        opcode = IR_HANDLER(word_); \
+        ir_a = ir_a << 16 | IR_A(word_); \
+        ir_b = ir_b << 16 | IR_B(word_); \
+        ir_c = ir_c << 16 | IR_C(word_); \
+    } while (0)
+
+/* The oparg and feedback entry of another instruction, as HANDLER reads
+ * them. */
+#define _PyIR_Oparg(FRAME, INSTR) \
+    _PyIR_InstrOparg(_PyFrame_IRBlock(FRAME), (INSTR), IR_HANDLER(*(INSTR)))
+#define _PyIR_FbHeaderOf(FRAME, INSTR, HANDLER) \
+    _PyIR_InstrFeedback(_PyFrame_IRBlock(FRAME), (INSTR), (HANDLER))
+
+/* Where a generator returns to in its caller: past the SEND or FOR_ITER
+ * at the caller's instr_ptr, or the trampoline's INTERPRETER_EXIT. */
+static inline int
+_PyIR_YieldReturnOffset(_PyInterpreterFrame *frame)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*frame->instr_ptr));
+    if (fmt->flags & _PyIR_TRANSPARENT) {
+        fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, frame->instr_ptr));
+    }
+    return fmt->nwords;
+}
+#endif

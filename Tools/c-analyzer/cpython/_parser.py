@@ -78,6 +78,8 @@ EXCLUDED = format_conf_lines([
     'Python/frozen_modules/*.h',
     'Python/generated_cases.c.h',
     'Python/opcode_targets.h',
+    'Python/generated_ir_cases.c.h',
+    'Python/ir_targets.h',
     'Modules/_testinternalcapi/test_targets.h',
     'Modules/_testinternalcapi/test_cases.c.h',
     'Modules/_testinternalcapi/interpreter.c',

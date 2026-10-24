@@ -1,3 +1,4 @@
+import copy
 import re
 from analyzer import StackItem, StackEffect, Instruction, Uop, PseudoInstruction
 from dataclasses import dataclass
@@ -148,6 +149,8 @@ class Local:
     # guard, was asserted to be an object, or was assigned from a pointer.
     # Cleared when the code assigns anything else to it.
     known_object: bool = False
+    # The IR field the value was read through (see ir_generator.IRStack).
+    ir_field: str | None = None
 
     def __repr__(self) -> str:
         return f"Local('{self.item.name}', mem={self.memory_offset}, local={self.in_local}, array={self.is_array()})"
@@ -191,6 +194,7 @@ class Local:
             self.memory_offset,
             self.in_local,
             self.known_object,
+            self.ir_field,
         )
 
     @property
@@ -246,7 +250,6 @@ class Stack:
                 # Mismatch in variables
                 self.clear(out)
         self.logical_sp = self.logical_sp.pop(var)
-        indirect = "&" if var.is_array() else ""
         if self.variables:
             popped = self.variables.pop()
             assert var.is_array() == popped.is_array() and popped.size == var.size
@@ -261,11 +264,8 @@ class Stack:
                 if popped.memory_offset is None:
                     popped.memory_offset = self.logical_sp
                 assert popped.memory_offset == self.logical_sp, (popped, self.as_comment())
-                offset = popped.memory_offset - self.physical_sp
-                if var.is_array():
-                    defn = f"{var.name} = &stack_pointer[{offset.to_c()}];\n"
-                else:
-                    defn = f"{var.name} = stack_pointer[{offset.to_c()}];\n"
+                defn = f"{var.name} = {self.load(var, popped.memory_offset)};\n"
+                if not var.is_array():
                     popped.in_local = True
             else:
                 defn = rename
@@ -274,11 +274,17 @@ class Stack:
         self.base_offset = self.logical_sp
         if var.name in UNUSED or not var.used:
             return Local.unused(var, self.base_offset)
-        c_offset = (self.base_offset - self.physical_sp).to_c()
-        assign = f"{var.name} = {indirect}stack_pointer[{c_offset}];\n"
+        assign = f"{var.name} = {self.load(var, self.base_offset)};\n"
         out.emit(assign)
         self._print(out)
         return Local.from_memory(var, self.base_offset)
+
+    def load(self, var: StackItem, memory_offset: PointerOffset) -> str:
+        "The C expression that reads var from memory_offset"
+        assert self.physical_sp is not None
+        offset = (memory_offset - self.physical_sp).to_c()
+        indirect = "&" if var.is_array() else ""
+        return f"{indirect}stack_pointer[{offset}]"
 
     def clear(self, out: CWriter) -> None:
         "Flush to memory and clear variables stack"
@@ -405,13 +411,8 @@ class Stack:
             out.emit(self.as_comment() + "\n")
 
     def copy(self) -> "Stack":
-        other = Stack()
-        other.base_offset = self.base_offset
-        other.physical_sp = self.physical_sp
-        other.logical_sp = self.logical_sp
-        other.frame_sp = self.frame_sp
+        other = copy.copy(self)
         other.variables = [var.copy() for var in self.variables]
-        other.check_stack_bounds = self.check_stack_bounds
         return other
 
     def __eq__(self, other: object) -> bool:

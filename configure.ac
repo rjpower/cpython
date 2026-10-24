@@ -7947,6 +7947,22 @@ fi
 ],
 [AC_MSG_RESULT([no value specified])])
 
+# Check for --with-ir-interp
+AC_MSG_CHECKING([for --with-ir-interp])
+AC_ARG_WITH(
+  [ir-interp],
+  [AS_HELP_STRING(
+    [--with-ir-interp],
+    [compile the register IR interpreter, which does not run yet (default is no)]
+  )],
+  [],
+  [with_ir_interp=no])
+AC_MSG_RESULT([$with_ir_interp])
+AS_VAR_IF([with_ir_interp], [yes],
+  [IR_INTERP_CHECK=Python/ceval_ir.o],
+  [IR_INTERP_CHECK=])
+AC_SUBST([IR_INTERP_CHECK])
+
 # Check for --with-remote-debug
 AC_MSG_CHECKING([for --with-remote-debug])
 AC_ARG_WITH(

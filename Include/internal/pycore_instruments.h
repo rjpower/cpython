@@ -5,7 +5,7 @@
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#include "pycore_structs.h"       // _Py_CODEUNIT
+#include "pycore_structs.h"       // _PyInstr
 #include "pycore_typedefs.h"      // _PyInterpreterFrame
 
 #ifdef __cplusplus
@@ -37,32 +37,32 @@ int _PyMonitoring_GetLocalEvents(PyCodeObject *code, int tool_id, _PyMonitoringE
 // these are exported only for other re-generated interpreters to call
 PyAPI_FUNC(int)
 _Py_call_instrumentation(PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *instr);
+    _PyInterpreterFrame *frame, _PyInstr *instr);
 
 PyAPI_FUNC(int)
 _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
-                              _Py_CODEUNIT *instr, _Py_CODEUNIT *prev);
+                              _PyInstr *instr, _PyInstr *prev);
 
 PyAPI_FUNC(int)
 _Py_call_instrumentation_instruction(
-    PyThreadState *tstate, _PyInterpreterFrame* frame, _Py_CODEUNIT *instr);
+    PyThreadState *tstate, _PyInterpreterFrame* frame, _PyInstr *instr);
 
-PyAPI_FUNC(_Py_CODEUNIT *)
+PyAPI_FUNC(_PyInstr *)
 _Py_call_instrumentation_jump(
-    _Py_CODEUNIT *instr, PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *src, _Py_CODEUNIT *dest);
+    _PyInstr *instr, PyThreadState *tstate, int event,
+    _PyInterpreterFrame *frame, _PyInstr *src, _PyInstr *dest);
 
 PyAPI_FUNC(int)
 _Py_call_instrumentation_arg(PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *instr, PyObject *arg);
+    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg);
 
 PyAPI_FUNC(int)
 _Py_call_instrumentation_2args(PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *instr, PyObject *arg0, PyObject *arg1);
+    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg0, PyObject *arg1);
 
 PyAPI_FUNC(void)
 _Py_call_instrumentation_exc2(PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *instr, PyObject *arg0, PyObject *arg1);
+    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg0, PyObject *arg1);
 
 PyAPI_DATA(PyObject) _PyInstrumentation_MISSING;
 PyAPI_DATA(PyObject) _PyInstrumentation_DISABLE;

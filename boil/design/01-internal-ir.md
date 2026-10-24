@@ -527,3 +527,57 @@ builds, with pyperformance compared against `boil/bench/run-default.log`.
 
 Dispatch stays a table load by handler index rather than an address in the
 word, as the note recommends; the plan artifact's wording is superseded.
+
+## 11. Implementation decisions
+
+Step 3 departs from sections 1 and 5 as follows. The coordinator approved
+items 1 to 4 on 2026-10-24; the others settle points the note left open.
+
+1. **`IR_BORROW` is bit 0 of a slot field**, and the slot index is the field
+   shifted right by one (`IR_SLOT_FIELD`, `IR_SLOT_INDEX` in
+   Include/internal/pycore_ir.h). Bit 0 is `Py_TAG_REFCNT`, so a handler ORs
+   the field's low bit into the value without a shift. It does so only once it
+   knows the value to be a pointer (`IR_BORROW_KNOWN`), because the bit means
+   something else in an inline int or float. The limit stays 32,767 slots.
+2. **Word 1 holds two 32-bit fields**: D in bits 0-31 is the oparg or jump
+   distance, F in bits 32-63 the feedback distance, both in words. Field E is
+   gone. `IR_EXT` widens A, B and C only.
+3. **Step 4 keeps the stack pointer.** Temporary d stays canonical in slot
+   `nlocalsplus + d`, so `stack_pointer` remains valid, window-style handlers
+   need no setup, and outputs are written through `stack_pointer` as before.
+   Register-style handlers read through their fields only the inputs that may
+   be borrowed locals; debug builds assert that every slot field names the
+   canonical slot of its input or output (`IR_CHECK_SLOT`, `IR_CHECK_INPUT`).
+   Step 5 removes the stack pointer from register-style handlers.
+4. **Absorbed loads keep their word.** The lowering replaces a
+   `LOAD_FAST_BORROW` whose consumer reads the local through `IR_BORROW` with
+   `IR_ABSORBED_LOAD_FAST_BORROW`, which pushes NULL. Depths, offsets, jump
+   targets and instrumentation stay one word per instruction; step 5 deletes
+   these words.
+5. **Inline values in borrowed inputs.** An input used as an object that holds
+   an inline int or float is boxed, and the box is written back to its slot,
+   local or temporary, so that the slot owns it and the borrow stays valid.
+   Guards deoptimise instead of boxing.
+6. **Formats are computed per family.** A family's head, its specialisations,
+   its `INSTRUMENTED_` twin and any `IR_ABSORBED_` handler named after a member
+   share one format. Inputs are aligned at the top of the stack and cover the
+   member that reads deepest, since `INSTRUMENTED_END_FOR` reads two inputs
+   that `END_FOR` leaves alone. Dst is the lowest first new output of any
+   member. A format is window style if a member is annotated `window`, takes
+   an array, or needs more than three slots; this covers `WITH_EXCEPT_START`,
+   `CLEANUP_THROW` and `RERAISE` without annotations. A register-style member
+   that switches frames and pushes outputs is an error. Fields go to slots,
+   then feedback, then oparg; if they do not fit, the oparg moves to the
+   entry's `arg` field (never for jumps), and otherwise to word 1.
+7. **Borrowing is decided per input.** Input k may carry `IR_BORROW` only if
+   every member first uses it as an object and no member leaves it on the
+   stack. An `unused` output passes through the input at its position.
+8. **Transparent handlers are found by structure**: no stack effect, oparg or
+   feedback, and a `DISPATCH_GOTO`. These are `IR_EXT`, `INSTRUMENTED_LINE`
+   and `INSTRUMENTED_INSTRUCTION`; the generator names no opcode.
+9. **Handler indices.** Handlers annotated `ir_only` follow the 256 opcodes in
+   name order. `IR_LOWER` is one of them.
+10. **The configure flag in step 3.** `--with-ir-interp` compiles
+    Python/ceval.c a second time with `Py_IR_INTERP` into Python/ceval_ir.o,
+    which is not linked, so the IR interpreter keeps compiling. Step 4 makes
+    the flag define `Py_IR_INTERP` instead.

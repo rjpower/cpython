@@ -209,34 +209,34 @@ extern int _PyCode_SafeAddr2Line(PyCodeObject *co, int addr);
  * interpreters to call */
 
 PyAPI_FUNC(void) _Py_Specialize_LoadSuperAttr(_PyStackRef global_super, _PyStackRef cls,
-                                         _Py_CODEUNIT *instr, int load_method);
-PyAPI_FUNC(void) _Py_Specialize_LoadAttr(_PyStackRef owner, _Py_CODEUNIT *instr,
+                                         _PyInstr *instr, int load_method);
+PyAPI_FUNC(void) _Py_Specialize_LoadAttr(_PyStackRef owner, _PyInstr *instr,
                                     PyObject *name);
-PyAPI_FUNC(void) _Py_Specialize_StoreAttr(_PyStackRef owner, _Py_CODEUNIT *instr,
+PyAPI_FUNC(void) _Py_Specialize_StoreAttr(_PyStackRef owner, _PyInstr *instr,
                                      PyObject *name);
 PyAPI_FUNC(void) _Py_Specialize_LoadGlobal(PyObject *globals, PyObject *builtins,
-                                      _Py_CODEUNIT *instr, PyObject *name);
+                                      _PyInstr *instr, PyObject *name);
 PyAPI_FUNC(void) _Py_Specialize_StoreSubscr(_PyStackRef container, _PyStackRef sub,
-                                       _Py_CODEUNIT *instr);
+                                       _PyInstr *instr);
 PyAPI_FUNC(void) _Py_Specialize_Call(_PyStackRef callable, _PyStackRef self_or_null,
-                                _Py_CODEUNIT *instr, int nargs);
-PyAPI_FUNC(void) _Py_Specialize_CallKw(_PyStackRef callable, _Py_CODEUNIT *instr,
+                                _PyInstr *instr, int nargs);
+PyAPI_FUNC(void) _Py_Specialize_CallKw(_PyStackRef callable, _PyInstr *instr,
                                   int nargs);
-PyAPI_FUNC(void) _Py_Specialize_BinaryOp(_PyStackRef lhs, _PyStackRef rhs, _Py_CODEUNIT *instr,
+PyAPI_FUNC(void) _Py_Specialize_BinaryOp(_PyStackRef lhs, _PyStackRef rhs, _PyInstr *instr,
                                     int oparg, _PyStackRef *locals);
 PyAPI_FUNC(void) _Py_Specialize_CompareOp(_PyStackRef lhs, _PyStackRef rhs,
-                                     _Py_CODEUNIT *instr, int oparg);
-PyAPI_FUNC(void) _Py_Specialize_UnpackSequence(_PyStackRef seq, _Py_CODEUNIT *instr,
+                                     _PyInstr *instr, int oparg);
+PyAPI_FUNC(void) _Py_Specialize_UnpackSequence(_PyStackRef seq, _PyInstr *instr,
                                           int oparg);
-PyAPI_FUNC(void) _Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _Py_CODEUNIT *instr, int oparg);
-PyAPI_FUNC(void) _Py_Specialize_Send(_PyStackRef receiver, _Py_CODEUNIT *instr);
-PyAPI_FUNC(void) _Py_Specialize_ToBool(_PyStackRef value, _Py_CODEUNIT *instr);
+PyAPI_FUNC(void) _Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _PyInstr *instr, int oparg);
+PyAPI_FUNC(void) _Py_Specialize_Send(_PyStackRef receiver, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_Specialize_ToBool(_PyStackRef value, _PyInstr *instr);
 PyAPI_FUNC(void) _Py_Specialize_ContainsOp(_PyStackRef item, _PyStackRef value,
-                                           _Py_CODEUNIT *instr);
+                                           _PyInstr *instr);
 PyAPI_FUNC(void) _Py_GatherStats_GetIter(_PyStackRef iterable);
-PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(_PyStackRef func_st, _Py_CODEUNIT *instr);
-PyAPI_FUNC(void) _Py_Specialize_Resume(_Py_CODEUNIT *instr, PyThreadState *tstate);
-PyAPI_FUNC(void) _Py_Specialize_GetIter(_PyStackRef iterable, _Py_CODEUNIT *instr);
+PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(_PyStackRef func_st, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_Specialize_Resume(_PyInstr *instr, PyThreadState *tstate);
+PyAPI_FUNC(void) _Py_Specialize_GetIter(_PyStackRef iterable, _PyInstr *instr);
 
 /* Typed feedback, see pycore_feedback.h.  _PyFb_BlockSize() returns the
  * bytes that the feedback block of unquickened bytecode needs, or 0 if no

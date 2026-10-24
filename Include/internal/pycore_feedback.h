@@ -94,7 +94,10 @@ typedef struct {
     _Py_BackoffCounter counter;     // warmup, cooldown and backoff
     uint16_t misses;                // reserved: the counter holds them, see above
     uint16_t hits;                  // reserved for call counts; not written yet
-    uint32_t arg;                   // reserved for the IR's static immediate; zero
+    union {
+        uint32_t arg;               // the oparg, for IR formats that keep it here
+        uint16_t history;           // BRANCH entries of the IR: see FB_BRANCH()
+    };
     uint32_t poly;                  // 0, or 1 + index into the block's poly tables
 } _PyFbHeader;
 
@@ -196,10 +199,18 @@ typedef struct _PyFbBlock {
     X(CALL_KW,              _PyFbCall,   FB_CALL) \
     X(CALL_FUNCTION_EX,     _PyFbCall,   FB_CALL)
 
+/* The conditional branches, which have entries in the register IR only. */
+#define _PyFb_BRANCHES(X) \
+    X(POP_JUMP_IF_FALSE,    _PyFbHeader, FB_BRANCH) \
+    X(POP_JUMP_IF_TRUE,     _PyFbHeader, FB_BRANCH) \
+    X(POP_JUMP_IF_NONE,     _PyFbHeader, FB_BRANCH) \
+    X(POP_JUMP_IF_NOT_NONE, _PyFbHeader, FB_BRANCH)
+
 // _PyFb_LOAD_ATTR and so on: the entry type of each family, used by the
 // generated cases.
 #define _PyFb_TYPEDEF(OP, TYPE, KIND) typedef TYPE _PyFb_##OP;
 _PyFb_FAMILIES(_PyFb_TYPEDEF)
+_PyFb_BRANCHES(_PyFb_TYPEDEF)
 #undef _PyFb_TYPEDEF
 
 // Whether instructions with the generic opcode OPCODE have an entry.

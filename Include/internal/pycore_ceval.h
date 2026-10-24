@@ -305,7 +305,7 @@ PyObject * _PyEval_ImportNameWithImport(
     PyObject *locals, PyObject *name, PyObject *fromlist, PyObject *level);
 PyAPI_FUNC(PyObject *)_PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type, Py_ssize_t nargs, PyObject *kwargs);
 PyAPI_FUNC(PyObject *)_PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys);
-PyAPI_FUNC(void) _PyEval_MonitorRaise(PyThreadState *tstate, _PyInterpreterFrame *frame, _Py_CODEUNIT *instr);
+PyAPI_FUNC(void) _PyEval_MonitorRaise(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *instr);
 PyAPI_FUNC(bool) _PyEval_NoToolsForUnwind(PyThreadState *tstate, _PyInterpreterFrame *frame);
 PyAPI_FUNC(int) _PyEval_UnpackIterableStackRef(PyThreadState *tstate, PyObject *v, int argcnt, int argcntafter, _PyStackRef *sp);
 PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame);
@@ -399,7 +399,7 @@ _PyForIter_VirtualIteratorNext(PyThreadState* tstate, struct _PyInterpreterFrame
 #define SPECIAL___AEXIT__   3
 #define SPECIAL_MAX   3
 
-PyAPI_DATA(const _Py_CODEUNIT *) _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR;
+PyAPI_DATA(const _PyInstr *) _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR;
 
 /* Helper functions for large uops */
 
@@ -418,7 +418,7 @@ _Py_VectorCallInstrumentation_StackRefSteal(
     _PyStackRef kwnames,
     bool call_instrumentation,
     _PyInterpreterFrame* frame,
-    _Py_CODEUNIT* this_instr,
+    _PyInstr* this_instr,
     PyThreadState* tstate);
 
 PyAPI_FUNC(PyObject *)

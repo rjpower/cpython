@@ -209,6 +209,29 @@ dump_stack(_PyInterpreterFrame *frame, _PyStackRef *stack_pointer)
     _PyFrame_GetStackPointer(frame);
 }
 
+#ifdef Py_IR_INTERP
+static void
+lltrace_instruction(_PyInterpreterFrame *frame,
+                    _PyStackRef *stack_pointer,
+                    _PyIRWord *next_instr,
+                    int opcode,
+                    uint32_t a, uint32_t b, uint32_t c)
+{
+    int offset = 0;
+    if (frame->owner < FRAME_OWNED_BY_INTERPRETER) {
+        dump_stack(frame, stack_pointer);
+        _PyFrame_SetStackPointer(frame, stack_pointer);
+        _PyStackRef_CheckFrame(frame);
+        _PyFrame_GetStackPointer(frame);
+        offset = _PyFrame_InstrOffset(frame, next_instr);
+    }
+    const char *name = opcode < 256 ? _PyOpcode_OpName[opcode]
+                                    : _PyIR_OnlyNames[opcode - 256];
+    assert(name != NULL);
+    printf("%d: %s %u %u %u\n", offset * 2, name, a, b, c);
+    fflush(stdout);
+}
+#else
 static void
 lltrace_instruction(_PyInterpreterFrame *frame,
                     _PyStackRef *stack_pointer,
@@ -234,6 +257,7 @@ lltrace_instruction(_PyInterpreterFrame *frame,
     }
     fflush(stdout);
 }
+#endif
 
 static void
 lltrace_resume_frame(_PyInterpreterFrame *frame)
@@ -305,20 +329,20 @@ maybe_lltrace_resume_frame(_PyInterpreterFrame *frame, PyObject *globals)
 
 static void monitor_reraise(PyThreadState *tstate,
                  _PyInterpreterFrame *frame,
-                 _Py_CODEUNIT *instr);
+                 _PyInstr *instr);
 static int monitor_stop_iteration(PyThreadState *tstate,
                  _PyInterpreterFrame *frame,
-                 _Py_CODEUNIT *instr,
+                 _PyInstr *instr,
                  PyObject *value);
 static void monitor_unwind(PyThreadState *tstate,
                  _PyInterpreterFrame *frame,
-                 _Py_CODEUNIT *instr);
+                 _PyInstr *instr);
 static int monitor_handled(PyThreadState *tstate,
                  _PyInterpreterFrame *frame,
-                 _Py_CODEUNIT *instr, PyObject *exc);
+                 _PyInstr *instr, PyObject *exc);
 static void monitor_throw(PyThreadState *tstate,
                  _PyInterpreterFrame *frame,
-                 _Py_CODEUNIT *instr);
+                 _PyInstr *instr);
 
 static int get_exception_handler(PyCodeObject *, int, int*, int*, int*);
 
@@ -333,7 +357,7 @@ typedef struct {
 
 static int
 do_monitor_exc(PyThreadState *tstate, _PyInterpreterFrame *frame,
-               _Py_CODEUNIT *instr, int event)
+               _PyInstr *instr, int event)
 {
     assert(event < _PY_MONITORING_UNGROUPED_EVENTS);
     if (_PyFrame_GetCode(frame)->co_flags & CO_NO_MONITORING_EVENTS) {
@@ -374,7 +398,7 @@ no_tools_for_local_event(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 static int
 monitor_handled(PyThreadState *tstate,
                 _PyInterpreterFrame *frame,
-                _Py_CODEUNIT *instr, PyObject *exc)
+                _PyInstr *instr, PyObject *exc)
 {
     if (no_tools_for_local_event(tstate, frame, PY_MONITORING_EVENT_EXCEPTION_HANDLED)) {
         return 0;
@@ -385,7 +409,7 @@ monitor_handled(PyThreadState *tstate,
 static void
 monitor_throw(PyThreadState *tstate,
               _PyInterpreterFrame *frame,
-              _Py_CODEUNIT *instr)
+              _PyInstr *instr)
 {
     if (no_tools_for_local_event(tstate, frame, PY_MONITORING_EVENT_PY_THROW)) {
         return;
@@ -395,7 +419,7 @@ monitor_throw(PyThreadState *tstate,
 
 static void
 monitor_reraise(PyThreadState *tstate, _PyInterpreterFrame *frame,
-              _Py_CODEUNIT *instr)
+              _PyInstr *instr)
 {
     if (no_tools_for_local_event(tstate, frame, PY_MONITORING_EVENT_RERAISE)) {
         return;
@@ -405,7 +429,7 @@ monitor_reraise(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 static int
 monitor_stop_iteration(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                       _Py_CODEUNIT *instr, PyObject *value)
+                       _PyInstr *instr, PyObject *value)
 {
     if (no_tools_for_local_event(tstate, frame, PY_MONITORING_EVENT_STOP_ITERATION)) {
         return 0;
@@ -423,7 +447,7 @@ monitor_stop_iteration(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static void
 monitor_unwind(PyThreadState *tstate,
                _PyInterpreterFrame *frame,
-               _Py_CODEUNIT *instr)
+               _PyInstr *instr)
 {
     if (no_tools_for_local_event(tstate, frame, PY_MONITORING_EVENT_PY_UNWIND)) {
         return;

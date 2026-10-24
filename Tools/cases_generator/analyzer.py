@@ -37,6 +37,14 @@ class Properties:
     needs_prev: bool = False
     no_save_ip: bool = False
     inline_ok: bool = False
+    # The IR binds this instruction in window style (see ir_generator.py).
+    window: bool = False
+    # Annotated `no_fold`: outputs may alias a borrowed input, so the IR
+    # must not fold a store into them. Uop.aliased_outputs covers the
+    # outputs that the body assigns from an input.
+    no_fold: bool = False
+    # Assigns `frame`: what follows runs in another frame.
+    switches_frame: bool = False
 
     def dump(self, indent: str) -> None:
         simple_properties = self.__dict__.copy()
@@ -74,6 +82,9 @@ class Properties:
             needs_prev=any(p.needs_prev for p in properties),
             no_save_ip=all(p.no_save_ip for p in properties),
             inline_ok=all(p.inline_ok for p in properties),
+            window=any(p.window for p in properties),
+            no_fold=any(p.no_fold for p in properties),
+            switches_frame=any(p.switches_frame for p in properties),
         )
 
     @property
@@ -188,6 +199,8 @@ class Uop:
     object_inputs: tuple[str, ...] = ()
     # Scalar stack inputs that the body asserts to be objects
     asserted_objects: tuple[str, ...] = ()
+    # Outputs that the body assigns from an input, `out = in;`
+    aliased_outputs: tuple[str, ...] = ()
 
     def dump(self, indent: str) -> None:
         print(
@@ -333,6 +346,10 @@ class Analysis:
     opmap: dict[str, int]
     have_arg: int
     min_instrumented: int
+    # Instructions annotated `ir_only`: handlers of the register IR that
+    # have no opcode, kept apart so that the stack interpreter's outputs
+    # do not see them.
+    ir_only: dict[str, Instruction]
 
 
 def analysis_error(message: str, tkn: lexer.Token) -> SyntaxError:
@@ -873,6 +890,36 @@ def stmt_escapes(stmt: Stmt) -> bool:
     else:
         assert False, "Unexpected statement type"
 
+def find_aliased_outputs(op: parser.InstDef) -> tuple[str, ...]:
+    """The outputs that a statement `out = in;` makes alias an input."""
+    innames = {i.name for i in op.inputs if isinstance(i, parser.StackEffect)}
+    outnames = {o.name for o in op.outputs} - innames
+    tokens = [t for t in op.block.tokens() if t.kind != "COMMENT"]
+    found: list[str] = []
+    for i in range(len(tokens) - 3):
+        if (tokens[i].text in outnames and tokens[i + 1].kind == "EQUALS"
+                and tokens[i + 2].text in innames and tokens[i + 3].kind == "SEMI"
+                and (i == 0 or tokens[i - 1].kind in ("SEMI", "LBRACE", "RBRACE"))
+                and tokens[i].text not in found):
+            found.append(tokens[i].text)
+    return tuple(found)
+
+
+def switches_frame(op: parser.CodeDef) -> bool:
+    """Whether op assigns `frame`, directly or through DISPATCH_INLINED."""
+    tokens = [t for t in op.tokens if t.kind != "COMMENT"]
+    for i, tkn in enumerate(tokens):
+        if tkn.kind != "IDENTIFIER":
+            continue
+        if tkn.text == "DISPATCH_INLINED":
+            return True
+        if (tkn.text == "frame" and i + 1 < len(tokens)
+                and tokens[i + 1].kind == "EQUALS"
+                and tokens[i - 1].kind in ("SEMI", "LBRACE", "RBRACE", "EQUALS")):
+            return True
+    return False
+
+
 def compute_properties(op: parser.CodeDef) -> Properties:
     escaping_calls = find_escaping_api_calls(op)
     has_free = (
@@ -899,6 +946,8 @@ def compute_properties(op: parser.CodeDef) -> Properties:
     pure = False if isinstance(op, parser.LabelDef) else "pure" in op.annotations
     no_save_ip = False if isinstance(op, parser.LabelDef) else "no_save_ip" in op.annotations
     inline_ok = False if isinstance(op, parser.LabelDef) else "inline_ok" in op.annotations
+    window = False if isinstance(op, parser.LabelDef) else "window" in op.annotations
+    no_fold = False if isinstance(op, parser.LabelDef) else "no_fold" in op.annotations
     return Properties(
         escaping_calls=escaping_calls,
         escapes=escapes,
@@ -909,7 +958,9 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         oparg=oparg_used(op),
         jumps=variable_used(op, "JUMPBY"),
         eval_breaker="CHECK_PERIODIC" in op.name,
-        needs_this=variable_used(op, "this_instr"),
+        needs_this=(variable_used(op, "this_instr")
+                    or variable_used(op, "FB_COUNTER")
+                    or variable_used(op, "FB_BRANCH")),
         always_exits=always_exits(op),
         sync_sp=variable_used(op, "SYNC_SP") or variable_used(op, "SAVE_STACK") or variable_used(op, "RELOAD_STACK"),
         uses_co_consts=variable_used(op, "FRAME_CO_CONSTS"),
@@ -922,6 +973,9 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         inline_ok=inline_ok,
         tier=tier_variable(op),
         needs_prev=variable_used(op, "prev_instr"),
+        window=window,
+        no_fold=no_fold,
+        switches_frame=switches_frame(op),
     )
 
 STACKREF_TO_OBJECT = (
@@ -997,6 +1051,7 @@ def make_uop(
         properties=compute_properties(op),
         object_inputs=object_inputs,
         asserted_objects=asserted_objects,
+        aliased_outputs=find_aliased_outputs(op),
     )
 
 
@@ -1258,6 +1313,14 @@ def analyze_forest(forest: list[parser.AstNode]) -> Analysis:
                 add_label(node, labels)
             case _:
                 pass
+    ir_only: dict[str, Instruction] = {}
+    for name, inst in list(instructions.items()):
+        if any(isinstance(part, Uop) and "ir_only" in part.annotations
+               for part in inst.parts):
+            ir_only[name] = instructions.pop(name)
+            for part in inst.parts:
+                if isinstance(part, Uop) and "ir_only" in part.annotations:
+                    uops.pop(part.name if part.name in uops else name, None)
     for uop in uops.values():
         uop.instruction_size = get_instruction_size_for_uop(instructions, uop)
     # Special case BINARY_OP_INPLACE_ADD_UNICODE
@@ -1270,7 +1333,8 @@ def analyze_forest(forest: list[parser.AstNode]) -> Analysis:
         families["BINARY_OP"].members.append(inst)
     opmap, first_arg, min_instrumented = assign_opcodes(instructions, families, pseudos)
     return Analysis(
-        instructions, uops, families, pseudos, labels, opmap, first_arg, min_instrumented
+        instructions, uops, families, pseudos, labels, opmap, first_arg,
+        min_instrumented, ir_only
     )
 
 

@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 from analyzer import (
     Instruction,
@@ -124,6 +125,59 @@ POINTER_CONSTRUCTORS = {
 }
 
 
+# Macros of the DSL that name the instruction stream or the feedback entry.
+# Each generator expands them for its form of the code: these are the stack
+# interpreter's expansions, and ir_generator.IR_INSTRUCTION_MACROS holds the
+# register IR's. "{0}" and "{1}" stand for the arguments, "{0p}" for the
+# first argument in parentheses unless it is a single token.
+STACK_INSTRUCTION_MACROS = {
+    # The header of the instruction's feedback entry, which holds its counter.
+    "FB_COUNTER": "_PyFb_Header(this_instr)",
+    # The 16-bit taken history of a conditional branch.
+    "FB_BRANCH": "this_instr[1].cache",
+    # The entry header of the instruction at {0} once it runs as opcode {1}.
+    "FB_HEADER_OF": "_PyFb_Header({0})",
+    # The opcode and oparg of the instruction at {0}.
+    "INSTR_OPCODE": "{0p}->op.code",
+    "INSTR_OPARG": "{0p}->op.arg",
+    # The size of an instruction of family {0}, in units of next_instr.
+    "INSTRUCTION_SIZE_OF": "1 + INLINE_CACHE_ENTRIES_{0}",
+    # Resume the caller of a generator that yields, after its SEND or FOR_ITER.
+    "RETURN_TO_CALLER": "LOAD_IP(1 + INLINE_CACHE_ENTRIES_SEND)",
+    # The bytecode offset of the instruction at {0}, of the first code unit of
+    # the instruction at {0} (its EXTENDED_ARG prefix), and the instruction at
+    # bytecode offset {0}.
+    "INSTR_OFFSET_OF": "{0} - _PyFrame_GetBytecode(frame)",
+    "INSTR_START_OF": "{0} - _PyFrame_GetBytecode(frame)",
+    "INSTR_AT_OFFSET": "_PyFrame_GetBytecode(frame) + {0}",
+    # The bytecode offset of the instruction that is executing, from
+    # next_instr, for exception_unwind.
+    "CURRENT_OFFSET": "INSTR_OFFSET()-1",
+    # The index of {0} in the frame's instruction array, and the instruction at
+    # index {1} of the array {0}, for a frame moving to another copy.
+    "INSTR_INDEX": "{0} - _PyFrame_GetBytecode(frame)",
+    "INSTR_IN": "{0} + {1}",
+    # The handler that runs an instruction whose original opcode, as the
+    # instrumentation records it, is {0}.
+    "ORIGINAL_HANDLER": "{0}",
+}
+
+
+def tokens_text(tkns: list[Token]) -> str:
+    "The source text of tkns, with the spacing they have in the input"
+    text = ""
+    prev: Token | None = None
+    for tkn in tkns:
+        if prev is not None:
+            if prev.end_line < tkn.line:
+                text += " "
+            else:
+                text += " " * (tkn.column - prev.end_column)
+        text += tkn.text
+        prev = tkn
+    return text
+
+
 def find_local(name: str, storage: Storage) -> Local | None:
     for var in storage.inputs + storage.outputs:
         if var.name == name:
@@ -158,6 +212,7 @@ class Emitter:
     _replacers: dict[str, ReplacementFunctionType]
     cannot_escape: bool
     jump_prefix: str
+    instruction_macros: dict[str, str] = STACK_INSTRUCTION_MACROS
 
     def __init__(self, out: CWriter, labels: dict[str, Label], cannot_escape: bool = False, jump_prefix: str = ""):
         self._replacers = {
@@ -181,6 +236,8 @@ class Emitter:
             "stack_pointer": self.stack_pointer,
             "Py_UNREACHABLE": self.unreachable,
         }
+        for name in self.instruction_macros:
+            self._replacers[name] = self.instruction_macro
         self.out = out
         self.killed_pointer: str | None = None
         self.labels = labels
@@ -614,6 +671,59 @@ class Emitter:
         if uop.instruction_size is None:
             raise analysis_error("The INSTRUCTION_SIZE macro requires uop.instruction_size to be set", tkn)
         self.out.emit(f" {uop.instruction_size}u ")
+        return True
+
+    def instruction_macro_args(self, tkn: Token, tkn_iter: TokenIterator) -> tuple[list[list[Token]], Token]:
+        lparen = next(tkn_iter)
+        if lparen.kind != "LPAREN":
+            raise analysis_error(f"Expected '(' after {tkn.text}", lparen)
+        args: list[list[Token]] = [[]]
+        depth = 0
+        for t in tkn_iter:
+            if t.kind == "RPAREN" and depth == 0:
+                if args == [[]]:
+                    args = []
+                return args, t
+            if t.kind in ("LPAREN", "LBRACKET"):
+                depth += 1
+            elif t.kind in ("RPAREN", "RBRACKET"):
+                depth -= 1
+            if t.kind == "COMMA" and depth == 0:
+                args.append([])
+            else:
+                if t.text in self._replacers:
+                    raise analysis_error(f"{t.text} in an argument of {tkn.text}", t)
+                args[-1].append(t)
+        raise analysis_error(f"Unterminated {tkn.text}", tkn)
+
+    def expand_instruction_macro(self, tkn: Token, args: list[list[Token]], inst: Instruction | None) -> str:
+        template = self.instruction_macros[tkn.text]
+        texts = [tokens_text(arg) for arg in args]
+        values = {str(i): text for i, text in enumerate(texts)}
+        if args:
+            values["0p"] = texts[0] if len(args[0]) == 1 else f"({texts[0]})"
+        def substitute(m: re.Match[str]) -> str:
+            if m.group(1) not in values:
+                raise analysis_error(f"Wrong number of arguments to {tkn.text}", tkn)
+            return values[m.group(1)]
+        return re.sub(r"\{(\w+)\}", substitute, template)
+
+    def instruction_macro(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        """Expand a macro of STACK_INSTRUCTION_MACROS. The text takes the place
+        of the macro and its arguments, so spacing around it is kept."""
+        args, rparen = self.instruction_macro_args(tkn, tkn_iter)
+        text = self.expand_instruction_macro(tkn, args, inst)
+        self.out.maybe_dedent(text)
+        self.out.emit_at(text, tkn)
+        self.out.maybe_indent(text)
+        self.out.last_token = rparen
         return True
 
     def _print_storage(self, reason:str, storage: Storage) -> None:

@@ -97,3 +97,19 @@ Entries are appended in order; each milestone is also a commit.
   executable ref and restores it on the wrong frame (from GH-127875), and
   `BINARY_OP_INPLACE_ADD_UNICODE` steals a borrowed local (gh-131527).
   The tag design relies on that build as a checker, so step 2 fixes both.
+- Cherry-picked the attribute-specialisation fix for instances with a
+  materialised `__dict__` (plan item 1d). Loads after `vars()` go from 292
+  to 35 instructions, stores from 378 to 63; combined-dict stores pay about
+  4 more instructions for the split-or-combined choice. Covered by new
+  `test_opcache` tests including a free-threaded race test.
+- Rewrote the branch history to drop agent attribution trailers, which the
+  user's global instructions forbid. Nothing had been pushed.
+- Tagged-values step 2 (NaN-box encoding, no producers) is parked on branch
+  `boil/tagged-step2-wip`: it failed the instruction gate at 5.8 percent
+  geomean (richards, go, nqueens, chaos). Cost breakdown: `PyStackRef_Borrow`
+  needs a pointer-space test because an inline float's bit 0 is mantissa
+  (+4 instructions on every `LOAD_FAST_BORROW`), guard exits for inline
+  values on every guarded input (+3/+2), and the 64-bit mask loads. Time
+  measurement on an idle machine is running before the encoding decision.
+  The same branch carries two fixes that make the `Py_STACKREF_DEBUG` build
+  usable again; those will be split out regardless.

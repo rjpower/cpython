@@ -146,3 +146,13 @@ Entries are appended in order; each milestone is also a commit.
   Final: NaN boxing. Landing order on main: feedback vector (in progress),
   NaN-box encoding with the by-value boxing fixes, inline ints, inline
   floats, then the IR interpreter.
+
+## 2026-10-24
+
+- Overnight both running agents (feedback vector, generator boxing fixes)
+  were stopped without reporting. Relaunched the feedback vector from its
+  partial diff. An hourly wakeup now checks agent liveness and keeps the
+  pipeline moving until Phase 1 is done.
+- Phase 1 deliverable, per review: a PR on rjpower/cpython from this branch
+  with a detailed description of the new pipeline (mermaid diagrams of the
+  flow and object layout, the changes made) and the final results table.

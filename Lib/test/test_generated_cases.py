@@ -529,8 +529,9 @@ class TestGeneratedCases(unittest.TestCase):
         self.run_cases_test(input, output)
 
     def test_cache_effect(self):
+        # Named cache effects read fields of the feedback entry
         input = """
-        inst(OP, (counter/1, extra/2, value --)) {
+        inst(OP, (index/1, extra/2, descr/4, value --)) {
             DEAD(value);
         }
     """
@@ -542,15 +543,18 @@ class TestGeneratedCases(unittest.TestCase):
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_OP *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
-            next_instr += 4;
+            next_instr += 8;
             INSTRUCTION_STATS(OP);
             _PyStackRef value;
             value = stack_pointer[-1];
-            uint16_t counter = read_u16(&this_instr[1].cache);
-            (void)counter;
-            uint32_t extra = read_u32(&this_instr[2].cache);
+            uint32_t index = fb->index;
+            (void)index;
+            uint32_t extra = fb->extra;
             (void)extra;
+            PyObject *descr = (PyObject *)fb->descr;
+            (void)descr;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
             DISPATCH();
@@ -587,7 +591,7 @@ class TestGeneratedCases(unittest.TestCase):
 
     def test_macro_instruction(self):
         input = """
-        inst(OP1, (counter/1, left, right -- left, right)) {
+        inst(OP1, (index/1, left, right -- left, right)) {
             op1(left, right);
         }
         op(OP2, (extra/2, arg2, left, right -- res)) {
@@ -613,6 +617,7 @@ class TestGeneratedCases(unittest.TestCase):
             PREDICTED_OP:;
             _Py_CODEUNIT* const this_instr = next_instr - 6;
             (void)this_instr;
+            _PyFb_OP *fb = _PyFb_Entry(this_instr);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef arg2;
@@ -621,8 +626,8 @@ class TestGeneratedCases(unittest.TestCase):
             {
                 right = stack_pointer[-1];
                 left = stack_pointer[-2];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
+                uint32_t index = fb->index;
+                (void)index;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 op1(left, right);
@@ -632,7 +637,7 @@ class TestGeneratedCases(unittest.TestCase):
             // OP2
             {
                 arg2 = stack_pointer[-3];
-                uint32_t extra = read_u32(&this_instr[4].cache);
+                uint32_t extra = fb->extra;
                 (void)extra;
                 assert(stack_pointer == _PyFrame_GetStackPointer(frame));
                 _PyFrame_StackPointerValidate(frame);
@@ -652,6 +657,7 @@ class TestGeneratedCases(unittest.TestCase):
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_OP1 *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 2;
             INSTRUCTION_STATS(OP1);
@@ -659,8 +665,8 @@ class TestGeneratedCases(unittest.TestCase):
             _PyStackRef right;
             right = stack_pointer[-1];
             left = stack_pointer[-2];
-            uint16_t counter = read_u16(&this_instr[1].cache);
-            (void)counter;
+            uint32_t index = fb->index;
+            (void)index;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
             op1(left, right);

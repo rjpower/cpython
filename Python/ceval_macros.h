@@ -238,8 +238,7 @@ GETITEM(PyObject *v, Py_ssize_t i) {
     do {                                                         \
         STAT_INC(opcode, miss);                                  \
         STAT_INC((INSTNAME), miss);                              \
-        /* The counter is always the first cache entry: */       \
-        if (ADAPTIVE_COUNTER_TRIGGERS(next_instr->cache)) {      \
+        if (ADAPTIVE_COUNTER_TRIGGERS(_PyFb_Header(this_instr))) { \
             STAT_INC((INSTNAME), deopt);                         \
         }                                                        \
     } while (0)
@@ -295,40 +294,42 @@ static void dtrace_function_return(_PyInterpreterFrame *);
 #define DTRACE_FUNCTION_RETURN() ((void)0)
 #endif
 
-/* This takes a uint16_t instead of a _Py_BackoffCounter,
- * because it is used directly on the cache entry in generated code,
- * which is always an integral type. */
-// Force re-specialization when tracing a side exit to get good side exits.
-#define ADAPTIVE_COUNTER_TRIGGERS(COUNTER) \
-    backoff_counter_triggers(forge_backoff_counter((COUNTER)))
+/* Counters live in feedback entries (pycore_feedback.h).  FB is the entry
+ * header of the instruction, or NULL if it has none, which never triggers. */
+#define ADAPTIVE_COUNTER_TRIGGERS(FB) \
+    ((FB) != NULL && backoff_counter_triggers((FB)->counter))
 
 #ifdef Py_GIL_DISABLED
 /* Counters are unreachable when thread-local bytecode is disabled,
  * so there is no need to update them. */
-#define ADVANCE_ADAPTIVE_COUNTER(COUNTER) \
+#define ADVANCE_ADAPTIVE_COUNTER(FB) \
     do { \
-        _Py_BackoffCounter cnt = (COUNTER); \
-        if (!backoff_counter_is_unreachable(cnt)) { \
-            (COUNTER) = advance_backoff_counter(cnt); \
+        if ((FB) != NULL && !backoff_counter_is_unreachable((FB)->counter)) { \
+            (FB)->counter = advance_backoff_counter((FB)->counter); \
         } \
     } while (0);
 
-#define PAUSE_ADAPTIVE_COUNTER(COUNTER) \
+#define PAUSE_ADAPTIVE_COUNTER(FB) \
     do { \
-        _Py_BackoffCounter cnt = (COUNTER); \
-        if (!backoff_counter_is_unreachable(cnt)) { \
-            (COUNTER) = pause_backoff_counter(cnt); \
+        _PyFbHeader *fb_ = (FB); \
+        if (fb_ != NULL && !backoff_counter_is_unreachable(fb_->counter)) { \
+            fb_->counter = pause_backoff_counter(fb_->counter); \
         } \
     } while (0);
 #else
-#define ADVANCE_ADAPTIVE_COUNTER(COUNTER) \
+#define ADVANCE_ADAPTIVE_COUNTER(FB) \
     do { \
-        (COUNTER) = advance_backoff_counter((COUNTER)); \
+        if ((FB) != NULL) { \
+            (FB)->counter = advance_backoff_counter((FB)->counter); \
+        } \
     } while (0);
 
-#define PAUSE_ADAPTIVE_COUNTER(COUNTER) \
+#define PAUSE_ADAPTIVE_COUNTER(FB) \
     do { \
-        (COUNTER) = pause_backoff_counter((COUNTER)); \
+        _PyFbHeader *fb_ = (FB); \
+        if (fb_ != NULL) { \
+            fb_->counter = pause_backoff_counter(fb_->counter); \
+        } \
     } while (0);
 #endif
 

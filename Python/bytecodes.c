@@ -75,7 +75,7 @@ static PyObject *orig, *excs, *update, *b, *fromlist, *level, *from;
 static PyObject **pieces, **values;
 static size_t jump;
 // Dummy variables for cache effects
-static uint16_t invert, counter, index, hint;
+static uint16_t invert, index, hint;
 #define unused 0  // Used in a macro def, can't be static
 static uint32_t type_version;
 
@@ -464,15 +464,16 @@ dummy_func(
             TO_BOOL_STR,
         };
 
-        specializing op(_SPECIALIZE_TO_BOOL, (counter/1, value -- value)) {
+        specializing op(_SPECIALIZE_TO_BOOL, (value -- value)) {
             #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_ToBool(value, next_instr);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(TO_BOOL);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -483,7 +484,7 @@ dummy_func(
             res = err ? PyStackRef_True : PyStackRef_False;
         }
 
-        macro(TO_BOOL) = _SPECIALIZE_TO_BOOL + unused/2 + _TO_BOOL;
+        macro(TO_BOOL) = unused/1 + _SPECIALIZE_TO_BOOL + unused/2 + _TO_BOOL;
 
         inst(TO_BOOL_BOOL, (unused/1, unused/2, value -- value)) {
             EXIT_IF(!PyStackRef_BoolCheck(value));
@@ -1125,7 +1126,7 @@ dummy_func(
         }
 
         macro(BINARY_OP_SUBSCR_GETITEM) =
-            unused/5 + // Skip over the counter and cache
+            unused/5 + // Skip over the entry distance and reserved units
             _CHECK_PEP_523 +
             _BINARY_OP_SUBSCR_CHECK_FUNC +
             _BINARY_OP_SUBSCR_INIT_CALL +
@@ -1148,15 +1149,16 @@ dummy_func(
             STORE_SUBSCR_LIST_INT,
         };
 
-        specializing op(_SPECIALIZE_STORE_SUBSCR, (counter/1, container, sub -- container, sub)) {
+        specializing op(_SPECIALIZE_STORE_SUBSCR, (container, sub -- container, sub)) {
             #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_StoreSubscr(container, sub, next_instr);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(STORE_SUBSCR);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -1167,7 +1169,7 @@ dummy_func(
             ERROR_IF(err);
         }
 
-        macro(STORE_SUBSCR) = _SPECIALIZE_STORE_SUBSCR + _STORE_SUBSCR;
+        macro(STORE_SUBSCR) = unused/1 + _SPECIALIZE_STORE_SUBSCR + _STORE_SUBSCR;
 
         macro(STORE_SUBSCR_LIST_INT) =
             _GUARD_TOS_INT + _GUARD_NOS_LIST + unused/1 + _STORE_SUBSCR_LIST_INT + _POP_TOP_INT + POP_TOP;
@@ -1387,15 +1389,16 @@ dummy_func(
             SEND_ASYNC_GEN,
         };
 
-        specializing op(_SPECIALIZE_SEND, (counter/1, receiver, unused, unused -- receiver, unused, unused)) {
+        specializing op(_SPECIALIZE_SEND, (receiver, unused, unused -- receiver, unused, unused)) {
             #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_Send(receiver, next_instr);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(SEND);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -1445,7 +1448,7 @@ dummy_func(
             }
         }
 
-        macro(SEND) = _SPECIALIZE_SEND + _SEND;
+        macro(SEND) = unused/1 + _SPECIALIZE_SEND + _SEND;
 
         op(_SEND_GEN_FRAME, (receiver, null, v -- receiver, null, gen_frame)) {
             PyGenObject *gen = (PyGenObject *)PyStackRef_AsPyObjectBorrow(receiver);
@@ -1473,7 +1476,7 @@ dummy_func(
             EXIT_IF(!PyStackRef_IsNone(val));
         }
 
-        macro(FOR_ITER) = _SPECIALIZE_FOR_ITER + _FOR_ITER;
+        macro(FOR_ITER) = unused/1 + _SPECIALIZE_FOR_ITER + _FOR_ITER;
 
         op(_GUARD_NOS_NOT_NULL, (nos, unused -- nos, unused)) {
             EXIT_IF(PyStackRef_IsNull(nos));
@@ -1704,18 +1707,18 @@ dummy_func(
             UNPACK_SEQUENCE_LIST,
         };
 
-        specializing op(_SPECIALIZE_UNPACK_SEQUENCE, (counter/1, seq -- seq)) {
+        specializing op(_SPECIALIZE_UNPACK_SEQUENCE, (seq -- seq)) {
             #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_UnpackSequence(seq, next_instr, oparg);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(UNPACK_SEQUENCE);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
             (void)seq;
-            (void)counter;
         }
 
         op(_UNPACK_SEQUENCE, (seq -- unused[oparg], top[0])) {
@@ -1725,7 +1728,7 @@ dummy_func(
             ERROR_IF(res == 0);
         }
 
-        macro(UNPACK_SEQUENCE) = _SPECIALIZE_UNPACK_SEQUENCE + _UNPACK_SEQUENCE;
+        macro(UNPACK_SEQUENCE) = unused/1 + _SPECIALIZE_UNPACK_SEQUENCE + _UNPACK_SEQUENCE;
 
         macro(UNPACK_SEQUENCE_TWO_TUPLE) =
             _GUARD_TOS_TUPLE + unused/1 + _UNPACK_SEQUENCE_TWO_TUPLE;
@@ -1789,9 +1792,10 @@ dummy_func(
             STORE_ATTR_WITH_HINT,
         };
 
-        specializing op(_SPECIALIZE_STORE_ATTR, (counter/1, v, owner -- v, owner)) {
+        specializing op(_SPECIALIZE_STORE_ATTR, (v, owner -- v, owner)) {
             #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 if (!PyStackRef_IsNull(v)) {
                     PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                     next_instr = this_instr;
@@ -1800,7 +1804,7 @@ dummy_func(
                 }
             }
             OPCODE_DEFERRED_INC(STORE_ATTR);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -1813,7 +1817,7 @@ dummy_func(
             ERROR_IF(err);
         }
 
-        macro(STORE_ATTR) = _SPECIALIZE_STORE_ATTR + unused/3 + _STORE_ATTR;
+        macro(STORE_ATTR) = unused/1 + _SPECIALIZE_STORE_ATTR + unused/3 + _STORE_ATTR;
 
         inst(STORE_GLOBAL, (v --)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
@@ -1878,16 +1882,17 @@ dummy_func(
             LOAD_GLOBAL_BUILTIN,
         };
 
-        specializing op(_SPECIALIZE_LOAD_GLOBAL, (counter/1 -- )) {
+        specializing op(_SPECIALIZE_LOAD_GLOBAL, ( -- )) {
             #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                 next_instr = this_instr;
                 _Py_Specialize_LoadGlobal(GLOBALS(), BUILTINS(), next_instr, name);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(LOAD_GLOBAL);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -1906,27 +1911,26 @@ dummy_func(
         }
 
         macro(LOAD_GLOBAL) =
+            unused/1 +
             _SPECIALIZE_LOAD_GLOBAL +
-            counter/1 +
-            globals_version/1 +
-            builtins_version/1 +
+            unused/3 +
             _LOAD_GLOBAL +
             _PUSH_NULL_CONDITIONAL;
 
-        op(_GUARD_GLOBALS_VERSION, (version/1 --)) {
+        op(_GUARD_GLOBALS_VERSION, (globals_version/1 --)) {
             PyDictObject *dict = (PyDictObject *)GLOBALS();
             DEOPT_IF(!PyDict_CheckExact(dict));
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != version);
+            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version);
             assert(keys->dk_kind == DICT_KEYS_UNICODE);
         }
 
-        op(_LOAD_GLOBAL_MODULE, (version/1, unused/1, index/1 -- res))
+        op(_LOAD_GLOBAL_MODULE, (globals_version/1, unused/1, index/1 -- res))
         {
             PyDictObject *dict = (PyDictObject *)GLOBALS();
             DEOPT_IF(!PyDict_CheckExact(dict));
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != version);
+            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version);
             assert(keys->dk_kind == DICT_KEYS_UNICODE);
             PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
             assert(index < DK_SIZE(keys));
@@ -1941,12 +1945,12 @@ dummy_func(
             STAT_INC(LOAD_GLOBAL, hit);
         }
 
-        op(_LOAD_GLOBAL_BUILTINS, (version/1, index/1 -- res))
+        op(_LOAD_GLOBAL_BUILTINS, (builtins_version/1, index/1 -- res))
         {
             PyDictObject *dict = (PyDictObject *)BUILTINS();
             DEOPT_IF(!PyDict_CheckExact(dict));
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != version);
+            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != builtins_version);
             assert(keys->dk_kind == DICT_KEYS_UNICODE);
             PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
             PyObject *res_o = FT_ATOMIC_LOAD_PTR_CONSUME(entries[index].me_value);
@@ -1961,12 +1965,12 @@ dummy_func(
         }
 
         macro(LOAD_GLOBAL_MODULE) =
-            unused/1 + // Skip over the counter
+            unused/1 + // Skip over the entry distance
             _LOAD_GLOBAL_MODULE +
             _PUSH_NULL_CONDITIONAL;
 
         macro(LOAD_GLOBAL_BUILTIN) =
-            unused/1 + // Skip over the counter
+            unused/1 + // Skip over the entry distance
             _GUARD_GLOBALS_VERSION +
             _LOAD_GLOBAL_BUILTINS +
             _PUSH_NULL_CONDITIONAL;
@@ -2287,7 +2291,7 @@ dummy_func(
         }
 
         macro(INSTRUMENTED_LOAD_SUPER_ATTR) =
-            counter/1 +
+            unused/1 +
             _LOAD_SUPER_ATTR +
             _PUSH_NULL_CONDITIONAL;
 
@@ -2296,16 +2300,17 @@ dummy_func(
             LOAD_SUPER_ATTR_METHOD,
         };
 
-        specializing op(_SPECIALIZE_LOAD_SUPER_ATTR, (counter/1, global_super_st, class_st, unused -- global_super_st, class_st, unused)) {
+        specializing op(_SPECIALIZE_LOAD_SUPER_ATTR, (global_super_st, class_st, unused -- global_super_st, class_st, unused)) {
             #if ENABLE_SPECIALIZATION
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
             int load_method = oparg & 1;
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_LoadSuperAttr(global_super_st, class_st, next_instr, load_method);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(LOAD_SUPER_ATTR);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -2358,7 +2363,7 @@ dummy_func(
         }
 
         macro(LOAD_SUPER_ATTR) =
-            _SPECIALIZE_LOAD_SUPER_ATTR +
+            unused/1 + _SPECIALIZE_LOAD_SUPER_ATTR +
             _LOAD_SUPER_ATTR +
             _PUSH_NULL_CONDITIONAL;
 
@@ -2437,16 +2442,17 @@ dummy_func(
             LOAD_ATTR_NONDESCRIPTOR_NO_DICT,
         };
 
-        specializing op(_SPECIALIZE_LOAD_ATTR, (counter/1, owner -- owner)) {
+        specializing op(_SPECIALIZE_LOAD_ATTR, (owner -- owner)) {
             #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                 next_instr = this_instr;
                 _Py_Specialize_LoadAttr(owner, next_instr, name);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(LOAD_ATTR);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -2467,7 +2473,7 @@ dummy_func(
         }
 
         macro(LOAD_ATTR) =
-            _SPECIALIZE_LOAD_ATTR +
+            unused/1 + _SPECIALIZE_LOAD_ATTR +
             unused/8 +
             _LOAD_ATTR;
 
@@ -2513,7 +2519,7 @@ dummy_func(
         }
 
         macro(LOAD_ATTR_INSTANCE_VALUE) =
-            unused/1 + // Skip over the counter
+            unused/1 + // Skip over the entry distance
             _GUARD_TYPE_VERSION +
             _CHECK_MANAGED_OBJECT_HAS_VALUES +
             _LOAD_ATTR_INSTANCE_VALUE +
@@ -2626,12 +2632,12 @@ dummy_func(
             unused/5 +
             _PUSH_NULL_CONDITIONAL;
 
-        op(_CHECK_ATTR_CLASS, (type_version/2, owner -- owner)) {
+        op(_CHECK_ATTR_CLASS, (class_version/2, owner -- owner)) {
             PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
 
             EXIT_IF(!PyType_Check(owner_o));
-            assert(type_version != 0);
-            EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != type_version);
+            assert(class_version != 0);
+            EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version);
         }
 
         op(_LOAD_ATTR_CLASS, (descr/4, owner -- attr)) {
@@ -2821,15 +2827,16 @@ dummy_func(
             COMPARE_OP_STR,
         };
 
-        specializing op(_SPECIALIZE_COMPARE_OP, (counter/1, left, right -- left, right)) {
+        specializing op(_SPECIALIZE_COMPARE_OP, (left, right -- left, right)) {
             #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_CompareOp(left, right, next_instr, oparg);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(COMPARE_OP);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -2852,7 +2859,7 @@ dummy_func(
             }
         }
 
-        macro(COMPARE_OP) = _SPECIALIZE_COMPARE_OP + _COMPARE_OP;
+        macro(COMPARE_OP) = unused/1 + _SPECIALIZE_COMPARE_OP + _COMPARE_OP;
 
         macro(COMPARE_OP_FLOAT) =
             _GUARD_TOS_FLOAT + _GUARD_NOS_FLOAT + unused/1 + _COMPARE_OP_FLOAT + _POP_TOP_FLOAT + _POP_TOP_FLOAT;
@@ -2950,19 +2957,20 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        specializing op(_SPECIALIZE_CONTAINS_OP, (counter/1, left, right -- left, right)) {
+        specializing op(_SPECIALIZE_CONTAINS_OP, (left, right -- left, right)) {
             #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
-                _Py_Specialize_ContainsOp(right, next_instr);
+                _Py_Specialize_ContainsOp(left, right, next_instr);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(CONTAINS_OP);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        macro(CONTAINS_OP) = _SPECIALIZE_CONTAINS_OP + _CONTAINS_OP + POP_TOP + POP_TOP;
+        macro(CONTAINS_OP) = unused/1 + _SPECIALIZE_CONTAINS_OP + _CONTAINS_OP + POP_TOP + POP_TOP;
 
         op(_GUARD_TOS_ANY_SET, (tos -- tos)) {
             PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
@@ -3215,15 +3223,16 @@ dummy_func(
             GET_ITER_VIRTUAL,
         };
 
-        specializing op(_SPECIALIZE_GET_ITER, (counter/1, iterable -- iterable)) {
+        specializing op(_SPECIALIZE_GET_ITER, (iterable -- iterable)) {
             #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_GetIter(iterable, next_instr);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(GET_ITER);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -3235,7 +3244,7 @@ dummy_func(
         }
 
         macro(GET_ITER) =
-            _SPECIALIZE_GET_ITER +
+            unused/1 + _SPECIALIZE_GET_ITER +
             _GET_ITER;
 
         op(_GUARD_ITERATOR, (iterable -- iterable)) {
@@ -3278,15 +3287,16 @@ dummy_func(
             FOR_ITER_VIRTUAL,
         };
 
-        specializing op(_SPECIALIZE_FOR_ITER, (counter/1, iter, null_or_index -- iter, null_or_index)) {
+        specializing op(_SPECIALIZE_FOR_ITER, (iter, null_or_index -- iter, null_or_index)) {
             #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_ForIter(iter, null_or_index, next_instr, oparg);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(FOR_ITER);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -3303,7 +3313,7 @@ dummy_func(
             next = item;
         }
 
-        macro(FOR_ITER) = _SPECIALIZE_FOR_ITER + _FOR_ITER;
+        macro(FOR_ITER) = unused/1 + _SPECIALIZE_FOR_ITER + _FOR_ITER;
 
         op(_GUARD_TOS_NOT_NULL, (null_or_index -- null_or_index)) {
             EXIT_IF(PyStackRef_IsNull(null_or_index));
@@ -3328,7 +3338,7 @@ dummy_func(
         }
 
         macro(FOR_ITER_VIRTUAL) =
-            unused/1 +  // Skip over the counter
+            unused/1 +  // Skip over the entry distance
             _GUARD_TOS_NOT_NULL +
             _FOR_ITER_VIRTUAL;
 
@@ -3398,7 +3408,7 @@ dummy_func(
         }
 
         macro(FOR_ITER_LIST) =
-            unused/1 +  // Skip over the counter
+            unused/1 +  // Skip over the entry distance
             _ITER_CHECK_LIST +
             _ITER_JUMP_LIST +
             _ITER_NEXT_LIST;
@@ -3432,7 +3442,7 @@ dummy_func(
         }
 
         macro(FOR_ITER_TUPLE) =
-            unused/1 +  // Skip over the counter
+            unused/1 +  // Skip over the entry distance
             _ITER_CHECK_TUPLE +
             _ITER_JUMP_TUPLE +
             _ITER_NEXT_TUPLE;
@@ -3475,7 +3485,7 @@ dummy_func(
         }
 
         macro(FOR_ITER_RANGE) =
-            unused/1 +  // Skip over the counter
+            unused/1 +  // Skip over the entry distance
             _ITER_CHECK_RANGE +
             _ITER_JUMP_RANGE +
             _ITER_NEXT_RANGE;
@@ -3693,7 +3703,7 @@ dummy_func(
             unused/1 +
             _LOAD_ATTR_METHOD_LAZY_DICT;
 
-        // Cache layout: counter/1, func_version/2
+        // Feedback: func_version
         // CALL_INTRINSIC_1/2, CALL_KW, and CALL_FUNCTION_EX aren't members!
         family(CALL, INLINE_CACHE_ENTRIES_CALL) = {
             CALL_BOUND_METHOD_EXACT_ARGS,
@@ -3718,15 +3728,16 @@ dummy_func(
             CALL_NON_PY_GENERAL,
         };
 
-        specializing op(_SPECIALIZE_CALL, (counter/1, callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
+        specializing op(_SPECIALIZE_CALL, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
             #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_Call(callable, self_or_null, next_instr, oparg + !PyStackRef_IsNull(self_or_null));
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(CALL);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -3814,7 +3825,7 @@ dummy_func(
             ERROR_IF(err);
         }
 
-        macro(CALL) = _SPECIALIZE_CALL + unused/2 + _MAYBE_EXPAND_METHOD + _DO_CALL + _CHECK_PERIODIC_AT_END;
+        macro(CALL) = unused/1 + _SPECIALIZE_CALL + unused/2 + _MAYBE_EXPAND_METHOD + _DO_CALL + _CHECK_PERIODIC_AT_END;
         macro(INSTRUMENTED_CALL) = unused/3 + _MAYBE_EXPAND_METHOD + _MONITOR_CALL + _DO_CALL + _CHECK_PERIODIC_AT_END;
 
         op(_PY_FRAME_GENERAL, (callable, self_or_null, args[oparg] -- new_frame)) {
@@ -3850,7 +3861,7 @@ dummy_func(
         }
 
         macro(CALL_PY_GENERAL) =
-            unused/1 + // Skip over the counter
+            unused/1 + // Skip over the entry distance
             _CHECK_PEP_523 +
             _CHECK_FUNCTION_VERSION +
             _CHECK_RECURSION_REMAINING +
@@ -3880,7 +3891,7 @@ dummy_func(
         }
 
         macro(CALL_BOUND_METHOD_GENERAL) =
-            unused/1 + // Skip over the counter
+            unused/1 + // Skip over the entry distance
             _CHECK_PEP_523 +
             _CHECK_METHOD_VERSION +
             _EXPAND_METHOD +
@@ -3917,7 +3928,7 @@ dummy_func(
         }
 
         macro(CALL_NON_PY_GENERAL) =
-            unused/1 + // Skip over the counter
+            unused/1 + // Skip over the entry distance
             unused/2 +
             _CHECK_IS_NOT_PY_CALLABLE +
             _CALL_NON_PY_GENERAL +
@@ -3993,7 +4004,7 @@ dummy_func(
         }
 
         macro(CALL_BOUND_METHOD_EXACT_ARGS) =
-            unused/1 + // Skip over the counter
+            unused/1 + // Skip over the entry distance
             _CHECK_PEP_523 +
             _CHECK_CALL_BOUND_METHOD_EXACT_ARGS +
             _INIT_CALL_BOUND_METHOD_EXACT_ARGS +
@@ -4007,7 +4018,7 @@ dummy_func(
             _PUSH_FRAME;
 
         macro(CALL_PY_EXACT_ARGS) =
-            unused/1 + // Skip over the counter
+            unused/1 + // Skip over the entry distance
             _CHECK_PEP_523 +
             _CHECK_FUNCTION_VERSION +
             _CHECK_FUNCTION_EXACT_ARGS +
@@ -4650,7 +4661,7 @@ dummy_func(
             POP_TOP +
             _CHECK_PERIODIC_AT_END;
 
-        // Cache layout: counter/1, func_version/2
+        // Feedback: func_version
         family(CALL_KW, INLINE_CACHE_ENTRIES_CALL_KW) = {
             CALL_KW_BOUND_METHOD,
             CALL_KW_PY,
@@ -4781,7 +4792,7 @@ dummy_func(
         }
 
         macro(CALL_KW_PY) =
-            unused/1 + // Skip over the counter
+            unused/1 + // Skip over the entry distance
             _CHECK_PEP_523 +
             _CHECK_FUNCTION_VERSION_KW +
             _CHECK_RECURSION_REMAINING +
@@ -4811,7 +4822,7 @@ dummy_func(
         }
 
         macro(CALL_KW_BOUND_METHOD) =
-            unused/1 + // Skip over the counter
+            unused/1 + // Skip over the entry distance
             _CHECK_PEP_523 +
             _CHECK_METHOD_VERSION_KW +
             _EXPAND_METHOD_KW +
@@ -4820,26 +4831,27 @@ dummy_func(
             _SAVE_RETURN_OFFSET +
             _PUSH_FRAME;
 
-        specializing op(_SPECIALIZE_CALL_KW, (counter/1, callable, self_or_null, unused[oparg], unused -- callable, self_or_null, unused[oparg], unused)) {
+        specializing op(_SPECIALIZE_CALL_KW, (callable, self_or_null, unused[oparg], unused -- callable, self_or_null, unused[oparg], unused)) {
             #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_CallKw(callable, next_instr, oparg + !PyStackRef_IsNull(self_or_null));
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(CALL_KW);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
         macro(CALL_KW) =
-            _SPECIALIZE_CALL_KW +
+            unused/1 + _SPECIALIZE_CALL_KW +
             unused/2 +
             _MAYBE_EXPAND_METHOD_KW +
             _DO_CALL_KW;
 
         macro(INSTRUMENTED_CALL_KW) =
-            counter/1 +
+            unused/1 +
             unused/2 +
             _MAYBE_EXPAND_METHOD_KW +
             _MONITOR_CALL_KW +
@@ -4874,7 +4886,7 @@ dummy_func(
         }
 
         macro(CALL_KW_NON_PY) =
-            unused/1 + // Skip over the counter
+            unused/1 + // Skip over the entry distance
             unused/2 +
             _CHECK_IS_NOT_PY_CALLABLE_KW +
             _CALL_KW_NON_PY +
@@ -4981,20 +4993,21 @@ dummy_func(
             result = PyStackRef_FromPyObjectSteal(result_o);
         }
 
-        specializing op(_SPECIALIZE_CALL_FUNCTION_EX, (counter/1, func, unused, unused, unused -- func, unused, unused, unused)) {
+        specializing op(_SPECIALIZE_CALL_FUNCTION_EX, (func, unused, unused, unused -- func, unused, unused, unused)) {
         #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_CallFunctionEx(func, next_instr);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
         #endif  /* ENABLE_SPECIALIZATION */
         }
 
         macro(CALL_FUNCTION_EX) =
-            _SPECIALIZE_CALL_FUNCTION_EX +
+            unused/1 + _SPECIALIZE_CALL_FUNCTION_EX +
             _MAKE_CALLARGS_A_TUPLE +
             _DO_CALL_FUNCTION_EX +
             _CHECK_PERIODIC_AT_END;
@@ -5174,15 +5187,16 @@ dummy_func(
             top = PyStackRef_DUP(bottom);
         }
 
-        specializing op(_SPECIALIZE_BINARY_OP, (counter/1, lhs, rhs -- lhs, rhs)) {
+        specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs)) {
             #if ENABLE_SPECIALIZATION
-            if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+            _PyFbHeader *feedback = _PyFb_Header(this_instr);
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(BINARY_OP);
-            ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
             assert(NB_ADD <= oparg);
             assert(oparg <= NB_OPARG_LAST);
@@ -5204,7 +5218,7 @@ dummy_func(
             DEAD(rhs);
         }
 
-        macro(BINARY_OP) = _SPECIALIZE_BINARY_OP + unused/4 + _BINARY_OP + POP_TOP + POP_TOP;
+        macro(BINARY_OP) = unused/1 + _SPECIALIZE_BINARY_OP + unused/4 + _BINARY_OP + POP_TOP + POP_TOP;
 
         pure inst(SWAP, (bottom, unused[oparg-2], top --
                     bottom, unused[oparg-2], top)) {
@@ -5233,11 +5247,10 @@ dummy_func(
                     DISPATCH();
                 }
             }
-            if (_PyOpcode_Caches[original_opcode]) {
-                _PyBinaryOpCache *cache = (_PyBinaryOpCache *)(next_instr+1);
+            if (_PyFb_HasEntry(original_opcode)) {
                 /* Prevent the underlying instruction from specializing
                 * and overwriting the instrumentation. */
-                PAUSE_ADAPTIVE_COUNTER(cache->counter);
+                PAUSE_ADAPTIVE_COUNTER(_PyFb_Header(next_instr));
             }
             opcode = original_opcode;
             PRE_DISPATCH_GOTO();
@@ -5249,8 +5262,8 @@ dummy_func(
                 tstate, frame, this_instr);
             ERROR_IF(next_opcode < 0);
             next_instr = this_instr;
-            if (_PyOpcode_Caches[next_opcode]) {
-                PAUSE_ADAPTIVE_COUNTER(next_instr[1].counter);
+            if (_PyFb_HasEntry(next_opcode)) {
+                PAUSE_ADAPTIVE_COUNTER(_PyFb_Header(next_instr));
             }
             assert(next_opcode > 0 && next_opcode < 256);
             opcode = next_opcode;

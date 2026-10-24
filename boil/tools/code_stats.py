@@ -9,6 +9,8 @@ Invariants: files are compiled with ``compile()`` by the interpreter under
 test, run in a subprocess so that opcode metadata matches that interpreter.
 Files that fail to compile are counted in ``skipped`` and never abort the run.
 Cache entries are not counted as instructions; ``co_code`` bytes include them.
+``sizeof`` sums ``sys.getsizeof(code)``, which includes the typed feedback
+block on interpreters that have one.
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ CACHE = opcode._inline_cache_entries
 JUMPS = set(dis.hasjump)
 KEYS = ("instructions", "stacksize", "nlocalsplus", "consts", "names",
         "specialisable", "longest_jump", "co_code_bytes", "slots")
-SUM_KEYS = ("instructions", "specialisable", "co_code_bytes")
+SUM_KEYS = ("instructions", "specialisable", "co_code_bytes", "sizeof")
 
 
 def walk(code):
@@ -67,6 +69,7 @@ def stats(code):
         "longest_jump": longest,
         "co_code_bytes": len(code.co_code),
         "slots": nlp + code.co_stacksize,
+        "sizeof": sys.getsizeof(code),
     }
 
 
@@ -129,13 +132,15 @@ def collect(interpreter: Path, files: list[Path]) -> dict:
 
 
 def summary(name: str, r: dict) -> str:
-    """Return a ten-line human summary."""
+    """Return an eleven-line human summary."""
     t, m = r["totals"], r["maxima"]
     share = 100 * t["specialisable"] / t["instructions"]
     lines = [
         f"[{name}] files={r['files']} skipped={r['skipped']} code_objects={r['code_objects']}",
         f"  instructions={t['instructions']} co_code_bytes={t['co_code_bytes']}",
         f"  specialisable share={share:.1f}%",
+        f"  bytes per code object: sizeof={t['sizeof'] / r['code_objects']:.0f}"
+        f" co_code={t['co_code_bytes'] / r['code_objects']:.0f}",
         f"  max nlocalsplus+stacksize={m['slots']} (nlocalsplus {m['nlocalsplus']}, stacksize {m['stacksize']})",
         f"  max nlocalsplus={m['nlocalsplus']} max stacksize={m['stacksize']}",
         f"  max consts={m['consts']} max names={m['names']}",

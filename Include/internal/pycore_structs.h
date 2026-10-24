@@ -28,7 +28,6 @@ typedef union {
         uint8_t code;
         uint8_t arg;
     } op;
-    _Py_BackoffCounter counter;  // First cache entry of specializable op
 } _Py_CODEUNIT;
 
 

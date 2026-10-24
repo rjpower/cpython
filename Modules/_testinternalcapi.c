@@ -1505,6 +1505,59 @@ get_co_framesize(PyObject *self, PyObject *arg)
     return PyLong_FromLong(code->co_framesize);
 }
 
+/* The feedback entry of the instruction at byte OFFSET of the main copy of
+ * CODE's bytecode: None if it has none, else (kind, state, first, second,
+ * rows), where first and second are the two 32-bit fields after the header
+ * and rows lists the (type_version, aux, opcode) rows of its poly table. */
+static PyObject *
+get_feedback(PyObject *self, PyObject *args)
+{
+    static const char *const kinds[] = {
+        "COUNTER", "BRANCH", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL",
+    };
+    static const char *const states[] = {"COLD", "MONO", "POLY", "MEGA", "OFF"};
+    PyCodeObject *code;
+    int offset;
+    if (!PyArg_ParseTuple(args, "O!i", &PyCode_Type, &code, &offset)) {
+        return NULL;
+    }
+    if (offset < 0 || offset % 2 || offset / 2 >= Py_SIZE(code)) {
+        PyErr_SetString(PyExc_ValueError, "offset out of range");
+        return NULL;
+    }
+    int i = offset / 2;
+    if (!_PyFb_HasEntry(_Py_GetBaseCodeUnit(code, i).op.code)) {
+        Py_RETURN_NONE;
+    }
+    _PyFbHeader *h = _PyFb_Header(&_PyCode_CODE(code)[i]);
+    if (h == NULL) {
+        Py_RETURN_NONE;
+    }
+    PyObject *rows = PyList_New(0);
+    if (rows == NULL) {
+        return NULL;
+    }
+    if (h->poly) {
+        _PyFbPoly *poly = &code->_co_feedback->poly[h->poly - 1];
+        for (int r = 0; r < FB_POLY_SIZE && poly->handler[r]; r++) {
+            PyObject *row = Py_BuildValue("(IIi)", poly->type_version[r],
+                                          poly->aux[r], poly->handler[r]);
+            if (row == NULL || PyList_Append(rows, row) < 0) {
+                Py_XDECREF(row);
+                Py_DECREF(rows);
+                return NULL;
+            }
+            Py_DECREF(row);
+        }
+    }
+    uint32_t fields[2] = {0, 0};
+    if (h->kind != FB_COUNTER) {
+        memcpy(fields, h + 1, sizeof(fields));
+    }
+    return Py_BuildValue("(ssIIN)", kinds[h->kind], states[h->state],
+                         fields[0], fields[1], rows);
+}
+
 static PyObject *
 get_co_localskinds(PyObject *self, PyObject *arg)
 {
@@ -3252,6 +3305,7 @@ static PyMethodDef module_functions[] = {
     {"code_returns_only_none", code_returns_only_none, METH_O, NULL},
     {"get_co_framesize", get_co_framesize, METH_O, NULL},
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
+    {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_code_var_counts", _PyCFunction_CAST(get_code_var_counts),
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"verify_stateless_code", _PyCFunction_CAST(verify_stateless_code),

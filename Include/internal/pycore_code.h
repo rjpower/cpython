@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 #include "pycore_backoff.h"     // _Py_BackoffCounter
+#include "pycore_feedback.h"    // _PyFbHeader
 #include "pycore_structs.h"     // _Py_CODEUNIT
 #include "pycore_tstate.h"      // _PyThreadStateImpl
 
@@ -56,119 +57,28 @@ extern void _PyCode_Fini(PyInterpreterState *interp);
  */
 
 
-// Inline caches. If you change the number of cache entries for an instruction,
-// you must *also* update the number of cache entries in Lib/opcode.py and bump
-// the magic number in Lib/importlib/_bootstrap_external.py!
+// Inline cache units.  Unit 0 locates the instruction's feedback entry (see
+// pycore_feedback.h); the rest are reserved and keep the layout of co_code.
+// If you change the number of cache entries for an instruction, you must
+// *also* update the number of cache entries in Lib/opcode.py and bump the
+// magic number in Lib/importlib/_bootstrap_external.py!
 
-#define CACHE_ENTRIES(cache) (sizeof(cache)/sizeof(_Py_CODEUNIT))
-
-typedef struct {
-    _Py_BackoffCounter counter;
-    uint16_t module_keys_version;
-    uint16_t builtin_keys_version;
-    uint16_t index;
-} _PyLoadGlobalCache;
-
-#define INLINE_CACHE_ENTRIES_LOAD_GLOBAL CACHE_ENTRIES(_PyLoadGlobalCache)
-
-typedef struct {
-    _Py_BackoffCounter counter;
-    uint16_t external_cache[4];
-} _PyBinaryOpCache;
-
-#define INLINE_CACHE_ENTRIES_BINARY_OP CACHE_ENTRIES(_PyBinaryOpCache)
-
-typedef struct {
-    _Py_BackoffCounter counter;
-} _PyUnpackSequenceCache;
-
-#define INLINE_CACHE_ENTRIES_UNPACK_SEQUENCE \
-    CACHE_ENTRIES(_PyUnpackSequenceCache)
-
-typedef struct {
-    _Py_BackoffCounter counter;
-} _PyCompareOpCache;
-
-#define INLINE_CACHE_ENTRIES_COMPARE_OP CACHE_ENTRIES(_PyCompareOpCache)
-
-typedef struct {
-    _Py_BackoffCounter counter;
-} _PySuperAttrCache;
-
-#define INLINE_CACHE_ENTRIES_LOAD_SUPER_ATTR CACHE_ENTRIES(_PySuperAttrCache)
-
-typedef struct {
-    _Py_BackoffCounter counter;
-    uint16_t version[2];
-    uint16_t index;
-} _PyAttrCache;
-
-typedef struct {
-    _Py_BackoffCounter counter;
-    uint16_t type_version[2];
-    union {
-        uint16_t keys_version[2];
-        uint16_t dict_offset;
-    };
-    uint16_t descr[4];
-} _PyLoadMethodCache;
-
-
-// MUST be the max(_PyAttrCache, _PyLoadMethodCache)
-#define INLINE_CACHE_ENTRIES_LOAD_ATTR CACHE_ENTRIES(_PyLoadMethodCache)
-
-#define INLINE_CACHE_ENTRIES_STORE_ATTR CACHE_ENTRIES(_PyAttrCache)
-
-typedef struct {
-    _Py_BackoffCounter counter;
-    uint16_t func_version[2];
-} _PyCallCache;
-
-#define INLINE_CACHE_ENTRIES_CALL CACHE_ENTRIES(_PyCallCache)
-#define INLINE_CACHE_ENTRIES_CALL_KW CACHE_ENTRIES(_PyCallCache)
-
-typedef struct {
-    _Py_BackoffCounter counter;
-} _PyStoreSubscrCache;
-
-#define INLINE_CACHE_ENTRIES_STORE_SUBSCR CACHE_ENTRIES(_PyStoreSubscrCache)
-
-typedef struct {
-    _Py_BackoffCounter counter;
-} _PyForIterCache;
-
-#define INLINE_CACHE_ENTRIES_FOR_ITER CACHE_ENTRIES(_PyForIterCache)
-
-typedef struct {
-    _Py_BackoffCounter counter;
-} _PyGetIterCache;
-
-#define INLINE_CACHE_ENTRIES_GET_ITER CACHE_ENTRIES(_PyGetIterCache)
-
-typedef struct {
-    _Py_BackoffCounter counter;
-} _PySendCache;
-
-#define INLINE_CACHE_ENTRIES_SEND CACHE_ENTRIES(_PySendCache)
-
-typedef struct {
-    _Py_BackoffCounter counter;
-    uint16_t version[2];
-} _PyToBoolCache;
-
-#define INLINE_CACHE_ENTRIES_TO_BOOL CACHE_ENTRIES(_PyToBoolCache)
-
-typedef struct {
-    _Py_BackoffCounter counter;
-} _PyContainsOpCache;
-
-#define INLINE_CACHE_ENTRIES_CONTAINS_OP CACHE_ENTRIES(_PyContainsOpCache)
-
-typedef struct {
-    _Py_BackoffCounter counter;
-} _PyCallFunctionExCache;
-
-#define INLINE_CACHE_ENTRIES_CALL_FUNCTION_EX CACHE_ENTRIES(_PyCallFunctionExCache)
+#define INLINE_CACHE_ENTRIES_LOAD_GLOBAL 4
+#define INLINE_CACHE_ENTRIES_BINARY_OP 5
+#define INLINE_CACHE_ENTRIES_UNPACK_SEQUENCE 1
+#define INLINE_CACHE_ENTRIES_COMPARE_OP 1
+#define INLINE_CACHE_ENTRIES_LOAD_SUPER_ATTR 1
+#define INLINE_CACHE_ENTRIES_LOAD_ATTR 9
+#define INLINE_CACHE_ENTRIES_STORE_ATTR 4
+#define INLINE_CACHE_ENTRIES_CALL 3
+#define INLINE_CACHE_ENTRIES_CALL_KW 3
+#define INLINE_CACHE_ENTRIES_STORE_SUBSCR 1
+#define INLINE_CACHE_ENTRIES_FOR_ITER 1
+#define INLINE_CACHE_ENTRIES_GET_ITER 1
+#define INLINE_CACHE_ENTRIES_SEND 1
+#define INLINE_CACHE_ENTRIES_TO_BOOL 3
+#define INLINE_CACHE_ENTRIES_CONTAINS_OP 1
+#define INLINE_CACHE_ENTRIES_CALL_FUNCTION_EX 1
 
 /* "Locals plus" for a code object is the set of locals + cell vars +
  * free vars.  This relates to variable names as well as offsets into
@@ -321,68 +231,21 @@ PyAPI_FUNC(void) _Py_Specialize_UnpackSequence(_PyStackRef seq, _Py_CODEUNIT *in
 PyAPI_FUNC(void) _Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _Py_CODEUNIT *instr, int oparg);
 PyAPI_FUNC(void) _Py_Specialize_Send(_PyStackRef receiver, _Py_CODEUNIT *instr);
 PyAPI_FUNC(void) _Py_Specialize_ToBool(_PyStackRef value, _Py_CODEUNIT *instr);
-PyAPI_FUNC(void) _Py_Specialize_ContainsOp(_PyStackRef value, _Py_CODEUNIT *instr);
+PyAPI_FUNC(void) _Py_Specialize_ContainsOp(_PyStackRef item, _PyStackRef value,
+                                           _Py_CODEUNIT *instr);
 PyAPI_FUNC(void) _Py_GatherStats_GetIter(_PyStackRef iterable);
 PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(_PyStackRef func_st, _Py_CODEUNIT *instr);
 PyAPI_FUNC(void) _Py_Specialize_Resume(_Py_CODEUNIT *instr, PyThreadState *tstate);
 PyAPI_FUNC(void) _Py_Specialize_GetIter(_PyStackRef iterable, _Py_CODEUNIT *instr);
 
-// Utility functions for reading/writing 32/64-bit values in the inline caches.
-// Great care should be taken to ensure that these functions remain correct and
-// performant! They should compile to just "move" instructions on all supported
-// compilers and platforms.
-
-// We use memcpy to let the C compiler handle unaligned accesses and endianness
-// issues for us. It also seems to produce better code than manual copying for
-// most compilers (see https://blog.regehr.org/archives/959 for more info).
-
-static inline void
-write_u32(uint16_t *p, uint32_t val)
-{
-    memcpy(p, &val, sizeof(val));
-}
-
-static inline void
-write_u64(uint16_t *p, uint64_t val)
-{
-    memcpy(p, &val, sizeof(val));
-}
-
-static inline void
-write_ptr(uint16_t *p, void *val)
-{
-    memcpy(p, &val, sizeof(val));
-}
-
-static inline uint16_t
-read_u16(uint16_t *p)
-{
-    return *p;
-}
-
-static inline uint32_t
-read_u32(uint16_t *p)
-{
-    uint32_t val;
-    memcpy(&val, p, sizeof(val));
-    return val;
-}
-
-static inline uint64_t
-read_u64(uint16_t *p)
-{
-    uint64_t val;
-    memcpy(&val, p, sizeof(val));
-    return val;
-}
-
-static inline PyObject *
-read_obj(uint16_t *p)
-{
-    PyObject *val;
-    memcpy(&val, p, sizeof(val));
-    return val;
-}
+/* Typed feedback, see pycore_feedback.h.  _PyFb_BlockSize() returns the
+ * bytes that the feedback block of unquickened bytecode needs, or 0 if no
+ * instruction has an entry.  _PyCode_Quicken() writes the block after
+ * INSTRUCTIONS, a copy of the bytecode of CO allocated with room for it, and
+ * points unit 0 of every inline cache at its entry. */
+extern Py_ssize_t _PyFb_BlockSize(const _Py_CODEUNIT *code, Py_ssize_t size);
+extern void _PyCode_Quicken(PyCodeObject *co, _Py_CODEUNIT *instructions,
+                            int enable_counters);
 
 /* See InternalDocs/exception_handling.md for details.
  */
@@ -434,7 +297,7 @@ write_location_entry_start(uint8_t *ptr, int code, int length)
 
 
 /** Counters
- * The first 16-bit value in each inline cache is a counter.
+ * Each feedback entry has a counter (_PyFbHeader.counter).
  *
  * When counting executions until the next specialization attempt,
  * exponential backoff is used to reduce the number of specialization failures.

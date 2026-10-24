@@ -662,6 +662,18 @@ _Py_GetBaseCodeUnit(PyCodeObject *code, int i)
     return inst;
 }
 
+/* Restart the specialisation warmup of an instruction whose opcode changes
+ * between its instrumented and uninstrumented forms. */
+static void
+warm_up(_Py_CODEUNIT *instr)
+{
+    _PyFbHeader *fb = _PyFb_Header(instr);
+    if (fb != NULL) {
+        FT_ATOMIC_STORE_UINT16_RELAXED(fb->counter.value_and_backoff,
+                                       adaptive_counter_warmup().value_and_backoff);
+    }
+}
+
 static void
 de_instrument(PyCodeObject *code, _Py_CODEUNIT *bytecode, _PyCoMonitoringData *monitoring, int i,
               int event)
@@ -686,9 +698,8 @@ de_instrument(PyCodeObject *code, _Py_CODEUNIT *bytecode, _PyCoMonitoringData *m
     }
     CHECK(_PyOpcode_Deopt[deinstrumented] == deinstrumented);
     FT_ATOMIC_STORE_UINT8_RELAXED(*opcode_ptr, deinstrumented);
-    if (_PyOpcode_Caches[deinstrumented]) {
-        FT_ATOMIC_STORE_UINT16_RELAXED(instr[1].counter.value_and_backoff,
-                                       adaptive_counter_warmup().value_and_backoff);
+    if (_PyFb_HasEntry(deinstrumented)) {
+        warm_up(instr);
     }
 }
 
@@ -706,9 +717,8 @@ de_instrument_line(PyCodeObject *code, _Py_CODEUNIT *bytecode, _PyCoMonitoringDa
     CHECK(original_opcode != 0);
     CHECK(original_opcode == _PyOpcode_Deopt[original_opcode]);
     FT_ATOMIC_STORE_UINT8(instr->op.code, original_opcode);
-    if (_PyOpcode_Caches[original_opcode]) {
-        FT_ATOMIC_STORE_UINT16_RELAXED(instr[1].counter.value_and_backoff,
-                                       adaptive_counter_warmup().value_and_backoff);
+    if (_PyFb_HasEntry(original_opcode)) {
+        warm_up(instr);
     }
     assert(instr->op.code != INSTRUMENTED_LINE);
 }
@@ -731,9 +741,8 @@ de_instrument_per_instruction(PyCodeObject *code, _Py_CODEUNIT *bytecode,
     CHECK(original_opcode != 0);
     CHECK(original_opcode == _PyOpcode_Deopt[original_opcode]);
     FT_ATOMIC_STORE_UINT8_RELAXED(*opcode_ptr, original_opcode);
-    if (_PyOpcode_Caches[original_opcode]) {
-        FT_ATOMIC_STORE_UINT16_RELAXED(instr[1].counter.value_and_backoff,
-                                       adaptive_counter_warmup().value_and_backoff);
+    if (_PyFb_HasEntry(original_opcode)) {
+        warm_up(instr);
     }
     assert(*opcode_ptr != INSTRUMENTED_INSTRUCTION);
     assert(instr->op.code != INSTRUMENTED_INSTRUCTION);
@@ -761,9 +770,8 @@ instrument(PyCodeObject *code, _Py_CODEUNIT *bytecode, _PyCoMonitoringData *moni
         int instrumented = INSTRUMENTED_OPCODES[deopt];
         assert(instrumented);
         FT_ATOMIC_STORE_UINT8_RELAXED(*opcode_ptr, instrumented);
-        if (_PyOpcode_Caches[deopt]) {
-            FT_ATOMIC_STORE_UINT16_RELAXED(instr[1].counter.value_and_backoff,
-                                           adaptive_counter_warmup().value_and_backoff);
+        if (_PyFb_HasEntry(deopt)) {
+            warm_up(instr);
         }
     }
 }

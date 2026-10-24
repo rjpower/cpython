@@ -183,6 +183,56 @@ def generate_cache_table(analysis: Analysis, out: CWriter) -> None:
     out.emit("#endif\n\n")
 
 
+def feedback_fields(inst: Instruction) -> list[tuple[int, int, str]]:
+    "(unit, size, name) of each named cache effect of a specialised instruction"
+    fields: dict[int, tuple[int, int, str]] = {}
+    offset = 1
+    for part in inst.parts:
+        if isinstance(part, Uop):
+            for cache in part.caches:
+                if cache.name != "unused":
+                    fields.setdefault(offset, (offset, cache.size, cache.name))
+                offset += cache.size
+        else:
+            offset += part.size
+    return sorted(fields.values())
+
+
+def generate_feedback_fields_table(analysis: Analysis, out: CWriter) -> None:
+    """The feedback entry fields that each specialised instruction reads, and
+    where its inline cache held them before typed feedback, which is where
+    code_getcodeadaptive() puts them for dis."""
+    tables = {}
+    for inst in analysis.instructions.values():
+        if inst.family is None or inst.family.name == inst.name:
+            continue
+        if fields := feedback_fields(inst):
+            tables[inst.name] = (inst.family.name, fields)
+    max_fields = max((len(fields) for _, fields in tables.values()), default=1)
+    out.emit(f"#define FB_MAX_FIELDS {max_fields}\n")
+    out.emit("struct _PyFbField {\n")
+    out.emit("uint8_t unit;  // in code units from the instruction\n")
+    out.emit("uint8_t size;  // in code units\n")
+    out.emit("uint8_t offset;  // in the feedback entry\n")
+    out.emit("};\n")
+    out.emit("struct _PyFbFields {\n")
+    out.emit("uint8_t n;\n")
+    out.emit("struct _PyFbField fields[FB_MAX_FIELDS];\n")
+    out.emit("};\n")
+    out.emit("extern const struct _PyFbFields _PyOpcode_FeedbackFields[256];\n")
+    out.emit("#ifdef NEED_OPCODE_METADATA\n")
+    out.emit('#include "pycore_feedback.h"\n')
+    out.emit("const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {\n")
+    for name, (family, fields) in sorted(tables.items()):
+        entries = ", ".join(
+            f"{{ {unit}, {size}, offsetof(_PyFb_{family}, {field}) }}"
+            for unit, size, field in fields
+        )
+        out.emit(f"[{name}] = {{ {len(fields)}, {{ {entries} }} }},\n")
+    out.emit("};\n")
+    out.emit("#endif\n\n")
+
+
 def generate_name_table(analysis: Analysis, out: CWriter) -> None:
     table_size = 256 + len(analysis.pseudos)
     out.emit(f"PyAPI_DATA(const char) *_PyOpcode_OpName[{table_size}];\n")
@@ -381,6 +431,7 @@ def generate_opcode_metadata(
         generate_expansion_table(analysis, out)
         generate_name_table(analysis, out)
         generate_cache_table(analysis, out)
+        generate_feedback_fields_table(analysis, out)
         generate_deopt_table(analysis, out)
         generate_extra_cases(analysis, out)
         generate_pseudo_targets(analysis, out)

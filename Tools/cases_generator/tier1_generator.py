@@ -88,15 +88,13 @@ def write_uop(
 
     for cache in uop.caches:
         if cache.name != "unused":
+            # Cache effects name fields of the instruction's feedback entry;
+            # their sizes only describe the reserved inline cache units.
             if cache.size == 4:
-                type = "PyObject *"
-                reader = "read_obj"
+                value = f"PyObject *{cache.name} = (PyObject *)fb->{cache.name};"
             else:
-                type = f"uint{cache.size*16}_t "
-                reader = f"read_u{cache.size*16}"
-            emitter.emit(
-                f"{type}{cache.name} = {reader}(&this_instr[{offset}].cache);\n"
-            )
+                value = f"uint32_t {cache.name} = fb->{cache.name};"
+            emitter.emit(value + "\n")
             if inst.family is None:
                 emitter.emit(f"(void){cache.name};\n")
         offset += cache.size
@@ -109,15 +107,27 @@ def write_uop(
     return reachable, offset, storage.stack
 
 
-def uses_this(inst: Instruction) -> bool:
-    if inst.properties.needs_this:
-        return True
+def uses_feedback(inst: Instruction) -> bool:
     for uop in inst.parts:
         if not isinstance(uop, Uop):
             continue
         for cache in uop.caches:
             if cache.name != "unused":
                 return True
+    return False
+
+
+def feedback_type(inst: Instruction) -> str:
+    "The entry type of an instruction: that of its family, see pycore_feedback.h"
+    family = inst.family.name if inst.family is not None else inst.name
+    return f"_PyFb_{family}"
+
+
+def uses_this(inst: Instruction) -> bool:
+    if inst.properties.needs_this:
+        return True
+    if uses_feedback(inst):
+        return True
     # Can't be merged into the loop above, because
     # this must strictly be performed at the end.
     for uop in inst.parts:
@@ -222,9 +232,12 @@ def generate_tier1_cases(
         if inst.properties.needs_prev:
             out.emit(f"_Py_CODEUNIT* const prev_instr = frame->instr_ptr;\n")
 
+        feedback = f"{feedback_type(inst)} *fb = _PyFb_Entry(this_instr);\n"
         if needs_this and not inst.is_target:
             out.emit(f"_Py_CODEUNIT* const this_instr = next_instr;\n")
             out.emit(unused_guard)
+            if uses_feedback(inst):
+                out.emit(feedback)
         if not inst.properties.no_save_ip:
             out.emit(f"frame->instr_ptr = next_instr;\n")
 
@@ -235,6 +248,8 @@ def generate_tier1_cases(
             if needs_this:
                 out.emit(f"_Py_CODEUNIT* const this_instr = next_instr - {inst.size};\n")
                 out.emit(unused_guard)
+                if uses_feedback(inst):
+                    out.emit(feedback)
         if inst.properties.uses_opcode:
             out.emit(f"opcode = {name};\n")
         if inst.family is not None:

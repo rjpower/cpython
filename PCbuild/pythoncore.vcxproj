@@ -242,6 +242,7 @@
     <ClInclude Include="..\Include\internal\pycore_dtoa.h" />
     <ClInclude Include="..\Include\internal\pycore_exceptions.h" />
     <ClInclude Include="..\Include\internal\pycore_faulthandler.h" />
+    <ClInclude Include="..\Include\internal\pycore_feedback.h" />
     <ClInclude Include="..\Include\internal\pycore_fileutils.h" />
     <ClInclude Include="..\Include\internal\pycore_fileutils_windows.h" />
     <ClInclude Include="..\Include\internal\pycore_floatobject.h" />

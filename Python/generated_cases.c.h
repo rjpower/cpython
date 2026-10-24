@@ -30,14 +30,14 @@
             _PyStackRef l;
             _PyStackRef r;
             _PyStackRef value;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = stack_pointer[-1];
                 lhs = stack_pointer[-2];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
@@ -46,7 +46,7 @@
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
                 assert(oparg <= NB_OPARG_LAST);
@@ -321,6 +321,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_BINARY_OP *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 6;
             INSTRUCTION_STATS(BINARY_OP_EXTEND);
@@ -336,7 +337,7 @@
             {
                 right = stack_pointer[-1];
                 left = stack_pointer[-2];
-                PyObject *descr = read_obj(&this_instr[2].cache);
+                PyObject *descr = (PyObject *)fb->descr;
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 _PyBinaryOpSpecializationDescr *d = (_PyBinaryOpSpecializationDescr*)descr;
@@ -357,7 +358,7 @@
             /* Skip -4 cache entry */
             // _BINARY_OP_EXTEND
             {
-                PyObject *descr = read_obj(&this_instr[2].cache);
+                PyObject *descr = (PyObject *)fb->descr;
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
@@ -1819,14 +1820,14 @@
             _PyStackRef self_or_null;
             _PyStackRef *args;
             _PyStackRef res;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_CALL
             {
                 self_or_null = stack_pointer[-1 - oparg];
                 callable = stack_pointer[-2 - oparg];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
@@ -1835,7 +1836,7 @@
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CALL);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             /* Skip 2 cache entries */
@@ -1933,6 +1934,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_CALL *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 4;
             INSTRUCTION_STATS(CALL_ALLOC_AND_ENTER_INIT);
@@ -1957,7 +1959,7 @@
             {
                 self_or_null = stack_pointer[-1 - oparg];
                 callable = stack_pointer[-2 - oparg];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (!PyStackRef_IsNull(self_or_null)) {
                     UPDATE_MISS_STATS(CALL);
@@ -2080,6 +2082,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_CALL *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 4;
             INSTRUCTION_STATS(CALL_BOUND_METHOD_EXACT_ARGS);
@@ -2132,7 +2135,7 @@
             // flush
             // _CHECK_FUNCTION_VERSION
             {
-                uint32_t func_version = read_u32(&this_instr[2].cache);
+                uint32_t func_version = fb->func_version;
                 PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
@@ -2225,6 +2228,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_CALL *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 4;
             INSTRUCTION_STATS(CALL_BOUND_METHOD_GENERAL);
@@ -2247,7 +2251,7 @@
             {
                 null = stack_pointer[-1 - oparg];
                 callable = stack_pointer[-2 - oparg];
-                uint32_t func_version = read_u32(&this_instr[2].cache);
+                uint32_t func_version = fb->func_version;
                 PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (Py_TYPE(callable_o) != &PyMethod_Type) {
                     UPDATE_MISS_STATS(CALL);
@@ -2998,13 +3002,13 @@
             _PyStackRef callargs_st;
             _PyStackRef kwargs_st;
             _PyStackRef result;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_CALL_FUNCTION_EX
             {
                 func = stack_pointer[-4];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
@@ -3013,7 +3017,7 @@
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _MAKE_CALLARGS_A_TUPLE
@@ -3367,14 +3371,14 @@
             _PyStackRef *args;
             _PyStackRef kwnames;
             _PyStackRef res;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_CALL_KW
             {
                 self_or_null = stack_pointer[-2 - oparg];
                 callable = stack_pointer[-3 - oparg];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
@@ -3383,7 +3387,7 @@
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CALL_KW);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             /* Skip 2 cache entries */
@@ -3479,6 +3483,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_CALL_KW *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 4;
             INSTRUCTION_STATS(CALL_KW_BOUND_METHOD);
@@ -3502,7 +3507,7 @@
             {
                 null = stack_pointer[-2 - oparg];
                 callable = stack_pointer[-3 - oparg];
-                uint32_t func_version = read_u32(&this_instr[2].cache);
+                uint32_t func_version = fb->func_version;
                 PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (Py_TYPE(callable_o) != &PyMethod_Type) {
                     UPDATE_MISS_STATS(CALL_KW);
@@ -3690,6 +3695,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_CALL_KW *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 4;
             INSTRUCTION_STATS(CALL_KW_PY);
@@ -3711,7 +3717,7 @@
             // _CHECK_FUNCTION_VERSION_KW
             {
                 callable = stack_pointer[-3 - oparg];
-                uint32_t func_version = read_u32(&this_instr[2].cache);
+                uint32_t func_version = fb->func_version;
                 PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL_KW);
@@ -4576,6 +4582,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_CALL *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 4;
             INSTRUCTION_STATS(CALL_PY_EXACT_ARGS);
@@ -4596,7 +4603,7 @@
             // _CHECK_FUNCTION_VERSION
             {
                 callable = stack_pointer[-2 - oparg];
-                uint32_t func_version = read_u32(&this_instr[2].cache);
+                uint32_t func_version = fb->func_version;
                 PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
@@ -4690,6 +4697,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_CALL *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 4;
             INSTRUCTION_STATS(CALL_PY_GENERAL);
@@ -4710,7 +4718,7 @@
             // _CHECK_FUNCTION_VERSION
             {
                 callable = stack_pointer[-2 - oparg];
-                uint32_t func_version = read_u32(&this_instr[2].cache);
+                uint32_t func_version = fb->func_version;
                 PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
@@ -5226,14 +5234,14 @@
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_COMPARE_OP
             {
                 right = stack_pointer[-1];
                 left = stack_pointer[-2];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
@@ -5242,7 +5250,7 @@
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(COMPARE_OP);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _COMPARE_OP
@@ -5523,33 +5531,33 @@
             PREDICTED_CONTAINS_OP:;
             _Py_CODEUNIT* const this_instr = next_instr - 2;
             (void)this_instr;
-            _PyStackRef right;
             _PyStackRef left;
+            _PyStackRef right;
             _PyStackRef b;
             _PyStackRef l;
             _PyStackRef r;
             _PyStackRef value;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_CONTAINS_OP
             {
                 right = stack_pointer[-1];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
+                left = stack_pointer[-2];
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
-                    _Py_Specialize_ContainsOp(right, next_instr);
+                    _Py_Specialize_ContainsOp(left, right, next_instr);
                     _PyFrame_StackPointerInvalidate(frame);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CONTAINS_OP);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _CONTAINS_OP
             {
-                left = stack_pointer[-2];
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -6250,14 +6258,14 @@
             _PyStackRef iter;
             _PyStackRef null_or_index;
             _PyStackRef next;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_FOR_ITER
             {
                 null_or_index = stack_pointer[-1];
                 iter = stack_pointer[-2];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
@@ -6266,7 +6274,7 @@
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(FOR_ITER);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _FOR_ITER
@@ -6760,13 +6768,13 @@
             _PyStackRef iterable;
             _PyStackRef iter;
             _PyStackRef index_or_null;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_GET_ITER
             {
                 iterable = stack_pointer[-1];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
@@ -6775,7 +6783,7 @@
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(GET_ITER);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _GET_ITER
@@ -7629,8 +7637,8 @@
                 JUMP_TO_LABEL(error);
             }
             next_instr = this_instr;
-            if (_PyOpcode_Caches[next_opcode]) {
-                PAUSE_ADAPTIVE_COUNTER(next_instr[1].counter);
+            if (_PyFb_HasEntry(next_opcode)) {
+                PAUSE_ADAPTIVE_COUNTER(_PyFb_Header(next_instr));
             }
             assert(next_opcode > 0 && next_opcode < 256);
             opcode = next_opcode;
@@ -7715,9 +7723,8 @@
                     DISPATCH();
                 }
             }
-            if (_PyOpcode_Caches[original_opcode]) {
-                _PyBinaryOpCache *cache = (_PyBinaryOpCache *)(next_instr+1);
-                PAUSE_ADAPTIVE_COUNTER(cache->counter);
+            if (_PyFb_HasEntry(original_opcode)) {
+                PAUSE_ADAPTIVE_COUNTER(_PyFb_Header(next_instr));
             }
             opcode = original_opcode;
             PRE_DISPATCH_GOTO();
@@ -8467,13 +8474,13 @@
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef *self_or_null;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_LOAD_ATTR
             {
                 owner = stack_pointer[-1];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -8483,7 +8490,7 @@
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(LOAD_ATTR);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             /* Skip 8 cache entries */
@@ -8531,6 +8538,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 10;
             INSTRUCTION_STATS(LOAD_ATTR_CLASS);
@@ -8542,15 +8550,15 @@
             // _CHECK_ATTR_CLASS
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t class_version = fb->class_version;
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 if (!PyType_Check(owner_o)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != type_version) {
+                assert(class_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -8559,7 +8567,7 @@
             /* Skip 2 cache entries */
             // _LOAD_ATTR_CLASS
             {
-                PyObject *descr = read_obj(&this_instr[6].cache);
+                PyObject *descr = (PyObject *)fb->descr;
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
                 attr = PyStackRef_FromPyObjectNew(descr);
@@ -8590,6 +8598,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 10;
             INSTRUCTION_STATS(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK);
@@ -8601,7 +8610,7 @@
             // _GUARD_TYPE_VERSION
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -8612,15 +8621,15 @@
             }
             // _CHECK_ATTR_CLASS
             {
-                uint32_t type_version = read_u32(&this_instr[4].cache);
+                uint32_t class_version = fb->class_version;
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 if (!PyType_Check(owner_o)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != type_version) {
+                assert(class_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -8628,7 +8637,7 @@
             }
             // _LOAD_ATTR_CLASS
             {
-                PyObject *descr = read_obj(&this_instr[6].cache);
+                PyObject *descr = (PyObject *)fb->descr;
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
                 attr = PyStackRef_FromPyObjectNew(descr);
@@ -8659,6 +8668,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 10;
             INSTRUCTION_STATS(LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN);
@@ -8669,7 +8679,7 @@
             // _GUARD_TYPE_VERSION
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -8688,8 +8698,8 @@
             }
             // _LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN_FRAME
             {
-                uint32_t func_version = read_u32(&this_instr[4].cache);
-                PyObject *getattribute = read_obj(&this_instr[6].cache);
+                uint32_t func_version = fb->func_version;
+                PyObject *getattribute = (PyObject *)fb->getattribute;
                 assert((oparg & 1) == 0);
                 assert(Py_IS_TYPE(getattribute, &PyFunction_Type));
                 PyFunctionObject *f = (PyFunctionObject *)getattribute;
@@ -8749,6 +8759,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 10;
             INSTRUCTION_STATS(LOAD_ATTR_INSTANCE_VALUE);
@@ -8762,7 +8773,7 @@
             // _GUARD_TYPE_VERSION
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -8784,7 +8795,7 @@
             }
             // _LOAD_ATTR_INSTANCE_VALUE
             {
-                uint16_t offset = read_u16(&this_instr[4].cache);
+                uint32_t offset = fb->offset;
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 PyObject **value_ptr = (PyObject**)(((char *)owner_o) + offset);
                 PyObject *attr_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(*value_ptr);
@@ -8837,6 +8848,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 10;
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_LAZY_DICT);
@@ -8848,7 +8860,7 @@
             // _GUARD_TYPE_VERSION
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -8859,7 +8871,7 @@
             }
             // _CHECK_ATTR_METHOD_LAZY_DICT
             {
-                uint16_t dictoffset = read_u16(&this_instr[4].cache);
+                uint32_t dictoffset = fb->dictoffset;
                 char *ptr = ((char *)PyStackRef_AsPyObjectBorrow(owner)) + MANAGED_DICT_OFFSET + dictoffset;
                 PyObject *dict = FT_ATOMIC_LOAD_PTR_ACQUIRE(*(PyObject **)ptr);
                 if (dict != NULL) {
@@ -8871,7 +8883,7 @@
             /* Skip 1 cache entry */
             // _LOAD_ATTR_METHOD_LAZY_DICT
             {
-                PyObject *descr = read_obj(&this_instr[6].cache);
+                PyObject *descr = (PyObject *)fb->descr;
                 assert(oparg & 1);
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
@@ -8893,6 +8905,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 10;
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_NO_DICT);
@@ -8904,7 +8917,7 @@
             // _GUARD_TYPE_VERSION
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -8916,7 +8929,7 @@
             /* Skip 2 cache entries */
             // _LOAD_ATTR_METHOD_NO_DICT
             {
-                PyObject *descr = read_obj(&this_instr[6].cache);
+                PyObject *descr = (PyObject *)fb->descr;
                 assert(oparg & 1);
                 assert(Py_TYPE(PyStackRef_AsPyObjectBorrow(owner))->tp_dictoffset == 0);
                 STAT_INC(LOAD_ATTR, hit);
@@ -8939,6 +8952,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 10;
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_WITH_VALUES);
@@ -8950,7 +8964,7 @@
             // _GUARD_TYPE_VERSION
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -8973,7 +8987,7 @@
             /* Skip 2 cache entries */
             // _LOAD_ATTR_METHOD_WITH_VALUES
             {
-                PyObject *descr = read_obj(&this_instr[6].cache);
+                PyObject *descr = (PyObject *)fb->descr;
                 assert(oparg & 1);
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
@@ -8995,6 +9009,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 10;
             INSTRUCTION_STATS(LOAD_ATTR_MODULE);
@@ -9008,8 +9023,8 @@
             // _LOAD_ATTR_MODULE
             {
                 owner = stack_pointer[-1];
-                uint32_t dict_version = read_u32(&this_instr[2].cache);
-                uint16_t index = read_u16(&this_instr[4].cache);
+                uint32_t dict_version = fb->dict_version;
+                uint32_t index = fb->index;
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 if (!PyModule_CheckExact(owner_o)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -9077,6 +9092,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 10;
             INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_NO_DICT);
@@ -9087,7 +9103,7 @@
             // _GUARD_TYPE_VERSION
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -9099,7 +9115,7 @@
             /* Skip 2 cache entries */
             // _LOAD_ATTR_NONDESCRIPTOR_NO_DICT
             {
-                PyObject *descr = read_obj(&this_instr[6].cache);
+                PyObject *descr = (PyObject *)fb->descr;
                 assert((oparg & 1) == 0);
                 assert(Py_TYPE(PyStackRef_AsPyObjectBorrow(owner))->tp_dictoffset == 0);
                 STAT_INC(LOAD_ATTR, hit);
@@ -9125,6 +9141,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 10;
             INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES);
@@ -9135,7 +9152,7 @@
             // _GUARD_TYPE_VERSION
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -9158,7 +9175,7 @@
             /* Skip 2 cache entries */
             // _LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES
             {
-                PyObject *descr = read_obj(&this_instr[6].cache);
+                PyObject *descr = (PyObject *)fb->descr;
                 assert((oparg & 1) == 0);
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
@@ -9183,6 +9200,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 10;
             INSTRUCTION_STATS(LOAD_ATTR_PROPERTY);
@@ -9193,7 +9211,7 @@
             // _GUARD_TYPE_VERSION
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -9212,8 +9230,8 @@
             }
             // _LOAD_ATTR_PROPERTY_FRAME
             {
-                uint32_t func_version = read_u32(&this_instr[4].cache);
-                PyObject *fget = read_obj(&this_instr[6].cache);
+                uint32_t func_version = fb->func_version;
+                PyObject *fget = (PyObject *)fb->fget;
                 assert((oparg & 1) == 0);
                 assert(Py_IS_TYPE(fget, &PyFunction_Type));
                 PyFunctionObject *f = (PyFunctionObject *)fget;
@@ -9268,6 +9286,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 10;
             INSTRUCTION_STATS(LOAD_ATTR_SLOT);
@@ -9281,7 +9300,7 @@
             // _GUARD_TYPE_VERSION
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -9292,7 +9311,7 @@
             }
             // _LOAD_ATTR_SLOT
             {
-                uint16_t index = read_u16(&this_instr[4].cache);
+                uint32_t index = fb->index;
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 PyObject **addr = (PyObject **)((char *)owner_o + index);
                 PyObject *attr_o = FT_ATOMIC_LOAD_PTR(*addr);
@@ -9343,6 +9362,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 10;
             INSTRUCTION_STATS(LOAD_ATTR_WITH_HINT);
@@ -9356,7 +9376,7 @@
             // _GUARD_TYPE_VERSION
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -9367,7 +9387,7 @@
             }
             // _LOAD_ATTR_WITH_HINT
             {
-                uint16_t hint = read_u16(&this_instr[4].cache);
+                uint32_t hint = fb->hint;
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
                 PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
@@ -9795,12 +9815,12 @@
             (void)this_instr;
             _PyStackRef *res;
             _PyStackRef *null;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_LOAD_GLOBAL
             {
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -9810,12 +9830,10 @@
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(LOAD_GLOBAL);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
-            /* Skip 1 cache entry */
-            /* Skip 1 cache entry */
-            /* Skip 1 cache entry */
+            /* Skip 3 cache entries */
             // _LOAD_GLOBAL
             {
                 res = &stack_pointer[0];
@@ -9847,6 +9865,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_GLOBAL *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 5;
             INSTRUCTION_STATS(LOAD_GLOBAL_BUILTIN);
@@ -9856,7 +9875,7 @@
             /* Skip 1 cache entry */
             // _GUARD_GLOBALS_VERSION
             {
-                uint16_t version = read_u16(&this_instr[2].cache);
+                uint32_t globals_version = fb->globals_version;
                 PyDictObject *dict = (PyDictObject *)GLOBALS();
                 if (!PyDict_CheckExact(dict)) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
@@ -9864,7 +9883,7 @@
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
                 }
                 PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
@@ -9873,8 +9892,8 @@
             }
             // _LOAD_GLOBAL_BUILTINS
             {
-                uint16_t version = read_u16(&this_instr[3].cache);
-                uint16_t index = read_u16(&this_instr[4].cache);
+                uint32_t builtins_version = fb->builtins_version;
+                uint32_t index = fb->index;
                 PyDictObject *dict = (PyDictObject *)BUILTINS();
                 if (!PyDict_CheckExact(dict)) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
@@ -9882,7 +9901,7 @@
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
                 }
                 PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != builtins_version) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
@@ -9927,6 +9946,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_LOAD_GLOBAL *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 5;
             INSTRUCTION_STATS(LOAD_GLOBAL_MODULE);
@@ -9936,8 +9956,8 @@
             /* Skip 1 cache entry */
             // _LOAD_GLOBAL_MODULE
             {
-                uint16_t version = read_u16(&this_instr[2].cache);
-                uint16_t index = read_u16(&this_instr[4].cache);
+                uint32_t globals_version = fb->globals_version;
+                uint32_t index = fb->index;
                 PyDictObject *dict = (PyDictObject *)GLOBALS();
                 if (!PyDict_CheckExact(dict)) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
@@ -9945,7 +9965,7 @@
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
                 }
                 PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
@@ -10118,15 +10138,15 @@
             _PyStackRef self_st;
             _PyStackRef attr;
             _PyStackRef *null;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_LOAD_SUPER_ATTR
             {
                 class_st = stack_pointer[-2];
                 global_super_st = stack_pointer[-3];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
                 int load_method = oparg & 1;
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
@@ -10135,7 +10155,7 @@
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(LOAD_SUPER_ATTR);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _LOAD_SUPER_ATTR
@@ -11233,13 +11253,13 @@
             _PyStackRef null_or_index;
             _PyStackRef v;
             _PyStackRef retval;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_SEND
             {
                 receiver = stack_pointer[-3];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
@@ -11248,7 +11268,7 @@
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(SEND);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _SEND
@@ -11678,14 +11698,14 @@
             (void)this_instr;
             _PyStackRef v;
             _PyStackRef owner;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_STORE_ATTR
             {
                 owner = stack_pointer[-1];
                 v = stack_pointer[-2];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     if (!PyStackRef_IsNull(v)) {
                         PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                         next_instr = this_instr;
@@ -11697,7 +11717,7 @@
                     }
                 }
                 OPCODE_DEFERRED_INC(STORE_ATTR);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             /* Skip 3 cache entries */
@@ -11735,6 +11755,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_STORE_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 5;
             INSTRUCTION_STATS(STORE_ATTR_INSTANCE_VALUE);
@@ -11755,7 +11776,7 @@
             // _GUARD_TYPE_VERSION_LOCKED
             {
                 owner = value;
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 assert(type_version != 0);
                 PyTypeObject *tp = Py_TYPE(owner_o);
@@ -11786,7 +11807,7 @@
             // _STORE_ATTR_INSTANCE_VALUE
             {
                 value = stack_pointer[-2];
-                uint16_t offset = read_u16(&this_instr[4].cache);
+                uint32_t offset = fb->offset;
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 STAT_INC(STORE_ATTR, hit);
                 assert(_PyObject_GetManagedDict(owner_o) == NULL);
@@ -11828,6 +11849,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_STORE_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 5;
             INSTRUCTION_STATS(STORE_ATTR_SLOT);
@@ -11839,7 +11861,7 @@
             // _GUARD_TYPE_VERSION
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -11851,7 +11873,7 @@
             // _STORE_ATTR_SLOT
             {
                 value = stack_pointer[-2];
-                uint16_t index = read_u16(&this_instr[4].cache);
+                uint32_t index = fb->index;
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 if (!LOCK_OBJECT(owner_o)) {
                     UPDATE_MISS_STATS(STORE_ATTR);
@@ -11892,6 +11914,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_STORE_ATTR *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 5;
             INSTRUCTION_STATS(STORE_ATTR_WITH_HINT);
@@ -11903,7 +11926,7 @@
             // _GUARD_TYPE_VERSION
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -11915,7 +11938,7 @@
             // _STORE_ATTR_WITH_HINT
             {
                 value = stack_pointer[-2];
-                uint16_t hint = read_u16(&this_instr[4].cache);
+                uint32_t hint = fb->hint;
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
                 PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
@@ -12262,14 +12285,14 @@
             _PyStackRef container;
             _PyStackRef sub;
             _PyStackRef v;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_STORE_SUBSCR
             {
                 sub = stack_pointer[-1];
                 container = stack_pointer[-2];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
@@ -12278,7 +12301,7 @@
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(STORE_SUBSCR);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _STORE_SUBSCR
@@ -12522,13 +12545,13 @@
             (void)this_instr;
             _PyStackRef value;
             _PyStackRef res;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_TO_BOOL
             {
                 value = stack_pointer[-1];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
@@ -12537,7 +12560,7 @@
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(TO_BOOL);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             /* Skip 2 cache entries */
@@ -12571,6 +12594,7 @@
             #endif
             _Py_CODEUNIT* const this_instr = next_instr;
             (void)this_instr;
+            _PyFb_TO_BOOL *fb = _PyFb_Entry(this_instr);
             frame->instr_ptr = next_instr;
             next_instr += 4;
             INSTRUCTION_STATS(TO_BOOL_ALWAYS_TRUE);
@@ -12583,7 +12607,7 @@
             // _GUARD_TYPE_VERSION
             {
                 owner = stack_pointer[-1];
-                uint32_t type_version = read_u32(&this_instr[2].cache);
+                uint32_t type_version = fb->type_version;
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -12929,13 +12953,13 @@
             (void)this_instr;
             _PyStackRef seq;
             _PyStackRef *top;
+            /* Skip 1 cache entry */
             // _SPECIALIZE_UNPACK_SEQUENCE
             {
                 seq = stack_pointer[-1];
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 #if ENABLE_SPECIALIZATION
-                if (ADAPTIVE_COUNTER_TRIGGERS(counter)) {
+                _PyFbHeader *feedback = _PyFb_Header(this_instr);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
@@ -12944,10 +12968,9 @@
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(UNPACK_SEQUENCE);
-                ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 (void)seq;
-                (void)counter;
             }
             // _UNPACK_SEQUENCE
             {

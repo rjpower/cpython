@@ -156,3 +156,15 @@ Entries are appended in order; each milestone is also a commit.
 - Phase 1 deliverable, per review: a PR on rjpower/cpython from this branch
   with a detailed description of the new pipeline (mermaid diagrams of the
   flow and object layout, the changes made) and the final results table.
+- IR step 2 landed: typed feedback entries replace all 15 inline-cache
+  structs. One block per bytecode copy, placed after the code units in the
+  same allocation; cache unit 0 holds the distance to the entry so a handler
+  reaches it with one load. Seven kinds; branches keep their 16-bit history
+  inline because an entry cost 5 instructions per branch. Instruction gate:
+  +0.67 percent geomean (richards +1.2, go +0.4, nqueens +0.4, chaos +0.7),
+  micro loops neutral. Memory: code objects go from 424 to 875 bytes on
+  average because the block is allocated eagerly; RSS +5.6 percent on the
+  import workload, +1.4 at startup. Accepted: IR step 4's lazy lowering
+  creates the block lazily. Full suite green. Deviations from note 01
+  section 3 (BRANCH inline, `misses` and `arg` reserved) to be folded into
+  the note at step 4.

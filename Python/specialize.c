@@ -57,56 +57,89 @@ fixup_getiter(_Py_CODEUNIT *instruction, int flags)
     }
 }
 
-// Initialize warmup counters and optimize instructions. This cannot fail.
-void
-_PyCode_Quicken(_Py_CODEUNIT *instructions, Py_ssize_t size, int enable_counters, int flags)
+// Entry size and kind of each generic opcode that has inline cache units.
+static const uint8_t fb_entry_size[256] = {
+#define FB_SIZE(OP, TYPE, KIND) [OP] = sizeof(TYPE),
+    _PyFb_FAMILIES(FB_SIZE)
+#undef FB_SIZE
+};
+
+static const uint8_t fb_kind[256] = {
+#define FB_KIND(OP, TYPE, KIND) [OP] = KIND,
+    _PyFb_FAMILIES(FB_KIND)
+#undef FB_KIND
+};
+
+Py_ssize_t
+_PyFb_BlockSize(const _Py_CODEUNIT *code, Py_ssize_t size)
 {
-    #if ENABLE_SPECIALIZATION
-    _Py_BackoffCounter adaptive_counter;
-    if (enable_counters) {
-        adaptive_counter = adaptive_counter_warmup();
+    // Branch-free, since about half of all instructions have an entry.
+    Py_ssize_t entries = 0;
+    for (Py_ssize_t i = 0; i < size; ) {
+        int opcode = code[i].op.code;
+        entries += fb_entry_size[opcode];
+        i += 1 + _PyOpcode_Caches[opcode];
     }
-    else {
-        adaptive_counter = initial_unreachable_backoff_counter();
+    return entries ? (Py_ssize_t)sizeof(_PyFbBlock) + entries : 0;
+}
+
+// Lay out the feedback block, initialize warmup counters and optimize
+// instructions. This cannot fail.
+void
+_PyCode_Quicken(PyCodeObject *co, _Py_CODEUNIT *instructions, int enable_counters)
+{
+    if (co->_co_feedback == NULL) {
+        // Every instruction with inline cache units except a branch has an
+        // entry, so there is nothing to prepare.
+        return;
     }
-    int opcode = 0;
-    int oparg = 0;
-    /* The last code unit cannot have a cache, so we don't need to check it */
-    for (Py_ssize_t i = 0; i < size-1; i++) {
-        opcode = instructions[i].op.code;
-        int caches = _PyOpcode_Caches[opcode];
-        oparg = (oparg << 8) | instructions[i].op.arg;
-        if (opcode == GET_ITER) {
-            fixup_getiter(&instructions[i], flags);
-        }
-        if (caches) {
-            // The initial value depends on the opcode
-            switch (opcode) {
-                case POP_JUMP_IF_FALSE:
-                case POP_JUMP_IF_TRUE:
-                case POP_JUMP_IF_NONE:
-                case POP_JUMP_IF_NOT_NONE:
-                    instructions[i + 1].cache = 0x5555;  // Alternating 0, 1 bits
-                    break;
-                default:
-                    instructions[i + 1].counter = adaptive_counter;
-                    break;
-            }
-            i += caches;
-        }
-        if (opcode != EXTENDED_ARG) {
-            oparg = 0;
-        }
+    _Py_BackoffCounter counter = initial_unreachable_backoff_counter();
+    if (ENABLE_SPECIALIZATION && enable_counters) {
+        counter = adaptive_counter_warmup();
     }
-    #else
-    for (Py_ssize_t i = 0; i < size-1; i++) {
+    Py_ssize_t size = Py_SIZE(co);
+    _PyFbBlock *block = _PyFb_Block(instructions, size);
+    char *end = (char *)&instructions[size];
+    uint32_t block_size = co->_co_feedback->size;
+    memset(end, 0, (char *)block - end + block_size);
+    block->size = block_size;
+    char *entry = (char *)(block + 1);
+    char *limit = (char *)block + block_size;
+    // The last code unit cannot have a cache, so we don't need to check it
+    for (Py_ssize_t i = 0; i < size - 1; i++) {
         int opcode = instructions[i].op.code;
-        if (opcode == GET_ITER) {
-            fixup_getiter(&instructions[i], flags);
+        if (opcode >= MIN_INSTRUMENTED_OPCODE && co->_co_monitoring != NULL) {
+            // A thread-local copy of instrumented bytecode
+            opcode = _Py_GetBaseCodeUnit(co, (int)i).op.code;
         }
-        i += _PyOpcode_Caches[opcode];
+        int caches = _PyOpcode_Caches[opcode];
+        if (caches == 0) {
+            continue;
+        }
+        if (opcode == GET_ITER) {
+            fixup_getiter(&instructions[i], co->co_flags);
+        }
+        int entry_size = fb_entry_size[opcode];
+        uint16_t unit0 = 0x5555;  // a branch: alternating 0, 1 bits
+        if (entry_size) {
+            unit0 = 0;
+            // The limit only matters for bytecode that disagrees with the
+            // layout of _PyFb_BlockSize(), such as hand-written bytecode
+            // with instrumented opcodes.
+            if (entry + entry_size <= limit) {
+                _PyFbHeader *h = (_PyFbHeader *)entry;
+                h->kind = fb_kind[opcode];
+                h->counter = counter;
+                ptrdiff_t distance = (_Py_CODEUNIT *)entry - &instructions[i];
+                if (distance <= UINT16_MAX) {
+                    unit0 = (uint16_t)distance;
+                }
+                entry += entry_size;
+            }
+        }
+        instructions[i + 1].cache = unit0;
+        i += caches;
     }
-    #endif /* ENABLE_SPECIALIZATION */
 }
 
 #define SIMPLE_FUNCTION 0
@@ -331,19 +364,200 @@ set_opcode(_Py_CODEUNIT *instr, uint8_t opcode)
 }
 
 static inline void
-set_counter(_Py_BackoffCounter *counter, _Py_BackoffCounter value)
+set_counter(_PyFbHeader *h, _Py_BackoffCounter value)
 {
-    FT_ATOMIC_STORE_UINT16_RELAXED(counter->value_and_backoff,
+    FT_ATOMIC_STORE_UINT16_RELAXED(h->counter.value_and_backoff,
                                    value.value_and_backoff);
 }
 
 static inline _Py_BackoffCounter
-load_counter(_Py_BackoffCounter *counter)
+load_counter(_PyFbHeader *h)
 {
     _Py_BackoffCounter result = {
         .value_and_backoff =
-            FT_ATOMIC_LOAD_UINT16_RELAXED(counter->value_and_backoff)};
+            FT_ATOMIC_LOAD_UINT16_RELAXED(h->counter.value_and_backoff)};
     return result;
+}
+
+/* Polymorphic feedback.
+ *
+ * An entry describes the newest specialisation of its site.  When a
+ * specialised site is about to be re-specialised, fb_begin() saves the
+ * observation that the entry still describes in a poly table, and
+ * specialize() then adds the new observation, up to FB_POLY_SIZE of them;
+ * one more makes the site megamorphic.  fb_begin() also clears the entry
+ * body, so the fields of a row are the ones its handler reads, plus the
+ * operand versions recorded by fb_begin_unary() and friends, and zero
+ * otherwise.  Poly tables belong to the feedback block of the current
+ * frame's bytecode, since the specialiser always runs on behalf of that
+ * frame. */
+
+typedef struct {
+    uint32_t type_version;
+    uint32_t aux;
+    uint32_t index;
+    const void *descr;
+} fb_row;
+
+static _PyFbBlock *
+fb_block(_Py_CODEUNIT *instr)
+{
+    _PyInterpreterFrame *frame = _PyThreadState_GET()->current_frame;
+    Py_ssize_t size = Py_SIZE(_PyFrame_GetCode(frame));
+    _Py_CODEUNIT *bytecode = _PyFrame_GetBytecode(frame);
+    assert(bytecode <= instr && instr < bytecode + size);
+    return _PyFb_Block(bytecode, size);
+}
+
+static fb_row
+fb_row_of(_PyFbHeader *h)
+{
+    fb_row row = {0};
+    switch (h->kind) {
+        case FB_UNARY:
+            row.type_version = ((_PyFbUnary *)h)->type_version;
+            break;
+        case FB_BINARY:
+            row.type_version = ((_PyFbBinary *)h)->lhs_version;
+            row.aux = ((_PyFbBinary *)h)->rhs_version;
+            row.descr = ((_PyFbBinary *)h)->descr;
+            break;
+        case FB_ATTR:
+            row.type_version = ((_PyFbAttr *)h)->type_version;
+            row.aux = ((_PyFbAttr *)h)->dict_version;
+            row.index = ((_PyFbAttr *)h)->index;
+            row.descr = ((_PyFbAttr *)h)->descr;
+            break;
+        case FB_CALL:
+            row.type_version = ((_PyFbCall *)h)->func_version;
+            row.aux = ((_PyFbCall *)h)->callable_type_version;
+            break;
+        default:
+            Py_UNREACHABLE();
+    }
+    return row;
+}
+
+static void
+fb_put_row(_PyFbPoly *poly, int i, fb_row row, int opcode)
+{
+    poly->type_version[i] = row.type_version;
+    poly->aux[i] = row.aux;
+    poly->index[i] = row.index;
+    poly->descr[i] = row.descr;
+    poly->handler[i] = (uint16_t)opcode;
+}
+
+/* Save the observation of a specialised MONO site in a new poly table.
+ * Losing it to a failed allocation only loses feedback. */
+static void
+fb_save_mono(_Py_CODEUNIT *instr, _PyFbHeader *h, int opcode)
+{
+    _PyFbBlock *block = fb_block(instr);
+    uint32_t n = block->npoly;
+    if ((n & (n - 1)) == 0) {
+        size_t capacity = n ? 2 * (size_t)n : 1;
+        _PyFbPoly *poly = PyMem_Realloc(block->poly, capacity * sizeof(_PyFbPoly));
+        if (poly == NULL) {
+            return;
+        }
+        block->poly = poly;
+    }
+    memset(&block->poly[n], 0, sizeof(_PyFbPoly));
+    fb_put_row(&block->poly[n], 0, fb_row_of(h), opcode);
+    block->npoly = n + 1;
+    h->poly = n + 1;
+}
+
+/* Called by each specialiser of a site that keeps poly rows, before it
+ * rewrites the entry.  Every specialiser then replaces the opcode in memory,
+ * through specialize(), unspecialize() or LOAD_ATTR's retry of an absent
+ * attribute, so no specialised handler reads the cleared entry. */
+static _PyFbHeader *
+fb_begin(_Py_CODEUNIT *instr)
+{
+    _PyFbHeader *h = _PyFb_Header(instr);
+    assert(h != NULL);
+    uint8_t opcode = FT_ATOMIC_LOAD_UINT8_RELAXED(instr->op.code);
+    if (h->state == FB_MONO && h->poly == 0 && _PyOpcode_Deopt[opcode] != opcode) {
+        fb_save_mono(instr, h, opcode);
+    }
+    // Constant sizes, so that the compiler inlines the stores
+    switch (h->kind) {
+        case FB_UNARY:
+            memset(h + 1, 0, sizeof(_PyFbUnary) - sizeof(_PyFbHeader));
+            break;
+        case FB_BINARY:
+            memset(h + 1, 0, sizeof(_PyFbBinary) - sizeof(_PyFbHeader));
+            break;
+        case FB_ATTR:
+            memset(h + 1, 0, sizeof(_PyFbAttr) - sizeof(_PyFbHeader));
+            break;
+        case FB_CALL:
+            memset(h + 1, 0, sizeof(_PyFbCall) - sizeof(_PyFbHeader));
+            break;
+        default:
+            Py_UNREACHABLE();
+    }
+    return h;
+}
+
+/* The operand types that UNARY, BINARY and CALL entries record, as type
+ * versions, which are 0 for types that have none yet. */
+static inline uint32_t
+fb_type_version(PyTypeObject *tp)
+{
+    return FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag);
+}
+
+static void
+fb_begin_unary(_Py_CODEUNIT *instr, PyTypeObject *tp)
+{
+    _PyFbUnary *fb = (_PyFbUnary *)fb_begin(instr);
+    fb->type_version = fb_type_version(tp);
+}
+
+static _PyFbBinary *
+fb_begin_binary(_Py_CODEUNIT *instr, PyObject *lhs, PyObject *rhs)
+{
+    _PyFbBinary *fb = (_PyFbBinary *)fb_begin(instr);
+    fb->lhs_version = fb_type_version(Py_TYPE(lhs));
+    fb->rhs_version = fb_type_version(Py_TYPE(rhs));
+    return fb;
+}
+
+static void
+fb_begin_call(_Py_CODEUNIT *instr, PyObject *callable)
+{
+    _PyFbCall *fb = (_PyFbCall *)fb_begin(instr);
+    fb->callable_type_version = fb_type_version(Py_TYPE(callable));
+}
+
+/* Record the new specialisation OPCODE of a site in its poly table. */
+static void
+fb_record(_Py_CODEUNIT *instr, _PyFbHeader *h, int opcode)
+{
+    if (h->poly == 0) {
+        h->state = FB_MONO;
+        return;
+    }
+    if (h->state == FB_MEGA) {
+        return;
+    }
+    _PyFbPoly *poly = &fb_block(instr)->poly[h->poly - 1];
+    fb_row row = fb_row_of(h);
+    int i = 0;
+    while (i < FB_POLY_SIZE && poly->handler[i] != 0 &&
+           (poly->type_version[i] != row.type_version ||
+            poly->aux[i] != row.aux || poly->handler[i] != opcode)) {
+        i++;
+    }
+    if (i == FB_POLY_SIZE) {
+        h->state = FB_MEGA;
+        return;
+    }
+    fb_put_row(poly, i, row, opcode);
+    h->state = poly->handler[1] != 0 ? FB_POLY : FB_MONO;
 }
 
 static inline void
@@ -357,7 +571,13 @@ specialize(_Py_CODEUNIT *instr, uint8_t specialized_opcode)
         return;
     }
     STAT_INC(_PyOpcode_Deopt[specialized_opcode], success);
-    set_counter((_Py_BackoffCounter *)instr + 1, adaptive_counter_cooldown());
+    _PyFbHeader *h = _PyFb_Header(instr);
+    if (h == NULL) {
+        // RESUME specialises without an entry
+        return;
+    }
+    set_counter(h, adaptive_counter_cooldown());
+    fb_record(instr, h, specialized_opcode);
 }
 
 static inline void
@@ -371,9 +591,10 @@ unspecialize(_Py_CODEUNIT *instr)
         SPECIALIZATION_FAIL(generic_opcode, SPEC_FAIL_OTHER);
         return;
     }
-    _Py_BackoffCounter *counter = (_Py_BackoffCounter *)instr + 1;
-    _Py_BackoffCounter cur = load_counter(counter);
-    set_counter(counter, adaptive_counter_backoff(cur));
+    _PyFbHeader *h = _PyFb_Header(instr);
+    if (h != NULL) {
+        set_counter(h, adaptive_counter_backoff(load_counter(h)));
+    }
 }
 
 static int function_kind(PyCodeObject *code);
@@ -398,7 +619,7 @@ maybe_enable_deferred_ref_count(PyObject *op)
 static int
 specialize_module_load_attr_lock_held(PyDictObject *dict, _Py_CODEUNIT *instr, PyObject *name)
 {
-    _PyAttrCache *cache = (_PyAttrCache *)(instr + 1);
+    _PyFbAttr *fb = _PyFb_Entry(instr);
     if (dict->ma_keys->dk_kind != DICT_KEYS_UNICODE) {
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NON_STRING);
         return -1;
@@ -410,11 +631,8 @@ specialize_module_load_attr_lock_held(PyDictObject *dict, _Py_CODEUNIT *instr, P
         return -1;
     }
     assert(index != DKIX_ERROR);
-    if (index != (uint16_t)index) {
-        SPECIALIZATION_FAIL(LOAD_ATTR,
-                            index == DKIX_EMPTY ?
-                            SPEC_FAIL_ATTR_MODULE_ATTR_NOT_FOUND :
-                            SPEC_FAIL_OUT_OF_RANGE);
+    if (index == DKIX_EMPTY) {
+        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_MODULE_ATTR_NOT_FOUND);
         return -1;
     }
     uint32_t keys_version = _PyDict_GetKeysVersionForCurrentState(
@@ -426,8 +644,8 @@ specialize_module_load_attr_lock_held(PyDictObject *dict, _Py_CODEUNIT *instr, P
 #ifdef Py_GIL_DISABLED
     maybe_enable_deferred_ref_count(value);
 #endif
-    write_u32(cache->version, keys_version);
-    cache->index = (uint16_t)index;
+    fb->dict_version = keys_version;
+    fb->index = (uint32_t)index;
     specialize(instr, LOAD_ATTR_MODULE);
     return 0;
 }
@@ -459,6 +677,7 @@ _Py_Specialize_LoadSuperAttr(_PyStackRef global_super_st, _PyStackRef cls_st, _P
 
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[LOAD_SUPER_ATTR] == INLINE_CACHE_ENTRIES_LOAD_SUPER_ATTR);
+    fb_begin(instr);
     if (global_super != (PyObject *)&PySuper_Type) {
         SPECIALIZATION_FAIL(LOAD_SUPER_ATTR, SPEC_FAIL_SUPER_SHADOWED);
         goto fail;
@@ -622,7 +841,7 @@ specialize_dict_access_inline(
     PyObject *name, unsigned int tp_version,
     int base_op, int values_op)
 {
-    _PyAttrCache *cache = (_PyAttrCache *)(instr + 1);
+    _PyFbAttr *fb = _PyFb_Entry(instr);
     PyDictKeysObject *keys = ((PyHeapTypeObject *)type)->ht_cached_keys;
     assert(PyUnicode_CheckExact(name));
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(owner);
@@ -638,13 +857,8 @@ specialize_dict_access_inline(
     assert(_PyObject_GetManagedDict(owner) != NULL ||
            _PyObject_InlineValues(owner)->valid);
     char *value_addr = (char *)&_PyObject_InlineValues(owner)->values[index];
-    Py_ssize_t offset = value_addr - (char *)owner;
-    if (offset != (uint16_t)offset) {
-        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_OUT_OF_RANGE);
-        return 0;
-    }
-    cache->index = (uint16_t)offset;
-    write_u32(cache->version, tp_version);
+    fb->offset = (uint32_t)(value_addr - (char *)owner);
+    fb->type_version = tp_version;
     specialize(instr, values_op);
     return 1;
 }
@@ -655,7 +869,7 @@ specialize_dict_access_hint(
     PyObject *name, unsigned int tp_version,
     int base_op, int hint_op)
 {
-    _PyAttrCache *cache = (_PyAttrCache *)(instr + 1);
+    _PyFbAttr *fb = _PyFb_Entry(instr);
 
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(dict);
 #ifdef Py_GIL_DISABLED
@@ -676,15 +890,12 @@ specialize_dict_access_hint(
         // A split table's shared keys can hold names this dict lacks.
         index = DKIX_EMPTY;
     }
-    if (index != (uint16_t)index) {
-        SPECIALIZATION_FAIL(base_op,
-                            index == DKIX_EMPTY ?
-                            SPEC_FAIL_ATTR_NOT_IN_DICT :
-                            SPEC_FAIL_OUT_OF_RANGE);
+    if (index < 0) {
+        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_NOT_IN_DICT);
         return 0;
     }
-    cache->index = (uint16_t)index;
-    write_u32(cache->version, tp_version);
+    fb->hint = (uint32_t)index;
+    fb->type_version = tp_version;
     specialize(instr, hint_op);
     return 1;
 }
@@ -788,7 +999,7 @@ do_specialize_instance_load_attr(PyObject* owner, _Py_CODEUNIT* instr, PyObject*
                                  bool shadow, uint32_t shared_keys_version,
                                  DescriptorClassification kind, PyObject *descr, unsigned int tp_version)
 {
-    _PyAttrCache *cache = (_PyAttrCache *)(instr + 1);
+    _PyFbAttr *fb = _PyFb_Entry(instr);
     PyTypeObject *type = Py_TYPE(owner);
     if (tp_version == 0) {
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
@@ -819,7 +1030,6 @@ do_specialize_instance_load_attr(PyObject* owner, _Py_CODEUNIT* instr, PyObject*
         }
         case PROPERTY:
         {
-            _PyLoadMethodCache *lm_cache = (_PyLoadMethodCache *)(instr + 1);
             assert(Py_TYPE(descr) == &PyProperty_Type);
             PyObject *fget = ((_PyPropertyObject *)descr)->prop_get;
             if (fget == NULL) {
@@ -853,10 +1063,9 @@ do_specialize_instance_load_attr(PyObject* owner, _Py_CODEUNIT* instr, PyObject*
                 return -1;
             }
             assert(tp_version != 0);
-            write_u32(lm_cache->type_version, tp_version);
-            write_u32(lm_cache->keys_version, func_version);
-            /* borrowed */
-            write_ptr(lm_cache->descr, fget);
+            fb->type_version = tp_version;
+            fb->func_version = func_version;
+            fb->fget = fget;  /* borrowed */
             specialize(instr, LOAD_ATTR_PROPERTY);
             return 0;
         }
@@ -877,23 +1086,21 @@ do_specialize_instance_load_attr(PyObject* owner, _Py_CODEUNIT* instr, PyObject*
                 SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_AUDITED_SLOT);
                 return -1;
             }
-            if (offset != (uint16_t)offset) {
+            if (offset != (uint32_t)offset) {
                 SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_RANGE);
                 return -1;
             }
             assert(dmem->type == Py_T_OBJECT_EX || dmem->type == _Py_T_OBJECT);
             assert(offset > 0);
-            cache->index = (uint16_t)offset;
-            write_u32(cache->version, tp_version);
+            fb->index = (uint32_t)offset;
+            fb->type_version = tp_version;
             specialize(instr, LOAD_ATTR_SLOT);
             return 0;
         }
         case DUNDER_CLASS:
         {
-            Py_ssize_t offset = offsetof(PyObject, ob_type);
-            assert(offset == (uint16_t)offset);
-            cache->index = (uint16_t)offset;
-            write_u32(cache->version, tp_version);
+            fb->index = offsetof(PyObject, ob_type);
+            fb->type_version = tp_version;
             specialize(instr, LOAD_ATTR_SLOT);
             return 0;
         }
@@ -909,7 +1116,6 @@ do_specialize_instance_load_attr(PyObject* owner, _Py_CODEUNIT* instr, PyObject*
         case GETATTRIBUTE_IS_PYTHON_FUNCTION:
         {
             assert(Py_IS_TYPE(descr, &PyFunction_Type));
-            _PyLoadMethodCache *lm_cache = (_PyLoadMethodCache *)(instr + 1);
             if (!function_check_args(descr, 2, LOAD_ATTR)) {
                 return -1;
             }
@@ -932,10 +1138,9 @@ do_specialize_instance_load_attr(PyObject* owner, _Py_CODEUNIT* instr, PyObject*
                 return -1;
             }
             #endif
-            write_u32(lm_cache->keys_version, version);
-            /* borrowed */
-            write_ptr(lm_cache->descr, descr);
-            write_u32(lm_cache->type_version, tp_version);
+            fb->func_version = version;
+            fb->getattribute = descr;  /* borrowed */
+            fb->type_version = tp_version;
             specialize(instr, LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN);
             return 0;
         }
@@ -962,7 +1167,10 @@ do_specialize_instance_load_attr(PyObject* owner, _Py_CODEUNIT* instr, PyObject*
             if (shadow) {
                 goto try_instance;
             }
-            set_counter((_Py_BackoffCounter*)instr + 1, adaptive_counter_cooldown());
+            // Retry after the cooldown.  A specialised opcode in memory
+            // would read the entry that fb_begin() cleared.
+            set_opcode(instr, LOAD_ATTR);
+            set_counter(&fb->h, adaptive_counter_cooldown());
             return 0;
     }
     Py_UNREACHABLE();
@@ -1000,6 +1208,7 @@ _Py_Specialize_LoadAttr(_PyStackRef owner_st, _Py_CODEUNIT *instr, PyObject *nam
 
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[LOAD_ATTR] == INLINE_CACHE_ENTRIES_LOAD_ATTR);
+    fb_begin(instr);
     PyTypeObject *type = Py_TYPE(owner);
     bool fail;
     if (!_PyType_IsReady(type)) {
@@ -1032,7 +1241,7 @@ _Py_Specialize_StoreAttr(_PyStackRef owner_st, _Py_CODEUNIT *instr, PyObject *na
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[STORE_ATTR] == INLINE_CACHE_ENTRIES_STORE_ATTR);
     PyObject *descr = NULL;
-    _PyAttrCache *cache = (_PyAttrCache *)(instr + 1);
+    _PyFbAttr *fb = (_PyFbAttr *)fb_begin(instr);
     PyTypeObject *type = Py_TYPE(owner);
     if (!_PyType_IsReady(type)) {
         // We *might* not really need this check, but we inherited it from
@@ -1078,14 +1287,14 @@ _Py_Specialize_StoreAttr(_PyStackRef owner_st, _Py_CODEUNIT *instr, PyObject *na
                 SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_READ_ONLY);
                 goto fail;
             }
-            if (offset != (uint16_t)offset) {
+            if (offset != (uint32_t)offset) {
                 SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OUT_OF_RANGE);
                 goto fail;
             }
             assert(dmem->type == Py_T_OBJECT_EX || dmem->type == _Py_T_OBJECT);
             assert(offset > 0);
-            cache->index = (uint16_t)offset;
-            write_u32(cache->version, tp_version);
+            fb->index = (uint32_t)offset;
+            fb->type_version = tp_version;
             specialize(instr, STORE_ATTR_SLOT);
             goto success;
         }
@@ -1171,7 +1380,7 @@ specialize_class_load_attr(PyObject *owner, _Py_CODEUNIT *instr,
 {
     assert(PyType_Check(owner));
     PyTypeObject *cls = (PyTypeObject *)owner;
-    _PyLoadMethodCache *cache = (_PyLoadMethodCache *)(instr + 1);
+    _PyFbAttr *fb = _PyFb_Entry(instr);
     if (Py_TYPE(cls)->tp_getattro != _Py_type_getattro) {
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_METACLASS_OVERRIDDEN);
         return -1;
@@ -1230,14 +1439,13 @@ specialize_class_load_attr(PyObject *owner, _Py_CODEUNIT *instr,
 #ifdef Py_GIL_DISABLED
             maybe_enable_deferred_ref_count(descr);
 #endif
-            write_ptr(cache->descr, descr);
+            fb->descr = descr;
+            fb->class_version = tp_version;
             if (metaclass_check) {
-                write_u32(cache->keys_version, tp_version);
-                write_u32(cache->type_version, meta_version);
+                fb->type_version = meta_version;
                 specialize(instr, LOAD_ATTR_CLASS_WITH_METACLASS_CHECK);
             }
             else {
-                write_u32(cache->type_version, tp_version);
                 specialize(instr, LOAD_ATTR_CLASS);
             }
             Py_XDECREF(descr);
@@ -1265,7 +1473,7 @@ specialize_attr_loadclassattr(PyObject *owner, _Py_CODEUNIT *instr,
                               DescriptorClassification kind, bool is_method,
                               uint32_t shared_keys_version)
 {
-    _PyLoadMethodCache *cache = (_PyLoadMethodCache *)(instr + 1);
+    _PyFbAttr *fb = _PyFb_Entry(instr);
     PyTypeObject *owner_cls = Py_TYPE(owner);
 
     assert(descr != NULL);
@@ -1278,6 +1486,7 @@ specialize_attr_loadclassattr(PyObject *owner, _Py_CODEUNIT *instr,
     }
     #endif
 
+    int opcode;
     unsigned long tp_flags = PyType_GetFlags(owner_cls);
     if (tp_flags & Py_TPFLAGS_INLINE_VALUES) {
         #ifndef Py_GIL_DISABLED
@@ -1288,7 +1497,7 @@ specialize_attr_loadclassattr(PyObject *owner, _Py_CODEUNIT *instr,
             SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
             return 0;
         }
-        specialize(instr, is_method ? LOAD_ATTR_METHOD_WITH_VALUES : LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES);
+        opcode = is_method ? LOAD_ATTR_METHOD_WITH_VALUES : LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
     }
     else {
         Py_ssize_t dictoffset;
@@ -1297,13 +1506,13 @@ specialize_attr_loadclassattr(PyObject *owner, _Py_CODEUNIT *instr,
         }
         else {
             dictoffset = owner_cls->tp_dictoffset;
-            if (dictoffset < 0 || dictoffset > INT16_MAX + MANAGED_DICT_OFFSET) {
+            if (dictoffset < 0 || dictoffset > INT32_MAX) {
                 SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_RANGE);
                 return 0;
             }
         }
         if (dictoffset == 0) {
-            specialize(instr, is_method ? LOAD_ATTR_METHOD_NO_DICT : LOAD_ATTR_NONDESCRIPTOR_NO_DICT);
+            opcode = is_method ? LOAD_ATTR_METHOD_NO_DICT : LOAD_ATTR_NONDESCRIPTOR_NO_DICT;
         }
         else if (is_method) {
             PyObject **addr = (PyObject **)((char *)owner + dictoffset);
@@ -1312,13 +1521,11 @@ specialize_attr_loadclassattr(PyObject *owner, _Py_CODEUNIT *instr,
                 SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NOT_MANAGED_DICT);
                 return 0;
             }
-            /* Cache entries must be unsigned values, so we offset the
-             * dictoffset by MANAGED_DICT_OFFSET.
+            /* Feedback fields are unsigned, so we offset the dictoffset by
+             * MANAGED_DICT_OFFSET.
              * We do the reverse offset in LOAD_ATTR_METHOD_LAZY_DICT */
-            dictoffset -= MANAGED_DICT_OFFSET;
-            assert(((uint16_t)dictoffset) == dictoffset);
-            cache->dict_offset = (uint16_t)dictoffset;
-            specialize(instr, LOAD_ATTR_METHOD_LAZY_DICT);
+            fb->dictoffset = (uint32_t)(dictoffset - MANAGED_DICT_OFFSET);
+            opcode = LOAD_ATTR_METHOD_LAZY_DICT;
         }
         else {
             SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_CLASS_ATTR_SIMPLE);
@@ -1339,8 +1546,9 @@ specialize_attr_loadclassattr(PyObject *owner, _Py_CODEUNIT *instr,
     *  PyType_Modified usages in typeobject.c). The MCACHE has been
     *  working since Python 2.6 and it's battle-tested.
     */
-    write_u32(cache->type_version, tp_version);
-    write_ptr(cache->descr, descr);
+    fb->type_version = tp_version;
+    fb->descr = descr;
+    specialize(instr, opcode);
     return 1;
 }
 
@@ -1351,8 +1559,7 @@ specialize_load_global_lock_held(
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[LOAD_GLOBAL] == INLINE_CACHE_ENTRIES_LOAD_GLOBAL);
-    /* Use inline cache */
-    _PyLoadGlobalCache *cache = (_PyLoadGlobalCache *)(instr + 1);
+    _PyFbGlobal *fb = _PyFb_Entry(instr);
     assert(PyUnicode_CheckExact(name));
     if (!PyDict_CheckExact(globals)) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_LOAD_GLOBAL_NON_DICT);
@@ -1375,26 +1582,18 @@ specialize_load_global_lock_held(
     }
     PyInterpreterState *interp = _PyInterpreterState_GET();
     if (index != DKIX_EMPTY) {
-        if (index != (uint16_t)index) {
-            SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_RANGE);
-            goto fail;
-        }
         uint32_t keys_version = _PyDict_GetKeysVersionForCurrentState(
                 interp, (PyDictObject*) globals);
         if (keys_version == 0) {
             SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_VERSIONS);
             goto fail;
         }
-        if (keys_version != (uint16_t)keys_version) {
-            SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_RANGE);
-            goto fail;
-        }
         PyDict_Watch(MODULE_WATCHER_ID, globals);
 #ifdef Py_GIL_DISABLED
         maybe_enable_deferred_ref_count(value);
 #endif
-        cache->index = (uint16_t)index;
-        cache->module_keys_version = (uint16_t)keys_version;
+        fb->index = (uint32_t)index;
+        fb->globals_version = keys_version;
         specialize(instr, LOAD_GLOBAL_MODULE);
         return;
     }
@@ -1416,18 +1615,14 @@ specialize_load_global_lock_held(
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
         goto fail;
     }
-    if (index != (uint16_t)index) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_RANGE);
+    if (index == DKIX_EMPTY) {
+        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_EXPECTED_ERROR);
         goto fail;
     }
     uint32_t globals_version = _PyDict_GetKeysVersionForCurrentState(
             interp, (PyDictObject*) globals);
     if (globals_version == 0) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_VERSIONS);
-        goto fail;
-    }
-    if (globals_version != (uint16_t)globals_version) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_RANGE);
         goto fail;
     }
     PyDict_Watch(MODULE_WATCHER_ID, globals);
@@ -1437,14 +1632,10 @@ specialize_load_global_lock_held(
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_VERSIONS);
         goto fail;
     }
-    if (builtins_version > UINT16_MAX) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_RANGE);
-        goto fail;
-    }
     PyDict_Watch(MODULE_WATCHER_ID, builtins);
-    cache->index = (uint16_t)index;
-    cache->module_keys_version = (uint16_t)globals_version;
-    cache->builtin_keys_version = (uint16_t)builtins_version;
+    fb->index = (uint32_t)index;
+    fb->globals_version = globals_version;
+    fb->builtins_version = builtins_version;
     specialize(instr, LOAD_GLOBAL_BUILTIN);
     return;
 fail:
@@ -1586,6 +1777,7 @@ _Py_Specialize_StoreSubscr(_PyStackRef container_st, _PyStackRef sub_st, _Py_COD
     PyObject *sub = PyStackRef_AsPyObjectBorrow(sub_st);
 
     assert(ENABLE_SPECIALIZATION);
+    fb_begin_binary(instr, container, sub);
     PyTypeObject *container_type = Py_TYPE(container);
     if (container_type == &PyList_Type) {
         if (PyLong_CheckExact(sub)) {
@@ -1692,8 +1884,7 @@ specialize_class_call(PyObject *callable, _Py_CODEUNIT *instr, int nargs)
         }
         if (init != NULL && _PyType_CacheInitForSpecialization(
                                 (PyHeapTypeObject *)tp, init, tp_version)) {
-            _PyCallCache *cache = (_PyCallCache *)(instr + 1);
-            write_u32(cache->func_version, tp_version);
+            ((_PyFbCall *)_PyFb_Entry(instr))->type_version = tp_version;
             specialize(instr, CALL_ALLOC_AND_ENTER_INIT);
             Py_DECREF(init);
             return 0;
@@ -1753,7 +1944,7 @@ static int
 specialize_py_call(PyFunctionObject *func, _Py_CODEUNIT *instr, int nargs,
                    bool bound_method)
 {
-    _PyCallCache *cache = (_PyCallCache *)(instr + 1);
+    _PyFbCall *fb = _PyFb_Entry(instr);
     PyCodeObject *code = (PyCodeObject *)func->func_code;
     int kind = function_kind(code);
     /* Don't specialize if PEP 523 is active */
@@ -1778,7 +1969,7 @@ specialize_py_call(PyFunctionObject *func, _Py_CODEUNIT *instr, int nargs,
         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OUT_OF_VERSIONS);
         return -1;
     }
-    write_u32(cache->func_version, version);
+    fb->func_version = version;
     uint8_t opcode;
     if (argcount == nargs + bound_method) {
         opcode =
@@ -1796,7 +1987,7 @@ static int
 specialize_py_call_kw(PyFunctionObject *func, _Py_CODEUNIT *instr, int nargs,
                    bool bound_method)
 {
-    _PyCallCache *cache = (_PyCallCache *)(instr + 1);
+    _PyFbCall *fb = _PyFb_Entry(instr);
     PyCodeObject *code = (PyCodeObject *)func->func_code;
     int kind = function_kind(code);
     /* Don't specialize if PEP 523 is active */
@@ -1817,7 +2008,7 @@ specialize_py_call_kw(PyFunctionObject *func, _Py_CODEUNIT *instr, int nargs,
         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OUT_OF_VERSIONS);
         return -1;
     }
-    write_u32(cache->func_version, version);
+    fb->func_version = version;
     specialize(instr, bound_method ? CALL_KW_BOUND_METHOD : CALL_KW_PY);
     return 0;
 }
@@ -1874,6 +2065,7 @@ _Py_Specialize_Call(_PyStackRef callable_st, _PyStackRef self_or_null_st, _Py_CO
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[CALL] == INLINE_CACHE_ENTRIES_CALL);
     assert(_Py_OPCODE(*instr) != INSTRUMENTED_CALL);
+    fb_begin_call(instr, callable);
     int fail;
     if (PyCFunction_CheckExact(callable)) {
         fail = specialize_c_call(callable, instr, nargs);
@@ -1916,6 +2108,7 @@ _Py_Specialize_CallKw(_PyStackRef callable_st, _Py_CODEUNIT *instr, int nargs)
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[CALL_KW] == INLINE_CACHE_ENTRIES_CALL_KW);
     assert(_Py_OPCODE(*instr) != INSTRUMENTED_CALL_KW);
+    fb_begin_call(instr, callable);
     int fail;
     if (PyFunction_Check(callable)) {
         fail = specialize_py_call_kw((PyFunctionObject *)callable, instr, nargs, false);
@@ -2342,10 +2535,8 @@ _Py_Specialize_BinaryOp(_PyStackRef lhs_st, _PyStackRef rhs_st, _Py_CODEUNIT *in
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[BINARY_OP] == INLINE_CACHE_ENTRIES_BINARY_OP);
 
-    _PyBinaryOpCache *cache = (_PyBinaryOpCache *)(instr + 1);
-    if (FT_ATOMIC_LOAD_UINT8_RELAXED(instr->op.code) == BINARY_OP_EXTEND) {
-        write_ptr(cache->external_cache, NULL);
-    }
+    _PyFbBinary *fb = fb_begin_binary(instr, lhs, rhs);
+    fb->descr = NULL;
 
     switch (oparg) {
         case NB_ADD:
@@ -2456,8 +2647,8 @@ _Py_Specialize_BinaryOp(_PyStackRef lhs_st, _PyStackRef rhs_st, _Py_CODEUNIT *in
 
     _PyBinaryOpSpecializationDescr *descr;
     if (binary_op_extended_specialization(lhs, rhs, oparg, &descr)) {
+        fb->descr = descr;
         specialize(instr, BINARY_OP_EXTEND);
-        write_ptr(cache->external_cache, (void*)descr);
         return;
     }
 
@@ -2512,6 +2703,7 @@ _Py_Specialize_CompareOp(_PyStackRef lhs_st, _PyStackRef rhs_st, _Py_CODEUNIT *i
 
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[COMPARE_OP] == INLINE_CACHE_ENTRIES_COMPARE_OP);
+    fb_begin_binary(instr, lhs, rhs);
     // All of these specializations compute boolean values, so they're all valid
     // regardless of the fifth-lowest oparg bit.
     if (Py_TYPE(lhs) != Py_TYPE(rhs)) {
@@ -2573,6 +2765,7 @@ _Py_Specialize_UnpackSequence(_PyStackRef seq_st, _Py_CODEUNIT *instr, int oparg
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[UNPACK_SEQUENCE] ==
            INLINE_CACHE_ENTRIES_UNPACK_SEQUENCE);
+    fb_begin_unary(instr, Py_TYPE(seq));
     if (PyTuple_CheckExact(seq)) {
         if (PyTuple_GET_SIZE(seq) != oparg) {
             SPECIALIZATION_FAIL(UNPACK_SEQUENCE, SPEC_FAIL_EXPECTED_ERROR);
@@ -2679,6 +2872,7 @@ _Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _Py_CODEUNIT
     assert(_PyOpcode_Caches[FOR_ITER] == INLINE_CACHE_ENTRIES_FOR_ITER);
     PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
     PyTypeObject *tp = Py_TYPE(iter_o);
+    fb_begin_unary(instr, tp);
 
     if (PyStackRef_IsNull(null_or_index)) {
         if (tp == &PyRangeIter_Type) {
@@ -2741,6 +2935,7 @@ _Py_Specialize_Send(_PyStackRef receiver_st, _Py_CODEUNIT *instr)
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[SEND] == INLINE_CACHE_ENTRIES_SEND);
     PyTypeObject *tp = Py_TYPE(receiver);
+    fb_begin_unary(instr, tp);
     if (tp == &PyGen_Type || tp == &PyCoro_Type) {
         /* Don't specialize if PEP 523 is active */
         if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
@@ -2771,6 +2966,7 @@ _Py_Specialize_CallFunctionEx(_PyStackRef func_st, _Py_CODEUNIT *instr)
 
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[CALL_FUNCTION_EX] == INLINE_CACHE_ENTRIES_CALL_FUNCTION_EX);
+    fb_begin_call(instr, func);
 
     if (Py_TYPE(func) == &PyFunction_Type &&
         ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
@@ -2838,8 +3034,8 @@ _Py_Specialize_ToBool(_PyStackRef value_o, _Py_CODEUNIT *instr)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[TO_BOOL] == INLINE_CACHE_ENTRIES_TO_BOOL);
-    _PyToBoolCache *cache = (_PyToBoolCache *)(instr + 1);
     PyObject *value = PyStackRef_AsPyObjectBorrow(value_o);
+    fb_begin_unary(instr, Py_TYPE(value));
     uint8_t specialized_op;
     if (PyBool_Check(value)) {
         specialized_op = TO_BOOL_BOOL;
@@ -2875,7 +3071,7 @@ _Py_Specialize_ToBool(_PyStackRef value_o, _Py_CODEUNIT *instr)
 
         assert(err == 0);
         assert(version);
-        write_u32(cache->version, version);
+        ((_PyFbUnary *)_PyFb_Entry(instr))->type_version = version;
         specialized_op = TO_BOOL_ALWAYS_TRUE;
         goto success;
     }
@@ -2908,12 +3104,13 @@ containsop_fail_kind(PyObject *value) {
 #endif
 
 Py_NO_INLINE void
-_Py_Specialize_ContainsOp(_PyStackRef value_st, _Py_CODEUNIT *instr)
+_Py_Specialize_ContainsOp(_PyStackRef item_st, _PyStackRef value_st, _Py_CODEUNIT *instr)
 {
     PyObject *value = PyStackRef_AsPyObjectBorrow(value_st);
 
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[CONTAINS_OP] == INLINE_CACHE_ENTRIES_COMPARE_OP);
+    fb_begin_binary(instr, PyStackRef_AsPyObjectBorrow(item_st), value);
     if (PyAnyDict_CheckExact(value)) {
         specialize(instr, CONTAINS_OP_DICT);
         return;
@@ -2933,6 +3130,7 @@ _Py_Specialize_GetIter(_PyStackRef iterable, _Py_CODEUNIT *instr)
 {
     assert(ENABLE_SPECIALIZATION);
     PyTypeObject *tp = PyStackRef_TYPE(iterable);
+    fb_begin_unary(instr, tp);
     if (tp->_tp_iteritem != NULL) {
         specialize(instr, GET_ITER_VIRTUAL);
         return;

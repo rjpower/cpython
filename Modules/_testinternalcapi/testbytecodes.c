@@ -71,7 +71,7 @@ static PyObject *orig, *excs, *update, *b, *fromlist, *level, *from;
 static PyObject **pieces, **values;
 static size_t jump;
 // Dummy variables for cache effects
-static uint16_t invert, counter, index, hint;
+static uint16_t invert, index, hint;
 #define unused 0  // Used in a macro def, can't be static
 static uint32_t type_version;
 

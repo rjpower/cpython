@@ -19,10 +19,10 @@ _testinternalcapi = import_module("_testinternalcapi")
 
 
 def have_dict_key_versions():
-    # max version value that can be stored in the load global cache. This is
-    # determined by the type of module_keys_version and builtin_keys_version
-    # in _PyLoadGlobalCache, uint16_t.
-    max_version = 1<<16
+    # max version value that can be stored in the LOAD_GLOBAL feedback entry.
+    # This is determined by the type of globals_version and builtins_version
+    # in _PyFbGlobal, uint32_t.
+    max_version = 1<<32
     # use a wide safety margin (use only half of what's available)
     limit = max_version // 2
     return _testinternalcapi.get_next_dict_keys_version() < limit
@@ -2441,6 +2441,120 @@ class TestSpecializer(TestBase):
         load_enum_member()
         self.assert_specialized(load_enum_member,
                                 "LOAD_ATTR_CLASS_WITH_METACLASS_CHECK")
+
+
+@cpython_only
+class TestFeedback(TestBase):
+    """The typed feedback entries of Include/internal/pycore_feedback.h."""
+
+    KINDS = {
+        "RESUME": "COUNTER", "JUMP_BACKWARD": "COUNTER",
+        "TO_BOOL": "UNARY", "UNPACK_SEQUENCE": "UNARY", "FOR_ITER": "UNARY",
+        "GET_ITER": "UNARY", "SEND": "UNARY",
+        "BINARY_OP": "BINARY", "COMPARE_OP": "BINARY",
+        "CONTAINS_OP": "BINARY", "STORE_SUBSCR": "BINARY",
+        "LOAD_ATTR": "ATTR", "STORE_ATTR": "ATTR", "LOAD_SUPER_ATTR": "ATTR",
+        "LOAD_GLOBAL": "GLOBAL",
+        "CALL": "CALL", "CALL_KW": "CALL", "CALL_FUNCTION_EX": "CALL",
+    }
+
+    def feedback(self, func, opname):
+        return [_testinternalcapi.get_feedback(func.__code__, i.offset)
+                for i in dis.get_instructions(func) if i.opname == opname]
+
+    def test_kinds(self):
+        class C:
+            def m(self, o, a, b, *args, **kw):
+                for x in [a, b]:
+                    if x in o and not a or a < b:
+                        o.y = a + b
+                        o[x] = o.z
+                        a, b = o
+                print(len(args), *args, **kw)
+                print(a, end=b)
+                return super().m
+
+        def g(it):
+            yield from it
+
+        seen = set()
+        for func in C.m, g:
+            for instr in dis.get_instructions(func):
+                entry = _testinternalcapi.get_feedback(func.__code__,
+                                                       instr.offset)
+                if not instr.cache_info or instr.opname.startswith("POP_JUMP"):
+                    # Branches keep their history in the cache unit
+                    self.assertIsNone(entry, instr.opname)
+                    continue
+                kind, state, *_ = entry
+                self.assertEqual(kind, self.KINDS[instr.opname], instr.opname)
+                self.assertEqual(state, "COLD", instr.opname)
+                seen.add(instr.opname)
+        self.assertEqual(seen, set(self.KINDS))
+
+    @requires_specialization
+    def test_poly_and_mega(self):
+        _testcapi = import_module("_testcapi")
+
+        class C:
+            def __init__(self):
+                self.x = 1
+
+        # One type more than a poly table holds
+        classes = [type(f"C{i}", (C,), {}) for i in range(5)]
+        objects = [cls() for cls in classes]
+
+        def f(o):
+            return o.x
+
+        handler = dis._specialized_opmap["LOAD_ATTR_INSTANCE_VALUE"]
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+            f(objects[0])
+        self.assert_specialized(f, "LOAD_ATTR_INSTANCE_VALUE")
+        [(kind, state, type_version, _, rows)] = self.feedback(f, "LOAD_ATTR")
+        self.assertEqual((kind, state, rows), ("ATTR", "MONO", []))
+        self.assertEqual(type_version, _testcapi.type_get_version(classes[0]))
+
+        for n in range(1, len(classes)):
+            for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN):
+                f(objects[n])
+            [(_, state, type_version, _, rows)] = self.feedback(f, "LOAD_ATTR")
+            self.assertEqual(type_version,
+                             _testcapi.type_get_version(classes[n]))
+            expected = [(_testcapi.type_get_version(cls), 0, handler)
+                        for cls in classes[:n + 1]]
+            if n < 4:
+                self.assertEqual(state, "POLY")
+                self.assertEqual(rows, expected)
+            else:
+                self.assertEqual(state, "MEGA")
+                self.assertEqual(rows, expected[:4])
+
+    @requires_specialization
+    def test_operand_versions(self):
+        _testcapi = import_module("_testcapi")
+
+        def add(a, b):
+            return a + b
+
+        def g():
+            pass
+
+        def call(f):
+            return f()
+
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+            add(1, 2.0)
+            call(g)
+        [(kind, state, lhs, rhs, _)] = self.feedback(add, "BINARY_OP")
+        self.assertEqual((kind, state), ("BINARY", "MONO"))
+        self.assertEqual(lhs, _testcapi.type_get_version(int))
+        self.assertEqual(rhs, _testcapi.type_get_version(float))
+        [(kind, state, func_version, callable_type, _)] = self.feedback(call, "CALL")
+        self.assertEqual((kind, state), ("CALL", "MONO"))
+        self.assertNotEqual(func_version, 0)
+        self.assertEqual(callable_type,
+                         _testcapi.type_get_version(types.FunctionType))
 
 
 if __name__ == "__main__":

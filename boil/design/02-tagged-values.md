@@ -541,3 +541,29 @@ Decisions:
    The gate stays at 2 percent instructions with 3 percent accepted.
 4. **Guards** stay generated. With producers, an int guard becomes the inline
    test itself and gets cheaper than today's `ob_type` load and compare.
+
+## 14. Correction (2026-10-23, review)
+
+Section 13 decided too much on too little. The step 2 measurement exercised
+a refcounting interpreter with dynamic borrow flags, no inline producers and
+no IR, which is the worst case for any tagging scheme and says nothing about
+the cases where NaN boxing pays: floats held in slots across iterations,
+floats in containers and attributes once those hold `PyValue`, and the JIT
+materialising doubles only at escapes. The dominant NaN-box cost, the
+pointer-space test in `PyStackRef_Borrow`, exists only because borrow status
+is a runtime bit; the IR makes it static.
+
+Revised decisions:
+
+1. **The encoding decision is deferred to IR step 4** (the 1:1 IR
+   interpreter with static borrows), where both encodings are re-measured
+   on equal footing with the first inline producers in place. NaN boxing
+   remains the Phase 2 target and the default candidate.
+2. **Section 13 decision 1 is withdrawn.** `boil/tagged-step2-wip` (NaN-box)
+   and `boil/tagged-lowbit` (low-bit) are both kept as measured data.
+3. **Section 13 decision 3 stands** (by-value boxing, unlikely branches,
+   inlining control): it applies to either encoding.
+4. **Conversion reduction work precedes the decision**: static borrow bit,
+   feedback-driven slot kinds so boxing checks are emitted only where inline
+   values can flow, slot-level `known_object` across instructions, and
+   `inline_ok` on the numeric handlers.

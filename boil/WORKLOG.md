@@ -136,3 +136,8 @@ Entries are appended in order; each milestone is also a commit.
   note 02 section 13: Phase 1 uses the low-bit tag with floats boxed; two
   generator fixes (by-value boxing, unlikely branch) run next on that
   branch, then it rebases onto main after the feedback vector lands.
+- Review correction: the encoding decision in note 02 section 13 was made
+  on a worst-case measurement (dynamic borrows, no producers, no IR). It is
+  withdrawn and deferred to IR step 4, where NaN-box and low-bit are
+  re-measured with static borrows and the first producers. Order returns to
+  the plan's: IR first, tags on top. Both branches are kept as data.

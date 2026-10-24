@@ -227,3 +227,15 @@ Entries are appended in order; each milestone is also a commit.
   branch per local load, so instruction cache and branch behaviour, not
   instruction count, now set the pace on object-heavy code. The IR step is
   where both are addressed (static borrows, smaller handlers).
+
+### IR step 3 landed (2c2c886f091)
+
+The cases generator now emits a second interpreter from `Python/bytecodes.c`:
+`Python/generated_ir_cases.c.h` and `Python/ir_targets.h`, with the word
+layout in `Include/internal/pycore_ir.h`. The stack interpreter's generated
+files are byte-identical. `--with-ir-interp` compiles ceval a second time with
+`Py_IR_INTERP` but does not link it yet. 11 new generator tests. Decisions that
+depart from design note 01 are recorded in its new section 11: IR_BORROW in
+bit 0, 32-bit immediate/jump and feedback fields in word 1, stack pointer kept
+through step 4, absorbed loads keep their word. Step 4 (lazy lowering, pcmap,
+static borrows) is in progress.

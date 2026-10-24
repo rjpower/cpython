@@ -1,14 +1,13 @@
-"""Test in-process C stack unwinders against Python and JIT frames.
+"""Test in-process C stack unwinders against Python frames.
 
 The tests build a recursive Python call stack, ask each _testinternalcapi
-unwinder for return addresses, and classify those addresses as Python, JIT, or
+unwinder for return addresses, and classify those addresses as Python or
 other frames. The backends include CPython's manual stack-chain unwinder and
 GNU backtrace(), so this module is about in-process C stack unwinding rather
 than a single unwind mechanism. GDB integration tests live in test_gdb.
 """
 
 import json
-import os
 import platform
 import subprocess
 import sys
@@ -116,64 +115,39 @@ def _is_arm32_build():
 def _build_stack_and_unwind(unwinder):
     import operator
 
-    def build_stack(n, unwinder, warming_up_caller=False):
-        if warming_up_caller:
-            return
+    def build_stack(n, unwinder):
         if n == 0:
             return unwinder()
-        warming_up = True
-        while warming_up:
-            # Can't branch on JIT state inside JITted code, so compute here.
-            warming_up = (
-                hasattr(sys, "_jit")
-                and sys._jit.is_enabled()
-                and not sys._jit.is_active()
-            )
-            result = operator.call(build_stack, n - 1, unwinder, warming_up)
-        return result
+        return operator.call(build_stack, n - 1, unwinder)
 
     stack = build_stack(STACK_DEPTH, unwinder)
     return stack
 
 
-def _classify_stack(stack, jit_enabled):
-    labels = _testinternalcapi.classify_stack_addresses(stack, jit_enabled)
+def _classify_stack(stack):
+    labels = _testinternalcapi.classify_stack_addresses(stack)
 
     annotated = []
-    jit_frames = 0
     python_frames = 0
     other_frames = 0
     for idx, (frame, tag) in enumerate(zip(stack, labels)):
         addr = int(frame)
-        if tag == "jit":
-            jit_frames += 1
-        elif tag == "python":
+        if tag == "python":
             python_frames += 1
         else:
             other_frames += 1
         annotated.append((idx, addr, tag))
-    return annotated, python_frames, jit_frames, other_frames
+    return annotated, python_frames, other_frames
 
 
 def _summarize_unwind(stack, unwinder_name):
-    jit_enabled = hasattr(sys, "_jit") and sys._jit.is_enabled()
-    jit_backend = _testinternalcapi.get_jit_backend()
-    ranges = _testinternalcapi.get_jit_code_ranges() if jit_enabled else []
-    if jit_enabled and ranges:
-        print("JIT ranges:")
-        for start, end in ranges:
-            print(f"  {int(start):#x}-{int(end):#x}")
-    annotated, python_frames, jit_frames, other_frames = _classify_stack(
-        stack, jit_enabled
-    )
+    annotated, python_frames, other_frames = _classify_stack(stack)
     for idx, addr, tag in annotated:
         print(f"#{idx:02d} {addr:#x} -> {tag}")
     return {
         "length": len(stack),
         "python_frames": python_frames,
-        "jit_frames": jit_frames,
         "other_frames": other_frames,
-        "jit_backend": jit_backend,
         "unwinder": unwinder_name,
     }
 
@@ -184,34 +158,13 @@ def _annotate_unwind(unwinder_name="manual_frame_pointer_unwind"):
     return json.dumps(_summarize_unwind(stack, unwinder_name))
 
 
-def _annotate_unwind_after_executor_free(unwinder_name="gnu_backtrace_unwind"):
-    # The first unwind runs at the bottom of _build_stack_and_unwind(), while
-    # the recursive helper may be executing in JIT code. After it returns, this
-    # helper is back in normal test code; clearing executor caches should remove
-    # the old JIT ranges, so the second unwind must not report stale JIT frames.
-    live = json.loads(_annotate_unwind(unwinder_name))
-
-    sys._clear_internal_caches()
-    _testinternalcapi.clear_executor_deletion_list()
-
-    unwinder = getattr(_testinternalcapi, unwinder_name)
-    after_free = _summarize_unwind(unwinder(), unwinder_name)
-    return json.dumps({
-        "live": live,
-        "after_free": after_free,
-    })
-
-
-def _run_unwind_helper(helper_name, unwinder_name, **env):
+def _run_unwind_helper(helper_name, unwinder_name):
     code = (
         f"from test.test_c_stack_unwind import {helper_name}; "
         f"print({helper_name}({unwinder_name!r}));"
     )
-    run_env = os.environ.copy()
-    run_env.update(env)
     proc = subprocess.run(
         [sys.executable, "-c", code],
-        env=run_env,
         capture_output=True,
         text=True,
     )
@@ -233,13 +186,8 @@ def _run_unwind_helper(helper_name, unwinder_name, **env):
         ) from exc
 
 
-def _unwind_result(unwinder_name, **env):
-    return _run_unwind_helper("_annotate_unwind", unwinder_name, **env)
-
-
-def _unwind_after_executor_free_result(unwinder_name, **env):
-    return _run_unwind_helper(
-        "_annotate_unwind_after_executor_free", unwinder_name, **env)
+def _unwind_result(unwinder_name):
+    return _run_unwind_helper("_annotate_unwind", unwinder_name)
 
 
 @support.requires_gil_enabled("test requires the GIL enabled")
@@ -270,54 +218,20 @@ class ManualStackUnwindTests(unittest.TestCase):
         self.manual_unwind_expected = expected
 
     def test_manual_unwind_finds_expected_frames(self):
-        jit_available = hasattr(sys, "_jit") and sys._jit.is_available()
-        envs = [({"PYTHON_JIT": "0"}, False)]
-        if jit_available:
-            envs.append(({"PYTHON_JIT": "1"}, True))
-
-        for env, using_jit in envs:
-            with self.subTest(env=env):
-                result = _unwind_result("manual_frame_pointer_unwind", **env)
-                jit_frames = result["jit_frames"]
-                python_frames = result.get("python_frames", 0)
-                jit_backend = result.get("jit_backend")
-                if self.manual_unwind_expected:
-                    self.assertGreaterEqual(
-                        python_frames,
-                        STACK_DEPTH,
-                        f"expected to find Python frames on {self.machine} with env {env}",
-                    )
-                    if using_jit:
-                        if jit_backend == "jit":
-                            self.assertGreater(
-                                jit_frames,
-                                0,
-                                f"expected to find JIT frames on {self.machine} with env {env}",
-                            )
-                        else:
-                            # jit_backend is "interpreter" or not present
-                            self.assertEqual(
-                                jit_frames,
-                                0,
-                                f"unexpected JIT frames counted on {self.machine} with env {env}",
-                            )
-                    else:
-                        self.assertEqual(
-                            jit_frames,
-                            0,
-                            f"unexpected JIT frames counted on {self.machine} with env {env}",
-                        )
-                else:
-                    self.assertLessEqual(
-                        python_frames,
-                        1,
-                        f"unexpected Python frames counted on {self.machine} with env {env}",
-                    )
-                    self.assertEqual(
-                        jit_frames,
-                        0,
-                        f"unexpected JIT frames counted on {self.machine} with env {env}",
-                    )
+        result = _unwind_result("manual_frame_pointer_unwind")
+        python_frames = result.get("python_frames", 0)
+        if self.manual_unwind_expected:
+            self.assertGreaterEqual(
+                python_frames,
+                STACK_DEPTH,
+                f"expected to find Python frames on {self.machine}",
+            )
+        else:
+            self.assertLessEqual(
+                python_frames,
+                1,
+                f"unexpected Python frames counted on {self.machine}",
+            )
 
 
 @support.requires_gil_enabled("test requires the GIL enabled")
@@ -338,68 +252,12 @@ class GnuBacktraceUnwindTests(unittest.TestCase):
                 self.skipTest("gnu backtrace unwinding not supported on this platform")
             raise
 
-    def test_gnu_backtrace_unwinds_through_jit_frames(self):
-        jit_available = hasattr(sys, "_jit") and sys._jit.is_available()
-        envs = [({"PYTHON_JIT": "0"}, False)]
-        if jit_available:
-            envs.append(({"PYTHON_JIT": "1"}, True))
-
-        for env, using_jit in envs:
-            with self.subTest(env=env):
-                result = _unwind_result("gnu_backtrace_unwind", **env)
-                python_frames = result.get("python_frames", 0)
-                jit_frames = result.get("jit_frames", 0)
-                jit_backend = result.get("jit_backend")
-
-                self.assertGreaterEqual(
-                    python_frames,
-                    STACK_DEPTH,
-                    f"expected to find Python frames in GNU backtrace with env {env}",
-                )
-                if using_jit and jit_backend == "jit":
-                    self.assertGreater(
-                        jit_frames,
-                        0,
-                        f"expected GNU backtrace to include JIT frames with env {env}",
-                    )
-                else:
-                    self.assertEqual(
-                        jit_frames,
-                        0,
-                        f"unexpected JIT frames counted in GNU backtrace with env {env}",
-                    )
-
-    def test_gnu_backtrace_jit_frames_disappear_after_executor_free(self):
-        if not (hasattr(sys, "_jit") and sys._jit.is_available()):
-            self.skipTest("JIT is not available")
-
-        result = _unwind_after_executor_free_result(
-            "gnu_backtrace_unwind", PYTHON_JIT="1")
-        live = result["live"]
-        if live.get("jit_backend") != "jit":
-            self.skipTest("JIT backend is not active")
-
+    def test_gnu_backtrace_finds_python_frames(self):
+        result = _unwind_result("gnu_backtrace_unwind")
         self.assertGreaterEqual(
-            live.get("python_frames", 0),
+            result.get("python_frames", 0),
             STACK_DEPTH,
-            "expected live GNU backtrace to include recursive Python frames",
-        )
-        self.assertGreater(
-            live.get("jit_frames", 0),
-            0,
-            "expected live GNU backtrace to include JIT frames",
-        )
-
-        after_free = result["after_free"]
-        self.assertGreater(
-            after_free.get("python_frames", 0),
-            0,
-            "expected GNU backtrace after executor free to include Python frames",
-        )
-        self.assertEqual(
-            after_free.get("jit_frames", 0),
-            0,
-            "unexpected JIT frames in GNU backtrace after executor free",
+            "expected to find Python frames in GNU backtrace",
         )
 
 

@@ -111,9 +111,7 @@ class Emitter:
     def __init__(self, out: CWriter, labels: dict[str, Label], cannot_escape: bool = False, jump_prefix: str = ""):
         self._replacers = {
             "EXIT_IF": self.exit_if,
-            "AT_END_EXIT_IF": self.exit_if_after,
             "DEOPT_IF": self.deopt_if,
-            "HANDLE_PENDING_AND_DEOPT_IF": self.periodic_if,
             "ERROR_IF": self.error_if,
             "ERROR_NO_POP": self.error_no_pop,
             "DECREF_INPUTS": self.decref_inputs,
@@ -128,9 +126,6 @@ class Emitter:
             "INSTRUCTION_SIZE": self.instruction_size,
             "stack_pointer": self.stack_pointer,
             "Py_UNREACHABLE": self.unreachable,
-            "TIER1_TO_TIER2": self.tier1_to_tier2,
-            "TIER2_TO_TIER2": self.tier2_to_tier2,
-            "GOTO_TIER_ONE": self.goto_tier_one
         }
         self.out = out
         self.labels = labels
@@ -191,39 +186,6 @@ class Emitter:
 
     exit_if = deopt_if
 
-    def periodic_if(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-        raise NotImplementedError("HANDLE_PENDING_AND_DEOPT_IF not support in tier 1")
-
-    def exit_if_after(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-        storage.clear_inputs("in AT_END_EXIT_IF")
-        storage.flush(self.out)
-        storage.stack.clear(self.out)
-        return self.exit_if(tkn, tkn_iter, uop, storage, inst)
-
-    def goto_tier_one(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-        raise NotImplementedError("GOTO_TIER_ONE not supported in tier 1")
-
     def goto_error(self, offset: int, storage: Storage) -> str:
         if offset > 0:
             return f"{self.jump_prefix}JUMP_TO_LABEL(pop_{offset}_error);"
@@ -265,24 +227,6 @@ class Emitter:
         if not unconditional:
             self.out.emit("}\n")
         return not unconditional
-
-    def tier1_to_tier2(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-        self.out.emit(tkn)
-        lparen = next(tkn_iter)
-        assert lparen.kind == "LPAREN"
-        self.emit(lparen)
-        emit_to(self.out, tkn_iter, "RPAREN")
-        self.out.emit(")")
-        return False
-
-    tier2_to_tier2 = tier1_to_tier2
 
     def error_no_pop(
         self,
@@ -771,9 +715,7 @@ def cflags(p: Properties) -> str:
         flags.append("HAS_EVAL_BREAK_FLAG")
     if p.deopts:
         flags.append("HAS_DEOPT_FLAG")
-    if p.deopts_periodic:
-        flags.append("HAS_PERIODIC_FLAG")
-    if p.side_exit or p.side_exit_at_end:
+    if p.side_exit:
         flags.append("HAS_EXIT_FLAG")
     if not p.infallible:
         flags.append("HAS_ERROR_FLAG")
@@ -787,12 +729,6 @@ def cflags(p: Properties) -> str:
         flags.append("HAS_NO_SAVE_IP_FLAG")
     if p.sync_sp:
         flags.append("HAS_SYNC_SP_FLAG")
-    if p.unpredictable_jump:
-        flags.append("HAS_UNPREDICTABLE_JUMP_FLAG")
-    if p.needs_guard_ip:
-        flags.append("HAS_NEEDS_GUARD_IP_FLAG")
-    if p.records_value:
-        flags.append("HAS_RECORDS_VALUE_FLAG")
     if flags:
         return " | ".join(flags)
     else:

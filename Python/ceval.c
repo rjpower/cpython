@@ -1022,14 +1022,6 @@ _Py_assert_within_stack_bounds(
         abort();
     }
 }
-#ifdef _Py_JIT
-void
-_Py_jit_assert_within_stack_bounds(
-    _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, int lineno
-) {
-    _Py_assert_within_stack_bounds(frame, stack_pointer, "executor_cases.c.h", lineno);
-}
-#endif
 #endif
 
 int _Py_CheckRecursiveCallPy(
@@ -1066,10 +1058,6 @@ static const _Py_CODEUNIT _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS[] = {
 
 const _Py_CODEUNIT *_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR = (_Py_CODEUNIT*)&_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
 
-#ifdef Py_DEBUG
-extern void _PyUOpPrint(const _PyUOpInstruction *uop);
-#endif
-
 
 PyObject **
 _PyObjectArray_FromStackRefArray(_PyStackRef *input, Py_ssize_t nargs, PyObject **scratch)
@@ -1101,21 +1089,6 @@ _PyObjectArray_Free(PyObject **array, PyObject **scratch)
         PyMem_Free(array);
     }
 }
-
-#if _Py_TIER2
-// 0 for success, -1  for error.
-static int
-stop_tracing_and_jit(PyThreadState *tstate, _PyInterpreterFrame *frame)
-{
-    int _is_sys_tracing = (tstate->c_tracefunc != NULL) || (tstate->c_profilefunc != NULL);
-    int err = 0;
-    if (!_PyErr_Occurred(tstate) && !_is_sys_tracing) {
-        err = _PyOptimizer_Optimize(frame, tstate);
-    }
-    _PyJit_FinalizeTracing(tstate, err);
-    return err;
-}
-#endif
 
 /* _PyEval_EvalFrameDefault is too large to optimize for speed with PGO on MSVC.
  */
@@ -1274,7 +1247,6 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 #if USE_COMPUTED_GOTOS && !_Py_TAIL_CALL_INTERP
 /* Import the static jump table */
 #include "opcode_targets.h"
-    void **opcode_targets = opcode_targets_table;
 #endif
 
 #ifdef Py_STATS
@@ -1284,10 +1256,6 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     uint8_t opcode;    /* Current opcode */
     int oparg;         /* Current opcode argument, if any */
     assert(tstate->current_frame == NULL || tstate->current_frame->stackpointer != NULL);
-#if !USE_COMPUTED_GOTOS
-    uint8_t tracing_mode = 0;
-    uint8_t dispatch_code;
-#endif
 #endif
     _PyEntryFrame entry;
 
@@ -1326,14 +1294,6 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     entry.frame.previous = tstate->current_frame;
     frame->previous = &entry.frame;
     tstate->current_frame = frame;
-    entry.frame.localsplus[0] = PyStackRef_NULL;
-#ifdef _Py_TIER2
-    if (tstate->current_executor != NULL) {
-        assert(Py_TYPE(tstate->current_executor) == &_PyUOpExecutor_Type);
-        entry.frame.localsplus[0] = PyStackRef_FromPyObjectNew(tstate->current_executor);
-        tstate->current_executor = NULL;
-    }
-#endif
 
     /* support for generator.throw() */
     if (throwflag) {
@@ -1361,9 +1321,9 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
         _PyFrame_StackPointerInvalidate(frame);
 #if _Py_TAIL_CALL_INTERP
 #   if Py_STATS
-        return _TAIL_CALL_error(frame, stack_pointer, tstate, next_instr, instruction_funcptr_handler_table, 0, lastopcode);
+        return _TAIL_CALL_error(frame, stack_pointer, tstate, next_instr, 0, lastopcode);
 #   else
-        return _TAIL_CALL_error(frame, stack_pointer, tstate, next_instr, instruction_funcptr_handler_table, 0);
+        return _TAIL_CALL_error(frame, stack_pointer, tstate, next_instr, 0);
 #   endif
 #else
         goto error;
@@ -1372,9 +1332,9 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 
 #if _Py_TAIL_CALL_INTERP
 #   if Py_STATS
-        return _TAIL_CALL_start_frame(frame, NULL, tstate, NULL, instruction_funcptr_handler_table, 0, lastopcode);
+        return _TAIL_CALL_start_frame(frame, NULL, tstate, NULL, 0, lastopcode);
 #   else
-        return _TAIL_CALL_start_frame(frame, NULL, tstate, NULL, instruction_funcptr_handler_table, 0);
+        return _TAIL_CALL_start_frame(frame, NULL, tstate, NULL, 0);
 #   endif
 #else
     goto start_frame;
@@ -1396,137 +1356,6 @@ early_exit:
     tstate->current_frame = frame->previous;
     return NULL;
 }
-#ifdef _Py_TIER2
-#ifdef _Py_JIT
-_PyJitEntryFuncPtr _Py_jit_entry = _PyJIT_Entry;
-#else
-_PyJitEntryFuncPtr _Py_jit_entry = _PyTier2Interpreter;
-#endif
-#endif
-
-#if defined(_Py_TIER2) && !defined(_Py_JIT)
-
-_Py_CODEUNIT *
-_PyTier2Interpreter(
-    _PyExecutorObject *current_executor, _PyInterpreterFrame *frame,
-    _PyStackRef *stack_pointer, PyThreadState *tstate
-) {
-    const _PyUOpInstruction *next_uop;
-    int oparg;
-    /* Set up "jit" state after entry from tier 1.
-     * This mimics what the jit shim function does. */
-    tstate->jit_exit = NULL;
-    _PyStackRef _tos_cache0 = PyStackRef_ZERO_BITS;
-    _PyStackRef _tos_cache1 = PyStackRef_ZERO_BITS;
-    _PyStackRef _tos_cache2 = PyStackRef_ZERO_BITS;
-    int current_cached_values = 0;
-
-tier2_start:
-
-    next_uop = current_executor->trace;
-    assert(next_uop->opcode == _START_EXECUTOR_r00 + current_cached_values ||
-        next_uop->opcode == _COLD_EXIT_r00 + current_cached_values ||
-        next_uop->opcode == _COLD_DYNAMIC_EXIT_r00 + current_cached_values);
-
-#undef LOAD_IP
-#define LOAD_IP(UNUSED) (void)0
-
-#ifdef Py_STATS
-// Disable these macros that apply to Tier 1 stats when we are in Tier 2
-#undef STAT_INC
-#define STAT_INC(opname, name) ((void)0)
-#undef STAT_DEC
-#define STAT_DEC(opname, name) ((void)0)
-#endif
-
-#undef ENABLE_SPECIALIZATION
-#define ENABLE_SPECIALIZATION 0
-
-    uint16_t uopcode;
-#ifdef Py_STATS
-    int lastuop = 0;
-    uint64_t trace_uop_execution_counter = 0;
-#endif
-
-    assert(next_uop->opcode == _START_EXECUTOR_r00 ||
-        next_uop->opcode == _COLD_EXIT_r00 ||
-        next_uop->opcode == _COLD_DYNAMIC_EXIT_r00);
-tier2_dispatch:
-    for (;;) {
-        uopcode = next_uop->opcode;
-#ifdef Py_DEBUG
-        if (frame->lltrace >= 4) {
-            dump_stack(frame, stack_pointer);
-            printf("    cache=[");
-            dump_cache_item(_tos_cache0, 0, current_cached_values);
-            printf(", ");
-            dump_cache_item(_tos_cache1, 1, current_cached_values);
-            printf(", ");
-            dump_cache_item(_tos_cache2, 2, current_cached_values);
-            printf("]\n");
-            if (next_uop->opcode == _START_EXECUTOR_r00) {
-                printf("%4d uop: ", 0);
-            }
-            else {
-                printf("%4d uop: ", (int)(next_uop - current_executor->trace));
-            }
-            _PyUOpPrint(next_uop);
-            printf("\n");
-            fflush(stdout);
-        }
-#endif
-        next_uop++;
-        OPT_STAT_INC(uops_executed);
-        UOP_STAT_INC(uopcode, execution_count);
-        UOP_PAIR_INC(uopcode, lastuop);
-#ifdef Py_STATS
-        trace_uop_execution_counter++;
-        ((_PyUOpInstruction  *)next_uop)[-1].execution_count++;
-#endif
-
-        switch (uopcode) {
-
-#include "executor_cases.c.h"
-
-            default:
-#ifdef Py_DEBUG
-            {
-                printf("Unknown uop: ");
-                _PyUOpPrint(&next_uop[-1]);
-                printf(" @ %d\n", (int)(next_uop - current_executor->trace - 1));
-                Py_FatalError("Unknown uop");
-            }
-#else
-            Py_UNREACHABLE();
-#endif
-
-        }
-    }
-
-jump_to_error_target:
-#ifdef Py_DEBUG
-    if (frame->lltrace >= 2) {
-        printf("Error: [UOp ");
-        _PyUOpPrint(&next_uop[-1]);
-        printf(" @ %d -> %s]\n",
-               (int)(next_uop - current_executor->trace - 1),
-               _PyOpcode_OpName[frame->instr_ptr->op.code]);
-        fflush(stdout);
-    }
-#endif
-    assert(next_uop[-1].format == UOP_FORMAT_JUMP);
-    uint16_t target = uop_get_error_target(&next_uop[-1]);
-    next_uop = current_executor->trace + target;
-    goto tier2_dispatch;
-
-jump_to_jump_target:
-    assert(next_uop[-1].format == UOP_FORMAT_JUMP);
-    target = uop_get_jump_target(&next_uop[-1]);
-    next_uop = current_executor->trace + target;
-    goto tier2_dispatch;
-
-}
-#endif // _Py_TIER2
 
 
 #ifdef DO_NOT_OPTIMIZE_INTERP_LOOP

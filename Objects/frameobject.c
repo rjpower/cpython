@@ -13,7 +13,6 @@
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
-#include "pycore_optimizer.h"     // _Py_Executors_InvalidateDependency()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
@@ -278,10 +277,6 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
             PyErr_SetString(PyExc_ValueError, "cannot remove local variables from FrameLocalsProxy");
             return -1;
         }
-
-#if _Py_TIER2
-        _Py_Executors_InvalidateDependency(_PyInterpreterState_GET(), co, 1);
-#endif
 
         _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
         _PyStackRef oldvalue = fast[i];

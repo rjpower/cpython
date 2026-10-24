@@ -21,7 +21,7 @@ uv run --no-project --python python3 python -m ports bench [ref ...]
   `build/ports/bench.tsv`.
 
 With no refs, a verb covers every port under `python/`. `cpython:<variant>`
-(`default`, `jit`, `ft`; flags in `cpython/recipe.json`) builds this checkout
+(`default`, `ft`; flags in `cpython/recipe.json`) builds this checkout
 in `build/ports/cpython-<variant>/`. Logs go to stderr; stdout is one JSON
 summary.
 

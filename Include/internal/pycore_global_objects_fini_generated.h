@@ -707,7 +707,6 @@ _PyStaticObjects_CheckAll(PyInterpreterState *interp) {
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(other), "other", 5);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(out_fd), "out_fd", 6);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(outgoing), "outgoing", 8);
-    _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(outpath), "outpath", 7);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(overlapped), "overlapped", 10);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(owner), "owner", 5);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(pad), "pad", 3);

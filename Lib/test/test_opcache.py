@@ -8,7 +8,7 @@ import types
 import unittest
 from test.support import (threading_helper, check_impl_detail,
                           requires_specialization,
-                          cpython_only, requires_jit_disabled, reset_code)
+                          cpython_only, reset_code)
 from test.support.import_helper import import_module
 
 # Skip this module on other interpreters, it is cpython specific:
@@ -525,7 +525,6 @@ class TestCallCache(TestBase):
             f(None)
             f()
 
-    @requires_jit_disabled
     @requires_specialization
     def test_assign_init_code(self):
         class MyClass:
@@ -548,7 +547,6 @@ class TestCallCache(TestBase):
         MyClass.__init__.__code__ = count_args.__code__
         instantiate()
 
-    @requires_jit_disabled
     @requires_specialization
     def test_push_init_frame_fails(self):
         def instantiate():
@@ -577,7 +575,6 @@ class TestCallCache(TestBase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             f()
 
-    @requires_jit_disabled
     @requires_specialization
     def test_specialize_call_function_ex_py(self):
         def ex_py(*args, **kwargs):
@@ -593,7 +590,6 @@ class TestCallCache(TestBase):
             instantiate()
         self.assert_specialized(instantiate, "CALL_EX_PY")
 
-    @requires_jit_disabled
     @requires_specialization
     def test_specialize_call_function_ex_py_fail(self):
         def ex_py(*args, **kwargs):
@@ -629,7 +625,6 @@ class TestRacesDoNotCrash(TestBase):
     LOOPS = 4
     WRITERS = 2
 
-    @requires_jit_disabled
     def assert_races_do_not_crash(
         self, opname, get_items, read, write, *, check_items=False
     ):

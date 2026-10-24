@@ -14,7 +14,6 @@ extern "C" {
 #include "pycore_structs.h"       // PyHamtObject
 #include "pycore_tstate.h"        // _PyThreadStateImpl
 #include "pycore_typedefs.h"      // _PyRuntimeState
-#include "pycore_uop.h"           // _PyBloomFilter
 
 #define CODE_MAX_WATCHERS 8
 #define CONTEXT_MAX_WATCHERS 8
@@ -424,8 +423,7 @@ struct _stoptheworld_state {
     PyThreadState *requester; // Thread that requested the pause (may be NULL).
 };
 
-/* Tracks some rare events per-interpreter, used by the optimizer to turn on/off
-   specific optimizations. */
+/* Tracks some rare events per-interpreter. */
 typedef struct _rare_events {
     /* Setting an object's class, obj.__class__ = ... */
     uint8_t set_class;
@@ -440,25 +438,8 @@ typedef struct _rare_events {
 } _rare_events;
 
 // Optimization configuration for the interpreter.
-// This groups all thresholds and optimization flags for both JIT and interpreter.
 typedef struct _PyOptimizationConfig {
-    // Interpreter optimization thresholds
-    uint16_t jump_backward_initial_value;
-    uint16_t jump_backward_initial_backoff;
-
-    uint16_t resume_initial_value;
-    uint16_t resume_initial_backoff;
-
-    // JIT optimization thresholds
-    uint16_t side_exit_initial_value;
-    uint16_t side_exit_initial_backoff;
-
-    // Trace fitness thresholds
-    uint16_t fitness_initial;
-
-    // Optimization flags
     bool specialization_enabled;
-    bool uops_optimize_enabled;
 } _PyOptimizationConfig;
 
 struct
@@ -823,8 +804,6 @@ struct _Py_unique_id_pool {
 
 #endif
 
-typedef _Py_CODEUNIT *(*_PyJitEntryFuncPtr)(struct _PyExecutorObject *exec, _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate);
-
 #define _PyInterpreterGuard_GUARDS_NOT_ALLOWED UINTPTR_MAX
 
 /* PyInterpreterState holds the global state for one of the runtime's
@@ -1003,19 +982,8 @@ struct _is {
     struct types_state types;
     struct callable_cache callable_cache;
     _PyStackRef common_consts[NUM_COMMON_CONSTANTS];
-    bool jit;
-    bool compiling;
 
-    // Optimization configuration (thresholds and flags for JIT and interpreter)
     _PyOptimizationConfig opt_config;
-    _PyBloomFilter *executor_blooms;             // Contiguous bloom filter array
-    struct _PyExecutorObject **executor_ptrs;    // Corresponding executor pointer array
-    size_t executor_count;                       // Number of valid executors
-    size_t executor_capacity;                    // Array capacity
-    struct _PyExecutorObject *executor_deletion_list_head;
-    struct _PyExecutorObject *cold_executor;
-    struct _PyExecutorObject *cold_dynamic_executor;
-    size_t executor_creation_counter;
     _rare_events rare_events;
     PyDict_WatchCallback builtins_dict_watcher;
 

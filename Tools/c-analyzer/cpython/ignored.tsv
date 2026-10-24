@@ -407,11 +407,6 @@ Python/sysmodule.c	-	perf_map_state	-
 Python/sysmodule.c	-	_PySys_ImplCacheTag	-
 Python/sysmodule.c	-	_PySys_ImplName	-
 Python/sysmodule.c	-	whatstrings	-
-Python/optimizer.c	-	_PyUOpExecutor_Type	-
-Python/optimizer.c	-	_PyOptimizer_Default	-
-Python/optimizer.c	-	_ColdExit_Type	-
-Python/optimizer.c	-	Py_FatalErrorExecutor	-
-Python/optimizer.c	-	EMPTY_FILTER	-
 
 ##-----------------------
 ## test code

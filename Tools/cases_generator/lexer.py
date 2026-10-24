@@ -230,9 +230,7 @@ annotations = {
     "register",
     "replaced",
     "pure",
-    "replicate",
     "tier1",
-    "tier2",
     "no_save_ip",
 }
 

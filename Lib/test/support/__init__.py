@@ -66,8 +66,6 @@ __all__ = [
     "ALWAYS_EQ", "NEVER_EQ", "LARGEST", "SMALLEST",
     "LOOPBACK_TIMEOUT", "INTERNET_TIMEOUT", "SHORT_TIMEOUT", "LONG_TIMEOUT",
     "Py_DEBUG", "exceeds_recursion_limit", "skip_on_s390x",
-    "requires_jit_enabled",
-    "requires_jit_disabled",
     "force_not_colorized",
     "force_not_colorized_test_class",
     "make_clean_env",
@@ -3003,10 +3001,6 @@ skip_on_newlib = unittest.skipIf(sys.platform == 'cygwin',
                                  'the test fails on newlib C library')
 
 Py_TRACE_REFS = hasattr(sys, 'getobjects')
-
-_JIT_ENABLED = sys._jit.is_enabled()
-requires_jit_enabled = unittest.skipUnless(_JIT_ENABLED, "requires JIT enabled")
-requires_jit_disabled = unittest.skipIf(_JIT_ENABLED, "requires JIT disabled")
 
 
 _BASE_COPY_SRC_DIR_IGNORED_NAMES = frozenset({

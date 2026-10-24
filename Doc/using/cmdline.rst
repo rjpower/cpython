@@ -1410,14 +1410,6 @@ conflict.
 
    .. versionadded:: 3.15
 
-.. envvar:: PYTHON_JIT
-
-   On builds where experimental just-in-time compilation is available, this
-   variable can force the JIT to be disabled (``0``) or enabled (``1``) at
-   interpreter startup.
-
-   .. versionadded:: 3.13
-
 .. envvar:: PYTHON_TLBC
 
    If set to ``1`` enables thread-local bytecode. If set to ``0`` thread-local

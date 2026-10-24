@@ -11,11 +11,8 @@ What's currently here:
 - `plexer.py`: OO interface on top of lexer.py; main class: `PLexer`
 - `parsing.py`: Parser for instruction definition DSL; main class: `Parser`
 - `parser.py` helper for interactions with `parsing.py`
-- `tierN_generator.py`: a couple of driver scripts to read `Python/bytecodes.c` and
-  write `Python/generated_cases.c.h` (and several other files)
-- `optimizer_generator.py`: reads `Python/bytecodes.c` and
-  `Python/optimizer_bytecodes.c` and writes
-  `Python/optimizer_cases.c.h`
+- `tier1_generator.py`: reads `Python/bytecodes.c` and
+  writes `Python/generated_cases.c.h`
 - `stack.py`: code to handle generalized stack effects
 - `cwriter.py`: code which understands tokens and how to format C code;
   main class: `CWriter`
@@ -30,8 +27,6 @@ What's currently here:
   write them to `Python/opcode_targets.h`
 - `uop_id_generator.py`: generate a list of uop IDs and write them to
   `Include/internal/pycore_uop_ids.h`
-- `uop_metadata_generator.py`: reads the instruction definitions and
-  write the metadata to `Include/internal/pycore_uop_metadata.h`
 
 Note that there is some dummy C code at the top and bottom of
 `Python/bytecodes.c`

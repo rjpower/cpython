@@ -30,7 +30,6 @@ from stack import Local, Stack, StackError, get_stack_effect, Storage
 DEFAULT_OUTPUT = ROOT / "Python/generated_cases.c.h"
 
 
-FOOTER = "#undef TIER_ONE\n"
 INSTRUCTION_START_MARKER = "/* BEGIN INSTRUCTIONS */"
 INSTRUCTION_END_MARKER = "/* END INSTRUCTIONS */"
 LABEL_START_MARKER = "/* BEGIN LABELS */"
@@ -50,7 +49,7 @@ def declare_variables(inst: Instruction, out: CWriter) -> None:
         raise analysis_error(ex.args[0], inst.where) from None
     seen = {"unused"}
     for part in inst.parts:
-        if not isinstance(part, Uop) or part.properties.records_value:
+        if not isinstance(part, Uop):
             continue
         for var in part.stack.inputs:
             if var.used and var.name not in seen:
@@ -126,7 +125,7 @@ def uses_this(inst: Instruction) -> bool:
             continue
         for tkn in uop.body.tokens():
             if (tkn.kind == "IDENTIFIER"
-                    and (tkn.text in {"DEOPT_IF", "EXIT_IF", "AT_END_EXIT_IF"})):
+                    and (tkn.text in {"DEOPT_IF", "EXIT_IF"})):
                 return True
     return False
 
@@ -144,17 +143,11 @@ def generate_tier1(
     filenames: list[str], analysis: Analysis, outfile: TextIO, lines: bool
 ) -> None:
     write_header(__file__, filenames, outfile)
-    outfile.write("""
-#ifdef TIER_TWO
-    #error "This file is for Tier 1 only"
-#endif
-#define TIER_ONE 1
-""")
     outfile.write(f"""
 #if !_Py_TAIL_CALL_INTERP
 #if !USE_COMPUTED_GOTOS
     dispatch_opcode:
-        switch (dispatch_code)
+        switch (opcode)
 #endif
         {{
 #endif /* _Py_TAIL_CALL_INTERP */
@@ -187,7 +180,6 @@ def generate_tier1(
     emitter = Emitter(out, analysis.labels)
     generate_tier1_labels(analysis, emitter)
     outfile.write(f"{LABEL_END_MARKER}\n")
-    outfile.write(FOOTER)
 
 
 
@@ -197,10 +189,6 @@ def generate_tier1_labels(
     emitter.emit("\n")
     # Emit tail-callable labels as function defintions
     for name, label in analysis.labels.items():
-        if name == 'stop_tracing':
-            emitter.emit("#if _Py_TAIL_CALL_INTERP && !defined(_Py_TIER2)\n")
-            emitter.emit("Py_GCC_ATTRIBUTE((unused))\n")
-            emitter.emit("#endif\n")
         emitter.emit(f"LABEL({name})\n")
         storage = Storage(Stack(), [], [], 0, False)
         if label.spilled:
@@ -258,8 +246,6 @@ def generate_tier1_cases(
         offset = 1  # The instruction itself
         stack = Stack()
         for part in inst.parts:
-            if part.properties.records_value:
-                continue
             # Only emit braces if more than one uop
             insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
             reachable, offset, stack = write_uop(part, emitter, offset, stack, inst, insert_braces)

@@ -19,7 +19,6 @@
 #include "pycore_interpframe.h"   // _PyFrame_SetStackPointer()
 #include "pycore_interpolation.h" // _PyInterpolation_Build()
 #include "pycore_intrinsics.h"
-#include "pycore_jit.h"
 #include "pycore_lazyimportobject.h"
 #include "pycore_list.h"          // _PyList_GetItemRef()
 #include "pycore_long.h"          // _PyLong_GetZero()
@@ -27,7 +26,6 @@
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
 #include "pycore_opcode_metadata.h" // EXTRA_CASES
 #include "pycore_opcode_utils.h"  // MAKE_FUNCTION_*
-#include "pycore_optimizer.h"     // _PyUOpExecutor_Type
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_*
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
@@ -38,7 +36,6 @@
 #include "pycore_template.h"      // _PyTemplate_Build()
 #include "pycore_traceback.h"     // _PyTraceBack_FromFrame
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
-#include "pycore_uop_ids.h"       // Uops
 
 #include "dictobject.h"
 #include "frameobject.h"          // _PyInterpreterFrame_GetLine
@@ -208,19 +205,6 @@ dump_stack(_PyInterpreterFrame *frame, _PyStackRef *stack_pointer)
     _PyFrame_GetStackPointer(frame);
 }
 
-#if defined(_Py_TIER2) && !defined(_Py_JIT) && defined(Py_DEBUG)
-static void
-dump_cache_item(_PyStackRef cache, int position, int depth)
-{
-    if (position < depth) {
-        dump_item(cache);
-    }
-    else {
-        printf("---");
-    }
-}
-#endif
-
 static void
 lltrace_instruction(_PyInterpreterFrame *frame,
                     _PyStackRef *stack_pointer,
@@ -296,7 +280,7 @@ maybe_lltrace_resume_frame(_PyInterpreterFrame *frame, PyObject *globals)
         PyErr_Clear();
         return 0;
     }
-    int lltrace = r * 5;  // Levels 1-4 only trace uops
+    int lltrace = r * 5;  // Levels 1-4 do not trace instructions
     if (!lltrace) {
         // Can also be controlled by environment variable
         char *python_lltrace = Py_GETENV("PYTHON_LLTRACE");

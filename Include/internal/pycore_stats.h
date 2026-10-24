@@ -13,8 +13,6 @@ extern "C" {
 
 #ifdef Py_STATS
 
-#include "pycore_bitutils.h"  // _Py_bit_length
-
 #define STAT_INC(opname, name) _Py_STATS_EXPR(opcode_stats[opname].specialization.name++)
 #define STAT_DEC(opname, name) _Py_STATS_EXPR(opcode_stats[opname].specialization.name--)
 #define OPCODE_EXE_INC(opname) _Py_STATS_EXPR(opcode_stats[opname].execution_count++)
@@ -24,35 +22,6 @@ extern "C" {
 #define EVAL_CALL_STAT_INC(name) _Py_STATS_EXPR(call_stats.eval_calls[name]++)
 #define EVAL_CALL_STAT_INC_IF_FUNCTION(name, callable) _Py_STATS_COND_EXPR(PyFunction_Check(callable), call_stats.eval_calls[name]++)
 #define GC_STAT_ADD(gen, name, n) _Py_STATS_EXPR(gc_stats[(gen)].name += (n))
-#define OPT_STAT_INC(name) _Py_STATS_EXPR(optimization_stats.name++)
-#define OPT_STAT_ADD(name, n) _Py_STATS_EXPR(optimization_stats.name += (n))
-#define UOP_STAT_INC(opname, name) \
-    do { \
-        PyStats *s = _PyStats_GET(); \
-        if (s) { \
-            assert(opname < 512); \
-            s->optimization_stats.opcode[opname].name++; \
-        } \
-    } while (0)
-#define UOP_PAIR_INC(uopcode, lastuop) \
-    do { \
-        PyStats *s = _PyStats_GET(); \
-        if (lastuop && s) { \
-            s->optimization_stats.opcode[lastuop].pair_count[uopcode]++; \
-        } \
-        lastuop = uopcode; \
-    } while (0)
-#define OPT_UNSUPPORTED_OPCODE(opname) _Py_STATS_EXPR(optimization_stats.unsupported_opcode[opname]++)
-#define OPT_ERROR_IN_OPCODE(opname) _Py_STATS_EXPR(optimization_stats.error_in_opcode[opname]++)
-#define OPT_HIST(length, name) \
-    do { \
-        PyStats *s = _PyStats_GET(); \
-        if (s) { \
-            int bucket = _Py_bit_length(length >= 1 ? length - 1 : 0); \
-            bucket = (bucket >= _Py_UOP_HIST_SIZE) ? _Py_UOP_HIST_SIZE - 1 : bucket; \
-            s->optimization_stats.name[bucket]++; \
-        } \
-    } while (0)
 #define RARE_EVENT_STAT_INC(name) _Py_STATS_EXPR(rare_event_stats.name++)
 #define OPCODE_DEFERRED_INC(opname) _Py_STATS_COND_EXPR(opcode==opname, opcode_stats[opname].specialization.deferred++)
 
@@ -79,13 +48,6 @@ PyAPI_FUNC(PyObject*) _Py_GetSpecializationStats(void);
 #define EVAL_CALL_STAT_INC(name) ((void)0)
 #define EVAL_CALL_STAT_INC_IF_FUNCTION(name, callable) ((void)0)
 #define GC_STAT_ADD(gen, name, n) ((void)0)
-#define OPT_STAT_INC(name) ((void)0)
-#define OPT_STAT_ADD(name, n) ((void)0)
-#define UOP_STAT_INC(opname, name) ((void)0)
-#define UOP_PAIR_INC(uopcode, lastuop) ((void)0)
-#define OPT_UNSUPPORTED_OPCODE(opname) ((void)0)
-#define OPT_ERROR_IN_OPCODE(opname) ((void)0)
-#define OPT_HIST(length, name) ((void)0)
 #define RARE_EVENT_STAT_INC(name) ((void)0)
 #define OPCODE_DEFERRED_INC(opname) ((void)0)
 #define FT_STAT_MUTEX_SLEEP_INC()

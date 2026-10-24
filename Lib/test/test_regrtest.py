@@ -1321,7 +1321,6 @@ class ArgsTestCase(BaseTestCase):
                                   stats=TestStats(4, 1),
                                   forever=True)
 
-    @support.requires_jit_disabled
     def check_leak(self, code, what, *, run_workers=False,
                    name='huntrleaks', deltas=(1, 1, 1)):
         test = self.create_test(name, code=code)

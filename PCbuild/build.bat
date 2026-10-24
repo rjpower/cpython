@@ -36,9 +36,6 @@ echo.                 overrides -c and -d
 echo.  --disable-gil  Enable support for running without the GIL.
 echo.  --test-marker  Enable the test marker within the build.
 echo.  --regen        Regenerate all opcodes, grammar and tokens.
-echo.  --experimental-jit          Enable the experimental just-in-time compiler.
-echo.  --experimental-jit-off      Ditto but off by default (PYTHON_JIT=1 enables).
-echo.  --experimental-jit-interpreter  Enable the experimental Tier 2 interpreter.
 echo.  --pystats      Enable PyStats collection.
 echo.  --tail-call-interp  Enable tail-calling interpreter (requires LLVM 19 or higher).
 echo.  --enable-stackref-debug  Enable stackref debugging mode.
@@ -73,7 +70,6 @@ set verbose=/nologo /v:m /clp:summary
 set kill=
 set do_pgo=
 set pgo_job=-m test --pgo
-set UseTIER2=
 
 :CheckOpts
 if "%~1"=="-h" goto Usage
@@ -94,10 +90,6 @@ if "%~1"=="--disable-gil" (set UseDisableGil=true) & shift & goto CheckOpts
 if "%~1"=="--test-marker" (set UseTestMarker=true) & shift & goto CheckOpts
 if "%~1"=="-V" shift & goto Version
 if "%~1"=="--regen" (set Regen=true) & shift & goto CheckOpts
-if "%~1"=="--experimental-jit" (set UseJIT=true) & (set UseTIER2=1) & shift & goto CheckOpts
-if "%~1"=="--experimental-jit-off" (set UseJIT=true) & (set UseTIER2=3) & shift & goto CheckOpts
-if "%~1"=="--experimental-jit-interpreter" (set UseTIER2=4) & shift & goto CheckOpts
-if "%~1"=="--experimental-jit-interpreter-off" (set UseTIER2=6) & shift & goto CheckOpts
 if "%~1"=="--without-remote-debug" (set DisableRemoteDebug=true) & shift & goto CheckOpts
 if "%~1"=="--pystats" (set PyStats=1) & shift & goto CheckOpts
 if "%~1"=="--tail-call-interp" (set UseTailCallInterp=true) & shift & goto CheckOpts
@@ -116,7 +108,6 @@ if "%IncludeExternals%"=="" set IncludeExternals=true
 if "%IncludeCTypes%"=="" set IncludeCTypes=true
 if "%IncludeSSL%"=="" set IncludeSSL=true
 if "%IncludeTkinter%"=="" set IncludeTkinter=true
-if "%UseJIT%" NEQ "true" set IncludeLLVM=false
 
 if "%IncludeExternals%"=="true" call "%dir%get_externals.bat"
 
@@ -132,12 +123,6 @@ if "%do_pgo%" EQU "true" if "%platf%" EQU "x64" (
     )
 )
 
-if "%UseDisableGil%" EQU "true" if "%UseTIER2%" NEQ "" (
-    rem GH-133171: This configuration builds the JIT but never actually uses it,
-    rem which is surprising (and strictly worse than not building it at all):
-    echo.ERROR: --experimental-jit cannot be used with --disable-gil.
-    exit /b 1
-)
 
 if not exist "%GIT%" where git > "%TEMP%\git.loc" 2> nul && set /P GIT= < "%TEMP%\git.loc" & del "%TEMP%\git.loc"
 if exist "%GIT%" set GITProperty=/p:GIT="%GIT%"
@@ -214,8 +199,6 @@ echo on
  /p:IncludeSSL=%IncludeSSL% /p:IncludeTkinter=%IncludeTkinter%^
  /p:DisableGil=%UseDisableGil%^
  /p:UseTestMarker=%UseTestMarker% %GITProperty%^
- /p:UseJIT=%UseJIT%^
- /p:UseTIER2=%UseTIER2%^
  /p:PyStats=%PyStats%^
  /p:UseTailCallInterp=%UseTailCallInterp%^
  /p:DisableRemoteDebug=%DisableRemoteDebug%^

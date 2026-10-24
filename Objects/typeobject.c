@@ -1290,8 +1290,8 @@ type_mro_modified(PyTypeObject *type, PyObject *bases)
 }
 
 /*
-The Tier 2 interpreter requires looking up the type object by the type version, so it can install
-watchers to understand when they change.
+An optimizer that reads a type version from an inline cache needs the type object itself,
+for example to install watchers to understand when it changes.
 
 So we add a global cache from type version to borrowed references of type objects.
 

@@ -215,11 +215,6 @@ struct _ts {
     /* The thread's exception stack entry.  (Always the last entry.) */
     _PyErr_StackItem exc_state;
 
-    PyObject *current_executor;
-
-    /* Internal to the JIT */
-    struct _PyExitData *jit_exit;
-
     uint64_t dict_global_version;
 
     /* Used to store/retrieve `threading.local` keys/values for this thread */

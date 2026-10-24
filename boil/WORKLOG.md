@@ -71,3 +71,11 @@ Entries are appended in order; each milestone is also a commit.
   root enumeration. Phase 1 is now 1z, 1a, 1b, 1d, 1f, 1e in that order.
   Process note: add paths explicitly when committing; `git add boil` swept
   an in-progress draft into the shapes commit.
+- IR step 1 landed: tier 2 and the copy-and-patch JIT are deleted
+  (143 files, about 68,700 lines removed, 509 added). Base opcode numbers
+  and cache layouts are unchanged, so pyc files and `dis` offsets are
+  stable. `sys._jit` is a stub reporting no JIT. Full suite passes on the
+  default build except `test_remote_exec_deleted_static_executable`, which
+  also fails on the baseline. Debug and free-threaded builds pass their
+  targeted sets. `jit_unwind.c`, `jit_publish.c` and the perf trampolines
+  are kept for our own tiers. The ports recipe loses its `jit` variant.

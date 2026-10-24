@@ -5,8 +5,6 @@
 #include "pycore_pylifecycle.h"     // _PyOS_URandomNonblock()
 #include "pycore_tstate.h"
 #include "pycore_initconfig.h"      // _PyStatus_OK()
-#include "pycore_uop_metadata.h"    // _PyOpcode_uop_name
-#include "pycore_uop_ids.h"         // MAX_UOP_REGS_ID
 #include "pycore_pystate.h"         // _PyThreadState_GET()
 #include "pycore_runtime.h"         // NUM_GENERATIONS
 
@@ -32,10 +30,6 @@ _PyStats_GetLocal(void)
 #define STATS_UNLOCK(interp)
 #endif
 
-
-#if PYSTATS_MAX_UOP_ID < MAX_UOP_REGS_ID
-#error "Not enough space allocated for pystats. Increase PYSTATS_MAX_UOP_ID to at least MAX_UOP_REGS_ID"
-#endif
 
 #define ADD_STAT_TO_DICT(res, field) \
     do { \
@@ -249,93 +243,6 @@ print_gc_stats(FILE *out, GCStats *stats)
     }
 }
 
-#ifdef _Py_TIER2
-static void
-print_histogram(FILE *out, const char *name, uint64_t hist[_Py_UOP_HIST_SIZE])
-{
-    for (int i = 0; i < _Py_UOP_HIST_SIZE; i++) {
-        fprintf(out, "%s[%" PRIu64"]: %" PRIu64 "\n", name, (uint64_t)1 << i, hist[i]);
-    }
-}
-
-extern const char *_PyUOpName(int index);
-
-static void
-print_optimization_stats(FILE *out, OptimizationStats *stats)
-{
-    fprintf(out, "Optimization attempts: %" PRIu64 "\n", stats->attempts);
-    fprintf(out, "Optimization traces created: %" PRIu64 "\n", stats->traces_created);
-    fprintf(out, "Optimization traces executed: %" PRIu64 "\n", stats->traces_executed);
-    fprintf(out, "Optimization uops executed: %" PRIu64 "\n", stats->uops_executed);
-    fprintf(out, "Optimization trace stack overflow: %" PRIu64 "\n", stats->trace_stack_overflow);
-    fprintf(out, "Optimization trace stack underflow: %" PRIu64 "\n", stats->trace_stack_underflow);
-    fprintf(out, "Optimization trace too long: %" PRIu64 "\n", stats->trace_too_long);
-    fprintf(out, "Optimization trace too short: %" PRIu64 "\n", stats->trace_too_short);
-    fprintf(out, "Optimization inner loop: %" PRIu64 "\n", stats->inner_loop);
-    fprintf(out, "Optimization recursive call: %" PRIu64 "\n", stats->recursive_call);
-    fprintf(out, "Optimization low confidence: %" PRIu64 "\n", stats->low_confidence);
-    fprintf(out, "Optimization unknown callee: %" PRIu64 "\n", stats->unknown_callee);
-    fprintf(out, "Executors invalidated: %" PRIu64 "\n", stats->executors_invalidated);
-    fprintf(out, "Optimization fitness terminated: %" PRIu64 "\n", stats->fitness_terminated_traces);
-
-    print_histogram(out, "Trace length", stats->trace_length_hist);
-    print_histogram(out, "Trace run length", stats->trace_run_length_hist);
-    print_histogram(out, "Optimized trace length", stats->optimized_trace_length_hist);
-
-    fprintf(out, "Optimization optimizer attempts: %" PRIu64 "\n", stats->optimizer_attempts);
-    fprintf(out, "Optimization optimizer successes: %" PRIu64 "\n", stats->optimizer_successes);
-    fprintf(out, "Optimization optimizer failure no memory: %" PRIu64 "\n",
-            stats->optimizer_failure_reason_no_memory);
-    fprintf(out, "Optimizer remove globals builtins changed: %" PRIu64 "\n", stats->remove_globals_builtins_changed);
-    fprintf(out, "Optimizer remove globals incorrect keys: %" PRIu64 "\n", stats->remove_globals_incorrect_keys);
-    for (int i = 0; i <= MAX_UOP_REGS_ID; i++) {
-        if (stats->opcode[i].execution_count) {
-            fprintf(out, "uops[%s].execution_count : %" PRIu64 "\n", _PyUOpName(i), stats->opcode[i].execution_count);
-        }
-        if (stats->opcode[i].miss) {
-            fprintf(out, "uops[%s].specialization.miss : %" PRIu64 "\n", _PyUOpName(i), stats->opcode[i].miss);
-        }
-    }
-    for (int i = 0; i < 256; i++) {
-        if (stats->unsupported_opcode[i]) {
-            fprintf(
-                out,
-                "unsupported_opcode[%s].count : %" PRIu64 "\n",
-                _PyOpcode_OpName[i],
-                stats->unsupported_opcode[i]
-            );
-        }
-    }
-
-    for (int i = 1; i <= MAX_UOP_REGS_ID; i++){
-        for (int j = 1; j <= MAX_UOP_REGS_ID; j++) {
-            if (stats->opcode[i].pair_count[j]) {
-                fprintf(out, "uop[%s].pair_count[%s] : %" PRIu64 "\n",
-                        _PyOpcode_uop_name[i], _PyOpcode_uop_name[j], stats->opcode[i].pair_count[j]);
-            }
-        }
-    }
-    for (int i = 0; i < MAX_UOP_REGS_ID; i++) {
-        if (stats->error_in_opcode[i]) {
-            fprintf(
-                out,
-                "error_in_opcode[%s].count : %" PRIu64 "\n",
-                _PyUOpName(i),
-                stats->error_in_opcode[i]
-            );
-        }
-    }
-    fprintf(out, "JIT total memory size: %" PRIu64 "\n", stats->jit_total_memory_size);
-    fprintf(out, "JIT code size: %" PRIu64 "\n", stats->jit_code_size);
-    fprintf(out, "JIT trampoline size: %" PRIu64 "\n", stats->jit_trampoline_size);
-    fprintf(out, "JIT data size: %" PRIu64 "\n", stats->jit_data_size);
-    fprintf(out, "JIT padding size: %" PRIu64 "\n", stats->jit_padding_size);
-    fprintf(out, "JIT freed memory size: %" PRIu64 "\n", stats->jit_freed_memory_size);
-
-    print_histogram(out, "Trace total memory size", stats->trace_total_memory_hist);
-}
-#endif
-
 #ifdef Py_GIL_DISABLED
 static void
 print_ft_stats(FILE *out, FTStats *stats)
@@ -365,9 +272,6 @@ print_stats(FILE *out, PyStats *stats)
     print_call_stats(out, &stats->call_stats);
     print_object_stats(out, &stats->object_stats);
     print_gc_stats(out, stats->gc_stats);
-#ifdef _Py_TIER2
-    print_optimization_stats(out, &stats->optimization_stats);
-#endif
 #ifdef Py_GIL_DISABLED
     print_ft_stats(out, &stats->ft_stats);
 #endif
@@ -448,62 +352,6 @@ merge_object_stats(ObjectStats *dest, const ObjectStats *src)
 }
 
 static void
-merge_uop_stats_array(UOpStats *dest, const UOpStats *src)
-{
-    for (int i = 0; i <= PYSTATS_MAX_UOP_ID; i++) {
-        dest[i].execution_count += src[i].execution_count;
-        dest[i].miss += src[i].miss;
-        for (int j = 0; j <= PYSTATS_MAX_UOP_ID; j++) {
-            dest[i].pair_count[j] += src[i].pair_count[j];
-        }
-    }
-}
-
-static void
-merge_optimization_stats(OptimizationStats *dest, const OptimizationStats *src)
-{
-    dest->attempts += src->attempts;
-    dest->traces_created += src->traces_created;
-    dest->traces_executed += src->traces_executed;
-    dest->uops_executed += src->uops_executed;
-    dest->trace_stack_overflow += src->trace_stack_overflow;
-    dest->trace_stack_underflow += src->trace_stack_underflow;
-    dest->trace_too_long += src->trace_too_long;
-    dest->trace_too_short += src->trace_too_short;
-    dest->inner_loop += src->inner_loop;
-    dest->recursive_call += src->recursive_call;
-    dest->low_confidence += src->low_confidence;
-    dest->unknown_callee += src->unknown_callee;
-    dest->executors_invalidated += src->executors_invalidated;
-    dest->optimizer_attempts += src->optimizer_attempts;
-    dest->optimizer_successes += src->optimizer_successes;
-    dest->optimizer_failure_reason_no_memory += src->optimizer_failure_reason_no_memory;
-    dest->remove_globals_builtins_changed += src->remove_globals_builtins_changed;
-    dest->remove_globals_incorrect_keys += src->remove_globals_incorrect_keys;
-    dest->jit_total_memory_size += src->jit_total_memory_size;
-    dest->jit_code_size += src->jit_code_size;
-    dest->jit_trampoline_size += src->jit_trampoline_size;
-    dest->jit_data_size += src->jit_data_size;
-    dest->jit_padding_size += src->jit_padding_size;
-    dest->jit_freed_memory_size += src->jit_freed_memory_size;
-
-    merge_uop_stats_array(dest->opcode, src->opcode);
-
-    for (int i = 0; i < 256; i++) {
-        dest->unsupported_opcode[i] += src->unsupported_opcode[i];
-    }
-    for (int i = 0; i < _Py_UOP_HIST_SIZE; i++) {
-        dest->trace_length_hist[i] += src->trace_length_hist[i];
-        dest->trace_run_length_hist[i] += src->trace_run_length_hist[i];
-        dest->optimized_trace_length_hist[i] += src->optimized_trace_length_hist[i];
-        dest->trace_total_memory_hist[i] += src->trace_total_memory_hist[i];
-    }
-    for (int i = 0; i <= PYSTATS_MAX_UOP_ID; i++) {
-        dest->error_in_opcode[i] += src->error_in_opcode[i];
-    }
-}
-
-static void
 merge_ft_stats(FTStats *dest, const FTStats *src)
 {
     dest->mutex_sleeps = src->mutex_sleeps;
@@ -559,7 +407,6 @@ stats_merge_thread(_PyThreadStateImpl *tstate)
     merge_opcode_stats_array(dest->opcode_stats, src->opcode_stats);
     merge_call_stats(&dest->call_stats, &src->call_stats);
     merge_object_stats(&dest->object_stats, &src->object_stats);
-    merge_optimization_stats(&dest->optimization_stats, &src->optimization_stats);
     merge_ft_stats(&dest->ft_stats, &src->ft_stats);
     merge_rare_event_stats(&dest->rare_event_stats, &src->rare_event_stats);
     merge_gc_stats_array(dest->gc_stats, src->gc_stats);

@@ -37,7 +37,6 @@
 #include "dictobject.h"
 #include "pycore_frame.h"
 #include "opcode.h"
-#include "optimizer.h"
 #include "pydtrace.h"
 #include "setobject.h"
 
@@ -59,7 +58,6 @@
 #define guard
 #define override
 #define specializing
-#define replicate(TIMES)
 #define tier1
 #define no_save_ip
 
@@ -76,7 +74,6 @@ static size_t jump;
 static uint16_t invert, counter, index, hint;
 #define unused 0  // Used in a macro def, can't be static
 static uint32_t type_version;
-static _PyExecutorObject *current_executor;
 
 static PyObject *
 dummy_func(

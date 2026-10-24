@@ -82,7 +82,6 @@ Include/internal/pycore_opcode_metadata.h           generated
 Include/internal/pycore_*_generated.h               generated
 Include/internal/pycore_token.h                     generated
 Include/internal/pycore_uop_ids.h                   generated
-Include/internal/pycore_uop_metadata.h              generated
 Include/opcode.h                                    generated
 Include/opcode_ids.h                                generated
 Include/slots_generated.h                           generated
@@ -106,11 +105,8 @@ Parser/parser_invalid.c                             generated
 Parser/token.c                                      generated
 Programs/test_frozenmain.h                          generated
 Python/Python-ast.c                                 generated
-Python/executor_cases.c.h                           generated
 Python/generated_cases.c.h                          generated
-Python/optimizer_cases.c.h                          generated
 Python/opcode_targets.h                             generated
-Python/record_functions.c.h                         generated
 Python/slots_generated.c                            generated
 Python/stdlib_module_names.h                        generated
 Tools/peg_generator/pegen/grammar_parser.py         generated

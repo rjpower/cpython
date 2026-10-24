@@ -43,8 +43,6 @@ _py_set_opcode(_Py_CODEUNIT *word, uint8_t opcode)
 
 // We hide some of the newer PyCodeObject fields behind macros.
 // This helps with backporting certain changes to 3.12.
-#define _PyCode_HAS_EXECUTORS(CODE) \
-    (CODE->co_executors != NULL)
 #define _PyCode_HAS_INSTRUMENTATION(CODE) \
     (CODE->_co_instrumentation_version > 0)
 
@@ -294,9 +292,6 @@ extern int _PyLineTable_PreviousAddressRange(PyCodeAddressRange *range);
 extern int _PyCode_SafeAddr2Line(PyCodeObject *co, int addr);
 
 
-/** API for executors */
-extern void _PyCode_Clear_Executors(PyCodeObject *code);
-
 
 #define ENABLE_SPECIALIZATION 1
 
@@ -329,7 +324,7 @@ PyAPI_FUNC(void) _Py_Specialize_ToBool(_PyStackRef value, _Py_CODEUNIT *instr);
 PyAPI_FUNC(void) _Py_Specialize_ContainsOp(_PyStackRef value, _Py_CODEUNIT *instr);
 PyAPI_FUNC(void) _Py_GatherStats_GetIter(_PyStackRef iterable);
 PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(_PyStackRef func_st, _Py_CODEUNIT *instr);
-PyAPI_FUNC(void) _Py_Specialize_Resume(_Py_CODEUNIT *instr, PyThreadState *tstate, _PyInterpreterFrame *frame);
+PyAPI_FUNC(void) _Py_Specialize_Resume(_Py_CODEUNIT *instr, PyThreadState *tstate);
 PyAPI_FUNC(void) _Py_Specialize_GetIter(_PyStackRef iterable, _Py_CODEUNIT *instr);
 
 // Utility functions for reading/writing 32/64-bit values in the inline caches.
@@ -463,14 +458,6 @@ write_location_entry_start(uint8_t *ptr, int code, int length)
 #define ADAPTIVE_COOLDOWN_VALUE 52
 #define ADAPTIVE_COOLDOWN_BACKOFF 0
 
-// Can't assert this in pycore_backoff.h because of header order dependencies
-#if JUMP_BACKWARD_INITIAL_VALUE <= ADAPTIVE_COOLDOWN_VALUE
-#  error  "JIT threshold value should be larger than adaptive cooldown value"
-#endif
-#if SIDE_EXIT_INITIAL_VALUE <= ADAPTIVE_COOLDOWN_VALUE
-#  error  "Cold exit value should be larger than adaptive cooldown value"
-#endif
-
 static inline _Py_BackoffCounter
 adaptive_counter_bits(uint16_t value, uint16_t backoff) {
     return make_backoff_counter(value, backoff);
@@ -503,16 +490,13 @@ typedef struct {
     int oparg;
     binaryopguardfunc guard;
     binaryopactionfunc action;
-    /* Static type of the result, or NULL if unknown. Used by the tier 2
-       optimizer to propagate type information through _BINARY_OP_EXTEND. */
+    /* Static type of the result, or NULL if unknown. */
     PyTypeObject *result_type;
     /* Nonzero iff `action` always returns a freshly allocated object (not
-       aliased to either operand). Used by the tier 2 optimizer to enable
-       inplace follow-up ops. */
+       aliased to either operand). */
     int result_unique;
-    /* Expected types of the left and right operands. Used by the tier 2
-       optimizer to eliminate _GUARD_BINARY_OP_EXTEND when the operand
-       types are already known. NULL means unknown/don't eliminate. */
+    /* Expected types of the left and right operands, checked instead of
+       calling `guard` when `guard` is NULL. NULL means unknown. */
     PyTypeObject *lhs_type;
     PyTypeObject *rhs_type;
 } _PyBinaryOpSpecializationDescr;
@@ -655,7 +639,7 @@ PyAPI_FUNC(int) _PyCode_SetUnboundVarCounts(
  * is equivalent to its code object.
  *
  * Stateless code also does not keep any persistent state
- * of its own, so it can't have any executors, monitoring,
+ * of its own, so it can't have any monitoring,
  * instrumentation, or "extras" (i.e. co_extra).
  *
  * Stateless code may create nested functions, including closures.

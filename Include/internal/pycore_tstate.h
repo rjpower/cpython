@@ -13,7 +13,6 @@ extern "C" {
 #include "pycore_interpframe_structs.h"  // _PyInterpreterFrame
 #include "pycore_mimalloc.h"        // struct _mimalloc_thread_state
 #include "pycore_qsbr.h"            // struct qsbr
-#include "pycore_uop.h"             // struct _PyUOpInstruction
 #include "pycore_structs.h"
 
 #ifdef Py_GIL_DISABLED
@@ -101,9 +100,6 @@ typedef struct _PyThreadStateImpl {
 
 #if defined(Py_REF_DEBUG) && defined(Py_GIL_DISABLED)
     Py_ssize_t reftotal;  // this thread's total refcount operations
-#endif
-#if _Py_TIER2
-    struct _PyJitTracerState *jit_tracer_state;
 #endif
 
 #ifdef Py_GIL_DISABLED

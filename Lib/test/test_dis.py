@@ -15,8 +15,7 @@ import types
 import unittest
 from test.support import (captured_stdout, requires_debug_ranges,
                           requires_specialization, cpython_only,
-                          os_helper, import_helper, reset_code,
-                          requires_jit_enabled)
+                          os_helper, import_helper, reset_code)
 from test.support.bytecode_helper import BytecodeTestCase
 
 
@@ -911,7 +910,7 @@ def load_test(x, y=0):
     return a, b
 
 dis_load_test_quickened_code = """\
-%3d           RESUME_CHECK{: <6}       0
+%3d           RESUME_CHECK             0
 
 %3d           LOAD_FAST_LOAD_FAST      1 (x, y)
               STORE_FAST_STORE_FAST   50 (b, a)
@@ -928,7 +927,7 @@ def loop_test():
         load_test(i)
 
 dis_loop_test_quickened_code = """\
-%3d           RESUME_CHECK{: <6}       0
+%3d           RESUME_CHECK             0
 
 %3d           BUILD_LIST               0
               LOAD_CONST               1 ((1, 2, 3))
@@ -943,7 +942,7 @@ dis_loop_test_quickened_code = """\
               LOAD_FAST_BORROW         0 (i)
               CALL_PY_GENERAL          1
               POP_TOP
-              JUMP_BACKWARD_{: <6}    16 (to L1)
+              JUMP_BACKWARD           16 (to L1)
 
 %3d   L2:     END_FOR
               POP_ITER
@@ -1326,15 +1325,13 @@ class DisTests(DisTestBase):
     def test_super_instructions(self):
         self.code_quicken(lambda: load_test(0, 0))
         got = self.get_disassembly(load_test, adaptive=True)
-        jit = sys._jit.is_enabled()
-        expected = dis_load_test_quickened_code.format("_JIT" if jit else "")
-        self.do_disassembly_compare(got, expected)
+        self.do_disassembly_compare(got, dis_load_test_quickened_code)
 
     @cpython_only
     @requires_specialization
     def test_load_attr_specialize(self):
         load_attr_quicken = """\
-  0           RESUME_CHECK{: <6}       0
+  0           RESUME_CHECK             0
 
   1           LOAD_CONST               0 ('a')
               LOAD_ATTR_SLOT           0 (__class__)
@@ -1343,15 +1340,13 @@ class DisTests(DisTestBase):
         co = compile("'a'.__class__", "", "eval")
         self.code_quicken(lambda: exec(co, {}, {}))
         got = self.get_disassembly(co, adaptive=True)
-        jit = sys._jit.is_enabled()
-        expected = load_attr_quicken.format("_JIT" if jit else "")
-        self.do_disassembly_compare(got, expected)
+        self.do_disassembly_compare(got, load_attr_quicken)
 
     @cpython_only
     @requires_specialization
     def test_call_specialize(self):
         call_quicken = """\
-  0           RESUME_CHECK{: <6}       0
+  0           RESUME_CHECK             0
 
   1           LOAD_NAME                0 (str)
               PUSH_NULL
@@ -1362,9 +1357,7 @@ class DisTests(DisTestBase):
         co = compile("str(1)", "", "eval")
         self.code_quicken(lambda: exec(co, {}, {}))
         got = self.get_disassembly(co, adaptive=True)
-        jit = sys._jit.is_enabled()
-        expected = call_quicken.format("_JIT" if jit else "")
-        self.do_disassembly_compare(got, expected)
+        self.do_disassembly_compare(got, call_quicken)
 
     @cpython_only
     @requires_specialization
@@ -1372,11 +1365,7 @@ class DisTests(DisTestBase):
         # Loop can trigger a quicken where the loop is located
         self.code_quicken(loop_test)
         got = self.get_disassembly(loop_test, adaptive=True)
-        jit = sys._jit.is_enabled()
-        resume_str = "_JIT" if jit else ""
-        jit_str = "JIT " if jit else "NO_JIT"
-        expected = dis_loop_test_quickened_code.format(resume_str, jit_str)
-        self.do_disassembly_compare(got, expected)
+        self.do_disassembly_compare(got, dis_loop_test_quickened_code)
 
     @cpython_only
     @requires_specialization
@@ -1477,37 +1466,6 @@ class DisTests(DisTestBase):
         self.assertRegex(assem_op, fr"--> {opname}")
         # Make sure when lasti points to cache, it shows the same disassembly
         self.assertEqual(assem_op, assem_cache)
-
-
-    @cpython_only
-    @requires_specialization
-    @requires_jit_enabled
-    def test_show_jit(self):
-        def loop(n):
-            for i in range(n):
-                pass
-        for _ in range(10):
-            loop(500)
-        line = loop.__code__.co_firstlineno
-        loop_dis = f"""\
-{line}           RESUME_CHECK_JIT         0
-
-{line+1}           LOAD_GLOBAL_BUILTIN      1 (range + NULL)
-               LOAD_FAST_BORROW         0 (n)
-               CALL_BUILTIN_CLASS       1
-               GET_ITER                 0
-       L1:     FOR_ITER_RANGE           3 (to L2)
-               STORE_FAST               1 (i)
-
-{line+2}           ENTER_EXECUTOR           0
-
-{line+1}   L2:     END_FOR
-               POP_ITER
-               LOAD_COMMON_CONSTANT     7 (None)
-               RETURN_VALUE
-"""
-        got = self.get_disassembly(loop, adaptive=True, show_jit=True)
-        self.do_disassembly_compare(got, loop_dis)
 
 
 class DisWithFileTests(DisTests):

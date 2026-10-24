@@ -224,12 +224,6 @@ class Stack:
         self.variables: list[Local] = []
         self.check_stack_bounds = check_stack_bounds
 
-    def push_cache(self, cached_items:list[str], out: CWriter) -> None:
-        for i, name in enumerate(cached_items):
-            out.start_line()
-            out.emit(f"_PyStackRef _stack_item_{i} = {name};\n")
-            self.push(Local.register(f"_stack_item_{i}"))
-
     def drop(self, var: StackItem, check_liveness: bool) -> None:
         self.logical_sp = self.logical_sp.pop(var)
         if self.variables:

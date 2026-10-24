@@ -12,10 +12,8 @@ the instruction definitions.
 
 These tools would be used to:
 * Generate the main interpreter (done)
-* Generate the tier 2 interpreter
 * Generate documentation for instructions
 * Generate metadata about instructions, such as stack use (done).
-* Generate the tier 2 optimizer's abstract interpreter.
 
 Having a single definition file ensures that there is a single source
 of truth for bytecode semantics.
@@ -53,11 +51,10 @@ to be written. One way to mitigate this is through the use of code generators.
 Code generators decouple the debugging of the code (the generator) from checking
 the correctness (the DSL input).
 
-For example, we are likely to want a new interpreter for the tier 2 optimizer
-to be added in 3.12. That interpreter will have a different API, a different
-set of instructions and potentially different dispatching mechanism.
-But the instructions it will interpret will be built from the same building
-blocks as the instructions for the tier 1 (PEP 659) interpreter.
+For example, a new interpreter or compiler tier will have a different API,
+a different set of instructions and potentially different dispatching
+mechanism. But the instructions it executes will be built from the same
+building blocks as the instructions for the tier 1 (PEP 659) interpreter.
 
 Rewriting all the instructions is tedious and error-prone, and changing the
 instructions is a maintenance headache as both versions need to be kept in sync.
@@ -174,12 +171,11 @@ list of annotations and their meanings are as follows:
 * `override`. For external use by other interpreter definitions to override the current
    instruction definition.
 * `pure`. This instruction has no side effects.
-* `tierN`. This instruction is only used by the tier N interpreter.
+* `tier1`. This instruction is only used by the tier 1 interpreter.
 * `specializing`. A prefix for an instructions related to adaptive interpreter.
 * `replaced`. This instruction will be replaced in the final bytecode by its directed
    version (either forward or backward).
 * `register`. Currently does nothing.
-* `replicate(N)`. Replicate the instruction N times to store the oparg "inside" the instruction.
 * `no_save_ip`. This instruction does not affect the instruction pointer.
 
 ### Special functions/macros

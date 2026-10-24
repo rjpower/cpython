@@ -246,10 +246,7 @@ static inline void
 _PyFrame_StackPointerValidate(_PyInterpreterFrame *frame)
 {
 #ifdef Py_DEBUG
-/* Avoid bloating the JIT code */
-#ifndef _Py_JIT
     assert(frame->stackpointer_valid == 0);
-#endif
     frame->stackpointer_valid = 1;
 #endif
 }
@@ -258,10 +255,7 @@ static inline void
 _PyFrame_StackPointerInvalidate(_PyInterpreterFrame *frame)
 {
 #ifdef Py_DEBUG
-/* Avoid bloating the JIT code */
-#ifndef _Py_JIT
     assert(frame->stackpointer_valid == 1);
-#endif
     frame->stackpointer_valid = 0;
 #endif
 }
@@ -270,10 +264,7 @@ static inline void
 _PyFrame_StackAssertInvalid(_PyInterpreterFrame *frame)
 {
 #ifdef Py_DEBUG
-/* Avoid bloating the JIT code */
-#ifndef _Py_JIT
     assert(frame->stackpointer_valid == 0);
-#endif
 #endif
 }
 

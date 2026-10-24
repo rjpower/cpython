@@ -10,7 +10,6 @@
 #include "pycore_interpframe.h"   // FRAME_SPECIALS_SIZE
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
 #include "pycore_opcode_utils.h"  // RESUME_AT_FUNC_START
-#include "pycore_optimizer.h"     // _Py_ExecutorDetach
 #include "pycore_pymem.h"         // _PyMem_FreeDelayed()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_setobject.h"     // _PySet_NextEntry()
@@ -562,7 +561,6 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
     co->co_weakreflist = NULL;
     co->co_extra = NULL;
     co->_co_cached = NULL;
-    co->co_executors = NULL;
 
     memcpy(_PyCode_CODE(co), PyBytes_AS_STRING(con->code),
            PyBytes_GET_SIZE(con->code));
@@ -2014,8 +2012,8 @@ int
 _PyCode_CheckNoInternalState(PyCodeObject *co, const char **p_errmsg)
 {
     const char *errmsg = NULL;
-    // We don't worry about co_executors, co_instrumentation,
-    // or co_monitoring.  They are essentially ephemeral.
+    // We don't worry about co_instrumentation or co_monitoring.
+    // They are essentially ephemeral.
     if (co->co_extra != NULL) {
         errmsg = "only basic code objects are supported";
     }
@@ -2170,30 +2168,6 @@ _PyCode_ReturnsOnlyNone(PyCodeObject *co)
     return res;
 }
 
-
-#ifdef _Py_TIER2
-
-static void
-clear_executors(PyCodeObject *co)
-{
-    assert(co->co_executors);
-    for (int i = 0; i < co->co_executors->size; i++) {
-        if (co->co_executors->executors[i]) {
-            _Py_ExecutorDetach(co->co_executors->executors[i]);
-            assert(co->co_executors->executors[i] == NULL);
-        }
-    }
-    PyMem_Free(co->co_executors);
-    co->co_executors = NULL;
-}
-
-void
-_PyCode_Clear_Executors(PyCodeObject *code)
-{
-    clear_executors(code);
-}
-
-#endif
 
 static void
 deopt_code(PyCodeObject *code, _Py_CODEUNIT *instructions)
@@ -2422,11 +2396,6 @@ code_dealloc(PyObject *self)
 
         PyMem_Free(co_extra);
     }
-#ifdef _Py_TIER2
-    if (co->co_executors != NULL) {
-        clear_executors(co);
-    }
-#endif
 
     Py_XDECREF(co->co_consts);
     Py_XDECREF(co->co_names);
@@ -3349,8 +3318,6 @@ deopt_code_unit(PyCodeObject *code, int i)
         inst.op.code = _PyOpcode_Deopt[opcode];
         assert(inst.op.code < MIN_SPECIALIZED_OPCODE);
     }
-    // JIT should not be enabled with free-threading
-    assert(inst.op.code != ENTER_EXECUTOR);
     return inst;
 }
 

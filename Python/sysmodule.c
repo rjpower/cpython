@@ -26,7 +26,6 @@ Data members:
 #include "pycore_modsupport.h"    // _PyModule_CreateInitialized()
 #include "pycore_namespace.h"     // _PyNamespace_New()
 #include "pycore_object.h"        // _PyObject_DebugTypeStats()
-#include "pycore_optimizer.h"     // _PyDumpExecutors()
 #include "pycore_pathconfig.h"    // _PyPathConfig_ComputeSysPath0()
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
 #include "pycore_pylifecycle.h"   // _PyErr_WriteUnraisableDefaultHook()
@@ -2220,10 +2219,6 @@ static PyObject *
 sys__clear_internal_caches_impl(PyObject *module)
 /*[clinic end generated code: output=0ee128670a4966d6 input=253e741ca744f6e8]*/
 {
-#ifdef _Py_TIER2
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    _Py_Executors_InvalidateAll(interp, 0);
-#endif
 #ifdef Py_GIL_DISABLED
     if (_Py_ClearUnusedTLBC(_PyInterpreterState_GET()) < 0) {
         return NULL;
@@ -2344,15 +2339,6 @@ sys_activate_stack_trampoline_impl(PyObject *module, const char *backend)
 /*[clinic end generated code: output=5783cdeb51874b43 input=a12df928758a82b4]*/
 {
 #ifdef PY_HAVE_PERF_TRAMPOLINE
-#ifdef _Py_JIT
-    // Perf state is process-wide, and only the main interpreter can enable
-    // the JIT. Check it even when called from a subinterpreter (gh-157247).
-    if (_PyInterpreterState_Main()->jit) {
-        PyErr_SetString(PyExc_ValueError, "Cannot activate the perf trampoline if the JIT is active");
-        return NULL;
-    }
-#endif
-
     if (strcmp(backend, "perf") == 0) {
         _PyPerf_Callbacks cur_cb;
         _PyPerfTrampoline_GetCallbacks(&cur_cb);
@@ -2539,31 +2525,6 @@ error:
     return NULL;
 }
 
-
-
-/*[clinic input]
-sys._dump_tracelets
-
-    outpath: object
-
-Dump the graph of tracelets in graphviz format
-[clinic start generated code]*/
-
-static PyObject *
-sys__dump_tracelets_impl(PyObject *module, PyObject *outpath)
-/*[clinic end generated code: output=a7fe265e2bc3b674 input=5bff6880cd28ffd1]*/
-{
-    FILE *out = Py_fopen(outpath, "wb");
-    if (out == NULL) {
-        return NULL;
-    }
-    int err = _PyDumpExecutors(out);
-    fclose(out);
-    if (err) {
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
 
 
 /*[clinic input]
@@ -2958,7 +2919,6 @@ static PyMethodDef sys_methods[] = {
 #endif
     SYS__GET_CPU_COUNT_CONFIG_METHODDEF
     SYS__IS_GIL_ENABLED_METHODDEF
-    SYS__DUMP_TRACELETS_METHODDEF
     {NULL, NULL}  // sentinel
 };
 
@@ -4308,11 +4268,7 @@ _jit_is_available_impl(PyObject *module)
 /*[clinic end generated code: output=6849a9cd2ff4aac9 input=d009d751ae64c9ef]*/
 {
     (void)module;
-#ifdef _Py_TIER2
-    return true;
-#else
     return false;
-#endif
 }
 
 /*[clinic input]
@@ -4326,7 +4282,7 @@ _jit_is_enabled_impl(PyObject *module)
 /*[clinic end generated code: output=55865f8de993fe42 input=0524151e857f4f3a]*/
 {
     (void)module;
-    return _PyInterpreterState_GET()->jit;
+    return false;
 }
 
 /*[clinic input]
@@ -4340,7 +4296,7 @@ _jit_is_active_impl(PyObject *module)
 /*[clinic end generated code: output=7facca06b10064d4 input=081ee32563dc2086]*/
 {
     (void)module;
-    return _PyThreadState_GET()->current_executor != NULL;
+    return false;
 }
 
 static PyMethodDef _jit_methods[] = {

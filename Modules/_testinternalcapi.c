@@ -11,7 +11,6 @@
 
 #include "Python.h"
 #include <string.h>
-#include "pycore_backoff.h"       // JUMP_BACKWARD_INITIAL_VALUE
 #include "pycore_bitutils.h"      // _Py_bswap32()
 #include "pycore_bytesobject.h"   // _PyBytes_Find()
 #include "pycore_ceval.h"         // _PyEval_AddPendingCall()
@@ -29,10 +28,8 @@
 #include "pycore_initconfig.h"    // _Py_GetConfigsAsDict()
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
-#include "pycore_jit.h"           // _PyJIT_AddressInJitCode()
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_object.h"        // _PyObject_IsFreed()
-#include "pycore_optimizer.h"     // _Py_Executor_DependsOn
 #include "pycore_pathconfig.h"    // _PyPathConfig_ClearGlobal()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_pylifecycle.h"   // _PyInterpreterConfig_InitFromDict()
@@ -228,7 +225,7 @@ test_stop_the_world(PyObject *self, PyObject *Py_UNUSED(args))
 
 #ifdef MS_WINDOWS
 static const char *
-classify_address(uintptr_t addr, int jit_enabled, PyInterpreterState *interp)
+classify_address(uintptr_t addr)
 {
     HMODULE module = NULL;
     if (GetModuleHandleExW(
@@ -246,19 +243,14 @@ classify_address(uintptr_t addr, int jit_enabled, PyInterpreterState *interp)
             }
             return "other";
         }
-        /* Module resolved but path unavailable: treat as non-JIT. */
+        /* Module resolved but path unavailable. */
         return "other";
     }
-#ifdef _Py_JIT
-    if (jit_enabled && _PyJIT_AddressInJitCode(interp, addr)) {
-        return "jit";
-    }
-#endif
     return "other";
 }
 #elif defined(HAVE_DLADDR) && !defined(__wasi__)
 static const char *
-classify_address(uintptr_t addr, int jit_enabled, PyInterpreterState *interp)
+classify_address(uintptr_t addr)
 {
     Dl_info info;
     if (dladdr((void *)addr, &info) != 0
@@ -282,22 +274,12 @@ classify_address(uintptr_t addr, int jit_enabled, PyInterpreterState *interp)
 #endif
         return "other";
     }
-#ifdef _Py_JIT
-    if (jit_enabled && _PyJIT_AddressInJitCode(interp, addr)) {
-        return "jit";
-    }
-#endif
     return "other";
 }
 #else
 static const char *
-classify_address(uintptr_t addr, int jit_enabled, PyInterpreterState *interp)
+classify_address(uintptr_t Py_UNUSED(addr))
 {
-#ifdef _Py_JIT
-    if (jit_enabled && _PyJIT_AddressInJitCode(interp, addr)) {
-        return "jit";
-    }
-#endif
     return "other";
 }
 #endif
@@ -306,10 +288,8 @@ static PyObject *
 classify_stack_addresses(PyObject *self, PyObject *args)
 {
     PyObject *seq = NULL;
-    int jit_enabled = 0;
 
-    if (!PyArg_ParseTuple(args, "O|p:classify_stack_addresses",
-                          &seq, &jit_enabled)) {
+    if (!PyArg_ParseTuple(args, "O:classify_stack_addresses", &seq)) {
         return NULL;
     }
     PyObject *fast = PySequence_Fast(seq, "addresses must be iterable");
@@ -322,8 +302,6 @@ classify_stack_addresses(PyObject *self, PyObject *args)
         Py_DECREF(fast);
         return NULL;
     }
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyInterpreterState *interp = tstate ? tstate->interp : NULL;
     PyObject **items = PySequence_Fast_ITEMS(fast);
     for (Py_ssize_t i = 0; i < n; i++) {
         unsigned long long value = PyLong_AsUnsignedLongLong(items[i]);
@@ -332,7 +310,7 @@ classify_stack_addresses(PyObject *self, PyObject *args)
             Py_DECREF(fast);
             return NULL;
         }
-        const char *label = classify_address((uintptr_t)value, jit_enabled, interp);
+        const char *label = classify_address((uintptr_t)value);
         PyObject *label_obj = PyUnicode_FromString(label);
         if (label_obj == NULL) {
             Py_DECREF(labels);
@@ -343,66 +321,6 @@ classify_stack_addresses(PyObject *self, PyObject *args)
     }
     Py_DECREF(fast);
     return labels;
-}
-
-static PyObject *
-get_jit_code_ranges(PyObject *self, PyObject *Py_UNUSED(args))
-{
-    PyObject *ranges = PyList_New(0);
-    if (ranges == NULL) {
-        return NULL;
-    }
-#ifdef _Py_JIT
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyInterpreterState *interp = tstate ? tstate->interp : NULL;
-    if (interp == NULL) {
-        return ranges;
-    }
-    for (size_t i = 0; i < interp->executor_count; i++) {
-        _PyExecutorObject *exec = interp->executor_ptrs[i];
-        if (exec->jit_code == NULL || exec->jit_size == 0) {
-            continue;
-        }
-        uintptr_t start = (uintptr_t)exec->jit_code;
-        uintptr_t end = start + exec->jit_size;
-        PyObject *start_obj = PyLong_FromUnsignedLongLong(start);
-        PyObject *end_obj = PyLong_FromUnsignedLongLong(end);
-        if (start_obj == NULL || end_obj == NULL) {
-            Py_XDECREF(start_obj);
-            Py_XDECREF(end_obj);
-            Py_DECREF(ranges);
-            return NULL;
-        }
-        PyObject *pair = PyTuple_New(2);
-        if (pair == NULL) {
-            Py_DECREF(start_obj);
-            Py_DECREF(end_obj);
-            Py_DECREF(ranges);
-            return NULL;
-        }
-        PyTuple_SET_ITEM(pair, 0, start_obj);
-        PyTuple_SET_ITEM(pair, 1, end_obj);
-        if (PyList_Append(ranges, pair) < 0) {
-            Py_DECREF(pair);
-            Py_DECREF(ranges);
-            return NULL;
-        }
-        Py_DECREF(pair);
-    }
-#endif
-    return ranges;
-}
-
-static PyObject *
-get_jit_backend(PyObject *self, PyObject *Py_UNUSED(args))
-{
-#ifdef _Py_JIT
-    return PyUnicode_FromString("jit");
-#elif defined(_Py_TIER2)
-    return PyUnicode_FromString("interpreter");
-#else
-    Py_RETURN_NONE;
-#endif
 }
 
 static int
@@ -1827,54 +1745,6 @@ verify_stateless_code(PyObject *self, PyObject *args, PyObject *kwargs)
     }
     Py_RETURN_NONE;
 }
-
-#ifdef _Py_TIER2
-
-static PyObject *
-add_executor_dependency(PyObject *self, PyObject *args)
-{
-    PyObject *exec;
-    PyObject *obj;
-    if (!PyArg_ParseTuple(args, "OO", &exec, &obj)) {
-        return NULL;
-    }
-    _Py_Executor_DependsOn((_PyExecutorObject *)exec, obj);
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-invalidate_executors(PyObject *self, PyObject *obj)
-{
-    PyInterpreterState *interp = PyInterpreterState_Get();
-    _Py_Executors_InvalidateDependency(interp, obj, 1);
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-clear_executor_deletion_list(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    PyInterpreterState *interp = PyInterpreterState_Get();
-    _Py_ClearExecutorDeletionList(interp);
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-get_exit_executor(PyObject *self, PyObject *arg)
-{
-    if (!PyLong_CheckExact(arg)) {
-        PyErr_SetString(PyExc_TypeError, "argument must be an ID to an _PyExitData");
-        return NULL;
-    }
-    uint64_t ptr;
-    if (PyLong_AsUInt64(arg, &ptr) < 0) {
-        // Error set by PyLong API
-        return NULL;
-    }
-    _PyExitData *exit = (_PyExitData *)ptr;
-    return Py_NewRef(exit->executor);
-}
-
-#endif
 
 static int _pending_callback(void *arg)
 {
@@ -3350,8 +3220,6 @@ static PyMethodDef module_functions[] = {
     {"get_stack_margin", get_stack_margin, METH_NOARGS},
     {"test_stop_the_world", test_stop_the_world, METH_NOARGS},
     {"classify_stack_addresses", classify_stack_addresses, METH_VARARGS},
-    {"get_jit_code_ranges", get_jit_code_ranges, METH_NOARGS},
-    {"get_jit_backend", get_jit_backend, METH_NOARGS},
     {"gnu_backtrace_unwind", gnu_backtrace_unwind, METH_NOARGS},
     {"manual_frame_pointer_unwind", manual_frame_pointer_unwind, METH_NOARGS},
     {"test_bswap", test_bswap, METH_NOARGS},
@@ -3388,12 +3256,6 @@ static PyMethodDef module_functions[] = {
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"verify_stateless_code", _PyCFunction_CAST(verify_stateless_code),
      METH_VARARGS | METH_KEYWORDS, NULL},
-#ifdef _Py_TIER2
-    {"add_executor_dependency", add_executor_dependency, METH_VARARGS, NULL},
-    {"invalidate_executors", invalidate_executors, METH_O, NULL},
-    {"clear_executor_deletion_list", clear_executor_deletion_list, METH_NOARGS, NULL},
-    {"get_exit_executor", get_exit_executor, METH_O, NULL},
-#endif
     {"pending_threadfunc", _PyCFunction_CAST(pending_threadfunc),
      METH_VARARGS | METH_KEYWORDS},
     {"pending_identify", pending_identify, METH_VARARGS, NULL},
@@ -3446,9 +3308,6 @@ static PyMethodDef module_functions[] = {
     {"get_tlbc_id", get_tlbc_id, METH_O, NULL},
     {"get_long_lived_total", get_long_lived_total, METH_NOARGS},
 #endif
-#ifdef _Py_TIER2
-    {"uop_symbols_test", _Py_uop_symbols_test, METH_NOARGS},
-#endif
     GH_119213_GETARGS_METHODDEF
     {"get_static_builtin_types", get_static_builtin_types, METH_NOARGS},
     {"identify_type_slot_wrappers", identify_type_slot_wrappers, METH_NOARGS},
@@ -3479,8 +3338,6 @@ static PyMethodDef module_functions[] = {
 static int
 module_exec(PyObject *module)
 {
-    PyInterpreterState *interp = PyInterpreterState_Get();
-
     if (_PyTestInternalCapi_Init_Lock(module) < 0) {
         return 1;
     }
@@ -3528,21 +3385,6 @@ module_exec(PyObject *module)
 
     if (PyModule_Add(module, "SIZEOF_TIME_T",
                         PyLong_FromSsize_t(sizeof(time_t))) < 0) {
-        return 1;
-    }
-
-    // + 1 more due to one loop spent on tracing.
-    unsigned long threshold = interp->opt_config.jump_backward_initial_value + 2;
-    if (PyModule_Add(module, "TIER2_THRESHOLD",
-                        PyLong_FromUnsignedLong(threshold)) < 0) {
-        return 1;
-    }
-
-    // + 1 to specialize from RESUME to RESUME_CHECK_JIT
-    // + 1 more due to one loop spent on tracing.
-    long resume_threshold = interp->opt_config.resume_initial_value + 2;
-    if (PyModule_Add(module, "TIER2_RESUME_THRESHOLD",
-                    PyLong_FromLong(resume_threshold)) < 0) {
         return 1;
     }
 

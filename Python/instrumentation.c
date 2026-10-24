@@ -2,7 +2,7 @@
 #include "pycore_bitutils.h"      // _Py_popcount32()
 #include "pycore_call.h"          // _PyObject_VectorcallTstate()
 #include "pycore_ceval.h"         // _PY_EVAL_EVENTS_BITS
-#include "pycore_code.h"          // _PyCode_Clear_Executors()
+#include "pycore_code.h"          // _PyCode_InitAddressRange()
 #include "pycore_critical_section.h" // _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED()
 #include "pycore_frame.h"         // PyFrameObject
 #include "pycore_interpframe.h"   // _PyFrame_GetBytecode()
@@ -11,7 +11,6 @@
 #include "pycore_namespace.h"     // _PyNamespace_New()
 #include "pycore_opcode_metadata.h" // IS_VALID_OPCODE()
 #include "pycore_opcode_utils.h"  // IS_CONDITIONAL_JUMP_OPCODE()
-#include "pycore_optimizer.h"     // _PyExecutorObject
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_STORE_UINTPTR_RELEASE()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_runtime_structs.h" // _PyCoMonitoringData
@@ -196,7 +195,7 @@ is_instrumented(int opcode)
 {
     assert(opcode != 0);
     assert(opcode != RESERVED);
-    return opcode < ENTER_EXECUTOR && opcode >= MIN_INSTRUMENTED_OPCODE;
+    return opcode >= MIN_INSTRUMENTED_OPCODE;
 }
 
 #ifndef NDEBUG
@@ -524,8 +523,7 @@ valid_opcode(int opcode)
     }
     if (IS_VALID_OPCODE(opcode) &&
         opcode != CACHE &&
-        opcode != RESERVED &&
-        opcode < 254)
+        opcode != RESERVED)
     {
        return true;
     }
@@ -576,7 +574,6 @@ sanity_check_instrumentation(PyCodeObject *code)
             CHECK(opcode != END_FOR);
             CHECK(opcode != RESUME);
             CHECK(opcode != RESUME_CHECK);
-            CHECK(opcode != RESUME_CHECK_JIT);
             CHECK(opcode != INSTRUMENTED_RESUME);
             if (!is_instrumented(opcode)) {
                 CHECK(_PyOpcode_Deopt[opcode] == opcode);
@@ -633,7 +630,7 @@ sanity_check_instrumentation(PyCodeObject *code)
 
 #endif
 
-/* Get the underlying code unit, stripping instrumentation and ENTER_EXECUTOR */
+/* Get the underlying code unit, stripping instrumentation */
 _Py_CODEUNIT
 _Py_GetBaseCodeUnit(PyCodeObject *code, int i)
 {
@@ -643,14 +640,6 @@ _Py_GetBaseCodeUnit(PyCodeObject *code, int i)
     int opcode = inst.op.code;
     if (opcode < MIN_INSTRUMENTED_OPCODE) {
         inst.op.code = _PyOpcode_Deopt[opcode];
-        assert(inst.op.code < MIN_SPECIALIZED_OPCODE);
-        return inst;
-    }
-    if (opcode == ENTER_EXECUTOR) {
-        _PyExecutorObject *exec = code->co_executors->executors[inst.op.arg];
-        opcode = _PyOpcode_Deopt[exec->vm_data.opcode];
-        inst.op.code = opcode;
-        inst.op.arg = exec->vm_data.oparg;
         assert(inst.op.code < MIN_SPECIALIZED_OPCODE);
         return inst;
     }
@@ -683,7 +672,6 @@ de_instrument(PyCodeObject *code, _Py_CODEUNIT *bytecode, _PyCoMonitoringData *m
     _Py_CODEUNIT *instr = &bytecode[i];
     uint8_t *opcode_ptr = &instr->op.code;
     int opcode = *opcode_ptr;
-    assert(opcode != ENTER_EXECUTOR);
     if (opcode == INSTRUMENTED_LINE) {
         opcode_ptr = get_original_opcode_ptr(monitoring->lines, i);
         opcode = *opcode_ptr;
@@ -1504,7 +1492,6 @@ initialize_tools(PyCodeObject *code)
     for (int i = 0; i < code_len; i++) {
         _Py_CODEUNIT *instr = &_PyCode_CODE(code)[i];
         int opcode = instr->op.code;
-        assert(opcode != ENTER_EXECUTOR);
         if (opcode == INSTRUMENTED_LINE) {
             opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, i);
         }
@@ -1821,12 +1808,6 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
 {
     ASSERT_WORLD_STOPPED_OR_LOCKED(code);
 
-#ifdef _Py_TIER2
-    if (code->co_executors != NULL) {
-        _PyCode_Clear_Executors(code);
-    }
-    _Py_Executors_InvalidateDependency(interp, code, 1);
-#endif
     int code_len = (int)Py_SIZE(code);
     /* Exit early to avoid creating instrumentation
      * data for potential statically allocated code
@@ -1860,7 +1841,6 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     }
     /* Insert instrumentation */
     for (int i = code->_co_firsttraceable; i < code_len; i+= _PyInstruction_GetLength(code, i)) {
-        assert(_PyCode_CODE(code)[i].op.code != ENTER_EXECUTOR);
         _Py_CODEUNIT instr = _Py_GetBaseCodeUnit(code, i);
         CHECK(instr.op.code != 0);
         int base_opcode = instr.op.code;
@@ -2067,9 +2047,6 @@ _PyMonitoring_SetEvents(int tool_id, _PyMonitoringEventSet events)
     }
     set_events(&interp->monitors, tool_id, events);
     set_global_version(tstate, new_version);
-#ifdef _Py_TIER2
-    _Py_Executors_InvalidateAll(interp, 1);
-#endif
     return instrument_all_executing_code_objects(interp);
 }
 
@@ -2155,9 +2132,6 @@ int _PyMonitoring_ClearToolId(int tool_id)
     // Set the new global version so all the code objects can refresh the
     // instrumentation.
     set_global_version(_PyThreadState_GET(), version);
-#ifdef _Py_TIER2
-    _Py_Executors_InvalidateAll(interp, 1);
-#endif
     int res = instrument_all_executing_code_objects(interp);
     _PyEval_StartTheWorld(interp);
     return res;
@@ -2500,9 +2474,6 @@ monitoring_restart_events_impl(PyObject *module)
     }
     interp->last_restart_version = restart_version;
     set_global_version(tstate, new_version);
-#ifdef _Py_TIER2
-    _Py_Executors_InvalidateAll(interp, 1);
-#endif
     int res = instrument_all_executing_code_objects(interp);
     _PyEval_StartTheWorld(interp);
 

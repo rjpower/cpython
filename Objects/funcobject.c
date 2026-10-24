@@ -8,7 +8,6 @@
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
 #include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
-#include "pycore_optimizer.h"       // _Py_Executors_InvalidateDependency()
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
 #include "pycore_setobject.h"     // _PySet_NextEntry()
 #include "pycore_stats.h"
@@ -65,13 +64,6 @@ handle_func_event(PyFunction_WatchEvent event, PyFunctionObject *func,
         case PyFunction_EVENT_MODIFY_DEFAULTS:
         case PyFunction_EVENT_MODIFY_KWDEFAULTS:
         case PyFunction_EVENT_MODIFY_QUALNAME:
-#if _Py_TIER2
-            // Note: we only invalidate JIT code if a function version changes.
-            // Not when the function is deallocated.
-            // Function deallocation occurs frequently (think: lambdas),
-            // so we want to minimize dependency invalidation there.
-            _Py_Executors_InvalidateDependency(interp, func, 1);
-#endif
             RARE_EVENT_INTERP_INC(interp, func_modification);
             break;
         default:
@@ -280,9 +272,9 @@ calls to this function, and the guard will always fail.
 The function and code version cache
 -----------------------------------
 
-The Tier 2 optimizer now has a problem, since it needs to find the
-function and code objects given only the version number from the inline
-cache.  Our solution is to maintain a cache mapping version numbers to
+An optimizer that reads a function version from an inline cache needs
+to find the function and code objects given only the version number.
+Our solution is to maintain a cache mapping version numbers to
 function and code objects.  To limit the cache size we could hash
 the version number, but for now we simply use it modulo the table size.
 

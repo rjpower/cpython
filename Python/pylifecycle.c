@@ -18,7 +18,6 @@
 #include "pycore_moduleobject.h"  // _PyModule_InitModuleDictWatcher()
 #include "pycore_object.h"        // _PyDebug_PrintTotalRefs()
 #include "pycore_obmalloc.h"      // _PyMem_init_obmalloc()
-#include "pycore_optimizer.h"     // _Py_Executors_InvalidateAll
 #include "pycore_parking_lot.h"   // _PyParkingLot
 #include "pycore_pathconfig.h"    // _PyPathConfig_UpdateGlobal()
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
@@ -657,11 +656,6 @@ static int
 builtins_dict_watcher(PyDict_WatchEvent event, PyObject *dict, PyObject *key, PyObject *new_value)
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
-#ifdef _Py_TIER2
-    if (interp->rare_events.builtin_dict < _Py_MAX_ALLOWED_BUILTINS_MODIFICATIONS) {
-        _Py_Executors_InvalidateAll(interp, 1);
-    }
-#endif
     RARE_EVENT_INTERP_INC(interp, builtin_dict);
     return 0;
 }
@@ -1520,37 +1514,6 @@ init_interp_main(PyThreadState *tstate)
 #endif
     }
 
-    // Turn on experimental tier 2 (uops-based) optimizer
-    // This is also needed when the JIT is enabled
-#ifdef _Py_TIER2
-    if (is_main_interp) {
-        int enabled = 1;
-#if _Py_TIER2 & 2
-        enabled = 0;
-#endif
-        char *env = Py_GETENV("PYTHON_JIT");
-        if (env && *env != '\0') {
-            // PYTHON_JIT=0|1 overrides the default
-            enabled = *env != '0';
-        }
-        if (enabled) {
-#ifdef _Py_JIT
-            // perf profiler works fine with tier 2 interpreter, so
-            // only checking for a "real JIT".
-            if (config->perf_profiling > 0) {
-                (void)PyErr_WarnEx(
-                    PyExc_RuntimeWarning,
-                    "JIT deactivated as perf profiling support is active",
-                    0);
-            } else
-#endif
-            {
-                interp->jit = true;
-            }
-        }
-    }
-#endif
-
     if (!is_main_interp) {
         // The main interpreter is handled in Py_Main(), for now.
         if (config->sys_path_0 != NULL) {
@@ -1910,19 +1873,6 @@ static void
 finalize_modules(PyThreadState *tstate)
 {
     PyInterpreterState *interp = tstate->interp;
-
-    // Invalidate all executors and turn off JIT:
-    interp->jit = false;
-    interp->compiling = false;
-#ifdef _Py_TIER2
-    _Py_Executors_InvalidateAll(interp, 0);
-    PyMem_Free(interp->executor_blooms);
-    PyMem_Free(interp->executor_ptrs);
-    interp->executor_blooms = NULL;
-    interp->executor_ptrs = NULL;
-    interp->executor_count = 0;
-    interp->executor_capacity = 0;
-#endif
 
     // Stop watching __builtin__ modifications
     if (PyDict_Unwatch(0, interp->builtins) < 0) {

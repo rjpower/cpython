@@ -72,11 +72,11 @@
 #endif
 
 #ifdef Py_STATS
-#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate, _Py_CODEUNIT *next_instr, const void *instruction_funcptr_table, int oparg, int lastopcode
-#   define TAIL_CALL_ARGS frame, stack_pointer, tstate, next_instr, instruction_funcptr_table, oparg, lastopcode
+#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate, _Py_CODEUNIT *next_instr, int oparg, int lastopcode
+#   define TAIL_CALL_ARGS frame, stack_pointer, tstate, next_instr, oparg, lastopcode
 #else
-#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate, _Py_CODEUNIT *next_instr, const void *instruction_funcptr_table, int oparg
-#   define TAIL_CALL_ARGS frame, stack_pointer, tstate, next_instr, instruction_funcptr_table, oparg
+#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate, _Py_CODEUNIT *next_instr, int oparg
+#   define TAIL_CALL_ARGS frame, stack_pointer, tstate, next_instr, oparg
 #endif
 
 #if _Py_TAIL_CALL_INTERP
@@ -96,18 +96,11 @@
 #   endif
     typedef PyObject *(Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
 
-#   define DISPATCH_TABLE_VAR instruction_funcptr_table
-#   define DISPATCH_TABLE instruction_funcptr_handler_table
-#   define TRACING_DISPATCH_TABLE instruction_funcptr_tracing_table
 #   define TARGET(op) Py_NO_INLINE PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
 
 #   define DISPATCH_GOTO() \
         do { \
-            Py_MUSTTAIL return (((py_tail_call_funcptr *)instruction_funcptr_table)[opcode])(TAIL_CALL_ARGS); \
-        } while (0)
-#   define DISPATCH_GOTO_NON_TRACING() \
-        do { \
-            Py_MUSTTAIL return (((py_tail_call_funcptr *)DISPATCH_TABLE)[opcode])(TAIL_CALL_ARGS); \
+            Py_MUSTTAIL return (instruction_funcptr_handler_table[opcode])(TAIL_CALL_ARGS); \
         } while (0)
 #   define JUMP_TO_LABEL(name) \
         do { \
@@ -116,56 +109,27 @@
 #   ifdef Py_STATS
 #       define JUMP_TO_PREDICTED(name) \
             do { \
-                Py_MUSTTAIL return (_TAIL_CALL_##name)(frame, stack_pointer, tstate, this_instr, instruction_funcptr_table, oparg, lastopcode); \
+                Py_MUSTTAIL return (_TAIL_CALL_##name)(frame, stack_pointer, tstate, this_instr, oparg, lastopcode); \
             } while (0)
 #   else
 #       define JUMP_TO_PREDICTED(name) \
             do { \
-                Py_MUSTTAIL return (_TAIL_CALL_##name)(frame, stack_pointer, tstate, this_instr, instruction_funcptr_table, oparg); \
+                Py_MUSTTAIL return (_TAIL_CALL_##name)(frame, stack_pointer, tstate, this_instr, oparg); \
             } while (0)
 #   endif
 #    define LABEL(name) TARGET(name)
 #elif USE_COMPUTED_GOTOS
-#  define DISPATCH_TABLE_VAR opcode_targets
-#  define DISPATCH_TABLE opcode_targets_table
-#  define TRACING_DISPATCH_TABLE opcode_tracing_targets_table
 #  define TARGET(op) TARGET_##op:
 #  define DISPATCH_GOTO() goto *opcode_targets[opcode]
-#  define DISPATCH_GOTO_NON_TRACING() goto *DISPATCH_TABLE[opcode];
 #  define JUMP_TO_LABEL(name) goto name;
 #  define JUMP_TO_PREDICTED(name) goto PREDICTED_##name;
 #  define LABEL(name) name:
 #else
 #  define TARGET(op) case op: TARGET_##op:
-#  define DISPATCH_GOTO() dispatch_code = opcode | tracing_mode ; goto dispatch_opcode
-#  define DISPATCH_GOTO_NON_TRACING() dispatch_code = opcode; goto dispatch_opcode
+#  define DISPATCH_GOTO() goto dispatch_opcode
 #  define JUMP_TO_LABEL(name) goto name;
 #  define JUMP_TO_PREDICTED(name) goto PREDICTED_##name;
 #  define LABEL(name) name:
-#endif
-
-#if (_Py_TAIL_CALL_INTERP || USE_COMPUTED_GOTOS) && _Py_TIER2
-#  define IS_JIT_TRACING() (DISPATCH_TABLE_VAR == TRACING_DISPATCH_TABLE)
-#  define ENTER_TRACING() \
-    DISPATCH_TABLE_VAR = TRACING_DISPATCH_TABLE;
-#  define LEAVE_TRACING() \
-    DISPATCH_TABLE_VAR = DISPATCH_TABLE;
-#else
-#  define IS_JIT_TRACING() (tracing_mode != 0)
-#  define ENTER_TRACING() tracing_mode = 255
-#  define LEAVE_TRACING() tracing_mode = 0
-#endif
-
-#if _Py_TIER2
-#define STOP_TRACING() \
-    do { \
-        if (IS_JIT_TRACING()) { \
-            LEAVE_TRACING(); \
-            _PyJit_FinalizeTracing(tstate, 0); \
-        } \
-    } while (0);
-#else
-#define STOP_TRACING() ((void)(0));
 #endif
 
 /* PRE_DISPATCH_GOTO() does lltrace if enabled. Normally a no-op */
@@ -204,19 +168,11 @@ do { \
         DISPATCH_GOTO(); \
     }
 
-#define DISPATCH_NON_TRACING() \
-    { \
-        _PyFrame_StackAssertInvalid(frame); \
-        NEXTOPARG(); \
-        PRE_DISPATCH_GOTO(); \
-        DISPATCH_GOTO_NON_TRACING(); \
-    }
-
 #define DISPATCH_SAME_OPARG() \
     { \
         opcode = next_instr->op.code; \
         PRE_DISPATCH_GOTO(); \
-        DISPATCH_GOTO_NON_TRACING(); \
+        DISPATCH_GOTO(); \
     }
 
 #define DISPATCH_INLINED(NEW_FRAME)                              \
@@ -266,14 +222,6 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 
 #define WITHIN_STACK_BOUNDS() \
    (frame->owner == FRAME_OWNED_BY_INTERPRETER || (STACK_LEVEL() >= 0 && STACK_LEVEL() <= STACK_SIZE()))
-
-#if defined(Py_DEBUG) && !defined(_Py_JIT)
-// This allows temporary stack "overflows", provided it's all in the cache at any point of time.
-#define ASSERT_WITHIN_STACK_BOUNDS_IGNORING_CACHE(F, L) \
-   assert(frame->owner == FRAME_OWNED_BY_INTERPRETER || (STACK_LEVEL() >= 0 && (STACK_LEVEL()) <= STACK_SIZE()))
-#else
-#define ASSERT_WITHIN_STACK_BOUNDS_IGNORING_CACHE ASSERT_WITHIN_STACK_BOUNDS
-#endif
 
 /* Data access macros */
 #define FRAME_CO_CONSTS (_PyFrame_GetCode(frame)->co_consts)
@@ -434,9 +382,7 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 }
 
 /* Implementation of "macros" that modify the instruction pointer,
- * stack pointer, or frame pointer.
- * These need to treated differently by tier 1 and 2.
- * The Tier 1 version is here; Tier 2 is inlined in ceval.c. */
+ * stack pointer, or frame pointer. */
 
 #define LOAD_IP(OFFSET) do { \
         next_instr = frame->instr_ptr + (OFFSET); \
@@ -449,68 +395,6 @@ stack_pointer = _PyFrame_GetStackPointer(frame)
 
 #define SAVE_SP() \
 _PyFrame_SetStackPointer(frame, stack_pointer)
-
-/* Tier-switching macros. */
-
-#define TIER1_TO_TIER2(EXECUTOR)                        \
-do {                                                   \
-    OPT_STAT_INC(traces_executed);                     \
-    next_instr = _Py_jit_entry((EXECUTOR), frame, stack_pointer, tstate); \
-    frame = tstate->current_frame;                     \
-    stack_pointer = _PyFrame_GetStackPointer(frame);   \
-    int keep_tracing_bit = (uintptr_t)next_instr & 1;   \
-    next_instr = (_Py_CODEUNIT *)(((uintptr_t)next_instr) & (~1)); \
-    if (next_instr == NULL) {                          \
-        /* gh-140104: The exception handler expects frame->instr_ptr
-            to after this_instr, not this_instr! */ \
-        next_instr = frame->instr_ptr + 1;                 \
-        JUMP_TO_LABEL(error);                          \
-    }                                                  \
-    if (keep_tracing_bit) { \
-        assert(uop_buffer_length(&((_PyThreadStateImpl *)tstate)->jit_tracer_state->code_buffer)); \
-        ENTER_TRACING(); \
-        DISPATCH_NON_TRACING(); \
-    } \
-    DISPATCH();                                        \
-} while (0)
-
-#define TIER2_TO_TIER2(EXECUTOR) \
-do {                                                   \
-    OPT_STAT_INC(traces_executed);                     \
-    current_executor = (EXECUTOR);                     \
-    goto tier2_start;                                  \
-} while (0)
-
-#define GOTO_TIER_ONE_SETUP \
-    tstate->current_executor = NULL;                              \
-    OPT_HIST(trace_uop_execution_counter, trace_run_length_hist); \
-    _PyFrame_SetStackPointer(frame, stack_pointer);
-
-#define GOTO_TIER_ONE(TARGET) \
-    do \
-    { \
-        GOTO_TIER_ONE_SETUP \
-        return (_Py_CODEUNIT *)(TARGET); \
-    } while (0)
-
-#define GOTO_TIER_ONE_CONTINUE_TRACING(TARGET) \
-    do \
-    { \
-        GOTO_TIER_ONE_SETUP \
-        return (_Py_CODEUNIT *)(((uintptr_t)(TARGET))| 1); \
-    } while (0)
-
-#define CURRENT_OPARG()    (next_uop[-1].oparg)
-#define CURRENT_OPERAND0_64() (next_uop[-1].operand0)
-#define CURRENT_OPERAND1_64() (next_uop[-1].operand1)
-#define CURRENT_OPERAND0_32() (next_uop[-1].operand0)
-#define CURRENT_OPERAND1_32() (next_uop[-1].operand1)
-#define CURRENT_OPERAND0_16() (next_uop[-1].operand0)
-#define CURRENT_OPERAND1_16() (next_uop[-1].operand1)
-#define CURRENT_TARGET()   (next_uop[-1].target)
-
-#define JUMP_TO_JUMP_TARGET() goto jump_to_jump_target
-#define JUMP_TO_ERROR() goto jump_to_error_target
 
 /* Stackref macros */
 
@@ -527,14 +411,6 @@ do {                                                   \
     _PyObjectArray_Free(NAME - 1, NAME##_temp);
 
 #define CONVERSION_FAILED(NAME) ((NAME) == NULL)
-
-#if defined(Py_DEBUG) && !defined(_Py_JIT)
-#define SET_CURRENT_CACHED_VALUES(N) current_cached_values = (N)
-#define CHECK_CURRENT_CACHED_VALUES(N) assert(current_cached_values == (N))
-#else
-#define SET_CURRENT_CACHED_VALUES(N) ((void)0)
-#define CHECK_CURRENT_CACHED_VALUES(N) ((void)0)
-#endif
 
 #define IS_PEP523_HOOKED(tstate) (tstate->interp->eval_frame != NULL)
 
@@ -593,91 +469,6 @@ gen_try_set_executing(PyGenObject *gen)
     }
     return false;
 }
-
-// Macro for inplace float binary ops (tier 2 only).
-// Mutates the uniquely-referenced TARGET operand in place.
-// TARGET must be either left or right.
-#define FLOAT_INPLACE_OP(left, right, TARGET, OP)                        \
-    do {                                                                 \
-        PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);            \
-        PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);          \
-        assert(PyFloat_CheckExact(left_o));                              \
-        assert(PyFloat_CheckExact(right_o));                             \
-        assert(_PyObject_IsUniquelyReferenced(                           \
-            PyStackRef_AsPyObjectBorrow(TARGET)));                       \
-        STAT_INC(BINARY_OP, hit);                                        \
-        double _dres =                                                   \
-            ((PyFloatObject *)left_o)->ob_fval                           \
-            OP ((PyFloatObject *)right_o)->ob_fval;                      \
-        ((PyFloatObject *)PyStackRef_AsPyObjectBorrow(TARGET))           \
-            ->ob_fval = _dres;                                           \
-    } while (0)
-
-// Inplace float true division. Sets _divop_err to 1 on zero division.
-// Caller must check _divop_err and call ERROR_NO_POP() if set.
-#define FLOAT_INPLACE_DIVOP(left, right, TARGET)                         \
-    int _divop_err = 0;                                                  \
-    do {                                                                 \
-        PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);            \
-        PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);          \
-        assert(PyFloat_CheckExact(left_o));                              \
-        assert(PyFloat_CheckExact(right_o));                             \
-        assert(_PyObject_IsUniquelyReferenced(                           \
-            PyStackRef_AsPyObjectBorrow(TARGET)));                       \
-        STAT_INC(BINARY_OP, hit);                                        \
-        double _divisor = ((PyFloatObject *)right_o)->ob_fval;           \
-        if (_divisor == 0.0) {                                           \
-            PyErr_SetString(PyExc_ZeroDivisionError,                     \
-                            "float division by zero");                   \
-            _divop_err = 1;                                              \
-            break;                                                       \
-        }                                                                \
-        double _dres = ((PyFloatObject *)left_o)->ob_fval / _divisor;    \
-        ((PyFloatObject *)PyStackRef_AsPyObjectBorrow(TARGET))           \
-            ->ob_fval = _dres;                                           \
-    } while (0)
-
-// Inplace compact int operation. TARGET is expected to be uniquely
-// referenced at the optimizer level, but at runtime it may be a
-// cached small int singleton. We check _Py_IsImmortal on TARGET
-// to decide whether inplace mutation is safe.
-//
-// After the macro, _int_inplace_res holds the result (may be NULL
-// on allocation failure). On success, TARGET was mutated in place
-// and _int_inplace_res is a DUP'd reference to it. On fallback
-// (small int target, small int result, or overflow), _int_inplace_res
-// is from FUNC (_PyCompactLong_Add etc.).
-// FUNC is the fallback function (_PyCompactLong_Add etc.)
-#define INT_INPLACE_OP(left, right, TARGET, OP, FUNC)                    \
-    _PyStackRef _int_inplace_res = PyStackRef_NULL;                      \
-    do {                                                                 \
-        PyObject *target_o = PyStackRef_AsPyObjectBorrow(TARGET);        \
-        if (_Py_IsImmortal(target_o)) {                                  \
-            break;                                                       \
-        }                                                                \
-        assert(_PyObject_IsUniquelyReferenced(target_o));                \
-        Py_ssize_t left_val = _PyLong_CompactValue(                      \
-            (PyLongObject *)PyStackRef_AsPyObjectBorrow(left));          \
-        Py_ssize_t right_val = _PyLong_CompactValue(                     \
-            (PyLongObject *)PyStackRef_AsPyObjectBorrow(right));         \
-        Py_ssize_t result = left_val OP right_val;                       \
-        if (!_PY_IS_SMALL_INT(result)                                    \
-            && ((twodigits)((stwodigits)result) + PyLong_MASK            \
-                < (twodigits)PyLong_MASK + PyLong_BASE))                 \
-        {                                                                \
-            _PyLong_SetSignAndDigitCount(                                \
-                (PyLongObject *)target_o, result < 0 ? -1 : 1, 1);       \
-            ((PyLongObject *)target_o)->long_value.ob_digit[0] =         \
-                (digit)(result < 0 ? -result : result);                  \
-            _int_inplace_res = PyStackRef_DUP(TARGET);                   \
-            break;                                                       \
-        }                                                                \
-    } while (0);                                                         \
-    if (PyStackRef_IsNull(_int_inplace_res)) {                           \
-        _int_inplace_res = FUNC(                                         \
-            (PyLongObject *)PyStackRef_AsPyObjectBorrow(left),           \
-            (PyLongObject *)PyStackRef_AsPyObjectBorrow(right));         \
-    }
 
 #define CALL_TP_ITERITEM_NO_ESCAPE(ITER, INDEX) \
     Py_TYPE(ITER)->_tp_iteritem((ITER), (INDEX))

@@ -2,7 +2,7 @@
 #include "pycore_ceval.h"         // _PyEval_SignalReceived()
 #include "pycore_gc.h"            // _Py_RunGC()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
-#include "pycore_optimizer.h"     // _Py_Executors_InvalidateCold()
+#include "pycore_pyatomic_ft_wrappers.h" // FT_MUTEX_LOCK()
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
 #include "pycore_pylifecycle.h"   // _PyErr_Print()
 #include "pycore_pystats.h"       // _Py_PrintSpecializationStats()
@@ -1398,19 +1398,7 @@ _Py_HandlePending(PyThreadState *tstate)
     if ((breaker & _PY_GC_SCHEDULED_BIT) != 0) {
         _Py_unset_eval_breaker_bit(tstate, _PY_GC_SCHEDULED_BIT);
         _Py_RunGC(tstate);
-#ifdef _Py_TIER2
-        _Py_ClearExecutorDeletionList(tstate->interp);
-#endif
     }
-
-#ifdef _Py_TIER2
-    if ((breaker & _PY_EVAL_JIT_INVALIDATE_COLD_BIT) != 0) {
-        _Py_unset_eval_breaker_bit(tstate, _PY_EVAL_JIT_INVALIDATE_COLD_BIT);
-        _Py_Executors_InvalidateCold(tstate->interp);
-        tstate->interp->executor_creation_counter = JIT_CLEANUP_THRESHOLD;
-        _Py_ClearExecutorDeletionList(tstate->interp);
-    }
-#endif
 
     /* GIL drop request */
     if ((breaker & _PY_GIL_DROP_REQUEST_BIT) != 0) {

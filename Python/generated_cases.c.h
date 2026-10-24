@@ -3,15 +3,10 @@
 //   Python/bytecodes.c
 // Do not edit!
 
-#ifdef TIER_TWO
-    #error "This file is for Tier 1 only"
-#endif
-#define TIER_ONE 1
-
 #if !_Py_TAIL_CALL_INTERP
 #if !USE_COMPUTED_GOTOS
     dispatch_opcode:
-        switch (dispatch_code)
+        switch (opcode)
 #endif
         {
 #endif /* _Py_TAIL_CALL_INTERP */
@@ -377,7 +372,6 @@
                 }
                 assert(d->result_type == NULL || Py_TYPE(res_o) == d->result_type);
                 assert(!d->result_unique || Py_REFCNT(res_o) == 1 || _Py_IsImmortal(res_o));
-                assert(!PyFloat_CheckExact(res_o) || Py_REFCNT(res_o) == 1);
                 res = PyStackRef_FromPyObjectSteal(res_o);
                 l = left;
                 r = right;
@@ -450,12 +444,8 @@
                 assert(PyUnicode_CheckExact(left_o));
                 assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(right)));
                 int next_oparg;
-                #if TIER_ONE
                 assert(next_instr->op.code == STORE_FAST);
                 next_oparg = next_instr->op.arg;
-                #else
-                next_oparg = (int)CURRENT_OPERAND0_16();
-                #endif
                 _PyStackRef *target_local = &GETLOCAL(next_oparg);
                 assert(PyUnicode_CheckExact(left_o));
                 if (PyStackRef_AsPyObjectBorrow(*target_local) != left_o) {
@@ -2202,12 +2192,7 @@
             }
             // _SAVE_RETURN_OFFSET
             {
-                #if TIER_ONE
                 frame->return_offset = (uint16_t)(next_instr - this_instr);
-                #endif
-                #if TIER_TWO
-                frame->return_offset = oparg;
-                #endif
             }
             // _PUSH_FRAME
             {
@@ -2340,12 +2325,7 @@
             }
             // _SAVE_RETURN_OFFSET
             {
-                #if TIER_ONE
                 frame->return_offset = (uint16_t)(next_instr - this_instr);
-                #endif
-                #if TIER_TWO
-                frame->return_offset = oparg;
-                #endif
             }
             // _PUSH_FRAME
             {
@@ -2974,12 +2954,7 @@
             }
             // _SAVE_RETURN_OFFSET
             {
-                #if TIER_ONE
                 frame->return_offset = (uint16_t)(next_instr - this_instr);
-                #endif
-                #if TIER_TWO
-                frame->return_offset = oparg;
-                #endif
             }
             // _PUSH_FRAME
             {
@@ -3607,12 +3582,7 @@
             }
             // _SAVE_RETURN_OFFSET
             {
-                #if TIER_ONE
                 frame->return_offset = (uint16_t)(next_instr - this_instr);
-                #endif
-                #if TIER_TWO
-                frame->return_offset = oparg;
-                #endif
             }
             // _PUSH_FRAME
             {
@@ -3675,9 +3645,7 @@
                 kwnames = stack_pointer[-1];
                 args = &stack_pointer[-1 - oparg];
                 self_or_null = stack_pointer[-2 - oparg];
-                #if TIER_ONE
                 assert(opcode != INSTRUMENTED_CALL);
-                #endif
                 int total_args = oparg;
                 _PyStackRef *arguments = args;
                 if (!PyStackRef_IsNull(self_or_null)) {
@@ -3804,12 +3772,7 @@
             }
             // _SAVE_RETURN_OFFSET
             {
-                #if TIER_ONE
                 frame->return_offset = (uint16_t)(next_instr - this_instr);
-                #endif
-                #if TIER_TWO
-                frame->return_offset = oparg;
-                #endif
             }
             // _PUSH_FRAME
             {
@@ -4568,9 +4531,7 @@
             {
                 args = &stack_pointer[-oparg];
                 self_or_null = stack_pointer[-1 - oparg];
-                #if TIER_ONE
                 assert(opcode != INSTRUMENTED_CALL);
-                #endif
                 int total_args = oparg;
                 _PyStackRef *arguments = args;
                 if (!PyStackRef_IsNull(self_or_null)) {
@@ -4696,12 +4657,7 @@
             }
             // _SAVE_RETURN_OFFSET
             {
-                #if TIER_ONE
                 frame->return_offset = (uint16_t)(next_instr - this_instr);
-                #endif
-                #if TIER_TWO
-                frame->return_offset = oparg;
-                #endif
             }
             // _PUSH_FRAME
             {
@@ -4805,12 +4761,7 @@
             }
             // _SAVE_RETURN_OFFSET
             {
-                #if TIER_ONE
                 frame->return_offset = (uint16_t)(next_instr - this_instr);
-                #endif
-                #if TIER_TWO
-                frame->return_offset = oparg;
-                #endif
             }
             // _PUSH_FRAME
             {
@@ -6162,56 +6113,6 @@
             PyStackRef_CLOSE(receiver);
             _PyFrame_StackPointerInvalidate(frame);
             DISPATCH();
-        }
-
-        TARGET(ENTER_EXECUTOR) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = ENTER_EXECUTOR;
-            (void)(opcode);
-            #endif
-            _Py_CODEUNIT* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(ENTER_EXECUTOR);
-            opcode = ENTER_EXECUTOR;
-            #ifdef _Py_TIER2
-            PyCodeObject *code = _PyFrame_GetCode(frame);
-            _PyExecutorObject *executor = code->co_executors->executors[oparg & 255];
-            if (IS_JIT_TRACING()) {
-                int og_opcode = executor->vm_data.opcode;
-                int og_oparg = (oparg & ~255) | executor->vm_data.oparg;
-                next_instr = this_instr;
-                if (_PyJit_EnterExecutorShouldStopTracing(og_opcode)) {
-                    if (_PyOpcode_Caches[_PyOpcode_Deopt[og_opcode]]) {
-                        PAUSE_ADAPTIVE_COUNTER(this_instr[1].counter);
-                    }
-                    opcode = og_opcode;
-                    oparg = og_oparg;
-                    DISPATCH_GOTO_NON_TRACING();
-                }
-                JUMP_TO_LABEL(stop_tracing);
-            }
-            assert(executor->vm_data.index == INSTR_OFFSET() - 1);
-            assert(executor->vm_data.code == code);
-            assert(executor->vm_data.valid);
-            assert(tstate->current_executor == NULL);
-            uintptr_t iversion = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(code->_co_instrumentation_version);
-            if (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) != iversion) {
-                opcode = executor->vm_data.opcode;
-                oparg = (oparg & ~255) | executor->vm_data.oparg;
-                next_instr = this_instr;
-                if (_PyOpcode_Caches[_PyOpcode_Deopt[opcode]]) {
-                    PAUSE_ADAPTIVE_COUNTER(this_instr[1].counter);
-                }
-                DISPATCH_GOTO();
-            }
-            assert(executor != tstate->interp->cold_executor);
-            tstate->jit_exit = NULL;
-            TIER1_TO_TIER2(executor);
-            #else
-            Py_FatalError("ENTER_EXECUTOR is not supported in this build");
-            #endif /* _Py_TIER2 */
         }
 
         TARGET(EXIT_INIT_CHECK) {
@@ -8334,7 +8235,7 @@
                 ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
                 FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
                 assert(INLINE_CACHE_ENTRIES_SEND == INLINE_CACHE_ENTRIES_FOR_ITER);
-                #if TIER_ONE && defined(Py_DEBUG)
+                #ifdef Py_DEBUG
                 if (!PyStackRef_IsNone(frame->f_executable)) {
                     Py_ssize_t i = frame->instr_ptr - _PyFrame_GetBytecode(frame);
                     assert(i >= 0 && i <= INT_MAX);
@@ -8371,21 +8272,6 @@
             PyObject *result = PyStackRef_AsPyObjectSteal(retval);
             #if !_Py_TAIL_CALL_INTERP
             assert(frame == &entry.frame);
-            #endif
-            #ifdef _Py_TIER2
-            _PyStackRef executor = frame->localsplus[0];
-            assert(tstate->current_executor == NULL);
-            if (!PyStackRef_IsNull(executor)) {
-                assert(PyStackRef_TYPE(executor) == &_PyUOpExecutor_Type);
-                tstate->current_executor = PyStackRef_AsPyObjectBorrow(executor);
-                stack_pointer += -1;
-                ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-                _PyFrame_SetStackPointer(frame, stack_pointer);
-                _PyFrame_StackPointerValidate(frame);
-                PyStackRef_CLOSE(executor);
-                _PyFrame_StackPointerInvalidate(frame);
-                stack_pointer += 1;
-            }
             #endif
             LLTRACE_RESUME_FRAME();
             return result;
@@ -8445,50 +8331,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 2;
             INSTRUCTION_STATS(JUMP_BACKWARD);
-            PREDICTED_JUMP_BACKWARD:;
-            _Py_CODEUNIT* const this_instr = next_instr - 2;
-            (void)this_instr;
-            /* Skip 1 cache entry */
-            // _SPECIALIZE_JUMP_BACKWARD
-            {
-                #if ENABLE_SPECIALIZATION
-                if (this_instr->op.code == JUMP_BACKWARD) {
-                    uint8_t desired = tstate->interp->jit ? JUMP_BACKWARD_JIT : JUMP_BACKWARD_NO_JIT;
-                    FT_ATOMIC_STORE_UINT8_RELAXED(this_instr->op.code, desired);
-                    next_instr = this_instr;
-                    DISPATCH_SAME_OPARG();
-                }
-                #endif
-            }
-            // _CHECK_PERIODIC
-            {
-                _PyFrame_SetStackPointer(frame, stack_pointer);
-                _PyFrame_StackPointerValidate(frame);
-                int err = check_periodics(tstate);
-                _PyFrame_StackPointerInvalidate(frame);
-                if (err != 0) {
-                    JUMP_TO_LABEL(error);
-                }
-            }
-            // _JUMP_BACKWARD_NO_INTERRUPT
-            {
-                assert(oparg <= INSTR_OFFSET());
-                JUMPBY(-oparg);
-            }
-            DISPATCH();
-        }
-
-        TARGET(JUMP_BACKWARD_JIT) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = JUMP_BACKWARD_JIT;
-            (void)(opcode);
-            #endif
-            _Py_CODEUNIT* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 2;
-            INSTRUCTION_STATS(JUMP_BACKWARD_JIT);
-            static_assert(1 == 1, "incorrect cache size");
             /* Skip 1 cache entry */
             // _CHECK_PERIODIC
             {
@@ -8504,33 +8346,6 @@
             {
                 assert(oparg <= INSTR_OFFSET());
                 JUMPBY(-oparg);
-            }
-            // _JIT
-            {
-                #ifdef _Py_TIER2
-                bool is_resume = this_instr->op.code == RESUME_CHECK_JIT;
-                _Py_BackoffCounter counter = this_instr[1].counter;
-                if ((backoff_counter_triggers(counter) &&
-                        !IS_JIT_TRACING() &&
-                        (this_instr->op.code == JUMP_BACKWARD_JIT || is_resume)) &&
-                    next_instr->op.code != ENTER_EXECUTOR) {
-                    _Py_CODEUNIT *insert_exec_at = this_instr;
-                    for (int tmp = oparg; tmp > 255; tmp >>= 8) {
-                        insert_exec_at--;
-                    }
-                    int succ = _PyJit_TryInitializeTracing(tstate, frame, this_instr, insert_exec_at,
-                        is_resume ? insert_exec_at : next_instr, stack_pointer, 0, NULL, oparg, NULL);
-                    if (succ) {
-                        ENTER_TRACING();
-                    }
-                    else {
-                        this_instr[1].counter = restart_backoff_counter(counter);
-                    }
-                }
-                else {
-                    ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
-                }
-                #endif
             }
             DISPATCH();
         }
@@ -8545,34 +8360,6 @@
             INSTRUCTION_STATS(JUMP_BACKWARD_NO_INTERRUPT);
             assert(oparg <= INSTR_OFFSET());
             JUMPBY(-oparg);
-            DISPATCH();
-        }
-
-        TARGET(JUMP_BACKWARD_NO_JIT) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = JUMP_BACKWARD_NO_JIT;
-            (void)(opcode);
-            #endif
-            frame->instr_ptr = next_instr;
-            next_instr += 2;
-            INSTRUCTION_STATS(JUMP_BACKWARD_NO_JIT);
-            static_assert(1 == 1, "incorrect cache size");
-            /* Skip 1 cache entry */
-            // _CHECK_PERIODIC
-            {
-                _PyFrame_SetStackPointer(frame, stack_pointer);
-                _PyFrame_StackPointerValidate(frame);
-                int err = check_periodics(tstate);
-                _PyFrame_StackPointerInvalidate(frame);
-                if (err != 0) {
-                    JUMP_TO_LABEL(error);
-                }
-            }
-            // _JUMP_BACKWARD_NO_INTERRUPT
-            {
-                assert(oparg <= INSTR_OFFSET());
-                JUMPBY(-oparg);
-            }
             DISPATCH();
         }
 
@@ -8929,12 +8716,7 @@
             }
             // _SAVE_RETURN_OFFSET
             {
-                #if TIER_ONE
                 frame->return_offset = (uint16_t)(next_instr - this_instr);
-                #endif
-                #if TIER_TWO
-                frame->return_offset = oparg;
-                #endif
             }
             // _PUSH_FRAME
             {
@@ -9453,12 +9235,7 @@
             }
             // _SAVE_RETURN_OFFSET
             {
-                #if TIER_ONE
                 frame->return_offset = (uint16_t)(next_instr - this_instr);
-                #endif
-                #if TIER_TWO
-                frame->return_offset = oparg;
-                #endif
             }
             // _PUSH_FRAME
             {
@@ -10157,9 +9934,6 @@
             _PyStackRef res;
             _PyStackRef *null;
             /* Skip 1 cache entry */
-            // _NOP
-            {
-            }
             // _LOAD_GLOBAL_MODULE
             {
                 uint16_t version = read_u16(&this_instr[2].cache);
@@ -11251,6 +11025,7 @@
             PREDICTED_RESUME:;
             _Py_CODEUNIT* const this_instr = next_instr - 2;
             (void)this_instr;
+            /* Skip 1 cache entry */
             // _LOAD_BYTECODE
             {
                 #ifdef Py_GIL_DISABLED
@@ -11298,11 +11073,9 @@
             }
             // _QUICKEN_RESUME
             {
-                uint16_t counter = read_u16(&this_instr[1].cache);
-                (void)counter;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
-                _Py_Specialize_Resume(this_instr, tstate, frame);
+                _Py_Specialize_Resume(this_instr, tstate);
                 _PyFrame_StackPointerInvalidate(frame);
             }
             // _CHECK_PERIODIC_IF_NOT_YIELD_FROM
@@ -11356,75 +11129,6 @@
                 JUMP_TO_PREDICTED(RESUME);
             }
             #endif
-            DISPATCH();
-        }
-
-        TARGET(RESUME_CHECK_JIT) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = RESUME_CHECK_JIT;
-            (void)(opcode);
-            #endif
-            _Py_CODEUNIT* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 2;
-            INSTRUCTION_STATS(RESUME_CHECK_JIT);
-            static_assert(1 == 1, "incorrect cache size");
-            /* Skip 1 cache entry */
-            // _RESUME_CHECK
-            {
-                #if defined(__EMSCRIPTEN__)
-                if (_Py_emscripten_signal_clock == 0) {
-                    UPDATE_MISS_STATS(RESUME);
-                    assert(_PyOpcode_Deopt[opcode] == (RESUME));
-                    JUMP_TO_PREDICTED(RESUME);
-                }
-                _Py_emscripten_signal_clock -= Py_EMSCRIPTEN_SIGNAL_HANDLING;
-                #endif
-                uintptr_t eval_breaker = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker);
-                uintptr_t version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                assert((version & _PY_EVAL_EVENTS_MASK) == 0);
-                if (eval_breaker != version) {
-                    UPDATE_MISS_STATS(RESUME);
-                    assert(_PyOpcode_Deopt[opcode] == (RESUME));
-                    JUMP_TO_PREDICTED(RESUME);
-                }
-                #ifdef Py_GIL_DISABLED
-                if (frame->tlbc_index !=
-                    ((_PyThreadStateImpl *)tstate)->tlbc_index) {
-                    UPDATE_MISS_STATS(RESUME);
-                    assert(_PyOpcode_Deopt[opcode] == (RESUME));
-                    JUMP_TO_PREDICTED(RESUME);
-                }
-                #endif
-            }
-            // _JIT
-            {
-                #ifdef _Py_TIER2
-                bool is_resume = this_instr->op.code == RESUME_CHECK_JIT;
-                _Py_BackoffCounter counter = this_instr[1].counter;
-                if ((backoff_counter_triggers(counter) &&
-                        !IS_JIT_TRACING() &&
-                        (this_instr->op.code == JUMP_BACKWARD_JIT || is_resume)) &&
-                    next_instr->op.code != ENTER_EXECUTOR) {
-                    _Py_CODEUNIT *insert_exec_at = this_instr;
-                    for (int tmp = oparg; tmp > 255; tmp >>= 8) {
-                        insert_exec_at--;
-                    }
-                    int succ = _PyJit_TryInitializeTracing(tstate, frame, this_instr, insert_exec_at,
-                        is_resume ? insert_exec_at : next_instr, stack_pointer, 0, NULL, oparg, NULL);
-                    if (succ) {
-                        ENTER_TRACING();
-                    }
-                    else {
-                        this_instr[1].counter = restart_backoff_counter(counter);
-                    }
-                }
-                else {
-                    ADVANCE_ADAPTIVE_COUNTER(this_instr[1].counter);
-                }
-                #endif
-            }
             DISPATCH();
         }
 
@@ -13088,86 +12792,6 @@
             DISPATCH();
         }
 
-        TARGET(TRACE_RECORD) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = TRACE_RECORD;
-            (void)(opcode);
-            #endif
-            _Py_CODEUNIT* const prev_instr = frame->instr_ptr;
-            _Py_CODEUNIT* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(TRACE_RECORD);
-            opcode = TRACE_RECORD;
-            #if _Py_TIER2
-            assert(IS_JIT_TRACING());
-            next_instr = this_instr;
-            frame->instr_ptr = prev_instr;
-            opcode = next_instr->op.code;
-            bool stop_tracing = (
-                                 opcode == WITH_EXCEPT_START ||
-                                 opcode == RERAISE ||
-                                 opcode == CLEANUP_THROW ||
-                                 opcode == PUSH_EXC_INFO ||
-                                 opcode == INTERPRETER_EXIT ||
-                                 (opcode >= MIN_INSTRUMENTED_OPCODE && opcode != ENTER_EXECUTOR)
-            );
-            _PyThreadStateImpl *_tstate = (_PyThreadStateImpl *)tstate;
-            _PyJitTracerState *tracer = _tstate->jit_tracer_state;
-            assert(tracer != NULL);
-            _PyFrame_SetStackPointer(frame, stack_pointer);
-            _PyFrame_StackPointerValidate(frame);
-            int full = !_PyJit_translate_single_bytecode_to_trace(tstate, frame, next_instr, stop_tracing ? _DEOPT : 0);
-            _PyFrame_StackPointerInvalidate(frame);
-            if (full) {
-                LEAVE_TRACING();
-                assert(stack_pointer == _PyFrame_GetStackPointer(frame));
-                _PyFrame_StackPointerValidate(frame);
-                int err = stop_tracing_and_jit(tstate, frame);
-                _PyFrame_StackPointerInvalidate(frame);
-                if (err < 0) {
-                    JUMP_TO_LABEL(error);
-                }
-                DISPATCH();
-            }
-            for (int i = 0; i < tracer->prev_state.recorded_count; i++) {
-                assert(stack_pointer == _PyFrame_GetStackPointer(frame));
-                _PyFrame_StackPointerValidate(frame);
-                Py_CLEAR(tracer->prev_state.recorded_values[i]);
-                _PyFrame_StackPointerInvalidate(frame);
-            }
-            tracer->prev_state.recorded_count = 0;
-            tracer->prev_state.instr = next_instr;
-            PyObject *prev_code = PyStackRef_AsPyObjectBorrow(frame->f_executable);
-            if (tracer->prev_state.instr_code != (PyCodeObject *)prev_code) {
-                assert(stack_pointer == _PyFrame_GetStackPointer(frame));
-                _PyFrame_StackPointerValidate(frame);
-                Py_SETREF(tracer->prev_state.instr_code, (PyCodeObject*)Py_NewRef((prev_code)));
-                _PyFrame_StackPointerInvalidate(frame);
-            }
-            tracer->prev_state.instr_frame = frame;
-            tracer->prev_state.instr_oparg = oparg;
-            tracer->prev_state.instr_stacklevel = PyStackRef_IsNone(frame->f_executable) ? 2 : STACK_LEVEL();
-            if (_PyOpcode_Caches[_PyOpcode_Deopt[opcode]]
-                // Branch opcodes use the cache for branch history, not
-                // specialization counters.  Don't reset it.
-                && !IS_CONDITIONAL_JUMP_OPCODE(opcode)) {
-                (&next_instr[1])->counter = trigger_backoff_counter();
-            }
-            const _PyOpcodeRecordEntry *record_entry = &_PyOpcode_RecordEntries[opcode];
-            for (int i = 0; i < record_entry->count; i++) {
-                _Py_RecordFuncPtr doesnt_escape = _PyOpcode_RecordFunctions[record_entry->indices[i]];
-                doesnt_escape(frame, stack_pointer, oparg, &tracer->prev_state.recorded_values[i]);
-            }
-            tracer->prev_state.recorded_count = record_entry->count;
-            DISPATCH_GOTO_NON_TRACING();
-            #else
-            (void)prev_instr;
-            Py_FatalError("JIT instruction executed in non-jit build.");
-            #endif
-        }
-
         TARGET(UNARY_INVERT) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = UNARY_INVERT;
@@ -13600,7 +13224,7 @@
                 ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
                 FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
                 assert(INLINE_CACHE_ENTRIES_SEND == INLINE_CACHE_ENTRIES_FOR_ITER);
-                #if TIER_ONE && defined(Py_DEBUG)
+                #ifdef Py_DEBUG
                 if (!PyStackRef_IsNone(frame->f_executable)) {
                     Py_ssize_t i = frame->instr_ptr - _PyFrame_GetBytecode(frame);
                     assert(i >= 0 && i <= INT_MAX);
@@ -13674,14 +13298,10 @@ JUMP_TO_LABEL(error);
             #else
             assert(_PyErr_Occurred(tstate));
             #endif
-            _PyFrame_SetStackPointer(frame, stack_pointer);
-            _PyFrame_StackPointerValidate(frame);
-            STOP_TRACING();
-            stack_pointer = _PyFrame_GetStackPointer(frame);
-            _PyFrame_StackPointerInvalidate(frame);
+
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
             if (!_PyFrame_IsIncomplete(frame)) {
-                assert(stack_pointer == _PyFrame_GetStackPointer(frame));
+                _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 PyFrameObject *f = _PyFrame_GetFrameObject(frame);
                 _PyFrame_StackPointerInvalidate(frame);
@@ -13692,7 +13312,7 @@ JUMP_TO_LABEL(error);
                     _PyFrame_StackPointerInvalidate(frame);
                 }
             }
-            assert(stack_pointer == _PyFrame_GetStackPointer(frame));
+            _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
             _PyEval_MonitorRaise(tstate, frame, next_instr-1);
             _PyFrame_StackPointerInvalidate(frame);
@@ -13703,7 +13323,6 @@ JUMP_TO_LABEL(error);
 
         LABEL(exception_unwind)
         {
-            STOP_TRACING();
             int offset = INSTR_OFFSET()-1;
             int level, handler, lasti;
             int handled = get_exception_handler(_PyFrame_GetCode(frame), offset, &level, &handler, &lasti);
@@ -13770,14 +13389,6 @@ JUMP_TO_LABEL(error);
                 #if !_Py_TAIL_CALL_INTERP
                 assert(frame == &entry.frame);
                 #endif
-                #ifdef _Py_TIER2
-                _PyStackRef executor = frame->localsplus[0];
-                assert(tstate->current_executor == NULL);
-                if (!PyStackRef_IsNull(executor)) {
-                    tstate->current_executor = PyStackRef_AsPyObjectBorrow(executor);
-                    PyStackRef_CLOSE(executor);
-                }
-                #endif
                 return NULL;
             }
             next_instr = frame->instr_ptr;
@@ -13813,31 +13424,4 @@ JUMP_TO_LABEL(error);
             DISPATCH();
         }
 
-        #if _Py_TAIL_CALL_INTERP && !defined(_Py_TIER2)
-        Py_GCC_ATTRIBUTE((unused))
-        #endif
-        LABEL(stop_tracing)
-        {
-            #if _Py_TIER2
-            assert(IS_JIT_TRACING());
-            int opcode = next_instr->op.code;
-            _PyFrame_SetStackPointer(frame, stack_pointer);
-            _PyFrame_StackPointerValidate(frame);
-            _PyJit_translate_single_bytecode_to_trace(tstate, frame, NULL, _EXIT_TRACE);
-            _PyFrame_StackPointerInvalidate(frame);
-            LEAVE_TRACING();
-            assert(stack_pointer == _PyFrame_GetStackPointer(frame));
-            _PyFrame_StackPointerValidate(frame);
-            int err = stop_tracing_and_jit(tstate, frame);
-            _PyFrame_StackPointerInvalidate(frame);
-            if (err < 0) {
-                JUMP_TO_LABEL(error);
-            }
-            DISPATCH_GOTO_NON_TRACING();
-            #else
-            Py_FatalError("JIT label executed in non-jit build.");
-            #endif
-        }
-
 /* END LABELS */
-#undef TIER_ONE

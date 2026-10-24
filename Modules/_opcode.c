@@ -9,7 +9,6 @@
 #include "pycore_code.h"
 #include "pycore_compile.h"
 #include "pycore_intrinsics.h"
-#include "pycore_optimizer.h"     // _Py_GetExecutor()
 #include "pycore_opcode_metadata.h" // IS_VALID_OPCODE, OPCODE_HAS_*, etc
 #include "pycore_opcode_utils.h"
 
@@ -369,35 +368,6 @@ _opcode_get_special_method_names_impl(PyObject *module)
     return list;
 }
 
-/*[clinic input]
-
-_opcode.get_executor
-
-  code: object
-  offset: int
-
-Return the executor object at offset in code if exists, None otherwise.
-[clinic start generated code]*/
-
-static PyObject *
-_opcode_get_executor_impl(PyObject *module, PyObject *code, int offset)
-/*[clinic end generated code: output=c035c7a47b16648f input=85eff93ea7aac282]*/
-{
-    if (!PyCode_Check(code)) {
-        PyErr_Format(PyExc_TypeError,
-                     "expected a code object, not '%.100s'",
-                     Py_TYPE(code)->tp_name);
-        return NULL;
-    }
-#ifdef _Py_TIER2
-    return (PyObject *)_Py_GetExecutor((PyCodeObject *)code, offset);
-#else
-    PyErr_Format(PyExc_RuntimeError,
-                 "Executors are not available in this build");
-    return NULL;
-#endif
-}
-
 static PyMethodDef
 opcode_functions[] =  {
     _OPCODE_STACK_EFFECT_METHODDEF
@@ -413,7 +383,6 @@ opcode_functions[] =  {
     _OPCODE_GET_NB_OPS_METHODDEF
     _OPCODE_GET_INTRINSIC1_DESCS_METHODDEF
     _OPCODE_GET_INTRINSIC2_DESCS_METHODDEF
-    _OPCODE_GET_EXECUTOR_METHODDEF
     _OPCODE_GET_SPECIAL_METHOD_NAMES_METHODDEF
     {NULL, NULL, 0, NULL}
 };

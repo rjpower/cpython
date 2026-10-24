@@ -15,7 +15,6 @@
 #include "pycore_object.h"        // _Py_ClearImmortal()
 #include "pycore_obmalloc.h"      // _PyMem_obmalloc_state_on_heap()
 #include "pycore_opcode_utils.h"  // NUM_COMMON_CONSTANTS
-#include "pycore_optimizer.h"     // JIT_CLEANUP_THRESHOLD
 #include "pycore_parking_lot.h"   // _PyParkingLot_AfterFork()
 #include "pycore_pyerrors.h"      // _PyErr_Clear()
 #include "pycore_pylifecycle.h"   // _PyAST_Fini()
@@ -526,27 +525,6 @@ is_env_enabled(const char *env_name)
     return env && *env != '\0' && *env != '0';
 }
 
-static inline bool
-is_env_disabled(const char *env_name)
-{
-    char *env = Py_GETENV(env_name);
-    return env != NULL && *env == '0';
-}
-
-static inline void
-init_policy(uint16_t *target, const char *env_name, uint16_t default_value,
-            long min_value, long max_value)
-{
-    *target = default_value;
-    char *env = Py_GETENV(env_name);
-    if (env && *env != '\0') {
-        long value = atol(env);
-        if (value >= min_value && value <= max_value) {
-            *target = (uint16_t)value;
-        }
-    }
-}
-
 static PyStatus
 init_interpreter(PyInterpreterState *interp,
                  _PyRuntimeState *runtime, int64_t id,
@@ -604,53 +582,7 @@ init_interpreter(PyInterpreterState *interp,
         interp->monitoring_tool_versions[t] = 0;
     }
     interp->_code_object_generation = 0;
-    interp->jit = false;
-    interp->compiling = false;
-    interp->executor_blooms = NULL;
-    interp->executor_ptrs = NULL;
-    interp->executor_count = 0;
-    interp->executor_capacity = 0;
-    interp->executor_deletion_list_head = NULL;
-    interp->executor_creation_counter = JIT_CLEANUP_THRESHOLD;
-
-    // Initialize optimization configuration from environment variables
-    // PYTHON_JIT_STRESS sets aggressive defaults for testing, but can be overridden
-    uint16_t jump_default = JUMP_BACKWARD_INITIAL_VALUE;
-    uint16_t resume_default = RESUME_INITIAL_VALUE;
-    uint16_t side_exit_default = SIDE_EXIT_INITIAL_VALUE;
-
-    if (is_env_enabled("PYTHON_JIT_STRESS")) {
-        jump_default = 63;
-        side_exit_default = 63;
-        resume_default = 127;
-    }
-
-    init_policy(&interp->opt_config.jump_backward_initial_value,
-                "PYTHON_JIT_JUMP_BACKWARD_INITIAL_VALUE",
-                jump_default, 1, MAX_VALUE);
-    init_policy(&interp->opt_config.jump_backward_initial_backoff,
-                "PYTHON_JIT_JUMP_BACKWARD_INITIAL_BACKOFF",
-                JUMP_BACKWARD_INITIAL_BACKOFF, 0, MAX_BACKOFF);
-    init_policy(&interp->opt_config.resume_initial_value,
-                "PYTHON_JIT_RESUME_INITIAL_VALUE",
-                resume_default, 1, MAX_VALUE);
-    init_policy(&interp->opt_config.resume_initial_backoff,
-                "PYTHON_JIT_RESUME_INITIAL_BACKOFF",
-                RESUME_INITIAL_BACKOFF, 0, MAX_BACKOFF);
-    init_policy(&interp->opt_config.side_exit_initial_value,
-                "PYTHON_JIT_SIDE_EXIT_INITIAL_VALUE",
-                side_exit_default, 1, MAX_VALUE);
-    init_policy(&interp->opt_config.side_exit_initial_backoff,
-                "PYTHON_JIT_SIDE_EXIT_INITIAL_BACKOFF",
-                SIDE_EXIT_INITIAL_BACKOFF, 0, MAX_BACKOFF);
-
-    // Trace fitness configuration
-    init_policy(&interp->opt_config.fitness_initial,
-                "PYTHON_JIT_FITNESS_INITIAL",
-                FITNESS_INITIAL, EXIT_QUALITY_CLOSE_LOOP, FITNESS_INITIAL);
-
     interp->opt_config.specialization_enabled = !is_env_enabled("PYTHON_SPECIALIZATION_OFF");
-    interp->opt_config.uops_optimize_enabled = !is_env_disabled("PYTHON_UOPS_OPTIMIZE");
     if (interp != &runtime->_main_interpreter) {
         /* Fix the self-referential, statically initialized fields. */
         interp->dtoa = (struct _dtoa_state)_dtoa_state_INIT(interp);
@@ -913,10 +845,6 @@ interpreter_clear(PyInterpreterState *interp, PyThreadState *tstate)
     Py_CLEAR(interp->after_forkers_child);
 #endif
 
-
-#ifdef _Py_TIER2
-    _Py_ClearExecutorDeletionList(interp);
-#endif
     _PyAST_Fini(interp);
     _PyAtExit_Fini(interp);
 
@@ -931,21 +859,7 @@ interpreter_clear(PyInterpreterState *interp, PyThreadState *tstate)
     // Finalize warnings after last gc so that any finalizers can
     // access warnings state
     _PyWarnings_Fini(interp);
-    struct _PyExecutorObject *cold = interp->cold_executor;
-    if (cold != NULL) {
-        interp->cold_executor = NULL;
-        assert(cold->vm_data.valid);
-        assert(!cold->vm_data.cold);
-        _PyExecutor_Free(cold);
-    }
 
-    struct _PyExecutorObject *cold_dynamic = interp->cold_dynamic_executor;
-    if (cold_dynamic != NULL) {
-        interp->cold_dynamic_executor = NULL;
-        assert(cold_dynamic->vm_data.valid);
-        assert(!cold_dynamic->vm_data.cold);
-        _PyExecutor_Free(cold_dynamic);
-    }
     /* We don't clear sysdict and builtins until the end of this function.
        Because clearing other attributes can execute arbitrary Python code
        which requires sysdict and builtins. */
@@ -1632,8 +1546,6 @@ init_threadstate(_PyThreadStateImpl *_tstate,
     tstate->datastack_limit = NULL;
     tstate->datastack_cached_chunk = NULL;
     tstate->what_event = -1;
-    tstate->current_executor = NULL;
-    tstate->jit_exit = NULL;
     tstate->dict_global_version = 0;
 
     _tstate->c_stack_soft_limit = UINTPTR_MAX;
@@ -1647,9 +1559,6 @@ init_threadstate(_PyThreadStateImpl *_tstate,
     _tstate->asyncio_running_task = NULL;
     _tstate->lazy_imports = NULL;
 
-#ifdef _Py_TIER2
-    _tstate->jit_tracer_state = NULL;
-#endif
     tstate->delete_later = NULL;
 
     llist_init(&_tstate->mem_free_queue);
@@ -1914,10 +1823,6 @@ PyThreadState_Clear(PyThreadState *tstate)
 
     _PyThreadState_ClearMimallocHeaps(tstate);
 
-#ifdef _Py_TIER2
-    _PyJit_TracerFree((_PyThreadStateImpl *)tstate);
-#endif
-
     tstate->_status.cleared = 1;
 
     // XXX Call _PyThreadStateSwap(runtime, NULL) here if "current".
@@ -1989,10 +1894,6 @@ tstate_delete_common(PyThreadState *tstate, int release_gil, int is_unlinked)
     tstate->interp->object_state.reftotal += tstate_impl->reftotal;
     tstate_impl->reftotal = 0;
     assert(tstate_impl->refcounts.values == NULL);
-#endif
-
-#if _Py_TIER2
-    _PyJit_TracerFree((_PyThreadStateImpl *)tstate);
 #endif
 
     HEAD_UNLOCK(runtime);
@@ -3158,11 +3059,6 @@ _PyInterpreterState_SetEvalFrameFunc(PyInterpreterState *interp,
     if (eval_frame == interp->eval_frame) {
         return;
     }
-#ifdef _Py_TIER2
-    if (eval_frame != NULL) {
-        _Py_Executors_InvalidateAll(interp, 1);
-    }
-#endif
     RARE_EVENT_INC(set_eval_frame_func);
     _PyEval_StopTheWorld(interp);
     interp->eval_frame = eval_frame;
@@ -3178,7 +3074,6 @@ _PyInterpreterState_SetEvalFrameAllowSpecialization(PyInterpreterState *interp,
     if (allow_specialization == interp->eval_frame_allow_specialization) {
         return;
     }
-    _Py_Executors_InvalidateAll(interp, 1);
     RARE_EVENT_INC(set_eval_frame_func);
     _PyEval_StopTheWorld(interp);
     interp->eval_frame_allow_specialization = allow_specialization;

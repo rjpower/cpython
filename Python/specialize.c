@@ -17,8 +17,6 @@
 #include "pycore_moduleobject.h"
 #include "pycore_object.h"
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
-#include "pycore_uop_metadata.h"    // _PyOpcode_uop_name
-#include "pycore_uop_ids.h"       // MAX_UOP_ID
 #include "pycore_opcode_utils.h"  // RESUME_AT_FUNC_START
 #include "pycore_pylifecycle.h"   // _PyOS_URandomNonblock()
 #include "pycore_runtime.h"       // _Py_ID()
@@ -64,18 +62,12 @@ void
 _PyCode_Quicken(_Py_CODEUNIT *instructions, Py_ssize_t size, int enable_counters, int flags)
 {
     #if ENABLE_SPECIALIZATION
-    _Py_BackoffCounter jump_counter, adaptive_counter, resume_counter;
+    _Py_BackoffCounter adaptive_counter;
     if (enable_counters) {
-        PyThreadState *tstate = _PyThreadState_GET();
-        PyInterpreterState *interp = tstate->interp;
-        jump_counter = initial_jump_backoff_counter(&interp->opt_config);
         adaptive_counter = adaptive_counter_warmup();
-        resume_counter = initial_resume_backoff_counter(&interp->opt_config);
     }
     else {
-        jump_counter = initial_unreachable_backoff_counter();
         adaptive_counter = initial_unreachable_backoff_counter();
-        resume_counter = initial_unreachable_backoff_counter();
     }
     int opcode = 0;
     int oparg = 0;
@@ -90,12 +82,6 @@ _PyCode_Quicken(_Py_CODEUNIT *instructions, Py_ssize_t size, int enable_counters
         if (caches) {
             // The initial value depends on the opcode
             switch (opcode) {
-                case JUMP_BACKWARD:
-                    instructions[i + 1].counter = jump_counter;
-                    break;
-                case RESUME:
-                    instructions[i + 1].counter = resume_counter;
-                    break;
                 case POP_JUMP_IF_FALSE:
                 case POP_JUMP_IF_TRUE:
                 case POP_JUMP_IF_NONE:
@@ -2949,20 +2935,10 @@ _Py_Specialize_GetIter(_PyStackRef iterable, _Py_CODEUNIT *instr)
 }
 
 void
-_Py_Specialize_Resume(_Py_CODEUNIT *instr, PyThreadState *tstate, _PyInterpreterFrame *frame)
+_Py_Specialize_Resume(_Py_CODEUNIT *instr, PyThreadState *tstate)
 {
     if (tstate->tracing == 0 &&
         FT_ATOMIC_LOAD_UINT8_RELAXED(instr->op.code) == RESUME) {
-        if (tstate->interp->jit) {
-            PyCodeObject *co = (PyCodeObject *)PyStackRef_AsPyObjectBorrow(frame->f_executable);
-            if (co != NULL &&
-                PyCode_Check(co) &&
-                (co->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) == 0) {
-                specialize(instr, RESUME_CHECK_JIT);
-                set_counter((_Py_BackoffCounter *)instr + 1, initial_resume_backoff_counter(&tstate->interp->opt_config));
-                return;
-            }
-        }
         specialize(instr, RESUME_CHECK);
         return;
     }

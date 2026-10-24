@@ -3,11 +3,9 @@ import itertools
 import lexer
 import parser
 import re
-from typing import Optional, Callable, Iterator
+from typing import Optional, Callable
 
 from parser import Stmt, SimpleStmt, BlockStmt, IfStmt, WhileStmt, ForStmt, MacroIfStmt
-
-MAX_CACHED_REGISTER = 3
 
 @dataclass
 class EscapingCall:
@@ -22,7 +20,6 @@ class Properties:
     error_with_pop: bool
     error_without_pop: bool
     deopts: bool
-    deopts_periodic: bool
     oparg: bool
     jumps: bool
     eval_breaker: bool
@@ -34,14 +31,9 @@ class Properties:
     uses_locals: bool
     has_free: bool
     side_exit: bool
-    side_exit_at_end: bool
     pure: bool
     uses_opcode: bool
-    needs_guard_ip: bool
-    unpredictable_jump: bool
-    records_value: bool
     tier: int | None = None
-    const_oparg: int = -1
     needs_prev: bool = False
     no_save_ip: bool = False
 
@@ -65,7 +57,6 @@ class Properties:
             error_with_pop=any(p.error_with_pop for p in properties),
             error_without_pop=any(p.error_without_pop for p in properties),
             deopts=any(p.deopts for p in properties),
-            deopts_periodic=any(p.deopts_periodic for p in properties),
             oparg=any(p.oparg for p in properties),
             jumps=any(p.jumps for p in properties),
             eval_breaker=any(p.eval_breaker for p in properties),
@@ -78,13 +69,9 @@ class Properties:
             uses_opcode=any(p.uses_opcode for p in properties),
             has_free=any(p.has_free for p in properties),
             side_exit=any(p.side_exit for p in properties),
-            side_exit_at_end=any(p.side_exit_at_end for p in properties),
             pure=all(p.pure for p in properties),
             needs_prev=any(p.needs_prev for p in properties),
             no_save_ip=all(p.no_save_ip for p in properties),
-            needs_guard_ip=any(p.needs_guard_ip for p in properties),
-            unpredictable_jump=any(p.unpredictable_jump for p in properties),
-            records_value=any(p.records_value for p in properties),
         )
 
     @property
@@ -97,7 +84,6 @@ SKIP_PROPERTIES = Properties(
     error_with_pop=False,
     error_without_pop=False,
     deopts=False,
-    deopts_periodic=False,
     oparg=False,
     jumps=False,
     eval_breaker=False,
@@ -110,12 +96,8 @@ SKIP_PROPERTIES = Properties(
     uses_opcode=False,
     has_free=False,
     side_exit=False,
-    side_exit_at_end=False,
     pure=True,
     no_save_ip=False,
-    needs_guard_ip=False,
-    unpredictable_jump=False,
-    records_value=False,
 )
 
 
@@ -197,8 +179,6 @@ class Uop:
     properties: Properties
     _size: int = -1
     implicitly_created: bool = False
-    replicated = range(0)
-    replicates: "Uop | None" = None
     # Size of the instruction(s), only set for uops containing the INSTRUCTION_SIZE macro
     instruction_size: int | None = None
 
@@ -321,16 +301,6 @@ class Family:
     name: str
     size: str
     members: list[Instruction]
-
-    def get_member_record_names(self) -> tuple[str, ...]:
-        seen: set[str] = set()
-        names: list[str] = []
-        for member in self.members:
-            for part in member.parts:
-                if part.properties.records_value and part.name not in seen:
-                    seen.add(part.name)
-                    names.append(part.name)
-        return tuple(names)
 
     def dump(self, indent: str) -> None:
         print(indent, self.name, "= ", ", ".join([m.name for m in self.members]))
@@ -650,7 +620,6 @@ NON_ESCAPING_FUNCTIONS = (
     "advance_backoff_counter",
     "assert",
     "backoff_counter_triggers",
-    "initial_temperature_backoff_counter",
     "JUMP_TO_LABEL",
     "restart_backoff_counter",
     "_Py_ReachedRecursionLimit",
@@ -664,11 +633,8 @@ NON_ESCAPING_FUNCTIONS = (
     "PyStackRef_Wrap",
     "PyStackRef_Unwrap",
     "_PyLong_CheckExactAndCompact",
-    "_PyExecutor_FromExit",
-    "_PyJit_TryInitializeTracing",
     "_Py_unset_eval_breaker_bit",
     "_Py_set_eval_breaker_bit",
-    "trigger_backoff_counter",
     "_PyThreadState_PopCStackRefSteal",
     "doesnt_escape",
     "_Py_GatherStats_GetIter",
@@ -692,7 +658,7 @@ def check_escaping_calls(instr: parser.CodeDef, escapes: dict[SimpleStmt, Escapi
             in_if = 0
             tkn_iter = iter(stmt.contents)
             for tkn in tkn_iter:
-                if tkn.kind == "IDENTIFIER" and tkn.text in ("DEOPT_IF", "ERROR_IF", "EXIT_IF", "HANDLE_PENDING_AND_DEOPT_IF", "AT_END_EXIT_IF"):
+                if tkn.kind == "IDENTIFIER" and tkn.text in ("DEOPT_IF", "ERROR_IF", "EXIT_IF"):
                     in_if = 1
                     next(tkn_iter)
                 elif tkn.kind == "LPAREN":
@@ -724,9 +690,6 @@ def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, Esca
                 continue
             #if not tkn.text.startswith(("Py", "_Py", "monitor")):
             #    continue
-            if tkn.text.startswith(("sym_", "optimize_", "PyJitRef")):
-                # Optimize functions
-                continue
             if tkn.text.endswith("Check"):
                 continue
             if tkn.text.startswith("Py_Is"):
@@ -819,7 +782,7 @@ def stmt_is_simple_exit(stmt: Stmt) -> bool:
     if len(tokens) < 4:
         return False
     return (
-        tokens[0].text in ("ERROR_IF", "DEOPT_IF", "EXIT_IF", "AT_END_EXIT_IF")
+        tokens[0].text in ("ERROR_IF", "DEOPT_IF", "EXIT_IF")
         and
         tokens[1].text == "("
         and
@@ -865,47 +828,6 @@ def stmt_escapes(stmt: Stmt) -> bool:
     else:
         assert False, "Unexpected statement type"
 
-def stmt_has_jump_on_unpredictable_path_body(stmts: list[Stmt] | None, branches_seen: int) -> tuple[bool, int]:
-    if not stmts:
-        return False, branches_seen
-    predict = False
-    seen = 0
-    for st in stmts:
-        predict_body, seen_body = stmt_has_jump_on_unpredictable_path(st, branches_seen)
-        predict = predict or predict_body
-        seen += seen_body
-    return predict, seen
-
-def stmt_has_jump_on_unpredictable_path(stmt: Stmt, branches_seen: int) -> tuple[bool, int]:
-    if isinstance(stmt, BlockStmt):
-        return stmt_has_jump_on_unpredictable_path_body(stmt.body, branches_seen)
-    elif isinstance(stmt, SimpleStmt):
-        for tkn in stmt.contents:
-            if tkn.text == "JUMPBY":
-                return True, branches_seen
-        return False, branches_seen
-    elif isinstance(stmt, IfStmt):
-        predict, seen = stmt_has_jump_on_unpredictable_path(stmt.body, branches_seen)
-        if stmt.else_body:
-            predict_else, seen_else = stmt_has_jump_on_unpredictable_path(stmt.else_body, branches_seen)
-            return predict != predict_else, seen + seen_else + 1
-        return predict, seen + 1
-    elif isinstance(stmt, MacroIfStmt):
-        predict, seen = stmt_has_jump_on_unpredictable_path_body(stmt.body, branches_seen)
-        if stmt.else_body:
-            predict_else, seen_else = stmt_has_jump_on_unpredictable_path_body(stmt.else_body, branches_seen)
-            return predict != predict_else, seen + seen_else
-        return predict, seen
-    elif isinstance(stmt, ForStmt):
-        unpredictable, branches_seen = stmt_has_jump_on_unpredictable_path(stmt.body, branches_seen)
-        return unpredictable, branches_seen + 1
-    elif isinstance(stmt, WhileStmt):
-        unpredictable, branches_seen = stmt_has_jump_on_unpredictable_path(stmt.body, branches_seen)
-        return unpredictable, branches_seen + 1
-    else:
-        assert False, f"Unexpected statement type {stmt}"
-
-
 def compute_properties(op: parser.CodeDef) -> Properties:
     escaping_calls = find_escaping_api_calls(op)
     has_free = (
@@ -917,13 +839,10 @@ def compute_properties(op: parser.CodeDef) -> Properties:
     )
     deopts_if = variable_used(op, "DEOPT_IF")
     exits_if = variable_used(op, "EXIT_IF")
-    exit_if_at_end = variable_used(op, "AT_END_EXIT_IF")
-    deopts_periodic = variable_used(op, "HANDLE_PENDING_AND_DEOPT_IF")
-    exits_and_deopts = sum((deopts_if, exits_if, deopts_periodic))
-    if exits_and_deopts > 1:
+    if deopts_if and exits_if:
         tkn = op.tokens[0]
         raise lexer.make_syntax_error(
-            "Op cannot contain more than one of EXIT_IF, DEOPT_IF and HANDLE_PENDING_AND_DEOPT_IF",
+            "Op cannot contain both EXIT_IF and DEOPT_IF",
             tkn.filename,
             tkn.line,
             tkn.column,
@@ -934,17 +853,13 @@ def compute_properties(op: parser.CodeDef) -> Properties:
     escapes = stmt_escapes(op.block)
     pure = False if isinstance(op, parser.LabelDef) else "pure" in op.annotations
     no_save_ip = False if isinstance(op, parser.LabelDef) else "no_save_ip" in op.annotations
-    unpredictable, branches_seen = stmt_has_jump_on_unpredictable_path(op.block, 0)
-    unpredictable_jump = False if isinstance(op, parser.LabelDef) else (unpredictable and branches_seen > 0)
     return Properties(
         escaping_calls=escaping_calls,
         escapes=escapes,
         error_with_pop=error_with_pop,
         error_without_pop=error_without_pop,
         deopts=deopts_if,
-        deopts_periodic=deopts_periodic,
         side_exit=exits_if,
-        side_exit_at_end=exit_if_at_end,
         oparg=oparg_used(op),
         jumps=variable_used(op, "JUMPBY"),
         eval_breaker="CHECK_PERIODIC" in op.name,
@@ -960,44 +875,14 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         no_save_ip=no_save_ip,
         tier=tier_variable(op),
         needs_prev=variable_used(op, "prev_instr"),
-        needs_guard_ip=(isinstance(op, parser.InstDef)
-                        and (unpredictable_jump and "replaced" not in op.annotations))
-                       or variable_used(op, "LOAD_IP")
-                       or variable_used(op, "DISPATCH_INLINED"),
-        unpredictable_jump=unpredictable_jump,
-        records_value=variable_used(op, "RECORD_VALUE")
     )
-
-def expand(items: list[StackItem], oparg: int) -> list[StackItem]:
-    # Only replace array item with scalar if no more than one item is an array
-    index = -1
-    for i, item in enumerate(items):
-        if "oparg" in item.size:
-            if index >= 0:
-                return items
-            index = i
-    if index < 0:
-        return items
-    try:
-        count = int(eval(items[index].size.replace("oparg", str(oparg))))
-    except ValueError:
-        return items
-    return items[:index] + [
-        StackItem(items[index].name + f"_{i}", "", items[index].peek, items[index].used) for i in range(count)
-        ] + items[index+1:]
-
-def scalarize_stack(stack: StackEffect, oparg: int) -> StackEffect:
-    stack.inputs = expand(stack.inputs, oparg)
-    stack.outputs = expand(stack.outputs, oparg)
-    return stack
 
 def make_uop(
     name: str,
     op: parser.InstDef,
     inputs: list[parser.InputEffect],
-    uops: dict[str, Uop],
 ) -> Uop:
-    result = Uop(
+    return Uop(
         name=name,
         context=op.context,
         annotations=op.annotations,
@@ -1007,37 +892,6 @@ def make_uop(
         body=op.block,
         properties=compute_properties(op),
     )
-    for anno in op.annotations:
-        if anno.startswith("replicate"):
-            text = anno[10:-1]
-            start, stop = text.split(":")
-            result.replicated = range(int(start), int(stop))
-            break
-    else:
-        return result
-    for oparg in result.replicated:
-        name_x = name + "_" + str(oparg)
-        properties = compute_properties(op)
-        properties.oparg = False
-        stack = analyze_stack(op)
-        if not variable_used(op, "oparg"):
-            stack = scalarize_stack(stack, oparg)
-        else:
-            properties.const_oparg = oparg
-        rep = Uop(
-            name=name_x,
-            context=op.context,
-            annotations=op.annotations,
-            stack=stack,
-            caches=analyze_caches(inputs),
-            local_stores=find_variable_stores(op),
-            body=op.block,
-            properties=properties,
-        )
-        rep.replicates = result
-        uops[name_x] = rep
-
-    return result
 
 
 def add_op(op: parser.InstDef, uops: dict[str, Uop]) -> None:
@@ -1047,7 +901,7 @@ def add_op(op: parser.InstDef, uops: dict[str, Uop]) -> None:
             raise override_error(
                 op.name, op.context, uops[op.name].context, op.tokens[0]
             )
-    uops[op.name] = make_uop(op.name, op, op.inputs, uops)
+    uops[op.name] = make_uop(op.name, op, op.inputs)
 
 
 def add_instruction(
@@ -1077,7 +931,7 @@ def desugar_inst(
                 uop_index = len(parts)
                 # Place holder for the uop.
                 parts.append(Skip(0))
-    uop = make_uop("_" + inst.name, inst, op_inputs, uops)
+    uop = make_uop("_" + inst.name, inst, op_inputs)
     uop.implicitly_created = True
     uops[inst.name] = uop
     if uop_index < 0:
@@ -1091,7 +945,6 @@ def add_macro(
     macro: parser.Macro, instructions: dict[str, Instruction], uops: dict[str, Uop]
 ) -> None:
     parts: list[Part] = []
-    seen_real_uop = False
     for part in macro.uops:
         match part:
             case parser.OpName():
@@ -1102,16 +955,7 @@ def add_macro(
                         raise analysis_error(
                             f"No Uop named {part.name}", macro.tokens[0]
                         )
-                    uop = uops[part.name]
-                    if uop.properties.records_value:
-                        if seen_real_uop:
-                            raise analysis_error(
-                                f"Recording uop {part.name} must precede all "
-                                f"non-recording, non-specializing uops in macro",
-                                macro.tokens[0])
-                    elif "specializing" not in uop.annotations:
-                        seen_real_uop = True
-                    parts.append(uop)
+                    parts.append(uops[part.name])
             case parser.CacheEffect():
                 parts.append(Skip(part.size))
             case _:
@@ -1181,9 +1025,7 @@ def assign_opcodes(
     # This is an historical oddity.
     instmap["BINARY_OP_INPLACE_ADD_UNICODE"] = 3
 
-    instmap["INSTRUMENTED_LINE"] = 253
-    instmap["ENTER_EXECUTOR"] = 254
-    instmap["TRACE_RECORD"] = 255
+    instmap["INSTRUMENTED_LINE"] = 255
 
     instrumented = [name for name in instructions if name.startswith("INSTRUMENTED")]
 
@@ -1208,7 +1050,7 @@ def assign_opcodes(
     # Specialized ops appear in their own section
     # Instrumented opcodes are at the end of the valid range
     min_internal = instmap["RESUME"] + 1
-    min_instrumented = 254 - len(instrumented)
+    min_instrumented = 256 - len(instrumented)
     assert min_internal + len(specialized) < min_instrumented
 
     next_opcode = 1
@@ -1324,59 +1166,6 @@ def analyze_forest(forest: list[parser.AstNode]) -> Analysis:
     return Analysis(
         instructions, uops, families, pseudos, labels, opmap, first_arg, min_instrumented
     )
-
-
-#Simple heuristic for size to avoid too much stencil duplication
-def is_large(uop: Uop) -> bool:
-    return len(list(uop.body.tokens())) > 120
-
-
-def get_uop_cache_depths(uop: Uop) -> Iterator[tuple[int, int, int]]:
-    if uop.name == "_SPILL_OR_RELOAD":
-        for inputs in range(MAX_CACHED_REGISTER+1):
-            for outputs in range(MAX_CACHED_REGISTER+1):
-                if inputs != outputs:
-                    yield inputs, outputs, inputs
-        return
-    if uop.name in ("_DEOPT", "_HANDLE_PENDING_AND_DEOPT", "_EXIT_TRACE", "_DYNAMIC_EXIT"):
-        for i in range(MAX_CACHED_REGISTER+1):
-            yield i, 0, 0
-        return
-    if uop.name in ("_START_EXECUTOR", "_JUMP_TO_TOP", "_COLD_EXIT"):
-        yield 0, 0, 0
-        return
-    if uop.name == "_ERROR_POP_N":
-        yield 0, 0, 0
-        return
-    ideal_inputs = 0
-    has_array = False
-    for item in reversed(uop.stack.inputs):
-        if item.size:
-            has_array = True
-            break
-        ideal_inputs += 1
-    ideal_outputs = 0
-    for item in reversed(uop.stack.outputs):
-        if item.size:
-            has_array = True
-            break
-        ideal_outputs += 1
-    if ideal_inputs > MAX_CACHED_REGISTER:
-        ideal_inputs = MAX_CACHED_REGISTER
-    if ideal_outputs > MAX_CACHED_REGISTER:
-        ideal_outputs = MAX_CACHED_REGISTER
-    at_end = uop.properties.sync_sp or uop.properties.side_exit_at_end
-    exit_depth = ideal_outputs if at_end else ideal_inputs
-    if uop.properties.escapes or uop.properties.sync_sp or has_array or is_large(uop):
-        yield ideal_inputs, ideal_outputs, exit_depth
-        return
-    for inputs in range(MAX_CACHED_REGISTER + 1):
-        outputs = ideal_outputs - ideal_inputs + inputs
-        if outputs < ideal_outputs:
-            outputs = ideal_outputs
-        elif outputs > MAX_CACHED_REGISTER:
-            continue
-        yield inputs, outputs, outputs if at_end else inputs
 
 
 def analyze_files(filenames: list[str]) -> Analysis:

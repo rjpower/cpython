@@ -55,10 +55,6 @@ FLAGS = [
     "SYNC_SP",
     "ERROR_NO_POP",
     "NO_SAVE_IP",
-    "PERIODIC",
-    "UNPREDICTABLE_JUMP",
-    "NEEDS_GUARD_IP",
-    "RECORDS_VALUE",
 ]
 
 
@@ -300,7 +296,7 @@ def generate_expansion_table(analysis: Analysis, out: CWriter) -> None:
 
 
 def is_viable_expansion(inst: Instruction) -> bool:
-    "An instruction can be expanded if all its parts are viable for tier 2"
+    "An instruction can be expanded if all its parts are viable uops"
     for part in inst.parts:
         if isinstance(part, Uop):
             # Skip specializing and replaced uops

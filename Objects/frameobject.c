@@ -301,6 +301,10 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
                 if (add_overwritten_fast_local(frame, old_obj) < 0) {
                     return -1;
                 }
+                // f_overwritten_fast_locals now keeps old_obj alive until the
+                // frame dies, so LOAD_FAST_BORROW references to it elsewhere
+                // on the stack stay valid after the slot's own reference goes.
+                _Py_stackref_allow_borrows_outlive_close(fast[i]);
                 PyStackRef_CLOSE(fast[i]);
             }
             fast[i] = PyStackRef_FromPyObjectNew(value);

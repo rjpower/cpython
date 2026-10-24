@@ -82,6 +82,9 @@ PyAPI_FUNC(_PyStackRef) _Py_stackref_create(PyObject *obj, uint16_t flags, const
 PyAPI_FUNC(void) _Py_stackref_record_borrow(_PyStackRef ref, const char *filename, int linenumber);
 PyAPI_FUNC(_PyStackRef) _Py_stackref_get_borrowed_from(_PyStackRef ref, const char *filename, int linenumber);
 PyAPI_FUNC(void) _Py_stackref_set_borrowed_from(_PyStackRef ref, _PyStackRef borrowed_from, const char *filename, int linenumber);
+// Declare that borrows of `ref` may outlive its close, because another owner
+// keeps the object alive (see framelocalsproxy_setitem()).
+PyAPI_FUNC(void) _Py_stackref_allow_borrows_outlive_close(_PyStackRef ref);
 extern void _Py_stackref_associate(PyInterpreterState *interp, PyObject *obj, _PyStackRef ref);
 
 static const _PyStackRef PyStackRef_NULL = { .index = 0 };
@@ -397,6 +400,9 @@ PyAPI_FUNC(bool)
 PyStackRef_IsNullOrIndex(_PyStackRef ref);
 
 #else
+
+// Only the Py_STACKREF_DEBUG checker tracks borrows.
+#define _Py_stackref_allow_borrows_outlive_close(ref) ((void)(ref))
 
 static const _PyStackRef PyStackRef_ERROR = { .bits = Py_TAG_INVALID };
 

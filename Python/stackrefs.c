@@ -21,6 +21,11 @@ typedef struct _table_entry {
     int linenumber_borrow;
     int borrows;
     _PyStackRef borrowed_from;
+    // Closing with outstanding borrows is allowed (see
+    // _Py_stackref_allow_borrows_outlive_close()).
+    int borrows_may_outlive;
+    // Closed while borrowed; freed when the last borrow is closed.
+    int closed;
 } TableEntry;
 
 TableEntry *
@@ -38,6 +43,8 @@ make_table_entry(PyObject *obj, const char *filename, int linenumber)
     result->linenumber_borrow = 0;
     result->borrows = 0;
     result->borrowed_from = PyStackRef_NULL;
+    result->borrows_may_outlive = 0;
+    result->closed = 0;
     return result;
 }
 
@@ -113,6 +120,21 @@ _Py_stackref_close(_PyStackRef ref, const char *filename, int linenumber)
                     borrowed_from.index, filename, linenumber);
             }
             entry_borrowed->borrows--;
+            if (entry_borrowed->closed && entry_borrowed->borrows == 0) {
+                free(_Py_hashtable_steal(interp->open_stackrefs_table,
+                                         (void *)borrowed_from.index));
+            }
+        }
+        if (entry->borrows > 0 && entry->borrows_may_outlive) {
+            // The owner is gone but borrowers remain. Keep the entry so
+            // they can still find it, and drop it with the last borrower.
+            obj = entry->obj;
+            entry->closed = 1;
+            if (_Py_hashtable_set(interp->open_stackrefs_table,
+                                  (void *)ref.index, entry) < 0) {
+                Py_FatalError("No memory left for stackref debug table");
+            }
+            return obj;
         }
         if (entry->borrows > 0) {
             _Py_FatalErrorFormat(__func__,
@@ -241,11 +263,23 @@ _Py_stackref_associate(PyInterpreterState *interp, PyObject *obj, _PyStackRef re
 }
 
 
+void
+_Py_stackref_allow_borrows_outlive_close(_PyStackRef ref)
+{
+    PyInterpreterState *interp = PyInterpreterState_Get();
+    TableEntry *entry = _Py_hashtable_get(interp->open_stackrefs_table, (void *)ref.index);
+    if (entry == NULL) {
+        _Py_FatalErrorFormat(__func__,
+            "Invalid StackRef with ID %" PRIu64 "\n", ref.index);
+    }
+    entry->borrows_may_outlive = 1;
+}
+
 static int
 report_leak(_Py_hashtable_t *ht, const void *key, const void *value, void *leak)
 {
     TableEntry *entry = (TableEntry *)value;
-    if (!_Py_IsStaticImmortal(entry->obj)) {
+    if (!entry->closed && !_Py_IsStaticImmortal(entry->obj)) {
         *(int *)leak = 1;
         printf("Stackref leak. Refers to instance of %s at %p. Created at %s:%d",
                entry->classname, entry->obj, entry->filename, entry->linenumber);

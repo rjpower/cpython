@@ -232,6 +232,7 @@ annotations = {
     "pure",
     "tier1",
     "no_save_ip",
+    "inline_ok",
 }
 
 __all__ = []

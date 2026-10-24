@@ -168,3 +168,15 @@ Entries are appended in order; each milestone is also a commit.
   creates the block lazily. Full suite green. Deviations from note 01
   section 3 (BRANCH inline, `misses` and `arg` reserved) to be folded into
   the note at step 4.
+- Tagged-values step 2 landed on main: NaN-box `_PyStackRef` encoding
+  (section 2.1 of note 02) with no producers. Generator emits by-value
+  boxing behind `Py_UNLIKELY` with the cold body out of line, guard exits
+  that test the stack slot in memory, and `known_object` tracking so
+  close/dup/steal on proven pointers test only bit 0. Overhead against the
+  feedback commit: +3.38 percent instructions geomean (richards +2.8,
+  go +4.1, nqueens +2.8, chaos +3.9), down from +5.8 for the straight port.
+  34 percent of the remainder is the `LOAD_FAST_BORROW` pointer-space test
+  (floor for a dynamic borrow; the IR's static borrow bit removes it), the
+  rest guard exits that step 4 turns into the type test itself. Accepted on
+  record per the review direction. Full suite green on default; debug,
+  stackref-debug and free-threaded sets pass. Prototype branches deleted.

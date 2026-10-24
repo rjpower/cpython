@@ -347,6 +347,12 @@ _PyFrame_GetFrameObject(_PyInterpreterFrame *frame)
 PyAPI_FUNC(void)
 _PyFrame_ClearLocals(_PyInterpreterFrame *frame);
 
+#ifdef Py_DEBUG
+// Abort if a live slot of the frame holds a malformed stackref.
+// Exported for lltrace in _testinternalcapi, which includes ceval.h.
+PyAPI_FUNC(void) _PyStackRef_CheckFrame(_PyInterpreterFrame *frame);
+#endif
+
 /* Clears all references in the frame.
  * If take is non-zero, then the _PyInterpreterFrame frame
  * may be transferred to the frame object it references

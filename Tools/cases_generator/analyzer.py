@@ -36,6 +36,7 @@ class Properties:
     tier: int | None = None
     needs_prev: bool = False
     no_save_ip: bool = False
+    inline_ok: bool = False
 
     def dump(self, indent: str) -> None:
         simple_properties = self.__dict__.copy()
@@ -72,6 +73,7 @@ class Properties:
             pure=all(p.pure for p in properties),
             needs_prev=any(p.needs_prev for p in properties),
             no_save_ip=all(p.no_save_ip for p in properties),
+            inline_ok=all(p.inline_ok for p in properties),
         )
 
     @property
@@ -98,6 +100,7 @@ SKIP_PROPERTIES = Properties(
     side_exit=False,
     pure=True,
     no_save_ip=False,
+    inline_ok=True,
 )
 
 
@@ -181,6 +184,10 @@ class Uop:
     implicitly_created: bool = False
     # Size of the instruction(s), only set for uops containing the INSTRUCTION_SIZE macro
     instruction_size: int | None = None
+    # Scalar stack inputs that the body converts to PyObject *
+    object_inputs: tuple[str, ...] = ()
+    # Scalar stack inputs that the body asserts to be objects
+    asserted_objects: tuple[str, ...] = ()
 
     def dump(self, indent: str) -> None:
         print(
@@ -214,6 +221,16 @@ class Uop:
 
     def is_viable(self) -> bool:
         return self.why_not_viable() is None
+
+    def is_guard(self) -> bool:
+        """A guard only inspects its inputs: it may exit, but it does not
+        escape and leaves the stack unchanged."""
+        return (
+            (self.properties.deopts or self.properties.side_exit)
+            and not self.properties.escapes
+            and len(self.stack.inputs) == len(self.stack.outputs)
+            and all(item.peek for item in self.stack.inputs)
+        )
 
     def is_super(self) -> bool:
         for tkn in self.body.tokens():
@@ -518,6 +535,7 @@ NON_ESCAPING_FUNCTIONS = (
     "PyStackRef_FromPyObjectNewMortal",
     "PyStackRef_AsPyObjectSteal",
     "PyStackRef_Borrow",
+    "PyStackRef_BorrowAt",
     "PyStackRef_CLEAR",
     "PyStackRef_CLOSE_SPECIALIZED",
     "PyStackRef_DUP",
@@ -630,7 +648,21 @@ NON_ESCAPING_FUNCTIONS = (
     "PyStackRef_TagIndex",
     "PyStackRef_UntagIndex",
     "PyStackRef_IncrementTaggedIndexNoOverflow",
-    "PyStackRef_IsNullOrIndex",
+    "PyStackRef_IsObject",
+    "PyStackRef_IsPointerSpace",
+    "PyStackRef_IsPointerSpaceAt",
+    "PyStackRef_IsInlineAt",
+    "PyStackRef_IsInline",
+    "PyStackRef_IsInlineInt",
+    "PyStackRef_IsInlineFloat",
+    "PyStackRef_BothInlineInt",
+    "PyStackRef_FromInt32",
+    "PyStackRef_InlineInt",
+    "PyStackRef_FromDoubleNotNaN",
+    "PyStackRef_InlineFloat",
+    # Boxing allocates an int or float, which runs no Python code and
+    # cannot start a collection.
+    "PyStackRef_Box",
     "PyStackRef_IsError",
     "PyStackRef_IsValid",
     "PyStackRef_Wrap",
@@ -856,6 +888,7 @@ def compute_properties(op: parser.CodeDef) -> Properties:
     escapes = stmt_escapes(op.block)
     pure = False if isinstance(op, parser.LabelDef) else "pure" in op.annotations
     no_save_ip = False if isinstance(op, parser.LabelDef) else "no_save_ip" in op.annotations
+    inline_ok = False if isinstance(op, parser.LabelDef) else "inline_ok" in op.annotations
     return Properties(
         escaping_calls=escaping_calls,
         escapes=escapes,
@@ -876,24 +909,84 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         has_free=has_free,
         pure=pure,
         no_save_ip=no_save_ip,
+        inline_ok=inline_ok,
         tier=tier_variable(op),
         needs_prev=variable_used(op, "prev_instr"),
     )
+
+STACKREF_TO_OBJECT = (
+    "PyStackRef_AsPyObjectBorrow",
+    "PyStackRef_AsPyObjectNew",
+    "PyStackRef_AsPyObjectSteal",
+)
+
+
+def find_object_inputs(
+    op: parser.InstDef, stack: StackEffect
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Find the scalar stack inputs that op converts to PyObject *, and those
+    that it asserts to be objects.
+
+    Only a conversion whose whole argument is the input's name counts.
+    Conversions inside assert() are ignored, since they vanish from release
+    builds. Arrays are left to the C helpers that convert their elements.
+
+    An input that op asserts to be an object, with
+    `assert(PyStackRef_IsObject(name))`, can never hold an inline value by
+    construction of the bytecode, so it needs no test.
+    """
+    scalars = {item.name for item in stack.inputs if not item.is_array()}
+    found: list[str] = []
+    asserted: list[str] = []
+    tokens = list(op.block.tokens())
+    i = 0
+    while i < len(tokens):
+        tkn = tokens[i]
+        if tkn.text == "assert":
+            start = i
+            depth = 0
+            i += 1
+            while i < len(tokens):
+                if tokens[i].kind == lexer.LPAREN:
+                    depth += 1
+                elif tokens[i].kind == lexer.RPAREN:
+                    depth -= 1
+                    if depth == 0:
+                        break
+                i += 1
+            texts = [t.text for t in tokens[start:i + 1]]
+            if (len(texts) == 7 and texts[2] == "PyStackRef_IsObject"
+                    and texts[4] in scalars):
+                asserted.append(texts[4])
+        elif tkn.text in STACKREF_TO_OBJECT and i + 3 < len(tokens):
+            arg, close = tokens[i + 2], tokens[i + 3]
+            if arg.text in scalars and close.kind == lexer.RPAREN and arg.text not in found:
+                found.append(arg.text)
+        i += 1
+    return (
+        tuple(name for name in found if name not in asserted),
+        tuple(asserted),
+    )
+
 
 def make_uop(
     name: str,
     op: parser.InstDef,
     inputs: list[parser.InputEffect],
 ) -> Uop:
+    stack = analyze_stack(op)
+    object_inputs, asserted_objects = find_object_inputs(op, stack)
     return Uop(
         name=name,
         context=op.context,
         annotations=op.annotations,
-        stack=analyze_stack(op),
+        stack=stack,
         caches=analyze_caches(inputs),
         local_stores=find_variable_stores(op),
         body=op.block,
         properties=compute_properties(op),
+        object_inputs=object_inputs,
+        asserted_objects=asserted_objects,
     )
 
 

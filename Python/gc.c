@@ -462,7 +462,7 @@ _PyGC_VisitStackRef(_PyStackRef *ref, visitproc visit, void *arg)
     // This is a bit tricky! We want to ignore stackrefs with embedded
     // refcounts when computing the incoming references, but otherwise treat
     // them like normal.
-    assert(!PyStackRef_IsTaggedIndex(*ref));
+    assert(PyStackRef_IsObject(*ref));
     if (!PyStackRef_RefcountOnObject(*ref) && (visit == visit_decref)) {
         return 0;
     }
@@ -474,11 +474,9 @@ int
 _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
     _PyStackRef *ref = _PyFrame_GetLocalsArray(frame);
-    /* locals and stack */
+    /* locals and stack; _Py_VISIT_STACKREF skips indices and inline values */
     for (; ref < frame->stackpointer; ref++) {
-        if (!PyStackRef_IsTaggedIndex(*ref)) {
-            _Py_VISIT_STACKREF(*ref);
-        }
+        _Py_VISIT_STACKREF(*ref);
     }
     return 0;
 }

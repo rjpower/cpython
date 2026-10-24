@@ -144,6 +144,10 @@ class Local:
     item: StackItem
     memory_offset: PointerOffset | None
     in_local: bool
+    # Known to hold a pointer, not an inline value: it was boxed, passed a
+    # guard, was asserted to be an object, or was assigned from a pointer.
+    # Cleared when the code assigns anything else to it.
+    known_object: bool = False
 
     def __repr__(self) -> str:
         return f"Local('{self.item.name}', mem={self.memory_offset}, local={self.in_local}, array={self.is_array()})"
@@ -185,7 +189,8 @@ class Local:
         return Local(
             self.item,
             self.memory_offset,
-            self.in_local
+            self.in_local,
+            self.known_object,
         )
 
     @property
@@ -442,6 +447,8 @@ class Stack:
             if self_var.name != other_var.name:
                 raise StackError(f"Mismatched variables on stack: {self_var.name} and {other_var.name}")
             self_var.in_local = self_var.in_local and other_var.in_local
+            known = self_var.known_object and other_var.known_object
+            self_var.known_object = other_var.known_object = known
             if other_var.memory_offset is None:
                 self_var.memory_offset = None
         self.align(other, out)
@@ -683,6 +690,8 @@ class Storage:
         for var, other_var in zip(self.inputs, other.inputs):
             if var.in_local != other_var.in_local:
                 raise StackError(f"'{var.name}' is cleared on some paths, but not all")
+            known = var.known_object and other_var.known_object
+            var.known_object = other_var.known_object = known
         if len(self.outputs) != len(other.outputs):
             self._push_defined_outputs()
             other._push_defined_outputs()
@@ -694,6 +703,8 @@ class Storage:
                 other_var.memory_offset = None
             elif other_var.memory_offset is None:
                 var.memory_offset = None
+            known = var.known_object and other_var.known_object
+            var.known_object = other_var.known_object = known
         self.stack.merge(other.stack, out)
         self.sanity_check()
 
@@ -743,6 +754,9 @@ class Storage:
             close = "PyStackRef_CLOSE"
             if "null" in var.name:
                 close = "PyStackRef_XCLOSE"
+            if var.known_object and not var.size:
+                # Known to hold a pointer; see _PyStackRef_CLOSE_POINTER().
+                close = f"_{close}_POINTER"
             var.memory_offset = None
             self.save(out)
             out.start_line()

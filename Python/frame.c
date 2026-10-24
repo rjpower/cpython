@@ -4,6 +4,7 @@
 #include "pycore_frame.h"         // _PyFrame_New_NoTrack()
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
 #include "pycore_genobject.h"     // _PyGen_GetGeneratorFromFrame()
+#include "pycore_pyerrors.h"      // _Py_FatalErrorFormat()
 #include "pycore_stackref.h"      // _Py_VISIT_STACKREF()
 
 
@@ -96,10 +97,51 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
     Py_END_CRITICAL_SECTION();
 }
 
+#ifdef Py_DEBUG
+// An index is valid only on the evaluation stack, never in a local.
+static bool
+is_well_formed(_PyStackRef ref, bool in_stack)
+{
+#ifdef Py_STACKREF_INLINE_VALUES
+    if (PyStackRef_IsInlineInt(ref)) {
+        return (_PyStackRef_BITS(ref) >> 32) == (Py_INT_BASE >> 32);
+    }
+    if (PyStackRef_IsInlineFloat(ref)) {
+        return !isnan(PyStackRef_InlineFloat(ref));
+    }
+#endif
+    if (PyStackRef_IsTaggedIndex(ref)) {
+        return in_stack;
+    }
+    if (PyStackRef_IsNull(ref)) {
+        return true;
+    }
+    return !PyStackRef_IsMalformed(ref)
+           && Py_TYPE(PyStackRef_AsPyObjectBorrow(ref)) != NULL;
+}
+
+void
+_PyStackRef_CheckFrame(_PyInterpreterFrame *frame)
+{
+    assert(frame->stackpointer != NULL);
+    _PyStackRef *stack_base = _PyFrame_Stackbase(frame);
+    for (_PyStackRef *sp = frame->localsplus; sp < frame->stackpointer; sp++) {
+        if (!is_well_formed(*sp, sp >= stack_base)) {
+            _Py_FatalErrorFormat(__func__,
+                "malformed stackref 0x%" PRIx64 " in slot %d",
+                (uint64_t)_PyStackRef_BITS(*sp), (int)(sp - frame->localsplus));
+        }
+    }
+}
+#endif
+
 void
 _PyFrame_ClearLocals(_PyInterpreterFrame *frame)
 {
     assert(frame->stackpointer != NULL);
+#ifdef Py_DEBUG
+    _PyStackRef_CheckFrame(frame);
+#endif
     _PyStackRef *sp = frame->stackpointer;
     _PyStackRef *locals = frame->localsplus;
     frame->stackpointer = locals;

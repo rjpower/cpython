@@ -477,6 +477,10 @@ static inline void
 _PyObject_Init(PyObject *op, PyTypeObject *typeobj)
 {
     assert(op != NULL);
+#if SIZEOF_VOID_P == 8 && !defined(Py_GIL_DISABLED)
+    // A stackref holds an object address only below 2**48 (pycore_stackref.h).
+    assert(((uintptr_t)op >> 48) == 0);
+#endif
     Py_SET_TYPE(op, typeobj);
     assert(_PyType_HasFeature(typeobj, Py_TPFLAGS_HEAPTYPE) || _Py_IsImmortal(typeobj));
     _Py_INCREF_TYPE(typeobj);

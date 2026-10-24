@@ -1086,6 +1086,297 @@ class TestGeneratedCases(unittest.TestCase):
         with self.assertRaises(SyntaxError):
             self.run_cases_test(input, output)
 
+    def test_inline_value_boxed(self):
+        input = """
+        inst(OP, (value --)) {
+            SPAM(PyStackRef_AsPyObjectBorrow(value));
+            PyStackRef_CLOSE(value);
+        }
+
+        inline_ok inst(OP_INLINE_OK, (value --)) {
+            SPAM(PyStackRef_AsPyObjectBorrow(value));
+            PyStackRef_CLOSE(value);
+        }
+        """
+        output = """
+        TARGET(OP) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP;
+            (void)(opcode);
+            #endif
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(OP);
+            _PyStackRef value;
+            value = stack_pointer[-1];
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
+                value = PyStackRef_Box(value);
+                if (PyStackRef_IsInline(value)) {
+                    JUMP_TO_LABEL(error);
+                }
+                stack_pointer[-1] = value;
+            }
+            SPAM(PyStackRef_AsPyObjectBorrow(value));
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            _PyFrame_SetStackPointer(frame, stack_pointer);
+            _PyFrame_StackPointerValidate(frame);
+            _PyStackRef_CLOSE_POINTER(value);
+            _PyFrame_StackPointerInvalidate(frame);
+            DISPATCH();
+        }
+
+        TARGET(OP_INLINE_OK) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP_INLINE_OK;
+            (void)(opcode);
+            #endif
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(OP_INLINE_OK);
+            _PyStackRef value;
+            value = stack_pointer[-1];
+            SPAM(PyStackRef_AsPyObjectBorrow(value));
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            _PyFrame_SetStackPointer(frame, stack_pointer);
+            _PyFrame_StackPointerValidate(frame);
+            PyStackRef_CLOSE(value);
+            _PyFrame_StackPointerInvalidate(frame);
+            DISPATCH();
+        }
+        """
+        self.run_cases_test(input, output)
+
+    def test_inline_value_guard(self):
+        # The guard exits on an inline value; _USE then needs no box.
+        input = """
+        inst(OP, (value --)) {
+            DEAD(value);
+        }
+
+        op(_GUARD, (value -- value)) {
+            DEOPT_IF(Py_TYPE(PyStackRef_AsPyObjectBorrow(value)) != &PyLong_Type);
+        }
+
+        op(_USE, (value --)) {
+            SPAM(PyStackRef_AsPyObjectBorrow(value));
+            DEAD(value);
+        }
+
+        macro(OP_INT) = _GUARD + _USE;
+
+        family(OP, 0) = { OP_INT };
+        """
+        output = """
+        TARGET(OP) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP;
+            (void)(opcode);
+            #endif
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(OP);
+            PREDICTED_OP:;
+            _PyStackRef value;
+            value = stack_pointer[-1];
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(OP_INT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP_INT;
+            (void)(opcode);
+            #endif
+            _Py_CODEUNIT* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(OP_INT);
+            static_assert(0 == 0, "incorrect cache size");
+            _PyStackRef value;
+            // _GUARD
+            {
+                value = stack_pointer[-1];
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
+                    UPDATE_MISS_STATS(OP);
+                    assert(_PyOpcode_Deopt[opcode] == (OP));
+                    JUMP_TO_PREDICTED(OP);
+                }
+                if (Py_TYPE(PyStackRef_AsPyObjectBorrow(value)) != &PyLong_Type) {
+                    UPDATE_MISS_STATS(OP);
+                    assert(_PyOpcode_Deopt[opcode] == (OP));
+                    JUMP_TO_PREDICTED(OP);
+                }
+            }
+            // _USE
+            {
+                SPAM(PyStackRef_AsPyObjectBorrow(value));
+            }
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+        """
+        self.run_cases_test(input, output)
+
+    def test_inline_value_box_not_written_back(self):
+        # Nothing after the boxes reads the stack, so they stay in registers;
+        # if the second box fails, the first is stored before the error exit.
+        input = """
+        inst(OP, (left, right -- res)) {
+            res = PyStackRef_FromPyObjectSteal(PAIR(PyStackRef_AsPyObjectSteal(left), PyStackRef_AsPyObjectSteal(right)));
+        }
+        """
+        output = """
+        TARGET(OP) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP;
+            (void)(opcode);
+            #endif
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(OP);
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            right = stack_pointer[-1];
+            left = stack_pointer[-2];
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
+                left = PyStackRef_Box(left);
+                if (PyStackRef_IsInline(left)) {
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
+                right = PyStackRef_Box(right);
+                if (PyStackRef_IsInline(right)) {
+                    stack_pointer[-2] = left;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            res = PyStackRef_FromPyObjectSteal(PAIR(_PyStackRef_AsPyObjectStealPointer(left), _PyStackRef_AsPyObjectStealPointer(right)));
+            stack_pointer[-2] = res;
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+        """
+        self.run_cases_test(input, output)
+
+    def test_inline_value_asserted_object(self):
+        # An input asserted to be an object is neither tested nor boxed.
+        input = """
+        inst(OP, (iter --)) {
+            assert(PyStackRef_IsObject(iter));
+            SPAM(PyStackRef_AsPyObjectBorrow(iter));
+            PyStackRef_CLOSE(iter);
+        }
+        """
+        output = """
+        TARGET(OP) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP;
+            (void)(opcode);
+            #endif
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(OP);
+            _PyStackRef iter;
+            iter = stack_pointer[-1];
+            assert(PyStackRef_IsObject(iter));
+            SPAM(PyStackRef_AsPyObjectBorrow(iter));
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            _PyFrame_SetStackPointer(frame, stack_pointer);
+            _PyFrame_StackPointerValidate(frame);
+            _PyStackRef_CLOSE_POINTER(iter);
+            _PyFrame_StackPointerInvalidate(frame);
+            DISPATCH();
+        }
+        """
+        self.run_cases_test(input, output)
+
+    def test_known_pointer_assignment(self):
+        # A constructor result is a pointer, so _B closes it with the
+        # pointer-only variant, but not when only one path assigned it.
+        input = """
+        op(_A, (value -- value)) {
+            if (COND) {
+                value = PyStackRef_FromPyObjectNew(SPAM());
+            }
+        }
+
+        op(_B, (value --)) {
+            PyStackRef_CLOSE(value);
+        }
+
+        op(_C, (value -- value)) {
+            value = PyStackRef_FromPyObjectNew(SPAM());
+        }
+
+        macro(OP) = _A + _B;
+        macro(OP2) = _C + _B;
+        """
+        output = """
+        TARGET(OP) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP;
+            (void)(opcode);
+            #endif
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(OP);
+            _PyStackRef value;
+            // _A
+            {
+                value = stack_pointer[-1];
+                if (COND) {
+                    value = PyStackRef_FromPyObjectNew(SPAM());
+                }
+            }
+            // _B
+            {
+                stack_pointer += -1;
+                ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                PyStackRef_CLOSE(value);
+                _PyFrame_StackPointerInvalidate(frame);
+            }
+            DISPATCH();
+        }
+
+        TARGET(OP2) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP2;
+            (void)(opcode);
+            #endif
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(OP2);
+            _PyStackRef value;
+            // _C
+            {
+                value = stack_pointer[-1];
+                value = PyStackRef_FromPyObjectNew(SPAM());
+            }
+            // _B
+            {
+                stack_pointer += -1;
+                ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                _PyStackRef_CLOSE_POINTER(value);
+                _PyFrame_StackPointerInvalidate(frame);
+            }
+            DISPATCH();
+        }
+        """
+        self.run_cases_test(input, output)
+
     def test_array_of_one(self):
         input = """
         inst(OP, (arg[1] -- out[1])) {

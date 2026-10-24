@@ -61,6 +61,19 @@ def declare_variables(inst: Instruction, out: CWriter) -> None:
                 declare_variable(var, out)
 
 
+def stack_read_later(inst: Instruction, uop: Uop) -> bool:
+    """Whether the stack slots of uop's inputs may be read after its body
+    starts: a deopt or exit re-executes the instruction from the stack, an
+    error without pop leaves the stack to exception_unwind, and an escaping
+    call exposes the frame."""
+    parts = inst.parts[inst.parts.index(uop):]
+    return any(
+        p.properties.deopts or p.properties.side_exit
+        or p.properties.escapes or p.properties.error_without_pop
+        for p in parts if isinstance(p, Uop)
+    )
+
+
 def write_uop(
     uop: Part,
     emitter: Emitter,
@@ -99,6 +112,7 @@ def write_uop(
                 emitter.emit(f"(void){cache.name};\n")
         offset += cache.size
 
+    emitter.emit_object_inputs(uop, storage, inst, stack_read_later(inst, uop))
     reachable, storage = emitter.emit_tokens(uop, storage, inst, False)
     if braces:
         emitter.out.start_line()

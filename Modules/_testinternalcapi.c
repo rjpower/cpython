@@ -2919,6 +2919,73 @@ incref_decref_delayed(PyObject *self, PyObject *op)
     Py_RETURN_NONE;
 }
 
+#ifdef Py_STACKREF_INLINE_VALUES
+// Encode an exact int32 or non-NaN float as an inline stack value, check that
+// the operations valid on any stackref treat it as a value, then box it.
+static PyObject *
+stackref_box_roundtrip(PyObject *self, PyObject *arg)
+{
+    _PyStackRef ref;
+    if (PyLong_CheckExact(arg)) {
+        int32_t i;
+        if (PyLong_AsInt32(arg, &i) < 0) {
+            return NULL;
+        }
+        ref = PyStackRef_FromInt32(i);
+        if (!PyStackRef_IsInlineInt(ref) || PyStackRef_InlineInt(ref) != i
+            || !PyStackRef_BothInlineInt(ref, ref) || !PyStackRef_LongCheck(ref))
+        {
+            PyErr_SetString(PyExc_AssertionError, "bad inline int");
+            return NULL;
+        }
+    }
+    else if (PyFloat_CheckExact(arg)) {
+        double d = PyFloat_AS_DOUBLE(arg);
+        if (isnan(d)) {
+            PyErr_SetString(PyExc_ValueError, "NaN has no inline encoding");
+            return NULL;
+        }
+        ref = PyStackRef_FromDoubleNotNaN(d);
+        double back = PyStackRef_InlineFloat(ref);
+        if (!PyStackRef_IsInlineFloat(ref) || memcmp(&back, &d, sizeof(d)) != 0
+            || PyStackRef_IsInlineInt(ref) || !PyStackRef_FloatCheck(ref))
+        {
+            PyErr_SetString(PyExc_AssertionError, "bad inline float");
+            return NULL;
+        }
+    }
+    else {
+        PyErr_SetString(PyExc_TypeError, "expected an exact int or float");
+        return NULL;
+    }
+    _PyStackRef dup = PyStackRef_DUP(ref);
+    if (!PyStackRef_IsInline(ref) || PyStackRef_IsPointerSpace(ref)
+        || PyStackRef_IsTaggedIndex(ref) || PyStackRef_IsNull(ref)
+        || PyStackRef_IsError(ref) || !PyStackRef_IsValid(ref)
+        || PyStackRef_RefcountOnObject(ref)
+        || PyStackRef_TYPE(ref) != Py_TYPE(arg)
+        || !PyStackRef_Is(dup, ref) || !PyStackRef_Is(PyStackRef_Borrow(ref), ref)
+        || !PyStackRef_Is(PyStackRef_BorrowAt(&ref), ref)
+        || !PyStackRef_IsInlineAt(&ref) || PyStackRef_IsPointerSpaceAt(&ref)
+        || PyStackRef_Is(ref, PyStackRef_None))
+    {
+        PyErr_SetString(PyExc_AssertionError, "inline value predicates disagree");
+        return NULL;
+    }
+    PyStackRef_CLOSE(dup);
+    _PyStackRef boxed = PyStackRef_Box(ref);
+    if (PyStackRef_IsInline(boxed)) {
+        return NULL;
+    }
+    if (!PyStackRef_IsPointerSpaceAt(&boxed) || PyStackRef_IsInlineAt(&boxed)) {
+        PyStackRef_CLOSE(boxed);
+        PyErr_SetString(PyExc_AssertionError, "box is not a pointer");
+        return NULL;
+    }
+    return PyStackRef_AsPyObjectSteal(boxed);
+}
+#endif
+
 #ifdef __EMSCRIPTEN__
 #include "emscripten.h"
 
@@ -3369,6 +3436,9 @@ static PyMethodDef module_functions[] = {
     {"get_tracked_heap_size", get_tracked_heap_size, METH_NOARGS},
     {"is_static_immortal", is_static_immortal, METH_O},
     {"incref_decref_delayed", incref_decref_delayed, METH_O},
+#ifdef Py_STACKREF_INLINE_VALUES
+    {"stackref_box_roundtrip", stackref_box_roundtrip, METH_O},
+#endif
     GET_NEXT_DICT_KEYS_VERSION_METHODDEF
 #ifdef __EMSCRIPTEN__
     {"emscripten_set_up_async_input_device", emscripten_set_up_async_input_device, METH_NOARGS},

@@ -48,6 +48,18 @@ make_table_entry(PyObject *obj, const char *filename, int linenumber)
     return result;
 }
 
+// Indices and inline values are not table IDs.
+static void
+check_pointer_space(_PyStackRef ref, const char *func, const char *filename, int linenumber)
+{
+    if (!PyStackRef_IsPointerSpace(ref)) {
+        _Py_FatalErrorFormat(func,
+            "%s 0x%" PRIx64 " used as an object without boxing at %s:%d\n",
+            PyStackRef_IsTaggedIndex(ref) ? "Index" : "Inline value",
+            ref.index, filename, linenumber);
+    }
+}
+
 PyObject *
 _Py_stackref_get_object(_PyStackRef ref)
 {
@@ -55,6 +67,7 @@ _Py_stackref_get_object(_PyStackRef ref)
     if (ref.index == 0) {
         return NULL;
     }
+    check_pointer_space(ref, __func__, "<unknown>", 0);
     PyInterpreterState *interp = PyInterpreterState_Get();
     assert(interp != NULL);
     if (ref.index >= interp->next_stackref) {
@@ -72,6 +85,9 @@ _Py_stackref_get_object(_PyStackRef ref)
 int
 PyStackRef_Is(_PyStackRef a, _PyStackRef b)
 {
+    if (!PyStackRef_IsPointerSpace(a) || !PyStackRef_IsPointerSpace(b)) {
+        return a.index == b.index;
+    }
     return _Py_stackref_get_object(a) == _Py_stackref_get_object(b);
 }
 
@@ -79,6 +95,7 @@ PyObject *
 _Py_stackref_close(_PyStackRef ref, const char *filename, int linenumber)
 {
     assert(!PyStackRef_IsError(ref));
+    check_pointer_space(ref, __func__, filename, linenumber);
     PyInterpreterState *interp = PyInterpreterState_Get();
     if (ref.index >= interp->next_stackref) {
         _Py_FatalErrorFormat(__func__,
@@ -164,6 +181,7 @@ _Py_stackref_create(PyObject *obj, uint16_t flags, const char *filename, int lin
     }
     PyInterpreterState *interp = PyInterpreterState_Get();
     uint64_t new_id = interp->next_stackref;
+    assert(new_id < Py_PTR_LIMIT);
     interp->next_stackref = new_id + (1 << Py_TAGGED_SHIFT);
     TableEntry *entry = make_table_entry(obj, filename, linenumber);
     if (entry == NULL) {
@@ -180,6 +198,7 @@ void
 _Py_stackref_record_borrow(_PyStackRef ref, const char *filename, int linenumber)
 {
     assert(!PyStackRef_IsError(ref));
+    check_pointer_space(ref, __func__, filename, linenumber);
     if (ref.index < INITIAL_STACKREF_INDEX) {
         return;
     }
@@ -302,33 +321,29 @@ _Py_stackref_report_leaks(PyInterpreterState *interp)
     }
 }
 
-_PyStackRef PyStackRef_TagIndex(intptr_t i)
-{
-    assert(Py_ARITHMETIC_RIGHT_SHIFT(intptr_t, (i << Py_TAGGED_SHIFT), Py_TAGGED_SHIFT) == i);
-    return (_PyStackRef){ .index = (i << Py_TAGGED_SHIFT) | Py_INDEX_TAG };
-}
+#endif  // !defined(Py_GIL_DISABLED) && defined(Py_STACKREF_DEBUG)
 
-intptr_t
-PyStackRef_UntagIndex(_PyStackRef i)
-{
-    assert(PyStackRef_IsTaggedIndex(i));
-    intptr_t val = (intptr_t)i.index;
-    return Py_ARITHMETIC_RIGHT_SHIFT(intptr_t, val, Py_TAGGED_SHIFT);
-}
+#ifdef Py_STACKREF_INLINE_VALUES
 
-bool
-PyStackRef_IsNullOrIndex(_PyStackRef ref)
-{
-    return PyStackRef_IsNull(ref) || PyStackRef_IsTaggedIndex(ref);
-}
+// The tag bits (Py_TAG_BITS) of an object pointer must be clear.
+static_assert(_Alignof(PyObject) >= 8, "PyObject must be 8-byte aligned");
 
-_PyStackRef
-PyStackRef_IncrementTaggedIndexNoOverflow(_PyStackRef ref)
+// Out of line, so that the test before each call is all that hot paths carry.
+Py_NO_INLINE _PyStackRef
+_PyStackRef_BoxInlineValue(_PyStackRef ref)
 {
-    assert(PyStackRef_IsTaggedIndex(ref));
-    assert((ref.index & (~Py_TAG_BITS)) != (INTPTR_MAX & (~Py_TAG_BITS))); // Isn't about to overflow
-    return (_PyStackRef){ .index = ref.index + (1 << Py_TAGGED_SHIFT) };
+    assert(PyStackRef_IsInline(ref));
+    PyObject *box;
+    if (PyStackRef_IsInlineInt(ref)) {
+        box = PyLong_FromLong(PyStackRef_InlineInt(ref));
+    }
+    else {
+        box = PyFloat_FromDouble(PyStackRef_InlineFloat(ref));
+    }
+    if (box == NULL) {
+        return ref;
+    }
+    return PyStackRef_FromPyObjectSteal(box);
 }
-
 
 #endif

@@ -43,6 +43,7 @@ The module also extends gdb with some python-specific commands.
 
 import gdb
 import os
+import struct
 import sys
 
 
@@ -155,6 +156,22 @@ class TruncatedStringIO(object):
 
 def _PyStackRef_AsPyObjectBorrow(gdbval):
     return gdb.Value(int(gdbval['bits']) & ~USED_TAGS)
+
+# Inline ints and floats (Include/internal/pycore_stackref.h). Pointers and
+# indices lie below STACKREF_DOUBLE_OFFSET in every build.
+STACKREF_DOUBLE_OFFSET = 1 << 49
+STACKREF_INT_BASE = 0xFFFE << 48
+
+def _PyStackRef_InlineValue(gdbval):
+    '''Return the int or float that a _PyStackRef holds inline, or None'''
+    bits = int(gdbval['bits'])
+    if bits < STACKREF_DOUBLE_OFFSET:
+        return None
+    if bits >= STACKREF_INT_BASE:
+        value = bits & 0xFFFFFFFF
+        return value - (1 << 32) if value >= (1 << 31) else value
+    raw = struct.pack('<Q', bits - STACKREF_DOUBLE_OFFSET)
+    return struct.unpack('<d', raw)[0]
 
 
 class PyObjectPtr(object):
@@ -388,6 +405,10 @@ class PyObjectPtr(object):
         Try to locate the appropriate derived class dynamically, and cast
         the pointer accordingly.
         '''
+        if gdbval.type.name == '_PyStackRef':
+            value = _PyStackRef_InlineValue(gdbval)
+            if value is not None:
+                return InlineStackValue(value)
         try:
             p = PyObjectPtr(gdbval)
             cls = cls.subclass_from_type(p.type())
@@ -407,6 +428,24 @@ class PyObjectPtr(object):
 
 class PyVarObjectPtr(PyObjectPtr):
     _typename = 'PyVarObject'
+
+class InlineStackValue(PyObjectPtr):
+    '''An int or float held in a _PyStackRef without a heap object'''
+
+    def __init__(self, value):
+        self._value = value
+
+    def is_null(self):
+        return False
+
+    def safe_tp_name(self):
+        return type(self._value).__name__
+
+    def proxyval(self, visited):
+        return self._value
+
+    def write_repr(self, out, visited):
+        out.write(repr(self._value))
 
 class ProxyAlreadyVisited(object):
     '''

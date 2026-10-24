@@ -281,7 +281,7 @@ dummy_func(
 
         pure inst (LOAD_FAST_BORROW, (-- value)) {
             assert(!PyStackRef_IsNull(GETLOCAL(oparg)));
-            value = PyStackRef_Borrow(GETLOCAL(oparg));
+            value = PyStackRef_BorrowAt(&GETLOCAL(oparg));
         }
 
         inst(LOAD_FAST_AND_CLEAR, (-- value)) {
@@ -299,8 +299,10 @@ dummy_func(
         inst(LOAD_FAST_BORROW_LOAD_FAST_BORROW, ( -- value1, value2)) {
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
-            value1 = PyStackRef_Borrow(GETLOCAL(oparg1));
-            value2 = PyStackRef_Borrow(GETLOCAL(oparg2));
+            // Pointer-sized indices let GCC fold the frame offset into the
+            // address of each slot test, as it does for LOAD_FAST_BORROW.
+            value1 = PyStackRef_BorrowAt(&GETLOCAL((uintptr_t)oparg1));
+            value2 = PyStackRef_BorrowAt(&GETLOCAL((uintptr_t)oparg2));
         }
 
         inst(LOAD_CONST, (-- value)) {
@@ -3320,6 +3322,7 @@ dummy_func(
         }
 
         replaced op(_FOR_ITER_VIRTUAL, (iter, null_or_index -- iter, null_or_index, next)) {
+            assert(PyStackRef_IsObject(iter));
             PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
             Py_ssize_t index = PyStackRef_UntagIndex(null_or_index);
             _PyObjectIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
@@ -3357,6 +3360,8 @@ dummy_func(
         }
 
         op(_ITER_CHECK_LIST, (iter, null_or_index -- iter, null_or_index)) {
+            // GET_ITER always leaves an object, never an inline value.
+            assert(PyStackRef_IsObject(iter));
             PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
             EXIT_IF(Py_TYPE(iter_o) != &PyList_Type);
             assert(PyStackRef_IsTaggedIndex(null_or_index));
@@ -3414,6 +3419,7 @@ dummy_func(
             _ITER_NEXT_LIST;
 
         op(_ITER_CHECK_TUPLE, (iter, null_or_index -- iter, null_or_index)) {
+            assert(PyStackRef_IsObject(iter));
             PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
             EXIT_IF(Py_TYPE(iter_o) != &PyTuple_Type);
             assert(PyStackRef_IsTaggedIndex(null_or_index));
@@ -3448,6 +3454,7 @@ dummy_func(
             _ITER_NEXT_TUPLE;
 
         op(_ITER_CHECK_RANGE, (iter, null_or_index -- iter, null_or_index)) {
+            assert(PyStackRef_IsObject(iter));
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyStackRef_AsPyObjectBorrow(iter);
             EXIT_IF(Py_TYPE(r) != &PyRangeIter_Type);
 #ifdef Py_GIL_DISABLED
@@ -3491,6 +3498,7 @@ dummy_func(
             _ITER_NEXT_RANGE;
 
         op(_FOR_ITER_GEN_FRAME, (iter, null -- iter, null, gen_frame)) {
+            assert(PyStackRef_IsObject(iter));
             PyGenObject *gen = (PyGenObject *)PyStackRef_AsPyObjectBorrow(iter);
             EXIT_IF(Py_TYPE(gen) != &PyGen_Type);
             EXIT_IF(!gen_try_set_executing((PyGenObject *)gen));

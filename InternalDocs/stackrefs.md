@@ -1,15 +1,18 @@
 # Stack references (`_PyStackRef`)
 
 Stack references are the interpreter's tagged representation of values on the evaluation stack.
-They carry metadata to track ownership and can hold interpreter-internal indices without a heap object.
+They carry metadata to track ownership and can hold interpreter-internal indices, and on most
+64-bit builds small ints and floats, without a heap object.
 
 ## Shape and tagging
 
-- A `_PyStackRef` is a tagged pointer-sized value (see `Include/internal/pycore_stackref.h`).
-- Tag bits distinguish three cases:
+- A `_PyStackRef` is a tagged pointer-sized value. The header comment in
+  `Include/internal/pycore_stackref.h` gives the full bit layout.
+- Values below `Py_PTR_LIMIT` are pointer space, where bit 0 distinguishes two cases:
   - `Py_TAG_REFCNT` unset - reference count lives on the pointed-to object.
   - `Py_TAG_REFCNT` set - ownership is "borrowed" (no refcount to drop on close) or the object is immortal.
-  - `Py_INDEX_TAG` set - interpreter-internal index stored directly in the stackref (no heap allocation).
+- Above pointer space lie interpreter-internal indices and inline values, which own nothing.
+  Free-threaded and 32-bit builds have no inline values and mark indices with `Py_INDEX_TAG`.
 - Special constants: `PyStackRef_NULL`, `PyStackRef_ERROR`, and embedded `None`/`True`/`False`.
 
 In GIL builds, most objects carry their refcount; tagged borrowed refs skip decref on close. In free
@@ -58,12 +61,26 @@ the evaluation stack.
 
 ## Tagged indices on the stack
 
-The interpreter stores two kinds of internal index inline with `Py_INDEX_TAG`: the position of a
+The interpreter stores two kinds of internal index in a stackref: the position of a
 virtual iterator in the `FOR_ITER` family and the saved `lasti` during exception unwinding.
 `PyStackRef_TagIndex`, `PyStackRef_UntagIndex`, and `PyStackRef_IncrementTaggedIndexNoOverflow`
 create and update them, and `PyStackRef_IsTaggedIndex` tests for them. A tagged index is not a
 Python object: it never reaches Python code, never converts to a `PyObject*`, and is skipped by the
-GC. It is distinct from the inline Python ints planned in `boil/design/02-tagged-values.md`.
+GC.
+
+## Inline values
+
+On 64-bit builds without free threading (`Py_STACKREF_INLINE_VALUES`), a stackref can hold an
+exact int that fits in 32 bits or an exact float other than NaN. `PyStackRef_IsInline`,
+`PyStackRef_IsInlineInt` and `PyStackRef_IsInlineFloat` test for them; `PyStackRef_TYPE`,
+`PyStackRef_LongCheck` and `PyStackRef_FloatCheck` report `int` or `float`. `PyStackRef_Is`
+compares inline values by value. CLOSE, DUP and Borrow leave them unchanged and the GC skips them.
+
+An inline value must be boxed with `PyStackRef_Box` before it is converted to a `PyObject*`.
+Boxing returns a new reference to an int or float, or the inline value unchanged with an exception
+set if allocation fails. The cases generator does this for instruction inputs, and guards exit
+on them; see "Inline values" in `Tools/cases_generator/interpreter_definition.md`. Nothing creates
+inline values yet.
 
 ## Free threading considerations
 

@@ -163,6 +163,10 @@ dump_item(_PyStackRef item)
         printf("%" PRId64, (int64_t)PyStackRef_UntagIndex(item));
         return;
     }
+    if (PyStackRef_IsInline(item)) {
+        printf("<inline %s>", PyStackRef_TYPE(item)->tp_name);
+        return;
+    }
     PyObject *obj = PyStackRef_AsPyObjectBorrow(item);
     if (obj == NULL) {
         printf("<nil>");
@@ -215,6 +219,9 @@ lltrace_instruction(_PyInterpreterFrame *frame,
     int offset = 0;
     if (frame->owner < FRAME_OWNED_BY_INTERPRETER) {
         dump_stack(frame, stack_pointer);
+        _PyFrame_SetStackPointer(frame, stack_pointer);
+        _PyStackRef_CheckFrame(frame);
+        _PyFrame_GetStackPointer(frame);
         offset = (int)(next_instr - _PyFrame_GetBytecode(frame));
     }
     const char *opname = _PyOpcode_OpName[opcode];

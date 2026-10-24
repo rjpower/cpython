@@ -177,6 +177,8 @@ list of annotations and their meanings are as follows:
    version (either forward or backward).
 * `register`. Currently does nothing.
 * `no_save_ip`. This instruction does not affect the instruction pointer.
+* `inline_ok`. This instruction handles inline values in its inputs itself, so the
+   generator does not box them. See [Inline values](#inline-values).
 
 ### Special functions/macros
 
@@ -233,6 +235,46 @@ An example of the latter would be:
         ERROR_IF(true);
     }
 ```
+
+### Inline values
+
+On 64-bit builds without free threading, a stack item may hold an int or a
+float without a heap object (see `Include/internal/pycore_stackref.h`). Such an
+inline value must be boxed before C code treats it as a `PyObject *`.
+
+The generator finds each scalar input whose name a uop passes, as the whole
+argument, to `PyStackRef_AsPyObjectBorrow`, `PyStackRef_AsPyObjectNew` or
+`PyStackRef_AsPyObjectSteal` outside an `assert()`. Before the uop's body it
+emits one of two checks for that input, marked unlikely:
+
+* In a guard, a uop that may deopt or exit but does not escape and only peeks
+  at its inputs, it exits if the input is not a pointer. The guard then sees
+  only objects, and the specialized family member never meets an inline value.
+* In any other uop, it boxes an inline value with `x = PyStackRef_Box(x)`.
+  If boxing fails, it jumps to `error` with all inputs still on the stack.
+  The box is written back to the input's stack slot when the uop peeks at the
+  input or when this or a later uop of the instruction may deopt, exit, escape
+  or fail, so that code which reads the stack sees the box. Otherwise the slot
+  is overwritten by the uop's outputs and is not written.
+
+While the input is still in its stack slot, the check reads the slot in memory,
+which is shorter than testing the loaded value.
+
+A uop that contains `assert(PyStackRef_IsObject(name));` declares that the
+input `name` is never an inline value, and the generator emits no check for it.
+An input checked once is not checked again by later uops of the same
+instruction, until the code assigns to it. Array inputs are not checked; C
+helpers that convert stackref arrays must box their elements. Code that
+converts a stackref by another route, or that handles inline values itself,
+should use the `inline_ok` annotation and box explicitly where needed.
+
+An input that was checked, boxed or declared an object, and a variable assigned
+from such an input or from a `PyStackRef_FromPyObject...()` constructor, is
+known to be a pointer. `PyStackRef_CLOSE`, `PyStackRef_XCLOSE`,
+`PyStackRef_CLOSE_SPECIALIZED`, `PyStackRef_DUP` and
+`PyStackRef_AsPyObjectSteal` on such a variable, and the generator's own close
+of such an input, become the `_PyStackRef_..._POINTER` variants, which test
+only the reference count tag.
 
 ### Semantics
 

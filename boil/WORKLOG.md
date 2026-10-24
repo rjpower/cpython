@@ -113,3 +113,13 @@ Entries are appended in order; each milestone is also a commit.
   measurement on an idle machine is running before the encoding decision.
   The same branch carries two fixes that make the `Py_STACKREF_DEBUG` build
   usable again; those will be split out regardless.
+- Clean timing on an idle machine (`boil/bench/step1-delete-tier2.json`,
+  `tagged-step2-encoding.json`): the tier 2 and JIT deletion is 0.980
+  geomean against baseline (neutral to slightly better). The step 2
+  NaN-box encoding with no producers is 1.047 against step 1 (nbody 1.13,
+  chaos 1.08, go 1.07, richards 1.03), above the 3 percent line, so it does
+  not land as is. Decision: prototype the low-bit int tag with floats boxed
+  (`Borrow`, `CLOSE`, `DUP` unchanged; pointer-space test is one `test`
+  instruction) and measure it the same way; and proceed with the IR, whose
+  static borrow bit removes the `Borrow` cost that dominates the NaN-box
+  overhead, before revisiting inline floats.

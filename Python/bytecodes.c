@@ -2753,23 +2753,30 @@ dummy_func(
             DEOPT_IF(!LOCK_OBJECT(dict));
             assert(PyDict_CheckExact((PyObject *)dict));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            if (hint >= (size_t)dict->ma_keys->dk_nentries ||
-                    dict->ma_keys->dk_kind != DICT_KEYS_UNICODE) {
+            PyDictKeysObject *dk = dict->ma_keys;
+            // Split keys are shared with other dicts, which append to them
+            // under the keys lock rather than this dict's lock.
+            if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries) ||
+                    dk->dk_kind == DICT_KEYS_GENERAL) {
                 UNLOCK_OBJECT(dict);
                 DEOPT_IF(true);
             }
-            PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(dict->ma_keys) + hint;
-            if (ep->me_key != name) {
+            PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(dk) + hint;
+            if (FT_ATOMIC_LOAD_PTR_RELAXED(ep->me_key) != name) {
                 UNLOCK_OBJECT(dict);
                 DEOPT_IF(true);
             }
-            PyObject *old_value = ep->me_value;
+            // A split table keeps its values, such as an object's inline
+            // values, apart from its keys.
+            PyObject **value_ptr = dict->ma_values == NULL ?
+                &ep->me_value : &dict->ma_values->values[hint];
+            PyObject *old_value = *value_ptr;
             if (old_value == NULL) {
                 UNLOCK_OBJECT(dict);
                 DEOPT_IF(true);
             }
             _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, dict, name, PyStackRef_AsPyObjectBorrow(value));
-            FT_ATOMIC_STORE_PTR_RELEASE(ep->me_value, PyStackRef_AsPyObjectSteal(value));
+            FT_ATOMIC_STORE_PTR_RELEASE(*value_ptr, PyStackRef_AsPyObjectSteal(value));
             UNLOCK_OBJECT(dict);
 
             // old_value should be DECREFed after GC track checking is done, if not, it could raise a segmentation fault,

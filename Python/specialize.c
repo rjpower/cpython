@@ -633,7 +633,10 @@ specialize_dict_access_inline(
         return 0;
     }
     assert(index >= 0);
-    assert(_PyObject_InlineValues(owner)->valid);
+    // Once a dict exists, its lock (not the owner's) guards the values, so
+    // they may be invalidated concurrently. The instruction rechecks them.
+    assert(_PyObject_GetManagedDict(owner) != NULL ||
+           _PyObject_InlineValues(owner)->valid);
     char *value_addr = (char *)&_PyObject_InlineValues(owner)->values[index];
     Py_ssize_t offset = value_addr - (char *)owner;
     if (offset != (uint16_t)offset) {
@@ -660,11 +663,19 @@ specialize_dict_access_hint(
 #endif
 
     // We found an instance with a __dict__.
-    if (_PyDict_HasSplitTable(dict)) {
+    // STORE_ATTR_WITH_HINT can write the values of a split table, such as a
+    // materialized dict that shares the inline values; LOAD_ATTR_WITH_HINT
+    // reads combined tables only.
+    if (base_op == LOAD_ATTR && _PyDict_HasSplitTable(dict)) {
         SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_SPLIT_DICT);
         return 0;
     }
-    Py_ssize_t index = _PyDict_LookupIndex(dict, name);
+    PyObject *value;
+    Py_ssize_t index = _PyDict_LookupIndexAndValue(dict, name, &value);
+    if (value == NULL && index >= 0) {
+        // A split table's shared keys can hold names this dict lacks.
+        index = DKIX_EMPTY;
+    }
     if (index != (uint16_t)index) {
         SPECIALIZATION_FAIL(base_op,
                             index == DKIX_EMPTY ?
@@ -700,8 +711,9 @@ specialize_dict_access(
         int res;
         Py_BEGIN_CRITICAL_SECTION(owner);
         PyDictObject *dict = _PyObject_GetManagedDict(owner);
-        if (dict == NULL) {
-            // managed dict, not materialized, inline values valid
+        // A materialized dict shares the inline values, so loads can still
+        // read them directly. Stores must go through the dict.
+        if (dict == NULL || base_op == LOAD_ATTR) {
             res = specialize_dict_access_inline(owner, instr, type, name,
                                                 tp_version, base_op, values_op);
         }

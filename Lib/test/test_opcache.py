@@ -1156,6 +1156,32 @@ class TestRacesDoNotCrash(TestBase):
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
+    def test_store_attr_with_hint_materialized_dict(self):
+        def get_items():
+            class C:
+                pass
+
+            items = []
+            for _ in range(self.ITEMS):
+                item = C()
+                item.a = None
+                # A split dict that shares the inline values:
+                vars(item)
+                items.append(item)
+            return items
+
+        def read(items):
+            for item in items:
+                item.a = None
+
+        def write(items):
+            for item in items:
+                item.__dict__[None] = None
+
+        opname = "STORE_ATTR_WITH_HINT"
+        self.assert_races_do_not_crash(opname, get_items, read, write)
+
+    @requires_specialization
     def test_store_subscr_list_int(self):
         def get_items():
             items = []
@@ -1755,6 +1781,41 @@ class TestSpecializer(TestBase):
         C.x = property(lambda self: None, lambda self, x: None)
         set_value(_testinternalcapi.SPECIALIZATION_COOLDOWN)
         self.assert_no_opcode(set_value, "STORE_ATTR_WITH_HINT")
+
+    @cpython_only
+    @requires_specialization
+    def test_attr_materialized_dict(self):
+        class C:
+            def __init__(self):
+                self.x = 0
+
+        c = C()
+        d = vars(c)
+        self.assertTrue(_testinternalcapi.has_inline_values(c))
+
+        @reset_code
+        def get_value(n):
+            for _ in range(n):
+                c.x
+
+        @reset_code
+        def set_value(n):
+            for i in range(n):
+                c.x = i
+
+        n = _testinternalcapi.SPECIALIZATION_THRESHOLD
+        get_value(n)
+        self.assert_specialized(get_value, "LOAD_ATTR_INSTANCE_VALUE")
+        self.assert_no_opcode(get_value, "LOAD_ATTR")
+
+        set_value(n)
+        self.assert_specialized(set_value, "STORE_ATTR_WITH_HINT")
+        self.assert_no_opcode(set_value, "STORE_ATTR")
+        self.assertTrue(_testinternalcapi.has_inline_values(c))
+        self.assertIs(vars(c), d)
+        self.assertEqual(d, {"x": n - 1})
+        d["x"] = "y"
+        self.assertEqual(c.x, "y")
 
     @cpython_only
     @requires_specialization

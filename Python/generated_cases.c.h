@@ -11931,8 +11931,9 @@
                 }
                 assert(PyDict_CheckExact((PyObject *)dict));
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                if (hint >= (size_t)dict->ma_keys->dk_nentries ||
-                    dict->ma_keys->dk_kind != DICT_KEYS_UNICODE) {
+                PyDictKeysObject *dk = dict->ma_keys;
+                if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries) ||
+                    dk->dk_kind == DICT_KEYS_GENERAL) {
                     UNLOCK_OBJECT(dict);
                     if (true) {
                         UPDATE_MISS_STATS(STORE_ATTR);
@@ -11940,8 +11941,8 @@
                         JUMP_TO_PREDICTED(STORE_ATTR);
                     }
                 }
-                PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(dict->ma_keys) + hint;
-                if (ep->me_key != name) {
+                PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(dk) + hint;
+                if (FT_ATOMIC_LOAD_PTR_RELAXED(ep->me_key) != name) {
                     UNLOCK_OBJECT(dict);
                     if (true) {
                         UPDATE_MISS_STATS(STORE_ATTR);
@@ -11949,7 +11950,9 @@
                         JUMP_TO_PREDICTED(STORE_ATTR);
                     }
                 }
-                PyObject *old_value = ep->me_value;
+                PyObject **value_ptr = dict->ma_values == NULL ?
+                &ep->me_value : &dict->ma_values->values[hint];
+                PyObject *old_value = *value_ptr;
                 if (old_value == NULL) {
                     UNLOCK_OBJECT(dict);
                     if (true) {
@@ -11962,7 +11965,7 @@
                 _PyFrame_StackPointerValidate(frame);
                 _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, dict, name, PyStackRef_AsPyObjectBorrow(value));
                 _PyFrame_StackPointerInvalidate(frame);
-                FT_ATOMIC_STORE_PTR_RELEASE(ep->me_value, PyStackRef_AsPyObjectSteal(value));
+                FT_ATOMIC_STORE_PTR_RELEASE(*value_ptr, PyStackRef_AsPyObjectSteal(value));
                 UNLOCK_OBJECT(dict);
                 STAT_INC(STORE_ATTR, hit);
                 o = owner;

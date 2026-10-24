@@ -218,3 +218,12 @@ Entries are appended in order; each milestone is also a commit.
   stores still box (nbody's list stores, float's slot stores). Full suite
   green with and without the switch; all ports pass (abi
   `cpython-3.16-refcnt-v0-tagged2`).
+- Clean timing of the tagged-values build (`boil/bench/tagged-values.json`)
+  against the baseline: 0.989 geomean. spectral_norm 0.647, chaos 0.844,
+  generators 0.907, comprehensions 0.900; but nbody 1.027, fannkuch 1.038,
+  richards 1.040, go 1.055, nqueens 1.071, deltablue 1.108. Time diverges
+  from the instruction counts (nbody was -5.7 percent instructions): the
+  eval loop grew from 58 KB to 86 KB and the dynamic borrow test adds a
+  branch per local load, so instruction cache and branch behaviour, not
+  instruction count, now set the pace on object-heavy code. The IR step is
+  where both are addressed (static borrows, smaller handlers).

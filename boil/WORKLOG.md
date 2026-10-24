@@ -55,3 +55,19 @@ Entries are appended in order; each milestone is also a commit.
   `-Dallow-noblas=true`, no patches). Numpy builds in about 90 s on 16
   cores. `bench_ufunc.py` stresses small-array ufunc calls as a C API
   boundary benchmark: 2.40 s median on the baseline.
+- Design note `boil/design/04-shapes.md` landed. Shape pointer replaces the
+  `PyDictValues` header word; 30 slots and 64 shapes per type before
+  dictionary mode; `__dict__` stays a live view; per-property kind byte with
+  I32 and F64 reserved. Finding: the interpreter gain is neutral (15 versus
+  16 instructions per hit), so shapes move to the end of Phase 1 as the
+  foundation for tier 1 and unboxed fields. Separate finding to fix now:
+  objects with a materialised `__dict__` never specialise attribute access
+  (328 instructions per load instead of 71).
+- Design note `boil/design/03-deferred-refcounting.md` landed. Hybrid model
+  (deferred set as in the free-threaded build, existing local borrows kept,
+  bias of 2^30 plus a flag bit, exact accounting only in full collections).
+  Finding: about 1 percent fewer instructions and no measurable time change
+  in Phase 1, so item 1c moves to the start of Phase 2 as the tracing GC's
+  root enumeration. Phase 1 is now 1z, 1a, 1b, 1d, 1f, 1e in that order.
+  Process note: add paths explicitly when committing; `git add boil` swept
+  an in-progress draft into the shapes commit.

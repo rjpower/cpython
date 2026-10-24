@@ -35,16 +35,29 @@ ABI changes; until then, wheels survive interpreter rebuilds.
 | field | meaning |
 |---|---|
 | `name`, `version` | the directory name and the pinned release |
-| `kind` | `pure-wheel` (the published py3-none-any wheel) or `sdist` |
+| `kind` | `pure-wheel` (the published py3-none-any wheel), `sdist`, or for `native/` recipes `configure-make` |
 | `source` | `{url, sha256}`, from `https://pypi.org/pypi/<name>/<version>/json` |
-| `requires` | exact port references, such as `python/pycparser` |
-| `build_requires` | `name==version` for every build requirement, transitively; each needs a universal wheel, which the host fetches, so the target interpreter needs no network or ssl |
+| `requires` | exact port references, such as `python/pycparser` or `native/libyaml` |
+| `build_requires` | `name==version` for every build requirement, transitively; each needs a universal wheel, which the host fetches, so the target interpreter needs no network or ssl. A tool that ships only binaries (ninja) may use the `py3-none-manylinux*` wheel for the host's machine; the host has no system ninja |
+| `build_options` | extra arguments appended to `pip wheel`, such as `-Csetup-args=-Dfoo=true` (sdist only) |
 | `patches` | `[{file, sha256, touches: {path: sha256}}]` |
 | `tests`, `bench` | `[{script}]`, relative to the recipe directory |
 
 A `build.py` defining `build(ctx: BuildContext)` (see `_support/build.py`)
 replaces the default `pip wheel` step. Use one only when the build cannot be
 declared.
+
+## Native libraries: `native/<name>/recipe.json`
+
+A `configure-make` recipe takes only `name`, `version`, `kind` and `source`.
+`build` runs `configure --prefix=<prefix> --disable-shared --enable-static
+CFLAGS="<sdk cflags> -fPIC"`, `make` and `make install`, into
+`build/ports/native/<abi_id>/<name>/`, and records it under
+`build/ports/results/<abi_id>/`. A port that lists it in `requires` builds
+with `-I<prefix>/include` in CFLAGS and `-L<prefix>/lib` in LDFLAGS, so the
+library links statically into its extensions. The dependent's recipe hash
+includes the library's, so changing the library rebuilds the port. Native
+libraries are built and linked, never installed into a venv.
 
 ## Patches
 

@@ -102,3 +102,15 @@ def test_graph_rejects_cycles(tmp_path: Path) -> None:
     write_recipe(tmp_path, "b", requires=["python/a"])
     with pytest.raises(PortError, match="python/a -> python/b -> python/a"):
         resolve(["python/a"], tmp_path)
+
+
+@pytest.mark.parametrize(("fields", "message"), [
+    ({"kind": "sdist", "build_options": [3]}, "build_options must be a non-"),
+    ({"build_options": ["-Cx=1"]}, "takes no patches, build_requires or"),
+])
+def test_build_options_are_validated(
+    tmp_path: Path, fields: dict[str, object], message: str
+) -> None:
+    write_recipe(tmp_path, "pkg", **fields)
+    with pytest.raises(PortError, match=message):
+        load_recipe("python/pkg", tmp_path)

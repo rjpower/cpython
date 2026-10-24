@@ -16,7 +16,7 @@ from pathlib import Path
 from ports._support.build import create_venv, log_path, verified_result
 from ports._support.common import REPO, STATE, Summary, log, relative, run
 from ports._support.graph import Node, closure
-from ports._support.recipe import Recipe
+from ports._support.recipe import Recipe, is_native
 from ports._support.sdk import (
     SDK,
     interpreter_facts,
@@ -60,7 +60,8 @@ def bench_node(node: Node, sdk: SDK) -> Summary:
 def _prepare(node: Node, sdk: SDK, output: Path) -> Path:
     """Create the port's fresh venv holding it and its requirements."""
     wheels = [
-        REPO / verified_result(dep.recipe, sdk).wheel for dep in closure(node)
+        REPO / verified_result(dep.recipe, sdk).wheel
+        for dep in closure(node) if not is_native(dep.recipe)
     ]
     venv = STATE / "venvs" / sdk.abi_id / node.recipe.name
     python = create_venv(sdk, venv, output)

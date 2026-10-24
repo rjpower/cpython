@@ -1,3 +1,3 @@
 # PyYAML
 
-The libyaml headers are not installed here, so the build skips the `yaml._yaml` extension and `yaml.CLoader`; the smoke test exercises the pure-Python loader and checks the C loader only when the extension was built.
+Depends on `native/libyaml`, built as a static, position-independent library. The driver puts its include and lib directories on the compiler's search paths, so `yaml._yaml` (the Cython extension behind `yaml.CLoader` and `yaml.CSafeLoader`) builds and links libyaml into the extension. The smoke test requires the C loaders.

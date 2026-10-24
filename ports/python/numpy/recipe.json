@@ -1,0 +1,20 @@
+{
+  "name": "numpy",
+  "version": "2.5.4",
+  "kind": "sdist",
+  "source": {
+    "url": "https://files.pythonhosted.org/packages/95/b0/c7453d0b6e2073c3264468b106ee1563750cecc910965e67357e3698c83e/numpy-2.5.4.tar.gz",
+    "sha256": "9a94cf751c9ad8ebaa835bcd3d40dacf8534ad086b88c38029b65123c7999d2a"
+  },
+  "build_requires": [
+    "meson-python==0.22.1",
+    "meson==1.12.1",
+    "ninja==1.13.2",
+    "pyproject-metadata==0.12.1",
+    "packaging==26.3",
+    "Cython==3.3.0"
+  ],
+  "build_options": ["-Csetup-args=-Dallow-noblas=true"],
+  "tests": [{"script": "tests/smoke.py"}],
+  "bench": [{"script": "tests/bench_ufunc.py"}]
+}

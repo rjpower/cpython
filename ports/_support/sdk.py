@@ -21,7 +21,8 @@ from ports._support.common import PORTS, REPO, PortError, capture
 _FIELDS = {"interpreter", "abi_id", "compiler", "cflags"}
 _PROBE = (
     "import sysconfig as s;"
-    " print(s.get_config_var('SOABI'), s.get_config_var('srcdir'), sep='\\n')"
+    " print(s.get_config_var('SOABI'), s.get_config_var('srcdir'),"
+    " s.get_path('include'), s.get_path('platinclude'), sep='\\n')"
 )
 
 
@@ -37,6 +38,9 @@ class SDK:
 class InterpreterFacts:
     soabi: str
     srcdir: Path
+    # Python.h and pyconfig.h; an uninstalled interpreter's venv reports
+    # an installed prefix that does not exist, so ask the interpreter itself.
+    include: tuple[Path, Path]
 
 
 def load_sdk(interpreter: str | None, abi_id: str | None) -> SDK:
@@ -66,8 +70,10 @@ def interpreter_facts(sdk: SDK) -> InterpreterFacts:
             " --interpreter build/ports/cpython-default/python"
         )
     output = capture([sdk.interpreter, "-I", "-c", _PROBE])
-    soabi, srcdir = output.splitlines()
-    return InterpreterFacts(soabi, Path(srcdir))
+    soabi, srcdir, include, platinclude = output.splitlines()
+    return InterpreterFacts(
+        soabi, Path(srcdir), (Path(include), Path(platinclude))
+    )
 
 
 def tree_revision(tree: Path) -> str:

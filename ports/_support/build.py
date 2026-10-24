@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import shutil
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
@@ -36,7 +37,7 @@ from ports._support.common import (
     sha256_file,
     write_json,
 )
-from ports._support.recipe import Recipe
+from ports._support.recipe import Recipe, is_native, load_recipe
 from ports._support.sdk import SDK, interpreter_facts, subprocess_env
 from ports._support.sources import (
     apply_patches,
@@ -80,16 +81,39 @@ class Result:
     log: str
 
 
+@dataclass(frozen=True)
+class NativeResult:
+    """The record for a library installed under prefix."""
+
+    ref: str
+    version: str
+    abi_id: str
+    recipe_hash: str
+    prefix: str  # repository-relative path
+    source_sha256: str
+    log: str
+
+
 def fingerprint(recipe: Recipe, sdk: SDK) -> str:
     custom = recipe.directory / "build.py"
     inputs = {
         "recipe": recipe.digest,
         "build.py": sha256_file(custom) if custom.exists() else None,
         "sdk": [sdk.abi_id, sdk.compiler, sdk.cflags],
+        # A rebuilt library must rebuild whatever links against it.
+        "native": {
+            dep.ref: fingerprint(dep, sdk) for dep in native_requires(recipe)
+        },
         "driver": {name: sha256_file(PORTS / name) for name in _DRIVER},
     }
     encoded = json.dumps(inputs, sort_keys=True).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def native_requires(recipe: Recipe) -> list[Recipe]:
+    return [
+        dep for dep in map(load_recipe, recipe.requires) if is_native(dep)
+    ]
 
 
 def log_path(sdk: SDK, recipe: Recipe, verb: str) -> Path:
@@ -119,21 +143,65 @@ def verified_result(recipe: Recipe, sdk: SDK) -> Result:
     return result
 
 
+def native_prefix(recipe: Recipe, sdk: SDK) -> Path:
+    return STATE / "native" / sdk.abi_id / recipe.name
+
+
+def verified_native(recipe: Recipe, sdk: SDK) -> NativeResult:
+    """Return the library's current install record, or raise why not."""
+    path = _result_path(sdk, recipe)
+    if not path.exists():
+        raise PortError(f"{recipe.ref} is not built for {sdk.abi_id}")
+    result = NativeResult(**json.loads(path.read_text()))
+    if result.recipe_hash != fingerprint(recipe, sdk):
+        raise PortError(f"{recipe.ref} is stale: its recipe, the SDK or the"
+                        " driver changed")
+    if not (REPO / result.prefix).is_dir():
+        raise PortError(f"{result.prefix} no longer exists")
+    return result
+
+
 def build_port(recipe: Recipe, sdk: SDK, force: bool) -> Summary:
+    verify = verified_native if is_native(recipe) else verified_result
     if not force:
         try:
-            result = verified_result(recipe, sdk)
+            result = verify(recipe, sdk)
         except PortError as reason:
             log.info("%s; building", reason)
         else:
             return {"status": "cached", **asdict(result)}
     output = log_path(sdk, recipe, "build")
     archive = fetch(recipe.source)
-    if recipe.kind == "pure-wheel":
-        wheel = archive
+    if is_native(recipe):
+        built = _build_native(recipe, archive, sdk, output)
     else:
-        wheel = _build_sdist(recipe, archive, sdk, output)
-    return {"status": "built", **asdict(_publish(recipe, sdk, wheel, output))}
+        wheel = (archive if recipe.kind == "pure-wheel"
+                 else _build_sdist(recipe, archive, sdk, output))
+        built = _publish(recipe, sdk, wheel, output)
+    return {"status": "built", **asdict(built)}
+
+
+def _build_native(
+    recipe: Recipe, archive: Path, sdk: SDK, output: Path
+) -> NativeResult:
+    """configure, make and install a static, position-independent library
+    into its prefix, so extension modules can link it into a shared object."""
+    work = fresh_dir(STATE / "work" / sdk.abi_id / recipe.name)
+    tree = unpack(archive, work / "src")
+    prefix = fresh_dir(native_prefix(recipe, sdk))
+    env = subprocess_env(CC=sdk.compiler)
+    log.info("build %s: configure and make", recipe.ref)
+    run([tree / "configure", f"--prefix={prefix}", "--disable-shared",
+         "--enable-static", f"CFLAGS={sdk.cflags} -fPIC"],
+        output, cwd=tree, env=env)
+    run(["make", f"-j{os.cpu_count()}"], output, cwd=tree, env=env)
+    run(["make", "install"], output, cwd=tree, env=env)
+    result = NativeResult(
+        recipe.ref, recipe.version, sdk.abi_id, fingerprint(recipe, sdk),
+        relative(prefix), recipe.source.sha256, relative(output),
+    )
+    write_json(_result_path(sdk, recipe), asdict(result))
+    return result
 
 
 def create_venv(sdk: SDK, path: Path, output: Path) -> Path:
@@ -153,7 +221,9 @@ def _build_sdist(
     tree = unpack(archive, work / "src")
     apply_patches(recipe, tree, output)
     python = create_venv(sdk, work / "venv", output)
-    env = subprocess_env(CC=sdk.compiler, CFLAGS=sdk.cflags)
+    env = _sdist_env(recipe, sdk)
+    # Build tools installed as wheels (ninja) are found by PATH lookup.
+    env["PATH"] = f"{python.parent}{os.pathsep}{env['PATH']}"
     if recipe.build_requires:
         wheels = [fetch_requirement(pin) for pin in recipe.build_requires]
         run([python, "-m", "pip", "install", "--no-index", "--no-deps",
@@ -167,6 +237,22 @@ def _build_sdist(
         raise PortError(f"{recipe.ref}: the builder left {len(wheels)} wheels"
                         f" in {relative(ctx.wheel_dir)}, not one")
     return wheels[0]
+
+
+def _sdist_env(recipe: Recipe, sdk: SDK) -> dict[str, str]:
+    """The compiler environment, with each native requirement's headers and
+    static libraries on the search paths."""
+    prefixes = [
+        REPO / verified_native(dep, sdk).prefix
+        for dep in native_requires(recipe)
+    ]
+    cflags = " ".join([sdk.cflags, *(f"-I{p}/include" for p in prefixes)])
+    ldflags = " ".join(f"-L{p}/lib" for p in prefixes)
+    # Meson's python3 dependency finds Python.h only through the compiler's
+    # default search path, which CPATH extends.
+    cpath = os.pathsep.join(map(str, interpreter_facts(sdk).include))
+    return subprocess_env(CC=sdk.compiler, CFLAGS=cflags, LDFLAGS=ldflags,
+                          CPATH=cpath)
 
 
 def _builder(recipe: Recipe) -> Callable[[BuildContext], None]:
@@ -187,7 +273,7 @@ def pip_wheel(ctx: BuildContext) -> None:
     run([
         ctx.python, "-m", "pip", "wheel", "-v", "--no-deps",
         "--no-build-isolation", "--no-index", "--wheel-dir", ctx.wheel_dir,
-        ctx.source,
+        *ctx.recipe.build_options, ctx.source,
     ], ctx.log, cwd=ctx.source.parent, env=ctx.env)
 
 

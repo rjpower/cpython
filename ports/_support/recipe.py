@@ -20,10 +20,17 @@ from ports._support.common import PORTS, PortError
 _REF = re.compile(r"[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)+")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _PIN = re.compile(r"[A-Za-z0-9._-]+==[A-Za-z0-9.!+_-]+")
-_REQUIRED = {"name", "version", "kind", "source", "tests"}
-_OPTIONAL = {"requires", "build_requires", "patches", "bench"}
+_REQUIRED = {"name", "version", "kind", "source"}
+_OPTIONAL = {
+    "requires", "build_requires", "build_options", "patches", "tests", "bench",
+}
 _PATCH_FIELDS = {"file", "sha256", "touches"}
-_SUFFIX = {"pure-wheel": "-none-any.whl", "sdist": ".tar.gz"}
+_SUFFIX = {
+    "pure-wheel": "-none-any.whl",
+    "sdist": ".tar.gz",
+    "configure-make": ".tar.gz",
+}
+NATIVE = "configure-make"  # the only kind that builds a library, not a wheel
 
 
 @dataclass(frozen=True)
@@ -56,9 +63,14 @@ class Recipe:
     source: Source
     requires: tuple[str, ...]
     build_requires: tuple[str, ...]
+    build_options: tuple[str, ...]  # extra `pip wheel` arguments (sdist only)
     patches: tuple[Patch, ...]
     tests: tuple[str, ...]
     bench: tuple[str, ...]
+
+
+def is_native(recipe: Recipe) -> bool:
+    return recipe.kind == NATIVE
 
 
 def check_ref(ref: str) -> str:
@@ -115,18 +127,27 @@ def _parse(
         _patch(ref, directory, item)
         for item in _items(ref, document, "patches")
     )
-    if kind == "pure-wheel" and (patches or build_requires):
+    build_options = tuple(
+        _string(ref, item, "build_options")
+        for item in _items(ref, document, "build_options")
+    )
+    if kind == "pure-wheel" and (patches or build_requires or build_options):
         raise PortError(
             f"{ref}: a pure-wheel port installs the published wheel as is;"
-            " it takes no patches or build_requires"
+            " it takes no patches, build_requires or build_options"
         )
     tests = _scripts(ref, directory, document, "tests")
-    if not tests:
+    if kind == NATIVE:
+        if (patches or build_requires or build_options or requires or tests
+                or "bench" in document):
+            raise PortError(f"{ref}: a {kind} library takes only name,"
+                            " version, kind and source")
+    elif not tests:
         raise PortError(f"{ref}: declare at least one test script")
     return Recipe(
         ref, directory, digest, name, version, kind,
         _source(ref, document["source"], kind), requires, build_requires,
-        patches, tests, _scripts(ref, directory, document, "bench"),
+        build_options, patches, tests, _scripts(ref, directory, document, "bench"),
     )
 
 

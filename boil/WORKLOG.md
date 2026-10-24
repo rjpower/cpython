@@ -50,3 +50,8 @@ Entries are appended in order; each milestone is also a commit.
 - Measurement harness in `boil/tools/` reproduces both design notes'
   numbers. Started IR step 1 (delete tier 2 and the copy-and-patch JIT) in a
   subagent.
+- Ports: added `native/libyaml` (new `configure-make` kind, static, linked
+  into pyyaml's Cython extension) and `python/numpy` 2.5.4 (meson-python,
+  `-Dallow-noblas=true`, no patches). Numpy builds in about 90 s on 16
+  cores. `bench_ufunc.py` stresses small-array ufunc calls as a C API
+  boundary benchmark: 2.40 s median on the baseline.

@@ -10,6 +10,7 @@ fails naming that file instead of fuzzing the patch onto new code.
 from __future__ import annotations
 
 import json
+import platform
 import re
 import shutil
 import tarfile
@@ -40,22 +41,26 @@ def fetch(source: Source) -> Path:
 
 
 def fetch_requirement(pin: str) -> Path:
-    """Return the universal wheel PyPI publishes for a name==version pin.
+    """Return the wheel PyPI publishes for a name==version pin.
 
-    The host fetches build requirements, so the target interpreter needs
-    neither ssl nor network access. PyPI's lookup is cached for offline
-    rebuilds, and its published sha256 is verified like a recipe pin.
+    This is the universal wheel or, for a tool that ships a binary (ninja),
+    the py3-none manylinux wheel for the host's machine. The host fetches
+    build requirements, so the target interpreter needs neither ssl nor
+    network access. PyPI's lookup is cached for offline rebuilds, and its
+    published sha256 is verified like a recipe pin.
     """
     name, _, version = pin.partition("==")
     lookup = STATE / "sources" / "pypi" / f"{name}-{version}.json"
     if not lookup.exists():
         _download(f"https://pypi.org/pypi/{name}/{version}/json", lookup)
-    wheels = [
-        file for file in json.loads(lookup.read_text())["urls"]
-        if file["filename"].endswith("-none-any.whl")
-    ]
+    files = json.loads(lookup.read_text())["urls"]
+    machine = re.escape(platform.machine())
+    tool = re.compile(rf"[^-]+-[^-]+-py3-none-manylinux[^-]*_{machine}[^-]*\.whl")
+    wheels = [f for f in files if f["filename"].endswith("-none-any.whl")]
+    wheels = wheels or [f for f in files if tool.fullmatch(f["filename"])]
     if not wheels:
-        raise PortError(f"{pin}: PyPI publishes no universal wheel")
+        raise PortError(f"{pin}: PyPI publishes no universal or"
+                        f" {platform.machine()} py3-none wheel")
     return fetch(Source(wheels[0]["url"], wheels[0]["digests"]["sha256"]))
 
 

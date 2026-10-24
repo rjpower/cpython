@@ -1,5 +1,5 @@
-"""Smoke test for PyYAML. Without libyaml headers the C loader is not built
-(see ../README.md), so the pure-Python loader and dumper carry the test."""
+"""Smoke test for PyYAML, including the libyaml-backed C loader and dumper
+(see ../README.md)."""
 
 import datetime
 import importlib.metadata
@@ -41,5 +41,16 @@ except yaml.YAMLError:
 else:
     raise AssertionError("malformed YAML was accepted")
 
-if yaml.__with_libyaml__:
-    assert yaml.load(text, Loader=yaml.CSafeLoader) == DOCUMENT
+# The C extension must be present, and agree with the pure-Python path.
+assert yaml.__with_libyaml__
+assert yaml.load(text, Loader=yaml.CSafeLoader) == DOCUMENT
+assert yaml.load(text, Loader=yaml.CLoader) == DOCUMENT
+c_text = yaml.dump(DOCUMENT, Dumper=yaml.CSafeDumper, allow_unicode=True)
+assert yaml.load(c_text, Loader=yaml.CSafeLoader) == DOCUMENT
+assert yaml.safe_load(c_text) == DOCUMENT
+try:
+    yaml.load("a: [1, 2", Loader=yaml.CSafeLoader)
+except yaml.YAMLError:
+    pass
+else:
+    raise AssertionError("malformed YAML was accepted by the C loader")

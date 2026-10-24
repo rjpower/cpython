@@ -1,0 +1,10 @@
+{
+  "interpreter": "build/baseline-jit/python",
+  "unit": "KiB",
+  "peak_rss": {
+    "startup": 10496,
+    "imports": 12064,
+    "dicts": 65856,
+    "loops": 10720
+  }
+}

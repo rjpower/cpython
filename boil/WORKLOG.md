@@ -41,3 +41,12 @@ Entries are appended in order; each milestone is also a commit.
   Measured maxima on the stdlib: 803 slots per frame, 32 percent of
   instructions specialisable. Nine-step sequence; step 1 deletes tier 2 and
   the copy-and-patch JIT. Coordinator decisions in section 10.
+- Baselines recorded in `boil/bench/`. On the 24-benchmark subset without
+  PGO: the upstream JIT is 0.834 geomean against default (richards 0.32,
+  nbody 0.60), free-threaded is 1.144. Peak RSS at startup is about 10 MiB
+  for default and jit, 11.6 MiB for ft. The JIT number is the bar our tier 0
+  must clear; it is larger than the 7 to 12 percent upstream reports for
+  PGO builds, because our default build has no PGO.
+- Measurement harness in `boil/tools/` reproduces both design notes'
+  numbers. Started IR step 1 (delete tier 2 and the copy-and-patch JIT) in a
+  subagent.

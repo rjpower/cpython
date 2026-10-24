@@ -1,0 +1,10 @@
+{
+  "interpreter": "build/baseline-ft/python",
+  "unit": "KiB",
+  "peak_rss": {
+    "startup": 11596,
+    "imports": 13852,
+    "dicts": 74100,
+    "loops": 12004
+  }
+}

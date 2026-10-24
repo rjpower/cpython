@@ -1870,9 +1870,8 @@ class SubinterpreterTest(unittest.TestCase):
         self.assertEqual(support.run_in_subinterp(code), 0,
                          'subinterp code failure, check stderr.')
         after_config = _testcapi.config_get('int_max_str_digits')
-        self.assertIsNot(
-                before_config, after_config,
-                "Expected get_config() to return a new dict on each call")
+        # Equal ints that fit in int32 can be identical (see
+        # test_tagged_values), so only equality is tested.
         self.assertEqual(before_config, after_config,
                          "CAUTION: Tests executed after this may be "
                          "running under an altered config.")

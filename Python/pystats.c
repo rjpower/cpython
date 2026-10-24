@@ -169,6 +169,7 @@ print_spec_stats(FILE *out, OpcodeStats *stats)
         PRINT_STAT(i, specialization.miss);
         PRINT_STAT(i, specialization.deopt);
         PRINT_STAT(i, execution_count);
+        PRINT_STAT(i, boxes);
         for (int j = 0; j < SPECIALIZATION_FAILURE_KINDS; j++) {
             uint64_t val = stats[i].specialization.failure_kinds[j];
             if (val) {
@@ -229,6 +230,10 @@ print_object_stats(FILE *out, ObjectStats *stats)
     fprintf(out, "Object method cache dunder misses: %" PRIu64 "\n", stats->type_cache_dunder_misses);
     fprintf(out, "Object method cache invalidations: %" PRIu64 "\n", stats->type_cache_invalidations);
     fprintf(out, "Object method cache resizes: %" PRIu64 "\n", stats->type_cache_resizes);
+    fprintf(out, "Object inline ints created: %" PRIu64 "\n", stats->inline_ints_created);
+    fprintf(out, "Object inline int boxes: %" PRIu64 "\n", stats->inline_int_boxes);
+    fprintf(out, "Object inline float boxes: %" PRIu64 "\n", stats->inline_float_boxes);
+    fprintf(out, "Object inline array boxes: %" PRIu64 "\n", stats->inline_array_boxes);
 }
 
 static void
@@ -300,6 +305,7 @@ merge_opcode_stats_array(OpcodeStats *dest, const OpcodeStats *src)
     for (int i = 0; i < 256; i++) {
         merge_specialization_stats(&dest[i].specialization, &src[i].specialization);
         dest[i].execution_count += src[i].execution_count;
+        dest[i].boxes += src[i].boxes;
         for (int j = 0; j < 256; j++) {
             dest[i].pair_count[j] += src[i].pair_count[j];
         }
@@ -348,6 +354,10 @@ merge_object_stats(ObjectStats *dest, const ObjectStats *src)
     dest->type_cache_too_big += src->type_cache_too_big;
     dest->type_cache_invalidations += src->type_cache_invalidations;
     dest->type_cache_resizes += src->type_cache_resizes;
+    dest->inline_ints_created += src->inline_ints_created;
+    dest->inline_int_boxes += src->inline_int_boxes;
+    dest->inline_float_boxes += src->inline_float_boxes;
+    dest->inline_array_boxes += src->inline_array_boxes;
     dest->object_visits += src->object_visits;
 }
 

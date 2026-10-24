@@ -1430,6 +1430,15 @@ conflict.
 
    .. versionadded:: 3.15
 
+.. envvar:: PYTHON_TAGGED_VALUES
+
+   If set to ``0``, the interpreter keeps every :class:`int` in a heap object
+   instead of holding small ones in its evaluation stack and local variables.
+   This is meant for comparing the two when investigating a problem. Only
+   applies to 64-bit builds without :option:`--disable-gil`.
+
+   .. versionadded:: 3.16
+
 Debug-mode variables
 ~~~~~~~~~~~~~~~~~~~~
 

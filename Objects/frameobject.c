@@ -40,13 +40,17 @@ class frame "PyFrameObject *" "&PyFrame_Type"
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=2d1dbf2e06cf351f]*/
 
 
-// Returns new reference or NULL
+// Returns a new reference, or NULL if the variable is unset. Boxing an
+// inline value can fail, which returns NULL with an exception set.
 static PyObject *
 framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 {
     _PyStackRef *fast = _PyFrame_GetLocalsArray(frame);
     _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
 
+    if (PyStackRef_IsInline(fast[i])) {
+        return PyStackRef_AsPyObjectNewBoxed(fast[i]);
+    }
     PyObject *value = PyStackRef_AsPyObjectBorrow(fast[i]);
     PyObject *cell = NULL;
 
@@ -85,6 +89,9 @@ framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 static bool
 framelocalsproxy_hasval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 {
+    if (PyStackRef_IsInline(_PyFrame_GetLocalsArray(frame)[i])) {
+        return true;
+    }
     PyObject *value = framelocalsproxy_getval(frame, co, i);
     if (value == NULL) {
         return false;
@@ -152,6 +159,9 @@ framelocalsproxy_getkeyindex(PyFrameObject *frame, PyObject *key, bool read, PyO
                     }
                     return i;
                 }
+                if (PyErr_Occurred()) {
+                    return -2;
+                }
             } else {
                 if (!(_PyLocals_GetKind(co->co_localspluskinds, i) & CO_FAST_HIDDEN)) {
                     return i;
@@ -189,6 +199,9 @@ framelocalsproxy_getkeyindex(PyFrameObject *frame, PyObject *key, bool read, PyO
                         Py_DECREF(value);
                     }
                     return i;
+                }
+                if (PyErr_Occurred()) {
+                    return -2;
                 }
             } else {
                 if (!(_PyLocals_GetKind(co->co_localspluskinds, i) & CO_FAST_HIDDEN)) {
@@ -286,7 +299,7 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
             // the function's closure.
             assert(!PyStackRef_IsNull(oldvalue) && PyCell_Check(PyStackRef_AsPyObjectBorrow(oldvalue)));
             cell = PyStackRef_AsPyObjectBorrow(oldvalue);
-        } else if (kind & CO_FAST_CELL && !PyStackRef_IsNull(oldvalue)) {
+        } else if (kind & CO_FAST_CELL && PyStackRef_IsObject(oldvalue)) {
             PyObject *as_obj = PyStackRef_AsPyObjectBorrow(oldvalue);
             if (PyCell_Check(as_obj)) {
                 cell = as_obj;
@@ -295,6 +308,9 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
         if (cell != NULL) {
             Py_XINCREF(value);
             PyCell_SetTakeRef((PyCellObject *)cell, value);
+        } else if (PyStackRef_IsInline(oldvalue)) {
+            // An inline value holds no reference to keep alive.
+            fast[i] = PyStackRef_FromPyObjectNew(value);
         } else if (value != PyStackRef_AsPyObjectBorrow(oldvalue)) {
             PyObject *old_obj = PyStackRef_AsPyObjectBorrow(fast[i]);
             if (old_obj != NULL && !_Py_IsImmortal(old_obj)) {
@@ -629,6 +645,9 @@ framelocalsproxy_values(PyObject *self, PyObject *Py_UNUSED(ignored))
 
     for (int i = 0; i < co->co_nlocalsplus; i++) {
         PyObject *value = framelocalsproxy_getval(frame->f_frame, co, i);
+        if (value == NULL && PyErr_Occurred()) {
+            goto error;
+        }
         if (value) {
             PyObject *name = PyTuple_GET_ITEM(co->co_localsplusnames, i);
             int first = framelocalsproxy_is_first_occurrence(seen, name);
@@ -685,6 +704,9 @@ framelocalsproxy_items(PyObject *self, PyObject *Py_UNUSED(ignored))
     for (int i = 0; i < co->co_nlocalsplus; i++) {
         PyObject *name = PyTuple_GET_ITEM(co->co_localsplusnames, i);
         PyObject *value = framelocalsproxy_getval(frame->f_frame, co, i);
+        if (value == NULL && PyErr_Occurred()) {
+            goto error;
+        }
 
         if (value) {
             int first = framelocalsproxy_is_first_occurrence(seen, name);
@@ -2277,6 +2299,8 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
 }
 
 
+// Return 1 and set *pvalue to a new reference (NULL if the variable is
+// unset), 0 if the variable is skipped, or -1 with an exception set.
 static int
 frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
               PyObject **pvalue)
@@ -2297,6 +2321,14 @@ frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
 
     PyObject *value = NULL;
     if (frame->stackpointer == NULL || frame->stackpointer > frame->localsplus + i) {
+        if (PyStackRef_IsInline(frame->localsplus[i])) {
+            value = PyStackRef_AsPyObjectNewBoxed(frame->localsplus[i]);
+            if (value == NULL) {
+                return -1;
+            }
+            *pvalue = value;
+            return 1;
+        }
         value = PyStackRef_AsPyObjectBorrow(frame->localsplus[i]);
         if (kind & CO_FAST_FREE) {
             // The cell was set by COPY_FREE_VARS.
@@ -2398,7 +2430,11 @@ PyFrame_GetVar(PyFrameObject *frame_obj, PyObject *name)
         }
 
         PyObject *value;
-        if (!frame_get_var(frame, co, i, &value)) {
+        int r = frame_get_var(frame, co, i, &value);
+        if (r < 0) {
+            return NULL;
+        }
+        if (r == 0) {
             break;
         }
         if (value == NULL) {

@@ -12778,11 +12778,12 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
     }
 
     assert(_PyFrame_GetCode(cframe)->co_nlocalsplus > 0);
-    PyObject *firstarg = PyStackRef_AsPyObjectBorrow(_PyFrame_GetLocalsArray(cframe)[0]);
-    if (firstarg == NULL) {
+    _PyStackRef firstref = _PyFrame_GetLocalsArray(cframe)[0];
+    if (PyStackRef_IsNull(firstref)) {
         PyErr_SetString(PyExc_RuntimeError, "super(): arg[0] deleted");
         return -1;
     }
+    PyObject *firstarg;
     // The first argument might be a cell.
     // "firstarg" is a cell here unless (very unlikely) super()
     // was called from the C-API before the first MAKE_CELL op.
@@ -12792,15 +12793,20 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
         // to use _PyOpcode_Deopt here:
         assert(_PyCode_CODE(co)[0].op.code == MAKE_CELL ||
                 _PyCode_CODE(co)[0].op.code == COPY_FREE_VARS);
-        assert(PyCell_Check(firstarg));
-        firstarg = PyCell_GetRef((PyCellObject *)firstarg);
+        PyObject *cell = PyStackRef_AsPyObjectBorrow(firstref);
+        assert(PyCell_Check(cell));
+        firstarg = PyCell_GetRef((PyCellObject *)cell);
         if (firstarg == NULL) {
             PyErr_SetString(PyExc_RuntimeError, "super(): arg[0] deleted");
             return -1;
         }
     }
     else {
-        Py_INCREF(firstarg);
+        // The argument may be an inline value, which this boxes.
+        firstarg = PyStackRef_AsPyObjectNewBoxed(firstref);
+        if (firstarg == NULL) {
+            return -1;
+        }
     }
 
     // Look for __class__ in the free vars.

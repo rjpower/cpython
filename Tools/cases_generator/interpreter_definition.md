@@ -252,6 +252,8 @@ emits one of two checks for that input, marked unlikely:
   only objects, and the specialized family member never meets an inline value.
 * In any other uop, it boxes an inline value with `x = PyStackRef_Box(x)`.
   If boxing fails, it jumps to `error` with all inputs still on the stack.
+  In `Py_STATS` builds each box counts towards the instruction's `boxes`
+  statistic.
   The box is written back to the input's stack slot when the uop peeks at the
   input or when this or a later uop of the instruction may deopt, exit, escape
   or fail, so that code which reads the stack sees the box. Otherwise the slot
@@ -266,7 +268,10 @@ An input checked once is not checked again by later uops of the same
 instruction, until the code assigns to it. Array inputs are not checked; C
 helpers that convert stackref arrays must box their elements. Code that
 converts a stackref by another route, or that handles inline values itself,
-should use the `inline_ok` annotation and box explicitly where needed.
+should use the `inline_ok` annotation and box explicitly where needed. Accessors
+that read inline values, such as `PyStackRef_TYPE()` and
+`PyStackRef_CompactIntValue()`, are not conversions, so a uop that reads an
+input only through them needs no box.
 
 An input that was checked, boxed or declared an object, and a variable assigned
 from such an input or from a `PyStackRef_FromPyObject...()` constructor, is

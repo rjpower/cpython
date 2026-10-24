@@ -1114,6 +1114,7 @@ class TestGeneratedCases(unittest.TestCase):
                 if (PyStackRef_IsInline(value)) {
                     JUMP_TO_LABEL(error);
                 }
+                BOX_STAT_INC(OP);
                 stack_pointer[-1] = value;
             }
             SPAM(PyStackRef_AsPyObjectBorrow(value));
@@ -1249,6 +1250,7 @@ class TestGeneratedCases(unittest.TestCase):
                 if (PyStackRef_IsInline(left)) {
                     JUMP_TO_LABEL(error);
                 }
+                BOX_STAT_INC(OP);
             }
             if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
                 right = PyStackRef_Box(right);
@@ -1256,6 +1258,7 @@ class TestGeneratedCases(unittest.TestCase):
                     stack_pointer[-2] = left;
                     JUMP_TO_LABEL(error);
                 }
+                BOX_STAT_INC(OP);
             }
             res = PyStackRef_FromPyObjectSteal(PAIR(_PyStackRef_AsPyObjectStealPointer(left), _PyStackRef_AsPyObjectStealPointer(right)));
             stack_pointer[-2] = res;

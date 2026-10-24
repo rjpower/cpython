@@ -479,9 +479,15 @@ _PyTuple_FromStackRefStealOnSuccess(const _PyStackRef *src, Py_ssize_t n)
         return NULL;
     }
     PyObject **dst = tuple->ob_item;
+    if (_PyStackRef_BoxInto(src, dst, n) < 0) {
+        memset(dst, 0, n * sizeof(PyObject *));
+        Py_DECREF(tuple);
+        return NULL;
+    }
     bool track = false;
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *item = PyStackRef_AsPyObjectSteal(src[i]);
+        PyObject *item = PyStackRef_IsInline(src[i])
+                         ? dst[i] : PyStackRef_AsPyObjectSteal(src[i]);
         if (!track && maybe_tracked(item)) {
             track = true;
         }

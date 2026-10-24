@@ -73,14 +73,26 @@ GC.
 On 64-bit builds without free threading (`Py_STACKREF_INLINE_VALUES`), a stackref can hold an
 exact int that fits in 32 bits or an exact float other than NaN. `PyStackRef_IsInline`,
 `PyStackRef_IsInlineInt` and `PyStackRef_IsInlineFloat` test for them; `PyStackRef_TYPE`,
-`PyStackRef_LongCheck` and `PyStackRef_FloatCheck` report `int` or `float`. `PyStackRef_Is`
-compares inline values by value. CLOSE, DUP and Borrow leave them unchanged and the GC skips them.
+`PyStackRef_LongCheck` and `PyStackRef_FloatCheck` report `int` or `float`. CLOSE, DUP and Borrow
+leave them unchanged and the GC skips them.
+
+Such a value has value identity: `is`, `id()` and `operator.is_` give the same answer whether it is
+held inline or boxed, and however many boxes exist. `PyStackRef_Is` and `_PyObject_ValueIdentity`
+implement this; see "Value identity" in `Include/internal/pycore_stackref.h`.
 
 An inline value must be boxed with `PyStackRef_Box` before it is converted to a `PyObject*`.
 Boxing returns a new reference to an int or float, or the inline value unchanged with an exception
 set if allocation fails. The cases generator does this for instruction inputs, and guards exit
-on them; see "Inline values" in `Tools/cases_generator/interpreter_definition.md`. Nothing creates
-inline values yet.
+on them; see "Inline values" in `Tools/cases_generator/interpreter_definition.md`. C code that
+converts stackref arrays boxes their elements (`_PyStackRef_BoxArray`, `_PyStackRef_BoxInto`), and
+C code that needs an object for a stackref it does not own uses `PyStackRef_AsPyObjectNewBoxed`.
+
+Inline ints are made by `LOAD_SMALL_INT_INLINE` and `LOAD_CONST_INLINE_INT`, to which
+`_PyCode_Quicken` rewrites loads of compact int constants, by `BINARY_OP_ADD_INT`,
+`BINARY_OP_SUBTRACT_INT` and `BINARY_OP_MULTIPLY_INT`, which box a result that overflows int32, by
+`FOR_ITER_RANGE` and by `UNARY_NEGATIVE` of an inline int. The int guards accept an inline int or a
+compact int object, and the instructions after them read either with
+`PyStackRef_CompactIntValue`. `PYTHON_TAGGED_VALUES=0` turns the producers off.
 
 ## Free threading considerations
 

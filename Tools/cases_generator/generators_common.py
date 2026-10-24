@@ -295,6 +295,8 @@ class Emitter:
                 storage.stack.copy().flush(self.out)
                 self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
                 self.emit("}\n")
+                if inst is not None:
+                    self.emit(f"BOX_STAT_INC({inst.name});\n")
                 if var.memory_offset is not None:
                     if var.name in peeks or stack_read_later:
                         self.emit_store_input(var, storage)

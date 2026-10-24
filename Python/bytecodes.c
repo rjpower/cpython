@@ -305,15 +305,38 @@ dummy_func(
             value2 = PyStackRef_BorrowAt(&GETLOCAL((uintptr_t)oparg2));
         }
 
+        // _PyCode_Quicken() rewrites constant loads to the inline forms.
+        family(LOAD_CONST, 0) = {
+            LOAD_CONST_INLINE_INT,
+        };
+
         inst(LOAD_CONST, (-- value)) {
             PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
             value = PyStackRef_FromPyObjectBorrow(obj);
         }
 
+        // The constant is an exact int with at most one digit.
+        inst(LOAD_CONST_INLINE_INT, (-- value)) {
+            PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
+            assert(_PyLong_CheckExactAndCompact(obj));
+            value = PyStackRef_FromInt32((int32_t)_PyLong_CompactValue((PyLongObject *)obj));
+            ERROR_IF(PyStackRef_IsNull(value));
+        }
+
+        family(LOAD_SMALL_INT, 0) = {
+            LOAD_SMALL_INT_INLINE,
+        };
+
         inst(LOAD_SMALL_INT, (-- value)) {
             assert(oparg < _PY_NSMALLPOSINTS);
             PyObject *obj = (PyObject *)&_PyLong_SMALL_INTS[_PY_NSMALLNEGINTS + oparg];
             value = PyStackRef_FromPyObjectBorrow(obj);
+        }
+
+        inst(LOAD_SMALL_INT_INLINE, (-- value)) {
+            assert(oparg < _PY_NSMALLPOSINTS);
+            value = PyStackRef_FromInt32((int32_t)oparg);
+            ERROR_IF(PyStackRef_IsNull(value));
         }
 
         macro(STORE_FAST) = _SWAP_FAST + POP_TOP;
@@ -356,8 +379,8 @@ dummy_func(
             PyStackRef_XCLOSE(value);
         }
 
-        op(_POP_TOP_INT, (value --)) {
-            assert(PyLong_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+        inline_ok op(_POP_TOP_INT, (value --)) {
+            assert(PyStackRef_LongCheckExact(value));
             PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
         }
 
@@ -440,12 +463,28 @@ dummy_func(
 
         macro(UNARY_NEGATIVE) = _UNARY_NEGATIVE + POP_TOP;
 
-        op(_UNARY_NEGATIVE, (value -- res, v)) {
-            PyObject *res_o = PyNumber_Negative(PyStackRef_AsPyObjectBorrow(value));
-            if (res_o == NULL) {
+        // Inline values are negated without a box. Only -INT32_MIN
+        // overflows; negating a float that is not NaN gives one that is not.
+        inline_ok op(_UNARY_NEGATIVE, (value -- res, v)) {
+            if (PyStackRef_IsInlineInt(value)) {
+                int32_t i = PyStackRef_InlineInt(value);
+                if (i == INT32_MIN) {
+                    res = _PyStackRef_BoxInt64(-(int64_t)i);
+                }
+                else {
+                    res = PyStackRef_FromInt32(-i);
+                }
+            }
+            else if (PyStackRef_IsInlineFloat(value)) {
+                res = PyStackRef_FromDoubleNotNaN(-PyStackRef_InlineFloat(value));
+            }
+            else {
+                PyObject *res_o = PyNumber_Negative(PyStackRef_AsPyObjectBorrow(value));
+                res = res_o == NULL ? PyStackRef_NULL : PyStackRef_FromPyObjectSteal(res_o);
+            }
+            if (PyStackRef_IsNull(res)) {
                 ERROR_NO_POP();
             }
-            res = PyStackRef_FromPyObjectSteal(res_o);
             v = value;
             DEAD(value);
         }
@@ -493,10 +532,16 @@ dummy_func(
             STAT_INC(TO_BOOL, hit);
         }
 
-        op(_TO_BOOL_INT, (value -- res, v)) {
+        inline_ok op(_TO_BOOL_INT, (value -- res, v)) {
             STAT_INC(TO_BOOL, hit);
-            PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
-            res = (_PyLong_IsZero((PyLongObject *)value_o)) ? PyStackRef_False : PyStackRef_True;
+            bool zero;
+            if (PyStackRef_IsInlineInt(value)) {
+                zero = PyStackRef_InlineInt(value) == 0;
+            }
+            else {
+                zero = _PyLong_IsZero((PyLongObject *)PyStackRef_AsPyObjectBorrow(value));
+            }
+            res = zero ? PyStackRef_False : PyStackRef_True;
             v = value;
             DEAD(value);
         }
@@ -608,61 +653,74 @@ dummy_func(
             BINARY_OP_EXTEND,
         };
 
-        op(_GUARD_NOS_INT, (left, unused -- left, unused)) {
-            PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-            EXIT_IF(!_PyLong_CheckExactAndCompact(left_o));
+        // The int guards accept an inline int or a compact exact int, and
+        // the uops after them read either with PyStackRef_CompactIntValue().
+        inline_ok op(_GUARD_NOS_INT, (left, unused -- left, unused)) {
+            EXIT_IF(!PyStackRef_IsCompactInt(left));
         }
 
-        op(_GUARD_TOS_INT, (value -- value)) {
-            PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
-            EXIT_IF(!_PyLong_CheckExactAndCompact(value_o));
+        inline_ok op(_GUARD_TOS_INT, (value -- value)) {
+            EXIT_IF(!PyStackRef_IsCompactInt(value));
         }
 
-        op(_GUARD_TOS_EXACT_INT, (value -- value)) {
-            PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
-            EXIT_IF(!PyLong_CheckExact(value_o));
+        inline_ok op(_GUARD_TOS_EXACT_INT, (value -- value)) {
+            EXIT_IF(!PyStackRef_LongCheckExact(value));
         }
 
-        pure op(_BINARY_OP_MULTIPLY_INT, (left, right -- res, l, r)) {
-            PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-            PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
-            assert(PyLong_CheckExact(left_o));
-            assert(PyLong_CheckExact(right_o));
-            assert(_PyLong_BothAreCompact((PyLongObject *)left_o, (PyLongObject *)right_o));
-
+        // Int arithmetic on int32 operands. A result that overflows int32
+        // is exact in int64 and is boxed.
+        inline_ok pure op(_BINARY_OP_MULTIPLY_INT, (left, right -- res, l, r)) {
+            int32_t a = PyStackRef_CompactIntValue(left);
+            int32_t b = PyStackRef_CompactIntValue(right);
+            int32_t product;
             STAT_INC(BINARY_OP, hit);
-            res = _PyCompactLong_Multiply((PyLongObject *)left_o, (PyLongObject *)right_o);
-            EXIT_IF(PyStackRef_IsNull(res));
+            if (__builtin_mul_overflow(a, b, &product)) {
+                res = _PyStackRef_BoxInt64((int64_t)a * b);
+            }
+            else {
+                res = PyStackRef_FromInt32(product);
+            }
+            if (PyStackRef_IsNull(res)) {
+                ERROR_NO_POP();
+            }
             l = left;
             r = right;
             INPUTS_DEAD();
         }
 
-        pure op(_BINARY_OP_ADD_INT, (left, right -- res, l, r)) {
-            PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-            PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
-            assert(PyLong_CheckExact(left_o));
-            assert(PyLong_CheckExact(right_o));
-            assert(_PyLong_BothAreCompact((PyLongObject *)left_o, (PyLongObject *)right_o));
-
+        inline_ok pure op(_BINARY_OP_ADD_INT, (left, right -- res, l, r)) {
+            int32_t a = PyStackRef_CompactIntValue(left);
+            int32_t b = PyStackRef_CompactIntValue(right);
+            int32_t sum;
             STAT_INC(BINARY_OP, hit);
-            res = _PyCompactLong_Add((PyLongObject *)left_o, (PyLongObject *)right_o);
-            EXIT_IF(PyStackRef_IsNull(res));
+            if (__builtin_add_overflow(a, b, &sum)) {
+                res = _PyStackRef_BoxInt64((int64_t)a + b);
+            }
+            else {
+                res = PyStackRef_FromInt32(sum);
+            }
+            if (PyStackRef_IsNull(res)) {
+                ERROR_NO_POP();
+            }
             l = left;
             r = right;
             INPUTS_DEAD();
         }
 
-        pure op(_BINARY_OP_SUBTRACT_INT, (left, right -- res, l, r)) {
-            PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-            PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
-            assert(PyLong_CheckExact(left_o));
-            assert(PyLong_CheckExact(right_o));
-            assert(_PyLong_BothAreCompact((PyLongObject *)left_o, (PyLongObject *)right_o));
-
+        inline_ok pure op(_BINARY_OP_SUBTRACT_INT, (left, right -- res, l, r)) {
+            int32_t a = PyStackRef_CompactIntValue(left);
+            int32_t b = PyStackRef_CompactIntValue(right);
+            int32_t difference;
             STAT_INC(BINARY_OP, hit);
-            res = _PyCompactLong_Subtract((PyLongObject *)left_o, (PyLongObject *)right_o);
-            EXIT_IF(PyStackRef_IsNull(res));
+            if (__builtin_sub_overflow(a, b, &difference)) {
+                res = _PyStackRef_BoxInt64((int64_t)a - b);
+            }
+            else {
+                res = PyStackRef_FromInt32(difference);
+            }
+            if (PyStackRef_IsNull(res)) {
+                ERROR_NO_POP();
+            }
             l = left;
             r = right;
             INPUTS_DEAD();
@@ -818,23 +876,19 @@ dummy_func(
             res = PyStackRef_FromPyObjectSteal(temp);
         }
 
-       op(_GUARD_BINARY_OP_EXTEND, (descr/4, left, right -- left, right)) {
-            PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-            PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
-            _PyBinaryOpSpecializationDescr *d = (_PyBinaryOpSpecializationDescr*)descr;
-            assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
-            assert(d != NULL);
-            int match = (d->guard != NULL)
-                ? d->guard(left_o, right_o)
-                : (Py_TYPE(left_o) == d->lhs_type && Py_TYPE(right_o) == d->rhs_type);
-            EXIT_IF(!match);
-        }
-
+       // The descriptors take objects, so this is not a guard: the generator
+       // boxes inline operands in place first, and a failed match
+       // re-executes BINARY_OP with the boxes.
        op(_BINARY_OP_EXTEND, (descr/4, left, right -- res, l, r)) {
             PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
             PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
             assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
             _PyBinaryOpSpecializationDescr *d = (_PyBinaryOpSpecializationDescr*)descr;
+            assert(d != NULL);
+            int match = (d->guard != NULL)
+                ? d->guard(left_o, right_o)
+                : (Py_TYPE(left_o) == d->lhs_type && Py_TYPE(right_o) == d->rhs_type);
+            EXIT_IF(!match);
 
             STAT_INC(BINARY_OP, hit);
 
@@ -853,7 +907,7 @@ dummy_func(
         }
 
         macro(BINARY_OP_EXTEND) =
-            unused/1 + _GUARD_BINARY_OP_EXTEND + rewind/-4 + _BINARY_OP_EXTEND + POP_TOP + POP_TOP;
+            unused/1 + _BINARY_OP_EXTEND + POP_TOP + POP_TOP;
 
         macro(BINARY_OP_INPLACE_ADD_UNICODE) =
             _GUARD_TOS_UNICODE + _GUARD_NOS_UNICODE + unused/5 + _BINARY_OP_INPLACE_ADD_UNICODE;
@@ -924,14 +978,11 @@ dummy_func(
         macro(BINARY_OP_SUBSCR_LIST_INT) =
             _GUARD_TOS_INT + _GUARD_NOS_LIST + unused/5 + _BINARY_OP_SUBSCR_LIST_INT + _POP_TOP_INT + POP_TOP;
 
-        op(_BINARY_OP_SUBSCR_LIST_INT, (list_st, sub_st -- res, ls, ss)) {
-            PyObject *sub = PyStackRef_AsPyObjectBorrow(sub_st);
+        inline_ok op(_BINARY_OP_SUBSCR_LIST_INT, (list_st, sub_st -- res, ls, ss)) {
             PyObject *list = PyStackRef_AsPyObjectBorrow(list_st);
-
-            assert(PyLong_CheckExact(sub));
             assert(PyList_CheckExact(list));
 
-            Py_ssize_t index = _PyLong_CompactValue((PyLongObject *)sub);
+            Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
             if (index < 0) {
                 index += PyList_GET_SIZE(list);
             }
@@ -975,14 +1026,12 @@ dummy_func(
         macro(BINARY_OP_SUBSCR_STR_INT) =
             _GUARD_TOS_INT + _GUARD_NOS_COMPACT_ASCII + unused/5 + _BINARY_OP_SUBSCR_STR_INT + _POP_TOP_INT + _POP_TOP_UNICODE;
 
-        op(_BINARY_OP_SUBSCR_STR_INT, (str_st, sub_st -- res, s, i)) {
-            PyObject *sub = PyStackRef_AsPyObjectBorrow(sub_st);
+        inline_ok op(_BINARY_OP_SUBSCR_STR_INT, (str_st, sub_st -- res, s, i)) {
             PyObject *str = PyStackRef_AsPyObjectBorrow(str_st);
-
-            assert(PyLong_CheckExact(sub));
             assert(PyUnicode_CheckExact(str));
-            EXIT_IF(!_PyLong_IsNonNegativeCompact((PyLongObject*)sub));
-            Py_ssize_t index = ((PyLongObject*)sub)->long_value.ob_digit[0];
+
+            Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
+            EXIT_IF(index < 0);
             EXIT_IF(PyUnicode_GET_LENGTH(str) <= index);
             uint8_t c = PyUnicode_1BYTE_DATA(str)[index];
             assert(c < 128);
@@ -997,14 +1046,12 @@ dummy_func(
         macro(BINARY_OP_SUBSCR_USTR_INT) =
             _GUARD_TOS_INT + _GUARD_NOS_UNICODE + unused/5 + _BINARY_OP_SUBSCR_USTR_INT + _POP_TOP_INT + _POP_TOP_UNICODE;
 
-        op(_BINARY_OP_SUBSCR_USTR_INT, (str_st, sub_st -- res, s, i)) {
-            PyObject *sub = PyStackRef_AsPyObjectBorrow(sub_st);
+        inline_ok op(_BINARY_OP_SUBSCR_USTR_INT, (str_st, sub_st -- res, s, i)) {
             PyObject *str = PyStackRef_AsPyObjectBorrow(str_st);
-
-            assert(PyLong_CheckExact(sub));
             assert(PyUnicode_CheckExact(str));
-            EXIT_IF(!_PyLong_IsNonNegativeCompact((PyLongObject*)sub));
-            Py_ssize_t index = ((PyLongObject*)sub)->long_value.ob_digit[0];
+
+            Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
+            EXIT_IF(index < 0);
             EXIT_IF(PyUnicode_GET_LENGTH(str) <= index);
             // Specialize for reading an ASCII character from any string:
             Py_UCS4 c = PyUnicode_READ_CHAR(str, index);
@@ -1037,28 +1084,23 @@ dummy_func(
             POP_TOP;
 
         // A guard that checks that the tuple subscript is within bounds
-        op(_GUARD_BINARY_OP_SUBSCR_TUPLE_INT_BOUNDS, (tuple_st, sub_st -- tuple_st, sub_st)) {
-            PyObject *sub = PyStackRef_AsPyObjectBorrow(sub_st);
+        inline_ok op(_GUARD_BINARY_OP_SUBSCR_TUPLE_INT_BOUNDS, (tuple_st, sub_st -- tuple_st, sub_st)) {
             PyObject *tuple = PyStackRef_AsPyObjectBorrow(tuple_st);
-
-            assert(PyLong_CheckExact(sub));
             assert(PyTuple_CheckExact(tuple));
 
             // Deopt unless 0 <= sub < PyTuple_Size(list)
-            EXIT_IF(!_PyLong_IsNonNegativeCompact((PyLongObject *)sub));
-            Py_ssize_t index = ((PyLongObject*)sub)->long_value.ob_digit[0];
+            Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
+            EXIT_IF(index < 0);
             EXIT_IF(index >= PyTuple_GET_SIZE(tuple));
         }
 
-        op(_BINARY_OP_SUBSCR_TUPLE_INT, (tuple_st, sub_st -- res, ts, ss)) {
-            PyObject *sub = PyStackRef_AsPyObjectBorrow(sub_st);
+        inline_ok op(_BINARY_OP_SUBSCR_TUPLE_INT, (tuple_st, sub_st -- res, ts, ss)) {
             PyObject *tuple = PyStackRef_AsPyObjectBorrow(tuple_st);
-
-            assert(PyLong_CheckExact(sub));
             assert(PyTuple_CheckExact(tuple));
 
             STAT_INC(BINARY_OP, hit);
-            Py_ssize_t index = ((PyLongObject*)sub)->long_value.ob_digit[0];
+            Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
+            assert(0 <= index && index < PyTuple_GET_SIZE(tuple));
             PyObject *res_o = PyTuple_GET_ITEM(tuple, index);
             assert(res_o != NULL);
             res = PyStackRef_FromPyObjectNew(res_o);
@@ -1176,14 +1218,13 @@ dummy_func(
         macro(STORE_SUBSCR_LIST_INT) =
             _GUARD_TOS_INT + _GUARD_NOS_LIST + unused/1 + _STORE_SUBSCR_LIST_INT + _POP_TOP_INT + POP_TOP;
 
+        // Not inline_ok: the generator boxes value, which the list stores,
+        // and the index is read through PyStackRef_CompactIntValue().
         op(_STORE_SUBSCR_LIST_INT, (value, list_st, sub_st -- ls, ss)) {
-            PyObject *sub = PyStackRef_AsPyObjectBorrow(sub_st);
             PyObject *list = PyStackRef_AsPyObjectBorrow(list_st);
-
-            assert(PyLong_CheckExact(sub));
             assert(PyList_CheckExact(list));
 
-            Py_ssize_t index = _PyLong_CompactValue((PyLongObject *)sub);
+            Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
             DEOPT_IF(!LOCK_OBJECT(list));
             Py_ssize_t len = PyList_GET_SIZE(list);
             // Ensure index < len(list)
@@ -1268,6 +1309,10 @@ dummy_func(
 
         tier1 inst(RAISE_VARARGS, (args[oparg] -- )) {
             assert(oparg < 3);
+            // do_raise() rejects an int or float, which needs a box for that.
+            if (_PyStackRef_BoxArray(args, oparg) < 0) {
+                ERROR_NO_POP();
+            }
             PyObject *cause = oparg == 2 ? PyStackRef_AsPyObjectSteal(args[1]) : NULL;
             PyObject *exc = oparg > 0 ? PyStackRef_AsPyObjectSteal(args[0]) : NULL;
             int err = do_raise(tstate, exc, cause);
@@ -1993,7 +2038,11 @@ dummy_func(
 
         inst(MAKE_CELL, (--)) {
             // "initial" is probably NULL but not if it's an arg (or set
-            // via the f_locals proxy before MAKE_CELL has run).
+            // via the f_locals proxy before MAKE_CELL has run). A cell holds
+            // an object, so an inline arg is boxed.
+            if (_PyStackRef_BoxArray(&GETLOCAL(oparg), 1) < 0) {
+                ERROR_NO_POP();
+            }
             PyObject *initial = PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
             PyObject *cell = PyCell_New(initial);
             if (cell == NULL) {
@@ -2182,7 +2231,9 @@ dummy_func(
                 _PyStackRef value = values[i];
                 values[i] = PyStackRef_NULL;
                 if (err == 0) {
-                    err = _PySet_AddTakeRef((PySetObject *)set_o, PyStackRef_AsPyObjectSteal(value));
+                    value = PyStackRef_Box(value);
+                    err = PyStackRef_IsInline(value) ? -1 :
+                        _PySet_AddTakeRef((PySetObject *)set_o, PyStackRef_AsPyObjectSteal(value));
                 }
                 else {
                     PyStackRef_CLOSE(value);
@@ -2890,17 +2941,10 @@ dummy_func(
         }
 
         // Similar to COMPARE_OP_FLOAT
-        op(_COMPARE_OP_INT, (left, right -- res, l, r)) {
-            PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-            PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
-
-            assert(_PyLong_IsCompact((PyLongObject *)left_o));
-            assert(_PyLong_IsCompact((PyLongObject *)right_o));
+        inline_ok op(_COMPARE_OP_INT, (left, right -- res, l, r)) {
             STAT_INC(COMPARE_OP, hit);
-            assert(_PyLong_DigitCount((PyLongObject *)left_o) <= 1 &&
-                   _PyLong_DigitCount((PyLongObject *)right_o) <= 1);
-            Py_ssize_t ileft = _PyLong_CompactValue((PyLongObject *)left_o);
-            Py_ssize_t iright = _PyLong_CompactValue((PyLongObject *)right_o);
+            int32_t ileft = PyStackRef_CompactIntValue(left);
+            int32_t iright = PyStackRef_CompactIntValue(right);
             // 2 if <, 4 if >, 8 if ==; this matches the low 4 bits of the oparg
             int sign_ish = COMPARISON_BIT(ileft, iright);
             l = left;
@@ -2932,8 +2976,10 @@ dummy_func(
 
         macro(IS_OP) = _IS_OP + POP_TOP + POP_TOP;
 
-        op(_IS_OP, (left, right -- b, l, r)) {
-            int res = Py_Is(PyStackRef_AsPyObjectBorrow(left), PyStackRef_AsPyObjectBorrow(right)) ^ oparg;
+        // Value identity for inline ints and their boxes; see "Value
+        // identity" in pycore_stackref.h.
+        inline_ok op(_IS_OP, (left, right -- b, l, r)) {
+            int res = PyStackRef_Is(left, right) ^ oparg;
             b = res ? PyStackRef_True : PyStackRef_False;
             l = left;
             r = right;
@@ -3486,9 +3532,13 @@ dummy_func(
             long value = r->start;
             r->start = value + r->step;
             r->len--;
-            PyObject *res = PyLong_FromLong(value);
-            ERROR_IF(res == NULL);
-            next = PyStackRef_FromPyObjectSteal(res);
+            if ((int32_t)value == value) {
+                next = PyStackRef_FromInt32((int32_t)value);
+            }
+            else {
+                next = _PyStackRef_BoxInt64(value);
+            }
+            ERROR_IF(PyStackRef_IsNull(next));
         }
 
         macro(FOR_ITER_RANGE) =
@@ -3527,6 +3577,9 @@ dummy_func(
 
         op(_LOAD_SPECIAL, (method_and_self[2] -- method_and_self[2])) {
             PyObject *name = _Py_SpecialMethods[oparg].name;
+            if (_PyStackRef_BoxArray(method_and_self + 1, 1) < 0) {
+                ERROR_NO_POP();
+            }
             int err = _PyObject_LookupSpecialMethod(name, &method_and_self[0],
                                                     &method_and_self[1]);
             if (err <= 0) {
@@ -3820,6 +3873,9 @@ dummy_func(
                 arg0 = PyStackRef_AsPyObjectBorrow(maybe_self);
             }
             else if (oparg) {
+                if (_PyStackRef_BoxArray(args, 1) < 0) {
+                    ERROR_NO_POP();
+                }
                 arg0 = PyStackRef_AsPyObjectBorrow(args[0]);
             }
             else {
@@ -4049,14 +4105,12 @@ dummy_func(
             EXIT_IF(callable_o != (PyObject *)&PyType_Type);
         }
 
-        op(_CALL_TYPE_1, (callable, null, arg -- res, a)) {
-            PyObject *arg_o = PyStackRef_AsPyObjectBorrow(arg);
-
+        inline_ok op(_CALL_TYPE_1, (callable, null, arg -- res, a)) {
             assert(oparg == 1);
             STAT_INC(CALL, hit);
+            res = PyStackRef_FromPyObjectNew(PyStackRef_TYPE(arg));
             a = arg;
             INPUTS_DEAD();
-            res = PyStackRef_FromPyObjectNew(Py_TYPE(arg_o));
         }
 
         macro(CALL_TYPE_1) =
@@ -4256,6 +4310,9 @@ dummy_func(
             }
             STAT_INC(CALL, hit);
             PyCFunction cfunc = PyCFunction_GET_FUNCTION(callable_o);
+            if (_PyStackRef_BoxArray(args, 1) < 0) {
+                ERROR_NO_POP();
+            }
             _PyStackRef arg = args[0];
             PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, PyCFunction_GET_SELF(callable_o), PyStackRef_AsPyObjectBorrow(arg));
             _Py_LeaveRecursiveCallTstate(tstate);
@@ -4464,9 +4521,8 @@ dummy_func(
                 total_args++;
             }
             EXIT_IF(total_args != 2);
-            PyObject *self = PyStackRef_AsPyObjectBorrow(
-                PyStackRef_IsNull(self_or_null) ? args[0] : self_or_null);
-            EXIT_IF(!Py_IS_TYPE(self, method->d_common.d_type));
+            _PyStackRef self = PyStackRef_IsNull(self_or_null) ? args[0] : self_or_null;
+            EXIT_IF(PyStackRef_TYPE(self) != method->d_common.d_type);
         }
 
          op(_CALL_METHOD_DESCRIPTOR_O, (callable, self_or_null, args[oparg] -- res, c, s, a)) {
@@ -4479,6 +4535,9 @@ dummy_func(
             }
             STAT_INC(CALL, hit);
             PyCFunction cfunc = method->d_method->ml_meth;
+            if (_PyStackRef_BoxArray(arguments, 2) < 0) {
+                ERROR_NO_POP();
+            }
             PyObject *self = PyStackRef_AsPyObjectBorrow(arguments[0]);
             PyObject *arg = PyStackRef_AsPyObjectBorrow(arguments[1]);
             PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self, arg);
@@ -4522,8 +4581,7 @@ dummy_func(
                 total_args++;
             }
             EXIT_IF(total_args == 0);
-            PyObject *self = PyStackRef_AsPyObjectBorrow(arguments[0]);
-            EXIT_IF(!Py_IS_TYPE(self, method->d_common.d_type));
+            EXIT_IF(PyStackRef_TYPE(arguments[0]) != method->d_common.d_type);
         }
 
         op(_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
@@ -4535,6 +4593,9 @@ dummy_func(
             if (!PyStackRef_IsNull(self_or_null)) {
                 arguments--;
                 total_args++;
+            }
+            if (_PyStackRef_BoxArray(arguments, 1) < 0) {
+                ERROR_NO_POP();
             }
             PyObject *self = PyStackRef_AsPyObjectBorrow(arguments[0]);
             assert(self != NULL);
@@ -4575,9 +4636,8 @@ dummy_func(
                 total_args++;
             }
             EXIT_IF(total_args != 1);
-            PyObject *self = PyStackRef_AsPyObjectBorrow(
-                PyStackRef_IsNull(self_or_null) ? args[0] : self_or_null);
-            EXIT_IF(!Py_IS_TYPE(self, method->d_common.d_type));
+            _PyStackRef self = PyStackRef_IsNull(self_or_null) ? args[0] : self_or_null;
+            EXIT_IF(PyStackRef_TYPE(self) != method->d_common.d_type);
         }
 
         op(_CALL_METHOD_DESCRIPTOR_NOARGS, (callable, self_or_null, args[oparg] -- res, c, s)) {
@@ -4587,6 +4647,9 @@ dummy_func(
             assert(oparg == 1 || !PyStackRef_IsNull(self_or_null));
             if (!PyStackRef_IsNull(self_or_null)) {
                 args--;
+            }
+            if (_PyStackRef_BoxArray(args, 1) < 0) {
+                ERROR_NO_POP();
             }
             _PyStackRef self_stackref = args[0];
             PyObject *self = PyStackRef_AsPyObjectBorrow(self_stackref);
@@ -4626,9 +4689,8 @@ dummy_func(
                 total_args++;
             }
             EXIT_IF(total_args == 0);
-            PyObject *self = PyStackRef_AsPyObjectBorrow(
-                PyStackRef_IsNull(self_or_null) ? args[0] : self_or_null);
-            EXIT_IF(!Py_IS_TYPE(self, method->d_common.d_type));
+            _PyStackRef self = PyStackRef_IsNull(self_or_null) ? args[0] : self_or_null;
+            EXIT_IF(PyStackRef_TYPE(self) != method->d_common.d_type);
         }
 
         op(_CALL_METHOD_DESCRIPTOR_FAST, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
@@ -4640,6 +4702,9 @@ dummy_func(
             if (!PyStackRef_IsNull(self_or_null)) {
                 arguments--;
                 total_args++;
+            }
+            if (_PyStackRef_BoxArray(arguments, 1) < 0) {
+                ERROR_NO_POP();
             }
             PyObject *self = PyStackRef_AsPyObjectBorrow(arguments[0]);
             assert(self != NULL);
@@ -4683,6 +4748,9 @@ dummy_func(
                 arg = PyStackRef_AsPyObjectBorrow(self_or_null);
             }
             else if (args) {
+                if (_PyStackRef_BoxArray(args, 1) < 0) {
+                    ERROR_NO_POP();
+                }
                 arg = PyStackRef_AsPyObjectBorrow(args[0]);
             }
             else {
@@ -5149,6 +5217,9 @@ dummy_func(
         }
 
         inst(BUILD_SLICE, (args[oparg] -- slice)) {
+            if (_PyStackRef_BoxArray(args, oparg) < 0) {
+                ERROR_NO_POP();
+            }
             PyObject *start_o = PyStackRef_AsPyObjectBorrow(args[0]);
             PyObject *stop_o = PyStackRef_AsPyObjectBorrow(args[1]);
             PyObject *step_o = oparg == 3 ? PyStackRef_AsPyObjectBorrow(args[2]) : NULL;

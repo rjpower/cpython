@@ -180,3 +180,21 @@ Entries are appended in order; each milestone is also a commit.
   rest guard exits that step 4 turns into the type test itself. Accepted on
   record per the review direction. Full suite green on default; debug,
   stackref-debug and free-threaded sets pass. Prototype branches deleted.
+- Tagged-values steps 3 and 4 landed: value identity for exact int32 ints
+  and non-NaN floats through one choke point (`_PyObject_ValueIdentity`;
+  `id()` of such values is their inline encoding, which cannot collide with
+  an address), and the first inline-int producers: `LOAD_SMALL_INT_INLINE`,
+  `LOAD_CONST_INLINE_INT`, ADD/SUB/MUL_INT with overflow builtins,
+  UNARY_NEGATIVE, FOR_ITER_RANGE; tagged-aware COMPARE_OP_INT, TO_BOOL_INT,
+  IS_OP, list/tuple/str subscripts and list stores by inline index.
+  `PYTHON_TAGGED_VALUES=0` disables producers for bisecting. Micro loops:
+  int add 173 to 75 instructions per iteration, range loop 144 to 69, int
+  compare 102 to 82; floats unchanged. Benchmarks against the encoding
+  commit: chaos -0.7, nbody -1.0, spectral_norm -1.0, richards +1.4, go and
+  nqueens +2.1, fannkuch +1.3 percent instructions. Py_STATS box counters
+  show where ints still escape: STORE_ATTR_INSTANCE_VALUE, STORE_GLOBAL,
+  SET_ADD, slices, and BINARY_OP_EXTEND (`//` in spectral_norm). Full
+  suite green with and without the switch; all ports pass with abi id
+  `cpython-3.16-refcnt-v0-tagged`; the remote profiler now skips frames
+  being torn down. Handler code size grew (ADD_INT 50 to 129 instructions
+  of code), to be revisited with the IR.

@@ -8,8 +8,10 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_long.h"          // _PyLong_CheckExactAndCompact()
 #include "pycore_object.h"        // Py_DECREF_MORTAL
 #include "pycore_object_deferred.h" // _PyObject_HasDeferredRefcount()
+#include "pycore_stats.h"         // OBJECT_STAT_INC()
 
 #include <stdbool.h>              // bool
 
@@ -145,10 +147,19 @@ _PyStackRef_BorrowBitAt(const _PyStackRef *ref)
     return (uintptr_t)PyStackRef_IsPointerSpaceAt(ref);
 }
 
+// The encoding of an inline int, which is also its identity (see "Value
+// identity" below).
+static inline uintptr_t
+_PyStackRef_Int32Bits(int32_t i)
+{
+    return Py_INT_BASE | (uint32_t)i;
+}
+
 static inline _PyStackRef
 PyStackRef_FromInt32(int32_t i)
 {
-    return (_PyStackRef){ Py_INT_BASE | (uint32_t)i };
+    OBJECT_STAT_INC(inline_ints_created);
+    return (_PyStackRef){ _PyStackRef_Int32Bits(i) };
 }
 
 static inline int32_t
@@ -158,13 +169,20 @@ PyStackRef_InlineInt(_PyStackRef r)
     return (int32_t)(uint32_t)_PyStackRef_BITS(r);
 }
 
-static inline _PyStackRef
-PyStackRef_FromDoubleNotNaN(double d)
+// The encoding of an inline float, which is also its identity.
+static inline uintptr_t
+_PyStackRef_DoubleBits(double d)
 {
     assert(!isnan(d));
     uint64_t u;
     memcpy(&u, &d, sizeof(u));
-    return (_PyStackRef){ u + Py_DOUBLE_OFFSET };
+    return u + Py_DOUBLE_OFFSET;
+}
+
+static inline _PyStackRef
+PyStackRef_FromDoubleNotNaN(double d)
+{
+    return (_PyStackRef){ _PyStackRef_DoubleBits(d) };
 }
 
 static inline double
@@ -231,6 +249,11 @@ static inline bool PyStackRef_BothInlineInt(_PyStackRef a, _PyStackRef b) { (voi
 static inline bool PyStackRef_IsPointerSpaceAt(const _PyStackRef *ref) { return PyStackRef_IsPointerSpace(*ref); }
 static inline bool PyStackRef_IsInlineAt(const _PyStackRef *ref) { (void)ref; return false; }
 
+// Nothing is inline, so code behind the tests above never calls these.
+static inline int32_t PyStackRef_InlineInt(_PyStackRef r) { (void)r; Py_UNREACHABLE(); }
+static inline double PyStackRef_InlineFloat(_PyStackRef r) { (void)r; Py_UNREACHABLE(); }
+static inline _PyStackRef PyStackRef_FromDoubleNotNaN(double d) { (void)d; Py_UNREACHABLE(); }
+
 // Indices already have Py_TAG_REFCNT set.
 static inline uintptr_t
 _PyStackRef_BorrowBitAt(const _PyStackRef *ref)
@@ -270,6 +293,35 @@ PyStackRef_Box(_PyStackRef ref)
 }
 
 #endif  // SIZEOF_VOID_P == 8 && !defined(Py_GIL_DISABLED)
+
+/* Value identity (boil/design/02-tagged-values.md, section 3)
+
+   An exact int that fits in int32, or an exact float other than NaN, may be
+   held inline in one place and boxed in others, and a value may be boxed
+   more than once. The program must not be able to tell these apart, so such
+   a value has a single identity: its inline encoding, _PyStackRef_Int32Bits()
+   or _PyStackRef_DoubleBits(), whether it is held inline or boxed. Any other
+   object's identity is its address. An encoding is at least Py_DOUBLE_OFFSET
+   (2**49) and an address is below Py_PTR_LIMIT (2**48), so an identity names
+   exactly one value or object.
+
+   `is` (PyStackRef_Is(), hence IS_OP; operator.is_ and operator.is_not)
+   compares identities and id() returns the identity, so id(x) == id(y)
+   exactly when x is y, and id() of a value is the same before and after it
+   is boxed. 0.0 and -0.0 differ in bits, so `0.0 is -0.0` is False. NaN is
+   never inline and keeps object identity. Bools and int subclasses keep
+   object identity. Py_Is() stays pointer equality: C code sees only boxes.
+
+   Builds without inline values use object identity throughout. */
+
+// The identity of op: its value encoding or its address.
+PyAPI_FUNC(uintptr_t) _PyObject_ValueIdentity(PyObject *op);
+
+#ifdef Py_STACKREF_INLINE_VALUES
+// Do a and b, which are different references, hold the same value?
+// Neither may be PyStackRef_NULL or PyStackRef_ERROR.
+PyAPI_FUNC(int) _PyStackRef_IsSameValue(_PyStackRef a, _PyStackRef b);
+#endif
 
 #if !defined(Py_GIL_DISABLED) && defined(Py_STACKREF_DEBUG)
 
@@ -905,10 +957,18 @@ PyStackRef_XCLOSE(_PyStackRef ref)
     } while (0)
 
 
-// Bit 0 of a pointer is ignored; indices and inline values compare exactly.
+// Python's `is`: the same reference, ignoring bit 0 of a pointer, or else
+// the same value (see "Value identity" below), which only the out-of-line
+// test can establish. Indices compare exactly.
 // Note: this is a macro because MSVC (Windows) has trouble inlining it.
+#ifdef Py_STACKREF_INLINE_VALUES
+#define PyStackRef_Is(a, b) \
+    (((((a).bits ^ (b).bits) & ~(uintptr_t)PyStackRef_IsPointerSpace(a)) == 0) \
+     || _PyStackRef_IsSameValue((a), (b)))
+#else
 #define PyStackRef_Is(a, b) \
     ((((a).bits ^ (b).bits) & ~(uintptr_t)PyStackRef_IsPointerSpace(a)) == 0)
+#endif
 
 
 #endif // !defined(Py_GIL_DISABLED) && defined(Py_STACKREF_DEBUG)
@@ -1035,6 +1095,109 @@ PyStackRef_FloatCheck(_PyStackRef stackref)
 {
     return PyStackRef_IsInlineFloat(stackref) ||
            (PyStackRef_IsPointerSpace(stackref) && PyFloat_Check(PyStackRef_AsPyObjectBorrow(stackref)));
+}
+
+static inline bool
+PyStackRef_LongCheckExact(_PyStackRef stackref)
+{
+    return PyStackRef_IsInlineInt(stackref) ||
+           (PyStackRef_IsPointerSpace(stackref) && PyLong_CheckExact(PyStackRef_AsPyObjectBorrow(stackref)));
+}
+
+/* Ints in specialized instructions. The int guards accept an inline int or
+   a reference to an exact int with at most one digit; either way the value
+   fits in int32. These accessors read both forms without converting the
+   stackref to a PyObject *, so the cases generator does not box their
+   argument (see "Inline values" in
+   Tools/cases_generator/interpreter_definition.md). */
+static inline bool
+PyStackRef_IsCompactInt(_PyStackRef ref)
+{
+    if (PyStackRef_IsInlineInt(ref)) {
+        return true;
+    }
+    return PyStackRef_IsPointerSpace(ref)
+           && _PyLong_CheckExactAndCompact(PyStackRef_AsPyObjectBorrow(ref));
+}
+
+static inline int32_t
+PyStackRef_CompactIntValue(_PyStackRef ref)
+{
+    assert(PyStackRef_IsCompactInt(ref));
+    if (PyStackRef_IsInlineInt(ref)) {
+        return PyStackRef_InlineInt(ref);
+    }
+    return (int32_t)_PyLong_CompactValue((PyLongObject *)PyStackRef_AsPyObjectBorrow(ref));
+}
+
+#ifndef Py_STACKREF_INLINE_VALUES
+/* Without inline values the result of int arithmetic is an int object:
+   a new reference, or PyStackRef_NULL with an exception set. With them,
+   PyStackRef_FromInt32() cannot fail and the callers' NULL tests fold away. */
+static inline _PyStackRef
+PyStackRef_FromInt32(int32_t i)
+{
+    PyObject *op = PyLong_FromLong(i);
+    return op == NULL ? PyStackRef_NULL : PyStackRef_FromPyObjectSteal(op);
+}
+#endif
+
+// A new int for a result outside int32 (the slow path of int arithmetic),
+// or PyStackRef_NULL with an exception set.
+PyAPI_FUNC(_PyStackRef) _PyStackRef_BoxInt64(int64_t value);
+
+/* A new reference to the object that ref holds, a new box if ref holds an
+   inline value, or NULL with an exception set if boxing fails. For C code
+   that needs an object for a reference it does not own. */
+static inline PyObject *
+PyStackRef_AsPyObjectNewBoxed(_PyStackRef ref)
+{
+    if (PyStackRef_IsInline(ref)) {
+        ref = PyStackRef_Box(ref);
+        return PyStackRef_IsInline(ref) ? NULL : PyStackRef_AsPyObjectSteal(ref);
+    }
+    return PyStackRef_AsPyObjectNew(ref);
+}
+
+/* For each inline value src[i], store a new box in dst[i]; leave the other
+   elements of dst alone. Return 0, or -1 with an exception set and no boxes
+   left. For constructors that steal src only on success. */
+static inline int
+_PyStackRef_BoxInto(const _PyStackRef *src, PyObject **dst, Py_ssize_t n)
+{
+    for (Py_ssize_t i = 0; i < n; i++) {
+        if (PyStackRef_IsInline(src[i])) {
+            dst[i] = PyStackRef_AsPyObjectNewBoxed(src[i]);
+            if (dst[i] == NULL) {
+                while (--i >= 0) {
+                    if (PyStackRef_IsInline(src[i])) {
+                        Py_DECREF(dst[i]);
+                    }
+                }
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* Box each inline value of refs[0..n) in place, for C code that converts
+   the array to objects. Return 0, or -1 with an exception set if boxing
+   fails; boxes made so far stay in the array, so callers close it as usual
+   either way. */
+static inline int
+_PyStackRef_BoxArray(_PyStackRef *refs, Py_ssize_t n)
+{
+    for (Py_ssize_t i = 0; i < n; i++) {
+        if (PyStackRef_IsInlineAt(&refs[i])) {
+            refs[i] = PyStackRef_Box(refs[i]);
+            if (PyStackRef_IsInline(refs[i])) {
+                return -1;
+            }
+            OBJECT_STAT_INC(inline_array_boxes);
+        }
+    }
+    return 0;
 }
 
 static inline void

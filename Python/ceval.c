@@ -1062,6 +1062,9 @@ const _Py_CODEUNIT *_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR = (_Py_CODEUNIT*
 PyObject **
 _PyObjectArray_FromStackRefArray(_PyStackRef *input, Py_ssize_t nargs, PyObject **scratch)
 {
+    if (_PyStackRef_BoxArray(input, nargs) < 0) {
+        return NULL;
+    }
     PyObject **result;
     if (nargs > MAX_STACKREF_SCRATCH) {
         // +1 in case PY_VECTORCALL_ARGUMENTS_OFFSET is set.
@@ -1135,7 +1138,12 @@ _PyEval_GetIter(_PyStackRef iterable, _PyStackRef *index_or_null, int yield_from
         }
         return iterable;
     }
-    /* Pop iterable, and push iterator then NULL */
+    /* Pop iterable, and push iterator then NULL. An int or float is not
+       iterable; PyObject_GetIter() raises the error. */
+    iterable = PyStackRef_Box(iterable);
+    if (PyStackRef_IsInline(iterable)) {
+        return PyStackRef_ERROR;
+    }
     PyObject *iter_o = PyObject_GetIter(PyStackRef_AsPyObjectBorrow(iterable));
     PyStackRef_CLOSE(iterable);
     if (iter_o == NULL) {
@@ -1166,12 +1174,19 @@ int _PyEval_StoreName(PyThreadState *tstate, _PyStackRef v, PyObject *name, PyOb
         return error;
     }
 
-    PyObject *v_o = PyStackRef_AsPyObjectBorrow(v);
-    if (PyDict_CheckExact(ns)) {
-        return PyDict_SetItem(ns, name, v_o);
+    PyObject *v_o = PyStackRef_AsPyObjectNewBoxed(v);
+    if (v_o == NULL) {
+        return -1;
     }
-
-    return PyObject_SetItem(ns, name, v_o);
+    int err;
+    if (PyDict_CheckExact(ns)) {
+        err = PyDict_SetItem(ns, name, v_o);
+    }
+    else {
+        err = PyObject_SetItem(ns, name, v_o);
+    }
+    Py_DECREF(v_o);
+    return err;
 }
 
 #if (defined(__GNUC__) && __GNUC__ >= 10 && !defined(__clang__)) && defined(__x86_64__)
@@ -1486,7 +1501,7 @@ too_many_positional(PyThreadState *tstate, PyCodeObject *co,
     assert((co->co_flags & CO_VARARGS) == 0);
     /* Count missing keyword-only args. */
     for (i = co_argcount; i < co_argcount + co->co_kwonlyargcount; i++) {
-        if (PyStackRef_AsPyObjectBorrow(localsplus[i]) != NULL) {
+        if (!PyStackRef_IsNull(localsplus[i])) {
             kwonly_given++;
         }
     }
@@ -1659,7 +1674,11 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func,
         kwdict = NULL;
     }
 
-    if (argcount > co->co_argcount && !(co->co_flags & CO_VARARGS)) {
+    /* For the missing self hint, which an int or float never gets: its type
+       has no Python methods. */
+    if (argcount > co->co_argcount && !(co->co_flags & CO_VARARGS)
+        && !PyStackRef_IsInline(args[0]))
+    {
         first_argument = PyStackRef_AsPyObjectNew(args[0]);
     }
 
@@ -1693,7 +1712,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func,
         if (u == NULL) {
             goto fail_post_positional;
         }
-        assert(PyStackRef_AsPyObjectBorrow(localsplus[total_args]) == NULL);
+        assert(PyStackRef_IsNull(localsplus[total_args]));
         localsplus[total_args] = PyStackRef_FromPyObjectSteal(u);
     }
     else if (argcount > n) {
@@ -1783,7 +1802,13 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func,
                 goto kw_fail;
             }
 
-            if (PyDict_SetItem(kwdict, keyword, PyStackRef_AsPyObjectBorrow(value_stackref)) == -1) {
+            PyObject *value = PyStackRef_AsPyObjectNewBoxed(value_stackref);
+            if (value == NULL) {
+                goto kw_fail;
+            }
+            int err = PyDict_SetItem(kwdict, keyword, value);
+            Py_DECREF(value);
+            if (err == -1) {
                 goto kw_fail;
             }
             PyStackRef_CLOSE(value_stackref);
@@ -1796,7 +1821,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func,
             goto fail_post_args;
 
         kw_found:
-            if (PyStackRef_AsPyObjectBorrow(localsplus[j]) != NULL) {
+            if (!PyStackRef_IsNull(localsplus[j])) {
                 _PyErr_Format(tstate, PyExc_TypeError,
                               "%U() got multiple values for argument '%S'",
                               FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_qualname),
@@ -1838,7 +1863,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func,
         if (defcount) {
             PyObject **defs = &PyTuple_GET_ITEM(func->func_defaults, 0);
             for (; i < defcount; i++) {
-                if (PyStackRef_AsPyObjectBorrow(localsplus[m+i]) == NULL) {
+                if (PyStackRef_IsNull(localsplus[m+i])) {
                     PyObject *def = defs[i];
                     localsplus[m+i] = PyStackRef_FromPyObjectNew(def);
                 }
@@ -1850,7 +1875,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func,
     if (co->co_kwonlyargcount > 0) {
         Py_ssize_t missing = 0;
         for (i = co->co_argcount; i < total_args; i++) {
-            if (PyStackRef_AsPyObjectBorrow(localsplus[i]) != NULL)
+            if (!PyStackRef_IsNull(localsplus[i]))
                 continue;
             PyObject *varname = PyTuple_GET_ITEM(co->co_localsplusnames, i);
             if (func->func_kwdefaults != NULL) {

@@ -17,6 +17,10 @@ if check_impl_detail(cpython=False):
 
 _testinternalcapi = import_module("_testinternalcapi")
 
+# PYTHON_TAGGED_VALUES=0 turns off the specializations that produce inline
+# ints, which builds without inline values do not have.
+int_producers = getattr(_testinternalcapi, "TAGGED_VALUES", True)
+
 
 def have_dict_key_versions():
     # max version value that can be stored in the LOAD_GLOBAL feedback entry.
@@ -1394,8 +1398,9 @@ class TestSpecializer(TestBase):
                 self.assertEqual(c, 3)
 
         binary_op_add_int()
-        self.assert_specialized(binary_op_add_int, "BINARY_OP_ADD_INT")
-        self.assert_no_opcode(binary_op_add_int, "BINARY_OP")
+        if int_producers:
+            self.assert_specialized(binary_op_add_int, "BINARY_OP_ADD_INT")
+            self.assert_no_opcode(binary_op_add_int, "BINARY_OP")
 
         def binary_op_int_non_compact():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -2166,8 +2171,9 @@ class TestSpecializer(TestBase):
                 self.assertIn(i, r)
 
         for_iter_range()
-        self.assert_specialized(for_iter_range, "FOR_ITER_RANGE")
-        self.assert_no_opcode(for_iter_range, "FOR_ITER")
+        if int_producers:
+            self.assert_specialized(for_iter_range, "FOR_ITER_RANGE")
+            self.assert_no_opcode(for_iter_range, "FOR_ITER")
 
         def for_iter_generator():
             for i in (i for i in range(10)):

@@ -3375,8 +3375,15 @@ _PyList_FromStackRefStealOnSuccess(const _PyStackRef *src, Py_ssize_t n)
     }
 
     PyObject **dst = list->ob_item;
+    if (_PyStackRef_BoxInto(src, dst, n) < 0) {
+        memset(dst, 0, n * sizeof(PyObject *));
+        Py_DECREF(list);
+        return NULL;
+    }
     for (Py_ssize_t i = 0; i < n; i++) {
-        dst[i] = PyStackRef_AsPyObjectSteal(src[i]);
+        if (!PyStackRef_IsInline(src[i])) {
+            dst[i] = PyStackRef_AsPyObjectSteal(src[i]);
+        }
     }
 
     return (PyObject *)list;

@@ -3531,6 +3531,15 @@ module_exec(PyObject *module)
         return 1;
     }
 
+#ifdef Py_STACKREF_INLINE_VALUES
+    // Absent from builds without inline values; false under
+    // PYTHON_TAGGED_VALUES=0.
+    if (PyModule_Add(module, "TAGGED_VALUES", PyBool_FromLong(
+            _PyInterpreterState_GET()->opt_config.tagged_values_enabled)) < 0) {
+        return 1;
+    }
+#endif
+
 #ifdef _Py_WITH_FRAME_POINTERS
     if (PyModule_AddIntMacro(module, _Py_WITH_FRAME_POINTERS) < 0) {
         return 1;

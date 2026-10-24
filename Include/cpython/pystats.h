@@ -58,6 +58,9 @@ typedef struct _specialization_stats {
 typedef struct _opcode_stats {
     SpecializationStats specialization;
     uint64_t execution_count;
+    /* Inline stack values that the instruction boxed to use an input as an
+       object (boil/design/02-tagged-values.md, section 4) */
+    uint64_t boxes;
     uint64_t pair_count[256];
 } OpcodeStats;
 
@@ -97,6 +100,13 @@ typedef struct _object_stats {
     uint64_t type_cache_too_big;
     uint64_t type_cache_invalidations;
     uint64_t type_cache_resizes;
+    /* Inline stack values (boil/design/02-tagged-values.md): ints created,
+       and boxes made of each kind of value; array boxes are those made for
+       C code that takes a stackref array (calls and BUILD_*) */
+    uint64_t inline_ints_created;
+    uint64_t inline_int_boxes;
+    uint64_t inline_float_boxes;
+    uint64_t inline_array_boxes;
     /* Temporary value used during GC */
     uint64_t object_visits;
 } ObjectStats;

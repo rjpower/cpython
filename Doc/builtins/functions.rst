@@ -1062,7 +1062,11 @@ are always available.  They are listed here in alphabetical order.
    Two objects with non-overlapping lifetimes may have the same :func:`id`
    value.
 
-   .. impl-detail:: This is the address of the object in memory.
+   .. impl-detail:: This is the address of the object in memory, except for
+      an exact :class:`int` that fits in 32 bits and an exact :class:`float`
+      other than a NaN, on 64-bit builds without :option:`--disable-gil`:
+      their identity is derived from their value, so equal ones are the same
+      object as far as :func:`id` and ``is`` can tell.
 
    .. audit-event:: builtins.id id id
 

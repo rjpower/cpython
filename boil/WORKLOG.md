@@ -198,3 +198,9 @@ Entries are appended in order; each milestone is also a commit.
   `cpython-3.16-refcnt-v0-tagged`; the remote profiler now skips frames
   being torn down. Handler code size grew (ADD_INT 50 to 129 instructions
   of code), to be revisited with the IR.
+- Drafted `boil/PR.md` (pipeline, layout and lazy-boxing mermaid diagrams,
+  change list, compatibility, gates); results table and float section are
+  placeholders until the measurements and the float commit exist.
+  History flaw to fix at the final cleanup: the 36 tier-2 file deletions sit
+  in the design-notes commit `ac60a9c3c73` instead of the deletion commit,
+  a side effect of the soft reset; rewrite when the tree is clean.

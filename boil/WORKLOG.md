@@ -141,3 +141,8 @@ Entries are appended in order; each milestone is also a commit.
   withdrawn and deferred to IR step 4, where NaN-box and low-bit are
   re-measured with static borrows and the first producers. Order returns to
   the plan's: IR first, tags on top. Both branches are kept as data.
+- Direction from review: no prototype branches; develop incrementally on
+  main with tests at each step and commit to the well-known technique.
+  Final: NaN boxing. Landing order on main: feedback vector (in progress),
+  NaN-box encoding with the by-value boxing fixes, inline ints, inline
+  floats, then the IR interpreter.

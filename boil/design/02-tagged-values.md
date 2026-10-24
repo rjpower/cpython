@@ -567,3 +567,12 @@ Revised decisions:
    feedback-driven slot kinds so boxing checks are emitted only where inline
    values can flow, slot-level `known_object` across instructions, and
    `inline_ok` on the numeric handlers.
+
+## 15. Final decision (2026-10-23, after review)
+
+NaN boxing, as in section 2.1, developed incrementally on the main branch.
+The pre-IR overhead is accepted and recorded; inline ints (step 4) and
+floats (step 5) pay it back on numeric code, and the IR's static borrows
+remove the `Borrow` cost everywhere else. Sections 13 and 14 are history;
+the prototype branches are deleted once their generator improvements are
+carried over. No further encoding prototypes.

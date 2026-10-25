@@ -511,6 +511,11 @@ minutes or per rung, a "message me if blocked more than 15 minutes" rule and
 an explicit scope cut. I validate each gate myself: full suite in debug and
 release, `perf stat -e instructions:u` on the four reference benchmarks
 (richards, go, nbody, float), the ports build, and RSS where memory changes.
+Gates are correctness gates. A performance measurement is recorded at every
+step with its attribution, and blocks a step only when the step is the one
+meant to deliver that number (decided 2026-10-25 after step 2b: the register
+input machinery that the stack pointer and ownership demand regressed
+instruction counts, and the cure is steps 3 and 5, not more code in 2b).
 Each step lands as commits on `weaver/python-boil-the-ocean` with a worklog
 entry; nothing lives on a prototype branch.
 

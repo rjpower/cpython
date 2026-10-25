@@ -243,9 +243,11 @@ PyAPI_FUNC(void) _Py_Specialize_GetIter(_PyStackRef iterable, _PyInstr *instr);
  * instruction has an entry.  _PyCode_Quicken() writes the block after
  * INSTRUCTIONS, a copy of the bytecode of CO allocated with room for it, and
  * points unit 0 of every inline cache at its entry. */
+#ifndef Py_IR_INTERP
 extern Py_ssize_t _PyFb_BlockSize(const _Py_CODEUNIT *code, Py_ssize_t size);
 extern void _PyCode_Quicken(PyCodeObject *co, _Py_CODEUNIT *instructions,
                             int enable_counters);
+#endif
 
 /* See InternalDocs/exception_handling.md for details.
  */
@@ -419,9 +421,11 @@ _PyCode_GetTLBCFast(PyThreadState *tstate, PyCodeObject *co)
     return NULL;
 }
 
+#ifndef Py_IR_INTERP
 // Return a pointer to the thread-local bytecode for the current thread,
-// creating it if necessary.
+// creating it if necessary.  The register IR has no thread-local copies.
 PyAPI_FUNC(_Py_CODEUNIT *) _PyCode_GetTLBC(PyCodeObject *co);
+#endif
 
 // Reserve an index for the current thread into thread-local bytecode
 // arrays

@@ -144,19 +144,13 @@ STACK_INSTRUCTION_MACROS = {
     "INSTRUCTION_SIZE_OF": "1 + INLINE_CACHE_ENTRIES_{0}",
     # Resume the caller of a generator that yields, after its SEND or FOR_ITER.
     "RETURN_TO_CALLER": "LOAD_IP(1 + INLINE_CACHE_ENTRIES_SEND)",
-    # The bytecode offset of the instruction at {0}, of the first code unit of
-    # the instruction at {0} (its EXTENDED_ARG prefix), and the instruction at
+    # The bytecode offset of the instruction at {0}, and the instruction at
     # bytecode offset {0}.
     "INSTR_OFFSET_OF": "{0} - _PyFrame_GetBytecode(frame)",
-    "INSTR_START_OF": "{0} - _PyFrame_GetBytecode(frame)",
     "INSTR_AT_OFFSET": "_PyFrame_GetBytecode(frame) + {0}",
     # The bytecode offset of the instruction that is executing, from
     # next_instr, for exception_unwind.
     "CURRENT_OFFSET": "INSTR_OFFSET()-1",
-    # The index of {0} in the frame's instruction array, and the instruction at
-    # index {1} of the array {0}, for a frame moving to another copy.
-    "INSTR_INDEX": "{0} - _PyFrame_GetBytecode(frame)",
-    "INSTR_IN": "{0} + {1}",
     # The handler that runs an instruction whose original opcode, as the
     # instrumentation records it, is {0}.
     "ORIGINAL_HANDLER": "{0}",

@@ -27,6 +27,7 @@ extern "C" {
 #include "internal/pycore_debug_offsets.h"  // _Py_DebugOffsets
 #include "internal/pycore_frame.h"          // FRAME_SUSPENDED_YIELD_FROM
 #include "internal/pycore_interpframe.h"    // FRAME_OWNED_BY_INTERPRETER
+#include "internal/pycore_ir.h"             // _PyIRBlock
 #include "internal/pycore_llist.h"          // struct llist_node
 #include "internal/pycore_long.h"           // _PyLong_GetZero
 #include "internal/pycore_pyerrors.h"       // _PyErr_FormatFromCause
@@ -132,6 +133,7 @@ typedef enum _WIN32_THREADSTATE {
 #define SIZEOF_CODE_OBJ sizeof(PyCodeObject)
 #define SIZEOF_GEN_OBJ sizeof(PyGenObject)
 #define SIZEOF_INTERP_FRAME sizeof(_PyInterpreterFrame)
+#define SIZEOF_IR_BLOCK sizeof(_PyIRBlock)
 #define SIZEOF_LLIST_NODE sizeof(struct llist_node)
 #define SIZEOF_PAGE_CACHE_ENTRY sizeof(page_cache_entry_t)
 #define SIZEOF_PYOBJECT sizeof(PyObject)

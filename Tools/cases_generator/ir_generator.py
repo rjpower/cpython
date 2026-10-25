@@ -6,7 +6,8 @@ stack interpreter too, and writes
 - Python/generated_ir_cases.c.h, one handler per instruction, #included in
   ceval.c when Py_IR_INTERP is defined;
 - Python/ir_targets.h, the computed-goto and tail-call tables, indexed by
-  handler.
+  handler, and the table of IR_BODY_ labels, which enter a handler with its
+  fields decoded.
 
 Design note boil/design/01-internal-ir.md describes the IR, and
 Include/internal/pycore_ir.h the word layout. In short, an instruction is one
@@ -47,6 +48,9 @@ Invariants:
   first; there the borrow tag is set statically after the object check.
 - Instruction macros of the DSL (generators_common.STACK_INSTRUCTION_MACROS)
   expand to the IR forms of IR_INSTRUCTION_MACROS.
+- Each handler starts with IR_ENTRY(), which decodes its fields in the
+  computed-goto build, and a family head marks its PREDICTED_ label with
+  IR_PREDICTED() (Python/ceval_macros.h).
 """
 
 import argparse
@@ -90,7 +94,8 @@ LABEL_END_MARKER = "/* END LABELS */"
 
 FIRST_IR_ONLY_HANDLER = 256
 
-# Field names: the C variables that dispatch fills from word 0.
+# Field names: the C variables that hold fields of word 0, which IR_ENTRY()
+# decodes in each handler or dispatch does (Python/ceval_macros.h).
 FIELDS = ("A", "B", "C")
 FIELD_VARS = {"A": "ir_a", "B": "ir_b", "C": "ir_c"}
 
@@ -104,11 +109,8 @@ IR_INSTRUCTION_MACROS = {
     "INSTRUCTION_SIZE_OF": "{size}u",
     "RETURN_TO_CALLER": "LOAD_IP(_PyIR_YieldReturnOffset(frame))",
     "INSTR_OFFSET_OF": "_PyFrame_InstrOffset(frame, {0})",
-    "INSTR_START_OF": "_PyFrame_InstrStartOffset(frame, {0})",
     "INSTR_AT_OFFSET": "_PyFrame_InstrAt(frame, {0})",
     "CURRENT_OFFSET": "_PyFrame_InstrOffset(frame, next_instr - 1)",
-    "INSTR_INDEX": "({0} - _PyFrame_IRWords(frame))",
-    "INSTR_IN": "(_PyFrame_IRWords(frame) + ({1}))",
     "ORIGINAL_HANDLER": "_PyIR_OriginalHandler(frame, this_instr, {0})",
 }
 
@@ -135,7 +137,6 @@ class IRFormat:
     imm: str                        # where the oparg lives (LOC_*)
     fb: str                         # where the feedback distance lives
     jumps: bool                     # the oparg is a jump distance in words
-    popped: str                     # window style: inputs, as a C expression
     no_fold: bool = False
     transparent: bool = False       # see is_transparent()
 
@@ -424,7 +425,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     return IRFormat(
         group=group, window=window, nwords=nwords, roles=roles, inputs=names,
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
-        imm=imm, fb=fb, jumps=jumps, popped=get_popped(deepest), no_fold=no_fold,
+        imm=imm, fb=fb, jumps=jumps, no_fold=no_fold,
     )
 
 
@@ -451,7 +452,7 @@ def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
         formats[name] = IRFormat(
             group=name, window=False, nwords=1, roles=[ROLE_NONE] * 3,
             inputs=[], n_inputs=0, dst_offset=None, borrow_mask=0,
-            imm=LOC_NONE, fb=LOC_NONE, jumps=False, popped="0",
+            imm=LOC_NONE, fb=LOC_NONE, jumps=False,
             transparent=True)
     return formats
 
@@ -649,9 +650,11 @@ def needs_this(inst: Instruction, fmt: IRFormat) -> bool:
     return False
 
 
-def emit_field_checks(fmt: IRFormat, out: CWriter) -> None:
+def emit_field_checks(inst: Instruction, fmt: IRFormat, out: CWriter) -> None:
     """Debug checks that each slot field names its canonical slot, given as
-    an offset from stack_pointer, or for an input carries IR_BORROW."""
+    an offset from stack_pointer, or for an input carries IR_BORROW.  The
+    members of a window-style family pop different numbers of inputs for the
+    same oparg, so a base is checked against the member's own."""
     if fmt.transparent:
         return
     for name, role in zip(FIELDS, fmt.roles):
@@ -659,7 +662,8 @@ def emit_field_checks(fmt: IRFormat, out: CWriter) -> None:
         if role == ROLE_DST:
             out.emit(f"IR_CHECK_SLOT({f}, {fmt.dst_offset});\n")
         elif role == ROLE_BASE:
-            base = f"-{fmt.popped}" if fmt.popped.isdigit() else f"-({fmt.popped})"
+            popped = get_popped(inst)
+            base = f"-{popped}" if popped.isdigit() else f"-({popped})"
             out.emit(f"IR_CHECK_SLOT({f}, {base});\n")
         elif role.startswith(ROLE_IN0):
             k = int(role.split("+")[1])
@@ -679,6 +683,7 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         out.emit(f"int opcode = {name};\n")
         out.emit(f"(void)(opcode);\n")
         out.emit(f"#endif\n")
+        out.emit(f"IR_ENTRY({name});\n")
         this = needs_this(inst, fmt)
         if inst.properties.needs_prev:
             out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
@@ -690,7 +695,7 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         out.emit(f"next_instr += {fmt.nwords};\n")
         out.emit(f"INSTRUCTION_STATS({name});\n")
         if inst.is_target:
-            out.emit(f"PREDICTED_{name}:;\n")
+            out.emit(f"IR_PREDICTED({name});\n")
             if this:
                 out.emit(f"_PyIRWord* const this_instr = next_instr - {fmt.nwords};\n")
                 out.emit("(void)this_instr;\n")
@@ -705,7 +710,7 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
             else:
                 out.emit(f"int oparg = (int){field_expr(fmt.imm)};\n")
             out.emit("(void)oparg;\n")
-        emit_field_checks(fmt, out)
+        emit_field_checks(inst, fmt, out)
         if inst.properties.uses_opcode:
             out.emit(f"opcode = {name};\n")
         declare_variables(inst, out)
@@ -803,6 +808,14 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     for target in targets:
         out.emit(target)
     out.emit("};\n")
+    out.emit("#if IR_LAZY_FIELDS\n")
+    out.emit(f"static void *ir_body_targets[{n}] = {{\n")
+    by_index = {i: name for name, i in ids.items()}
+    for i in range(n):
+        name = by_index.get(i)
+        out.emit(f"&&IR_BODY_{name},\n" if name else "&&_unknown_opcode,\n")
+    out.emit("};\n")
+    out.emit("#endif\n")
     out.emit("#else /* _Py_TAIL_CALL_INTERP */\n")
     out.emit(f"static py_tail_call_funcptr instruction_funcptr_handler_table[{n}];\n")
     out.emit("\n")
@@ -819,7 +832,6 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     out.emit("}\n")
     out.emit("\n")
     out.emit(f"static py_tail_call_funcptr instruction_funcptr_handler_table[{n}] = {{\n")
-    by_index = {i: name for name, i in ids.items()}
     for i in range(n):
         name = by_index.get(i, "UNKNOWN_OPCODE")
         out.emit(f"[{i}] = _TAIL_CALL_{name},\n")

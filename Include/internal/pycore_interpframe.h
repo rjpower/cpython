@@ -37,10 +37,17 @@ static inline PyCodeObject *_PyFrame_GetCode(_PyInterpreterFrame *f) {
 /* The IR block that frame->instr_ptr points into.  A frame that has not
  * started yet may still be at the stub of a code object that another frame
  * has lowered since. */
+static inline int
+_PyFrame_IsAtStub(const _PyInterpreterFrame *f)
+{
+    return f->instr_ptr == _PyIR_LowerStub.words
+           || f->instr_ptr == _PyIR_STUB_RESUMED;
+}
+
 static inline _PyIRBlock *
 _PyFrame_IRBlock(_PyInterpreterFrame *f)
 {
-    if (f->instr_ptr == _PyIR_LowerStub.words) {
+    if (_PyFrame_IsAtStub(f)) {
         return &_PyIR_LowerStub;
     }
     return _PyFrame_GetCode(f)->_co_ir;
@@ -53,19 +60,20 @@ _PyFrame_IRWords(_PyInterpreterFrame *f)
 }
 
 /* The bytecode offset of the instruction at instr, which is f_lasti for
- * frame->instr_ptr. */
+ * frame->instr_ptr.  The word before the block, which the unwinding of a
+ * frame that has not finished an instruction reads, is at offset -1, as the
+ * code unit before the bytecode is. */
 static inline int
 _PyFrame_InstrOffset(_PyInterpreterFrame *f, const _PyIRWord *instr)
 {
-    return _PyIR_Anchor(_PyFrame_IRBlock(f), instr);
-}
-
-/* The offset of the first code unit that the instruction at instr consumed,
- * EXTENDED_ARG included. */
-static inline int
-_PyFrame_InstrStartOffset(_PyInterpreterFrame *f, const _PyIRWord *instr)
-{
-    return _PyIR_Start(_PyFrame_IRBlock(f), instr);
+    if (instr == _PyIR_STUB_RESUMED) {
+        return _PyFrame_GetCode(f)->_co_firsttraceable + 1;
+    }
+    _PyIRBlock *block = _PyFrame_IRBlock(f);
+    if (instr == block->words - 1) {
+        return -1;
+    }
+    return _PyIR_Anchor(block, instr);
 }
 
 /* The first word of the instruction that starts at a bytecode offset. */
@@ -116,6 +124,9 @@ _PyFrame_SafeGetCode(_PyInterpreterFrame *f)
     return (PyCodeObject *)executable;
 }
 
+#ifndef Py_IR_INTERP
+/* The bytecode that frame->instr_ptr points into.  The IR interpreter has
+ * none: frames point into IR blocks, see _PyFrame_IRBlock(). */
 static inline _Py_CODEUNIT *
 _PyFrame_GetBytecode(_PyInterpreterFrame *f)
 {
@@ -128,6 +139,7 @@ _PyFrame_GetBytecode(_PyInterpreterFrame *f)
     return _PyCode_CODE(_PyFrame_GetCode(f));
 #endif
 }
+#endif
 
 // Similar to PyUnstable_InterpreterFrame_GetLasti(), but return NULL if the
 // frame is invalid or freed. Used by dump_frame() in Python/traceback.c. The
@@ -145,6 +157,9 @@ _PyFrame_SafeGetLasti(struct _PyInterpreterFrame *f)
 #ifdef Py_IR_INTERP
     if (f->instr_ptr == _PyIR_LowerStub.words) {
         return 0;
+    }
+    if (f->instr_ptr == _PyIR_STUB_RESUMED) {
+        return (co->_co_firsttraceable + 1) * (int)sizeof(_Py_CODEUNIT);
     }
     _PyIRBlock *block = co->_co_ir;
     if (block == NULL || f->instr_ptr < block->words

@@ -68,12 +68,15 @@
 #endif
 
 #ifdef Py_STATS
+/* The handlers of the register IR that have no opcode have no statistics. */
 #define INSTRUCTION_STATS(op) \
     do { \
-        PyStats *s = _PyStats_GET(); \
-        OPCODE_EXE_INC(op); \
-        if (s) s->opcode_stats[lastopcode].pair_count[op]++; \
-        lastopcode = op; \
+        if ((op) < 256) { \
+            PyStats *s = _PyStats_GET(); \
+            OPCODE_EXE_INC(op); \
+            if (s) s->opcode_stats[lastopcode].pair_count[op]++; \
+            lastopcode = op; \
+        } \
     } while (0)
 #else
 #define INSTRUCTION_STATS(op) ((void)0)
@@ -152,10 +155,63 @@
 #  define LABEL(name) name:
 #endif
 
+/* The computed-goto build of the register IR decodes fields A, B and C of
+ * word 0 in each handler rather than at dispatch, so that a handler pays only
+ * for the fields it uses.  Dispatch after NEXTOPARG() enters a handler at its
+ * TARGET, where IR_ENTRY() decodes ir_a, ir_b and ir_c from ir_word into
+ * locals.  DISPATCH_GOTO() runs another handler on the fields at hand, which
+ * IR_EXT may have widened: it passes them in ir_fields to the handler's
+ * IR_BODY_ label, past the decoding, and sets ir_word to IR_FIELDS_PASSED.
+ * A specialisation that deoptimises jumps to the PREDICTED_ label of its
+ * family head, which takes the fields from wherever its entry found them.
+ * The tail-call and switch builds decode the fields at dispatch. */
+#if defined(Py_IR_INTERP) && USE_COMPUTED_GOTOS && !_Py_TAIL_CALL_INTERP
+#  define IR_LAZY_FIELDS 1
+/* No main word runs IR_EXT. */
+#  define IR_FIELDS_PASSED ((_PyIRWord)IR_EXT)
+#  define IR_DECODE_FIELDS() \
+    (ir_a = IR_A(ir_word), ir_b = IR_B(ir_word), ir_c = IR_C(ir_word))
+#  define IR_TAKE_FIELDS() \
+    (ir_a = ir_fields[0], ir_b = ir_fields[1], ir_c = ir_fields[2])
+#  undef DISPATCH_GOTO
+#  define DISPATCH_GOTO() \
+    do { \
+        ir_fields[0] = ir_a; \
+        ir_fields[1] = ir_b; \
+        ir_fields[2] = ir_c; \
+        ir_word = IR_FIELDS_PASSED; \
+        goto *ir_body_targets[opcode]; \
+    } while (0)
+#  define DISPATCH_DECODE() goto *opcode_targets[opcode]
+#  define IR_ENTRY(op) \
+    uintptr_t ir_a, ir_b, ir_c; \
+    IR_DECODE_FIELDS(); \
+    if (0) { \
+        IR_BODY_##op: \
+        IR_TAKE_FIELDS(); \
+    } \
+    (void)ir_a; (void)ir_b; (void)ir_c
+#  define IR_PREDICTED(op) \
+    if (0) { \
+        PREDICTED_##op: \
+        if (ir_word == IR_FIELDS_PASSED) { \
+            IR_TAKE_FIELDS(); \
+        } \
+        else { \
+            IR_DECODE_FIELDS(); \
+        } \
+    }
+#else
+#  define IR_LAZY_FIELDS 0
+#  define DISPATCH_DECODE() DISPATCH_GOTO()
+#  define IR_ENTRY(op) ((void)0)
+#  define IR_PREDICTED(op) PREDICTED_##op:
+#endif
+
 /* PRE_DISPATCH_GOTO() does lltrace if enabled. Normally a no-op */
 #if defined(Py_DEBUG) && defined(Py_IR_INTERP)
 #define PRE_DISPATCH_GOTO() if (frame->lltrace >= 5) { \
-    lltrace_instruction(frame, stack_pointer, next_instr, opcode, ir_a, ir_b, ir_c); }
+    lltrace_instruction(frame, stack_pointer, next_instr, opcode); }
 #elif defined(Py_DEBUG)
 #define PRE_DISPATCH_GOTO() if (frame->lltrace >= 5) { \
     lltrace_instruction(frame, stack_pointer, next_instr, opcode, oparg); }
@@ -188,7 +244,7 @@ do { \
         _PyFrame_StackAssertInvalid(frame); \
         NEXTOPARG(); \
         PRE_DISPATCH_GOTO(); \
-        DISPATCH_GOTO(); \
+        DISPATCH_DECODE(); \
     }
 
 #ifdef Py_IR_INTERP
@@ -237,13 +293,20 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 #ifdef Py_IR_INTERP
 /* In words: the IR has no bytecode offsets but those of its pcmap. */
 #define INSTR_OFFSET() ((int)(next_instr - _PyFrame_IRWords(frame)))
+#if IR_LAZY_FIELDS
 #define NEXTOPARG()  do { \
-        _PyIRWord word = *next_instr; \
+        ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr); \
+        opcode = IR_HANDLER(ir_word); \
+    } while (0)
+#else
+#define NEXTOPARG()  do { \
+        _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr); \
         opcode = IR_HANDLER(word); \
         ir_a = IR_A(word); \
         ir_b = IR_B(word); \
         ir_c = IR_C(word); \
     } while (0)
+#endif
 #else
 /* The integer overflow is checked by an assertion below. */
 #define INSTR_OFFSET() ((int)(next_instr - _PyFrame_GetBytecode(frame)))
@@ -574,7 +637,7 @@ static_assert(IR_BORROW == Py_TAG_REFCNT,
 /* IR_EXT: widen the fields with its own and go on to the next word. */
 #define IR_EXTEND_FIELDS() \
     do { \
-        _PyIRWord word_ = *next_instr; \
+        _PyIRWord word_ = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr); \
         opcode = IR_HANDLER(word_); \
         ir_a = ir_a << 16 | IR_A(word_); \
         ir_b = ir_b << 16 | IR_B(word_); \

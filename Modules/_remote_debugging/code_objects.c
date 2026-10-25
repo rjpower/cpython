@@ -124,6 +124,68 @@ cache_tlbc_array(RemoteUnwinderObject *unwinder, uintptr_t code_addr, uintptr_t 
 #endif
 
 /* ============================================================================
+ * REGISTER IR FUNCTIONS
+ * ============================================================================ */
+
+/* Store in *addrq the bytecode offset, in code units, of the register IR
+ * word at ip in the code object at code_addr: the anchor of the word's
+ * pcmap entry.  A frame that has not started yet may still point into the
+ * stub of a code object that another frame has lowered since, and is at
+ * offset 0. */
+static int
+read_ir_offset(RemoteUnwinderObject *unwinder, uintptr_t code_addr,
+               uintptr_t ip, ptrdiff_t *addrq)
+{
+    const struct _ir_block *offsets = &unwinder->debug_offsets.ir_block;
+    uintptr_t block_addr;
+    if (read_ptr(unwinder,
+                 code_addr + unwinder->debug_offsets.code_object.co_ir,
+                 &block_addr) < 0)
+    {
+        return -1;
+    }
+    char block[SIZEOF_IR_BLOCK];
+    if (_Py_RemoteDebug_PagedReadRemoteMemory(
+            &unwinder->handle, block_addr, offsets->size, block) < 0)
+    {
+        return -1;
+    }
+    uintptr_t words = GET_MEMBER(uintptr_t, block, offsets->words);
+    uint32_t nwords = GET_MEMBER(uint32_t, block, offsets->nwords);
+    uint32_t flags = GET_MEMBER(uint32_t, block, offsets->flags);
+    uintptr_t pcmap = GET_MEMBER(uintptr_t, block, offsets->pcmap);
+    const uintptr_t word_size = sizeof(uint64_t);
+    if (ip < words || (ip - words) % word_size != 0
+        || (ip - words) / word_size >= nwords)
+    {
+        *addrq = 0;
+        return 0;
+    }
+    uintptr_t w = (ip - words) / word_size;
+    if (flags & offsets->pcmap_wide) {
+        uint32_t entry[2];
+        if (_Py_RemoteDebug_PagedReadRemoteMemory(
+                &unwinder->handle, pcmap + w * sizeof(entry), sizeof(entry),
+                entry) < 0)
+        {
+            return -1;
+        }
+        *addrq = entry[1];
+    }
+    else {
+        uint16_t entry[2];
+        if (_Py_RemoteDebug_PagedReadRemoteMemory(
+                &unwinder->handle, pcmap + w * sizeof(entry), sizeof(entry),
+                entry) < 0)
+        {
+            return -1;
+        }
+        *addrq = entry[1];
+    }
+    return 0;
+}
+
+/* ============================================================================
  * LINE TABLE PARSING FUNCTIONS
  * ============================================================================ */
 
@@ -526,6 +588,17 @@ done_tlbc:
 #endif
     ;  // Empty statement to avoid C23 extension warning
 
+    // co_code_adaptive holds the bytecode that the register IR shadows
+    uintptr_t opcode_addr = ip;
+    if (unwinder->debug_offsets.code_object.co_ir != 0) {
+        if (read_ir_offset(unwinder, real_address, ip, &addrq) < 0) {
+            set_exception_cause(unwinder, PyExc_RuntimeError,
+                                "Failed to read the register IR of a code object");
+            goto error;
+        }
+        opcode_addr = meta->addr_code_adaptive + addrq * sizeof(uint16_t);
+    }
+
     if (!unwinder->opcodes && meta->last_frame_info != NULL && meta->last_addrq == addrq) {
         *result = Py_NewRef(meta->last_frame_info);
         return 0;
@@ -556,7 +629,7 @@ done_tlbc:
     PyObject *opcode_obj = NULL;
     if (unwinder->opcodes) {
         uint16_t instruction_word = 0;
-        if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle, ip,
+        if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle, opcode_addr,
                                                    sizeof(uint16_t), &instruction_word) == 0) {
             opcode_obj = PyLong_FromLong(instruction_word & 0xFF);
             if (!opcode_obj) {

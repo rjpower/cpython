@@ -30,6 +30,7 @@
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_object.h"        // _PyObject_IsFreed()
+#include "pycore_opcode_metadata.h" // _PyOpcode_OpName
 #include "pycore_pathconfig.h"    // _PyPathConfig_ClearGlobal()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_pylifecycle.h"   // _PyInterpreterConfig_InitFromDict()
@@ -1529,7 +1530,18 @@ get_feedback(PyObject *self, PyObject *args)
     if (!_PyFb_HasEntry(_Py_GetBaseCodeUnit(code, i).op.code)) {
         Py_RETURN_NONE;
     }
+#ifdef Py_IR_INTERP
+    _PyIRBlock *block = _PyIR_Lower(code);
+    if (block == NULL) {
+        return NULL;
+    }
+    _PyIRWord *instr = _PyIR_MainWordAt(block, i);
+    _PyFbHeader *h = _PyIR_InstrFeedback(block, instr, IR_HANDLER(*instr));
+    _PyFbBlock *feedback = block->feedback;
+#else
     _PyFbHeader *h = _PyFb_Header(&_PyCode_CODE(code)[i]);
+    _PyFbBlock *feedback = code->_co_feedback;
+#endif
     if (h == NULL) {
         Py_RETURN_NONE;
     }
@@ -1538,7 +1550,7 @@ get_feedback(PyObject *self, PyObject *args)
         return NULL;
     }
     if (h->poly) {
-        _PyFbPoly *poly = &code->_co_feedback->poly[h->poly - 1];
+        _PyFbPoly *poly = &feedback->poly[h->poly - 1];
         for (int r = 0; r < FB_POLY_SIZE && poly->handler[r]; r++) {
             PyObject *row = Py_BuildValue("(IIi)", poly->type_version[r],
                                           poly->aux[r], poly->handler[r]);
@@ -1557,6 +1569,66 @@ get_feedback(PyObject *self, PyObject *args)
     return Py_BuildValue("(ssIIN)", kinds[h->kind], states[h->state],
                          fields[0], fields[1], rows);
 }
+
+#ifdef Py_IR_INTERP
+/* The register IR of CODE, lowering it if need be: per instruction a tuple
+ * (start, anchor, handler, a, b, c, word1) of the bytecode offsets in bytes
+ * of its first code unit and of the instruction, the name of the handler of
+ * its main word, fields A, B and C, widened by IR_EXT, and word 1 of a
+ * two-word format or None. */
+static PyObject *
+get_ir(PyObject *self, PyObject *arg)
+{
+    if (!PyCode_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError, "argument must be a code object");
+        return NULL;
+    }
+    _PyIRBlock *block = _PyIR_Lower((PyCodeObject *)arg);
+    if (block == NULL) {
+        return NULL;
+    }
+    PyObject *result = PyList_New(0);
+    if (result == NULL) {
+        return NULL;
+    }
+    for (uint32_t w = 0; w < block->nwords; ) {
+        uint32_t a = 0, b = 0, c = 0;
+        if (IR_HANDLER(block->words[w]) == IR_EXT) {
+            a = IR_A(block->words[w]);
+            b = IR_B(block->words[w]);
+            c = IR_C(block->words[w]);
+            w++;
+        }
+        _PyIRWord word = block->words[w];
+        int handler = IR_HANDLER(word);
+        int real = handler;
+        if (_PyIR_FormatOf(handler)->flags & _PyIR_TRANSPARENT) {
+            real = block->real[w];
+        }
+        int nwords = _PyIR_FormatOf(real)->nwords;
+        PyObject *word1 = nwords == 2
+            ? PyLong_FromUnsignedLongLong(block->words[w + 1])
+            : Py_NewRef(Py_None);
+        const char *name = handler < IR_FIRST_ONLY_HANDLER
+            ? _PyOpcode_OpName[handler]
+            : _PyIR_OnlyNames[handler - IR_FIRST_ONLY_HANDLER];
+        PyObject *item = word1 == NULL ? NULL : Py_BuildValue(
+            "(iisIIIN)",
+            _PyIR_Start(block, &block->words[w]) * (int)sizeof(_Py_CODEUNIT),
+            _PyIR_Anchor(block, &block->words[w]) * (int)sizeof(_Py_CODEUNIT),
+            name, a << 16 | IR_A(word), b << 16 | IR_B(word),
+            c << 16 | IR_C(word), word1);
+        if (item == NULL || PyList_Append(result, item) < 0) {
+            Py_XDECREF(item);
+            Py_DECREF(result);
+            return NULL;
+        }
+        Py_DECREF(item);
+        w += nwords;
+    }
+    return result;
+}
+#endif
 
 static PyObject *
 get_co_localskinds(PyObject *self, PyObject *arg)
@@ -3398,6 +3470,9 @@ static PyMethodDef module_functions[] = {
     {"get_co_framesize", get_co_framesize, METH_O, NULL},
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
+#ifdef Py_IR_INTERP
+    {"get_ir", get_ir, METH_O, NULL},
+#endif
     {"get_code_var_counts", _PyCFunction_CAST(get_code_var_counts),
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"verify_stateless_code", _PyCFunction_CAST(verify_stateless_code),

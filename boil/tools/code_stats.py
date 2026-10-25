@@ -11,6 +11,11 @@ Files that fail to compile are counted in ``skipped`` and never abort the run.
 Cache entries are not counted as instructions; ``co_code`` bytes include them.
 ``sizeof`` sums ``sys.getsizeof(code)``, which includes the typed feedback
 block on interpreters that have one.
+
+On a build with the register IR (``--with-ir-interp``), each code object is
+also lowered: ``ir_words`` counts its words, IR_EXT and second words included,
+``ir_absorbed`` its absorbed loads, and ``ir_bytes`` the growth of
+``sys.getsizeof(code)`` that lowering causes (words, feedback and pcmap).
 """
 
 from __future__ import annotations
@@ -30,11 +35,18 @@ import dis, json, opcode, sys
 from pathlib import Path
 from types import CodeType
 
+try:
+    from _testinternalcapi import get_ir
+except ImportError:
+    get_ir = None
+
 CACHE = opcode._inline_cache_entries
 JUMPS = set(dis.hasjump)
 KEYS = ("instructions", "stacksize", "nlocalsplus", "consts", "names",
         "specialisable", "longest_jump", "co_code_bytes", "slots")
-SUM_KEYS = ("instructions", "specialisable", "co_code_bytes", "sizeof")
+IR_KEYS = ("ir_instructions", "ir_words", "ir_ext", "ir_absorbed", "ir_bytes")
+SUM_KEYS = ("instructions", "specialisable", "co_code_bytes", "sizeof") + (
+    IR_KEYS if get_ir else ())
 
 
 def walk(code):
@@ -73,6 +85,20 @@ def stats(code):
     }
 
 
+def ir_stats(code):
+    before = sys.getsizeof(code)
+    ir = get_ir(code)
+    # get_ir folds an IR_EXT word into the fields that it widens
+    ext = sum(max(a, b, c) > 0xFFFF for _, _, _, a, b, c, _ in ir)
+    return {
+        "ir_instructions": len(ir),
+        "ir_words": len(ir) + ext + sum(word1 is not None for *_, word1 in ir),
+        "ir_ext": ext,
+        "ir_absorbed": sum(name.startswith("IR_ABSORBED") for _, _, name, *_ in ir),
+        "ir_bytes": sys.getsizeof(code) - before,
+    }
+
+
 def main():
     files = [Path(p) for p in sys.stdin.read().split("\n") if p]
     totals = dict.fromkeys(SUM_KEYS, 0)
@@ -87,6 +113,8 @@ def main():
             continue
         for code in walk(top):
             s = stats(code)
+            if get_ir:
+                s.update(ir_stats(code))
             ncode += 1
             for k in SUM_KEYS:
                 totals[k] += s[k]
@@ -132,7 +160,7 @@ def collect(interpreter: Path, files: list[Path]) -> dict:
 
 
 def summary(name: str, r: dict) -> str:
-    """Return an eleven-line human summary."""
+    """Return a human summary."""
     t, m = r["totals"], r["maxima"]
     share = 100 * t["specialisable"] / t["instructions"]
     lines = [
@@ -149,6 +177,12 @@ def summary(name: str, r: dict) -> str:
         f"  max instructions in one code object={m['instructions']}",
         "  design note: 70/803 slots, 4048 consts, 368 names, 5458 jump, 510/1181 specialisable, 32%",
     ]
+    if "ir_words" in t:
+        units = t["co_code_bytes"] / 2
+        lines.append(
+            f"  IR: words per instruction={t['ir_words'] / t['ir_instructions']:.3f}"
+            f" IR_EXT={t['ir_ext']} absorbed loads={100 * t['ir_absorbed'] / t['ir_instructions']:.1f}%"
+            f" block bytes per code unit={t['ir_bytes'] / units:.2f}")
     return "\n".join(lines)
 
 

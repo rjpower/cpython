@@ -451,9 +451,13 @@ gen_close_iter(PyObject *yf)
 }
 
 static inline bool
-is_resume(_Py_CODEUNIT *instr)
+is_resume(_PyInstr *instr)
 {
+#ifdef Py_IR_INTERP
+    int code = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
+#else
     uint8_t code = FT_ATOMIC_LOAD_UINT8_RELAXED(instr->op.code);
+#endif
     return (
         code == RESUME ||
         code == RESUME_CHECK ||
@@ -502,7 +506,12 @@ gen_close(PyObject *self, PyObject *args)
         /* We can safely ignore the outermost try block
          * as it is automatically generated to handle
          * StopIteration. */
+#ifdef Py_IR_INTERP
+        int oparg = _PyIR_InstrOparg(_PyFrame_IRBlock(frame), frame->instr_ptr,
+                                     IR_HANDLER(*frame->instr_ptr));
+#else
         int oparg = frame->instr_ptr->op.arg;
+#endif
         if (oparg & RESUME_OPARG_DEPTH1_MASK && no_unwind_tools) {
             // RESUME after YIELD_VALUE and exception depth is 1
             assert((oparg & RESUME_OPARG_LOCATION_MASK) != RESUME_AT_FUNC_START);

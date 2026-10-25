@@ -66,6 +66,36 @@
 
 #endif
 
+/* The register IR shadows co_code_adaptive: copy each rewrite of the
+ * instruction at OFFSET to the IR block. */
+#ifdef Py_IR_INTERP
+#  define SYNC_IR(code, offset) _PyIR_SyncInstrumentation((code), (offset))
+#else
+#  define SYNC_IR(code, offset) ((void)0)
+#endif
+
+/* The bytecode offset of the instruction at instr, an instruction pointer of
+ * frame, and the offset that a jump to dest lands on. */
+static inline int
+instr_offset(_PyInterpreterFrame *frame, _PyInstr *instr)
+{
+#ifdef Py_IR_INTERP
+    return _PyFrame_InstrOffset(frame, instr);
+#else
+    return (int)(instr - _PyFrame_GetBytecode(frame));
+#endif
+}
+
+static inline int
+dest_offset(_PyInterpreterFrame *frame, _PyInstr *dest)
+{
+#ifdef Py_IR_INTERP
+    return _PyIR_Start(_PyFrame_IRBlock(frame), dest);
+#else
+    return (int)(dest - _PyFrame_GetBytecode(frame));
+#endif
+}
+
 PyObject _PyInstrumentation_DISABLE = _PyObject_HEAD_INIT(&PyBaseObject_Type);
 
 PyObject _PyInstrumentation_MISSING = _PyObject_HEAD_INIT(&PyBaseObject_Type);
@@ -667,11 +697,17 @@ _Py_GetBaseCodeUnit(PyCodeObject *code, int i)
 static void
 warm_up(_Py_CODEUNIT *instr)
 {
+#ifdef Py_IR_INTERP
+    // co_code_adaptive has no feedback; _PyIR_SyncInstrumentation() warms up
+    // the IR's counters.
+    (void)instr;
+#else
     _PyFbHeader *fb = _PyFb_Header(instr);
     if (fb != NULL) {
         FT_ATOMIC_STORE_UINT16_RELAXED(fb->counter.value_and_backoff,
                                        adaptive_counter_warmup().value_and_backoff);
     }
+#endif
 }
 
 static void
@@ -841,6 +877,7 @@ remove_tools(PyCodeObject * code, int offset, int event, int tools)
     }
     if (should_de_instrument) {
         MODIFY_BYTECODE(code, de_instrument, monitoring, offset, event);
+        SYNC_IR(code, offset);
     }
 }
 
@@ -878,6 +915,7 @@ remove_line_tools(PyCodeObject * code, int offset, int tools)
         /* Restore all thread-local bytecodes before updating the shared
          * original opcode. */
         MODIFY_BYTECODE(code, de_instrument_line, monitoring, offset);
+        SYNC_IR(code, offset);
         if (_PyCode_GetOriginalOpcode(monitoring->lines, offset) ==
             INSTRUMENTED_INSTRUCTION)
         {
@@ -906,6 +944,7 @@ add_tools(PyCodeObject * code, int offset, int event, int tools)
         assert(tools_is_subset_for_event(code, event, tools));
     }
     MODIFY_BYTECODE(code, instrument, code->_co_monitoring, offset);
+    SYNC_IR(code, offset);
 }
 
 static void
@@ -923,6 +962,7 @@ add_line_tools(PyCodeObject * code, int offset, int tools)
         assert(_Py_popcount32(tools) == 1);
     }
     MODIFY_BYTECODE(code, instrument_line, code->_co_monitoring, offset);
+    SYNC_IR(code, offset);
 }
 
 
@@ -941,6 +981,7 @@ add_per_instruction_tools(PyCodeObject * code, int offset, int tools)
         assert(_Py_popcount32(tools) == 1);
     }
     MODIFY_BYTECODE(code, instrument_per_instruction, code->_co_monitoring, offset);
+    SYNC_IR(code, offset);
 }
 
 
@@ -965,6 +1006,7 @@ remove_per_instruction_tools(PyCodeObject * code, int offset, int tools)
     }
     if (should_de_instrument) {
         MODIFY_BYTECODE(code, de_instrument_per_instruction, monitoring, offset);
+        SYNC_IR(code, offset);
     }
 }
 
@@ -1169,8 +1211,8 @@ remove_local_tool(PyCodeObject *code, PyInterpreterState *interp,
 
 static int
 call_instrumentation_vector(
-    _Py_CODEUNIT *instr, PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *arg2, Py_ssize_t nargs, PyObject *args[])
+    _PyInstr *instr, PyThreadState *tstate, int event,
+    _PyInterpreterFrame *frame, _PyInstr *arg2, Py_ssize_t nargs, PyObject *args[])
 {
     if (tstate->tracing) {
         return 0;
@@ -1180,10 +1222,10 @@ call_instrumentation_vector(
     PyCodeObject *code = _PyFrame_GetCode(frame);
     assert(args[1] == NULL);
     args[1] = (PyObject *)code;
-    int offset = (int)(instr - _PyFrame_GetBytecode(frame));
+    int offset = instr_offset(frame, instr);
     /* Offset visible to user should be the offset in bytes, as that is the
      * convention for APIs involving code offsets. */
-    int bytes_arg2 = (int)(arg2 - _PyFrame_GetBytecode(frame)) * (int)sizeof(_Py_CODEUNIT);
+    int bytes_arg2 = instr_offset(frame, arg2) * (int)sizeof(_Py_CODEUNIT);
     PyObject *arg2_obj = PyLong_FromLong(bytes_arg2);
     if (arg2_obj == NULL) {
         return -1;
@@ -1240,7 +1282,7 @@ call_instrumentation_vector(
 Py_NO_INLINE int
 _Py_call_instrumentation(
     PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *instr)
+    _PyInterpreterFrame *frame, _PyInstr *instr)
 {
     PyObject *args[3] = { NULL, NULL, NULL };
     return call_instrumentation_vector(instr, tstate, event, frame, instr, 2, args);
@@ -1249,7 +1291,7 @@ _Py_call_instrumentation(
 Py_NO_INLINE int
 _Py_call_instrumentation_arg(
     PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *instr, PyObject *arg)
+    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg)
 {
     PyObject *args[4] = { NULL, NULL, NULL, arg };
     return call_instrumentation_vector(instr, tstate, event, frame, instr, 3, args);
@@ -1258,27 +1300,27 @@ _Py_call_instrumentation_arg(
 Py_NO_INLINE int
 _Py_call_instrumentation_2args(
     PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *instr, PyObject *arg0, PyObject *arg1)
+    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg0, PyObject *arg1)
 {
     PyObject *args[5] = { NULL, NULL, NULL, arg0, arg1 };
     return call_instrumentation_vector(instr, tstate, event, frame, instr, 4, args);
 }
 
-Py_NO_INLINE _Py_CODEUNIT *
+Py_NO_INLINE _PyInstr *
 _Py_call_instrumentation_jump(
-    _Py_CODEUNIT *instr, PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *src, _Py_CODEUNIT *dest)
+    _PyInstr *instr, PyThreadState *tstate, int event,
+    _PyInterpreterFrame *frame, _PyInstr *src, _PyInstr *dest)
 {
     assert(event == PY_MONITORING_EVENT_JUMP ||
            event == PY_MONITORING_EVENT_BRANCH_RIGHT ||
            event == PY_MONITORING_EVENT_BRANCH_LEFT);
-    int to = (int)(dest - _PyFrame_GetBytecode(frame));
+    int to = dest_offset(frame, dest);
     PyObject *to_obj = PyLong_FromLong(to * (int)sizeof(_Py_CODEUNIT));
     if (to_obj == NULL) {
         return NULL;
     }
     PyObject *args[4] = { NULL, NULL, NULL, to_obj };
-    _Py_CODEUNIT *instr_ptr = frame->instr_ptr;
+    _PyInstr *instr_ptr = frame->instr_ptr;
     int err = call_instrumentation_vector(instr, tstate, event, frame, src, 3, args);
     Py_DECREF(to_obj);
     if (err) {
@@ -1294,7 +1336,7 @@ _Py_call_instrumentation_jump(
 static void
 call_instrumentation_vector_protected(
     PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *instr, Py_ssize_t nargs, PyObject *args[])
+    _PyInterpreterFrame *frame, _PyInstr *instr, Py_ssize_t nargs, PyObject *args[])
 {
     assert(_PyErr_Occurred(tstate));
     PyObject *exc = _PyErr_GetRaisedException(tstate);
@@ -1311,7 +1353,7 @@ call_instrumentation_vector_protected(
 Py_NO_INLINE void
 _Py_call_instrumentation_exc2(
     PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *instr, PyObject *arg0, PyObject *arg1)
+    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg0, PyObject *arg1)
 {
     assert(_PyErr_Occurred(tstate));
     PyObject *args[5] = { NULL, NULL, NULL, arg0, arg1 };
@@ -1329,13 +1371,12 @@ _Py_Instrumentation_GetLine(PyCodeObject *code, _PyCoLineInstrumentationData *li
 }
 
 Py_NO_INLINE int
-_Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame, _Py_CODEUNIT *instr, _Py_CODEUNIT *prev)
+_Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame, _PyInstr *instr, _PyInstr *prev)
 {
     PyCodeObject *code = _PyFrame_GetCode(frame);
     assert(tstate->tracing == 0);
     assert(debug_check_sanity(tstate->interp, code));
-    _Py_CODEUNIT *bytecode = _PyFrame_GetBytecode(frame);
-    int i = (int)(instr - bytecode);
+    int i = instr_offset(frame, instr);
 
     _PyCoMonitoringData *monitoring = code->_co_monitoring;
     _PyCoLineInstrumentationData *line_data = monitoring->lines;
@@ -1343,10 +1384,14 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     int line = _Py_Instrumentation_GetLine(code, line_data, i);
     assert(line >= 0);
     assert(prev != NULL);
-    int prev_index = (int)(prev - bytecode);
+    int prev_index = instr_offset(frame, prev);
     int prev_line = _Py_Instrumentation_GetLine(code, line_data, prev_index);
     if (prev_line == line) {
-        int prev_opcode = bytecode[prev_index].op.code;
+#ifdef Py_IR_INTERP
+        int prev_opcode = IR_HANDLER(*prev);
+#else
+        int prev_opcode = prev->op.code;
+#endif
         /* RESUME and INSTRUMENTED_RESUME are needed for the operation of
             * instrumentation, so must never be hidden by an INSTRUMENTED_LINE.
             */
@@ -1425,7 +1470,11 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     uint8_t original_opcode;
 done:
     original_opcode = _PyCode_GetOriginalOpcode(line_data, i);
+#ifdef Py_IR_INTERP
+    if (IR_HANDLER(*instr) == INSTRUMENTED_INSTRUCTION) {
+#else
     if (instr->op.code == INSTRUMENTED_INSTRUCTION) {
+#endif
         /* A LINE callback may have disabled the last LINE tool while
          * leaving INSTRUCTION monitoring enabled. */
         original_opcode = INSTRUMENTED_INSTRUCTION;
@@ -1437,10 +1486,10 @@ done:
 }
 
 Py_NO_INLINE int
-_Py_call_instrumentation_instruction(PyThreadState *tstate, _PyInterpreterFrame* frame, _Py_CODEUNIT *instr)
+_Py_call_instrumentation_instruction(PyThreadState *tstate, _PyInterpreterFrame* frame, _PyInstr *instr)
 {
     PyCodeObject *code = _PyFrame_GetCode(frame);
-    int offset = (int)(instr - _PyFrame_GetBytecode(frame));
+    int offset = instr_offset(frame, instr);
     _PyCoMonitoringData *instrumentation_data = code->_co_monitoring;
     assert(instrumentation_data->per_instruction_opcodes);
     int next_opcode = instrumentation_data->per_instruction_opcodes[offset];
@@ -1667,6 +1716,20 @@ initialize_lines(_PyCoLineInstrumentationData *line_data, PyCodeObject *code, in
             set_original_opcode(line_data, handler, original_opcode);
         }
     }
+#ifdef Py_IR_INTERP
+    /* The register IR has no words for EXTENDED_ARG, so a line that starts
+     * at an EXTENDED_ARG starts at its instruction instead. */
+    for (int i = 0; i < code_len; i += _PyInstruction_GetLength(code, i)) {
+        int start = i;
+        while (_Py_GetBaseCodeUnit(code, i).op.code == EXTENDED_ARG) {
+            i++;
+        }
+        if (start != i && _PyCode_GetOriginalOpcode(line_data, start)) {
+            set_original_opcode(line_data, start, 0);
+            set_original_opcode(line_data, i, _Py_GetBaseCodeUnit(code, i).op.code);
+        }
+    }
+#endif
 }
 
 static void
@@ -1715,6 +1778,11 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
     if (allocate_instrumentation_data(code)) {
         return -1;
     }
+#ifdef Py_IR_INTERP
+    if (_PyIR_PrepareInstrumentation(code) < 0) {
+        return -1;
+    }
+#endif
     // If the local monitors are out of date, clear them up
     _Py_LocalMonitors *local_monitors = &code->_co_monitoring->local_monitors;
     for (int i = 0; i < PY_MONITORING_TOOL_IDS; i++) {

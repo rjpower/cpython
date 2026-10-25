@@ -2302,6 +2302,7 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP;
             (void)(opcode);
             #endif
+            IR_ENTRY(OP);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
@@ -2429,6 +2430,7 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP;
             (void)(opcode);
             #endif
+            IR_ENTRY(OP);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
@@ -2523,10 +2525,11 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP;
             (void)(opcode);
             #endif
+            IR_ENTRY(OP);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            PREDICTED_OP:;
+            IR_PREDICTED(OP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(this_instr, ir_c);
@@ -2573,6 +2576,7 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP_SPECIALIZED;
             (void)(opcode);
             #endif
+            IR_ENTRY(OP_SPECIALIZED);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2638,6 +2642,7 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP;
             (void)(opcode);
             #endif
+            IR_ENTRY(OP);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2699,6 +2704,7 @@ class TestIRCases(unittest.TestCase):
             int opcode = IR_EXT;
             (void)(opcode);
             #endif
+            IR_ENTRY(IR_EXT);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IR_EXT);

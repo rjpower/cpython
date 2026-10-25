@@ -1893,6 +1893,9 @@
    SipHash13: 3, externally defined: 0 */
 #undef Py_HASH_ALGORITHM
 
+/* Define to run code objects as the register IR instead of bytecode. */
+#undef Py_IR_INTERP
+
 /* Define if you want to enable remote debugging support. */
 #undef Py_REMOTE_DEBUG
 

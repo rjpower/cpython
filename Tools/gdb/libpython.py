@@ -89,6 +89,30 @@ def interp_frame_has_tlbc_index():
                                            for field in interp_frame.fields())
     return _INTERP_FRAME_HAS_TLBC_INDEX
 
+_CODE_HAS_IR = None
+def code_has_ir():
+    global _CODE_HAS_IR
+    if _CODE_HAS_IR is None:
+        code = gdb.lookup_type("PyCodeObject")
+        _CODE_HAS_IR = any(field.name == "_co_ir" for field in code.fields())
+    return _CODE_HAS_IR
+
+_PyIR_PCMAP_WIDE = 1
+
+def ir_offset(block, instr_ptr):
+    '''The bytecode offset, in code units, of the register IR word at
+    instr_ptr in block (Include/internal/pycore_ir.h)'''
+    w = int(instr_ptr - block["words"])
+    if not 0 <= w < int(block["nwords"]):
+        # A frame that has not started yet, at the stub of a code object
+        # that another frame has lowered since
+        return 0
+    if int(block["flags"]) & _PyIR_PCMAP_WIDE:
+        entry = gdb.lookup_type("_PyIRPc32")
+    else:
+        entry = gdb.lookup_type("_PyIRPc16")
+    return int(block["pcmap"].cast(entry.pointer())[w]["anchor"])
+
 Py_TPFLAGS_INLINE_VALUES     = (1 << 2)
 Py_TPFLAGS_MANAGED_DICT      = (1 << 4)
 Py_TPFLAGS_HEAPTYPE          = (1 << 9)
@@ -1177,6 +1201,8 @@ class PyFramePtr:
     def _f_lasti(self):
         codeunit_p = gdb.lookup_type("_Py_CODEUNIT").pointer()
         instr_ptr = self._gdbval["instr_ptr"]
+        if code_has_ir():
+            return ir_offset(self._f_code().field("_co_ir"), instr_ptr)
         if interp_frame_has_tlbc_index():
             tlbc_index = self._gdbval["tlbc_index"]
             code_arr = PyCodeArrayPtr(self._f_code().field("co_tlbc"))

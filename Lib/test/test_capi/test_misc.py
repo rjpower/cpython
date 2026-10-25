@@ -3026,6 +3026,8 @@ class Test_Pep523AllowSpecialization(unittest.TestCase):
         finally:
             _testinternalcapi.set_eval_frame_default()
 
+    @unittest.skipIf(support.Py_IR_INTERP,
+                     "the register IR has no test interpreter")
     def test_allow_specialization_call(self):
         def func():
             pass

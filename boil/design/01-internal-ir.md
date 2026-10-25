@@ -581,3 +581,48 @@ items 1 to 4 on 2026-10-24; the others settle points the note left open.
     Python/ceval.c a second time with `Py_IR_INTERP` into Python/ceval_ir.o,
     which is not linked, so the IR interpreter keeps compiling. Step 4 makes
     the flag define `Py_IR_INTERP` instead.
+
+Step 4 adds the following.
+
+11. **Lowering** lives in Python/ir_lower.c. A code object starts at the
+    shared two-word block `_PyIR_LowerStub`, whose `IR_LOWER` lowers it on the
+    first call; word 1 of the stub marks a frame as past the first `RESUME`,
+    for frames that never run. Stack depths come from the opcode metadata; a
+    depth mismatch, underflow or unknown opcode raises SystemError.
+12. **Fields are decoded in the handler** in the computed-goto build.
+    Dispatch loads word 0 into `ir_word` and jumps; `IR_ENTRY` decodes A, B
+    and C into locals, which the compiler drops where a handler does not read
+    them. `IR_EXT`, the transparent handlers and `DISPATCH_SAME_OPARG` run
+    another handler on the fields at hand: they pass them in `ir_fields` to
+    its `IR_BODY_` label, after the decoding, and set `ir_word` to
+    `IR_FIELDS_PASSED`, so that a family head's `PREDICTED_` label knows
+    where to take the fields from. Decoding all three fields at dispatch cost
+    six instructions per instruction, 27 percent on the micro loops. The
+    tail-call and switch builds still decode at dispatch.
+13. **Instrumentation shadows `co_code_adaptive`.** Instrumentation keeps
+    rewriting the bytecode as in the stack build. After each rewrite
+    `_PyIR_SyncInstrumentation` sets the word's handler to the instrumented
+    opcode or, once instrumentation is removed, to the handler the lowering
+    chose, which `real[]` holds per word. Sync warms the counters of
+    specialisable instructions, so `warm_up` does nothing in the IR build.
+14. **A line that starts on `EXTENDED_ARG` starts at its instruction**, since
+    the IR has no word for `EXTENDED_ARG`; `initialize_lines` moves the start.
+    Per-instruction events on `EXTENDED_ARG` units are not raised. `IR_EXT`
+    does not save the instruction pointer, so an `INSTRUMENTED_LINE` on the
+    next word sees the previous instruction in `frame->instr_ptr`.
+15. **No feedback entry without a reader.** `RESUME` and `JUMP_BACKWARD` have
+    counter caches that no IR handler reads, so they get no entry.
+16. **Offsets.** `f_lasti` is the pcmap anchor of `frame->instr_ptr`. The
+    word before a block is at offset -1, as the code unit before the bytecode
+    is: the unwinding of a shim frame that has not started an instruction
+    reads it.
+17. **Free-threaded build.** There is no thread-local bytecode: threads share
+    one block, which is not specialised, and handler rewrites are 64-bit
+    atomic stores.
+18. **The test interpreter** of `_testinternalcapi` is generated from the
+    stack cases, so in the IR build it defers to `_PyEval_EvalFrameDefault`
+    and test_allow_specialization_call is skipped. Step 7 moves it.
+19. **Out-of-process readers.** The debug offsets gain `code_object.co_ir`
+    and an `ir_block` section (words, nwords, flags and pcmap); a reader maps
+    `instr_ptr` to its anchor and reads the opcode from `co_code_adaptive`.
+    `_remote_debugging` and Tools/gdb/libpython.py do so.

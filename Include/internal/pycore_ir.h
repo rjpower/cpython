@@ -27,7 +27,8 @@ extern "C" {
  *     | 1    | 32-63 | F       | the feedback distance, two-word formats only  |
  *
  * The handler of an instruction that has an opcode is that opcode.  The
- * handlers of the IR only (IR_LOWER, IR_EXT, ...) follow from 256.
+ * handlers of the IR only (IR_LOWER, IR_EXT, ...) follow from
+ * IR_FIRST_ONLY_HANDLER, 256.
  *
  * A field plays one of these roles, which _PyIR_Formats gives per handler:
  *
@@ -54,13 +55,15 @@ extern "C" {
  * exception handlers land on the first word of an instruction, IR_EXT
  * included; instrumentation rewrites the handler of the word after it.
  *
- * Code objects start with the one-word block _PyIR_LowerStub, whose handler
- * IR_LOWER lowers the bytecode (Python/ir_lower.c) at first execution.
+ * Code objects start with the block _PyIR_LowerStub, whose handler IR_LOWER
+ * lowers the bytecode (Python/ir_lower.c) at first execution.
  * The lowered block keeps, per word, the bytecode offsets of the first code
  * unit the instruction consumed (start) and of the instruction that does
  * the work (anchor), from which f_lasti, line numbers and exception
  * handlers follow.
  */
+
+#define IR_FIRST_ONLY_HANDLER 256
 
 #define IR_HANDLER(W)   ((int)((W) & 0xFFFF))
 #define IR_A(W)         ((uint32_t)(((W) >> 16) & 0xFFFF))
@@ -151,48 +154,99 @@ typedef struct {
 typedef struct _PyIRBlock {
     _PyIRWord *words;
     uint32_t nwords;
-    uint32_t flags;
-    void *pcmap;
+    uint32_t flags;         // _PyIR_PCMAP_WIDE
+    void *pcmap;            // _PyIRPc16 or _PyIRPc32, one per word
     _PyFbBlock *feedback;   // NULL if no instruction has an entry
-    uint16_t *real;         // while LINE or INSTRUCTION events are on, the
-                            // handler that their handlers displaced, per word
+    uint16_t *real;         // once the code is instrumented, per main word
+                            // the handler that the lowering chose, which
+                            // instrumentation displaces and restores
 } _PyIRBlock;
 
-/* The block of code objects not lowered yet: IR_LOWER, at offset 0. */
+/* The block of code objects not lowered yet.  Its two words run IR_LOWER:
+ * a frame at word 0 starts at bytecode offset 0, and a frame at word 1
+ * (_PyIR_STUB_RESUMED) counts as past the first RESUME, which frames that
+ * never run need for f_lasti. */
 PyAPI_DATA(_PyIRBlock) _PyIR_LowerStub;
+#define _PyIR_STUB_RESUMED (_PyIR_LowerStub.words + 1)
 
-/* Lowers the code of frame, which is at the start of _PyIR_LowerStub,
- * and moves frame->instr_ptr to the lowered block.  Raises SystemError for
- * malformed bytecode. */
+/* The static block of _Py_InitCleanup (Python/specialize.c). */
+extern _PyIRBlock _PyIR_InitCleanupBlock;
+
+/* Lower co if it is not lowered yet and return its block, or set an
+ * exception and return NULL.  Malformed bytecode raises SystemError. */
+PyAPI_FUNC(_PyIRBlock *) _PyIR_Lower(PyCodeObject *co);
+
+/* Lower the code of frame, whose instr_ptr is in _PyIR_LowerStub, and move
+ * frame->instr_ptr to the lowered block. */
+struct _PyInterpreterFrame;
 extern int _PyIR_LowerFrame(PyThreadState *tstate, struct _PyInterpreterFrame *frame);
 
+/* Free the block of a code object that is being freed. */
 extern void _PyIR_Clear(PyCodeObject *co);
+
+/* The bytes that co's block uses, for sys.getsizeof(). */
+extern size_t _PyIR_SizeOf(PyCodeObject *co);
 
 /* Offsets map words to bytecode and back; they are bytecode offsets in code
  * units, as f_lasti.  instr may be any word of an instruction. */
 PyAPI_FUNC(int) _PyIR_Anchor(const _PyIRBlock *block, const _PyIRWord *instr);
 PyAPI_FUNC(int) _PyIR_Start(const _PyIRBlock *block, const _PyIRWord *instr);
+
+/* The first word of the instruction that covers bytecode offset offset,
+ * which jumps and exception handlers land on, and its main word, which
+ * holds the handler and follows IR_EXT if there is one. */
 PyAPI_FUNC(_PyIRWord *) _PyIR_InstrAt(const _PyIRBlock *block, int offset);
+PyAPI_FUNC(_PyIRWord *) _PyIR_MainWordAt(const _PyIRBlock *block, int offset);
 
 /* The oparg and the feedback entry (or NULL) of the instruction whose main
- * word is instr, decoded as handler would decode them. */
+ * word is instr, decoded as handler would decode them.  A transparent
+ * handler decodes as the handler it runs. */
 PyAPI_FUNC(int) _PyIR_InstrOparg(const _PyIRBlock *block,
                                  const _PyIRWord *instr, int handler);
 PyAPI_FUNC(_PyFbHeader *) _PyIR_InstrFeedback(const _PyIRBlock *block,
                                               const _PyIRWord *instr, int handler);
 
-struct _PyInterpreterFrame;
-
-/* The handler that the word at instr runs: the handler field, or while
- * INSTRUMENTED_LINE or INSTRUMENTED_INSTRUCTION has displaced it, the
+/* The handler with the format of the word at instr: its handler field, or
+ * while INSTRUMENTED_LINE or INSTRUMENTED_INSTRUCTION has displaced it, the
  * handler it displaced. */
 PyAPI_FUNC(int) _PyIR_RealHandler(struct _PyInterpreterFrame *frame,
                                   const _PyIRWord *instr);
 
 /* The handler that INSTRUMENTED_LINE or INSTRUMENTED_INSTRUCTION at instr
- * goes on to, given the opcode that instrumentation returned for it. */
+ * goes on to, given the opcode that instrumentation returned for it: the
+ * lowering's choice where that opcode is the uninstrumented one. */
 PyAPI_FUNC(int) _PyIR_OriginalHandler(struct _PyInterpreterFrame *frame,
                                       const _PyIRWord *instr, int opcode);
+
+/* Instrumentation (Python/instrumentation.c) keeps rewriting
+ * co_code_adaptive, which the IR shadows.  _PyIR_PrepareInstrumentation()
+ * runs before the first rewrite of a lowered block and may fail;
+ * _PyIR_SyncInstrumentation() then copies the opcode at offset, an
+ * instruction's anchor, to the handler of its main word. */
+extern int _PyIR_PrepareInstrumentation(PyCodeObject *co);
+extern void _PyIR_SyncInstrumentation(PyCodeObject *co, int offset);
+
+/* Write into instructions, a copy of co_code_adaptive, the handlers and
+ * feedback of the lowered block in the layout of the stack bytecode, for
+ * code._co_code_adaptive and dis.  write_field writes the fields of an
+ * entry into the inline cache of the instruction it belongs to. */
+extern int _PyIR_WriteAdaptive(
+    PyCodeObject *co, _Py_CODEUNIT *instructions,
+    void (*write_fields)(_Py_CODEUNIT *instr, const _PyFbHeader *h));
+
+/* Rewrite the handler of the word at instr, for specialisation and
+ * instrumentation.  The fields never change once a block is lowered, but
+ * other threads may be dispatching on the word. */
+static inline void
+_PyIR_SetHandler(_PyIRWord *instr, int handler)
+{
+    _PyIRWord word = (*instr & ~(_PyIRWord)0xFFFF) | (uint16_t)handler;
+#ifdef Py_GIL_DISABLED
+    _Py_atomic_store_uint64_relaxed(instr, word);
+#else
+    *instr = word;
+#endif
+}
 
 static inline const _PyIRFormat *
 _PyIR_FormatOf(int handler)

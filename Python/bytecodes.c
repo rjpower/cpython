@@ -197,15 +197,16 @@ dummy_func(
         }
 
         replaced op(_LOAD_BYTECODE, (--)) {
-            #ifdef Py_GIL_DISABLED
+            // The register IR shares one block between threads.
+            #if defined(Py_GIL_DISABLED) && !defined(Py_IR_INTERP)
             if (frame->tlbc_index !=
                 ((_PyThreadStateImpl *)tstate)->tlbc_index) {
                 _Py_CODEUNIT *bytecode =
                     _PyEval_GetExecutableCode(tstate, _PyFrame_GetCode(frame));
                 ERROR_IF(bytecode == NULL);
-                ptrdiff_t off = INSTR_INDEX(this_instr);
+                ptrdiff_t off = this_instr - _PyFrame_GetBytecode(frame);
                 frame->tlbc_index = ((_PyThreadStateImpl *)tstate)->tlbc_index;
-                frame->instr_ptr = INSTR_IN(bytecode, off);
+                frame->instr_ptr = bytecode + off;
                 // Make sure this_instr gets reset correctly for any uops that
                 // follow
                 next_instr = frame->instr_ptr;
@@ -4370,8 +4371,8 @@ dummy_func(
         op(_CREATE_INIT_FRAME, (init, self, args[oparg] -- init_frame)) {
             _PyInterpreterFrame *shim = _PyFrame_PushTrampolineUnchecked(
                 tstate, (PyCodeObject *)&_Py_InitCleanup, 1, frame);
-            assert(_PyFrame_GetBytecode(shim)[0].op.code == EXIT_INIT_CHECK);
-            assert(_PyFrame_GetBytecode(shim)[1].op.code == RETURN_VALUE);
+            assert(_PyCode_CODE(_PyFrame_GetCode(shim))[0].op.code == EXIT_INIT_CHECK);
+            assert(_PyCode_CODE(_PyFrame_GetCode(shim))[1].op.code == RETURN_VALUE);
             /* Push self onto stack of shim */
             shim->localsplus[0] = PyStackRef_DUP(self);
             _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
@@ -5474,7 +5475,7 @@ dummy_func(
             int original_opcode = 0;
             if (tstate->tracing) {
                 PyCodeObject *code = _PyFrame_GetCode(frame);
-                int index = (int)(INSTR_START_OF(this_instr));
+                int index = (int)(INSTR_OFFSET_OF(this_instr));
                 original_opcode = code->_co_monitoring->lines->data[index*code->_co_monitoring->lines->bytes_per_entry];
                 next_instr = this_instr;
             } else {
@@ -5604,8 +5605,10 @@ dummy_func(
             DISPATCH();
         }
 
-        // The high halves of fields A, B and C of the next word.
-        ir_only inst(IR_EXT, ( -- )) {
+        // The high halves of fields A, B and C of the next word.  The next
+        // word saves the IP, so that an INSTRUMENTED_LINE there finds the
+        // previous instruction in frame->instr_ptr.
+        no_save_ip ir_only inst(IR_EXT, ( -- )) {
             IR_EXTEND_FIELDS();
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();

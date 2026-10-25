@@ -1294,7 +1294,12 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 #endif
 #if !_Py_TAIL_CALL_INTERP && defined(Py_IR_INTERP)
     int opcode;        /* Current handler */
+#  if IR_LAZY_FIELDS
+    _PyIRWord ir_word = 0;      /* Its word 0, which the handler decodes */
+    uint32_t ir_fields[3];      /* Fields for IR_BODY_ and PREDICTED_ labels */
+#  else
     uint32_t ir_a, ir_b, ir_c;  /* Its fields A, B and C */
+#  endif
     assert(tstate->current_frame == NULL || tstate->current_frame->stackpointer != NULL);
 #elif !_Py_TAIL_CALL_INTERP
     uint8_t opcode;    /* Current opcode */

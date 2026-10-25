@@ -2634,8 +2634,8 @@
                 _PyInterpreterFrame *shim = _PyFrame_PushTrampolineUnchecked(
                     tstate, (PyCodeObject *)&_Py_InitCleanup, 1, frame);
                 _PyFrame_StackPointerInvalidate(frame);
-                assert(_PyFrame_GetBytecode(shim)[0].op.code == EXIT_INIT_CHECK);
-                assert(_PyFrame_GetBytecode(shim)[1].op.code == RETURN_VALUE);
+                assert(_PyCode_CODE(_PyFrame_GetCode(shim))[0].op.code == EXIT_INIT_CHECK);
+                assert(_PyCode_CODE(_PyFrame_GetCode(shim))[1].op.code == RETURN_VALUE);
                 shim->localsplus[0] = _PyStackRef_DUP_POINTER(self);
                 assert(stack_pointer == _PyFrame_GetStackPointer(frame));
                 _PyFrame_StackPointerValidate(frame);
@@ -9352,7 +9352,7 @@
             /* Skip 1 cache entry */
             // _LOAD_BYTECODE
             {
-                #ifdef Py_GIL_DISABLED
+                #if defined(Py_GIL_DISABLED) && !defined(Py_IR_INTERP)
                 if (frame->tlbc_index !=
                     ((_PyThreadStateImpl *)tstate)->tlbc_index) {
                     _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -12743,7 +12743,7 @@
             /* Skip 1 cache entry */
             // _LOAD_BYTECODE
             {
-                #ifdef Py_GIL_DISABLED
+                #if defined(Py_GIL_DISABLED) && !defined(Py_IR_INTERP)
                 if (frame->tlbc_index !=
                     ((_PyThreadStateImpl *)tstate)->tlbc_index) {
                     _PyFrame_SetStackPointer(frame, stack_pointer);

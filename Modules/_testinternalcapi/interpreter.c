@@ -5,6 +5,24 @@
 #define Py_BUILD_CORE_MODULE
 #endif
 
+#include "Python.h"
+
+#ifdef Py_IR_INTERP
+/* The test interpreter is a second copy of the stack interpreter, which the
+ * register IR does not have, so it runs the default interpreter instead. */
+
+#include "pycore_ceval.h"         // _PyEval_EvalFrameDefault()
+
+int Test_EvalFrame_Resumes, Test_EvalFrame_Loads;
+
+PyObject *
+Test_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
+{
+    return _PyEval_EvalFrameDefault(tstate, frame, throwflag);
+}
+
+#else
+
 #include "../../Python/ceval.h"
 
 #include "../../Python/ceval_macros.h"
@@ -138,3 +156,5 @@ early_exit:
     tstate->current_frame = frame->previous;
     return NULL;
 }
+
+#endif  // Py_IR_INTERP

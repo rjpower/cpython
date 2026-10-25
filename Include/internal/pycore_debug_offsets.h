@@ -63,6 +63,28 @@ extern "C" {
 # define _Py_Debug_interpreter_state_tlbc_generation 0
 #endif
 
+// The register IR has no thread-local bytecode.  The offsets of _PyIRBlock
+// need Include/internal/pycore_ir.h where _Py_DebugOffsets_INIT expands.
+#ifdef Py_IR_INTERP
+# undef _Py_Debug_code_object_co_tlbc
+# define _Py_Debug_code_object_co_tlbc 0
+# define _Py_Debug_code_object_co_ir offsetof(PyCodeObject, _co_ir)
+# define _Py_Debug_ir_block_size sizeof(_PyIRBlock)
+# define _Py_Debug_ir_block_words offsetof(_PyIRBlock, words)
+# define _Py_Debug_ir_block_nwords offsetof(_PyIRBlock, nwords)
+# define _Py_Debug_ir_block_flags offsetof(_PyIRBlock, flags)
+# define _Py_Debug_ir_block_pcmap offsetof(_PyIRBlock, pcmap)
+# define _Py_Debug_ir_block_pcmap_wide _PyIR_PCMAP_WIDE
+#else
+# define _Py_Debug_code_object_co_ir 0
+# define _Py_Debug_ir_block_size 0
+# define _Py_Debug_ir_block_words 0
+# define _Py_Debug_ir_block_nwords 0
+# define _Py_Debug_ir_block_flags 0
+# define _Py_Debug_ir_block_pcmap 0
+# define _Py_Debug_ir_block_pcmap_wide 0
+#endif
+
 
 typedef struct _Py_DebugOffsets {
     char cookie[8] _Py_NONSTRING;
@@ -145,7 +167,23 @@ typedef struct _Py_DebugOffsets {
         uint64_t localspluskinds;
         uint64_t co_code_adaptive;
         uint64_t co_tlbc;
+        uint64_t co_ir;
     } code_object;
+
+    // The register IR block of a code object, which co_ir points to in
+    // builds --with-ir-interp; co_ir is 0 in other builds.  There
+    // instr_ptr points at one of the nwords 8-byte words at words, and
+    // pcmap holds per word a pair {start, anchor} of uint16_t, or of
+    // uint32_t if flags & pcmap_wide; anchor is the bytecode offset of the
+    // word's instruction in code units.
+    struct _ir_block {
+        uint64_t size;
+        uint64_t words;
+        uint64_t nwords;
+        uint64_t flags;
+        uint64_t pcmap;
+        uint64_t pcmap_wide;
+    } ir_block;
 
     // PyObject offset;
     struct _pyobject {
@@ -330,6 +368,15 @@ typedef struct _Py_DebugOffsets {
         .localspluskinds = offsetof(PyCodeObject, co_localspluskinds), \
         .co_code_adaptive = offsetof(PyCodeObject, co_code_adaptive), \
         .co_tlbc = _Py_Debug_code_object_co_tlbc, \
+        .co_ir = _Py_Debug_code_object_co_ir, \
+    }, \
+    .ir_block = { \
+        .size = _Py_Debug_ir_block_size, \
+        .words = _Py_Debug_ir_block_words, \
+        .nwords = _Py_Debug_ir_block_nwords, \
+        .flags = _Py_Debug_ir_block_flags, \
+        .pcmap = _Py_Debug_ir_block_pcmap, \
+        .pcmap_wide = _Py_Debug_ir_block_pcmap_wide, \
     }, \
     .pyobject = { \
         .size = sizeof(PyObject), \

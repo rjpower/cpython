@@ -834,7 +834,6 @@ ENSUREPIP
 CFLAGS_CEVAL
 SRCDIRS
 THREADHEADERS
-IR_INTERP_CHECK
 PANEL_LIBS
 PANEL_CFLAGS
 CURSES_LIBS
@@ -1995,8 +1994,8 @@ Optional Packages:
                           default on supported compilers)
   --with-tail-call-interp enable tail-calling interpreter in evaluation loop
                           and rest of CPython
-  --with-ir-interp        compile the register IR interpreter, which does not
-                          run yet (default is no)
+  --with-ir-interp        run code objects as the register IR of
+                          Include/internal/pycore_ir.h (default is no)
   --with-remote-debug     enable remote debugging support (default is yes)
   --with-ensurepip[=install|upgrade|no]
                           "install" or "upgrade" using bundled pip (default is
@@ -34819,12 +34818,10 @@ fi
 printf "%s\n" "$with_ir_interp" >&6; }
 if test "x$with_ir_interp" = xyes
 then :
-  IR_INTERP_CHECK=Python/ceval_ir.o
-else case e in #(
-  e) IR_INTERP_CHECK= ;;
-esac
-fi
 
+printf "%s\n" "#define Py_IR_INTERP 1" >>confdefs.h
+
+fi
 
 # Check for --with-remote-debug
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-remote-debug" >&5

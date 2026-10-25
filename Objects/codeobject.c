@@ -506,9 +506,11 @@ static _PyCodeArray * _PyCodeArray_New(Py_ssize_t size);
 static void
 free_bytecode_copy(PyCodeObject *co, char *bytecode)
 {
+#ifndef Py_IR_INTERP
     if (co->_co_feedback != NULL) {
         _PyFb_Clear(_PyFb_Block((_Py_CODEUNIT *)bytecode, Py_SIZE(co)));
     }
+#endif
     PyMem_Free(bytecode);
 }
 #endif
@@ -572,12 +574,17 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con,
 
     memcpy(_PyCode_CODE(co), PyBytes_AS_STRING(con->code),
            PyBytes_GET_SIZE(con->code));
+#ifdef Py_IR_INTERP
+    assert(feedback_size == 0);
+    co->_co_ir = &_PyIR_LowerStub;
+#else
     co->_co_feedback = NULL;
     if (feedback_size) {
         // _PyCode_Quicken() fills in the block.
         co->_co_feedback = _PyFb_Block(_PyCode_CODE(co), Py_SIZE(co));
         *co->_co_feedback = (_PyFbBlock){.size = (uint32_t)feedback_size};
     }
+#endif
 #ifdef Py_GIL_DISABLED
     co->co_tlbc = _PyCodeArray_New(INITIAL_SPECIALIZED_CODE_SIZE);
     if (co->co_tlbc == NULL) {
@@ -596,12 +603,14 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con,
     }
     co->_co_firsttraceable = entry_point;
 
+#ifndef Py_IR_INTERP
 #ifdef Py_GIL_DISABLED
     int enable_counters = interp->config.tlbc_enabled && interp->opt_config.specialization_enabled;
 #else
     int enable_counters = interp->opt_config.specialization_enabled;
 #endif
     _PyCode_Quicken(co, _PyCode_CODE(co), enable_counters);
+#endif
     notify_code_watchers(PY_CODE_EVENT_CREATE, co);
     return 0;
 }
@@ -742,8 +751,13 @@ _PyCode_New(struct _PyCodeConstructor *con)
     // The feedback block follows the bytecode in the same allocation.
     static_assert(offsetof(PyCodeObject, co_code_adaptive) % FB_ALIGN == 0,
                   "the feedback block must be aligned in every copy");
+#ifdef Py_IR_INTERP
+    // The IR block holds the feedback (Python/ir_lower.c).
+    Py_ssize_t feedback_size = 0;
+#else
     Py_ssize_t feedback_size = _PyFb_BlockSize(
         (const _Py_CODEUNIT *)PyBytes_AS_STRING(con->code), size);
+#endif
     Py_ssize_t nitems = size;
     if (feedback_size) {
         nitems = (_PyFb_BlockOffset(size) + feedback_size) / sizeof(_Py_CODEUNIT);
@@ -2442,9 +2456,13 @@ code_dealloc(PyObject *self)
     }
     FT_CLEAR_WEAKREFS(self, co->co_weakreflist);
     free_monitoring_data(co->_co_monitoring);
+#ifdef Py_IR_INTERP
+    _PyIR_Clear(co);
+#else
     if (co->_co_feedback != NULL) {
         _PyFb_Clear(co->_co_feedback);
     }
+#endif
 #ifdef Py_GIL_DISABLED
     if (co->co_tlbc != NULL) {
         // The first element always points to the mutable bytecode at the end of
@@ -2689,9 +2707,23 @@ write_feedback_field(_Py_CODEUNIT *instr, const char *entry,
     }
 }
 
+/* Write the counter and fields of entry h into the inline cache of instr,
+ * as the instruction's current opcode keeps them. */
+static void
+write_entry(_Py_CODEUNIT *instr, const _PyFbHeader *h)
+{
+    instr[1].cache = h->counter.value_and_backoff;
+    const struct _PyFbFields *fields = &_PyOpcode_FeedbackFields[instr->op.code];
+    for (int f = 0; f < fields->n; f++) {
+        write_feedback_field(instr, (const char *)h, &fields->fields[f]);
+    }
+}
+
 /* co_code_adaptive with the inline caches that dis expects: the counter in
  * unit 0 and the fields of a specialised instruction where its cache used to
- * hold them.  Branches keep their history in unit 0 already. */
+ * hold them.  Branches keep their history in unit 0 already.  With the
+ * register IR, the opcodes are the handlers of the IR block, and reading
+ * them lowers the code. */
 static PyObject *
 code_getcodeadaptive(PyObject *self, void *closure)
 {
@@ -2702,6 +2734,12 @@ code_getcodeadaptive(PyObject *self, void *closure)
         return NULL;
     }
     _Py_CODEUNIT *instructions = (_Py_CODEUNIT *)PyBytes_AS_STRING(bytes);
+#ifdef Py_IR_INTERP
+    if (_PyIR_WriteAdaptive(code, instructions, write_entry) < 0) {
+        Py_DECREF(bytes);
+        return NULL;
+    }
+#else
     for (Py_ssize_t i = 0; i < Py_SIZE(code); i++) {
         int base = _Py_GetBaseCodeUnit(code, (int)i).op.code;
         int caches = _PyOpcode_Caches[base];
@@ -2713,15 +2751,11 @@ code_getcodeadaptive(PyObject *self, void *closure)
         _PyFbHeader *h = _PyFb_Header(&_PyCode_CODE(code)[i]);
         memset(&instr[1], 0, caches * sizeof(_Py_CODEUNIT));
         if (h != NULL) {
-            instr[1].cache = h->counter.value_and_backoff;
-            int opcode = instr->op.code;
-            const struct _PyFbFields *fields = &_PyOpcode_FeedbackFields[opcode];
-            for (int f = 0; f < fields->n; f++) {
-                write_feedback_field(instr, (const char *)h, &fields->fields[f]);
-            }
+            write_entry(instr, h);
         }
         i += caches;
     }
+#endif
     return bytes;
 }
 
@@ -2748,6 +2782,9 @@ code_sizeof(PyObject *self, PyObject *Py_UNUSED(args))
 {
     PyCodeObject *co = _PyCodeObject_CAST(self);
     size_t res = _PyObject_VAR_SIZE(Py_TYPE(co), Py_SIZE(co));
+#ifdef Py_IR_INTERP
+    res += _PyIR_SizeOf(co);
+#else
     _PyFbBlock *feedback = co->_co_feedback;
     if (feedback != NULL) {
         res = offsetof(PyCodeObject, co_code_adaptive)
@@ -2761,6 +2798,7 @@ code_sizeof(PyObject *self, PyObject *Py_UNUSED(args))
             res += capacity * sizeof(_PyFbPoly);
         }
     }
+#endif
     _PyCodeObjectExtra *co_extra = (_PyCodeObjectExtra*) co->co_extra;
     if (co_extra != NULL) {
         res += sizeof(_PyCodeObjectExtra);
@@ -3399,6 +3437,10 @@ _PyCodeArray_New(Py_ssize_t size)
     return arr;
 }
 
+#ifndef Py_IR_INTERP
+// The register IR shares one block between threads, so there are no copies
+// of the bytecode to make.
+
 // Get the underlying code unit, leaving instrumentation
 static _Py_CODEUNIT
 deopt_code_unit(PyCodeObject *code, int i)
@@ -3493,6 +3535,7 @@ _PyCode_GetTLBC(PyCodeObject *co)
     Py_END_CRITICAL_SECTION();
     return result;
 }
+#endif  // !Py_IR_INTERP
 
 // My kingdom for a bitset
 struct flag_set {

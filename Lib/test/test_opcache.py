@@ -8,7 +8,7 @@ import types
 import unittest
 from test.support import (threading_helper, check_impl_detail,
                           requires_specialization,
-                          cpython_only, reset_code)
+                          cpython_only, reset_code, Py_IR_INTERP)
 from test.support.import_helper import import_module
 
 # Skip this module on other interpreters, it is cpython specific:
@@ -2506,12 +2506,17 @@ class TestFeedback(TestBase):
         def g(it):
             yield from it
 
+        # No handler of the register IR reads a COUNTER entry, so it has none
+        no_entry = set()
+        if Py_IR_INTERP:
+            no_entry = {op for op, kind in self.KINDS.items() if kind == "COUNTER"}
         seen = set()
         for func in C.m, g:
             for instr in dis.get_instructions(func):
                 entry = _testinternalcapi.get_feedback(func.__code__,
                                                        instr.offset)
-                if not instr.cache_info or instr.opname.startswith("POP_JUMP"):
+                if (not instr.cache_info or instr.opname.startswith("POP_JUMP")
+                        or instr.opname in no_entry):
                     # Branches keep their history in the cache unit
                     self.assertIsNone(entry, instr.opname)
                     continue
@@ -2519,7 +2524,7 @@ class TestFeedback(TestBase):
                 self.assertEqual(kind, self.KINDS[instr.opname], instr.opname)
                 self.assertEqual(state, "COLD", instr.opname)
                 seen.add(instr.opname)
-        self.assertEqual(seen, set(self.KINDS))
+        self.assertEqual(seen, set(self.KINDS) - no_entry)
 
     @requires_specialization
     def test_poly_and_mega(self):

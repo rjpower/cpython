@@ -513,3 +513,33 @@ build, 0.996 vs IR-only). spectral_norm 0.593, chaos 0.809, comprehensions
 are within the layout swing documented in design note 01 item 32. Results
 table filled in PR.md. Scratch build dirs removed; snapshots used in
 boil/bench kept.
+
+## Phase 2 design: architecture v2 (2026-10-25)
+
+Review of PR #1 by the user: the variable-size IR encoding and 16-bit fields
+look like avoiding a design rather than making one, and NaN boxing inside a
+`_PyStackRef` that still carries ownership bits beside raw `PyObject*` in the
+heap is two representations where one should do. Asked for a concise
+pipeline description, a redesigned IR and interpreter, a rethought object
+layout, and a step plan for Opus 5.5 agents, without deference to how
+CPython does things today.
+
+Measurements taken for the redesign (Py_STATS build, Phase 1 head):
+data-movement dispatches (`LOAD_FAST*`, `STORE_FAST`, `COPY`, `SWAP`,
+`POP_TOP`, `TO_BOOL_BOOL`, `UNARY_NOT`) are 45% of richards' 63.3M
+dispatches and 42% of go's 179.2M; mortal increfs and decrefs in richards are
+25M over 63M instructions. Over all 99,269 code objects in `Lib/`: largest
+frame 803 slots, most constants 4,048, most feedback sites 1,180, longest
+jump 5,458 words, largest call 27 arguments. 246 handlers, 21 instrumented.
+
+Design note 06 written. Decisions it proposes: a fixed 64-bit word with a
+16-bit handler and four 12-bit fields, emitted by the compiler and stored in
+the pyc, with the stack bytecode, lowering, pcmap and absorption deleted;
+locals as operands so that the data-movement instructions disappear; one
+`PyValue` type everywhere with no ownership bit; reference counting removed
+in favour of a non-moving mark-sweep collector over mimalloc with precise
+frame roots and conservative C stacks, which also removes the need for a
+handle API; eight-byte object header; frames without a stack pointer and
+with overlapping argument windows; shapes default on with unboxed slot
+kinds. Nine steps with gates and budgets; note 03 (deferred refcounting) is
+dropped. Awaiting the user's decisions on section 7 before any agent starts.

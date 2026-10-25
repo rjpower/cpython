@@ -308,6 +308,7 @@ Known values:
     Python 3.16a1 3708 (the assembler folds loads into their consumers)
     Python 3.16a1 3709 (RETURN_VALUE reads its value through a field)
     Python 3.16a1 3710 (the assembler folds stores into their producers)
+    Python 3.16a1 3711 (conditional jumps test truth; COPY of a local is a load)
 
     Python 3.17 will start with 3750
 
@@ -317,7 +318,7 @@ Known values:
 
 */
 
-#define PYC_MAGIC_NUMBER 3710
+#define PYC_MAGIC_NUMBER 3711
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

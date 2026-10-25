@@ -2662,6 +2662,34 @@ remove_redundant_nops_and_jumps(cfg_builder *g)
     return SUCCESS;
 }
 
+/* POP_JUMP_IF_FALSE and _TRUE test the truth of any value, so the TO_BOOL
+ * before a conditional jump goes, and a UNARY_NOT before it inverts it.
+ * This runs after the peepholes, which fold TO_BOOL into the instruction
+ * that produces its value where they can. */
+static void
+fold_truth_tests(basicblock *entryblock)
+{
+    for (basicblock *b = entryblock; b != NULL; b = b->b_next) {
+        cfg_instr *jump = basicblock_last_instr(b);
+        if (jump == NULL ||
+            (jump->i_opcode != POP_JUMP_IF_FALSE &&
+             jump->i_opcode != POP_JUMP_IF_TRUE)) {
+            continue;
+        }
+        for (int i = b->b_iused - 2; i >= 0; i--) {
+            cfg_instr *inst = &b->b_instr[i];
+            if (inst->i_opcode == UNARY_NOT) {
+                jump->i_opcode = jump->i_opcode == POP_JUMP_IF_FALSE
+                                     ? POP_JUMP_IF_TRUE : POP_JUMP_IF_FALSE;
+            }
+            else if (inst->i_opcode != TO_BOOL && inst->i_opcode != NOP) {
+                break;
+            }
+            INSTR_SET_OP0(inst, NOP);
+        }
+    }
+}
+
 /* Perform optimizations on a control flow graph.
    The consts object should still be in list form to allow new constants
    to be appended.
@@ -2682,6 +2710,7 @@ optimize_cfg(cfg_builder *g, PyObject *consts, PyObject *const_cache,
     for (basicblock *b = g->g_entryblock; b != NULL; b = b->b_next) {
         RETURN_IF_ERROR(optimize_basic_block(const_cache, b, consts, consts_index));
     }
+    fold_truth_tests(g->g_entryblock);
     RETURN_IF_ERROR(remove_redundant_nops_and_pairs(g->g_entryblock));
     RETURN_IF_ERROR(remove_unreachable(g->g_entryblock));
     RETURN_IF_ERROR(remove_redundant_nops_and_jumps(g));
@@ -3582,19 +3611,32 @@ convert_pseudo_conditional_jumps(cfg_builder *g)
                             .i_target = NULL,
                             .i_except = except,
                 };
+                // The jump tests the truth of the copy: see fold_truth_tests()
                 RETURN_IF_ERROR(basicblock_insert_instruction(b, i++, &copy));
-                cfg_instr to_bool = {
-                            .i_opcode = TO_BOOL,
-                            .i_oparg = 0,
-                            .i_loc = loc,
-                            .i_target = NULL,
-                            .i_except = except,
-                };
-                RETURN_IF_ERROR(basicblock_insert_instruction(b, i++, &to_bool));
             }
         }
     }
     return SUCCESS;
+}
+
+/* A COPY 1 of a local just loaded becomes a second load of the local, which
+ * the assembler can fold into the instruction that consumes the copy, as
+ * the jump of "x and y" or the LOAD_ATTR of "o.a += 1".  This runs before
+ * optimize_load_fast(), which decides whether each load borrows. */
+static void
+copy_local_as_load(basicblock *entryblock)
+{
+    for (basicblock *b = entryblock; b != NULL; b = b->b_next) {
+        for (int i = 1; i < b->b_iused; i++) {
+            cfg_instr *load = &b->b_instr[i - 1];
+            cfg_instr *copy = &b->b_instr[i];
+            if (copy->i_opcode == COPY && copy->i_oparg == 1 &&
+                (load->i_opcode == LOAD_FAST ||
+                 load->i_opcode == LOAD_FAST_CHECK)) {
+                INSTR_SET_OP1(copy, LOAD_FAST, load->i_oparg);
+            }
+        }
+    }
 }
 
 static int
@@ -4089,6 +4131,7 @@ _PyCfg_OptimizedCfgToInstructionSequence(cfg_builder *g,
                                      _PyInstructionSequence *seq)
 {
     RETURN_IF_ERROR(convert_pseudo_conditional_jumps(g));
+    copy_local_as_load(g->g_entryblock);
 
     *stackdepth = calculate_stackdepth(g);
     if (*stackdepth < 0) {

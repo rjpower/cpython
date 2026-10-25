@@ -326,11 +326,11 @@ make_exec(PyCodeObject *co)
     for (int i = 1; i < nfb; i++) {
         _PyFbHeader *h = _PyIR_FbEntry(exec->entries, (uint32_t)i);
         h->kind = (uint8_t)_PyIR_FBINIT_KIND(fbinit[i]);
+        h->counter = counter;
         if (h->kind == FB_BRANCH) {
             h->history = 0x5555;    // alternating taken and not taken
         }
         else {
-            h->counter = counter;
             h->arg = _PyIR_FBINIT_ARG(fbinit[i]);
         }
     }

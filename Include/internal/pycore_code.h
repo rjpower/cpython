@@ -213,6 +213,7 @@ PyAPI_FUNC(void) _Py_Specialize_UnpackSequence(_PyStackRef seq, _PyInstr *instr,
 PyAPI_FUNC(void) _Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _PyInstr *instr, int oparg);
 PyAPI_FUNC(void) _Py_Specialize_Send(_PyStackRef receiver, _PyInstr *instr);
 PyAPI_FUNC(void) _Py_Specialize_ToBool(_PyStackRef value, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_Specialize_PopJumpIf(_PyStackRef value, _PyInstr *instr);
 PyAPI_FUNC(void) _Py_Specialize_ContainsOp(_PyStackRef item, _PyStackRef value,
                                            _PyInstr *instr);
 PyAPI_FUNC(void) _Py_GatherStats_GetIter(_PyStackRef iterable);

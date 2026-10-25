@@ -632,12 +632,14 @@ static const uint8_t fb_kind[256] = {
 #undef FB_KIND
 };
 
+#ifndef NDEBUG
 static const uint8_t has_fb_entry[256] = {
 #define FB_HAS(OP, TYPE, KIND) [OP] = 1,
     _PyFb_FAMILIES(FB_HAS)
     _PyFb_BRANCHES(FB_HAS)
 #undef FB_HAS
 };
+#endif
 
 /* The farthest exit of FOR_ITER and SEND that the assembler does not relax */
 int _PyIR_MaxForward = IR_MAX_FORWARD;

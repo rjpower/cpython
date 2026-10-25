@@ -13392,16 +13392,47 @@
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef value;
+            _PyStackRef res;
             _PyStackRef cond;
-            cond = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
-            assert(PyStackRef_BoolCheck(cond));
-            int jump = PyStackRef_IsFalse(cond);
-            RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
-            if (jump) {
-                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+            // _TO_BOOL
+            {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                int err;
+                if (PyStackRef_IsInlineInt(value)) {
+                    err = PyStackRef_InlineInt(value) != 0;
+                }
+                else if (PyStackRef_IsInlineFloat(value)) {
+                    err = PyStackRef_InlineFloat(value) != 0.0;
+                }
+                else {
+                    stack_pointer[-1] = value;
+                    _PyFrame_SetStackPointer(frame, stack_pointer);
+                    _PyFrame_StackPointerValidate(frame);
+                    err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
+                    _PyFrame_StackPointerInvalidate(frame);
+                }
+                stack_pointer += -1;
+                ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                PyStackRef_CLOSE(value);
+                _PyFrame_StackPointerInvalidate(frame);
+                if (err < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                res = err ? PyStackRef_True : PyStackRef_False;
             }
-            stack_pointer += -1;
-            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            // _INSTRUMENTED_POP_JUMP_IF_FALSE
+            {
+                cond = res;
+                assert(PyStackRef_BoolCheck(cond));
+                int jump = PyStackRef_IsFalse(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
+                if (jump) {
+                    INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                }
+            }
             DISPATCH();
         }
 
@@ -13490,16 +13521,47 @@
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef value;
+            _PyStackRef res;
             _PyStackRef cond;
-            cond = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
-            assert(PyStackRef_BoolCheck(cond));
-            int jump = PyStackRef_IsTrue(cond);
-            RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
-            if (jump) {
-                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+            // _TO_BOOL
+            {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                int err;
+                if (PyStackRef_IsInlineInt(value)) {
+                    err = PyStackRef_InlineInt(value) != 0;
+                }
+                else if (PyStackRef_IsInlineFloat(value)) {
+                    err = PyStackRef_InlineFloat(value) != 0.0;
+                }
+                else {
+                    stack_pointer[-1] = value;
+                    _PyFrame_SetStackPointer(frame, stack_pointer);
+                    _PyFrame_StackPointerValidate(frame);
+                    err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
+                    _PyFrame_StackPointerInvalidate(frame);
+                }
+                stack_pointer += -1;
+                ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                PyStackRef_CLOSE(value);
+                _PyFrame_StackPointerInvalidate(frame);
+                if (err < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                res = err ? PyStackRef_True : PyStackRef_False;
             }
-            stack_pointer += -1;
-            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            // _INSTRUMENTED_POP_JUMP_IF_TRUE
+            {
+                cond = res;
+                assert(PyStackRef_BoolCheck(cond));
+                int jump = PyStackRef_IsTrue(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
+                if (jump) {
+                    INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                }
+            }
             DISPATCH();
         }
 
@@ -17407,26 +17469,458 @@
             int opcode = POP_JUMP_IF_FALSE;
             (void)(opcode);
             #endif
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_A(next_instr - 1));
+            INSTRUCTION_STATS(POP_JUMP_IF_FALSE);
+            IR_PREDICTED(POP_JUMP_IF_FALSE);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef cond;
+            // _SPECIALIZE_POP_JUMP_IF
+            {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    stack_pointer[-1] = value;
+                    _PyFrame_SetStackPointer(frame, stack_pointer);
+                    _PyFrame_StackPointerValidate(frame);
+                    _Py_Specialize_PopJumpIf(value, next_instr);
+                    _PyFrame_StackPointerInvalidate(frame);
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_A(this_instr));
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(TO_BOOL);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _TO_BOOL
+            {
+                int err;
+                if (PyStackRef_IsInlineInt(value)) {
+                    err = PyStackRef_InlineInt(value) != 0;
+                }
+                else if (PyStackRef_IsInlineFloat(value)) {
+                    err = PyStackRef_InlineFloat(value) != 0.0;
+                }
+                else {
+                    stack_pointer[-1] = value;
+                    _PyFrame_SetStackPointer(frame, stack_pointer);
+                    _PyFrame_StackPointerValidate(frame);
+                    err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
+                    _PyFrame_StackPointerInvalidate(frame);
+                }
+                stack_pointer += -1;
+                ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                PyStackRef_CLOSE(value);
+                _PyFrame_StackPointerInvalidate(frame);
+                if (err < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                res = err ? PyStackRef_True : PyStackRef_False;
+            }
+            // _POP_JUMP_IF_FALSE
+            {
+                cond = res;
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(POP_JUMP_IF_FALSE_ALWAYS_TRUE) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = POP_JUMP_IF_FALSE_ALWAYS_TRUE;
+            (void)(opcode);
+            #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             stack_pointer += IR_IS_LOCAL(IR_FIELD_A(next_instr - 1));
-            INSTRUCTION_STATS(POP_JUMP_IF_FALSE);
+            INSTRUCTION_STATS(POP_JUMP_IF_FALSE_ALWAYS_TRUE);
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef owner;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
             _PyStackRef cond;
-            cond = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
-            assert(PyStackRef_BoolCheck(cond));
-            int flag = PyStackRef_IsFalse(cond);
-            RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
-            if (flag) {
-                JUMPTO(oparg);
+            // _GUARD_TYPE_VERSION
+            {
+                owner = IR_SLOT(IR_FIELD_A(this_instr));
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                }
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                }
             }
-            else {
-                JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+            // _REPLACE_WITH_TRUE
+            {
+                value = owner;
+                res = PyStackRef_True;
+                v = value;
+            }
+            // _POP_TOP
+            {
+                value = v;
+                stack_pointer[-1] = res;
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                _PyStackRef_XCLOSE_POINTER(value);
+                _PyFrame_StackPointerInvalidate(frame);
+            }
+            // _POP_JUMP_IF_FALSE
+            {
+                cond = res;
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+                }
+            }
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(POP_JUMP_IF_FALSE_BOOL) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = POP_JUMP_IF_FALSE_BOOL;
+            (void)(opcode);
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_A(next_instr - 1));
+            INSTRUCTION_STATS(POP_JUMP_IF_FALSE_BOOL);
+            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef value;
+            _PyStackRef cond;
+            // _GUARD_TOS_BOOL
+            {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                if (!PyStackRef_BoolCheck(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                }
+                STAT_INC(TO_BOOL, hit);
+            }
+            // _POP_JUMP_IF_FALSE
+            {
+                cond = value;
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+                }
+            }
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(POP_JUMP_IF_FALSE_INT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = POP_JUMP_IF_FALSE_INT;
+            (void)(opcode);
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_A(next_instr - 1));
+            INSTRUCTION_STATS(POP_JUMP_IF_FALSE_INT);
+            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
+            _PyStackRef cond;
+            // _GUARD_TOS_EXACT_INT
+            {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                if (!PyStackRef_LongCheckExact(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                }
+            }
+            // _TO_BOOL_INT
+            {
+                STAT_INC(TO_BOOL, hit);
+                bool zero;
+                if (PyStackRef_IsInlineInt(value)) {
+                    zero = PyStackRef_InlineInt(value) == 0;
+                }
+                else {
+                    zero = _PyLong_IsZero((PyLongObject *)PyStackRef_AsPyObjectBorrow(value));
+                }
+                res = zero ? PyStackRef_False : PyStackRef_True;
+                v = value;
+            }
+            // _POP_TOP_INT
+            {
+                value = v;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            // _POP_JUMP_IF_FALSE
+            {
+                cond = res;
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+                }
+            }
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(POP_JUMP_IF_FALSE_LIST) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = POP_JUMP_IF_FALSE_LIST;
+            (void)(opcode);
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_A(next_instr - 1));
+            INSTRUCTION_STATS(POP_JUMP_IF_FALSE_LIST);
+            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef tos;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
+            _PyStackRef cond;
+            // _GUARD_TOS_LIST
+            {
+                tos = IR_SLOT(IR_FIELD_A(this_instr));
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                }
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
+                if (!PyList_CheckExact(o)) {
+                    IR_DROP_BORROW(tos, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                }
+            }
+            // _TO_BOOL_LIST
+            {
+                value = tos;
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
+                assert(PyList_CheckExact(value_o));
+                STAT_INC(TO_BOOL, hit);
+                res = PyList_GET_SIZE(value_o) ? PyStackRef_True : PyStackRef_False;
+                v = value;
+            }
+            // _POP_TOP
+            {
+                value = v;
+                stack_pointer[-1] = res;
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                _PyStackRef_XCLOSE_POINTER(value);
+                _PyFrame_StackPointerInvalidate(frame);
+            }
+            // _POP_JUMP_IF_FALSE
+            {
+                cond = res;
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+                }
+            }
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(POP_JUMP_IF_FALSE_NONE) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = POP_JUMP_IF_FALSE_NONE;
+            (void)(opcode);
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_A(next_instr - 1));
+            INSTRUCTION_STATS(POP_JUMP_IF_FALSE_NONE);
+            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef cond;
+            // _TO_BOOL_NONE
+            {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                if (!PyStackRef_IsNone(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                }
+                STAT_INC(TO_BOOL, hit);
+                res = PyStackRef_False;
+            }
+            // _POP_JUMP_IF_FALSE
+            {
+                cond = res;
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+                }
+            }
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(POP_JUMP_IF_FALSE_STR) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = POP_JUMP_IF_FALSE_STR;
+            (void)(opcode);
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_A(next_instr - 1));
+            INSTRUCTION_STATS(POP_JUMP_IF_FALSE_STR);
+            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
+            _PyStackRef cond;
+            // _GUARD_TOS_UNICODE
+            {
+                value = IR_SLOT(IR_FIELD_A(this_instr));
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(value))) {
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                }
+                value = IR_BORROW_KNOWN(value, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
+                if (!PyUnicode_CheckExact(value_o)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                }
+            }
+            // _TO_BOOL_STR
+            {
+                STAT_INC(TO_BOOL, hit);
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
+                res = value_o == &_Py_STR(empty) ? PyStackRef_False : PyStackRef_True;
+                v = value;
+            }
+            // _POP_TOP_UNICODE
+            {
+                value = v;
+                assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
+            }
+            // _POP_JUMP_IF_FALSE
+            {
+                cond = res;
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+                }
             }
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -17546,26 +18040,458 @@
             int opcode = POP_JUMP_IF_TRUE;
             (void)(opcode);
             #endif
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_A(next_instr - 1));
+            INSTRUCTION_STATS(POP_JUMP_IF_TRUE);
+            IR_PREDICTED(POP_JUMP_IF_TRUE);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef cond;
+            // _SPECIALIZE_POP_JUMP_IF
+            {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    stack_pointer[-1] = value;
+                    _PyFrame_SetStackPointer(frame, stack_pointer);
+                    _PyFrame_StackPointerValidate(frame);
+                    _Py_Specialize_PopJumpIf(value, next_instr);
+                    _PyFrame_StackPointerInvalidate(frame);
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_A(this_instr));
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(TO_BOOL);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _TO_BOOL
+            {
+                int err;
+                if (PyStackRef_IsInlineInt(value)) {
+                    err = PyStackRef_InlineInt(value) != 0;
+                }
+                else if (PyStackRef_IsInlineFloat(value)) {
+                    err = PyStackRef_InlineFloat(value) != 0.0;
+                }
+                else {
+                    stack_pointer[-1] = value;
+                    _PyFrame_SetStackPointer(frame, stack_pointer);
+                    _PyFrame_StackPointerValidate(frame);
+                    err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
+                    _PyFrame_StackPointerInvalidate(frame);
+                }
+                stack_pointer += -1;
+                ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                PyStackRef_CLOSE(value);
+                _PyFrame_StackPointerInvalidate(frame);
+                if (err < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                res = err ? PyStackRef_True : PyStackRef_False;
+            }
+            // _POP_JUMP_IF_TRUE
+            {
+                cond = res;
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(POP_JUMP_IF_TRUE_ALWAYS_TRUE) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = POP_JUMP_IF_TRUE_ALWAYS_TRUE;
+            (void)(opcode);
+            #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             stack_pointer += IR_IS_LOCAL(IR_FIELD_A(next_instr - 1));
-            INSTRUCTION_STATS(POP_JUMP_IF_TRUE);
+            INSTRUCTION_STATS(POP_JUMP_IF_TRUE_ALWAYS_TRUE);
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef owner;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
             _PyStackRef cond;
-            cond = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
-            assert(PyStackRef_BoolCheck(cond));
-            int flag = PyStackRef_IsTrue(cond);
-            RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
-            if (flag) {
-                JUMPTO(oparg);
+            // _GUARD_TYPE_VERSION
+            {
+                owner = IR_SLOT(IR_FIELD_A(this_instr));
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                }
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                }
             }
-            else {
-                JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+            // _REPLACE_WITH_TRUE
+            {
+                value = owner;
+                res = PyStackRef_True;
+                v = value;
+            }
+            // _POP_TOP
+            {
+                value = v;
+                stack_pointer[-1] = res;
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                _PyStackRef_XCLOSE_POINTER(value);
+                _PyFrame_StackPointerInvalidate(frame);
+            }
+            // _POP_JUMP_IF_TRUE
+            {
+                cond = res;
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+                }
+            }
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(POP_JUMP_IF_TRUE_BOOL) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = POP_JUMP_IF_TRUE_BOOL;
+            (void)(opcode);
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_A(next_instr - 1));
+            INSTRUCTION_STATS(POP_JUMP_IF_TRUE_BOOL);
+            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef value;
+            _PyStackRef cond;
+            // _GUARD_TOS_BOOL
+            {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                if (!PyStackRef_BoolCheck(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                }
+                STAT_INC(TO_BOOL, hit);
+            }
+            // _POP_JUMP_IF_TRUE
+            {
+                cond = value;
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+                }
+            }
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(POP_JUMP_IF_TRUE_INT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = POP_JUMP_IF_TRUE_INT;
+            (void)(opcode);
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_A(next_instr - 1));
+            INSTRUCTION_STATS(POP_JUMP_IF_TRUE_INT);
+            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
+            _PyStackRef cond;
+            // _GUARD_TOS_EXACT_INT
+            {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                if (!PyStackRef_LongCheckExact(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                }
+            }
+            // _TO_BOOL_INT
+            {
+                STAT_INC(TO_BOOL, hit);
+                bool zero;
+                if (PyStackRef_IsInlineInt(value)) {
+                    zero = PyStackRef_InlineInt(value) == 0;
+                }
+                else {
+                    zero = _PyLong_IsZero((PyLongObject *)PyStackRef_AsPyObjectBorrow(value));
+                }
+                res = zero ? PyStackRef_False : PyStackRef_True;
+                v = value;
+            }
+            // _POP_TOP_INT
+            {
+                value = v;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            // _POP_JUMP_IF_TRUE
+            {
+                cond = res;
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+                }
+            }
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(POP_JUMP_IF_TRUE_LIST) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = POP_JUMP_IF_TRUE_LIST;
+            (void)(opcode);
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_A(next_instr - 1));
+            INSTRUCTION_STATS(POP_JUMP_IF_TRUE_LIST);
+            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef tos;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
+            _PyStackRef cond;
+            // _GUARD_TOS_LIST
+            {
+                tos = IR_SLOT(IR_FIELD_A(this_instr));
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                }
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
+                if (!PyList_CheckExact(o)) {
+                    IR_DROP_BORROW(tos, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                }
+            }
+            // _TO_BOOL_LIST
+            {
+                value = tos;
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
+                assert(PyList_CheckExact(value_o));
+                STAT_INC(TO_BOOL, hit);
+                res = PyList_GET_SIZE(value_o) ? PyStackRef_True : PyStackRef_False;
+                v = value;
+            }
+            // _POP_TOP
+            {
+                value = v;
+                stack_pointer[-1] = res;
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                _PyStackRef_XCLOSE_POINTER(value);
+                _PyFrame_StackPointerInvalidate(frame);
+            }
+            // _POP_JUMP_IF_TRUE
+            {
+                cond = res;
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+                }
+            }
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(POP_JUMP_IF_TRUE_NONE) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = POP_JUMP_IF_TRUE_NONE;
+            (void)(opcode);
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_A(next_instr - 1));
+            INSTRUCTION_STATS(POP_JUMP_IF_TRUE_NONE);
+            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef cond;
+            // _TO_BOOL_NONE
+            {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                if (!PyStackRef_IsNone(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                }
+                STAT_INC(TO_BOOL, hit);
+                res = PyStackRef_False;
+            }
+            // _POP_JUMP_IF_TRUE
+            {
+                cond = res;
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+                }
+            }
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(POP_JUMP_IF_TRUE_STR) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = POP_JUMP_IF_TRUE_STR;
+            (void)(opcode);
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_A(next_instr - 1));
+            INSTRUCTION_STATS(POP_JUMP_IF_TRUE_STR);
+            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
+            _PyStackRef cond;
+            // _GUARD_TOS_UNICODE
+            {
+                value = IR_SLOT(IR_FIELD_A(this_instr));
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(value))) {
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                }
+                value = IR_BORROW_KNOWN(value, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
+                if (!PyUnicode_CheckExact(value_o)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                    UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                }
+            }
+            // _TO_BOOL_STR
+            {
+                STAT_INC(TO_BOOL, hit);
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
+                res = value_o == &_Py_STR(empty) ? PyStackRef_False : PyStackRef_True;
+                v = value;
+            }
+            // _POP_TOP_UNICODE
+            {
+                value = v;
+                assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
+            }
+            // _POP_JUMP_IF_TRUE
+            {
+                cond = res;
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+                }
             }
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);

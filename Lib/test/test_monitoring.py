@@ -1982,10 +1982,10 @@ class TestBranchAndJumpEvents(CheckEvents):
 
         self.check_events(func, recorders = BRANCH_OFFSET_RECORDERS, expected = [
             ('branch left', 'func', 6, 7),
-            ('branch right', 'func', 9, 13),
+            ('branch right', 'func', 7, 11),
             ('branch left', 'func', 6, 7),
-            ('branch left', 'func', 9, 11),
-            ('branch right', 'func', 6, 17)])
+            ('branch left', 'func', 7, 9),
+            ('branch right', 'func', 6, 15)])
 
     def test_except_star(self):
 

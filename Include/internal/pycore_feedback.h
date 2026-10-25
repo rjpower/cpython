@@ -31,7 +31,8 @@ extern "C" {
  * Each entry begins with a 16-byte header.  Kind, size and opcodes:
  *
  *     COUNTER  16  RESUME, JUMP_BACKWARD
- *     BRANCH   16  POP_JUMP_IF_FALSE, _TRUE, _NONE, _NOT_NONE
+ *     BRANCH   16  POP_JUMP_IF_NONE, _NOT_NONE
+ *              24  POP_JUMP_IF_FALSE, _TRUE
  *     UNARY    24  TO_BOOL, UNPACK_SEQUENCE, FOR_ITER, GET_ITER, SEND
  *     BINARY   32  BINARY_OP, COMPARE_OP, CONTAINS_OP, STORE_SUBSCR
  *     ATTR     40  LOAD_ATTR, STORE_ATTR, LOAD_SUPER_ATTR
@@ -39,6 +40,9 @@ extern "C" {
  *     CALL     24  CALL, CALL_KW, CALL_FUNCTION_EX
  *
  * A branch keeps its 16-bit taken history, newest in bit 0, in arg.
+ * POP_JUMP_IF_FALSE and _TRUE test the truth of any value and specialise
+ * as TO_BOOL does, so their entries are UNARY entries of kind BRANCH: the
+ * counter drives specialisation, and the history replaces the oparg.
  *
  * Fields carry the names of the cache effects in Python/bytecodes.c, which
  * is how the cases generator maps "type_version/2" to fb->type_version.
@@ -173,6 +177,8 @@ typedef struct _PyFbBlock {
     X(RESUME,               _PyFbHeader, FB_COUNTER) \
     X(JUMP_BACKWARD,        _PyFbHeader, FB_COUNTER) \
     X(TO_BOOL,              _PyFbUnary,  FB_UNARY) \
+    X(POP_JUMP_IF_FALSE,    _PyFbUnary,  FB_BRANCH) \
+    X(POP_JUMP_IF_TRUE,     _PyFbUnary,  FB_BRANCH) \
     X(UNPACK_SEQUENCE,      _PyFbUnary,  FB_UNARY) \
     X(FOR_ITER,             _PyFbUnary,  FB_UNARY) \
     X(GET_ITER,             _PyFbUnary,  FB_UNARY) \
@@ -189,10 +195,8 @@ typedef struct _PyFbBlock {
     X(CALL_KW,              _PyFbCall,   FB_CALL) \
     X(CALL_FUNCTION_EX,     _PyFbCall,   FB_CALL)
 
-/* The conditional branches, which have entries in the register IR only. */
+/* The branches that do not specialise, whose entries keep only the history. */
 #define _PyFb_BRANCHES(X) \
-    X(POP_JUMP_IF_FALSE,    _PyFbHeader, FB_BRANCH) \
-    X(POP_JUMP_IF_TRUE,     _PyFbHeader, FB_BRANCH) \
     X(POP_JUMP_IF_NONE,     _PyFbHeader, FB_BRANCH) \
     X(POP_JUMP_IF_NOT_NONE, _PyFbHeader, FB_BRANCH)
 

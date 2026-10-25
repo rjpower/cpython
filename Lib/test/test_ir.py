@@ -254,8 +254,9 @@ class AssemblerTest(unittest.TestCase):
                 self.assertEqual(f(xs, y), expected)
                 ir = handlers(f)
                 self.assertEqual(ir.count(handler), 3)
-                self.assertIn("POP_JUMP_IF_FALSE", ir)
-                self.assertIn("POP_JUMP_IF_TRUE", ir)
+                # The jumps test the bool that the compare makes
+                self.assertIn("POP_JUMP_IF_FALSE_BOOL", ir)
+                self.assertIn("POP_JUMP_IF_TRUE_BOOL", ir)
                 self.assertEqual(f(xs, y), expected)
                 # Operands of another type deoptimise the compare
                 self.assertEqual(f([None, y], y), 11)
@@ -778,6 +779,154 @@ class FoldTest(unittest.TestCase):
         finally:
             sys.settrace(None)
         self.assertEqual(lines, [f.__code__.co_firstlineno + 1])
+
+
+class Truthy:
+    pass
+
+
+class Falsy:
+    def __bool__(self):
+        return False
+
+
+class TruthTest(unittest.TestCase):
+    """Conditional jumps test the truth of any value (Python/flowgraph.c)"""
+
+    def test_no_to_bool_before_a_jump(self):
+        def f(x):
+            if x:
+                return 1
+            return 2
+        def g(x):
+            if not x:
+                return 1
+            return 2
+        self.assertEqual(words(f)[0], ("POP_JUMP_IF_FALSE", None, (0,)))
+        self.assertEqual(words(g)[0], ("POP_JUMP_IF_TRUE", None, (0,)))
+        for func in f, g:
+            names = [instr.opname for instr in dis.get_instructions(func)]
+            self.assertNotIn("TO_BOOL", names)
+            self.assertNotIn("UNARY_NOT", names)
+
+    def test_copy_of_a_local_is_a_load(self):
+        # The second load folds into the jump, so no COPY is left
+        def f(x, y):
+            return x and y
+        def g(o):
+            o.a += 1
+        for func in f, g:
+            names = [instr.opname for instr in dis.get_instructions(func)]
+            self.assertNotIn("COPY", names)
+        o = types.SimpleNamespace(a=1)
+        for k in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(f(0, 5), 0)
+            self.assertEqual(f([1], 5), 5)
+            g(o)
+        self.assertEqual(o.a, _testinternalcapi.SPECIALIZATION_THRESHOLD + 2)
+
+    @unittest.skipUnless(SPECIALIZES, "requires specialisation")
+    def test_specialisations(self):
+        source = ("def f(x):\n"
+                  "    if x:\n"
+                  "        return 1\n"
+                  "    return 2\n"
+                  "def g(x):\n"
+                  "    if not x:\n"
+                  "        return 1\n"
+                  "    return 2\n")
+        cases = (("BOOL", True, False), ("INT", 3, 0),
+                 ("INT", 2**40, 0), ("LIST", [0], []),
+                 ("NONE", None, None), ("STR", "a", ""),
+                 ("ALWAYS_TRUE", Truthy(), Truthy()))
+        for kind, true, false in cases:
+            with self.subTest(kind=kind, true=true):
+                f = make_function(source)
+                g = make_function(source, "g")
+                for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+                    self.assertEqual(f(true), 1 if true else 2)
+                    self.assertEqual(f(false), 1 if false else 2)
+                    self.assertEqual(g(true), 2 if true else 1)
+                    self.assertEqual(g(false), 2 if false else 1)
+                self.assertIn(f"POP_JUMP_IF_FALSE_{kind}", handlers(f))
+                self.assertIn(f"POP_JUMP_IF_TRUE_{kind}", handlers(g))
+                # Another type deoptimises
+                for value in (Falsy(), 0.0, (), 1.5, (1,)):
+                    self.assertEqual(f(value), 1 if value else 2)
+                    self.assertEqual(g(value), 2 if value else 1)
+
+    def test_always_true_after_the_type_changes(self):
+        class T:
+            pass
+        def f(x):
+            return 1 if x else 2
+        t = T()
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(f(t), 1)
+        T.__bool__ = lambda self: False
+        self.assertEqual(f(t), 2)
+        T.__len__ = lambda self: 1
+        del T.__bool__
+        self.assertEqual(f(t), 1)
+
+    def test_errors_of_the_truth_test(self):
+        class Raises:
+            def __bool__(self):
+                raise ZeroDivisionError
+        class NotBool:
+            def __bool__(self):
+                return 1
+        def f(x):
+            if x:
+                return 1
+            return 2
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(f(1), 1)
+        try:
+            f(Raises())
+        except ZeroDivisionError as exc:
+            tb = exc.__traceback__.tb_next
+        else:
+            self.fail("no exception")
+        self.assertIs(tb.tb_frame.f_code, f.__code__)
+        self.assertEqual(tb.tb_lineno, f.__code__.co_firstlineno + 1)
+        with self.assertRaises(TypeError):
+            f(NotBool())
+
+    def test_branch_events_of_any_value(self):
+        # The instrumented jumps test truth too
+        def f(xs):
+            n = 0
+            for x in xs:
+                if x:
+                    n += 1
+            return n
+
+        xs = [0, 1, None, "a", [], [0], Truthy(), Falsy()] * 10
+        jump = [instr for instr in dis.get_instructions(f)
+                if instr.opname.startswith("POP_JUMP_IF_")][0]
+        if_true = jump.opname == "POP_JUMP_IF_TRUE"
+        expected = ["right" if bool(x) == if_true else "left" for x in xs]
+        events = []
+        E = sys.monitoring.events
+        tool = sys.monitoring.DEBUGGER_ID
+        sys.monitoring.use_tool_id(tool, "test_ir")
+        try:
+            for event, name in ((E.BRANCH_LEFT, "left"),
+                                (E.BRANCH_RIGHT, "right")):
+                sys.monitoring.register_callback(
+                    tool, event,
+                    lambda code, src, dst, name=name:
+                        events.append(name) if src == jump.offset else None)
+            sys.monitoring.set_local_events(tool, f.__code__,
+                                            E.BRANCH_LEFT | E.BRANCH_RIGHT)
+            self.assertEqual(f(xs), 40)
+        finally:
+            sys.monitoring.set_local_events(tool, f.__code__, 0)
+            sys.monitoring.free_tool_id(tool)
+        self.assertEqual(events, expected)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(f(xs), 40)
 
 
 class StoreFoldTest(unittest.TestCase):

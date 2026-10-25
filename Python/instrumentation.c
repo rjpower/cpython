@@ -706,9 +706,7 @@ warm_up(PyCodeObject *code, int i)
         return;
     }
     _PyFbHeader *h = _PyIR_FbEntry(code->_co_exec->entries, (uint32_t)fb);
-    if (h->kind != FB_BRANCH) {
-        h->counter = adaptive_counter_warmup();
-    }
+    h->counter = adaptive_counter_warmup();
 #endif
 }
 

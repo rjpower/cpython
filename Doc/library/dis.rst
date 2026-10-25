@@ -1361,6 +1361,10 @@ iterations of the loop.
    .. versionchanged:: 3.13
       This instruction now requires an exact :class:`bool` operand.
 
+   .. versionchanged:: 3.16
+      This instruction tests the truth of any operand again, so the
+      compiler no longer emits a ``TO_BOOL`` before it.
+
 .. opcode:: POP_JUMP_IF_FALSE (delta)
 
    If ``STACK[-1]`` is false, increments the bytecode counter by *delta*.
@@ -1376,6 +1380,10 @@ iterations of the loop.
 
    .. versionchanged:: 3.13
       This instruction now requires an exact :class:`bool` operand.
+
+   .. versionchanged:: 3.16
+      This instruction tests the truth of any operand again, so the
+      compiler no longer emits a ``TO_BOOL`` before it.
 
 .. opcode:: POP_JUMP_IF_NOT_NONE (delta)
 
@@ -1970,7 +1978,7 @@ but are replaced by real opcodes or removed before bytecode is generated.
             JUMP_IF_FALSE
 
    Conditional jumps which do not impact the stack. Replaced by the sequence
-   ``COPY 1``, ``TO_BOOL``, ``POP_JUMP_IF_TRUE/FALSE``.
+   ``COPY 1``, ``POP_JUMP_IF_TRUE/FALSE``.
 
 .. opcode:: LOAD_CLOSURE (i)
 

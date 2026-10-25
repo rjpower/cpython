@@ -369,6 +369,7 @@ fb_row_of(_PyFbHeader *h)
     fb_row row = {0};
     switch (h->kind) {
         case FB_UNARY:
+        case FB_BRANCH:     // POP_JUMP_IF_FALSE and _TRUE
             row.type_version = ((_PyFbUnary *)h)->type_version;
             break;
         case FB_BINARY:
@@ -439,6 +440,7 @@ fb_begin(_PyInstr *instr)
     // Constant sizes, so that the compiler inlines the stores
     switch (h->kind) {
         case FB_UNARY:
+        case FB_BRANCH:     // POP_JUMP_IF_FALSE and _TRUE
             memset(h + 1, 0, sizeof(_PyFbUnary) - sizeof(_PyFbHeader));
             break;
         case FB_BINARY:
@@ -3066,14 +3068,20 @@ check_type_always_true(PyTypeObject *ty)
     return 0;
 }
 
-Py_NO_INLINE void
-_Py_Specialize_ToBool(_PyStackRef value_o, _PyInstr *instr)
+/* The specialisations of a truth test, in the order of truth_ops below */
+enum { TRUTH_BOOL, TRUTH_INT, TRUTH_LIST, TRUTH_NONE, TRUTH_STR,
+       TRUTH_ALWAYS_TRUE, TRUTH_COUNT };
+
+/* TO_BOOL and the conditional jumps, which test the truth of a value the
+ * same way, choose a specialisation from their own row of ops. */
+static void
+specialize_truth(_PyStackRef value_o, _PyInstr *instr, const uint8_t *ops)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[TO_BOOL] == INLINE_CACHE_ENTRIES_TO_BOOL);
     fb_begin_unary(instr, PyStackRef_TYPE(value_o));
     if (PyStackRef_IsInlineInt(value_o)) {
-        specialize(instr, TO_BOOL_INT);
+        specialize(instr, ops[TRUTH_INT]);
         return;
     }
     if (PyStackRef_IsInlineFloat(value_o)) {
@@ -3084,23 +3092,23 @@ _Py_Specialize_ToBool(_PyStackRef value_o, _PyInstr *instr)
     PyObject *value = PyStackRef_AsPyObjectBorrow(value_o);
     uint8_t specialized_op;
     if (PyBool_Check(value)) {
-        specialized_op = TO_BOOL_BOOL;
+        specialized_op = ops[TRUTH_BOOL];
         goto success;
     }
     if (PyLong_CheckExact(value)) {
-        specialized_op = TO_BOOL_INT;
+        specialized_op = ops[TRUTH_INT];
         goto success;
     }
     if (PyList_CheckExact(value)) {
-        specialized_op = TO_BOOL_LIST;
+        specialized_op = ops[TRUTH_LIST];
         goto success;
     }
     if (Py_IsNone(value)) {
-        specialized_op = TO_BOOL_NONE;
+        specialized_op = ops[TRUTH_NONE];
         goto success;
     }
     if (PyUnicode_CheckExact(value)) {
-        specialized_op = TO_BOOL_STR;
+        specialized_op = ops[TRUTH_STR];
         goto success;
     }
     if (PyType_HasFeature(Py_TYPE(value), Py_TPFLAGS_HEAPTYPE)) {
@@ -3118,7 +3126,7 @@ _Py_Specialize_ToBool(_PyStackRef value_o, _PyInstr *instr)
         assert(err == 0);
         assert(version);
         ((_PyFbUnary *)instr_entry(instr))->type_version = version;
-        specialized_op = TO_BOOL_ALWAYS_TRUE;
+        specialized_op = ops[TRUTH_ALWAYS_TRUE];
         goto success;
     }
 
@@ -3128,6 +3136,35 @@ failure:
     return;
 success:
     specialize(instr, specialized_op);
+}
+
+Py_NO_INLINE void
+_Py_Specialize_ToBool(_PyStackRef value_o, _PyInstr *instr)
+{
+    static const uint8_t ops[TRUTH_COUNT] = {
+        TO_BOOL_BOOL, TO_BOOL_INT, TO_BOOL_LIST, TO_BOOL_NONE, TO_BOOL_STR,
+        TO_BOOL_ALWAYS_TRUE,
+    };
+    specialize_truth(value_o, instr, ops);
+}
+
+Py_NO_INLINE void
+_Py_Specialize_PopJumpIf(_PyStackRef value_o, _PyInstr *instr)
+{
+    static const uint8_t if_false[TRUTH_COUNT] = {
+        POP_JUMP_IF_FALSE_BOOL, POP_JUMP_IF_FALSE_INT, POP_JUMP_IF_FALSE_LIST,
+        POP_JUMP_IF_FALSE_NONE, POP_JUMP_IF_FALSE_STR,
+        POP_JUMP_IF_FALSE_ALWAYS_TRUE,
+    };
+    static const uint8_t if_true[TRUTH_COUNT] = {
+        POP_JUMP_IF_TRUE_BOOL, POP_JUMP_IF_TRUE_INT, POP_JUMP_IF_TRUE_LIST,
+        POP_JUMP_IF_TRUE_NONE, POP_JUMP_IF_TRUE_STR,
+        POP_JUMP_IF_TRUE_ALWAYS_TRUE,
+    };
+    int opcode = _PyOpcode_Deopt[instr_opcode(instr)];
+    assert(opcode == POP_JUMP_IF_FALSE || opcode == POP_JUMP_IF_TRUE);
+    specialize_truth(value_o, instr,
+                     opcode == POP_JUMP_IF_FALSE ? if_false : if_true);
 }
 
 #ifdef Py_STATS

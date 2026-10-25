@@ -1853,6 +1853,32 @@ class TestSpecializer(TestBase):
     @cpython_only
     @requires_specialization
     def test_to_bool(self):
+        # TO_BOOL remains only where a bool is a value, as for "not x"
+        def to_bool_value(elems):
+            return [not e for e in elems]
+
+        cases = (("BOOL", [True, False]), ("INT", [0, 1, 2**40]),
+                 ("LIST", [[], [1]]), ("NONE", [None]), ("STR", ["", "a"]))
+        for kind, values in cases:
+            with self.subTest(kind=kind):
+                f = types.FunctionType(to_bool_value.__code__.replace(), {})
+                elems = values * _testinternalcapi.SPECIALIZATION_THRESHOLD
+                self.assertEqual(f(elems), [not e for e in elems])
+                self.assert_specialized(f, f"TO_BOOL_{kind}")
+                self.assert_no_opcode(f, "TO_BOOL")
+
+    def assert_jump_specialized(self, f, kind):
+        # Either sense: the layout of the blocks may invert a jump
+        opnames = {i.opname for i in dis.get_instructions(f, adaptive=True)}
+        self.assertTrue({f"POP_JUMP_IF_FALSE_{kind}",
+                         f"POP_JUMP_IF_TRUE_{kind}"} & opnames, opnames)
+        self.assertFalse({"POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE",
+                          "TO_BOOL", "UNARY_NOT"} & opnames, opnames)
+
+    @cpython_only
+    @requires_specialization
+    def test_pop_jump_if(self):
+        # The conditional jumps test truth, and specialise as TO_BOOL does
         def to_bool_bool():
             true_cnt, false_cnt = 0, 0
             elems = [e % 2 == 0 for e in range(_testinternalcapi.SPECIALIZATION_THRESHOLD)]
@@ -1866,8 +1892,7 @@ class TestSpecializer(TestBase):
             self.assertEqual(false_cnt, d)
 
         to_bool_bool()
-        self.assert_specialized(to_bool_bool, "TO_BOOL_BOOL")
-        self.assert_no_opcode(to_bool_bool, "TO_BOOL")
+        self.assert_jump_specialized(to_bool_bool, "BOOL")
 
         def to_bool_int():
             count = 0
@@ -1879,8 +1904,7 @@ class TestSpecializer(TestBase):
             self.assertEqual(count, _testinternalcapi.SPECIALIZATION_THRESHOLD - 2)
 
         to_bool_int()
-        self.assert_specialized(to_bool_int, "TO_BOOL_INT")
-        self.assert_no_opcode(to_bool_int, "TO_BOOL")
+        self.assert_jump_specialized(to_bool_int, "INT")
 
         def to_bool_list():
             count = 0
@@ -1891,8 +1915,7 @@ class TestSpecializer(TestBase):
             self.assertEqual(count, sum(range(_testinternalcapi.SPECIALIZATION_THRESHOLD)))
 
         to_bool_list()
-        self.assert_specialized(to_bool_list, "TO_BOOL_LIST")
-        self.assert_no_opcode(to_bool_list, "TO_BOOL")
+        self.assert_jump_specialized(to_bool_list, "LIST")
 
         def to_bool_none():
             count = 0
@@ -1903,8 +1926,7 @@ class TestSpecializer(TestBase):
             self.assertEqual(count, _testinternalcapi.SPECIALIZATION_THRESHOLD)
 
         to_bool_none()
-        self.assert_specialized(to_bool_none, "TO_BOOL_NONE")
-        self.assert_no_opcode(to_bool_none, "TO_BOOL")
+        self.assert_jump_specialized(to_bool_none, "NONE")
 
         def to_bool_str():
             count = 0
@@ -1915,8 +1937,7 @@ class TestSpecializer(TestBase):
             self.assertEqual(count, _testinternalcapi.SPECIALIZATION_THRESHOLD - 1)
 
         to_bool_str()
-        self.assert_specialized(to_bool_str, "TO_BOOL_STR")
-        self.assert_no_opcode(to_bool_str, "TO_BOOL")
+        self.assert_jump_specialized(to_bool_str, "STR")
 
     @cpython_only
     @requires_specialization
@@ -2506,7 +2527,7 @@ class TestFeedback(TestBase):
                         o[x] = o.z
                         a, b = o
                 print(len(args), *args, **kw)
-                print(a, end=b)
+                print(a, end=not b)
                 return super().m
 
         def g(it):

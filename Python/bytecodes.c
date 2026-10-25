@@ -541,10 +541,12 @@ dummy_func(
 
         macro(TO_BOOL) = unused/1 + _SPECIALIZE_TO_BOOL + unused/2 + _TO_BOOL;
 
-        inst(TO_BOOL_BOOL, (unused/1, unused/2, value -- value)) {
+        op(_GUARD_TOS_BOOL, (value -- value)) {
             EXIT_IF(!PyStackRef_BoolCheck(value));
             STAT_INC(TO_BOOL, hit);
         }
+
+        macro(TO_BOOL_BOOL) = unused/1 + unused/2 + _GUARD_TOS_BOOL;
 
         inline_ok op(_TO_BOOL_INT, (value -- res, v)) {
             STAT_INC(TO_BOOL, hit);
@@ -589,13 +591,15 @@ dummy_func(
             DEAD(value);
         }
 
-        inst(TO_BOOL_NONE, (unused/1, unused/2, value -- res)) {
+        op(_TO_BOOL_NONE, (value -- res)) {
             // This one is a bit weird, because we expect *some* failures:
             EXIT_IF(!PyStackRef_IsNone(value));
             DEAD(value);
             STAT_INC(TO_BOOL, hit);
             res = PyStackRef_False;
         }
+
+        macro(TO_BOOL_NONE) = unused/1 + unused/2 + _TO_BOOL_NONE;
 
         op(_GUARD_NOS_COMPACT_ASCII, (nos, unused -- nos, unused)) {
             PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
@@ -3417,9 +3421,71 @@ dummy_func(
             }
         }
 
-        macro(POP_JUMP_IF_TRUE) = unused/1 + _POP_JUMP_IF_TRUE;
+        // A conditional jump tests the truth of any value: the compiler
+        // drops the TO_BOOL before it (Python/flowgraph.c), so the jumps
+        // specialise as TO_BOOL does, and their entries keep the branch
+        // history with the specialisation counter.
+        family(POP_JUMP_IF_FALSE, INLINE_CACHE_ENTRIES_TO_BOOL) = {
+            POP_JUMP_IF_FALSE_ALWAYS_TRUE,
+            POP_JUMP_IF_FALSE_BOOL,
+            POP_JUMP_IF_FALSE_INT,
+            POP_JUMP_IF_FALSE_LIST,
+            POP_JUMP_IF_FALSE_NONE,
+            POP_JUMP_IF_FALSE_STR,
+        };
 
-        macro(POP_JUMP_IF_FALSE) = unused/1 + _POP_JUMP_IF_FALSE;
+        family(POP_JUMP_IF_TRUE, INLINE_CACHE_ENTRIES_TO_BOOL) = {
+            POP_JUMP_IF_TRUE_ALWAYS_TRUE,
+            POP_JUMP_IF_TRUE_BOOL,
+            POP_JUMP_IF_TRUE_INT,
+            POP_JUMP_IF_TRUE_LIST,
+            POP_JUMP_IF_TRUE_NONE,
+            POP_JUMP_IF_TRUE_STR,
+        };
+
+        specializing op(_SPECIALIZE_POP_JUMP_IF, (value -- value)) {
+            #if ENABLE_SPECIALIZATION
+            _PyFbHeader *feedback = FB_COUNTER();
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                next_instr = this_instr;
+                _Py_Specialize_PopJumpIf(value, next_instr);
+                DISPATCH_SAME_OPARG();
+            }
+            OPCODE_DEFERRED_INC(TO_BOOL);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            #endif  /* ENABLE_SPECIALIZATION */
+        }
+
+        macro(POP_JUMP_IF_TRUE) =
+            unused/1 + _SPECIALIZE_POP_JUMP_IF + unused/2 + _TO_BOOL + _POP_JUMP_IF_TRUE;
+
+        macro(POP_JUMP_IF_FALSE) =
+            unused/1 + _SPECIALIZE_POP_JUMP_IF + unused/2 + _TO_BOOL + _POP_JUMP_IF_FALSE;
+
+        macro(POP_JUMP_IF_FALSE_BOOL) =
+            unused/1 + unused/2 + _GUARD_TOS_BOOL + _POP_JUMP_IF_FALSE;
+        macro(POP_JUMP_IF_TRUE_BOOL) =
+            unused/1 + unused/2 + _GUARD_TOS_BOOL + _POP_JUMP_IF_TRUE;
+        macro(POP_JUMP_IF_FALSE_INT) =
+            _GUARD_TOS_EXACT_INT + unused/1 + unused/2 + _TO_BOOL_INT + _POP_TOP_INT + _POP_JUMP_IF_FALSE;
+        macro(POP_JUMP_IF_TRUE_INT) =
+            _GUARD_TOS_EXACT_INT + unused/1 + unused/2 + _TO_BOOL_INT + _POP_TOP_INT + _POP_JUMP_IF_TRUE;
+        macro(POP_JUMP_IF_FALSE_LIST) =
+            _GUARD_TOS_LIST + unused/1 + unused/2 + _TO_BOOL_LIST + POP_TOP + _POP_JUMP_IF_FALSE;
+        macro(POP_JUMP_IF_TRUE_LIST) =
+            _GUARD_TOS_LIST + unused/1 + unused/2 + _TO_BOOL_LIST + POP_TOP + _POP_JUMP_IF_TRUE;
+        macro(POP_JUMP_IF_FALSE_NONE) =
+            unused/1 + unused/2 + _TO_BOOL_NONE + _POP_JUMP_IF_FALSE;
+        macro(POP_JUMP_IF_TRUE_NONE) =
+            unused/1 + unused/2 + _TO_BOOL_NONE + _POP_JUMP_IF_TRUE;
+        macro(POP_JUMP_IF_FALSE_STR) =
+            _GUARD_TOS_UNICODE + unused/1 + unused/2 + _TO_BOOL_STR + _POP_TOP_UNICODE + _POP_JUMP_IF_FALSE;
+        macro(POP_JUMP_IF_TRUE_STR) =
+            _GUARD_TOS_UNICODE + unused/1 + unused/2 + _TO_BOOL_STR + _POP_TOP_UNICODE + _POP_JUMP_IF_TRUE;
+        macro(POP_JUMP_IF_FALSE_ALWAYS_TRUE) =
+            unused/1 + _GUARD_TYPE_VERSION + _REPLACE_WITH_TRUE + POP_TOP + _POP_JUMP_IF_FALSE;
+        macro(POP_JUMP_IF_TRUE_ALWAYS_TRUE) =
+            unused/1 + _GUARD_TYPE_VERSION + _REPLACE_WITH_TRUE + POP_TOP + _POP_JUMP_IF_TRUE;
 
         macro(POP_JUMP_IF_NONE) = unused/1 + _IS_NONE + _POP_JUMP_IF_TRUE;
 
@@ -5596,7 +5662,7 @@ dummy_func(
             _CHECK_PERIODIC +
             _MONITOR_JUMP_BACKWARD;
 
-        inst(INSTRUMENTED_POP_JUMP_IF_TRUE, (unused/1, cond -- )) {
+        op(_INSTRUMENTED_POP_JUMP_IF_TRUE, (cond -- )) {
             assert(PyStackRef_BoolCheck(cond));
             int jump = PyStackRef_IsTrue(cond);
             DEAD(cond);
@@ -5606,7 +5672,7 @@ dummy_func(
             }
         }
 
-        inst(INSTRUMENTED_POP_JUMP_IF_FALSE, (unused/1, cond -- )) {
+        op(_INSTRUMENTED_POP_JUMP_IF_FALSE, (cond -- )) {
             assert(PyStackRef_BoolCheck(cond));
             int jump = PyStackRef_IsFalse(cond);
             DEAD(cond);
@@ -5615,6 +5681,12 @@ dummy_func(
                 INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
         }
+
+        macro(INSTRUMENTED_POP_JUMP_IF_TRUE) =
+            unused/1 + unused/2 + _TO_BOOL + _INSTRUMENTED_POP_JUMP_IF_TRUE;
+
+        macro(INSTRUMENTED_POP_JUMP_IF_FALSE) =
+            unused/1 + unused/2 + _TO_BOOL + _INSTRUMENTED_POP_JUMP_IF_FALSE;
 
         inst(INSTRUMENTED_POP_JUMP_IF_NONE, (unused/1, value -- )) {
             int jump = PyStackRef_IsNone(value);

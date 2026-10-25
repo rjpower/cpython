@@ -424,3 +424,19 @@ branch and return mispredicts are lower in tier 0; _PyTier0_Continue and the
 interpreter's handler copy are under 1% of cycles.
 
 Clean pyperformance timing of the IR-only snapshot (fed4b13e878) started 21:46.
+
+### IR-only timing (0fb54f52d09) and stackref-debug fix (d3af3926dbc)
+
+Clean 24-benchmark timing of fed4b13e878: geomean 0.994 vs baseline, 1.006 vs
+the tagged-values build. Wins: spectral_norm 0.567 (0.88 vs tagged), chaos
+0.794, raytrace 0.939. Losses vs tagged values: unpack_sequence 1.19,
+generators 1.11, deepcopy family 1.05-1.08, coroutines 1.04. Time does not
+follow the 1-3% per-loop instruction gains; the IR agent has 1 hour to find
+where the cycles go (one-time lowering in short worker processes, generator
+resume through the IR, handler growth) and take a cheap fix or document it.
+
+Stackref-debug abort was a checker gap: a specialised handler's IR_BORROW_KNOWN
+borrow of an absorbed local was tracked, and a failed guard jumped to the
+family head without closing it. ir_generator now emits IR_DROP_BORROW before
+every deopt or exit for held borrows (51 sites; no-op outside the debug
+build). dev-stackrefdebug boots and passes the targeted set again.

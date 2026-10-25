@@ -801,6 +801,538 @@ static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_UNKNOWN_OPCODE(TAIL_CALL_PARAMS)
 JUMP_TO_LABEL(error);
 }
 
+#ifdef Py_TIER0
+static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_JUMP_BACKWARD(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_RESUME(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_RESUME_CHECK(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_RETURN_VALUE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_YIELD_VALUE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_pop_2_error(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_pop_1_error(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_error(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_exception_unwind(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_exit_unwind(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_exit_unwind_notrace(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_start_frame(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_ADD_FLOAT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_ADD_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_ADD_UNICODE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_AND_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_EXTEND(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_FLOOR_DIVIDE_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_INPLACE_ADD_UNICODE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_LSHIFT_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_MULTIPLY_FLOAT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_MULTIPLY_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_OR_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_REMAINDER_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_RSHIFT_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_SUBSCR_DICT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_SUBSCR_GETITEM(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_SUBSCR_LIST_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_SUBSCR_LIST_SLICE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_SUBSCR_STR_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_SUBSCR_TUPLE_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_SUBSCR_USTR_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_SUBTRACT_FLOAT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_SUBTRACT_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_TRUEDIV_FLOAT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_OP_XOR_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BINARY_SLICE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BUILD_INTERPOLATION(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BUILD_LIST(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BUILD_MAP(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BUILD_SET(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BUILD_SLICE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BUILD_STRING(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BUILD_TEMPLATE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_BUILD_TUPLE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CACHE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_ALLOC_AND_ENTER_INIT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_BOUND_METHOD_EXACT_ARGS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_BOUND_METHOD_GENERAL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_BUILTIN_CLASS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_BUILTIN_FAST(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_BUILTIN_FAST_WITH_KEYWORDS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_BUILTIN_O(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_EX_NON_PY_GENERAL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_EX_PY(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_FUNCTION_EX(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_INTRINSIC_1(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_INTRINSIC_2(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_ISINSTANCE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_KW(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_KW_BOUND_METHOD(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_KW_NON_PY(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_KW_PY(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_LEN(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_LIST_APPEND(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_METHOD_DESCRIPTOR_FAST(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_METHOD_DESCRIPTOR_NOARGS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_METHOD_DESCRIPTOR_O(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_NON_PY_GENERAL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_PY_EXACT_ARGS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_PY_GENERAL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_STR_1(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_TUPLE_1(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CALL_TYPE_1(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CHECK_EG_MATCH(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CHECK_EXC_MATCH(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CLEANUP_THROW(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_COMPARE_OP(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_COMPARE_OP_FLOAT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_COMPARE_OP_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_COMPARE_OP_STR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CONTAINS_OP(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CONTAINS_OP_DICT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CONTAINS_OP_SET(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_CONVERT_VALUE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_COPY(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_COPY_FREE_VARS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_DELETE_DEREF(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_DELETE_FAST(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_DELETE_SUBSCR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_DICT_MERGE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_DICT_UPDATE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_END_ASYNC_FOR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_END_FOR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_END_SEND(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_EXIT_INIT_CHECK(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_EXTENDED_ARG(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_FORMAT_SIMPLE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_FORMAT_WITH_SPEC(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_FOR_ITER(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_FOR_ITER_GEN(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_FOR_ITER_LIST(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_FOR_ITER_RANGE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_FOR_ITER_TUPLE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_FOR_ITER_VIRTUAL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_GET_AITER(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_GET_ANEXT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_GET_AWAITABLE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_GET_ITER(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_GET_ITER_SELF(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_GET_ITER_VIRTUAL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_GET_LEN(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_IMPORT_FROM(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_IMPORT_NAME(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_CALL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_CALL_FUNCTION_EX(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_CALL_KW(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_END_ASYNC_FOR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_END_FOR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_END_SEND(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_FOR_ITER(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_INSTRUCTION(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_JUMP_BACKWARD(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_JUMP_FORWARD(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_LINE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_LOAD_SUPER_ATTR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_NOT_TAKEN(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_POP_ITER(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_POP_JUMP_IF_FALSE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_POP_JUMP_IF_NONE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_POP_JUMP_IF_NOT_NONE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_POP_JUMP_IF_TRUE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_RESUME(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_RETURN_VALUE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INSTRUMENTED_YIELD_VALUE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_INTERPRETER_EXIT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_IR_EXT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_IR_LOWER(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_IR_REMAP(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_IR_SUPER_COMPARE_OP_FLOAT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_IR_SUPER_COMPARE_OP_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_IR_SUPER_COMPARE_OP_STR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_IS_OP(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_JUMP_BACKWARD(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_JUMP_BACKWARD_NO_INTERRUPT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_JUMP_FORWARD(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LIST_APPEND(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LIST_EXTEND(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR_CLASS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR_CLASS_WITH_METACLASS_CHECK(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR_INSTANCE_VALUE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR_METHOD_LAZY_DICT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR_METHOD_NO_DICT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR_METHOD_WITH_VALUES(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR_MODULE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR_NONDESCRIPTOR_NO_DICT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR_PROPERTY(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR_SHAPE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR_SLOT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_ATTR_WITH_HINT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_BUILD_CLASS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_COMMON_CONSTANT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_CONST(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_CONST_INLINE_FLOAT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_CONST_INLINE_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_DEREF(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_FAST(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_FAST_AND_CLEAR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_FAST_BORROW(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_FAST_BORROW_LOAD_FAST_BORROW(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_FAST_CHECK(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_FAST_LOAD_FAST(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_FROM_DICT_OR_DEREF(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_FROM_DICT_OR_GLOBALS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_GLOBAL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_GLOBAL_BUILTIN(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_GLOBAL_MODULE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_LOCALS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_NAME(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_SMALL_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_SMALL_INT_INLINE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_SPECIAL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_SUPER_ATTR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_SUPER_ATTR_ATTR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LOAD_SUPER_ATTR_METHOD(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_MAKE_CELL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_MAKE_FUNCTION(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_MAP_ADD(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_MATCH_CLASS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_MATCH_KEYS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_MATCH_MAPPING(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_MATCH_SEQUENCE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_NOP(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_NOT_TAKEN(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_POP_EXCEPT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_POP_ITER(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_POP_JUMP_IF_FALSE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_POP_JUMP_IF_NONE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_POP_JUMP_IF_NOT_NONE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_POP_JUMP_IF_TRUE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_POP_TOP(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_PUSH_EXC_INFO(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_PUSH_NULL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_RAISE_VARARGS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_RERAISE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_RESERVED(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_RESUME(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_RESUME_CHECK(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_RETURN_GENERATOR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_RETURN_VALUE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_SEND(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_SEND_ASYNC_GEN(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_SEND_GEN(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_SEND_VIRTUAL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_SETUP_ANNOTATIONS(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_SET_ADD(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_SET_FUNCTION_ATTRIBUTE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_SET_UPDATE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_ATTR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_ATTR_INSTANCE_VALUE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_ATTR_SHAPE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_ATTR_SHAPE_ADD(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_ATTR_SLOT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_ATTR_WITH_HINT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_DEREF(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_FAST(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_FAST_LOAD_FAST(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_FAST_STORE_FAST(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_GLOBAL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_NAME(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_SLICE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_SUBSCR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_SUBSCR_DICT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_STORE_SUBSCR_LIST_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_SWAP(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_TO_BOOL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_TO_BOOL_ALWAYS_TRUE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_TO_BOOL_BOOL(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_TO_BOOL_INT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_TO_BOOL_LIST(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_TO_BOOL_NONE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_TO_BOOL_STR(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_UNARY_INVERT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_UNARY_NEGATIVE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_UNARY_NOT(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_UNPACK_EX(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_UNPACK_SEQUENCE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_UNPACK_SEQUENCE_LIST(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_UNPACK_SEQUENCE_TUPLE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_UNPACK_SEQUENCE_TWO_TUPLE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_WITH_EXCEPT_START(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_YIELD_VALUE(TAIL_CALL_PARAMS) __attribute__((unused));
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_HOOK_JUMP_BACKWARD(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_HOOK_RESUME(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_HOOK_RESUME_CHECK(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_HOOK_RETURN_VALUE(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_HOOK_YIELD_VALUE(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TIER0_LEAVE(TAIL_CALL_PARAMS);
+
+static const py_tail_call_funcptr _PyTier0_CallTable[262] = {
+    [0] = _TIER0_CACHE,
+    [1] = _TIER0_BINARY_SLICE,
+    [2] = _TIER0_BUILD_TEMPLATE,
+    [3] = _TIER0_BINARY_OP_INPLACE_ADD_UNICODE,
+    [4] = _TIER0_CALL_FUNCTION_EX,
+    [5] = _TIER0_CHECK_EG_MATCH,
+    [6] = _TIER0_CHECK_EXC_MATCH,
+    [7] = _TIER0_CLEANUP_THROW,
+    [8] = _TIER0_DELETE_SUBSCR,
+    [9] = _TIER0_END_FOR,
+    [10] = _TIER0_END_SEND,
+    [11] = _TIER0_EXIT_INIT_CHECK,
+    [12] = _TIER0_FORMAT_SIMPLE,
+    [13] = _TIER0_FORMAT_WITH_SPEC,
+    [14] = _TIER0_GET_AITER,
+    [15] = _TIER0_GET_ANEXT,
+    [16] = _TIER0_GET_LEN,
+    [17] = _TIER0_RESERVED,
+    [18] = _TIER0_LEAVE,
+    [19] = _TIER0_LOAD_BUILD_CLASS,
+    [20] = _TIER0_LOAD_LOCALS,
+    [21] = _TIER0_MAKE_FUNCTION,
+    [22] = _TIER0_MATCH_KEYS,
+    [23] = _TIER0_MATCH_MAPPING,
+    [24] = _TIER0_MATCH_SEQUENCE,
+    [25] = _TIER0_NOP,
+    [26] = _TIER0_NOT_TAKEN,
+    [27] = _TIER0_POP_EXCEPT,
+    [28] = _TIER0_POP_ITER,
+    [29] = _TIER0_POP_TOP,
+    [30] = _TIER0_PUSH_EXC_INFO,
+    [31] = _TIER0_PUSH_NULL,
+    [32] = _TIER0_RETURN_GENERATOR,
+    [33] = _TIER0_RETURN_VALUE,
+    [34] = _TIER0_SETUP_ANNOTATIONS,
+    [35] = _TIER0_STORE_SLICE,
+    [36] = _TIER0_STORE_SUBSCR,
+    [37] = _TIER0_TO_BOOL,
+    [38] = _TIER0_UNARY_INVERT,
+    [39] = _TIER0_UNARY_NEGATIVE,
+    [40] = _TIER0_UNARY_NOT,
+    [41] = _TIER0_WITH_EXCEPT_START,
+    [42] = _TIER0_BINARY_OP,
+    [43] = _TIER0_BUILD_INTERPOLATION,
+    [44] = _TIER0_BUILD_LIST,
+    [45] = _TIER0_BUILD_MAP,
+    [46] = _TIER0_BUILD_SET,
+    [47] = _TIER0_BUILD_SLICE,
+    [48] = _TIER0_BUILD_STRING,
+    [49] = _TIER0_BUILD_TUPLE,
+    [50] = _TIER0_CALL,
+    [51] = _TIER0_CALL_INTRINSIC_1,
+    [52] = _TIER0_CALL_INTRINSIC_2,
+    [53] = _TIER0_CALL_KW,
+    [54] = _TIER0_COMPARE_OP,
+    [55] = _TIER0_CONTAINS_OP,
+    [56] = _TIER0_CONVERT_VALUE,
+    [57] = _TIER0_COPY,
+    [58] = _TIER0_COPY_FREE_VARS,
+    [59] = _TIER0_DELETE_DEREF,
+    [60] = _TIER0_DELETE_FAST,
+    [61] = _TIER0_DICT_MERGE,
+    [62] = _TIER0_DICT_UPDATE,
+    [63] = _TIER0_END_ASYNC_FOR,
+    [64] = _TIER0_EXTENDED_ARG,
+    [65] = _TIER0_FOR_ITER,
+    [66] = _TIER0_GET_AWAITABLE,
+    [67] = _TIER0_GET_ITER,
+    [68] = _TIER0_IMPORT_FROM,
+    [69] = _TIER0_IMPORT_NAME,
+    [70] = _TIER0_IS_OP,
+    [71] = _TIER0_JUMP_BACKWARD,
+    [72] = _TIER0_JUMP_BACKWARD_NO_INTERRUPT,
+    [73] = _TIER0_JUMP_FORWARD,
+    [74] = _TIER0_LIST_APPEND,
+    [75] = _TIER0_LIST_EXTEND,
+    [76] = _TIER0_LOAD_ATTR,
+    [77] = _TIER0_LOAD_COMMON_CONSTANT,
+    [78] = _TIER0_LOAD_CONST,
+    [79] = _TIER0_LOAD_DEREF,
+    [80] = _TIER0_LOAD_FAST,
+    [81] = _TIER0_LOAD_FAST_AND_CLEAR,
+    [82] = _TIER0_LOAD_FAST_BORROW,
+    [83] = _TIER0_LOAD_FAST_BORROW_LOAD_FAST_BORROW,
+    [84] = _TIER0_LOAD_FAST_CHECK,
+    [85] = _TIER0_LOAD_FAST_LOAD_FAST,
+    [86] = _TIER0_LOAD_FROM_DICT_OR_DEREF,
+    [87] = _TIER0_LOAD_FROM_DICT_OR_GLOBALS,
+    [88] = _TIER0_LOAD_GLOBAL,
+    [89] = _TIER0_LOAD_NAME,
+    [90] = _TIER0_LOAD_SMALL_INT,
+    [91] = _TIER0_LOAD_SPECIAL,
+    [92] = _TIER0_LOAD_SUPER_ATTR,
+    [93] = _TIER0_MAKE_CELL,
+    [94] = _TIER0_MAP_ADD,
+    [95] = _TIER0_MATCH_CLASS,
+    [96] = _TIER0_POP_JUMP_IF_FALSE,
+    [97] = _TIER0_POP_JUMP_IF_NONE,
+    [98] = _TIER0_POP_JUMP_IF_NOT_NONE,
+    [99] = _TIER0_POP_JUMP_IF_TRUE,
+    [100] = _TIER0_RAISE_VARARGS,
+    [101] = _TIER0_RERAISE,
+    [102] = _TIER0_SEND,
+    [103] = _TIER0_SET_ADD,
+    [104] = _TIER0_SET_FUNCTION_ATTRIBUTE,
+    [105] = _TIER0_SET_UPDATE,
+    [106] = _TIER0_STORE_ATTR,
+    [107] = _TIER0_STORE_DEREF,
+    [108] = _TIER0_STORE_FAST,
+    [109] = _TIER0_STORE_FAST_LOAD_FAST,
+    [110] = _TIER0_STORE_FAST_STORE_FAST,
+    [111] = _TIER0_STORE_GLOBAL,
+    [112] = _TIER0_STORE_NAME,
+    [113] = _TIER0_SWAP,
+    [114] = _TIER0_UNPACK_EX,
+    [115] = _TIER0_UNPACK_SEQUENCE,
+    [116] = _TIER0_YIELD_VALUE,
+    [117] = _TIER0_LEAVE,
+    [118] = _TIER0_LEAVE,
+    [119] = _TIER0_LEAVE,
+    [120] = _TIER0_LEAVE,
+    [121] = _TIER0_LEAVE,
+    [122] = _TIER0_LEAVE,
+    [123] = _TIER0_LEAVE,
+    [124] = _TIER0_LEAVE,
+    [125] = _TIER0_LEAVE,
+    [126] = _TIER0_LEAVE,
+    [127] = _TIER0_LEAVE,
+    [128] = _TIER0_RESUME,
+    [129] = _TIER0_BINARY_OP_ADD_FLOAT,
+    [130] = _TIER0_BINARY_OP_ADD_INT,
+    [131] = _TIER0_BINARY_OP_ADD_UNICODE,
+    [132] = _TIER0_BINARY_OP_AND_INT,
+    [133] = _TIER0_BINARY_OP_EXTEND,
+    [134] = _TIER0_BINARY_OP_FLOOR_DIVIDE_INT,
+    [135] = _TIER0_BINARY_OP_LSHIFT_INT,
+    [136] = _TIER0_BINARY_OP_MULTIPLY_FLOAT,
+    [137] = _TIER0_BINARY_OP_MULTIPLY_INT,
+    [138] = _TIER0_BINARY_OP_OR_INT,
+    [139] = _TIER0_BINARY_OP_REMAINDER_INT,
+    [140] = _TIER0_BINARY_OP_RSHIFT_INT,
+    [141] = _TIER0_BINARY_OP_SUBSCR_DICT,
+    [142] = _TIER0_BINARY_OP_SUBSCR_GETITEM,
+    [143] = _TIER0_BINARY_OP_SUBSCR_LIST_INT,
+    [144] = _TIER0_BINARY_OP_SUBSCR_LIST_SLICE,
+    [145] = _TIER0_BINARY_OP_SUBSCR_STR_INT,
+    [146] = _TIER0_BINARY_OP_SUBSCR_TUPLE_INT,
+    [147] = _TIER0_BINARY_OP_SUBSCR_USTR_INT,
+    [148] = _TIER0_BINARY_OP_SUBTRACT_FLOAT,
+    [149] = _TIER0_BINARY_OP_SUBTRACT_INT,
+    [150] = _TIER0_BINARY_OP_TRUEDIV_FLOAT,
+    [151] = _TIER0_BINARY_OP_XOR_INT,
+    [152] = _TIER0_CALL_ALLOC_AND_ENTER_INIT,
+    [153] = _TIER0_CALL_BOUND_METHOD_EXACT_ARGS,
+    [154] = _TIER0_CALL_BOUND_METHOD_GENERAL,
+    [155] = _TIER0_CALL_BUILTIN_CLASS,
+    [156] = _TIER0_CALL_BUILTIN_FAST,
+    [157] = _TIER0_CALL_BUILTIN_FAST_WITH_KEYWORDS,
+    [158] = _TIER0_CALL_BUILTIN_O,
+    [159] = _TIER0_CALL_EX_NON_PY_GENERAL,
+    [160] = _TIER0_CALL_EX_PY,
+    [161] = _TIER0_CALL_ISINSTANCE,
+    [162] = _TIER0_CALL_KW_BOUND_METHOD,
+    [163] = _TIER0_CALL_KW_NON_PY,
+    [164] = _TIER0_CALL_KW_PY,
+    [165] = _TIER0_CALL_LEN,
+    [166] = _TIER0_CALL_LIST_APPEND,
+    [167] = _TIER0_CALL_METHOD_DESCRIPTOR_FAST,
+    [168] = _TIER0_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS,
+    [169] = _TIER0_CALL_METHOD_DESCRIPTOR_NOARGS,
+    [170] = _TIER0_CALL_METHOD_DESCRIPTOR_O,
+    [171] = _TIER0_CALL_NON_PY_GENERAL,
+    [172] = _TIER0_CALL_PY_EXACT_ARGS,
+    [173] = _TIER0_CALL_PY_GENERAL,
+    [174] = _TIER0_CALL_STR_1,
+    [175] = _TIER0_CALL_TUPLE_1,
+    [176] = _TIER0_CALL_TYPE_1,
+    [177] = _TIER0_COMPARE_OP_FLOAT,
+    [178] = _TIER0_COMPARE_OP_INT,
+    [179] = _TIER0_COMPARE_OP_STR,
+    [180] = _TIER0_CONTAINS_OP_DICT,
+    [181] = _TIER0_CONTAINS_OP_SET,
+    [182] = _TIER0_FOR_ITER_GEN,
+    [183] = _TIER0_FOR_ITER_LIST,
+    [184] = _TIER0_FOR_ITER_RANGE,
+    [185] = _TIER0_FOR_ITER_TUPLE,
+    [186] = _TIER0_FOR_ITER_VIRTUAL,
+    [187] = _TIER0_GET_ITER_SELF,
+    [188] = _TIER0_GET_ITER_VIRTUAL,
+    [189] = _TIER0_LOAD_ATTR_CLASS,
+    [190] = _TIER0_LOAD_ATTR_CLASS_WITH_METACLASS_CHECK,
+    [191] = _TIER0_LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN,
+    [192] = _TIER0_LOAD_ATTR_INSTANCE_VALUE,
+    [193] = _TIER0_LOAD_ATTR_METHOD_LAZY_DICT,
+    [194] = _TIER0_LOAD_ATTR_METHOD_NO_DICT,
+    [195] = _TIER0_LOAD_ATTR_METHOD_WITH_VALUES,
+    [196] = _TIER0_LOAD_ATTR_MODULE,
+    [197] = _TIER0_LOAD_ATTR_NONDESCRIPTOR_NO_DICT,
+    [198] = _TIER0_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES,
+    [199] = _TIER0_LOAD_ATTR_PROPERTY,
+    [200] = _TIER0_LOAD_ATTR_SHAPE,
+    [201] = _TIER0_LOAD_ATTR_SLOT,
+    [202] = _TIER0_LOAD_ATTR_WITH_HINT,
+    [203] = _TIER0_LOAD_CONST_INLINE_FLOAT,
+    [204] = _TIER0_LOAD_CONST_INLINE_INT,
+    [205] = _TIER0_LOAD_GLOBAL_BUILTIN,
+    [206] = _TIER0_LOAD_GLOBAL_MODULE,
+    [207] = _TIER0_LOAD_SMALL_INT_INLINE,
+    [208] = _TIER0_LOAD_SUPER_ATTR_ATTR,
+    [209] = _TIER0_LOAD_SUPER_ATTR_METHOD,
+    [210] = _TIER0_RESUME_CHECK,
+    [211] = _TIER0_SEND_ASYNC_GEN,
+    [212] = _TIER0_SEND_GEN,
+    [213] = _TIER0_SEND_VIRTUAL,
+    [214] = _TIER0_STORE_ATTR_INSTANCE_VALUE,
+    [215] = _TIER0_STORE_ATTR_SHAPE,
+    [216] = _TIER0_STORE_ATTR_SHAPE_ADD,
+    [217] = _TIER0_STORE_ATTR_SLOT,
+    [218] = _TIER0_STORE_ATTR_WITH_HINT,
+    [219] = _TIER0_STORE_SUBSCR_DICT,
+    [220] = _TIER0_STORE_SUBSCR_LIST_INT,
+    [221] = _TIER0_TO_BOOL_ALWAYS_TRUE,
+    [222] = _TIER0_TO_BOOL_BOOL,
+    [223] = _TIER0_TO_BOOL_INT,
+    [224] = _TIER0_TO_BOOL_LIST,
+    [225] = _TIER0_TO_BOOL_NONE,
+    [226] = _TIER0_TO_BOOL_STR,
+    [227] = _TIER0_UNPACK_SEQUENCE_LIST,
+    [228] = _TIER0_UNPACK_SEQUENCE_TUPLE,
+    [229] = _TIER0_UNPACK_SEQUENCE_TWO_TUPLE,
+    [230] = _TIER0_LEAVE,
+    [231] = _TIER0_LEAVE,
+    [232] = _TIER0_LEAVE,
+    [233] = _TIER0_LEAVE,
+    [234] = _TIER0_LEAVE,
+    [235] = _TIER0_LEAVE,
+    [236] = _TIER0_LEAVE,
+    [237] = _TIER0_LEAVE,
+    [238] = _TIER0_LEAVE,
+    [239] = _TIER0_LEAVE,
+    [240] = _TIER0_LEAVE,
+    [241] = _TIER0_LEAVE,
+    [242] = _TIER0_LEAVE,
+    [243] = _TIER0_LEAVE,
+    [244] = _TIER0_LEAVE,
+    [245] = _TIER0_LEAVE,
+    [246] = _TIER0_LEAVE,
+    [247] = _TIER0_LEAVE,
+    [248] = _TIER0_LEAVE,
+    [249] = _TIER0_LEAVE,
+    [250] = _TIER0_LEAVE,
+    [251] = _TIER0_LEAVE,
+    [252] = _TIER0_LEAVE,
+    [253] = _TIER0_LEAVE,
+    [254] = _TIER0_LEAVE,
+    [255] = _TIER0_LEAVE,
+    [256] = _TIER0_LEAVE,
+    [257] = _TIER0_LEAVE,
+    [258] = _TIER0_LEAVE,
+    [259] = _TIER0_IR_SUPER_COMPARE_OP_FLOAT,
+    [260] = _TIER0_IR_SUPER_COMPARE_OP_INT,
+    [261] = _TIER0_IR_SUPER_COMPARE_OP_STR,
+};
+#endif /* Py_TIER0 */
+
 static py_tail_call_funcptr instruction_funcptr_handler_table[262] = {
     [0] = _TAIL_CALL_CACHE,
     [1] = _TAIL_CALL_BINARY_SLICE,
@@ -835,7 +1367,11 @@ static py_tail_call_funcptr instruction_funcptr_handler_table[262] = {
     [30] = _TAIL_CALL_PUSH_EXC_INFO,
     [31] = _TAIL_CALL_PUSH_NULL,
     [32] = _TAIL_CALL_RETURN_GENERATOR,
+    #ifdef Py_TIER0
+    [33] = _TIER0_HOOK_RETURN_VALUE,
+    #else
     [33] = _TAIL_CALL_RETURN_VALUE,
+    #endif
     [34] = _TAIL_CALL_SETUP_ANNOTATIONS,
     [35] = _TAIL_CALL_STORE_SLICE,
     [36] = _TAIL_CALL_STORE_SUBSCR,
@@ -873,7 +1409,11 @@ static py_tail_call_funcptr instruction_funcptr_handler_table[262] = {
     [68] = _TAIL_CALL_IMPORT_FROM,
     [69] = _TAIL_CALL_IMPORT_NAME,
     [70] = _TAIL_CALL_IS_OP,
+    #ifdef Py_TIER0
+    [71] = _TIER0_HOOK_JUMP_BACKWARD,
+    #else
     [71] = _TAIL_CALL_JUMP_BACKWARD,
+    #endif
     [72] = _TAIL_CALL_JUMP_BACKWARD_NO_INTERRUPT,
     [73] = _TAIL_CALL_JUMP_FORWARD,
     [74] = _TAIL_CALL_LIST_APPEND,
@@ -918,7 +1458,11 @@ static py_tail_call_funcptr instruction_funcptr_handler_table[262] = {
     [113] = _TAIL_CALL_SWAP,
     [114] = _TAIL_CALL_UNPACK_EX,
     [115] = _TAIL_CALL_UNPACK_SEQUENCE,
+    #ifdef Py_TIER0
+    [116] = _TIER0_HOOK_YIELD_VALUE,
+    #else
     [116] = _TAIL_CALL_YIELD_VALUE,
+    #endif
     [117] = _TAIL_CALL_UNKNOWN_OPCODE,
     [118] = _TAIL_CALL_UNKNOWN_OPCODE,
     [119] = _TAIL_CALL_UNKNOWN_OPCODE,
@@ -930,7 +1474,11 @@ static py_tail_call_funcptr instruction_funcptr_handler_table[262] = {
     [125] = _TAIL_CALL_UNKNOWN_OPCODE,
     [126] = _TAIL_CALL_UNKNOWN_OPCODE,
     [127] = _TAIL_CALL_UNKNOWN_OPCODE,
+    #ifdef Py_TIER0
+    [128] = _TIER0_HOOK_RESUME,
+    #else
     [128] = _TAIL_CALL_RESUME,
+    #endif
     [129] = _TAIL_CALL_BINARY_OP_ADD_FLOAT,
     [130] = _TAIL_CALL_BINARY_OP_ADD_INT,
     [131] = _TAIL_CALL_BINARY_OP_ADD_UNICODE,
@@ -1012,7 +1560,11 @@ static py_tail_call_funcptr instruction_funcptr_handler_table[262] = {
     [207] = _TAIL_CALL_LOAD_SMALL_INT_INLINE,
     [208] = _TAIL_CALL_LOAD_SUPER_ATTR_ATTR,
     [209] = _TAIL_CALL_LOAD_SUPER_ATTR_METHOD,
+    #ifdef Py_TIER0
+    [210] = _TIER0_HOOK_RESUME_CHECK,
+    #else
     [210] = _TAIL_CALL_RESUME_CHECK,
+    #endif
     [211] = _TAIL_CALL_SEND_ASYNC_GEN,
     [212] = _TAIL_CALL_SEND_GEN,
     [213] = _TAIL_CALL_SEND_VIRTUAL,

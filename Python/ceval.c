@@ -1112,6 +1112,9 @@ _PyObjectArray_Free(PyObject **array, PyObject **scratch)
 #if _Py_TAIL_CALL_INTERP
 #include "ir_targets.h"
 #include "generated_ir_cases.c.h"
+#ifdef Py_TIER0
+#include "ceval_tier0.c.h"
+#endif
 #endif
 
 

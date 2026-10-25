@@ -50,6 +50,7 @@
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
 #include "pycore_stackref.h"        // Py_STACKREF_INLINE_VALUES
+#include "pycore_tier0.h"           // _PyTier0_Clear()
 
 static_assert(sizeof(_PyIRBlock) % sizeof(_PyIRWord) == 0,
               "words must follow the block header aligned");
@@ -1240,9 +1241,15 @@ _PyIR_Clear(PyCodeObject *co)
         if (fused->feedback != NULL) {
             _PyFb_Clear(fused->feedback);
         }
+#ifdef Py_TIER0
+        _PyTier0_Clear(fused);
+#endif
         PyMem_Free(fused->real);
         PyMem_Free(fused);
     }
+#ifdef Py_TIER0
+    _PyTier0_Clear(block);
+#endif
     PyMem_Free(block->real);
     PyMem_Free(block);
     co->_co_ir = &_PyIR_LowerStub;
@@ -1326,6 +1333,11 @@ lower_one_to_one(PyCodeObject *co)
         _PyIR_SetHandler(&fused->words[w], IR_REMAP);
         w = next;
     }
+#ifdef Py_TIER0
+    // Frames in the fused block's machine code leave for the interpreter,
+    // which runs IR_REMAP, at their next instruction.
+    _PyTier0_Invalidate(fused);
+#endif
     FT_ATOMIC_STORE_PTR_RELEASE(co->_co_ir, block);
     return 0;
 }
@@ -1402,6 +1414,9 @@ _PyIR_SyncInstrumentation(PyCodeObject *co, int offset)
     if (IR_HANDLER(*instr) == handler) {
         return;
     }
+#ifdef Py_TIER0
+    _PyTier0_Invalidate(block);
+#endif
     _PyIR_SetHandler(instr, handler);
     if (_PyIR_FormatOf(handler)->flags & _PyIR_TRANSPARENT) {
         return;

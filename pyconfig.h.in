@@ -1911,6 +1911,10 @@
 /* The version of SunOS/Solaris as reported by `uname -r' without the dot. */
 #undef Py_SUNOS_VERSION
 
+/* Define to compile hot code objects to machine code that calls the IR
+   handlers. */
+#undef Py_TIER0
+
 /* Define if you want to enable tracing references for debugging purpose */
 #undef Py_TRACE_REFS
 

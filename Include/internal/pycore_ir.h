@@ -167,6 +167,11 @@ typedef struct _PyIRBlock {
     struct _PyIRBlock *fused;   // the block that this one replaced, in
                                 // which frames may still be; its words
                                 // run IR_REMAP
+#ifdef Py_TIER0
+    struct _PyTier0Code *tier0; // the newest machine code (Python/tier0.c)
+    int32_t tier0_heat;     // 16 per call plus 1 per backward jump
+    uint32_t tier0_compiles;
+#endif
 } _PyIRBlock;
 
 /* The block of code objects not lowered yet.  Its two words run IR_LOWER:

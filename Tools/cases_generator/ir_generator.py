@@ -918,8 +918,53 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
     outfile.write(f"{LABEL_END_MARKER}\n")
 
 
-def function_proto(name: str) -> str:
-    return f"static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_{name}(TAIL_CALL_PARAMS)"
+def function_proto(name: str, prefix: str = "_TAIL_CALL_") -> str:
+    return f"static PyObject *Py_PRESERVE_NONE_CC {prefix}{name}(TAIL_CALL_PARAMS)"
+
+
+# Tier 0 (Python/tier0.c) wraps these handlers of the interpreter, to count
+# calls and backward jumps and to enter machine code.
+TIER0_HOOKS = ("JUMP_BACKWARD", "RESUME", "RESUME_CHECK", "RETURN_VALUE",
+               "YIELD_VALUE")
+
+
+def tier0_leaves(inst: Instruction) -> bool:
+    """Whether tier 0's machine code leaves for the interpreter at a word
+    that runs inst, rather than calling inst's handler in call mode"""
+    return (inst.name.startswith("INSTRUMENTED_") or is_transparent(inst)
+            or inst.name in ("IR_LOWER", "IR_REMAP", "INTERPRETER_EXIT"))
+
+
+def generate_tier0_targets(analysis: Analysis, ids: dict[str, int], n: int,
+                           out: CWriter) -> None:
+    """The prototypes and table of the handlers in call mode, which return
+    to their caller where the interpreter's would dispatch"""
+    instructions = all_instructions(analysis)
+    by_index = {i: name for name, i in ids.items()}
+    out.emit("#ifdef Py_TIER0\n")
+    # Handlers that leave go unused in call mode, and some of those that
+    # the hooks wrap go unused in the interpreter.
+    unused = " __attribute__((unused))"
+    for name in TIER0_HOOKS:
+        out.emit(f"{function_proto(name)}{unused};\n")
+    for name in analysis.labels:
+        out.emit(f"{function_proto(name, '_TIER0_')};\n")
+    for name in sorted(ids):
+        out.emit(f"{function_proto(name, '_TIER0_')}{unused};\n")
+    for name in TIER0_HOOKS:
+        out.emit(f"{function_proto(name, '_TIER0_HOOK_')};\n")
+    out.emit(f"{function_proto('LEAVE', '_TIER0_')};\n")
+    out.emit("\n")
+    out.emit(f"static const py_tail_call_funcptr _PyTier0_CallTable[{n}] = {{\n")
+    for i in range(n):
+        name = by_index.get(i)
+        if name is None or tier0_leaves(instructions[name]):
+            out.emit(f"[{i}] = _TIER0_LEAVE,\n")
+        else:
+            out.emit(f"[{i}] = _TIER0_{name},\n")
+    out.emit("};\n")
+    out.emit("#endif /* Py_TIER0 */\n")
+    out.emit("\n")
 
 
 def generate_ir_targets(filenames: list[str], analysis: Analysis,
@@ -960,10 +1005,18 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     out.emit(UNKNOWN_OPCODE_HANDLER)
     out.emit("}\n")
     out.emit("\n")
+    generate_tier0_targets(analysis, ids, n, out)
     out.emit(f"static py_tail_call_funcptr instruction_funcptr_handler_table[{n}] = {{\n")
     for i in range(n):
         name = by_index.get(i, "UNKNOWN_OPCODE")
-        out.emit(f"[{i}] = _TAIL_CALL_{name},\n")
+        if name in TIER0_HOOKS:
+            out.emit("#ifdef Py_TIER0\n")
+            out.emit(f"[{i}] = _TIER0_HOOK_{name},\n")
+            out.emit("#else\n")
+            out.emit(f"[{i}] = _TAIL_CALL_{name},\n")
+            out.emit("#endif\n")
+        else:
+            out.emit(f"[{i}] = _TAIL_CALL_{name},\n")
     out.emit("};\n")
     out.emit("#endif /* _Py_TAIL_CALL_INTERP */\n")
 

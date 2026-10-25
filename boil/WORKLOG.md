@@ -403,3 +403,24 @@ at frame.c:148, opened at generated_ir_cases.c.h:12040". It passed at
 with the checker or outlive the local's close. Handed to the IR agent as its
 own commit, 1 hour, after the ASan run; the PR claim stays unverified until it
 passes.
+
+### FT heap corruption left open (7093ffb2235); tier 0 cycle diagnosis
+
+ASan could not see the FT double free because mimalloc owns the blocks; the
+debug FT build still reproduces it in 1 of 32 runs, detected at thread exit in
+_mi_page_thread_free_collect, far from the first free. Finding it needs
+MI_TRACK_ASAN or a debugger (none on this machine). Decision: the free-threaded
+build is unsupported for toggling monitoring or tracing while other threads
+run; test_free_threading.test_monitoring skips on Py_GIL_DISABLED; design note
+01 item 27 holds the numbers.
+
+Tier 0 diagnosis on a quiet machine: (1) calls between compiled frames hit two
+store-to-load interlocks because clang merged the {instr_ptr, stackpointer}
+stash into one 16-byte store; a volatile store takes a call loop from 128.9 to
+117.5 cycles per iteration (base 105.7), worth 1-3% on benchmarks, goes into
+commit 3. (2) The remaining gap is front-end: L1i misses 0.32M -> 0.89M on
+richards, 1.23M -> 3.23M on go; op-cache misses up 24-35%. (3) Not causes:
+branch and return mispredicts are lower in tier 0; _PyTier0_Continue and the
+interpreter's handler copy are under 1% of cycles.
+
+Clean pyperformance timing of the IR-only snapshot (fed4b13e878) started 21:46.

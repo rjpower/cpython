@@ -144,7 +144,7 @@ class IsolatedAssembleTests(AssemblerTestCase):
         dis.dis(co, file=output)
         exc_table = textwrap.dedent("""
                                        ExceptionTable:
-                                         L1 to L2 -> L2 [0]
-                                         L2 to L3 -> L3 [1] lasti
+                                         L1 to L2 -> L2 [r0]
+                                         L2 to L3 -> L3 [r2] lasti
                                     """)
         self.assertEndsWith(output.getvalue(), exc_table)

@@ -321,12 +321,16 @@ get_awaited_coro_address(
         return -1;
     }
 
-    uintptr_t stackpointer_addr = GET_MEMBER_NO_TAG(uintptr_t, iframe, unwinder->debug_offsets.interpreter_frame.stackpointer);
+    /* The receiver of the SEND whose yield suspended the frame is two
+     * slots below the slot of the yielded value, return_slot */
+    uint16_t return_slot = GET_MEMBER(uint16_t, iframe, unwinder->debug_offsets.interpreter_frame.return_slot);
 
-    if ((void*)stackpointer_addr != NULL) {
+    if (return_slot >= 2) {
+        uintptr_t localsplus_addr = gi_iframe_addr
+            + (uintptr_t)unwinder->debug_offsets.interpreter_frame.localsplus;
         err = read_py_ptr(
             unwinder,
-            stackpointer_addr - sizeof(void*) * 2,
+            localsplus_addr + sizeof(void*) * (return_slot - 2),
             next_coro);
         if (err) {
             set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to read gi_await address");

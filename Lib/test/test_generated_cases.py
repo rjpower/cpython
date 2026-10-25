@@ -279,12 +279,7 @@ class TestIRCases(unittest.TestCase):
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(OP);
-            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
-            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
-            IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
-            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
@@ -293,57 +288,38 @@ class TestIRCases(unittest.TestCase):
             if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
                 left = PyStackRef_Box(left);
                 if (PyStackRef_IsInline(left)) {
-                    IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-2]);
-                    IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(OP);
-                IR_KEEP_BOX(left, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -2);
+                IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
             }
             else {
-                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -2);
+                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
             }
             if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
                 right = PyStackRef_Box(right);
                 if (PyStackRef_IsInline(right)) {
-                    IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
-                    stack_pointer[-2] = left;
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(OP);
-                IR_KEEP_BOX(right, IR_FIELD_C(this_instr), IR_FIELD_D(this_instr) + -1);
+                IR_KEEP_BOX(right, IR_FIELD_C(this_instr));
             }
             else {
-                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_FIELD_D(this_instr) + -1);
+                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
             }
             PyObject *l = PyStackRef_AsPyObjectBorrow(left);
             PyObject *r = PyStackRef_AsPyObjectBorrow(right);
             PyObject *o = SPAM(l, r);
-            _PyFrame_SetStackPointer(frame, stack_pointer);
-            _PyFrame_StackPointerValidate(frame);
-            _PyStackRef tmp = right;
-            right = PyStackRef_NULL;
-            stack_pointer[-2] = left;
-            stack_pointer[-1] = right;
-            _PyStackRef_CLOSE_POINTER(tmp);
-            _PyFrame_StackPointerInvalidate(frame);
-            assert(stack_pointer == _PyFrame_GetStackPointer(frame));
-            _PyFrame_StackPointerValidate(frame);
-            tmp = left;
-            left = PyStackRef_NULL;
-            stack_pointer[-2] = left;
-            _PyStackRef_CLOSE_POINTER(tmp);
-            _PyFrame_StackPointerInvalidate(frame);
-            stack_pointer += -2;
-            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            _PyStackRef_CLOSE_POINTER(right);
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            _PyStackRef_CLOSE_POINTER(left);
             if (o == NULL) {
                 JUMP_TO_LABEL(error);
             }
             res = PyStackRef_FromPyObjectSteal(o);
-            stack_pointer[0] = res;
-            stack_pointer += 1;
-            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-            IR_STORE_RESULT(IR_FIELD_A(this_instr));
+            IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
     """
@@ -353,11 +329,8 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(fmt.roles, [ir_generator.ROLE_DST,
                                      f"{ir_generator.ROLE_IN0} + 0",
                                      f"{ir_generator.ROLE_IN0} + 1",
-                                     ir_generator.ROLE_TOP])
+                                     ir_generator.ROLE_NONE])
         self.assertEqual(fmt.dst_offset, -2)
-        # A borrowed input is checked against its canonical slot, which
-        # follows from the top slot, since dst may name a local
-        self.assertEqual(fmt.canonical_slot(1), "IR_FIELD_D(this_instr) + -1")
         self.assertEqual(fmt.borrow_mask, 0b11)
 
     def test_borrow_mask(self):
@@ -390,10 +363,10 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(formats["OP_FAMILY"].borrow_mask, 1)
         self.assertIs(formats["OP_FAMILY_RAW"], formats["OP_FAMILY"])
 
-    def test_sync(self):
-        # How a handler that may read locals through its fields finds the
-        # stack pointer: from dst, from the top slot in a free field, or by
-        # counting the inputs that name locals.
+    def test_consumed_inputs(self):
+        # A handler takes the inputs that it consumes: the slot of a
+        # temporary becomes NULL, and a local keeps its value.  No handler
+        # has a stack pointer to keep.
         input = """
         inst(STORE, (owner, value --)) {
             SPAM(owner, value);
@@ -409,15 +382,17 @@ class TestIRCases(unittest.TestCase):
         }
     """
         formats = self.formats(input)
-        fmt = formats["STORE"]
-        self.assertEqual(fmt.sync, ir_generator.SYNC_TOP)
-        self.assertIn(ir_generator.ROLE_TOP, fmt.roles)
-        self.assertEqual(fmt.canonical_slot(0),
-                         f"{ir_generator.FIELD_VARS[fmt.field_of(ir_generator.ROLE_TOP)]} + -2")
-        fmt = formats["BRANCH"]
-        self.assertEqual(fmt.sync, ir_generator.SYNC_LAG)
-        self.assertEqual(ir_generator.sync_stack_pointer(fmt),
-                         "stack_pointer += IR_IS_LOCAL(IR_FIELD_A(this_instr));\n")
+        self.assertEqual(formats["STORE"].roles[2:],
+                         [ir_generator.ROLE_NONE, ir_generator.ROLE_NONE])
+        output = self.ir_output(input)
+        store = self.handler(output, "STORE")
+        self.assertIn("IR_CONSUME_INPUT(IR_FIELD_A(this_instr));\n"
+                      "            PyStackRef_CLOSE(owner);", store)
+        self.assertIn("IR_CONSUME_INPUT(IR_FIELD_B(this_instr));\n"
+                      "            PyStackRef_CLOSE(value);", store)
+        self.assertIn("IR_CONSUME_INPUT(IR_FIELD_A(this_instr));",
+                      self.handler(output, "BRANCH"))
+        self.assertNotIn("stack_pointer", output)
 
     def test_store_dst(self):
         # Which results a folded STORE_FAST may send to a local, and how
@@ -447,19 +422,19 @@ class TestIRCases(unittest.TestCase):
     """
         formats = self.formats(input)
         self.assertTrue(formats["OP"].store_dst)
-        self.assertEqual(formats["OP"].sync, ir_generator.SYNC_TOP)
         self.assertTrue(formats["ATTR"].store_dst)
         self.assertFalse(formats["ALIAS"].store_dst)
-        self.assertEqual(formats["ALIAS"].sync, ir_generator.SYNC_DST)
         # PAIR never pushes its first output alone
         self.assertTrue(formats["PAIR"].store_dst)
         output = self.ir_output(input)
-        self.assertIn("IR_STORE_RESULT(IR_FIELD_A(this_instr));",
+        self.assertIn("IR_STORE_DST(IR_FIELD_A(this_instr), res);",
                       self.handler(output, "OP"))
-        self.assertIn("IR_STORE_RESULT(IR_FIELD_A(this_instr));",
+        self.assertIn("IR_STORE_DST(IR_FIELD_A(this_instr), attr);",
                       self.handler(output, "ATTR"))
-        self.assertNotIn("IR_STORE_RESULT", self.handler(output, "ALIAS"))
-        self.assertNotIn("IR_STORE_RESULT", self.handler(output, "PAIR"))
+        self.assertNotIn("IR_STORE_DST", self.handler(output, "ALIAS"))
+        self.assertIn("IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);",
+                      self.handler(output, "ALIAS"))
+        self.assertNotIn("IR_STORE_DST", self.handler(output, "PAIR"))
         self.assertIn("assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));",
                       self.handler(output, "PAIR"))
 
@@ -481,7 +456,7 @@ class TestIRCases(unittest.TestCase):
 
     def test_window_style(self):
         # An array input selects the window style: A names dst and B the
-        # deepest input, which the handler binds through stack_pointer; the
+        # deepest input, from which the handler addresses its window; the
         # count comes before any feedback index.
         input = """
         inst(OP, (callable, args[oparg] -- res)) {
@@ -502,18 +477,17 @@ class TestIRCases(unittest.TestCase):
             INSTRUCTION_STATS(OP);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -(1 + oparg) + 0);
-            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(1 + oparg));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            (void)window;
             _PyStackRef callable;
             _PyStackRef *args;
             _PyStackRef res;
-            args = &stack_pointer[-oparg];
-            callable = stack_pointer[-1 - oparg];
+            args = &window[1];
+            callable = window[0];
             res = SPAM(callable, args, oparg);
-            stack_pointer[-1 - oparg] = res;
-            stack_pointer += -oparg;
-            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-            IR_STORE_RESULT(IR_FIELD_A(this_instr));
+            IR_CLEAR_SLOTS(&window[1], oparg);
+            window[0] = res;
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
     """
@@ -605,7 +579,6 @@ class TestIRCases(unittest.TestCase):
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(OP);
             IR_PREDICTED(OP);
             _PyIRWord* const this_instr = next_instr - 1;
@@ -613,9 +586,6 @@ class TestIRCases(unittest.TestCase):
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
-            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
-            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef owner;
             _PyStackRef res;
             // _SPECIALIZE_OP
@@ -631,27 +601,20 @@ class TestIRCases(unittest.TestCase):
                 if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
                     owner = PyStackRef_Box(owner);
                     if (PyStackRef_IsInline(owner)) {
-                        IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(OP);
-                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
+                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
                 }
                 else {
-                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
+                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
                 }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
-                stack_pointer[-1] = owner;
-                _PyFrame_SetStackPointer(frame, stack_pointer);
-                _PyFrame_StackPointerValidate(frame);
-                _PyStackRef tmp = owner;
-                owner = res;
-                stack_pointer[-1] = owner;
-                _PyStackRef_CLOSE_POINTER(tmp);
-                _PyFrame_StackPointerInvalidate(frame);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_CLOSE_POINTER(owner);
             }
-            IR_STORE_RESULT(IR_FIELD_A(this_instr));
+            IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
 
@@ -664,13 +627,10 @@ class TestIRCases(unittest.TestCase):
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1));
             INSTRUCTION_STATS(OP);
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
-            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef res;
             // _SPECIALIZE_OP
@@ -686,27 +646,20 @@ class TestIRCases(unittest.TestCase):
                 if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
                     owner = PyStackRef_Box(owner);
                     if (PyStackRef_IsInline(owner)) {
-                        IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(OP);
-                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -1);
+                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
                 }
                 else {
-                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -1);
+                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
                 }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
-                stack_pointer[-1] = owner;
-                _PyFrame_SetStackPointer(frame, stack_pointer);
-                _PyFrame_StackPointerValidate(frame);
-                _PyStackRef tmp = owner;
-                owner = res;
-                stack_pointer[-1] = owner;
-                _PyStackRef_CLOSE_POINTER(tmp);
-                _PyFrame_StackPointerInvalidate(frame);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_CLOSE_POINTER(owner);
             }
-            IR_STORE_RESULT(IR_FIELD_A(this_instr));
+            IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
 
@@ -719,14 +672,10 @@ class TestIRCases(unittest.TestCase):
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(OP_SPECIALIZED);
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
-            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
-            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef owner;
             _PyStackRef res;
             // _GUARD
@@ -738,9 +687,9 @@ class TestIRCases(unittest.TestCase):
                     assert(_PyOpcode_Deopt[opcode] == (OP));
                     JUMP_TO_PREDICTED(OP);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
                 if (Py_TYPE(PyStackRef_AsPyObjectBorrow(owner))->tp_version_tag != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(OP);
                     assert(_PyOpcode_Deopt[opcode] == (OP));
                     JUMP_TO_PREDICTED(OP);
@@ -750,16 +699,10 @@ class TestIRCases(unittest.TestCase):
             {
                 PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
-                stack_pointer[-1] = owner;
-                _PyFrame_SetStackPointer(frame, stack_pointer);
-                _PyFrame_StackPointerValidate(frame);
-                _PyStackRef tmp = owner;
-                owner = res;
-                stack_pointer[-1] = owner;
-                _PyStackRef_CLOSE_POINTER(tmp);
-                _PyFrame_StackPointerInvalidate(frame);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_CLOSE_POINTER(owner);
             }
-            IR_STORE_RESULT(IR_FIELD_A(this_instr));
+            IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
     """
@@ -790,28 +733,23 @@ class TestIRCases(unittest.TestCase):
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(OP);
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
-            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
-            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
-            IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
-            right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
-            left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+            right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+            left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
             uint32_t counter = fb->counter;
             (void)counter;
             _PyFbHeader *feedback = ((_PyFbHeader *)fb);
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
-            stack_pointer[-2] = res;
-            stack_pointer += -1;
-            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-            IR_STORE_RESULT(IR_FIELD_A(this_instr));
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
 
@@ -824,28 +762,23 @@ class TestIRCases(unittest.TestCase):
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(OP);
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
-            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
-            IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
-            right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
-            left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+            right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+            left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
             uint32_t counter = fb->counter;
             (void)counter;
             _PyFbHeader *feedback = ((_PyFbHeader *)fb);
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
-            stack_pointer[-2] = res;
-            stack_pointer += -1;
-            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-            IR_STORE_RESULT(IR_FIELD_A(this_instr));
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
     """
@@ -878,7 +811,7 @@ class TestIRCases(unittest.TestCase):
         fmt = formats["OP"]
         self.assertTrue(fmt.jumps)
         self.assertEqual(fmt.roles, [f"{ir_generator.ROLE_IN0} + 0",
-                                     ir_generator.ROLE_TOP,
+                                     ir_generator.ROLE_NONE,
                                      ir_generator.ROLE_IMM,
                                      ir_generator.ROLE_IMM])
         self.assertEqual(fmt.imm, ir_generator.LOC_CD)

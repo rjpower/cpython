@@ -341,7 +341,7 @@ _Instruction.srcs.__doc__ = "Frame slots that the instruction reads, or for a wi
 _Instruction.fb.__doc__ = "Index of the instruction's feedback entry (if any), otherwise None"
 
 _ExceptionTableEntryBase = collections.namedtuple("_ExceptionTableEntryBase",
-    "start end target depth lasti")
+    "start end target slot lasti")
 
 class _ExceptionTableEntry(_ExceptionTableEntryBase):
     pass
@@ -624,7 +624,7 @@ class Formatter:
                 start = entry.start_label
                 end = entry.end_label
                 target = entry.target_label
-                print(f"  L{start} to L{end} -> L{target} [{entry.depth}]{lasti}", file=file)
+                print(f"  L{start} to L{end} -> L{target} [r{entry.slot}]{lasti}", file=file)
 
 
 class ArgResolver:
@@ -818,10 +818,12 @@ def _parse_exception_table(code):
             length = _parse_varint(iterator)
             end = start + length
             target = _parse_varint(iterator)
-            dl = _parse_varint(iterator)
-            depth = dl >> 1
-            lasti = bool(dl&1)
-            entries.append(_ExceptionTableEntry(start, end, target, depth, lasti))
+            # The slot that receives the exception; lasti, if the entry
+            # keeps it, goes to the slot below
+            sl = _parse_varint(iterator)
+            slot = sl >> 1
+            lasti = bool(sl&1)
+            entries.append(_ExceptionTableEntry(start, end, target, slot, lasti))
     except StopIteration:
         return entries
 

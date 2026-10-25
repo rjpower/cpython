@@ -987,8 +987,8 @@ _Py_LoadAttr_StackRefSteal(
     PyObject *name, _PyStackRef *self_or_null)
 {
     // Use _PyCStackRefs to ensure that both method and self are visible to
-    // the GC. Even though self_or_null is on the evaluation stack, it may be
-    // after the stackpointer and therefore not visible to the GC.
+    // the GC: the handler that calls this keeps self_or_null in a C
+    // variable until it writes it to its slot.
     _PyCStackRef method, self;
     _PyThreadState_PushCStackRef(tstate, &method);
     _PyThreadState_PushCStackRef(tstate, &self);
@@ -1000,29 +1000,6 @@ _Py_LoadAttr_StackRefSteal(
     return _PyThreadState_PopCStackRefSteal(tstate, &method);
 }
 
-#ifdef Py_DEBUG
-void
-_Py_assert_within_stack_bounds(
-    _PyInterpreterFrame *frame, _PyStackRef *stack_pointer,
-    const char *filename, int lineno
-) {
-    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
-        return;
-    }
-    int level = (int)(stack_pointer - _PyFrame_Stackbase(frame));
-    if (level < 0) {
-        printf("Stack underflow (depth = %d) at %s:%d\n", level, filename, lineno);
-        fflush(stdout);
-        abort();
-    }
-    int size = _PyFrame_GetCode(frame)->co_stacksize;
-    if (level > size) {
-        printf("Stack overflow (depth = %d) at %s:%d\n", level, filename, lineno);
-        fflush(stdout);
-        abort();
-    }
-}
-#endif
 
 int _Py_CheckRecursiveCallPy(
     PyThreadState *tstate)
@@ -1051,15 +1028,25 @@ static_assert(offsetof(_PyEntryFrame, stack) ==
               offsetof(_PyInterpreterFrame, localsplus) + sizeof(_PyStackRef),
               "the entry frame's stack must follow localsplus[0]");
 
-static const _PyIRWord _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS[] = {
-    /* Put a NOP at the start, so that the IP points into
-    * the code, rather than before it */
-    IR_WORD(NOP, 0, 0, 0, 0),
-    IR_WORD(INTERPRETER_EXIT, 1, 2, 0, 0),  /* reached on return */
-    IR_WORD(INTERPRETER_EXIT, 1, 2, 0, 0),  /* reached on yield */
+/* The entry frame's words.  Its slot 1 is a temporary, which
+ * INTERPRETER_EXIT takes; the header precedes the words, as in every
+ * executing copy, for IR_IS_LOCAL(). */
+static const struct {
+    _PyCodeExec exec;
+    _PyIRWord words[3];
+} entry_trampoline = {
+    .exec = { .nwords = 3, .nlocalsplus = 1 },
+    .words = {
+        /* Put a NOP at the start, so that the IP points into
+        * the code, rather than before it */
+        IR_WORD(NOP, 0, 0, 0, 0),
+        IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),  /* reached on return */
+        IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),  /* reached on yield */
+    },
 };
+#define _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS (entry_trampoline.words)
 
-const _PyInstr *_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR = (_PyInstr*)&_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
+const _PyInstr *_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR = (_PyInstr*)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
 
 
 PyObject **
@@ -1279,7 +1266,6 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 #if !_Py_TAIL_CALL_INTERP
     int opcode;        /* Current handler */
     _PyIRWord ir_word = 0;  /* Its word, from which the handler takes its fields */
-    assert(tstate->current_frame == NULL || tstate->current_frame->stackpointer != NULL);
 #endif
     _PyEntryFrame entry;
 
@@ -1292,7 +1278,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     /* Local "register" variables.
      * These are cached values from the frame and code object.  */
     _PyInstr *next_instr;
-    _PyStackRef *stack_pointer;
+    _PyStackRef *slots;
     entry.stack[0] = PyStackRef_NULL;
 #ifdef Py_STACKREF_DEBUG
     entry.frame.f_funcobj = PyStackRef_None;
@@ -1308,13 +1294,13 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     entry.frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS + 1;
     entry.frame.ir_words = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry.frame.ir_feedback = NULL;
-    entry.frame.stackpointer = entry.stack;
     entry.frame.owner = FRAME_OWNED_BY_INTERPRETER;
     entry.frame.visited = 0;
     entry.frame.return_offset = 0;
+    /* What the frame returns or yields lands in entry.stack[0] */
+    entry.frame.return_slot = 1;
 #ifdef Py_DEBUG
     entry.frame.lltrace = 0;
-    entry.frame.stackpointer_valid = 1;
 #endif
     /* Push frame */
     entry.frame.previous = tstate->current_frame;
@@ -1330,13 +1316,12 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
         _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
         next_instr = frame->instr_ptr;
         monitor_throw(tstate, frame, next_instr);
-        stack_pointer = _PyFrame_GetStackPointer(frame);
-        _PyFrame_StackPointerInvalidate(frame);
+        slots = _PyFrame_Slots(frame);
 #if _Py_TAIL_CALL_INTERP
 #   if Py_STATS
-        return _TAIL_CALL_error(frame, stack_pointer, tstate, next_instr, TAIL_CALL_NO_OPERANDS, lastopcode);
+        return _TAIL_CALL_error(frame, slots, tstate, next_instr, TAIL_CALL_NO_OPERANDS, lastopcode);
 #   else
-        return _TAIL_CALL_error(frame, stack_pointer, tstate, next_instr, TAIL_CALL_NO_OPERANDS);
+        return _TAIL_CALL_error(frame, slots, tstate, next_instr, TAIL_CALL_NO_OPERANDS);
 #   endif
 #else
         goto error;
@@ -2388,8 +2373,12 @@ _PyEval_UnpackIterableStackRef(PyThreadState *tstate, PyObject *v,
     return 1;
 
 Error:
+    /* The slots that the values went to are temporaries, which hold NULL
+       unless live */
     for (; i > 0; i--, sp++) {
-        PyStackRef_CLOSE(*sp);
+        _PyStackRef ref = *sp;
+        *sp = PyStackRef_NULL;
+        PyStackRef_CLOSE(ref);
     }
     Py_XDECREF(it);
     return 0;

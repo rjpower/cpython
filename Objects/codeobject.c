@@ -821,10 +821,8 @@ check_words(PyObject *code, PyObject *fbinit, PyObject *consts, int nslots)
         for (int k = 0; k < 4; k++) {
             int role = fmt->roles[k];
             uint32_t value = (uint32_t)(word >> (16 + 12 * k)) & IR_FIELD_MAX;
-            // The top of a full stack is one past the last slot
-            if (((role == _PyIR_ROLE_DST || role == _PyIR_ROLE_BASE
-                  || role >= _PyIR_ROLE_IN0) && value >= (uint32_t)nslots)
-                || (role == _PyIR_ROLE_TOP && value > (uint32_t)nslots))
+            if ((role == _PyIR_ROLE_DST || role == _PyIR_ROLE_BASE
+                 || role >= _PyIR_ROLE_IN0) && value >= (uint32_t)nslots)
             {
                 PyErr_Format(PyExc_ValueError,
                              "code: word %zd names slot %u of %d", i, value,

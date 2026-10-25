@@ -1685,8 +1685,8 @@ initialize_lines(_PyCoLineInstrumentationData *line_data, PyCodeObject *code, in
         assert(size >= 0 && start_offset+size <= code_len);
         scan = parse_varint(scan, &handler);
         assert(handler >= 0 && handler < code_len);
-        int depth_and_lasti;
-        scan = parse_varint(scan, &depth_and_lasti);
+        int slot_and_lasti;
+        scan = parse_varint(scan, &slot_and_lasti);
         int original_opcode = base_opcode(code, handler);
         /* Skip if not the start of a line.
          * END_ASYNC_FOR is a bit special as it marks the end of

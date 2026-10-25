@@ -134,7 +134,7 @@ assemble_emit_exception_table_item(struct assembler *a, int value, int msb)
 
 static int
 assemble_emit_exception_table_entry(struct assembler *a, int start, int end,
-                                    int handler_offset,
+                                    int handler_offset, int nlocalsplus,
                                     _PyExceptHandlerInfo *handler)
 {
     Py_ssize_t len = PyBytesWriter_GetSize(a->a_except_table_writer);
@@ -144,21 +144,22 @@ assemble_emit_exception_table_entry(struct assembler *a, int start, int end,
     int size = end-start;
     assert(end > start);
     int target = handler_offset;
-    int depth = handler->h_startdepth - 1;
-    if (handler->h_preserve_lasti > 0) {
-        depth -= 1;
-    }
-    assert(depth >= 0);
-    int depth_lasti = (depth<<1) | handler->h_preserve_lasti;
+    /* The handler starts with the exception on top of the stack, at depth
+     * h_startdepth - 1, and lasti, if it keeps it, below: the entry names
+     * the slot of the exception, whose temporary is canonical. */
+    int exc_slot = nlocalsplus + handler->h_startdepth - 1;
+    assert(exc_slot - (handler->h_preserve_lasti > 0) >= nlocalsplus);
+    int slot_lasti = (exc_slot<<1) | handler->h_preserve_lasti;
     assemble_emit_exception_table_item(a, start, (1<<7));
     assemble_emit_exception_table_item(a, size, 0);
     assemble_emit_exception_table_item(a, target, 0);
-    assemble_emit_exception_table_item(a, depth_lasti, 0);
+    assemble_emit_exception_table_item(a, slot_lasti, 0);
     return SUCCESS;
 }
 
 static int
-assemble_exception_table(struct assembler *a, instr_sequence *instrs)
+assemble_exception_table(struct assembler *a, instr_sequence *instrs,
+                         int nlocalsplus)
 {
     int ioffset = 0;
     _PyExceptHandlerInfo handler;
@@ -174,6 +175,7 @@ assemble_exception_table(struct assembler *a, instr_sequence *instrs)
                 RETURN_IF_ERROR(
                     assemble_emit_exception_table_entry(a, start, ioffset,
                                                         handler_offset,
+                                                        nlocalsplus,
                                                         &handler));
             }
             start = ioffset;
@@ -185,6 +187,7 @@ assemble_exception_table(struct assembler *a, instr_sequence *instrs)
         int handler_offset = instrs->s_instrs[handler.h_label].i_offset;
         RETURN_IF_ERROR(assemble_emit_exception_table_entry(a, start, ioffset,
                                                             handler_offset,
+                                                            nlocalsplus,
                                                             &handler));
     }
     return SUCCESS;
@@ -378,13 +381,13 @@ resolve_next_locations(instr_sequence *instrs)
 
 static int
 assemble_emit(struct assembler *a, instr_sequence *instrs,
-              int first_lineno, PyObject *const_cache)
+              int first_lineno, int nlocalsplus, PyObject *const_cache)
 {
     RETURN_IF_ERROR(assemble_init(a, first_lineno));
 
     RETURN_IF_ERROR(assemble_location_info(a, instrs, a->a_lineno));
 
-    RETURN_IF_ERROR(assemble_exception_table(a, instrs));
+    RETURN_IF_ERROR(assemble_exception_table(a, instrs, nlocalsplus));
 
     a->a_except_table = PyBytesWriter_FinishWithSize(a->a_except_table_writer,
                                                      a->a_except_table_off);
@@ -870,7 +873,6 @@ encode(struct assembler *a, instr_sequence *instrs, int i, int nlocalsplus,
         [_PyIR_ROLE_BASE] = slots.base,
         [_PyIR_ROLE_FB] = ai->fb > 0 ? ai->fb : 0,
         [_PyIR_ROLE_IMM] = oparg,
-        [_PyIR_ROLE_TOP] = nlocalsplus + depth,
         [_PyIR_ROLE_IN0] = slots.in[0],
         [_PyIR_ROLE_IN0 + 1] = slots.in[1],
         [_PyIR_ROLE_IN0 + 2] = slots.in[2],
@@ -1054,7 +1056,8 @@ _PyAssemble_MakeCodeObject(_PyCompile_CodeUnitMetadata *umd, PyObject *const_cac
     memset(&a, 0, sizeof(a));
     int res = assemble_words(&a, instrs, consts, nlocalsplus, maxdepth);
     if (res == SUCCESS) {
-        res = assemble_emit(&a, instrs, umd->u_firstlineno, const_cache);
+        res = assemble_emit(&a, instrs, umd->u_firstlineno, nlocalsplus,
+                            const_cache);
     }
     if (res == SUCCESS) {
         co = makecode(umd, &a, const_cache, consts, maxdepth, nlocalsplus,

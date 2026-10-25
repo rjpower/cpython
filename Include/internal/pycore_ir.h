@@ -91,8 +91,6 @@ enum {
     _PyIR_ROLE_BASE,
     _PyIR_ROLE_FB,
     _PyIR_ROLE_IMM,
-    _PyIR_ROLE_TOP,     // the canonical slot of the top of the stack, which
-                        // the handler sets stack_pointer from
     _PyIR_ROLE_IN0,
 };
 
@@ -167,7 +165,12 @@ typedef struct _PyCodeExec {
 
 /* The executing copy of _Py_InitCleanup (Python/specialize.c), which runs
  * with self in slot 0 and the result of __init__ in slot 1. */
-extern _PyCodeExec _PyIR_InitCleanupExec;
+typedef struct {
+    _PyCodeExec exec;
+    _PyIRWord words[3];
+} _PyIRStaticExec;
+extern _PyIRStaticExec _PyIR_InitCleanup;
+#define _PyIR_InitCleanupExec (_PyIR_InitCleanup.exec)
 
 /* The executing copy of co, allocated if this is its first call, or NULL
  * with an exception set. */

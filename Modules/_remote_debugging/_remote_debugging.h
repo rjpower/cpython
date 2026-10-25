@@ -604,7 +604,6 @@ extern int parse_frame_from_chunks(
     PyObject **result,
     uintptr_t address,
     uintptr_t *previous_frame,
-    uintptr_t *stackpointer,
     StackChunkList *chunks
 );
 

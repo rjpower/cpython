@@ -39,20 +39,26 @@ struct _PyInterpreterFrame {
      * into: the bases of jump targets and feedback indices. */
     _PyInstr *ir_words;
     char *ir_feedback;
-    _PyStackRef *stackpointer;
 #ifdef Py_GIL_DISABLED
     /* Index of thread-local bytecode containing instr_ptr. */
     int32_t tlbc_index;
 #endif
     uint16_t return_offset;  /* Only relevant during a function call */
+    /* The slot that receives the value when control comes back to this
+     * frame: the dst of the call it is making, or for a suspended
+     * generator the slot of the value it yielded, where the value sent in
+     * goes. */
+    uint16_t return_slot;
     char owner;
     uint8_t visited:1;
     uint8_t external:1; /* Set when the frame was pushed by something other than the VM */
 #ifdef Py_DEBUG
-    uint8_t stackpointer_valid:1;
     uint8_t lltrace:5;
 #endif
-    /* Locals and stack */
+    /* The slots: co_nlocalsplus locals, cells and free variables, then
+     * co_stacksize temporaries.  Every slot holds a value or NULL; a
+     * temporary that no instruction has written or that an instruction
+     * consumed is NULL. */
     _PyStackRef localsplus[1];
 };
 

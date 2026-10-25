@@ -153,6 +153,9 @@ class Local:
     ir_field: str | None = None
     # Holds the borrow that IR_BORROW_KNOWN made of what ir_field names.
     ir_borrowed: bool = False
+    # The stack position of the register-style input that the value was
+    # read from, whose slot is its home (see ir_generator.IRStack).
+    ir_input: int | None = None
 
     def __repr__(self) -> str:
         return f"Local('{self.item.name}', mem={self.memory_offset}, local={self.in_local}, array={self.is_array()})"
@@ -198,6 +201,7 @@ class Local:
             self.known_object,
             self.ir_field,
             self.ir_borrowed,
+            self.ir_input,
         )
 
     @property
@@ -282,12 +286,20 @@ class Stack:
         self._print(out)
         return Local.from_memory(var, self.base_offset)
 
-    def load(self, var: StackItem, memory_offset: PointerOffset) -> str:
-        "The C expression that reads var from memory_offset"
+    def address(self, memory_offset: PointerOffset) -> str:
+        "The C lvalue of the stack slot at memory_offset"
         assert self.physical_sp is not None
         offset = (memory_offset - self.physical_sp).to_c()
+        return f"stack_pointer[{offset}]"
+
+    def load(self, var: StackItem, memory_offset: PointerOffset) -> str:
+        "The C expression that reads var from memory_offset"
         indirect = "&" if var.is_array() else ""
-        return f"{indirect}stack_pointer[{offset}]"
+        return f"{indirect}{self.address(memory_offset)}"
+
+    def store(self, out: CWriter, var: Local, memory_offset: PointerOffset) -> None:
+        "Write var, which the stack holds at memory_offset, to memory"
+        out.emit(f"{self.address(memory_offset)} = {var.name};\n")
 
     def clear(self, out: CWriter) -> None:
         "Flush to memory and clear variables stack"
@@ -299,14 +311,6 @@ class Stack:
         assert(var not in self.variables), var
         self.variables.append(var)
         self.logical_sp = self.logical_sp.push(var.item)
-
-    @staticmethod
-    def _do_emit(
-        out: CWriter,
-        var: StackItem,
-        stack_offset: PointerOffset,
-    ) -> None:
-        out.emit(f"stack_pointer[{stack_offset.to_c()}] = {var.name};\n")
 
     def _save_physical_sp(self, out: CWriter) -> None:
         if self.physical_sp is None:
@@ -330,9 +334,8 @@ class Stack:
                 not var.is_array()
             ):
                 self._print(out)
+                self.store(out, var, var_offset)
                 var.memory_offset = var_offset
-                stack_offset = var_offset - self.physical_sp
-                Stack._do_emit(out, var.item, stack_offset)
                 self._print(out)
             var_offset = var_offset.push(var.item)
 
@@ -635,11 +638,10 @@ class Storage:
             inputs.append(local)
         inputs.reverse()
         peeks.reverse()
-        offset = stack.logical_sp - stack.physical_sp
+        offset = stack.logical_sp
         for ouput in uop.stack.outputs:
             if ouput.is_array() and ouput.used and not ouput.peek:
-                c_offset = offset.to_c()
-                out.emit(f"{ouput.name} = &stack_pointer[{c_offset}];\n")
+                out.emit(f"{ouput.name} = &{stack.address(offset)};\n")
             offset = offset.push(ouput)
         for var in inputs:
             stack.push(var)

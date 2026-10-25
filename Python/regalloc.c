@@ -117,15 +117,13 @@ _PyRegAlloc_Slots(const _PyIRFormat *fmt, int nlocalsplus, int depth,
  * reads the local through its input field, borrowed, as LOAD_FAST_BORROW
  * would have pushed it.  The value keeps its stack position, so every
  * temporary stays in its canonical slot, and the canonical slot of a folded
- * load holds whatever was left there.  Handlers still keep stack_pointer,
- * which lags behind by the folded loads, so a handler that may read a local
- * this way sets stack_pointer from its fields on entry (the SYNC_ modes of
- * Tools/cases_generator/ir_generator.py), and writes the borrow to the
- * canonical slot, or clears it, before code that reads the stack runs.
+ * load holds NULL, as every dead temporary does (section 12).  A handler
+ * tells a local from a temporary by comparing the field with
+ * co_nlocalsplus: it takes a temporary, leaving NULL, and borrows a local.
  *
  * Only the next word may consume a folded load.  Any other word running
- * in between, or an event or trace function at its start, could see the
- * stale slot under stack_pointer: so a load that is not read by the word
+ * in between, or an event or trace function at its start, would find the
+ * value missing from its canonical slot: so a load that is not read by the word
  * after it keeps its word, and so does every load below it.  This makes
  * liveness trivial: no word runs between the load and its consumer, so
  * nothing can store to the local or delete it in between.  Only loads that
@@ -137,7 +135,7 @@ _PyRegAlloc_Slots(const _PyIRFormat *fmt, int nlocalsplus, int depth,
  * A STORE_FAST has no word when the word before it pushes the value alone,
  * on top, and its format has _PyIR_STORE_DST: that word's dst names the
  * local, and its handler moves the result there and releases the old
- * value, as STORE_FAST would (IR_STORE_RESULT).  Nothing runs between the
+ * value, as STORE_FAST would (IR_STORE_DST).  Nothing runs between the
  * two, so this needs no liveness either.  The value a store takes is never
  * a borrow: Python/flowgraph.c makes no load that a store consumes
  * borrowed, and formats whose result may alias a borrowed input do not

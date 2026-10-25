@@ -327,9 +327,7 @@ class Emitter:
             ref = var.name
             at = ""
             if var.memory_offset is not None:
-                assert storage.stack.physical_sp is not None
-                offset = var.memory_offset - storage.stack.physical_sp
-                ref = f"&stack_pointer[{offset.to_c()}]"
+                ref = f"&{storage.stack.address(var.memory_offset)}"
                 at = "At"
             if guard:
                 self.emit(f"if (Py_UNLIKELY(!PyStackRef_IsPointerSpace{at}({ref}))) {{\n")
@@ -357,9 +355,8 @@ class Emitter:
 
     def emit_store_input(self, var: Local, storage: Storage) -> None:
         assert var.memory_offset is not None
-        assert storage.stack.physical_sp is not None
-        offset = var.memory_offset - storage.stack.physical_sp
-        self.emit(f"stack_pointer[{offset.to_c()}] = {var.name};\n")
+        self.out.start_line()
+        storage.stack.store(self.out, var, var.memory_offset)
 
     def goto_error(self, offset: int, storage: Storage) -> str:
         if offset > 0:

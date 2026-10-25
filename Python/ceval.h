@@ -16,7 +16,7 @@
 #include "pycore_genobject.h"     // _PyCoro_GetAwaitableIter()
 #include "pycore_import.h"        // _PyImport_IsDefaultImportFunc()
 #include "pycore_instruments.h"
-#include "pycore_interpframe.h"   // _PyFrame_SetStackPointer()
+#include "pycore_interpframe.h"   // _PyFrame_Slots()
 #include "pycore_interpolation.h" // _PyInterpolation_Build()
 #include "pycore_intrinsics.h"
 #include "pycore_lazyimportobject.h"
@@ -176,42 +176,36 @@ dump_item(_PyStackRef item)
     printf("<%s at %p>", Py_TYPE(obj)->tp_name, (void *)obj);
 }
 
+/* The locals, then the temporaries, of which NULL ones are dead */
 static void
-dump_stack(_PyInterpreterFrame *frame, _PyStackRef *stack_pointer)
+dump_stack(_PyInterpreterFrame *frame)
 {
-    _PyFrame_SetStackPointer(frame, stack_pointer);
-    _PyStackRef *locals_base = _PyFrame_GetLocalsArray(frame);
-    _PyStackRef *stack_base = _PyFrame_Stackbase(frame);
+    _PyStackRef *slots = _PyFrame_Slots(frame);
+    int nlocalsplus = _PyFrame_GetCode(frame)->co_nlocalsplus;
+    int nslots = _PyFrame_NumSlots(frame);
     PyObject *exc = PyErr_GetRaisedException();
     printf("    locals=[");
-    for (_PyStackRef *ptr = locals_base; ptr < stack_base; ptr++) {
-        if (ptr != locals_base) {
+    for (int i = 0; i < nlocalsplus; i++) {
+        if (i) {
             printf(", ");
         }
-        dump_item(*ptr);
+        dump_item(slots[i]);
     }
     printf("]\n");
-    if (stack_pointer < stack_base) {
-        printf("    stack=%d\n", (int)(stack_pointer-stack_base));
-    }
-    else {
-        printf("    stack=[");
-        for (_PyStackRef *ptr = stack_base; ptr < stack_pointer; ptr++) {
-            if (ptr != stack_base) {
-                printf(", ");
-            }
-            dump_item(*ptr);
+    printf("    stack=[");
+    for (int i = nlocalsplus; i < nslots; i++) {
+        if (i != nlocalsplus) {
+            printf(", ");
         }
-        printf("]\n");
+        dump_item(slots[i]);
     }
+    printf("]\n");
     fflush(stdout);
     PyErr_SetRaisedException(exc);
-    _PyFrame_GetStackPointer(frame);
 }
 
 static void
 lltrace_instruction(_PyInterpreterFrame *frame,
-                    _PyStackRef *stack_pointer,
                     _PyIRWord *next_instr,
                     int opcode)
 {
@@ -226,10 +220,8 @@ lltrace_instruction(_PyInterpreterFrame *frame,
         fflush(stdout);
         return;
     }
-    dump_stack(frame, stack_pointer);
-    _PyFrame_SetStackPointer(frame, stack_pointer);
+    dump_stack(frame);
     _PyStackRef_CheckFrame(frame);
-    _PyFrame_GetStackPointer(frame);
     /* First the word index and the instruction that the handler stands
      * for, with its oparg; then the handler and its fields, on a line
      * without a colon. */
@@ -460,7 +452,7 @@ skip_to_next_entry(unsigned char *p, unsigned char *end) {
 #define MAX_LINEAR_SEARCH 40
 
 static Py_NO_INLINE int
-get_exception_handler(PyCodeObject *code, int index, int *level, int *handler, int *lasti)
+get_exception_handler(PyCodeObject *code, int index, int *exc_slot, int *handler, int *lasti)
 {
     unsigned char *start = (unsigned char *)PyBytes_AS_STRING(code->co_exceptiontable);
     unsigned char *end = start + PyBytes_GET_SIZE(code->co_exceptiontable);
@@ -498,10 +490,10 @@ get_exception_handler(PyCodeObject *code, int index, int *level, int *handler, i
         scan = parse_varint(scan, &size);
         if (start_offset + size > index) {
             scan = parse_varint(scan, handler);
-            int depth_and_lasti;
-            parse_varint(scan, &depth_and_lasti);
-            *level = depth_and_lasti >> 1;
-            *lasti = depth_and_lasti & 1;
+            int slot_and_lasti;
+            parse_varint(scan, &slot_and_lasti);
+            *exc_slot = slot_and_lasti >> 1;
+            *lasti = slot_and_lasti & 1;
             return 1;
         }
         scan = skip_to_next_entry(scan, end);
@@ -510,11 +502,6 @@ get_exception_handler(PyCodeObject *code, int index, int *level, int *handler, i
 }
 
 
-#ifdef Py_DEBUG
-#define ASSERT_WITHIN_STACK_BOUNDS(F, L) _Py_assert_within_stack_bounds(frame, stack_pointer, (F), (L))
-#else
-#define ASSERT_WITHIN_STACK_BOUNDS(F, L) (void)0
-#endif
 
 /* Logic for the raise statement (too complicated for inlining).
    This *consumes* a reference count to each of its arguments. */

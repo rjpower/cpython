@@ -122,9 +122,9 @@ is_well_formed(_PyStackRef ref, bool in_stack)
 void
 _PyStackRef_CheckFrame(_PyInterpreterFrame *frame)
 {
-    assert(frame->stackpointer != NULL);
     _PyStackRef *stack_base = _PyFrame_Stackbase(frame);
-    for (_PyStackRef *sp = frame->localsplus; sp < frame->stackpointer; sp++) {
+    _PyStackRef *end = frame->localsplus + _PyFrame_NumSlots(frame);
+    for (_PyStackRef *sp = frame->localsplus; sp < end; sp++) {
         if (!is_well_formed(*sp, sp >= stack_base)) {
             _Py_FatalErrorFormat(__func__,
                 "malformed stackref 0x%" PRIx64 " in slot %d",
@@ -137,16 +137,18 @@ _PyStackRef_CheckFrame(_PyInterpreterFrame *frame)
 void
 _PyFrame_ClearLocals(_PyInterpreterFrame *frame)
 {
-    assert(frame->stackpointer != NULL);
 #ifdef Py_DEBUG
     _PyStackRef_CheckFrame(frame);
 #endif
-    _PyStackRef *sp = frame->stackpointer;
+    /* From the top, so that a finalizer that looks at the frame finds the
+     * slots that it has not reached yet intact and the rest NULL */
     _PyStackRef *locals = frame->localsplus;
-    frame->stackpointer = locals;
+    _PyStackRef *sp = locals + _PyFrame_NumSlots(frame);
     while (sp > locals) {
         sp--;
-        PyStackRef_XCLOSE(*sp);
+        _PyStackRef ref = *sp;
+        *sp = PyStackRef_NULL;
+        PyStackRef_XCLOSE(ref);
     }
     Py_CLEAR(frame->f_locals);
 }

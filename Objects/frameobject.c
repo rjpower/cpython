@@ -1327,6 +1327,18 @@ top_of_stack(int64_t stack)
     return stack & MASK;
 }
 
+/* The number of values on stack; every kind is nonzero */
+static int
+stack_depth(int64_t stack)
+{
+    int depth = 0;
+    while (stack != EMPTY_STACK) {
+        stack = pop_value(stack);
+        depth++;
+    }
+    return depth;
+}
+
 static inline Kind
 peek(int64_t stack, int n)
 {
@@ -1598,10 +1610,11 @@ mark_stacks(PyCodeObject *code_obj, int len)
             assert(size >= 0 && start_offset+size <= len);
             scan = parse_varint(scan, &handler);
             assert(handler >= 0 && handler < len);
-            int depth_and_lasti;
-            scan = parse_varint(scan, &depth_and_lasti);
-            int level = depth_and_lasti >> 1;
-            int lasti = depth_and_lasti & 1;
+            int slot_and_lasti;
+            scan = parse_varint(scan, &slot_and_lasti);
+            int lasti = slot_and_lasti & 1;
+            /* The entry names the slot of the exception, above lasti */
+            int level = (slot_and_lasti >> 1) - lasti - code_obj->co_nlocalsplus;
             if (stacks[start_offset] != UNINITIALIZED) {
                 if (stacks[handler] == UNINITIALIZED) {
                     todo = 1;
@@ -1910,8 +1923,13 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         /* Account for value popped by yield */
         start_stack = pop_value(start_stack);
     }
+    /* The temporary at depth d is in slot co_nlocalsplus + d */
+    _PyStackRef *stack_base = _PyFrame_Stackbase(self->f_frame);
+    int depth = stack_depth(start_stack);
     while (start_stack > best_stack) {
-        _PyStackRef popped = _PyFrame_StackPop(self->f_frame);
+        depth--;
+        _PyStackRef popped = stack_base[depth];
+        stack_base[depth] = PyStackRef_NULL;
         if (top_of_stack(start_stack) == Except) {
             /* Pop exception stack as well as the evaluation stack */
             PyObject *exc = PyStackRef_AsPyObjectBorrow(popped);
@@ -1923,6 +1941,10 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             PyStackRef_XCLOSE(popped);
         }
         start_stack = pop_value(start_stack);
+    }
+    if (is_suspended) {
+        /* The value sent in goes on top of the new stack */
+        self->f_frame->return_slot = (uint16_t)(code->co_nlocalsplus + depth);
     }
     /* Finally set the new lasti and return OK. */
     self->f_lineno = 0;
@@ -2029,11 +2051,12 @@ frame_dealloc(PyObject *op)
 
     /* Kill all local variables including specials, if we own them */
     if (f->f_frame == frame && frame->owner == FRAME_OWNED_BY_FRAME_OBJECT) {
+        int nslots = _PyFrame_NumSlots(frame);
         PyStackRef_CLEAR(frame->f_executable);
         PyStackRef_CLEAR(frame->f_funcobj);
         Py_CLEAR(frame->f_locals);
         _PyStackRef *locals = _PyFrame_GetLocalsArray(frame);
-        _PyStackRef *sp = frame->stackpointer;
+        _PyStackRef *sp = locals + nslots;
         while (sp > locals) {
             sp--;
             PyStackRef_CLEAR(*sp);
@@ -2072,15 +2095,13 @@ frame_tp_clear(PyObject *op)
     Py_CLEAR(f->f_locals_cache);
     Py_CLEAR(f->f_overwritten_fast_locals);
 
-    /* locals and stack */
+    /* all slots */
     _PyStackRef *locals = _PyFrame_GetLocalsArray(f->f_frame);
-    _PyStackRef *sp = f->f_frame->stackpointer;
-    assert(sp >= locals);
+    _PyStackRef *sp = locals + _PyFrame_NumSlots(f->f_frame);
     while (sp > locals) {
         sp--;
         PyStackRef_CLEAR(*sp);
     }
-    f->f_frame->stackpointer = locals;
     Py_CLEAR(f->f_frame->f_locals);
     return 0;
 }
@@ -2314,7 +2335,7 @@ frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
     }
 
     PyObject *value = NULL;
-    if (frame->stackpointer == NULL || frame->stackpointer > frame->localsplus + i) {
+    {
         if (PyStackRef_IsInline(frame->localsplus[i])) {
             value = PyStackRef_AsPyObjectNewBoxed(frame->localsplus[i]);
             if (value == NULL) {

@@ -474,8 +474,9 @@ int
 _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
     _PyStackRef *ref = _PyFrame_GetLocalsArray(frame);
-    /* locals and stack; _Py_VISIT_STACKREF skips indices and inline values */
-    for (; ref < frame->stackpointer; ref++) {
+    _PyStackRef *end = ref + _PyFrame_NumSlots(frame);
+    /* all slots; _Py_VISIT_STACKREF skips NULL, indices and inline values */
+    for (; ref < end; ref++) {
         _Py_VISIT_STACKREF(*ref);
     }
     return 0;

@@ -133,7 +133,7 @@ typedef struct _Py_DebugOffsets {
         uint64_t ir_words;
         uint64_t localsplus;
         uint64_t owner;
-        uint64_t stackpointer;
+        uint64_t return_slot;
         uint64_t tlbc_index;
     } interpreter_frame;
 
@@ -325,7 +325,7 @@ typedef struct _Py_DebugOffsets {
         .ir_words = offsetof(_PyInterpreterFrame, ir_words), \
         .localsplus = offsetof(_PyInterpreterFrame, localsplus), \
         .owner = offsetof(_PyInterpreterFrame, owner), \
-        .stackpointer = offsetof(_PyInterpreterFrame, stackpointer), \
+        .return_slot = offsetof(_PyInterpreterFrame, return_slot), \
         .tlbc_index = _Py_Debug_interpreter_frame_tlbc_index, \
     }, \
     .code_object = { \

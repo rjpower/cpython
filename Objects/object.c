@@ -2864,8 +2864,9 @@ PyUnstable_Object_IsUniqueReferencedTemporary(PyObject *op)
         return 0;
     }
 
+    /* The temporaries; NULL ones are not objects */
     _PyStackRef *base = _PyFrame_Stackbase(frame);
-    _PyStackRef *stackpointer = frame->stackpointer;
+    _PyStackRef *stackpointer = frame->localsplus + _PyFrame_NumSlots(frame);
     while (stackpointer > base) {
         stackpointer--;
         _PyStackRef ref = *stackpointer;
@@ -3315,11 +3316,6 @@ py_dealloc(PyObject *op)
     if (tstate == NULL) {
         tstate = _PyThreadState_GET();
     }
-#if !defined(Py_GIL_DISABLED) && !defined(Py_STACKREF_DEBUG)
-    /* This assertion doesn't hold for the free-threading build, as
-     * PyStackRef_CLOSE_SPECIALIZED is not implemented */
-    assert(tstate->current_frame == NULL || tstate->current_frame->stackpointer != NULL);
-#endif
     PyObject *old_exc = tstate != NULL ? tstate->current_exception : NULL;
     // Keep the old exception type alive to prevent undefined behavior
     // on (tstate->curexc_type != old_exc_type) below

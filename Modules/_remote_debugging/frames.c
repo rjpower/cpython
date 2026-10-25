@@ -259,7 +259,6 @@ parse_frame_from_chunks(
     PyObject **result,
     uintptr_t address,
     uintptr_t *previous_frame,
-    uintptr_t *stackpointer,
     StackChunkList *chunks
 ) {
     void *frame_ptr = find_frame_in_chunks(chunks, address);
@@ -271,7 +270,6 @@ parse_frame_from_chunks(
 
     char *frame = (char *)frame_ptr;
     *previous_frame = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.previous);
-    *stackpointer = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.stackpointer);
     uintptr_t code_object = GET_MEMBER_NO_TAG(uintptr_t, frame_ptr, unwinder->debug_offsets.interpreter_frame.executable);
     int frame_valid = is_frame_valid(unwinder, (uintptr_t)frame, code_object);
     if (frame_valid != 1) {
@@ -310,7 +308,6 @@ process_frame_chain(
         int parse_result = 0;
         PyObject *frame = NULL;
         uintptr_t next_frame_addr = 0;
-        uintptr_t stackpointer = 0;
         last_frame_addr = frame_addr;
 
         if (++frame_count > MAX_FRAME_CHAIN_DEPTH) {
@@ -322,7 +319,7 @@ process_frame_chain(
 
         if (ctx->chunks && ctx->chunks->count > 0) {
             parse_result = parse_frame_from_chunks(
-                unwinder, &frame, frame_addr, &next_frame_addr, &stackpointer, ctx->chunks);
+                unwinder, &frame, frame_addr, &next_frame_addr, ctx->chunks);
             if (parse_result == 0) {
                 goto parsed_frame;
             }

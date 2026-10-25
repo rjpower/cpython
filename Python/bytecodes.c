@@ -86,13 +86,13 @@ dummy_func(
     unsigned char opcode,
     unsigned int oparg,
     _PyIRWord *next_instr,
-    PyObject **stack_pointer,
+    _PyStackRef *slots,
     int throwflag,
     PyObject *args[]
 )
 {
     // Dummy labels.
-    pop_1_error:
+    error:
     // Dummy locals.
     PyObject *dummy;
     _PyIRWord *this_instr;
@@ -1310,6 +1310,7 @@ dummy_func(
             pushed_frame->localsplus[1] = sub;
             INPUTS_DEAD();
             frame->return_offset = INSTRUCTION_SIZE;
+            frame->return_slot = (uint16_t)IR_DST_SLOT;
             new_frame = PyStackRef_Wrap(pushed_frame);
         }
 
@@ -1494,7 +1495,7 @@ dummy_func(
             _PyStackRef temp = retval;
             DEAD(retval);
             SAVE_STACK();
-            assert(STACK_LEVEL() == 0);
+            _PyFrame_AssertTemporariesClear(frame);
             DTRACE_FUNCTION_RETURN();
             _Py_LeaveRecursiveCallPy(tstate);
             // GH-99729: We need to unlink the frame *before* clearing it:
@@ -1602,13 +1603,14 @@ dummy_func(
             {
                 PyGenObject *gen = (PyGenObject *)receiver_o;
                 _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
-                _PyFrame_StackPush(gen_frame, PyStackRef_MakeHeapSafe(v));
+                _PyFrame_SetReturnValue(gen_frame, PyStackRef_MakeHeapSafe(v));
                 DEAD(v);
                 SYNC_SP();
                 gen->gi_exc_state.previous_item = tstate->exc_info;
                 tstate->exc_info = &gen->gi_exc_state;
                 assert(INSTRUCTION_SIZE + oparg <= UINT16_MAX);
                 frame->return_offset = (uint16_t)(INSTRUCTION_SIZE + oparg);
+                frame->return_slot = (uint16_t)IR_DST_SLOT;
                 gen->gi_yield_offset = INSTRUCTION_SIZE;
                 assert(gen_frame->previous == NULL);
                 gen_frame->previous = frame;
@@ -1648,12 +1650,13 @@ dummy_func(
             EXIT_IF(!gen_try_set_executing((PyGenObject *)gen));
             STAT_INC(SEND, hit);
             _PyInterpreterFrame *pushed_frame = &gen->gi_iframe;
-            _PyFrame_StackPush(pushed_frame, PyStackRef_MakeHeapSafe(v));
+            _PyFrame_SetReturnValue(pushed_frame, PyStackRef_MakeHeapSafe(v));
             DEAD(v);
             gen->gi_exc_state.previous_item = tstate->exc_info;
             tstate->exc_info = &gen->gi_exc_state;
             assert(INSTRUCTION_SIZE + oparg <= UINT16_MAX);
             frame->return_offset = (uint16_t)(INSTRUCTION_SIZE + oparg);
+            frame->return_slot = (uint16_t)IR_DST_SLOT;
             gen->gi_yield_offset = INSTRUCTION_SIZE;
             pushed_frame->previous = frame;
             gen_frame = PyStackRef_Wrap(pushed_frame);
@@ -1749,6 +1752,9 @@ dummy_func(
             gen->gi_exc_state.previous_item = NULL;
             _Py_LeaveRecursiveCallPy(tstate);
             _PyInterpreterFrame *gen_frame = frame;
+            // The value sent in when the generator resumes takes the slot
+            // of the value it yields
+            gen_frame->return_slot = (uint16_t)IR_BASE;
             _PyThreadState_UpdateLastProfiledFrame(tstate, gen_frame, gen_frame->previous);
             frame = tstate->current_frame = frame->previous;
             gen_frame->previous = NULL;
@@ -1914,7 +1920,7 @@ dummy_func(
             (void)seq;
         }
 
-        op(_UNPACK_SEQUENCE, (seq -- unused[oparg], top[0])) {
+        window op(_UNPACK_SEQUENCE, (seq -- unused[oparg], top[0])) {
             PyObject *seq_o = PyStackRef_AsPyObjectSteal(seq);
             int res = _PyEval_UnpackIterableStackRef(tstate, seq_o, oparg, -1, top);
             Py_DECREF(seq_o);
@@ -1972,7 +1978,7 @@ dummy_func(
             DECREF_INPUTS();
         }
 
-        inst(UNPACK_EX, (seq -- unused[oparg & 0xFF], unused, unused[oparg >> 8], top[0])) {
+        window inst(UNPACK_EX, (seq -- unused[oparg & 0xFF], unused, unused[oparg >> 8], top[0])) {
             PyObject *seq_o = PyStackRef_AsPyObjectSteal(seq);
             int res = _PyEval_UnpackIterableStackRef(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
             Py_DECREF(seq_o);
@@ -2291,12 +2297,11 @@ dummy_func(
                 format_o = &_Py_STR(empty);
             }
             PyObject *interpolation_o = _PyInterpolation_Build(value_o, str_o, conversion, format_o);
-            if (oparg & 1) {
-                PyStackRef_CLOSE(format[0]);
-            }
-            else {
-                DEAD(format);
-            }
+            // The handler clears the slots of the array before it closes
+            // the element, so the element moves to a C variable first
+            _PyStackRef format_ref = (oparg & 1) ? format[0] : PyStackRef_NULL;
+            DEAD(format);
+            PyStackRef_XCLOSE(format_ref);
             PyStackRef_CLOSE(str);
             PyStackRef_CLOSE(value);
             ERROR_IF(interpolation_o == NULL);
@@ -3842,12 +3847,13 @@ dummy_func(
             EXIT_IF(!gen_try_set_executing((PyGenObject *)gen));
             STAT_INC(FOR_ITER, hit);
             _PyInterpreterFrame *pushed_frame = &gen->gi_iframe;
-            _PyFrame_StackPush(pushed_frame, PyStackRef_None);
+            _PyFrame_SetReturnValue(pushed_frame, PyStackRef_None);
             gen->gi_exc_state.previous_item = tstate->exc_info;
             tstate->exc_info = &gen->gi_exc_state;
             pushed_frame->previous = frame;
             // oparg is the return offset from the next instruction.
             frame->return_offset = (uint16_t)(INSTRUCTION_SIZE + oparg);
+            frame->return_slot = (uint16_t)IR_DST_SLOT;
             gen->gi_yield_offset = INSTRUCTION_SIZE;
             gen_frame = PyStackRef_Wrap(pushed_frame);
         }
@@ -3858,7 +3864,9 @@ dummy_func(
             _FOR_ITER_GEN_FRAME +
             _PUSH_FRAME;
 
-        op(_INSERT_NULL, (self -- method_and_self[2])) {
+        // A window: the method and self go to the canonical slots, which a
+        // folded input, a local, would not name
+        window op(_INSERT_NULL, (self -- method_and_self[2])) {
             method_and_self[1] = self;
             method_and_self[0] = PyStackRef_NULL;
             DEAD(self);
@@ -4136,6 +4144,7 @@ dummy_func(
                     ERROR_NO_POP();
                 }
                 frame->return_offset = INSTRUCTION_SIZE;
+                frame->return_slot = (uint16_t)IR_DST_SLOT;
                 DISPATCH_INLINED(new_frame);
             }
             PyObject* res_o = _Py_VectorCallInstrumentation_StackRefSteal(
@@ -4349,9 +4358,6 @@ dummy_func(
             tstate->py_recursion_remaining--;
             RELOAD_STACK();
             LOAD_IP(0);
-            #ifdef Py_DEBUG
-            assert(frame->previous->stackpointer_valid == 1);
-            #endif
             DTRACE_FUNCTION_ENTRY();
             LLTRACE_RESUME_FRAME();
         }
@@ -4499,6 +4505,7 @@ dummy_func(
         }
 
         op(_CREATE_INIT_FRAME, (init, self, args[oparg] -- init_frame)) {
+            /* The shim gets the result of __init__ in slot 1 */
             _PyInterpreterFrame *shim = _PyFrame_PushTrampolineUnchecked(
                 tstate, (PyCodeObject *)&_Py_InitCleanup, 1, frame);
             assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 0) == EXIT_INIT_CHECK);
@@ -4516,6 +4523,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
             frame->return_offset = INSTRUCTION_SIZE_OF(CALL);
+            frame->return_slot = (uint16_t)IR_DST_SLOT;
             /* Account for pushing the extra frame.
              * We don't check recursion depth here,
              * as it will be checked after start_frame */
@@ -5106,6 +5114,7 @@ dummy_func(
                 }
                 assert(INSTRUCTION_SIZE == INSTRUCTION_SIZE_OF(CALL_KW));
                 frame->return_offset = INSTRUCTION_SIZE;
+                frame->return_slot = (uint16_t)IR_DST_SLOT;
                 DISPATCH_INLINED(new_frame);
             }
             PyObject* res_o = _Py_VectorCallInstrumentation_StackRefSteal(
@@ -5348,6 +5357,7 @@ dummy_func(
                     }
                     assert(INSTRUCTION_SIZE == INSTRUCTION_SIZE_OF(CALL_FUNCTION_EX));
                     frame->return_offset = INSTRUCTION_SIZE;
+                    frame->return_slot = (uint16_t)IR_DST_SLOT;
                     DISPATCH_INLINED(new_frame);
                 }
                 PyObject *callargs = PyStackRef_AsPyObjectBorrow(callargs_st);
@@ -5492,11 +5502,12 @@ dummy_func(
             PyFunctionObject *func = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(frame->f_funcobj);
             PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func);
             ERROR_IF(gen == NULL);
-            assert(STACK_LEVEL() <= 2);
             SAVE_STACK();
             _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
             frame->instr_ptr++;
             _PyFrame_Copy(frame, gen_frame);
+            // The value of the first send takes the slot of res
+            gen_frame->return_slot = (uint16_t)IR_BASE;
             assert(frame->frame_obj == NULL);
             gen->gi_frame_state = FRAME_CREATED;
             gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
@@ -5743,22 +5754,10 @@ dummy_func(
 
         op(_SAVE_RETURN_OFFSET, (--)) {
             frame->return_offset = (uint16_t)(next_instr - this_instr);
-        }
-
-        label(pop_2_error) {
-            stack_pointer -= 2;
-            assert(WITHIN_STACK_BOUNDS());
-            goto error;
-        }
-
-        label(pop_1_error) {
-            stack_pointer -= 1;
-            assert(WITHIN_STACK_BOUNDS());
-            goto error;
+            frame->return_slot = (uint16_t)IR_DST_SLOT;
         }
 
         label(error) {
-            _PyFrame_StackAssertInvalid(frame);
             /* Double-check exception status. */
 #ifdef NDEBUG
             if (!_PyErr_Occurred(tstate)) {
@@ -5784,31 +5783,25 @@ dummy_func(
         spilled label(exception_unwind) {
             /* We can't use frame->instr_ptr here, as RERAISE may have set it */
             int offset = CURRENT_OFFSET();
-            int level, handler, lasti;
-            int handled = get_exception_handler(_PyFrame_GetCode(frame), offset, &level, &handler, &lasti);
+            int exc_slot, handler, lasti;
+            int handled = get_exception_handler(_PyFrame_GetCode(frame), offset, &exc_slot, &handler, &lasti);
             if (handled == 0) {
                 // No handlers, so exit.
                 assert(_PyErr_Occurred(tstate));
-                /* Pop remaining stack entries. */
-                _PyStackRef *stackbase = _PyFrame_Stackbase(frame);
-                while (frame->stackpointer > stackbase) {
-                    _PyStackRef ref = _PyFrame_StackPop(frame);
-                    PyStackRef_XCLOSE(ref);
-                }
+                _PyFrame_ClearTemporaries(frame, _PyFrame_GetCode(frame)->co_nlocalsplus);
                 monitor_unwind(tstate, frame, next_instr-1);
                 goto exit_unwind;
             }
-            assert(STACK_LEVEL() >= level);
-            _PyStackRef *new_top = _PyFrame_Stackbase(frame) + level;
-            assert(frame->stackpointer >= new_top);
-            while (frame->stackpointer > new_top) {
-                _PyStackRef ref = _PyFrame_StackPop(frame);
-                PyStackRef_XCLOSE(ref);
-            }
+            /* The handler's slots, for lasti and the exception, come after
+             * the temporaries that are live at the handler; the rest are
+             * dead there. */
+            int first = exc_slot - lasti;
+            assert(first >= _PyFrame_GetCode(frame)->co_nlocalsplus);
+            _PyFrame_ClearTemporaries(frame, first);
+            _PyStackRef *slots = _PyFrame_Slots(frame);
             if (lasti) {
                 int frame_lasti = _PyInterpreterFrame_LASTI(frame);
-                _PyStackRef lasti = PyStackRef_TagIndex(frame_lasti);
-                _PyFrame_StackPush(frame, lasti);
+                slots[first] = PyStackRef_TagIndex(frame_lasti);
             }
 
             /* Make the raw exception data
@@ -5816,7 +5809,7 @@ dummy_func(
                 so a program can emulate the
                 Python main loop. */
             PyObject *exc = _PyErr_GetRaisedException(tstate);
-            _PyFrame_StackPush(frame, PyStackRef_FromPyObjectSteal(exc));
+            slots[exc_slot] = PyStackRef_FromPyObjectSteal(exc);
             next_instr = INSTR_AT_OFFSET(handler);
 
             int err = monitor_handled(tstate, frame, next_instr, exc);
@@ -5869,9 +5862,6 @@ dummy_func(
         }
 
         spilled label(start_frame) {
-            #ifdef Py_DEBUG
-            assert(frame->stackpointer_valid == 1);
-            #endif
             int too_deep = _Py_EnterRecursivePy(tstate);
             if (too_deep) {
                 goto exit_unwind_notrace;

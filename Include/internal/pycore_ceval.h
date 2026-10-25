@@ -454,11 +454,6 @@ _Py_BuildMap_StackRefSteal(
     _PyStackRef *arguments,
     int half_args);
 
-PyAPI_FUNC(void)
-_Py_assert_within_stack_bounds(
-    _PyInterpreterFrame *frame, _PyStackRef *stack_pointer,
-    const char *filename, int lineno);
-
 PyAPI_FUNC(_PyStackRef)
 _Py_LoadAttr_StackRefSteal(
     PyThreadState *tstate, _PyStackRef owner,

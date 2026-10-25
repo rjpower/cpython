@@ -89,11 +89,11 @@
 #   define TAIL_CALL_NO_OPERANDS 0
 
 #ifdef Py_STATS
-#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
-#   define TAIL_CALL_ARGS frame, stack_pointer, tstate, next_instr, TAIL_CALL_OPERAND_ARGS, lastopcode
+#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
+#   define TAIL_CALL_ARGS frame, slots, tstate, next_instr, TAIL_CALL_OPERAND_ARGS, lastopcode
 #else
-#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS
-#   define TAIL_CALL_ARGS frame, stack_pointer, tstate, next_instr, TAIL_CALL_OPERAND_ARGS
+#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS
+#   define TAIL_CALL_ARGS frame, slots, tstate, next_instr, TAIL_CALL_OPERAND_ARGS
 #endif
 
 #if _Py_TAIL_CALL_INTERP
@@ -126,12 +126,12 @@
 #   ifdef Py_STATS
 #       define JUMP_TO_PREDICTED(name) \
             do { \
-                Py_MUSTTAIL return (_TAIL_CALL_##name)(frame, stack_pointer, tstate, this_instr, TAIL_CALL_OPERAND_ARGS, lastopcode); \
+                Py_MUSTTAIL return (_TAIL_CALL_##name)(frame, slots, tstate, this_instr, TAIL_CALL_OPERAND_ARGS, lastopcode); \
             } while (0)
 #   else
 #       define JUMP_TO_PREDICTED(name) \
             do { \
-                Py_MUSTTAIL return (_TAIL_CALL_##name)(frame, stack_pointer, tstate, this_instr, TAIL_CALL_OPERAND_ARGS); \
+                Py_MUSTTAIL return (_TAIL_CALL_##name)(frame, slots, tstate, this_instr, TAIL_CALL_OPERAND_ARGS); \
             } while (0)
 #   endif
 #    define LABEL(name) TARGET(name)
@@ -205,10 +205,7 @@ ir_check_field(uintptr_t field, uint64_t expected)
 /* PRE_DISPATCH_GOTO() does lltrace if enabled. Normally a no-op */
 #ifdef Py_DEBUG
 #define PRE_DISPATCH_GOTO() if (frame->lltrace >= 5) { \
-    lltrace_instruction(frame, stack_pointer, next_instr, opcode); }
-#elif defined(Py_DEBUG)
-#define PRE_DISPATCH_GOTO() if (frame->lltrace >= 5) { \
-    lltrace_instruction(frame, stack_pointer, next_instr, opcode, oparg); }
+    lltrace_instruction(frame, next_instr, opcode); }
 #else
 #define PRE_DISPATCH_GOTO() ((void)0)
 #endif
@@ -216,9 +213,7 @@ ir_check_field(uintptr_t field, uint64_t expected)
 #ifdef Py_DEBUG
 #define LLTRACE_RESUME_FRAME() \
 do { \
-    _PyFrame_SetStackPointer(frame, stack_pointer); \
     int lltrace = maybe_lltrace_resume_frame(frame, GLOBALS()); \
-    stack_pointer = _PyFrame_GetStackPointer(frame); \
     frame->lltrace = lltrace; \
 } while (0)
 #else
@@ -235,7 +230,6 @@ do { \
 /* Do interpreter dispatch accounting for tracing and instrumentation */
 #define DISPATCH() \
     { \
-        _PyFrame_StackAssertInvalid(frame); \
         NEXTOPARG(); \
         PRE_DISPATCH_GOTO(); \
         DISPATCH_GOTO(); \
@@ -251,8 +245,6 @@ do { \
 #define DISPATCH_INLINED(NEW_FRAME)                              \
     do {                                                         \
         assert(!IS_PEP523_HOOKED(tstate));                       \
-        _PyFrame_SetStackPointer(frame, stack_pointer);          \
-        _PyFrame_StackPointerValidate(frame);                    \
         assert((NEW_FRAME)->previous == frame);                  \
         frame = tstate->current_frame = (NEW_FRAME);             \
         CALL_STAT_INC(inlined_py_calls);                         \
@@ -292,11 +284,7 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 #define JUMPTO(T)       (next_instr = JUMP_TARGET(T))
 #define SKIP_OVER(x)    (next_instr += (x))
 
-#define STACK_LEVEL()     ((int)(stack_pointer - _PyFrame_Stackbase(frame)))
-#define STACK_SIZE()      (_PyFrame_GetCode(frame)->co_stacksize)
 
-#define WITHIN_STACK_BOUNDS() \
-   (frame->owner == FRAME_OWNED_BY_INTERPRETER || (STACK_LEVEL() >= 0 && STACK_LEVEL() <= STACK_SIZE()))
 
 /* Data access macros */
 #define FRAME_CO_CONSTS (_PyFrame_GetCode(frame)->co_consts)
@@ -304,8 +292,8 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 
 /* Local variable macros */
 
-#define LOCALS_ARRAY    (frame->localsplus)
-#define GETLOCAL(i)     (frame->localsplus[i])
+#define LOCALS_ARRAY    (slots)
+#define GETLOCAL(i)     (slots[i])
 
 
 #ifdef Py_STATS
@@ -437,9 +425,7 @@ do { \
     if (tstate->tracing) {\
         next_instr = _dest; \
     } else { \
-        _PyFrame_SetStackPointer(frame, stack_pointer); \
         next_instr = _Py_call_instrumentation_jump(this_instr, tstate, event, frame, src, _dest); \
-        stack_pointer = _PyFrame_GetStackPointer(frame); \
         if (next_instr == NULL) { \
             next_instr = _dest + 1; \
             JUMP_TO_LABEL(error); \
@@ -466,11 +452,6 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 
 /* There's no STORE_IP(), it's inlined by the code generator. */
 
-#define LOAD_SP() \
-stack_pointer = _PyFrame_GetStackPointer(frame)
-
-#define SAVE_SP() \
-_PyFrame_SetStackPointer(frame, stack_pointer)
 
 /* Stackref macros */
 
@@ -552,31 +533,35 @@ gen_try_set_executing(PyGenObject *gen)
 /* Operands of the register IR handlers (Tools/cases_generator/ir_generator.py).
  * F is a field, IR_FIELD_A(this_instr) and so on. */
 
-/* The slot that a slot field names, an lvalue. */
-#define IR_SLOT(F) (frame->localsplus[(F)])
+/* The slot that a slot field names, an lvalue.  `slots` is the frame's
+ * slots, _PyFrame_Slots(frame), which the handlers keep in a register. */
+#define IR_SLOT(F) (slots[(F)])
 
-/* Whether an input that the handler reads through field F, whose canonical
- * slot is CANON, names a local whose LOAD_FAST_BORROW a fold absorbed.
- * A local is below every temporary, so it is never CANON. */
-#define IR_BORROWED(F, CANON) ((int)(F) != (int)(CANON))
+/* Whether field F names a local, a cell or a free variable rather than a
+ * temporary: the executing copy keeps co_nlocalsplus in its header.  An
+ * input read through a local is borrowed; one read through a temporary is
+ * the handler's, which it takes, leaving NULL in the slot. */
+#define IR_NLOCALSPLUS() \
+    ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
+#define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
 
 /* REF, read through field F and known to be a pointer, borrowed if F names
  * a local. */
 static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
 #ifdef Py_STACKREF_DEBUG
-#  define IR_BORROW_KNOWN(REF, F, CANON) \
-    (IR_BORROWED(F, CANON) ? PyStackRef_Borrow(REF) : (REF))
+#  define IR_BORROW_KNOWN(REF, F) \
+    (IR_IS_LOCAL(F) ? PyStackRef_Borrow(REF) : (REF))
 #else
-#  define IR_BORROW_KNOWN(REF, F, CANON) \
-    ((_PyStackRef){ .bits = (REF).bits | (uintptr_t)IR_BORROWED(F, CANON) })
+#  define IR_BORROW_KNOWN(REF, F) \
+    ((_PyStackRef){ .bits = (REF).bits | (uintptr_t)IR_IS_LOCAL(F) })
 #endif
 
 /* The box of an inline value read through field F, which belongs to the
- * temporary's slot if F is the canonical slot.  A local keeps its inline
- * value, and the handler drops the box as it would a temporary's. */
-#define IR_KEEP_BOX(REF, F, CANON) \
+ * slot if F names a temporary.  A local keeps its inline value, and the
+ * handler drops the box as it would a temporary's. */
+#define IR_KEEP_BOX(REF, F) \
     do { \
-        if (!IR_BORROWED(F, CANON)) { \
+        if (!IR_IS_LOCAL(F)) { \
             IR_SLOT(F) = (REF); \
         } \
     } while (0)
@@ -585,10 +570,97 @@ static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
  * names a local: the family head reads the local again.  REF is a borrow,
  * which only the Py_STACKREF_DEBUG checker counts, or the box of the
  * local's inline value. */
-#define IR_DROP_BORROW(REF, F, CANON) \
+#define IR_DROP_BORROW(REF, F) \
     do { \
-        if (IR_BORROWED(F, CANON)) { \
+        if (IR_IS_LOCAL(F)) { \
             PyStackRef_CLOSE(REF); \
+        } \
+    } while (0)
+
+/* An input that the handler consumes as it is, through field F: a
+ * temporary, or a borrow of the local that F names, which is what
+ * LOAD_FAST_BORROW would have pushed. */
+#if defined(Py_STACKREF_DEBUG) || !defined(Py_STACKREF_INLINE_VALUES)
+#  define IR_LOAD_BORROWED(F) \
+    (IR_IS_LOCAL(F) ? PyStackRef_BorrowAt(&IR_SLOT(F)) : IR_SLOT(F))
+#else
+#  define IR_LOAD_BORROWED(F) \
+    ((_PyStackRef){ .bits = IR_SLOT(F).bits \
+        | ((uintptr_t)IR_IS_LOCAL(F) & _PyStackRef_BorrowBitAt(&IR_SLOT(F))) })
+#endif
+
+/* The handler takes the input that it read through field F: a temporary's
+ * slot becomes NULL, and a local keeps its value. */
+#define IR_CONSUME_INPUT(F) \
+    do { \
+        if (!IR_IS_LOCAL(F)) { \
+            IR_SLOT(F) = PyStackRef_NULL; \
+        } \
+    } while (0)
+
+/* V, the input read through field F or what replaced it, goes back to a
+ * temporary's slot. */
+#define IR_STORE_INPUT(F, V) \
+    do { \
+        if (!IR_IS_LOCAL(F)) { \
+            IR_SLOT(F) = (V); \
+        } \
+    } while (0)
+
+/* A handler writes a temporary into a slot that holds NULL. */
+#define IR_STORE_TEMP(SLOT, V) \
+    do { \
+        assert(PyStackRef_IsNull(SLOT)); \
+        (SLOT) = (V); \
+    } while (0)
+
+/* The result V goes to dst field F, which may name a local (a folded
+ * STORE_FAST, _PyIR_STORE_DST): the local's old value is released after
+ * it, as STORE_FAST does.  A temporary's slot holds NULL, or V when the
+ * handler wrote it there before (IR_STORE_TEMP_DST). */
+#define IR_STORE_DST(F, V) \
+    do { \
+        if (IR_IS_LOCAL(F)) { \
+            _PyStackRef ir_old = IR_SLOT(F); \
+            IR_SLOT(F) = (V); \
+            PyStackRef_XCLOSE(ir_old); \
+        } \
+        else { \
+            assert(PyStackRef_IsNull(IR_SLOT(F)) \
+                   || _PyStackRef_BITS(IR_SLOT(F)) == _PyStackRef_BITS(V)); \
+            IR_SLOT(F) = (V); \
+        } \
+    } while (0)
+
+/* Before code that may run other code, the result V goes to dst field F
+ * if F names a temporary.  A local gets it at the end, IR_STORE_DST. */
+#define IR_STORE_TEMP_DST(F, V) \
+    do { \
+        if (!IR_IS_LOCAL(F)) { \
+            assert(PyStackRef_IsNull(IR_SLOT(F)) \
+                   || _PyStackRef_BITS(IR_SLOT(F)) == _PyStackRef_BITS(V)); \
+            IR_SLOT(F) = (V); \
+        } \
+    } while (0)
+
+/* A window-style handler whose dst field F may name a local moves its
+ * result from SLOT of its window there, releasing the local's old value. */
+#define IR_MOVE_TO_DST(F, SLOT) \
+    do { \
+        if (IR_IS_LOCAL(F)) { \
+            _PyStackRef ir_old = IR_SLOT(F); \
+            IR_SLOT(F) = (SLOT); \
+            (SLOT) = PyStackRef_NULL; \
+            PyStackRef_XCLOSE(ir_old); \
+        } \
+    } while (0)
+
+/* Clear N slots from PTR on; N may be zero or less. */
+#define IR_CLEAR_SLOTS(PTR, N) \
+    do { \
+        _PyStackRef *ir_p = (PTR); \
+        for (int ir_i = 0; ir_i < (int)(N); ir_i++) { \
+            ir_p[ir_i] = PyStackRef_NULL; \
         } \
     } while (0)
 
@@ -617,79 +689,9 @@ static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
         DISPATCH_GOTO(); \
     } while (0)
 
-/* Whether field F names a local, a cell or a free variable rather than a
- * temporary: the executing copy keeps co_nlocalsplus in its header. */
-#define IR_NLOCALSPLUS() \
-    ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
-#define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
-
-/* A folded STORE_FAST (_PyIR_STORE_DST): when dst field F names a local,
- * the result that the handler left on top of the stack moves there, and
- * the old value of the local is released after it, as STORE_FAST does. */
-#define IR_STORE_RESULT(F) \
-    do { \
-        if (IR_IS_LOCAL(F)) { \
-            _PyStackRef ir_old = IR_SLOT(F); \
-            IR_SLOT(F) = stack_pointer[-1]; \
-            stack_pointer -= 1; \
-            _PyFrame_SetStackPointer(frame, stack_pointer); \
-            _PyFrame_StackPointerValidate(frame); \
-            PyStackRef_XCLOSE(ir_old); \
-            _PyFrame_StackPointerInvalidate(frame); \
-        } \
-    } while (0)
-
-/* The slot that stack_pointer points to */
-#define IR_STACK_SLOT() ((int)(stack_pointer - frame->localsplus))
-
-/* An input that the handler consumes as it is, through field F, whose
- * canonical slot is CANON: a temporary, or a borrow of the local that F
- * names, which is what LOAD_FAST_BORROW would have pushed. */
-#if defined(Py_STACKREF_DEBUG) || !defined(Py_STACKREF_INLINE_VALUES)
-#  define IR_LOAD_BORROWED(F, CANON) \
-    (IR_BORROWED(F, CANON) ? PyStackRef_BorrowAt(&IR_SLOT(F)) : IR_SLOT(F))
-#else
-#  define IR_LOAD_BORROWED(F, CANON) \
-    ((_PyStackRef){ .bits = IR_SLOT(F).bits \
-        | ((uintptr_t)IR_BORROWED(F, CANON) & _PyStackRef_BorrowBitAt(&IR_SLOT(F))) })
-#endif
-
-/* A handler that adds its lag to stack_pointer on entry (SYNC_LAG in the
- * generator) takes it back before a tail call to its family head, which
- * adds it again.  With computed goto the head is entered after that. */
-#if _Py_TAIL_CALL_INTERP
-#  define IR_UNSYNC_FOR_TAIL_CALL(LAG) (stack_pointer -= (LAG))
-#else
-#  define IR_UNSYNC_FOR_TAIL_CALL(LAG) ((void)0)
-#endif
-
-/* The stack pointer before an instruction whose dst field F names the slot
- * at OFF from it.  The loads that an instruction absorbs have no words, so
- * the stack pointer at its dispatch may lag behind. */
-#define IR_STACK_POINTER(F, OFF) (&frame->localsplus[(F)] - (OFF))
-
-/* An absorbed load leaves the canonical slot of its value as it was, so
- * before code that reads the stack runs, a handler clears SLOT, the
- * canonical slot of an input that it reads through field F, if F names a
- * local. */
-#define IR_CLEAR_IF_BORROWED(F, SLOT) \
-    do { \
-        if (&IR_SLOT(F) != &(SLOT)) { \
-            (SLOT) = PyStackRef_NULL; \
-        } \
-    } while (0)
-
-/* Every temporary lives in its canonical slot, at OFF from stack_pointer.
- * An input that may be borrowed may instead name a local. */
-#ifdef Py_DEBUG
-#  define IR_CHECK_SLOT(F, OFF) assert(&IR_SLOT(F) == &stack_pointer[(OFF)])
-#  define IR_CHECK_INPUT(F, OFF) \
-    assert(&IR_SLOT(F) == &stack_pointer[(OFF)] \
-           || (int)(F) < _PyFrame_GetCode(frame)->co_nlocalsplus)
-#else
-#  define IR_CHECK_SLOT(F, OFF) ((void)0)
-#  define IR_CHECK_INPUT(F, OFF) ((void)0)
-#endif
+/* After a frame switch, V goes to the slot of the frame that control came
+ * back to (frame->return_slot). */
+#define IR_STORE_RETURN(V) _PyFrame_SetReturnValue(frame, (V))
 
 /* The oparg and feedback entry of another instruction of the frame. */
 #define _PyIR_Oparg(FRAME, INSTR) \

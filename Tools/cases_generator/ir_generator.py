@@ -84,6 +84,7 @@ from analyzer import (
     analysis_error,
     analyze_files,
 )
+from parser import SimpleStmt
 from generators_common import (
     DEFAULT_INPUT,
     ROOT,
@@ -149,17 +150,10 @@ IR_INSTRUCTION_MACROS = {
 ROLE_NONE, ROLE_IN0, ROLE_DST, ROLE_BASE, ROLE_FB, ROLE_IMM = (
     "_PyIR_ROLE_NONE", "_PyIR_ROLE_IN0", "_PyIR_ROLE_DST",
     "_PyIR_ROLE_BASE", "_PyIR_ROLE_FB", "_PyIR_ROLE_IMM")
-ROLE_TOP = "_PyIR_ROLE_TOP"
 LOC_NONE, LOC_A, LOC_B, LOC_C, LOC_D, LOC_CD, LOC_FBARG = (
     "_PyIR_LOC_NONE", "_PyIR_LOC_A", "_PyIR_LOC_B", "_PyIR_LOC_C",
     "_PyIR_LOC_D", "_PyIR_LOC_CD", "_PyIR_LOC_FBARG")
 FIELD_LOCS = {"A": LOC_A, "B": LOC_B, "C": LOC_C, "D": LOC_D}
-
-# How a handler whose inputs may name locals finds the stack pointer, which
-# lags behind by the folded loads that have no words: from its dst, from
-# the canonical top slot in a field of its own (ROLE_TOP), or, where no
-# field is free, by adding the number of its inputs that name locals.
-SYNC_NONE, SYNC_DST, SYNC_TOP, SYNC_LAG = "none", "dst", "top", "lag"
 
 # The families whose oparg is a forward distance in words, in D, rather than
 # an absolute target: the loops, whose bodies jump relative to the next word.
@@ -213,13 +207,8 @@ class IRFormat:
     # What place_fields() placed, from which the NOFB form follows
     slot_roles: tuple[str, ...] = ()
     imm_kind: str | None = None
-    sync: str = "none"              # how the handler finds the stack
-                                    # pointer, see SYNC_*
     store_dst: bool = False         # dst may name a local, see
                                     # stores_to_dst()
-
-    def __post_init__(self) -> None:
-        assert self.sync != SYNC_NONE or not self.borrow_mask, self.group
 
     def field_of(self, role: str) -> str | None:
         for name, r in zip(FIELDS, self.roles):
@@ -229,23 +218,6 @@ class IRFormat:
 
     def input_field(self, k: int) -> str:
         return FIELDS[self.roles.index(f"{ROLE_IN0} + {k}")]
-
-    def canonical_slot(self, k: int) -> str:
-        """The C expression of the canonical slot of input k, the slot that
-        its field names unless it names a local.  It follows from dst, the
-        top slot, or the stack pointer, which the handler sets first."""
-        if self.sync == SYNC_DST:
-            assert self.dst_offset is not None
-            base = FIELD_VARS[self.field_of(ROLE_DST)]
-            delta = k - self.n_inputs - self.dst_offset
-        elif self.sync == SYNC_TOP:
-            base = FIELD_VARS[self.field_of(ROLE_TOP)]
-            delta = k - self.n_inputs
-        else:
-            assert self.sync == SYNC_LAG
-            base = "IR_STACK_SLOT()"
-            delta = k - self.n_inputs
-        return f"{base} + {delta}" if delta else base
 
     def borrowed_fields(self) -> list[str]:
         "The C expressions of the fields of the inputs that may be borrowed"
@@ -681,22 +653,12 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
             if all(u[k] in ("object", "raw") for u in uses):
                 borrow_mask |= 1 << k
     store_dst = stores_to_dst(members, io, dst_offset, window)
-    sync = SYNC_NONE
-    if borrow_mask and dst_offset is not None and not store_dst:
-        sync = SYNC_DST
-    elif borrow_mask and ROLE_NONE in roles:
-        # The canonical top slot in a free field
-        roles = list(roles)
-        roles[roles.index(ROLE_NONE)] = ROLE_TOP
-        sync = SYNC_TOP
-    elif borrow_mask:
-        sync = SYNC_LAG
     return IRFormat(
         group=group, window=window, roles=roles, inputs=names,
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
         imm=imm, fb=fb, jumps=jumps and not forward, forward=forward,
         no_fold=no_fold, slot_roles=slot_roles, imm_kind=imm_kind,
-        sync=sync, store_dst=store_dst,
+        store_dst=store_dst,
     )
 
 
@@ -755,13 +717,7 @@ def nofb_format(fmt: IRFormat) -> IRFormat:
     placed = place_fields(list(fmt.slot_roles), False, fmt.imm_kind, fmt.window)
     assert placed is not None, fmt.group
     roles, imm, fb = placed
-    sync = fmt.sync
-    if sync == SYNC_TOP and ROLE_NONE in roles:
-        roles[roles.index(ROLE_NONE)] = ROLE_TOP
-    elif sync == SYNC_TOP:
-        # The oparg took the free field
-        sync = SYNC_LAG
-    return replace(fmt, roles=roles, imm=imm, fb=fb, sync=sync)
+    return replace(fmt, roles=roles, imm=imm, fb=fb)
 
 
 def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
@@ -814,82 +770,318 @@ def is_specialization(inst: Instruction) -> bool:
     return inst.family is not None
 
 
-class IRStack(Stack):
-    """A stack that reads the external inputs at the offsets of field_inputs
-    through their fields, the SlotStack of the design note. An offset leaves
-    field_inputs when the handler writes the canonical slot, which then holds
-    the current value."""
+@dataclass
+class SlotLayout:
+    """Where a handler keeps the positions of the stack effect, the offsets
+    from the top of the stack before the instruction that Stack tracks.
+    There is no stack pointer.  A window-style handler addresses position p
+    as window[p - base], from the slot that its base field names.  A
+    register-style handler reads input k through its field and writes its
+    outputs at dst and the slots after it."""
+    window: bool
+    base: PointerOffset             # window: position of the deepest input
+    # Register style: the field of the input at each position, the
+    # positions whose field may name a local, and dst
+    in_fields: dict[int, str]
+    borrowable: frozenset[int]
+    dst: str | None = None
+    dst_offset: int | None = None   # register: position of dst; window:
+                                    # its offset from base
+    store_dst: bool = False         # dst may name a local
 
-    def __init__(self, field_inputs: dict[int, str] | None = None,
-                 raw_inputs: dict[int, str] | None = None) -> None:
+    @staticmethod
+    def empty() -> "SlotLayout":
+        return SlotLayout(False, PointerOffset.zero(), {}, frozenset())
+
+
+def may_be_positive(diff: PointerOffset) -> bool:
+    "Whether diff can be above zero; symbolic sizes are never negative"
+    d = diff.as_int()
+    if d is not None:
+        return d > 0
+    return bool(diff.positive) or diff.numeric > 0
+
+
+class IRStack(Stack):
+    """The frame's slots in place of the stack, the SlotStack of the design
+    note.  Every slot holds a value that the frame owns or NULL: a handler
+    that consumes a temporary takes its reference and stores NULL in its
+    slot, and a slot that a handler writes for a temporary holds NULL.  An
+    input field that names a local, a cell or a free variable (a slot below
+    co_nlocalsplus) is borrowed: its slot is never cleared or written.
+
+    Positions that the stack gives up, below the old and above the new top,
+    are cleared.  In register style the value at a position lives in the
+    slot of its input (its home) until the handler writes another value
+    there, which goes to the slot counted from dst."""
+
+    def __init__(self, layout: SlotLayout | None = None,
+                 raw_inputs: set[int] | None = None) -> None:
         super().__init__()
-        self.field_inputs = dict(field_inputs or {})
-        # The offsets of the inputs that the handler consumes as they are,
-        # with their canonical slots: those read through a local come
-        # borrowed, as LOAD_FAST_BORROW would have pushed them.
-        self.raw_inputs = dict(raw_inputs or {})
+        self.layout = layout if layout is not None else SlotLayout.empty()
+        # The positions of the borrowable inputs that the handler consumes
+        # as they are: those read through a local come borrowed, as
+        # LOAD_FAST_BORROW would have pushed them.
+        self.raw_inputs = set(raw_inputs or ())
+        # Register style: where the frame holds the value at a constant
+        # position, "in" the slot of its input or "out" the slot from dst.
+        # Positions that are not constant are outputs.
+        self.owner: dict[int, str] = {}
+        if not self.layout.window:
+            self.owner = {p: "in" for p in self.layout.in_fields}
+        # Set for the flush at the end of the handler, where a dst that
+        # names a local is written; and after the frame changed, when no
+        # position may be written.
+        self.final = False
+        self.reloaded = False
+        self.error_exit = False
 
     def copy(self) -> "IRStack":
         other = super().copy()
         assert isinstance(other, IRStack)
-        other.field_inputs = dict(self.field_inputs)
-        other.raw_inputs = dict(self.raw_inputs)
+        other.owner = dict(self.owner)
+        other.raw_inputs = set(self.raw_inputs)
         return other
 
-    def field_of(self, var: StackItem, memory_offset: PointerOffset) -> str | None:
-        offset = memory_offset.as_int()
-        if var.is_array() or offset is None:
-            return None
-        return self.field_inputs.get(offset)
+    def input_field(self, p: int) -> str:
+        "The C expression of the field of the input at position p"
+        return FIELD_VARS[self.layout.in_fields[p]]
+
+    def out_slot(self, p: PointerOffset) -> str:
+        "The slot of position p counted from dst"
+        lay = self.layout
+        if lay.dst is None or lay.dst_offset is None:
+            raise StackError(f"no slot for stack position {p}")
+        k = p - PointerOffset(lay.dst_offset, (), ())
+        if k.as_int() is not None and k.as_int() < 0 or k.negative:
+            raise StackError(f"no slot for stack position {p}")
+        dst = FIELD_VARS[lay.dst]
+        return f"IR_SLOT({dst})" if k.as_int() == 0 else f"IR_SLOT({dst} + {k.to_c()})"
+
+    def window_slot(self, p: PointerOffset) -> str:
+        return f"window[{(p - self.layout.base).to_c()}]"
+
+    def address(self, memory_offset: PointerOffset) -> str:
+        lay = self.layout
+        if lay.window:
+            return self.window_slot(memory_offset)
+        p = memory_offset.as_int()
+        if p is not None and self.home_of(p) == "in":
+            return f"IR_SLOT({self.input_field(p)})"
+        return self.out_slot(memory_offset)
+
+    def home_of(self, p: int) -> str | None:
+        "Where the value at constant position p lives"
+        lay = self.layout
+        owner = self.owner.get(p)
+        if owner is not None:
+            return owner
+        if p in lay.in_fields and (lay.dst_offset is None or p < lay.dst_offset):
+            return "in"
+        return None
 
     def load(self, var: StackItem, memory_offset: PointerOffset) -> str:
-        field = self.field_of(var, memory_offset)
-        if field is not None:
-            canon = self.raw_inputs.get(memory_offset.as_int())
-            if canon is not None:
-                return f"IR_LOAD_BORROWED({FIELD_VARS[field]}, {canon})"
-            return f"IR_SLOT({FIELD_VARS[field]})"
+        lay = self.layout
+        if not lay.window and not var.is_array():
+            p = memory_offset.as_int()
+            if (p is not None and self.owner.get(p) == "in"
+                    and p in lay.borrowable and p in self.raw_inputs):
+                return f"IR_LOAD_BORROWED({self.input_field(p)})"
         return super().load(var, memory_offset)
 
     def pop(self, var: StackItem, out: CWriter) -> Local:
         local = super().pop(var, out)
-        if local.memory_offset is not None and var.used and local.ir_field is None:
-            local.ir_field = self.field_of(var, local.memory_offset)
-            if (local.ir_field is not None
-                    and local.memory_offset.as_int() in self.raw_inputs):
-                # Safe in any slot, as a converted object input is: a flush
-                # writes it to its canonical slot.
-                local.ir_borrowed = True
-                local.memory_offset = None
+        lay = self.layout
+        if (not lay.window and local.memory_offset is not None and var.used
+                and local.ir_input is None and not var.is_array()):
+            p = local.memory_offset.as_int()
+            if p is not None and self.owner.get(p) == "in":
+                local.ir_input = p
+                if p in lay.borrowable:
+                    local.ir_field = lay.in_fields[p]
+                    local.ir_borrowed = p in self.raw_inputs
         return local
 
-    def flush(self, out: CWriter) -> None:
-        # An input still read through its field may name a local, and then
-        # its canonical slot holds whatever the frame left there.  Clear it
-        # for whoever reads the stack.
-        for var in self.variables if self.physical_sp is not None else ():
-            if var.ir_field is not None and var.memory_offset is not None:
-                offset = (var.memory_offset - self.physical_sp).to_c()
-                out.emit(f"IR_CLEAR_IF_BORROWED({FIELD_VARS[var.ir_field]}, "
-                         f"stack_pointer[{offset}]);\n")
-        super().flush(out)
+    def consume(self, out: CWriter, p: int) -> None:
+        "The frame gives up the input at position p, which may be borrowed"
+        f = self.input_field(p)
+        if p in self.layout.borrowable:
+            out.emit(f"IR_CONSUME_INPUT({f});\n")
+        else:
+            out.emit(f"IR_SLOT({f}) = PyStackRef_NULL;\n")
+
+    def store(self, out: CWriter, var: Local, memory_offset: PointerOffset) -> bool:
+        """Write var, which the stack holds at memory_offset; whether the
+        frame then holds it there"""
+        out.start_line()
+        if self.reloaded:
+            # A value that the instruction hands to the frame it switched
+            # to: the slot that frame named when it called or resumed
+            if memory_offset.as_int() != 0:
+                raise StackError(f"'{var.name}' is written after the frame changed")
+            out.emit(f"IR_STORE_RETURN({var.name});\n")
+            return True
+        lay = self.layout
+        if lay.window:
+            out.emit(f"{self.window_slot(memory_offset)} = {var.name};\n")
+            return True
+        p = memory_offset.as_int()
+        if p is not None and var.ir_input == p and self.owner.get(p) == "in":
+            # The input itself, back in its slot: a box, or a NULL before
+            # the handler closes it
+            f = self.input_field(p)
+            if p in lay.borrowable:
+                out.emit(f"IR_STORE_INPUT({f}, {var.name});\n")
+            else:
+                out.emit(f"IR_SLOT({f}) = {var.name};\n")
+            return True
+        if p is not None and (lay.dst_offset is None or p < lay.dst_offset):
+            if p in lay.in_fields and p not in lay.borrowable:
+                # An input that the instruction passes through, changed
+                out.emit(f"IR_SLOT({self.input_field(p)}) = {var.name};\n")
+                return True
+            return self.keep(var, p)
+        if lay.store_dst and p != lay.dst_offset:
+            # dst may name a local, so the slots after it are not ours
+            return self.keep(var, p)
+        previous = self.owner.get(p) if p is not None else "out"
+        if previous == "in":
+            self.consume(out, p)
+            self.owner[p] = "out"
+            previous = None
+        slot = self.out_slot(memory_offset)
+        if lay.store_dst and p == lay.dst_offset:
+            if self.final:
+                out.emit(f"IR_STORE_DST({FIELD_VARS[lay.dst]}, {var.name});\n")
+                return True
+            # Before the end, dst gets the result only if it is a
+            # temporary; a local gets it at the end, releasing its value.
+            out.emit(f"IR_STORE_TEMP_DST({FIELD_VARS[lay.dst]}, {var.name});\n")
+            return False
+        if previous == "out":
+            out.emit(f"{slot} = {var.name};\n")
+        else:
+            out.emit(f"IR_STORE_TEMP({slot}, {var.name});\n")
+        if p is not None:
+            self.owner[p] = "out"
+        return True
+
+    def keep(self, var: Local, p: int | None) -> bool:
+        """A value at a position without a slot of its own, such as the
+        input that a later uop of the handler closes, stays in its C
+        variable, which owns it; it needs no slot unless the handler can
+        leave with it."""
+        if self.final or self.error_exit:
+            raise StackError(f"'{var.name}' has no slot at position {p}")
+        return False
 
     def save_variables(self, out: CWriter) -> None:
+        out.start_line()
         var_offset = self.base_offset
         for var in self.variables:
             if var.in_local and not var.memory_offset and not var.is_array():
-                offset = var_offset.as_int()
-                if offset is not None:
-                    self.field_inputs.pop(offset, None)
+                if self.store(out, var, var_offset):
+                    var.memory_offset = var_offset
             var_offset = var_offset.push(var.item)
-        super().save_variables(out)
+
+    def vacate(self, out: CWriter, low: PointerOffset, high: PointerOffset) -> None:
+        "Clear the positions from low up to high, which the stack gave up"
+        out.start_line()
+        lay = self.layout
+        count = high - low
+        n = count.as_int()
+        if lay.window:
+            if n is None:
+                out.emit(f"IR_CLEAR_SLOTS(&{self.window_slot(low)}, {count.to_c()});\n")
+                return
+            for i in range(n):
+                out.emit(f"{self.window_slot(low + PointerOffset(i, (), ()))} = PyStackRef_NULL;\n")
+            return
+        lo = low.as_int()
+        if lo is not None and n is not None:
+            for p in range(lo, lo + n):
+                owner = self.owner.pop(p, None)
+                if owner == "in":
+                    self.consume(out, p)
+                elif owner == "out":
+                    out.emit(f"{self.out_slot(PointerOffset(p, (), ()))} = PyStackRef_NULL;\n")
+            return
+        # Outputs whose count is not constant, above the inputs
+        if any(p >= (lo if lo is not None else low.numeric) for p in self.owner
+               if self.owner[p] == "in"):
+            raise StackError(f"cannot clear inputs from {low} to {high}")
+        for p in [p for p in self.owner if lo is not None and p >= lo]:
+            del self.owner[p]
+        out.emit(f"IR_CLEAR_SLOTS(&{self.out_slot(low)}, {count.to_c()});\n")
+
+    def flush(self, out: CWriter) -> None:
+        if self.physical_sp is None:
+            # After a frame switch there is nothing of this frame to write.
+            if self.variables:
+                raise StackError("flush while the frame is switching")
+            return
+        self._print(out)
+        if may_be_positive(self.physical_sp - self.logical_sp):
+            self.vacate(out, self.logical_sp, self.physical_sp)
+        self.save_variables(out)
+        self.physical_sp = self.logical_sp
+        out.start_line()
+
+    def align(self, other: Stack, out: CWriter) -> None:
+        if self.logical_sp != other.logical_sp:
+            raise StackError("Cannot align stacks: differing logical top")
+        if self.physical_sp is None and other.physical_sp is None:
+            return
+        if self.physical_sp is None or other.physical_sp is None:
+            raise StackError("Cannot align stacks: one side switched frames")
+        if self.physical_sp == other.physical_sp:
+            return
+        if may_be_positive(self.physical_sp - other.physical_sp):
+            self.vacate(out, other.physical_sp, self.physical_sp)
+        # Otherwise this side has cleared more: the slots it cleared are
+        # cleared again later, which does no harm.
+        self.physical_sp = other.physical_sp
 
     def merge(self, other: Stack, out: CWriter) -> None:
-        super().merge(other, out)
         assert isinstance(other, IRStack)
-        for offset in list(self.field_inputs):
-            if offset not in other.field_inputs:
-                del self.field_inputs[offset]
+        super().merge(other, out)
+        # A side that has not written a position yet writes it later,
+        # without the check that the slot is NULL.
+        for p in set(self.owner) | set(other.owner):
+            mine, theirs = self.owner.get(p), other.owner.get(p)
+            if mine == theirs:
+                continue
+            if "in" in (mine, theirs):
+                raise StackError(f"position {p} is an input on one path only")
+            self.owner[p] = other.owner[p] = "out"
+
+    # The frame's slots are always current, so an escaping call needs no
+    # spill.  Only a frame switch changes `slots`.
+    def emit_spill(self, out: CWriter) -> None:
+        self.frame_sp = self.physical_sp
+
+    def emit_reload(self, out: CWriter) -> None:
+        if self.physical_sp is None:
+            if self.frame_sp is None:
+                self.frame_sp = PointerOffset.zero()
+            self.physical_sp = self.frame_sp
+
+    def emit_fullreload(self, out: CWriter, spilled: bool = True) -> None:
+        self._print(out)
+        while self.variables:
+            top = self.variables.pop()
+            if not top.in_memory():
+                raise StackError(f"Cannot reload with live variable: {top.name}")
+        self.base_offset = PointerOffset.zero()
+        self.physical_sp = PointerOffset.zero()
+        self.frame_sp = PointerOffset.zero()
+        self.logical_sp = PointerOffset.zero()
+        self.owner = {}
+        self.reloaded = True
+        out.emit_str("slots = _PyFrame_Slots(frame);\n")
+
+    def stack_bound_check(self, out: CWriter) -> None:
+        pass
 
 
 class IREmitter(Emitter):
@@ -904,6 +1096,8 @@ class IREmitter(Emitter):
         self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
         self._replacers["DISPATCH_SAME_OPARG"] = self.dispatch_same_oparg
         self._replacers["IR_DST"] = self.ir_dst
+        self._replacers["IR_DST_SLOT"] = self.ir_dst_slot
+        self._replacers["IR_BASE"] = self.ir_base
         # The storage at a deopt or exit being emitted
         self.deopt_storage: Storage | None = None
         # The format of the handler being emitted, which for a NOFB form
@@ -931,16 +1125,6 @@ class IREmitter(Emitter):
 
     exit_if = deopt_if
 
-    def canonical_slot(self, inst: Instruction | None, field: str) -> str:
-        "The canonical slot of the input that inst reads through field"
-        assert inst is not None
-        fmt = self.format_of(inst)
-        for k in range(fmt.n_inputs):
-            if fmt.input_field(k) == field:
-                return fmt.canonical_slot(k)
-        raise analysis_error(f"{inst.name}: no input in field {field}",
-                             inst.where)
-
     def emit_borrow_drops(self, inst: Instruction | None,
                           storage: Storage | None = None) -> None:
         """Before a deopt, or a specialisation that runs the word again,
@@ -958,8 +1142,102 @@ class IREmitter(Emitter):
                     and var.name not in seen):
                 seen.add(var.name)
                 self.emit(f"IR_DROP_BORROW({var.name}, "
-                          f"{FIELD_VARS[var.ir_field]}, "
-                          f"{self.canonical_slot(inst, var.ir_field)});\n")
+                          f"{FIELD_VARS[var.ir_field]});\n")
+
+    def consume_killed(self, storage: Storage) -> None:
+        """Clear the slots of the inputs that the handler has taken: a dead
+        input's slot holds NULL, on every path"""
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        if stack.layout.window:
+            return
+        for var in storage.inputs:
+            p = var.ir_input
+            if var.is_dead() and p is not None and stack.owner.get(p) == "in":
+                self.out.start_line()
+                stack.consume(self.out, p)
+                del stack.owner[p]
+
+    def emit_SimpleStmt(self, stmt: SimpleStmt, uop: CodeSection,
+                        storage: Storage, inst: Instruction | None
+                        ) -> tuple[bool, Token | None, Storage]:
+        """A statement that kills an input, as DEAD(), a close or a steal,
+        gives up its slot"""
+        reachable, tkn, storage = super().emit_SimpleStmt(stmt, uop, storage, inst)
+        if reachable:
+            self.consume_killed(storage)
+        return reachable, tkn, storage
+
+    def decref_inputs(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        """In register style, close each input from the top after clearing
+        its slot; an output defined before stays in its variable."""
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        if stack.layout.window or self.cannot_escape:
+            return super().decref_inputs(tkn, tkn_iter, uop, storage, inst)
+        next(tkn_iter)
+        next(tkn_iter)
+        next(tkn_iter)
+        storage.clear_dead_inputs()
+        for var in reversed(storage.inputs):
+            if var.is_dead():
+                continue
+            if var.is_array():
+                raise analysis_error("register-style array input", tkn)
+            close = "PyStackRef_XCLOSE" if "null" in var.name else "PyStackRef_CLOSE"
+            if var.known_object:
+                close = f"_{close}_POINTER"
+            self.out.start_line()
+            p = var.ir_input
+            if p is not None and stack.owner.get(p) == "in":
+                stack.consume(self.out, p)
+                del stack.owner[p]
+            self.emit(f"{close}({var.name});\n")
+            var.kill()
+        storage.clear_inputs("after DECREF_INPUTS")
+        return True
+
+    def goto_error(self, offset: int, storage: Storage) -> str:
+        """Clear the slots that the stack gave up, which the stack machine
+        left above its stack pointer, and leave the rest to
+        exception_unwind."""
+        stack = storage.stack.copy()
+        assert isinstance(stack, IRStack)
+        stack.error_exit = True
+        stack.flush(self.out)
+        return f"{self.jump_prefix}JUMP_TO_LABEL(error);"
+
+    def error_no_pop(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        "The inputs stay in their slots; drop what was read from locals"
+        self.out.start_line()
+        self.emit_borrow_drops(inst, storage)
+        return super().error_no_pop(tkn, tkn_iter, uop, storage, inst)
+
+    def dispatch(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        assert isinstance(storage.stack, IRStack)
+        storage.stack.final = True
+        return super().dispatch(tkn, tkn_iter, uop, storage, inst)
 
     def expand_instruction_macro(self, tkn: Token, args: list[list[Token]],
                                  inst: Instruction | None) -> str:
@@ -988,6 +1266,40 @@ class IREmitter(Emitter):
         self.emit(FIELD_VARS[fmt.field_of(ROLE_DST)])
         return True
 
+    def ir_dst_slot(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        "The dst field: the slot that receives the result of a frame it pushes"
+        assert inst is not None
+        fmt = self.format_of(inst)
+        field = fmt.field_of(ROLE_DST)
+        if field is None:
+            raise analysis_error(f"{inst.name} has no dst", tkn)
+        self.emit(FIELD_VARS[field])
+        return True
+
+    def ir_base(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        "The base field of a window-style instruction"
+        assert inst is not None
+        fmt = self.format_of(inst)
+        field = fmt.field_of(ROLE_BASE)
+        if field is None:
+            raise analysis_error(f"{inst.name} has no base", tkn)
+        self.emit(FIELD_VARS[field])
+        return True
+
     def dispatch_same_oparg(
         self,
         tkn: Token,
@@ -996,13 +1308,9 @@ class IREmitter(Emitter):
         storage: Storage,
         inst: Instruction | None,
     ) -> bool:
-        """The handler runs again on the same word, and a SYNC_LAG handler
-        adds the lag on entry, so take it back first."""
+        "The handler runs again on the same word, and reads its inputs again"
         assert inst is not None
         self.emit_borrow_drops(inst, storage)
-        fmt = self.format_of(inst)
-        if fmt.sync == SYNC_LAG:
-            self.emit(f"stack_pointer -= {lag_expr(fmt)};\n")
         self.emit(tkn)
         return True
 
@@ -1011,15 +1319,8 @@ class IREmitter(Emitter):
         self.emit_borrow_drops(inst)
         fmt = self.format_of(inst)
         binary_op = inst.family is not None and inst.family.name == BINARY_OP_FAMILY
-        if fmt.sync == SYNC_LAG and not binary_op:
-            # A tail call enters the family head from the top, where it adds
-            # the lag again.  Computed goto enters after that.
-            self.emit(f"IR_UNSYNC_FOR_TAIL_CALL({lag_expr(fmt)});\n")
         if binary_op:
-            # The handler of the operation that the entry records, which
-            # runs from the top: it adds the lag again
-            if fmt.sync == SYNC_LAG:
-                self.emit(f"stack_pointer -= {lag_expr(fmt)};\n")
+            # The handler of the operation that the entry records
             self.emit(f"UPDATE_MISS_STATS({BINARY_OP_FAMILY});\n")
             self.emit(f"IR_DEOPT_BINARY_OP({field_expr(fmt.fb)});\n")
             return
@@ -1061,7 +1362,6 @@ class IREmitter(Emitter):
             if var.ir_field is None or var.known_object or var.ir_borrowed:
                 continue
             f = FIELD_VARS[var.ir_field]
-            canon = self.canonical_slot(inst, var.ir_field)
             converts = not uop.properties.inline_ok and (
                 var.name in uop.object_inputs or var.name in uop.asserted_objects)
             if not converts:
@@ -1080,24 +1380,24 @@ class IREmitter(Emitter):
                     self.emit(f"if (Py_UNLIKELY(PyStackRef_IsInline({var.name}))) {{\n")
                     self.emit(f"{var.name} = PyStackRef_Box({var.name});\n")
                     self.emit(f"if (PyStackRef_IsInline({var.name})) {{\n")
+                    # The inputs converted before this one, if they name
+                    # locals, hold borrows or boxes that only C owns
+                    self.emit_borrow_drops(inst, storage)
                     storage.stack.copy().flush(self.out)
                     self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
                     self.emit("}\n")
                     if inst is not None:
                         self.emit(f"BOX_STAT_INC({inst.name});\n")
-                    self.emit(f"IR_KEEP_BOX({var.name}, {f}, {canon});\n")
+                    self.emit(f"IR_KEEP_BOX({var.name}, {f});\n")
                     self.emit("}\n")
                     self.emit("else {\n")
-                    self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f}, {canon});\n")
+                    self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f});\n")
                 self.emit("}\n")
             if uop.is_guard() or var.name in uop.asserted_objects:
                 self.out.start_line()
-                self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f}, {canon});\n")
+                self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f});\n")
             var.known_object = True
             var.ir_borrowed = True
-            # From here the value is safe in any slot, so a flush writes it to
-            # its canonical slot for code that reads the stack.
-            var.memory_offset = None
         super().emit_object_inputs(uop, storage, inst, stack_read_later)
 
 
@@ -1147,50 +1447,20 @@ def reads_fb_arg(inst: Instruction, fmt: IRFormat, operation: str | None) -> boo
             and operation is None)
 
 
-def emit_field_checks(inst: Instruction, fmt: IRFormat, out: CWriter) -> None:
-    """Debug checks that each slot field names its canonical slot, given as
-    an offset from stack_pointer, or for an input that may be borrowed, a
-    local.  The members of a window-style family pop different numbers of
-    inputs for the same oparg, so a base is checked against the member's
-    own."""
+def slot_layout(inst: Instruction, fmt: IRFormat, mode: str | None) -> SlotLayout:
+    "Where the handler of inst, of format fmt, keeps its stack positions"
     if fmt.transparent:
-        return
-    popped = get_popped(inst)
-    base = f"-{popped}" if popped.isdigit() else f"-({popped})"
-    for name, role in zip(FIELDS, fmt.roles):
-        f = FIELD_VARS[name]
-        if role == ROLE_DST:
-            # A dst that may name a local, see store_mode()
-            check = "IR_CHECK_INPUT" if fmt.store_dst else "IR_CHECK_SLOT"
-            offset = f"{base} + {fmt.dst_offset}" if fmt.window else fmt.dst_offset
-            out.emit(f"{check}({f}, {offset});\n")
-        elif role == ROLE_BASE:
-            out.emit(f"IR_CHECK_SLOT({f}, {base});\n")
-        elif role == ROLE_TOP:
-            out.emit(f"IR_CHECK_SLOT({f}, 0);\n")
-        elif role.startswith(ROLE_IN0):
-            k = int(role.split("+")[1])
-            if fmt.borrow_mask & (1 << k):
-                out.emit(f"IR_CHECK_INPUT({f}, {k - fmt.n_inputs});\n")
-            else:
-                out.emit(f"IR_CHECK_SLOT({f}, {k - fmt.n_inputs});\n")
-
-
-def lag_expr(fmt: IRFormat) -> str:
-    "The number of inputs of a SYNC_LAG handler that name locals"
-    return " + ".join(f"IR_IS_LOCAL({f})" for f in fmt.borrowed_fields())
-
-
-def sync_stack_pointer(fmt: IRFormat) -> str:
-    "The statement that sets stack_pointer on entry, see SYNC_*"
-    if fmt.sync == SYNC_DST:
-        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-        return f"stack_pointer = IR_STACK_POINTER({dst}, {fmt.dst_offset});\n"
-    if fmt.sync == SYNC_TOP:
-        top = FIELD_VARS[fmt.field_of(ROLE_TOP)]
-        return f"stack_pointer = IR_STACK_POINTER({top}, 0);\n"
-    assert fmt.sync == SYNC_LAG
-    return f"stack_pointer += {lag_expr(fmt)};\n"
+        return SlotLayout.empty()
+    if fmt.window:
+        return SlotLayout(True, get_stack_effect(inst).base_offset, {},
+                          frozenset())
+    in_fields = {k - fmt.n_inputs: fmt.input_field(k)
+                 for k in range(fmt.n_inputs)}
+    borrowable = frozenset(k - fmt.n_inputs for k in range(fmt.n_inputs)
+                           if fmt.borrow_mask & (1 << k))
+    return SlotLayout(False, PointerOffset.zero(), in_fields, borrowable,
+                      dst=fmt.field_of(ROLE_DST), dst_offset=fmt.dst_offset,
+                      store_dst=mode == STORE_RESULT)
 
 
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
@@ -1216,10 +1486,6 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     if not inst.properties.no_save_ip:
         out.emit(f"frame->instr_ptr = next_instr;\n")
     out.emit(f"next_instr += 1;\n")
-    if fmt.borrow_mask:
-        # Folded loads have no words, so stack_pointer may lag behind.
-        # A target defines this_instr below, after its PREDICTED_ label.
-        out.emit(sync_stack_pointer(fmt).replace("this_instr", "next_instr - 1"))
     out.emit(f"INSTRUCTION_STATS({inst.name});\n")
     if is_target:
         out.emit(f"IR_PREDICTED({name});\n")
@@ -1243,7 +1509,10 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         else:
             out.emit(f"int oparg = (int){field_expr(fmt.imm)};\n")
         out.emit("(void)oparg;\n")
-    emit_field_checks(inst, fmt, out)
+    if fmt.window:
+        base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
+        out.emit(f"_PyStackRef *window = &IR_SLOT({base});\n")
+        out.emit("(void)window;\n")
     if inst.properties.uses_opcode:
         out.emit(f"opcode = {name};\n")
     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
@@ -1254,25 +1523,29 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     elif mode == STORE_NEVER:
         out.emit(f"assert(!IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]}));\n")
     declare_variables(inst, out)
-    field_inputs: dict[int, str] = {}
-    raw_inputs: dict[int, str] = {}
+    raw_inputs: set[int] = set()
     if fmt.borrow_mask:
         uses = classify_inputs(inst, fmt.n_inputs)
-    for k in range(fmt.n_inputs):
-        if fmt.borrow_mask & (1 << k):
-            field_inputs[k - fmt.n_inputs] = fmt.input_field(k)
-            if uses[k] == "raw":
-                raw_inputs[k - fmt.n_inputs] = fmt.canonical_slot(k)
-    stack: Stack = IRStack(field_inputs, raw_inputs)
+        raw_inputs = {k - fmt.n_inputs for k in range(fmt.n_inputs)
+                      if fmt.borrow_mask & (1 << k) and uses[k] == "raw"}
+    stack: Stack = IRStack(slot_layout(inst, fmt, mode), raw_inputs)
     insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
     reachable = True
     for part in inst.parts:
-        reachable, stack = write_uop(part, emitter, stack, inst, insert_braces)
+        try:
+            reachable, stack = write_uop(part, emitter, stack, inst, insert_braces)
+        except SyntaxError as ex:
+            ex.msg = f"{name}: {ex.msg}"
+            raise
     out.start_line()
     if reachable:
+        assert isinstance(stack, IRStack)
+        stack.final = True
         stack.flush(out)
-        if mode == STORE_RESULT:
-            out.emit(f"IR_STORE_RESULT({FIELD_VARS[fmt.field_of(ROLE_DST)]});\n")
+        if mode == STORE_RESULT and fmt.window:
+            # The result is in its slot of the window; a local takes it
+            dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+            out.emit(f"IR_MOVE_TO_DST({dst}, window[{fmt.dst_offset}]);\n")
         out.emit("DISPATCH();\n")
     out.start_line()
     out.emit("}")

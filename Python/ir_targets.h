@@ -310,8 +310,6 @@ static void *opcode_targets[302] = {
 #else /* _Py_TAIL_CALL_INTERP */
 static py_tail_call_funcptr instruction_funcptr_handler_table[302];
 
-static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_pop_2_error(TAIL_CALL_PARAMS);
-static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_pop_1_error(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_error(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_exception_unwind(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_exit_unwind(TAIL_CALL_PARAMS);

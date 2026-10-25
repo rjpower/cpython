@@ -136,23 +136,6 @@ static inline _PyStackRef *_PyFrame_Stackbase(_PyInterpreterFrame *f) {
     return (f->localsplus + _PyFrame_GetCode(f)->co_nlocalsplus);
 }
 
-static inline _PyStackRef _PyFrame_StackPeek(_PyInterpreterFrame *f, int depth) {
-    assert(f->stackpointer > _PyFrame_Stackbase(f));
-    assert(!PyStackRef_IsNull(f->stackpointer[-depth]));
-    return f->stackpointer[-depth];
-}
-
-static inline _PyStackRef _PyFrame_StackPop(_PyInterpreterFrame *f) {
-    assert(f->stackpointer > _PyFrame_Stackbase(f));
-    f->stackpointer--;
-    return *f->stackpointer;
-}
-
-static inline void _PyFrame_StackPush(_PyInterpreterFrame *f, _PyStackRef value) {
-    *f->stackpointer = value;
-    f->stackpointer++;
-}
-
 #define FRAME_SPECIALS_SIZE ((int)((sizeof(_PyInterpreterFrame)-1)/sizeof(PyObject *)))
 
 static inline int
@@ -164,8 +147,68 @@ _PyFrame_NumSlotsForCodeObject(PyCodeObject *code)
     return code->co_framesize - FRAME_SPECIALS_SIZE;
 }
 
+/* The slots of f, which the IR's fields index */
+static inline _PyStackRef *
+_PyFrame_Slots(_PyInterpreterFrame *f)
+{
+    return f->localsplus;
+}
+
+/* co_nlocalsplus + co_stacksize: the number of slots of f */
+static inline int
+_PyFrame_NumSlots(_PyInterpreterFrame *f)
+{
+    return _PyFrame_NumSlotsForCodeObject(_PyFrame_GetCode(f));
+}
+
+/* Hand v to f, which a call returns to or a send resumes: it goes to the
+ * slot that f named, which holds NULL. */
+static inline void
+_PyFrame_SetReturnValue(_PyInterpreterFrame *f, _PyStackRef v)
+{
+#ifdef Py_DEBUG
+    if (f->owner != FRAME_OWNED_BY_INTERPRETER) {
+        assert(f->return_slot >= _PyFrame_GetCode(f)->co_nlocalsplus);
+        assert(f->return_slot < _PyFrame_NumSlots(f));
+    }
+#endif
+    assert(PyStackRef_IsNull(f->localsplus[f->return_slot]));
+    f->localsplus[f->return_slot] = v;
+}
+
+/* Release the temporaries of f from slot first on and leave them NULL */
+static inline void
+_PyFrame_ClearTemporaries(_PyInterpreterFrame *f, int first)
+{
+    int nslots = _PyFrame_NumSlots(f);
+    for (int i = first; i < nslots; i++) {
+        _PyStackRef ref = f->localsplus[i];
+        if (!PyStackRef_IsNull(ref)) {
+            f->localsplus[i] = PyStackRef_NULL;
+            PyStackRef_CLOSE(ref);
+        }
+    }
+}
+
+/* Whether every temporary of f is NULL, as when it returns */
+static inline void
+_PyFrame_AssertTemporariesClear(_PyInterpreterFrame *f)
+{
+#ifdef Py_DEBUG
+    int nslots = _PyFrame_NumSlots(f);
+    for (int i = _PyFrame_GetCode(f)->co_nlocalsplus; i < nslots; i++) {
+        assert(PyStackRef_IsNull(f->localsplus[i]));
+    }
+#else
+    (void)f;
+#endif
+}
+
 static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 {
+    // Before the executable moves, which in Py_STACKREF_DEBUG builds
+    // closes src->f_executable
+    int nslots = _PyFrame_NumSlots(src);
     dest->f_executable = PyStackRef_MakeHeapSafe(src->f_executable);
     // Don't leave a dangling pointer to the old frame when creating generators
     // and coroutines:
@@ -181,17 +224,13 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
 #ifdef Py_GIL_DISABLED
     dest->tlbc_index = src->tlbc_index;
 #endif
-    assert(src->stackpointer != NULL);
-    int stacktop = (int)(src->stackpointer - src->localsplus);
-    assert(stacktop >= 0);
-    dest->stackpointer = dest->localsplus + stacktop;
+    dest->return_slot = src->return_slot;
     // visited is GC bookkeeping for the current stack walk, not frame state.
     dest->visited = 0;
 #ifdef Py_DEBUG
-    dest->stackpointer_valid =  src->stackpointer_valid;
     dest->lltrace = src->lltrace;
 #endif
-    for (int i = 0; i < stacktop; i++) {
+    for (int i = 0; i < nslots; i++) {
         dest->localsplus[i] = PyStackRef_MakeHeapSafe(src->localsplus[i]);
     }
 }
@@ -213,19 +252,19 @@ _PyFrame_Initialize(
     frame->f_builtins = func_obj->func_builtins;
     frame->f_globals = func_obj->func_globals;
     frame->f_locals = locals;
-    frame->stackpointer = frame->localsplus + code->co_nlocalsplus;
     frame->frame_obj = NULL;
     (void)tstate;
     _PyFrame_InitIRInstrPtr(frame, code);
     frame->return_offset = 0;
+    frame->return_slot = 0;
     frame->owner = FRAME_OWNED_BY_THREAD;
     frame->visited = 0;
 #ifdef Py_DEBUG
-    frame->stackpointer_valid = 1;
     frame->lltrace = 0;
 #endif
 
-    for (int i = null_locals_from; i < code->co_nlocalsplus; i++) {
+    int nslots = _PyFrame_NumSlotsForCodeObject(code);
+    for (int i = null_locals_from; i < nslots; i++) {
         frame->localsplus[i] = PyStackRef_NULL;
     }
 }
@@ -238,48 +277,6 @@ _PyFrame_GetLocalsArray(_PyInterpreterFrame *frame)
 {
     return frame->localsplus;
 }
-
-// Fetches the stack pointer, and (on debug builds) sets stackpointer to NULL.
-// Having stackpointer == NULL makes it easier to catch missing stack pointer
-// spills/restores (which could expose invalid values to the GC) using asserts.
-static inline _PyStackRef*
-_PyFrame_GetStackPointer(_PyInterpreterFrame *frame)
-{
-    return frame->stackpointer;
-}
-
-static inline void
-_PyFrame_SetStackPointer(_PyInterpreterFrame *frame, _PyStackRef *stack_pointer)
-{
-    frame->stackpointer = stack_pointer;
-}
-
-static inline void
-_PyFrame_StackPointerValidate(_PyInterpreterFrame *frame)
-{
-#ifdef Py_DEBUG
-    assert(frame->stackpointer_valid == 0);
-    frame->stackpointer_valid = 1;
-#endif
-}
-
-static inline void
-_PyFrame_StackPointerInvalidate(_PyInterpreterFrame *frame)
-{
-#ifdef Py_DEBUG
-    assert(frame->stackpointer_valid == 1);
-    frame->stackpointer_valid = 0;
-#endif
-}
-
-static inline void
-_PyFrame_StackAssertInvalid(_PyInterpreterFrame *frame)
-{
-#ifdef Py_DEBUG
-    assert(frame->stackpointer_valid == 0);
-#endif
-}
-
 
 /* Determine whether a frame is incomplete.
  * A frame is incomplete if it is part way through
@@ -426,7 +423,7 @@ _PyFrame_PushUnchecked(PyThreadState *tstate, _PyStackRef func, int null_locals_
 /* Pushes a trampoline frame without checking for space.
  * Must be guarded by _PyThreadState_HasStackSpace() */
 static inline _PyInterpreterFrame *
-_PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int stackdepth, _PyInterpreterFrame * previous)
+_PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int return_slot, _PyInterpreterFrame * previous)
 {
     CALL_STAT_INC(frames_pushed);
     _PyInterpreterFrame *frame = (_PyInterpreterFrame *)tstate->datastack_top;
@@ -440,17 +437,20 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     frame->f_globals = NULL;
 #endif
     frame->f_locals = NULL;
-    assert(stackdepth <= code->co_stacksize);
-    frame->stackpointer = frame->localsplus + code->co_nlocalsplus + stackdepth;
     frame->frame_obj = NULL;
     _PyFrame_InitIRInstrPtr(frame, code);
     frame->owner = FRAME_OWNED_BY_THREAD;
     frame->visited = 0;
 #ifdef Py_DEBUG
-    frame->stackpointer_valid = 1;
     frame->lltrace = 0;
 #endif
     frame->return_offset = 0;
+    int nslots = _PyFrame_NumSlotsForCodeObject(code);
+    assert(return_slot < nslots);
+    frame->return_slot = (uint16_t)return_slot;
+    for (int i = 0; i < nslots; i++) {
+        frame->localsplus[i] = PyStackRef_NULL;
+    }
     return frame;
 }
 

@@ -88,6 +88,7 @@ _LOC_CD = _opcode.IR_LOC_CD
 _LOC_FBARG = _opcode.IR_LOC_FBARG
 _IR_JUMPS = _opcode.IR_JUMPS
 _IR_FORWARD = _opcode.IR_FORWARD
+_IR_FIRST_ONLY_HANDLER = _opcode.IR_FIRST_ONLY_HANDLER
 _BINARY_OP_FIRST = _ir_opmap["BINARY_OP_ADD"]
 _BINARY_OP_LAST = _BINARY_OP_FIRST + len(_nb_ops) - 1
 _FEEDBACK_KINDS = ("COUNTER", "BRANCH", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL")
@@ -325,10 +326,9 @@ _Instruction.opcode.__doc__ = "Numeric code for operation"
 _Instruction.arg.__doc__ = "Numeric argument to operation (if any), otherwise None"
 _Instruction.argval.__doc__ = "Resolved arg value (if known), otherwise same as arg"
 _Instruction.argrepr.__doc__ = "Human readable description of operation argument"
-_Instruction.offset.__doc__ = "Start index of operation within bytecode sequence"
+_Instruction.offset.__doc__ = "Index of the instruction's word within the code"
 _Instruction.start_offset.__doc__ = (
-    "Start index of operation within bytecode sequence, including extended args if present; "
-    "otherwise equal to Instruction.offset"
+    "Equal to Instruction.offset, since an instruction has one word"
 )
 _Instruction.starts_line.__doc__ = "True if this opcode starts a source line, otherwise False"
 _Instruction.line_number.__doc__ = "source line number associated with this opcode (if any), otherwise None"
@@ -429,16 +429,19 @@ class Instruction(_Instruction):
          arg - numeric argument to operation (if any), otherwise None
          argval - resolved arg value (if known), otherwise same as arg
          argrepr - human readable description of operation argument
-         offset - start index of operation within bytecode sequence
-         start_offset - start index of operation within bytecode sequence including extended args if present;
-                        otherwise equal to Instruction.offset
+         offset - index of the instruction's word within the code
+         start_offset - equal to Instruction.offset, since an instruction
+                        has one word
          starts_line - True if this opcode starts a source line, otherwise False
          line_number - source line number associated with this opcode (if any), otherwise None
          label - A label if this instruction is a jump target, otherwise None
          positions - Optional dis.Positions object holding the span of source code
                      covered by this instruction
-         cache_info - information about the format and content of the instruction's cache
-                        entries (if any)
+         cache_info - the fields of the instruction's feedback entry (if any)
+         handler - name of the handler of the instruction's word
+         dst - frame slot that the instruction writes (if any), otherwise None
+         srcs - frame slots that the instruction reads
+         fb - index of the instruction's feedback entry (if any), otherwise None
     """
 
     @staticmethod
@@ -447,6 +450,8 @@ class Instruction(_Instruction):
         line_number, label=None, positions=None, cache_info=None,
         handler=None, dst=None, srcs=(), fb=None
     ):
+        if handler is None:
+            handler = opname
         return Instruction(opname, _all_opmap[opname], arg, argval, argrepr, offset,
                            start_offset, starts_line, line_number, label, positions, cache_info,
                            handler, dst, srcs, fb)
@@ -868,13 +873,18 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
                 line_number = None
         positions = Positions(*next(co_positions, ()))
         if code is original_code:
+            runs = handler
             op = _deoptop(handler)
         else:
-            op = int.from_bytes(code[offset * _WORD_SIZE:offset * _WORD_SIZE + 2],
-                                sys.byteorder)
-        # The executing copy's handler, which INSTRUMENTED_LINE or
-        # INSTRUMENTED_INSTRUCTION may have displaced, has the format of the
-        # code object's
+            # The executing copy's handler, which INSTRUMENTED_LINE or
+            # INSTRUMENTED_INSTRUCTION may have displaced, has the format of
+            # the code object's
+            runs = int.from_bytes(code[offset * _WORD_SIZE:offset * _WORD_SIZE + 2],
+                                  sys.byteorder)
+            # A handler of the IR only, such as BINARY_OP_ADD or a NOFB form,
+            # shows as the instruction that it runs; a specialisation shows
+            # as itself
+            op = _deoptop(runs) if runs >= _IR_FIRST_ONLY_HANDLER else runs
         if arg_resolver:
             argval, argrepr = arg_resolver.get_argval_argrepr(handler, arg, offset)
         else:
@@ -885,8 +895,7 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
         yield Instruction(_all_opname[op], op, arg, argval, argrepr,
                           offset, offset, starts_line, line_number,
                           label, positions, cache_info,
-                          _all_opname[handler if code is original_code else op],
-                          dst, srcs, fb)
+                          _all_opname[runs], dst, srcs, fb)
 
 
 def disassemble(co, lasti=-1, *, file=None, show_caches=False, adaptive=False,

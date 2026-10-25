@@ -720,3 +720,17 @@ Py_STATS dispatches, `--worker -l 2`:
 The loads left are those option A does not fold: under RETURN_VALUE, a
 window format (31% of richards' remaining, 19% of go's), under a call or a
 global load, under COPY (item 3) and under TO_BOOL (item 4).
+
+### 2026-10-25 13:30 — step 2b: folding regresses instructions; operand-kind variants
+
+Items 1 and 2 (load and store folding) are committed and correct: dispatches
+on richards -23%, go -24% against 2a. But per-loop instructions rose 18 to
+50%: every register input now pays a field decode, canonical-slot
+arithmetic, a borrowed-or-consumed test and borrow tagging at run time, plus
+a stack-pointer sync on entry and a dst-is-local test, and ceval's spills
+nearly tripled. All of it is the stack pointer (step 3) and ownership
+(step 5) showing through. Decision: encode the operand-kind pattern (input
+k is a local, dst is a local) in spare bits of the handler index and
+generate a variant per pattern for the hot families, Lua 5.4's ADDK/ADDI
+technique, so a folded word runs code with no runtime tests. RESUME removal
+(item 5) moves to step 3. Deadline for 2b moves to 2026-10-29 12:00.

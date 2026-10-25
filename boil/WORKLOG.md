@@ -298,3 +298,19 @@ compare per access in the JIT. Off by default. Limitations in design note 04:
 no shape for objects with a materialised dict, no polymorphic handler, method
 loads unchanged, not available with --disable-gil. Cherry-pick onto this tree
 after IR step 5 lands, then regenerate the IR files.
+
+### IR step 5 landed (33e727d9745)
+
+Absorbed-load words removed; handler fields read as 16-bit loads from memory
+instead of shift-decoded; lowering trimmed. Instructions versus ref-head: go
+-1.6%, chaos -0.6%, float -0.9%, richards -0.2% per loop but +0.6% over an
+8-loop run from one-time lowering cost (66M vs 13M for quickening). micro_loops
+0.93-0.99 on every row. Full suite found a real bug the targeted files missed:
+unwinding from a frame pushed by a consumer of an absorbed load looked up the
+wrong word, so `try: o.prop except` did not catch; fixed, with no absorption
+across exception-range edges, and a regression test. All 7 ports pass.
+
+Queue for the IR agent: FT instrumentation hang fix (45 min), cherry-pick
+shapes fb39384892c (30 min), step 6 (2 h: fused compare-branch, oparg folding,
+re-lower 1:1 when opcode events are enabled, lowering within 2x of quickening;
+gate richards, go, nqueens, float below ref-head including one-time cost).

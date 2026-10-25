@@ -312,6 +312,7 @@ class LoweringTest(unittest.TestCase):
             self.assertIn("FOR_ITER_GEN", handlers(f))
             self.assertIn("SEND_GEN", handlers(delegate))
 
+    @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
     def test_compare_and_branch(self):
         # A specialised compare whose result a POP_JUMP_IF_FALSE or
         # POP_JUMP_IF_TRUE consumes runs the jump too; the jump keeps its

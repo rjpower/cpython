@@ -285,3 +285,16 @@ form, absorbed words removed; gate is fewer instructions than ref-head on
 richards, go, chaos, float) in this tree; shapes step one behind
 `--with-shapes` in an isolated worktree. Tier 0 starts once step 5 fixes the
 word format.
+
+### Shapes step one done in its worktree (fb39384892c, 52 minutes)
+
+`--with-shapes`: per-type shape table hung off the shared keys, a one-byte
+shape index in the PyDictValues padding, LOAD_ATTR_SHAPE / STORE_ATTR_SHAPE /
+STORE_ATTR_SHAPE_ADD guarding type version then shape. 22 tests; full suite
+passes. Instructions: richards 0.997, go 0.995, deltablue 0.996, raytrace 0.999
+versus the same commit without the flag; attribute store 115 -> 111 per
+iteration. Neutral in the interpreter as predicted; the payoff is one pointer
+compare per access in the JIT. Off by default. Limitations in design note 04:
+no shape for objects with a materialised dict, no polymorphic handler, method
+loads unchanged, not available with --disable-gil. Cherry-pick onto this tree
+after IR step 5 lands, then regenerate the IR files.

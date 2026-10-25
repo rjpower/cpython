@@ -671,3 +671,123 @@ step 1.
 | two STORE_FAST | 57.0 | 69.0 | 61.1 |
 | attribute load | 67.0 | 85.1 | 74.0 |
 | attribute store, existing | 116.9 | 121.1 | 119.2 |
+
+## 10. Step 2a decisions
+
+Step 2a moved the IR into the compiler. The stack bytecode, the lowering
+(`Python/ir_lower.c`), its stub and pcmap, `IR_LOWER`, `IR_REMAP`,
+`_PyIR_FUSED`, `co_code_adaptive` and the instrumentation sync are gone.
+These are the choices made on the way, where they differ from or add to
+sections 2.3 and 2.4.
+
+**Pipeline.** `Python/regalloc.c` maps depth d to slot `co_nlocalsplus + d`,
+in a function of its own so that step 2b can fold there.
+`Python/assemble.c` chooses each handler, encodes the words, numbers the
+feedback entries, relaxes FOR_ITER and SEND, and writes the line and
+exception tables by word index. Nothing is folded, so `LOAD_FAST_BORROW`
+keeps a word and every input field names its canonical slot. Handlers still
+keep `stack_pointer`, and the exception table keeps its depth column. The
+`IR_BORROWED` machinery for absorbed loads stays in the generator for step
+2b.
+
+**Code object.** The trailing array, `co_words`, holds the words followed by
+the feedback table: one 32-bit entry per feedback site, `kind << 24 | arg`,
+where arg is the static operand. Entry 0 is the shared entry. `co_code`
+returns the words, and `co_fbinit` returns the table. `code()` takes the
+table as a new last positional argument, `fbinit=b''`, and `replace()`
+takes `co_fbinit`, defaulting to the code object's own table. Marshal
+writes the table after `co_code`. The pyc magic is 3707.
+
+**Checking.** The Python and C-API constructors check every word: the
+handler exists, and the slot fields are below `co_nlocalsplus +
+co_stacksize`. A feedback field must be below the number of entries, and
+must not be 0 for a handler that reads its operand from the entry. A word with
+an inline constant handler whose constant is no longer a compact int or a
+float, as after `replace(co_consts=...)`, runs `LOAD_CONST` instead. Marshal
+does not check, just as it trusts bytecode today. Sites past the 4095th share
+entry 0 and run a NOFB handler, which carries the operand in the word
+(`LOAD_ATTR_NOFB`, `COMPARE_OP_NOFB` and so on).
+
+**Executing copy.** `_PyCode_GetExec()` (Python/ir.c) allocates the words
+and the feedback vector together on the first call and initialises the
+entries from the table. It is called when a frame is pushed, by
+`PyFrame_New`, by the specialiser when it inspects a callee, and when
+instrumentation is forced. Frames point into the copy (`ir_words`,
+`ir_feedback`). The assembler always emits the inline constant handlers
+(`LOAD_SMALL_INT_INLINE`, `LOAD_CONST_INLINE_INT` and `_FLOAT`). The copy
+runs the boxing forms instead in a build without inline values or under
+`PYTHON_TAGGED_VALUES=0`, so the words do not depend on the build.
+
+**Instrumentation.** Instrumentation rewrites handlers in the executing copy
+and restores them from the code object's words. The pristine words replace
+the `real[]` array of note 01: the handler to restore is that word's, or for
+a NOFB site the NOFB form of the instrumented instruction. A restored word is
+generic and warms up again. INSTRUCTION events fire once per word; the
+`IR_JUMP` words described below have none.
+
+**Offsets.** Word indices are used everywhere:
+
+- `f_lasti`, `tb_lasti` and `co_lines()`, `co_positions()`, the line and
+  exception tables;
+- monitoring offsets, including the legacy branch events;
+- `dis` offsets and lazy-import locations.
+
+`co_lines()` ends at `len(co_code) // 8`. This is the visible API change of
+the step.
+
+**Relaxation.** FOR_ITER and SEND reach `IR_MAX_FORWARD` (2047) words. The
+assembler relaxes a loop whose exit is further away into trampolines. A
+relaxed FOR_ITER at w exits by distance 1 and is followed by three
+`IR_JUMP` words: to the body at w + 4, to END_FOR (where a generator
+returns), and past END_FOR. A relaxed SEND has two: to w + 3 and to
+END_SEND. `IR_JUMP` does not save the instruction pointer, so the events
+after it see the loop as the instruction before. `dis` shows these words as
+`JUMP_FORWARD`, with `handler` `IR_JUMP`.
+
+**Handler numbers.** The IR-only handlers now follow the pseudo-instructions
+of the compiler. `IR_JUMP` is 267, not 256. As a result
+`opcode.opname[n]` names one opcode, pseudo-instruction or handler for every
+n.
+
+**dis.**
+
+- `Instruction` gains four fields:
+  - `handler`, the name of the word's handler;
+  - `dst`, the slot written;
+  - `srcs`, the slots read, or the base of a window;
+  - `fb`, the feedback index.
+- `cache_info` lists the fields of the feedback entry. These come from the
+  table, or with `adaptive=True` from the executing copy (state, counter,
+  arg, first, second). `show_caches` prints them as a `FEEDBACK` line.
+- Each line ends with a register column, for example `r1 <- r1, r2`.
+- With `adaptive=True`, an IR-only generic handler such as
+  `BINARY_OP_SUBTRACT` or `LOAD_ATTR_NOFB` shows as the instruction it
+  runs. Specialisations show as themselves.
+- `opcode` takes its tables from the generator (`_ir_formats` via
+  `_opcode.get_ir_formats()`, and `_ir_opmap`). `_cache_format` and
+  `_inline_cache_entries` are deleted.
+- Limit: disassembling bare `co_code` bytes cannot show an operand that
+  lives in the feedback table, such as COMPARE_OP's operator or a global's
+  name, because those bytes do not include the table.
+
+**Readers.** `_Py_DebugOffsets` drops the IR block and renames
+`co_code_adaptive` to `co_words`, and it adds `interpreter_frame.ir_words`.
+`_remote_debugging` computes the word index as `(instr_ptr - ir_words) / 8`
+and reads the handler as the low 16 bits of the word. `Tools/gdb/libpython.py`
+computes `f_lasti` the same way.
+
+**Byte order.** A pyc stores the words in the order they have in memory,
+which assumes a little-endian host as every supported 64-bit target is. A
+big-endian port would swap them in marshal.
+
+**Smaller changes.**
+
+- Whether `GET_ITER` of a `yield from` must reject a coroutine depends on
+  `CO_ITERABLE_COROUTINE`. `types.coroutine()` sets that flag on a copy of
+  the code object, so the compiler cannot know it. The lowering used to
+  resolve it; now `_PyEval_GetIter` reads the running code's flags.
+- The compiler builds a function's annotations dict 15 pairs at a time
+  (`BUILD_MAP` and `DICT_UPDATE`), so that a function with thousands of
+  annotated parameters stays within the slot limit.
+- `EXTENDED_ARG` is never emitted. The opcode stays defined because
+  `opcode.EXTENDED_ARG` and `dis` document it.

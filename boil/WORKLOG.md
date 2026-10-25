@@ -380,3 +380,16 @@ bytecode machinery kept inert for a separate removal.
 
 Pending: clean pyperformance timing of the IR-only build once the machine is
 idle (tier 0 suite and ASan run in progress).
+
+### Tier 0 finding: fewer instructions, more cycles
+
+Commit 2 of tier 0 (inline fast paths) cuts instructions 2-15% on
+pyperformance and 3-4x on micro loops, but on a quiet machine cycles rise:
+richards 241M -> 266M, go 552M -> 623M, nbody 516M -> 479M (the only win).
+Code size is not the cause: a shared call stub shrank words from 53 to 28
+bytes and made it worse (+5 instructions per call), and L1i misses are 80% in
+the C handlers, which exist twice (interpreter and call mode). Threshold
+changes only drop startup blocks. Decision: tier 0 ships behind --with-tier0,
+off by default, with the honest table; commit 3 adds a cycle diagnosis
+(branch misses, iTLB, frontend stalls) and the tier 1 list: register-cached
+stack top, inlined LOAD_ATTR/CALL fast paths, one handler copy.

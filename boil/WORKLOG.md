@@ -270,3 +270,18 @@ Remaining steps, in order, each one commit with instruction counts in its messag
 7. Close out: fix ac60a9c3c73 history split, results table, PR.md, open PR.
 
 Steps 5 and 6 are independent and run as parallel agents once step 4 lands.
+
+### IR step 4 landed (92cc151177c); step 5 and shapes launched
+
+`--with-ir-interp` now runs code objects as the register IR with lazy lowering,
+a pcmap and static borrows for absorbed loads. Micro-loops at parity with the
+tree before the commit (0.93 to 1.02); pyperformance user instructions +2 to
++6% (richards +5.8, go +5.4) because absorbed-load words still dispatch and
+borrowed inputs go through an extra indirection. Full suite passes apart from
+the machine-local test_sys remote-exec failure; all 7 ports pass.
+
+Launched at 17:50 with 3h budgets and 30-minute reports: IR step 5 (register
+form, absorbed words removed; gate is fewer instructions than ref-head on
+richards, go, chaos, float) in this tree; shapes step one behind
+`--with-shapes` in an isolated worktree. Tier 0 starts once step 5 fixes the
+word format.

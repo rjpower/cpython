@@ -624,3 +624,60 @@ BINARY_OP_ADD r1 r1 r2 fb3, RETURN_VALUE r1, with the names in the feedback
 table. After 100 calls the executing copy runs RESUME_CHECK,
 LOAD_ATTR_INSTANCE_VALUE twice and BINARY_OP_ADD_INT. test_grammar and
 test_builtin pass; test_generators and test_exceptions do not yet.
+
+### 2026-10-25 — Step 2a, days 2 and 3: the tests read words
+
+test_ir, test_dis, test_opcache, test_generated_cases, test_monitoring,
+test_sys_settrace, test_generators, test_exceptions, test_code, test_compile
+and test__opcode expect the words. Changes the tests forced:
+
+- The IR-only handlers are numbered after the pseudo-instructions, so that
+  `opcode.opname` names one thing per number (`IR_JUMP` is 267).
+- `IR_JUMP`, the trampoline word of a relaxed FOR_ITER or SEND, keeps the
+  instruction pointer at the loop, so BRANCH events name the loop.
+- The assembler emits the inline constant handlers in every build; the
+  executing copy runs the boxing forms where values stay boxed.
+- The compiler builds annotation dicts 15 pairs at a time, so that
+  test_stack_3050_2 stays within the slot limit.
+- `test.support.bytecode_helper.encode_words()` builds words for tests that
+  hand-assemble code. test_dis has 145 tests and 0 failures on dev-debug.
+  On dev-ft it has 8, because the free-threaded build does not specialise
+  those sites; the MONO check of show_caches is skipped there.
+- The gdb reader takes `f_lasti` from `instr_ptr - ir_words`. gdb is not
+  installed here, so test_gdb was skipped and the file is only compiled.
+
+### 2026-10-25 — Step 2a, day 4: suites and ports
+
+The full suite on dev-debug and dev-default fails only in the known
+test_remote_exec_deleted_static_executable. Three failures surfaced on the
+way:
+
+- test_import's test_foreign_code replaces a constant with a code object.
+  The word kept `LOAD_CONST_INLINE_INT` and aborted. The code constructor now
+  demotes such a word to `LOAD_CONST`.
+- test_embed's test_frozenmain needed Programs/test_frozenmain.h
+  regenerated.
+- numpy and pyyaml failed to import: Cython passes zeroed code in 2-byte
+  units, 4-byte aligned, for each function's code object. The constructor
+  pads it to whole words of CACHE. All seven ports then pass against
+  dev-default (`--interpreter build/dev-default/python`; the default
+  baseline-default interpreter cannot run the current Lib).
+
+Rung 2 passes on dev-tailcall. On dev-stackrefdebug it passes too;
+test_embed's test_asyncio_task_during_interpreter_clear reports leaked
+stackrefs there, but it does so at the step 1 head as well. dev-ft fails only
+in the known places: test_dis and test_opcache (72) and test_monitoring's
+test_no_unwind_for_shim_frame.
+
+### 2026-10-25 — Step 2a, day 5: measurements
+
+Recorded in note 06 section 10. Per loop, 2a is within 1 percent of
+step1-noabsorb on all four (richards +0.4, go +0.5, nbody -0.2, float +0.4
+percent). Against step 1 it is richards +3.4, go +5.5, nbody -0.2 and float
++3.0 percent: the absorption 2a does not do, left to 2b. Removing the lowering
+saves about 40M instructions on a richards `-l 1` worker and 6.8M at startup.
+Peak RSS is +1.2 percent at startup, but +4.8 percent after twelve stdlib
+imports and +2.9 percent on richards `-l 10`: code objects hold 8-byte words
+where they held 2-byte units. The step 1 builds are VPATH builds of this
+tree, so they ran the current Lib; none of the workloads imports dis or
+opcode, the only modules that differ.

@@ -703,8 +703,12 @@ handler exists, and the slot fields are below `co_nlocalsplus +
 co_stacksize`. A feedback field must be below the number of entries, and
 must not be 0 for a handler that reads its operand from the entry. A word with
 an inline constant handler whose constant is no longer a compact int or a
-float, as after `replace(co_consts=...)`, runs `LOAD_CONST` instead. Marshal
-does not check, just as it trusts bytecode today. Sites past the 4095th share
+float, as after `replace(co_consts=...)`, runs `LOAD_CONST` instead. Code
+whose length is a whole number of 2-byte units but not of words is padded
+with zero words (CACHE): Cython builds each function's code object from
+zeroed code of that kind, which never runs and only spans its line table,
+and the numpy and pyyaml ports fail to import without it. Marshal does not
+check, just as it trusts bytecode today. Sites past the 4095th share
 entry 0 and run a NOFB handler, which carries the operand in the word
 (`LOAD_ATTR_NOFB`, `COMPARE_OP_NOFB` and so on).
 
@@ -791,3 +795,43 @@ big-endian port would swap them in marshal.
   annotated parameters stays within the slot limit.
 - `EXTENDED_ARG` is never emitted. The opcode stays defined because
   `opcode.EXTENDED_ARG` and `dis` document it.
+
+**Measurements.** gcc with computed goto (dev-default), against step 1 and
+against step 1 with absorption disabled (step1-noabsorb), which emits the
+same words as 2a. Instructions per loop are the worker at 2 and 10 loops,
+differenced, the median of four or five runs; each build has its own pyc
+cache.
+
+| per loop (M instructions) | step 1 | step1-noabsorb | 2a | 2a vs noabsorb | 2a vs step 1 |
+|---|---|---|---|---|---|
+| richards | 577.3 | 594.5 | 597.0 | +0.4% | +3.4% |
+| go | 1244.1 | 1305.7 | 1312.7 | +0.5% | +5.5% |
+| nbody | 1030.3 | 1030.3 | 1028.6 | -0.2% | -0.2% |
+| float | 780.0 | 800.4 | 803.2 | +0.4% | +3.0% |
+
+The gap to step 1 is the absorption that 2a does not do; step 2b's folding
+is to win it back.
+
+| one-time (M instructions) | step 1 | step1-noabsorb | 2a |
+|---|---|---|---|
+| `python -c pass` | 54.1 | 53.5 | 46.7 |
+| richards `-l 1` | 995.0 | 1012.4 | 974.2 |
+| richards `-l 1` less one loop | 417.7 | 417.9 | 377.2 |
+
+Deleting the lowering saves about 40M instructions on a richards worker and
+6.8M at startup.
+
+Peak RSS is the median of five runs, measured two or three times.
+
+| max RSS (KiB) | step 1 | step1-noabsorb | 2a | 2a vs noabsorb |
+|---|---|---|---|---|
+| `python -c pass` | 10448 | 11248 | 11384 | +1.2% |
+| twelve stdlib imports | 19280 | 20204 | 21178 | +4.8% |
+| richards `-l 10` | 22356 | 23464 | 24136 | +2.9% |
+
+Imports and richards exceed the 2 percent allowance. The code objects carry
+the cost: after the imports, their 3,758 code objects hold 842 KB of stack
+bytecode in step 1 and 1,334 KB of words plus 257 KB of feedback tables in
+2a. A loaded code object now holds 8 bytes per instruction where it held 2
+bytes per code unit. A quarter of the words load a local or a constant;
+2b's folding removes many of them.

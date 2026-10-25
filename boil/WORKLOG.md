@@ -335,3 +335,27 @@ return-to-caller dispatch mode and an own x86-64 emitter behind --with-tier0;
 inline fast paths for locals, constants, jumps, feedback-guarded inline int and
 float arithmetic and compares, and the shape guard; tests and measurements.
 IR word layout frozen for it.
+
+### IR 6a (0c20d49484d) and 6b (d05ff3faf24) landed; tier 0 commit 1 in its worktree
+
+6a: blocks with absorbed loads re-lower one word per instruction when
+INSTRUCTION events turn on; frames in the old block move over through IR_REMAP
+words; expectedFailure removed. The suspected second FT bug did not exist.
+
+6b: IR_SUPER_COMPARE_OP_{INT,FLOAT,STR} fuse a specialised compare with the
+following POP_JUMP_IF, the comparison feeding the jump as a C int, with a deopt
+guard on the next handler so BRANCH events survive. Interpreter effect is
+small, as expected: richards 562.8M -> 562.2M per loop, nqueens 872.7M ->
+869.0M, go 5157M -> 5120M (-l 4). Pairs are under 1% of executed instructions;
+the value is that tier 0 can emit cmp+jcc for a fused word.
+
+6c in progress: lowering 34M instructions on richards -l 1 vs 13M for
+quickening; acceptance at or below 1.5x with per-loop below ref-head.
+
+Tier 0 commit 1 (ca33452e860 in its worktree): generated_ir_cases.c.h compiled
+a second time in "call mode" where dispatch returns the next frame and word;
+Python/jit_x86.h emitter; Python/tier0.c emits per word: fields as
+immediates, call through the handler table, compare returned word, fall
+through or jump table. Specialisation needs no recompile; instrumentation
+invalidates. Full suite green on the JIT build. Commit 2, inline fast paths,
+in progress.

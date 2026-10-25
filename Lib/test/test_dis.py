@@ -13,6 +13,7 @@ import tempfile
 import textwrap
 import types
 import unittest
+from test import support
 from test.support import (captured_stdout, requires_debug_ranges,
                           requires_specialization, cpython_only,
                           os_helper, import_helper, reset_code)
@@ -1455,7 +1456,8 @@ class DisTests(DisTestBase):
                         names = tuple(name for name, _, _ in instr.cache_info)
                         self.assertIn(names, fields)
                     self.assertEqual(text.count(" FEEDBACK "), 6)
-                    if quickened and adaptive:
+                    # The free-threaded build does not specialise the IR
+                    if quickened and adaptive and not support.Py_GIL_DISABLED:
                         states = [dict((name, data) for name, _, data
                                        in instr.cache_info)["state"]
                                   for instr in with_fb]

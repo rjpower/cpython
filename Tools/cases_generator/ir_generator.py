@@ -941,12 +941,15 @@ class IREmitter(Emitter):
         raise analysis_error(f"{inst.name}: no input in field {field}",
                              inst.where)
 
-    def emit_borrow_drops(self, inst: Instruction | None) -> None:
-        """Before a deopt, where the family head reads the locals again,
-        drop the object inputs read through fields that name locals: the
-        borrows that IR_BORROW_KNOWN made, which only the Py_STACKREF_DEBUG
-        checker tracks, and the boxes of inline values."""
-        storage = self.deopt_storage
+    def emit_borrow_drops(self, inst: Instruction | None,
+                          storage: Storage | None = None) -> None:
+        """Before a deopt, or a specialisation that runs the word again,
+        where the handler reads the locals again, drop the object inputs
+        read through fields that name locals: the borrows that
+        IR_BORROW_KNOWN and IR_LOAD_BORROWED made, which only the
+        Py_STACKREF_DEBUG checker tracks, and the boxes of inline values."""
+        if storage is None:
+            storage = self.deopt_storage
         if storage is None:
             return
         seen = set()
@@ -996,6 +999,7 @@ class IREmitter(Emitter):
         """The handler runs again on the same word, and a SYNC_LAG handler
         adds the lag on entry, so take it back first."""
         assert inst is not None
+        self.emit_borrow_drops(inst, storage)
         fmt = self.format_of(inst)
         if fmt.sync == SYNC_LAG:
             self.emit(f"stack_pointer -= {lag_expr(fmt)};\n")

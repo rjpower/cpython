@@ -447,8 +447,6 @@ def first_new_output(outputs: list[Entry], n_inputs: int) -> int | None:
     return None
 
 
-
-
 def window_dst(outputs: list[Entry]) -> int | None:
     """The offset from the deepest input of the slot of the first new
     output, if no array lies below it."""

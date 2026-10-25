@@ -824,8 +824,8 @@ class TestIRCases(unittest.TestCase):
         ir_metadata_generator.generate_ir_metadata(
             [self.temp_input_filename], analysis, out)
         lines = [line.strip() for line in out.getvalue().splitlines()]
-        self.assertIn("#define _PyIR_BINARY_OP_FIRST                          BINARY_OP_ADD",
-                      lines)
+        self.assertIn("#define _PyIR_BINARY_OP_FIRST" + " " * 26
+                      + "BINARY_OP_ADD", lines)
         self.assertIn('static_assert(BINARY_OP_ADD == _PyIR_BINARY_OP_FIRST + '
                       'NB_ADD, "BINARY_OP_ADD");', lines)
 

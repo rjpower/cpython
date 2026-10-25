@@ -2490,6 +2490,7 @@ class TestFeedback(TestBase):
         "LOAD_ATTR": "ATTR", "STORE_ATTR": "ATTR", "LOAD_SUPER_ATTR": "ATTR",
         "LOAD_GLOBAL": "GLOBAL",
         "CALL": "CALL", "CALL_KW": "CALL", "CALL_FUNCTION_EX": "CALL",
+        "POP_JUMP": "BRANCH",
     }
 
     def feedback(self, func, opname):
@@ -2518,15 +2519,17 @@ class TestFeedback(TestBase):
             for instr in dis.get_instructions(func):
                 entry = _testinternalcapi.get_feedback(func.__code__,
                                                        instr.offset)
-                if (not instr.cache_info or instr.opname.startswith("POP_JUMP")
-                        or instr.opname in no_entry):
-                    # Branches keep their history in the cache unit
+                name = instr.opname
+                if name.startswith("POP_JUMP"):
+                    # A branch keeps its history in the arg of its entry
+                    name = "POP_JUMP"
+                if instr.fb is None or name in no_entry:
                     self.assertIsNone(entry, instr.opname)
                     continue
                 kind, state, *_ = entry
-                self.assertEqual(kind, self.KINDS[instr.opname], instr.opname)
+                self.assertEqual(kind, self.KINDS[name], instr.opname)
                 self.assertEqual(state, "COLD", instr.opname)
-                seen.add(instr.opname)
+                seen.add(name)
         self.assertEqual(seen, set(self.KINDS) - no_entry)
 
     @requires_specialization

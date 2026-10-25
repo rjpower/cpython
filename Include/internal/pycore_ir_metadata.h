@@ -13,43 +13,44 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-/* Handlers of the IR only, after the opcodes */
-#define IR_JUMP                                        256
-#define BINARY_OP_ADD                                  257
-#define BINARY_OP_AND                                  258
-#define BINARY_OP_FLOOR_DIVIDE                         259
-#define BINARY_OP_LSHIFT                               260
-#define BINARY_OP_MATRIX_MULTIPLY                      261
-#define BINARY_OP_MULTIPLY                             262
-#define BINARY_OP_REMAINDER                            263
-#define BINARY_OP_OR                                   264
-#define BINARY_OP_POWER                                265
-#define BINARY_OP_RSHIFT                               266
-#define BINARY_OP_SUBTRACT                             267
-#define BINARY_OP_TRUE_DIVIDE                          268
-#define BINARY_OP_XOR                                  269
-#define BINARY_OP_INPLACE_ADD                          270
-#define BINARY_OP_INPLACE_AND                          271
-#define BINARY_OP_INPLACE_FLOOR_DIVIDE                 272
-#define BINARY_OP_INPLACE_LSHIFT                       273
-#define BINARY_OP_INPLACE_MATRIX_MULTIPLY              274
-#define BINARY_OP_INPLACE_MULTIPLY                     275
-#define BINARY_OP_INPLACE_REMAINDER                    276
-#define BINARY_OP_INPLACE_OR                           277
-#define BINARY_OP_INPLACE_POWER                        278
-#define BINARY_OP_INPLACE_RSHIFT                       279
-#define BINARY_OP_INPLACE_SUBTRACT                     280
-#define BINARY_OP_INPLACE_TRUE_DIVIDE                  281
-#define BINARY_OP_INPLACE_XOR                          282
-#define BINARY_OP_SUBSCR                               283
-#define COMPARE_OP_NOFB                                284
-#define CONTAINS_OP_NOFB                               285
-#define INSTRUMENTED_LOAD_SUPER_ATTR_NOFB              286
-#define LOAD_ATTR_NOFB                                 287
-#define LOAD_GLOBAL_NOFB                               288
-#define LOAD_SUPER_ATTR_NOFB                           289
-#define STORE_ATTR_NOFB                                290
-#define IR_NUM_HANDLERS                                291
+/* Handlers of the IR only, after the opcodes and the pseudo-instructions */
+#define IR_FIRST_ONLY_HANDLER                          267
+#define IR_JUMP                                        267
+#define BINARY_OP_ADD                                  268
+#define BINARY_OP_AND                                  269
+#define BINARY_OP_FLOOR_DIVIDE                         270
+#define BINARY_OP_LSHIFT                               271
+#define BINARY_OP_MATRIX_MULTIPLY                      272
+#define BINARY_OP_MULTIPLY                             273
+#define BINARY_OP_REMAINDER                            274
+#define BINARY_OP_OR                                   275
+#define BINARY_OP_POWER                                276
+#define BINARY_OP_RSHIFT                               277
+#define BINARY_OP_SUBTRACT                             278
+#define BINARY_OP_TRUE_DIVIDE                          279
+#define BINARY_OP_XOR                                  280
+#define BINARY_OP_INPLACE_ADD                          281
+#define BINARY_OP_INPLACE_AND                          282
+#define BINARY_OP_INPLACE_FLOOR_DIVIDE                 283
+#define BINARY_OP_INPLACE_LSHIFT                       284
+#define BINARY_OP_INPLACE_MATRIX_MULTIPLY              285
+#define BINARY_OP_INPLACE_MULTIPLY                     286
+#define BINARY_OP_INPLACE_REMAINDER                    287
+#define BINARY_OP_INPLACE_OR                           288
+#define BINARY_OP_INPLACE_POWER                        289
+#define BINARY_OP_INPLACE_RSHIFT                       290
+#define BINARY_OP_INPLACE_SUBTRACT                     291
+#define BINARY_OP_INPLACE_TRUE_DIVIDE                  292
+#define BINARY_OP_INPLACE_XOR                          293
+#define BINARY_OP_SUBSCR                               294
+#define COMPARE_OP_NOFB                                295
+#define CONTAINS_OP_NOFB                               296
+#define INSTRUMENTED_LOAD_SUPER_ATTR_NOFB              297
+#define LOAD_ATTR_NOFB                                 298
+#define LOAD_GLOBAL_NOFB                               299
+#define LOAD_SUPER_ATTR_NOFB                           300
+#define STORE_ATTR_NOFB                                301
+#define IR_NUM_HANDLERS                                302
 
 /* The handler of BINARY_OP operation OP is _PyIR_BINARY_OP_FIRST + OP */
 #define _PyIR_BINARY_OP_FIRST                          BINARY_OP_ADD
@@ -81,9 +82,9 @@ static_assert(BINARY_OP_INPLACE_TRUE_DIVIDE == _PyIR_BINARY_OP_FIRST + NB_INPLAC
 static_assert(BINARY_OP_INPLACE_XOR == _PyIR_BINARY_OP_FIRST + NB_INPLACE_XOR, "BINARY_OP_INPLACE_XOR");
 static_assert(BINARY_OP_SUBSCR == _PyIR_BINARY_OP_FIRST + NB_SUBSCR, "BINARY_OP_SUBSCR");
 
-PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[291];
+PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[302];
 #ifdef NEED_IR_METADATA
-const _PyIRFormat _PyIR_Formats[291] = {
+const _PyIRFormat _PyIR_Formats[302] = {
     [CACHE] = { .flags = _PyIR_VALID, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = CACHE, .nofb = 0 },
     [BINARY_SLICE] = { .flags = _PyIR_VALID, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IN0 + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 3, .dst = -3, .borrow_mask = 0x0, .shadow = BINARY_SLICE, .nofb = 0 },
     [BUILD_TEMPLATE] = { .flags = _PyIR_VALID, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = -2, .borrow_mask = 0x3, .shadow = BUILD_TEMPLATE, .nofb = 0 },
@@ -365,41 +366,41 @@ const _PyIRFormat _PyIR_Formats[291] = {
 PyAPI_DATA(const char *const) _PyIR_OnlyNames[35];
 #ifdef NEED_IR_METADATA
 const char *const _PyIR_OnlyNames[35] = {
-    [IR_JUMP - 256] = "IR_JUMP",
-    [BINARY_OP_ADD - 256] = "BINARY_OP_ADD",
-    [BINARY_OP_AND - 256] = "BINARY_OP_AND",
-    [BINARY_OP_FLOOR_DIVIDE - 256] = "BINARY_OP_FLOOR_DIVIDE",
-    [BINARY_OP_LSHIFT - 256] = "BINARY_OP_LSHIFT",
-    [BINARY_OP_MATRIX_MULTIPLY - 256] = "BINARY_OP_MATRIX_MULTIPLY",
-    [BINARY_OP_MULTIPLY - 256] = "BINARY_OP_MULTIPLY",
-    [BINARY_OP_REMAINDER - 256] = "BINARY_OP_REMAINDER",
-    [BINARY_OP_OR - 256] = "BINARY_OP_OR",
-    [BINARY_OP_POWER - 256] = "BINARY_OP_POWER",
-    [BINARY_OP_RSHIFT - 256] = "BINARY_OP_RSHIFT",
-    [BINARY_OP_SUBTRACT - 256] = "BINARY_OP_SUBTRACT",
-    [BINARY_OP_TRUE_DIVIDE - 256] = "BINARY_OP_TRUE_DIVIDE",
-    [BINARY_OP_XOR - 256] = "BINARY_OP_XOR",
-    [BINARY_OP_INPLACE_ADD - 256] = "BINARY_OP_INPLACE_ADD",
-    [BINARY_OP_INPLACE_AND - 256] = "BINARY_OP_INPLACE_AND",
-    [BINARY_OP_INPLACE_FLOOR_DIVIDE - 256] = "BINARY_OP_INPLACE_FLOOR_DIVIDE",
-    [BINARY_OP_INPLACE_LSHIFT - 256] = "BINARY_OP_INPLACE_LSHIFT",
-    [BINARY_OP_INPLACE_MATRIX_MULTIPLY - 256] = "BINARY_OP_INPLACE_MATRIX_MULTIPLY",
-    [BINARY_OP_INPLACE_MULTIPLY - 256] = "BINARY_OP_INPLACE_MULTIPLY",
-    [BINARY_OP_INPLACE_REMAINDER - 256] = "BINARY_OP_INPLACE_REMAINDER",
-    [BINARY_OP_INPLACE_OR - 256] = "BINARY_OP_INPLACE_OR",
-    [BINARY_OP_INPLACE_POWER - 256] = "BINARY_OP_INPLACE_POWER",
-    [BINARY_OP_INPLACE_RSHIFT - 256] = "BINARY_OP_INPLACE_RSHIFT",
-    [BINARY_OP_INPLACE_SUBTRACT - 256] = "BINARY_OP_INPLACE_SUBTRACT",
-    [BINARY_OP_INPLACE_TRUE_DIVIDE - 256] = "BINARY_OP_INPLACE_TRUE_DIVIDE",
-    [BINARY_OP_INPLACE_XOR - 256] = "BINARY_OP_INPLACE_XOR",
-    [BINARY_OP_SUBSCR - 256] = "BINARY_OP_SUBSCR",
-    [COMPARE_OP_NOFB - 256] = "COMPARE_OP_NOFB",
-    [CONTAINS_OP_NOFB - 256] = "CONTAINS_OP_NOFB",
-    [INSTRUMENTED_LOAD_SUPER_ATTR_NOFB - 256] = "INSTRUMENTED_LOAD_SUPER_ATTR_NOFB",
-    [LOAD_ATTR_NOFB - 256] = "LOAD_ATTR_NOFB",
-    [LOAD_GLOBAL_NOFB - 256] = "LOAD_GLOBAL_NOFB",
-    [LOAD_SUPER_ATTR_NOFB - 256] = "LOAD_SUPER_ATTR_NOFB",
-    [STORE_ATTR_NOFB - 256] = "STORE_ATTR_NOFB",
+    [IR_JUMP - IR_FIRST_ONLY_HANDLER] = "IR_JUMP",
+    [BINARY_OP_ADD - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_ADD",
+    [BINARY_OP_AND - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_AND",
+    [BINARY_OP_FLOOR_DIVIDE - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_FLOOR_DIVIDE",
+    [BINARY_OP_LSHIFT - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_LSHIFT",
+    [BINARY_OP_MATRIX_MULTIPLY - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_MATRIX_MULTIPLY",
+    [BINARY_OP_MULTIPLY - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_MULTIPLY",
+    [BINARY_OP_REMAINDER - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_REMAINDER",
+    [BINARY_OP_OR - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_OR",
+    [BINARY_OP_POWER - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_POWER",
+    [BINARY_OP_RSHIFT - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_RSHIFT",
+    [BINARY_OP_SUBTRACT - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_SUBTRACT",
+    [BINARY_OP_TRUE_DIVIDE - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_TRUE_DIVIDE",
+    [BINARY_OP_XOR - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_XOR",
+    [BINARY_OP_INPLACE_ADD - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_ADD",
+    [BINARY_OP_INPLACE_AND - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_AND",
+    [BINARY_OP_INPLACE_FLOOR_DIVIDE - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_FLOOR_DIVIDE",
+    [BINARY_OP_INPLACE_LSHIFT - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_LSHIFT",
+    [BINARY_OP_INPLACE_MATRIX_MULTIPLY - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_MATRIX_MULTIPLY",
+    [BINARY_OP_INPLACE_MULTIPLY - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_MULTIPLY",
+    [BINARY_OP_INPLACE_REMAINDER - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_REMAINDER",
+    [BINARY_OP_INPLACE_OR - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_OR",
+    [BINARY_OP_INPLACE_POWER - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_POWER",
+    [BINARY_OP_INPLACE_RSHIFT - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_RSHIFT",
+    [BINARY_OP_INPLACE_SUBTRACT - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_SUBTRACT",
+    [BINARY_OP_INPLACE_TRUE_DIVIDE - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_TRUE_DIVIDE",
+    [BINARY_OP_INPLACE_XOR - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_XOR",
+    [BINARY_OP_SUBSCR - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_SUBSCR",
+    [COMPARE_OP_NOFB - IR_FIRST_ONLY_HANDLER] = "COMPARE_OP_NOFB",
+    [CONTAINS_OP_NOFB - IR_FIRST_ONLY_HANDLER] = "CONTAINS_OP_NOFB",
+    [INSTRUMENTED_LOAD_SUPER_ATTR_NOFB - IR_FIRST_ONLY_HANDLER] = "INSTRUMENTED_LOAD_SUPER_ATTR_NOFB",
+    [LOAD_ATTR_NOFB - IR_FIRST_ONLY_HANDLER] = "LOAD_ATTR_NOFB",
+    [LOAD_GLOBAL_NOFB - IR_FIRST_ONLY_HANDLER] = "LOAD_GLOBAL_NOFB",
+    [LOAD_SUPER_ATTR_NOFB - IR_FIRST_ONLY_HANDLER] = "LOAD_SUPER_ATTR_NOFB",
+    [STORE_ATTR_NOFB - IR_FIRST_ONLY_HANDLER] = "STORE_ATTR_NOFB",
 };
 #endif
 

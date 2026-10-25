@@ -15,7 +15,7 @@ from generators_common import (
     write_header,
 )
 from cwriter import CWriter
-from ir_generator import FIRST_IR_ONLY_HANDLER, handler_ids
+from ir_generator import first_ir_only_handler, handler_ids
 from typing import TextIO
 
 
@@ -75,7 +75,7 @@ def generate_ir_opmap(analysis: Analysis, out: CWriter) -> None:
     out.emit("_ir_opmap = frozendict(\n")
     ids = handler_ids(analysis)
     for name, handler in sorted(ids.items(), key=lambda item: item[1]):
-        if handler >= FIRST_IR_ONLY_HANDLER:
+        if handler >= first_ir_only_handler(analysis):
             out.emit(f"{name}={handler},\n")
     out.emit(")\n\n")
 

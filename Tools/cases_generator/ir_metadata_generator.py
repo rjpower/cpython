@@ -22,7 +22,7 @@ from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
 from ir_generator import (
     BINARY_OP_FAMILY,
-    FIRST_IR_ONLY_HANDLER,
+    first_ir_only_handler,
     NOFB_SUFFIX,
     IRFormat,
     binary_op_handlers,
@@ -73,7 +73,8 @@ def generate_ir_metadata(
     formats = compute_formats(analysis)
     ids = handler_ids(analysis)
     n = num_handlers(analysis)
-    ir_only = sorted((name for name in ids if ids[name] >= FIRST_IR_ONLY_HANDLER),
+    first = first_ir_only_handler(analysis)
+    ir_only = sorted((name for name in ids if ids[name] >= first),
                      key=lambda name: ids[name])
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
@@ -81,7 +82,9 @@ def generate_ir_metadata(
         out.emit("#ifndef Py_BUILD_CORE\n")
         out.emit('#  error "this header requires Py_BUILD_CORE define"\n')
         out.emit("#endif\n\n")
-        out.emit("/* Handlers of the IR only, after the opcodes */\n")
+        out.emit("/* Handlers of the IR only, after the opcodes and the "
+                 "pseudo-instructions */\n")
+        out.emit(f"#define {'IR_FIRST_ONLY_HANDLER':<46} {first}\n")
         for name in ir_only:
             out.emit(f"#define {name:<46} {ids[name]}\n")
         out.emit(f"#define {'IR_NUM_HANDLERS':<46} {n}\n\n")
@@ -115,7 +118,7 @@ def generate_ir_metadata(
         out.emit("#ifdef NEED_IR_METADATA\n")
         out.emit(f"const char *const _PyIR_OnlyNames[{len(ir_only)}] = {{\n")
         for name in ir_only:
-            out.emit(f'[{name} - {FIRST_IR_ONLY_HANDLER}] = "{name}",\n')
+            out.emit(f'[{name} - IR_FIRST_ONLY_HANDLER] = "{name}",\n')
         out.emit("};\n")
         out.emit("#endif\n")
 

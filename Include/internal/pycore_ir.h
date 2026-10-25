@@ -24,7 +24,8 @@ extern "C" {
  *
  * The handler of an instruction that has an opcode is that opcode.  The
  * handlers of the IR only (IR_JUMP, BINARY_OP_ADD, LOAD_ATTR_NOFB, ...)
- * follow from IR_FIRST_ONLY_HANDLER, 256.  A, B, C and D are 12-bit fields,
+ * follow from IR_FIRST_ONLY_HANDLER, after the pseudo-instructions of the
+ * compiler, so that opcode.opname names each number once.  A, B, C and D are 12-bit fields,
  * and C and D together form a 24-bit field CD.  A field plays one of these
  * roles, which _PyIR_Formats gives per handler:
  *
@@ -57,8 +58,6 @@ extern "C" {
  * Word indices are the offsets of the IR: f_lasti, the line table and the
  * exception table count words.
  */
-
-#define IR_FIRST_ONLY_HANDLER 256
 
 #define IR_FIELD_MAX    0xFFF       // the largest value of a 12-bit field
 #define IR_CD_MAX       0xFFFFFF    // and of CD

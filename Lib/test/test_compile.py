@@ -1436,7 +1436,7 @@ class TestSpecifics(unittest.TestCase):
                 code = func.__code__
                 [(start, end, line)] = code.co_lines()
                 self.assertEqual(start, 0)
-                self.assertEqual(end, len(code.co_code))
+                self.assertEqual(end, len(code.co_code) // 8)
                 self.assertEqual(line, code.co_firstlineno)
 
     def get_code_lines(self, code):

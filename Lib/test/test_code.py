@@ -213,7 +213,7 @@ from test.support import (cpython_only,
                           gc_collect, Py_GIL_DISABLED, late_deletion)
 from test.support.script_helper import assert_python_ok
 from test.support import threading_helper, import_helper
-from test.support.bytecode_helper import instructions_with_positions
+from test.support.bytecode_helper import encode_words, instructions_with_positions
 from opcode import opmap, opname
 try:
     import _testinternalcapi
@@ -268,9 +268,32 @@ class CodeTest(unittest.TestCase):
         def create_closure(__class__):
             return (lambda: __class__).__closure__
 
+        def shift_stack_slots(c, by):
+            # A new free variable moves the evaluation stack up by one slot,
+            # so every word that names a stack slot must follow it.
+            import _opcode
+            formats = _opcode.get_ir_formats()
+            words = []
+            for i in range(0, len(c.co_code), 8):
+                word = int.from_bytes(c.co_code[i:i+8], 'little')
+                handler = word & 0xFFFF
+                flags, roles, *_ = formats[handler]
+                self.assertFalse(flags & _opcode.IR_JUMPS)
+                fields = [(word >> shift) & 0xFFF for shift in (16, 28, 40, 52)]
+                for k, role in enumerate(roles):
+                    is_slot = role in (_opcode.IR_ROLE_DST, _opcode.IR_ROLE_BASE) \
+                              or role >= _opcode.IR_ROLE_IN0
+                    if is_slot and fields[k] >= c.co_nlocals:
+                        fields[k] += by
+                words.append((handler, *fields))
+            return encode_words(*words)
+
         def new_code(c):
             '''A new code object with a __class__ cell added to freevars'''
-            return c.replace(co_freevars=c.co_freevars + ('__class__',), co_code=bytes([COPY_FREE_VARS, 1])+c.co_code)
+            self.assertEqual(c.co_freevars, ())
+            return c.replace(co_freevars=('__class__',),
+                             co_code=encode_words((COPY_FREE_VARS, 1))
+                                     + shift_stack_slots(c, 1))
 
         def add_foreign_method(cls, name, f):
             code = new_code(f.__code__)
@@ -485,13 +508,12 @@ class CodeTest(unittest.TestCase):
         # assert that opcode 127 is invalid
         self.assertEqual(opname[127], '<127>')
 
-        # change first opcode to 0x7f (=127)
-        foo.__code__ = foo.__code__.replace(
-            co_code=b'\x7f' + foo.__code__.co_code[1:])
-
-        msg = "unknown opcode 127"
-        with self.assertRaisesRegex(SystemError, msg):
-            foo()
+        # change the first handler to 0x7f (=127); the constructor
+        # rejects words whose handler does not exist
+        msg = "word 0 has no handler 127"
+        with self.assertRaisesRegex(ValueError, msg):
+            foo.__code__.replace(
+                co_code=b'\x7f\x00' + foo.__code__.co_code[2:])
 
     @requires_debug_ranges()
     def test_co_positions_artificial_instructions(self):
@@ -1444,13 +1466,11 @@ class CodeLocationTest(unittest.TestCase):
         f.__code__ = f.__code__.replace(
             co_stacksize=1,
             co_firstlineno=42,
-            co_code=bytes(
-                [
-                    dis.opmap["RESUME"], 0,
-                    dis.opmap["CACHE"], 0,
-                    dis.opmap["LOAD_COMMON_CONSTANT"], 0,
-                    dis.opmap["RAISE_VARARGS"], 1,
-                ]
+            co_code=encode_words(
+                ("RESUME", 0),
+                ("NOP",),
+                ("LOAD_COMMON_CONSTANT", 0, 0),
+                ("RAISE_VARARGS", 0, 1),
             ),
             co_linetable=bytes(
                 [

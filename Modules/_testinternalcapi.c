@@ -1507,7 +1507,8 @@ get_co_framesize(PyObject *self, PyObject *arg)
 }
 
 /* The feedback entry of the instruction at word index I of the executing
- * copy of CODE: None if it has none or CODE has never run, else (kind,
+ * copy of CODE, which this makes if CODE has never run: None if it has
+ * none, else (kind,
  * state, first, second, rows), where first and second are the two 32-bit
  * fields after the header and rows lists the (type_version, aux, handler)
  * rows of its poly table. */
@@ -1527,8 +1528,11 @@ get_feedback(PyObject *self, PyObject *args)
         PyErr_SetString(PyExc_ValueError, "index out of range");
         return NULL;
     }
-    _PyCodeExec *exec = code->_co_exec;
-    if (exec == NULL || _PyCode_InstrFbIndex(code, i) <= 0) {
+    _PyCodeExec *exec = _PyCode_GetExec(code);
+    if (exec == NULL) {
+        return NULL;
+    }
+    if (_PyCode_InstrFbIndex(code, i) <= 0) {
         Py_RETURN_NONE;
     }
     _PyFbHeader *h = _PyIR_InstrFeedback(code, exec, &exec->words[i]);

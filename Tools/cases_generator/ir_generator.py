@@ -43,7 +43,8 @@ records.
 Invariants:
 
 - The handler index of an instruction with an opcode is its opcode. IR-only
-  handlers (annotation `ir_only`) follow from 256, then the handlers of the
+  handlers (annotation `ir_only`) follow the pseudo-instructions, then the
+  handlers of the
   BINARY_OP operations in the order of their NB_ constants, then the NOFB
   forms in name order.
 - Members of a family share the format of the family, and INSTRUMENTED_X that
@@ -119,7 +120,10 @@ INSTRUCTION_END_MARKER = "/* END INSTRUCTIONS */"
 LABEL_START_MARKER = "/* BEGIN LABELS */"
 LABEL_END_MARKER = "/* END LABELS */"
 
-FIRST_IR_ONLY_HANDLER = 256
+def first_ir_only_handler(analysis: Analysis) -> int:
+    """The first handler of the IR only.  They follow the pseudo-instructions,
+    so that a number names one opcode, pseudo-instruction or handler."""
+    return 1 + max((p.opcode for p in analysis.pseudos.values()), default=255)
 
 # The fields of the word, and the C expressions that read them in a handler
 # (Python/ceval_macros.h), from this_instr, which every handler defines.
@@ -443,7 +447,7 @@ def handler_ids(analysis: Analysis) -> dict[str, int]:
     names = (sorted(analysis.ir_only) + binary_op_handlers(analysis)
              + [name + NOFB_SUFFIX for name in nofb_bases(analysis)])
     for i, name in enumerate(names):
-        ids[name] = FIRST_IR_ONLY_HANDLER + i
+        ids[name] = first_ir_only_handler(analysis) + i
     return ids
 
 
@@ -1137,7 +1141,7 @@ def function_proto(name: str, prefix: str = "_TAIL_CALL_") -> str:
 
 
 def num_handlers(analysis: Analysis) -> int:
-    return (FIRST_IR_ONLY_HANDLER + len(analysis.ir_only)
+    return (first_ir_only_handler(analysis) + len(analysis.ir_only)
             + len(binary_op_handlers(analysis)) + len(nofb_bases(analysis)))
 
 

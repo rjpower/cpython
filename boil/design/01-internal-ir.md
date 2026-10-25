@@ -697,8 +697,17 @@ Step 5 adds the following.
     section and instrumentation under the same lock or with the world
     stopped, so neither races the other. Until it is found, the
     free-threaded IR build does not support toggling sys.monitoring while
-    other threads run. test_monitoring's test_no_unwind_for_shim_frame also
-    fails there, since that build does not specialise the IR.
+    other threads run, and test_free_threading.test_monitoring is skipped
+    there: with only its CALL and LINE toggling test skipped, 1 run of the
+    module in 12 still crashed the same way. test_monitoring's
+    test_no_unwind_for_shim_frame also fails there, since that build does
+    not specialise the IR. After step 7 the debug free-threaded build still
+    reports the double free, in 1 of 32 runs of the trigger and with the
+    same stack, in `_PyThreadState_ClearMimallocHeaps` of an exiting
+    thread. An ASan build does not see it in 44 runs: mimalloc owns the
+    blocks, so ASan cannot tell when one is freed twice. Finding the first
+    free needs mimalloc's own tracking (`MI_TRACK_ASAN`) or a debugger,
+    which this machine lacks.
 
 Left for step 6, in order of measured cost:
 

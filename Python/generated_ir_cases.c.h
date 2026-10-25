@@ -23,12 +23,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_ADD;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -120,9 +120,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_ADD_FLOAT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
@@ -136,7 +136,7 @@
                 double a, b;
                 if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
                 res = PyStackRef_FromDouble(a + b);
@@ -174,9 +174,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_ADD_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
@@ -188,7 +188,7 @@
                 value = stack_pointer[-1];
                 if (!PyStackRef_IsCompactInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
@@ -196,7 +196,7 @@
                 left = stack_pointer[-2];
                 if (!PyStackRef_IsCompactInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_ADD_INT
@@ -246,9 +246,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_ADD_UNICODE);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef nos;
             _PyStackRef left;
@@ -261,12 +261,12 @@
                 value = stack_pointer[-1];
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
                 if (!PyUnicode_CheckExact(value_o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_UNICODE
@@ -274,12 +274,12 @@
                 nos = stack_pointer[-2];
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyUnicode_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_ADD_UNICODE
@@ -327,12 +327,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_AND;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -424,9 +424,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_AND_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
@@ -438,7 +438,7 @@
                 value = stack_pointer[-1];
                 if (!PyStackRef_IsCompactInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
@@ -446,7 +446,7 @@
                 left = stack_pointer[-2];
                 if (!PyStackRef_IsCompactInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_AND_INT
@@ -488,10 +488,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_EXTEND);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
@@ -532,7 +532,7 @@
                 _PyFrame_StackPointerInvalidate(frame);
                 if (!match) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
                 assert(stack_pointer == _PyFrame_GetStackPointer(frame));
@@ -581,12 +581,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_FLOOR_DIVIDE;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -678,9 +678,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_FLOOR_DIVIDE_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
@@ -692,7 +692,7 @@
                 value = stack_pointer[-1];
                 if (!PyStackRef_IsCompactInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
@@ -700,7 +700,7 @@
                 left = stack_pointer[-2];
                 if (!PyStackRef_IsCompactInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_FLOOR_DIVIDE_INT
@@ -709,7 +709,7 @@
                 int32_t b = PyStackRef_CompactIntValue(right);
                 if (b == 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 int32_t a = PyStackRef_CompactIntValue(left);
                 STAT_INC(BINARY_OP, hit);
@@ -757,12 +757,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_ADD;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -854,9 +854,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_INPLACE_ADD_UNICODE);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef nos;
             _PyStackRef left;
@@ -867,12 +867,12 @@
                 value = stack_pointer[-1];
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
                 if (!PyUnicode_CheckExact(value_o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_UNICODE
@@ -880,12 +880,12 @@
                 nos = stack_pointer[-2];
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyUnicode_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_INPLACE_ADD_UNICODE
@@ -902,7 +902,7 @@
                 assert(PyUnicode_CheckExact(left_o));
                 if (PyStackRef_AsPyObjectBorrow(*target_local) != left_o) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
                 assert(Py_REFCNT(left_o) >= 2 || !PyStackRef_IsHeapSafe(left));
@@ -941,12 +941,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_AND;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -1038,12 +1038,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_FLOOR_DIVIDE;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -1135,12 +1135,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_LSHIFT;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -1232,12 +1232,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MATRIX_MULTIPLY;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -1329,12 +1329,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MULTIPLY;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -1426,12 +1426,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_OR;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -1523,12 +1523,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_POWER;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -1620,12 +1620,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_REMAINDER;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -1717,12 +1717,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_RSHIFT;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -1814,12 +1814,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_SUBTRACT;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -1911,12 +1911,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_TRUE_DIVIDE;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -2008,12 +2008,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_XOR;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -2105,12 +2105,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_LSHIFT;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -2202,9 +2202,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_LSHIFT_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
@@ -2216,7 +2216,7 @@
                 value = stack_pointer[-1];
                 if (!PyStackRef_IsCompactInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
@@ -2224,7 +2224,7 @@
                 left = stack_pointer[-2];
                 if (!PyStackRef_IsCompactInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_LSHIFT_INT
@@ -2233,7 +2233,7 @@
                 int32_t b = PyStackRef_CompactIntValue(right);
                 if (b < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 int32_t a = PyStackRef_CompactIntValue(left);
                 STAT_INC(BINARY_OP, hit);
@@ -2283,12 +2283,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MATRIX_MULTIPLY;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -2380,12 +2380,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MULTIPLY;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -2477,9 +2477,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_FLOAT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
@@ -2493,7 +2493,7 @@
                 double a, b;
                 if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
                 res = PyStackRef_FromDouble(a * b);
@@ -2531,9 +2531,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
@@ -2545,7 +2545,7 @@
                 value = stack_pointer[-1];
                 if (!PyStackRef_IsCompactInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
@@ -2553,7 +2553,7 @@
                 left = stack_pointer[-2];
                 if (!PyStackRef_IsCompactInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_MULTIPLY_INT
@@ -2603,12 +2603,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_OR;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -2700,9 +2700,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_OR_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
@@ -2714,7 +2714,7 @@
                 value = stack_pointer[-1];
                 if (!PyStackRef_IsCompactInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
@@ -2722,7 +2722,7 @@
                 left = stack_pointer[-2];
                 if (!PyStackRef_IsCompactInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_OR_INT
@@ -2764,12 +2764,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_POWER;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -2861,12 +2861,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_REMAINDER;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -2958,9 +2958,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_REMAINDER_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
@@ -2972,7 +2972,7 @@
                 value = stack_pointer[-1];
                 if (!PyStackRef_IsCompactInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
@@ -2980,7 +2980,7 @@
                 left = stack_pointer[-2];
                 if (!PyStackRef_IsCompactInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_REMAINDER_INT
@@ -2989,7 +2989,7 @@
                 int32_t b = PyStackRef_CompactIntValue(right);
                 if (b == 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 int32_t a = PyStackRef_CompactIntValue(left);
                 STAT_INC(BINARY_OP, hit);
@@ -3035,12 +3035,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_RSHIFT;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -3132,9 +3132,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_RSHIFT_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
@@ -3146,7 +3146,7 @@
                 value = stack_pointer[-1];
                 if (!PyStackRef_IsCompactInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
@@ -3154,7 +3154,7 @@
                 left = stack_pointer[-2];
                 if (!PyStackRef_IsCompactInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_RSHIFT_INT
@@ -3163,7 +3163,7 @@
                 int32_t b = PyStackRef_CompactIntValue(right);
                 if (b < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 int32_t a = PyStackRef_CompactIntValue(left);
                 STAT_INC(BINARY_OP, hit);
@@ -3205,12 +3205,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBSCR;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -3302,9 +3302,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_DICT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef nos;
             _PyStackRef dict_st;
             _PyStackRef sub_st;
@@ -3317,16 +3317,16 @@
                 nos = stack_pointer[-2];
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!Py_TYPE(o)->tp_as_mapping) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (Py_TYPE(o)->tp_as_mapping->mp_subscript != _PyDict_Subscript) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_SUBSCR_DICT
@@ -3389,9 +3389,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_GETITEM);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef container;
             _PyStackRef getitem;
             _PyStackRef sub;
@@ -3400,7 +3400,7 @@
             {
                 if (IS_PEP523_HOOKED(tstate)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_SUBSCR_CHECK_FUNC
@@ -3417,25 +3417,25 @@
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(container));
                 if (!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
                 PyObject *getitem_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.getitem);
                 if (getitem_o == NULL) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 assert(PyFunction_Check(getitem_o));
                 uint32_t cached_version = FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.getitem_version);
                 if (((PyFunctionObject *)getitem_o)->func_version != cached_version) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(getitem_o);
                 assert(code->co_argcount == 2);
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 getitem = PyStackRef_FromPyObjectNew(getitem_o);
             }
@@ -3483,9 +3483,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef nos;
             _PyStackRef list_st;
@@ -3498,7 +3498,7 @@
                 value = stack_pointer[-1];
                 if (!PyStackRef_IsCompactInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_LIST
@@ -3506,12 +3506,12 @@
                 nos = stack_pointer[-2];
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyList_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_SUBSCR_LIST_INT
@@ -3531,13 +3531,13 @@
                 _PyFrame_StackPointerInvalidate(frame);
                 if (res_o == NULL) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 res = PyStackRef_FromPyObjectSteal(res_o);
                 #else
                 if (index < 0 || index >= PyList_GET_SIZE(list)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyObject *res_o = PyList_GET_ITEM(list, index);
                 assert(res_o != NULL);
@@ -3577,9 +3577,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_SLICE);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef tos;
             _PyStackRef nos;
             _PyStackRef list_st;
@@ -3593,12 +3593,12 @@
                 tos = stack_pointer[-1];
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PySlice_Check(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_LIST
@@ -3606,12 +3606,12 @@
                 nos = stack_pointer[-2];
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyList_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_SUBSCR_LIST_SLICE
@@ -3667,9 +3667,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_STR_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef nos;
             _PyStackRef str_st;
@@ -3682,7 +3682,7 @@
                 value = stack_pointer[-1];
                 if (!PyStackRef_IsCompactInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_COMPACT_ASCII
@@ -3690,16 +3690,16 @@
                 nos = stack_pointer[-2];
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyUnicode_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (!PyUnicode_IS_COMPACT_ASCII(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_SUBSCR_STR_INT
@@ -3711,11 +3711,11 @@
                 Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
                 if (index < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (PyUnicode_GET_LENGTH(str) <= index) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 uint8_t c = PyUnicode_1BYTE_DATA(str)[index];
                 assert(c < 128);
@@ -3753,9 +3753,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_TUPLE_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef nos;
             _PyStackRef tuple_st;
@@ -3768,7 +3768,7 @@
                 value = stack_pointer[-1];
                 if (!PyStackRef_IsCompactInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_TUPLE
@@ -3776,12 +3776,12 @@
                 nos = stack_pointer[-2];
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyTuple_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_BINARY_OP_SUBSCR_TUPLE_INT_BOUNDS
@@ -3793,11 +3793,11 @@
                 Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
                 if (index < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (index >= PyTuple_GET_SIZE(tuple)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_SUBSCR_TUPLE_INT
@@ -3843,9 +3843,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_USTR_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef nos;
             _PyStackRef str_st;
@@ -3858,7 +3858,7 @@
                 value = stack_pointer[-1];
                 if (!PyStackRef_IsCompactInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_UNICODE
@@ -3866,12 +3866,12 @@
                 nos = stack_pointer[-2];
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyUnicode_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_SUBSCR_USTR_INT
@@ -3883,16 +3883,16 @@
                 Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
                 if (index < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (PyUnicode_GET_LENGTH(str) <= index) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 Py_UCS4 c = PyUnicode_READ_CHAR(str, index);
                 if (Py_ARRAY_LENGTH(_Py_SINGLETON(strings).ascii) <= c) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
                 PyObject *res_o = (PyObject*)&_Py_SINGLETON(strings).ascii[c];
@@ -3928,12 +3928,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBTRACT;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -4025,9 +4025,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_FLOAT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
@@ -4041,7 +4041,7 @@
                 double a, b;
                 if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
                 res = PyStackRef_FromDouble(a - b);
@@ -4079,9 +4079,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
@@ -4093,7 +4093,7 @@
                 value = stack_pointer[-1];
                 if (!PyStackRef_IsCompactInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
@@ -4101,7 +4101,7 @@
                 left = stack_pointer[-2];
                 if (!PyStackRef_IsCompactInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_SUBTRACT_INT
@@ -4151,9 +4151,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_TRUEDIV_FLOAT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
@@ -4167,11 +4167,11 @@
                 double a, b;
                 if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (b == 0.0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
                 res = PyStackRef_FromDouble(a / b);
@@ -4209,12 +4209,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_TRUE_DIVIDE;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -4306,12 +4306,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_XOR;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
             _PyStackRef rhs;
             _PyStackRef res;
@@ -4403,9 +4403,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_XOR_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
@@ -4417,7 +4417,7 @@
                 value = stack_pointer[-1];
                 if (!PyStackRef_IsCompactInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
@@ -4425,7 +4425,7 @@
                 left = stack_pointer[-2];
                 if (!PyStackRef_IsCompactInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_XOR_INT
@@ -4462,13 +4462,15 @@
             int opcode = BINARY_SLICE;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_SLICE);
-            IR_CHECK_SLOT(IR_A(ir_word), -3);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
-            IR_CHECK_SLOT(IR_C(ir_word), -2);
-            IR_CHECK_SLOT(IR_D(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), -1);
             _PyStackRef container;
             _PyStackRef start;
             _PyStackRef stop;
@@ -4527,13 +4529,15 @@
             int opcode = BUILD_INTERPOLATION;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_INTERPOLATION);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + (oparg & 1)) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + (oparg & 1)));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + (oparg & 1)) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + (oparg & 1)));
             _PyStackRef value;
             _PyStackRef str;
             _PyStackRef *format;
@@ -4609,13 +4613,15 @@
             int opcode = BUILD_LIST;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_LIST);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(oparg));
             _PyStackRef *values;
             _PyStackRef list;
             values = &stack_pointer[-oparg];
@@ -4638,13 +4644,15 @@
             int opcode = BUILD_MAP;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_MAP);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(oparg*2) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(oparg*2));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(oparg*2) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(oparg*2));
             _PyStackRef *values;
             _PyStackRef map;
             values = &stack_pointer[-oparg*2];
@@ -4669,13 +4677,15 @@
             int opcode = BUILD_SET;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_SET);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(oparg));
             _PyStackRef *values;
             _PyStackRef set;
             values = &stack_pointer[-oparg];
@@ -4737,13 +4747,15 @@
             int opcode = BUILD_SLICE;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_SLICE);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(oparg));
             _PyStackRef *args;
             _PyStackRef slice;
             args = &stack_pointer[-oparg];
@@ -4780,13 +4792,15 @@
             int opcode = BUILD_STRING;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_STRING);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(oparg));
             _PyStackRef *pieces;
             _PyStackRef str;
             pieces = &stack_pointer[-oparg];
@@ -4811,40 +4825,42 @@
             int opcode = BUILD_TEMPLATE;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -2);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
             INSTRUCTION_STATS(BUILD_TEMPLATE);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_INPUT(IR_B(ir_word), -2);
-            IR_CHECK_INPUT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef strings;
             _PyStackRef interpolations;
             _PyStackRef template;
-            interpolations = IR_SLOT(IR_C(ir_word));
-            strings = IR_SLOT(IR_B(ir_word));
+            interpolations = IR_SLOT(IR_FIELD_C(this_instr));
+            strings = IR_SLOT(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInline(strings))) {
                 strings = PyStackRef_Box(strings);
                 if (PyStackRef_IsInline(strings)) {
-                    IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-2]);
-                    IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-2]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(BUILD_TEMPLATE);
-                IR_SLOT(IR_B(ir_word)) = strings;
+                IR_SLOT(IR_FIELD_B(this_instr)) = strings;
             }
-            strings = IR_BORROW_KNOWN(strings, IR_B(ir_word), IR_A(ir_word));
+            strings = IR_BORROW_KNOWN(strings, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInline(interpolations))) {
                 interpolations = PyStackRef_Box(interpolations);
                 if (PyStackRef_IsInline(interpolations)) {
-                    IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                     stack_pointer[-2] = strings;
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(BUILD_TEMPLATE);
-                IR_SLOT(IR_C(ir_word)) = interpolations;
+                IR_SLOT(IR_FIELD_C(this_instr)) = interpolations;
             }
-            interpolations = IR_BORROW_KNOWN(interpolations, IR_C(ir_word), IR_A(ir_word) + 1);
+            interpolations = IR_BORROW_KNOWN(interpolations, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
             PyObject *strings_o = PyStackRef_AsPyObjectBorrow(strings);
             PyObject *interpolations_o = PyStackRef_AsPyObjectBorrow(interpolations);
             stack_pointer[-2] = strings;
@@ -4853,7 +4869,7 @@
             _PyFrame_StackPointerValidate(frame);
             PyObject *template_o = _PyTemplate_Build(strings_o, interpolations_o);
             _PyFrame_StackPointerInvalidate(frame);
-            IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-2]);
+            IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-2]);
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
             _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -4881,13 +4897,15 @@
             int opcode = BUILD_TUPLE;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_TUPLE);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(oparg));
             _PyStackRef *values;
             _PyStackRef tup;
             values = &stack_pointer[-oparg];
@@ -4907,6 +4925,8 @@
             int opcode = CACHE;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CACHE);
@@ -4926,11 +4946,11 @@
             IR_PREDICTED(CALL);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
-            int oparg = (int)IR_C(ir_word);
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             opcode = CALL;
             _PyStackRef callable;
             _PyStackRef self_or_null;
@@ -5059,11 +5079,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_ALLOC_AND_ENTER_INIT);
-            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
-            int oparg = (int)IR_C(ir_word);
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             _PyStackRef callable;
             _PyStackRef self_or_null;
             _PyStackRef init;
@@ -5214,11 +5234,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_BOUND_METHOD_EXACT_ARGS);
-            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
-            int oparg = (int)IR_C(ir_word);
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             _PyStackRef callable;
             _PyStackRef null;
             _PyStackRef self_or_null;
@@ -5367,11 +5387,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_BOUND_METHOD_GENERAL);
-            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
-            int oparg = (int)IR_C(ir_word);
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             _PyStackRef callable;
             _PyStackRef null;
             _PyStackRef self_or_null;
@@ -5506,10 +5526,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_BUILTIN_CLASS);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             _PyStackRef callable;
             _PyStackRef self_or_null;
             _PyStackRef *args;
@@ -5605,10 +5625,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_BUILTIN_FAST);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             _PyStackRef callable;
             _PyStackRef self_or_null;
             _PyStackRef *args;
@@ -5705,10 +5725,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_BUILTIN_FAST_WITH_KEYWORDS);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             _PyStackRef callable;
             _PyStackRef self_or_null;
             _PyStackRef *args;
@@ -5801,10 +5821,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_BUILTIN_O);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             _PyStackRef callable;
             _PyStackRef self_or_null;
             _PyStackRef *args;
@@ -5922,8 +5942,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_EX_NON_PY_GENERAL);
-            IR_CHECK_SLOT(IR_A(ir_word), -4 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -4);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -4 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -4);
             _PyStackRef func_st;
             _PyStackRef func;
             _PyStackRef callargs;
@@ -6058,8 +6078,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_EX_PY);
-            IR_CHECK_SLOT(IR_A(ir_word), -4 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -4);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -4 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -4);
             _PyStackRef func;
             _PyStackRef callargs;
             _PyStackRef func_st;
@@ -6211,9 +6231,9 @@
             IR_PREDICTED(CALL_FUNCTION_EX);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_CALL_FUNCTION_EX *fb = (_PyFb_CALL_FUNCTION_EX *)IR_FB(IR_C(ir_word));
-            IR_CHECK_SLOT(IR_A(ir_word), -4 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -4);
+            _PyFb_CALL_FUNCTION_EX *fb = (_PyFb_CALL_FUNCTION_EX *)IR_FB(IR_FIELD_C(this_instr));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -4 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -4);
             opcode = CALL_FUNCTION_EX;
             _PyStackRef func;
             _PyStackRef callargs;
@@ -6431,30 +6451,32 @@
             int opcode = CALL_INTRINSIC_1;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(CALL_INTRINSIC_1);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef value;
             _PyStackRef res;
             _PyStackRef v;
             // _CALL_INTRINSIC_1
             {
-                value = IR_SLOT(IR_B(ir_word));
+                value = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
                     value = PyStackRef_Box(value);
                     if (PyStackRef_IsInline(value)) {
-                        IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL_INTRINSIC_1);
-                    IR_SLOT(IR_B(ir_word)) = value;
+                    IR_SLOT(IR_FIELD_B(this_instr)) = value;
                 }
-                value = IR_BORROW_KNOWN(value, IR_B(ir_word), IR_A(ir_word));
+                value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 assert(oparg <= MAX_INTRINSIC_1);
                 stack_pointer[-1] = value;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -6484,15 +6506,17 @@
             int opcode = CALL_INTRINSIC_2;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -2);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
             INSTRUCTION_STATS(CALL_INTRINSIC_2);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_INPUT(IR_B(ir_word), -2);
-            IR_CHECK_INPUT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value2_st;
             _PyStackRef value1_st;
             _PyStackRef res;
@@ -6501,30 +6525,30 @@
             _PyStackRef value;
             // _CALL_INTRINSIC_2
             {
-                value1_st = IR_SLOT(IR_C(ir_word));
-                value2_st = IR_SLOT(IR_B(ir_word));
+                value1_st = IR_SLOT(IR_FIELD_C(this_instr));
+                value2_st = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(PyStackRef_IsInline(value2_st))) {
                     value2_st = PyStackRef_Box(value2_st);
                     if (PyStackRef_IsInline(value2_st)) {
-                        IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-2]);
-                        IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-2]);
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL_INTRINSIC_2);
-                    IR_SLOT(IR_B(ir_word)) = value2_st;
+                    IR_SLOT(IR_FIELD_B(this_instr)) = value2_st;
                 }
-                value2_st = IR_BORROW_KNOWN(value2_st, IR_B(ir_word), IR_A(ir_word));
+                value2_st = IR_BORROW_KNOWN(value2_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 if (Py_UNLIKELY(PyStackRef_IsInline(value1_st))) {
                     value1_st = PyStackRef_Box(value1_st);
                     if (PyStackRef_IsInline(value1_st)) {
-                        IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                         stack_pointer[-2] = value2_st;
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL_INTRINSIC_2);
-                    IR_SLOT(IR_C(ir_word)) = value1_st;
+                    IR_SLOT(IR_FIELD_C(this_instr)) = value1_st;
                 }
-                value1_st = IR_BORROW_KNOWN(value1_st, IR_C(ir_word), IR_A(ir_word) + 1);
+                value1_st = IR_BORROW_KNOWN(value1_st, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
                 assert(oparg <= MAX_INTRINSIC_2);
                 PyObject *value1 = PyStackRef_AsPyObjectBorrow(value1_st);
                 PyObject *value2 = PyStackRef_AsPyObjectBorrow(value2_st);
@@ -6574,8 +6598,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_ISINSTANCE);
-            IR_CHECK_SLOT(IR_A(ir_word), -4 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -4);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -4 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -4);
             _PyStackRef null;
             _PyStackRef callable;
             _PyStackRef instance;
@@ -6667,11 +6691,11 @@
             IR_PREDICTED(CALL_KW);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_D(ir_word));
-            int oparg = (int)IR_C(ir_word);
+            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_FIELD_D(this_instr));
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(3 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(3 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(3 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(3 + oparg));
             opcode = CALL_KW;
             _PyStackRef callable;
             _PyStackRef self_or_null;
@@ -6809,11 +6833,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_KW_BOUND_METHOD);
-            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_D(ir_word));
-            int oparg = (int)IR_C(ir_word);
+            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_FIELD_D(this_instr));
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(3 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(3 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(3 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(3 + oparg));
             _PyStackRef callable;
             _PyStackRef null;
             _PyStackRef self_or_null;
@@ -6959,10 +6983,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_KW_NON_PY);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(3 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(3 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(3 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(3 + oparg));
             opcode = CALL_KW_NON_PY;
             _PyStackRef callable;
             _PyStackRef self_or_null;
@@ -7042,11 +7066,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_KW_PY);
-            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_D(ir_word));
-            int oparg = (int)IR_C(ir_word);
+            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_FIELD_D(this_instr));
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(3 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(3 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(3 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(3 + oparg));
             _PyStackRef callable;
             _PyStackRef self_or_null;
             _PyStackRef *args;
@@ -7171,8 +7195,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_LEN);
-            IR_CHECK_SLOT(IR_A(ir_word), -3 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             _PyStackRef null;
             _PyStackRef callable;
             _PyStackRef arg;
@@ -7269,10 +7293,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_LIST_APPEND);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -3 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             _PyStackRef callable;
             _PyStackRef nos;
             _PyStackRef self;
@@ -7400,10 +7424,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_FAST);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             _PyStackRef callable;
             _PyStackRef self_or_null;
             _PyStackRef *args;
@@ -7528,10 +7552,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             _PyStackRef callable;
             _PyStackRef self_or_null;
             _PyStackRef *args;
@@ -7657,10 +7681,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_NOARGS);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             _PyStackRef callable;
             _PyStackRef self_or_null;
             _PyStackRef *args;
@@ -7788,10 +7812,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_O);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             _PyStackRef callable;
             _PyStackRef self_or_null;
             _PyStackRef *args;
@@ -7932,10 +7956,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_NON_PY_GENERAL);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             opcode = CALL_NON_PY_GENERAL;
             _PyStackRef callable;
             _PyStackRef self_or_null;
@@ -8013,11 +8037,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_PY_EXACT_ARGS);
-            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
-            int oparg = (int)IR_C(ir_word);
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             _PyStackRef callable;
             _PyStackRef self_or_null;
             _PyStackRef *args;
@@ -8135,11 +8159,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_PY_GENERAL);
-            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
-            int oparg = (int)IR_C(ir_word);
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             _PyStackRef callable;
             _PyStackRef self_or_null;
             _PyStackRef *args;
@@ -8245,10 +8269,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_STR_1);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -3 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             _PyStackRef null;
             _PyStackRef callable;
             _PyStackRef arg;
@@ -8337,10 +8361,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_TUPLE_1);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -3 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             _PyStackRef null;
             _PyStackRef callable;
             _PyStackRef arg;
@@ -8429,10 +8453,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_TYPE_1);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -3 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             _PyStackRef null;
             _PyStackRef callable;
             _PyStackRef arg;
@@ -8490,41 +8514,43 @@
             int opcode = CHECK_EG_MATCH;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -2);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
             INSTRUCTION_STATS(CHECK_EG_MATCH);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_INPUT(IR_B(ir_word), -2);
-            IR_CHECK_INPUT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef exc_value_st;
             _PyStackRef match_type_st;
             _PyStackRef rest;
             _PyStackRef match;
-            match_type_st = IR_SLOT(IR_C(ir_word));
-            exc_value_st = IR_SLOT(IR_B(ir_word));
+            match_type_st = IR_SLOT(IR_FIELD_C(this_instr));
+            exc_value_st = IR_SLOT(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInline(exc_value_st))) {
                 exc_value_st = PyStackRef_Box(exc_value_st);
                 if (PyStackRef_IsInline(exc_value_st)) {
-                    IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-2]);
-                    IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-2]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(CHECK_EG_MATCH);
-                IR_SLOT(IR_B(ir_word)) = exc_value_st;
+                IR_SLOT(IR_FIELD_B(this_instr)) = exc_value_st;
             }
-            exc_value_st = IR_BORROW_KNOWN(exc_value_st, IR_B(ir_word), IR_A(ir_word));
+            exc_value_st = IR_BORROW_KNOWN(exc_value_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInline(match_type_st))) {
                 match_type_st = PyStackRef_Box(match_type_st);
                 if (PyStackRef_IsInline(match_type_st)) {
-                    IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                     stack_pointer[-2] = exc_value_st;
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(CHECK_EG_MATCH);
-                IR_SLOT(IR_C(ir_word)) = match_type_st;
+                IR_SLOT(IR_FIELD_C(this_instr)) = match_type_st;
             }
-            match_type_st = IR_BORROW_KNOWN(match_type_st, IR_C(ir_word), IR_A(ir_word) + 1);
+            match_type_st = IR_BORROW_KNOWN(match_type_st, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
             PyObject *exc_value = PyStackRef_AsPyObjectBorrow(exc_value_st);
             PyObject *match_type = PyStackRef_AsPyObjectBorrow(match_type_st);
             stack_pointer[-2] = exc_value_st;
@@ -8553,8 +8579,8 @@
                 JUMP_TO_LABEL(error);
             }
             PyObject *match_o = NULL;
-            PyObject *rest_o = NULL;IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-2]);
-            IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+            PyObject *rest_o = NULL;IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-2]);
+            IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
             assert(stack_pointer == _PyFrame_GetStackPointer(frame));
             _PyFrame_StackPointerValidate(frame);
             int res = _PyEval_ExceptionGroupMatch(frame, exc_value, match_type,
@@ -8603,28 +8629,30 @@
             int opcode = CHECK_EXC_MATCH;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(CHECK_EXC_MATCH);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_INPUT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef b;
-            right = IR_SLOT(IR_C(ir_word));
+            right = IR_SLOT(IR_FIELD_C(this_instr));
             left = stack_pointer[-2];
             if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
                 right = PyStackRef_Box(right);
                 if (PyStackRef_IsInline(right)) {
-                    IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(CHECK_EXC_MATCH);
-                IR_SLOT(IR_C(ir_word)) = right;
+                IR_SLOT(IR_FIELD_C(this_instr)) = right;
             }
-            right = IR_BORROW_KNOWN(right, IR_C(ir_word), IR_A(ir_word));
+            right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
                 left = PyStackRef_Box(left);
                 if (PyStackRef_IsInline(left)) {
@@ -8644,7 +8672,7 @@
             _PyFrame_StackPointerInvalidate(frame);
             if (err < 0) {
                 JUMP_TO_LABEL(error);
-            }IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+            }IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
             assert(stack_pointer == _PyFrame_GetStackPointer(frame));
             _PyFrame_StackPointerValidate(frame);
             int res = PyErr_GivenExceptionMatches(left_o, right_o);
@@ -8672,8 +8700,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CLEANUP_THROW);
-            IR_CHECK_SLOT(IR_A(ir_word), -4 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -4);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -4 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -4);
             _PyStackRef sub_iter;
             _PyStackRef null_in;
             _PyStackRef last_sent_val;
@@ -8769,12 +8797,12 @@
             IR_PREDICTED(COMPARE_OP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_D(ir_word));
+            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
+            int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
@@ -8874,12 +8902,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_FLOAT);
-            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
@@ -8943,12 +8971,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_INT);
-            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef left;
             _PyStackRef right;
@@ -9012,12 +9040,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_STR);
-            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef nos;
             _PyStackRef left;
@@ -9094,19 +9122,19 @@
             int opcode = CONTAINS_OP;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -2);
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
             INSTRUCTION_STATS(CONTAINS_OP);
             IR_PREDICTED(CONTAINS_OP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_D(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_D(ir_word));
+            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
+            int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_INPUT(IR_B(ir_word), -2);
-            IR_CHECK_INPUT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef b;
@@ -9115,13 +9143,13 @@
             _PyStackRef value;
             // _SPECIALIZE_CONTAINS_OP
             {
-                right = IR_SLOT(IR_C(ir_word));
-                left = IR_SLOT(IR_B(ir_word));
+                right = IR_SLOT(IR_FIELD_C(this_instr));
+                left = IR_SLOT(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-2]);
-                    IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+                    next_instr = this_instr;IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-2]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_ContainsOp(left, right, next_instr);
@@ -9137,25 +9165,25 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
                     left = PyStackRef_Box(left);
                     if (PyStackRef_IsInline(left)) {
-                        IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-2]);
-                        IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-2]);
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP);
-                    IR_SLOT(IR_B(ir_word)) = left;
+                    IR_SLOT(IR_FIELD_B(this_instr)) = left;
                 }
-                left = IR_BORROW_KNOWN(left, IR_B(ir_word), IR_A(ir_word));
+                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
                     right = PyStackRef_Box(right);
                     if (PyStackRef_IsInline(right)) {
-                        IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                         stack_pointer[-2] = left;
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP);
-                    IR_SLOT(IR_C(ir_word)) = right;
+                    IR_SLOT(IR_FIELD_C(this_instr)) = right;
                 }
-                right = IR_BORROW_KNOWN(right, IR_C(ir_word), IR_A(ir_word) + 1);
+                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 stack_pointer[-2] = left;
@@ -9199,18 +9227,18 @@
             int opcode = CONTAINS_OP_DICT;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -2);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
             INSTRUCTION_STATS(CONTAINS_OP_DICT);
-            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_INPUT(IR_B(ir_word), -2);
-            IR_CHECK_INPUT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef tos;
             _PyStackRef left;
             _PyStackRef right;
@@ -9220,16 +9248,16 @@
             _PyStackRef value;
             // _GUARD_TOS_ANY_DICT
             {
-                tos = IR_SLOT(IR_C(ir_word));
+                tos = IR_SLOT(IR_FIELD_C(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
                     JUMP_TO_PREDICTED(CONTAINS_OP);
                 }
-                tos = IR_BORROW_KNOWN(tos, IR_C(ir_word), IR_A(ir_word) + 1);
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyAnyDict_CheckExact(o)) {
-                    IR_DROP_BORROW(tos, IR_C(ir_word), IR_A(ir_word) + 1);
+                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
                     JUMP_TO_PREDICTED(CONTAINS_OP);
@@ -9238,18 +9266,18 @@
             // _CONTAINS_OP_DICT
             {
                 right = tos;
-                left = IR_SLOT(IR_B(ir_word));
+                left = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
                     left = PyStackRef_Box(left);
                     if (PyStackRef_IsInline(left)) {
-                        IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-2]);
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-2]);
                         stack_pointer[-1] = right;
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP_DICT);
-                    IR_SLOT(IR_B(ir_word)) = left;
+                    IR_SLOT(IR_FIELD_B(this_instr)) = left;
                 }
-                left = IR_BORROW_KNOWN(left, IR_B(ir_word), IR_A(ir_word));
+                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert(PyAnyDict_CheckExact(right_o));
@@ -9295,18 +9323,18 @@
             int opcode = CONTAINS_OP_SET;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -2);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
             INSTRUCTION_STATS(CONTAINS_OP_SET);
-            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_INPUT(IR_B(ir_word), -2);
-            IR_CHECK_INPUT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef tos;
             _PyStackRef left;
             _PyStackRef right;
@@ -9316,16 +9344,16 @@
             _PyStackRef value;
             // _GUARD_TOS_ANY_SET
             {
-                tos = IR_SLOT(IR_C(ir_word));
+                tos = IR_SLOT(IR_FIELD_C(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
                     JUMP_TO_PREDICTED(CONTAINS_OP);
                 }
-                tos = IR_BORROW_KNOWN(tos, IR_C(ir_word), IR_A(ir_word) + 1);
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyAnySet_CheckExact(o)) {
-                    IR_DROP_BORROW(tos, IR_C(ir_word), IR_A(ir_word) + 1);
+                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
                     JUMP_TO_PREDICTED(CONTAINS_OP);
@@ -9334,18 +9362,18 @@
             // _CONTAINS_OP_SET
             {
                 right = tos;
-                left = IR_SLOT(IR_B(ir_word));
+                left = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
                     left = PyStackRef_Box(left);
                     if (PyStackRef_IsInline(left)) {
-                        IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-2]);
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-2]);
                         stack_pointer[-1] = right;
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP_SET);
-                    IR_SLOT(IR_B(ir_word)) = left;
+                    IR_SLOT(IR_FIELD_B(this_instr)) = left;
                 }
-                left = IR_BORROW_KNOWN(left, IR_B(ir_word), IR_A(ir_word));
+                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert(PyAnySet_CheckExact(right_o));
@@ -9391,27 +9419,29 @@
             int opcode = CONVERT_VALUE;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(CONVERT_VALUE);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef value;
             _PyStackRef result;
-            value = IR_SLOT(IR_B(ir_word));
+            value = IR_SLOT(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
                 value = PyStackRef_Box(value);
                 if (PyStackRef_IsInline(value)) {
-                    IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(CONVERT_VALUE);
-                IR_SLOT(IR_B(ir_word)) = value;
+                IR_SLOT(IR_FIELD_B(this_instr)) = value;
             }
-            value = IR_BORROW_KNOWN(value, IR_B(ir_word), IR_A(ir_word));
+            value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
             conversion_func conv_fn;
             assert(oparg >= FVC_STR && oparg <= FVC_ASCII);
             conv_fn = _PyEval_ConversionFuncs[oparg];
@@ -9441,12 +9471,14 @@
             int opcode = COPY;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COPY);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(1 + (oparg-1)));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(1 + (oparg-1)));
             _PyStackRef bottom;
             _PyStackRef top;
             bottom = stack_pointer[-1 - (oparg-1)];
@@ -9462,10 +9494,12 @@
             int opcode = COPY_FREE_VARS;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COPY_FREE_VARS);
-            int oparg = (int)IR_A(ir_word);
+            int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
             PyCodeObject *co = _PyFrame_GetCode(frame);
             assert(PyStackRef_FunctionCheck(frame->f_funcobj));
@@ -9485,10 +9519,12 @@
             int opcode = DELETE_DEREF;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DELETE_DEREF);
-            int oparg = (int)IR_A(ir_word);
+            int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
             PyObject *cell = PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
             PyObject *oldobj = PyCell_SwapTakeRef((PyCellObject *)cell, NULL);
@@ -9511,10 +9547,12 @@
             int opcode = DELETE_FAST;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DELETE_FAST);
-            int oparg = (int)IR_A(ir_word);
+            int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
             _PyStackRef v = GETLOCAL(oparg);
             if (PyStackRef_IsNull(v)) {
@@ -9541,11 +9579,13 @@
             int opcode = DELETE_SUBSCR;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DELETE_SUBSCR);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef container;
             _PyStackRef sub;
             sub = stack_pointer[-1];
@@ -9598,12 +9638,14 @@
             int opcode = DICT_MERGE;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DICT_MERGE);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(5 + (oparg - 1)));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(5 + (oparg - 1)));
             _PyStackRef callable;
             _PyStackRef dict;
             _PyStackRef update;
@@ -9677,12 +9719,14 @@
             int opcode = DICT_UPDATE;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DICT_UPDATE);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + (oparg - 1)));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + (oparg - 1)));
             _PyStackRef dict;
             _PyStackRef update;
             _PyStackRef upd;
@@ -9770,9 +9814,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(END_ASYNC_FOR);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
             _PyStackRef awaitable_st;
             _PyStackRef exc_st;
             exc_st = stack_pointer[-1];
@@ -9833,11 +9877,13 @@
             int opcode = END_FOR;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             next_instr += 1;
             INSTRUCTION_STATS(END_FOR);
-            IR_CHECK_SLOT(IR_A(ir_word), -3);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             value = stack_pointer[-1];
             stack_pointer += -1;
@@ -9854,13 +9900,15 @@
             int opcode = END_SEND;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(END_SEND);
-            IR_CHECK_SLOT(IR_A(ir_word), -3);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
-            IR_CHECK_SLOT(IR_C(ir_word), -2);
-            IR_CHECK_SLOT(IR_D(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), -1);
             _PyStackRef receiver;
             _PyStackRef index_or_null;
             _PyStackRef value;
@@ -9885,10 +9933,12 @@
             int opcode = EXIT_INIT_CHECK;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(EXIT_INIT_CHECK);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef should_be_none;
             should_be_none = stack_pointer[-1];
             if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
@@ -9918,10 +9968,12 @@
             int opcode = EXTENDED_ARG;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(EXTENDED_ARG);
-            int oparg = (int)IR_A(ir_word);
+            int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
             opcode = EXTENDED_ARG;
             assert(oparg);
@@ -9936,25 +9988,27 @@
             int opcode = FORMAT_SIMPLE;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(FORMAT_SIMPLE);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef value;
             _PyStackRef res;
-            value = IR_SLOT(IR_B(ir_word));
+            value = IR_SLOT(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
                 value = PyStackRef_Box(value);
                 if (PyStackRef_IsInline(value)) {
-                    IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(FORMAT_SIMPLE);
-                IR_SLOT(IR_B(ir_word)) = value;
+                IR_SLOT(IR_FIELD_B(this_instr)) = value;
             }
-            value = IR_BORROW_KNOWN(value, IR_B(ir_word), IR_A(ir_word));
+            value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
             PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
             if (!PyUnicode_CheckExact(value_o)) {
                 stack_pointer[-1] = value;
@@ -9988,40 +10042,42 @@
             int opcode = FORMAT_WITH_SPEC;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -2);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
             INSTRUCTION_STATS(FORMAT_WITH_SPEC);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_INPUT(IR_B(ir_word), -2);
-            IR_CHECK_INPUT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
             _PyStackRef fmt_spec;
             _PyStackRef res;
-            fmt_spec = IR_SLOT(IR_C(ir_word));
-            value = IR_SLOT(IR_B(ir_word));
+            fmt_spec = IR_SLOT(IR_FIELD_C(this_instr));
+            value = IR_SLOT(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
                 value = PyStackRef_Box(value);
                 if (PyStackRef_IsInline(value)) {
-                    IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-2]);
-                    IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-2]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(FORMAT_WITH_SPEC);
-                IR_SLOT(IR_B(ir_word)) = value;
+                IR_SLOT(IR_FIELD_B(this_instr)) = value;
             }
-            value = IR_BORROW_KNOWN(value, IR_B(ir_word), IR_A(ir_word));
+            value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInline(fmt_spec))) {
                 fmt_spec = PyStackRef_Box(fmt_spec);
                 if (PyStackRef_IsInline(fmt_spec)) {
-                    IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                     stack_pointer[-2] = value;
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(FORMAT_WITH_SPEC);
-                IR_SLOT(IR_C(ir_word)) = fmt_spec;
+                IR_SLOT(IR_FIELD_C(this_instr)) = fmt_spec;
             }
-            fmt_spec = IR_BORROW_KNOWN(fmt_spec, IR_C(ir_word), IR_A(ir_word) + 1);
+            fmt_spec = IR_BORROW_KNOWN(fmt_spec, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
             stack_pointer[-2] = value;
             stack_pointer[-1] = fmt_spec;
             _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -10065,11 +10121,11 @@
             IR_PREDICTED(FOR_ITER);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_FOR_ITER *fb = (_PyFb_FOR_ITER *)IR_FB(IR_C(ir_word));
-            int oparg = (int)IR_D(ir_word);
+            _PyFb_FOR_ITER *fb = (_PyFb_FOR_ITER *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2 + 2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef iter;
             _PyStackRef null_or_index;
             _PyStackRef next;
@@ -10124,10 +10180,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_GEN);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2 + 2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef iter;
             _PyStackRef gen_frame;
             _PyStackRef new_frame;
@@ -10197,10 +10253,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_LIST);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2 + 2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef iter;
             _PyStackRef null_or_index;
             _PyStackRef next;
@@ -10285,10 +10341,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_RANGE);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2 + 2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef iter;
             _PyStackRef next;
             // _ITER_CHECK_RANGE
@@ -10359,10 +10415,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_TUPLE);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2 + 2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef iter;
             _PyStackRef null_or_index;
             _PyStackRef next;
@@ -10418,10 +10474,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_VIRTUAL);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2 + 2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef null_or_index;
             _PyStackRef iter;
             _PyStackRef next;
@@ -10468,25 +10524,27 @@
             int opcode = GET_AITER;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(GET_AITER);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef obj;
             _PyStackRef iter;
-            obj = IR_SLOT(IR_B(ir_word));
+            obj = IR_SLOT(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInline(obj))) {
                 obj = PyStackRef_Box(obj);
                 if (PyStackRef_IsInline(obj)) {
-                    IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(GET_AITER);
-                IR_SLOT(IR_B(ir_word)) = obj;
+                IR_SLOT(IR_FIELD_B(this_instr)) = obj;
             }
-            obj = IR_BORROW_KNOWN(obj, IR_B(ir_word), IR_A(ir_word));
+            obj = IR_BORROW_KNOWN(obj, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
             unaryfunc getter = NULL;
             PyObject *obj_o = PyStackRef_AsPyObjectBorrow(obj);
             PyObject *iter_o;
@@ -10552,11 +10610,13 @@
             int opcode = GET_ANEXT;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_ANEXT);
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef aiter;
             _PyStackRef awaitable;
             aiter = stack_pointer[-1];
@@ -10587,27 +10647,29 @@
             int opcode = GET_AWAITABLE;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(GET_AWAITABLE);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef iterable;
             _PyStackRef iter;
-            iterable = IR_SLOT(IR_B(ir_word));
+            iterable = IR_SLOT(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInline(iterable))) {
                 iterable = PyStackRef_Box(iterable);
                 if (PyStackRef_IsInline(iterable)) {
-                    IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(GET_AWAITABLE);
-                IR_SLOT(IR_B(ir_word)) = iterable;
+                IR_SLOT(IR_FIELD_B(this_instr)) = iterable;
             }
-            iterable = IR_BORROW_KNOWN(iterable, IR_B(ir_word), IR_A(ir_word));
+            iterable = IR_BORROW_KNOWN(iterable, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
             stack_pointer[-1] = iterable;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
@@ -10640,11 +10702,11 @@
             IR_PREDICTED(GET_ITER);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_GET_ITER *fb = (_PyFb_GET_ITER *)IR_FB(IR_C(ir_word));
-            int oparg = (int)IR_D(ir_word);
+            _PyFb_GET_ITER *fb = (_PyFb_GET_ITER *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef iterable;
             _PyStackRef iter;
             _PyStackRef index_or_null;
@@ -10693,8 +10755,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_ITER_SELF);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef iterable;
             _PyStackRef res;
             // _GUARD_ITERATOR
@@ -10733,8 +10795,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_ITER_VIRTUAL);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef iterable;
             _PyStackRef zero;
             // _GUARD_ITER_VIRTUAL
@@ -10768,11 +10830,13 @@
             int opcode = GET_LEN;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_LEN);
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef obj;
             _PyStackRef len;
             obj = stack_pointer[-1];
@@ -10807,13 +10871,15 @@
             int opcode = IMPORT_FROM;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IMPORT_FROM);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef from;
             _PyStackRef res;
             from = stack_pointer[-1];
@@ -10856,13 +10922,15 @@
             int opcode = IMPORT_NAME;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IMPORT_NAME);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef level;
             _PyStackRef fromlist;
             _PyStackRef res;
@@ -10941,10 +11009,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_CALL);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(2 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + oparg));
             opcode = INSTRUMENTED_CALL;
             _PyStackRef callable;
             _PyStackRef self_or_null;
@@ -11107,8 +11175,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_CALL_FUNCTION_EX);
-            IR_CHECK_SLOT(IR_A(ir_word), -4 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -4);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -4 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -4);
             opcode = INSTRUMENTED_CALL_FUNCTION_EX;
             _PyStackRef func;
             _PyStackRef callargs;
@@ -11315,10 +11383,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_CALL_KW);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(3 + oparg) + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -(3 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(3 + oparg) + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(3 + oparg));
             opcode = INSTRUMENTED_CALL_KW;
             _PyStackRef callable;
             _PyStackRef self_or_null;
@@ -11473,9 +11541,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_END_ASYNC_FOR);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
             _PyStackRef awaitable_st;
             _PyStackRef exc_st;
             // _MONITOR_END_ASYNC_FOR
@@ -11548,9 +11616,9 @@
             (void)this_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_END_FOR);
-            IR_CHECK_SLOT(IR_A(ir_word), -3);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef receiver;
             _PyStackRef value;
             value = stack_pointer[-1];
@@ -11591,10 +11659,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_END_SEND);
-            IR_CHECK_SLOT(IR_A(ir_word), -3);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
-            IR_CHECK_SLOT(IR_C(ir_word), -2);
-            IR_CHECK_SLOT(IR_D(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), -1);
             _PyStackRef receiver;
             _PyStackRef index_or_null;
             _PyStackRef value;
@@ -11650,10 +11718,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_FOR_ITER);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2 + 2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef iter;
             _PyStackRef null_or_index;
             _PyStackRef next;
@@ -11718,7 +11786,7 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_BACKWARD);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             // _CHECK_PERIODIC
             {
@@ -11747,7 +11815,7 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_FORWARD);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_JUMP);
             DISPATCH();
@@ -11807,11 +11875,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_LOAD_SUPER_ATTR);
-            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_C(ir_word));
+            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -3 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             opcode = INSTRUMENTED_LOAD_SUPER_ATTR;
             _PyStackRef global_super_st;
             _PyStackRef class_st;
@@ -11998,8 +12066,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_ITER);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef iter;
             _PyStackRef index_or_null;
             index_or_null = stack_pointer[-1];
@@ -12025,10 +12093,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_FALSE);
-            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
+            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef cond;
             cond = stack_pointer[-1];
             assert(PyStackRef_BoolCheck(cond));
@@ -12052,10 +12120,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_NONE);
-            _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
+            _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef value;
             value = stack_pointer[-1];
             int jump = PyStackRef_IsNone(value);
@@ -12087,10 +12155,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_NOT_NONE);
-            _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
+            _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef value;
             value = stack_pointer[-1];
             int jump = !PyStackRef_IsNone(value);
@@ -12120,10 +12188,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_TRUE);
-            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
+            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef cond;
             cond = stack_pointer[-1];
             assert(PyStackRef_BoolCheck(cond));
@@ -12147,7 +12215,7 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_RESUME);
-            int oparg = (int)IR_A(ir_word);
+            int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
             // _MAYBE_INSTRUMENT
             {
@@ -12215,8 +12283,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_RETURN_VALUE);
-            IR_CHECK_SLOT(IR_A(ir_word), -1 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef val;
             _PyStackRef value;
             _PyStackRef retval;
@@ -12284,10 +12352,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_YIELD_VALUE);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             opcode = INSTRUMENTED_YIELD_VALUE;
             _PyStackRef val;
             _PyStackRef value;
@@ -12377,10 +12445,12 @@
             int opcode = INTERPRETER_EXIT;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INTERPRETER_EXIT);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef retval;
             retval = stack_pointer[-1];
             if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
@@ -12407,6 +12477,8 @@
             int opcode = IR_LOWER;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IR_LOWER);
@@ -12426,6 +12498,8 @@
             int opcode = IR_REMAP;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IR_REMAP);
@@ -12447,14 +12521,16 @@
             int opcode = IS_OP;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IS_OP);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef b;
@@ -12498,10 +12574,12 @@
             int opcode = JUMP_BACKWARD;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_BACKWARD);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             // _CHECK_PERIODIC
             {
@@ -12526,10 +12604,12 @@
             int opcode = JUMP_BACKWARD_NO_INTERRUPT;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_BACKWARD_NO_INTERRUPT);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             assert(JUMP_TARGET(oparg) < next_instr);
             JUMPTO(oparg);
@@ -12541,10 +12621,12 @@
             int opcode = JUMP_FORWARD;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_FORWARD);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             JUMPTO(oparg);
             DISPATCH();
@@ -12555,12 +12637,14 @@
             int opcode = LIST_APPEND;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LIST_APPEND);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + (oparg-1)));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + (oparg-1)));
             _PyStackRef list;
             _PyStackRef v;
             v = stack_pointer[-1];
@@ -12595,12 +12679,14 @@
             int opcode = LIST_EXTEND;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LIST_EXTEND);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + (oparg-1)));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + (oparg-1)));
             _PyStackRef list_st;
             _PyStackRef iterable_st;
             _PyStackRef i;
@@ -12670,29 +12756,29 @@
             int opcode = LOAD_ATTR;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR);
             IR_PREDICTED(LOAD_ATTR);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef *self_or_null;
             // _SPECIALIZE_LOAD_ATTR
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                    next_instr = this_instr;IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                    next_instr = this_instr;IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_LoadAttr(owner, next_instr, name);
@@ -12709,13 +12795,13 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
                     owner = PyStackRef_Box(owner);
                     if (PyStackRef_IsInline(owner)) {
-                        IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LOAD_ATTR);
-                    IR_SLOT(IR_B(ir_word)) = owner;
+                    IR_SLOT(IR_FIELD_B(this_instr)) = owner;
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 if (oparg & 1) {
                     stack_pointer[-1] = owner;
@@ -12757,40 +12843,40 @@
             int opcode = LOAD_ATTR_CLASS;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR_CLASS);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef *null;
             // _CHECK_ATTR_CLASS
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t class_version = fb->class_version;
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 if (!PyType_Check(owner_o)) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 assert(class_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12828,34 +12914,34 @@
             int opcode = LOAD_ATTR_CLASS_WITH_METACLASS_CHECK;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef *null;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12866,14 +12952,14 @@
                 uint32_t class_version = fb->class_version;
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 if (!PyType_Check(owner_o)) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 assert(class_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12911,33 +12997,33 @@
             int opcode = LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef new_frame;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12946,7 +13032,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12961,7 +13047,7 @@
                 PyFunctionObject *f = (PyFunctionObject *)getattribute;
                 assert(func_version != 0);
                 if (f->func_version != func_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12969,7 +13055,7 @@
                 PyCodeObject *code = (PyCodeObject *)f->func_code;
                 assert(code->co_argcount == 2);
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13015,17 +13101,17 @@
             int opcode = LOAD_ATTR_INSTANCE_VALUE;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR_INSTANCE_VALUE);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef o;
@@ -13033,18 +13119,18 @@
             _PyStackRef *null;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13056,7 +13142,7 @@
                 assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
                 if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13069,7 +13155,7 @@
                 PyObject **value_ptr = (PyObject**)(((char *)owner_o) + offset);
                 PyObject *attr_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(*value_ptr);
                 if (attr_o == NULL) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13078,7 +13164,7 @@
                 int increfed = _Py_TryIncrefCompareStackRef(value_ptr, attr_o, &attr);
                 if (!increfed) {
                     if (true) {
-                        IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13116,34 +13202,34 @@
             int opcode = LOAD_ATTR_METHOD_LAZY_DICT;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_LAZY_DICT);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef self;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13155,7 +13241,7 @@
                 char *ptr = ((char *)PyStackRef_AsPyObjectBorrow(owner)) + MANAGED_DICT_OFFSET + dictoffset;
                 PyObject *dict = FT_ATOMIC_LOAD_PTR_ACQUIRE(*(PyObject **)ptr);
                 if (dict != NULL) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13183,34 +13269,34 @@
             int opcode = LOAD_ATTR_METHOD_NO_DICT;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_NO_DICT);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef self;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13239,34 +13325,34 @@
             int opcode = LOAD_ATTR_METHOD_WITH_VALUES;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_WITH_VALUES);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef self;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13278,7 +13364,7 @@
                 assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
                 if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13306,17 +13392,17 @@
             int opcode = LOAD_ATTR_MODULE;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR_MODULE);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef o;
@@ -13324,22 +13410,22 @@
             _PyStackRef *null;
             // _LOAD_ATTR_MODULE
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t dict_version = fb->dict_version;
                 uint32_t index = fb->index;
                 if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
                     owner = PyStackRef_Box(owner);
                     if (PyStackRef_IsInline(owner)) {
-                        IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LOAD_ATTR_MODULE);
-                    IR_SLOT(IR_B(ir_word)) = owner;
+                    IR_SLOT(IR_FIELD_B(this_instr)) = owner;
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 if (!PyModule_CheckExact(owner_o)) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13348,7 +13434,7 @@
                 assert(dict != NULL);
                 PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
                 if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != dict_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13358,7 +13444,7 @@
                 PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(keys) + index;
                 PyObject *attr_o = FT_ATOMIC_LOAD_PTR_CONSUME(ep->me_value);
                 if (attr_o == NULL) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13367,7 +13453,7 @@
                 int increfed = _Py_TryIncrefCompareStackRef(&ep->me_value, attr_o, &attr);
                 if (!increfed) {
                     if (true) {
-                        IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13405,33 +13491,33 @@
             int opcode = LOAD_ATTR_NONDESCRIPTOR_NO_DICT;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_NO_DICT);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef attr;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13463,33 +13549,33 @@
             int opcode = LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef attr;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13501,7 +13587,7 @@
                 assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
                 if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13532,33 +13618,33 @@
             int opcode = LOAD_ATTR_PROPERTY;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR_PROPERTY);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef new_frame;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13567,7 +13653,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13581,14 +13667,14 @@
                 assert(Py_IS_TYPE(fget, &PyFunction_Type));
                 PyFunctionObject *f = (PyFunctionObject *)fget;
                 if (f->func_version != func_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 PyCodeObject *code = (PyCodeObject *)f->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13631,17 +13717,17 @@
             int opcode = LOAD_ATTR_SHAPE;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef o;
@@ -13649,18 +13735,18 @@
             _PyStackRef *null;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13670,7 +13756,7 @@
             {
                 uint32_t shape = fb->shape;
                 if (_PyObject_Shape(PyStackRef_AsPyObjectBorrow(owner)) != shape) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13712,17 +13798,17 @@
             int opcode = LOAD_ATTR_SLOT;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR_SLOT);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef o;
@@ -13730,18 +13816,18 @@
             _PyStackRef *null;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13754,7 +13840,7 @@
                 PyObject **addr = (PyObject **)((char *)owner_o + index);
                 PyObject *attr_o = FT_ATOMIC_LOAD_PTR(*addr);
                 if (attr_o == NULL) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13762,7 +13848,7 @@
                 #ifdef Py_GIL_DISABLED
                 int increfed = _Py_TryIncrefCompareStackRef(addr, attr_o, &attr);
                 if (!increfed) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13799,17 +13885,17 @@
             int opcode = LOAD_ATTR_WITH_HINT;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_ATTR_WITH_HINT);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef o;
@@ -13817,18 +13903,18 @@
             _PyStackRef *null;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13841,7 +13927,7 @@
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
                 PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
                 if (dict == NULL) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13850,7 +13936,7 @@
                 assert(PyDict_CheckExact((PyObject *)dict));
                 #ifdef Py_GIL_DISABLED
                 if (!_Py_IsOwnedByCurrentThread((PyObject *)dict) && !_PyObject_GC_IS_SHARED(dict)) {
-                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13859,7 +13945,7 @@
                 PyObject *attr_o;
                 if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries)) {
                     if (true) {
-                        IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13868,7 +13954,7 @@
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                 if (dk->dk_kind != DICT_KEYS_UNICODE) {
                     if (true) {
-                        IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13877,7 +13963,7 @@
                 PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(dk) + hint;
                 if (FT_ATOMIC_LOAD_PTR_RELAXED(ep->me_key) != name) {
                     if (true) {
-                        IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13886,7 +13972,7 @@
                 attr_o = FT_ATOMIC_LOAD_PTR(ep->me_value);
                 if (attr_o == NULL) {
                     if (true) {
-                        IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13897,7 +13983,7 @@
                 int increfed = _Py_TryIncrefCompareStackRef(&ep->me_value, attr_o, &attr);
                 if (!increfed) {
                     if (true) {
-                        IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13934,10 +14020,12 @@
             int opcode = LOAD_BUILD_CLASS;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_BUILD_CLASS);
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef bc;
             int err;
             _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -13967,12 +14055,14 @@
             int opcode = LOAD_COMMON_CONSTANT;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_COMMON_CONSTANT);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             assert(oparg < NUM_COMMON_CONSTANTS);
             value = PyStackRef_DupImmortal(tstate->interp->common_consts[oparg]);
@@ -13991,9 +14081,11 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST);
             IR_PREDICTED(LOAD_CONST);
-            int oparg = (int)IR_CD(ir_word);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
             value = PyStackRef_FromPyObjectBorrow(obj);
@@ -14008,12 +14100,14 @@
             int opcode = LOAD_CONST_INLINE_FLOAT;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST_INLINE_FLOAT);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
             _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -14032,12 +14126,14 @@
             int opcode = LOAD_CONST_INLINE_INT;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST_INLINE_INT);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
             assert(_PyLong_CheckExactAndCompact(obj));
@@ -14056,12 +14152,14 @@
             int opcode = LOAD_DEREF;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_DEREF);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             PyCellObject *cell = (PyCellObject *)PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
             _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -14089,12 +14187,14 @@
             int opcode = LOAD_FAST;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             assert(!PyStackRef_IsNull(GETLOCAL(oparg)));
             value = PyStackRef_DUP(GETLOCAL(oparg));
@@ -14109,12 +14209,14 @@
             int opcode = LOAD_FAST_AND_CLEAR;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_AND_CLEAR);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             value = GETLOCAL(oparg);
             GETLOCAL(oparg) = PyStackRef_NULL;
@@ -14129,12 +14231,14 @@
             int opcode = LOAD_FAST_BORROW;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_BORROW);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             assert(!PyStackRef_IsNull(GETLOCAL(oparg)));
             value = PyStackRef_BorrowAt(&GETLOCAL(oparg));
@@ -14149,12 +14253,14 @@
             int opcode = LOAD_FAST_BORROW_LOAD_FAST_BORROW;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_BORROW_LOAD_FAST_BORROW);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value1;
             _PyStackRef value2;
             uint32_t oparg1 = oparg >> 4;
@@ -14173,12 +14279,14 @@
             int opcode = LOAD_FAST_CHECK;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_CHECK);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             _PyStackRef value_s = GETLOCAL(oparg);
             if (PyStackRef_IsNull(value_s)) {
@@ -14203,12 +14311,14 @@
             int opcode = LOAD_FAST_LOAD_FAST;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_LOAD_FAST);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value1;
             _PyStackRef value2;
             uint32_t oparg1 = oparg >> 4;
@@ -14227,27 +14337,29 @@
             int opcode = LOAD_FROM_DICT_OR_DEREF;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_FROM_DICT_OR_DEREF);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef class_dict_st;
             _PyStackRef value;
-            class_dict_st = IR_SLOT(IR_B(ir_word));
+            class_dict_st = IR_SLOT(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInline(class_dict_st))) {
                 class_dict_st = PyStackRef_Box(class_dict_st);
                 if (PyStackRef_IsInline(class_dict_st)) {
-                    IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(LOAD_FROM_DICT_OR_DEREF);
-                IR_SLOT(IR_B(ir_word)) = class_dict_st;
+                IR_SLOT(IR_FIELD_B(this_instr)) = class_dict_st;
             }
-            class_dict_st = IR_BORROW_KNOWN(class_dict_st, IR_B(ir_word), IR_A(ir_word));
+            class_dict_st = IR_BORROW_KNOWN(class_dict_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
             PyObject *name;
             PyObject *class_dict = PyStackRef_AsPyObjectBorrow(class_dict_st);
             assert(class_dict);
@@ -14265,7 +14377,7 @@
             if (!value_o) {
                 PyCellObject *cell = (PyCellObject *)PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
                 value_o = PyCell_GetRef(cell);
-                if (value_o == NULL) {IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                if (value_o == NULL) {IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                     assert(stack_pointer == _PyFrame_GetStackPointer(frame));
                     _PyFrame_StackPointerValidate(frame);
                     _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
@@ -14273,7 +14385,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
-            else if (PyLazyImport_CheckExact(value_o)) {IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+            else if (PyLazyImport_CheckExact(value_o)) {IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                 assert(stack_pointer == _PyFrame_GetStackPointer(frame));
                 _PyFrame_StackPointerValidate(frame);
                 Py_SETREF(value_o, _PyLazyImport_Reify(
@@ -14301,27 +14413,29 @@
             int opcode = LOAD_FROM_DICT_OR_GLOBALS;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(LOAD_FROM_DICT_OR_GLOBALS);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef mod_or_class_dict;
             _PyStackRef v;
-            mod_or_class_dict = IR_SLOT(IR_B(ir_word));
+            mod_or_class_dict = IR_SLOT(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInline(mod_or_class_dict))) {
                 mod_or_class_dict = PyStackRef_Box(mod_or_class_dict);
                 if (PyStackRef_IsInline(mod_or_class_dict)) {
-                    IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(LOAD_FROM_DICT_OR_GLOBALS);
-                IR_SLOT(IR_B(ir_word)) = mod_or_class_dict;
+                IR_SLOT(IR_FIELD_B(this_instr)) = mod_or_class_dict;
             }
-            mod_or_class_dict = IR_BORROW_KNOWN(mod_or_class_dict, IR_B(ir_word), IR_A(ir_word));
+            mod_or_class_dict = IR_BORROW_KNOWN(mod_or_class_dict, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *namespace = PyStackRef_AsPyObjectBorrow(mod_or_class_dict);
             int err;
@@ -14330,7 +14444,7 @@
             _PyFrame_StackPointerValidate(frame);
             PyObject *v_o = _PyMapping_GetOptionalItem2(namespace, name, &err);
             _PyFrame_StackPointerInvalidate(frame);
-            if (v_o != NULL && PyLazyImport_CheckExact(v_o)) {IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+            if (v_o != NULL && PyLazyImport_CheckExact(v_o)) {IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                 assert(stack_pointer == _PyFrame_GetStackPointer(frame));
                 _PyFrame_StackPointerValidate(frame);
                 Py_SETREF(v_o, _PyLazyImport_Reify(tstate, v_o, name, namespace));
@@ -14377,10 +14491,10 @@
             IR_PREDICTED(LOAD_GLOBAL);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_B(ir_word));
+            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = IR_FB_ARG(fb, IR_FIELD_B(this_instr));
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef *res;
             _PyStackRef *null;
             // _SPECIALIZE_LOAD_GLOBAL
@@ -14434,10 +14548,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL_BUILTIN);
-            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
+            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef res;
             _PyStackRef *null;
             // _GUARD_GLOBALS_VERSION
@@ -14516,10 +14630,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL_MODULE);
-            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
+            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef res;
             _PyStackRef *null;
             // _LOAD_GLOBAL_MODULE
@@ -14577,10 +14691,12 @@
             int opcode = LOAD_LOCALS;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_LOCALS);
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef locals;
             PyObject *l = LOCALS();
             if (l == NULL) {
@@ -14603,12 +14719,14 @@
             int opcode = LOAD_NAME;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_NAME);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef v;
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -14634,9 +14752,11 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SMALL_INT);
             IR_PREDICTED(LOAD_SMALL_INT);
-            int oparg = (int)IR_B(ir_word);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             assert(oparg < _PY_NSMALLPOSINTS);
             PyObject *obj = (PyObject *)&_PyLong_SMALL_INTS[_PY_NSMALLNEGINTS + oparg];
@@ -14652,12 +14772,14 @@
             int opcode = LOAD_SMALL_INT_INLINE;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SMALL_INT_INLINE);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyStackRef_FromInt32((int32_t)oparg);
@@ -14675,12 +14797,14 @@
             int opcode = LOAD_SPECIAL;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SPECIAL);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef self;
             _PyStackRef *method_and_self;
             // _INSERT_NULL
@@ -14737,11 +14861,11 @@
             IR_PREDICTED(LOAD_SUPER_ATTR);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_C(ir_word));
+            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -3 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             opcode = LOAD_SUPER_ATTR;
             _PyStackRef global_super_st;
             _PyStackRef class_st;
@@ -14928,11 +15052,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SUPER_ATTR_ATTR);
-            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -3 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             _PyStackRef global_super_st;
             _PyStackRef class_st;
             _PyStackRef self_st;
@@ -15027,11 +15151,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SUPER_ATTR_METHOD);
-            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -3 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             _PyStackRef global_super_st;
             _PyStackRef class_st;
             _PyStackRef self_st;
@@ -15138,10 +15262,12 @@
             int opcode = MAKE_CELL;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MAKE_CELL);
-            int oparg = (int)IR_A(ir_word);
+            int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
             if (_PyStackRef_BoxArray(&GETLOCAL(oparg), 1) < 0) {
                 JUMP_TO_LABEL(error);
@@ -15165,29 +15291,31 @@
             int opcode = MAKE_FUNCTION;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(MAKE_FUNCTION);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef codeobj_st;
             _PyStackRef func;
             _PyStackRef co;
             _PyStackRef value;
             // _MAKE_FUNCTION
             {
-                codeobj_st = IR_SLOT(IR_B(ir_word));
+                codeobj_st = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(PyStackRef_IsInline(codeobj_st))) {
                     codeobj_st = PyStackRef_Box(codeobj_st);
                     if (PyStackRef_IsInline(codeobj_st)) {
-                        IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(MAKE_FUNCTION);
-                    IR_SLOT(IR_B(ir_word)) = codeobj_st;
+                    IR_SLOT(IR_FIELD_B(this_instr)) = codeobj_st;
                 }
-                codeobj_st = IR_BORROW_KNOWN(codeobj_st, IR_B(ir_word), IR_A(ir_word));
+                codeobj_st = IR_BORROW_KNOWN(codeobj_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyObject *codeobj = PyStackRef_AsPyObjectBorrow(codeobj_st);
                 stack_pointer[-1] = codeobj_st;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -15220,12 +15348,14 @@
             int opcode = MAP_ADD;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MAP_ADD);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(3 + (oparg - 1)));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(3 + (oparg - 1)));
             _PyStackRef dict_st;
             _PyStackRef key;
             _PyStackRef value;
@@ -15279,13 +15409,15 @@
             int opcode = MATCH_CLASS;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_CLASS);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -3 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             _PyStackRef subject;
             _PyStackRef type;
             _PyStackRef names;
@@ -15384,12 +15516,14 @@
             int opcode = MATCH_KEYS;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_KEYS);
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef subject;
             _PyStackRef keys;
             _PyStackRef values_or_none;
@@ -15431,11 +15565,13 @@
             int opcode = MATCH_MAPPING;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_MAPPING);
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef subject;
             _PyStackRef res;
             subject = stack_pointer[-1];
@@ -15452,11 +15588,13 @@
             int opcode = MATCH_SEQUENCE;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_SEQUENCE);
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef subject;
             _PyStackRef res;
             subject = stack_pointer[-1];
@@ -15473,6 +15611,8 @@
             int opcode = NOP;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(NOP);
@@ -15484,6 +15624,8 @@
             int opcode = NOT_TAKEN;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(NOT_TAKEN);
@@ -15495,10 +15637,12 @@
             int opcode = POP_EXCEPT;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_EXCEPT);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef exc_value;
             exc_value = stack_pointer[-1];
             if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
@@ -15526,11 +15670,13 @@
             int opcode = POP_ITER;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_ITER);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef iter;
             _PyStackRef index_or_null;
             index_or_null = stack_pointer[-1];
@@ -15555,10 +15701,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE);
-            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
+            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef cond;
             cond = stack_pointer[-1];
             assert(PyStackRef_BoolCheck(cond));
@@ -15585,10 +15731,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_NONE);
-            _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
+            _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef value;
             _PyStackRef b;
             _PyStackRef cond;
@@ -15637,10 +15783,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_NOT_NONE);
-            _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
+            _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef value;
             _PyStackRef b;
             _PyStackRef cond;
@@ -15689,10 +15835,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE);
-            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
+            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef cond;
             cond = stack_pointer[-1];
             assert(PyStackRef_BoolCheck(cond));
@@ -15714,10 +15860,12 @@
             int opcode = POP_TOP;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_TOP);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef value;
             value = stack_pointer[-1];
             stack_pointer += -1;
@@ -15734,11 +15882,13 @@
             int opcode = PUSH_EXC_INFO;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(PUSH_EXC_INFO);
-            IR_CHECK_SLOT(IR_A(ir_word), -1 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef exc;
             _PyStackRef prev_exc;
             _PyStackRef new_exc;
@@ -15772,10 +15922,12 @@
             int opcode = PUSH_NULL;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(PUSH_NULL);
-            IR_CHECK_SLOT(IR_A(ir_word), 0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
             _PyStackRef res;
             res = PyStackRef_NULL;
             stack_pointer[0] = res;
@@ -15794,9 +15946,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RAISE_VARARGS);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(oparg));
             _PyStackRef *args;
             args = &stack_pointer[-oparg];
             assert(oparg < 3);
@@ -15834,9 +15986,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RERAISE);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(1 + oparg));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(1 + oparg));
             _PyStackRef *values;
             _PyStackRef exc_st;
             exc_st = stack_pointer[-1];
@@ -15875,6 +16027,8 @@
             int opcode = RESERVED;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RESERVED);
@@ -15894,7 +16048,7 @@
             IR_PREDICTED(RESUME);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            int oparg = (int)IR_A(ir_word);
+            int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
             // _MAYBE_INSTRUMENT
             {
@@ -15984,11 +16138,13 @@
             int opcode = RETURN_GENERATOR;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RETURN_GENERATOR);
-            IR_CHECK_SLOT(IR_A(ir_word), -0 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -0);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -0 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -0);
             _PyStackRef res;
             assert(PyStackRef_FunctionCheck(frame->f_funcobj));
             PyFunctionObject *func = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(frame->f_funcobj);
@@ -16029,11 +16185,13 @@
             int opcode = RETURN_VALUE;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RETURN_VALUE);
-            IR_CHECK_SLOT(IR_A(ir_word), -1 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef value;
             _PyStackRef retval;
             _PyStackRef res;
@@ -16080,11 +16238,11 @@
             IR_PREDICTED(SEND);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_SEND *fb = (_PyFb_SEND *)IR_FB(IR_C(ir_word));
-            int oparg = (int)IR_D(ir_word);
+            _PyFb_SEND *fb = (_PyFb_SEND *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -3 + 2);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             _PyStackRef receiver;
             _PyStackRef null_or_index;
             _PyStackRef v;
@@ -16198,10 +16356,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SEND_ASYNC_GEN);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -3 + 2);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             _PyStackRef iter;
             _PyStackRef null_in;
             _PyStackRef v;
@@ -16277,10 +16435,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SEND_GEN);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -3 + 2);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             _PyStackRef receiver;
             _PyStackRef v;
             _PyStackRef gen_frame;
@@ -16362,10 +16520,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SEND_VIRTUAL);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -3 + 2);
-            IR_CHECK_SLOT(IR_B(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             _PyStackRef val;
             _PyStackRef nos;
             _PyStackRef iter;
@@ -16432,6 +16590,8 @@
             int opcode = SETUP_ANNOTATIONS;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SETUP_ANNOTATIONS);
@@ -16486,12 +16646,14 @@
             int opcode = SET_ADD;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SET_ADD);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + (oparg-1)));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + (oparg-1)));
             _PyStackRef set;
             _PyStackRef v;
             v = stack_pointer[-1];
@@ -16530,42 +16692,44 @@
             int opcode = SET_FUNCTION_ATTRIBUTE;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -2);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
             INSTRUCTION_STATS(SET_FUNCTION_ATTRIBUTE);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_INPUT(IR_B(ir_word), -2);
-            IR_CHECK_INPUT(IR_C(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef attr_st;
             _PyStackRef func_in;
             _PyStackRef func_out;
-            func_in = IR_SLOT(IR_C(ir_word));
-            attr_st = IR_SLOT(IR_B(ir_word));
+            func_in = IR_SLOT(IR_FIELD_C(this_instr));
+            attr_st = IR_SLOT(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInline(attr_st))) {
                 attr_st = PyStackRef_Box(attr_st);
                 if (PyStackRef_IsInline(attr_st)) {
-                    IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-2]);
-                    IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-2]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(SET_FUNCTION_ATTRIBUTE);
-                IR_SLOT(IR_B(ir_word)) = attr_st;
+                IR_SLOT(IR_FIELD_B(this_instr)) = attr_st;
             }
-            attr_st = IR_BORROW_KNOWN(attr_st, IR_B(ir_word), IR_A(ir_word));
+            attr_st = IR_BORROW_KNOWN(attr_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
             if (Py_UNLIKELY(PyStackRef_IsInline(func_in))) {
                 func_in = PyStackRef_Box(func_in);
                 if (PyStackRef_IsInline(func_in)) {
-                    IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_FIELD_C(this_instr), stack_pointer[-1]);
                     stack_pointer[-2] = attr_st;
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(SET_FUNCTION_ATTRIBUTE);
-                IR_SLOT(IR_C(ir_word)) = func_in;
+                IR_SLOT(IR_FIELD_C(this_instr)) = func_in;
             }
-            func_in = IR_BORROW_KNOWN(func_in, IR_C(ir_word), IR_A(ir_word) + 1);
+            func_in = IR_BORROW_KNOWN(func_in, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
             PyObject *func = PyStackRef_AsPyObjectBorrow(func_in);
             PyObject *attr = _PyStackRef_AsPyObjectStealPointer(attr_st);
             func_out = func_in;
@@ -16586,12 +16750,14 @@
             int opcode = SET_UPDATE;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SET_UPDATE);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + (oparg-1)));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + (oparg-1)));
             _PyStackRef set;
             _PyStackRef iterable;
             _PyStackRef i;
@@ -16650,11 +16816,11 @@
             IR_PREDICTED(STORE_ATTR);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_C(ir_word));
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef v;
             _PyStackRef owner;
             // _SPECIALIZE_STORE_ATTR
@@ -16731,9 +16897,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_INSTANCE_VALUE);
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef value;
             _PyStackRef owner;
             _PyStackRef o;
@@ -16839,9 +17005,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE);
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef owner;
             _PyStackRef value;
             _PyStackRef o;
@@ -16921,9 +17087,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE_ADD);
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef owner;
             _PyStackRef value;
             _PyStackRef o;
@@ -16999,9 +17165,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SLOT);
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef owner;
             _PyStackRef value;
             _PyStackRef o;
@@ -17077,11 +17243,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_WITH_HINT);
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef owner;
             _PyStackRef value;
             _PyStackRef o;
@@ -17193,12 +17359,14 @@
             int opcode = STORE_DEREF;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_DEREF);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef v;
             v = stack_pointer[-1];
             if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
@@ -17224,12 +17392,14 @@
             int opcode = STORE_FAST;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_FAST);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef value;
             _PyStackRef trash;
             // _SWAP_FAST
@@ -17257,13 +17427,15 @@
             int opcode = STORE_FAST_LOAD_FAST;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_FAST_LOAD_FAST);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef value1;
             _PyStackRef value2;
             value1 = stack_pointer[-1];
@@ -17285,13 +17457,15 @@
             int opcode = STORE_FAST_STORE_FAST;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_FAST_STORE_FAST);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef value2;
             _PyStackRef value1;
             value1 = stack_pointer[-1];
@@ -17322,12 +17496,14 @@
             int opcode = STORE_GLOBAL;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_GLOBAL);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef v;
             v = stack_pointer[-1];
             if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
@@ -17379,12 +17555,14 @@
             int opcode = STORE_NAME;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_NAME);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef v;
             v = stack_pointer[-1];
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
@@ -17417,13 +17595,15 @@
             int opcode = STORE_SLICE;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SLICE);
-            IR_CHECK_SLOT(IR_A(ir_word), -3);
-            IR_CHECK_SLOT(IR_B(ir_word), -2);
-            IR_CHECK_SLOT(IR_C(ir_word), -1);
-            IR_CHECK_SLOT(IR_D(ir_word), -4);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), -4);
             _PyStackRef v;
             _PyStackRef container;
             _PyStackRef start;
@@ -17492,10 +17672,10 @@
             IR_PREDICTED(STORE_SUBSCR);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_STORE_SUBSCR *fb = (_PyFb_STORE_SUBSCR *)IR_FB(IR_D(ir_word));
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
-            IR_CHECK_SLOT(IR_C(ir_word), -3);
+            _PyFb_STORE_SUBSCR *fb = (_PyFb_STORE_SUBSCR *)IR_FB(IR_FIELD_D(this_instr));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -3);
             _PyStackRef container;
             _PyStackRef sub;
             _PyStackRef v;
@@ -17588,9 +17768,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR_DICT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
-            IR_CHECK_SLOT(IR_C(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -3);
             _PyStackRef nos;
             _PyStackRef value;
             _PyStackRef dict_st;
@@ -17680,9 +17860,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR_LIST_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -2);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
-            IR_CHECK_SLOT(IR_C(ir_word), -3);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -3);
             _PyStackRef value;
             _PyStackRef nos;
             _PyStackRef list_st;
@@ -17787,12 +17967,14 @@
             int opcode = SWAP;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SWAP);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -(2 + (oparg-2)));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + (oparg-2)));
             _PyStackRef bottom;
             _PyStackRef top;
             top = stack_pointer[-1];
@@ -17816,9 +17998,9 @@
             IR_PREDICTED(TO_BOOL);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_C(ir_word));
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_FIELD_C(this_instr));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef value;
             _PyStackRef res;
             // _SPECIALIZE_TO_BOOL
@@ -17880,9 +18062,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_ALWAYS_TRUE);
-            _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_C(ir_word));
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_FIELD_C(this_instr));
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef value;
             _PyStackRef res;
@@ -17932,8 +18114,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_BOOL);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef value;
             value = stack_pointer[-1];
             if (!PyStackRef_BoolCheck(value)) {
@@ -17955,8 +18137,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_INT);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef value;
             _PyStackRef res;
             _PyStackRef v;
@@ -18002,8 +18184,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_LIST);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef tos;
             _PyStackRef value;
             _PyStackRef res;
@@ -18054,8 +18236,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_NONE);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef value;
             _PyStackRef res;
             value = stack_pointer[-1];
@@ -18080,8 +18262,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_STR);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef value;
             _PyStackRef res;
             _PyStackRef v;
@@ -18122,28 +18304,30 @@
             int opcode = UNARY_INVERT;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(UNARY_INVERT);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef value;
             _PyStackRef res;
             _PyStackRef v;
             // _UNARY_INVERT
             {
-                value = IR_SLOT(IR_B(ir_word));
+                value = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
                     value = PyStackRef_Box(value);
                     if (PyStackRef_IsInline(value)) {
-                        IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(UNARY_INVERT);
-                    IR_SLOT(IR_B(ir_word)) = value;
+                    IR_SLOT(IR_FIELD_B(this_instr)) = value;
                 }
-                value = IR_BORROW_KNOWN(value, IR_B(ir_word), IR_A(ir_word));
+                value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 stack_pointer[-1] = value;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
@@ -18172,11 +18356,13 @@
             int opcode = UNARY_NEGATIVE;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNARY_NEGATIVE);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef value;
             _PyStackRef res;
             _PyStackRef v;
@@ -18229,11 +18415,13 @@
             int opcode = UNARY_NOT;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNARY_NOT);
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef value;
             _PyStackRef res;
             value = stack_pointer[-1];
@@ -18249,12 +18437,14 @@
             int opcode = UNPACK_EX;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNPACK_EX);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             _PyStackRef seq;
             _PyStackRef *top;
             seq = stack_pointer[-1];
@@ -18291,27 +18481,27 @@
             int opcode = UNPACK_SEQUENCE;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(UNPACK_SEQUENCE);
             IR_PREDICTED(UNPACK_SEQUENCE);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_UNPACK_SEQUENCE *fb = (_PyFb_UNPACK_SEQUENCE *)IR_FB(IR_C(ir_word));
-            int oparg = (int)IR_D(ir_word);
+            _PyFb_UNPACK_SEQUENCE *fb = (_PyFb_UNPACK_SEQUENCE *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef seq;
             _PyStackRef *top;
             // _SPECIALIZE_UNPACK_SEQUENCE
             {
-                seq = IR_SLOT(IR_B(ir_word));
+                seq = IR_SLOT(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                    next_instr = this_instr;IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_UnpackSequence(seq, next_instr, oparg);
@@ -18329,13 +18519,13 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(seq))) {
                     seq = PyStackRef_Box(seq);
                     if (PyStackRef_IsInline(seq)) {
-                        IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(UNPACK_SEQUENCE);
-                    IR_SLOT(IR_B(ir_word)) = seq;
+                    IR_SLOT(IR_FIELD_B(this_instr)) = seq;
                 }
-                seq = IR_BORROW_KNOWN(seq, IR_B(ir_word), IR_A(ir_word));
+                seq = IR_BORROW_KNOWN(seq, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyObject *seq_o = _PyStackRef_AsPyObjectStealPointer(seq);
                 stack_pointer += -1;
                 ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -18361,31 +18551,31 @@
             int opcode = UNPACK_SEQUENCE_LIST;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(UNPACK_SEQUENCE_LIST);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef tos;
             _PyStackRef seq;
             _PyStackRef *values;
             // _GUARD_TOS_LIST
             {
-                tos = IR_SLOT(IR_B(ir_word));
+                tos = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
-                tos = IR_BORROW_KNOWN(tos, IR_B(ir_word), IR_A(ir_word));
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyList_CheckExact(o)) {
-                    IR_DROP_BORROW(tos, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(tos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
@@ -18398,7 +18588,7 @@
                 PyObject *seq_o = PyStackRef_AsPyObjectBorrow(seq);
                 assert(PyList_CheckExact(seq_o));
                 if (!LOCK_OBJECT(seq_o)) {
-                    IR_DROP_BORROW(seq, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(seq, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
@@ -18406,7 +18596,7 @@
                 if (PyList_GET_SIZE(seq_o) != oparg) {
                     UNLOCK_OBJECT(seq_o);
                     if (true) {
-                        IR_DROP_BORROW(seq, IR_B(ir_word), IR_A(ir_word));
+                        IR_DROP_BORROW(seq, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                         UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                         assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                         JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
@@ -18433,31 +18623,31 @@
             int opcode = UNPACK_SEQUENCE_TUPLE;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(UNPACK_SEQUENCE_TUPLE);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef tos;
             _PyStackRef seq;
             _PyStackRef *values;
             // _GUARD_TOS_TUPLE
             {
-                tos = IR_SLOT(IR_B(ir_word));
+                tos = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
-                tos = IR_BORROW_KNOWN(tos, IR_B(ir_word), IR_A(ir_word));
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyTuple_CheckExact(o)) {
-                    IR_DROP_BORROW(tos, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(tos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
@@ -18470,7 +18660,7 @@
                 PyObject *seq_o = PyStackRef_AsPyObjectBorrow(seq);
                 assert(PyTuple_CheckExact(seq_o));
                 if (PyTuple_GET_SIZE(seq_o) != oparg) {
-                    IR_DROP_BORROW(seq, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(seq, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
@@ -18495,32 +18685,32 @@
             int opcode = UNPACK_SEQUENCE_TWO_TUPLE;
             (void)(opcode);
             #endif
-            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
             INSTRUCTION_STATS(UNPACK_SEQUENCE_TWO_TUPLE);
-            int oparg = (int)IR_D(ir_word);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1);
-            IR_CHECK_INPUT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef tos;
             _PyStackRef seq;
             _PyStackRef val1;
             _PyStackRef val0;
             // _GUARD_TOS_TUPLE
             {
-                tos = IR_SLOT(IR_B(ir_word));
+                tos = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
-                tos = IR_BORROW_KNOWN(tos, IR_B(ir_word), IR_A(ir_word));
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                 PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyTuple_CheckExact(o)) {
-                    IR_DROP_BORROW(tos, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(tos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
@@ -18533,7 +18723,7 @@
                 PyObject *seq_o = PyStackRef_AsPyObjectBorrow(seq);
                 assert(PyTuple_CheckExact(seq_o));
                 if (PyTuple_GET_SIZE(seq_o) != 2) {
-                    IR_DROP_BORROW(seq, IR_B(ir_word), IR_A(ir_word));
+                    IR_DROP_BORROW(seq, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
@@ -18558,11 +18748,13 @@
             int opcode = WITH_EXCEPT_START;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(WITH_EXCEPT_START);
-            IR_CHECK_SLOT(IR_A(ir_word), -5 + 5);
-            IR_CHECK_SLOT(IR_B(ir_word), -5);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -5 + 5);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -5);
             _PyStackRef exit_func;
             _PyStackRef exit_self;
             _PyStackRef lasti;
@@ -18636,13 +18828,15 @@
             int opcode = YIELD_VALUE;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(YIELD_VALUE);
-            int oparg = (int)IR_C(ir_word);
+            int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_A(ir_word), -1 + 0);
-            IR_CHECK_SLOT(IR_B(ir_word), -1);
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1 + 0);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             opcode = YIELD_VALUE;
             _PyStackRef value;
             _PyStackRef retval;

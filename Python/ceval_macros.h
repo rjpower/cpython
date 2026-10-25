@@ -149,12 +149,57 @@
 #  define LABEL(name) name:
 #endif
 
-/* Dispatch loads the word of the instruction into ir_word, a register, from
- * which each handler extracts the fields it uses with a shift and a mask
- * (IR_A(ir_word) and so on), in every dispatch build.  A handler that runs
+/* Dispatch loads the word of the instruction into ir_word and takes the
+ * handler from it.  A handler reads field A, B, C or D, or CD, of its word W,
+ * which is this_instr, as IR_FIELD_A(W) and so on.  A handler that runs
  * another on the same word, as INSTRUMENTED_LINE does and a specialisation
  * that deoptimises to its family head's PREDICTED_ label, leaves ir_word as
- * it is, so the other handler finds the same fields. */
+ * it is, so the other handler finds the same fields.
+ *
+ * Fields never change once a block is lowered, so with the GIL the
+ * computed-goto build reads each from W in memory, with a 16-bit load and a
+ * shift or a mask.  Decoding ir_word instead keeps it live through the
+ * handler and costs a copy, a shift and a mask per field; GCC then keeps
+ * next_instr on the stack, which adds a load and a store to every handler.
+ * The tail-call build, which receives ir_word as an argument, and the
+ * free-threaded build, which loads it atomically, decode ir_word. */
+#if USE_COMPUTED_GOTOS && !_Py_TAIL_CALL_INTERP \
+    && !defined(Py_GIL_DISABLED) && PY_LITTLE_ENDIAN
+/* The unsigned integer of N bytes at byte K of the word at W */
+static inline uintptr_t
+ir_bytes_at(const _PyIRWord *w, int k, int n)
+{
+    if (n == 2) {
+        uint16_t v;
+        memcpy(&v, (const char *)w + k, sizeof(v));
+        return v;
+    }
+    uint32_t v;
+    memcpy(&v, (const char *)w + k, sizeof(v));
+    return v;
+}
+/* In a debug build, the field in memory is the one in ir_word */
+static inline uintptr_t
+ir_check_field(uintptr_t field, uint64_t expected)
+{
+    assert(field == expected);
+    (void)expected;
+    return field;
+}
+#  define IR_MEMORY_FIELD(W, K, N, SHIFT, MASK, F) \
+    ir_check_field((ir_bytes_at((W), (K), (N)) >> (SHIFT)) & (MASK), F(ir_word))
+#  define IR_FIELD_A(W) IR_MEMORY_FIELD(W, 2, 2, 0, IR_FIELD_MAX, IR_A)
+#  define IR_FIELD_B(W) IR_MEMORY_FIELD(W, 3, 2, 4, IR_FIELD_MAX, IR_B)
+#  define IR_FIELD_C(W) IR_MEMORY_FIELD(W, 5, 2, 0, IR_FIELD_MAX, IR_C)
+#  define IR_FIELD_D(W) IR_MEMORY_FIELD(W, 6, 2, 4, IR_FIELD_MAX, IR_D)
+#  define IR_FIELD_CD(W) IR_MEMORY_FIELD(W, 4, 4, 8, IR_CD_MAX, IR_CD)
+#else
+#  define IR_FIELD_A(W) IR_A(ir_word)
+#  define IR_FIELD_B(W) IR_B(ir_word)
+#  define IR_FIELD_C(W) IR_C(ir_word)
+#  define IR_FIELD_D(W) IR_D(ir_word)
+#  define IR_FIELD_CD(W) IR_CD(ir_word)
+#endif
 #define IR_PREDICTED(op) PREDICTED_##op:
 
 /* PRE_DISPATCH_GOTO() does lltrace if enabled. Normally a no-op */
@@ -514,7 +559,7 @@ gen_try_set_executing(PyGenObject *gen)
     Py_TYPE(ITER)->_tp_iteritem((ITER), (INDEX))
 
 /* Operands of the register IR handlers (Tools/cases_generator/ir_generator.py).
- * F is a field, IR_A(ir_word) and so on. */
+ * F is a field, IR_FIELD_A(this_instr) and so on. */
 
 /* The slot that a slot field names, an lvalue. */
 #define IR_SLOT(F) (frame->localsplus[(F)])

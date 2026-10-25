@@ -12,8 +12,9 @@ Include/internal/pycore_ir.h the word layout. In short, an instruction is one
 64-bit word: a 16-bit handler index and four 12-bit fields A, B, C and D, of
 which C and D also form a 24-bit field CD. A field names a frame slot, the
 feedback entry (its index in the block's feedback vector) or the oparg.
-Handlers extract the fields they use from the word in ir_word, which dispatch
-loads.
+Handlers read the fields they use with IR_FIELD_A(this_instr) and so on,
+from the word in memory or from ir_word, which dispatch loads, depending on
+the build (Python/ceval_macros.h).
 
 The format of each instruction follows from its stack effect:
 
@@ -116,10 +117,10 @@ LABEL_END_MARKER = "/* END LABELS */"
 
 FIRST_IR_ONLY_HANDLER = 256
 
-# The fields of the word, and the C expressions that extract them from
-# ir_word, the word that dispatch loaded (Python/ceval_macros.h).
+# The fields of the word, and the C expressions that read them in a handler
+# (Python/ceval_macros.h), from this_instr, which every handler defines.
 FIELDS = ("A", "B", "C", "D")
-FIELD_VARS = {f: f"IR_{f}(ir_word)" for f in FIELDS}
+FIELD_VARS = {f: f"IR_FIELD_{f}(this_instr)" for f in FIELDS}
 
 # The IR forms of the instruction macros (see STACK_INSTRUCTION_MACROS).
 IR_INSTRUCTION_MACROS = {
@@ -658,7 +659,7 @@ def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
 def field_expr(loc: str) -> str:
     "The C expression of the field at loc, in a handler"
     if loc == LOC_CD:
-        return "IR_CD(ir_word)"
+        return "IR_FIELD_CD(this_instr)"
     return FIELD_VARS[loc.removeprefix("_PyIR_LOC_")]
 
 
@@ -924,20 +925,6 @@ def reads_fb_arg(inst: Instruction, fmt: IRFormat, operation: str | None) -> boo
             and operation is None)
 
 
-def needs_this(inst: Instruction, fmt: IRFormat, operation: str | None) -> bool:
-    if inst.properties.needs_this:
-        return True
-    if reads_fb_arg(inst, fmt, operation) and not is_specialization(inst):
-        # For the shared entry, see IR_FB_ARG
-        return True
-    for part in inst.parts:
-        if isinstance(part, Uop):
-            for tkn in part.body.tokens():
-                if tkn.kind == "IDENTIFIER" and tkn.text in ("DEOPT_IF", "EXIT_IF"):
-                    return True
-    return False
-
-
 def emit_field_checks(inst: Instruction, fmt: IRFormat, out: CWriter) -> None:
     """Debug checks that each slot field names its canonical slot, given as
     an offset from stack_pointer, or for an input that may be borrowed, a
@@ -978,25 +965,25 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit(f"int opcode = {name};\n")
     out.emit(f"(void)(opcode);\n")
     out.emit(f"#endif\n")
-    if fmt.borrow_mask:
-        # Absorbed loads have no words, so stack_pointer may lag behind
-        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-        out.emit(f"stack_pointer = IR_STACK_POINTER({dst}, {fmt.dst_offset});\n")
-    this = needs_this(inst, fmt, operation)
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
-    if this and not is_target:
+    if not is_target:
         out.emit(f"_PyIRWord* const this_instr = next_instr;\n")
         out.emit("(void)this_instr;\n")
     if not inst.properties.no_save_ip:
         out.emit(f"frame->instr_ptr = next_instr;\n")
     out.emit(f"next_instr += 1;\n")
+    if fmt.borrow_mask:
+        # Absorbed loads have no words, so stack_pointer may lag behind.
+        # A target defines this_instr below, after its PREDICTED_ label.
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)].replace(
+            "this_instr", "next_instr - 1")
+        out.emit(f"stack_pointer = IR_STACK_POINTER({dst}, {fmt.dst_offset});\n")
     out.emit(f"INSTRUCTION_STATS({inst.name});\n")
     if is_target:
         out.emit(f"IR_PREDICTED({name});\n")
-        if this:
-            out.emit(f"_PyIRWord* const this_instr = next_instr - 1;\n")
-            out.emit("(void)this_instr;\n")
+        out.emit(f"_PyIRWord* const this_instr = next_instr - 1;\n")
+        out.emit("(void)this_instr;\n")
     use_fb = fmt.fb != LOC_NONE and (
         uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
     if use_fb:

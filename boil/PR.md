@@ -4,18 +4,65 @@ This branch is the start of a performance fork of CPython 3.16 that owns its pac
 
 Phase 1 has landed through the register IR. The branch deletes tier 2 and the JIT, replaces the per-opcode inline caches with typed feedback entries, changes `_PyStackRef` to a NaN-boxed layout, and produces inline int32 and float values on the evaluation stack. Every code object now runs as a register IR, lowered from its bytecode at the first call. The stack interpreter is deleted. Shapes and a tier 0 baseline JIT are built only with configure flags. Tier 1 has not landed. Each step was measured before it was kept; the results are below.
 
-<!-- RESULTS TABLE: coordinator fills in -->
+## Results
+
+Timing is the 24-benchmark pyperformance subset in `boil/bench`, geometric mean of new over old, release builds without PGO, each run on an idle machine. Instruction counts come from `perf stat -e instructions:u` and do not depend on load. Below 1 is faster.
+
+| Step | Commits | Time vs baseline | Instructions | Note |
+|---|---|---|---|---|
+| Baseline (main, default build) | 3a440b65695 | 1.000 | | `boil/bench/default.json`; the deleted JIT build measured 0.834, free-threaded 1.144 |
+| Delete tier 2 and the copy-and-patch JIT | ac60a9c3c73, 69ffcec5a77 | 0.980 | | `step1-delete-tier2.json` |
+| Typed feedback blocks | 3e7bca13a62 | not timed alone | +0.67% | code objects 424 to 875 bytes eager; import RSS +5.6% |
+| NaN-boxed stack encoding, no producers | 37b41c5f82e | not timed alone | +3.4% | cost of the tag tests before any value is inline |
+| Inline int32 and float producers | eca4bf0ba63, 2d3e30a6cab | 0.989 | spectral_norm -26%, fannkuch -9%, nbody -6% | `tagged-values.json`; int add 173 to 75 instructions per iteration, float add 139 to 79 |
+| Register IR, only interpreter | 2c2c886f091 to 180a3244ba5 | 0.994 | richards -0.2%, nqueens -1.1%, go -3.2%, float -2.1% per loop | `ir-only.json`; one-time lowering 3.0x quickening |
+| Yield offset, stackref fix, tier 0 and shapes landed off | e55f2ce2586 to f655ef62814 | **0.991** | generators -2% | `final.json`; 1.002 vs the inline-values build, 0.996 vs IR-only |
+| Shapes (`--with-shapes`, off) | b36c99a7593 | not timed | richards -0.3%, go -0.5%, deltablue -0.4% | kept for the JIT guard |
+| Tier 0 (`--with-tier0`, off) | 299f9fe2026 to 6023aeccc47 | slower | nbody -15%, richards -1%, go -2% | cycles +3% to +13%; see the tier 0 section |
+
+Final build against the baseline, per benchmark:
+
+| Benchmark | Baseline (ms) | Final (ms) | Ratio |
+|---|---|---|---|
+| spectral_norm | 112.062 | 66.428 | 0.593 |
+| chaos | 83.147 | 67.228 | 0.809 |
+| comprehensions | 0.022 | 0.018 | 0.845 |
+| generators | 35.118 | 33.220 | 0.946 |
+| raytrace | 326.414 | 311.263 | 0.954 |
+| pickle | 0.014 | 0.013 | 0.971 |
+| json_loads | 0.030 | 0.029 | 0.982 |
+| xml_etree_parse | 164.905 | 162.374 | 0.985 |
+| json_dumps | 11.760 | 11.594 | 0.986 |
+| go | 119.097 | 118.525 | 0.995 |
+| unpickle | 0.018 | 0.018 | 0.997 |
+| xml_etree_iterparse | 112.421 | 112.868 | 1.004 |
+| logging_silent | 0.000 | 0.000 | 1.010 |
+| coroutines | 26.797 | 27.075 | 1.010 |
+| logging_simple | 0.007 | 0.007 | 1.017 |
+| richards | 58.308 | 59.833 | 1.026 |
+| logging_format | 0.008 | 0.008 | 1.030 |
+| xml_etree_process | 88.199 | 91.060 | 1.032 |
+| regex_compile | 181.232 | 187.521 | 1.035 |
+| deepcopy_memo | 0.031 | 0.032 | 1.037 |
+| deltablue | 3.797 | 3.971 | 1.046 |
+| deepcopy | 0.316 | 0.332 | 1.049 |
+| deepcopy_reduce | 0.004 | 0.004 | 1.063 |
+| xml_etree_generate | 130.808 | 139.437 | 1.066 |
+| float | 81.571 | 87.247 | 1.070 |
+| nbody | 104.250 | 111.870 | 1.073 |
+| unpack_sequence | 0.000 | 0.000 | 1.083 |
+| nqueens | 92.406 | 101.116 | 1.094 |
+| fannkuch | 401.383 | 439.536 | 1.095 |
+| **geometric mean** | | | **0.991** |
+
+Reading the table. The encoding and the IR pay off where values stay inline and loops are tight: spectral_norm 0.59, chaos 0.81, comprehensions 0.85. Object-heavy benchmarks are 3 to 9 percent slower: the eval loop grew from 58 KB to 86 KB, every handler now tests tags, and the IR handlers read fields from memory. Single small benchmarks move by up to 20 percent with code placement alone (design note 01, item 32), so per-benchmark deltas under that size are not conclusive; the instruction counts are. The interpreter was never where these changes were expected to win. They exist so that a JIT can keep inline values in registers and guard attribute access with one shape compare, and tier 0 shows that the first JIT needs register caching to pay for its front-end cost.
 
 | Step | pyperformance geomean vs baseline | Notes |
 |---|---|---|
 | baseline default | 1.000 | 321925c92c9, gcc 15, no PGO, no LTO |
-| tier 2 / JIT deletion | <!-- TODO: fill --> | `boil/bench/step1-delete-tier2.json` records 0.980 against baseline |
 | typed feedback | <!-- TODO: fill --> | +0.67 percent instructions on richards, go, nqueens, chaos |
-| NaN-box encoding | <!-- TODO: fill --> | +3.38 percent instructions against typed feedback, no producers yet |
 | inline ints | <!-- TODO: fill --> | instructions against the encoding commit: chaos -0.7, nbody -1.0, spectral_norm -1.0, richards +1.4, go +2.1, nqueens +2.1, fannkuch +1.3 percent |
-| inline floats, wider ints | <!-- TODO: fill --> | `boil/bench/tagged-values.json` records 0.989 against baseline; instructions against inline ints: spectral_norm -26.4, fannkuch -8.7, nbody -5.7, chaos -4.9, nqueens -2.5, float -2.1, go -0.9, richards -0.4 percent |
 | register IR, the only interpreter | <!-- TODO: fill --> | instructions per loop against the stack build: richards -0.2, nqueens -1.1, go -3.2, float -2.1 percent; lowering adds about 25M instructions once on richards |
-| shapes, `--with-shapes` | <!-- TODO: fill --> | instructions against the same commit without the flag: richards -0.28, go -0.47, deltablue -0.44, raytrace -0.15 percent |
 | tier 0, `--with-tier0` | <!-- TODO: fill --> | see "Tier 0 baseline JIT" |
 
 For reference, the upstream JIT measured 0.834 against baseline on the same subset (`boil/bench/README.md`). That is the bar for the fork's own tier 0.

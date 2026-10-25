@@ -503,3 +503,13 @@ rewritten, because a rewrite would invalidate every later commit id cited in
 this log, the design notes and the commit messages.
 
 Final clean timing of f655ef62814 (build/final-snapshot) started 23:00.
+
+### Final timing and results (Phase 1 close)
+
+Final head f655ef62814: geomean 0.991 vs baseline (1.002 vs inline-values
+build, 0.996 vs IR-only). spectral_norm 0.593, chaos 0.809, comprehensions
+0.845, generators 0.946; nqueens 1.094, fannkuch 1.095, nbody 1.073, float
+1.070. Numeric losses versus the earlier tagged-values timing (nbody 1.027)
+are within the layout swing documented in design note 01 item 32. Results
+table filled in PR.md. Scratch build dirs removed; snapshots used in
+boil/bench kept.

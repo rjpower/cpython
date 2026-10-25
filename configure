@@ -1154,7 +1154,6 @@ with_readline
 with_curses
 with_computed_gotos
 with_tail_call_interp
-with_ir_interp
 with_shapes
 with_remote_debug
 with_ensurepip
@@ -1995,8 +1994,6 @@ Optional Packages:
                           default on supported compilers)
   --with-tail-call-interp enable tail-calling interpreter in evaluation loop
                           and rest of CPython
-  --with-ir-interp        run code objects as the register IR of
-                          Include/internal/pycore_ir.h (default is no)
   --with-shapes           guard instance attribute access on per-type shapes
                           (default is no)
   --with-remote-debug     enable remote debugging support (default is yes)
@@ -34804,27 +34801,11 @@ esac
 fi
 
 
-# Check for --with-ir-interp
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-ir-interp" >&5
-printf %s "checking for --with-ir-interp... " >&6; }
-
-# Check whether --with-ir-interp was given.
-if test ${with_ir_interp+y}
-then :
-  withval=$with_ir_interp;
-else case e in #(
-  e) with_ir_interp=no ;;
-esac
-fi
-
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $with_ir_interp" >&5
-printf "%s\n" "$with_ir_interp" >&6; }
-if test "x$with_ir_interp" = xyes
-then :
+# The interpreter runs code objects as the register IR of
+# Include/internal/pycore_ir.h; the macro tells extensions and sysconfig.
 
 printf "%s\n" "#define Py_IR_INTERP 1" >>confdefs.h
 
-fi
 
 # Check for --with-shapes
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-shapes" >&5

@@ -76,19 +76,14 @@ EXCLUDED = format_conf_lines([
     # generated
     'Python/deepfreeze/*.c',
     'Python/frozen_modules/*.h',
-    'Python/generated_cases.c.h',
-    'Python/opcode_targets.h',
     'Python/generated_ir_cases.c.h',
     'Python/ir_targets.h',
-    'Modules/_testinternalcapi/test_targets.h',
-    'Modules/_testinternalcapi/test_cases.c.h',
     'Modules/_testinternalcapi/interpreter.c',
     # XXX: Throws errors if PY_VERSION_HEX is not mocked out
     'Modules/clinic/_testclinic_depr.c.h',
 
     # not actually source
     'Python/bytecodes.c',
-    'Modules/_testinternalcapi/testbytecodes.c',
 
     # mimalloc
     'Objects/mimalloc/*.c',
@@ -299,7 +294,7 @@ MACROS = format_tsv_lines([
 
 SAME = {
     _abs('Include/*.h'): [_abs('Include/cpython/')],
-    _abs('Python/ceval.c'): ['Python/generated_cases.c.h'],
+    _abs('Python/ceval.c'): ['Python/generated_ir_cases.c.h'],
 }
 
 MAX_SIZES = {
@@ -335,7 +330,7 @@ MAX_SIZES = {
     _abs('Python/Python-ast.c'): (20_000, 500),
     _abs('Python/deepfreeze/*.c'): (20_000, 500),
     _abs('Python/frozen_modules/*.h'): (20_000, 500),
-    _abs('Python/opcode_targets.h'): (10_000, 500),
+    _abs('Python/ir_targets.h'): (10_000, 500),
     _abs('Python/stdlib_module_names.h'): (5_000, 500),
 
     # These large files are currently ignored (see above).

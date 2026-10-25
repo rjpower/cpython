@@ -347,8 +347,7 @@ class Analysis:
     have_arg: int
     min_instrumented: int
     # Instructions annotated `ir_only`: handlers of the register IR that
-    # have no opcode, kept apart so that the stack interpreter's outputs
-    # do not see them.
+    # have no opcode, kept apart so that the opcode tables do not see them.
     ir_only: dict[str, Instruction]
 
 

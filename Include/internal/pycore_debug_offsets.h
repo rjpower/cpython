@@ -65,7 +65,6 @@ extern "C" {
 
 // The register IR has no thread-local bytecode.  The offsets of _PyIRBlock
 // need Include/internal/pycore_ir.h where _Py_DebugOffsets_INIT expands.
-#ifdef Py_IR_INTERP
 # undef _Py_Debug_code_object_co_tlbc
 # define _Py_Debug_code_object_co_tlbc 0
 # define _Py_Debug_code_object_co_ir offsetof(PyCodeObject, _co_ir)
@@ -75,15 +74,6 @@ extern "C" {
 # define _Py_Debug_ir_block_flags offsetof(_PyIRBlock, flags)
 # define _Py_Debug_ir_block_pcmap offsetof(_PyIRBlock, pcmap)
 # define _Py_Debug_ir_block_pcmap_wide _PyIR_PCMAP_WIDE
-#else
-# define _Py_Debug_code_object_co_ir 0
-# define _Py_Debug_ir_block_size 0
-# define _Py_Debug_ir_block_words 0
-# define _Py_Debug_ir_block_nwords 0
-# define _Py_Debug_ir_block_flags 0
-# define _Py_Debug_ir_block_pcmap 0
-# define _Py_Debug_ir_block_pcmap_wide 0
-#endif
 
 
 typedef struct _Py_DebugOffsets {
@@ -170,8 +160,7 @@ typedef struct _Py_DebugOffsets {
         uint64_t co_ir;
     } code_object;
 
-    // The register IR block of a code object, which co_ir points to in
-    // builds --with-ir-interp; co_ir is 0 in other builds.  There
+    // The register IR block of a code object, which co_ir points to.
     // instr_ptr points at one of the nwords 8-byte words at words, and
     // pcmap holds per word a pair {start, anchor} of uint16_t, or of
     // uint32_t if flags & pcmap_wide; anchor is the bytecode offset of the

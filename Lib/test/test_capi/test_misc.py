@@ -3026,31 +3026,6 @@ class Test_Pep523AllowSpecialization(unittest.TestCase):
         finally:
             _testinternalcapi.set_eval_frame_default()
 
-    @unittest.skipIf(support.Py_IR_INTERP,
-                     "the register IR has no test interpreter")
-    def test_allow_specialization_call(self):
-        def func():
-            pass
-
-        def func_outer():
-            func()
-
-        actual_calls = []
-        try:
-            _testinternalcapi.set_eval_frame_interp(
-                actual_calls)
-            for i in range(SUFFICIENT_TO_DEOPT_AND_SPECIALIZE * 2):
-                func_outer()
-        finally:
-            _testinternalcapi.set_eval_frame_default()
-
-        # With specialization enabled, calls to inner() will dispatch
-        # through the installed frame evaluator
-        self.assertEqual(actual_calls.count("func"), 0)
-
-        # But the normal interpreter loop still shouldn't be inlining things
-        self.assertNotEqual(actual_calls.count("func_outer"), 0)
-
     def test_no_specialization_call(self):
         # Without allow_specialization, ALL calls go through the eval frame.
         # This is the existing PEP 523 behavior.

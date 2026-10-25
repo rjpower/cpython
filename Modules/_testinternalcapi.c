@@ -1530,7 +1530,6 @@ get_feedback(PyObject *self, PyObject *args)
     if (!_PyFb_HasEntry(_Py_GetBaseCodeUnit(code, i).op.code)) {
         Py_RETURN_NONE;
     }
-#ifdef Py_IR_INTERP
     _PyIRBlock *block = _PyIR_Lower(code);
     if (block == NULL) {
         return NULL;
@@ -1538,10 +1537,6 @@ get_feedback(PyObject *self, PyObject *args)
     _PyIRWord *instr = _PyIR_MainWordAt(block, i);
     _PyFbHeader *h = _PyIR_InstrFeedback(block, instr, IR_HANDLER(*instr));
     _PyFbBlock *feedback = block->feedback;
-#else
-    _PyFbHeader *h = _PyFb_Header(&_PyCode_CODE(code)[i]);
-    _PyFbBlock *feedback = code->_co_feedback;
-#endif
     if (h == NULL) {
         Py_RETURN_NONE;
     }
@@ -1570,7 +1565,6 @@ get_feedback(PyObject *self, PyObject *args)
                          fields[0], fields[1], rows);
 }
 
-#ifdef Py_IR_INTERP
 /* The register IR of CODE, lowering it if need be: per instruction a tuple
  * (start, anchor, handler, a, b, c, word1) of the bytecode offsets in bytes
  * of its first code unit and of the instruction, the name of the handler of
@@ -1628,7 +1622,6 @@ get_ir(PyObject *self, PyObject *arg)
     }
     return result;
 }
-#endif
 
 static PyObject *
 get_co_localskinds(PyObject *self, PyObject *arg)
@@ -3499,9 +3492,7 @@ static PyMethodDef module_functions[] = {
     {"get_co_framesize", get_co_framesize, METH_O, NULL},
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
-#ifdef Py_IR_INTERP
     {"get_ir", get_ir, METH_O, NULL},
-#endif
     {"get_code_var_counts", _PyCFunction_CAST(get_code_var_counts),
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"verify_stateless_code", _PyCFunction_CAST(verify_stateless_code),

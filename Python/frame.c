@@ -68,13 +68,7 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
     if (_PyFrame_IsIncomplete(new_frame)) {
         // This may be a newly-created generator or coroutine frame. Since it's
         // dead anyways, just pretend that the first RESUME ran:
-#ifdef Py_IR_INTERP
         new_frame->instr_ptr = _PyIR_STUB_RESUMED;
-#else
-        PyCodeObject *code = _PyFrame_GetCode(new_frame);
-        new_frame->instr_ptr =
-            _PyFrame_GetBytecode(new_frame) + code->_co_firsttraceable + 1;
-#endif
     }
     assert(!_PyFrame_IsIncomplete(new_frame));
     assert(f->f_back == NULL);

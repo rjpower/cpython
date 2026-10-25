@@ -68,32 +68,20 @@
 
 /* The register IR shadows co_code_adaptive: copy each rewrite of the
  * instruction at OFFSET to the IR block. */
-#ifdef Py_IR_INTERP
 #  define SYNC_IR(code, offset) _PyIR_SyncInstrumentation((code), (offset))
-#else
-#  define SYNC_IR(code, offset) ((void)0)
-#endif
 
 /* The bytecode offset of the instruction at instr, an instruction pointer of
  * frame, and the offset that a jump to dest lands on. */
 static inline int
 instr_offset(_PyInterpreterFrame *frame, _PyInstr *instr)
 {
-#ifdef Py_IR_INTERP
     return _PyFrame_InstrOffset(frame, instr);
-#else
-    return (int)(instr - _PyFrame_GetBytecode(frame));
-#endif
 }
 
 static inline int
 dest_offset(_PyInterpreterFrame *frame, _PyInstr *dest)
 {
-#ifdef Py_IR_INTERP
     return _PyIR_Start(_PyFrame_IRBlock(frame), dest);
-#else
-    return (int)(dest - _PyFrame_GetBytecode(frame));
-#endif
 }
 
 PyObject _PyInstrumentation_DISABLE = _PyObject_HEAD_INIT(&PyBaseObject_Type);
@@ -697,17 +685,9 @@ _Py_GetBaseCodeUnit(PyCodeObject *code, int i)
 static void
 warm_up(_Py_CODEUNIT *instr)
 {
-#ifdef Py_IR_INTERP
     // co_code_adaptive has no feedback; _PyIR_SyncInstrumentation() warms up
     // the IR's counters.
     (void)instr;
-#else
-    _PyFbHeader *fb = _PyFb_Header(instr);
-    if (fb != NULL) {
-        FT_ATOMIC_STORE_UINT16_RELAXED(fb->counter.value_and_backoff,
-                                       adaptive_counter_warmup().value_and_backoff);
-    }
-#endif
 }
 
 static void
@@ -1387,11 +1367,7 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     int prev_index = instr_offset(frame, prev);
     int prev_line = _Py_Instrumentation_GetLine(code, line_data, prev_index);
     if (prev_line == line) {
-#ifdef Py_IR_INTERP
         int prev_opcode = IR_HANDLER(*prev);
-#else
-        int prev_opcode = prev->op.code;
-#endif
         /* RESUME and INSTRUMENTED_RESUME are needed for the operation of
             * instrumentation, so must never be hidden by an INSTRUMENTED_LINE.
             */
@@ -1469,7 +1445,6 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     Py_DECREF(line_obj);
     uint8_t original_opcode;
 done:
-#ifdef Py_IR_INTERP
     if (frame->instr_ptr == instr && code->_co_ir->fused != NULL
         && _PyFrame_IRBlock(frame) == code->_co_ir->fused)
     {
@@ -1478,13 +1453,8 @@ done:
          * before it for the loads that the instruction absorbed. */
         frame->instr_ptr = _PyIR_Remap(code, instr);
     }
-#endif
     original_opcode = _PyCode_GetOriginalOpcode(line_data, i);
-#ifdef Py_IR_INTERP
     if (IR_HANDLER(*instr) == INSTRUMENTED_INSTRUCTION) {
-#else
-    if (instr->op.code == INSTRUMENTED_INSTRUCTION) {
-#endif
         /* A LINE callback may have disabled the last LINE tool while
          * leaving INSTRUCTION monitoring enabled. */
         original_opcode = INSTRUMENTED_INSTRUCTION;
@@ -1726,7 +1696,6 @@ initialize_lines(_PyCoLineInstrumentationData *line_data, PyCodeObject *code, in
             set_original_opcode(line_data, handler, original_opcode);
         }
     }
-#ifdef Py_IR_INTERP
     /* The register IR has no words for EXTENDED_ARG, so a line that starts
      * at an EXTENDED_ARG starts at its instruction instead. */
     for (int i = 0; i < code_len; i += _PyInstruction_GetLength(code, i)) {
@@ -1749,7 +1718,6 @@ initialize_lines(_PyCoLineInstrumentationData *line_data, PyCodeObject *code, in
                                 _Py_GetBaseCodeUnit(code, anchor).op.code);
         }
     }
-#endif
 }
 
 static void
@@ -1811,13 +1779,11 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
     _Py_LocalMonitors all_events = local_union(
         interp->monitors,
         code->_co_monitoring->local_monitors);
-#ifdef Py_IR_INTERP
     if (_PyIR_PrepareInstrumentation(
             code, all_events.tools[PY_MONITORING_EVENT_INSTRUCTION] != 0) < 0)
     {
         return -1;
     }
-#endif
     bool multitools = multiple_tools(&all_events);
     if (code->_co_monitoring->tools == NULL && multitools) {
         code->_co_monitoring->tools = PyMem_Malloc(code_len);

@@ -29,7 +29,7 @@
     <_KeywordSources Include="$(PySourcePath)Grammar\python.gram;$(PySourcePath)Grammar\invalid.gram;$(PySourcePath)Grammar\Tokens" />
     <_KeywordOutputs Include="$(PySourcePath)Lib\keyword.py" />
     <_CasesSources Include="$(PySourcePath)Python\bytecodes.c;"/>
-    <_CasesOutputs Include="$(PySourcePath)Python\generated_cases.c.h;$(PySourcePath)Include\opcode_ids.h;$(PySourcePath)Include\internal\pycore_uop_ids.h;$(PySourcePath)Python\opcode_targets.h;$(PySourcePath)Include\internal\pycore_opcode_metadata.h;$(PySourcePath)Lib\_opcode_metadata.py"/>
+    <_CasesOutputs Include="$(PySourcePath)Python\generated_ir_cases.c.h;$(PySourcePath)Include\opcode_ids.h;$(PySourcePath)Include\internal\pycore_uop_ids.h;$(PySourcePath)Python\ir_targets.h;$(PySourcePath)Include\internal\pycore_ir_metadata.h;$(PySourcePath)Include\internal\pycore_opcode_metadata.h;$(PySourcePath)Lib\_opcode_metadata.py"/>
     <_SbomSources Include="$(PySourcePath)PCbuild\get_externals.bat" />
     <_SbomOutputs Include="$(PySourcePath)Misc\externals.spdx.json;$(PySourcePath)Misc\sbom.spdx.json">
       <Format>json</Format>
@@ -89,19 +89,15 @@
     <Message Text="Regenerate cases" Importance="high" />
     <Exec Command="$(PythonForBuild) Tools\cases_generator\opcode_id_generator.py Python\bytecodes.c"
           WorkingDirectory="$(PySourcePath)" />
-    <Exec Command="$(PythonForBuild) Tools\cases_generator\target_generator.py Python\bytecodes.c"
-          WorkingDirectory="$(PySourcePath)" />
     <Exec Command="$(PythonForBuild) Tools\cases_generator\uop_id_generator.py Python\bytecodes.c"
           WorkingDirectory="$(PySourcePath)" />
     <Exec Command="$(PythonForBuild) Tools\cases_generator\py_metadata_generator.py Python\bytecodes.c"
           WorkingDirectory="$(PySourcePath)" />
-    <Exec Command="$(PythonForBuild) Tools\cases_generator\tier1_generator.py Python\bytecodes.c"
+    <Exec Command="$(PythonForBuild) Tools\cases_generator\ir_generator.py Python\bytecodes.c"
+          WorkingDirectory="$(PySourcePath)" />
+    <Exec Command="$(PythonForBuild) Tools\cases_generator\ir_metadata_generator.py Python\bytecodes.c"
           WorkingDirectory="$(PySourcePath)" />
     <Exec Command="$(PythonForBuild) Tools\cases_generator\opcode_metadata_generator.py Python\bytecodes.c"
-          WorkingDirectory="$(PySourcePath)" />
-    <Exec Command="$(PythonForBuild) Tools\cases_generator\target_generator.py -o Modules\_testinternalcapi\test_targets.h Python\bytecodes.c Modules\_testinternalcapi\testbytecodes.c"
-          WorkingDirectory="$(PySourcePath)" />
-    <Exec Command="$(PythonForBuild) Tools\cases_generator\tier1_generator.py -o Modules\_testinternalcapi\test_cases.c.h Python\bytecodes.c Modules\_testinternalcapi\testbytecodes.c"
           WorkingDirectory="$(PySourcePath)" />
   </Target>
 

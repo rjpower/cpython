@@ -1936,11 +1936,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
     /* Finally set the new lasti and return OK. */
     self->f_lineno = 0;
-#ifdef Py_IR_INTERP
     self->f_frame->instr_ptr = _PyFrame_InstrAt(self->f_frame, best_addr);
-#else
-    self->f_frame->instr_ptr = _PyFrame_GetBytecode(self->f_frame) + best_addr;
-#endif
     return 0;
 }
 
@@ -2267,11 +2263,7 @@ PyFrame_New(PyThreadState *tstate, PyCodeObject *code,
     f->f_frame = (_PyInterpreterFrame *)f->_f_frame_data;
     f->f_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
     // This frame needs to be "complete", so pretend that the first RESUME ran:
-#ifdef Py_IR_INTERP
     f->f_frame->instr_ptr = _PyIR_STUB_RESUMED;
-#else
-    f->f_frame->instr_ptr = _PyCode_CODE(code) + code->_co_firsttraceable + 1;
-#endif
     assert(!_PyFrame_IsIncomplete(f->f_frame));
     Py_DECREF(func);
     _PyObject_GC_TRACK(f);
@@ -2303,11 +2295,7 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
         frame->localsplus[offset + i] = PyStackRef_FromPyObjectNew(o);
     }
     // COPY_FREE_VARS doesn't have inline CACHEs, either:
-#ifdef Py_IR_INTERP
     frame->instr_ptr = _PyFrame_InstrAt(frame, 0);
-#else
-    frame->instr_ptr = _PyFrame_GetBytecode(frame);
-#endif
 }
 
 

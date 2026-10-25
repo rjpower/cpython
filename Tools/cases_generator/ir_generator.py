@@ -1,10 +1,9 @@
 """Generate the register IR interpreter.
 
-Reads the instruction definitions from Python/bytecodes.c, the source of the
-stack interpreter too, and writes
+Reads the instruction definitions from Python/bytecodes.c and writes
 
 - Python/generated_ir_cases.c.h, one handler per instruction, #included in
-  ceval.c when Py_IR_INTERP is defined;
+  ceval.c;
 - Python/ir_targets.h, the computed-goto and tail-call tables, indexed by
   handler, and the table of IR_BODY_ labels, which enter a handler with its
   fields decoded.
@@ -75,20 +74,32 @@ from generators_common import (
     ROOT,
     Emitter,
     TokenIterator,
+    type_and_null,
     write_header,
 )
 from cwriter import CWriter
 from lexer import Token
-from stack import Local, PointerOffset, Stack, Storage, get_stack_effect
-from tier1_generator import (
-    UNKNOWN_OPCODE_HANDLER,
-    declare_variables,
-    stack_read_later,
+from stack import (
+    Local,
+    PointerOffset,
+    Stack,
+    StackError,
+    Storage,
+    get_stack_effect,
 )
 from typing import TextIO
 
 DEFAULT_OUTPUT = ROOT / "Python/generated_ir_cases.c.h"
 DEFAULT_TARGETS_OUTPUT = ROOT / "Python/ir_targets.h"
+
+UNKNOWN_OPCODE_HANDLER = """\
+_PyErr_Format(tstate, PyExc_SystemError,
+              "%U:%d: unknown opcode %d",
+              _PyFrame_GetCode(frame)->co_filename,
+              PyUnstable_InterpreterFrame_GetLine(frame),
+              opcode);
+JUMP_TO_LABEL(error);
+"""
 
 INSTRUCTION_START_MARKER = "/* BEGIN INSTRUCTIONS */"
 INSTRUCTION_END_MARKER = "/* END INSTRUCTIONS */"
@@ -157,6 +168,45 @@ class IRFormat:
 # X: the instrumented twins and the IR's superinstructions, which specialise X
 # further.
 SHARED_FORMAT_PREFIXES = ("INSTRUMENTED_", "IR_SUPER_")
+
+
+
+def declare_variable(var: StackItem, out: CWriter) -> None:
+    type, null = type_and_null(var)
+    space = " " if type[-1].isalnum() else ""
+    out.emit(f"{type}{space}{var.name};\n")
+
+
+def declare_variables(inst: Instruction, out: CWriter) -> None:
+    try:
+        stack = get_stack_effect(inst)
+    except StackError as ex:
+        raise analysis_error(ex.args[0], inst.where) from None
+    seen = {"unused"}
+    for part in inst.parts:
+        if not isinstance(part, Uop):
+            continue
+        for var in part.stack.inputs:
+            if var.used and var.name not in seen:
+                seen.add(var.name)
+                declare_variable(var, out)
+        for var in part.stack.outputs:
+            if var.used and var.name not in seen:
+                seen.add(var.name)
+                declare_variable(var, out)
+
+
+def stack_read_later(inst: Instruction, uop: Uop) -> bool:
+    """Whether the stack slots of uop's inputs may be read after its body
+    starts: a deopt or exit re-executes the instruction from the stack, an
+    error without pop leaves the stack to exception_unwind, and an escaping
+    call exposes the frame."""
+    parts = inst.parts[inst.parts.index(uop):]
+    return any(
+        p.properties.deopts or p.properties.side_exit
+        or p.properties.escapes or p.properties.error_without_pop
+        for p in parts if isinstance(p, Uop)
+    )
 
 
 def is_transparent(inst: Instruction) -> bool:
@@ -788,9 +838,6 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
     formats = compute_formats(analysis)
     write_header(__file__, filenames, outfile)
     outfile.write(f"""
-#ifndef Py_IR_INTERP
-#  error "this header is the interpreter of the register IR (Py_IR_INTERP)"
-#endif
 #if !_Py_TAIL_CALL_INTERP
 #if !USE_COMPUTED_GOTOS
     dispatch_opcode:

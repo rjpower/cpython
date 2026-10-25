@@ -84,15 +84,9 @@
 
 /* The operands that dispatch decodes: the oparg, or for the register IR
  * fields A, B and C of word 0 (Include/internal/pycore_ir.h). */
-#ifdef Py_IR_INTERP
 #   define TAIL_CALL_OPERANDS uint32_t ir_a, uint32_t ir_b, uint32_t ir_c
 #   define TAIL_CALL_OPERAND_ARGS ir_a, ir_b, ir_c
 #   define TAIL_CALL_NO_OPERANDS 0, 0, 0
-#else
-#   define TAIL_CALL_OPERANDS int oparg
-#   define TAIL_CALL_OPERAND_ARGS oparg
-#   define TAIL_CALL_NO_OPERANDS 0
-#endif
 
 #ifdef Py_STATS
 #   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
@@ -170,7 +164,7 @@
  * reads each from the word in memory with one 16-bit load, where shifting it
  * out of ir_word takes three instructions.  The free-threaded build decodes
  * ir_word, which it loaded atomically. */
-#if defined(Py_IR_INTERP) && USE_COMPUTED_GOTOS && !_Py_TAIL_CALL_INTERP
+#if USE_COMPUTED_GOTOS && !_Py_TAIL_CALL_INTERP
 #  define IR_LAZY_FIELDS 1
 /* No main word runs IR_EXT. */
 #  define IR_FIELDS_PASSED ((_PyIRWord)IR_EXT)
@@ -230,7 +224,7 @@ ir_field_in_memory(const _PyIRWord *w, int k)
 #endif
 
 /* PRE_DISPATCH_GOTO() does lltrace if enabled. Normally a no-op */
-#if defined(Py_DEBUG) && defined(Py_IR_INTERP)
+#ifdef Py_DEBUG
 #define PRE_DISPATCH_GOTO() if (frame->lltrace >= 5) { \
     lltrace_instruction(frame, stack_pointer, next_instr, opcode); }
 #elif defined(Py_DEBUG)
@@ -268,21 +262,12 @@ do { \
         DISPATCH_DECODE(); \
     }
 
-#ifdef Py_IR_INTERP
 #define DISPATCH_SAME_OPARG() \
     { \
         opcode = IR_HANDLER(*next_instr); \
         PRE_DISPATCH_GOTO(); \
         DISPATCH_GOTO(); \
     }
-#else
-#define DISPATCH_SAME_OPARG() \
-    { \
-        opcode = next_instr->op.code; \
-        PRE_DISPATCH_GOTO(); \
-        DISPATCH_GOTO(); \
-    }
-#endif
 
 #define DISPATCH_INLINED(NEW_FRAME)                              \
     do {                                                         \
@@ -311,7 +296,6 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 
 /* Code access macros */
 
-#ifdef Py_IR_INTERP
 /* In words: the IR has no bytecode offsets but those of its pcmap. */
 #define INSTR_OFFSET() ((int)(next_instr - _PyFrame_IRWords(frame)))
 #if IR_LAZY_FIELDS
@@ -326,15 +310,6 @@ GETITEM(PyObject *v, Py_ssize_t i) {
         ir_a = IR_A(word); \
         ir_b = IR_B(word); \
         ir_c = IR_C(word); \
-    } while (0)
-#endif
-#else
-/* The integer overflow is checked by an assertion below. */
-#define INSTR_OFFSET() ((int)(next_instr - _PyFrame_GetBytecode(frame)))
-#define NEXTOPARG()  do { \
-        _Py_CODEUNIT word  = {.cache = FT_ATOMIC_LOAD_UINT16_RELAXED(*(uint16_t*)next_instr)}; \
-        opcode = word.op.code; \
-        oparg = word.op.arg; \
     } while (0)
 #endif
 
@@ -361,7 +336,7 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 #define GETLOCAL(i)     (frame->localsplus[i])
 
 
-#if defined(Py_STATS) && defined(Py_IR_INTERP)
+#ifdef Py_STATS
 #define UPDATE_MISS_STATS(INSTNAME)                              \
     do {                                                         \
         STAT_INC(opcode, miss);                                  \
@@ -570,15 +545,9 @@ check_periodics_at_end(PyThreadState *tstate, _PyInterpreterFrame *frame) {
         // Do not handle pending interrupts if the previous instruction was LOAD_SPECIAL
         // This may also not handle interrupts if a cache looks like LOAD_SPECIAL,
         // but this is benign as we won't skip periodic checks indefinitely.
-#ifdef Py_IR_INTERP
         if (IR_HANDLER(frame->instr_ptr[-1]) == LOAD_SPECIAL) {
             return 0;
         }
-#else
-        if (frame->instr_ptr[-1].op.code == LOAD_SPECIAL) {
-            return 0;
-        }
-#endif
         return _Py_HandlePending(tstate);
     }
     return 0;
@@ -617,7 +586,6 @@ gen_try_set_executing(PyGenObject *gen)
 #define CALL_TP_ITERITEM_NO_ESCAPE(ITER, INDEX) \
     Py_TYPE(ITER)->_tp_iteritem((ITER), (INDEX))
 
-#ifdef Py_IR_INTERP
 /* Operands of the register IR handlers (Tools/cases_generator/ir_generator.py).
  * F is a field variable, ir_a, ir_b or ir_c. */
 
@@ -710,4 +678,3 @@ _PyIR_YieldReturnOffset(_PyInterpreterFrame *frame)
     }
     return fmt->nwords;
 }
-#endif

@@ -506,11 +506,6 @@ static _PyCodeArray * _PyCodeArray_New(Py_ssize_t size);
 static void
 free_bytecode_copy(PyCodeObject *co, char *bytecode)
 {
-#ifndef Py_IR_INTERP
-    if (co->_co_feedback != NULL) {
-        _PyFb_Clear(_PyFb_Block((_Py_CODEUNIT *)bytecode, Py_SIZE(co)));
-    }
-#endif
     PyMem_Free(bytecode);
 }
 #endif
@@ -574,17 +569,8 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con,
 
     memcpy(_PyCode_CODE(co), PyBytes_AS_STRING(con->code),
            PyBytes_GET_SIZE(con->code));
-#ifdef Py_IR_INTERP
     assert(feedback_size == 0);
     co->_co_ir = &_PyIR_LowerStub;
-#else
-    co->_co_feedback = NULL;
-    if (feedback_size) {
-        // _PyCode_Quicken() fills in the block.
-        co->_co_feedback = _PyFb_Block(_PyCode_CODE(co), Py_SIZE(co));
-        *co->_co_feedback = (_PyFbBlock){.size = (uint32_t)feedback_size};
-    }
-#endif
 #ifdef Py_GIL_DISABLED
     co->co_tlbc = _PyCodeArray_New(INITIAL_SPECIALIZED_CODE_SIZE);
     if (co->co_tlbc == NULL) {
@@ -603,14 +589,6 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con,
     }
     co->_co_firsttraceable = entry_point;
 
-#ifndef Py_IR_INTERP
-#ifdef Py_GIL_DISABLED
-    int enable_counters = interp->config.tlbc_enabled && interp->opt_config.specialization_enabled;
-#else
-    int enable_counters = interp->opt_config.specialization_enabled;
-#endif
-    _PyCode_Quicken(co, _PyCode_CODE(co), enable_counters);
-#endif
     notify_code_watchers(PY_CODE_EVENT_CREATE, co);
     return 0;
 }
@@ -751,13 +729,8 @@ _PyCode_New(struct _PyCodeConstructor *con)
     // The feedback block follows the bytecode in the same allocation.
     static_assert(offsetof(PyCodeObject, co_code_adaptive) % FB_ALIGN == 0,
                   "the feedback block must be aligned in every copy");
-#ifdef Py_IR_INTERP
     // The IR block holds the feedback (Python/ir_lower.c).
     Py_ssize_t feedback_size = 0;
-#else
-    Py_ssize_t feedback_size = _PyFb_BlockSize(
-        (const _Py_CODEUNIT *)PyBytes_AS_STRING(con->code), size);
-#endif
     Py_ssize_t nitems = size;
     if (feedback_size) {
         nitems = (_PyFb_BlockOffset(size) + feedback_size) / sizeof(_Py_CODEUNIT);
@@ -2456,13 +2429,7 @@ code_dealloc(PyObject *self)
     }
     FT_CLEAR_WEAKREFS(self, co->co_weakreflist);
     free_monitoring_data(co->_co_monitoring);
-#ifdef Py_IR_INTERP
     _PyIR_Clear(co);
-#else
-    if (co->_co_feedback != NULL) {
-        _PyFb_Clear(co->_co_feedback);
-    }
-#endif
 #ifdef Py_GIL_DISABLED
     if (co->co_tlbc != NULL) {
         // The first element always points to the mutable bytecode at the end of
@@ -2734,28 +2701,10 @@ code_getcodeadaptive(PyObject *self, void *closure)
         return NULL;
     }
     _Py_CODEUNIT *instructions = (_Py_CODEUNIT *)PyBytes_AS_STRING(bytes);
-#ifdef Py_IR_INTERP
     if (_PyIR_WriteAdaptive(code, instructions, write_entry) < 0) {
         Py_DECREF(bytes);
         return NULL;
     }
-#else
-    for (Py_ssize_t i = 0; i < Py_SIZE(code); i++) {
-        int base = _Py_GetBaseCodeUnit(code, (int)i).op.code;
-        int caches = _PyOpcode_Caches[base];
-        if (!_PyFb_HasEntry(base)) {
-            i += caches;
-            continue;
-        }
-        _Py_CODEUNIT *instr = &instructions[i];
-        _PyFbHeader *h = _PyFb_Header(&_PyCode_CODE(code)[i]);
-        memset(&instr[1], 0, caches * sizeof(_Py_CODEUNIT));
-        if (h != NULL) {
-            write_entry(instr, h);
-        }
-        i += caches;
-    }
-#endif
     return bytes;
 }
 
@@ -2782,23 +2731,7 @@ code_sizeof(PyObject *self, PyObject *Py_UNUSED(args))
 {
     PyCodeObject *co = _PyCodeObject_CAST(self);
     size_t res = _PyObject_VAR_SIZE(Py_TYPE(co), Py_SIZE(co));
-#ifdef Py_IR_INTERP
     res += _PyIR_SizeOf(co);
-#else
-    _PyFbBlock *feedback = co->_co_feedback;
-    if (feedback != NULL) {
-        res = offsetof(PyCodeObject, co_code_adaptive)
-              + _PyFb_BlockOffset(Py_SIZE(co)) + feedback->size;
-        if (feedback->npoly) {
-            // capacity: npoly rounded up to a power of 2
-            size_t capacity = 1;
-            while (capacity < feedback->npoly) {
-                capacity *= 2;
-            }
-            res += capacity * sizeof(_PyFbPoly);
-        }
-    }
-#endif
     _PyCodeObjectExtra *co_extra = (_PyCodeObjectExtra*) co->co_extra;
     if (co_extra != NULL) {
         res += sizeof(_PyCodeObjectExtra);
@@ -3437,105 +3370,6 @@ _PyCodeArray_New(Py_ssize_t size)
     return arr;
 }
 
-#ifndef Py_IR_INTERP
-// The register IR shares one block between threads, so there are no copies
-// of the bytecode to make.
-
-// Get the underlying code unit, leaving instrumentation
-static _Py_CODEUNIT
-deopt_code_unit(PyCodeObject *code, int i)
-{
-    _Py_CODEUNIT *src_instr = _PyCode_CODE(code) + i;
-    _Py_CODEUNIT inst = {
-        .cache = FT_ATOMIC_LOAD_UINT16_RELAXED(*(uint16_t *)src_instr)};
-    int opcode = inst.op.code;
-    if (opcode < MIN_INSTRUMENTED_OPCODE) {
-        inst.op.code = _PyOpcode_Deopt[opcode];
-        assert(inst.op.code < MIN_SPECIALIZED_OPCODE);
-    }
-    return inst;
-}
-
-static void
-copy_code(PyInterpreterState *interp, _Py_CODEUNIT *dst, PyCodeObject *co)
-{
-    int code_len = (int) Py_SIZE(co);
-    for (int i = 0; i < code_len; i += _PyInstruction_GetLength(co, i)) {
-        dst[i] = deopt_code_unit(co, i);
-    }
-    _PyCode_Quicken(co, dst, interp->opt_config.specialization_enabled);
-}
-
-static Py_ssize_t
-get_pow2_greater(Py_ssize_t initial, Py_ssize_t limit)
-{
-    // initial must be a power of two
-    assert(!(initial & (initial - 1)));
-    Py_ssize_t res = initial;
-    while (res && res < limit) {
-        res <<= 1;
-    }
-    return res;
-}
-
-static _Py_CODEUNIT *
-create_tlbc_lock_held(PyInterpreterState *interp, PyCodeObject *co, Py_ssize_t idx)
-{
-    _PyCodeArray *tlbc = co->co_tlbc;
-    if (idx >= tlbc->size) {
-        Py_ssize_t new_size = get_pow2_greater(tlbc->size, idx + 1);
-        if (!new_size) {
-            PyErr_NoMemory();
-            return NULL;
-        }
-        _PyCodeArray *new_tlbc = _PyCodeArray_New(new_size);
-        if (new_tlbc == NULL) {
-            return NULL;
-        }
-        memcpy(new_tlbc->entries, tlbc->entries, tlbc->size * sizeof(void *));
-        _Py_atomic_store_ptr_release(&co->co_tlbc, new_tlbc);
-        _PyMem_FreeDelayed(tlbc, tlbc->size * sizeof(void *));
-        tlbc = new_tlbc;
-    }
-    // Each copy carries its own feedback block, as the main copy does.
-    size_t nbytes = _PyCode_NBYTES(co);
-    if (co->_co_feedback != NULL) {
-        nbytes = _PyFb_BlockOffset(Py_SIZE(co)) + co->_co_feedback->size;
-    }
-    char *bc = PyMem_Calloc(1, nbytes);
-    if (bc == NULL) {
-        PyErr_NoMemory();
-        return NULL;
-    }
-    copy_code(interp, (_Py_CODEUNIT *) bc, co);
-    assert(tlbc->entries[idx] == NULL);
-    tlbc->entries[idx] = bc;
-    return (_Py_CODEUNIT *) bc;
-}
-
-static _Py_CODEUNIT *
-get_tlbc_lock_held(PyCodeObject *co)
-{
-    _PyCodeArray *tlbc = co->co_tlbc;
-    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)PyThreadState_GET();
-    int32_t idx = tstate->tlbc_index;
-    if (idx < tlbc->size && tlbc->entries[idx] != NULL) {
-        return (_Py_CODEUNIT *)tlbc->entries[idx];
-    }
-    PyInterpreterState *interp = tstate->base.interp;
-    return create_tlbc_lock_held(interp, co, idx);
-}
-
-_Py_CODEUNIT *
-_PyCode_GetTLBC(PyCodeObject *co)
-{
-    _Py_CODEUNIT *result;
-    Py_BEGIN_CRITICAL_SECTION(co);
-    result = get_tlbc_lock_held(co);
-    Py_END_CRITICAL_SECTION();
-    return result;
-}
-#endif  // !Py_IR_INTERP
 
 // My kingdom for a bitset
 struct flag_set {

@@ -12,7 +12,7 @@ Cache entries are not counted as instructions; ``co_code`` bytes include them.
 ``sizeof`` sums ``sys.getsizeof(code)``, which includes the typed feedback
 block on interpreters that have one.
 
-On a build with the register IR (``--with-ir-interp``), each code object is
+On a build with the register IR, each code object is
 also lowered: ``ir_words`` counts its words, IR_EXT and second words included,
 ``ir_absorbed`` the loads that their consumer absorbs, which have no words,
 and ``ir_bytes`` the growth of ``sys.getsizeof(code)`` that lowering causes

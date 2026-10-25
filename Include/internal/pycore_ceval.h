@@ -181,19 +181,6 @@ extern int _PyEval_EnableGILTransient(PyThreadState *tstate);
 extern int _PyEval_EnableGILPermanent(PyThreadState *tstate);
 extern int _PyEval_DisableGIL(PyThreadState *state);
 
-
-#ifndef Py_IR_INTERP
-static inline _Py_CODEUNIT *
-_PyEval_GetExecutableCode(PyThreadState *tstate, PyCodeObject *co)
-{
-    _Py_CODEUNIT *bc = _PyCode_GetTLBCFast(tstate, co);
-    if (bc != NULL) {
-        return bc;
-    }
-    return _PyCode_GetTLBC(co);
-}
-#endif
-
 #endif
 
 extern void _PyEval_DeactivateOpCache(void);

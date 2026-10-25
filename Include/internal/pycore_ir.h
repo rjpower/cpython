@@ -13,8 +13,8 @@ extern "C" {
 
 /* The register IR (boil/design/01-internal-ir.md).
  *
- * Built with --with-ir-interp, the interpreter runs a translation of each
- * code object's bytecode instead of the bytecode itself.  An instruction is
+ * The interpreter runs a translation of each code object's bytecode instead
+ * of the bytecode itself.  An instruction is
  * one 64-bit word or two:
  *
  *     | Word | Bits  | Field   | Contents                                      |

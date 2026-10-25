@@ -4,6 +4,11 @@ Design note for idea 0 of the plan. Every `file:line` refers to commit
 `321925c92c9`. Measurements come from `build/baseline-default/python`; step 0
 turns the scripts into a harness.
 
+Since step 7 the register IR is the only interpreter (item 31). The note's
+plan sections describe the two interpreters side by side, and "the stack
+build" in the measurements means a build of the stack interpreter, such as
+`build/ref-head`.
+
 ## Decisions
 
 1. 64-bit words: a 16-bit handler index and three 16-bit fields, with a second
@@ -800,3 +805,25 @@ Step 6 adds the following.
     residual. The next cuts would be a fused per-opcode table for the
     decoder and a smaller `lower_insn`, together worth an estimated fifth
     of the cost.
+
+31. **The IR is the only interpreter.** Step 7 removes `--with-ir-interp`.
+    configure defines `Py_IR_INTERP` unconditionally, so that extensions and
+    `sysconfig` can still tell, but no file in the tree tests it. Deleted:
+    the stack interpreter's cases and dispatch tables
+    (Python/generated_cases.c.h, Python/opcode_targets.h), their generators
+    (tier1_generator.py, target_generator.py), the `_testinternalcapi` test
+    interpreter's own instructions and cases (testbytecodes.c, test_cases.c.h,
+    test_targets.h), their regen targets, and every branch of a
+    `Py_IR_INTERP` conditional that served the stack interpreter. The empty
+    `_LOAD_BYTECODE` uop leaves `RESUME`. ir_generator.py takes the three
+    helpers it used from tier1_generator.py. Test_EvalFrame, the
+    evaluator that `set_eval_frame_interp()` installs, runs the default
+    interpreter, so test_allow_specialization_call, which needed a second
+    interpreter, is gone. test_generated_cases keeps its rejected-definition
+    tests, now run through ir_generator.py, and drops the comparisons with
+    tier 1 output; TestIRCases covers the IR output. The thread-local
+    bytecode of the free-threaded build (`co_tlbc`, `-X tlbc`,
+    `_PyCode_GetTLBCFast`, test_thread_local_bytecode) remains, though no
+    frame runs it any more (item 17). Removing it touches PyConfig and the
+    remote debugging offsets, so it is a separate change. `--with-shapes`
+    is unchanged.

@@ -1,6 +1,6 @@
 // This file contains instruction definitions.
 // It is read by generators stored in Tools/cases_generator/
-// to generate Python/generated_cases.c.h and others.
+// to generate Python/generated_ir_cases.c.h and others.
 // Note that there is some dummy C code at the top and bottom of the file
 // to fool text editors like VS Code into believing this is valid C code.
 // The actual instruction definitions start at // BEGIN BYTECODES //.
@@ -196,28 +196,8 @@ dummy_func(
             }
         }
 
-        replaced op(_LOAD_BYTECODE, (--)) {
-            // The register IR shares one block between threads.
-            #if defined(Py_GIL_DISABLED) && !defined(Py_IR_INTERP)
-            if (frame->tlbc_index !=
-                ((_PyThreadStateImpl *)tstate)->tlbc_index) {
-                _Py_CODEUNIT *bytecode =
-                    _PyEval_GetExecutableCode(tstate, _PyFrame_GetCode(frame));
-                ERROR_IF(bytecode == NULL);
-                ptrdiff_t off = this_instr - _PyFrame_GetBytecode(frame);
-                frame->tlbc_index = ((_PyThreadStateImpl *)tstate)->tlbc_index;
-                frame->instr_ptr = bytecode + off;
-                // Make sure this_instr gets reset correctly for any uops that
-                // follow
-                next_instr = frame->instr_ptr;
-                DISPATCH();
-            }
-            #endif
-        }
-
         macro(RESUME) =
             unused/1 +
-            _LOAD_BYTECODE +
             _MAYBE_INSTRUMENT +
             _QUICKEN_RESUME +
             _CHECK_PERIODIC_IF_NOT_YIELD_FROM;
@@ -254,7 +234,6 @@ dummy_func(
 
         macro(INSTRUMENTED_RESUME) =
             unused/1 +
-            _LOAD_BYTECODE +
             _MAYBE_INSTRUMENT +
             _CHECK_PERIODIC_IF_NOT_YIELD_FROM +
             _MONITOR_RESUME;
@@ -306,7 +285,8 @@ dummy_func(
             value2 = PyStackRef_BorrowAt(&GETLOCAL((uintptr_t)oparg2));
         }
 
-        // _PyCode_Quicken() rewrites constant loads to the inline forms.
+        // The lowering (Python/ir_lower.c) runs constant loads as the inline
+        // forms.
         family(LOAD_CONST, 0) = {
             LOAD_CONST_INLINE_INT,
             LOAD_CONST_INLINE_FLOAT,
@@ -5731,7 +5711,7 @@ dummy_func(
         }
 
         /* Handlers of the register IR only (Include/internal/pycore_ir.h).
-         * They have no opcode, and the stack interpreter does not see them. */
+         * They have no opcode. */
 
         // The one word of a code object that has not been lowered yet.
         ir_only inst(IR_LOWER, ( -- )) {
@@ -5877,7 +5857,6 @@ dummy_func(
                 return NULL;
             }
             next_instr = frame->instr_ptr;
-#ifdef Py_IR_INTERP
             /* exception_unwind looks up the code unit before the call.  Where
              * the call's word starts with absorbed loads or an EXTENDED_ARG,
              * that unit is the word's own, not the previous word's. */
@@ -5885,7 +5864,6 @@ dummy_func(
             if (_PyIR_Start(block, next_instr) != _PyIR_Anchor(block, next_instr)) {
                 next_instr++;
             }
-#endif
             RELOAD_STACK();
             goto error;
         }

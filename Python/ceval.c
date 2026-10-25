@@ -1045,7 +1045,6 @@ int _Py_CheckRecursiveCallPy(
     return 0;
 }
 
-#ifdef Py_IR_INTERP
 /* The value that a frame returns or yields to the entry frame lands in
  * entry.stack[0], localsplus[1] of the entry frame. */
 static_assert(offsetof(_PyEntryFrame, stack) ==
@@ -1059,18 +1058,6 @@ static const _PyIRWord _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS[] = {
     IR_WORD(INTERPRETER_EXIT, IR_SLOT_FIELD(1), 0, 0),  /* reached on return */
     IR_WORD(INTERPRETER_EXIT, IR_SLOT_FIELD(1), 0, 0),  /* reached on yield */
 };
-#else
-static const _Py_CODEUNIT _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS[] = {
-    /* Put a NOP at the start, so that the IP points into
-    * the code, rather than before it */
-    { .op.code = NOP, .op.arg = 0 },
-    { .op.code = INTERPRETER_EXIT, .op.arg = 0 },  /* reached on return */
-    { .op.code = NOP, .op.arg = 0 },
-    { .op.code = INTERPRETER_EXIT, .op.arg = 0 },  /* reached on yield */
-    { .op.code = RESUME, .op.arg = RESUME_OPARG_DEPTH1_MASK | RESUME_AT_FUNC_START },
-    { .op.code = CACHE, .op.arg = 0 } /* RESUME's CACHE */
-};
-#endif
 
 const _PyInstr *_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR = (_PyInstr*)&_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
 
@@ -1123,13 +1110,8 @@ _PyObjectArray_Free(PyObject **array, PyObject **scratch)
 #endif
 
 #if _Py_TAIL_CALL_INTERP
-#ifdef Py_IR_INTERP
 #include "ir_targets.h"
 #include "generated_ir_cases.c.h"
-#else
-#include "opcode_targets.h"
-#include "generated_cases.c.h"
-#endif
 #endif
 
 
@@ -1282,17 +1264,13 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 
 #if USE_COMPUTED_GOTOS && !_Py_TAIL_CALL_INTERP
 /* Import the static jump table */
-#ifdef Py_IR_INTERP
 #include "ir_targets.h"
-#else
-#include "opcode_targets.h"
-#endif
 #endif
 
 #ifdef Py_STATS
     int lastopcode = 0;
 #endif
-#if !_Py_TAIL_CALL_INTERP && defined(Py_IR_INTERP)
+#if !_Py_TAIL_CALL_INTERP
     int opcode;        /* Current handler */
 #  if IR_LAZY_FIELDS
     _PyIRWord ir_word = 0;      /* Its word 0, which the handler decodes */
@@ -1349,19 +1327,6 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
         if (_Py_EnterRecursivePy(tstate)) {
             goto early_exit;
         }
-#if defined(Py_GIL_DISABLED) && !defined(Py_IR_INTERP)
-        /* Load thread-local bytecode */
-        if (frame->tlbc_index != ((_PyThreadStateImpl *)tstate)->tlbc_index) {
-            _Py_CODEUNIT *bytecode =
-                _PyEval_GetExecutableCode(tstate, _PyFrame_GetCode(frame));
-            if (bytecode == NULL) {
-                goto early_exit;
-            }
-            ptrdiff_t off = frame->instr_ptr - _PyFrame_GetBytecode(frame);
-            frame->tlbc_index = ((_PyThreadStateImpl *)tstate)->tlbc_index;
-            frame->instr_ptr = bytecode + off;
-        }
-#endif
         /* Because this avoids the RESUME, we need to update instrumentation */
         _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
         next_instr = frame->instr_ptr;
@@ -1387,11 +1352,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 #   endif
 #else
     goto start_frame;
-#   ifdef Py_IR_INTERP
 #       include "generated_ir_cases.c.h"
-#   else
-#       include "generated_cases.c.h"
-#   endif
 #endif
 
 

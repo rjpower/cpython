@@ -1,4 +1,4 @@
-"""Tests for the register IR of --with-ir-interp (Include/internal/pycore_ir.h)."""
+"""Tests for the register IR (Include/internal/pycore_ir.h)."""
 
 import dis
 import opcode
@@ -8,7 +8,7 @@ from test import support
 from test.support import import_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
-get_ir = getattr(_testinternalcapi, "get_ir", None)
+get_ir = _testinternalcapi.get_ir
 
 IR_BORROW = 1
 # The free-threaded build does not specialise the IR.
@@ -69,7 +69,6 @@ class C:
     attr = 5
 
 
-@unittest.skipIf(get_ir is None, "build without the register IR")
 class LoweringTest(unittest.TestCase):
 
     def check_offsets(self, func):

@@ -3,9 +3,6 @@
 //   Python/bytecodes.c
 // Do not edit!
 
-#ifndef Py_IR_INTERP
-#  error "this header is the interpreter of the register IR (Py_IR_INTERP)"
-#endif
 #if !_Py_TAIL_CALL_INTERP
 #if !USE_COMPUTED_GOTOS
     dispatch_opcode:
@@ -9793,27 +9790,6 @@
             INSTRUCTION_STATS(INSTRUMENTED_RESUME);
             int oparg = (int)ir_a;
             (void)oparg;
-            // _LOAD_BYTECODE
-            {
-                #if defined(Py_GIL_DISABLED) && !defined(Py_IR_INTERP)
-                if (frame->tlbc_index !=
-                    ((_PyThreadStateImpl *)tstate)->tlbc_index) {
-                    _PyFrame_SetStackPointer(frame, stack_pointer);
-                    _PyFrame_StackPointerValidate(frame);
-                    _Py_CODEUNIT *bytecode =
-                    _PyEval_GetExecutableCode(tstate, _PyFrame_GetCode(frame));
-                    _PyFrame_StackPointerInvalidate(frame);
-                    if (bytecode == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    ptrdiff_t off = this_instr - _PyFrame_GetBytecode(frame);
-                    frame->tlbc_index = ((_PyThreadStateImpl *)tstate)->tlbc_index;
-                    frame->instr_ptr = bytecode + off;
-                    next_instr = frame->instr_ptr;
-                    DISPATCH();
-                }
-                #endif
-            }
             // _MAYBE_INSTRUMENT
             {
                 #ifdef Py_GIL_DISABLED
@@ -13808,27 +13784,6 @@
             (void)this_instr;
             int oparg = (int)ir_a;
             (void)oparg;
-            // _LOAD_BYTECODE
-            {
-                #if defined(Py_GIL_DISABLED) && !defined(Py_IR_INTERP)
-                if (frame->tlbc_index !=
-                    ((_PyThreadStateImpl *)tstate)->tlbc_index) {
-                    _PyFrame_SetStackPointer(frame, stack_pointer);
-                    _PyFrame_StackPointerValidate(frame);
-                    _Py_CODEUNIT *bytecode =
-                    _PyEval_GetExecutableCode(tstate, _PyFrame_GetCode(frame));
-                    _PyFrame_StackPointerInvalidate(frame);
-                    if (bytecode == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    ptrdiff_t off = this_instr - _PyFrame_GetBytecode(frame);
-                    frame->tlbc_index = ((_PyThreadStateImpl *)tstate)->tlbc_index;
-                    frame->instr_ptr = bytecode + off;
-                    next_instr = frame->instr_ptr;
-                    DISPATCH();
-                }
-                #endif
-            }
             // _MAYBE_INSTRUMENT
             {
                 #ifdef Py_GIL_DISABLED
@@ -16806,12 +16761,10 @@ JUMP_TO_LABEL(error);
                 return NULL;
             }
             next_instr = frame->instr_ptr;
-            #ifdef Py_IR_INTERP
             _PyIRBlock *block = _PyFrame_IRBlock(frame);
             if (_PyIR_Start(block, next_instr) != _PyIR_Anchor(block, next_instr)) {
                 next_instr++;
             }
-            #endif
             stack_pointer = _PyFrame_GetStackPointer(frame);
             _PyFrame_StackPointerInvalidate(frame);
             JUMP_TO_LABEL(error);

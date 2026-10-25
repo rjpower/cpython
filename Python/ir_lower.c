@@ -39,8 +39,6 @@
 #define NEED_IR_METADATA            // defines _PyIR_Formats, _PyIR_OnlyNames
 #include "Python.h"
 
-#ifdef Py_IR_INTERP
-
 #include "pycore_backoff.h"         // adaptive_counter_warmup()
 #include "pycore_code.h"            // _Py_GetBaseCodeUnit()
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
@@ -1450,5 +1448,3 @@ _PyIR_WriteAdaptive(PyCodeObject *co, _Py_CODEUNIT *instructions,
     })
     return 0;
 }
-
-#endif  /* Py_IR_INTERP */

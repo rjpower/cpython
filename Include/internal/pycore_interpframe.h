@@ -7,9 +7,7 @@
 
 #include "pycore_code.h"          // _PyCode_CODE()
 #include "pycore_interpframe_structs.h" // _PyInterpreterFrame
-#ifdef Py_IR_INTERP
-#  include "pycore_ir.h"          // _PyIRBlock
-#endif
+#include "pycore_ir.h"            // _PyIRBlock
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_PTR_ACQUIRE()
 #include "pycore_stackref.h"      // PyStackRef_AsPyObjectBorrow()
 #include "pycore_stats.h"         // CALL_STAT_INC()
@@ -18,13 +16,8 @@
 extern "C" {
 #endif
 
-#ifdef Py_IR_INTERP
 #define _PyInterpreterFrame_LASTI(IF) \
     _PyFrame_InstrOffset((IF), (IF)->instr_ptr)
-#else
-#define _PyInterpreterFrame_LASTI(IF) \
-    ((int)((IF)->instr_ptr - _PyFrame_GetBytecode((IF))))
-#endif
 
 static inline PyCodeObject *_PyFrame_GetCode(_PyInterpreterFrame *f) {
     assert(!PyStackRef_IsNull(f->f_executable));
@@ -33,7 +26,6 @@ static inline PyCodeObject *_PyFrame_GetCode(_PyInterpreterFrame *f) {
     return (PyCodeObject *)executable;
 }
 
-#ifdef Py_IR_INTERP
 /* The IR block that frame->instr_ptr points into.  A frame that has not
  * started yet may still be at the stub of a code object that another frame
  * has lowered since. */
@@ -101,7 +93,6 @@ _PyFrame_InitIRInstrPtr(_PyInterpreterFrame *frame, PyCodeObject *code)
     frame->tlbc_index = 0;
 #endif
 }
-#endif
 
 // Similar to _PyFrame_GetCode(), but return NULL if the frame is invalid or
 // freed. Used by dump_frame() in Python/traceback.c. The function uses
@@ -133,22 +124,6 @@ _PyFrame_SafeGetCode(_PyInterpreterFrame *f)
     return (PyCodeObject *)executable;
 }
 
-#ifndef Py_IR_INTERP
-/* The bytecode that frame->instr_ptr points into.  The IR interpreter has
- * none: frames point into IR blocks, see _PyFrame_IRBlock(). */
-static inline _Py_CODEUNIT *
-_PyFrame_GetBytecode(_PyInterpreterFrame *f)
-{
-#ifdef Py_GIL_DISABLED
-    PyCodeObject *co = _PyFrame_GetCode(f);
-    _PyCodeArray *tlbc = _PyCode_GetTLBCArray(co);
-    assert(f->tlbc_index >= 0 && f->tlbc_index < tlbc->size);
-    return (_Py_CODEUNIT *)tlbc->entries[f->tlbc_index];
-#else
-    return _PyCode_CODE(_PyFrame_GetCode(f));
-#endif
-}
-#endif
 
 // Similar to PyUnstable_InterpreterFrame_GetLasti(), but return NULL if the
 // frame is invalid or freed. Used by dump_frame() in Python/traceback.c. The
@@ -163,7 +138,6 @@ _PyFrame_SafeGetLasti(struct _PyInterpreterFrame *f)
         return -1;
     }
 
-#ifdef Py_IR_INTERP
     if (f->instr_ptr == _PyIR_LowerStub.words) {
         return 0;
     }
@@ -176,18 +150,6 @@ _PyFrame_SafeGetLasti(struct _PyInterpreterFrame *f)
         return -1;
     }
     return _PyIR_Anchor(block, f->instr_ptr) * (int)sizeof(_Py_CODEUNIT);
-#else
-    _Py_CODEUNIT *bytecode;
-#ifdef Py_GIL_DISABLED
-    _PyCodeArray *tlbc = _PyCode_GetTLBCArray(co);
-    assert(f->tlbc_index >= 0 && f->tlbc_index < tlbc->size);
-    bytecode = (_Py_CODEUNIT *)tlbc->entries[f->tlbc_index];
-#else
-    bytecode = _PyCode_CODE(co);
-#endif
-
-    return (int)(f->instr_ptr - bytecode) * sizeof(_Py_CODEUNIT);
-#endif
 }
 
 static inline PyFunctionObject *_PyFrame_GetFunction(_PyInterpreterFrame *f) {
@@ -258,25 +220,6 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
     }
 }
 
-#if defined(Py_GIL_DISABLED) && !defined(Py_IR_INTERP)
-static inline void
-_PyFrame_InitializeTLBC(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                        PyCodeObject *code)
-{
-    _Py_CODEUNIT *tlbc = _PyCode_GetTLBCFast(tstate, code);
-    if (tlbc == NULL) {
-        // No thread-local bytecode exists for this thread yet; use the main
-        // thread's copy, deferring thread-local bytecode creation to the
-        // execution of RESUME.
-        frame->instr_ptr = _PyCode_CODE(code);
-        frame->tlbc_index = 0;
-    }
-    else {
-        frame->instr_ptr = tlbc;
-        frame->tlbc_index = ((_PyThreadStateImpl *)tstate)->tlbc_index;
-    }
-}
-#endif
 
 /* Consumes reference to func and locals.
    Does not initialize frame->previous, which happens
@@ -296,15 +239,8 @@ _PyFrame_Initialize(
     frame->f_locals = locals;
     frame->stackpointer = frame->localsplus + code->co_nlocalsplus;
     frame->frame_obj = NULL;
-#ifdef Py_IR_INTERP
     (void)tstate;
     _PyFrame_InitIRInstrPtr(frame, code);
-#elif defined(Py_GIL_DISABLED)
-    _PyFrame_InitializeTLBC(tstate, frame, code);
-#else
-    (void)tstate;
-    frame->instr_ptr = _PyCode_CODE(code);
-#endif
     frame->return_offset = 0;
     frame->owner = FRAME_OWNED_BY_THREAD;
     frame->visited = 0;
@@ -386,15 +322,9 @@ _PyFrame_IsIncomplete(_PyInterpreterFrame *frame)
     if (frame->owner >= FRAME_OWNED_BY_INTERPRETER) {
         return true;
     }
-#ifdef Py_IR_INTERP
     return frame->owner != FRAME_OWNED_BY_GENERATOR &&
            _PyFrame_InstrOffset(frame, frame->instr_ptr) <
                _PyFrame_GetCode(frame)->_co_firsttraceable;
-#else
-    return frame->owner != FRAME_OWNED_BY_GENERATOR &&
-           frame->instr_ptr < _PyFrame_GetBytecode(frame) +
-                                  _PyFrame_GetCode(frame)->_co_firsttraceable;
-#endif
 }
 
 static inline _PyInterpreterFrame *
@@ -537,13 +467,7 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     assert(stackdepth <= code->co_stacksize);
     frame->stackpointer = frame->localsplus + code->co_nlocalsplus + stackdepth;
     frame->frame_obj = NULL;
-#ifdef Py_IR_INTERP
     _PyFrame_InitIRInstrPtr(frame, code);
-#elif defined(Py_GIL_DISABLED)
-    _PyFrame_InitializeTLBC(tstate, frame, code);
-#else
-    frame->instr_ptr = _PyCode_CODE(code);
-#endif
     frame->owner = FRAME_OWNED_BY_THREAD;
     frame->visited = 0;
 #ifdef Py_DEBUG

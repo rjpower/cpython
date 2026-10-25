@@ -7947,20 +7947,10 @@ fi
 ],
 [AC_MSG_RESULT([no value specified])])
 
-# Check for --with-ir-interp
-AC_MSG_CHECKING([for --with-ir-interp])
-AC_ARG_WITH(
-  [ir-interp],
-  [AS_HELP_STRING(
-    [--with-ir-interp],
-    [run code objects as the register IR of Include/internal/pycore_ir.h (default is no)]
-  )],
-  [],
-  [with_ir_interp=no])
-AC_MSG_RESULT([$with_ir_interp])
-AS_VAR_IF([with_ir_interp], [yes],
-  [AC_DEFINE([Py_IR_INTERP], [1],
-    [Define to run code objects as the register IR instead of bytecode.])])
+# The interpreter runs code objects as the register IR of
+# Include/internal/pycore_ir.h; the macro tells extensions and sysconfig.
+AC_DEFINE([Py_IR_INTERP], [1],
+  [Defined because code objects run as the register IR.])
 
 # Check for --with-shapes
 AC_MSG_CHECKING([for --with-shapes])

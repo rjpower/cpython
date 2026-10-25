@@ -42,147 +42,6 @@ do { \
 #  define SPECIALIZATION_FAIL(opcode, kind) ((void)0)
 #endif  // Py_STATS
 
-#ifndef Py_IR_INTERP
-/* Bytecode preparation; the IR lowering (Python/ir_lower.c) does its own. */
-
-static void
-fixup_getiter(_PyInstr *instruction, int flags)
-{
-    // Compiler can't know if types.coroutine() will be called,
-    // so fix up here
-    if (instruction->op.arg) {
-        if (flags & (CO_COROUTINE | CO_ITERABLE_COROUTINE)) {
-            instruction->op.arg = GET_ITER_YIELD_FROM_NO_CHECK;
-        }
-        else {
-            instruction->op.arg = GET_ITER_YIELD_FROM_CORO_CHECK;
-        }
-    }
-}
-
-// Entry size and kind of each generic opcode that has inline cache units.
-static const uint8_t fb_entry_size[256] = {
-#define FB_SIZE(OP, TYPE, KIND) [OP] = sizeof(TYPE),
-    _PyFb_FAMILIES(FB_SIZE)
-#undef FB_SIZE
-};
-
-static const uint8_t fb_kind[256] = {
-#define FB_KIND(OP, TYPE, KIND) [OP] = KIND,
-    _PyFb_FAMILIES(FB_KIND)
-#undef FB_KIND
-};
-
-Py_ssize_t
-_PyFb_BlockSize(const _Py_CODEUNIT *code, Py_ssize_t size)
-{
-    // Branch-free, since about half of all instructions have an entry.
-    Py_ssize_t entries = 0;
-    for (Py_ssize_t i = 0; i < size; ) {
-        int opcode = code[i].op.code;
-        entries += fb_entry_size[opcode];
-        i += 1 + _PyOpcode_Caches[opcode];
-    }
-    return entries ? (Py_ssize_t)sizeof(_PyFbBlock) + entries : 0;
-}
-
-#ifdef Py_STACKREF_INLINE_VALUES
-// Rewrite loads of int and float constants that can be inline to the forms
-// that push them inline. Instrumentation restores the boxing forms.
-static void
-quicken_constants(PyCodeObject *co, _PyInstr *instructions)
-{
-    assert(co->_co_monitoring == NULL);
-    Py_ssize_t size = Py_SIZE(co);
-    int oparg = 0;
-    for (Py_ssize_t i = 0; i < size; i++) {
-        int opcode = instructions[i].op.code;
-        oparg = (oparg << 8) | instructions[i].op.arg;
-        if (opcode == EXTENDED_ARG) {
-            continue;
-        }
-        if (opcode == LOAD_SMALL_INT) {
-            instructions[i].op.code = LOAD_SMALL_INT_INLINE;
-        }
-        else if (opcode == LOAD_CONST) {
-            PyObject *value = PyTuple_GET_ITEM(co->co_consts, oparg);
-            if (_PyLong_CheckExactAndCompact(value)) {
-                instructions[i].op.code = LOAD_CONST_INLINE_INT;
-            }
-            else if (PyFloat_CheckExact(value) && !isnan(PyFloat_AS_DOUBLE(value))) {
-                instructions[i].op.code = LOAD_CONST_INLINE_FLOAT;
-            }
-        }
-        oparg = 0;
-        i += _PyOpcode_Caches[opcode];
-    }
-}
-#endif
-
-// Lay out the feedback block, initialize warmup counters and optimize
-// instructions. This cannot fail.
-void
-_PyCode_Quicken(PyCodeObject *co, _PyInstr *instructions, int enable_counters)
-{
-#ifdef Py_STACKREF_INLINE_VALUES
-    if (_PyInterpreterState_GET()->opt_config.tagged_values_enabled) {
-        quicken_constants(co, instructions);
-    }
-#endif
-    if (co->_co_feedback == NULL) {
-        // Every instruction with inline cache units except a branch has an
-        // entry, so there is nothing to prepare.
-        return;
-    }
-    _Py_BackoffCounter counter = initial_unreachable_backoff_counter();
-    if (ENABLE_SPECIALIZATION && enable_counters) {
-        counter = adaptive_counter_warmup();
-    }
-    Py_ssize_t size = Py_SIZE(co);
-    _PyFbBlock *block = _PyFb_Block(instructions, size);
-    char *end = (char *)&instructions[size];
-    uint32_t block_size = co->_co_feedback->size;
-    memset(end, 0, (char *)block - end + block_size);
-    block->size = block_size;
-    char *entry = (char *)(block + 1);
-    char *limit = (char *)block + block_size;
-    // The last code unit cannot have a cache, so we don't need to check it
-    for (Py_ssize_t i = 0; i < size - 1; i++) {
-        int opcode = instructions[i].op.code;
-        if (opcode >= MIN_INSTRUMENTED_OPCODE && co->_co_monitoring != NULL) {
-            // A thread-local copy of instrumented bytecode
-            opcode = _Py_GetBaseCodeUnit(co, (int)i).op.code;
-        }
-        int caches = _PyOpcode_Caches[opcode];
-        if (caches == 0) {
-            continue;
-        }
-        if (opcode == GET_ITER) {
-            fixup_getiter(&instructions[i], co->co_flags);
-        }
-        int entry_size = fb_entry_size[opcode];
-        uint16_t unit0 = 0x5555;  // a branch: alternating 0, 1 bits
-        if (entry_size) {
-            unit0 = 0;
-            // The limit only matters for bytecode that disagrees with the
-            // layout of _PyFb_BlockSize(), such as hand-written bytecode
-            // with instrumented opcodes.
-            if (entry + entry_size <= limit) {
-                _PyFbHeader *h = (_PyFbHeader *)entry;
-                h->kind = fb_kind[opcode];
-                h->counter = counter;
-                ptrdiff_t distance = (_Py_CODEUNIT *)entry - &instructions[i];
-                if (distance <= UINT16_MAX) {
-                    unit0 = (uint16_t)distance;
-                }
-                entry += entry_size;
-            }
-        }
-        instructions[i + 1].cache = unit0;
-        i += caches;
-    }
-}
-#endif  // !Py_IR_INTERP
 
 #define SIMPLE_FUNCTION 0
 
@@ -388,7 +247,6 @@ _PyCode_Quicken(PyCodeObject *co, _PyInstr *instructions, int enable_counters)
  * unit of the current frame's bytecode, or with the register IR the main
  * word of an instruction of the current frame's block. */
 
-#ifdef Py_IR_INTERP
 static inline _PyIRBlock *
 current_block(void)
 {
@@ -448,52 +306,6 @@ set_opcode(_PyInstr *instr, uint8_t opcode)
     return 1;
 #endif
 }
-#else
-static inline int
-instr_opcode(_PyInstr *instr)
-{
-    return FT_ATOMIC_LOAD_UINT8_RELAXED(instr->op.code);
-}
-
-static inline int
-instr_oparg(_PyInstr *instr)
-{
-    return FT_ATOMIC_LOAD_UINT8_RELAXED(instr->op.arg);
-}
-
-static inline _PyFbHeader *
-instr_fb(_PyInstr *instr)
-{
-    return _PyFb_Header(instr);
-}
-
-static inline void *
-instr_entry(_PyInstr *instr)
-{
-    return _PyFb_Entry(instr);
-}
-
-static inline int
-set_opcode(_PyInstr *instr, uint8_t opcode)
-{
-#ifdef Py_GIL_DISABLED
-    uint8_t old_op = _Py_atomic_load_uint8_relaxed(&instr->op.code);
-    if (old_op >= MIN_INSTRUMENTED_OPCODE) {
-        /* Lost race with instrumentation */
-        return 0;
-    }
-    if (!_Py_atomic_compare_exchange_uint8(&instr->op.code, &old_op, opcode)) {
-        /* Lost race with instrumentation */
-        assert(old_op >= MIN_INSTRUMENTED_OPCODE);
-        return 0;
-    }
-    return 1;
-#else
-    instr->op.code = opcode;
-    return 1;
-#endif
-}
-#endif  // Py_IR_INTERP
 
 static inline void
 set_counter(_PyFbHeader *h, _Py_BackoffCounter value)
@@ -534,17 +346,9 @@ typedef struct {
 static _PyFbBlock *
 fb_block(_PyInstr *instr)
 {
-#ifdef Py_IR_INTERP
     _PyIRBlock *block = current_block();
     assert(block->words <= instr && instr < block->words + block->nwords);
     return block->feedback;
-#else
-    _PyInterpreterFrame *frame = _PyThreadState_GET()->current_frame;
-    Py_ssize_t size = Py_SIZE(_PyFrame_GetCode(frame));
-    _Py_CODEUNIT *bytecode = _PyFrame_GetBytecode(frame);
-    assert(bytecode <= instr && instr < bytecode + size);
-    return _PyFb_Block(bytecode, size);
-#endif
 }
 
 static fb_row
@@ -2679,17 +2483,11 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
                 break;
             }
             if (PyUnicode_CheckExact(lhs)) {
-#ifdef Py_IR_INTERP
                 // The handler reads the first word of the next instruction,
                 // so an IR_EXT there rules the specialisation out.
                 _PyInstr *next = instr + _PyIR_FormatOf(BINARY_OP)->nwords;
                 bool to_store = (instr_opcode(next) == STORE_FAST);
                 int local = to_store ? instr_oparg(next) : 0;
-#else
-                _Py_CODEUNIT next = instr[INLINE_CACHE_ENTRIES_BINARY_OP + 1];
-                bool to_store = (next.op.code == STORE_FAST);
-                int local = next.op.arg;
-#endif
                 if (to_store && PyStackRef_IsObject(locals[local]) &&
                     PyStackRef_AsPyObjectBorrow(locals[local]) == lhs)
                 {
@@ -2948,7 +2746,7 @@ failure:
     return;
 success:
     specialize(instr, specialized_op);
-#if defined(Py_IR_INTERP) && !defined(Py_GIL_DISABLED)
+#ifndef Py_GIL_DISABLED
     // The compare runs the jump that consumes its result too.  Its handler
     // checks the jump each time, so instrumentation can still replace it.
     int jump = IR_HANDLER(instr[_PyIR_FormatOf(COMPARE_OP)->nwords]);
@@ -3113,14 +2911,8 @@ _Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _PyInstr *in
             return;
         }
         else if (tp == &PyGen_Type && oparg <= SHRT_MAX) {
-#ifdef Py_IR_INTERP
             assert(instr_opcode(instr + _PyIR_FormatOf(FOR_ITER)->nwords + oparg) == END_FOR ||
                    instr_opcode(instr + _PyIR_FormatOf(FOR_ITER)->nwords + oparg) == INSTRUMENTED_END_FOR);
-#else
-            assert(instr[oparg + INLINE_CACHE_ENTRIES_FOR_ITER + 1].op.code == END_FOR  ||
-                instr[oparg + INLINE_CACHE_ENTRIES_FOR_ITER + 1].op.code == INSTRUMENTED_END_FOR
-            );
-#endif
             /* Don't specialize if PEP 523 is active */
             if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
                 goto failure;
@@ -3474,12 +3266,6 @@ static const PyBytesObject no_location = {
     .ob_sval = { NO_LOC_4 }
 };
 
-#if defined(Py_GIL_DISABLED) && !defined(Py_IR_INTERP)
-static _PyCodeArray init_cleanup_tlbc = {
-    .size = 1,
-    .entries = {(char*) &_Py_InitCleanup.co_code_adaptive},
-};
-#endif
 
 const struct _PyCode8 _Py_InitCleanup = {
     _PyVarObject_HEAD_INIT(&PyCode_Type, 3),
@@ -3496,11 +3282,7 @@ const struct _PyCode8 _Py_InitCleanup = {
     ._co_firsttraceable = 4,
     .co_stacksize = 2,
     .co_framesize = 2 + FRAME_SPECIALS_SIZE,
-#ifdef Py_IR_INTERP
     ._co_ir = &_PyIR_InitCleanupBlock,
-#elif defined(Py_GIL_DISABLED)
-    .co_tlbc = &init_cleanup_tlbc,
-#endif
     .co_code_adaptive = {
         EXIT_INIT_CHECK, 0,
         RETURN_VALUE, 0,

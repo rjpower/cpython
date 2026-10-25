@@ -33,13 +33,8 @@ typedef union {
 /* A word of the register IR; see pycore_ir.h. */
 typedef uint64_t _PyIRWord;
 
-/* What an interpreter instruction pointer points at: an IR word in the
- * register IR interpreter (--with-ir-interp), a code unit otherwise. */
-#ifdef Py_IR_INTERP
+/* What an interpreter instruction pointer points at */
 typedef _PyIRWord _PyInstr;
-#else
-typedef _Py_CODEUNIT _PyInstr;
-#endif
 
 
 /* Abstract tree node. */

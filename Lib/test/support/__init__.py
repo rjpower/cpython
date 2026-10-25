@@ -1062,9 +1062,6 @@ def expected_failure_if_gil_disabled():
         return unittest.expectedFailure
     return lambda test_case: test_case
 
-# Code objects run as the register IR (--with-ir-interp)
-Py_IR_INTERP = bool(sysconfig.get_config_var('Py_IR_INTERP'))
-
 # Instance attribute access guards per-type shapes (--with-shapes)
 Py_SHAPES = bool(sysconfig.get_config_var('Py_SHAPES'))
 

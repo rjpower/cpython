@@ -209,7 +209,6 @@ dump_stack(_PyInterpreterFrame *frame, _PyStackRef *stack_pointer)
     _PyFrame_GetStackPointer(frame);
 }
 
-#ifdef Py_IR_INTERP
 static void
 lltrace_instruction(_PyInterpreterFrame *frame,
                     _PyStackRef *stack_pointer,
@@ -236,7 +235,7 @@ lltrace_instruction(_PyInterpreterFrame *frame,
     _PyFrame_SetStackPointer(frame, stack_pointer);
     _PyStackRef_CheckFrame(frame);
     _PyFrame_GetStackPointer(frame);
-    /* First the instruction as the stack interpreter prints it, with the
+    /* First the instruction as a bytecode trace prints it, with the
      * oparg from the bytecode that co_code_adaptive shadows; then the
      * handler that runs it and its fields, on a line without a colon. */
     _PyIRBlock *block = _PyFrame_IRBlock(frame);
@@ -258,33 +257,6 @@ lltrace_instruction(_PyInterpreterFrame *frame,
     printf("    ir %s %u %u %u\n", name, a, b, c);
     fflush(stdout);
 }
-#else
-static void
-lltrace_instruction(_PyInterpreterFrame *frame,
-                    _PyStackRef *stack_pointer,
-                    _Py_CODEUNIT *next_instr,
-                    int opcode,
-                    int oparg)
-{
-    int offset = 0;
-    if (frame->owner < FRAME_OWNED_BY_INTERPRETER) {
-        dump_stack(frame, stack_pointer);
-        _PyFrame_SetStackPointer(frame, stack_pointer);
-        _PyStackRef_CheckFrame(frame);
-        _PyFrame_GetStackPointer(frame);
-        offset = (int)(next_instr - _PyFrame_GetBytecode(frame));
-    }
-    const char *opname = _PyOpcode_OpName[opcode];
-    assert(opname != NULL);
-    if (OPCODE_HAS_ARG((int)_PyOpcode_Deopt[opcode])) {
-        printf("%d: %s %d\n", offset * 2, opname, oparg);
-    }
-    else {
-        printf("%d: %s\n", offset * 2, opname);
-    }
-    fflush(stdout);
-}
-#endif
 
 static void
 lltrace_resume_frame(_PyInterpreterFrame *frame)

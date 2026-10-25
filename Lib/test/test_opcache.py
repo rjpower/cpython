@@ -8,7 +8,7 @@ import types
 import unittest
 from test.support import (threading_helper, check_impl_detail,
                           requires_specialization,
-                          cpython_only, reset_code, Py_IR_INTERP, Py_SHAPES)
+                          cpython_only, reset_code, Py_SHAPES)
 from test.support.import_helper import import_module
 
 # Skip this module on other interpreters, it is cpython specific:
@@ -2512,9 +2512,7 @@ class TestFeedback(TestBase):
             yield from it
 
         # No handler of the register IR reads a COUNTER entry, so it has none
-        no_entry = set()
-        if Py_IR_INTERP:
-            no_entry = {op for op, kind in self.KINDS.items() if kind == "COUNTER"}
+        no_entry = {op for op, kind in self.KINDS.items() if kind == "COUNTER"}
         seen = set()
         for func in C.m, g:
             for instr in dis.get_instructions(func):

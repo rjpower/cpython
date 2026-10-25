@@ -567,3 +567,12 @@ with every FOR_ITER and SEND relaxed (`set_ir_max_forward(0)`). Tier 0 and
 the compare-and-branch superinstructions are deleted. Borrowed-local
 absorption is kept under the static rule (an input is borrowed when its field
 differs from its canonical slot), so it was not turned off.
+
+### 2026-10-25 — Step 1: full suite passes
+
+Full suite on dev-debug and dev-default: only the known
+test_remote_exec_deleted_static_executable fails (test_sys's frame size
+check now counts `ir_words` and `ir_feedback`). Rung 2 passes on
+dev-stackrefdebug. dev-ft builds; its rung 2 fails only in the known places
+(test_dis and test_opcache, 72 failures, and test_monitoring's
+test_no_unwind_for_shim_frame).

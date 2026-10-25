@@ -121,6 +121,30 @@ class LoweringTest(unittest.TestCase):
             self.assertNotIn("LOAD_ATTR", handlers(f))
         self.assertNotIn("LOAD_FAST_BORROW", handlers(f))
 
+    def test_deopt_after_borrowing_a_local(self):
+        # The specialised LOAD_ATTR borrows its absorbed owner before its
+        # guards, and a deopt drops that borrow; a Py_STACKREF_DEBUG build
+        # aborts when the frame closes the local with the borrow still out.
+        def f(o):
+            try:
+                return o.attr
+            except AttributeError:
+                return None
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(f(C()), 5)
+        if SPECIALIZES:
+            self.assertNotIn("LOAD_ATTR", handlers(f))
+        self.assertTrue(self.load_attr_owner_field(f) & IR_BORROW)
+        for _ in range(3):
+            self.assertIsNone(f(object()))
+
+    def load_attr_owner_field(self, func):
+        # Field B of the word that runs the LOAD_ATTR of func
+        anchor = [instr.offset for instr in dis.get_instructions(func)
+                  if instr.opname == "LOAD_ATTR"][0]
+        return [instr for instr in get_ir(func.__code__)
+                if instr[1] == anchor][0][4]
+
     def test_absorbed_pair(self):
         def f(a, b):
             return a in b

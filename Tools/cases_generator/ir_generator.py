@@ -598,6 +598,39 @@ class IREmitter(Emitter):
         super().__init__(out, analysis.labels)
         self.formats = formats
         self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
+        # The storage at a deopt or exit being emitted
+        self.deopt_storage: Storage | None = None
+
+    def deopt_if(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        self.deopt_storage = storage
+        try:
+            return super().deopt_if(tkn, tkn_iter, uop, storage, inst)
+        finally:
+            self.deopt_storage = None
+
+    exit_if = deopt_if
+
+    def emit_borrow_drops(self) -> None:
+        """Drop the borrows that IR_BORROW_KNOWN made of locals before a
+        deopt, where the family head reads the locals again.  Only the
+        Py_STACKREF_DEBUG checker tracks them."""
+        storage = self.deopt_storage
+        if storage is None:
+            return
+        seen = set()
+        for var in storage.inputs + storage.stack.variables + storage.outputs:
+            if (var.ir_borrowed and var.in_local and var.ir_field is not None
+                    and var.name not in seen):
+                seen.add(var.name)
+                self.emit(f"IR_DROP_BORROW({var.name}, "
+                          f"{FIELD_VARS[var.ir_field]});\n")
 
     def expand_instruction_macro(self, tkn: Token, args: list[list[Token]],
                                  inst: Instruction | None) -> str:
@@ -612,6 +645,7 @@ class IREmitter(Emitter):
 
     def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
         assert inst is not None
+        self.emit_borrow_drops()
         if inst.family is not None:
             super().emit_jump_to_predicted(inst)
             return
@@ -642,6 +676,15 @@ class IREmitter(Emitter):
         """Inputs read through a field: check, box and tag as borrowed when
         the field carries IR_BORROW. A box goes back to the slot the field
         names, which owns it then, a local for an IR_BORROW field."""
+        self.deopt_storage = storage
+        try:
+            self.convert_object_inputs(uop, storage, inst, stack_read_later)
+        finally:
+            self.deopt_storage = None
+
+    def convert_object_inputs(
+        self, uop: Uop, storage: Storage, inst: Instruction | None, stack_read_later: bool
+    ) -> None:
         kept = {item.name for item in uop.stack.outputs}
         for var in storage.inputs:
             if var.ir_field is None or var.known_object:
@@ -675,6 +718,7 @@ class IREmitter(Emitter):
             self.out.start_line()
             self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f});\n")
             var.known_object = True
+            var.ir_borrowed = True
             # From here the value is safe in any slot, so a flush writes it to
             # its canonical slot for code that reads the stack.
             var.memory_offset = None

@@ -604,6 +604,20 @@ static_assert(IR_BORROW == Py_TAG_REFCNT,
     ((_PyStackRef){ .bits = (REF).bits | ((F) & IR_BORROW) })
 #endif
 
+/* Before a deopt, drop REF if IR_BORROW_KNOWN made it a borrow of the local
+ * that F names: the family head borrows the local again.  Only the
+ * Py_STACKREF_DEBUG checker counts such borrows. */
+#ifdef Py_STACKREF_DEBUG
+#  define IR_DROP_BORROW(REF, F) \
+    do { \
+        if ((F) & IR_BORROW) { \
+            PyStackRef_CLOSE(REF); \
+        } \
+    } while (0)
+#else
+#  define IR_DROP_BORROW(REF, F) ((void)0)
+#endif
+
 /* The feedback entry at distance F from the instruction. */
 #define IR_FB(INSTR, F) ((void *)((INSTR) + (F)))
 

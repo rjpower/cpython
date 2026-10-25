@@ -574,6 +574,7 @@ class TestIRCases(unittest.TestCase):
                 }
                 owner = IR_BORROW_KNOWN(owner, ir_b);
                 if (Py_TYPE(PyStackRef_AsPyObjectBorrow(owner))->tp_version_tag != type_version) {
+                    IR_DROP_BORROW(owner, ir_b);
                     UPDATE_MISS_STATS(OP);
                     assert(_PyOpcode_Deopt[opcode] == (OP));
                     JUMP_TO_PREDICTED(OP);

@@ -151,6 +151,8 @@ class Local:
     known_object: bool = False
     # The IR field the value was read through (see ir_generator.IRStack).
     ir_field: str | None = None
+    # Holds the borrow that IR_BORROW_KNOWN made of what ir_field names.
+    ir_borrowed: bool = False
 
     def __repr__(self) -> str:
         return f"Local('{self.item.name}', mem={self.memory_offset}, local={self.in_local}, array={self.is_array()})"
@@ -195,6 +197,7 @@ class Local:
             self.in_local,
             self.known_object,
             self.ir_field,
+            self.ir_borrowed,
         )
 
     @property

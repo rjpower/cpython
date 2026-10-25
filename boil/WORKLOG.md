@@ -393,3 +393,13 @@ changes only drop startup blocks. Decision: tier 0 ships behind --with-tier0,
 off by default, with the honest table; commit 3 adds a cycle diagnosis
 (branch misses, iTLB, frontend stalls) and the tier 1 list: register-cached
 stack top, inlined LOAD_ATTR/CALL fast paths, one handler copy.
+
+### Regression found: Py_STACKREF_DEBUG build aborts at the IR-only head
+
+Re-verifying the PR's compatibility claim: build/dev-stackrefdebug at
+2566fce0b03 aborts during freezing with "StackRef closed with 2 borrowed refs
+at frame.c:148, opened at generated_ir_cases.c.h:12040". It passed at
+2d3e30a6cab. Suspect: static borrows from absorbed loads are not registered
+with the checker or outlive the local's close. Handed to the IR agent as its
+own commit, 1 hour, after the ASan run; the PR claim stays unverified until it
+passes.

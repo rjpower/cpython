@@ -38,7 +38,7 @@ static_assert(sizeof(_PyFbUnary) <= FB_STRIDE && sizeof(_PyFbBinary) <= FB_STRID
  * result of __init__ in slot 1: EXIT_INIT_CHECK checks slot 1, and
  * RETURN_VALUE returns slot 0.  Its third word, RESUME, never runs. */
 static _PyIRWord init_cleanup_words[3] = {
-    IR_WORD(EXIT_INIT_CHECK, 1, 0, 0, 0),
+    IR_WORD(EXIT_INIT_CHECK, 1, 2, 0, 0),
     IR_WORD(RETURN_VALUE, 0, 0, 0, 0),
     IR_WORD(RESUME, 0, 0, 0, 0),
 };
@@ -100,6 +100,27 @@ _PyIR_FieldOparg(_PyIRWord word)
     }
     assert(fmt->imm != _PyIR_LOC_FBARG);
     return (int)read_field(word, fmt->imm);
+}
+
+int
+_PyCode_InstrFoldedInputs(PyCodeObject *co, int i)
+{
+    assert(i >= 0 && i < Py_SIZE(co));
+    _PyIRWord word = _PyCode_WORDS(co)[i];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (fmt->borrow_mask == 0) {
+        return 0;
+    }
+    int n = 0;
+    for (int r = 0; r < 4; r++) {
+        int k = fmt->roles[r] - _PyIR_ROLE_IN0;
+        if (k >= 0 && (fmt->borrow_mask & (1 << k))
+            && (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX) < co->co_nlocalsplus)
+        {
+            n++;
+        }
+    }
+    return n;
 }
 
 int
@@ -252,6 +273,7 @@ make_exec(PyCodeObject *co)
     *exec = (_PyCodeExec){
         .words = words,
         .nwords = (uint32_t)nwords,
+        .nlocalsplus = (uint32_t)co->co_nlocalsplus,
     };
     memcpy(words, _PyCode_WORDS(co), words_size);
     if (inline_values_off()) {

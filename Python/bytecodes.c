@@ -5789,7 +5789,11 @@ dummy_func(
 #endif
                 return NULL;
             }
-            next_instr = frame->instr_ptr;
+            // The caller's instr_ptr is the word that pushed the frame, and
+            // error takes the word that raised as the one before next_instr.
+            // That word may start a try block, now that the loads before it
+            // have no words.
+            next_instr = frame->instr_ptr + 1;
             RELOAD_STACK();
             goto error;
         }

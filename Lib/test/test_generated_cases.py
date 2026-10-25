@@ -370,9 +370,40 @@ class TestIRCases(unittest.TestCase):
         # of a borrowed local holds NULL.
         self.assertEqual(formats["OP_PASS"].borrow_mask, 0)
         self.assertEqual(formats["OP_PASS"].dst_offset, 0)
-        # A member that consumes the input raw denies the whole family.
-        self.assertEqual(formats["OP_FAMILY"].borrow_mask, 0)
+        # A member that consumes the input raw reads it borrowed, as
+        # LOAD_FAST_BORROW would push it.
+        self.assertEqual(formats["OP_FAMILY"].borrow_mask, 1)
         self.assertIs(formats["OP_FAMILY_RAW"], formats["OP_FAMILY"])
+        self.assertEqual(formats["OP_FAMILY"].sync, ir_generator.SYNC_DST)
+
+    def test_sync(self):
+        # How a handler that may read locals through its fields finds the
+        # stack pointer: from dst, from the top slot in a free field, or by
+        # counting the inputs that name locals.
+        input = """
+        inst(STORE, (owner, value --)) {
+            SPAM(owner, value);
+            DECREF_INPUTS();
+        }
+        inst(BRANCH, (counter/1, cond --)) {
+            _PyFbHeader *feedback = FB_COUNTER();
+            int flag = PyStackRef_IsFalse(cond);
+            DEAD(cond);
+            if (flag) {
+                JUMPTO(oparg);
+            }
+        }
+    """
+        formats = self.formats(input)
+        fmt = formats["STORE"]
+        self.assertEqual(fmt.sync, ir_generator.SYNC_TOP)
+        self.assertIn(ir_generator.ROLE_TOP, fmt.roles)
+        self.assertEqual(fmt.canonical_slot(0),
+                         f"{ir_generator.FIELD_VARS[fmt.field_of(ir_generator.ROLE_TOP)]} + -2")
+        fmt = formats["BRANCH"]
+        self.assertEqual(fmt.sync, ir_generator.SYNC_LAG)
+        self.assertEqual(ir_generator.sync_stack_pointer(fmt),
+                         "stack_pointer += IR_IS_LOCAL(IR_FIELD_A(this_instr));\n")
 
     def test_unused_outputs_pass_through(self):
         input = """
@@ -691,18 +722,19 @@ class TestIRCases(unittest.TestCase):
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
             INSTRUCTION_STATS(OP);
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
             IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
-            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
-            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
-            right = stack_pointer[-1];
-            left = stack_pointer[-2];
+            right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+            left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
             uint32_t counter = fb->counter;
             (void)counter;
             _PyFbHeader *feedback = ((_PyFbHeader *)fb);
@@ -723,18 +755,19 @@ class TestIRCases(unittest.TestCase):
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
             INSTRUCTION_STATS(OP);
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
             IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
-            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
-            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
-            right = stack_pointer[-1];
-            left = stack_pointer[-2];
+            right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+            left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
             uint32_t counter = fb->counter;
             (void)counter;
             _PyFbHeader *feedback = ((_PyFbHeader *)fb);
@@ -775,7 +808,7 @@ class TestIRCases(unittest.TestCase):
         fmt = formats["OP"]
         self.assertTrue(fmt.jumps)
         self.assertEqual(fmt.roles, [f"{ir_generator.ROLE_IN0} + 0",
-                                     ir_generator.ROLE_NONE,
+                                     ir_generator.ROLE_TOP,
                                      ir_generator.ROLE_IMM,
                                      ir_generator.ROLE_IMM])
         self.assertEqual(fmt.imm, ir_generator.LOC_CD)

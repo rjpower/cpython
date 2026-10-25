@@ -1055,8 +1055,8 @@ static const _PyIRWord _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS[] = {
     /* Put a NOP at the start, so that the IP points into
     * the code, rather than before it */
     IR_WORD(NOP, 0, 0, 0, 0),
-    IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),  /* reached on return */
-    IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),  /* reached on yield */
+    IR_WORD(INTERPRETER_EXIT, 1, 2, 0, 0),  /* reached on return */
+    IR_WORD(INTERPRETER_EXIT, 1, 2, 0, 0),  /* reached on yield */
 };
 
 const _PyInstr *_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR = (_PyInstr*)&_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;

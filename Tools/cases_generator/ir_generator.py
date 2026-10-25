@@ -149,10 +149,17 @@ IR_INSTRUCTION_MACROS = {
 ROLE_NONE, ROLE_IN0, ROLE_DST, ROLE_BASE, ROLE_FB, ROLE_IMM = (
     "_PyIR_ROLE_NONE", "_PyIR_ROLE_IN0", "_PyIR_ROLE_DST",
     "_PyIR_ROLE_BASE", "_PyIR_ROLE_FB", "_PyIR_ROLE_IMM")
+ROLE_TOP = "_PyIR_ROLE_TOP"
 LOC_NONE, LOC_A, LOC_B, LOC_C, LOC_D, LOC_CD, LOC_FBARG = (
     "_PyIR_LOC_NONE", "_PyIR_LOC_A", "_PyIR_LOC_B", "_PyIR_LOC_C",
     "_PyIR_LOC_D", "_PyIR_LOC_CD", "_PyIR_LOC_FBARG")
 FIELD_LOCS = {"A": LOC_A, "B": LOC_B, "C": LOC_C, "D": LOC_D}
+
+# How a handler whose inputs may name locals finds the stack pointer, which
+# lags behind by the folded loads that have no words: from its dst, from
+# the canonical top slot in a field of its own (ROLE_TOP), or, where no
+# field is free, by adding the number of its inputs that name locals.
+SYNC_NONE, SYNC_DST, SYNC_TOP, SYNC_LAG = "none", "dst", "top", "lag"
 
 # The families whose oparg is a forward distance in words, in D, rather than
 # an absolute target: the loops, whose bodies jump relative to the next word.
@@ -206,6 +213,11 @@ class IRFormat:
     # What place_fields() placed, from which the NOFB form follows
     slot_roles: tuple[str, ...] = ()
     imm_kind: str | None = None
+    sync: str = "none"              # how the handler finds the stack
+                                    # pointer, see SYNC_*
+
+    def __post_init__(self) -> None:
+        assert self.sync != SYNC_NONE or not self.borrow_mask, self.group
 
     def field_of(self, role: str) -> str | None:
         for name, r in zip(FIELDS, self.roles):
@@ -217,12 +229,26 @@ class IRFormat:
         return FIELDS[self.roles.index(f"{ROLE_IN0} + {k}")]
 
     def canonical_slot(self, k: int) -> str:
-        """The C expression of the canonical slot of input k, which follows
-        from dst: the slot that the field names unless it names a local."""
-        assert self.dst_offset is not None
-        dst = FIELD_VARS[self.field_of(ROLE_DST)]
-        delta = k - self.n_inputs - self.dst_offset
-        return f"{dst} + {delta}" if delta else dst
+        """The C expression of the canonical slot of input k, the slot that
+        its field names unless it names a local.  It follows from dst, the
+        top slot, or the stack pointer, which the handler sets first."""
+        if self.sync == SYNC_DST:
+            assert self.dst_offset is not None
+            base = FIELD_VARS[self.field_of(ROLE_DST)]
+            delta = k - self.n_inputs - self.dst_offset
+        elif self.sync == SYNC_TOP:
+            base = FIELD_VARS[self.field_of(ROLE_TOP)]
+            delta = k - self.n_inputs
+        else:
+            assert self.sync == SYNC_LAG
+            base = "IR_STACK_SLOT()"
+            delta = k - self.n_inputs
+        return f"{base} + {delta}" if delta else base
+
+    def borrowed_fields(self) -> list[str]:
+        "The C expressions of the fields of the inputs that may be borrowed"
+        return [FIELD_VARS[self.input_field(k)] for k in range(self.n_inputs)
+                if self.borrow_mask & (1 << k)]
 
 
 # An instruction named PREFIX + X, for an instruction X, shares the format of
@@ -644,18 +670,26 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         for k in range(n_inputs):
             if k in passthrough:
                 continue
-            if all(u[k] in ("object", "unused") for u in uses) and any(
-                    u[k] == "object" for u in uses):
+            # Every member reads the input, so that its canonical slot
+            # holds a value whenever code that reads the stack runs.
+            if all(u[k] in ("object", "raw") for u in uses):
                 borrow_mask |= 1 << k
-        if dst_offset is None:
-            # The handler finds the stack pointer through dst, see
-            # generate_ir_cases(), so without one it borrows nothing.
-            borrow_mask = 0
+    sync = SYNC_NONE
+    if borrow_mask and dst_offset is not None:
+        sync = SYNC_DST
+    elif borrow_mask and ROLE_NONE in roles:
+        # The canonical top slot in a free field
+        roles = list(roles)
+        roles[roles.index(ROLE_NONE)] = ROLE_TOP
+        sync = SYNC_TOP
+    elif borrow_mask:
+        sync = SYNC_LAG
     return IRFormat(
         group=group, window=window, roles=roles, inputs=names,
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
         imm=imm, fb=fb, jumps=jumps and not forward, forward=forward,
         no_fold=no_fold, slot_roles=slot_roles, imm_kind=imm_kind,
+        sync=sync,
     )
 
 
@@ -664,7 +698,13 @@ def nofb_format(fmt: IRFormat) -> IRFormat:
     placed = place_fields(list(fmt.slot_roles), False, fmt.imm_kind, fmt.window)
     assert placed is not None, fmt.group
     roles, imm, fb = placed
-    return replace(fmt, roles=roles, imm=imm, fb=fb)
+    sync = fmt.sync
+    if sync == SYNC_TOP and ROLE_NONE in roles:
+        roles[roles.index(ROLE_NONE)] = ROLE_TOP
+    elif sync == SYNC_TOP:
+        # The oparg took the free field
+        sync = SYNC_LAG
+    return replace(fmt, roles=roles, imm=imm, fb=fb, sync=sync)
 
 
 def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
@@ -723,14 +763,20 @@ class IRStack(Stack):
     field_inputs when the handler writes the canonical slot, which then holds
     the current value."""
 
-    def __init__(self, field_inputs: dict[int, str] | None = None) -> None:
+    def __init__(self, field_inputs: dict[int, str] | None = None,
+                 raw_inputs: dict[int, str] | None = None) -> None:
         super().__init__()
         self.field_inputs = dict(field_inputs or {})
+        # The offsets of the inputs that the handler consumes as they are,
+        # with their canonical slots: those read through a local come
+        # borrowed, as LOAD_FAST_BORROW would have pushed them.
+        self.raw_inputs = dict(raw_inputs or {})
 
     def copy(self) -> "IRStack":
         other = super().copy()
         assert isinstance(other, IRStack)
         other.field_inputs = dict(self.field_inputs)
+        other.raw_inputs = dict(self.raw_inputs)
         return other
 
     def field_of(self, var: StackItem, memory_offset: PointerOffset) -> str | None:
@@ -742,6 +788,9 @@ class IRStack(Stack):
     def load(self, var: StackItem, memory_offset: PointerOffset) -> str:
         field = self.field_of(var, memory_offset)
         if field is not None:
+            canon = self.raw_inputs.get(memory_offset.as_int())
+            if canon is not None:
+                return f"IR_LOAD_BORROWED({FIELD_VARS[field]}, {canon})"
             return f"IR_SLOT({FIELD_VARS[field]})"
         return super().load(var, memory_offset)
 
@@ -749,6 +798,12 @@ class IRStack(Stack):
         local = super().pop(var, out)
         if local.memory_offset is not None and var.used and local.ir_field is None:
             local.ir_field = self.field_of(var, local.memory_offset)
+            if (local.ir_field is not None
+                    and local.memory_offset.as_int() in self.raw_inputs):
+                # Safe in any slot, as a converted object input is: a flush
+                # writes it to its canonical slot.
+                local.ir_borrowed = True
+                local.memory_offset = None
         return local
 
     def flush(self, out: CWriter) -> None:
@@ -790,6 +845,7 @@ class IREmitter(Emitter):
         super().__init__(out, analysis.labels)
         self.formats = formats
         self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
+        self._replacers["DISPATCH_SAME_OPARG"] = self.dispatch_same_oparg
         # The storage at a deopt or exit being emitted
         self.deopt_storage: Storage | None = None
 
@@ -846,10 +902,31 @@ class IREmitter(Emitter):
             return "1u"
         return super().expand_instruction_macro(tkn, args, inst)
 
+    def dispatch_same_oparg(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        """The handler runs again on the same word, and a SYNC_LAG handler
+        adds the lag on entry, so take it back first."""
+        assert inst is not None
+        fmt = self.formats[inst.name]
+        if fmt.sync == SYNC_LAG:
+            self.emit(f"stack_pointer -= {lag_expr(fmt)};\n")
+        self.emit(tkn)
+        return True
+
     def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
         assert inst is not None
         self.emit_borrow_drops(inst)
         fmt = self.formats[inst.name]
+        if fmt.sync == SYNC_LAG:
+            # A tail call enters the family head from the top, where it adds
+            # the lag again.  Computed goto enters after that.
+            self.emit(f"IR_UNSYNC_FOR_TAIL_CALL({lag_expr(fmt)});\n")
         if inst.family is not None and inst.family.name == BINARY_OP_FAMILY:
             # The handler of the operation that the entry records
             self.emit(f"UPDATE_MISS_STATS({BINARY_OP_FAMILY});\n")
@@ -889,7 +966,7 @@ class IREmitter(Emitter):
     ) -> None:
         kept = {item.name for item in uop.stack.outputs}
         for var in storage.inputs:
-            if var.ir_field is None or var.known_object:
+            if var.ir_field is None or var.known_object or var.ir_borrowed:
                 continue
             f = FIELD_VARS[var.ir_field]
             converts = not uop.properties.inline_ok and (
@@ -992,12 +1069,31 @@ def emit_field_checks(inst: Instruction, fmt: IRFormat, out: CWriter) -> None:
             out.emit(f"IR_CHECK_SLOT({f}, {fmt.dst_offset});\n")
         elif role == ROLE_BASE:
             out.emit(f"IR_CHECK_SLOT({f}, {base});\n")
+        elif role == ROLE_TOP:
+            out.emit(f"IR_CHECK_SLOT({f}, 0);\n")
         elif role.startswith(ROLE_IN0):
             k = int(role.split("+")[1])
             if fmt.borrow_mask & (1 << k):
                 out.emit(f"IR_CHECK_INPUT({f}, {k - fmt.n_inputs});\n")
             else:
                 out.emit(f"IR_CHECK_SLOT({f}, {k - fmt.n_inputs});\n")
+
+
+def lag_expr(fmt: IRFormat) -> str:
+    "The number of inputs of a SYNC_LAG handler that name locals"
+    return " + ".join(f"IR_IS_LOCAL({f})" for f in fmt.borrowed_fields())
+
+
+def sync_stack_pointer(fmt: IRFormat) -> str:
+    "The statement that sets stack_pointer on entry, see SYNC_*"
+    if fmt.sync == SYNC_DST:
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        return f"stack_pointer = IR_STACK_POINTER({dst}, {fmt.dst_offset});\n"
+    if fmt.sync == SYNC_TOP:
+        top = FIELD_VARS[fmt.field_of(ROLE_TOP)]
+        return f"stack_pointer = IR_STACK_POINTER({top}, 0);\n"
+    assert fmt.sync == SYNC_LAG
+    return f"stack_pointer += {lag_expr(fmt)};\n"
 
 
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
@@ -1024,11 +1120,9 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit(f"frame->instr_ptr = next_instr;\n")
     out.emit(f"next_instr += 1;\n")
     if fmt.borrow_mask:
-        # Absorbed loads have no words, so stack_pointer may lag behind.
+        # Folded loads have no words, so stack_pointer may lag behind.
         # A target defines this_instr below, after its PREDICTED_ label.
-        dst = FIELD_VARS[fmt.field_of(ROLE_DST)].replace(
-            "this_instr", "next_instr - 1")
-        out.emit(f"stack_pointer = IR_STACK_POINTER({dst}, {fmt.dst_offset});\n")
+        out.emit(sync_stack_pointer(fmt).replace("this_instr", "next_instr - 1"))
     out.emit(f"INSTRUCTION_STATS({inst.name});\n")
     if is_target:
         out.emit(f"IR_PREDICTED({name});\n")
@@ -1057,10 +1151,15 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit(f"opcode = {name};\n")
     declare_variables(inst, out)
     field_inputs: dict[int, str] = {}
+    raw_inputs: dict[int, str] = {}
+    if fmt.borrow_mask:
+        uses = classify_inputs(inst, fmt.n_inputs)
     for k in range(fmt.n_inputs):
         if fmt.borrow_mask & (1 << k):
             field_inputs[k - fmt.n_inputs] = fmt.input_field(k)
-    stack: Stack = IRStack(field_inputs)
+            if uses[k] == "raw":
+                raw_inputs[k - fmt.n_inputs] = fmt.canonical_slot(k)
+    stack: Stack = IRStack(field_inputs, raw_inputs)
     insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
     reachable = True
     for part in inst.parts:

@@ -559,7 +559,7 @@ gen_try_set_executing(PyGenObject *gen)
  * slot is CANON, names a local whose LOAD_FAST_BORROW a fold absorbed.
  * The assembler folds no load yet, so every input field is CANON.  A local
  * is below every temporary, so it is never CANON. */
-#define IR_BORROWED(F, CANON) ((F) != (CANON))
+#define IR_BORROWED(F, CANON) ((int)(F) != (int)(CANON))
 
 /* REF, read through field F and known to be a pointer, borrowed if F names
  * a local. */
@@ -610,6 +610,36 @@ static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
         next_instr = this_instr; \
         DISPATCH_GOTO(); \
     } while (0)
+
+/* Whether field F names a local, a cell or a free variable rather than a
+ * temporary: the executing copy keeps co_nlocalsplus in its header. */
+#define IR_NLOCALSPLUS() \
+    ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
+#define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
+
+/* The slot that stack_pointer points to */
+#define IR_STACK_SLOT() ((int)(stack_pointer - frame->localsplus))
+
+/* An input that the handler consumes as it is, through field F, whose
+ * canonical slot is CANON: a temporary, or a borrow of the local that F
+ * names, which is what LOAD_FAST_BORROW would have pushed. */
+#if defined(Py_STACKREF_DEBUG) || !defined(Py_STACKREF_INLINE_VALUES)
+#  define IR_LOAD_BORROWED(F, CANON) \
+    (IR_BORROWED(F, CANON) ? PyStackRef_BorrowAt(&IR_SLOT(F)) : IR_SLOT(F))
+#else
+#  define IR_LOAD_BORROWED(F, CANON) \
+    ((_PyStackRef){ .bits = IR_SLOT(F).bits \
+        | ((uintptr_t)IR_BORROWED(F, CANON) & _PyStackRef_BorrowBitAt(&IR_SLOT(F))) })
+#endif
+
+/* A handler that adds its lag to stack_pointer on entry (SYNC_LAG in the
+ * generator) takes it back before a tail call to its family head, which
+ * adds it again.  With computed goto the head is entered after that. */
+#if _Py_TAIL_CALL_INTERP
+#  define IR_UNSYNC_FOR_TAIL_CALL(LAG) (stack_pointer -= (LAG))
+#else
+#  define IR_UNSYNC_FOR_TAIL_CALL(LAG) ((void)0)
+#endif
 
 /* The stack pointer before an instruction whose dst field F names the slot
  * at OFF from it.  The loads that an instruction absorbs have no words, so

@@ -91,6 +91,8 @@ enum {
     _PyIR_ROLE_BASE,
     _PyIR_ROLE_FB,
     _PyIR_ROLE_IMM,
+    _PyIR_ROLE_TOP,     // the canonical slot of the top of the stack, which
+                        // the handler sets stack_pointer from
     _PyIR_ROLE_IN0,
 };
 
@@ -152,7 +154,7 @@ typedef struct _PyCodeExec {
     char *entries;          // feedback entry 0, or NULL if no instruction
                             // has an entry
     uint32_t nwords;
-    uint32_t reserved;
+    uint32_t nlocalsplus;   // of the code, which IR_IS_LOCAL() reads
     _PyFbBlock *feedback;   // the header before entries, or NULL
 } _PyCodeExec;
 
@@ -216,6 +218,11 @@ PyAPI_FUNC(int) _PyCode_InstrOparg(PyCodeObject *co, int i);
 
 /* The feedback index of the instruction at index i, or -1 if it has none. */
 PyAPI_FUNC(int) _PyCode_InstrFbIndex(PyCodeObject *co, int i);
+
+/* The number of inputs of the instruction at index i that its fields read
+ * from locals: the loads folded into it, which have no words and push
+ * nothing that the frame sees before the instruction runs. */
+PyAPI_FUNC(int) _PyCode_InstrFoldedInputs(PyCodeObject *co, int i);
 
 /* The word index that the instruction at index i jumps to, or -1 if it
  * does not jump.  END_ASYNC_FOR, which names its SEND, counts as a jump. */

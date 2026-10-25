@@ -669,10 +669,8 @@ Step 5 adds the following.
     nothing while the code object has monitoring data or any tool has global
     events, so code lowered under a tracer runs one word per instruction. For
     code lowered before, `initialize_lines` moves a line start from an
-    absorbed load to its consumer (`_PyIR_WordAnchor`), and no `INSTRUCTION`
-    event is raised for an absorbed load: `f_trace_opcodes` misses those
-    opcodes, which test_ir records as an expected failure. This falls short
-    of decision 10.5; step 6 re-lowers such code one word per instruction.
+    absorbed load to its consumer (`_PyIR_WordAnchor`). Item 28 covers
+    `INSTRUCTION` events.
 26. **Lowering cost.** Line starts are marked only once a load could be
     absorbed, layout takes one pass when every field fits in 16 bits, and
     handler choice, absorption and feedback allocation share one loop. The
@@ -680,11 +678,22 @@ Step 5 adds the following.
     about 66 million in a richards run, against 13 million for quickening in
     the stack build. That is all of richards' gap, since its loop costs less
     than the stack build's.
-27. **Free-threaded hang, a step 4 bug.**
-    `test_free_threading.test_monitoring` (SetPreTraceMultiThreaded,
-    test_instrumentation) hangs in the free-threaded IR build and passes in
-    63 ms in the free-threaded stack build. It must be fixed before the IR
-    becomes the default, in its own commit after step 5.
+27. **Free-threaded hang, a step 4 bug, still open.**
+    `test_free_threading.test_monitoring` hangs in the free-threaded IR build
+    and never in the free-threaded stack build. The hang is heap corruption:
+    a thread that exits spins in mimalloc's `mi_heap_collect_ex` on a free
+    list that a double free turned into a cycle, and a debug build reports a
+    double free of a 128- or 224-byte block from the delayed-free list, so
+    another thread freed a block that the exiting thread owns. Toggling
+    `CALL` events in one thread while ten or more threads make calls
+    triggers it in about one run in eight, with C callees and a C callback;
+    setting the events once, a single worker thread, or toggling `PY_START`
+    or `PY_RETURN` does not. Lowering runs under the code object's critical
+    section and instrumentation under the same lock or with the world
+    stopped, so neither races the other. Until it is found, the
+    free-threaded IR build does not support toggling sys.monitoring while
+    other threads run. test_monitoring's test_no_unwind_for_shim_frame also
+    fails there, since that build does not specialise the IR.
 
 Left for step 6, in order of measured cost:
 
@@ -695,11 +704,32 @@ Left for step 6, in order of measured cost:
   instructions longer than the stack build's, from three field loads against
   one oparg load, the `lea` for `stack_pointer`, the owner read through its
   field and the borrow OR.
-- Re-lowering one word per instruction when opcode events are enabled,
-  which removes the expected failure in test_ir.
 - Absorption into formats without a dst (`STORE_ATTR*`, `STORE_SUBSCR*`), and
   borrowable inputs for `BINARY_OP`, `COMPARE_OP` and `TO_BOOL` with tagged
   values, where they take none today.
 - Smaller items: the dependent load of `co->_co_ir->words` at frame push,
   `CALL_PY_EXACT_ARGS` (8 instructions over the stack build),
   `STORE_ATTR_INSTANCE_VALUE` and `TO_BOOL`.
+
+Step 6 adds the following.
+
+28. **Lowering again for INSTRUCTION events.** A block with absorbed loads
+    is marked `_PyIR_FUSED`. When instrumentation turns on `INSTRUCTION`
+    events for such a code object, `_PyIR_PrepareInstrumentation` lowers it
+    again without absorption and keeps the fused block in the new block's
+    `fused` field, since frames may still be in it, on thread stacks or
+    suspended in generators. Every word of the fused block that a frame can
+    dispatch on is set to `IR_REMAP`, which moves the frame to the first
+    word of the instruction that starts at the same offset in the new
+    block. Frames dispatch only between instructions, where both blocks
+    hold the same values in the same slots, since the canonical slot of an
+    absorbed load is written only by its consumer. A handler that is in an
+    escaping call when the code is lowered again finishes its instruction
+    in the fused block. `_PyFrame_IRBlock` returns the fused block for a
+    frame still in it, so offsets, unwinding and jumps stay right. If a
+    LINE callback turns on the events, the instruction at the line start
+    starts over in the new block, so the absorbed loads before it raise
+    their events. The new block stays when the events go off. Line starts
+    moved by item 25 stay on the consumer, so the LINE event of such a line
+    comes after the load's INSTRUCTION event. Out-of-process readers map a
+    frame still in a fused block through the new block's pcmap.

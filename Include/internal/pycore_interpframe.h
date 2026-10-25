@@ -50,7 +50,16 @@ _PyFrame_IRBlock(_PyInterpreterFrame *f)
     if (_PyFrame_IsAtStub(f)) {
         return &_PyIR_LowerStub;
     }
-    return _PyFrame_GetCode(f)->_co_ir;
+    _PyIRBlock *block = _PyFrame_GetCode(f)->_co_ir;
+    // A frame that was in the code when it was lowered again stays in the
+    // fused block until its next dispatch.  The word before a block counts.
+    _PyIRBlock *fused = block->fused;
+    if (fused != NULL && f->instr_ptr >= fused->words - 1
+        && f->instr_ptr <= fused->words + fused->nwords)
+    {
+        return fused;
+    }
+    return block;
 }
 
 static inline _PyIRWord *

@@ -29,6 +29,13 @@ def make_function(source, name="f"):
     return namespace[name]
 
 
+def one_word_per_instruction(func):
+    anchors = [instr[1] for instr in get_ir(func.__code__)]
+    offsets = [instr.offset for instr in dis.get_instructions(func)
+               if instr.opname != "EXTENDED_ARG"]
+    return anchors == offsets
+
+
 def trace(func, *args, opcodes=False):
     """Run func under sys.settrace(): its result and its (event, f_lasti,
     f_lineno) for the events of func's own frame."""
@@ -188,18 +195,60 @@ class LoweringTest(unittest.TestCase):
         self.assertEqual(f(C()), 5)
         self.assertNotIn("LOAD_FAST_BORROW", handlers(f))
 
-    # Code lowered before INSTRUCTION events were enabled has no word for
-    # an absorbed load to instrument, see section 11 of
-    # boil/design/01-internal-ir.md.
-    @unittest.expectedFailure
     def test_opcode_events_of_absorbed_loads(self):
+        # Enabling INSTRUCTION events lowers fused code again, one word per
+        # instruction.
         def f(o):
             return o.attr
         self.assertEqual(f(C()), 5)
+        self.assertNotIn("LOAD_FAST_BORROW", handlers(f))
         result, events = trace(f, C(), opcodes=True)
         self.assertEqual(result, 5)
         lasti = [instr.offset for instr in dis.get_instructions(f)][1:]
         self.assertEqual([e[1] for e in events if e[0] == "opcode"], lasti)
+        self.assertTrue(one_word_per_instruction(f))
+        # The new block stays once the events are off
+        self.assertEqual(f(C()), 5)
+        self.assertTrue(one_word_per_instruction(f))
+
+    def test_frames_in_the_fused_block(self):
+        # Frames that are in the code when it is lowered again go on in the
+        # new block: a suspended generator, and a frame in a call that turns
+        # on opcode events for it and raises.
+        def gen(o):
+            yield o.attr
+            yield o.attr
+
+        def enable_and_raise():
+            frame = sys._getframe(1)
+            frame.f_trace = lambda *args: None
+            frame.f_trace_opcodes = True
+            raise ValueError
+
+        def f(o):
+            x = o.attr
+            try:
+                enable_and_raise()
+            except ValueError:
+                pass
+            return x + o.attr
+
+        g = gen(C())
+        self.assertEqual(next(g), 5)
+        self.assertFalse(one_word_per_instruction(gen))
+        self.assertFalse(one_word_per_instruction(f))
+        sys.settrace(lambda *args: None)
+        try:
+            self.assertEqual(f(C()), 10)
+            g.gi_frame.f_trace_opcodes = True
+            g.gi_frame.f_trace = lambda *args: None
+            self.assertEqual(next(g), 5)
+        finally:
+            sys.settrace(None)
+        self.assertTrue(one_word_per_instruction(f))
+        self.assertTrue(one_word_per_instruction(gen))
+        with self.assertRaises(StopIteration):
+            next(g)
 
     def test_f_lasti(self):
         def f():

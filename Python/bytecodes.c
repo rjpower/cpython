@@ -5678,6 +5678,14 @@ dummy_func(
             DISPATCH();
         }
 
+        // A word of a fused block that its code object no longer runs: the
+        // frame goes on in the block that replaced it.
+        ir_only inst(IR_REMAP, ( -- )) {
+            next_instr = _PyIR_Remap(_PyFrame_GetCode(frame), frame->instr_ptr);
+            frame->instr_ptr = next_instr;
+            DISPATCH();
+        }
+
         // The high halves of fields A, B and C of the next word.  The next
         // word saves the IP, so that an INSTRUMENTED_LINE there finds the
         // previous instruction in frame->instr_ptr.

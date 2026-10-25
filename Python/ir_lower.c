@@ -311,6 +311,7 @@ typedef struct {
     int fb_words;       // words of all entries
     int max_oparg;
     int lines_marked;   // mark_line_starts() has run
+    int nabsorbed;      // loads absorbed into their consumers
 } lowering;
 
 static const uint8_t fb_entry_size[256] = {
@@ -637,6 +638,7 @@ absorb_loads(lowering *L, int i)
             in->borrow[k] = IR_SLOT_FIELD(locals[p]) | IR_BORROW;
         }
         load->absorbed = 1;
+        L->nabsorbed++;
     }
 }
 
@@ -832,6 +834,9 @@ emit(lowering *L)
     block->words = words;
     block->nwords = L->nwords;
     block->flags = wide ? _PyIR_PCMAP_WIDE : 0;
+    if (L->nabsorbed) {
+        block->flags |= _PyIR_FUSED;
+    }
     block->pcmap = (char *)words + words_size + fb_size;
     char *entries = NULL;
     if (fb_size) {
@@ -926,8 +931,9 @@ check_block(lowering *L, _PyIRBlock *block)
 }
 #endif
 
+/* Lower co, absorbing loads unless one_to_one is set */
 static _PyIRBlock *
-lower(PyCodeObject *co)
+lower(PyCodeObject *co, int one_to_one)
 {
     lowering L = {.co = co};
     _PyIRBlock *block = NULL;
@@ -946,7 +952,7 @@ lower(PyCodeObject *co)
 #else
     int inline_values = 0;
 #endif
-    int absorb = !instrumentation_active(co);
+    int absorb = !one_to_one && !instrumentation_active(co);
     for (int i = 0; i < L.n; i++) {
         lower_insn *in = &L.insns[i];
         in->handler = choose_handler(co, in, inline_values);
@@ -995,7 +1001,7 @@ _PyIR_Lower(PyCodeObject *co)
     Py_BEGIN_CRITICAL_SECTION(co);
     block = co->_co_ir;
     if (block == &_PyIR_LowerStub) {
-        block = lower(co);
+        block = lower(co, 0);
         if (block != NULL) {
             FT_ATOMIC_STORE_PTR_RELEASE(co->_co_ir, block);
         }
@@ -1036,18 +1042,22 @@ _PyIR_Clear(PyCodeObject *co)
     if (block->feedback != NULL) {
         _PyFb_Clear(block->feedback);
     }
+    if (block->fused != NULL) {
+        _PyIRBlock *fused = block->fused;
+        if (fused->feedback != NULL) {
+            _PyFb_Clear(fused->feedback);
+        }
+        PyMem_Free(fused->real);
+        PyMem_Free(fused);
+    }
     PyMem_Free(block->real);
     PyMem_Free(block);
     co->_co_ir = &_PyIR_LowerStub;
 }
 
-size_t
-_PyIR_SizeOf(PyCodeObject *co)
+static size_t
+block_size(const _PyIRBlock *block)
 {
-    _PyIRBlock *block = FT_ATOMIC_LOAD_PTR_ACQUIRE(co->_co_ir);
-    if (block == &_PyIR_LowerStub || block == &_PyIR_InitCleanupBlock) {
-        return 0;
-    }
     size_t pc_entry = (block->flags & _PyIR_PCMAP_WIDE)
         ? sizeof(_PyIRPc32) : sizeof(_PyIRPc16);
     size_t res = sizeof(_PyIRBlock)
@@ -1067,7 +1077,20 @@ _PyIR_SizeOf(PyCodeObject *co)
             res += capacity * sizeof(_PyFbPoly);
         }
     }
+    if (block->fused != NULL) {
+        res += block_size(block->fused);
+    }
     return res;
+}
+
+size_t
+_PyIR_SizeOf(PyCodeObject *co)
+{
+    _PyIRBlock *block = FT_ATOMIC_LOAD_PTR_ACQUIRE(co->_co_ir);
+    if (block == &_PyIR_LowerStub || block == &_PyIR_InitCleanupBlock) {
+        return 0;
+    }
+    return block_size(block);
 }
 
 
@@ -1083,13 +1106,58 @@ _PyIR_SizeOf(PyCodeObject *co)
             IR_HANDLER((block)->words[main])))->nwords; \
     }
 
-int
-_PyIR_PrepareInstrumentation(PyCodeObject *co)
+/* Replace the fused block of co with one that has a word per instruction.
+ * Frames may still be in the fused block, on thread stacks or suspended, so
+ * it stays allocated, and its words run IR_REMAP, which moves a frame over
+ * at its next dispatch.  A frame dispatches between instructions, where both
+ * blocks hold the same values in the same slots: the canonical slot of an
+ * absorbed load is only written by the instruction that absorbs it. */
+static int
+lower_one_to_one(PyCodeObject *co)
+{
+    _PyIRBlock *fused = co->_co_ir;
+    assert(fused->fused == NULL);
+    _PyIRBlock *block = lower(co, 1);
+    if (block == NULL) {
+        return -1;
+    }
+    block->fused = fused;
+    for (uint32_t w = 0; w < fused->nwords; ) {
+        _PyIRWord *main = &fused->words[w];
+        if (IR_HANDLER(*main) == IR_EXT) {
+            main++;
+        }
+        int handler = decoding_handler(fused, main, IR_HANDLER(*main));
+        uint32_t next = (uint32_t)(main - fused->words)
+                        + _PyIR_FormatOf(handler)->nwords;
+        _PyIR_SetHandler(&fused->words[w], IR_REMAP);
+        w = next;
+    }
+    FT_ATOMIC_STORE_PTR_RELEASE(co->_co_ir, block);
+    return 0;
+}
+
+_PyIRWord *
+_PyIR_Remap(PyCodeObject *co, const _PyIRWord *instr)
 {
     _PyIRBlock *block = co->_co_ir;
-    if (block == &_PyIR_LowerStub || block == &_PyIR_InitCleanupBlock
-        || block->real != NULL)
-    {
+    assert(block->fused != NULL);
+    return _PyIR_InstrAt(block, _PyIR_Start(block->fused, instr));
+}
+
+int
+_PyIR_PrepareInstrumentation(PyCodeObject *co, int instructions)
+{
+    _PyIRBlock *block = co->_co_ir;
+    if (block == &_PyIR_LowerStub || block == &_PyIR_InitCleanupBlock) {
+        return 0;
+    }
+    if (instructions && (block->flags & _PyIR_FUSED)) {
+        // The new block has real[], since co->_co_monitoring is set
+        assert(co->_co_monitoring != NULL);
+        return lower_one_to_one(co);
+    }
+    if (block->real != NULL) {
         return 0;
     }
     uint16_t *real = PyMem_Calloc(block->nwords, sizeof(uint16_t));

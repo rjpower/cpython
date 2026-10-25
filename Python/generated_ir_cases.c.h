@@ -10101,6 +10101,23 @@
             DISPATCH();
         }
 
+        TARGET(IR_REMAP) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = IR_REMAP;
+            (void)(opcode);
+            #endif
+            IR_ENTRY(IR_REMAP);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(IR_REMAP);
+            _PyFrame_SetStackPointer(frame, stack_pointer);
+            _PyFrame_StackPointerValidate(frame);
+            next_instr = _PyIR_Remap(_PyFrame_GetCode(frame), frame->instr_ptr);
+            _PyFrame_StackPointerInvalidate(frame);
+            frame->instr_ptr = next_instr;
+            DISPATCH();
+        }
+
         TARGET(IS_OP) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = IS_OP;

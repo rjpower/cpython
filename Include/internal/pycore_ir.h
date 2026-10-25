@@ -143,6 +143,10 @@ typedef struct {
 } _PyIRPc32;
 
 #define _PyIR_PCMAP_WIDE    1
+/* Some instruction has no word of its own: a load absorbed into its
+ * consumer.  INSTRUCTION events need the code lowered again, one word per
+ * instruction. */
+#define _PyIR_FUSED         2
 
 /* The IR of a code object: PyCodeObject._co_ir.  A lowered block is one
  * allocation, laid out as
@@ -154,12 +158,15 @@ typedef struct {
 typedef struct _PyIRBlock {
     _PyIRWord *words;
     uint32_t nwords;
-    uint32_t flags;         // _PyIR_PCMAP_WIDE
+    uint32_t flags;         // _PyIR_PCMAP_WIDE, _PyIR_FUSED
     void *pcmap;            // _PyIRPc16 or _PyIRPc32, one per word
     _PyFbBlock *feedback;   // NULL if no instruction has an entry
     uint16_t *real;         // once the code is instrumented, per main word
                             // the handler that the lowering chose, which
                             // instrumentation displaces and restores
+    struct _PyIRBlock *fused;   // the block that this one replaced, in
+                                // which frames may still be; its words
+                                // run IR_REMAP
 } _PyIRBlock;
 
 /* The block of code objects not lowered yet.  Its two words run IR_LOWER:
@@ -220,10 +227,16 @@ PyAPI_FUNC(int) _PyIR_OriginalHandler(struct _PyInterpreterFrame *frame,
 
 /* Instrumentation (Python/instrumentation.c) keeps rewriting
  * co_code_adaptive, which the IR shadows.  _PyIR_PrepareInstrumentation()
- * runs before the first rewrite of a lowered block and may fail;
- * _PyIR_SyncInstrumentation() then copies the opcode at offset, an
- * instruction's anchor, to the handler of its main word. */
-extern int _PyIR_PrepareInstrumentation(PyCodeObject *co);
+ * runs before each update of the instrumentation of a lowered block and may
+ * fail.  If instructions are on, it lowers a fused block again, one word per
+ * instruction.  _PyIR_SyncInstrumentation() then copies the opcode at
+ * offset, an instruction's anchor, to the handler of its main word. */
+extern int _PyIR_PrepareInstrumentation(PyCodeObject *co, int instructions);
+
+/* The word in the block of co where a frame at instr, a word of the fused
+ * block that co ran before, goes on: the first word of the instruction
+ * that starts at the same offset. */
+PyAPI_FUNC(_PyIRWord *) _PyIR_Remap(PyCodeObject *co, const _PyIRWord *instr);
 extern void _PyIR_SyncInstrumentation(PyCodeObject *co, int offset);
 
 /* The anchor of the instruction whose words cover bytecode offset offset:

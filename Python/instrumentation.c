@@ -1469,6 +1469,16 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     Py_DECREF(line_obj);
     uint8_t original_opcode;
 done:
+#ifdef Py_IR_INTERP
+    if (frame->instr_ptr == instr && code->_co_ir->fused != NULL
+        && _PyFrame_IRBlock(frame) == code->_co_ir->fused)
+    {
+        /* A tool turned on INSTRUCTION events, so the code is lowered again.
+         * Start the instruction over in the new block, which may have words
+         * before it for the loads that the instruction absorbed. */
+        frame->instr_ptr = _PyIR_Remap(code, instr);
+    }
+#endif
     original_opcode = _PyCode_GetOriginalOpcode(line_data, i);
 #ifdef Py_IR_INTERP
     if (IR_HANDLER(*instr) == INSTRUMENTED_INSTRUCTION) {
@@ -1788,11 +1798,6 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
     if (allocate_instrumentation_data(code)) {
         return -1;
     }
-#ifdef Py_IR_INTERP
-    if (_PyIR_PrepareInstrumentation(code) < 0) {
-        return -1;
-    }
-#endif
     // If the local monitors are out of date, clear them up
     _Py_LocalMonitors *local_monitors = &code->_co_monitoring->local_monitors;
     for (int i = 0; i < PY_MONITORING_TOOL_IDS; i++) {
@@ -1806,6 +1811,13 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
     _Py_LocalMonitors all_events = local_union(
         interp->monitors,
         code->_co_monitoring->local_monitors);
+#ifdef Py_IR_INTERP
+    if (_PyIR_PrepareInstrumentation(
+            code, all_events.tools[PY_MONITORING_EVENT_INSTRUCTION] != 0) < 0)
+    {
+        return -1;
+    }
+#endif
     bool multitools = multiple_tools(&all_events);
     if (code->_co_monitoring->tools == NULL && multitools) {
         code->_co_monitoring->tools = PyMem_Malloc(code_len);

@@ -359,3 +359,24 @@ immediates, call through the handler table, compare returned word, fall
 through or jump table. Specialisation needs no recompile; instrumentation
 invalidates. Full suite green on the JIT build. Commit 2, inline fast paths,
 in progress.
+
+### IR 6c (118e1e274ab) and IR-only (180a3244ba5) landed
+
+6c: one forward pass for decode, depth, jump marking, handler choice and
+feedback slots; static stack-effect table; cheaper emit. Lowering 37M on
+richards -l 1 against 12.3M for quickening (3.0x; structural: ~160
+instructions per code unit to build word, fields, pcmap and feedback entry,
+versus in-place opcode rewrites). Per loop below ref-head: richards 562.2M vs
+563.5M, nqueens 870.0M vs 879.6M, go 1190.2M vs 1229.9M, float 764.3M vs
+780.3M.
+
+IR-only: --with-ir-interp removed, Py_IR_INTERP unconditional, stack
+interpreter and its generator, test interpreter and regen targets deleted
+(+196/-36,732). Full suite passes; all 7 ports pass on the release build.
+Free-threaded build compiles but does not specialise the IR, so test_dis,
+test_opcache and test_thread_local_bytecode fail there (74 failures); FT is
+not a Phase 1 target and this is recorded as a limitation. Thread-local
+bytecode machinery kept inert for a separate removal.
+
+Pending: clean pyperformance timing of the IR-only build once the machine is
+idle (tier 0 suite and ASan run in progress).

@@ -552,3 +552,18 @@ pass, precise moving collector becomes step 10; shape-in-header decided at
 launched with one Opus agent, budget 2 days, in this worktree. Tier 0 is
 deleted in step 1 rather than carried through; `Python/jit_x86.h` is kept for
 step 8. Hourly wake cadence resumed.
+
+### 2026-10-25 — Step 1: encoding compiles; targeted tests pass
+
+The v2 word (16-bit handler, four 12-bit fields, CD as 24 bits) replaces the
+Phase 1 format on the existing lowering. dev-debug builds; a hand check of
+`def g(o): return o.x + o.y` gives `LOAD_ATTR_INSTANCE_VALUE 1,0,1,0` (dst
+slot 1, owner read from local 0, entry 1, name in the entry) and
+`BINARY_OP_ADD_INT 1,1,2,3`. Rung 2 (test_ir, test_dis, test_opcache,
+test_generated_cases, test_monitoring, test_sys_settrace, test_generators,
+test_exceptions) passes, as do test_generators, test_coroutines,
+test_asyncgen, test_sys_settrace, test_monitoring and test_contextlib_async
+with every FOR_ITER and SEND relaxed (`set_ir_max_forward(0)`). Tier 0 and
+the compare-and-branch superinstructions are deleted. Borrowed-local
+absorption is kept under the static rule (an input is borrowed when its field
+differs from its canonical slot), so it was not turned off.

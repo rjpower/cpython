@@ -571,19 +571,26 @@ static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
     ((_PyStackRef){ .bits = (REF).bits | (uintptr_t)IR_BORROWED(F, CANON) })
 #endif
 
-/* Before a deopt, drop REF if IR_BORROW_KNOWN made it a borrow of the local
- * that F names: the family head borrows the local again.  Only the
- * Py_STACKREF_DEBUG checker counts such borrows. */
-#ifdef Py_STACKREF_DEBUG
-#  define IR_DROP_BORROW(REF, F, CANON) \
+/* The box of an inline value read through field F, which belongs to the
+ * temporary's slot if F is the canonical slot.  A local keeps its inline
+ * value, and the handler drops the box as it would a temporary's. */
+#define IR_KEEP_BOX(REF, F, CANON) \
+    do { \
+        if (!IR_BORROWED(F, CANON)) { \
+            IR_SLOT(F) = (REF); \
+        } \
+    } while (0)
+
+/* Before a deopt, drop REF, an object input read through field F, if F
+ * names a local: the family head reads the local again.  REF is a borrow,
+ * which only the Py_STACKREF_DEBUG checker counts, or the box of the
+ * local's inline value. */
+#define IR_DROP_BORROW(REF, F, CANON) \
     do { \
         if (IR_BORROWED(F, CANON)) { \
             PyStackRef_CLOSE(REF); \
         } \
     } while (0)
-#else
-#  define IR_DROP_BORROW(REF, F, CANON) ((void)0)
-#endif
 
 /* The frame's view of its executing copy: frame->ir_words and
  * frame->ir_feedback follow the copy that instr_ptr points into. */

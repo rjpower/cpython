@@ -942,9 +942,10 @@ class IREmitter(Emitter):
                              inst.where)
 
     def emit_borrow_drops(self, inst: Instruction | None) -> None:
-        """Drop the borrows that IR_BORROW_KNOWN made of locals before a
-        deopt, where the family head reads the locals again.  Only the
-        Py_STACKREF_DEBUG checker tracks them."""
+        """Before a deopt, where the family head reads the locals again,
+        drop the object inputs read through fields that name locals: the
+        borrows that IR_BORROW_KNOWN made, which only the Py_STACKREF_DEBUG
+        checker tracks, and the boxes of inline values."""
         storage = self.deopt_storage
         if storage is None:
             return
@@ -1039,8 +1040,9 @@ class IREmitter(Emitter):
         self, uop: Uop, storage: Storage, inst: Instruction | None, stack_read_later: bool
     ) -> None:
         """Inputs read through a field: check, box and tag as borrowed when
-        the field names a local. A box goes back to the slot the field names,
-        which owns it then."""
+        the field names a local.  A box belongs to the handler, as the box of
+        the temporary that LOAD_FAST_BORROW pushed would: a temporary's goes
+        back to its slot, and a local keeps its inline value."""
         self.deopt_storage = storage
         try:
             self.convert_object_inputs(uop, storage, inst, stack_read_later)
@@ -1055,6 +1057,7 @@ class IREmitter(Emitter):
             if var.ir_field is None or var.known_object or var.ir_borrowed:
                 continue
             f = FIELD_VARS[var.ir_field]
+            canon = self.canonical_slot(inst, var.ir_field)
             converts = not uop.properties.inline_ok and (
                 var.name in uop.object_inputs or var.name in uop.asserted_objects)
             if not converts:
@@ -1078,11 +1081,14 @@ class IREmitter(Emitter):
                     self.emit("}\n")
                     if inst is not None:
                         self.emit(f"BOX_STAT_INC({inst.name});\n")
-                    self.emit(f"IR_SLOT({f}) = {var.name};\n")
+                    self.emit(f"IR_KEEP_BOX({var.name}, {f}, {canon});\n")
+                    self.emit("}\n")
+                    self.emit("else {\n")
+                    self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f}, {canon});\n")
                 self.emit("}\n")
-            self.out.start_line()
-            self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f}, "
-                      f"{self.canonical_slot(inst, var.ir_field)});\n")
+            if uop.is_guard() or var.name in uop.asserted_objects:
+                self.out.start_line()
+                self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f}, {canon});\n")
             var.known_object = True
             var.ir_borrowed = True
             # From here the value is safe in any slot, so a flush writes it to

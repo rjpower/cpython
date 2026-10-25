@@ -298,9 +298,11 @@ class TestIRCases(unittest.TestCase):
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(OP);
-                IR_SLOT(IR_FIELD_B(this_instr)) = left;
+                IR_KEEP_BOX(left, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -2);
             }
-            left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -2);
+            else {
+                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -2);
+            }
             if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
                 right = PyStackRef_Box(right);
                 if (PyStackRef_IsInline(right)) {
@@ -309,9 +311,11 @@ class TestIRCases(unittest.TestCase):
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(OP);
-                IR_SLOT(IR_FIELD_C(this_instr)) = right;
+                IR_KEEP_BOX(right, IR_FIELD_C(this_instr), IR_FIELD_D(this_instr) + -1);
             }
-            right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_FIELD_D(this_instr) + -1);
+            else {
+                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_FIELD_D(this_instr) + -1);
+            }
             PyObject *l = PyStackRef_AsPyObjectBorrow(left);
             PyObject *r = PyStackRef_AsPyObjectBorrow(right);
             PyObject *o = SPAM(l, r);
@@ -631,9 +635,11 @@ class TestIRCases(unittest.TestCase):
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(OP);
-                    IR_SLOT(IR_FIELD_B(this_instr)) = owner;
+                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
+                else {
+                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
+                }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
                 stack_pointer[-1] = owner;
@@ -684,9 +690,11 @@ class TestIRCases(unittest.TestCase):
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(OP);
-                    IR_SLOT(IR_FIELD_B(this_instr)) = owner;
+                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -1);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -1);
+                else {
+                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -1);
+                }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
                 stack_pointer[-1] = owner;

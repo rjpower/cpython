@@ -576,3 +576,30 @@ check now counts `ir_words` and `ir_feedback`). Rung 2 passes on
 dev-stackrefdebug. dev-ft builds; its rung 2 fails only in the known places
 (test_dis and test_opcache, 72 failures, and test_monitoring's
 test_no_unwind_for_shim_frame).
+
+### 2026-10-25 — Step 1: measurements
+
+Instructions per loop (worker at 2 and 10 loops, differenced) against Phase 1
+(f655ef62814). On gcc with computed goto, the register decode of section 2.1
+(v0) ran 8 to 14 percent more instructions: richards +10.0, go +14.0, nbody
++11.3, float +8.1. GCC had put `next_instr` in a stack slot, which cost a
+load and a store in every handler and a reload at dispatch. Handlers now read
+their fields from the word in memory at `this_instr`, and debug builds check
+each read against `ir_word`. That leaves richards +2.4, go +4.6, nbody +1.7
+and float +2.1 percent; LOAD_ATTR_INSTANCE_VALUE runs about 8 more
+instructions, which the layout accounts for (note 06 section 9). The
+clang-21 tail-call build, which still decodes `ir_word`, runs fewer
+instructions than Phase 1 built the same way on all four: richards -1.8, go
+-2.5, nbody -10.3, float -3.8 percent. Accepted as the step 1 result, with
+go over the 3 percent allowance for the computed-goto fallback.
+
+Two other changes did not explain or close the gap and are not kept:
+
+- With the compare-and-branch superinstructions disabled, Phase 1's go
+  rises by only 0.8 percent and the other three by under 0.2 percent.
+- A 32-byte feedback stride was 0.3 percent worse on go.
+
+The full suite on dev-debug and dev-default fails only in the known
+test_remote_exec_deleted_static_executable. Rung 2 passes on
+dev-stackrefdebug and dev-tailcall. dev-ft fails
+only in the known places. All seven ports pass against dev-default.

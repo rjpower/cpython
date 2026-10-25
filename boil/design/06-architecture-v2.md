@@ -579,3 +579,95 @@ Boehm-Demers-Weiser (conservative stack and data-segment scanning, interior
 pointers); Demers et al. 1990 (sticky mark bits for non-moving generational
 collection); Ruby's non-moving GC and PyPy's finalisation semantics as
 precedents for the observable changes.
+
+## 9. Step 1 measurements
+
+User-mode instructions per loop (`perf stat -e instructions:u`) of the
+pyperformance worker for each benchmark, run at 2 and at 10 loops, with the
+difference divided by 8. That excludes startup, imports and lowering. Repeat
+runs agree to within 0.1 percent. Phase 1 is f655ef62814. Both computed-goto
+builds use gcc 15.2 with `-O3`, and both tail-call builds use clang-21 with
+`--with-tail-call-interp`. Ryzen 7 3800X.
+
+gcc, computed goto (Phase 1 is `build/final-snapshot`):
+
+| benchmark | Phase 1 | v0 | v1 | v1b | v1b / Phase 1 |
+|---|---|---|---|---|---|
+| richards | 562.3M | 618.3M | 583.0M | 575.9M | 1.024 |
+| go | 1190.0M | 1356.5M | 1271.4M | 1244.9M | 1.046 |
+| nbody | 1013.1M | 1127.8M | 1038.1M | 1030.3M | 1.017 |
+| float | 763.6M | 825.0M | 789.8M | 779.7M | 1.021 |
+
+The variants:
+
+- v0 decodes each field from `ir_word` with a shift and a mask, as section
+  2.1 planned.
+- v1 reads each field from the word in memory, at `this_instr`, with a
+  16-bit load and a shift (B, D) or a mask (A, C). CD is a 32-bit load and a
+  shift.
+- v1b is v1 with the fields as `uintptr_t`, which removes GCC's 16-bit
+  arithmetic and zero extensions.
+- Making the feedback stride 32 bytes rather than 40 was worse by 0.3
+  percent on go and is not kept.
+- With the compare-and-branch superinstructions disabled, Phase 1 runs go
+  at 1199.5M (+0.8 percent) and the other three within 0.2 percent. Their
+  deletion is therefore not the gap.
+
+clang-21, tail call (Phase 1 built the same way):
+
+| benchmark | Phase 1 | v1b | ratio |
+|---|---|---|---|
+| richards | 643.2M | 631.6M | 0.982 |
+| go | 1418.5M | 1382.6M | 0.975 |
+| nbody | 1489.8M | 1336.8M | 0.897 |
+| float | 941.9M | 906.5M | 0.962 |
+
+The tail-call build passes the 1 percent gate. The computed-goto build stays
+within the 3 percent allowance for the fallback dispatch, except go at 4.6
+percent.
+
+**Why v0 lost.** Keeping `ir_word` live through the handler body changed
+GCC's register allocation in `_PyEval_EvalFrameDefault`. In v0, STORE_FAST
+and LOAD_ATTR_INSTANCE_VALUE keep `next_instr` in a stack slot: every
+handler loads it, stores it back after `next_instr += 1`, and dispatch loads
+it again. The base of `opcode_targets` is also spilled. Only `frame`,
+`stack_pointer` and `ir_word` stay in registers, and each field costs a
+copy, a shift and a mask. Phase 1 kept `next_instr` in a register, because
+every field read used it as a base. In v1 the only value spilled is the
+`opcode_targets` base, as in Phase 1. `next_instr` and `this_instr` live in
+registers, and dispatch loads only the 16-bit handler. Section 2.1's claim
+that a field costs two ALU operations from a register holds per field, but
+not for the handler as a whole.
+
+**What remains in v1b is the layout.** LOAD_ATTR_INSTANCE_VALUE runs about 8
+more instructions than in Phase 1. The attribute-load micro loop of
+`boil/tools/micro_loops.py` goes from 67 to 74, while the loop skeleton is 2
+cheaper. The extra instructions:
+
+- A and C need `& 0xfff`, because their 16-bit loads overlap the next field
+  (+2).
+- The borrow test compares the field with its canonical slot
+  (`cmp`/`setne`/`movzbl`) instead of testing a flag bit (+2).
+- The feedback entry is an index times 40 from `frame->ir_feedback`, where
+  Phase 1 addressed it relative to `next_instr` (+1 to 2).
+- The unscaled dst field leads GCC to build `&localsplus[A]` in a chain of
+  `lea`s (+2).
+
+Steps 2b (folding the data-movement handlers that dominate go's dispatch
+count, and with them most borrow tests) and 3 address these.
+
+**Tail call against computed goto.** In both trees the tail-call build runs
+many more instructions than the computed-goto build. For v1b the ratio is
+1.30 on nbody, 1.16 on float, 1.11 on go and 1.10 on richards; for Phase 1
+it is 1.47, 1.23, 1.19 and 1.14. This is a step 3 item, the interpreter
+state kept in registers across handlers, and not something to chase in
+step 1.
+
+| micro loop, instructions per iteration | Phase 1 | v0 | v1b |
+|---|---|---|---|
+| empty loop, i >= 1025 | 68.0 | 75.1 | 66.0 |
+| int add, result not cached | 65.8 | 79.0 | 68.8 |
+| float add | 75.1 | 87.9 | 77.9 |
+| two STORE_FAST | 57.0 | 69.0 | 61.1 |
+| attribute load | 67.0 | 85.1 | 74.0 |
+| attribute store, existing | 116.9 | 121.1 | 119.2 |

@@ -314,3 +314,24 @@ Queue for the IR agent: FT instrumentation hang fix (45 min), cherry-pick
 shapes fb39384892c (30 min), step 6 (2 h: fused compare-branch, oparg folding,
 re-lower 1:1 when opcode events are enabled, lowering within 2x of quickening;
 gate richards, go, nqueens, float below ref-head including one-time cost).
+
+### Shapes on main (b36c99a7593); step 6 re-cut; tier 0 launched
+
+Shapes cherry-picked with only generated IR files regenerated; its worktree
+removed. IR step 6 did not fit 2 hours: lowering costs 44M instructions on a
+richards run against 13M for quickening, and the per-loop gain needs the fused
+compare-branch, which needs 1:1 re-lowering when branch events are enabled so
+coverage keeps its BRANCH events. Re-cut as three commits by 00:00: 6a re-lower
+on monitoring (1h), 6b fused COMPARE_OP+POP_JUMP_IF with int/float fast paths
+(1.5h), 6c single-pass lowering (1.5h; gate: lowering within 2x of quickening
+and richards, nqueens, go, float below ref-head including one-time cost).
+Oparg folding dropped from Phase 1. FT IR build: double free when
+sys.monitoring CALL events toggle across 10+ threads, deferred with an ASan
+build in .worktrees/boil-ft-asan; throw-path instr_ptr fix goes in with 6a.
+
+Tier 0 JIT agent launched 19:45 in an isolated worktree from b36c99a7593, 6h,
+three commits: call-threaded code from the tail-call handlers with a
+return-to-caller dispatch mode and an own x86-64 emitter behind --with-tier0;
+inline fast paths for locals, constants, jumps, feedback-guarded inline int and
+float arithmetic and compares, and the shape guard; tests and measurements.
+IR word layout frozen for it.

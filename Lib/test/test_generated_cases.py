@@ -487,8 +487,9 @@ class TestIRCases(unittest.TestCase):
     def test_feedback_mapping(self):
         # A family shares one format. A name index, which may not fit in a
         # field, moves into the entry's arg field, and cache effects read the
-        # entry.  The generic handler shares entry 0 past the last index and
-        # then reads the oparg from the bytecode; a specialisation never does.
+        # entry.  The sites past the last index share entry 0 and run the
+        # NOFB form of the generic handler, which carries the oparg in the
+        # word; a specialisation never does.
         input = """
         specializing op(_SPECIALIZE_OP, (counter/1, owner -- owner)) {
             _PyFbHeader *feedback = FB_COUNTER();
@@ -521,6 +522,58 @@ class TestIRCases(unittest.TestCase):
             (void)this_instr;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
+            (void)oparg;
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            _PyStackRef owner;
+            _PyStackRef res;
+            // _SPECIALIZE_OP
+            {
+                uint32_t counter = fb->counter;
+                (void)counter;
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+            }
+            // _OP
+            {
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
+                    owner = PyStackRef_Box(owner);
+                    if (PyStackRef_IsInline(owner)) {
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_B(this_instr), stack_pointer[-1]);
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(OP);
+                    IR_SLOT(IR_FIELD_B(this_instr)) = owner;
+                }
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
+                res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
+                stack_pointer[-1] = owner;
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                _PyStackRef tmp = owner;
+                owner = res;
+                stack_pointer[-1] = owner;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                _PyFrame_StackPointerInvalidate(frame);
+            }
+            DISPATCH();
+        }
+
+        TARGET(OP_NOFB) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP_NOFB;
+            (void)(opcode);
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            INSTRUCTION_STATS(OP);
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
+            int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
@@ -619,7 +672,7 @@ class TestIRCases(unittest.TestCase):
 
     def test_oparg_in_entry(self):
         # Two inputs, a destination and an entry fill the word, so the oparg
-        # lives in the entry.
+        # lives in the entry, or for the NOFB form in the field of the entry.
         input = """
         inst(OP, (counter/1, left, right -- res)) {
             _PyFbHeader *feedback = FB_COUNTER();
@@ -641,6 +694,38 @@ class TestIRCases(unittest.TestCase):
             INSTRUCTION_STATS(OP);
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
+            (void)oparg;
+            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            right = stack_pointer[-1];
+            left = stack_pointer[-2];
+            uint32_t counter = fb->counter;
+            (void)counter;
+            _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            res = SPAM(left, right, oparg);
+            stack_pointer[-2] = res;
+            stack_pointer += -1;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(OP_NOFB) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = OP_NOFB;
+            (void)(opcode);
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(OP);
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
+            int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
             IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
@@ -736,7 +821,7 @@ class TestIRCases(unittest.TestCase):
         inst(INSTRUMENTED_LOAD, ( -- value)) {
             value = PyStackRef_DUP(GETLOCAL(oparg));
         }
-        ir_only inst(IR_LOWER, ( -- )) {
+        ir_only inst(IR_BACON, ( -- )) {
             SPAM();
         }
         ir_only inst(IR_PASS, ( -- )) {
@@ -752,23 +837,42 @@ class TestIRCases(unittest.TestCase):
         load = ("{ .flags = _PyIR_VALID, .roles = { _PyIR_ROLE_DST, "
                 "_PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, "
                 ".imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, "
-                ".dst = 0, .borrow_mask = 0x0, .shadow = LOAD }")
+                ".dst = 0, .borrow_mask = 0x0, .shadow = LOAD, .nofb = 0 }")
         for expected in [
-            "#define IR_LOWER                                       256",
+            "#define IR_BACON                                       256",
             "#define IR_PASS                                        257",
             "#define IR_NUM_HANDLERS                                258",
             f"[LOAD] = {load},",
             "[INSTRUMENTED_LOAD] = "
-            f"{load.replace('LOAD }', 'INSTRUMENTED_LOAD }')},",
+            f"{load.replace('LOAD,', 'INSTRUMENTED_LOAD,')},",
             "[IR_PASS] = { .flags = _PyIR_VALID | _PyIR_TRANSPARENT, "
             ".roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, "
             "_PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, "
             ".ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, "
-            ".shadow = IR_PASS },",
-            '[IR_LOWER - 256] = "IR_LOWER",',
-            '[IR_PASS - 256] = "IR_PASS",',
+            ".shadow = IR_PASS, .nofb = 0 },",
+            '[IR_BACON - IR_FIRST_ONLY_HANDLER] = "IR_BACON",',
+            '[IR_PASS - IR_FIRST_ONLY_HANDLER] = "IR_PASS",',
         ]:
             self.assertIn(expected, lines)
+
+    def test_ir_only_after_pseudo(self):
+        # IR-only handlers follow the pseudo-instructions, so that no number
+        # names both.
+        input = """
+        inst(GO, ( -- )) {
+            JUMPBY(oparg);
+        }
+        pseudo(JUMP, (--)) = {
+            GO,
+        };
+        ir_only inst(IR_BACON, ( -- )) {
+            SPAM();
+        }
+    """
+        analysis = self.analyze(input)
+        self.assertEqual(analysis.pseudos["JUMP"].opcode, 256)
+        self.assertEqual(ir_generator.first_ir_only_handler(analysis), 257)
+        self.assertEqual(ir_generator.handler_ids(analysis)["IR_BACON"], 257)
 
     def test_binary_op_handlers(self):
         # BINARY_OP has one generic handler per operation, with the operation
@@ -794,7 +898,7 @@ class TestIRCases(unittest.TestCase):
             INPUTS_DEAD();
         }
         macro(BINARY_OP_ADD_INT) = unused/1 + _GUARD_INT + _ADD_INT;
-        ir_only inst(IR_LOWER, ( -- )) {
+        ir_only inst(IR_BACON, ( -- )) {
             SPAM();
         }
     """
@@ -804,7 +908,7 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("BINARY_OP_SUBSCR", handlers)
         ids = ir_generator.handler_ids(analysis)
         self.assertNotIn("BINARY_OP", ids)
-        self.assertEqual(ids["IR_LOWER"], 256)
+        self.assertEqual(ids["IR_BACON"], 256)
         self.assertEqual([ids[name] for name in handlers],
                          list(range(257, 257 + len(handlers))))
         formats = ir_generator.compute_formats(analysis)

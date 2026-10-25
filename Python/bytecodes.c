@@ -5665,8 +5665,9 @@ dummy_func(
 
         // The jumps that the assembler adds after a relaxed FOR_ITER or
         // SEND (Python/assemble.c), which no instruction of the stack
-        // machine stands for.
-        ir_only inst(IR_JUMP, ( -- )) {
+        // machine stands for.  They leave frame->instr_ptr at the loop, so
+        // that the events after them see the loop as the instruction before.
+        ir_only no_save_ip inst(IR_JUMP, ( -- )) {
             JUMPTO(oparg);
         }
 

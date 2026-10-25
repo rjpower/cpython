@@ -2921,9 +2921,9 @@ _Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _PyInstr *in
         else if (tp == &PyGen_Type && oparg <= SHRT_MAX) {
             // The generator returns to END_FOR, or for a relaxed FOR_ITER
             // to a jump there
-            assert(instr_opcode(instr + 1 + oparg) == END_FOR ||
-                   instr_opcode(instr + 1 + oparg) == INSTRUMENTED_END_FOR ||
-                   IR_HANDLER(instr[1 + oparg]) == IR_JUMP);
+            assert(IR_HANDLER(instr[1 + oparg]) == IR_JUMP ||
+                   instr_opcode(instr + 1 + oparg) == END_FOR ||
+                   instr_opcode(instr + 1 + oparg) == INSTRUMENTED_END_FOR);
             /* Don't specialize if PEP 523 is active */
             if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
                 goto failure;

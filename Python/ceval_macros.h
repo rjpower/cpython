@@ -556,8 +556,9 @@ gen_try_set_executing(PyGenObject *gen)
 #define IR_SLOT(F) (frame->localsplus[(F)])
 
 /* Whether an input that the handler reads through field F, whose canonical
- * slot is CANON, names a local whose LOAD_FAST_BORROW the lowering
- * absorbed.  A local is below every temporary, so it is never CANON. */
+ * slot is CANON, names a local whose LOAD_FAST_BORROW a fold absorbed.
+ * The assembler folds no load yet, so every input field is CANON.  A local
+ * is below every temporary, so it is never CANON. */
 #define IR_BORROWED(F, CANON) ((F) != (CANON))
 
 /* REF, read through field F and known to be a pointer, borrowed if F names

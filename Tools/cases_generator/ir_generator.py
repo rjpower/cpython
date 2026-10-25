@@ -54,9 +54,10 @@ Invariants:
 - The temporary at depth d lives in slot nlocalsplus + d, where the stack
   interpreter keeps it, and handlers keep stack_pointer. A register field
   equals that canonical slot unless it names a local whose LOAD_FAST_BORROW
-  the lowering absorbed, which debug builds check at every dispatch. Handlers
-  read an input through its field only where the family lets the lowering
-  absorb a LOAD_FAST_BORROW, that is where every member converts the input to
+  a fold absorbed, which debug builds check at every dispatch; the assembler
+  folds no load yet. Handlers read an input through its field only where the
+  family lets a fold absorb a LOAD_FAST_BORROW, that is where every member
+  converts the input to
   an object first and the format has a dst; there the borrow tag is set
   statically after the object check, if the field is not the canonical slot.
   An absorbed load has no word, so these handlers set stack_pointer from dst

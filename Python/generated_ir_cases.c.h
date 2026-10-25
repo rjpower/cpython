@@ -12868,7 +12868,6 @@
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IR_JUMP);
             int oparg = (int)IR_FIELD_CD(this_instr);

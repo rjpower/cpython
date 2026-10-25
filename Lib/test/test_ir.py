@@ -1,67 +1,38 @@
-"""Tests for the register IR (Include/internal/pycore_ir.h)."""
+"""Tests for the register IR (Include/internal/pycore_ir.h) that the
+assembler (Python/assemble.c) emits."""
 
 import dis
 import io
-import opcode
 import sys
 import unittest
 from test import support
 from test.support import import_helper
+from test.support.bytecode_helper import encode_words
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 get_ir = _testinternalcapi.get_ir
 
 # The free-threaded build does not specialise the IR.
 SPECIALIZES = not support.Py_GIL_DISABLED
-BORROWED_LOADS = ("LOAD_FAST_BORROW", "LOAD_FAST_BORROW_LOAD_FAST_BORROW")
 # Include/internal/pycore_ir.h
 IR_MAX_SLOTS = 4095
 IR_FIELD_MAX = 4095
 IR_MAX_FORWARD = 2047
 
 
-def instructions(code):
-    """The words of get_ir() less the jumps that a relaxed FOR_ITER or SEND
-    adds, which share its offsets"""
-    words = []
-    for word in get_ir(code):
-        if words and word[:2] == words[-1][:2]:
-            assert word[2] == "JUMP_FORWARD", word
-            continue
-        words.append(word)
-    return words
-
-
 def handlers(func):
-    return [instr[2] for instr in instructions(func.__code__)]
+    """The handlers of the executing copy of func's code"""
+    return [word[0] for word in get_ir(func.__code__, True)]
 
 
-def names_local(func, field):
-    """Whether a slot field of func names a local, which an input field does
-    only for an absorbed load"""
-    return field < len(_testinternalcapi.get_co_localskinds(func.__code__))
+def nlocalsplus(func):
+    return len(_testinternalcapi.get_co_localskinds(func.__code__))
 
 
 def make_function(source, name="f"):
     namespace = {}
     exec(source, namespace)
     return namespace[name]
-
-
-def assemble(*instrs):
-    """co_code for (opname, oparg) pairs, with their inline caches"""
-    code = bytearray()
-    for name, arg in instrs:
-        code += bytes([dis.opmap[name], arg])
-        code += bytes(2 * opcode._inline_cache_entries.get(name, 0))
-    return bytes(code)
-
-
-def one_word_per_instruction(func):
-    anchors = [instr[1] for instr in instructions(func.__code__)]
-    offsets = [instr.offset for instr in dis.get_instructions(func)
-               if instr.opname != "EXTENDED_ARG"]
-    return anchors == offsets
 
 
 def trace(func, *args, opcodes=False):
@@ -87,23 +58,18 @@ class C:
     attr = 5
 
 
-class LoweringTest(unittest.TestCase):
+class AssemblerTest(unittest.TestCase):
 
     def check_offsets(self, func):
-        # One IR instruction per bytecode instruction but EXTENDED_ARG and
-        # the loads that their consumer absorbs, anchored at the bytecode
-        # offset of the instruction.  Its offsets start at the first of those
-        # before it.
-        instrs = list(dis.get_instructions(func))
-        i = 0
-        for start, anchor, *_ in instructions(func.__code__):
-            self.assertEqual(start, instrs[i].offset)
-            while instrs[i].offset != anchor:
-                self.assertIn(instrs[i].opname,
-                              ("EXTENDED_ARG",) + BORROWED_LOADS)
-                i += 1
-            i += 1
-        self.assertEqual(i, len(instrs))
+        # An instruction per word, at the word's index, and line ranges
+        # that cover the words
+        nwords = len(func.__code__.co_code) // 8
+        self.assertEqual(len(get_ir(func.__code__)), nwords)
+        self.assertEqual([instr.offset for instr in dis.get_instructions(func)],
+                         list(range(nwords)))
+        ranges = [(start, end) for start, end, _ in func.__code__.co_lines()]
+        self.assertEqual(ranges[0][0], 0)
+        self.assertEqual(ranges[-1][1], nwords)
 
     def test_offsets(self):
         def f(a, b):
@@ -113,35 +79,39 @@ class LoweringTest(unittest.TestCase):
             return None
         self.check_offsets(f)
 
-    def load_attr_owner(self, func):
-        # Field B of the LOAD_ATTR of func
-        ir = get_ir(func.__code__)
-        return [instr for instr in ir if instr[2] == "LOAD_ATTR"][0][4]
+    def test_stack_slots(self):
+        # The temporary at depth d lives in slot nlocalsplus + d
+        def f(a, b):
+            return a in b
+        base = nlocalsplus(f)
+        contains = [instr for instr in dis.get_instructions(f)
+                    if instr.opname == "CONTAINS_OP"][0]
+        self.assertEqual(contains.dst, base)
+        self.assertEqual(contains.srcs, (base, base + 1))
+        self.assertTrue(f(1, [1]))
+        self.assertFalse(f(2, {1}))
 
-    def test_absorbed_load(self):
+    def test_borrowed_load_keeps_a_word(self):
+        # The assembler folds nothing: the load of the owner has a word, and
+        # LOAD_ATTR reads the owner from the slot that the load writes.
         def f(o):
             return o.attr
-        load = [instr for instr in dis.get_instructions(f)
-                if instr.opname == "LOAD_FAST_BORROW"][0]
-        ir = {instr[2]: instr for instr in get_ir(f.__code__)}
-        # The load has no word.  LOAD_ATTR covers its offset and reads the
-        # owner through field B, from local 0.
-        self.assertNotIn("LOAD_FAST_BORROW", ir)
-        start, anchor, _, _, b, *_ = ir["LOAD_ATTR"]
-        self.assertEqual(start, load.offset)
-        self.assertGreater(anchor, start)
-        self.assertEqual(b, 0)
-        self.check_offsets(f)
+        ir = get_ir(f.__code__)
+        load = [word for word in ir if word[0] == "LOAD_FAST_BORROW"][0]
+        attr = [word for word in ir if word[0] == "LOAD_ATTR"][0]
+        self.assertEqual(attr[2], load[1])
+        self.assertEqual(load[1], nlocalsplus(f))
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(f(C()), 5)
         if SPECIALIZES:
             self.assertNotIn("LOAD_ATTR", handlers(f))
-        self.assertNotIn("LOAD_FAST_BORROW", handlers(f))
+        self.assertIn("LOAD_FAST_BORROW", handlers(f))
+        # The words of the code object stay as the compiler emitted them
+        self.assertEqual(get_ir(f.__code__), ir)
 
     def test_deopt_after_borrowing_a_local(self):
-        # The specialised LOAD_ATTR borrows its absorbed owner before its
-        # guards, and a deopt drops that borrow; a Py_STACKREF_DEBUG build
-        # aborts when the frame closes the local with the borrow still out.
+        # A Py_STACKREF_DEBUG build aborts when the frame closes a local
+        # whose borrow a deoptimising LOAD_ATTR left out.
         def f(o):
             try:
                 return o.attr
@@ -151,33 +121,13 @@ class LoweringTest(unittest.TestCase):
             self.assertEqual(f(C()), 5)
         if SPECIALIZES:
             self.assertNotIn("LOAD_ATTR", handlers(f))
-        self.assertTrue(names_local(f, self.load_attr_owner_field(f)))
         for _ in range(3):
             self.assertIsNone(f(object()))
 
-    def load_attr_owner_field(self, func):
-        # Field B of the word that runs the LOAD_ATTR of func
-        anchor = [instr.offset for instr in dis.get_instructions(func)
-                  if instr.opname == "LOAD_ATTR"][0]
-        return [instr for instr in get_ir(func.__code__)
-                if instr[1] == anchor][0][4]
-
-    def test_absorbed_pair(self):
-        def f(a, b):
-            return a in b
-        self.assertNotIn("LOAD_FAST_BORROW_LOAD_FAST_BORROW", handlers(f))
-        ir = {instr[2]: instr for instr in get_ir(f.__code__)}
-        # Field A is the destination, and B and C name the locals
-        _, _, _, _, b, c, _ = ir["CONTAINS_OP"]
-        self.assertEqual((b, c), (0, 1))
-        self.check_offsets(f)
-        self.assertTrue(f(1, [1]))
-        self.assertFalse(f(2, {1}))
-
     def test_exception_from_a_pushed_frame(self):
         # LOAD_ATTR_PROPERTY pushes the frame of the getter.  When the getter
-        # raises, the unwinding of f looks up the code unit before LOAD_ATTR,
-        # the load that starts the try block, which LOAD_ATTR absorbs.
+        # raises, the unwinding of f looks up the word of LOAD_ATTR in the
+        # exception table.
         class P:
             @property
             def attr(self):
@@ -192,51 +142,12 @@ class LoweringTest(unittest.TestCase):
             self.assertEqual(f(P()), "caught")
         if SPECIALIZES:
             self.assertIn("LOAD_ATTR_PROPERTY", handlers(f))
-        self.assertNotIn("LOAD_FAST_BORROW", handlers(f))
 
-    def test_no_absorption_into_a_join(self):
-        # LOAD_ATTR starts a basic block, so its owner comes from the stack
-        # on both paths.  The compiler borrows no load whose value crosses a
-        # block boundary; patch one in to check that the lowering holds back.
-        def f(a, b):
-            return (a or b).attr
-        code = bytearray(f.__code__.co_code)
-        load_b = [instr for instr in dis.get_instructions(f)
-                  if instr.opname == "LOAD_FAST" and instr.argval == "b"]
-        code[load_b[0].offset] = dis.opmap["LOAD_FAST_BORROW"]
-        f.__code__ = f.__code__.replace(co_code=bytes(code))
-        self.assertIn("LOAD_FAST_BORROW", handlers(f))
-        self.assertFalse(names_local(f, self.load_attr_owner(f)))
-        self.assertEqual(f(C(), None), 5)
-        self.assertEqual(f(None, C()), 5)
-
-    def test_no_absorption_across_a_line(self):
-        def f(o):
-            return (o
-                    .attr)
-        self.assertIn("LOAD_FAST_BORROW", handlers(f))
-        self.assertFalse(names_local(f, self.load_attr_owner(f)))
-        self.assertEqual(f(C()), 5)
-
-    def test_no_absorption_under_tracing(self):
-        def f(o):
-            return o.attr
-        result, events = trace(f, C(), opcodes=True)
-        self.assertEqual(result, 5)
-        # A word per instruction, and one event per instruction from the
-        # first RESUME on
-        offsets = [instr.offset for instr in dis.get_instructions(f)]
-        self.assertEqual([instr[1] for instr in instructions(f.__code__)],
-                         offsets)
-        lasti = offsets[1:]
-        self.assertEqual([e[1] for e in events if e[0] == "opcode"], lasti)
-
-    def test_line_starting_at_absorbed_load(self):
+    def test_line_events(self):
         def f(o):
             x = 1
             return o.attr
         self.assertEqual(f(C()), 5)
-        self.assertNotIn("LOAD_FAST_BORROW", handlers(f))
         result, events = trace(f, C())
         self.assertEqual(result, 5)
         line = f.__code__.co_firstlineno
@@ -244,28 +155,24 @@ class LoweringTest(unittest.TestCase):
                          [line + 1, line + 2])
         # The next RESUME removes the instrumentation
         self.assertEqual(f(C()), 5)
-        self.assertNotIn("LOAD_FAST_BORROW", handlers(f))
+        self.assertNotIn("INSTRUMENTED_LINE", handlers(f))
 
-    def test_opcode_events_of_absorbed_loads(self):
-        # Enabling INSTRUCTION events lowers fused code again, one word per
-        # instruction.
+    def test_opcode_events(self):
+        # One event per word from the first RESUME on, at its index
         def f(o):
             return o.attr
-        self.assertEqual(f(C()), 5)
-        self.assertNotIn("LOAD_FAST_BORROW", handlers(f))
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(f(C()), 5)
         result, events = trace(f, C(), opcodes=True)
         self.assertEqual(result, 5)
-        lasti = [instr.offset for instr in dis.get_instructions(f)][1:]
+        lasti = list(range(1, len(get_ir(f.__code__))))
         self.assertEqual([e[1] for e in events if e[0] == "opcode"], lasti)
-        self.assertTrue(one_word_per_instruction(f))
-        # The new block stays once the events are off
         self.assertEqual(f(C()), 5)
-        self.assertTrue(one_word_per_instruction(f))
 
-    def test_frames_in_the_fused_block(self):
-        # Frames that are in the code when it is lowered again go on in the
-        # new block: a suspended generator, and a frame in a call that turns
-        # on opcode events for it and raises.
+    def test_frames_when_instrumented(self):
+        # Frames that are in the code when instrumentation rewrites its
+        # executing copy go on in it: a suspended generator, and a frame in
+        # a call that turns on opcode events for it and raises.
         def gen(o):
             yield o.attr
             yield o.attr
@@ -286,8 +193,6 @@ class LoweringTest(unittest.TestCase):
 
         g = gen(C())
         self.assertEqual(next(g), 5)
-        self.assertFalse(one_word_per_instruction(gen))
-        self.assertFalse(one_word_per_instruction(f))
         sys.settrace(lambda *args: None)
         try:
             self.assertEqual(f(C()), 10)
@@ -296,8 +201,6 @@ class LoweringTest(unittest.TestCase):
             self.assertEqual(next(g), 5)
         finally:
             sys.settrace(None)
-        self.assertTrue(one_word_per_instruction(f))
-        self.assertTrue(one_word_per_instruction(gen))
         with self.assertRaises(StopIteration):
             next(g)
 
@@ -326,9 +229,8 @@ class LoweringTest(unittest.TestCase):
         g = counter()
         self.assertEqual(f(g, delegate(g), rounds),
                          list(range(1, 3 * rounds + 1)))
-        if SPECIALIZES:
-            self.assertIn("FOR_ITER_GEN", handlers(f))
-            self.assertIn("SEND_GEN", handlers(delegate))
+        self.assertIn("FOR_ITER_GEN", handlers(f))
+        self.assertIn("SEND_GEN", handlers(delegate))
 
     @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
     def test_compare_and_branch(self):
@@ -406,21 +308,21 @@ class LoweringTest(unittest.TestCase):
                      if instr.argval == "f_lasti"]
         self.assertEqual(f(), load_attr[0].offset)
 
-    def test_line_starting_at_extended_arg(self):
-        # From the 257th constant on, each line starts with an EXTENDED_ARG,
-        # which has no word of its own.
+    def test_many_constants(self):
+        # Constant indices beyond 255 fit in a field: no EXTENDED_ARG
         n = 300
         source = "def f():\n" + "".join(f"    a = {i}.5\n" for i in range(n))
         f = make_function(source)
+        self.assertNotIn("EXTENDED_ARG", [word[0] for word in get_ir(f.__code__)])
         _, events = trace(f)
         self.assertEqual([e[2] for e in events if e[0] == "line"],
                          list(range(2, n + 2)))
         self.check_offsets(f)
 
     def test_wide_operands(self):
-        # Constant indices beyond 4095 take the 24-bit field CD, a name index
-        # beyond 4095 of an instruction with an entry lives in the entry, and
-        # more than 65535 code units need a pcmap with 32-bit offsets.
+        # Constant indices beyond 4095 take the 24-bit field CD, and a name
+        # index beyond 4095 of an instruction with an entry lives in the
+        # entry.
         nconsts = 70_000
         nnames = 5_000
         source = ("def f(o):\n"
@@ -429,19 +331,17 @@ class LoweringTest(unittest.TestCase):
                   + "".join(f"    v = {i}.5\n" for i in range(nconsts))
                   + "    return v, o.attr\n")
         f = make_function(source)
-        self.assertGreater(len(f.__code__.co_code) // 2, 65535)
+        self.assertGreater(len(f.__code__.co_code) // 8, 65535)
         self.assertGreater(f.__code__.co_names.index("attr"), IR_FIELD_MAX)
         ir = get_ir(f.__code__)
-        self.assertGreater(ir[-1][1], 2 * 65535)
         # The last LOAD_CONST, which may push its constant inline, names it
         # through CD
-        load_const = [instr for instr in ir
-                      if instr[2].startswith("LOAD_CONST")][-1]
-        _, anchor, _, _, _, c, d = load_const
-        index = [instr for instr in dis.get_instructions(f)
-                 if instr.offset == anchor][0].arg
-        self.assertGreater(index, IR_FIELD_MAX)
-        self.assertEqual(d << 12 | c, index)
+        index = [k for k, word in enumerate(ir)
+                 if word[0].startswith("LOAD_CONST")][-1]
+        _, _, _, c, d = ir[index]
+        arg = list(dis.get_instructions(f))[index].arg
+        self.assertGreater(arg, IR_FIELD_MAX)
+        self.assertEqual(d << 12 | c, arg)
         self.check_offsets(f)
 
         # The handlers that run the LOAD_ATTR: specialised, deoptimised and
@@ -471,7 +371,7 @@ class LoweringTest(unittest.TestCase):
 
     def test_slot_limit(self):
         # Locals, cells, free variables and the stack share IR_MAX_SLOTS
-        # slots.
+        # slots; code that needs more does not compile.
         def make(nlocals):
             source = ("def f():\n"
                       + "".join(f"    v{i} = {i}\n" for i in range(nlocals))
@@ -482,15 +382,13 @@ class LoweringTest(unittest.TestCase):
         self.assertEqual(f.__code__.co_nlocals + f.__code__.co_stacksize,
                          IR_MAX_SLOTS)
         self.assertEqual(f(), 0)
-        f = make(IR_MAX_SLOTS - stacksize + 1)
         with self.assertRaisesRegex(SystemError, "slots"):
-            f()
-        with self.assertRaisesRegex(SystemError, "slots"):
-            get_ir(f.__code__)
+            make(IR_MAX_SLOTS - stacksize + 1)
 
     def test_shared_feedback_entry(self):
         # The sites past the IR_FIELD_MAX-th share entry 0: they never
-        # specialise and read their static operands from the bytecode.
+        # specialise, and those with a static operand run a NOFB form that
+        # carries it in the word.
         class O:
             attr = 5
             other = 7
@@ -503,92 +401,73 @@ class LoweringTest(unittest.TestCase):
         expected = (-2, 3, True, True)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(f(O(), 2), expected)
-        ir = instructions(f.__code__)
-        load_attrs = [instr for instr in ir if instr[2].startswith("LOAD_ATTR")]
-        # Field C is the feedback index
-        self.assertEqual([instr[5] for instr in load_attrs[:3]], [1, 2, 3])
-        self.assertEqual({instr[5] for instr in load_attrs[IR_FIELD_MAX:]},
-                         {0})
-        names = [instr[2] for instr in ir]
+        load_attrs = [instr for instr in dis.get_instructions(f)
+                      if instr.opname == "LOAD_ATTR"]
+        self.assertEqual([instr.fb for instr in load_attrs[:3]], [1, 2, 3])
+        shared = load_attrs[IR_FIELD_MAX:]
+        self.assertEqual({instr.fb for instr in shared}, {None})
+        self.assertEqual({instr.handler for instr in shared},
+                         {"LOAD_ATTR_NOFB"})
+        self.assertEqual({instr.argval for instr in shared},
+                         {"attr", "other"})
+        ir = handlers(f)
         if SPECIALIZES:
-            self.assertNotEqual(load_attrs[0][2], "LOAD_ATTR")
-        self.assertEqual({instr[2] for instr in load_attrs[IR_FIELD_MAX:]},
-                         {"LOAD_ATTR"})
-        self.assertIn("BINARY_OP_SUBTRACT", names)
-        self.assertIn("BINARY_OP_FLOOR_DIVIDE", names)
-        self.assertIn("COMPARE_OP", names)
-        self.assertIn("CONTAINS_OP", names)
+            self.assertNotEqual(ir[load_attrs[0].offset], "LOAD_ATTR")
+        self.assertEqual({ir[instr.offset] for instr in shared},
+                         {"LOAD_ATTR_NOFB"})
+        for name in ("BINARY_OP_SUBTRACT", "BINARY_OP_FLOOR_DIVIDE",
+                     "COMPARE_OP_NOFB", "CONTAINS_OP_NOFB"):
+            self.assertIn(name, ir)
         # Other operands take the generic paths
         self.assertEqual(f(O(), 2.0), (-2, 3.0, True, True))
         with self.assertRaises(ZeroDivisionError):
             f(O(), 0)
         # The shared entry holds nothing that dis could show
-        dis.dis(f, adaptive=True, file=io.StringIO())
+        dis.dis(f, adaptive=True, show_caches=True, file=io.StringIO())
 
     def test_sizeof(self):
+        # The first call makes the executing copy
         code = compile("x = [i for i in range(3)]", "<test>", "exec")
         before = sys.getsizeof(code)
-        get_ir(code)
+        exec(code, {})
         self.assertGreater(sys.getsizeof(code), before)
 
-    def test_stack_underflow(self):
-        def f():
-            pass
-        code = f.__code__.replace(co_code=bytes([
-            dis.opmap["RESUME"], 0, 0, 0,
-            dis.opmap["POP_TOP"], 0,
-            dis.opmap["RETURN_VALUE"], 0]))
-        with self.assertRaisesRegex(SystemError, "stack underflow"):
-            get_ir(code)
+    def test_constructor_checks_the_words(self):
+        def f(a):
+            return a.attr
+        code = f.__code__
+        words = get_ir(code)
+        index = [k for k, word in enumerate(words) if word[0] == "LOAD_ATTR"][0]
+        _, a, b, c, d = words[index]
 
-    def test_backward_jump_into_unreachable_code(self):
-        # The forward pass finds the LOAD_SMALL_INT unreachable, and only the
-        # JUMP_BACKWARD after it gives it a depth.
-        def f():
-            pass
-        f.__code__ = f.__code__.replace(co_code=assemble(
-            ("RESUME", 0),
-            ("JUMP_FORWARD", 2),
-            ("LOAD_SMALL_INT", 7),
-            ("RETURN_VALUE", 0),
-            ("JUMP_BACKWARD", 4)))
-        self.assertEqual(f(), 7)
+        def with_word(word):
+            return code.co_code[:8 * index] + encode_words(word) \
+                + code.co_code[8 * (index + 1):]
 
-    def test_inconsistent_stack_depth(self):
-        def f():
-            pass
-        code = f.__code__.replace(co_code=assemble(
-            ("RESUME", 0),
-            ("LOAD_SMALL_INT", 0),
-            ("POP_JUMP_IF_FALSE", 1),
-            ("LOAD_SMALL_INT", 1),
-            ("RETURN_VALUE", 0)))
-        with self.assertRaisesRegex(SystemError, "inconsistent stack depth"):
-            get_ir(code)
-
-    def test_jump_into_an_instruction(self):
-        def f():
-            pass
-        code = f.__code__.replace(co_code=assemble(
-            ("RESUME", 0),
-            ("JUMP_FORWARD", 1),
-            ("POP_JUMP_IF_FALSE", 0),
-            ("RETURN_VALUE", 0)))
-        with self.assertRaisesRegex(SystemError, "jump into an instruction"):
-            get_ir(code)
+        nslots = nlocalsplus(f) + code.co_stacksize
+        with self.assertRaisesRegex(ValueError, "slot"):
+            code.replace(co_code=with_word(("LOAD_ATTR", nslots, b, c, d)))
+        with self.assertRaisesRegex(ValueError, "feedback"):
+            code.replace(co_code=with_word(("LOAD_ATTR", a, b, IR_FIELD_MAX, d)))
+        with self.assertRaisesRegex(ValueError, "malformed"):
+            code.replace(co_code=code.co_code + b"\0")
+        self.assertEqual(code.replace(co_code=with_word(("LOAD_ATTR", a, b, c, d))),
+                         code)
 
     def test_binary_op_handlers(self):
         # BINARY_OP runs the handler of its operation
         def f(a, b):
             a -= b
             return a - b, a * b
-        self.assertEqual(handlers(f).count("BINARY_OP_SUBTRACT"), 1)
-        self.assertIn("BINARY_OP_INPLACE_SUBTRACT", handlers(f))
-        self.assertIn("BINARY_OP_MULTIPLY", handlers(f))
+        ir = [word[0] for word in get_ir(f.__code__)]
+        self.assertEqual(ir.count("BINARY_OP_SUBTRACT"), 1)
+        self.assertIn("BINARY_OP_INPLACE_SUBTRACT", ir)
+        self.assertIn("BINARY_OP_MULTIPLY", ir)
         self.assertEqual(f(7, 2), (3, 10))
         self.assertEqual(f(7.0, 2), (3.0, 10.0))
-        ops = [instr.opname for instr in dis.get_instructions(f, adaptive=True)]
+        ops = [instr.opname for instr in dis.get_instructions(f)]
         self.assertNotIn("BINARY_OP_SUBTRACT", ops)
+        self.assertEqual(ops.count("BINARY_OP"), 3)
 
     @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
     def test_binary_op_deopt(self):
@@ -617,22 +496,32 @@ class LoweringTest(unittest.TestCase):
         self.assertEqual(f(3, 1), 2)
 
 
+def relaxed_compile(source):
+    """The namespace of source compiled with every loop relaxed"""
+    old = _testinternalcapi.set_ir_max_forward(0)
+    try:
+        namespace = {}
+        exec(source, namespace)
+    finally:
+        _testinternalcapi.set_ir_max_forward(old)
+    return namespace
+
+
 class RelaxationTest(unittest.TestCase):
     """FOR_ITER and SEND reach IR_MAX_FORWARD words; a loop whose exit is
-    further away exits through jumps after its word."""
+    further away exits through IR_JUMP words after its own."""
 
     def relaxed(self, func, opname):
-        # The word of the first opname instruction of func, which may be
-        # specialised, and the words after it that share its offsets
+        # The index of the first opname word of func and the handlers of
+        # the IR_JUMP words after it
         ir = get_ir(func.__code__)
-        i = [k for k, instr in enumerate(ir)
-             if instr[2].startswith(opname)][0]
+        index = [k for k, word in enumerate(ir) if word[0] == opname][0]
         jumps = []
-        for instr in ir[i + 1:]:
-            if instr[:2] != ir[i][:2]:
+        for word in ir[index + 1:]:
+            if word[0] != "IR_JUMP":
                 break
-            jumps.append(instr[2])
-        return ir[i], jumps
+            jumps.append(word[0])
+        return index, jumps
 
     def test_far_for_iter(self):
         nlines = IR_MAX_FORWARD
@@ -655,29 +544,18 @@ class RelaxationTest(unittest.TestCase):
             self.assertEqual(f([1, -1, 2, 200, 3]), 3 * nlines)
             self.assertEqual(f(gen(4)), 6 * nlines)
             self.assertEqual(f(()), 0)
-        word, jumps = self.relaxed(f, "FOR_ITER")
-        self.assertEqual(jumps, ["JUMP_FORWARD"] * 3)
-        # Field D: the exit is the third jump
-        self.assertEqual(word[6], 1)
-        LoweringTest.check_offsets(self, f)
+        index, jumps = self.relaxed(f, "FOR_ITER")
+        self.assertEqual(jumps, ["IR_JUMP"] * 3)
+        # The loop exits by distance 1, to the second jump
+        self.assertEqual(list(dis.get_instructions(f))[index].arg, 1)
+        AssemblerTest.check_offsets(self, f)
 
         # A generator returns to the second jump
         f = make_function(source)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(f(gen(4)), 6 * nlines)
         if SPECIALIZES:
-            self.assertEqual(self.relaxed(f, "FOR_ITER")[0][2], "FOR_ITER_GEN")
-
-    def run_relaxed(self, source, name):
-        # A function of source lowered with every loop relaxed, and one
-        # lowered as usual
-        old = _testinternalcapi.set_ir_max_forward(0)
-        try:
-            relaxed = make_function(source, name)
-            get_ir(relaxed.__code__)
-        finally:
-            _testinternalcapi.set_ir_max_forward(old)
-        return relaxed, make_function(source, name)
+            self.assertEqual(handlers(f)[index], "FOR_ITER_GEN")
 
     def test_relaxed_send(self):
         source = """if 1:
@@ -713,17 +591,10 @@ class RelaxationTest(unittest.TestCase):
                     values.append(e.value)
                 return values
         """
-        namespace = {}
-        old = _testinternalcapi.set_ir_max_forward(0)
-        try:
-            exec(source, namespace)
-            for func in ("outer", "co"):
-                get_ir(namespace[func].__code__)
-        finally:
-            _testinternalcapi.set_ir_max_forward(old)
+        namespace = relaxed_compile(source)
         for name in ("outer", "co"):
             _, jumps = self.relaxed(namespace[name], "SEND")
-            self.assertEqual(jumps, ["JUMP_FORWARD"] * 2)
+            self.assertEqual(jumps, ["IR_JUMP"] * 2)
         expected = [1, 5, "done", "stop", "a", "b"]
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(namespace["run"](), expected)
@@ -741,9 +612,17 @@ class RelaxationTest(unittest.TestCase):
                         n += 1
                 return n
         """
-        relaxed, plain = self.run_relaxed(source, "f")
-        self.assertEqual(self.relaxed(relaxed, "FOR_ITER")[1],
-                         ["JUMP_FORWARD"] * 3)
+        relaxed = relaxed_compile(source)["f"]
+        plain = make_function(source)
+        self.assertEqual(self.relaxed(relaxed, "FOR_ITER")[1], ["IR_JUMP"] * 3)
+        self.assertEqual(self.relaxed(plain, "FOR_ITER")[1], [])
+
+        def canonical(func, offset):
+            # The index of the word at offset among the words that are not
+            # IR_JUMP
+            ir = get_ir(func.__code__)
+            self.assertNotEqual(ir[offset][0], "IR_JUMP")
+            return offset - sum(word[0] == "IR_JUMP" for word in ir[:offset])
 
         def branches(func):
             events = []
@@ -755,7 +634,8 @@ class RelaxationTest(unittest.TestCase):
                     sys.monitoring.register_callback(
                         tool, event,
                         lambda code, src, dst, event=event:
-                            events.append((event, src, dst)))
+                            events.append((event, canonical(func, src),
+                                           canonical(func, dst))))
                 sys.monitoring.set_local_events(
                     tool, func.__code__,
                     E.BRANCH_LEFT | E.BRANCH_RIGHT | E.JUMP)
@@ -765,9 +645,13 @@ class RelaxationTest(unittest.TestCase):
                 sys.monitoring.free_tool_id(tool)
             return events
 
+        def opcodes(func):
+            result, events = trace(func, [0, 1, 1], opcodes=True)
+            return result, [(event, canonical(func, lasti), line)
+                            for event, lasti, line in events]
+
         self.assertEqual(branches(relaxed), branches(plain))
-        self.assertEqual(trace(relaxed, [0, 1, 1], opcodes=True),
-                         trace(plain, [0, 1, 1], opcodes=True))
+        self.assertEqual(opcodes(relaxed), opcodes(plain))
 
 
 if __name__ == "__main__":

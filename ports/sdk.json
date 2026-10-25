@@ -1,5 +1,5 @@
 {
-  "interpreter": "build/baseline-default/python",
+  "interpreter": "build/dev-default/python",
   "abi_id": "cpython-3.16-refcnt-v0",
   "compiler": "gcc",
   "cflags": "-O2"

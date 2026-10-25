@@ -681,3 +681,12 @@ imports and +2.9 percent on richards `-l 10`: code objects hold 8-byte words
 where they held 2-byte units. The step 1 builds are VPATH builds of this
 tree, so they ran the current Lib; none of the workloads imports dis or
 opcode, the only modules that differ.
+
+### 2026-10-25 11:50 — step 2a landed; coordinator gate check
+
+Spot check on dev-default at 3abc1ca9651: test_ir, test_dis, test_compile,
+test_monitoring pass; richards per loop 1548M against 1489M for the step 1
+snapshot (+4.0%, the absorption left to 2b; the agent measured +3.4%). The
+ports SDK interpreter now names build/dev-default, since baseline-default is
+a VPATH build of this tree and can no longer create a venv against the old
+Lib. Step 2b (folding) launches now.

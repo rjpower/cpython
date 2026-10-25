@@ -81,7 +81,12 @@ instr_offset(_PyInterpreterFrame *frame, _PyInstr *instr)
 static inline int
 dest_offset(_PyInterpreterFrame *frame, _PyInstr *dest)
 {
-    return _PyIR_Start(_PyFrame_IRBlock(frame), dest);
+    _PyIRBlock *block = _PyFrame_IRBlock(frame);
+    if (_PyIR_IsTrampoline(block, dest)) {
+        // A relaxed FOR_ITER or SEND goes on through a jump that it added
+        dest = block->words + IR_CD(*dest);
+    }
+    return _PyIR_Start(block, dest);
 }
 
 PyObject _PyInstrumentation_DISABLE = _PyObject_HEAD_INIT(&PyBaseObject_Type);
@@ -1452,6 +1457,7 @@ done:
          * Start the instruction over in the new block, which may have words
          * before it for the loads that the instruction absorbed. */
         frame->instr_ptr = _PyIR_Remap(code, instr);
+        _PyFrame_SetIRBlock(frame, code->_co_ir);
     }
     original_opcode = _PyCode_GetOriginalOpcode(line_data, i);
     if (IR_HANDLER(*instr) == INSTRUMENTED_INSTRUCTION) {

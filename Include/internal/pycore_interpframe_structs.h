@@ -35,6 +35,10 @@ struct _PyInterpreterFrame {
     PyObject *f_locals; /* Strong reference, may be NULL. Only valid if not on C stack */
     PyFrameObject *frame_obj; /* Strong reference, may be NULL. Only valid if not on C stack */
     _PyInstr *instr_ptr; /* Instruction currently executing (or about to begin) */
+    /* Word 0 and feedback entry 0 of the IR block that instr_ptr points
+     * into: the bases of jump targets and feedback indices. */
+    _PyInstr *ir_words;
+    char *ir_feedback;
     _PyStackRef *stackpointer;
 #ifdef Py_GIL_DISABLED
     /* Index of thread-local bytecode containing instr_ptr. */

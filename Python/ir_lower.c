@@ -1,37 +1,47 @@
 /* Lowering of stack bytecode to the register IR, and the accessors of IR
- * blocks.  See boil/design/01-internal-ir.md and Include/internal/pycore_ir.h.
+ * blocks.  See boil/design/06-architecture-v2.md, section 2, and
+ * Include/internal/pycore_ir.h.
  *
  * A code object starts at _PyIR_LowerStub.  The stub's handler, IR_LOWER,
  * calls _PyIR_LowerFrame(), which lowers co_code_adaptive into a block the
  * first time a frame of the code runs, publishes it in co->_co_ir and moves
- * the frame there.  The lowering emits one IR instruction per bytecode
- * instruction, except that
+ * the frame there.  The lowering emits one word per bytecode instruction,
+ * except that
  *
- * - EXTENDED_ARG units vanish into the fields of their instruction.  An
- *   IR_EXT word precedes an instruction only when a field needs more than
- *   16 bits;
- * - inline caches vanish: feedback entries follow the words;
+ * - EXTENDED_ARG units vanish into the fields of their instruction;
+ * - inline caches vanish: each instruction that has a feedback entry names
+ *   it by its index in the feedback vector, which follows the words;
  * - a LOAD_FAST_BORROW (or LOAD_FAST_BORROW_LOAD_FAST_BORROW) that pushes
  *   the top inputs of the next instruction, which consumes them as objects
  *   on the same line and in the same basic block, emits nothing.  The
- *   consumer reads the local through a field marked IR_BORROW.  Code objects
- *   lowered while instrumentation is active absorb nothing, so that every
- *   instruction keeps its INSTRUCTION events.
+ *   consumer reads the local through its input field, which then differs
+ *   from the input's canonical slot.  Code objects lowered while
+ *   instrumentation is active absorb nothing, so that every instruction
+ *   keeps its INSTRUCTION events;
+ * - a FOR_ITER or SEND whose exit is more than IR_MAX_FORWARD words away is
+ *   relaxed: it exits to words after its own that jump to the far targets,
+ *   and its next word jumps over them to the body (relax()).
  *
  * Temporary d lives in slot co_nlocalsplus + d, so every handler keeps its
- * stack-interpreter body.  Depths come from the stack effects of the
- * bytecode, as in calculate_stackdepth().  A consumer of absorbed loads,
- * whose canonical slots the loads leave as they were, finds stack_pointer
- * through its dst field (IR_STACK_POINTER in Python/ceval_macros.h).
+ * stack-interpreter body, and a frame has at most IR_MAX_SLOTS slots.
+ * Depths come from the stack effects of the bytecode, as in
+ * calculate_stackdepth().  A consumer of absorbed loads, whose canonical
+ * slots the loads leave as they were, finds stack_pointer through its dst
+ * field (IR_STACK_POINTER in Python/ceval_macros.h).
+ *
+ * Feedback entries are FB_STRIDE bytes apart.  Entry 0 is shared by the
+ * sites past the IR_FIELD_MAX-th, never specialises, and holds no static
+ * operand: those sites read theirs from the bytecode (_PyIR_BytecodeOparg).
  *
  * The pcmap gives each word two bytecode offsets: start, the first code unit
  * of its instruction (an EXTENDED_ARG if it has one, or the first absorbed
  * load), and anchor, the instruction itself.  The anchor is f_lasti and keys
  * instrumentation, line events included; the start is where jumps and
- * exception handlers land.
+ * exception handlers land.  The words that relax() adds share the entry of
+ * their loop instruction.
  *
  * Instrumentation keeps rewriting co_code_adaptive, which the IR shadows:
- * _PyIR_SyncInstrumentation() copies each rewrite to the main word of the
+ * _PyIR_SyncInstrumentation() copies each rewrite to the word of the
  * instruction.  The handler that the lowering chose, which instrumentation
  * displaces, is kept in block->real once the code is instrumented.
  */
@@ -50,24 +60,22 @@
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
 #include "pycore_stackref.h"        // Py_STACKREF_INLINE_VALUES
-#include "pycore_tier0.h"           // _PyTier0_Clear()
 
 static_assert(sizeof(_PyIRBlock) % sizeof(_PyIRWord) == 0,
               "words must follow the block header aligned");
 static_assert(sizeof(_PyFbBlock) % sizeof(_PyIRWord) == 0,
               "entries must follow the feedback header aligned");
-static_assert(FB_ALIGN == sizeof(_PyIRWord),
-              "a feedback distance counts words");
-
-/* Words of the feedback header that precedes the entries */
-#define FB_HEADER_WORDS ((int)(sizeof(_PyFbBlock) / sizeof(_PyIRWord)))
+static_assert(FB_STRIDE % FB_ALIGN == 0, "entries must stay aligned");
+static_assert(sizeof(_PyFbUnary) <= FB_STRIDE && sizeof(_PyFbBinary) <= FB_STRIDE
+              && sizeof(_PyFbGlobal) <= FB_STRIDE && sizeof(_PyFbCall) <= FB_STRIDE,
+              "FB_STRIDE must hold every entry");
 
 
 /* Static blocks */
 
 static _PyIRWord lower_stub_words[2] = {
-    IR_WORD(IR_LOWER, 0, 0, 0),
-    IR_WORD(IR_LOWER, 0, 0, 0),
+    IR_WORD(IR_LOWER, 0, 0, 0, 0),
+    IR_WORD(IR_LOWER, 0, 0, 0, 0),
 };
 
 static _PyIRPc16 lower_stub_pcmap[2] = {{0, 0}, {0, 0}};
@@ -81,8 +89,8 @@ _PyIRBlock _PyIR_LowerStub = {
 /* _Py_InitCleanup runs with self in slot 0 and the result of __init__ in
  * slot 1: EXIT_INIT_CHECK checks slot 1, and RETURN_VALUE returns slot 0. */
 static _PyIRWord init_cleanup_words[2] = {
-    IR_WORD(EXIT_INIT_CHECK, IR_SLOT_FIELD(1), 0, 0),
-    IR_WORD(RETURN_VALUE, IR_SLOT_FIELD(0), 0, 0),
+    IR_WORD(EXIT_INIT_CHECK, 1, 0, 0, 0),
+    IR_WORD(RETURN_VALUE, 0, 0, 0, 0),
 };
 
 static _PyIRPc16 init_cleanup_pcmap[2] = {{0, 0}, {1, 1}};
@@ -148,7 +156,7 @@ _PyIR_InstrAt(const _PyIRBlock *block, int offset)
             hi = mid;
         }
     }
-    // Back to the first word of that instruction
+    // Back to the word of that instruction, before any that relax() added
     int start = pc_start(block, lo);
     while (lo > 0 && pc_start(block, lo - 1) == start) {
         lo--;
@@ -156,55 +164,42 @@ _PyIR_InstrAt(const _PyIRBlock *block, int offset)
     return block->words + lo;
 }
 
-_PyIRWord *
-_PyIR_MainWordAt(const _PyIRBlock *block, int offset)
+static inline int
+is_trampoline(const _PyIRBlock *block, Py_ssize_t w)
 {
-    _PyIRWord *instr = _PyIR_InstrAt(block, offset);
-    if (IR_HANDLER(*instr) == IR_EXT) {
-        instr++;
-    }
-    return instr;
+    return w > 0 && IR_HANDLER(block->words[w]) == JUMP_FORWARD
+        && pc_start(block, w - 1) == pc_start(block, w)
+        && pc_anchor(block, w - 1) == pc_anchor(block, w);
 }
 
-/* The IR_EXT word before the main word instr, or NULL.  Words of one
- * instruction share their pcmap entry, and IR_EXT comes first. */
-static inline const _PyIRWord *
-ext_word(const _PyIRBlock *block, const _PyIRWord *instr)
+int
+_PyIR_IsTrampoline(const _PyIRBlock *block, const _PyIRWord *instr)
 {
-    Py_ssize_t w = word_index(block, instr);
-    if (w > 0 && pc_anchor(block, w - 1) == pc_anchor(block, w)
-        && pc_start(block, w - 1) == pc_start(block, w))
-    {
-        assert(IR_HANDLER(instr[-1]) == IR_EXT);
-        return instr - 1;
-    }
-    return NULL;
+    return is_trampoline(block, word_index(block, instr));
 }
 
+/* The value of the field at loc of the word at instr */
 static inline uint32_t
-read_field(const _PyIRBlock *block, const _PyIRWord *instr, int loc)
+read_field(const _PyIRWord *instr, int loc)
 {
-    const _PyIRWord *ext;
+    _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
     switch (loc) {
         case _PyIR_LOC_A:
-            ext = ext_word(block, instr);
-            return (ext ? IR_A(*ext) << 16 : 0) | IR_A(*instr);
+            return IR_A(word);
         case _PyIR_LOC_B:
-            ext = ext_word(block, instr);
-            return (ext ? IR_B(*ext) << 16 : 0) | IR_B(*instr);
+            return IR_B(word);
         case _PyIR_LOC_C:
-            ext = ext_word(block, instr);
-            return (ext ? IR_C(*ext) << 16 : 0) | IR_C(*instr);
+            return IR_C(word);
         case _PyIR_LOC_D:
-            return IR_D(instr[1]);
-        case _PyIR_LOC_F:
-            return IR_F(instr[1]);
+            return IR_D(word);
+        case _PyIR_LOC_CD:
+            return IR_CD(word);
         default:
             Py_UNREACHABLE();
     }
 }
 
-/* The handler whose format decodes the main word instr */
+/* The handler whose format decodes the word at instr */
 static inline int
 decoding_handler(const _PyIRBlock *block, const _PyIRWord *instr, int handler)
 {
@@ -215,24 +210,66 @@ decoding_handler(const _PyIRBlock *block, const _PyIRWord *instr, int handler)
     return handler;
 }
 
-_PyFbHeader *
-_PyIR_InstrFeedback(const _PyIRBlock *block, const _PyIRWord *instr, int handler)
+/* The feedback index of the word at instr, which handler decodes, or -1 */
+static inline int
+fb_index(const _PyIRBlock *block, const _PyIRWord *instr, int handler)
 {
     if (block == &_PyIR_LowerStub) {
-        return NULL;
+        return -1;
     }
     handler = decoding_handler(block, instr, handler);
     const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
     if (fmt->fb == _PyIR_LOC_NONE) {
+        return -1;
+    }
+    return (int)read_field(instr, fmt->fb);
+}
+
+_PyFbHeader *
+_PyIR_InstrFeedback(const _PyIRBlock *block, const _PyIRWord *instr, int handler)
+{
+    int i = fb_index(block, instr, handler);
+    if (i < 0) {
         return NULL;
     }
-    uint32_t distance = read_field(block, instr, fmt->fb);
-    assert(distance != 0);
-    return (_PyFbHeader *)(instr + distance);
+    return _PyIR_FbEntry(block->entries, (uint32_t)i);
+}
+
+/* The oparg in the bytecode of the instruction whose word is at instr:
+ * decode from its start, which may be an absorbed load, to its anchor. */
+static int
+bytecode_oparg(PyCodeObject *co, const _PyIRBlock *block, const _PyIRWord *instr)
+{
+    Py_ssize_t w = word_index(block, instr);
+    int anchor = pc_anchor(block, w);
+    int oparg = 0;
+    for (int i = pc_start(block, w); i <= anchor; ) {
+        _Py_CODEUNIT unit = _Py_GetBaseCodeUnit(co, i);
+        if (i == anchor) {
+            return (oparg << 8) | unit.op.arg;
+        }
+        if (unit.op.code == EXTENDED_ARG) {
+            oparg = (oparg << 8) | unit.op.arg;
+            i++;
+        }
+        else {
+            oparg = 0;
+            i += 1 + _PyOpcode_Caches[unit.op.code];
+        }
+    }
+    Py_UNREACHABLE();
 }
 
 int
-_PyIR_InstrOparg(const _PyIRBlock *block, const _PyIRWord *instr, int handler)
+_PyIR_BytecodeOparg(_PyInterpreterFrame *frame, const _PyIRWord *instr)
+{
+    return bytecode_oparg(_PyFrame_GetCode(frame), _PyFrame_IRBlock(frame),
+                          instr);
+}
+
+int
+_PyIR_InstrOparg(PyCodeObject *co, const _PyIRBlock *block,
+                 const _PyIRWord *instr, int handler)
 {
     if (block == &_PyIR_LowerStub) {
         return 0;
@@ -242,10 +279,15 @@ _PyIR_InstrOparg(const _PyIRBlock *block, const _PyIRWord *instr, int handler)
     switch (fmt->imm) {
         case _PyIR_LOC_NONE:
             return 0;
-        case _PyIR_LOC_FBARG:
-            return (int)_PyIR_InstrFeedback(block, instr, handler)->arg;
+        case _PyIR_LOC_FBARG: {
+            int i = fb_index(block, instr, handler);
+            if (i == 0) {
+                return bytecode_oparg(co, block, instr);
+            }
+            return (int)_PyIR_FbEntry(block->entries, (uint32_t)i)->arg;
+        }
         default:
-            return (int)read_field(block, instr, fmt->imm);
+            return (int)read_field(instr, fmt->imm);
     }
 }
 
@@ -263,6 +305,25 @@ lowered_opcode(int handler)
         return _PyIR_Formats[handler].shadow;
     }
     return _PyOpcode_Deopt[handler];
+}
+
+int
+_PyIR_GenericHandler(const _PyIRBlock *block, const _PyIRWord *instr, int handler)
+{
+    handler = decoding_handler(block, instr, handler);
+    if (handler >= _PyIR_BINARY_OP_FIRST
+        && handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST)
+    {
+        return handler;
+    }
+    int opcode = _PyOpcode_Deopt[lowered_opcode(handler)];
+    if (opcode == BINARY_OP) {
+        int i = fb_index(block, instr, handler);
+        assert(i > 0);
+        return _PyIR_BINARY_OP_FIRST
+            + (int)_PyIR_FbEntry(block->entries, (uint32_t)i)->arg;
+    }
+    return opcode;
 }
 
 int
@@ -291,15 +352,13 @@ typedef struct {
     int depth;          // stack depth before, or -1 if unreachable
     int target;         // the instruction a jump goes to, or -1
     int handler;        // the handler that the lowering chooses
-    int ext;            // 1 if an IR_EXT word precedes the main word
-    int word;           // index of the first word
-    int fb;             // offset of the feedback entry in words from the
-                        // first entry, or -1
+    int word;           // index of its word
+    int fb;             // index of its feedback entry, or -1
     int pc_start;       // the start of its words in the pcmap
-    uint32_t borrow[3]; // per input: an absorbed local's slot field, or 0
+    int borrow[3];      // per input: 1 + the local of an absorbed load, or 0
     uint8_t block_start;// an event or a jump may come in before it
     uint8_t absorbed;   // a load that its consumer reads through a field
-    uint8_t nwords;     // the words of its handler's format
+    uint8_t nwords;     // 1, or with the words that relax() adds more
 } lower_insn;
 
 typedef struct {
@@ -308,8 +367,7 @@ typedef struct {
     int n;
     int *index;         // per code unit, the instruction that covers it
     int nwords;
-    int fb_words;       // words of all entries
-    int max_oparg;
+    int nfb;            // feedback entries, entry 0 included
     int lines_marked;   // mark_line_starts() has run
     int nabsorbed;      // loads absorbed into their consumers
     // Per code unit not decoded yet, what jumps and exception handlers
@@ -319,13 +377,6 @@ typedef struct {
     int rescan;         // a backward jump reaches code that scan() did not
     int resolved;       // jump targets are instruction indices
 } lowering;
-
-static const uint8_t fb_entry_size[256] = {
-#define FB_SIZE(OP, TYPE, KIND) [OP] = sizeof(TYPE),
-    _PyFb_FAMILIES(FB_SIZE)
-    _PyFb_BRANCHES(FB_SIZE)
-#undef FB_SIZE
-};
 
 static const uint8_t fb_kind[256] = {
 #define FB_KIND(OP, TYPE, KIND) [OP] = KIND,
@@ -456,7 +507,6 @@ check_handlers(lowering *L)
 }
 
 static int choose_handler(PyCodeObject *co, lower_insn *in, int inline_values);
-
 /* Decode the instructions, in one forward pass that also follows the stack
  * depth, marks where jumps land, chooses the handlers and places the
  * feedback entries.  Edges that come in ahead wait in
@@ -474,6 +524,7 @@ scan(lowering *L)
 #endif
     int n = 0;
     int depth = 0;      // the depth that falls through, or -1
+    L->nfb = 1;         // entry 0 is shared
     for (int i = 0; i < size; n++) {
         // L->insns starts zeroed
         lower_insn *in = &L->insns[n];
@@ -512,7 +563,6 @@ scan(lowering *L)
         in->anchor = i;
         in->opcode = opcode;
         in->oparg = oparg;
-        L->max_oparg = Py_MAX(L->max_oparg, oparg);
         in->top = _PyCode_CODE(co)[i].op.code;
         int length = 1 + _PyOpcode_Caches[opcode];
         if (i + length > size) {
@@ -543,12 +593,15 @@ scan(lowering *L)
         }
 
         in->handler = choose_handler(co, in, inline_values);
+        if (in->handler < 0) {
+            return malformed(co, in->anchor, "invalid oparg");
+        }
         const _PyIRFormat *fmt = _PyIR_FormatOf(in->handler);
-        in->nwords = fmt->nwords;
+        in->nwords = 1;
         if (fmt->fb != _PyIR_LOC_NONE) {
-            assert(fb_entry_size[opcode] != 0);
-            in->fb = L->fb_words;
-            L->fb_words += fb_entry_size[opcode] / (int)sizeof(_PyIRWord);
+            assert(fb_kind[opcode] != FB_COUNTER);
+            // Sites past the last index share entry 0
+            in->fb = L->nfb <= IR_FIELD_MAX ? L->nfb++ : 0;
         }
 
         int offset = OPCODE_HAS_JUMP(opcode) ? jump_offset(L, n) : INT_MIN;
@@ -730,10 +783,17 @@ mark_line_starts(lowering *L)
 }
 
 /* The handler for an instruction before instrumentation and absorption:
- * its opcode, or a form that pushes its constant inline. */
+ * its opcode, a form that pushes its constant inline, or for BINARY_OP the
+ * handler of its operation.  -1 for an oparg out of range. */
 static int
 choose_handler(PyCodeObject *co, lower_insn *in, int inline_values)
 {
+    if (in->opcode == BINARY_OP) {
+        if (in->oparg > NB_OPARG_LAST) {
+            return -1;
+        }
+        return _PyIR_BINARY_OP_FIRST + in->oparg;
+    }
 #ifdef Py_STACKREF_INLINE_VALUES
     if (inline_values) {
         if (in->opcode == LOAD_SMALL_INT) {
@@ -757,7 +817,7 @@ choose_handler(PyCodeObject *co, lower_insn *in, int inline_values)
 }
 
 /* Absorb the borrowed loads that push the top inputs of instruction i,
- * those that its format lets carry IR_BORROW.  Only NOPs and other absorbed
+ * those that its format lets name a local.  Only NOPs and other absorbed
  * loads may lie between, so the instructions that run in place of the loads
  * do not use stack_pointer, and no line or block may start after the load,
  * so nothing can write the local before i reads it.  Returns the index of
@@ -813,7 +873,7 @@ absorb_loads(lowering *L, int i)
         }
         for (int p = 0; p < pushed; p++) {
             int k = load->depth + p - base;
-            in->borrow[k] = IR_SLOT_FIELD(locals[p]) | IR_BORROW;
+            in->borrow[k] = locals[p] + 1;
         }
         load->absorbed = 1;
         L->nabsorbed++;
@@ -842,40 +902,39 @@ instrumentation_active(PyCodeObject *co)
 static inline int
 insn_nwords(const lower_insn *in)
 {
-    if (in->absorbed) {
-        return 0;
-    }
-    return in->ext + in->nwords;
+    return in->absorbed ? 0 : in->nwords;
 }
 
-/* The jump distance in words of instruction i */
-static int
-jump_distance(lowering *L, int i)
-{
-    lower_insn *in = &L->insns[i];
-    lower_insn *target = &L->insns[in->target];
-    int next = in->word + insn_nwords(in);
-    int dest = target->word;
-    if (in->opcode == FOR_ITER || in->opcode == END_ASYNC_FOR) {
-        // FOR_ITER skips END_FOR, and END_ASYNC_FOR names END_SEND, by
-        // their main words
-        dest += target->ext;
-    }
-    if (in->opcode == JUMP_BACKWARD || in->opcode == JUMP_BACKWARD_NO_INTERRUPT
-        || in->opcode == END_ASYNC_FOR)
-    {
-        return next - dest;
-    }
-    return dest - next;
-}
+/* The words of a relaxed FOR_ITER and of a relaxed SEND, its own included.
+ * A relaxed FOR_ITER at word w exits by distance 1, so that
+ *
+ *     w + 1   JUMP_FORWARD to w + 4, the body
+ *     w + 2   JUMP_FORWARD to END_FOR, where a generator returns
+ *     w + 3   JUMP_FORWARD past END_FOR, where an exhausted iterator goes
+ *
+ * and a relaxed SEND at w has w + 1, to w + 3, and w + 2, to END_SEND. */
+#define RELAXED_FOR_ITER_WORDS 4
+#define RELAXED_SEND_WORDS 3
 
-/* The oparg that the handlers of instruction i, of format fmt, read */
+/* The farthest exit of FOR_ITER and SEND that the lowering does not relax.
+ * Tests lower it to relax every loop. */
+int _PyIR_MaxForward = IR_MAX_FORWARD;
+
+/* The oparg that the handlers of instruction i, of format fmt, read: the
+ * word index of the target of a jump, the distance from the next word to
+ * the exit of FOR_ITER and SEND, otherwise the oparg of the bytecode. */
 static inline uint32_t
 handler_oparg(lowering *L, int i, const _PyIRFormat *fmt)
 {
     lower_insn *in = &L->insns[i];
     if (fmt->flags & _PyIR_JUMPS) {
-        return (uint32_t)jump_distance(L, i);
+        return (uint32_t)L->insns[in->target].word;
+    }
+    if (fmt->flags & _PyIR_FORWARD) {
+        if (in->nwords > 1) {
+            return 1;
+        }
+        return (uint32_t)(L->insns[in->target].word - (in->word + 1));
     }
     if (in->opcode == GET_ITER && in->oparg) {
         // The compiler cannot know whether types.coroutine() will be called
@@ -885,69 +944,8 @@ handler_oparg(lowering *L, int i, const _PyIRFormat *fmt)
     return (uint32_t)in->oparg;
 }
 
-static inline uint32_t
-fb_distance(lowering *L, const lower_insn *in)
-{
-    if (in->fb < 0) {
-        return 0;
-    }
-    int main = in->word + in->ext;
-    return (uint32_t)(L->nwords + FB_HEADER_WORDS + in->fb - main);
-}
-
-/* Fields A, B and C of an instruction of format fmt */
-static inline void
-encode_fields(lowering *L, const lower_insn *in, const _PyIRFormat *fmt,
-              uint32_t oparg, uint32_t fb, uint32_t fields[3])
-{
-    // Unreachable code never runs; give it fields that stay in the frame.
-    int depth = in->depth >= 0 ? in->depth : Py_MAX(in->popped, fmt->ninputs);
-    int top = L->co->co_nlocalsplus + depth;
-    assert(top >= in->popped && top >= fmt->ninputs);
-    int base = top - fmt->ninputs;
-    // Every role's value, then a pick per field, which costs less than a
-    // switch per field.  DST is meaningless when fmt->dst is _PyIR_NO_DST.
-    uint32_t values[_PyIR_ROLE_IN0 + 3] = {
-        [_PyIR_ROLE_NONE] = 0,
-        [_PyIR_ROLE_DST] = IR_SLOT_FIELD(top + fmt->dst),
-        [_PyIR_ROLE_BASE] = IR_SLOT_FIELD(top - in->popped),
-        [_PyIR_ROLE_FB] = fb,
-        [_PyIR_ROLE_IMM] = oparg,
-        [_PyIR_ROLE_IN0] = in->borrow[0] ? in->borrow[0] : IR_SLOT_FIELD(base),
-        [_PyIR_ROLE_IN0 + 1] = in->borrow[1] ? in->borrow[1] : IR_SLOT_FIELD(base + 1),
-        [_PyIR_ROLE_IN0 + 2] = in->borrow[2] ? in->borrow[2] : IR_SLOT_FIELD(base + 2),
-    };
-    for (int r = 0; r < 3; r++) {
-        assert(fmt->roles[r] < _PyIR_ROLE_IN0 + 3);
-        assert(fmt->roles[r] < _PyIR_ROLE_IN0
-               || fmt->roles[r] - _PyIR_ROLE_IN0 < fmt->ninputs);
-        fields[r] = values[fmt->roles[r]];
-    }
-}
-
-/* Fields A, B and C of instruction i */
-static void
-encode(lowering *L, int i, uint32_t fields[3])
-{
-    lower_insn *in = &L->insns[i];
-    const _PyIRFormat *fmt = _PyIR_FormatOf(in->handler);
-    encode_fields(L, in, fmt, handler_oparg(L, i, fmt), fb_distance(L, in),
-                  fields);
-}
-
-/* Whether every field fits in 16 bits without encoding the instructions:
- * slots, opargs and distances in words do.  Unreachable code may name up to
- * three slots past the stack (see encode()). */
-static int
-fields_fit(lowering *L)
-{
-    PyCodeObject *co = L->co;
-    return IR_SLOT_FIELD(co->co_nlocalsplus + co->co_stacksize + 4) < 0xFFFF
-        && L->max_oparg <= 0xFFFF
-        && L->nwords + FB_HEADER_WORDS + L->fb_words <= 0xFFFF;
-}
-
-/* Place the words again, adding IR_EXT words until every field fits */
+/* Place the words, relaxing each FOR_ITER and SEND whose exit is too far,
+ * until none is: relaxing only moves exits further away. */
 static void
 layout(lowering *L)
 {
@@ -958,19 +956,21 @@ layout(lowering *L)
             word += insn_nwords(&L->insns[i]);
         }
         L->nwords = word;
-        if (fields_fit(L)) {
+        if (word <= _PyIR_MaxForward) {
             return;
         }
         int changed = 0;
         for (int i = 0; i < L->n; i++) {
             lower_insn *in = &L->insns[i];
-            if (in->absorbed) {
+            if ((in->opcode != FOR_ITER && in->opcode != SEND)
+                || in->nwords > 1 || in->absorbed)
+            {
                 continue;
             }
-            uint32_t fields[3];
-            encode(L, i, fields);
-            if (!in->ext && (fields[0] | fields[1] | fields[2]) > 0xFFFF) {
-                in->ext = 1;
+            int distance = L->insns[in->target].word - (in->word + 1);
+            if (distance > _PyIR_MaxForward) {
+                in->nwords = in->opcode == FOR_ITER
+                    ? RELAXED_FOR_ITER_WORDS : RELAXED_SEND_WORDS;
                 changed = 1;
             }
         }
@@ -980,14 +980,110 @@ layout(lowering *L)
     }
 }
 
+static int
+too_large(PyCodeObject *co, int offset, const char *what, uint32_t value)
+{
+    PyErr_Format(PyExc_SystemError,
+                 "cannot run code object %R: %s %u at offset %d does not "
+                 "fit in the register IR", co, what, value,
+                 offset * (int)sizeof(_Py_CODEUNIT));
+    return -1;
+}
+
+/* The word of instruction i with the given handler.  Fields that do not
+ * fit fail for reachable code; unreachable code never runs, and its
+ * fields become 0. */
+static int
+encode(lowering *L, int i, int handler, _PyIRWord *word)
+{
+    lower_insn *in = &L->insns[i];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(in->handler);
+    int reachable = in->depth >= 0;
+    int depth = reachable ? in->depth : Py_MAX(in->popped, fmt->ninputs);
+    int top = L->co->co_nlocalsplus + depth;
+    int base = top - fmt->ninputs;
+    uint32_t oparg = handler_oparg(L, i, fmt);
+    // Every role's value, then a pick per field.  DST is meaningless when
+    // fmt->dst is _PyIR_NO_DST.  Only formats with a dst borrow, and they
+    // have at most three inputs; others, such as STORE_SLICE, have four.
+    uint32_t values[_PyIR_ROLE_IN0 + 4] = {
+        [_PyIR_ROLE_NONE] = 0,
+        [_PyIR_ROLE_DST] = (uint32_t)(fmt->flags & _PyIR_WINDOW
+                                      ? top - in->popped + fmt->dst
+                                      : top + fmt->dst),
+        [_PyIR_ROLE_BASE] = (uint32_t)(top - in->popped),
+        [_PyIR_ROLE_FB] = in->fb > 0 ? (uint32_t)in->fb : 0,
+        [_PyIR_ROLE_IMM] = oparg,
+        [_PyIR_ROLE_IN0] = in->borrow[0] ? (uint32_t)in->borrow[0] - 1 : (uint32_t)base,
+        [_PyIR_ROLE_IN0 + 1] = in->borrow[1] ? (uint32_t)in->borrow[1] - 1 : (uint32_t)base + 1,
+        [_PyIR_ROLE_IN0 + 2] = in->borrow[2] ? (uint32_t)in->borrow[2] - 1 : (uint32_t)base + 2,
+        [_PyIR_ROLE_IN0 + 3] = (uint32_t)base + 3,
+    };
+    uint32_t fields[4];
+    for (int r = 0; r < 4; r++) {
+        int role = fmt->roles[r];
+        assert(role < _PyIR_ROLE_IN0 + 4);
+        assert(role < _PyIR_ROLE_IN0 || role - _PyIR_ROLE_IN0 < fmt->ninputs);
+        fields[r] = values[role];
+        if (role == _PyIR_ROLE_IMM) {
+            continue;
+        }
+        if (fields[r] > IR_FIELD_MAX) {
+            // Only unreachable code names slots past the frame, since
+            // lower() checks the slot count.
+            assert(!reachable);
+            fields[r] = 0;
+        }
+    }
+    if (fmt->imm == _PyIR_LOC_CD) {
+        if (oparg > IR_CD_MAX) {
+            if (reachable) {
+                return too_large(L->co, in->anchor, "oparg", oparg);
+            }
+            oparg = 0;
+        }
+        fields[2] = oparg & IR_FIELD_MAX;
+        fields[3] = oparg >> 12;
+    }
+    else if (fmt->imm >= _PyIR_LOC_A && fmt->imm <= _PyIR_LOC_D) {
+        int r = fmt->imm - _PyIR_LOC_A;
+        if (oparg > IR_FIELD_MAX) {
+            if (reachable) {
+                return too_large(L->co, in->anchor, "oparg", oparg);
+            }
+            fields[r] = 0;
+        }
+    }
+    *word = IR_WORD(handler, fields[0], fields[1], fields[2], fields[3]);
+    return 0;
+}
+
+static inline void
+set_pc(_PyIRBlock *block, int w, int start, int anchor)
+{
+    if (block->flags & _PyIR_PCMAP_WIDE) {
+        ((_PyIRPc32 *)block->pcmap)[w] = (_PyIRPc32){(uint32_t)start, (uint32_t)anchor};
+    }
+    else {
+        ((_PyIRPc16 *)block->pcmap)[w] = (_PyIRPc16){(uint16_t)start, (uint16_t)anchor};
+    }
+}
+
+static inline _PyIRWord
+jump_word(int target)
+{
+    return IR_WORD(JUMP_FORWARD, 0, 0, target & IR_FIELD_MAX, target >> 12);
+}
+
 static _PyIRBlock *
 emit(lowering *L)
 {
     PyCodeObject *co = L->co;
     int wide = Py_SIZE(co) > UINT16_MAX;
     size_t words_size = (size_t)L->nwords * sizeof(_PyIRWord);
-    size_t fb_size = L->fb_words
-        ? sizeof(_PyFbBlock) + (size_t)L->fb_words * sizeof(_PyIRWord) : 0;
+    // Entry 0 exists only with others
+    size_t fb_size = L->nfb > 1
+        ? sizeof(_PyFbBlock) + (size_t)L->nfb * FB_STRIDE : 0;
     size_t pc_size = (size_t)L->nwords * (wide ? sizeof(_PyIRPc32) : sizeof(_PyIRPc16));
     _PyIRBlock *block = PyMem_Malloc(sizeof(_PyIRBlock) + words_size
                                      + fb_size + pc_size);
@@ -1002,13 +1098,17 @@ emit(lowering *L)
         .flags = (wide ? _PyIR_PCMAP_WIDE : 0) | (L->nabsorbed ? _PyIR_FUSED : 0),
         .pcmap = (char *)words + words_size + fb_size,
     };
-    char *entries = NULL;
     if (fb_size) {
         block->feedback = (_PyFbBlock *)(words + L->nwords);
         // Entries that this pass does not set start zeroed
         memset(block->feedback, 0, fb_size);
         block->feedback->size = (uint32_t)fb_size;
-        entries = (char *)(block->feedback + 1);
+        block->entries = (char *)(block->feedback + 1);
+        // The shared entry never specialises: its counter never triggers
+        _PyFbHeader *shared = _PyIR_FbEntry(block->entries, 0);
+        shared->kind = FB_COUNTER;
+        shared->state = FB_OFF;
+        shared->counter = initial_unreachable_backoff_counter();
     }
     int instrumented = co->_co_monitoring != NULL;
     if (instrumented) {
@@ -1027,8 +1127,6 @@ emit(lowering *L)
 #endif
     _Py_BackoffCounter counter = enable_counters
         ? adaptive_counter_warmup() : initial_unreachable_backoff_counter();
-    _PyIRPc16 *pc16 = block->pcmap;
-    _PyIRPc32 *pc32 = block->pcmap;
     // The words after absorbed loads cover their offsets
     int pc_start = -1;
     for (int i = 0; i < L->n; i++) {
@@ -1041,45 +1139,47 @@ emit(lowering *L)
         }
         in->pc_start = pc_start;
         pc_start = -1;
-        const _PyIRFormat *fmt = _PyIR_FormatOf(in->handler);
-        uint32_t oparg = handler_oparg(L, i, fmt);
-        uint32_t fb = fb_distance(L, in);
-        uint32_t fields[3];
-        encode_fields(L, in, fmt, oparg, fb, fields);
         int w = in->word;
-        if (in->ext) {
-            words[w++] = IR_WORD(IR_EXT, fields[0] >> 16, fields[1] >> 16,
-                                 fields[2] >> 16);
-        }
         // co_code_adaptive holds opcodes that instrumentation put there,
         // in place of the lowering's choice, which real[] keeps.
         int handler = in->top == in->opcode ? in->handler : in->top;
-        words[w] = IR_WORD(handler, fields[0], fields[1], fields[2]);
+        if (encode(L, i, handler, &words[w]) < 0) {
+            PyMem_Free(block->real);
+            PyMem_Free(block);
+            return NULL;
+        }
         if (instrumented) {
             block->real[w] = (uint16_t)in->handler;
         }
-        if (fmt->nwords == 2) {
-            words[w + 1] = IR_WORD1(fmt->imm == _PyIR_LOC_D ? oparg : 0,
-                                    fmt->fb == _PyIR_LOC_F ? fb : 0);
-        }
-        if (in->fb >= 0) {
-            _PyFbHeader *h = (_PyFbHeader *)(entries + in->fb * sizeof(_PyIRWord));
+        if (in->fb > 0) {
+            _PyFbHeader *h = _PyIR_FbEntry(block->entries, (uint32_t)in->fb);
             h->kind = fb_kind[in->opcode];
             if (h->kind == FB_BRANCH) {
                 h->history = 0x5555;    // alternating taken and not taken
             }
             else {
                 h->counter = counter;
-                h->arg = oparg;
+                h->arg = handler_oparg(L, i, _PyIR_FormatOf(in->handler));
             }
         }
-        int end = w + fmt->nwords;
-        for (int k = in->word; k < end; k++) {
-            if (wide) {
-                pc32[k] = (_PyIRPc32){(uint32_t)in->pc_start, (uint32_t)in->anchor};
+        set_pc(block, w, in->pc_start, in->anchor);
+        if (in->nwords > 1) {
+            int exit = L->insns[in->target].word;
+            if (in->opcode == FOR_ITER) {
+                words[w + 1] = jump_word(w + RELAXED_FOR_ITER_WORDS);
+                words[w + 2] = jump_word(exit);
+                words[w + 3] = jump_word(exit + 1);
             }
             else {
-                pc16[k] = (_PyIRPc16){(uint16_t)in->pc_start, (uint16_t)in->anchor};
+                assert(in->opcode == SEND);
+                words[w + 1] = jump_word(w + RELAXED_SEND_WORDS);
+                words[w + 2] = jump_word(exit);
+            }
+            for (int k = 1; k < in->nwords; k++) {
+                set_pc(block, w + k, in->pc_start, in->anchor);
+                if (instrumented) {
+                    block->real[w + k] = JUMP_FORWARD;
+                }
             }
         }
     }
@@ -1093,26 +1193,29 @@ check_block(lowering *L, _PyIRBlock *block)
 {
     for (int i = 0; i < L->n; i++) {
         lower_insn *in = &L->insns[i];
-        _PyIRWord *first = block->words + in->word;
-        _PyIRWord *main = first + in->ext;
-        assert(_PyIR_InstrAt(block, in->start) == first);
-        assert(_PyIR_InstrAt(block, in->anchor) == first);
+        _PyIRWord *instr = block->words + in->word;
+        assert(_PyIR_InstrAt(block, in->start) == instr);
+        assert(_PyIR_InstrAt(block, in->anchor) == instr);
         if (in->absorbed) {
             // Its consumer, or a NOP before it, covers its offsets
             continue;
         }
-        assert(_PyIR_MainWordAt(block, in->anchor) == main);
-        assert(_PyIR_Anchor(block, main) == in->anchor);
-        assert(_PyIR_Start(block, first) == in->pc_start);
-        assert(ext_word(block, main) == (in->ext ? first : NULL));
-        int handler = in->handler;
-        if (_PyIR_FormatOf(handler)->imm != _PyIR_LOC_NONE) {
-            assert((uint32_t)_PyIR_InstrOparg(block, main, handler)
-                   == handler_oparg(L, i, _PyIR_FormatOf(handler)));
+        assert(_PyIR_Anchor(block, instr) == in->anchor);
+        assert(_PyIR_Start(block, instr) == in->pc_start);
+        assert(!_PyIR_IsTrampoline(block, instr));
+        for (int k = 1; k < in->nwords; k++) {
+            assert(_PyIR_IsTrampoline(block, instr + k));
         }
-        _PyFbHeader *fb = _PyIR_InstrFeedback(block, main, handler);
+        int handler = in->handler;
+        const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+        if (fmt->imm != _PyIR_LOC_NONE && in->depth >= 0) {
+            int expected = (fmt->imm == _PyIR_LOC_FBARG && in->fb == 0)
+                ? in->oparg : (int)handler_oparg(L, i, fmt);
+            assert(_PyIR_InstrOparg(L->co, block, instr, handler) == expected);
+        }
+        _PyFbHeader *fb = _PyIR_InstrFeedback(block, instr, handler);
         assert((fb != NULL) == (in->fb >= 0));
-        assert(fb == NULL || fb->kind == fb_kind[in->opcode]);
+        assert(fb == NULL || in->fb == 0 || fb->kind == fb_kind[in->opcode]);
     }
 }
 #endif
@@ -1121,6 +1224,14 @@ check_block(lowering *L, _PyIRBlock *block)
 static _PyIRBlock *
 lower(PyCodeObject *co, int one_to_one)
 {
+    if (co->co_nlocalsplus + co->co_stacksize > IR_MAX_SLOTS) {
+        PyErr_Format(PyExc_SystemError,
+                     "cannot run code object %R: it needs %d slots for its "
+                     "locals, cells, free variables and stack, and the "
+                     "register IR has at most %d",
+                     co, co->co_nlocalsplus + co->co_stacksize, IR_MAX_SLOTS);
+        return NULL;
+    }
     lowering L = {.co = co};
     _PyIRBlock *block = NULL;
     Py_ssize_t size = Py_MAX(Py_SIZE(co), 1);
@@ -1147,31 +1258,19 @@ lower(PyCodeObject *co, int one_to_one)
         }
     }
     int absorb = !one_to_one && !instrumentation_active(co);
-    // Absorption and the word of each instruction, assuming that no IR_EXT
-    // is needed
-    int word = 0;
     for (int i = 0; i < L.n; i++) {
-        lower_insn *in = &L.insns[i];
-        if (!L.resolved && in->target >= 0 && resolve_target(&L, i) < 0) {
+        if (!L.resolved && L.insns[i].target >= 0 && resolve_target(&L, i) < 0) {
             goto done;
         }
         if (absorb) {
-            // Only loads before i change; they give up their words
-            int first = absorb_loads(&L, i);
-            if (first >= 0) {
-                word = L.insns[first].word;
-                for (int j = first; j < i; j++) {
-                    L.insns[j].word = word;
-                    word += insn_nwords(&L.insns[j]);
-                }
-            }
+            absorb_loads(&L, i);
         }
-        in->word = word;
-        word += in->nwords;
     }
-    L.nwords = word;
-    if (!fields_fit(&L)) {
-        layout(&L);
+    layout(&L);
+    if (L.nwords > IR_CD_MAX) {
+        // Jump targets would not fit
+        too_large(co, 0, "word count", (uint32_t)L.nwords);
+        goto done;
     }
     block = emit(&L);
 #ifdef Py_DEBUG
@@ -1217,12 +1316,11 @@ _PyIR_LowerFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
     }
     _PyIRWord *instr = block->words;
     if (resumed && co->_co_firsttraceable < Py_SIZE(co)) {
-        // Past the first RESUME
-        instr = _PyIR_MainWordAt(block, co->_co_firsttraceable);
-        instr += _PyIR_FormatOf(decoding_handler(block, instr,
-                                                 IR_HANDLER(*instr)))->nwords;
+        // Past the first RESUME, which has one word
+        instr = _PyIR_InstrAt(block, co->_co_firsttraceable) + 1;
     }
     frame->instr_ptr = instr;
+    _PyFrame_SetIRBlock(frame, block);
     return 0;
 }
 
@@ -1241,15 +1339,9 @@ _PyIR_Clear(PyCodeObject *co)
         if (fused->feedback != NULL) {
             _PyFb_Clear(fused->feedback);
         }
-#ifdef Py_TIER0
-        _PyTier0_Clear(fused);
-#endif
         PyMem_Free(fused->real);
         PyMem_Free(fused);
     }
-#ifdef Py_TIER0
-    _PyTier0_Clear(block);
-#endif
     PyMem_Free(block->real);
     PyMem_Free(block);
     co->_co_ir = &_PyIR_LowerStub;
@@ -1296,14 +1388,14 @@ _PyIR_SizeOf(PyCodeObject *co)
 
 /* Instrumentation */
 
-/* Call fn for the first and main word of each instruction of block */
-#define FOR_EACH_INSTRUCTION(block, first, main, BODY) \
-    for (Py_ssize_t first = 0; first < (Py_ssize_t)(block)->nwords; ) { \
-        Py_ssize_t main = first + (IR_HANDLER((block)->words[first]) == IR_EXT); \
+/* Run BODY with w set to the word of each instruction of block, skipping
+ * the words that relax() adds */
+#define FOR_EACH_INSTRUCTION(block, w, BODY) \
+    for (Py_ssize_t w = 0; w < (Py_ssize_t)(block)->nwords; w++) { \
+        if (is_trampoline((block), w)) { \
+            continue; \
+        } \
         BODY \
-        first = main + _PyIR_FormatOf(decoding_handler( \
-            (block), (block)->words + main, \
-            IR_HANDLER((block)->words[main])))->nwords; \
     }
 
 /* Replace the fused block of co with one that has a word per instruction.
@@ -1311,7 +1403,9 @@ _PyIR_SizeOf(PyCodeObject *co)
  * it stays allocated, and its words run IR_REMAP, which moves a frame over
  * at its next dispatch.  A frame dispatches between instructions, where both
  * blocks hold the same values in the same slots: the canonical slot of an
- * absorbed load is only written by the instruction that absorbs it. */
+ * absorbed load is only written by the instruction that absorbs it.  The
+ * words that relax() added keep jumping within the fused block, to words
+ * that run IR_REMAP. */
 static int
 lower_one_to_one(PyCodeObject *co)
 {
@@ -1322,22 +1416,9 @@ lower_one_to_one(PyCodeObject *co)
         return -1;
     }
     block->fused = fused;
-    for (uint32_t w = 0; w < fused->nwords; ) {
-        _PyIRWord *main = &fused->words[w];
-        if (IR_HANDLER(*main) == IR_EXT) {
-            main++;
-        }
-        int handler = decoding_handler(fused, main, IR_HANDLER(*main));
-        uint32_t next = (uint32_t)(main - fused->words)
-                        + _PyIR_FormatOf(handler)->nwords;
+    FOR_EACH_INSTRUCTION(fused, w, {
         _PyIR_SetHandler(&fused->words[w], IR_REMAP);
-        w = next;
-    }
-#ifdef Py_TIER0
-    // Frames in the fused block's machine code leave for the interpreter,
-    // which runs IR_REMAP, at their next instruction.
-    _PyTier0_Invalidate(fused);
-#endif
+    })
     FT_ATOMIC_STORE_PTR_RELEASE(co->_co_ir, block);
     return 0;
 }
@@ -1370,15 +1451,17 @@ _PyIR_PrepareInstrumentation(PyCodeObject *co, int instructions)
         PyErr_NoMemory();
         return -1;
     }
-    FOR_EACH_INSTRUCTION(block, first, main, {
+    for (Py_ssize_t w = 0; w < (Py_ssize_t)block->nwords; w++) {
         // Not instrumented yet, so the handler is the lowering's choice
-        // or a specialisation of it, as a superinstruction is.
-        int handler = IR_HANDLER(block->words[main]);
+        // or a specialisation of it.
+        int handler = IR_HANDLER(block->words[w]);
         assert(!(_PyIR_FormatOf(handler)->flags & _PyIR_TRANSPARENT));
-        handler = lowered_opcode(handler);
-        assert(handler < IR_FIRST_ONLY_HANDLER);
-        real[main] = (uint16_t)_PyOpcode_Deopt[handler];
-    })
+        if (is_trampoline(block, w)) {
+            real[w] = (uint16_t)handler;
+            continue;
+        }
+        real[w] = (uint16_t)_PyIR_GenericHandler(block, block->words + w, handler);
+    }
     block->real = real;
     return 0;
 }
@@ -1390,7 +1473,7 @@ _PyIR_WordAnchor(PyCodeObject *co, int offset)
     if (block == &_PyIR_LowerStub) {
         return offset;
     }
-    return _PyIR_Anchor(block, _PyIR_MainWordAt(block, offset));
+    return _PyIR_Anchor(block, _PyIR_InstrAt(block, offset));
 }
 
 void
@@ -1401,7 +1484,7 @@ _PyIR_SyncInstrumentation(PyCodeObject *co, int offset)
         // The lowering reads the instrumentation when it runs
         return;
     }
-    _PyIRWord *instr = _PyIR_MainWordAt(block, offset);
+    _PyIRWord *instr = _PyIR_InstrAt(block, offset);
     if (_PyIR_Anchor(block, instr) != offset) {
         // An EXTENDED_ARG prefix or an absorbed load, which has no word of
         // its own
@@ -1414,19 +1497,19 @@ _PyIR_SyncInstrumentation(PyCodeObject *co, int offset)
     if (IR_HANDLER(*instr) == handler) {
         return;
     }
-#ifdef Py_TIER0
-    _PyTier0_Invalidate(block);
-#endif
     _PyIR_SetHandler(instr, handler);
     if (_PyIR_FormatOf(handler)->flags & _PyIR_TRANSPARENT) {
         return;
     }
     // Restart the warmup of an instruction whose handler changes between
-    // its instrumented and uninstrumented forms.
-    _PyFbHeader *h = _PyIR_InstrFeedback(block, instr, handler);
-    if (h != NULL && h->kind != FB_BRANCH) {
-        FT_ATOMIC_STORE_UINT16_RELAXED(h->counter.value_and_backoff,
-                                       adaptive_counter_warmup().value_and_backoff);
+    // its instrumented and uninstrumented forms; the shared entry never
+    // warms up.
+    if (fb_index(block, instr, handler) > 0) {
+        _PyFbHeader *h = _PyIR_InstrFeedback(block, instr, handler);
+        if (h->kind != FB_BRANCH) {
+            FT_ATOMIC_STORE_UINT16_RELAXED(h->counter.value_and_backoff,
+                                           adaptive_counter_warmup().value_and_backoff);
+        }
     }
 }
 
@@ -1438,26 +1521,28 @@ _PyIR_WriteAdaptive(PyCodeObject *co, _Py_CODEUNIT *instructions,
     if (block == NULL) {
         return -1;
     }
-    FOR_EACH_INSTRUCTION(block, first, main, {
-        _PyIRWord *instr = block->words + main;
+    FOR_EACH_INSTRUCTION(block, w, {
+        _PyIRWord *instr = block->words + w;
         int offset = _PyIR_Anchor(block, instr);
         int handler = IR_HANDLER(*instr);
         _Py_CODEUNIT *unit = &instructions[offset];
-        // Specialised or instrumented; a superinstruction shows as the
-        // specialisation that it extends, and absorbed loads keep their
-        // opcode.
+        // Specialised or instrumented; an IR-only handler shows as the
+        // instruction it stands for, and absorbed loads keep their opcode.
         unit->op.code = (uint8_t)(handler < IR_FIRST_ONLY_HANDLER
                                   ? handler : _PyIR_Formats[handler].shadow);
         int base = _Py_GetBaseCodeUnit(co, offset).op.code;
         int caches = _PyOpcode_Caches[base];
         if (caches) {
             memset(&unit[1], 0, caches * sizeof(_Py_CODEUNIT));
-            _PyFbHeader *h = _PyIR_InstrFeedback(block, instr, handler);
-            if (h != NULL && h->kind == FB_BRANCH) {
-                unit[1].cache = h->history;
-            }
-            else if (h != NULL) {
-                write_fields(unit, h);
+            // The shared entry holds nothing of the instruction
+            if (fb_index(block, instr, handler) > 0) {
+                _PyFbHeader *h = _PyIR_InstrFeedback(block, instr, handler);
+                if (h->kind == FB_BRANCH) {
+                    unit[1].cache = h->history;
+                }
+                else {
+                    write_fields(unit, h);
+                }
             }
         }
     })

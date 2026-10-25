@@ -82,11 +82,11 @@
 #define INSTRUCTION_STATS(op) ((void)0)
 #endif
 
-/* The operands that dispatch decodes: the oparg, or for the register IR
- * fields A, B and C of word 0 (Include/internal/pycore_ir.h). */
-#   define TAIL_CALL_OPERANDS uint32_t ir_a, uint32_t ir_b, uint32_t ir_c
-#   define TAIL_CALL_OPERAND_ARGS ir_a, ir_b, ir_c
-#   define TAIL_CALL_NO_OPERANDS 0, 0, 0
+/* The word that dispatch loads, from which the handler extracts its fields
+ * (Include/internal/pycore_ir.h). */
+#   define TAIL_CALL_OPERANDS _PyIRWord ir_word
+#   define TAIL_CALL_OPERAND_ARGS ir_word
+#   define TAIL_CALL_NO_OPERANDS 0
 
 #ifdef Py_STATS
 #   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
@@ -149,79 +149,13 @@
 #  define LABEL(name) name:
 #endif
 
-/* The computed-goto build of the register IR decodes fields A, B and C of
- * word 0 in each handler rather than at dispatch, so that a handler pays only
- * for the fields it uses.  Dispatch after NEXTOPARG() enters a handler at its
- * TARGET, where IR_ENTRY() decodes ir_a, ir_b and ir_c from ir_word into
- * locals.  DISPATCH_GOTO() runs another handler on the fields at hand, which
- * IR_EXT may have widened: it passes them in ir_fields to the handler's
- * IR_BODY_ label, past the decoding, and sets ir_word to IR_FIELDS_PASSED.
- * A specialisation that deoptimises jumps to the PREDICTED_ label of its
- * family head, which takes the fields from wherever its entry found them.
- * The tail-call and switch builds decode the fields at dispatch.
- *
- * Fields never change once a block is lowered, so with the GIL a handler
- * reads each from the word in memory with one 16-bit load, where shifting it
- * out of ir_word takes three instructions.  The free-threaded build decodes
- * ir_word, which it loaded atomically. */
-#if USE_COMPUTED_GOTOS && !_Py_TAIL_CALL_INTERP
-#  define IR_LAZY_FIELDS 1
-/* No main word runs IR_EXT. */
-#  define IR_FIELDS_PASSED ((_PyIRWord)IR_EXT)
-#  define IR_DECODE_WORD_FIELDS() \
-    (ir_a = IR_A(ir_word), ir_b = IR_B(ir_word), ir_c = IR_C(ir_word))
-#  if !defined(Py_GIL_DISABLED) && PY_LITTLE_ENDIAN
-/* 16-bit unit K of the word at W, through memcpy since W is a uint64_t */
-static inline uintptr_t
-ir_field_in_memory(const _PyIRWord *w, int k)
-{
-    uint16_t field;
-    memcpy(&field, (const char *)w + 2 * k, sizeof(field));
-    return field;
-}
-#    define IR_DECODE_FIELDS() \
-    (ir_a = ir_field_in_memory(next_instr, 1), \
-     ir_b = ir_field_in_memory(next_instr, 2), \
-     ir_c = ir_field_in_memory(next_instr, 3))
-#  else
-#    define IR_DECODE_FIELDS() IR_DECODE_WORD_FIELDS()
-#  endif
-#  define IR_TAKE_FIELDS() \
-    (ir_a = ir_fields[0], ir_b = ir_fields[1], ir_c = ir_fields[2])
-#  undef DISPATCH_GOTO
-#  define DISPATCH_GOTO() \
-    do { \
-        ir_fields[0] = ir_a; \
-        ir_fields[1] = ir_b; \
-        ir_fields[2] = ir_c; \
-        ir_word = IR_FIELDS_PASSED; \
-        goto *ir_body_targets[opcode]; \
-    } while (0)
-#  define DISPATCH_DECODE() goto *opcode_targets[opcode]
-#  define IR_ENTRY(op) \
-    uintptr_t ir_a, ir_b, ir_c; \
-    IR_DECODE_FIELDS(); \
-    if (0) { \
-        IR_BODY_##op: \
-        IR_TAKE_FIELDS(); \
-    } \
-    (void)ir_a; (void)ir_b; (void)ir_c
-#  define IR_PREDICTED(op) \
-    if (0) { \
-        PREDICTED_##op: \
-        if (ir_word == IR_FIELDS_PASSED) { \
-            IR_TAKE_FIELDS(); \
-        } \
-        else { \
-            IR_DECODE_WORD_FIELDS(); \
-        } \
-    }
-#else
-#  define IR_LAZY_FIELDS 0
-#  define DISPATCH_DECODE() DISPATCH_GOTO()
-#  define IR_ENTRY(op) ((void)0)
-#  define IR_PREDICTED(op) PREDICTED_##op:
-#endif
+/* Dispatch loads the word of the instruction into ir_word, a register, from
+ * which each handler extracts the fields it uses with a shift and a mask
+ * (IR_A(ir_word) and so on), in every dispatch build.  A handler that runs
+ * another on the same word, as INSTRUMENTED_LINE does and a specialisation
+ * that deoptimises to its family head's PREDICTED_ label, leaves ir_word as
+ * it is, so the other handler finds the same fields. */
+#define IR_PREDICTED(op) PREDICTED_##op:
 
 /* PRE_DISPATCH_GOTO() does lltrace if enabled. Normally a no-op */
 #ifdef Py_DEBUG
@@ -259,7 +193,7 @@ do { \
         _PyFrame_StackAssertInvalid(frame); \
         NEXTOPARG(); \
         PRE_DISPATCH_GOTO(); \
-        DISPATCH_DECODE(); \
+        DISPATCH_GOTO(); \
     }
 
 #define DISPATCH_SAME_OPARG() \
@@ -298,26 +232,19 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 
 /* In words: the IR has no bytecode offsets but those of its pcmap. */
 #define INSTR_OFFSET() ((int)(next_instr - _PyFrame_IRWords(frame)))
-#if IR_LAZY_FIELDS
 #define NEXTOPARG()  do { \
         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr); \
         opcode = IR_HANDLER(ir_word); \
     } while (0)
-#else
-#define NEXTOPARG()  do { \
-        _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr); \
-        opcode = IR_HANDLER(word); \
-        ir_a = IR_A(word); \
-        ir_b = IR_B(word); \
-        ir_c = IR_C(word); \
-    } while (0)
-#endif
 
 /* JUMPBY makes the generator identify the instruction as a jump. SKIP_OVER is
  * for advancing to the next instruction, taking into account cache entries
  * and skipped instructions.
  */
 #define JUMPBY(x)       (next_instr += (x))
+/* The word at absolute index T, the target of a jump, and a jump there. */
+#define JUMP_TARGET(T)  (IR_CHECK_BLOCK(), frame->ir_words + (T))
+#define JUMPTO(T)       (next_instr = JUMP_TARGET(T))
 #define SKIP_OVER(x)    (next_instr += (x))
 
 #define STACK_LEVEL()     ((int)(stack_pointer - _PyFrame_Stackbase(frame)))
@@ -587,111 +514,100 @@ gen_try_set_executing(PyGenObject *gen)
     Py_TYPE(ITER)->_tp_iteritem((ITER), (INDEX))
 
 /* Operands of the register IR handlers (Tools/cases_generator/ir_generator.py).
- * F is a field variable, ir_a, ir_b or ir_c. */
-
-static_assert(IR_BORROW == Py_TAG_REFCNT,
-              "IR_BORROW must be the tag of a borrowed reference");
+ * F is a field, IR_A(ir_word) and so on. */
 
 /* The slot that a slot field names, an lvalue. */
-#define IR_SLOT(F) (frame->localsplus[IR_SLOT_INDEX(F)])
+#define IR_SLOT(F) (frame->localsplus[(F)])
 
-/* REF, read through field F and known to be a pointer, borrowed if F
- * carries IR_BORROW. */
+/* Whether an input that the handler reads through field F, whose canonical
+ * slot is CANON, names a local whose LOAD_FAST_BORROW the lowering
+ * absorbed.  A local is below every temporary, so it is never CANON. */
+#define IR_BORROWED(F, CANON) ((F) != (CANON))
+
+/* REF, read through field F and known to be a pointer, borrowed if F names
+ * a local. */
+static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
 #ifdef Py_STACKREF_DEBUG
-#  define IR_BORROW_KNOWN(REF, F) (((F) & IR_BORROW) ? PyStackRef_Borrow(REF) : (REF))
+#  define IR_BORROW_KNOWN(REF, F, CANON) \
+    (IR_BORROWED(F, CANON) ? PyStackRef_Borrow(REF) : (REF))
 #else
-#  define IR_BORROW_KNOWN(REF, F) \
-    ((_PyStackRef){ .bits = (REF).bits | ((F) & IR_BORROW) })
+#  define IR_BORROW_KNOWN(REF, F, CANON) \
+    ((_PyStackRef){ .bits = (REF).bits | (uintptr_t)IR_BORROWED(F, CANON) })
 #endif
 
 /* Before a deopt, drop REF if IR_BORROW_KNOWN made it a borrow of the local
  * that F names: the family head borrows the local again.  Only the
  * Py_STACKREF_DEBUG checker counts such borrows. */
 #ifdef Py_STACKREF_DEBUG
-#  define IR_DROP_BORROW(REF, F) \
+#  define IR_DROP_BORROW(REF, F, CANON) \
     do { \
-        if ((F) & IR_BORROW) { \
+        if (IR_BORROWED(F, CANON)) { \
             PyStackRef_CLOSE(REF); \
         } \
     } while (0)
 #else
-#  define IR_DROP_BORROW(REF, F) ((void)0)
+#  define IR_DROP_BORROW(REF, F, CANON) ((void)0)
 #endif
 
-/* The feedback entry at distance F from the instruction. */
-#define IR_FB(INSTR, F) ((void *)((INSTR) + (F)))
+/* The frame's view of its block: frame->ir_words and frame->ir_feedback
+ * follow the block that instr_ptr points into. */
+#define IR_CHECK_BLOCK() \
+    assert(frame->ir_words == _PyFrame_IRBlock(frame)->words && \
+           frame->ir_feedback == _PyFrame_IRBlock(frame)->entries)
 
-/* A superinstruction runs the POP_JUMP_IF_FALSE or POP_JUMP_IF_TRUE word
- * JUMP at next_instr, which jumps if TAKEN, as that handler does. */
-#define IR_JUMP_NEXT(JUMP, TAKEN) \
+/* The feedback entry at index F. */
+#define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_feedback, (F)))
+
+/* The oparg that the generic handler of an instruction with entry FB, at
+ * index F, keeps in the arg field of the entry.  The sites that share entry
+ * 0 find theirs in the bytecode. */
+#define IR_FB_ARG(FB, F) \
+    (Py_UNLIKELY((F) == 0) ? _PyIR_BytecodeOparg(frame, this_instr) \
+                           : (int)((_PyFbHeader *)(FB))->arg)
+
+/* A specialisation of BINARY_OP deoptimises to the handler of the operation
+ * that its entry, at index F, records. */
+#define IR_DEOPT_BINARY_OP(F) \
     do { \
-        _PyFbHeader *fb_ = (_PyFbHeader *)IR_FB(next_instr, IR_B(JUMP)); \
-        RECORD_BRANCH_TAKEN(fb_->history, (TAKEN)); \
-        next_instr++; \
-        next_instr += (TAKEN) ? (int)IR_C(JUMP) \
-                              : IR_HANDLER(*next_instr) == NOT_TAKEN; \
+        opcode = _PyIR_BINARY_OP_FIRST + \
+            (int)((_PyFbHeader *)IR_FB(F))->arg; \
+        next_instr = this_instr; \
+        DISPATCH_GOTO(); \
     } while (0)
 
 /* The stack pointer before an instruction whose dst field F names the slot
  * at OFF from it.  The loads that an instruction absorbs have no words, so
- * the stack pointer at its dispatch may lag behind.  A dst never carries
- * IR_BORROW, so F is the slot index times two. */
-#define IR_STACK_POINTER(F, OFF) \
-    ((_PyStackRef *)((char *)frame->localsplus + \
-                     (F) * (sizeof(_PyStackRef) / 2)) - (OFF))
+ * the stack pointer at its dispatch may lag behind. */
+#define IR_STACK_POINTER(F, OFF) (&frame->localsplus[(F)] - (OFF))
 
 /* An absorbed load leaves the canonical slot of its value as it was, so
- * before code that reads the stack runs, a handler clears the slot of an
- * input that it reads through field F if F names a local. */
+ * before code that reads the stack runs, a handler clears SLOT, the
+ * canonical slot of an input that it reads through field F, if F names a
+ * local. */
 #define IR_CLEAR_IF_BORROWED(F, SLOT) \
     do { \
-        if ((F) & IR_BORROW) { \
+        if (&IR_SLOT(F) != &(SLOT)) { \
             (SLOT) = PyStackRef_NULL; \
         } \
     } while (0)
 
 /* Every temporary lives in its canonical slot, at OFF from stack_pointer.
- * An input of N may instead carry IR_BORROW and name a local. */
+ * An input that may be borrowed may instead name a local. */
 #ifdef Py_DEBUG
-#  define IR_CHECK_SLOT(F, OFF) \
-    assert(((F) & IR_BORROW) == 0 && &IR_SLOT(F) == &stack_pointer[(OFF)])
-#  define IR_CHECK_INPUT(F, OFF, N) \
-    assert(((F) & IR_BORROW) \
-           ? (int)IR_SLOT_INDEX(F) < _PyFrame_GetCode(frame)->co_nlocalsplus \
-           : &IR_SLOT(F) == &stack_pointer[(OFF)])
+#  define IR_CHECK_SLOT(F, OFF) assert(&IR_SLOT(F) == &stack_pointer[(OFF)])
+#  define IR_CHECK_INPUT(F, OFF) \
+    assert(&IR_SLOT(F) == &stack_pointer[(OFF)] \
+           || (int)(F) < _PyFrame_GetCode(frame)->co_nlocalsplus)
 #else
 #  define IR_CHECK_SLOT(F, OFF) ((void)0)
-#  define IR_CHECK_INPUT(F, OFF, N) ((void)0)
+#  define IR_CHECK_INPUT(F, OFF) ((void)0)
 #endif
-
-/* IR_EXT: widen the fields with its own and go on to the next word. */
-#define IR_EXTEND_FIELDS() \
-    do { \
-        _PyIRWord word_ = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr); \
-        opcode = IR_HANDLER(word_); \
-        ir_a = ir_a << 16 | IR_A(word_); \
-        ir_b = ir_b << 16 | IR_B(word_); \
-        ir_c = ir_c << 16 | IR_C(word_); \
-    } while (0)
 
 /* The oparg and feedback entry of another instruction, as HANDLER reads
  * them. */
 #define _PyIR_Oparg(FRAME, INSTR) \
-    _PyIR_InstrOparg(_PyFrame_IRBlock(FRAME), (INSTR), IR_HANDLER(*(INSTR)))
+    _PyIR_InstrOparg(_PyFrame_GetCode(FRAME), _PyFrame_IRBlock(FRAME), \
+                     (INSTR), IR_HANDLER(*(INSTR)))
 #define _PyIR_FbHeaderOf(FRAME, INSTR, HANDLER) \
     _PyIR_InstrFeedback(_PyFrame_IRBlock(FRAME), (INSTR), (HANDLER))
 
-/* Where a generator returns to in its caller: past the SEND or FOR_ITER
- * at the caller's instr_ptr, or the trampoline's INTERPRETER_EXIT.
- * YIELD_VALUE reads the offset from gi_yield_offset, which the resuming
- * instruction records, rather than through this chain of dependent loads;
- * debug builds check that the two agree. */
-static inline int
-_PyIR_YieldReturnOffset(_PyInterpreterFrame *frame)
-{
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*frame->instr_ptr));
-    if (fmt->flags & _PyIR_TRANSPARENT) {
-        fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, frame->instr_ptr));
-    }
-    return fmt->nwords;
-}

@@ -1535,7 +1535,7 @@ get_feedback(PyObject *self, PyObject *args)
     if (block == NULL) {
         return NULL;
     }
-    _PyIRWord *instr = _PyIR_MainWordAt(block, i);
+    _PyIRWord *instr = _PyIR_InstrAt(block, i);
     _PyFbHeader *h = _PyIR_InstrFeedback(block, instr, IR_HANDLER(*instr));
     _PyFbBlock *feedback = block->feedback;
     if (h == NULL) {
@@ -1566,11 +1566,11 @@ get_feedback(PyObject *self, PyObject *args)
                          fields[0], fields[1], rows);
 }
 
-/* The register IR of CODE, lowering it if need be: per instruction a tuple
- * (start, anchor, handler, a, b, c, word1) of the bytecode offsets in bytes
- * of its first code unit and of the instruction, the name of the handler of
- * its main word, fields A, B and C, widened by IR_EXT, and word 1 of a
- * two-word format or None. */
+/* The register IR of CODE, lowering it if need be: per word a tuple
+ * (start, anchor, handler, a, b, c, d) of the bytecode offsets in bytes of
+ * the first code unit of its instruction and of the instruction, the name of
+ * its handler and its fields.  The jumps that a relaxed FOR_ITER or SEND
+ * adds after its word share its offsets. */
 static PyObject *
 get_ir(PyObject *self, PyObject *arg)
 {
@@ -1586,42 +1586,43 @@ get_ir(PyObject *self, PyObject *arg)
     if (result == NULL) {
         return NULL;
     }
-    for (uint32_t w = 0; w < block->nwords; ) {
-        uint32_t a = 0, b = 0, c = 0;
-        if (IR_HANDLER(block->words[w]) == IR_EXT) {
-            a = IR_A(block->words[w]);
-            b = IR_B(block->words[w]);
-            c = IR_C(block->words[w]);
-            w++;
-        }
+    for (uint32_t w = 0; w < block->nwords; w++) {
         _PyIRWord word = block->words[w];
         int handler = IR_HANDLER(word);
-        int real = handler;
-        if (_PyIR_FormatOf(handler)->flags & _PyIR_TRANSPARENT) {
-            real = block->real[w];
-        }
-        int nwords = _PyIR_FormatOf(real)->nwords;
-        PyObject *word1 = nwords == 2
-            ? PyLong_FromUnsignedLongLong(block->words[w + 1])
-            : Py_NewRef(Py_None);
         const char *name = handler < IR_FIRST_ONLY_HANDLER
             ? _PyOpcode_OpName[handler]
             : _PyIR_OnlyNames[handler - IR_FIRST_ONLY_HANDLER];
-        PyObject *item = word1 == NULL ? NULL : Py_BuildValue(
-            "(iisIIIN)",
+        PyObject *item = Py_BuildValue(
+            "(iisIIII)",
             _PyIR_Start(block, &block->words[w]) * (int)sizeof(_Py_CODEUNIT),
             _PyIR_Anchor(block, &block->words[w]) * (int)sizeof(_Py_CODEUNIT),
-            name, a << 16 | IR_A(word), b << 16 | IR_B(word),
-            c << 16 | IR_C(word), word1);
+            name, IR_A(word), IR_B(word), IR_C(word), IR_D(word));
         if (item == NULL || PyList_Append(result, item) < 0) {
             Py_XDECREF(item);
             Py_DECREF(result);
             return NULL;
         }
         Py_DECREF(item);
-        w += nwords;
     }
     return result;
+}
+
+/* Set the farthest exit of FOR_ITER and SEND that the lowering does not
+ * relax, for code lowered from now on, and return the previous one. */
+static PyObject *
+set_ir_max_forward(PyObject *self, PyObject *arg)
+{
+    int value = PyLong_AsInt(arg);
+    if (value == -1 && PyErr_Occurred()) {
+        return NULL;
+    }
+    if (value < 0 || value > IR_MAX_FORWARD) {
+        PyErr_SetString(PyExc_ValueError, "distance out of range");
+        return NULL;
+    }
+    int old = _PyIR_MaxForward;
+    _PyIR_MaxForward = value;
+    return PyLong_FromLong(old);
 }
 
 static PyObject *
@@ -3523,6 +3524,7 @@ static PyMethodDef module_functions[] = {
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_O, NULL},
+    {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},
     {"get_code_var_counts", _PyCFunction_CAST(get_code_var_counts),
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"verify_stateless_code", _PyCFunction_CAST(verify_stateless_code),

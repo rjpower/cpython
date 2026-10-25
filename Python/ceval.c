@@ -1054,9 +1054,9 @@ static_assert(offsetof(_PyEntryFrame, stack) ==
 static const _PyIRWord _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS[] = {
     /* Put a NOP at the start, so that the IP points into
     * the code, rather than before it */
-    IR_WORD(NOP, 0, 0, 0),
-    IR_WORD(INTERPRETER_EXIT, IR_SLOT_FIELD(1), 0, 0),  /* reached on return */
-    IR_WORD(INTERPRETER_EXIT, IR_SLOT_FIELD(1), 0, 0),  /* reached on yield */
+    IR_WORD(NOP, 0, 0, 0, 0),
+    IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),  /* reached on return */
+    IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),  /* reached on yield */
 };
 
 const _PyInstr *_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR = (_PyInstr*)&_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
@@ -1112,9 +1112,6 @@ _PyObjectArray_Free(PyObject **array, PyObject **scratch)
 #if _Py_TAIL_CALL_INTERP
 #include "ir_targets.h"
 #include "generated_ir_cases.c.h"
-#ifdef Py_TIER0
-#include "ceval_tier0.c.h"
-#endif
 #endif
 
 
@@ -1275,16 +1272,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 #endif
 #if !_Py_TAIL_CALL_INTERP
     int opcode;        /* Current handler */
-#  if IR_LAZY_FIELDS
-    _PyIRWord ir_word = 0;      /* Its word 0, which the handler decodes */
-    uint32_t ir_fields[3];      /* Fields for IR_BODY_ and PREDICTED_ labels */
-#  else
-    uint32_t ir_a, ir_b, ir_c;  /* Its fields A, B and C */
-#  endif
-    assert(tstate->current_frame == NULL || tstate->current_frame->stackpointer != NULL);
-#elif !_Py_TAIL_CALL_INTERP
-    uint8_t opcode;    /* Current opcode */
-    int oparg;         /* Current opcode argument, if any */
+    _PyIRWord ir_word = 0;  /* Its word, from which the handler takes its fields */
     assert(tstate->current_frame == NULL || tstate->current_frame->stackpointer != NULL);
 #endif
     _PyEntryFrame entry;
@@ -1312,6 +1300,8 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 #endif
     entry.frame.f_executable = PyStackRef_None;
     entry.frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS + 1;
+    entry.frame.ir_words = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
+    entry.frame.ir_feedback = NULL;
     entry.frame.stackpointer = entry.stack;
     entry.frame.owner = FRAME_OWNED_BY_INTERPRETER;
     entry.frame.visited = 0;

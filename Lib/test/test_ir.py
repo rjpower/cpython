@@ -1,6 +1,7 @@
 """Tests for the register IR (Include/internal/pycore_ir.h)."""
 
 import dis
+import io
 import opcode
 import sys
 import unittest
@@ -10,18 +11,35 @@ from test.support import import_helper
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 get_ir = _testinternalcapi.get_ir
 
-IR_BORROW = 1
 # The free-threaded build does not specialise the IR.
 SPECIALIZES = not support.Py_GIL_DISABLED
 BORROWED_LOADS = ("LOAD_FAST_BORROW", "LOAD_FAST_BORROW_LOAD_FAST_BORROW")
+# Include/internal/pycore_ir.h
+IR_MAX_SLOTS = 4095
+IR_FIELD_MAX = 4095
+IR_MAX_FORWARD = 2047
 
 
-def slot(field):
-    return field >> 1
+def instructions(code):
+    """The words of get_ir() less the jumps that a relaxed FOR_ITER or SEND
+    adds, which share its offsets"""
+    words = []
+    for word in get_ir(code):
+        if words and word[:2] == words[-1][:2]:
+            assert word[2] == "JUMP_FORWARD", word
+            continue
+        words.append(word)
+    return words
 
 
 def handlers(func):
-    return [instr[2] for instr in get_ir(func.__code__)]
+    return [instr[2] for instr in instructions(func.__code__)]
+
+
+def names_local(func, field):
+    """Whether a slot field of func names a local, which an input field does
+    only for an absorbed load"""
+    return field < len(_testinternalcapi.get_co_localskinds(func.__code__))
 
 
 def make_function(source, name="f"):
@@ -40,7 +58,7 @@ def assemble(*instrs):
 
 
 def one_word_per_instruction(func):
-    anchors = [instr[1] for instr in get_ir(func.__code__)]
+    anchors = [instr[1] for instr in instructions(func.__code__)]
     offsets = [instr.offset for instr in dis.get_instructions(func)
                if instr.opname != "EXTENDED_ARG"]
     return anchors == offsets
@@ -78,7 +96,7 @@ class LoweringTest(unittest.TestCase):
         # before it.
         instrs = list(dis.get_instructions(func))
         i = 0
-        for start, anchor, *_ in get_ir(func.__code__):
+        for start, anchor, *_ in instructions(func.__code__):
             self.assertEqual(start, instrs[i].offset)
             while instrs[i].offset != anchor:
                 self.assertIn(instrs[i].opname,
@@ -112,8 +130,7 @@ class LoweringTest(unittest.TestCase):
         start, anchor, _, _, b, *_ = ir["LOAD_ATTR"]
         self.assertEqual(start, load.offset)
         self.assertGreater(anchor, start)
-        self.assertTrue(b & IR_BORROW)
-        self.assertEqual(slot(b), 0)
+        self.assertEqual(b, 0)
         self.check_offsets(f)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(f(C()), 5)
@@ -134,7 +151,7 @@ class LoweringTest(unittest.TestCase):
             self.assertEqual(f(C()), 5)
         if SPECIALIZES:
             self.assertNotIn("LOAD_ATTR", handlers(f))
-        self.assertTrue(self.load_attr_owner_field(f) & IR_BORROW)
+        self.assertTrue(names_local(f, self.load_attr_owner_field(f)))
         for _ in range(3):
             self.assertIsNone(f(object()))
 
@@ -150,9 +167,9 @@ class LoweringTest(unittest.TestCase):
             return a in b
         self.assertNotIn("LOAD_FAST_BORROW_LOAD_FAST_BORROW", handlers(f))
         ir = {instr[2]: instr for instr in get_ir(f.__code__)}
-        # Field A is the destination
+        # Field A is the destination, and B and C name the locals
         _, _, _, _, b, c, _ = ir["CONTAINS_OP"]
-        self.assertEqual((b, c), (0 << 1 | IR_BORROW, 1 << 1 | IR_BORROW))
+        self.assertEqual((b, c), (0, 1))
         self.check_offsets(f)
         self.assertTrue(f(1, [1]))
         self.assertFalse(f(2, {1}))
@@ -189,7 +206,7 @@ class LoweringTest(unittest.TestCase):
         code[load_b[0].offset] = dis.opmap["LOAD_FAST_BORROW"]
         f.__code__ = f.__code__.replace(co_code=bytes(code))
         self.assertIn("LOAD_FAST_BORROW", handlers(f))
-        self.assertFalse(self.load_attr_owner(f) & IR_BORROW)
+        self.assertFalse(names_local(f, self.load_attr_owner(f)))
         self.assertEqual(f(C(), None), 5)
         self.assertEqual(f(None, C()), 5)
 
@@ -198,7 +215,7 @@ class LoweringTest(unittest.TestCase):
             return (o
                     .attr)
         self.assertIn("LOAD_FAST_BORROW", handlers(f))
-        self.assertFalse(self.load_attr_owner(f) & IR_BORROW)
+        self.assertFalse(names_local(f, self.load_attr_owner(f)))
         self.assertEqual(f(C()), 5)
 
     def test_no_absorption_under_tracing(self):
@@ -209,7 +226,8 @@ class LoweringTest(unittest.TestCase):
         # A word per instruction, and one event per instruction from the
         # first RESUME on
         offsets = [instr.offset for instr in dis.get_instructions(f)]
-        self.assertEqual([instr[1] for instr in get_ir(f.__code__)], offsets)
+        self.assertEqual([instr[1] for instr in instructions(f.__code__)],
+                         offsets)
         lasti = offsets[1:]
         self.assertEqual([e[1] for e in events if e[0] == "opcode"], lasti)
 
@@ -286,8 +304,8 @@ class LoweringTest(unittest.TestCase):
     @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
     def test_yield_to_each_kind_of_resumer(self):
         # A yield returns past the instruction that resumed the generator:
-        # FOR_ITER_GEN (two words), SEND_GEN (one) or the trampoline of a
-        # C-level next() (one).  One generator alternates between all three.
+        # FOR_ITER_GEN, SEND_GEN or the trampoline of a C-level next().  One
+        # generator alternates between all three.
         def counter():
             n = 0
             while True:
@@ -314,9 +332,8 @@ class LoweringTest(unittest.TestCase):
 
     @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
     def test_compare_and_branch(self):
-        # A specialised compare whose result a POP_JUMP_IF_FALSE or
-        # POP_JUMP_IF_TRUE consumes runs the jump too; the jump keeps its
-        # word.
+        # A specialised compare and the jump that consumes its result keep
+        # a word each.
         source = ("def f(xs, y):\n"
                   "    n = 0\n"
                   "    for x in xs:\n"
@@ -325,9 +342,9 @@ class LoweringTest(unittest.TestCase):
                   "        if x != y:\n"
                   "            n += 10\n"
                   "    return n\n")
-        cases = (([1, 2, 3], 2, "IR_SUPER_COMPARE_OP_INT"),
-                 ([1.5, 2.5], 2.5, "IR_SUPER_COMPARE_OP_FLOAT"),
-                 (["a", "b"], "b", "IR_SUPER_COMPARE_OP_STR"))
+        cases = (([1, 2, 3], 2, "COMPARE_OP_INT"),
+                 ([1.5, 2.5], 2.5, "COMPARE_OP_FLOAT"),
+                 (["a", "b"], "b", "COMPARE_OP_STR"))
         for xs, y, handler in cases:
             with self.subTest(handler=handler):
                 f = make_function(source)
@@ -344,9 +361,7 @@ class LoweringTest(unittest.TestCase):
                 self.assertEqual(f(xs, y), expected)
 
     @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
-    def test_branch_events_of_a_compare_and_branch(self):
-        # While BRANCH events instrument the jump, the compare deoptimises
-        # and specialises again without it.
+    def test_branch_events_of_a_specialised_compare(self):
         def f(xs):
             n = 0
             for x in xs:
@@ -356,11 +371,10 @@ class LoweringTest(unittest.TestCase):
 
         xs = [1, 2, 3] * _testinternalcapi.SPECIALIZATION_THRESHOLD
         self.assertEqual(f(xs), len(xs) // 3)
-        self.assertIn("IR_SUPER_COMPARE_OP_INT", handlers(f))
+        self.assertIn("COMPARE_OP_INT", handlers(f))
         jump = [instr for instr in dis.get_instructions(f)
                 if instr.opname.startswith("POP_JUMP_IF_")][0]
         if_true = jump.opname == "POP_JUMP_IF_TRUE"
-        # More runs than the cooldown of a specialisation
         xs = [1, 2, 3] * 100
         expected = ["right" if (x < 2) == if_true else "left" for x in xs]
         events = []
@@ -383,7 +397,6 @@ class LoweringTest(unittest.TestCase):
             sys.monitoring.free_tool_id(tool)
         self.assertEqual(events, expected)
         self.assertIn("COMPARE_OP_INT", ir)
-        self.assertNotIn("IR_SUPER_COMPARE_OP_INT", ir)
         self.assertEqual(f(xs), len(xs) // 3)
 
     def test_f_lasti(self):
@@ -404,38 +417,43 @@ class LoweringTest(unittest.TestCase):
                          list(range(2, n + 2)))
         self.check_offsets(f)
 
-    def test_wide_fields(self):
-        # Slots beyond 32767 and constants beyond 65535 need IR_EXT, and
-        # more than 65535 code units a pcmap with 32-bit offsets.
-        nlocals = 40_000
+    def test_wide_operands(self):
+        # Constant indices beyond 4095 take the 24-bit field CD, a name index
+        # beyond 4095 of an instruction with an entry lives in the entry, and
+        # more than 65535 code units need a pcmap with 32-bit offsets.
         nconsts = 70_000
-        last = f"v{nlocals - 1}"
+        nnames = 5_000
         source = ("def f(o):\n"
-                  + "".join(f"    v{i % nlocals} = {i}.5\n"
-                            for i in range(nconsts))
-                  + f"    {last} = o\n"
-                  + f"    return v0, {last}.attr\n")
+                  + "".join(f"    global g{i}\n" for i in range(nnames))
+                  + "".join(f"    g{i} = 0\n" for i in range(nnames))
+                  + "".join(f"    v = {i}.5\n" for i in range(nconsts))
+                  + "    return v, o.attr\n")
         f = make_function(source)
         self.assertGreater(len(f.__code__.co_code) // 2, 65535)
+        self.assertGreater(f.__code__.co_names.index("attr"), IR_FIELD_MAX)
         ir = get_ir(f.__code__)
-        # get_ir folds IR_EXT words into the fields they widen
-        self.assertGreater(max(max(instr[3:6]) for instr in ir), 0xFFFF)
         self.assertGreater(ir[-1][1], 2 * 65535)
-        # LOAD_ATTR reads the last local through a wide field
-        load_attr = [instr for instr in ir if instr[2] == "LOAD_ATTR"]
-        self.assertEqual(slot(load_attr[0][4]),
-                         f.__code__.co_varnames.index(last))
+        # The last LOAD_CONST, which may push its constant inline, names it
+        # through CD
+        load_const = [instr for instr in ir
+                      if instr[2].startswith("LOAD_CONST")][-1]
+        _, anchor, _, _, _, c, d = load_const
+        index = [instr for instr in dis.get_instructions(f)
+                 if instr.offset == anchor][0].arg
+        self.assertGreater(index, IR_FIELD_MAX)
+        self.assertEqual(d << 12 | c, index)
         self.check_offsets(f)
 
-        # The handlers that run the wide LOAD_ATTR: specialised, deoptimised
-        # and instrumented
+        # The handlers that run the LOAD_ATTR: specialised, deoptimised and
+        # instrumented
         class D:
             attr = 6
+        last = nconsts - 1 + 0.5
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
-            self.assertEqual(f(C()), (40_000.5, 5))
+            self.assertEqual(f(C()), (last, 5))
         if SPECIALIZES:
             self.assertNotIn("LOAD_ATTR", handlers(f))
-        self.assertEqual(f(D()), (40_000.5, 6))
+        self.assertEqual(f(D()), (last, 6))
         lines = 0
 
         def tracer(frame, event, arg):
@@ -448,8 +466,64 @@ class LoweringTest(unittest.TestCase):
             result = f(C())
         finally:
             sys.settrace(None)
-        self.assertEqual(result, (40_000.5, 5))
-        self.assertEqual(lines, nconsts + 2)
+        self.assertEqual(result, (last, 5))
+        self.assertEqual(lines, nnames + nconsts + 1)
+
+    def test_slot_limit(self):
+        # Locals, cells, free variables and the stack share IR_MAX_SLOTS
+        # slots.
+        def make(nlocals):
+            source = ("def f():\n"
+                      + "".join(f"    v{i} = {i}\n" for i in range(nlocals))
+                      + "    return v0\n")
+            return make_function(source)
+        stacksize = make(1).__code__.co_stacksize
+        f = make(IR_MAX_SLOTS - stacksize)
+        self.assertEqual(f.__code__.co_nlocals + f.__code__.co_stacksize,
+                         IR_MAX_SLOTS)
+        self.assertEqual(f(), 0)
+        f = make(IR_MAX_SLOTS - stacksize + 1)
+        with self.assertRaisesRegex(SystemError, "slots"):
+            f()
+        with self.assertRaisesRegex(SystemError, "slots"):
+            get_ir(f.__code__)
+
+    def test_shared_feedback_entry(self):
+        # The sites past the IR_FIELD_MAX-th share entry 0: they never
+        # specialise and read their static operands from the bytecode.
+        class O:
+            attr = 5
+            other = 7
+        nsites = IR_FIELD_MAX + 10
+        source = ("def f(o, n):\n"
+                  + "".join(f"    x = o.attr\n" for i in range(nsites))
+                  + "    return (o.attr - o.other, o.other // n,\n"
+                  + "            o.attr < o.other, 5 in [o.attr])\n")
+        f = make_function(source)
+        expected = (-2, 3, True, True)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(f(O(), 2), expected)
+        ir = instructions(f.__code__)
+        load_attrs = [instr for instr in ir if instr[2].startswith("LOAD_ATTR")]
+        # Field C is the feedback index
+        self.assertEqual([instr[5] for instr in load_attrs[:3]], [1, 2, 3])
+        self.assertEqual({instr[5] for instr in load_attrs[IR_FIELD_MAX:]},
+                         {0})
+        names = [instr[2] for instr in ir]
+        if SPECIALIZES:
+            self.assertNotEqual(load_attrs[0][2], "LOAD_ATTR")
+        self.assertEqual({instr[2] for instr in load_attrs[IR_FIELD_MAX:]},
+                         {"LOAD_ATTR"})
+        self.assertIn("BINARY_OP_SUBTRACT", names)
+        self.assertIn("BINARY_OP_FLOOR_DIVIDE", names)
+        self.assertIn("COMPARE_OP", names)
+        self.assertIn("CONTAINS_OP", names)
+        # Other operands take the generic paths
+        self.assertEqual(f(O(), 2.0), (-2, 3.0, True, True))
+        with self.assertRaises(ZeroDivisionError):
+            f(O(), 0)
+        # The shared entry holds nothing that dis could show
+        dis.dis(f, adaptive=True, file=io.StringIO())
 
     def test_sizeof(self):
         code = compile("x = [i for i in range(3)]", "<test>", "exec")
@@ -502,6 +576,198 @@ class LoweringTest(unittest.TestCase):
             ("RETURN_VALUE", 0)))
         with self.assertRaisesRegex(SystemError, "jump into an instruction"):
             get_ir(code)
+
+    def test_binary_op_handlers(self):
+        # BINARY_OP runs the handler of its operation
+        def f(a, b):
+            a -= b
+            return a - b, a * b
+        self.assertEqual(handlers(f).count("BINARY_OP_SUBTRACT"), 1)
+        self.assertIn("BINARY_OP_INPLACE_SUBTRACT", handlers(f))
+        self.assertIn("BINARY_OP_MULTIPLY", handlers(f))
+        self.assertEqual(f(7, 2), (3, 10))
+        self.assertEqual(f(7.0, 2), (3.0, 10.0))
+        ops = [instr.opname for instr in dis.get_instructions(f, adaptive=True)]
+        self.assertNotIn("BINARY_OP_SUBTRACT", ops)
+
+    @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
+    def test_binary_op_deopt(self):
+        # A specialisation of BINARY_OP deoptimises to the handler of its own
+        # operation, which the specialiser installs when it gives up.
+        class Sub:
+            def __sub__(self, other):
+                return "sub"
+            def __rsub__(self, other):
+                return "rsub"
+            def __add__(self, other):
+                return "add"
+
+        def f(a, b):
+            return a - b
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(f(3, 1), 2)
+        self.assertIn("BINARY_OP_SUBTRACT_INT", handlers(f))
+        self.assertEqual(f(Sub(), 1), "sub")
+        self.assertEqual(f(1, Sub()), "rsub")
+        # Each deoptimisation advances the counter of the specialisation
+        for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN + 1):
+            self.assertEqual(f(Sub(), 1), "sub")
+        self.assertIn("BINARY_OP_SUBTRACT", handlers(f))
+        self.assertNotIn("BINARY_OP_SUBTRACT_INT", handlers(f))
+        self.assertEqual(f(3, 1), 2)
+
+
+class RelaxationTest(unittest.TestCase):
+    """FOR_ITER and SEND reach IR_MAX_FORWARD words; a loop whose exit is
+    further away exits through jumps after its word."""
+
+    def relaxed(self, func, opname):
+        # The word of the first opname instruction of func, which may be
+        # specialised, and the words after it that share its offsets
+        ir = get_ir(func.__code__)
+        i = [k for k, instr in enumerate(ir)
+             if instr[2].startswith(opname)][0]
+        jumps = []
+        for instr in ir[i + 1:]:
+            if instr[:2] != ir[i][:2]:
+                break
+            jumps.append(instr[2])
+        return ir[i], jumps
+
+    def test_far_for_iter(self):
+        nlines = IR_MAX_FORWARD
+        source = ("def f(it):\n"
+                  "    n = 0\n"
+                  "    for x in it:\n"
+                  "        if x < 0:\n"
+                  "            continue\n"
+                  "        if x > 100:\n"
+                  "            break\n"
+                  + "        n = n + x\n" * nlines
+                  + "    return n\n")
+        f = make_function(source)
+
+        def gen(n):
+            yield from range(n)
+
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(f(range(10)), 45 * nlines)
+            self.assertEqual(f([1, -1, 2, 200, 3]), 3 * nlines)
+            self.assertEqual(f(gen(4)), 6 * nlines)
+            self.assertEqual(f(()), 0)
+        word, jumps = self.relaxed(f, "FOR_ITER")
+        self.assertEqual(jumps, ["JUMP_FORWARD"] * 3)
+        # Field D: the exit is the third jump
+        self.assertEqual(word[6], 1)
+        LoweringTest.check_offsets(self, f)
+
+        # A generator returns to the second jump
+        f = make_function(source)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(f(gen(4)), 6 * nlines)
+        if SPECIALIZES:
+            self.assertEqual(self.relaxed(f, "FOR_ITER")[0][2], "FOR_ITER_GEN")
+
+    def run_relaxed(self, source, name):
+        # A function of source lowered with every loop relaxed, and one
+        # lowered as usual
+        old = _testinternalcapi.set_ir_max_forward(0)
+        try:
+            relaxed = make_function(source, name)
+            get_ir(relaxed.__code__)
+        finally:
+            _testinternalcapi.set_ir_max_forward(old)
+        return relaxed, make_function(source, name)
+
+    def test_relaxed_send(self):
+        source = """if 1:
+            def inner():
+                x = yield 1
+                yield x
+                return "done"
+
+            def outer():
+                r = yield from inner()
+                yield r
+
+            class Awaitable:
+                def __await__(self):
+                    yield "a"
+                    return "b"
+
+            async def co():
+                return await Awaitable()
+
+            def run():
+                g = outer()
+                values = [next(g), g.send(5), next(g)]
+                try:
+                    next(g)
+                except StopIteration:
+                    values.append("stop")
+                c = co()
+                values.append(c.send(None))
+                try:
+                    c.send(None)
+                except StopIteration as e:
+                    values.append(e.value)
+                return values
+        """
+        namespace = {}
+        old = _testinternalcapi.set_ir_max_forward(0)
+        try:
+            exec(source, namespace)
+            for func in ("outer", "co"):
+                get_ir(namespace[func].__code__)
+        finally:
+            _testinternalcapi.set_ir_max_forward(old)
+        for name in ("outer", "co"):
+            _, jumps = self.relaxed(namespace[name], "SEND")
+            self.assertEqual(jumps, ["JUMP_FORWARD"] * 2)
+        expected = [1, 5, "done", "stop", "a", "b"]
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(namespace["run"](), expected)
+        if SPECIALIZES:
+            self.assertIn("SEND_GEN", handlers(namespace["outer"]))
+
+    def test_events_of_a_relaxed_loop(self):
+        # The jumps that relaxation adds have no events, and the branches of
+        # the loop go where they would without them.
+        source = """if 1:
+            def f(xs):
+                n = 0
+                for x in xs:
+                    if x:
+                        n += 1
+                return n
+        """
+        relaxed, plain = self.run_relaxed(source, "f")
+        self.assertEqual(self.relaxed(relaxed, "FOR_ITER")[1],
+                         ["JUMP_FORWARD"] * 3)
+
+        def branches(func):
+            events = []
+            E = sys.monitoring.events
+            tool = sys.monitoring.DEBUGGER_ID
+            sys.monitoring.use_tool_id(tool, "test_ir")
+            try:
+                for event in (E.BRANCH_LEFT, E.BRANCH_RIGHT, E.JUMP):
+                    sys.monitoring.register_callback(
+                        tool, event,
+                        lambda code, src, dst, event=event:
+                            events.append((event, src, dst)))
+                sys.monitoring.set_local_events(
+                    tool, func.__code__,
+                    E.BRANCH_LEFT | E.BRANCH_RIGHT | E.JUMP)
+                self.assertEqual(func([0, 1, 1]), 2)
+            finally:
+                sys.monitoring.set_local_events(tool, func.__code__, 0)
+                sys.monitoring.free_tool_id(tool)
+            return events
+
+        self.assertEqual(branches(relaxed), branches(plain))
+        self.assertEqual(trace(relaxed, [0, 1, 1], opcodes=True),
+                         trace(plain, [0, 1, 1], opcodes=True))
 
 
 if __name__ == "__main__":

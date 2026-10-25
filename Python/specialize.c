@@ -253,8 +253,8 @@ current_block(void)
     return _PyFrame_IRBlock(_PyThreadState_GET()->current_frame);
 }
 
-/* The opcode of the handler; for a superinstruction of the IR, the
- * specialisation that it extends. */
+/* The opcode of the handler; for an IR-only handler, the instruction that
+ * it stands for, as BINARY_OP for BINARY_OP_ADD. */
 static inline int
 instr_opcode(_PyInstr *instr)
 {
@@ -269,13 +269,23 @@ instr_opcode(_PyInstr *instr)
 static inline int
 instr_oparg(_PyInstr *instr)
 {
-    return _PyIR_InstrOparg(current_block(), instr, instr_opcode(instr));
+    _PyInterpreterFrame *frame = _PyThreadState_GET()->current_frame;
+    return _PyIR_InstrOparg(_PyFrame_GetCode(frame), _PyFrame_IRBlock(frame),
+                            instr, instr_opcode(instr));
 }
 
 static inline _PyFbHeader *
 instr_fb(_PyInstr *instr)
 {
     return _PyIR_InstrFeedback(current_block(), instr, instr_opcode(instr));
+}
+
+/* Whether h is entry 0, which the sites past the IR_FIELD_MAX-th share and
+ * which never specialises */
+static inline int
+is_shared_entry(_PyFbHeader *h)
+{
+    return (char *)h == current_block()->entries;
 }
 
 static inline void *
@@ -287,15 +297,16 @@ instr_entry(_PyInstr *instr)
 }
 
 static inline int
-set_opcode(_PyInstr *instr, uint8_t opcode)
+set_opcode(_PyInstr *instr, int opcode)
 {
 #ifdef Py_GIL_DISABLED
     _PyIRWord old = _Py_atomic_load_uint64_relaxed(instr);
-    if (IR_HANDLER(old) >= MIN_INSTRUMENTED_OPCODE) {
+    int handler = IR_HANDLER(old);
+    if (handler >= MIN_INSTRUMENTED_OPCODE && handler < IR_FIRST_ONLY_HANDLER) {
         /* Lost race with instrumentation */
         return 0;
     }
-    _PyIRWord new = (old & ~(_PyIRWord)0xFFFF) | opcode;
+    _PyIRWord new = (old & ~(_PyIRWord)0xFFFF) | (uint16_t)opcode;
     if (!_Py_atomic_compare_exchange_uint64(instr, &old, new)) {
         /* Lost race with instrumentation */
         return 0;
@@ -541,6 +552,7 @@ specialize(_PyInstr *instr, uint8_t specialized_opcode)
         // RESUME specialises without an entry
         return;
     }
+    assert(!is_shared_entry(h));
     set_counter(h, adaptive_counter_cooldown());
     fb_record(instr, h, specialized_opcode);
 }
@@ -549,15 +561,17 @@ static inline void
 unspecialize(_PyInstr *instr)
 {
     assert(!PyErr_Occurred());
-    uint8_t opcode = instr_opcode(instr);
-    uint8_t generic_opcode = _PyOpcode_Deopt[opcode];
-    STAT_INC(generic_opcode, failure);
-    if (!set_opcode(instr, generic_opcode)) {
-        SPECIALIZATION_FAIL(generic_opcode, SPEC_FAIL_OTHER);
+    STAT_INC(_PyOpcode_Deopt[instr_opcode(instr)], failure);
+    // For BINARY_OP, the handler of the operation
+    int generic = _PyIR_GenericHandler(current_block(), instr,
+                                       IR_HANDLER(*instr));
+    if (!set_opcode(instr, generic)) {
+        SPECIALIZATION_FAIL(_PyOpcode_Deopt[instr_opcode(instr)], SPEC_FAIL_OTHER);
         return;
     }
     _PyFbHeader *h = instr_fb(instr);
     if (h != NULL) {
+        assert(!is_shared_entry(h));
         set_counter(h, adaptive_counter_backoff(load_counter(h)));
     }
 }
@@ -2483,9 +2497,7 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
                 break;
             }
             if (PyUnicode_CheckExact(lhs)) {
-                // The handler reads the first word of the next instruction,
-                // so an IR_EXT there rules the specialisation out.
-                _PyInstr *next = instr + _PyIR_FormatOf(BINARY_OP)->nwords;
+                _PyInstr *next = instr + 1;
                 bool to_store = (instr_opcode(next) == STORE_FAST);
                 int local = to_store ? instr_oparg(next) : 0;
                 if (to_store && PyStackRef_IsObject(locals[local]) &&
@@ -2746,18 +2758,6 @@ failure:
     return;
 success:
     specialize(instr, specialized_op);
-#ifndef Py_GIL_DISABLED
-    // The compare runs the jump that consumes its result too.  Its handler
-    // checks the jump each time, so instrumentation can still replace it.
-    int jump = IR_HANDLER(instr[_PyIR_FormatOf(COMPARE_OP)->nwords]);
-    if (jump == POP_JUMP_IF_FALSE || jump == POP_JUMP_IF_TRUE) {
-        _PyIR_SetHandler(instr, specialized_op == COMPARE_OP_FLOAT
-                                ? IR_SUPER_COMPARE_OP_FLOAT
-                                : specialized_op == COMPARE_OP_INT
-                                ? IR_SUPER_COMPARE_OP_INT
-                                : IR_SUPER_COMPARE_OP_STR);
-    }
-#endif
 }
 
 #ifdef Py_STATS
@@ -2911,8 +2911,11 @@ _Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _PyInstr *in
             return;
         }
         else if (tp == &PyGen_Type && oparg <= SHRT_MAX) {
-            assert(instr_opcode(instr + _PyIR_FormatOf(FOR_ITER)->nwords + oparg) == END_FOR ||
-                   instr_opcode(instr + _PyIR_FormatOf(FOR_ITER)->nwords + oparg) == INSTRUMENTED_END_FOR);
+            // The generator returns to END_FOR, or for a relaxed FOR_ITER
+            // to a jump there
+            assert(instr_opcode(instr + 1 + oparg) == END_FOR ||
+                   instr_opcode(instr + 1 + oparg) == INSTRUMENTED_END_FOR ||
+                   _PyIR_IsTrampoline(current_block(), instr + 1 + oparg));
             /* Don't specialize if PEP 523 is active */
             if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
                 goto failure;

@@ -164,7 +164,8 @@ typedef struct _Py_DebugOffsets {
     // instr_ptr points at one of the nwords 8-byte words at words, and
     // pcmap holds per word a pair {start, anchor} of uint16_t, or of
     // uint32_t if flags & pcmap_wide; anchor is the bytecode offset of the
-    // word's instruction in code units.
+    // word's instruction in code units.  The jumps that a relaxed FOR_ITER
+    // or SEND adds after its word share its entry.
     struct _ir_block {
         uint64_t size;
         uint64_t words;

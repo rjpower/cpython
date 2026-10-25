@@ -958,7 +958,7 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         deopts=deopts_if,
         side_exit=exits_if,
         oparg=oparg_used(op),
-        jumps=variable_used(op, "JUMPBY"),
+        jumps=variable_used(op, "JUMPBY") or variable_used(op, "JUMPTO"),
         eval_breaker="CHECK_PERIODIC" in op.name,
         needs_this=(variable_used(op, "this_instr")
                     or variable_used(op, "FB_COUNTER")

@@ -266,41 +266,40 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP;
             (void)(opcode);
             #endif
-            IR_ENTRY(OP);
-            stack_pointer = IR_STACK_POINTER(ir_a, -2);
+            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -2);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            IR_CHECK_SLOT(ir_a, -2);
-            IR_CHECK_INPUT(ir_b, -2, 2);
-            IR_CHECK_INPUT(ir_c, -1, 2);
+            IR_CHECK_SLOT(IR_A(ir_word), -2);
+            IR_CHECK_INPUT(IR_B(ir_word), -2);
+            IR_CHECK_INPUT(IR_C(ir_word), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
-            right = IR_SLOT(ir_c);
-            left = IR_SLOT(ir_b);
+            right = IR_SLOT(IR_C(ir_word));
+            left = IR_SLOT(IR_B(ir_word));
             if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
                 left = PyStackRef_Box(left);
                 if (PyStackRef_IsInline(left)) {
-                    IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-2]);
-                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-2]);
+                    IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(OP);
-                IR_SLOT(ir_b) = left;
+                IR_SLOT(IR_B(ir_word)) = left;
             }
-            left = IR_BORROW_KNOWN(left, ir_b);
+            left = IR_BORROW_KNOWN(left, IR_B(ir_word), IR_A(ir_word));
             if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
                 right = PyStackRef_Box(right);
                 if (PyStackRef_IsInline(right)) {
-                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
+                    IR_CLEAR_IF_BORROWED(IR_C(ir_word), stack_pointer[-1]);
                     stack_pointer[-2] = left;
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(OP);
-                IR_SLOT(ir_c) = right;
+                IR_SLOT(IR_C(ir_word)) = right;
             }
-            right = IR_BORROW_KNOWN(right, ir_c);
+            right = IR_BORROW_KNOWN(right, IR_C(ir_word), IR_A(ir_word) + 1);
             PyObject *l = PyStackRef_AsPyObjectBorrow(left);
             PyObject *r = PyStackRef_AsPyObjectBorrow(right);
             PyObject *o = SPAM(l, r);
@@ -336,8 +335,12 @@ class TestIRCases(unittest.TestCase):
         self.assertFalse(fmt.window)
         self.assertEqual(fmt.roles, [ir_generator.ROLE_DST,
                                      f"{ir_generator.ROLE_IN0} + 0",
-                                     f"{ir_generator.ROLE_IN0} + 1"])
+                                     f"{ir_generator.ROLE_IN0} + 1",
+                                     ir_generator.ROLE_NONE])
         self.assertEqual(fmt.dst_offset, -2)
+        # A borrowed input is checked against its canonical slot, which
+        # follows from dst
+        self.assertEqual(fmt.canonical_slot(1), "IR_A(ir_word) + 1")
         self.assertEqual(fmt.borrow_mask, 0b11)
 
     def test_borrow_mask(self):
@@ -386,8 +389,9 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(fmt.borrow_mask, 0b10)
 
     def test_window_style(self):
-        # An array input selects the window style: A names the deepest
-        # input, which the handler binds through stack_pointer.
+        # An array input selects the window style: A names dst and B the
+        # deepest input, which the handler binds through stack_pointer; the
+        # count comes before any feedback index.
         input = """
         inst(OP, (callable, args[oparg] -- res)) {
             res = SPAM(callable, args, oparg);
@@ -400,13 +404,13 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP;
             (void)(opcode);
             #endif
-            IR_ENTRY(OP);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            int oparg = (int)ir_b;
+            int oparg = (int)IR_C(ir_word);
             (void)oparg;
-            IR_CHECK_SLOT(ir_a, -(1 + oparg));
+            IR_CHECK_SLOT(IR_A(ir_word), -(1 + oparg) + 0);
+            IR_CHECK_SLOT(IR_B(ir_word), -(1 + oparg));
             _PyStackRef callable;
             _PyStackRef *args;
             _PyStackRef res;
@@ -422,15 +426,21 @@ class TestIRCases(unittest.TestCase):
         self.run_ir_test(input, output)
         fmt = self.formats(input)["OP"]
         self.assertTrue(fmt.window)
-        self.assertEqual(fmt.roles, [ir_generator.ROLE_BASE,
+        self.assertEqual(fmt.roles, [ir_generator.ROLE_DST,
+                                     ir_generator.ROLE_BASE,
                                      ir_generator.ROLE_IMM,
                                      ir_generator.ROLE_NONE])
-        self.assertEqual(fmt.imm, ir_generator.LOC_B)
+        self.assertEqual(fmt.imm, ir_generator.LOC_C)
+        self.assertEqual(fmt.dst_offset, 0)
 
     def test_window_selection(self):
         input = """
         inst(OP_FOUR, (a, b, c -- res)) {
             res = SPAM(a, b, c);
+            INPUTS_DEAD();
+        }
+        inst(OP_FIVE, (a, b, c, d -- res)) {
+            res = SPAM(a, b, c, d);
             INPUTS_DEAD();
         }
         inst(OP_THREE, (a, b, c --)) {
@@ -448,8 +458,10 @@ class TestIRCases(unittest.TestCase):
         }
     """
         formats = self.formats(input)
-        # Three inputs and a destination need more than three fields
-        self.assertTrue(formats["OP_FOUR"].window)
+        # Three inputs and a destination fill the four fields; four do not
+        # fit
+        self.assertFalse(formats["OP_FOUR"].window)
+        self.assertTrue(formats["OP_FIVE"].window)
         self.assertFalse(formats["OP_THREE"].window)
         self.assertEqual(formats["OP_THREE"].n_inputs, 3)
         self.assertTrue(formats["OP_ANNOTATED"].window)
@@ -469,9 +481,10 @@ class TestIRCases(unittest.TestCase):
             self.formats(input)
 
     def test_feedback_mapping(self):
-        # A family shares one format. With a destination, an input and a
-        # feedback entry, the oparg moves into the entry's arg field, and
-        # cache effects read the entry.
+        # A family shares one format. A name index, which may not fit in a
+        # field, moves into the entry's arg field, and cache effects read the
+        # entry.  The generic handler shares entry 0 past the last index and
+        # then reads the oparg from the bytecode; a specialisation never does.
         input = """
         specializing op(_SPECIALIZE_OP, (counter/1, owner -- owner)) {
             _PyFbHeader *feedback = FB_COUNTER();
@@ -479,7 +492,7 @@ class TestIRCases(unittest.TestCase):
         }
         op(_OP, (owner -- res)) {
             PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
-            res = SPAM(o, oparg);
+            res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
             DECREF_INPUTS();
         }
         macro(OP) = _SPECIALIZE_OP + _OP;
@@ -495,19 +508,18 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP;
             (void)(opcode);
             #endif
-            IR_ENTRY(OP);
-            stack_pointer = IR_STACK_POINTER(ir_a, -1);
+            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
             IR_PREDICTED(OP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(this_instr, ir_c);
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
+            int oparg = IR_FB_ARG(fb, IR_C(ir_word));
             (void)oparg;
-            IR_CHECK_SLOT(ir_a, -1);
-            IR_CHECK_INPUT(ir_b, -1, 1);
+            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_INPUT(IR_B(ir_word), -1);
             _PyStackRef owner;
             _PyStackRef res;
             // _SPECIALIZE_OP
@@ -519,19 +531,19 @@ class TestIRCases(unittest.TestCase):
             }
             // _OP
             {
-                owner = IR_SLOT(ir_b);
+                owner = IR_SLOT(IR_B(ir_word));
                 if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
                     owner = PyStackRef_Box(owner);
                     if (PyStackRef_IsInline(owner)) {
-                        IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
+                        IR_CLEAR_IF_BORROWED(IR_B(ir_word), stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(OP);
-                    IR_SLOT(ir_b) = owner;
+                    IR_SLOT(IR_B(ir_word)) = owner;
                 }
-                owner = IR_BORROW_KNOWN(owner, ir_b);
+                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
                 PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
-                res = SPAM(o, oparg);
+                res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
                 stack_pointer[-1] = owner;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
@@ -549,32 +561,31 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP_SPECIALIZED;
             (void)(opcode);
             #endif
-            IR_ENTRY(OP_SPECIALIZED);
-            stack_pointer = IR_STACK_POINTER(ir_a, -1);
+            stack_pointer = IR_STACK_POINTER(IR_A(ir_word), -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP_SPECIALIZED);
-            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(this_instr, ir_c);
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(ir_a, -1);
-            IR_CHECK_INPUT(ir_b, -1, 1);
+            IR_CHECK_SLOT(IR_A(ir_word), -1);
+            IR_CHECK_INPUT(IR_B(ir_word), -1);
             _PyStackRef owner;
             _PyStackRef res;
             // _GUARD
             {
-                owner = IR_SLOT(ir_b);
+                owner = IR_SLOT(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(OP);
                     assert(_PyOpcode_Deopt[opcode] == (OP));
                     JUMP_TO_PREDICTED(OP);
                 }
-                owner = IR_BORROW_KNOWN(owner, ir_b);
+                owner = IR_BORROW_KNOWN(owner, IR_B(ir_word), IR_A(ir_word));
                 if (Py_TYPE(PyStackRef_AsPyObjectBorrow(owner))->tp_version_tag != type_version) {
-                    IR_DROP_BORROW(owner, ir_b);
+                    IR_DROP_BORROW(owner, IR_B(ir_word), IR_A(ir_word));
                     UPDATE_MISS_STATS(OP);
                     assert(_PyOpcode_Deopt[opcode] == (OP));
                     JUMP_TO_PREDICTED(OP);
@@ -583,7 +594,7 @@ class TestIRCases(unittest.TestCase):
             // _OP
             {
                 PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
-                res = SPAM(o, oparg);
+                res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
                 stack_pointer[-1] = owner;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
@@ -602,8 +613,9 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(fmt.fb, ir_generator.LOC_C)
         self.assertEqual(fmt.imm, ir_generator.LOC_FBARG)
 
-    def test_two_words(self):
-        # Two inputs, a destination, an oparg and an entry take word 1.
+    def test_oparg_in_entry(self):
+        # Two inputs, a destination and an entry fill the word, so the oparg
+        # lives in the entry.
         input = """
         inst(OP, (counter/1, left, right -- res)) {
             _PyFbHeader *feedback = FB_COUNTER();
@@ -618,18 +630,17 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP;
             (void)(opcode);
             #endif
-            IR_ENTRY(OP);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
-            next_instr += 2;
+            next_instr += 1;
             INSTRUCTION_STATS(OP);
-            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(this_instr, IR_F(this_instr[1]));
-            int oparg = (int)IR_D(this_instr[1]);
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_D(ir_word));
+            int oparg = IR_FB_ARG(fb, IR_D(ir_word));
             (void)oparg;
-            IR_CHECK_SLOT(ir_a, -2);
-            IR_CHECK_INPUT(ir_b, -2, 2);
-            IR_CHECK_INPUT(ir_c, -1, 2);
+            IR_CHECK_SLOT(IR_A(ir_word), -2);
+            IR_CHECK_SLOT(IR_B(ir_word), -2);
+            IR_CHECK_SLOT(IR_C(ir_word), -1);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
@@ -648,49 +659,66 @@ class TestIRCases(unittest.TestCase):
     """
         self.run_ir_test(input, output)
         fmt = self.formats(input)["OP"]
-        self.assertEqual(fmt.nwords, 2)
-        self.assertEqual((fmt.imm, fmt.fb), (ir_generator.LOC_D, ir_generator.LOC_F))
+        self.assertEqual(fmt.roles[3], ir_generator.ROLE_FB)
+        self.assertEqual((fmt.imm, fmt.fb),
+                         (ir_generator.LOC_FBARG, ir_generator.LOC_D))
 
     def test_jump(self):
+        # A jump keeps the absolute word index of its target in CD, and
+        # FOR_ITER the distance to its exit in D.
         input = """
         inst(OP, (cond --)) {
             int flag = PyStackRef_IsFalse(cond);
             DEAD(cond);
-            JUMPBY(flag ? oparg : 0);
+            if (flag) {
+                JUMPTO(oparg);
+            }
+        }
+        inst(FOR_ITER, (iter -- iter, next)) {
+            next = SPAM(iter);
+            if (PyStackRef_IsNull(next)) {
+                JUMPBY(oparg + 1);
+                DISPATCH();
+            }
         }
     """
-        fmt = self.formats(input)["OP"]
+        formats = self.formats(input)
+        fmt = formats["OP"]
         self.assertTrue(fmt.jumps)
-        self.assertEqual(fmt.roles[:2], [f"{ir_generator.ROLE_IN0} + 0",
-                                         ir_generator.ROLE_IMM])
+        self.assertEqual(fmt.roles, [f"{ir_generator.ROLE_IN0} + 0",
+                                     ir_generator.ROLE_NONE,
+                                     ir_generator.ROLE_IMM,
+                                     ir_generator.ROLE_IMM])
+        self.assertEqual(fmt.imm, ir_generator.LOC_CD)
+        fmt = formats["FOR_ITER"]
+        self.assertFalse(fmt.jumps)
+        self.assertTrue(fmt.forward)
+        self.assertEqual(fmt.imm, ir_generator.LOC_D)
 
-    def test_ext(self):
-        # IR_EXT has no stack effect, oparg or entry and dispatches to the
-        # next word without TARGET bookkeeping of its own: it is transparent.
+    def test_transparent(self):
+        # A handler without stack effect, oparg or entry that dispatches
+        # again runs another handler on the same word: it is transparent.
         input = """
-        ir_only inst(IR_EXT, ( -- )) {
-            IR_EXTEND_FIELDS();
+        ir_only inst(IR_PASS, ( -- )) {
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
     """
         output = """
-        TARGET(IR_EXT) {
+        TARGET(IR_PASS) {
             #if _Py_TAIL_CALL_INTERP
-            int opcode = IR_EXT;
+            int opcode = IR_PASS;
             (void)(opcode);
             #endif
-            IR_ENTRY(IR_EXT);
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(IR_EXT);
-            IR_EXTEND_FIELDS();
+            INSTRUCTION_STATS(IR_PASS);
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
     """
         self.run_ir_test(input, output)
-        self.assertTrue(self.formats(input)["IR_EXT"].transparent)
+        self.assertTrue(self.formats(input)["IR_PASS"].transparent)
 
     def test_metadata(self):
         # IR-only handlers follow the opcodes in name order. An instrumented
@@ -702,13 +730,12 @@ class TestIRCases(unittest.TestCase):
         inst(INSTRUMENTED_LOAD, ( -- value)) {
             value = PyStackRef_DUP(GETLOCAL(oparg));
         }
-        ir_only inst(IR_EXT, ( -- )) {
-            IR_EXTEND_FIELDS();
-            PRE_DISPATCH_GOTO();
-            DISPATCH_GOTO();
-        }
         ir_only inst(IR_LOWER, ( -- )) {
             SPAM();
+        }
+        ir_only inst(IR_PASS, ( -- )) {
+            PRE_DISPATCH_GOTO();
+            DISPATCH_GOTO();
         }
     """
         analysis = self.analyze(input)
@@ -716,63 +743,91 @@ class TestIRCases(unittest.TestCase):
         ir_metadata_generator.generate_ir_metadata(
             [self.temp_input_filename], analysis, out)
         lines = [line.strip() for line in out.getvalue().splitlines()]
-        load = ("{ .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, "
-                "_PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, "
-                ".fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = 0, "
-                ".borrow_mask = 0x0, .shadow = LOAD }")
+        load = ("{ .flags = _PyIR_VALID, .roles = { _PyIR_ROLE_DST, "
+                "_PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, "
+                ".imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, "
+                ".dst = 0, .borrow_mask = 0x0, .shadow = LOAD }")
         for expected in [
-            "#define IR_EXT                                         256",
-            "#define IR_LOWER                                       257",
+            "#define IR_LOWER                                       256",
+            "#define IR_PASS                                        257",
             "#define IR_NUM_HANDLERS                                258",
             f"[LOAD] = {load},",
             "[INSTRUMENTED_LOAD] = "
             f"{load.replace('LOAD }', 'INSTRUMENTED_LOAD }')},",
-            "[IR_EXT] = { .nwords = 1, .flags = _PyIR_TRANSPARENT, "
-            ".roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, "
-            ".imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, "
-            ".dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = IR_EXT },",
-            '[IR_EXT - 256] = "IR_EXT",',
+            "[IR_PASS] = { .flags = _PyIR_VALID | _PyIR_TRANSPARENT, "
+            ".roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, "
+            "_PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, "
+            ".ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, "
+            ".shadow = IR_PASS },",
             '[IR_LOWER - 256] = "IR_LOWER",',
+            '[IR_PASS - 256] = "IR_PASS",',
         ]:
             self.assertIn(expected, lines)
 
-    def test_superinstruction(self):
-        # IR_SUPER_X shares the format of X's family, stands for X and
-        # deoptimises to the family's head.
+    def test_binary_op_handlers(self):
+        # BINARY_OP has one generic handler per operation, with the operation
+        # as a constant, after the other IR-only handlers.  Its
+        # specialisations deoptimise to the handler of the operation that
+        # their entry records.
         input = """
-        family(OP, 1) = { OP_INT };
-        inst(OP, (unused/1, left, right -- res)) {
-            res = SPAM(left, right);
-            DECREF_INPUTS();
+        family(BINARY_OP, 1) = { BINARY_OP_ADD_INT };
+        specializing op(_SPECIALIZE_BINARY_OP, (counter/1, lhs, rhs -- lhs, rhs)) {
+            _PyFbHeader *feedback = FB_COUNTER();
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
         }
-        op(_GUARD, (left, right -- left, right)) {
+        op(_BINARY_OP, (lhs, rhs -- res)) {
+            res = SPAM(lhs, rhs, oparg);
+            INPUTS_DEAD();
+        }
+        macro(BINARY_OP) = _SPECIALIZE_BINARY_OP + _BINARY_OP;
+        op(_GUARD_INT, (left, right -- left, right)) {
             DEOPT_IF(!EGGS(left, right));
         }
-        op(_OP_INT, (left, right -- res)) {
+        op(_ADD_INT, (left, right -- res)) {
             res = HAM(left, right);
-            DEAD(left);
-            DEAD(right);
+            INPUTS_DEAD();
         }
-        macro(OP_INT) = unused/1 + _GUARD + _OP_INT;
-        ir_only op(_JUMP_NEXT, (cond -- )) {
-            next_instr += PyStackRef_IsTrue(cond);
-            DEAD(cond);
+        macro(BINARY_OP_ADD_INT) = unused/1 + _GUARD_INT + _ADD_INT;
+        ir_only inst(IR_LOWER, ( -- )) {
+            SPAM();
         }
-        macro(IR_SUPER_OP_INT) = unused/1 + _GUARD + _OP_INT + _JUMP_NEXT;
     """
         analysis = self.analyze(input)
+        handlers = ir_generator.binary_op_handlers(analysis)
+        self.assertEqual(handlers[0], "BINARY_OP_ADD")
+        self.assertIn("BINARY_OP_SUBSCR", handlers)
+        ids = ir_generator.handler_ids(analysis)
+        self.assertNotIn("BINARY_OP", ids)
+        self.assertEqual(ids["IR_LOWER"], 256)
+        self.assertEqual([ids[name] for name in handlers],
+                         list(range(257, 257 + len(handlers))))
         formats = ir_generator.compute_formats(analysis)
-        self.assertEqual(formats["IR_SUPER_OP_INT"], formats["OP"])
+        self.assertIs(formats["BINARY_OP_ADD"], formats["BINARY_OP"])
         self.assertEqual(
-            ir_metadata_generator.shadow_of("IR_SUPER_OP_INT", analysis),
-            "OP_INT")
+            ir_metadata_generator.shadow_of("BINARY_OP_ADD", analysis),
+            "BINARY_OP")
+
         out = io.StringIO()
         ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
         code = out.getvalue()
-        handler = code[code.index("TARGET(IR_SUPER_OP_INT)"):]
+        self.assertNotIn("TARGET(BINARY_OP)", code)
+        generic = code[code.index("TARGET(BINARY_OP_SUBTRACT)"):]
+        generic = generic[:generic.index("DISPATCH();")]
+        self.assertIn("int oparg = NB_SUBTRACT;", generic)
+        self.assertIn("INSTRUCTION_STATS(BINARY_OP);", generic)
+        handler = code[code.index("TARGET(BINARY_OP_ADD_INT)"):]
         handler = handler[:handler.index("DISPATCH();")]
-        self.assertIn("JUMP_TO_PREDICTED(OP);", handler)
-        self.assertNotIn("_PyOpcode_Deopt", handler)
+        self.assertIn("IR_DEOPT_BINARY_OP(IR_D(ir_word));", handler)
+        self.assertNotIn("JUMP_TO_PREDICTED", handler)
+
+        out = io.StringIO()
+        ir_metadata_generator.generate_ir_metadata(
+            [self.temp_input_filename], analysis, out)
+        lines = [line.strip() for line in out.getvalue().splitlines()]
+        self.assertIn("#define _PyIR_BINARY_OP_FIRST                          BINARY_OP_ADD",
+                      lines)
+        self.assertIn('static_assert(BINARY_OP_ADD == _PyIR_BINARY_OP_FIRST + '
+                      'NB_ADD, "BINARY_OP_ADD");', lines)
 
 if __name__ == "__main__":
     unittest.main()

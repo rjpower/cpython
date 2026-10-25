@@ -2264,6 +2264,7 @@ PyFrame_New(PyThreadState *tstate, PyCodeObject *code,
     f->f_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
     // This frame needs to be "complete", so pretend that the first RESUME ran:
     f->f_frame->instr_ptr = _PyIR_STUB_RESUMED;
+    _PyFrame_SetIRBlock(f->f_frame, &_PyIR_LowerStub);
     assert(!_PyFrame_IsIncomplete(f->f_frame));
     Py_DECREF(func);
     _PyObject_GC_TRACK(f);

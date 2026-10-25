@@ -1759,7 +1759,7 @@ dummy_func(
                 int opcode = _Py_GetBaseCodeUnit(_PyFrame_GetCode(frame), (int)i).op.code;
                 assert(opcode == SEND || opcode == FOR_ITER);
             }
-            assert(gen->gi_yield_offset == _PyIR_YieldReturnOffset(frame));
+            assert(gen->gi_yield_offset == 1);
             #endif
             RELOAD_STACK();
             LOAD_IP(gen->gi_yield_offset);
@@ -1830,8 +1830,8 @@ dummy_func(
         }
 
         tier1 op(_MONITOR_END_ASYNC_FOR, ( -- )) {
-            assert(INSTR_OPCODE(next_instr-oparg) == END_SEND || INSTR_OPCODE(next_instr-oparg) >= MIN_INSTRUMENTED_OPCODE);
-            INSTRUMENTED_JUMP(next_instr-oparg, this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);
+            assert(INSTR_OPCODE(JUMP_TARGET(oparg)) == END_SEND || INSTR_OPCODE(JUMP_TARGET(oparg)) >= MIN_INSTRUMENTED_OPCODE);
+            INSTRUMENTED_JUMP(JUMP_TARGET(oparg), this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);
         }
 
         macro(INSTRUMENTED_END_ASYNC_FOR) =
@@ -3187,69 +3187,6 @@ dummy_func(
             // It's always a bool, so we don't care about oparg & 16.
         }
 
-        /* Superinstructions of the register IR: a specialised COMPARE_OP
-         * whose next word is a POP_JUMP_IF_FALSE or POP_JUMP_IF_TRUE runs
-         * the jump too, so the bool never reaches the stack and the jump is
-         * not dispatched.  The jump keeps its word for code that jumps to it
-         * and for instrumentation; while instrumentation replaces its
-         * handler, the compare goes back to COMPARE_OP. */
-        ir_only op(_IR_GUARD_JUMP_NEXT, ( -- )) {
-            int jump = IR_HANDLER(*next_instr);
-            DEOPT_IF(jump != POP_JUMP_IF_FALSE && jump != POP_JUMP_IF_TRUE);
-        }
-
-        ir_only op(_IR_COMPARE_OP_FLOAT_JUMP, (left, right -- l, r)) {
-            STAT_INC(COMPARE_OP, hit);
-            _PyIRWord jump = *next_instr;
-            double dleft = PyStackRef_FloatValue(left);
-            double dright = PyStackRef_FloatValue(right);
-            int res = (COMPARISON_BIT(dleft, dright) & oparg) != 0;
-            l = left;
-            r = right;
-            DEAD(left);
-            DEAD(right);
-            IR_JUMP_NEXT(jump, res == (IR_HANDLER(jump) == POP_JUMP_IF_TRUE));
-        }
-
-        ir_only op(_IR_COMPARE_OP_INT_JUMP, (left, right -- l, r)) {
-            STAT_INC(COMPARE_OP, hit);
-            _PyIRWord jump = *next_instr;
-            int32_t ileft = PyStackRef_CompactIntValue(left);
-            int32_t iright = PyStackRef_CompactIntValue(right);
-            int res = (COMPARISON_BIT(ileft, iright) & oparg) != 0;
-            l = left;
-            r = right;
-            DEAD(left);
-            DEAD(right);
-            IR_JUMP_NEXT(jump, res == (IR_HANDLER(jump) == POP_JUMP_IF_TRUE));
-        }
-
-        ir_only op(_IR_COMPARE_OP_STR_JUMP, (left, right -- l, r)) {
-            STAT_INC(COMPARE_OP, hit);
-            _PyIRWord jump = *next_instr;
-            int eq = _PyUnicode_Equal(PyStackRef_AsPyObjectBorrow(left),
-                                      PyStackRef_AsPyObjectBorrow(right));
-            assert((oparg >> 5) == Py_EQ || (oparg >> 5) == Py_NE);
-            int res = ((COMPARISON_NOT_EQUALS + eq) & oparg) != 0;
-            l = left;
-            r = right;
-            DEAD(left);
-            DEAD(right);
-            IR_JUMP_NEXT(jump, res == (IR_HANDLER(jump) == POP_JUMP_IF_TRUE));
-        }
-
-        macro(IR_SUPER_COMPARE_OP_FLOAT) =
-            _GUARD_TOS_FLOAT + _GUARD_NOS_FLOAT + _IR_GUARD_JUMP_NEXT + unused/1 +
-            _IR_COMPARE_OP_FLOAT_JUMP + _POP_TOP_FLOAT + _POP_TOP_FLOAT;
-
-        macro(IR_SUPER_COMPARE_OP_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_INT + _IR_GUARD_JUMP_NEXT + unused/1 +
-            _IR_COMPARE_OP_INT_JUMP + _POP_TOP_INT + _POP_TOP_INT;
-
-        macro(IR_SUPER_COMPARE_OP_STR) =
-            _GUARD_TOS_UNICODE + _GUARD_NOS_UNICODE + _IR_GUARD_JUMP_NEXT + unused/1 +
-            _IR_COMPARE_OP_STR_JUMP + _POP_TOP_UNICODE + _POP_TOP_UNICODE;
-
         macro(IS_OP) = _IS_OP + POP_TOP + POP_TOP;
 
         // Value identity for inline ints and their boxes; see "Value
@@ -3418,7 +3355,7 @@ dummy_func(
         }
 
         tier1 inst(JUMP_FORWARD, (--)) {
-            JUMPBY(oparg);
+            JUMPTO(oparg);
         }
 
         macro(JUMP_BACKWARD) =
@@ -3449,7 +3386,12 @@ dummy_func(
             int flag = PyStackRef_IsFalse(cond);
             DEAD(cond);
             RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
-            JUMPBY(flag ? oparg : INSTR_OPCODE(next_instr) == NOT_TAKEN);
+            if (flag) {
+                JUMPTO(oparg);
+            }
+            else {
+                JUMPBY(INSTR_OPCODE(next_instr) == NOT_TAKEN);
+            }
         }
 
         replaced op(_POP_JUMP_IF_TRUE, (cond -- )) {
@@ -3457,7 +3399,12 @@ dummy_func(
             int flag = PyStackRef_IsTrue(cond);
             DEAD(cond);
             RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
-            JUMPBY(flag ? oparg : INSTR_OPCODE(next_instr) == NOT_TAKEN);
+            if (flag) {
+                JUMPTO(oparg);
+            }
+            else {
+                JUMPBY(INSTR_OPCODE(next_instr) == NOT_TAKEN);
+            }
         }
 
         op(_IS_NONE, (value -- b)) {
@@ -3485,8 +3432,8 @@ dummy_func(
              * generator or coroutine, so we deliberately do not check it here.
              * (see bpo-30039).
              */
-            assert(oparg <= INSTR_OFFSET());
-            JUMPBY(-oparg);
+            assert(JUMP_TARGET(oparg) < next_instr);
+            JUMPTO(oparg);
         }
 
         inst(GET_LEN, (obj -- obj, len)) {
@@ -5633,11 +5580,11 @@ dummy_func(
         }
 
         inst(INSTRUMENTED_JUMP_FORWARD, ( -- )) {
-            INSTRUMENTED_JUMP(this_instr, next_instr + oparg, PY_MONITORING_EVENT_JUMP);
+            INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_JUMP);
         }
 
         op(_MONITOR_JUMP_BACKWARD, (-- )) {
-            INSTRUMENTED_JUMP(this_instr, next_instr - oparg, PY_MONITORING_EVENT_JUMP);
+            INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_JUMP);
         }
 
         inst(INSTRUMENTED_NOT_TAKEN, ( -- )) {
@@ -5656,7 +5603,7 @@ dummy_func(
             DEAD(cond);
             RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
-                INSTRUMENTED_JUMP(this_instr, next_instr + oparg, PY_MONITORING_EVENT_BRANCH_RIGHT);
+                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
         }
 
@@ -5666,7 +5613,7 @@ dummy_func(
             DEAD(cond);
             RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
-                INSTRUMENTED_JUMP(this_instr, next_instr + oparg, PY_MONITORING_EVENT_BRANCH_RIGHT);
+                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
         }
 
@@ -5675,7 +5622,7 @@ dummy_func(
             RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 DEAD(value);
-                INSTRUMENTED_JUMP(this_instr, next_instr + oparg, PY_MONITORING_EVENT_BRANCH_RIGHT);
+                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
                 PyStackRef_CLOSE(value);
@@ -5687,7 +5634,7 @@ dummy_func(
             RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 PyStackRef_CLOSE(value);
-                INSTRUMENTED_JUMP(this_instr, next_instr + oparg, PY_MONITORING_EVENT_BRANCH_RIGHT);
+                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
                 DEAD(value);
@@ -5726,18 +5673,11 @@ dummy_func(
         // A word of a fused block that its code object no longer runs: the
         // frame goes on in the block that replaced it.
         ir_only inst(IR_REMAP, ( -- )) {
-            next_instr = _PyIR_Remap(_PyFrame_GetCode(frame), frame->instr_ptr);
+            PyCodeObject *code = _PyFrame_GetCode(frame);
+            next_instr = _PyIR_Remap(code, frame->instr_ptr);
             frame->instr_ptr = next_instr;
+            _PyFrame_SetIRBlock(frame, code->_co_ir);
             DISPATCH();
-        }
-
-        // The high halves of fields A, B and C of the next word.  The next
-        // word saves the IP, so that an INSTRUMENTED_LINE there finds the
-        // previous instruction in frame->instr_ptr.
-        no_save_ip ir_only inst(IR_EXT, ( -- )) {
-            IR_EXTEND_FIELDS();
-            PRE_DISPATCH_GOTO();
-            DISPATCH_GOTO();
         }
 
         op(_SAVE_RETURN_OFFSET, (--)) {

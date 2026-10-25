@@ -84,11 +84,21 @@ _PyFrame_InstrAt(_PyInterpreterFrame *f, int offset)
     return _PyIR_InstrAt(_PyFrame_IRBlock(f), offset);
 }
 
+/* Set the bases that the handlers of the frame index, for block, which
+ * frame->instr_ptr points into. */
+static inline void
+_PyFrame_SetIRBlock(_PyInterpreterFrame *frame, const _PyIRBlock *block)
+{
+    frame->ir_words = block->words;
+    frame->ir_feedback = block->entries;
+}
+
 static inline void
 _PyFrame_InitIRInstrPtr(_PyInterpreterFrame *frame, PyCodeObject *code)
 {
     _PyIRBlock *block = (_PyIRBlock *)FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_ir);
     frame->instr_ptr = block->words;
+    _PyFrame_SetIRBlock(frame, block);
 #ifdef Py_GIL_DISABLED
     frame->tlbc_index = 0;
 #endif
@@ -202,6 +212,8 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
     dest->f_locals = src->f_locals;
     dest->frame_obj = src->frame_obj;
     dest->instr_ptr = src->instr_ptr;
+    dest->ir_words = src->ir_words;
+    dest->ir_feedback = src->ir_feedback;
 #ifdef Py_GIL_DISABLED
     dest->tlbc_index = src->tlbc_index;
 #endif

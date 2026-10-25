@@ -485,7 +485,7 @@ PYTHON_OBJS=	\
 		Python/instrumentation.o \
 		Python/instruction_sequence.o \
 		Python/intrinsics.o \
-		Python/ir_lower.o \
+		Python/ir.o \
 		Python/jit_publish.o \
 		Python/legacy_tracing.o \
 		Python/lock.o \
@@ -508,6 +508,7 @@ PYTHON_OBJS=	\
 		Python/pythonrun.o \
 		Python/pytime.o \
 		Python/qsbr.o \
+		Python/regalloc.o \
 		Python/bootstrap_hash.o \
 		Python/specialize.o \
 		Python/slots.o \

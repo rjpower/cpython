@@ -5,15 +5,13 @@ Include/internal/pycore_ir_metadata.h, which pycore_ir.h includes:
 
 - the handler indices of the IR-only instructions (annotation `ir_only`),
   which follow the 256 opcodes in name order, then those of the BINARY_OP
-  operations, and IR_NUM_HANDLERS;
+  operations and of the NOFB forms, and IR_NUM_HANDLERS;
 - _PyIR_Formats, the format of every handler, indexed by handler, as
   ir_generator.compute_formats() computes it for the handlers it generates;
-- _PyIR_OnlyNames, the names of the IR-only handlers;
-- _PyIR_StackEffects, the stack effect of each opcode whose effect does not
-  depend on its oparg, which spares the lowering two calls per instruction.
+- _PyIR_OnlyNames, the names of the IR-only handlers.
 
-The tables are defined where NEED_IR_METADATA is defined (Python/ir_lower.c)
-and declared elsewhere. Handler indices without an instruction have a zeroed
+The tables are defined where NEED_IR_METADATA is defined (Python/ir.c) and
+declared elsewhere. Handler indices without an instruction have a zeroed
 format, without _PyIR_VALID.
 """
 
@@ -22,15 +20,16 @@ import argparse
 from analyzer import Analysis, analyze_files
 from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
-from stack import get_stack_effect
 from ir_generator import (
     BINARY_OP_FAMILY,
     FIRST_IR_ONLY_HANDLER,
+    NOFB_SUFFIX,
     IRFormat,
     binary_op_handlers,
     binary_ops,
     compute_formats,
     handler_ids,
+    nofb_bases,
     num_handlers,
 )
 from typing import TextIO
@@ -39,14 +38,14 @@ DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
 
 
 def shadow_of(name: str, analysis: Analysis) -> str:
-    """The instruction of co_code that the handler stands for: itself, or
-    for the handler of a BINARY_OP operation, BINARY_OP."""
+    """The instruction that the handler stands for: itself, for the handler
+    of a BINARY_OP operation BINARY_OP, and for a NOFB form its base."""
     if name in binary_op_handlers(analysis):
         return BINARY_OP_FAMILY
-    return name
+    return name.removesuffix(NOFB_SUFFIX)
 
 
-def format_initializer(fmt: IRFormat, shadow: str) -> str:
+def format_initializer(fmt: IRFormat, shadow: str, nofb: str) -> str:
     flags = ["_PyIR_VALID"]
     if fmt.window:
         flags.append("_PyIR_WINDOW")
@@ -63,21 +62,9 @@ def format_initializer(fmt: IRFormat, shadow: str) -> str:
         f"{{ .flags = {' | '.join(flags)}, "
         f".roles = {{ {', '.join(fmt.roles)} }}, .imm = {fmt.imm}, "
         f".fb = {fmt.fb}, .ninputs = {fmt.n_inputs}, .dst = {dst}, "
-        f".borrow_mask = {fmt.borrow_mask:#x}, .shadow = {shadow} }}"
+        f".borrow_mask = {fmt.borrow_mask:#x}, .shadow = {shadow}, "
+        f".nofb = {nofb} }}"
     )
-
-
-def constant_stack_effect(inst) -> tuple[int, int]:
-    """The (popped, pushed) of inst as _PyOpcode_num_popped() and
-    _PyOpcode_num_pushed() compute them, or (-1, -1) if they depend on the
-    oparg."""
-    stack = get_stack_effect(inst)
-    popped = (-stack.base_offset).to_c()
-    pushed = (stack.logical_sp - stack.base_offset).to_c()
-    if not (popped.isdigit() and pushed.isdigit()):
-        return -1, -1
-    assert int(popped) < 128 and int(pushed) < 128, inst.name
-    return int(popped), int(pushed)
 
 
 def generate_ir_metadata(
@@ -115,8 +102,11 @@ def generate_ir_metadata(
         indices = dict(ids)
         if BINARY_OP_FAMILY in analysis.instructions:
             indices[BINARY_OP_FAMILY] = analysis.instructions[BINARY_OP_FAMILY].opcode
+        has_nofb = set(nofb_bases(analysis))
         for name in sorted(indices, key=lambda name: indices[name]):
-            init = format_initializer(formats[name], shadow_of(name, analysis))
+            nofb = name + NOFB_SUFFIX if name in has_nofb else "0"
+            init = format_initializer(formats[name], shadow_of(name, analysis),
+                                      nofb)
             out.emit(f"[{name}] = {init},\n")
         out.emit("};\n")
         out.emit("#endif\n\n")
@@ -126,18 +116,6 @@ def generate_ir_metadata(
         out.emit(f"const char *const _PyIR_OnlyNames[{len(ir_only)}] = {{\n")
         for name in ir_only:
             out.emit(f'[{name} - {FIRST_IR_ONLY_HANDLER}] = "{name}",\n')
-        out.emit("};\n")
-        out.emit("#endif\n\n")
-
-        out.emit("/* Popped and pushed of each opcode whose stack effect does "
-                 "not depend on\n * its oparg, or -1 */\n")
-        out.emit("PyAPI_DATA(const int8_t) _PyIR_StackEffects[256][2];\n")
-        out.emit("#ifdef NEED_IR_METADATA\n")
-        out.emit("const int8_t _PyIR_StackEffects[256][2] = {\n")
-        for name, inst in sorted(analysis.instructions.items(),
-                                 key=lambda item: item[1].opcode):
-            popped, pushed = constant_stack_effect(inst)
-            out.emit(f"[{name}] = {{ {popped}, {pushed} }},\n")
         out.emit("};\n")
         out.emit("#endif\n")
 

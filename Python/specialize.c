@@ -243,14 +243,13 @@ do { \
 #define SPEC_FAIL_CONTAINS_OP_LIST       11
 #define SPEC_FAIL_CONTAINS_OP_USER_CLASS 12
 
-/* Instruction access.  instr is the instruction being specialised: a code
- * unit of the current frame's bytecode, or with the register IR the main
- * word of an instruction of the current frame's block. */
+/* Instruction access.  instr is the instruction being specialised: a word
+ * of the executing copy of the current frame's code object. */
 
-static inline _PyIRBlock *
-current_block(void)
+static inline _PyInterpreterFrame *
+current_frame(void)
 {
-    return _PyFrame_IRBlock(_PyThreadState_GET()->current_frame);
+    return _PyThreadState_GET()->current_frame;
 }
 
 /* The opcode of the handler; for an IR-only handler, the instruction that
@@ -269,15 +268,17 @@ instr_opcode(_PyInstr *instr)
 static inline int
 instr_oparg(_PyInstr *instr)
 {
-    _PyInterpreterFrame *frame = _PyThreadState_GET()->current_frame;
-    return _PyIR_InstrOparg(_PyFrame_GetCode(frame), _PyFrame_IRBlock(frame),
-                            instr, instr_opcode(instr));
+    _PyInterpreterFrame *frame = current_frame();
+    return _PyCode_InstrOparg(_PyFrame_GetCode(frame),
+                              _PyFrame_InstrOffset(frame, instr));
 }
 
 static inline _PyFbHeader *
 instr_fb(_PyInstr *instr)
 {
-    return _PyIR_InstrFeedback(current_block(), instr, instr_opcode(instr));
+    _PyInterpreterFrame *frame = current_frame();
+    return _PyIR_InstrFeedback(_PyFrame_GetCode(frame), _PyFrame_Exec(frame),
+                               instr);
 }
 
 /* Whether h is entry 0, which the sites past the IR_FIELD_MAX-th share and
@@ -285,7 +286,7 @@ instr_fb(_PyInstr *instr)
 static inline int
 is_shared_entry(_PyFbHeader *h)
 {
-    return (char *)h == current_block()->entries;
+    return (char *)h == _PyFrame_Exec(current_frame())->entries;
 }
 
 static inline void *
@@ -357,9 +358,9 @@ typedef struct {
 static _PyFbBlock *
 fb_block(_PyInstr *instr)
 {
-    _PyIRBlock *block = current_block();
-    assert(block->words <= instr && instr < block->words + block->nwords);
-    return block->feedback;
+    _PyCodeExec *exec = _PyFrame_Exec(current_frame());
+    assert(exec->words <= instr && instr < exec->words + exec->nwords);
+    return exec->feedback;
 }
 
 static fb_row
@@ -563,8 +564,9 @@ unspecialize(_PyInstr *instr)
     assert(!PyErr_Occurred());
     STAT_INC(_PyOpcode_Deopt[instr_opcode(instr)], failure);
     // For BINARY_OP, the handler of the operation
-    int generic = _PyIR_GenericHandler(current_block(), instr,
-                                       IR_HANDLER(*instr));
+    _PyInterpreterFrame *frame = current_frame();
+    int generic = _PyCode_GenericHandler(_PyFrame_GetCode(frame),
+                                         _PyFrame_InstrOffset(frame, instr));
     if (!set_opcode(instr, generic)) {
         SPECIALIZATION_FAIL(_PyOpcode_Deopt[instr_opcode(instr)], SPEC_FAIL_OTHER);
         return;
@@ -1720,6 +1722,12 @@ function_kind(PyCodeObject *code) {
     }
     if ((flags & CO_OPTIMIZED) == 0) {
         return SPEC_FAIL_CODE_NOT_OPTIMIZED;
+    }
+    // The specialisations of simple functions push the callee's frame
+    // inline, where allocating its executing copy could not fail
+    if (_PyCode_GetExec(code) == NULL) {
+        PyErr_Clear();
+        return SPEC_FAIL_OTHER;
     }
     return SIMPLE_FUNCTION;
 }
@@ -2915,7 +2923,7 @@ _Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _PyInstr *in
             // to a jump there
             assert(instr_opcode(instr + 1 + oparg) == END_FOR ||
                    instr_opcode(instr + 1 + oparg) == INSTRUMENTED_END_FOR ||
-                   _PyIR_IsTrampoline(current_block(), instr + 1 + oparg));
+                   IR_HANDLER(instr[1 + oparg]) == IR_JUMP);
             /* Don't specialize if PEP 523 is active */
             if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
                 goto failure;
@@ -3270,7 +3278,7 @@ static const PyBytesObject no_location = {
 };
 
 
-const struct _PyCode8 _Py_InitCleanup = {
+const struct _PyCode3 _Py_InitCleanup = {
     _PyVarObject_HEAD_INIT(&PyCode_Type, 3),
     .co_consts = (PyObject *)&_Py_SINGLETON(tuple_empty),
     .co_names = (PyObject *)&_Py_SINGLETON(tuple_empty),
@@ -3282,14 +3290,15 @@ const struct _PyCode8 _Py_InitCleanup = {
     .co_name = &_Py_ID(__init__),
     .co_qualname = &_Py_ID(__init__),
     .co_linetable = (PyObject *)&no_location,
-    ._co_firsttraceable = 4,
+    ._co_firsttraceable = 3,
     .co_stacksize = 2,
     .co_framesize = 2 + FRAME_SPECIALS_SIZE,
-    ._co_ir = &_PyIR_InitCleanupBlock,
-    .co_code_adaptive = {
-        EXIT_INIT_CHECK, 0,
-        RETURN_VALUE, 0,
-        RESUME, RESUME_AT_FUNC_START,
-        CACHE, 0, /* RESUME's cache */
+    // The same words as _PyIR_InitCleanupExec (Python/ir.c), which this
+    // static code object starts with as its executing copy
+    ._co_exec = &_PyIR_InitCleanupExec,
+    .co_words = {
+        IR_WORD(EXIT_INIT_CHECK, 1, 0, 0, 0),
+        IR_WORD(RETURN_VALUE, 0, 0, 0, 0),
+        IR_WORD(RESUME, 0, 0, 0, 0),
     }
 };

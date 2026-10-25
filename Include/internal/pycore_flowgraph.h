@@ -30,6 +30,25 @@ int _PyCfg_OptimizedCfgToInstructionSequence(struct _PyCfgBuilder *g, _PyCompile
                                              int *stackdepth, int *nlocalsplus,
                                              _PyInstructionSequence *seq);
 
+/* Slot assignment (Python/regalloc.c) */
+
+/* The stack depth before each instruction of instrs, whose jump targets are
+ * instruction indices, or -1 for an instruction that no path reaches. */
+int _PyRegAlloc_Depths(_PyInstructionSequence *instrs, int *depths);
+
+/* The slot of each role of a word */
+typedef struct {
+    int dst;
+    int base;           // the deepest input of a window-style instruction
+    int in[4];          // the inputs of a register-style one, bottom first
+} _PyRegSlots;
+
+/* The slots of an instruction of format fmt that pops popped values, with
+ * depth values on the stack before it. */
+struct _PyIRFormat;
+void _PyRegAlloc_Slots(const struct _PyIRFormat *fmt, int nlocalsplus,
+                       int depth, int popped, _PyRegSlots *slots);
+
 PyCodeObject *
 _PyAssemble_MakeCodeObject(_PyCompile_CodeUnitMetadata *u, PyObject *const_cache,
                            PyObject *consts, int maxdepth, _PyInstructionSequence *instrs,

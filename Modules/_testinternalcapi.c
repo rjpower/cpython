@@ -1506,10 +1506,11 @@ get_co_framesize(PyObject *self, PyObject *arg)
     return PyLong_FromLong(code->co_framesize);
 }
 
-/* The feedback entry of the instruction at byte OFFSET of the main copy of
- * CODE's bytecode: None if it has none, else (kind, state, first, second,
- * rows), where first and second are the two 32-bit fields after the header
- * and rows lists the (type_version, aux, opcode) rows of its poly table. */
+/* The feedback entry of the instruction at word index I of the executing
+ * copy of CODE: None if it has none or CODE has never run, else (kind,
+ * state, first, second, rows), where first and second are the two 32-bit
+ * fields after the header and rows lists the (type_version, aux, handler)
+ * rows of its poly table. */
 static PyObject *
 get_feedback(PyObject *self, PyObject *args)
 {
@@ -1518,34 +1519,25 @@ get_feedback(PyObject *self, PyObject *args)
     };
     static const char *const states[] = {"COLD", "MONO", "POLY", "MEGA", "OFF"};
     PyCodeObject *code;
-    int offset;
-    if (!PyArg_ParseTuple(args, "O!i", &PyCode_Type, &code, &offset)) {
+    int i;
+    if (!PyArg_ParseTuple(args, "O!i", &PyCode_Type, &code, &i)) {
         return NULL;
     }
-    if (offset < 0 || offset % 2 || offset / 2 >= Py_SIZE(code)) {
-        PyErr_SetString(PyExc_ValueError, "offset out of range");
+    if (i < 0 || i >= Py_SIZE(code)) {
+        PyErr_SetString(PyExc_ValueError, "index out of range");
         return NULL;
     }
-    int i = offset / 2;
-    if (!_PyFb_HasEntry(_Py_GetBaseCodeUnit(code, i).op.code)) {
+    _PyCodeExec *exec = code->_co_exec;
+    if (exec == NULL || _PyCode_InstrFbIndex(code, i) <= 0) {
         Py_RETURN_NONE;
     }
-    _PyIRBlock *block = _PyIR_Lower(code);
-    if (block == NULL) {
-        return NULL;
-    }
-    _PyIRWord *instr = _PyIR_InstrAt(block, i);
-    _PyFbHeader *h = _PyIR_InstrFeedback(block, instr, IR_HANDLER(*instr));
-    _PyFbBlock *feedback = block->feedback;
-    if (h == NULL) {
-        Py_RETURN_NONE;
-    }
+    _PyFbHeader *h = _PyIR_InstrFeedback(code, exec, &exec->words[i]);
     PyObject *rows = PyList_New(0);
     if (rows == NULL) {
         return NULL;
     }
     if (h->poly) {
-        _PyFbPoly *poly = &feedback->poly[h->poly - 1];
+        _PyFbPoly *poly = &exec->feedback->poly[h->poly - 1];
         for (int r = 0; r < FB_POLY_SIZE && poly->handler[r]; r++) {
             PyObject *row = Py_BuildValue("(IIi)", poly->type_version[r],
                                           poly->aux[r], poly->handler[r]);
@@ -1565,37 +1557,34 @@ get_feedback(PyObject *self, PyObject *args)
                          fields[0], fields[1], rows);
 }
 
-/* The register IR of CODE, lowering it if need be: per word a tuple
- * (start, anchor, handler, a, b, c, d) of the bytecode offsets in bytes of
- * the first code unit of its instruction and of the instruction, the name of
- * its handler and its fields.  The jumps that a relaxed FOR_ITER or SEND
- * adds after its word share its offsets. */
+/* The words of CODE as the compiler emitted them, or with ADAPTIVE those of
+ * its executing copy, which specialisation and instrumentation rewrite:
+ * per word a tuple (handler, a, b, c, d) of the name of its handler and its
+ * fields.  The executing copy of code that has never run is co_code's. */
 static PyObject *
-get_ir(PyObject *self, PyObject *arg)
+get_ir(PyObject *self, PyObject *args)
 {
-    if (!PyCode_Check(arg)) {
-        PyErr_SetString(PyExc_TypeError, "argument must be a code object");
+    PyCodeObject *code;
+    int adaptive = 0;
+    if (!PyArg_ParseTuple(args, "O!|p", &PyCode_Type, &code, &adaptive)) {
         return NULL;
     }
-    _PyIRBlock *block = _PyIR_Lower((PyCodeObject *)arg);
-    if (block == NULL) {
-        return NULL;
+    const _PyIRWord *words = _PyCode_WORDS(code);
+    if (adaptive && code->_co_exec != NULL) {
+        words = code->_co_exec->words;
     }
     PyObject *result = PyList_New(0);
     if (result == NULL) {
         return NULL;
     }
-    for (uint32_t w = 0; w < block->nwords; w++) {
-        _PyIRWord word = block->words[w];
+    for (Py_ssize_t w = 0; w < Py_SIZE(code); w++) {
+        _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(words[w]);
         int handler = IR_HANDLER(word);
         const char *name = handler < IR_FIRST_ONLY_HANDLER
             ? _PyOpcode_OpName[handler]
             : _PyIR_OnlyNames[handler - IR_FIRST_ONLY_HANDLER];
         PyObject *item = Py_BuildValue(
-            "(iisIIII)",
-            _PyIR_Start(block, &block->words[w]) * (int)sizeof(_Py_CODEUNIT),
-            _PyIR_Anchor(block, &block->words[w]) * (int)sizeof(_Py_CODEUNIT),
-            name, IR_A(word), IR_B(word), IR_C(word), IR_D(word));
+            "(sIIII)", name, IR_A(word), IR_B(word), IR_C(word), IR_D(word));
         if (item == NULL || PyList_Append(result, item) < 0) {
             Py_XDECREF(item);
             Py_DECREF(result);
@@ -1606,8 +1595,8 @@ get_ir(PyObject *self, PyObject *arg)
     return result;
 }
 
-/* Set the farthest exit of FOR_ITER and SEND that the lowering does not
- * relax, for code lowered from now on, and return the previous one. */
+/* Set the farthest exit of FOR_ITER and SEND that the assembler does not
+ * relax, for code compiled from now on, and return the previous one. */
 static PyObject *
 set_ir_max_forward(PyObject *self, PyObject *arg)
 {
@@ -3493,7 +3482,7 @@ static PyMethodDef module_functions[] = {
     {"get_co_framesize", get_co_framesize, METH_O, NULL},
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
-    {"get_ir", get_ir, METH_O, NULL},
+    {"get_ir", get_ir, METH_VARARGS, NULL},
     {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},
     {"get_code_var_counts", _PyCFunction_CAST(get_code_var_counts),
      METH_VARARGS | METH_KEYWORDS, NULL},

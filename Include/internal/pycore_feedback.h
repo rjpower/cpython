@@ -9,48 +9,36 @@ extern "C" {
 #endif
 
 #include "pycore_backoff.h"     // _Py_BackoffCounter
-#include "pycore_structs.h"     // _Py_CODEUNIT
 #include "opcode_ids.h"         // RESUME, LOAD_ATTR, ...
 
 /* Typed feedback.
  *
- * Every instruction with inline cache units except the conditional branches
- * owns one feedback entry.  The entries of a copy of the bytecode live in one
- * block that follows the bytecode in the same allocation, at the next 8-byte
- * boundary:
+ * Every instruction of a family below, and every conditional branch, owns
+ * one feedback entry.  The assembler numbers the entries and stores in the
+ * IR word the index of its entry (Include/internal/pycore_ir.h).  The code
+ * object keeps one 32-bit initialiser per entry after its words, the kind
+ * and the static operand that does not fit the word (_PyIR_FBINIT).  At
+ * the first call the executing copy is allocated with the entries after the
+ * words:
  *
- *     | code units, inline caches included | pad | _PyFbBlock | entries |
+ *     | _PyCodeExec | words | _PyFbBlock | entries |
  *
- * The main copy is co_code_adaptive, and PyCodeObject._co_feedback points at
- * its block.  Each thread-local copy of the free-threaded build carries its
- * own block in the same layout.
- *
- * Unit 0 of an instruction's inline cache holds the distance in code units
- * from the instruction to its entry, so a handler finds its entry with one
- * load and no base register (_PyFb_Entry).  Because the block sits at the
- * same offset in every copy, unit 0 is the same in every copy.  0 means no
- * entry: the static code object _Py_InitCleanup, and instructions more than
- * 65535 code units from their entry, which only happens in code objects of
- * more than about 64K code units.  Such instructions never specialise.  The
- * other cache units are reserved and stay zero, so co_code, dis offsets and
- * pyc files keep their layout; code_getcodeadaptive() rebuilds the old cache
- * contents from the entries for _co_code_adaptive and dis.
+ * Entry 0 is shared by every instruction that has no entry of its own: the
+ * instructions past the IR's entry limit and _Py_InitCleanup.  It never
+ * specialises.  dis reads the entries of the executing copy for
+ * show_caches and adaptive.
  *
  * Each entry begins with a 16-byte header.  Kind, size and opcodes:
  *
  *     COUNTER  16  RESUME, JUMP_BACKWARD
- *     BRANCH    -  POP_JUMP_IF_FALSE, _TRUE, _NONE, _NOT_NONE
+ *     BRANCH   16  POP_JUMP_IF_FALSE, _TRUE, _NONE, _NOT_NONE
  *     UNARY    24  TO_BOOL, UNPACK_SEQUENCE, FOR_ITER, GET_ITER, SEND
  *     BINARY   32  BINARY_OP, COMPARE_OP, CONTAINS_OP, STORE_SUBSCR
  *     ATTR     40  LOAD_ATTR, STORE_ATTR, LOAD_SUPER_ATTR
  *     GLOBAL   32  LOAD_GLOBAL
  *     CALL     24  CALL, CALL_KW, CALL_FUNCTION_EX
  *
- * A branch keeps its 16-bit taken history, newest in bit 0, in its single
- * cache unit, as before.  Branches are the only instructions whose fast path
- * writes feedback on every execution, and reaching an entry there costs five
- * instructions per branch, about 2 percent on richards.  The IR block of
- * design note 01 gives BRANCH a 16-byte entry with the history in arg.
+ * A branch keeps its 16-bit taken history, newest in bit 0, in arg.
  *
  * Fields carry the names of the cache effects in Python/bytecodes.c, which
  * is how the cases generator maps "type_version/2" to fb->type_version.
@@ -227,50 +215,6 @@ _PyFb_HasEntry(int opcode)
     default:
         return 0;
     }
-}
-
-/* Alignment of the block and of every entry.  Bytecode copies start at
- * least this aligned, so the block has the same offset in all of them. */
-#define FB_ALIGN 8
-
-/* Offset in bytes of the block from the start of a copy of the bytecode
- * with SIZE code units. */
-static inline Py_ssize_t
-_PyFb_BlockOffset(Py_ssize_t size)
-{
-    return (Py_ssize_t)_Py_SIZE_ROUND_UP(size * (Py_ssize_t)sizeof(_Py_CODEUNIT),
-                                         FB_ALIGN);
-}
-
-static inline _PyFbBlock *
-_PyFb_Block(_Py_CODEUNIT *bytecode, Py_ssize_t size)
-{
-    return (_PyFbBlock *)((char *)bytecode + _PyFb_BlockOffset(size));
-}
-
-/* The entry of an instruction that has one. */
-static inline void *
-_PyFb_Entry(const _Py_CODEUNIT *instr)
-{
-    assert(instr[1].cache != 0);
-    return (void *)(instr + instr[1].cache);
-}
-
-/* The entry header of an instruction of a family with entries, or NULL if
- * the instruction has none. */
-static inline _PyFbHeader *
-_PyFb_Header(const _Py_CODEUNIT *instr)
-{
-    uint16_t distance = instr[1].cache;
-    if (distance == 0) {
-        return NULL;
-    }
-    _PyFbHeader *h = (_PyFbHeader *)(instr + distance);
-    if (h == NULL) {
-        // Tells the compiler that callers need no second NULL test
-        Py_UNREACHABLE();
-    }
-    return h;
 }
 
 /* Free the poly tables of a block whose bytecode copy is being freed. */

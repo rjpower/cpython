@@ -285,8 +285,8 @@ dummy_func(
             value2 = PyStackRef_BorrowAt(&GETLOCAL((uintptr_t)oparg2));
         }
 
-        // The lowering (Python/ir_lower.c) runs constant loads as the inline
-        // forms.
+        // The assembler (Python/assemble.c) emits constant loads as the
+        // inline forms.
         family(LOAD_CONST, 0) = {
             LOAD_CONST_INLINE_INT,
             LOAD_CONST_INLINE_FLOAT,
@@ -1756,7 +1756,8 @@ dummy_func(
             if (!PyStackRef_IsNone(frame->f_executable)) {
                 Py_ssize_t i = INSTR_OFFSET_OF(frame->instr_ptr);
                 assert(i >= 0 && i <= INT_MAX);
-                int opcode = _Py_GetBaseCodeUnit(_PyFrame_GetCode(frame), (int)i).op.code;
+                int opcode = _PyIR_BaseOpcode(
+                    _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
                 assert(opcode == SEND || opcode == FOR_ITER);
             }
             assert(gen->gi_yield_offset == 1);
@@ -4436,8 +4437,8 @@ dummy_func(
         op(_CREATE_INIT_FRAME, (init, self, args[oparg] -- init_frame)) {
             _PyInterpreterFrame *shim = _PyFrame_PushTrampolineUnchecked(
                 tstate, (PyCodeObject *)&_Py_InitCleanup, 1, frame);
-            assert(_PyCode_CODE(_PyFrame_GetCode(shim))[0].op.code == EXIT_INIT_CHECK);
-            assert(_PyCode_CODE(_PyFrame_GetCode(shim))[1].op.code == RETURN_VALUE);
+            assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 0) == EXIT_INIT_CHECK);
+            assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 1) == RETURN_VALUE);
             /* Push self onto stack of shim */
             shim->localsplus[0] = PyStackRef_DUP(self);
             _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
@@ -5662,22 +5663,11 @@ dummy_func(
         /* Handlers of the register IR only (Include/internal/pycore_ir.h).
          * They have no opcode. */
 
-        // The one word of a code object that has not been lowered yet.
-        ir_only inst(IR_LOWER, ( -- )) {
-            int err = _PyIR_LowerFrame(tstate, frame);
-            ERROR_IF(err < 0);
-            next_instr = frame->instr_ptr;
-            DISPATCH();
-        }
-
-        // A word of a fused block that its code object no longer runs: the
-        // frame goes on in the block that replaced it.
-        ir_only inst(IR_REMAP, ( -- )) {
-            PyCodeObject *code = _PyFrame_GetCode(frame);
-            next_instr = _PyIR_Remap(code, frame->instr_ptr);
-            frame->instr_ptr = next_instr;
-            _PyFrame_SetIRBlock(frame, code->_co_ir);
-            DISPATCH();
+        // The jumps that the assembler adds after a relaxed FOR_ITER or
+        // SEND (Python/assemble.c), which no instruction of the stack
+        // machine stands for.
+        ir_only inst(IR_JUMP, ( -- )) {
+            JUMPTO(oparg);
         }
 
         op(_SAVE_RETURN_OFFSET, (--)) {
@@ -5799,13 +5789,6 @@ dummy_func(
                 return NULL;
             }
             next_instr = frame->instr_ptr;
-            /* exception_unwind looks up the code unit before the call.  Where
-             * the call's word starts with absorbed loads or an EXTENDED_ARG,
-             * that unit is the word's own, not the previous word's. */
-            _PyIRBlock *block = _PyFrame_IRBlock(frame);
-            if (_PyIR_Start(block, next_instr) != _PyIR_Anchor(block, next_instr)) {
-                next_instr++;
-            }
             RELOAD_STACK();
             goto error;
         }

@@ -38,10 +38,10 @@ typedef struct {
 #define _PyCode_DEF_THREAD_LOCAL_BYTECODE()
 #endif
 
-/* The register IR of the code object, which holds the feedback (see
-   Include/internal/pycore_ir.h); _PyIR_LowerStub until first executed. */
+/* The executing copy of the words, with the feedback vector (see
+   Include/internal/pycore_ir.h); NULL until the first call. */
 #define _PyCode_DEF_FEEDBACK() \
-    struct _PyIRBlock *_co_ir;
+    struct _PyCodeExec *_co_exec;
 
 // To avoid repeating ourselves in deepfreeze.py, all PyCodeObject members are
 // defined in this macro:
@@ -109,9 +109,12 @@ typedef struct {
        Type is a void* to keep the format private in codeobject.c to force     \
        people to go through the proper APIs. */                                \
     void *co_extra;                                                            \
+    int co_nfeedback;             /* feedback entries, entry 0 included, or 0 */ \
     _PyCode_DEF_FEEDBACK()                                                     \
     _PyCode_DEF_THREAD_LOCAL_BYTECODE()                                        \
-    char co_code_adaptive[(SIZE)];                                             \
+    /* The IR, one 64-bit word per instruction (Py_SIZE() of them), then the   \
+       feedback table: co_nfeedback 32-bit entries. */                         \
+    uint64_t co_words[(SIZE)];                                                 \
 }
 
 /* Bytecode object */

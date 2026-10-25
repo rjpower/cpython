@@ -221,12 +221,6 @@ lltrace_instruction(_PyInterpreterFrame *frame,
         ? _PyOpcode_OpName[opcode]
         : _PyIR_OnlyNames[opcode - IR_FIRST_ONLY_HANDLER];
     assert(name != NULL);
-    if (_PyFrame_IRBlock(frame) == &_PyIR_LowerStub) {
-        // The code object's first instruction has no IR yet
-        printf("    ir %s\n", name);
-        fflush(stdout);
-        return;
-    }
     if (frame->owner >= FRAME_OWNED_BY_INTERPRETER) {
         printf("0: %s\n    ir %s %u %u %u %u\n", name, name, a, b, c, d);
         fflush(stdout);
@@ -236,18 +230,17 @@ lltrace_instruction(_PyInterpreterFrame *frame,
     _PyFrame_SetStackPointer(frame, stack_pointer);
     _PyStackRef_CheckFrame(frame);
     _PyFrame_GetStackPointer(frame);
-    /* First the instruction as a bytecode trace prints it, with the
-     * oparg from the bytecode that co_code_adaptive shadows; then the
-     * handler that runs it and its fields, on a line without a colon. */
-    int offset = _PyIR_Anchor(_PyFrame_IRBlock(frame), next_instr);
-    int shown = opcode < IR_FIRST_ONLY_HANDLER
-        ? opcode : _PyIR_FormatOf(opcode)->shadow;
-    int oparg = _PyIR_BytecodeOparg(frame, next_instr);
-    if (OPCODE_HAS_ARG((int)_PyOpcode_Deopt[shown])) {
-        printf("%d: %s %d\n", offset * 2, _PyOpcode_OpName[shown], oparg);
+    /* First the word index and the instruction that the handler stands
+     * for, with its oparg; then the handler and its fields, on a line
+     * without a colon. */
+    int offset = _PyFrame_InstrOffset(frame, next_instr);
+    int shown = _PyIR_BaseOpcode(_PyIR_RealHandler(frame, next_instr));
+    int oparg = _PyCode_InstrOparg(_PyFrame_GetCode(frame), offset);
+    if (OPCODE_HAS_ARG(shown)) {
+        printf("%d: %s %d\n", offset, _PyOpcode_OpName[shown], oparg);
     }
     else {
-        printf("%d: %s\n", offset * 2, _PyOpcode_OpName[shown]);
+        printf("%d: %s\n", offset, _PyOpcode_OpName[shown]);
     }
     printf("    ir %s %u %u %u %u\n", name, a, b, c, d);
     fflush(stdout);

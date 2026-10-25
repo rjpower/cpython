@@ -275,8 +275,8 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 
 /* Code access macros */
 
-/* In words: the IR has no bytecode offsets but those of its pcmap. */
-#define INSTR_OFFSET() ((int)(next_instr - _PyFrame_IRWords(frame)))
+/* In words */
+#define INSTR_OFFSET() ((int)(next_instr - frame->ir_words))
 #define NEXTOPARG()  do { \
         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr); \
         opcode = IR_HANDLER(ir_word); \
@@ -314,15 +314,6 @@ GETITEM(PyObject *v, Py_ssize_t i) {
         STAT_INC(opcode, miss);                                  \
         STAT_INC((INSTNAME), miss);                              \
         if (ADAPTIVE_COUNTER_TRIGGERS(_PyIR_FbHeaderOf(frame, this_instr, opcode))) { \
-            STAT_INC((INSTNAME), deopt);                         \
-        }                                                        \
-    } while (0)
-#elif defined(Py_STATS)
-#define UPDATE_MISS_STATS(INSTNAME)                              \
-    do {                                                         \
-        STAT_INC(opcode, miss);                                  \
-        STAT_INC((INSTNAME), miss);                              \
-        if (ADAPTIVE_COUNTER_TRIGGERS(_PyFb_Header(this_instr))) { \
             STAT_INC((INSTNAME), deopt);                         \
         }                                                        \
     } while (0)
@@ -594,21 +585,20 @@ static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
 #  define IR_DROP_BORROW(REF, F, CANON) ((void)0)
 #endif
 
-/* The frame's view of its block: frame->ir_words and frame->ir_feedback
- * follow the block that instr_ptr points into. */
+/* The frame's view of its executing copy: frame->ir_words and
+ * frame->ir_feedback follow the copy that instr_ptr points into. */
 #define IR_CHECK_BLOCK() \
-    assert(frame->ir_words == _PyFrame_IRBlock(frame)->words && \
-           frame->ir_feedback == _PyFrame_IRBlock(frame)->entries)
+    assert(frame->ir_words == _PyFrame_Exec(frame)->words && \
+           frame->ir_feedback == _PyFrame_Exec(frame)->entries)
 
 /* The feedback entry at index F. */
 #define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_feedback, (F)))
 
 /* The oparg that the generic handler of an instruction with entry FB, at
  * index F, keeps in the arg field of the entry.  The sites that share entry
- * 0 find theirs in the bytecode. */
+ * 0 run NOFB forms, which keep theirs in the word. */
 #define IR_FB_ARG(FB, F) \
-    (Py_UNLIKELY((F) == 0) ? _PyIR_BytecodeOparg(frame, this_instr) \
-                           : (int)((_PyFbHeader *)(FB))->arg)
+    (assert((F) != 0), (int)((_PyFbHeader *)(FB))->arg)
 
 /* A specialisation of BINARY_OP deoptimises to the handler of the operation
  * that its entry, at index F, records. */
@@ -648,11 +638,11 @@ static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
 #  define IR_CHECK_INPUT(F, OFF) ((void)0)
 #endif
 
-/* The oparg and feedback entry of another instruction, as HANDLER reads
- * them. */
+/* The oparg and feedback entry of another instruction of the frame. */
 #define _PyIR_Oparg(FRAME, INSTR) \
-    _PyIR_InstrOparg(_PyFrame_GetCode(FRAME), _PyFrame_IRBlock(FRAME), \
-                     (INSTR), IR_HANDLER(*(INSTR)))
+    _PyCode_InstrOparg(_PyFrame_GetCode(FRAME), \
+                       _PyFrame_InstrOffset((FRAME), (INSTR)))
 #define _PyIR_FbHeaderOf(FRAME, INSTR, HANDLER) \
-    _PyIR_InstrFeedback(_PyFrame_IRBlock(FRAME), (INSTR), (HANDLER))
+    ((void)(HANDLER), \
+     _PyIR_InstrFeedback(_PyFrame_GetCode(FRAME), _PyFrame_Exec(FRAME), (INSTR)))
 

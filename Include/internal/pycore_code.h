@@ -14,8 +14,12 @@ extern "C" {
 #include "pycore_tstate.h"      // _PyThreadStateImpl
 
 
-#define _PyCode_CODE(CO) _Py_RVALUE((_Py_CODEUNIT *)(CO)->co_code_adaptive)
-#define _PyCode_NBYTES(CO) (Py_SIZE(CO) * (Py_ssize_t)sizeof(_Py_CODEUNIT))
+/* The words of the IR, which never change (Include/internal/pycore_ir.h) */
+#define _PyCode_WORDS(CO) _Py_RVALUE((const _PyIRWord *)(CO)->co_words)
+#define _PyCode_NBYTES(CO) (Py_SIZE(CO) * (Py_ssize_t)sizeof(_PyIRWord))
+/* The feedback table, co_nfeedback entries after the words */
+#define _PyCode_FBINIT(CO) \
+    _Py_RVALUE((const uint32_t *)((CO)->co_words + Py_SIZE(CO)))
 
 
 /* These macros only remain defined for compatibility. */
@@ -134,8 +138,10 @@ struct _PyCodeConstructor {
     PyObject *qualname;
     int flags;
 
-    /* the code */
+    /* the code: the words of the IR, and the feedback table (one 32-bit
+       entry per feedback entry, see pycore_ir.h), or NULL for none */
     PyObject *code;
+    PyObject *fbinit;
     int firstlineno;
     PyObject *linetable;
 
@@ -377,16 +383,11 @@ typedef struct {
 
 PyAPI_FUNC(int) _Py_Instrument(PyCodeObject *co, PyInterpreterState *interp);
 
-// Export for '_testinternalcapi' shared extension
-PyAPI_FUNC(_Py_CODEUNIT) _Py_GetBaseCodeUnit(PyCodeObject *code, int offset);
-
-extern int _PyInstruction_GetLength(PyCodeObject *code, int offset);
-
 extern PyObject *_PyInstrumentation_BranchesIterator(PyCodeObject *code);
 
-struct _PyCode8 _PyCode_DEF(8);
+struct _PyCode3 _PyCode_DEF(3);
 
-PyAPI_DATA(const struct _PyCode8) _Py_InitCleanup;
+PyAPI_DATA(const struct _PyCode3) _Py_InitCleanup;
 
 #ifdef Py_GIL_DISABLED
 

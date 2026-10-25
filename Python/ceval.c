@@ -1966,6 +1966,9 @@ _PyEvalFramePushAndInit(PyThreadState *tstate, _PyStackRef func,
     PyFunctionObject *func_obj = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(func);
     PyCodeObject * code = (PyCodeObject *)func_obj->func_code;
     CALL_STAT_INC(frames_pushed);
+    if (_PyCode_GetExec(code) == NULL) {
+        goto fail;
+    }
     _PyInterpreterFrame *frame = _PyThreadState_PushFrame(tstate, code->co_framesize);
     if (frame == NULL) {
         goto fail;

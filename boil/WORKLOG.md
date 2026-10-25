@@ -603,3 +603,24 @@ The full suite on dev-debug and dev-default fails only in the known
 test_remote_exec_deleted_static_executable. Rung 2 passes on
 dev-stackrefdebug and dev-tailcall. dev-ft fails
 only in the known places. All seven ports pass against dev-default.
+
+### 2026-10-25 — Step 2a, day 1: the compiler emits the words
+
+The assembler now emits one IR word per instruction (Python/regalloc.c maps
+depth d to slot co_nlocalsplus + d, and Python/assemble.c encodes the words,
+numbers the feedback entries and relaxes FOR_ITER and SEND). co_code holds
+the words, followed in the code object by a feedback table of one 32-bit
+entry per site, the kind and the static operand. The first call copies the
+words into the executing copy with its feedback vector
+(`_PyCode_GetExec()`, Python/ir.c, which replaces Python/ir_lower.c). Sites
+past the 4095th entry run NOFB handlers that carry the operand in the word.
+Line, exception and monitoring offsets are word indices. The pyc magic is
+3707.
+
+`def g(o): return o.x + o.y` compiles to seven words on dev-debug, which
+match note 06 section 2.2 before folding: RESUME, LOAD_FAST_BORROW r1 r0,
+LOAD_ATTR r1 r1 fb1, LOAD_FAST_BORROW r2 r0, LOAD_ATTR r2 r2 fb2,
+BINARY_OP_ADD r1 r1 r2 fb3, RETURN_VALUE r1, with the names in the feedback
+table. After 100 calls the executing copy runs RESUME_CHECK,
+LOAD_ATTR_INSTANCE_VALUE twice and BINARY_OP_ADD_INT. test_grammar and
+test_builtin pass; test_generators and test_exceptions do not yet.

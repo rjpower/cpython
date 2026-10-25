@@ -63,17 +63,9 @@ extern "C" {
 # define _Py_Debug_interpreter_state_tlbc_generation 0
 #endif
 
-// The register IR has no thread-local bytecode.  The offsets of _PyIRBlock
-// need Include/internal/pycore_ir.h where _Py_DebugOffsets_INIT expands.
+// The register IR has no thread-local bytecode.
 # undef _Py_Debug_code_object_co_tlbc
 # define _Py_Debug_code_object_co_tlbc 0
-# define _Py_Debug_code_object_co_ir offsetof(PyCodeObject, _co_ir)
-# define _Py_Debug_ir_block_size sizeof(_PyIRBlock)
-# define _Py_Debug_ir_block_words offsetof(_PyIRBlock, words)
-# define _Py_Debug_ir_block_nwords offsetof(_PyIRBlock, nwords)
-# define _Py_Debug_ir_block_flags offsetof(_PyIRBlock, flags)
-# define _Py_Debug_ir_block_pcmap offsetof(_PyIRBlock, pcmap)
-# define _Py_Debug_ir_block_pcmap_wide _PyIR_PCMAP_WIDE
 
 
 typedef struct _Py_DebugOffsets {
@@ -138,6 +130,7 @@ typedef struct _Py_DebugOffsets {
         uint64_t previous;
         uint64_t executable;
         uint64_t instr_ptr;
+        uint64_t ir_words;
         uint64_t localsplus;
         uint64_t owner;
         uint64_t stackpointer;
@@ -155,25 +148,13 @@ typedef struct _Py_DebugOffsets {
         uint64_t argcount;
         uint64_t localsplusnames;
         uint64_t localspluskinds;
-        uint64_t co_code_adaptive;
+        // The 8-byte IR words as the compiler emitted them; a frame runs
+        // a copy, whose first word interpreter_frame.ir_words points to, so
+        // (instr_ptr - ir_words) / 8 is the word index that the line table
+        // and the exception table use.
+        uint64_t co_words;
         uint64_t co_tlbc;
-        uint64_t co_ir;
     } code_object;
-
-    // The register IR block of a code object, which co_ir points to.
-    // instr_ptr points at one of the nwords 8-byte words at words, and
-    // pcmap holds per word a pair {start, anchor} of uint16_t, or of
-    // uint32_t if flags & pcmap_wide; anchor is the bytecode offset of the
-    // word's instruction in code units.  The jumps that a relaxed FOR_ITER
-    // or SEND adds after its word share its entry.
-    struct _ir_block {
-        uint64_t size;
-        uint64_t words;
-        uint64_t nwords;
-        uint64_t flags;
-        uint64_t pcmap;
-        uint64_t pcmap_wide;
-    } ir_block;
 
     // PyObject offset;
     struct _pyobject {
@@ -341,6 +322,7 @@ typedef struct _Py_DebugOffsets {
         .previous = offsetof(_PyInterpreterFrame, previous), \
         .executable = offsetof(_PyInterpreterFrame, f_executable), \
         .instr_ptr = offsetof(_PyInterpreterFrame, instr_ptr), \
+        .ir_words = offsetof(_PyInterpreterFrame, ir_words), \
         .localsplus = offsetof(_PyInterpreterFrame, localsplus), \
         .owner = offsetof(_PyInterpreterFrame, owner), \
         .stackpointer = offsetof(_PyInterpreterFrame, stackpointer), \
@@ -356,17 +338,8 @@ typedef struct _Py_DebugOffsets {
         .argcount = offsetof(PyCodeObject, co_argcount), \
         .localsplusnames = offsetof(PyCodeObject, co_localsplusnames), \
         .localspluskinds = offsetof(PyCodeObject, co_localspluskinds), \
-        .co_code_adaptive = offsetof(PyCodeObject, co_code_adaptive), \
+        .co_words = offsetof(PyCodeObject, co_words), \
         .co_tlbc = _Py_Debug_code_object_co_tlbc, \
-        .co_ir = _Py_Debug_code_object_co_ir, \
-    }, \
-    .ir_block = { \
-        .size = _Py_Debug_ir_block_size, \
-        .words = _Py_Debug_ir_block_words, \
-        .nwords = _Py_Debug_ir_block_nwords, \
-        .flags = _Py_Debug_ir_block_flags, \
-        .pcmap = _Py_Debug_ir_block_pcmap, \
-        .pcmap_wide = _Py_Debug_ir_block_pcmap_wide, \
     }, \
     .pyobject = { \
         .size = sizeof(PyObject), \

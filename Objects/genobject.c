@@ -505,9 +505,8 @@ gen_close(PyObject *self, PyObject *args)
         /* We can safely ignore the outermost try block
          * as it is automatically generated to handle
          * StopIteration. */
-        int oparg = _PyIR_InstrOparg(_PyFrame_GetCode(frame),
-                                     _PyFrame_IRBlock(frame), frame->instr_ptr,
-                                     IR_HANDLER(*frame->instr_ptr));
+        int oparg = _PyCode_InstrOparg(_PyFrame_GetCode(frame),
+                                       _PyFrame_InstrOffset(frame, frame->instr_ptr));
         if (oparg & RESUME_OPARG_DEPTH1_MASK && no_unwind_tools) {
             // RESUME after YIELD_VALUE and exception depth is 1
             assert((oparg & RESUME_OPARG_LOCATION_MASK) != RESUME_AT_FUNC_START);

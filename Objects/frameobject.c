@@ -1413,15 +1413,10 @@ print_stacks(int64_t *stacks, int n) {
 static int64_t *
 mark_stacks(PyCodeObject *code_obj, int len)
 {
-    PyObject *co_code = _PyCode_GetCode(code_obj);
-    if (co_code == NULL) {
-        return NULL;
-    }
     int64_t *stacks = PyMem_New(int64_t, len+1);
 
     if (stacks == NULL) {
         PyErr_NoMemory();
-        Py_DECREF(co_code);
         return NULL;
     }
     for (int i = 1; i <= len; i++) {
@@ -1431,22 +1426,14 @@ mark_stacks(PyCodeObject *code_obj, int len)
     int todo = 1;
     while (todo) {
         todo = 0;
-        /* Scan instructions */
+        /* Scan instructions, one word each.  The jumps of a relaxed FOR_ITER
+         * or SEND are JUMP_FORWARD. */
         for (int i = 0; i < len;) {
             int j;
             int64_t next_stack = stacks[i];
-            _Py_CODEUNIT inst = _Py_GetBaseCodeUnit(code_obj, i);
-            int opcode = inst.op.code;
-            int oparg = 0;
-            while (opcode == EXTENDED_ARG) {
-                oparg = (oparg << 8) | inst.op.arg;
-                i++;
-                inst = _Py_GetBaseCodeUnit(code_obj, i);
-                opcode = inst.op.code;
-                stacks[i] = next_stack;
-            }
-            oparg = (oparg << 8) | inst.op.arg;
-            int next_i = i + _PyOpcode_Caches[opcode] + 1;
+            int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(code_obj, i));
+            int oparg = _PyCode_InstrOparg(code_obj, i);
+            int next_i = i + 1;
             if (next_stack == UNINITIALIZED) {
                 i = next_i;
                 continue;
@@ -1458,7 +1445,7 @@ mark_stacks(PyCodeObject *code_obj, int len)
                 case POP_JUMP_IF_NOT_NONE:
                 {
                     int64_t target_stack;
-                    j = next_i + oparg;
+                    j = _PyCode_InstrTarget(code_obj, i);
                     assert(j < len);
                     next_stack = pop_value(next_stack);
                     target_stack = next_stack;
@@ -1468,21 +1455,21 @@ mark_stacks(PyCodeObject *code_obj, int len)
                     break;
                 }
                 case SEND:
-                    j = oparg + i + INLINE_CACHE_ENTRIES_SEND + 1;
+                    j = _PyCode_InstrTarget(code_obj, i);
                     assert(j < len);
                     assert(stacks[j] == UNINITIALIZED || stacks[j] == next_stack);
                     stacks[j] = next_stack;
                     stacks[next_i] = next_stack;
                     break;
                 case JUMP_FORWARD:
-                    j = oparg + i + 1;
+                    j = _PyCode_InstrTarget(code_obj, i);
                     assert(j < len);
                     assert(stacks[j] == UNINITIALIZED || stacks[j] == next_stack);
                     stacks[j] = next_stack;
                     break;
                 case JUMP_BACKWARD:
                 case JUMP_BACKWARD_NO_INTERRUPT:
-                    j = next_i - oparg;
+                    j = _PyCode_InstrTarget(code_obj, i);
                     assert(j >= 0);
                     assert(j < len);
                     if (stacks[j] == UNINITIALIZED && j < i) {
@@ -1504,7 +1491,7 @@ mark_stacks(PyCodeObject *code_obj, int len)
                 {
                     int64_t target_stack = push_value(next_stack, Object);
                     stacks[next_i] = target_stack;
-                    j = oparg + 1 + INLINE_CACHE_ENTRIES_FOR_ITER + i;
+                    j = _PyCode_InstrTarget(code_obj, i);
                     assert(j < len);
                     assert(stacks[j] == UNINITIALIZED || stacks[j] == target_stack);
                     stacks[j] = target_stack;
@@ -1573,11 +1560,6 @@ mark_stacks(PyCodeObject *code_obj, int len)
                     stacks[next_i] = next_stack;
                     break;
                 }
-                case CACHE:
-                case RESERVED:
-                {
-                    assert(0);
-                }
                 default:
                 {
                     int delta = PyCompile_OpcodeStackEffect(opcode, oparg);
@@ -1624,7 +1606,6 @@ mark_stacks(PyCodeObject *code_obj, int len)
             }
         }
     }
-    Py_DECREF(co_code);
     return stacks;
 }
 
@@ -1692,9 +1673,9 @@ marklines(PyCodeObject *code, int len)
     }
 
     while (_PyLineTable_NextAddressRange(&bounds)) {
-        assert(bounds.ar_start / (int)sizeof(_Py_CODEUNIT) < len);
+        assert(bounds.ar_start < len);
         if (bounds.ar_line != last_line && bounds.ar_line != -1) {
-            linestarts[bounds.ar_start / sizeof(_Py_CODEUNIT)] = bounds.ar_line;
+            linestarts[bounds.ar_start] = bounds.ar_line;
             last_line = bounds.ar_line;
         }
     }
@@ -2254,6 +2235,10 @@ PyFrame_New(PyThreadState *tstate, PyCodeObject *code,
     if (func == NULL) {
         return NULL;
     }
+    if (_PyCode_GetExec(code) == NULL) {
+        Py_DECREF(func);
+        return NULL;
+    }
     PyFrameObject *f = _PyFrame_New_NoTrack(code);
     if (f == NULL) {
         Py_DECREF(func);
@@ -2263,8 +2248,7 @@ PyFrame_New(PyThreadState *tstate, PyCodeObject *code,
     f->f_frame = (_PyInterpreterFrame *)f->_f_frame_data;
     f->f_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
     // This frame needs to be "complete", so pretend that the first RESUME ran:
-    f->f_frame->instr_ptr = _PyIR_STUB_RESUMED;
-    _PyFrame_SetIRBlock(f->f_frame, &_PyIR_LowerStub);
+    f->f_frame->instr_ptr = f->f_frame->ir_words + code->_co_firsttraceable + 1;
     assert(!_PyFrame_IsIncomplete(f->f_frame));
     Py_DECREF(func);
     _PyObject_GC_TRACK(f);
@@ -2280,7 +2264,7 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
     PyCodeObject *co = _PyFrame_GetCode(frame);
     int lasti = _PyInterpreterFrame_LASTI(frame);
     if (!(lasti < 0
-          && _PyCode_CODE(co)->op.code == COPY_FREE_VARS
+          && _PyCode_InstrHandler(co, 0) == COPY_FREE_VARS
           && PyStackRef_FunctionCheck(frame->f_funcobj)))
     {
         /* Free vars are initialized */
@@ -2555,7 +2539,7 @@ PyFrame_GetLasti(PyFrameObject *frame)
     Py_BEGIN_CRITICAL_SECTION(frame);
     assert(!_PyFrame_IsIncomplete(frame->f_frame));
     int lasti = _PyInterpreterFrame_LASTI(frame->f_frame);
-    ret = lasti < 0 ? -1 : lasti * (int)sizeof(_Py_CODEUNIT);
+    ret = lasti;
     Py_END_CRITICAL_SECTION();
     return ret;
 }

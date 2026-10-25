@@ -924,6 +924,14 @@ w_complex_object(PyObject *v, WFILE *p)
             p->error = true;
             return;
         }
+        PyObject *co_fbinit = PyBytes_FromStringAndSize(
+            (const char *)_PyCode_FBINIT(co),
+            co->co_nfeedback * sizeof(uint32_t));
+        if (co_fbinit == NULL) {
+            Py_DECREF(co_code);
+            p->error = true;
+            return;
+        }
         W_TYPE(TYPE_CODE, p);
         w_long(co->co_argcount, p);
         w_long(co->co_posonlyargcount, p);
@@ -931,6 +939,7 @@ w_complex_object(PyObject *v, WFILE *p)
         w_long(co->co_stacksize, p);
         w_long(co->co_flags, p);
         w_object(co_code, p);
+        w_object(co_fbinit, p);
         w_object(co->co_consts, p);
         w_object(co->co_names, p);
         w_object(co->co_localsplusnames, p);
@@ -942,6 +951,7 @@ w_complex_object(PyObject *v, WFILE *p)
         w_object(co->co_linetable, p);
         w_object(co->co_exceptiontable, p);
         Py_DECREF(co_code);
+        Py_DECREF(co_fbinit);
         w_complete(v, p);
     }
     else if (PyObject_CheckBuffer(v)) {
@@ -1823,6 +1833,7 @@ r_object(RFILE *p)
             int stacksize;
             int flags;
             PyObject *code = NULL;
+            PyObject *fbinit = NULL;
             PyObject *consts = NULL;
             PyObject *names = NULL;
             PyObject *localsplusnames = NULL;
@@ -1865,6 +1876,9 @@ r_object(RFILE *p)
             code = r_object(p);
             if (code == NULL)
                 goto code_error;
+            fbinit = r_object(p);
+            if (fbinit == NULL)
+                goto code_error;
             consts = r_object(p);
             if (consts == NULL)
                 goto code_error;
@@ -1903,6 +1917,7 @@ r_object(RFILE *p)
                 .flags = flags,
 
                 .code = code,
+                .fbinit = fbinit,
                 .firstlineno = firstlineno,
                 .linetable = linetable,
 
@@ -1938,6 +1953,7 @@ r_object(RFILE *p)
                     "NULL object in marshal data for code object");
             }
             Py_XDECREF(code);
+            Py_XDECREF(fbinit);
             Py_XDECREF(consts);
             Py_XDECREF(names);
             Py_XDECREF(localsplusnames);

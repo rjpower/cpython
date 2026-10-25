@@ -216,21 +216,14 @@ parse_frame_buffer(
     }
 
     uintptr_t instruction_pointer = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.instr_ptr);
-
-    // Get tlbc_index for free threading builds
-    int32_t tlbc_index = 0;
-#ifdef Py_GIL_DISABLED
-    if (unwinder->debug_offsets.interpreter_frame.tlbc_index != 0) {
-        tlbc_index = GET_MEMBER(int32_t, frame, unwinder->debug_offsets.interpreter_frame.tlbc_index);
-    }
-#endif
+    uintptr_t ir_words = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.ir_words);
 
     *address_of_code_object = code_object;
 
     CodeObjectContext code_ctx = {
         .code_addr = code_object,
         .instruction_pointer = instruction_pointer,
-        .tlbc_index = tlbc_index,
+        .ir_words = ir_words,
     };
     return parse_code_object(unwinder, result, &code_ctx);
 }
@@ -286,19 +279,12 @@ parse_frame_from_chunks(
     }
 
     uintptr_t instruction_pointer = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.instr_ptr);
-
-    // Get tlbc_index for free threading builds
-    int32_t tlbc_index = 0;
-#ifdef Py_GIL_DISABLED
-    if (unwinder->debug_offsets.interpreter_frame.tlbc_index != 0) {
-        tlbc_index = GET_MEMBER(int32_t, frame, unwinder->debug_offsets.interpreter_frame.tlbc_index);
-    }
-#endif
+    uintptr_t ir_words = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.ir_words);
 
     CodeObjectContext code_ctx = {
         .code_addr = code_object,
         .instruction_pointer = instruction_pointer,
-        .tlbc_index = tlbc_index,
+        .ir_words = ir_words,
     };
     return parse_code_object(unwinder, result, &code_ctx);
 }

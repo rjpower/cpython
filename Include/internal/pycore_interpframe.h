@@ -5,9 +5,9 @@
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#include "pycore_code.h"          // _PyCode_CODE()
+#include "pycore_code.h"          // _PyCode_WORDS()
 #include "pycore_interpframe_structs.h" // _PyInterpreterFrame
-#include "pycore_ir.h"            // _PyIRBlock
+#include "pycore_ir.h"            // _PyCodeExec
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_PTR_ACQUIRE()
 #include "pycore_stackref.h"      // PyStackRef_AsPyObjectBorrow()
 #include "pycore_stats.h"         // CALL_STAT_INC()
@@ -26,79 +26,49 @@ static inline PyCodeObject *_PyFrame_GetCode(_PyInterpreterFrame *f) {
     return (PyCodeObject *)executable;
 }
 
-/* The IR block that frame->instr_ptr points into.  A frame that has not
- * started yet may still be at the stub of a code object that another frame
- * has lowered since. */
-static inline int
-_PyFrame_IsAtStub(const _PyInterpreterFrame *f)
+/* The executing copy of the code of f, which f->instr_ptr points into. */
+static inline _PyCodeExec *
+_PyFrame_Exec(_PyInterpreterFrame *f)
 {
-    return f->instr_ptr == _PyIR_LowerStub.words
-           || f->instr_ptr == _PyIR_STUB_RESUMED;
+    _PyCodeExec *exec = _PyFrame_GetCode(f)->_co_exec;
+    assert(exec != NULL && exec->words == f->ir_words);
+    return exec;
 }
 
-static inline _PyIRBlock *
-_PyFrame_IRBlock(_PyInterpreterFrame *f)
-{
-    if (_PyFrame_IsAtStub(f)) {
-        return &_PyIR_LowerStub;
-    }
-    _PyIRBlock *block = _PyFrame_GetCode(f)->_co_ir;
-    // A frame that was in the code when it was lowered again stays in the
-    // fused block until its next dispatch.  The word before a block counts.
-    _PyIRBlock *fused = block->fused;
-    if (fused != NULL && f->instr_ptr >= fused->words - 1
-        && f->instr_ptr <= fused->words + fused->nwords)
-    {
-        return fused;
-    }
-    return block;
-}
-
-static inline _PyIRWord *
-_PyFrame_IRWords(_PyInterpreterFrame *f)
-{
-    return _PyFrame_IRBlock(f)->words;
-}
-
-/* The bytecode offset of the instruction at instr, which is f_lasti for
- * frame->instr_ptr.  The word before the block, which the unwinding of a
- * frame that has not finished an instruction reads, is at offset -1, as the
- * code unit before the bytecode is. */
+/* The word index of the instruction at instr, which is f_lasti for
+ * frame->instr_ptr.  The word before the first, which the unwinding of a
+ * frame that has not finished an instruction reads, is at -1. */
 static inline int
 _PyFrame_InstrOffset(_PyInterpreterFrame *f, const _PyIRWord *instr)
 {
-    if (instr == _PyIR_STUB_RESUMED) {
-        return _PyFrame_GetCode(f)->_co_firsttraceable + 1;
-    }
-    _PyIRBlock *block = _PyFrame_IRBlock(f);
-    if (instr == block->words - 1) {
-        return -1;
-    }
-    return _PyIR_Anchor(block, instr);
+    return (int)(instr - f->ir_words);
 }
 
-/* The first word of the instruction that starts at a bytecode offset. */
+/* The word of the instruction at a word index. */
 static inline _PyIRWord *
 _PyFrame_InstrAt(_PyInterpreterFrame *f, int offset)
 {
-    return _PyIR_InstrAt(_PyFrame_IRBlock(f), offset);
+    return f->ir_words + offset;
 }
 
-/* Set the bases that the handlers of the frame index, for block, which
+/* Set the bases that the handlers of the frame index, for exec, which
  * frame->instr_ptr points into. */
 static inline void
-_PyFrame_SetIRBlock(_PyInterpreterFrame *frame, const _PyIRBlock *block)
+_PyFrame_SetExec(_PyInterpreterFrame *frame, const _PyCodeExec *exec)
 {
-    frame->ir_words = block->words;
-    frame->ir_feedback = block->entries;
+    frame->ir_words = exec->words;
+    frame->ir_feedback = exec->entries;
 }
 
+/* Start a frame of code, whose executing copy exists: _PyCode_GetExec()
+ * has succeeded for it, which the call paths ensure. */
 static inline void
 _PyFrame_InitIRInstrPtr(_PyInterpreterFrame *frame, PyCodeObject *code)
 {
-    _PyIRBlock *block = (_PyIRBlock *)FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_ir);
-    frame->instr_ptr = block->words;
-    _PyFrame_SetIRBlock(frame, block);
+    _PyCodeExec *exec = (_PyCodeExec *)FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
+    assert(exec != NULL);
+    frame->instr_ptr = exec->words;
+    _PyFrame_SetExec(frame, exec);
 #ifdef Py_GIL_DISABLED
     frame->tlbc_index = 0;
 #endif
@@ -148,18 +118,12 @@ _PyFrame_SafeGetLasti(struct _PyInterpreterFrame *f)
         return -1;
     }
 
-    if (f->instr_ptr == _PyIR_LowerStub.words) {
-        return 0;
-    }
-    if (f->instr_ptr == _PyIR_STUB_RESUMED) {
-        return (co->_co_firsttraceable + 1) * (int)sizeof(_Py_CODEUNIT);
-    }
-    _PyIRBlock *block = co->_co_ir;
-    if (block == NULL || f->instr_ptr < block->words
-        || f->instr_ptr >= block->words + block->nwords) {
+    _PyCodeExec *exec = co->_co_exec;
+    if (exec == NULL || f->instr_ptr < exec->words
+        || f->instr_ptr >= exec->words + exec->nwords) {
         return -1;
     }
-    return _PyIR_Anchor(block, f->instr_ptr) * (int)sizeof(_Py_CODEUNIT);
+    return (int)(f->instr_ptr - exec->words);
 }
 
 static inline PyFunctionObject *_PyFrame_GetFunction(_PyInterpreterFrame *f) {

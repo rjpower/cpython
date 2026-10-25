@@ -543,3 +543,12 @@ handle API; eight-byte object header; frames without a stack pointer and
 with overlapping argument windows; shapes default on with unboxed slot
 kinds. Nine steps with gates and budgets; note 03 (deferred refcounting) is
 dropped. Awaiting the user's decisions on section 7 before any agent starts.
+
+### 2026-10-25 — Phase 2 approved; step 1 launched
+
+User approved note 06 with two amendments (conservative scanning is a first
+pass, precise moving collector becomes step 10; shape-in-header decided at
+6c). Step 1 (fixed-width encoding and handlers on the existing lowering)
+launched with one Opus agent, budget 2 days, in this worktree. Tier 0 is
+deleted in step 1 rather than carried through; `Python/jit_x86.h` is kept for
+step 8. Hourly wake cadence resumed.

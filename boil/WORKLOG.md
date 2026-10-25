@@ -440,3 +440,27 @@ borrow of an absorbed local was tracked, and a failed guard jumped to the
 family head without closing it. ir_generator now emits IR_DROP_BORROW before
 every deopt or exit for held borrows (51 sites; no-op outside the debug
 build). dev-stackrefdebug boots and passes the targeted set again.
+
+### Tier 0 complete in its worktree (ca33452e860, f86efd25c98, 86d85955acc)
+
+Three commits: call-threaded code; inline fast paths for locals, constants,
+jumps, bool branches, int32/double add, sub, mul and compare, FOR_ITER_RANGE,
+with invalidation by patching and frame switches inside the machine code;
+tests (24), design note 05, and a volatile store that breaks a 16-byte stash
+copy clang had merged (call loop 128.9 -> 117.5 cycles; interpreter 105.7).
+
+Result, release clang-21 builds, base / tier 0: nbody 1490M / 1269M
+instructions but 467M / 482M cycles; richards 646M / 638M, 248M / 264M; go
+1432M / 1407M, 532M / 600M. Micro loops: int add 103 -> 29 instructions per
+iteration, empty loop 87 -> 36. Fewer instructions, more cycles: L1i misses
+rise 2.6-2.8x and op-cache fetches 24-35%, explaining roughly half of go's
+gap; indirect and return mispredicts fall; the handler copy and frame switch
+are under 1%. Code-size experiments (shared stub, higher threshold,
+contiguous arena) did not help. Ships behind --with-tier0, off by default.
+Open: test_tier0 leaks under -R 3:3 (stabilises after ~9 runs). Design note 05
+lists what tier 1 needs: values in registers across instructions, inline
+attribute/global/call paths, one handler copy, state in registers, hot-only
+compilation laid out together.
+
+Next: rebase onto head (IR-only deleted tier1_generator.py; IR_DROP_BORROW),
+fix or narrow the leak, land, then history fix, results table, PR.

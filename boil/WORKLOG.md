@@ -690,3 +690,33 @@ snapshot (+4.0%, the absorption left to 2b; the agent measured +3.4%). The
 ports SDK interpreter now names build/dev-default, since baseline-default is
 a VPATH build of this tree and can no longer create a venv against the old
 Lib. Step 2b (folding) launches now.
+
+### 2026-10-25 — Step 2b, day 1: loads fold into their consumers
+
+Item 1 landed (e06e93ea0db, 9fe2885ef6e). A LOAD_FAST_BORROW keeps no word
+when the next word reads it through an input field, on the same line and in
+the same block (option A, confirmed by the coordinator). Handlers that may
+read a local this way resync stack_pointer from dst, from a new TOP field,
+or by counting local fields. The LOAD_FAST and STORE_FAST superinstructions
+are no longer built. `def g(o): return o.x + o.y` is four words after RESUME,
+as note 06 section 2.2 shows; the numeric loop is nine words per iteration,
+six once STORE_FAST folds (item 2) and the pending local under a call is
+handled (step 3).
+
+Rung 2 and the full dev-debug suite pass, but for the known
+test_remote_exec_deleted_static_executable. Fixes on the way: an error that
+unwinds out of a frame resumes the caller one word later, since the calling
+word may now start a try block; the frame-state simulation in
+frameobject.c pushes the folded inputs; Programs/test_frozenmain.h is
+regenerated (magic 3708).
+
+Py_STATS dispatches, `--worker -l 2`:
+
+| benchmark | 2a | item 1 | change | LOAD_FAST* 2a | LOAD_FAST* item 1 |
+|---|---|---|---|---|---|
+| richards | 83.50M | 67.74M | -18.9% | 19.80M (23.7%) | 4.03M (6.0%) |
+| go | 238.06M | 197.69M | -17.0% | 62.19M (26.1%) | 21.55M (10.9%) |
+
+The loads left are those option A does not fold: under RETURN_VALUE, a
+window format (31% of richards' remaining, 19% of go's), under a call or a
+global load, under COPY (item 3) and under TO_BOOL (item 4).

@@ -68,6 +68,8 @@ struct _PyInterpreterFrame {
     int8_t prefix##_hooks_inited;                                           \
     int8_t prefix##_closed;                                                 \
     int8_t prefix##_running_async;                                          \
+    /* IR words from the resuming instruction to where a yield returns */   \
+    uint8_t prefix##_yield_offset;                                          \
     /* The frame */                                                         \
     int8_t prefix##_frame_state;                                            \
     _PyInterpreterFrame prefix##_iframe;                                    \

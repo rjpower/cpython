@@ -121,7 +121,6 @@ IR_INSTRUCTION_MACROS = {
     "INSTR_OPCODE": "IR_HANDLER(*{0p})",
     "INSTR_OPARG": "_PyIR_Oparg(frame, {0})",
     "INSTRUCTION_SIZE_OF": "{size}u",
-    "RETURN_TO_CALLER": "LOAD_IP(_PyIR_YieldReturnOffset(frame))",
     "INSTR_OFFSET_OF": "_PyFrame_InstrOffset(frame, {0})",
     "INSTR_AT_OFFSET": "_PyFrame_InstrAt(frame, {0})",
     "CURRENT_OFFSET": "_PyFrame_InstrOffset(frame, next_instr - 1)",

@@ -7762,6 +7762,7 @@
                 tstate->exc_info = &gen->gi_exc_state;
                 pushed_frame->previous = frame;
                 frame->return_offset = (uint16_t)( 2u + oparg);
+                gen->gi_yield_offset = 2u ;
                 gen_frame = PyStackRef_Wrap(pushed_frame);
             }
             // _PUSH_FRAME
@@ -9994,7 +9995,6 @@
                 gen_frame->previous = NULL;
                 ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
                 FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
-                assert(INLINE_CACHE_ENTRIES_SEND == INLINE_CACHE_ENTRIES_FOR_ITER);
                 #ifdef Py_DEBUG
                 if (!PyStackRef_IsNone(frame->f_executable)) {
                     Py_ssize_t i = _PyFrame_InstrOffset(frame, frame->instr_ptr);
@@ -10002,10 +10002,11 @@
                     int opcode = _Py_GetBaseCodeUnit(_PyFrame_GetCode(frame), (int)i).op.code;
                     assert(opcode == SEND || opcode == FOR_ITER);
                 }
+                assert(gen->gi_yield_offset == _PyIR_YieldReturnOffset(frame));
                 #endif
                 stack_pointer = _PyFrame_GetStackPointer(frame);
                 _PyFrame_StackPointerInvalidate(frame);
-                LOAD_IP(_PyIR_YieldReturnOffset(frame));
+                LOAD_IP(gen->gi_yield_offset);
                 value = temp;
                 LLTRACE_RESUME_FRAME();
             }
@@ -14074,6 +14075,7 @@
                     tstate->exc_info = &gen->gi_exc_state;
                     assert( 1u + oparg <= UINT16_MAX);
                     frame->return_offset = (uint16_t)( 1u + oparg);
+                    gen->gi_yield_offset = 1u ;
                     assert(gen_frame->previous == NULL);
                     gen_frame->previous = frame;
                     DISPATCH_INLINED(gen_frame);
@@ -14255,6 +14257,7 @@
                 tstate->exc_info = &gen->gi_exc_state;
                 assert( 1u + oparg <= UINT16_MAX);
                 frame->return_offset = (uint16_t)( 1u + oparg);
+                gen->gi_yield_offset = 1u ;
                 pushed_frame->previous = frame;
                 gen_frame = PyStackRef_Wrap(pushed_frame);
             }
@@ -16643,7 +16646,6 @@
                 gen_frame->previous = NULL;
                 ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
                 FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
-                assert(INLINE_CACHE_ENTRIES_SEND == INLINE_CACHE_ENTRIES_FOR_ITER);
                 #ifdef Py_DEBUG
                 if (!PyStackRef_IsNone(frame->f_executable)) {
                     Py_ssize_t i = _PyFrame_InstrOffset(frame, frame->instr_ptr);
@@ -16651,10 +16653,11 @@
                     int opcode = _Py_GetBaseCodeUnit(_PyFrame_GetCode(frame), (int)i).op.code;
                     assert(opcode == SEND || opcode == FOR_ITER);
                 }
+                assert(gen->gi_yield_offset == _PyIR_YieldReturnOffset(frame));
                 #endif
                 stack_pointer = _PyFrame_GetStackPointer(frame);
                 _PyFrame_StackPointerInvalidate(frame);
-                LOAD_IP(_PyIR_YieldReturnOffset(frame));
+                LOAD_IP(gen->gi_yield_offset);
                 value = temp;
                 LLTRACE_RESUME_FRAME();
             }

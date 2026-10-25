@@ -1607,6 +1607,7 @@ dummy_func(
                 tstate->exc_info = &gen->gi_exc_state;
                 assert(INSTRUCTION_SIZE + oparg <= UINT16_MAX);
                 frame->return_offset = (uint16_t)(INSTRUCTION_SIZE + oparg);
+                gen->gi_yield_offset = INSTRUCTION_SIZE;
                 assert(gen_frame->previous == NULL);
                 gen_frame->previous = frame;
                 DISPATCH_INLINED(gen_frame);
@@ -1651,6 +1652,7 @@ dummy_func(
             tstate->exc_info = &gen->gi_exc_state;
             assert(INSTRUCTION_SIZE + oparg <= UINT16_MAX);
             frame->return_offset = (uint16_t)(INSTRUCTION_SIZE + oparg);
+            gen->gi_yield_offset = INSTRUCTION_SIZE;
             pushed_frame->previous = frame;
             gen_frame = PyStackRef_Wrap(pushed_frame);
         }
@@ -1750,8 +1752,6 @@ dummy_func(
             gen_frame->previous = NULL;
             ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
             FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
-            /* We don't know which of these is relevant here, so keep them equal */
-            assert(INLINE_CACHE_ENTRIES_SEND == INLINE_CACHE_ENTRIES_FOR_ITER);
             #ifdef Py_DEBUG
             if (!PyStackRef_IsNone(frame->f_executable)) {
                 Py_ssize_t i = INSTR_OFFSET_OF(frame->instr_ptr);
@@ -1759,9 +1759,10 @@ dummy_func(
                 int opcode = _Py_GetBaseCodeUnit(_PyFrame_GetCode(frame), (int)i).op.code;
                 assert(opcode == SEND || opcode == FOR_ITER);
             }
+            assert(gen->gi_yield_offset == _PyIR_YieldReturnOffset(frame));
             #endif
             RELOAD_STACK();
-            RETURN_TO_CALLER();
+            LOAD_IP(gen->gi_yield_offset);
             value = temp;
             LLTRACE_RESUME_FRAME();
         }
@@ -3835,6 +3836,7 @@ dummy_func(
             pushed_frame->previous = frame;
             // oparg is the return offset from the next instruction.
             frame->return_offset = (uint16_t)(INSTRUCTION_SIZE + oparg);
+            gen->gi_yield_offset = INSTRUCTION_SIZE;
             gen_frame = PyStackRef_Wrap(pushed_frame);
         }
 

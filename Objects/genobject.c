@@ -273,6 +273,9 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
     _PyErr_StackItem *prev_exc_info = tstate->exc_info;
     gen->gi_exc_state.previous_item = prev_exc_info;
     tstate->exc_info = &gen->gi_exc_state;
+    /* A yield returns to the trampoline's second INTERPRETER_EXIT, one word
+       past the entry frame's instr_ptr (Python/ceval.c). */
+    gen->gi_yield_offset = 1;
 
     if (exc) {
         assert(_PyErr_Occurred(tstate));

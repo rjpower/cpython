@@ -284,6 +284,34 @@ class LoweringTest(unittest.TestCase):
             next(g)
 
     @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
+    def test_yield_to_each_kind_of_resumer(self):
+        # A yield returns past the instruction that resumed the generator:
+        # FOR_ITER_GEN (two words), SEND_GEN (one) or the trampoline of a
+        # C-level next() (one).  One generator alternates between all three.
+        def counter():
+            n = 0
+            while True:
+                n += 1
+                yield n
+
+        def delegate(g):
+            yield from g
+
+        def f(g, d, rounds):
+            seen = []
+            for n in g:
+                seen += [n, next(g), next(d)]
+                if len(seen) >= 3 * rounds:
+                    return seen
+
+        rounds = 2 * _testinternalcapi.SPECIALIZATION_THRESHOLD
+        g = counter()
+        self.assertEqual(f(g, delegate(g), rounds),
+                         list(range(1, 3 * rounds + 1)))
+        if SPECIALIZES:
+            self.assertIn("FOR_ITER_GEN", handlers(f))
+            self.assertIn("SEND_GEN", handlers(delegate))
+
     def test_compare_and_branch(self):
         # A specialised compare whose result a POP_JUMP_IF_FALSE or
         # POP_JUMP_IF_TRUE consumes runs the jump too; the jump keeps its

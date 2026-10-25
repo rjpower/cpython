@@ -142,8 +142,6 @@ STACK_INSTRUCTION_MACROS = {
     "INSTR_OPARG": "{0p}->op.arg",
     # The size of an instruction of family {0}, in units of next_instr.
     "INSTRUCTION_SIZE_OF": "1 + INLINE_CACHE_ENTRIES_{0}",
-    # Resume the caller of a generator that yields, after its SEND or FOR_ITER.
-    "RETURN_TO_CALLER": "LOAD_IP(1 + INLINE_CACHE_ENTRIES_SEND)",
     # The bytecode offset of the instruction at {0}, and the instruction at
     # bytecode offset {0}.
     "INSTR_OFFSET_OF": "{0} - _PyFrame_GetBytecode(frame)",

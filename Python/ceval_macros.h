@@ -682,7 +682,10 @@ static_assert(IR_BORROW == Py_TAG_REFCNT,
     _PyIR_InstrFeedback(_PyFrame_IRBlock(FRAME), (INSTR), (HANDLER))
 
 /* Where a generator returns to in its caller: past the SEND or FOR_ITER
- * at the caller's instr_ptr, or the trampoline's INTERPRETER_EXIT. */
+ * at the caller's instr_ptr, or the trampoline's INTERPRETER_EXIT.
+ * YIELD_VALUE reads the offset from gi_yield_offset, which the resuming
+ * instruction records, rather than through this chain of dependent loads;
+ * debug builds check that the two agree. */
 static inline int
 _PyIR_YieldReturnOffset(_PyInterpreterFrame *frame)
 {

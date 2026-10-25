@@ -1907,8 +1907,7 @@ clear_thread_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
     assert(frame->owner == FRAME_OWNED_BY_THREAD);
     // Make sure that this is, indeed, the top frame. We can't check this in
     // _PyThreadState_PopFrame, since f_code is already cleared at that point:
-    assert((PyObject **)frame + _PyFrame_GetCode(frame)->co_framesize ==
-        tstate->datastack_top);
+    assert((PyObject **)frame == tstate->datastack_limit);
     assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
     _PyFrame_ClearExceptCode(frame);
     PyStackRef_CLEAR(frame->f_executable);
@@ -1979,7 +1978,7 @@ _PyEvalFramePushAndInit(PyThreadState *tstate, _PyStackRef func,
     if (frame == NULL) {
         goto fail;
     }
-    _PyFrame_Initialize(tstate, frame, func, locals, code, frame->owned_slots, 0, previous);
+    _PyFrame_Initialize(tstate, frame, func, locals, code, frame->base, 0, previous);
     if (initialize_locals(tstate, func_obj, frame->base, args, argcount, kwnames)) {
         assert(frame->owner == FRAME_OWNED_BY_THREAD);
         _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);

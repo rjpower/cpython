@@ -231,8 +231,10 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
 #ifdef Py_DEBUG
     dest->lltrace = src->lltrace;
 #endif
+    // A move: the slots that src leaves behind may be the caller's
     for (int i = 0; i < nslots; i++) {
         dest->base[i] = PyStackRef_MakeHeapSafe(src->base[i]);
+        src->base[i] = PyStackRef_NULL;
     }
 }
 
@@ -399,7 +401,25 @@ _PyThreadState_HasStackSpace(PyThreadState *tstate, int size)
         size < tstate->datastack_limit - tstate->datastack_top;
 }
 
-// Exported for external JIT support
+/* Push a frame header and nslots slots, the header onto the frame stack and
+ * the slots onto the value stack.  Must be guarded by
+ * _PyThreadState_HasStackSpace(), for nslots + FRAME_SPECIALS_SIZE. */
+static inline _PyInterpreterFrame *
+_PyThreadState_PushFrameUnchecked(PyThreadState *tstate, int nslots)
+{
+    _PyInterpreterFrame *frame =
+        (_PyInterpreterFrame *)(tstate->datastack_limit - FRAME_SPECIALS_SIZE);
+    frame->base = (_PyStackRef *)tstate->datastack_top;
+    frame->saved_top = frame->base;
+    tstate->datastack_limit = (PyObject **)frame;
+    tstate->datastack_top += nslots;
+    assert(tstate->datastack_top < tstate->datastack_limit);
+    return frame;
+}
+
+/* Push a frame of size words, a header and size - FRAME_SPECIALS_SIZE
+ * slots, on a new chunk if there is no room.
+ * Exported for external JIT support */
 PyAPI_FUNC(_PyInterpreterFrame *)
 _PyThreadState_PushFrame(PyThreadState *tstate, size_t size);
 
@@ -414,11 +434,10 @@ _PyFrame_PushUnchecked(PyThreadState *tstate, _PyStackRef func, int null_locals_
     CALL_STAT_INC(frames_pushed);
     PyFunctionObject *func_obj = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(func);
     PyCodeObject *code = (PyCodeObject *)func_obj->func_code;
-    _PyInterpreterFrame *new_frame = (_PyInterpreterFrame *)tstate->datastack_top;
-    tstate->datastack_top += code->co_framesize;
-    assert(tstate->datastack_top < tstate->datastack_limit);
+    _PyInterpreterFrame *new_frame = _PyThreadState_PushFrameUnchecked(
+        tstate, _PyFrame_NumSlotsForCodeObject(code));
     _PyFrame_Initialize(tstate, new_frame, func, NULL, code,
-                        new_frame->owned_slots, null_locals_from, previous);
+                        new_frame->base, null_locals_from, previous);
     return new_frame;
 }
 
@@ -428,11 +447,9 @@ static inline _PyInterpreterFrame *
 _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int return_slot, _PyInterpreterFrame * previous)
 {
     CALL_STAT_INC(frames_pushed);
-    _PyInterpreterFrame *frame = (_PyInterpreterFrame *)tstate->datastack_top;
-    tstate->datastack_top += code->co_framesize;
-    assert(tstate->datastack_top < tstate->datastack_limit);
+    int nslots = _PyFrame_NumSlotsForCodeObject(code);
+    _PyInterpreterFrame *frame = _PyThreadState_PushFrameUnchecked(tstate, nslots);
     frame->previous = previous;
-    frame->base = frame->owned_slots;
     frame->f_funcobj = PyStackRef_None;
     frame->f_executable = PyStackRef_FromPyObjectNew(code);
 #ifdef Py_DEBUG
@@ -447,7 +464,6 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
 #ifdef Py_DEBUG
     frame->lltrace = 0;
 #endif
-    int nslots = _PyFrame_NumSlotsForCodeObject(code);
     assert(return_slot < nslots);
     frame->return_slot = (uint16_t)return_slot;
     for (int i = 0; i < nslots; i++) {

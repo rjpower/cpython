@@ -36,6 +36,9 @@ struct _PyInterpreterFrame {
      * thread's value stack; a generator and a frame object keep them in
      * owned_slots. */
     _PyStackRef *base;
+    /* For a frame on the frame stack, the top of the value stack before it
+     * was pushed, which popping it restores */
+    _PyStackRef *saved_top;
     _PyStackRef f_funcobj; /* Deferred or strong reference. Only valid if not on C stack */
     PyObject *f_globals; /* Borrowed reference. Only valid if not on C stack */
     PyObject *f_builtins; /* Borrowed reference. Only valid if not on C stack */

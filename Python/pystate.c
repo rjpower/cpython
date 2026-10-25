@@ -3115,9 +3115,20 @@ _PyInterpreterState_HasFeature(PyInterpreterState *interp, unsigned long feature
 
 #define MINIMUM_OVERHEAD 1000
 
+/* The end of the frame stack in chunk: its first header ends one word
+ * before the end of the chunk, which keeps a frame header and the word after
+ * it, its owned_slots field, inside the chunk. */
 static PyObject **
-push_chunk(PyThreadState *tstate, int size)
+chunk_frames_end(_PyStackChunk *chunk)
 {
+    return (PyObject **)((char *)chunk + chunk->size) - 1;
+}
+
+/* Push a frame header and nslots slots onto a new chunk */
+static _PyInterpreterFrame *
+push_chunk(PyThreadState *tstate, int nslots)
+{
+    int size = nslots + FRAME_SPECIALS_SIZE + 1;
     int allocate_size = _PY_DATA_STACK_CHUNK_SIZE;
     while (allocate_size < (int)sizeof(PyObject*)*(size + MINIMUM_OVERHEAD)) {
         allocate_size *= 2;
@@ -3137,46 +3148,49 @@ push_chunk(PyThreadState *tstate, int size)
             return NULL;
         }
     }
+    // The root chunk's value stack starts empty
+    _PyStackRef *saved_top = new->previous == NULL ?
+        (_PyStackRef *)&new->data[0] : (_PyStackRef *)tstate->datastack_top;
     if (tstate->datastack_chunk) {
-        tstate->datastack_chunk->top = tstate->datastack_top -
+        // What popping the frame restores, with saved_top
+        tstate->datastack_chunk->top = tstate->datastack_limit -
                                        &tstate->datastack_chunk->data[0];
     }
     tstate->datastack_chunk = new;
-    tstate->datastack_limit = (PyObject **)(((char *)new) + allocate_size);
-    // When new is the "root" chunk (i.e. new->previous == NULL), we can keep
-    // _PyThreadState_PopFrame from freeing it later by "skipping" over the
-    // first element:
-    PyObject **res = &new->data[new->previous == NULL];
-    tstate->datastack_top = res + size;
-    return res;
+    _PyInterpreterFrame *frame =
+        (_PyInterpreterFrame *)(chunk_frames_end(new) - FRAME_SPECIALS_SIZE);
+    frame->base = (_PyStackRef *)&new->data[0];
+    frame->saved_top = saved_top;
+    tstate->datastack_limit = (PyObject **)frame;
+    tstate->datastack_top = (PyObject **)(frame->base + nslots);
+    return frame;
 }
 
 _PyInterpreterFrame *
 _PyThreadState_PushFrame(PyThreadState *tstate, size_t size)
 {
     assert(size < INT_MAX/sizeof(PyObject *));
+    assert(size >= (size_t)FRAME_SPECIALS_SIZE);
     if (_PyThreadState_HasStackSpace(tstate, (int)size)) {
-        _PyInterpreterFrame *res = (_PyInterpreterFrame *)tstate->datastack_top;
-        tstate->datastack_top += size;
-        return res;
+        return _PyThreadState_PushFrameUnchecked(
+            tstate, (int)size - FRAME_SPECIALS_SIZE);
     }
-    return (_PyInterpreterFrame *)push_chunk(tstate, (int)size);
+    return push_chunk(tstate, (int)size - FRAME_SPECIALS_SIZE);
 }
 
 void
 _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame * frame)
 {
-    assert(tstate->datastack_chunk);
-    PyObject **base = (PyObject **)frame;
-    if (base == &tstate->datastack_chunk->data[0]) {
-        _PyStackChunk *chunk = tstate->datastack_chunk;
+    _PyStackChunk *chunk = tstate->datastack_chunk;
+    assert(chunk);
+    assert((PyObject **)frame == tstate->datastack_limit);
+    PyObject **header_end = (PyObject **)frame + FRAME_SPECIALS_SIZE;
+    // The root chunk stays, for the next frame
+    if (header_end == chunk_frames_end(chunk) && chunk->previous != NULL) {
         _PyStackChunk *previous = chunk->previous;
         _PyStackChunk *cached = tstate->datastack_cached_chunk;
-        // push_chunk ensures that the root chunk is never popped:
-        assert(previous);
-        tstate->datastack_top = &previous->data[previous->top];
+        tstate->datastack_limit = &previous->data[previous->top];
         tstate->datastack_chunk = previous;
-        tstate->datastack_limit = (PyObject **)(((char *)previous) + previous->size);
         chunk->previous = NULL;
         if (cached != NULL) {
             _PyObject_VirtualFree(cached, cached->size);
@@ -3184,10 +3198,10 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame * frame)
         tstate->datastack_cached_chunk = chunk;
     }
     else {
-        assert(tstate->datastack_top);
-        assert(tstate->datastack_top >= base);
-        tstate->datastack_top = base;
+        tstate->datastack_limit = header_end;
     }
+    tstate->datastack_top = (PyObject **)frame->saved_top;
+    assert(tstate->datastack_top < tstate->datastack_limit);
 }
 
 

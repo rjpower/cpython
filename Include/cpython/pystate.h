@@ -195,6 +195,9 @@ struct _ts {
     /* Unique thread state id. */
     uint64_t id;
 
+    /* Each chunk holds two stacks that grow towards each other: the value
+     * stack of frame slots from the start, up to datastack_top, and the
+     * frame stack of frame headers from the end, down to datastack_limit. */
     _PyStackChunk *datastack_chunk;
     PyObject **datastack_top;
     PyObject **datastack_limit;

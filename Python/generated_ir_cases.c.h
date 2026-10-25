@@ -22,12 +22,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_ADD;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -49,6 +49,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -69,7 +70,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -80,7 +81,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -117,6 +118,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -129,9 +131,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_ADD_FLOAT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
@@ -142,12 +144,13 @@
             _PyStackRef value;
             // _BINARY_OP_ADD_FLOAT
             {
-                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 double a, b;
                 if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -174,6 +177,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -186,9 +190,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_ADD_INT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -199,19 +203,21 @@
             _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (!PyStackRef_IsCompactInt(left)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -250,6 +256,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -262,9 +269,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_ADD_UNICODE);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -278,13 +285,15 @@
             {
                 value = IR_SLOT(IR_FIELD_C(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(value))) {
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                value = IR_BORROW_KNOWN(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_BORROW_KNOWN(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
                 if (!PyUnicode_CheckExact(value_o)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -293,15 +302,17 @@
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyUnicode_CheckExact(o)) {
-                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -338,6 +349,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -350,12 +362,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_AND;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -377,6 +389,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -397,7 +410,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -408,7 +421,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -445,6 +458,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -457,9 +471,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_AND_INT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -470,19 +484,21 @@
             _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (!PyStackRef_IsCompactInt(left)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -513,6 +529,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -525,10 +542,10 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_EXTEND);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
@@ -552,7 +569,7 @@
                     BOX_STAT_INC(BINARY_OP_EXTEND);
                     IR_SLOT(IR_FIELD_B(this_instr)) = left;
                 }
-                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
                     right = PyStackRef_Box(right);
                     if (PyStackRef_IsInline(right)) {
@@ -563,7 +580,7 @@
                     BOX_STAT_INC(BINARY_OP_EXTEND);
                     IR_SLOT(IR_FIELD_C(this_instr)) = right;
                 }
-                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
@@ -578,8 +595,9 @@
             : (Py_TYPE(left_o) == d->lhs_type && Py_TYPE(right_o) == d->rhs_type);
                 _PyFrame_StackPointerInvalidate(frame);
                 if (!match) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -618,6 +636,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -630,12 +649,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_FLOOR_DIVIDE;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -657,6 +676,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -677,7 +697,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -688,7 +708,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -725,6 +745,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -737,9 +758,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_FLOOR_DIVIDE_INT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -750,19 +771,21 @@
             _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (!PyStackRef_IsCompactInt(left)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -772,8 +795,9 @@
                 right = value;
                 int32_t b = PyStackRef_CompactIntValue(right);
                 if (b == 0) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -810,6 +834,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -822,12 +847,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_ADD;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -849,6 +874,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -869,7 +895,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -880,7 +906,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -917,6 +943,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -929,9 +956,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_INPLACE_ADD_UNICODE);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -943,13 +970,15 @@
             {
                 value = IR_SLOT(IR_FIELD_C(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(value))) {
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                value = IR_BORROW_KNOWN(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_BORROW_KNOWN(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
                 if (!PyUnicode_CheckExact(value_o)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -958,15 +987,17 @@
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyUnicode_CheckExact(o)) {
-                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -978,14 +1009,13 @@
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 assert(PyUnicode_CheckExact(left_o));
                 assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(right)));
-                int next_oparg;
-                assert(IR_HANDLER(*next_instr) == STORE_FAST);
-                next_oparg = _PyIR_Oparg(frame, next_instr);
-                _PyStackRef *target_local = &GETLOCAL(next_oparg);
+                assert(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+                _PyStackRef *target_local = &IR_SLOT(IR_FIELD_A(this_instr));
                 assert(PyUnicode_CheckExact(left_o));
                 if (PyStackRef_AsPyObjectBorrow(*target_local) != left_o) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -1013,6 +1043,7 @@
             stack_pointer[0] = res;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -1025,12 +1056,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_AND;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -1052,6 +1083,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -1072,7 +1104,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -1083,7 +1115,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -1120,6 +1152,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -1132,12 +1165,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_FLOOR_DIVIDE;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -1159,6 +1192,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -1179,7 +1213,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -1190,7 +1224,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -1227,6 +1261,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -1239,12 +1274,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_LSHIFT;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -1266,6 +1301,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -1286,7 +1322,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -1297,7 +1333,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -1334,6 +1370,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -1346,12 +1383,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MATRIX_MULTIPLY;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -1373,6 +1410,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -1393,7 +1431,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -1404,7 +1442,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -1441,6 +1479,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -1453,12 +1492,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MULTIPLY;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -1480,6 +1519,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -1500,7 +1540,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -1511,7 +1551,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -1548,6 +1588,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -1560,12 +1601,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_OR;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -1587,6 +1628,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -1607,7 +1649,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -1618,7 +1660,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -1655,6 +1697,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -1667,12 +1710,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_POWER;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -1694,6 +1737,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -1714,7 +1758,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -1725,7 +1769,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -1762,6 +1806,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -1774,12 +1819,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_REMAINDER;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -1801,6 +1846,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -1821,7 +1867,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -1832,7 +1878,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -1869,6 +1915,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -1881,12 +1928,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_RSHIFT;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -1908,6 +1955,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -1928,7 +1976,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -1939,7 +1987,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -1976,6 +2024,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -1988,12 +2037,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_SUBTRACT;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -2015,6 +2064,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -2035,7 +2085,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -2046,7 +2096,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -2083,6 +2133,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -2095,12 +2146,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_TRUE_DIVIDE;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -2122,6 +2173,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -2142,7 +2194,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -2153,7 +2205,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -2190,6 +2242,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -2202,12 +2255,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_XOR;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -2229,6 +2282,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -2249,7 +2303,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -2260,7 +2314,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -2297,6 +2351,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -2309,12 +2364,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_LSHIFT;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -2336,6 +2391,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -2356,7 +2412,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -2367,7 +2423,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -2404,6 +2460,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -2416,9 +2473,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_LSHIFT_INT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -2429,19 +2486,21 @@
             _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (!PyStackRef_IsCompactInt(left)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2451,8 +2510,9 @@
                 right = value;
                 int32_t b = PyStackRef_CompactIntValue(right);
                 if (b < 0) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2491,6 +2551,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -2503,12 +2564,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MATRIX_MULTIPLY;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -2530,6 +2591,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -2550,7 +2612,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -2561,7 +2623,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -2598,6 +2660,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -2610,12 +2673,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MULTIPLY;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -2637,6 +2700,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -2657,7 +2721,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -2668,7 +2732,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -2705,6 +2769,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -2717,9 +2782,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_FLOAT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
@@ -2730,12 +2795,13 @@
             _PyStackRef value;
             // _BINARY_OP_MULTIPLY_FLOAT
             {
-                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 double a, b;
                 if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2762,6 +2828,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -2774,9 +2841,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_INT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -2787,19 +2854,21 @@
             _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (!PyStackRef_IsCompactInt(left)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2838,6 +2907,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -2850,12 +2920,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_OR;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -2877,6 +2947,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -2897,7 +2968,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -2908,7 +2979,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -2945,6 +3016,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -2957,9 +3029,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_OR_INT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -2970,19 +3042,21 @@
             _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (!PyStackRef_IsCompactInt(left)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3013,6 +3087,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -3025,12 +3100,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_POWER;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -3052,6 +3127,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -3072,7 +3148,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -3083,7 +3159,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -3120,6 +3196,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -3132,12 +3209,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_REMAINDER;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -3159,6 +3236,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -3179,7 +3257,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -3190,7 +3268,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -3227,6 +3305,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -3239,9 +3318,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_REMAINDER_INT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -3252,19 +3331,21 @@
             _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (!PyStackRef_IsCompactInt(left)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3274,8 +3355,9 @@
                 right = value;
                 int32_t b = PyStackRef_CompactIntValue(right);
                 if (b == 0) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3310,6 +3392,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -3322,12 +3405,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_RSHIFT;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -3349,6 +3432,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -3369,7 +3453,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -3380,7 +3464,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -3417,6 +3501,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -3429,9 +3514,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_RSHIFT_INT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -3442,19 +3527,21 @@
             _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (!PyStackRef_IsCompactInt(left)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3464,8 +3551,9 @@
                 right = value;
                 int32_t b = PyStackRef_CompactIntValue(right);
                 if (b < 0) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3498,6 +3586,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -3510,12 +3599,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBSCR;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -3537,6 +3626,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -3557,7 +3647,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -3568,7 +3658,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -3605,6 +3695,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -3617,9 +3708,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_DICT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef nos;
@@ -3633,18 +3724,21 @@
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!Py_TYPE(o)->tp_as_mapping) {
-                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (Py_TYPE(o)->tp_as_mapping->mp_subscript != _PyDict_Subscript) {
-                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3663,7 +3757,7 @@
                     BOX_STAT_INC(BINARY_OP_SUBSCR_DICT);
                     IR_SLOT(IR_FIELD_C(this_instr)) = sub_st;
                 }
-                sub_st = IR_BORROW_KNOWN(sub_st, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                sub_st = IR_BORROW_KNOWN(sub_st, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *sub = PyStackRef_AsPyObjectBorrow(sub_st);
                 PyObject *dict = PyStackRef_AsPyObjectBorrow(dict_st);
                 assert(Py_TYPE(dict)->tp_as_mapping->mp_subscript == _PyDict_Subscript);
@@ -3701,6 +3795,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -3713,11 +3808,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_GETITEM);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
+            if (IR_IS_LOCAL(IR_FIELD_A(this_instr))) {
+                stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
+                UPDATE_MISS_STATS(BINARY_OP);
+                IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
+            }
             _PyStackRef container;
             _PyStackRef getitem;
             _PyStackRef sub;
@@ -3725,6 +3825,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3741,31 +3842,35 @@
                     BOX_STAT_INC(BINARY_OP_SUBSCR_GETITEM);
                     IR_SLOT(IR_FIELD_B(this_instr)) = container;
                 }
-                container = IR_BORROW_KNOWN(container, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                container = IR_BORROW_KNOWN(container, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(container));
                 if (!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE)) {
-                    IR_DROP_BORROW(container, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(container, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
                 PyObject *getitem_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.getitem);
                 if (getitem_o == NULL) {
-                    IR_DROP_BORROW(container, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(container, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 assert(PyFunction_Check(getitem_o));
                 uint32_t cached_version = FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.getitem_version);
                 if (((PyFunctionObject *)getitem_o)->func_version != cached_version) {
-                    IR_DROP_BORROW(container, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(container, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(getitem_o);
                 assert(code->co_argcount == 2);
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
-                    IR_DROP_BORROW(container, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(container, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3773,7 +3878,7 @@
             }
             // _BINARY_OP_SUBSCR_INIT_CALL
             {
-                sub = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                sub = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 STAT_INC(BINARY_OP, hit);
                 _PyInterpreterFrame* pushed_frame = _PyFrame_PushUnchecked(tstate, getitem, 2, frame);
                 pushed_frame->localsplus[0] = container;
@@ -3814,9 +3919,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_INT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -3828,9 +3933,10 @@
             _PyStackRef ss;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3839,15 +3945,17 @@
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyList_CheckExact(o)) {
-                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3870,16 +3978,18 @@
                 PyObject *res_o = _PyList_GetItemRef((PyListObject*)list, index);
                 _PyFrame_StackPointerInvalidate(frame);
                 if (res_o == NULL) {
-                    IR_DROP_BORROW(list_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(list_st, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 res = PyStackRef_FromPyObjectSteal(res_o);
                 #else
                 if (index < 0 || index >= PyList_GET_SIZE(list)) {
-                    IR_DROP_BORROW(list_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(list_st, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3908,6 +4018,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -3920,9 +4031,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_SLICE);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef tos;
@@ -3937,13 +4048,15 @@
             {
                 tos = IR_SLOT(IR_FIELD_C(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                tos = IR_BORROW_KNOWN(tos, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PySlice_Check(o)) {
-                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3952,15 +4065,17 @@
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
-                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyList_CheckExact(o)) {
-                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -4007,6 +4122,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -4019,9 +4135,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_STR_INT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -4033,9 +4149,10 @@
             _PyStackRef i;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -4044,21 +4161,24 @@
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyUnicode_CheckExact(o)) {
-                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (!PyUnicode_IS_COMPACT_ASCII(o)) {
-                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -4071,14 +4191,16 @@
                 assert(PyUnicode_CheckExact(str));
                 Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
                 if (index < 0) {
-                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (PyUnicode_GET_LENGTH(str) <= index) {
-                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -4105,6 +4227,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -4117,9 +4240,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_TUPLE_INT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -4131,9 +4254,10 @@
             _PyStackRef ss;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -4142,15 +4266,17 @@
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyTuple_CheckExact(o)) {
-                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -4163,14 +4289,16 @@
                 assert(PyTuple_CheckExact(tuple));
                 Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
                 if (index < 0) {
-                    IR_DROP_BORROW(tuple_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(tuple_st, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (index >= PyTuple_GET_SIZE(tuple)) {
-                    IR_DROP_BORROW(tuple_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(tuple_st, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -4205,6 +4333,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -4217,9 +4346,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_USTR_INT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -4231,9 +4360,10 @@
             _PyStackRef i;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -4242,15 +4372,17 @@
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyUnicode_CheckExact(o)) {
-                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -4263,21 +4395,24 @@
                 assert(PyUnicode_CheckExact(str));
                 Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
                 if (index < 0) {
-                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (PyUnicode_GET_LENGTH(str) <= index) {
-                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 Py_UCS4 c = PyUnicode_READ_CHAR(str, index);
                 if (Py_ARRAY_LENGTH(_Py_SINGLETON(strings).ascii) <= c) {
-                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -4302,6 +4437,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -4314,12 +4450,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBTRACT;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -4341,6 +4477,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -4361,7 +4498,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -4372,7 +4509,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -4409,6 +4546,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -4421,9 +4559,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_FLOAT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
@@ -4434,12 +4572,13 @@
             _PyStackRef value;
             // _BINARY_OP_SUBTRACT_FLOAT
             {
-                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 double a, b;
                 if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -4466,6 +4605,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -4478,9 +4618,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_INT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -4491,19 +4631,21 @@
             _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (!PyStackRef_IsCompactInt(left)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -4542,6 +4684,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -4554,9 +4697,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_TRUEDIV_FLOAT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
@@ -4567,18 +4710,20 @@
             _PyStackRef value;
             // _BINARY_OP_TRUEDIV_FLOAT
             {
-                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 double a, b;
                 if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (b == 0.0) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -4605,6 +4750,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -4617,12 +4763,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_TRUE_DIVIDE;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -4644,6 +4790,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -4664,7 +4811,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -4675,7 +4822,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -4712,6 +4859,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -4724,12 +4872,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_XOR;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef lhs;
@@ -4751,6 +4899,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
@@ -4771,7 +4920,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = lhs;
                 }
-                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
                     rhs = PyStackRef_Box(rhs);
                     if (PyStackRef_IsInline(rhs)) {
@@ -4782,7 +4931,7 @@
                     BOX_STAT_INC(BINARY_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = rhs;
                 }
-                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
                 PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
@@ -4819,6 +4968,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -4831,9 +4981,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(BINARY_OP_XOR_INT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -4844,19 +4994,21 @@
             _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (!PyStackRef_IsCompactInt(left)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -4887,6 +5039,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -4899,9 +5052,9 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -3);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_D(next_instr - 1));
             INSTRUCTION_STATS(BINARY_SLICE);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -3);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -3);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_D(this_instr), -1);
@@ -4917,9 +5070,9 @@
             }
             // _BINARY_SLICE
             {
-                stop = IR_LOAD_BORROWED(IR_FIELD_D(this_instr), IR_FIELD_A(this_instr) + 2);
-                start = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
-                container = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                stop = IR_LOAD_BORROWED(IR_FIELD_D(this_instr), IR_STACK_SLOT() + -1);
+                start = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -2);
+                container = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -3);
                 stack_pointer[-3] = container;
                 stack_pointer[-2] = start;
                 stack_pointer[-1] = stop;
@@ -4958,6 +5111,7 @@
             stack_pointer[0] = res;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -4973,7 +5127,7 @@
             INSTRUCTION_STATS(BUILD_INTERPOLATION);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(2 + (oparg & 1)) + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -(2 + (oparg & 1)) + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(2 + (oparg & 1)));
             _PyStackRef value;
             _PyStackRef str;
@@ -5042,6 +5196,7 @@
             stack_pointer[0] = interpolation;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -5057,7 +5212,7 @@
             INSTRUCTION_STATS(BUILD_LIST);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(oparg) + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -(oparg) + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(oparg));
             _PyStackRef *values;
             _PyStackRef list;
@@ -5073,6 +5228,7 @@
             stack_pointer[-oparg] = list;
             stack_pointer += 1 - oparg;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -5088,7 +5244,7 @@
             INSTRUCTION_STATS(BUILD_MAP);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(oparg*2) + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -(oparg*2) + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(oparg*2));
             _PyStackRef *values;
             _PyStackRef map;
@@ -5106,6 +5262,7 @@
             stack_pointer[-oparg*2] = map;
             stack_pointer += 1 - oparg*2;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -5121,7 +5278,7 @@
             INSTRUCTION_STATS(BUILD_SET);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(oparg) + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -(oparg) + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(oparg));
             _PyStackRef *values;
             _PyStackRef set;
@@ -5176,6 +5333,7 @@
             stack_pointer[-oparg] = set;
             stack_pointer += 1 - oparg;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -5191,7 +5349,7 @@
             INSTRUCTION_STATS(BUILD_SLICE);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(oparg) + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -(oparg) + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(oparg));
             _PyStackRef *args;
             _PyStackRef slice;
@@ -5221,6 +5379,7 @@
             stack_pointer[0] = slice;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -5236,7 +5395,7 @@
             INSTRUCTION_STATS(BUILD_STRING);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(oparg) + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -(oparg) + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(oparg));
             _PyStackRef *pieces;
             _PyStackRef str;
@@ -5254,6 +5413,7 @@
             stack_pointer[-oparg] = str;
             stack_pointer += 1 - oparg;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -5266,11 +5426,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(BUILD_TEMPLATE);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef strings;
             _PyStackRef interpolations;
             _PyStackRef template;
@@ -5286,7 +5447,7 @@
                 BOX_STAT_INC(BUILD_TEMPLATE);
                 IR_SLOT(IR_FIELD_B(this_instr)) = strings;
             }
-            strings = IR_BORROW_KNOWN(strings, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+            strings = IR_BORROW_KNOWN(strings, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -2);
             if (Py_UNLIKELY(PyStackRef_IsInline(interpolations))) {
                 interpolations = PyStackRef_Box(interpolations);
                 if (PyStackRef_IsInline(interpolations)) {
@@ -5297,7 +5458,7 @@
                 BOX_STAT_INC(BUILD_TEMPLATE);
                 IR_SLOT(IR_FIELD_C(this_instr)) = interpolations;
             }
-            interpolations = IR_BORROW_KNOWN(interpolations, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+            interpolations = IR_BORROW_KNOWN(interpolations, IR_FIELD_C(this_instr), IR_FIELD_D(this_instr) + -1);
             PyObject *strings_o = PyStackRef_AsPyObjectBorrow(strings);
             PyObject *interpolations_o = PyStackRef_AsPyObjectBorrow(interpolations);
             stack_pointer[-2] = strings;
@@ -5326,6 +5487,7 @@
             stack_pointer[0] = template;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -5341,7 +5503,7 @@
             INSTRUCTION_STATS(BUILD_TUPLE);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -(oparg) + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -(oparg) + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -(oparg));
             _PyStackRef *values;
             _PyStackRef tup;
@@ -5354,6 +5516,7 @@
             stack_pointer[-oparg] = tup;
             stack_pointer += 1 - oparg;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -6898,12 +7061,13 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(CALL_INTRINSIC_1);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef value;
             _PyStackRef res;
             _PyStackRef v;
@@ -6919,7 +7083,7 @@
                     BOX_STAT_INC(CALL_INTRINSIC_1);
                     IR_SLOT(IR_FIELD_B(this_instr)) = value;
                 }
-                value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 assert(oparg <= MAX_INTRINSIC_1);
                 stack_pointer[-1] = value;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -6941,6 +7105,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -6953,11 +7118,11 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(CALL_INTRINSIC_2);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value2_st;
@@ -6980,7 +7145,7 @@
                     BOX_STAT_INC(CALL_INTRINSIC_2);
                     IR_SLOT(IR_FIELD_B(this_instr)) = value2_st;
                 }
-                value2_st = IR_BORROW_KNOWN(value2_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                value2_st = IR_BORROW_KNOWN(value2_st, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(value1_st))) {
                     value1_st = PyStackRef_Box(value1_st);
                     if (PyStackRef_IsInline(value1_st)) {
@@ -6991,7 +7156,7 @@
                     BOX_STAT_INC(CALL_INTRINSIC_2);
                     IR_SLOT(IR_FIELD_C(this_instr)) = value1_st;
                 }
-                value1_st = IR_BORROW_KNOWN(value1_st, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value1_st = IR_BORROW_KNOWN(value1_st, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 assert(oparg <= MAX_INTRINSIC_2);
                 PyObject *value1 = PyStackRef_AsPyObjectBorrow(value1_st);
                 PyObject *value2 = PyStackRef_AsPyObjectBorrow(value2_st);
@@ -7028,6 +7193,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -8961,11 +9127,13 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(CHECK_EG_MATCH);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
+            assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
             _PyStackRef exc_value_st;
             _PyStackRef match_type_st;
             _PyStackRef rest;
@@ -8982,7 +9150,7 @@
                 BOX_STAT_INC(CHECK_EG_MATCH);
                 IR_SLOT(IR_FIELD_B(this_instr)) = exc_value_st;
             }
-            exc_value_st = IR_BORROW_KNOWN(exc_value_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+            exc_value_st = IR_BORROW_KNOWN(exc_value_st, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -2);
             if (Py_UNLIKELY(PyStackRef_IsInline(match_type_st))) {
                 match_type_st = PyStackRef_Box(match_type_st);
                 if (PyStackRef_IsInline(match_type_st)) {
@@ -8993,7 +9161,7 @@
                 BOX_STAT_INC(CHECK_EG_MATCH);
                 IR_SLOT(IR_FIELD_C(this_instr)) = match_type_st;
             }
-            match_type_st = IR_BORROW_KNOWN(match_type_st, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+            match_type_st = IR_BORROW_KNOWN(match_type_st, IR_FIELD_C(this_instr), IR_FIELD_D(this_instr) + -1);
             PyObject *exc_value = PyStackRef_AsPyObjectBorrow(exc_value_st);
             PyObject *match_type = PyStackRef_AsPyObjectBorrow(match_type_st);
             stack_pointer[-2] = exc_value_st;
@@ -9076,11 +9244,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(CHECK_EXC_MATCH);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef b;
@@ -9095,7 +9264,7 @@
                 BOX_STAT_INC(CHECK_EXC_MATCH);
                 IR_SLOT(IR_FIELD_C(this_instr)) = right;
             }
-            right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr));
+            right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_FIELD_D(this_instr) + -1);
             if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
                 left = PyStackRef_Box(left);
                 if (PyStackRef_IsInline(left)) {
@@ -9130,6 +9299,7 @@
             stack_pointer[0] = b;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -9143,8 +9313,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CLEANUP_THROW);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -4 + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -4 + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -4);
+            assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
             _PyStackRef sub_iter;
             _PyStackRef null_in;
             _PyStackRef last_sent_val;
@@ -9236,7 +9407,7 @@
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(COMPARE_OP);
             IR_PREDICTED(COMPARE_OP);
             _PyIRWord* const this_instr = next_instr - 1;
@@ -9244,7 +9415,7 @@
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
@@ -9263,6 +9434,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_CompareOp(left, right, next_instr, oparg);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(COMPARE_OP);
@@ -9281,7 +9453,7 @@
                     BOX_STAT_INC(COMPARE_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = left;
                 }
-                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
                     right = PyStackRef_Box(right);
                     if (PyStackRef_IsInline(right)) {
@@ -9292,7 +9464,7 @@
                     BOX_STAT_INC(COMPARE_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = right;
                 }
-                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert((oparg >> 5) <= Py_GE);
@@ -9342,6 +9514,7 @@
             stack_pointer[0] = res;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -9354,12 +9527,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(COMPARE_OP_FLOAT);
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -9370,9 +9543,10 @@
             _PyStackRef r;
             // _GUARD_TOS_FLOAT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_FloatCheckExact(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr)));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -9380,10 +9554,11 @@
             }
             // _GUARD_NOS_FLOAT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (!PyStackRef_FloatCheckExact(left)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr)));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -9415,6 +9590,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -9427,12 +9603,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(COMPARE_OP_INT);
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -9443,9 +9619,10 @@
             _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 if (!PyStackRef_IsCompactInt(value)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr)));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -9453,10 +9630,11 @@
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (!PyStackRef_IsCompactInt(left)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr)));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -9488,6 +9666,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -9500,12 +9679,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(COMPARE_OP);
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
@@ -9524,6 +9703,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_CompareOp(left, right, next_instr, oparg);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(COMPARE_OP);
@@ -9542,7 +9722,7 @@
                     BOX_STAT_INC(COMPARE_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = left;
                 }
-                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
                     right = PyStackRef_Box(right);
                     if (PyStackRef_IsInline(right)) {
@@ -9553,7 +9733,7 @@
                     BOX_STAT_INC(COMPARE_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = right;
                 }
-                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert((oparg >> 5) <= Py_GE);
@@ -9603,6 +9783,7 @@
             stack_pointer[0] = res;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -9615,12 +9796,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(COMPARE_OP_STR);
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef value;
@@ -9634,14 +9815,16 @@
             {
                 value = IR_SLOT(IR_FIELD_C(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(value))) {
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr)));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
                 }
-                value = IR_BORROW_KNOWN(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                value = IR_BORROW_KNOWN(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
                 if (!PyUnicode_CheckExact(value_o)) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr)));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -9651,16 +9834,18 @@
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr)));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
                 }
-                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyUnicode_CheckExact(o)) {
-                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
-                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr)));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -9697,6 +9882,7 @@
             stack_pointer[-2] = res;
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -9707,7 +9893,7 @@
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(CONTAINS_OP);
             IR_PREDICTED(CONTAINS_OP);
             _PyIRWord* const this_instr = next_instr - 1;
@@ -9715,7 +9901,7 @@
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
@@ -9737,6 +9923,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_ContainsOp(left, right, next_instr);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CONTAINS_OP);
@@ -9755,7 +9942,7 @@
                     BOX_STAT_INC(CONTAINS_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = left;
                 }
-                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
                     right = PyStackRef_Box(right);
                     if (PyStackRef_IsInline(right)) {
@@ -9766,7 +9953,7 @@
                     BOX_STAT_INC(CONTAINS_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = right;
                 }
-                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 stack_pointer[-2] = left;
@@ -9802,6 +9989,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -9814,12 +10002,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(CONTAINS_OP_DICT);
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef tos;
@@ -9833,14 +10021,16 @@
             {
                 tos = IR_SLOT(IR_FIELD_C(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr)));
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
                     JUMP_TO_PREDICTED(CONTAINS_OP);
                 }
-                tos = IR_BORROW_KNOWN(tos, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyAnyDict_CheckExact(o)) {
-                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr)));
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
                     JUMP_TO_PREDICTED(CONTAINS_OP);
@@ -9860,7 +10050,7 @@
                     BOX_STAT_INC(CONTAINS_OP_DICT);
                     IR_SLOT(IR_FIELD_B(this_instr)) = left;
                 }
-                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert(PyAnyDict_CheckExact(right_o));
@@ -9898,6 +10088,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -9910,12 +10101,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(CONTAINS_OP);
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
@@ -9937,6 +10128,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_ContainsOp(left, right, next_instr);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CONTAINS_OP);
@@ -9955,7 +10147,7 @@
                     BOX_STAT_INC(CONTAINS_OP);
                     IR_SLOT(IR_FIELD_B(this_instr)) = left;
                 }
-                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
                     right = PyStackRef_Box(right);
                     if (PyStackRef_IsInline(right)) {
@@ -9966,7 +10158,7 @@
                     BOX_STAT_INC(CONTAINS_OP);
                     IR_SLOT(IR_FIELD_C(this_instr)) = right;
                 }
-                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 stack_pointer[-2] = left;
@@ -10002,6 +10194,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -10014,12 +10207,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(CONTAINS_OP_SET);
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef tos;
@@ -10033,14 +10226,16 @@
             {
                 tos = IR_SLOT(IR_FIELD_C(this_instr));
                 if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr)));
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
                     JUMP_TO_PREDICTED(CONTAINS_OP);
                 }
-                tos = IR_BORROW_KNOWN(tos, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyAnySet_CheckExact(o)) {
-                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                    IR_UNSYNC_FOR_TAIL_CALL(IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_C(this_instr)));
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
                     JUMP_TO_PREDICTED(CONTAINS_OP);
@@ -10060,7 +10255,7 @@
                     BOX_STAT_INC(CONTAINS_OP_SET);
                     IR_SLOT(IR_FIELD_B(this_instr)) = left;
                 }
-                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert(PyAnySet_CheckExact(right_o));
@@ -10098,6 +10293,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -10110,12 +10306,13 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(CONVERT_VALUE);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef value;
             _PyStackRef result;
             value = IR_SLOT(IR_FIELD_B(this_instr));
@@ -10128,7 +10325,7 @@
                 BOX_STAT_INC(CONVERT_VALUE);
                 IR_SLOT(IR_FIELD_B(this_instr)) = value;
             }
-            value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+            value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
             conversion_func conv_fn;
             assert(oparg >= FVC_STR && oparg <= FVC_ASCII);
             conv_fn = _PyEval_ConversionFuncs[oparg];
@@ -10150,6 +10347,7 @@
             stack_pointer[0] = result;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -10751,11 +10949,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(FORMAT_WITH_SPEC);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef value;
             _PyStackRef fmt_spec;
             _PyStackRef res;
@@ -10771,7 +10970,7 @@
                 BOX_STAT_INC(FORMAT_WITH_SPEC);
                 IR_SLOT(IR_FIELD_B(this_instr)) = value;
             }
-            value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+            value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -2);
             if (Py_UNLIKELY(PyStackRef_IsInline(fmt_spec))) {
                 fmt_spec = PyStackRef_Box(fmt_spec);
                 if (PyStackRef_IsInline(fmt_spec)) {
@@ -10782,7 +10981,7 @@
                 BOX_STAT_INC(FORMAT_WITH_SPEC);
                 IR_SLOT(IR_FIELD_C(this_instr)) = fmt_spec;
             }
-            fmt_spec = IR_BORROW_KNOWN(fmt_spec, IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
+            fmt_spec = IR_BORROW_KNOWN(fmt_spec, IR_FIELD_C(this_instr), IR_FIELD_D(this_instr) + -1);
             stack_pointer[-2] = value;
             stack_pointer[-1] = fmt_spec;
             _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -10812,6 +11011,7 @@
             stack_pointer[0] = res;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -10829,7 +11029,7 @@
             _PyFb_FOR_ITER *fb = (_PyFb_FOR_ITER *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2 + 2);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef iter;
             _PyStackRef null_or_index;
@@ -10872,6 +11072,7 @@
             stack_pointer[0] = next;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -10887,8 +11088,13 @@
             INSTRUCTION_STATS(FOR_ITER_GEN);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2 + 2);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
+            if (IR_IS_LOCAL(IR_FIELD_A(this_instr))) {
+                UPDATE_MISS_STATS(FOR_ITER);
+                assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
+                JUMP_TO_PREDICTED(FOR_ITER);
+            }
             _PyStackRef iter;
             _PyStackRef gen_frame;
             _PyStackRef new_frame;
@@ -10960,7 +11166,7 @@
             INSTRUCTION_STATS(FOR_ITER_LIST);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2 + 2);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef iter;
             _PyStackRef null_or_index;
@@ -11033,6 +11239,7 @@
             stack_pointer[0] = next;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -11048,7 +11255,7 @@
             INSTRUCTION_STATS(FOR_ITER_RANGE);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2 + 2);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef iter;
             _PyStackRef next;
@@ -11107,6 +11314,7 @@
             stack_pointer[0] = next;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -11122,7 +11330,7 @@
             INSTRUCTION_STATS(FOR_ITER_TUPLE);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2 + 2);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef iter;
             _PyStackRef null_or_index;
@@ -11166,6 +11374,7 @@
             stack_pointer[0] = next;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -11181,7 +11390,7 @@
             INSTRUCTION_STATS(FOR_ITER_VIRTUAL);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2 + 2);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef null_or_index;
             _PyStackRef iter;
@@ -11221,6 +11430,7 @@
             stack_pointer[0] = next;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -11233,10 +11443,11 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_C(next_instr - 1), 0);
             INSTRUCTION_STATS(GET_AITER);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), 0);
             _PyStackRef obj;
             _PyStackRef iter;
             obj = IR_SLOT(IR_FIELD_B(this_instr));
@@ -11249,7 +11460,7 @@
                 BOX_STAT_INC(GET_AITER);
                 IR_SLOT(IR_FIELD_B(this_instr)) = obj;
             }
-            obj = IR_BORROW_KNOWN(obj, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+            obj = IR_BORROW_KNOWN(obj, IR_FIELD_B(this_instr), IR_FIELD_C(this_instr) + -1);
             unaryfunc getter = NULL;
             PyObject *obj_o = PyStackRef_AsPyObjectBorrow(obj);
             PyObject *iter_o;
@@ -11307,6 +11518,7 @@
             stack_pointer[0] = iter;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -11320,7 +11532,7 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_ANEXT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef aiter;
             _PyStackRef awaitable;
@@ -11344,6 +11556,7 @@
             stack_pointer[0] = awaitable;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -11356,12 +11569,13 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(GET_AWAITABLE);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef iterable;
             _PyStackRef iter;
             iterable = IR_SLOT(IR_FIELD_B(this_instr));
@@ -11374,7 +11588,7 @@
                 BOX_STAT_INC(GET_AWAITABLE);
                 IR_SLOT(IR_FIELD_B(this_instr)) = iterable;
             }
-            iterable = IR_BORROW_KNOWN(iterable, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+            iterable = IR_BORROW_KNOWN(iterable, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
             stack_pointer[-1] = iterable;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
@@ -11393,6 +11607,7 @@
             stack_pointer[0] = iter;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -11540,7 +11755,7 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_LEN);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef obj;
             _PyStackRef len;
@@ -11568,6 +11783,7 @@
             stack_pointer[0] = len;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -11583,7 +11799,7 @@
             INSTRUCTION_STATS(IMPORT_FROM);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef from;
             _PyStackRef res;
@@ -11619,6 +11835,7 @@
             stack_pointer[0] = res;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -11634,7 +11851,7 @@
             INSTRUCTION_STATS(IMPORT_NAME);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2 + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef level;
             _PyStackRef fromlist;
@@ -11701,6 +11918,7 @@
             stack_pointer[0] = res;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -12442,7 +12660,7 @@
             INSTRUCTION_STATS(INSTRUMENTED_FOR_ITER);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2 + 2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2 + 2);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             _PyStackRef iter;
             _PyStackRef null_or_index;
@@ -12467,6 +12685,7 @@
             stack_pointer[0] = next;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -12600,7 +12819,7 @@
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -3 + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             opcode = INSTRUMENTED_LOAD_SUPER_ATTR;
             _PyStackRef global_super_st;
@@ -12758,6 +12977,7 @@
             stack_pointer[0] = attr;
             stack_pointer += 1 + (oparg & 1);
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -12773,7 +12993,7 @@
             INSTRUCTION_STATS(INSTRUMENTED_LOAD_SUPER_ATTR);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -3 + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             opcode = INSTRUMENTED_LOAD_SUPER_ATTR_NOFB;
             _PyStackRef global_super_st;
@@ -12931,6 +13151,7 @@
             stack_pointer[0] = attr;
             stack_pointer += 1 + (oparg & 1);
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -13407,11 +13628,11 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -2);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1)) + IR_IS_LOCAL(IR_FIELD_C(next_instr - 1));
             INSTRUCTION_STATS(IS_OP);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -2);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_INPUT(IR_FIELD_C(this_instr), -1);
             _PyStackRef left;
@@ -13422,8 +13643,8 @@
             _PyStackRef value;
             // _IS_OP
             {
-                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_FIELD_A(this_instr) + 1);
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr), IR_STACK_SLOT() + -1);
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 int res = PyStackRef_Is(left, right) ^ oparg;
                 b = res ? PyStackRef_True : PyStackRef_False;
                 l = left;
@@ -13449,6 +13670,7 @@
                 PyStackRef_XCLOSE(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -13641,7 +13863,7 @@
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR);
             IR_PREDICTED(LOAD_ATTR);
             _PyIRWord* const this_instr = next_instr - 1;
@@ -13649,8 +13871,9 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef *self_or_null;
@@ -13684,7 +13907,7 @@
                     BOX_STAT_INC(LOAD_ATTR);
                     IR_SLOT(IR_FIELD_B(this_instr)) = owner;
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 if (oparg & 1) {
                     stack_pointer[-1] = owner;
@@ -13718,6 +13941,7 @@
             stack_pointer[-1] = attr;
             stack_pointer += (oparg&1);
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -13730,13 +13954,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR_CLASS);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef *null;
@@ -13749,17 +13974,17 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 if (!PyType_Check(owner_o)) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 assert(class_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13789,6 +14014,7 @@
             }
             stack_pointer += (oparg & 1);
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -13801,13 +14027,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef *null;
@@ -13820,11 +14047,11 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13835,14 +14062,14 @@
                 uint32_t class_version = fb->class_version;
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 if (!PyType_Check(owner_o)) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 assert(class_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13872,6 +14099,7 @@
             }
             stack_pointer += (oparg & 1);
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -13884,13 +14112,19 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
+            if (IR_IS_LOCAL(IR_FIELD_A(this_instr))) {
+                UPDATE_MISS_STATS(LOAD_ATTR);
+                assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                JUMP_TO_PREDICTED(LOAD_ATTR);
+            }
             _PyStackRef owner;
             _PyStackRef new_frame;
             // _GUARD_TYPE_VERSION
@@ -13902,11 +14136,11 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13915,7 +14149,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13930,7 +14164,7 @@
                 PyFunctionObject *f = (PyFunctionObject *)getattribute;
                 assert(func_version != 0);
                 if (f->func_version != func_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13938,7 +14172,7 @@
                 PyCodeObject *code = (PyCodeObject *)f->func_code;
                 assert(code->co_argcount == 2);
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13988,13 +14222,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR_INSTANCE_VALUE);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef o;
@@ -14009,11 +14244,11 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14025,7 +14260,7 @@
                 assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
                 if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14038,7 +14273,7 @@
                 PyObject **value_ptr = (PyObject**)(((char *)owner_o) + offset);
                 PyObject *attr_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(*value_ptr);
                 if (attr_o == NULL) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14047,7 +14282,7 @@
                 int increfed = _Py_TryIncrefCompareStackRef(value_ptr, attr_o, &attr);
                 if (!increfed) {
                     if (true) {
-                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14077,6 +14312,7 @@
             }
             stack_pointer += (oparg & 1);
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -14089,13 +14325,15 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_LAZY_DICT);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
+            assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef self;
@@ -14108,11 +14346,11 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14124,7 +14362,7 @@
                 char *ptr = ((char *)PyStackRef_AsPyObjectBorrow(owner)) + MANAGED_DICT_OFFSET + dictoffset;
                 PyObject *dict = FT_ATOMIC_LOAD_PTR_ACQUIRE(*(PyObject **)ptr);
                 if (dict != NULL) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14156,13 +14394,15 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_NO_DICT);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
+            assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef self;
@@ -14175,11 +14415,11 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14212,13 +14452,15 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_WITH_VALUES);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
+            assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef self;
@@ -14231,11 +14473,11 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14247,7 +14489,7 @@
                 assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
                 if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14279,13 +14521,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR_MODULE);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef o;
@@ -14305,10 +14548,10 @@
                     BOX_STAT_INC(LOAD_ATTR_MODULE);
                     IR_SLOT(IR_FIELD_B(this_instr)) = owner;
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 if (!PyModule_CheckExact(owner_o)) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14317,7 +14560,7 @@
                 assert(dict != NULL);
                 PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
                 if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != dict_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14327,7 +14570,7 @@
                 PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(keys) + index;
                 PyObject *attr_o = FT_ATOMIC_LOAD_PTR_CONSUME(ep->me_value);
                 if (attr_o == NULL) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14336,7 +14579,7 @@
                 int increfed = _Py_TryIncrefCompareStackRef(&ep->me_value, attr_o, &attr);
                 if (!increfed) {
                     if (true) {
-                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14366,6 +14609,7 @@
             }
             stack_pointer += (oparg & 1);
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -14378,12 +14622,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1));
             INSTRUCTION_STATS(LOAD_ATTR);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef owner;
             _PyStackRef attr;
@@ -14400,6 +14644,7 @@
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_LoadAttr(owner, next_instr, name);
                     _PyFrame_StackPointerInvalidate(frame);
+                    stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(LOAD_ATTR);
@@ -14418,7 +14663,7 @@
                     BOX_STAT_INC(LOAD_ATTR);
                     IR_SLOT(IR_FIELD_B(this_instr)) = owner;
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 if (oparg & 1) {
                     stack_pointer[-1] = owner;
@@ -14452,6 +14697,7 @@
             stack_pointer[-1] = attr;
             stack_pointer += (oparg&1);
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -14464,13 +14710,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_NO_DICT);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef owner;
             _PyStackRef attr;
             // _GUARD_TYPE_VERSION
@@ -14482,11 +14729,11 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14510,6 +14757,7 @@
             stack_pointer[0] = attr;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -14522,13 +14770,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef owner;
             _PyStackRef attr;
             // _GUARD_TYPE_VERSION
@@ -14540,11 +14789,11 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14556,7 +14805,7 @@
                 assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
                 if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14579,6 +14828,7 @@
             stack_pointer[0] = attr;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -14591,13 +14841,19 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR_PROPERTY);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
+            if (IR_IS_LOCAL(IR_FIELD_A(this_instr))) {
+                UPDATE_MISS_STATS(LOAD_ATTR);
+                assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                JUMP_TO_PREDICTED(LOAD_ATTR);
+            }
             _PyStackRef owner;
             _PyStackRef new_frame;
             // _GUARD_TYPE_VERSION
@@ -14609,11 +14865,11 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14622,7 +14878,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14636,14 +14892,14 @@
                 assert(Py_IS_TYPE(fget, &PyFunction_Type));
                 PyFunctionObject *f = (PyFunctionObject *)fget;
                 if (f->func_version != func_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 PyCodeObject *code = (PyCodeObject *)f->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14690,13 +14946,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef o;
@@ -14711,11 +14968,11 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14725,7 +14982,7 @@
             {
                 uint32_t shape = fb->shape;
                 if (_PyObject_Shape(PyStackRef_AsPyObjectBorrow(owner)) != shape) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14759,6 +15016,7 @@
             }
             stack_pointer += (oparg & 1);
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -14771,13 +15029,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR_SLOT);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef o;
@@ -14792,11 +15051,11 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14809,7 +15068,7 @@
                 PyObject **addr = (PyObject **)((char *)owner_o + index);
                 PyObject *attr_o = FT_ATOMIC_LOAD_PTR(*addr);
                 if (attr_o == NULL) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14817,7 +15076,7 @@
                 #ifdef Py_GIL_DISABLED
                 int increfed = _Py_TryIncrefCompareStackRef(addr, attr_o, &attr);
                 if (!increfed) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14846,6 +15105,7 @@
             }
             stack_pointer += (oparg & 1);
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -14858,13 +15118,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_ATTR_WITH_HINT);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef owner;
             _PyStackRef attr;
             _PyStackRef o;
@@ -14879,11 +15140,11 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14896,7 +15157,7 @@
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
                 PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
                 if (dict == NULL) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14905,7 +15166,7 @@
                 assert(PyDict_CheckExact((PyObject *)dict));
                 #ifdef Py_GIL_DISABLED
                 if (!_Py_IsOwnedByCurrentThread((PyObject *)dict) && !_PyObject_GC_IS_SHARED(dict)) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14914,7 +15175,7 @@
                 PyObject *attr_o;
                 if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries)) {
                     if (true) {
-                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14923,7 +15184,7 @@
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                 if (dk->dk_kind != DICT_KEYS_UNICODE) {
                     if (true) {
-                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14932,7 +15193,7 @@
                 PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(dk) + hint;
                 if (FT_ATOMIC_LOAD_PTR_RELAXED(ep->me_key) != name) {
                     if (true) {
-                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14941,7 +15202,7 @@
                 attr_o = FT_ATOMIC_LOAD_PTR(ep->me_value);
                 if (attr_o == NULL) {
                     if (true) {
-                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14952,7 +15213,7 @@
                 int increfed = _Py_TryIncrefCompareStackRef(&ep->me_value, attr_o, &attr);
                 if (!increfed) {
                     if (true) {
-                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -14981,6 +15242,7 @@
             }
             stack_pointer += (oparg & 1);
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -14994,7 +15256,7 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_BUILD_CLASS);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef bc;
             int err;
             _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -15016,6 +15278,7 @@
             stack_pointer[0] = bc;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15031,13 +15294,14 @@
             INSTRUCTION_STATS(LOAD_COMMON_CONSTANT);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             assert(oparg < NUM_COMMON_CONSTANTS);
             value = PyStackRef_DupImmortal(tstate->interp->common_consts[oparg]);
             stack_pointer[0] = value;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15054,13 +15318,14 @@
             (void)this_instr;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
             value = PyStackRef_FromPyObjectBorrow(obj);
             stack_pointer[0] = value;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15076,7 +15341,7 @@
             INSTRUCTION_STATS(LOAD_CONST_INLINE_FLOAT);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
             _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -15087,6 +15352,7 @@
             stack_pointer[0] = value;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15102,7 +15368,7 @@
             INSTRUCTION_STATS(LOAD_CONST_INLINE_INT);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
             assert(_PyLong_CheckExactAndCompact(obj));
@@ -15113,6 +15379,7 @@
             stack_pointer[0] = value;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15128,7 +15395,7 @@
             INSTRUCTION_STATS(LOAD_DEREF);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             PyCellObject *cell = (PyCellObject *)PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
             _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -15148,6 +15415,7 @@
             stack_pointer[0] = value;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15163,13 +15431,14 @@
             INSTRUCTION_STATS(LOAD_FAST);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             assert(!PyStackRef_IsNull(GETLOCAL(oparg)));
             value = PyStackRef_DUP(GETLOCAL(oparg));
             stack_pointer[0] = value;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15185,13 +15454,14 @@
             INSTRUCTION_STATS(LOAD_FAST_AND_CLEAR);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             value = GETLOCAL(oparg);
             GETLOCAL(oparg) = PyStackRef_NULL;
             stack_pointer[0] = value;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15207,13 +15477,14 @@
             INSTRUCTION_STATS(LOAD_FAST_BORROW);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             assert(!PyStackRef_IsNull(GETLOCAL(oparg)));
             value = PyStackRef_BorrowAt(&GETLOCAL(oparg));
             stack_pointer[0] = value;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15229,7 +15500,8 @@
             INSTRUCTION_STATS(LOAD_FAST_BORROW_LOAD_FAST_BORROW);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
+            assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
             _PyStackRef value1;
             _PyStackRef value2;
             uint32_t oparg1 = oparg >> 4;
@@ -15255,7 +15527,7 @@
             INSTRUCTION_STATS(LOAD_FAST_CHECK);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             _PyStackRef value_s = GETLOCAL(oparg);
             if (PyStackRef_IsNull(value_s)) {
@@ -15272,6 +15544,7 @@
             stack_pointer[0] = value;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15287,7 +15560,8 @@
             INSTRUCTION_STATS(LOAD_FAST_LOAD_FAST);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
+            assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
             _PyStackRef value1;
             _PyStackRef value2;
             uint32_t oparg1 = oparg >> 4;
@@ -15310,12 +15584,13 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(LOAD_FROM_DICT_OR_DEREF);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef class_dict_st;
             _PyStackRef value;
             class_dict_st = IR_SLOT(IR_FIELD_B(this_instr));
@@ -15328,7 +15603,7 @@
                 BOX_STAT_INC(LOAD_FROM_DICT_OR_DEREF);
                 IR_SLOT(IR_FIELD_B(this_instr)) = class_dict_st;
             }
-            class_dict_st = IR_BORROW_KNOWN(class_dict_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+            class_dict_st = IR_BORROW_KNOWN(class_dict_st, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
             PyObject *name;
             PyObject *class_dict = PyStackRef_AsPyObjectBorrow(class_dict_st);
             assert(class_dict);
@@ -15374,6 +15649,7 @@
             stack_pointer[0] = value;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15386,11 +15662,11 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer += IR_IS_LOCAL(IR_FIELD_B(next_instr - 1));
             INSTRUCTION_STATS(LOAD_FROM_DICT_OR_GLOBALS);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
             _PyStackRef mod_or_class_dict;
             _PyStackRef v;
@@ -15404,7 +15680,7 @@
                 BOX_STAT_INC(LOAD_FROM_DICT_OR_GLOBALS);
                 IR_SLOT(IR_FIELD_B(this_instr)) = mod_or_class_dict;
             }
-            mod_or_class_dict = IR_BORROW_KNOWN(mod_or_class_dict, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+            mod_or_class_dict = IR_BORROW_KNOWN(mod_or_class_dict, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -1);
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *namespace = PyStackRef_AsPyObjectBorrow(mod_or_class_dict);
             int err;
@@ -15446,6 +15722,7 @@
             stack_pointer[0] = v;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15722,7 +15999,7 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_LOCALS);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef locals;
             PyObject *l = LOCALS();
             if (l == NULL) {
@@ -15737,6 +16014,7 @@
             stack_pointer[0] = locals;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15752,7 +16030,7 @@
             INSTRUCTION_STATS(LOAD_NAME);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef v;
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -15766,6 +16044,7 @@
             stack_pointer[0] = v;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15782,7 +16061,7 @@
             (void)this_instr;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             assert(oparg < _PY_NSMALLPOSINTS);
             PyObject *obj = (PyObject *)&_PyLong_SMALL_INTS[_PY_NSMALLNEGINTS + oparg];
@@ -15790,6 +16069,7 @@
             stack_pointer[0] = value;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15805,7 +16085,7 @@
             INSTRUCTION_STATS(LOAD_SMALL_INT_INLINE);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef value;
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyStackRef_FromInt32((int32_t)oparg);
@@ -15815,6 +16095,7 @@
             stack_pointer[0] = value;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15892,7 +16173,7 @@
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -3 + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             opcode = LOAD_SUPER_ATTR;
             _PyStackRef global_super_st;
@@ -16067,6 +16348,7 @@
             stack_pointer[0] = attr;
             stack_pointer += 1 + (oparg & 1);
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -16083,7 +16365,7 @@
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -3 + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             _PyStackRef global_super_st;
             _PyStackRef class_st;
@@ -16166,6 +16448,7 @@
             stack_pointer[0] = attr_st;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -16182,8 +16465,9 @@
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -3 + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
+            assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
             _PyStackRef global_super_st;
             _PyStackRef class_st;
             _PyStackRef self_st;
@@ -16298,7 +16582,7 @@
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -3 + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             opcode = LOAD_SUPER_ATTR_NOFB;
             _PyStackRef global_super_st;
@@ -16473,6 +16757,7 @@
             stack_pointer[0] = attr;
             stack_pointer += 1 + (oparg & 1);
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -16514,10 +16799,11 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_C(next_instr - 1), 0);
             INSTRUCTION_STATS(MAKE_FUNCTION);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), 0);
             _PyStackRef codeobj_st;
             _PyStackRef func;
             _PyStackRef co;
@@ -16534,7 +16820,7 @@
                     BOX_STAT_INC(MAKE_FUNCTION);
                     IR_SLOT(IR_FIELD_B(this_instr)) = codeobj_st;
                 }
-                codeobj_st = IR_BORROW_KNOWN(codeobj_st, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                codeobj_st = IR_BORROW_KNOWN(codeobj_st, IR_FIELD_B(this_instr), IR_FIELD_C(this_instr) + -1);
                 PyObject *codeobj = PyStackRef_AsPyObjectBorrow(codeobj_st);
                 stack_pointer[-1] = codeobj_st;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -16559,6 +16845,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -16635,7 +16922,7 @@
             INSTRUCTION_STATS(MATCH_CLASS);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -3 + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -3 + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -3);
             _PyStackRef subject;
             _PyStackRef type;
@@ -16727,6 +17014,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -16740,7 +17028,7 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_KEYS);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -2);
             IR_CHECK_SLOT(IR_FIELD_C(this_instr), -1);
             _PyStackRef subject;
@@ -16776,6 +17064,7 @@
             stack_pointer[0] = values_or_none;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -16789,7 +17078,7 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_MAPPING);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef subject;
             _PyStackRef res;
@@ -16799,6 +17088,7 @@
             stack_pointer[0] = res;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -16812,7 +17102,7 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_SEQUENCE);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
             _PyStackRef subject;
             _PyStackRef res;
@@ -16822,6 +17112,7 @@
             stack_pointer[0] = res;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -17121,8 +17412,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(PUSH_EXC_INFO);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1 + 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1 + 0);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
+            assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
             _PyStackRef exc;
             _PyStackRef prev_exc;
             _PyStackRef new_exc;
@@ -17161,12 +17453,13 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(PUSH_NULL);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), 0);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), 0);
             _PyStackRef res;
             res = PyStackRef_NULL;
             stack_pointer[0] = res;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -18284,6 +18577,7 @@
                         _PyFrame_StackPointerValidate(frame);
                         _Py_Specialize_StoreAttr(owner, next_instr, name);
                         _PyFrame_StackPointerInvalidate(frame);
+                        stack_pointer -= IR_IS_LOCAL(IR_FIELD_B(this_instr)) + IR_IS_LOCAL(IR_FIELD_A(this_instr));
                         DISPATCH_SAME_OPARG();
                     }
                 }
@@ -18303,7 +18597,7 @@
                     BOX_STAT_INC(STORE_ATTR);
                     IR_SLOT(IR_FIELD_B(this_instr)) = v;
                 }
-                v = IR_BORROW_KNOWN(v, IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -2);
+                v = IR_BORROW_KNOWN(v, IR_FIELD_B(this_instr), IR_STACK_SLOT() + -2);
                 if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
                     owner = PyStackRef_Box(owner);
                     if (PyStackRef_IsInline(owner)) {
@@ -18314,7 +18608,7 @@
                     BOX_STAT_INC(STORE_ATTR);
                     IR_SLOT(IR_FIELD_A(this_instr)) = owner;
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr), IR_FIELD_D(this_instr) + -1);
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr), IR_STACK_SLOT() + -1);
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                 stack_pointer[-2] = v;
                 stack_pointer[-1] = owner;
@@ -18830,15 +19124,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_D(next_instr - 1), 0);
             INSTRUCTION_STATS(STORE_FAST_LOAD_FAST);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_D(this_instr), 0);
             _PyStackRef value1;
             _PyStackRef value2;
-            value1 = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+            value1 = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_D(this_instr) + -1);
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
             _PyStackRef tmp = GETLOCAL(oparg1);
@@ -18849,6 +19144,7 @@
             _PyFrame_StackPointerValidate(frame);
             PyStackRef_XCLOSE(tmp);
             _PyFrame_StackPointerInvalidate(frame);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -19781,10 +20077,11 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_C(next_instr - 1), 0);
             INSTRUCTION_STATS(UNARY_INVERT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), 0);
             _PyStackRef value;
             _PyStackRef res;
             _PyStackRef v;
@@ -19800,7 +20097,7 @@
                     BOX_STAT_INC(UNARY_INVERT);
                     IR_SLOT(IR_FIELD_B(this_instr)) = value;
                 }
-                value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr), IR_FIELD_C(this_instr) + -1);
                 stack_pointer[-1] = value;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
@@ -19821,6 +20118,7 @@
                 _PyStackRef_XCLOSE_POINTER(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -19833,16 +20131,17 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_C(next_instr - 1), 0);
             INSTRUCTION_STATS(UNARY_NEGATIVE);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), 0);
             _PyStackRef value;
             _PyStackRef res;
             _PyStackRef v;
             // _UNARY_NEGATIVE
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+                value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_C(this_instr) + -1);
                 if (PyStackRef_IsInlineInt(value)) {
                     int32_t i = PyStackRef_InlineInt(value);
                     if (i == INT32_MIN) {
@@ -19882,6 +20181,7 @@
                 PyStackRef_XCLOSE(value);
                 _PyFrame_StackPointerInvalidate(frame);
             }
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -19894,17 +20194,19 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            stack_pointer = IR_STACK_POINTER(IR_FIELD_A(next_instr - 1), -1);
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_C(next_instr - 1), 0);
             INSTRUCTION_STATS(UNARY_NOT);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
             IR_CHECK_INPUT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_C(this_instr), 0);
             _PyStackRef value;
             _PyStackRef res;
-            value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_A(this_instr));
+            value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr), IR_FIELD_C(this_instr) + -1);
             assert(PyStackRef_BoolCheck(value));
             res = PyStackRef_IsFalse(value)
             ? PyStackRef_True : PyStackRef_False;
             stack_pointer[-1] = res;
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -20233,7 +20535,7 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(WITH_EXCEPT_START);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -5 + 5);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -5 + 5);
             IR_CHECK_SLOT(IR_FIELD_B(this_instr), -5);
             _PyStackRef exit_func;
             _PyStackRef exit_self;
@@ -20300,6 +20602,7 @@
             stack_pointer[0] = res;
             stack_pointer += 1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            IR_STORE_RESULT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 

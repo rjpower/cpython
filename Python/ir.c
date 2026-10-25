@@ -124,6 +124,24 @@ _PyCode_InstrFoldedInputs(PyCodeObject *co, int i)
 }
 
 int
+_PyCode_InstrStoredLocal(PyCodeObject *co, int i)
+{
+    assert(i >= 0 && i < Py_SIZE(co));
+    _PyIRWord word = _PyCode_WORDS(co)[i];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (!(fmt->flags & _PyIR_STORE_DST)) {
+        return -1;
+    }
+    for (int r = 0; r < 4; r++) {
+        if (fmt->roles[r] == _PyIR_ROLE_DST) {
+            int dst = (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX);
+            return dst < co->co_nlocalsplus ? dst : -1;
+        }
+    }
+    return -1;
+}
+
+int
 _PyCode_InstrFbIndex(PyCodeObject *co, int i)
 {
     assert(i >= 0 && i < Py_SIZE(co));

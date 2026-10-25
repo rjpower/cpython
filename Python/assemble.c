@@ -859,6 +859,9 @@ encode(struct assembler *a, instr_sequence *instrs, int i, int nlocalsplus,
             slots.in[k] = ai->fold.in[k];
         }
     }
+    if (ai->fold.dst >= 0) {
+        slots.dst = ai->fold.dst;
+    }
     int values[_PyIR_ROLE_IN0 + 4] = {
         [_PyIR_ROLE_NONE] = 0,
         [_PyIR_ROLE_DST] = slots.dst,

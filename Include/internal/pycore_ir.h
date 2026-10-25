@@ -114,6 +114,7 @@ enum {
 #define _PyIR_FORWARD       8   // the oparg is a forward distance in words
 #define _PyIR_NO_FOLD       16  // an output may alias a borrowed input
 #define _PyIR_TRANSPARENT   32  // runs another handler on the same fields
+#define _PyIR_STORE_DST     64  // dst may name a local: a folded STORE_FAST
 
 #define _PyIR_NO_DST        INT8_MIN
 
@@ -223,6 +224,9 @@ PyAPI_FUNC(int) _PyCode_InstrFbIndex(PyCodeObject *co, int i);
  * from locals: the loads folded into it, which have no words and push
  * nothing that the frame sees before the instruction runs. */
 PyAPI_FUNC(int) _PyCode_InstrFoldedInputs(PyCodeObject *co, int i);
+/* The local that the dst field of word i names, into which a STORE_FAST of
+ * its result is folded, or -1. */
+PyAPI_FUNC(int) _PyCode_InstrStoredLocal(PyCodeObject *co, int i);
 
 /* The word index that the instruction at index i jumps to, or -1 if it
  * does not jump.  END_ASYNC_FOR, which names its SEND, counts as a jump. */

@@ -779,5 +779,145 @@ class FoldTest(unittest.TestCase):
             sys.settrace(None)
         self.assertEqual(lines, [f.__code__.co_firstlineno + 1])
 
+
+class StoreFoldTest(unittest.TestCase):
+    """Stores folded into the word before them (Python/regalloc.c)"""
+
+    def run_specialized(self, check):
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
+            check()
+
+    def test_sum_to_local(self):
+        def f(a, b):
+            x = a + b
+            return x
+        t = nlocalsplus(f)
+        self.assertEqual(words(f), [
+            ("BINARY_OP_ADD", 2, (0, 1)),
+            ("RETURN_VALUE", None, (2,)),
+        ])
+        self.assertEqual(t, 3)
+        self.run_specialized(lambda: self.assertEqual(f(1, 2), 3))
+        self.run_specialized(lambda: self.assertEqual(f("a", "b"), "ab"))
+
+    def test_copy_before_the_store_to_its_source(self):
+        # The store to y is folded into the load of x; the later store to x
+        # must not change y.
+        def f(x):
+            y = x
+            x = x + 1
+            return y
+        self.assertNotIn("STORE_FAST", [w[0] for w in words(f)])
+        self.run_specialized(lambda: self.assertEqual(f(1), 1))
+
+    def test_loop_index(self):
+        def f(a, b):
+            total = 0.0
+            for i in range(len(a)):
+                total += a[i] * b[i]
+            return total
+        handlers = [w[0] for w in words(f)]
+        self.assertNotIn("STORE_FAST", handlers)
+        self.run_specialized(
+            lambda: self.assertEqual(f([1.0, 2.0], [3.0, 4.0]), 11.0))
+
+    def test_raise_keeps_the_old_value(self):
+        def g(z):
+            raise ValueError(z)
+        def f(z):
+            try:
+                z = g(z)
+            except ValueError:
+                pass
+            return z
+        def h(z):
+            try:
+                z = z + "x"
+            except TypeError:
+                pass
+            return z
+        self.run_specialized(lambda: self.assertEqual(f(5), 5))
+        self.run_specialized(lambda: self.assertEqual(h(5), 5))
+
+    def test_old_value_released_once(self):
+        class C:
+            freed = 0
+            def __del__(self):
+                C.freed += 1
+            def __add__(self, other):
+                return C()
+        def f(x):
+            x = x + 1
+            x = x + 1
+            return None
+        self.run_specialized(lambda: f(C()))
+        n = _testinternalcapi.SPECIALIZATION_THRESHOLD + 2
+        self.assertEqual(C.freed, 3 * n)
+
+    def test_release_runs_with_the_frame_consistent(self):
+        # __del__ of the old value runs as the store releases it, and sees
+        # the new value in the local.
+        seen = []
+        class D:
+            def __del__(self):
+                seen.append(sys._getframe(1).f_locals.get("x"))
+        def f():
+            x = D()
+            x = 2 + 3
+            return x
+        self.assertEqual(f(), 5)
+        self.assertEqual(seen, [5])
+
+    def test_generator(self):
+        def gen(n):
+            for i in range(n):
+                j = i * 2
+                yield j
+                del j
+                j = i
+                yield j
+        self.run_specialized(
+            lambda: self.assertEqual(list(gen(2)), [0, 0, 2, 1]))
+
+    def test_delete_and_store(self):
+        def f(a):
+            x = a + 1
+            del x
+            try:
+                return x
+            except UnboundLocalError:
+                x = a + 2
+            return x
+        self.run_specialized(lambda: self.assertEqual(f(1), 3))
+
+    def test_inplace_unicode_add(self):
+        def f(n):
+            s = ""
+            for i in range(n):
+                s += "ab"
+            return s
+        self.run_specialized(lambda: self.assertEqual(f(3), "ababab"))
+
+    def test_set_lineno_after_folded_store(self):
+        # The frame-state simulation (frameobject.c) pops the result of a
+        # word that stores it.
+        def f():
+            x = 1 + len("a")
+            y = x + 1
+            return y
+        lines = []
+        def trace(frame, event, arg):
+            if frame.f_code is f.__code__ and event == "line":
+                lines.append(frame.f_lineno)
+                if frame.f_lineno == f.__code__.co_firstlineno + 2 and len(lines) == 2:
+                    frame.f_lineno = f.__code__.co_firstlineno + 1
+            return trace
+        sys.settrace(trace)
+        try:
+            self.assertEqual(f(), 3)
+        finally:
+            sys.settrace(None)
+
+
 if __name__ == "__main__":
     unittest.main()

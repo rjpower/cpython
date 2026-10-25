@@ -215,6 +215,8 @@ class IRFormat:
     imm_kind: str | None = None
     sync: str = "none"              # how the handler finds the stack
                                     # pointer, see SYNC_*
+    store_dst: bool = False         # dst may name a local, see
+                                    # stores_to_dst()
 
     def __post_init__(self) -> None:
         assert self.sync != SYNC_NONE or not self.borrow_mask, self.group
@@ -678,8 +680,9 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
             # holds a value whenever code that reads the stack runs.
             if all(u[k] in ("object", "raw") for u in uses):
                 borrow_mask |= 1 << k
+    store_dst = stores_to_dst(members, io, dst_offset, window)
     sync = SYNC_NONE
-    if borrow_mask and dst_offset is not None:
+    if borrow_mask and dst_offset is not None and not store_dst:
         sync = SYNC_DST
     elif borrow_mask and ROLE_NONE in roles:
         # The canonical top slot in a free field
@@ -693,8 +696,58 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
         imm=imm, fb=fb, jumps=jumps and not forward, forward=forward,
         no_fold=no_fold, slot_roles=slot_roles, imm_kind=imm_kind,
-        sync=sync,
+        sync=sync, store_dst=store_dst,
     )
+
+
+STORE_RESULT = "store"     # moves the result to the local dst names
+STORE_LEAVE = "leave"      # leaves to the family head if dst names a local
+STORE_NEVER = "never"      # pushes more than the result, so dst never names
+                           # a local
+
+
+def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
+    """How inst, a member of a family whose dst may name a local, treats
+    such a dst; None if it cannot.  The result must be the first new output
+    of inst, not an alias of an input, which may be a borrow.  Members of a
+    family share their stack effect for each oparg, and the assembler folds
+    a store only where the instruction pushes the result alone, so a member
+    that always pushes more never sees a local dst.  A member that pushes a
+    frame leaves to the head: the result arrives in its slot only after
+    the callee returns."""
+    if inst.properties.switches_frame:
+        return STORE_LEAVE
+    if inst.properties.no_fold:
+        return None
+    j = window_dst(outputs)
+    if j is None or outputs[j].aliased:
+        return None
+    if all(e.item.is_array() and not e.item.size.isdigit()
+           for e in outputs[j + 1:]):
+        return STORE_RESULT
+    return STORE_NEVER
+
+
+def stores_to_dst(members: list[Instruction],
+                  io: dict[str, tuple[list[Entry], list[Entry]]],
+                  dst_offset: int | None, window: bool) -> bool:
+    """Whether the assembler may fold a STORE_FAST of the result into the
+    family's words, so that dst names the local (see store_mode()).  A
+    family whose head pushes frames gains too little to pay for checking."""
+    if dst_offset is None or members[0].properties.switches_frame:
+        return False
+    for m in members:
+        inputs, outputs = io[m.name]
+        mode = store_mode(m, outputs)
+        if mode is None:
+            return False
+        if mode == STORE_LEAVE:
+            continue
+        offset = window_dst(outputs) if window else first_new_output(
+            outputs, len(inputs))
+        if offset != dst_offset:
+            return False
+    return True
 
 
 def nofb_format(fmt: IRFormat) -> IRFormat:
@@ -850,8 +903,17 @@ class IREmitter(Emitter):
         self.formats = formats
         self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
         self._replacers["DISPATCH_SAME_OPARG"] = self.dispatch_same_oparg
+        self._replacers["IR_DST"] = self.ir_dst
         # The storage at a deopt or exit being emitted
         self.deopt_storage: Storage | None = None
+        # The format of the handler being emitted, which for a NOFB form
+        # is not its instruction's
+        self.handler_format: IRFormat | None = None
+
+    def format_of(self, inst: Instruction) -> IRFormat:
+        if self.handler_format is not None:
+            return self.handler_format
+        return self.formats[inst.name]
 
     def deopt_if(
         self,
@@ -872,7 +934,7 @@ class IREmitter(Emitter):
     def canonical_slot(self, inst: Instruction | None, field: str) -> str:
         "The canonical slot of the input that inst reads through field"
         assert inst is not None
-        fmt = self.formats[inst.name]
+        fmt = self.format_of(inst)
         for k in range(fmt.n_inputs):
             if fmt.input_field(k) == field:
                 return fmt.canonical_slot(k)
@@ -906,6 +968,22 @@ class IREmitter(Emitter):
             return "1u"
         return super().expand_instruction_macro(tkn, args, inst)
 
+    def ir_dst(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        "The dst field, which may name a local (see store_mode())"
+        assert inst is not None
+        fmt = self.format_of(inst)
+        if not fmt.store_dst:
+            raise analysis_error(f"{inst.name}: no dst that names a local", tkn)
+        self.emit(FIELD_VARS[fmt.field_of(ROLE_DST)])
+        return True
+
     def dispatch_same_oparg(
         self,
         tkn: Token,
@@ -917,7 +995,7 @@ class IREmitter(Emitter):
         """The handler runs again on the same word, and a SYNC_LAG handler
         adds the lag on entry, so take it back first."""
         assert inst is not None
-        fmt = self.formats[inst.name]
+        fmt = self.format_of(inst)
         if fmt.sync == SYNC_LAG:
             self.emit(f"stack_pointer -= {lag_expr(fmt)};\n")
         self.emit(tkn)
@@ -926,13 +1004,17 @@ class IREmitter(Emitter):
     def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
         assert inst is not None
         self.emit_borrow_drops(inst)
-        fmt = self.formats[inst.name]
-        if fmt.sync == SYNC_LAG:
+        fmt = self.format_of(inst)
+        binary_op = inst.family is not None and inst.family.name == BINARY_OP_FAMILY
+        if fmt.sync == SYNC_LAG and not binary_op:
             # A tail call enters the family head from the top, where it adds
             # the lag again.  Computed goto enters after that.
             self.emit(f"IR_UNSYNC_FOR_TAIL_CALL({lag_expr(fmt)});\n")
-        if inst.family is not None and inst.family.name == BINARY_OP_FAMILY:
-            # The handler of the operation that the entry records
+        if binary_op:
+            # The handler of the operation that the entry records, which
+            # runs from the top: it adds the lag again
+            if fmt.sync == SYNC_LAG:
+                self.emit(f"stack_pointer -= {lag_expr(fmt)};\n")
             self.emit(f"UPDATE_MISS_STATS({BINARY_OP_FAMILY});\n")
             self.emit(f"IR_DEOPT_BINARY_OP({field_expr(fmt.fb)});\n")
             return
@@ -1067,10 +1149,11 @@ def emit_field_checks(inst: Instruction, fmt: IRFormat, out: CWriter) -> None:
     base = f"-{popped}" if popped.isdigit() else f"-({popped})"
     for name, role in zip(FIELDS, fmt.roles):
         f = FIELD_VARS[name]
-        if role == ROLE_DST and fmt.window:
-            out.emit(f"IR_CHECK_SLOT({f}, {base} + {fmt.dst_offset});\n")
-        elif role == ROLE_DST:
-            out.emit(f"IR_CHECK_SLOT({f}, {fmt.dst_offset});\n")
+        if role == ROLE_DST:
+            # A dst that may name a local, see store_mode()
+            check = "IR_CHECK_INPUT" if fmt.store_dst else "IR_CHECK_SLOT"
+            offset = f"{base} + {fmt.dst_offset}" if fmt.window else fmt.dst_offset
+            out.emit(f"{check}({f}, {offset});\n")
         elif role == ROLE_BASE:
             out.emit(f"IR_CHECK_SLOT({f}, {base});\n")
         elif role == ROLE_TOP:
@@ -1153,6 +1236,13 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     emit_field_checks(inst, fmt, out)
     if inst.properties.uses_opcode:
         out.emit(f"opcode = {name};\n")
+    mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
+    if mode == STORE_LEAVE:
+        out.emit(f"if (IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]})) {{\n")
+        emitter.emit_jump_to_predicted(inst)
+        out.emit("}\n")
+    elif mode == STORE_NEVER:
+        out.emit(f"assert(!IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]}));\n")
     declare_variables(inst, out)
     field_inputs: dict[int, str] = {}
     raw_inputs: dict[int, str] = {}
@@ -1171,6 +1261,8 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.start_line()
     if reachable:
         stack.flush(out)
+        if mode == STORE_RESULT:
+            out.emit(f"IR_STORE_RESULT({FIELD_VARS[fmt.field_of(ROLE_DST)]});\n")
         out.emit("DISPATCH();\n")
     out.start_line()
     out.emit("}")
@@ -1183,7 +1275,9 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
     emitter = IREmitter(out, analysis, formats)
     out.emit("\n")
     for name, inst in sorted(handler_instructions(analysis).items()):
+        emitter.handler_format = formats[name]
         generate_handler(name, inst, formats[name], emitter, out)
+        emitter.handler_format = None
 
 
 def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:

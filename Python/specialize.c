@@ -2505,9 +2505,11 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
                 break;
             }
             if (PyUnicode_CheckExact(lhs)) {
-                _PyInstr *next = instr + 1;
-                bool to_store = (instr_opcode(next) == STORE_FAST);
-                int local = to_store ? instr_oparg(next) : 0;
+                // A STORE_FAST folded into the word: its dst names the local
+                _PyInterpreterFrame *frame = current_frame();
+                int local = _PyCode_InstrStoredLocal(
+                    _PyFrame_GetCode(frame), _PyFrame_InstrOffset(frame, instr));
+                bool to_store = local >= 0;
                 if (to_store && PyStackRef_IsObject(locals[local]) &&
                     PyStackRef_AsPyObjectBorrow(locals[local]) == lhs)
                 {

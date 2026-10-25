@@ -133,6 +133,15 @@ _PyRegAlloc_Slots(const _PyIRFormat *fmt, int nlocalsplus, int depth,
  * because it outlives the block, is stored, or the local is killed while
  * the value is on the stack.  A load keeps its word too if it starts a line
  * that its consumer does not, so that line events stay where they were.
+ *
+ * A STORE_FAST has no word when the word before it pushes the value alone,
+ * on top, and its format has _PyIR_STORE_DST: that word's dst names the
+ * local, and its handler moves the result there and releases the old
+ * value, as STORE_FAST would (IR_STORE_RESULT).  Nothing runs between the
+ * two, so this needs no liveness either.  The value a store takes is never
+ * a borrow: Python/flowgraph.c makes no load that a store consumes
+ * borrowed, and formats whose result may alias a borrowed input do not
+ * have _PyIR_STORE_DST.
  */
 
 /* The instructions that start a basic block: jump targets, exception
@@ -188,9 +197,49 @@ fold_loads(_PyInstructionSequence *instrs, const int *depths,
         if (load->i_loc.lineno != consumer->i_loc.lineno) {
             return;
         }
+        // Only other folded loads lie between the load and its consumer, so
+        // nothing writes the local in between
+        assert(run[r] == i - nrun + r);
+        for (int j = run[r] + 1; j < i; j++) {
+            assert(instrs->s_instrs[j].i_opcode == LOAD_FAST_BORROW);
+        }
         folds[run[r]].folded = 1;
         folds[i].in[k] = load->i_oparg;
     }
+}
+
+/* Fold STORE_FAST i into the word before it, if that pushes the value
+ * alone; see above. */
+static void
+fold_store(_PyInstructionSequence *instrs, const int *depths,
+           const int *handlers, _PyRegFold *folds, int i)
+{
+    int p = i - 1;
+    _PyInstruction *store = &instrs->s_instrs[i];
+    _PyInstruction *producer = &instrs->s_instrs[p];
+    if (depths[p] < 0 || folds[p].folded || folds[i].in[0] >= 0
+        || producer->i_opcode == LOAD_FAST_BORROW
+        || producer->i_loc.lineno != store->i_loc.lineno)
+    {
+        return;
+    }
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handlers[p]);
+    if (!(fmt->flags & _PyIR_STORE_DST)) {
+        return;
+    }
+    int popped = _PyOpcode_num_popped(producer->i_opcode, producer->i_oparg);
+    int dst = fmt->flags & _PyIR_WINDOW
+        ? depths[p] - popped + fmt->dst : depths[p] + fmt->dst;
+    // The depth after the producer is the store's: the value is on top
+    if (dst != depths[i] - 1) {
+        return;
+    }
+    // Nothing lies between the producer and the store, so nothing reads or
+    // writes the local in between, and no other fold sees the store: loads
+    // fold only into the next word, which the store was not.
+    assert(folds[p].dst < 0);
+    folds[i].folded = 1;
+    folds[p].dst = store->i_oparg;
 }
 
 int
@@ -203,6 +252,7 @@ _PyRegAlloc_Fold(_PyInstructionSequence *instrs, const int *depths,
         for (int k = 0; k < 4; k++) {
             folds[i].in[k] = -1;
         }
+        folds[i].dst = -1;
     }
     if (n == 0) {
         return 0;
@@ -233,6 +283,13 @@ _PyRegAlloc_Fold(_PyInstructionSequence *instrs, const int *depths,
         if (nrun > 0) {
             fold_loads(instrs, depths, handlers, folds, i, run, nrun);
             nrun = 0;
+        }
+    }
+    for (int i = 1; i < n; i++) {
+        if (instrs->s_instrs[i].i_opcode == STORE_FAST && !starts[i]
+            && depths[i] >= 0)
+        {
+            fold_store(instrs, depths, handlers, folds, i);
         }
     }
     PyMem_Free(starts);

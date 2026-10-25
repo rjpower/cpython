@@ -57,6 +57,8 @@ def format_initializer(fmt: IRFormat, shadow: str, nofb: str) -> str:
         flags.append("_PyIR_NO_FOLD")
     if fmt.transparent:
         flags.append("_PyIR_TRANSPARENT")
+    if fmt.store_dst:
+        flags.append("_PyIR_STORE_DST")
     dst = "_PyIR_NO_DST" if fmt.dst_offset is None else str(fmt.dst_offset)
     return (
         f"{{ .flags = {' | '.join(flags)}, "

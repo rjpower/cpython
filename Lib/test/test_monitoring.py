@@ -1274,20 +1274,16 @@ class TestLineAndInstructionEvents(CheckEvents):
             line3 = 3
 
         self.check_events(func1, recorders = LINE_AND_INSTRUCTION_RECORDERS, expected = [
-            ("line", "get_events", 10),
-            ("line", "func1", 1),
-            ("instruction", "func1", 1),
-            ("instruction", "func1", 2),
-            ("line", "func1", 2),
-            ("instruction", "func1", 3),
-            ("instruction", "func1", 4),
-            ("line", "func1", 3),
-            ("instruction", "func1", 5),
-            ("instruction", "func1", 6),
-            ("instruction", "func1", 7),
-            ("instruction", "func1", 8),
-            ("line", "get_events", 11),
-        ])
+            ('line', 'get_events', 10),
+            ('line', 'func1', 1),
+            ('instruction', 'func1', 1),
+            ('line', 'func1', 2),
+            ('instruction', 'func1', 2),
+            ('line', 'func1', 3),
+            ('instruction', 'func1', 3),
+            ('instruction', 'func1', 4),
+            ('instruction', 'func1', 5),
+            ('line', 'get_events', 11)])
 
     def test_c_call(self):
 
@@ -1297,23 +1293,20 @@ class TestLineAndInstructionEvents(CheckEvents):
             line3 = 3
 
         self.check_events(func2, recorders = LINE_AND_INSTRUCTION_RECORDERS, expected = [
-            ("line", "get_events", 10),
-            ("line", "func2", 1),
-            ("instruction", "func2", 1),
-            ("instruction", "func2", 2),
-            ("line", "func2", 2),
-            ("instruction", "func2", 3),
-            ("instruction", "func2", 4),
-            ("instruction", "func2", 5),
-            ("instruction", "func2", 6),
-            ("instruction", "func2", 7),
-            ("line", "func2", 3),
-            ("instruction", "func2", 8),
-            ("instruction", "func2", 9),
-            ("instruction", "func2", 10),
-            ("instruction", "func2", 11),
-            ("line", "get_events", 11),
-        ])
+            ('line', 'get_events', 10),
+            ('line', 'func2', 1),
+            ('instruction', 'func2', 1),
+            ('line', 'func2', 2),
+            ('instruction', 'func2', 2),
+            ('instruction', 'func2', 3),
+            ('instruction', 'func2', 4),
+            ('instruction', 'func2', 5),
+            ('instruction', 'func2', 6),
+            ('line', 'func2', 3),
+            ('instruction', 'func2', 7),
+            ('instruction', 'func2', 8),
+            ('instruction', 'func2', 9),
+            ('line', 'get_events', 11)])
 
     def test_try_except(self):
 
@@ -1326,29 +1319,25 @@ class TestLineAndInstructionEvents(CheckEvents):
             line = 6
 
         self.check_events(func3, recorders = LINE_AND_INSTRUCTION_RECORDERS, expected = [
-            ("line", "get_events", 10),
-            ("line", "func3", 1),
-            ("instruction", "func3", 1),
-            ("line", "func3", 2),
-            ("instruction", "func3", 2),
-            ("instruction", "func3", 3),
-            ("line", "func3", 3),
-            ("instruction", "func3", 4),
-            ("instruction", "func3", 5),
-            ("instruction", "func3", 6),
-            ("line", "func3", 4),
-            ("instruction", "func3", 7),
-            ("line", "func3", 5),
-            ("instruction", "func3", 8),
-            ("instruction", "func3", 9),
-            ("instruction", "func3", 10),
-            ("line", "func3", 6),
-            ("instruction", "func3", 11),
-            ("instruction", "func3", 12),
-            ("instruction", "func3", 13),
-            ("instruction", "func3", 14),
-            ("line", "get_events", 11),
-        ])
+            ('line', 'get_events', 10),
+            ('line', 'func3', 1),
+            ('instruction', 'func3', 1),
+            ('line', 'func3', 2),
+            ('instruction', 'func3', 2),
+            ('line', 'func3', 3),
+            ('instruction', 'func3', 3),
+            ('instruction', 'func3', 4),
+            ('instruction', 'func3', 5),
+            ('line', 'func3', 4),
+            ('instruction', 'func3', 6),
+            ('line', 'func3', 5),
+            ('instruction', 'func3', 7),
+            ('instruction', 'func3', 8),
+            ('line', 'func3', 6),
+            ('instruction', 'func3', 9),
+            ('instruction', 'func3', 10),
+            ('instruction', 'func3', 11),
+            ('line', 'get_events', 11)])
 
     def test_with_restart(self):
         def func1():
@@ -1360,15 +1349,12 @@ class TestLineAndInstructionEvents(CheckEvents):
             ('line', 'get_events', 10),
             ('line', 'func1', 1),
             ('instruction', 'func1', 1),
-            ('instruction', 'func1', 2),
             ('line', 'func1', 2),
+            ('instruction', 'func1', 2),
+            ('line', 'func1', 3),
             ('instruction', 'func1', 3),
             ('instruction', 'func1', 4),
-            ('line', 'func1', 3),
             ('instruction', 'func1', 5),
-            ('instruction', 'func1', 6),
-            ('instruction', 'func1', 7),
-            ('instruction', 'func1', 8),
             ('line', 'get_events', 11)])
 
         sys.monitoring.restart_events()
@@ -1377,15 +1363,12 @@ class TestLineAndInstructionEvents(CheckEvents):
             ('line', 'get_events', 10),
             ('line', 'func1', 1),
             ('instruction', 'func1', 1),
-            ('instruction', 'func1', 2),
             ('line', 'func1', 2),
+            ('instruction', 'func1', 2),
+            ('line', 'func1', 3),
             ('instruction', 'func1', 3),
             ('instruction', 'func1', 4),
-            ('line', 'func1', 3),
             ('instruction', 'func1', 5),
-            ('instruction', 'func1', 6),
-            ('instruction', 'func1', 7),
-            ('instruction', 'func1', 8),
             ('line', 'get_events', 11)])
 
     def test_turn_off_only_instruction(self):
@@ -1956,10 +1939,10 @@ class TestBranchAndJumpEvents(CheckEvents):
             3
 
         self.check_events(func, recorders = JUMP_AND_BRANCH_RECORDERS, expected = [
-            ('branch', 'func', 2, 2),
+            ('branch', 'func', 2, 3),
             ('branch', 'func', 3, 6),
             ('jump', 'func', 6, 2),
-            ('branch', 'func', 2, 2),
+            ('branch', 'func', 2, 3),
             ('branch', 'func', 3, 4),
             ('jump', 'func', 4, 2),
             ('branch', 'func', 2, 7)])
@@ -1968,13 +1951,13 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('line', 'get_events', 10),
             ('line', 'func', 1),
             ('line', 'func', 2),
-            ('branch', 'func', 2, 2),
+            ('branch', 'func', 2, 3),
             ('line', 'func', 3),
             ('branch', 'func', 3, 6),
             ('line', 'func', 6),
             ('jump', 'func', 6, 2),
             ('line', 'func', 2),
-            ('branch', 'func', 2, 2),
+            ('branch', 'func', 2, 3),
             ('line', 'func', 3),
             ('branch', 'func', 3, 4),
             ('line', 'func', 4),
@@ -1985,9 +1968,9 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('line', 'get_events', 11)])
 
         self.check_events(func, recorders = BRANCHES_RECORDERS, expected = [
-            ('branch left', 'func', 2, 2),
+            ('branch left', 'func', 2, 3),
             ('branch right', 'func', 3, 6),
-            ('branch left', 'func', 2, 2),
+            ('branch left', 'func', 2, 3),
             ('branch left', 'func', 3, 4),
             ('branch right', 'func', 2, 7)])
 
@@ -1998,11 +1981,11 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('branch right', 'whilefunc', 1, 3)])
 
         self.check_events(func, recorders = BRANCH_OFFSET_RECORDERS, expected = [
-            ('branch left', 'func', 7, 8),
-            ('branch right', 'func', 11, 16),
-            ('branch left', 'func', 7, 8),
-            ('branch left', 'func', 11, 13),
-            ('branch right', 'func', 7, 21)])
+            ('branch left', 'func', 6, 7),
+            ('branch right', 'func', 9, 13),
+            ('branch left', 'func', 6, 7),
+            ('branch left', 'func', 9, 11),
+            ('branch right', 'func', 6, 17)])
 
     def test_except_star(self):
 
@@ -2029,8 +2012,8 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('branch', 'func', 4, 4),
             ('line', 'func', 5),
             ('line', 'meth', 1),
-            ('jump', 'func', 5, '[offset=37]'),
-            ('branch', 'func', '[offset=39]', '[offset=41]'),
+            ('jump', 'func', 5, '[offset=35]'),
+            ('branch', 'func', '[offset=37]', '[offset=39]'),
             ('line', 'get_events', 11)])
 
         self.check_events(func, recorders = FLOW_AND_LINE_RECORDERS, expected = [
@@ -2044,8 +2027,8 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('line', 'func', 5),
             ('line', 'meth', 1),
             ('return', 'meth', None),
-            ('jump', 'func', 5, '[offset=37]'),
-            ('branch', 'func', '[offset=39]', '[offset=41]'),
+            ('jump', 'func', 5, '[offset=35]'),
+            ('branch', 'func', '[offset=37]', '[offset=39]'),
             ('return', 'func', None),
             ('line', 'get_events', 11)])
 
@@ -2058,7 +2041,7 @@ class TestBranchAndJumpEvents(CheckEvents):
             return None
 
         in_loop = ('branch left', 'foo', 4, 6)
-        exit_loop = ('branch right', 'foo', 4, 12)
+        exit_loop = ('branch right', 'foo', 4, 11)
         self.check_events(foo, recorders = BRANCH_OFFSET_RECORDERS, expected = [
             in_loop,
             in_loop,
@@ -2105,15 +2088,15 @@ class TestBranchAndJumpEvents(CheckEvents):
             return x
 
         self.check_events(func, recorders = BRANCHES_RECORDERS, expected = [
-            ('branch left', 'func', 2, 2),
+            ('branch left', 'func', 2, 3),
             ('branch right', 'func', 4, 6),
             ('branch right', 'func', 6, 8),
-            ('branch left', 'func', 2, 2),
+            ('branch left', 'func', 2, 3),
             ('branch left', 'func', 4, 5),
-            ('branch left', 'func', 2, 2),
+            ('branch left', 'func', 2, 3),
             ('branch right', 'func', 4, 6),
             ('branch left', 'func', 6, 7),
-            ('branch left', 'func', 2, 2),
+            ('branch left', 'func', 2, 3),
             ('branch right', 'func', 4, 6),
             ('branch right', 'func', 6, 8),
             ('branch right', 'func', 2, 10)])

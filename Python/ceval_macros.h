@@ -557,8 +557,7 @@ gen_try_set_executing(PyGenObject *gen)
 
 /* Whether an input that the handler reads through field F, whose canonical
  * slot is CANON, names a local whose LOAD_FAST_BORROW a fold absorbed.
- * The assembler folds no load yet, so every input field is CANON.  A local
- * is below every temporary, so it is never CANON. */
+ * A local is below every temporary, so it is never CANON. */
 #define IR_BORROWED(F, CANON) ((int)(F) != (int)(CANON))
 
 /* REF, read through field F and known to be a pointer, borrowed if F names
@@ -616,6 +615,22 @@ static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
 #define IR_NLOCALSPLUS() \
     ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
 #define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
+
+/* A folded STORE_FAST (_PyIR_STORE_DST): when dst field F names a local,
+ * the result that the handler left on top of the stack moves there, and
+ * the old value of the local is released after it, as STORE_FAST does. */
+#define IR_STORE_RESULT(F) \
+    do { \
+        if (IR_IS_LOCAL(F)) { \
+            _PyStackRef ir_old = IR_SLOT(F); \
+            IR_SLOT(F) = stack_pointer[-1]; \
+            stack_pointer -= 1; \
+            _PyFrame_SetStackPointer(frame, stack_pointer); \
+            _PyFrame_StackPointerValidate(frame); \
+            PyStackRef_XCLOSE(ir_old); \
+            _PyFrame_StackPointerInvalidate(frame); \
+        } \
+    } while (0)
 
 /* The slot that stack_pointer points to */
 #define IR_STACK_SLOT() ((int)(stack_pointer - frame->localsplus))

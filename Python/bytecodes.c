@@ -1002,18 +1002,16 @@ dummy_func(
         macro(BINARY_OP_ADD_UNICODE) =
             _GUARD_TOS_UNICODE + _GUARD_NOS_UNICODE + unused/5 + _BINARY_OP_ADD_UNICODE + _POP_TOP_UNICODE + _POP_TOP_UNICODE;
 
-        // This is a subtle one. We write NULL to the local
-        // of the following STORE_FAST and leave the result for STORE_FAST
-        // later to store.
+        // This is a subtle one. We write NULL to the local that dst
+        // names, the target of the STORE_FAST folded into the word, and
+        // leave the result for IR_STORE_RESULT to store.
         op(_BINARY_OP_INPLACE_ADD_UNICODE, (left, right -- res)) {
             PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
             assert(PyUnicode_CheckExact(left_o));
             assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(right)));
 
-            int next_oparg;
-            assert(INSTR_OPCODE(next_instr) == STORE_FAST);
-            next_oparg = INSTR_OPARG(next_instr);
-            _PyStackRef *target_local = &GETLOCAL(next_oparg);
+            assert(IR_IS_LOCAL(IR_DST));
+            _PyStackRef *target_local = &IR_SLOT(IR_DST);
             assert(PyUnicode_CheckExact(left_o));
             EXIT_IF(PyStackRef_AsPyObjectBorrow(*target_local) != left_o);
             STAT_INC(BINARY_OP, hit);

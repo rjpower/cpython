@@ -4543,7 +4543,7 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
         location instead of failing the whole sample."""
         src = (
             "def big(sample):\n"
-            + "    x = 1\n" * 20_000
+            + "    x = 1\n" * 30_000
             + "    return sample()\n"
         )
         ns = {}

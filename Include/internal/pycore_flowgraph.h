@@ -51,14 +51,16 @@ void _PyRegAlloc_Slots(const struct _PyIRFormat *fmt, int nlocalsplus,
 
 /* What folding decides for an instruction (Python/regalloc.c): whether it
  * keeps a word, and the slots that replace the canonical ones of its
- * inputs, or -1. */
+ * inputs and of its dst, or -1. */
 typedef struct {
-    int folded;         // no word: a load that its consumer reads directly
+    int folded;         // no word: a load that its consumer reads directly,
+                        // or a store that its producer does
     int in[4];
+    int dst;
 } _PyRegFold;
 
-/* Fold the loads of instrs, whose handlers are handlers[i] and whose stack
- * depths are depths[i], into folds[i]. */
+/* Fold the loads and stores of instrs, whose handlers are handlers[i] and
+ * whose stack depths are depths[i], into folds[i]. */
 int _PyRegAlloc_Fold(_PyInstructionSequence *instrs, const int *depths,
                      const int *handlers, _PyRegFold *folds);
 

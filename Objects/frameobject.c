@@ -1580,6 +1580,10 @@ mark_stacks(PyCodeObject *code_obj, int len)
                     stacks[next_i] = next_stack;
                 }
             }
+            if (_PyCode_InstrStoredLocal(code_obj, i) >= 0) {
+                // A STORE_FAST of the result is folded into the word
+                stacks[next_i] = pop_value(stacks[next_i]);
+            }
             i = next_i;
         }
         /* Scan exception table */

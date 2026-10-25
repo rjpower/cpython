@@ -781,3 +781,39 @@ all 7 ports pass. Step 3 is split: 3a frames and calls (static frame, dead
 temporaries NULL, no stack pointer, frame header and value stacks with
 overlapping argument windows, RESUME into frame entry), 3b the register CFG
 and passes of note 07. 3a launched, budget 4 days.
+
+### 2026-10-25 16:20 — step 3a, milestone 1: no stack pointer, dead temporaries NULL
+
+Items 1 and 2 of step 3a landed (d867022133c, b59b5ea5676). Every frame
+slot holds a value or NULL; handlers keep the slots in a register and
+have no stack pointer. The cases generator models the slots in IRStack
+(Tools/cases_generator/ir_generator.py), behind address/load/store hooks
+in stack.py; the TOP role, the SYNC modes, canonical-slot arithmetic,
+IR_CLEAR_IF_BORROWED, IR_STORE_RESULT and the pop_N_error labels are gone.
+The frame keeps `return_slot`, the slot that receives a callee's result or
+a generator's sent value. The exception table names the exception's slot;
+the pyc magic is 3712.
+
+Two decisions differ from the brief's wording and go into note 06
+section 12:
+
+- The unwinder releases temporaries from the handler's first slot up, not
+  all of them: a handler runs with live temporaries below it, such as the
+  iterator of an enclosing for loop or the with-block's exit pair.
+- LOAD_SPECIAL became window style. Its output pair overlaid its input,
+  which a fold of `COPY 1` could make a local, and the outputs then
+  overwrote the local. `with` blocks lose that one fold.
+
+The generator found one bug it could not see: a window handler cleared an
+array input's slots before the statement that closed an element
+(BUILD_INTERPOLATION's format spec). The element now moves to a C variable
+first.
+
+Tests: rungs 1 and 2 pass on dev-debug, dev-default, dev-tailcall and
+dev-stackrefdebug; dev-ft has the known 78 failures. The full dev-debug
+suite passes but for test_remote_exec_deleted_static_executable. The full
+dev-stackrefdebug suite fails 15 files. A build of 1b71d70deb4 with the
+same flags fails the same 15, and where counted (test_faulthandler,
+test_threading, test_interpreters, test_embed) the same number of tests:
+stackref leak reports at exit, and faulthandler dumps that record a
+borrow without the GIL.

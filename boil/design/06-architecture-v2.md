@@ -840,3 +840,223 @@ bytecode in step 1 and 1,334 KB of words plus 257 KB of feedback tables in
 2a. A loaded code object now holds 8 bytes per instruction where it held 2
 bytes per code unit. A quarter of the words load a local or a constant;
 2b's folding removes many of them.
+
+## 11. Step 2b decisions and measurements
+
+Step 2b folded loads, stores and truth tests into the words that use them.
+Step 3 takes over what is left.
+
+**What landed.**
+
+1. A `LOAD_FAST_BORROW` keeps no word when the next word reads it through
+   an input field, on the same line and in the same block (option A of
+   section 2.3). The commits are e06e93ea0db and 9fe2885ef6e.
+   `RETURN_VALUE` reads its value through a field (710a7d5ae0c).
+2. A `STORE_FAST` folds into the word that produces its value, through the
+   `_PyIR_STORE_DST` format flag (5d12e1cd240).
+3. `COPY 1` just after `LOAD_FAST x` becomes a second load of `x`, which
+   then folds, so `x and y` and `o.a += 1` keep no `COPY` (82b2b301236).
+   Renaming `SWAP` and `POP_TOP` needs liveness, so it moves to step 3.
+4. `POP_JUMP_IF_FALSE` and `_TRUE` test the truth of any value
+   (82b2b301236). They are families with TO_BOOL's specialisations: BOOL,
+   INT, LIST, NONE, STR and ALWAYS_TRUE. The flowgraph drops the `TO_BOOL`
+   before a jump, and a `UNARY_NOT` there inverts the jump.
+5. Removing `RESUME` moves to step 3, which rewrites the call and resume
+   paths anyway.
+
+A fix came out of item 1 (7a616230c10). The generic handlers boxed an
+inline local and wrote the box back into the local, so the local stayed
+boxed. Now the box belongs to the handler, and the local keeps its inline
+value.
+
+Plan section 6 lists the opcodes 2b would delete. 2b deletes none of
+them:
+
+- `TO_BOOL` and `UNARY_NOT` remain where a bool is a value, as in
+  `return not x`.
+- `COPY`, `SWAP` and `POP_TOP` remain for the cases that need renaming.
+- `RESUME_CHECK` remains until step 3.
+
+**Decisions.**
+
+- *Jump feedback.* An entry of POP_JUMP_IF_FALSE or _TRUE is a UNARY
+  entry of kind BRANCH. The counter drives specialisation. The taken
+  history replaces the oparg in the header, which the jump does not need
+  because its target is in the word. `make_exec` and instrumentation's
+  `warm_up` now set the counter of every entry. POP_JUMP_IF_NONE and
+  _NOT_NONE keep header-only entries.
+- *Opcode numbers.* The twelve jump specialisations do not fit in the 106
+  numbers between RESUME and the instrumented opcodes. The cases generator
+  puts the overflow in the unused numbers below RESUME (117 to 127).
+  Nothing in C uses MIN_SPECIALIZED_OPCODE as a range.
+- *Where the truth test folds.* `fold_truth_tests()` in
+  `Python/flowgraph.c` runs after the peepholes, so COMPARE_OP, IS_OP and
+  CONTAINS_OP absorb a TO_BOOL first. The JUMP_IF_FALSE and _TRUE pseudo
+  instructions expand to `COPY 1` and the jump.
+- *Operand-kind variants: tried and removed.* This was Lua 5.4's
+  ADDK/ADDI technique: spare bits of the handler index record which inputs
+  are locals, and each pattern of the hot families gets its own generated
+  handler. It made 519 handlers instead of 302. ceval.o text grew from
+  217.0K to 371.8K and data from 2.8K to 33.1K, behind a 4096-entry table.
+  It won back part of the per-loop regression (table below). The
+  regression is the run-time operand machinery, which step 3 removes, so
+  the variants would be deleted again.
+- *Gates.* From 2026-10-25, gates check correctness, and 2b reports
+  dispatch counts and instruction counts without gating on them
+  (section 6).
+
+**Dispatches.** These are Py_STATS opcode executions of one pyperformance
+worker at `-l 2` (`--worker -l 2 -w 0 -n 1 -p 1`, build/dev-pystats). The
+day-1 worklog figures count a whole default run, so they are about four
+times larger.
+
+| dispatches | 2a | item 1 | items 1-2 | items 1-4 | vs 2a |
+|---|---|---|---|---|---|
+| richards | 21.83M | 17.81M | 16.86M | 15.33M | -29.8% |
+| go | 60.47M | 50.29M | 46.23M | 42.96M | -29.0% |
+
+The plan's target was 35 percent. Before items 3 and 4, the breakdown of
+what they could remove was:
+
+- richards: 1.50M TO_BOOL before a jump; 0.63M each of COPY 1 and TO_BOOL
+  from `and` and `or`; 0.25M UNARY_NOT. The projection was 14.7M (-32.5%).
+- go: 1.52M TO_BOOL; 0.73M COPY after LOAD_FAST_BORROW (`o.a += x`);
+  0.20M COPY after LOAD_FAST; 0.73M SWAP before STORE_ATTR, deferred. The
+  projection was 43.8M (-27.6%).
+
+The value contexts that remain in richards are 0.43M COPY after
+LOAD_ATTR, from `self.a and ...` as a value, and 0.25M TO_BOOL_BOOL and
+UNARY_NOT, from `not self.x` as a value. The rest of the gap to 35 percent
+is the loads under windows, calls and globals, and RESUME_CHECK (1.01M in
+richards, 1.89M in go), all of it step 3's work.
+
+**What step 3 inherits** (go, after items 1 to 4):
+
+- LOAD_FAST_BORROW, 3.45M. Its successors:
+  - LOAD_ATTR_INSTANCE_VALUE, 1.29M, where the load is below another word,
+    as in `f(a, b.c)`;
+  - CALL_PY_EXACT_ARGS, 1.00M;
+  - LOAD_GLOBAL_MODULE, 0.53M;
+  - LOAD_SMALL_INT_INLINE, 0.24M.
+
+  In richards: 0.67M, mostly before LOAD_GLOBAL, LOAD_ATTR and calls.
+- STORE_FAST, 1.50M. Its predecessors are RETURN_VALUE, 1.00M (the
+  caller's result, which step 3 writes straight to the caller's dst), and
+  COPY, 0.25M (chained assignment).
+- SWAP, 0.75M, after BINARY_OP, before STORE_ATTR and STORE_SUBSCR in
+  augmented assignment.
+- POP_TOP, 1.00M, half of it after RETURN_VALUE.
+- RESUME_CHECK, 1.89M.
+
+**Instructions per loop.** These are user-mode instructions per loop of
+the worker, from runs at 2 and 10 loops, differenced. Each figure is the
+median of four, and each build has its own `PYTHONPYCACHEPREFIX`. The
+column "before 3-4" is 7c9ccdcaca3.
+
+gcc 15, computed goto:
+
+| per loop (M) | step 1 | 2a | before 3-4 | 2b | 2b vs 2a |
+|---|---|---|---|---|---|
+| richards | 575.1 | 594.3 | 704.1 | 733.4 | +23.4% |
+| go | 1244.2 | 1312.4 | 1689.9 | 1774.1 | +35.2% |
+| nbody | 1030.3 | 1028.6 | 1563.4 | 1640.6 | +59.5% |
+| float | 782.0 | 804.4 | 963.8 | 995.2 | +23.7% |
+
+clang 21, tail calls:
+
+| per loop (M) | before 3-4 | 2b |
+|---|---|---|
+| richards | 680.7 | 672.9 |
+| go | 1589.8 | 1570.3 |
+| nbody | 1675.8 | 1675.8 |
+| float | 995.4 | 990.5 |
+
+Items 3 and 4 remove 7 to 9 percent of dispatches. In the tail-call
+build, where each handler is its own function, they save up to 1.2
+percent of instructions. In the gcc computed-goto build they add 3 to 5
+percent, because GCC allocates registers for the whole eval loop at once,
+as the next paragraph shows.
+
+Where the 2a-to-2b rise comes from:
+
+- **Step 3** removes two costs:
+  - the stack-pointer sync on handler entry: SYNC_DST, SYNC_TOP and
+    SYNC_LAG, including `stack_pointer += IR_IS_LOCAL(field)`;
+  - the canonical-slot arithmetic, `nlocalsplus + depth`, that decides
+    whether a field names a local.
+- **Step 5** removes two more:
+  - the borrowed-or-consumed tests at run time (`IR_LOAD_BORROWED`,
+    `IR_BORROW_KNOWN`, `IR_CLEAR_IF_BORROWED`, `IR_DROP_BORROW`);
+  - the release of the old value of a dst that names a local, and the
+    test for it.
+
+**GCC spills.** Since item 2, GCC spills `frame`, `next_instr` and
+`stack_pointer` to the stack frame across the whole computed-goto loop
+(`-0x188`, `-0x190` and `-0x198(%rbp)`). Every handler reloads them.
+These are `%rbp`-relative references in `_PyEval_EvalFrameDefault`:
+
+| build | %rbp refs | lines | text |
+|---|---|---|---|
+| 2a | 2309 | 24.0K | |
+| item 1 | 3816 | 29.8K | |
+| before 3-4 | 7448 | 40.4K | 238.9K |
+| 2b | 10176 | 44.6K | 263.8K |
+| experiment base: items 1-2 with the variant generator, no variants | 8629 | 42.2K | |
+| the base, operand machinery stubbed out | 2327 | 23.8K | |
+| stubbed, with LOAD_ATTR variants | 2291 | 26.4K | |
+| stubbed, with BINARY_OP variants | 5330 | 55.6K | |
+| operand-kind variants, full | 11248 | 69.2K | |
+
+The stubbed rows replace `IR_IS_LOCAL`, `IR_LOAD_BORROWED`,
+`IR_BORROW_KNOWN`, `IR_CLEAR_IF_BORROWED` and `IR_STORE_RESULT` with their
+stack-only forms. That build keeps the state in registers, as 2a does. The
+code size and register pressure of the run-time operand machinery cause
+the spills. Changing GCC's register-allocation options (`-fira-region`,
+`-fira-algorithm`, the conflict-table size, the loop limits) made no
+difference. Step 3's removal of the stack pointer is the cure, and step 3
+should measure the computed-goto build first.
+
+Micro loops: instructions per iteration of `for i in range(1000):`
+around the body, in the gcc build, with `x` and `y` locals holding inline
+ints. "Variants" is the operand-kind experiment, without and with the
+inline-local fix:
+
+| body | 2a | before variants | variants | variants + fix |
+|---|---|---|---|---|
+| `x + y` | 131 | 225 | 190 | 158 |
+| `z = x + y` | 138 | 202 | 168 | 136 |
+| `pass` | 69 | 71 | 71 | 79 |
+| `z = x` | 104 | 109 | 109 | 123 |
+| boxed `x + y` | 170 | 225 | 190 | 203 |
+
+**nbody.** nbody boxes 1.9M floats per run, 1.5M of them in
+`STORE_SUBSCR_LIST_INT`, which stores an inline float into a list. 2a has
+the same boxing. Step 6a removes it, when lists hold `PyValue`.
+
+**Startup and memory.** `python -c pass` takes 54.0M instructions in
+step 1, 46.6M in 2a, 47.5M before items 3 and 4, and 47.7M in 2b. Peak
+RSS is from `boil/tools/rss.py`, the median of five warm runs, in KiB:
+
+| max RSS | step 1 | 2a | before 3-4 | 2b |
+|---|---|---|---|---|
+| startup | 9428 | 9572 | 10480 | 10524 |
+| imports | 11572 | 11644 | 12600 | 12720 |
+| dicts | 65032 | 64300 | 65496 | 65652 |
+| loops | 10024 | 10016 | 11112 | 11208 |
+
+Items 1 and 2 added about 0.9 MB at startup, which the 57K of extra
+interpreter text does not explain. It is not yet investigated. Items 3 and
+4 add 44 to 160 KB.
+
+**Known failures.**
+
+- dev-debug: test_sys `test_remote_exec_deleted_static_executable`, as
+  before.
+- dev-stackrefdebug: test_embed `test_asyncio_task_during_interpreter_clear`.
+  The function and code references of a never-run coroutine's frame leak
+  at interpreter clear. I believe this predates 2b, but it has not been
+  checked on an older build.
+- dev-ft: 78 failures in the rung-2 files, all of them tests that expect
+  specialisation, which the free-threaded IR does not do. That is the 73
+  known before plus five, because test_to_bool now has five subtests and there
+  is a new test_pop_jump_if.

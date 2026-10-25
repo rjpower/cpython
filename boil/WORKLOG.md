@@ -734,3 +734,42 @@ k is a local, dst is a local) in spare bits of the handler index and
 generate a variant per pattern for the hot families, Lua 5.4's ADDK/ADDI
 technique, so a folded word runs code with no runtime tests. RESUME removal
 (item 5) moves to step 3. Deadline for 2b moves to 2026-10-29 12:00.
+
+### 2026-10-25 — Step 2b, end: truth tests fold into jumps; the variants go
+
+The operand-kind variants were removed, as decided at the policy change
+(note 06 section 6), and items 3 and 4 landed. These are the commits:
+
+- 4ea1b59d7bf: the cases generator puts the specialised opcodes that do
+  not fit their range into free numbers below RESUME.
+- d755da1b3e9: a specialising head drops its field-input borrows before it
+  runs the word again. The Py_STACKREF_DEBUG build hit a fatal error at
+  frame clear without it.
+- 82b2b301236: the conditional jumps test the truth of any value. They
+  specialise as TO_BOOL does, the flowgraph drops TO_BOOL before them and
+  inverts them for UNARY_NOT, and `COPY 1` of a just-loaded local becomes
+  a second load. The pyc magic is now 3711.
+
+Dispatches at `-l 2` are down 29.8% on richards and 29.0% on go against
+2a. The plan's 35% target is not met; what remains is listed for step 3
+in note 06 section 11.
+
+In the gcc computed-goto build, items 3 and 4 add 3 to 5% instructions
+per loop. In the clang tail-call build they save up to 1.2%. GCC spills
+the interpreter state across the eval loop, and the larger handlers made
+that worse: %rbp references went from 7448 to 10176. Section 11 has the
+tables, the attribution to steps 3 and 5, and the experiment with the
+operand machinery stubbed out.
+
+Tests: the full dev-debug suite passes but for the known test_sys failure.
+Rung 2 passes on dev-default and dev-tailcall. dev-stackrefdebug fails one
+test_embed case, which leaks a never-run coroutine's frame references.
+dev-ft has 78 failures, which is the 73 known before plus the new
+specialisation subtests. All seven ports pass `check`.
+
+One measurement pitfall: Python/import.o is not rebuilt when
+pycore_magic_number.h changes. An incremental build then keeps the old
+magic and loads stale pycs, which invalidated one full-suite run. Builds
+that share `Lib/__pycache__` but have different magics also overwrite each
+other's pycs, which corrupts per-loop numbers unless each build gets its
+own PYTHONPYCACHEPREFIX.

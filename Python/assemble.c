@@ -665,9 +665,9 @@ choose_handler(instruction *instr, PyObject *consts)
         }
         return _PyIR_BINARY_OP_FIRST + oparg;
     }
-#ifdef Py_STACKREF_INLINE_VALUES
-    // Objects/codeobject.c turns these back into the boxing forms when
-    // PYTHON_TAGGED_VALUES=0.
+    // The executing copy runs the boxing forms instead in a build without
+    // inline values or under PYTHON_TAGGED_VALUES=0 (Python/ir.c), so the
+    // words do not depend on the build.
     if (opcode == LOAD_SMALL_INT) {
         return LOAD_SMALL_INT_INLINE;
     }
@@ -680,9 +680,6 @@ choose_handler(instruction *instr, PyObject *consts)
             return LOAD_CONST_INLINE_FLOAT;
         }
     }
-#else
-    (void)consts;
-#endif
     return opcode;
 }
 

@@ -162,13 +162,25 @@ _PyIR_InstrFeedback(PyCodeObject *co, const _PyCodeExec *exec,
     return _PyIR_FbEntry(exec->entries, (uint32_t)fb);
 }
 
-/* The boxing form of an inline constant handler, for PYTHON_TAGGED_VALUES=0,
- * or handler itself */
+/* Whether every value stays boxed: in a build without inline values, or
+ * under PYTHON_TAGGED_VALUES=0.  The assembler emits the inline constant
+ * handlers in every build, so that code objects do not depend on it. */
+static inline int
+inline_values_off(void)
+{
+#ifdef Py_STACKREF_INLINE_VALUES
+    return !_PyInterpreterState_GET()->opt_config.tagged_values_enabled;
+#else
+    return 1;
+#endif
+}
+
+/* The boxing form of an inline constant handler if values stay boxed, or
+ * handler itself */
 static inline int
 boxing_handler(int handler)
 {
-#ifdef Py_STACKREF_INLINE_VALUES
-    if (!_PyInterpreterState_GET()->opt_config.tagged_values_enabled) {
+    if (inline_values_off()) {
         switch (handler) {
             case LOAD_SMALL_INT_INLINE:
                 return LOAD_SMALL_INT;
@@ -177,7 +189,6 @@ boxing_handler(int handler)
                 return LOAD_CONST;
         }
     }
-#endif
     return handler;
 }
 
@@ -243,8 +254,7 @@ make_exec(PyCodeObject *co)
         .nwords = (uint32_t)nwords,
     };
     memcpy(words, _PyCode_WORDS(co), words_size);
-#ifdef Py_STACKREF_INLINE_VALUES
-    if (!_PyInterpreterState_GET()->opt_config.tagged_values_enabled) {
+    if (inline_values_off()) {
         for (Py_ssize_t i = 0; i < nwords; i++) {
             int handler = boxing_handler(IR_HANDLER(words[i]));
             if (handler != IR_HANDLER(words[i])) {
@@ -252,7 +262,6 @@ make_exec(PyCodeObject *co)
             }
         }
     }
-#endif
     if (fb_size == 0) {
         return exec;
     }

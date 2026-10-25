@@ -85,7 +85,7 @@ dummy_func(
     _PyInterpreterFrame *frame,
     unsigned char opcode,
     unsigned int oparg,
-    _Py_CODEUNIT *next_instr,
+    _PyIRWord *next_instr,
     PyObject **stack_pointer,
     int throwflag,
     PyObject *args[]
@@ -95,7 +95,7 @@ dummy_func(
     pop_1_error:
     // Dummy locals.
     PyObject *dummy;
-    _Py_CODEUNIT *this_instr;
+    _PyIRWord *this_instr;
     PyObject *attr;
     PyObject *attrs;
     PyObject *bottom;

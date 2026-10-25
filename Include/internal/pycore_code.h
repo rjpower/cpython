@@ -22,30 +22,6 @@ extern "C" {
     _Py_RVALUE((const uint32_t *)((CO)->co_words + Py_SIZE(CO)))
 
 
-/* These macros only remain defined for compatibility. */
-#define _Py_OPCODE(word) ((word).op.code)
-#define _Py_OPARG(word) ((word).op.arg)
-
-static inline _Py_CODEUNIT
-_py_make_codeunit(uint8_t opcode, uint8_t oparg)
-{
-    // No designated initialisers because of C++ compat
-    _Py_CODEUNIT word;
-    word.op.code = opcode;
-    word.op.arg = oparg;
-    return word;
-}
-
-static inline void
-_py_set_opcode(_Py_CODEUNIT *word, uint8_t opcode)
-{
-    word->op.code = opcode;
-}
-
-#define _Py_MAKE_CODEUNIT(opcode, oparg) _py_make_codeunit((opcode), (oparg))
-#define _Py_SET_OPCODE(word, opcode) _py_set_opcode(&(word), (opcode))
-
-
 // We hide some of the newer PyCodeObject fields behind macros.
 // This helps with backporting certain changes to 3.12.
 #define _PyCode_HAS_INSTRUMENTATION(CODE) \

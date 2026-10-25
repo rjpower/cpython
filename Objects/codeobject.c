@@ -776,13 +776,32 @@ _PyCode_New(struct _PyCodeConstructor *con)
  * the legacy "constructors"
  ******************/
 
+/* Whether the inline constant handler of word fits the constant it names */
+static int
+inline_const_fits(_PyIRWord word, PyObject *consts)
+{
+    Py_ssize_t index = _PyIR_FieldOparg(word);
+    if (index >= PyTuple_GET_SIZE(consts)) {
+        return 0;
+    }
+    PyObject *value = PyTuple_GET_ITEM(consts, index);
+    if (IR_HANDLER(word) == LOAD_CONST_INLINE_INT) {
+        return _PyLong_CheckExactAndCompact(value);
+    }
+    return PyFloat_CheckExact(value) && !isnan(PyFloat_AS_DOUBLE(value));
+}
+
 /* Check the fields of words from outside the compiler and marshal that the
  * interpreter uses as indices without checking them: each handler exists,
  * each slot is in the frame, and each feedback index has an entry, which
- * for an operand kept in the entry is not the shared entry 0. */
-static int
-check_words(PyObject *code, PyObject *fbinit, int nslots)
+ * for an operand kept in the entry is not the shared entry 0.  Returns the
+ * words to use, a new reference: code itself, or a copy whose inline
+ * constant handlers that no longer fit their constant run LOAD_CONST, as
+ * after code.replace(co_consts=...). */
+static PyObject *
+check_words(PyObject *code, PyObject *fbinit, PyObject *consts, int nslots)
 {
+    PyObject *result = Py_NewRef(code);
     const char *bytes = PyBytes_AS_STRING(code);
     Py_ssize_t nwords = PyBytes_GET_SIZE(code) / (Py_ssize_t)sizeof(_PyIRWord);
     Py_ssize_t nfb = fbinit == NULL ? 0
@@ -796,7 +815,7 @@ check_words(PyObject *code, PyObject *fbinit, int nslots)
         {
             PyErr_Format(PyExc_ValueError,
                          "code: word %zd has no handler %d", i, handler);
-            return -1;
+            goto error;
         }
         const _PyIRFormat *fmt = &_PyIR_Formats[handler];
         for (int k = 0; k < 4; k++) {
@@ -808,7 +827,7 @@ check_words(PyObject *code, PyObject *fbinit, int nslots)
                 PyErr_Format(PyExc_ValueError,
                              "code: word %zd names slot %u of %d", i, value,
                              nslots);
-                return -1;
+                goto error;
             }
             if (role == _PyIR_ROLE_FB
                 && (value >= (uint32_t)nfb
@@ -819,11 +838,29 @@ check_words(PyObject *code, PyObject *fbinit, int nslots)
                 PyErr_Format(PyExc_ValueError,
                              "code: word %zd has no feedback entry %u", i,
                              value);
-                return -1;
+                goto error;
             }
         }
+        if ((handler == LOAD_CONST_INLINE_INT || handler == LOAD_CONST_INLINE_FLOAT)
+            && !inline_const_fits(word, consts))
+        {
+            if (result == code) {
+                Py_SETREF(result, PyBytes_FromStringAndSize(
+                    PyBytes_AS_STRING(code), PyBytes_GET_SIZE(code)));
+                if (result == NULL) {
+                    return NULL;
+                }
+            }
+            _PyIR_SetHandler(&word, LOAD_CONST);
+            memcpy(PyBytes_AS_STRING(result) + i * sizeof(_PyIRWord), &word,
+                   sizeof(word));
+        }
     }
-    return 0;
+    return result;
+
+error:
+    Py_DECREF(result);
+    return NULL;
 }
 
 /* As PyUnstable_Code_NewWithPosOnlyArgs(), with the feedback table of the
@@ -843,6 +880,7 @@ code_new_with_fbinit(
     PyCodeObject *co = NULL;
     PyObject *localsplusnames = NULL;
     PyObject *localspluskinds = NULL;
+    PyObject *checked = NULL;
 
     if (varnames == NULL || !PyTuple_Check(varnames) ||
         cellvars == NULL || !PyTuple_Check(cellvars) ||
@@ -958,9 +996,11 @@ code_new_with_fbinit(
     if (_PyCode_Validate(&con) < 0) {
         goto error;
     }
-    if (check_words(code, fbinit, nlocalsplus + stacksize) < 0) {
+    checked = check_words(code, fbinit, consts, nlocalsplus + stacksize);
+    if (checked == NULL) {
         goto error;
     }
+    con.code = checked;
     if (nlocals != PyTuple_GET_SIZE(varnames)) {
         PyErr_SetString(PyExc_ValueError,
                         "code: co_nlocals != len(co_varnames)");
@@ -975,6 +1015,7 @@ code_new_with_fbinit(
 error:
     Py_XDECREF(localsplusnames);
     Py_XDECREF(localspluskinds);
+    Py_XDECREF(checked);
     return co;
 }
 

@@ -515,6 +515,19 @@ class CodeTest(unittest.TestCase):
             foo.__code__.replace(
                 co_code=b'\x7f\x00' + foo.__code__.co_code[2:])
 
+    def test_replace_inline_constant(self):
+        # The assembler loads a compact int or a float with an inline
+        # constant handler; replacing the constant keeps the code valid
+        def f():
+            x = 1000
+            y = 2.5
+            return x, y
+
+        consts = tuple("spam" if c == 1000 else b"eggs" if c == 2.5 else c
+                       for c in f.__code__.co_consts)
+        f.__code__ = f.__code__.replace(co_consts=consts)
+        self.assertEqual(f(), ("spam", b"eggs"))
+
     @requires_debug_ranges()
     def test_co_positions_artificial_instructions(self):
         import dis

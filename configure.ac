@@ -7962,6 +7962,24 @@ AS_VAR_IF([with_ir_interp], [yes],
   [AC_DEFINE([Py_IR_INTERP], [1],
     [Define to run code objects as the register IR instead of bytecode.])])
 
+# Check for --with-shapes
+AC_MSG_CHECKING([for --with-shapes])
+AC_ARG_WITH(
+  [shapes],
+  [AS_HELP_STRING(
+    [--with-shapes],
+    [guard instance attribute access on per-type shapes (default is no)]
+  )],
+  [],
+  [with_shapes=no])
+AC_MSG_RESULT([$with_shapes])
+AS_VAR_IF([with_shapes], [yes], [
+  AS_VAR_IF([disable_gil], [yes],
+    [AC_MSG_ERROR([--with-shapes is not supported with --disable-gil])])
+  AC_DEFINE([Py_SHAPES], [1],
+    [Define to guard instance attribute access on per-type shapes.])
+])
+
 # Check for --with-remote-debug
 AC_MSG_CHECKING([for --with-remote-debug])
 AC_ARG_WITH(

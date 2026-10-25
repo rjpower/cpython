@@ -1899,6 +1899,9 @@
 /* Define if you want to enable remote debugging support. */
 #undef Py_REMOTE_DEBUG
 
+/* Define to guard instance attribute access on per-type shapes. */
+#undef Py_SHAPES
+
 /* Define if rl_startup_hook takes arguments */
 #undef Py_RL_STARTUP_HOOK_TAKES_ARGS
 

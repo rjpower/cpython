@@ -2,7 +2,8 @@
 
 Measures user-mode instructions (``instructions:u``) per iteration of the
 inner ``for i in range(1000)`` loop bodies listed in
-boil/design/02-tagged-values.md section 1.
+boil/design/02-tagged-values.md section 1 and, for attribute access,
+boil/design/04-shapes.md section 1.
 
 Invariants: each benchmark is run twice in a fresh ``python -S -E`` process
 with different outer repeat counts; the per-iteration cost is the difference
@@ -36,6 +37,22 @@ class Loop:
     start: int = 0
     subtract_skeleton: bool = True
     design_note: int | None = None  # value quoted in 02-tagged-values.md
+    prelude: str = ""  # module-level definitions
+
+
+# Classes for the attribute rows: four attributes added in __init__.
+CLASSES = """\
+class O:
+    def __init__(self):
+        self.a = 1; self.b = 2; self.c = 3; self.d = 4
+class S:
+    __slots__ = ("a", "b", "c", "d")
+    def __init__(self):
+        self.a = 1; self.b = 2; self.c = 3; self.d = 4
+class E:
+    def __init__(self):
+        pass
+"""
 
 
 LOOPS = [
@@ -49,6 +66,15 @@ LOOPS = [
     Loop("float compare", "a = 1.5; b = 2.5", "z = a < b", design_note=79),
     Loop("list-of-floats subscript", "l = [1.5] * 8; j = 3", "z = l[j]", design_note=88),
     Loop("two STORE_FAST", "x = 1; y = 2", "z = x; z = y", design_note=57),
+    Loop("attribute load", "o = O()", "z = o.a", prelude=CLASSES),
+    Loop("attribute store, existing", "o = O()", "o.a = i", prelude=CLASSES),
+    Loop("attribute load, __slots__", "s = S()", "z = s.a", prelude=CLASSES),
+    Loop("attribute load, after __dict__", "o = O(); o.__dict__", "z = o.a",
+         prelude=CLASSES),
+    Loop("attribute store, after __dict__", "o = O(); o.__dict__", "o.a = i",
+         prelude=CLASSES),
+    Loop("new instance, four attributes", "", "z = O()", prelude=CLASSES),
+    Loop("new instance, empty __init__", "", "z = E()", prelude=CLASSES),
 ]
 
 
@@ -56,6 +82,7 @@ def program(loop: Loop) -> str:
     """Return the source of a script running the loop; argv[1] is the outer repeat count."""
     return (
         "import sys\n"
+        f"{loop.prelude}"
         "def f(reps):\n"
         f"    {loop.setup or 'pass'}\n"
         "    for _ in range(reps):\n"
@@ -110,7 +137,10 @@ def table(rows: list[dict]) -> str:
     lines = [f"{'loop':38} {'measured':>9} {'note':>6} {'ratio':>6}"]
     for r in rows:
         ratio = r["ratio_to_design_note"]
-        flag = "" if ratio is None or abs(ratio - 1) <= 0.05 else "  >5% off"
+        if ratio is None:
+            lines.append(f"{r['name']:38} {r['instructions_per_iteration']:9.1f}")
+            continue
+        flag = "" if abs(ratio - 1) <= 0.05 else "  >5% off"
         lines.append(f"{r['name']:38} {r['instructions_per_iteration']:9.1f} "
                      f"{r['design_note']:6} {ratio:6.3f}{flag}")
     return "\n".join(lines)

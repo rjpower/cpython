@@ -905,7 +905,7 @@ values_size_from_count(size_t count)
     size_t suffix_size = _Py_SIZE_ROUND_UP(count, sizeof(PyObject *));
     assert(suffix_size < 128);
     assert(suffix_size % sizeof(PyObject *) == 0);
-    return (count + 1) * sizeof(PyObject *) + suffix_size;
+    return offsetof(PyDictValues, values) + count * sizeof(PyObject *) + suffix_size;
 }
 
 #define CACHED_KEYS(tp) (((PyHeapTypeObject*)tp)->ht_cached_keys)
@@ -920,6 +920,7 @@ new_values(size_t size)
     }
     res->embedded = 0;
     res->size = 0;
+    _PyDictValues_SetShape(res, _Py_SHAPE_NONE);
     assert(size < 256);
     res->capacity = (uint8_t)size;
     return res;
@@ -2184,6 +2185,7 @@ invalidate_and_clear_inline_values(PyDictValues *values)
 {
     assert(values->embedded);
     FT_ATOMIC_STORE_UINT8(values->valid, 0);
+    _PyDictValues_SetShape(values, _Py_SHAPE_NONE);
     for (int i = 0; i < values->capacity; i++) {
         FT_ATOMIC_STORE_PTR_RELEASE(values->values[i], NULL);
     }
@@ -7272,6 +7274,109 @@ dictvalues_reversed(PyObject *self, PyObject *Py_UNUSED(ignored))
 }
 
 
+#ifdef Py_SHAPES
+
+#define SHAPES_INITIAL_CAPACITY 4
+
+static _PyTypeShapes *
+new_type_shapes(void)
+{
+    _PyTypeShapes *shapes = PyMem_Malloc(
+        sizeof(_PyTypeShapes) + SHAPES_INITIAL_CAPACITY * sizeof(_PyShape));
+    if (shapes == NULL) {
+        return NULL;
+    }
+    shapes->nshapes = 1;
+    shapes->capacity = SHAPES_INITIAL_CAPACITY;
+    shapes->shapes[_Py_SHAPE_ROOT] = (_PyShape){
+        .present = 0, .parent = _Py_SHAPE_NONE, .slot = 0, .kind = _Py_SLOT_BOXED,
+    };
+    return shapes;
+}
+
+uint8_t
+_PyShape_Add(PyTypeObject *tp, uint8_t from, Py_ssize_t slot)
+{
+    struct _instancekeysobject *shared_keys = _PyDictKeys_AsSharedKeys(CACHED_KEYS(tp));
+    _PyTypeShapes *shapes = shared_keys->dsk_shapes;
+    assert(from < shapes->nshapes);
+    assert(0 <= slot && slot < SHARED_KEYS_MAX_SIZE);
+    assert(!_PyShape_HasSlot(tp, from, slot));
+    // A shape is always added after its parent.
+    for (int i = from + 1; i < shapes->nshapes; i++) {
+        _PyShape *s = &shapes->shapes[i];
+        if (s->parent == from && s->slot == slot && s->kind == _Py_SLOT_BOXED) {
+            return (uint8_t)i;
+        }
+    }
+    if (shapes->nshapes == _Py_SHAPE_MAX_PER_TYPE) {
+        return _Py_SHAPE_NONE;
+    }
+    if (shapes->nshapes == shapes->capacity) {
+        int capacity = Py_MIN(2 * shapes->capacity, _Py_SHAPE_MAX_PER_TYPE);
+        shapes = PyMem_Realloc(
+            shapes, sizeof(_PyTypeShapes) + capacity * sizeof(_PyShape));
+        if (shapes == NULL) {
+            return _Py_SHAPE_NONE;
+        }
+        shapes->capacity = (uint8_t)capacity;
+        shared_keys->dsk_shapes = shapes;
+    }
+    _PyShape *parent = &shapes->shapes[from];
+    uint8_t index = shapes->nshapes++;
+    shapes->shapes[index] = (_PyShape){
+        .present = parent->present | (1u << slot), .parent = from,
+        .slot = (uint8_t)slot, .kind = _Py_SLOT_BOXED,
+    };
+    return index;
+}
+
+#ifndef NDEBUG
+static int
+shape_matches_order(PyTypeObject *tp, PyDictValues *values)
+{
+    if (values->shape == _Py_SHAPE_NONE) {
+        return 1;
+    }
+    _PyTypeShapes *shapes = _PyType_Shapes(tp);
+    uint8_t *order = get_insertion_order_array(values);
+    uint8_t shape = values->shape;
+    for (int i = values->size - 1; i >= 0; i--) {
+        if (shape == _Py_SHAPE_NONE || shapes->shapes[shape].slot != order[i]) {
+            return 0;
+        }
+        shape = shapes->shapes[shape].parent;
+    }
+    return shape == _Py_SHAPE_ROOT;
+}
+#endif
+
+static void
+shape_after_delete(PyTypeObject *tp, PyDictValues *values)
+{
+    if (values->shape == _Py_SHAPE_NONE) {
+        return;
+    }
+    // The attributes left, in their insertion order, are the path of the
+    // new shape from the root.
+    uint8_t shape = _Py_SHAPE_ROOT;
+    uint8_t *order = get_insertion_order_array(values);
+    for (int i = 0; i < values->size && shape != _Py_SHAPE_NONE; i++) {
+        shape = _PyShape_Add(tp, shape, order[i]);
+    }
+    values->shape = shape;
+    assert(shape_matches_order(tp, values));
+}
+
+#else
+
+static inline void
+shape_after_delete(PyTypeObject *tp, PyDictValues *values)
+{
+}
+
+#endif  /* Py_SHAPES */
+
 /* Returns NULL if cannot allocate a new PyDictKeysObject,
    but does not set an error */
 PyDictKeysObject *
@@ -7290,6 +7395,17 @@ _PyDict_NewKeysForClass(PyHeapTypeObject *cls)
     }
 
     shared_keys->dsk_owning_type = (PyTypeObject *)cls;
+#ifdef Py_SHAPES
+    shared_keys->dsk_shapes = NULL;
+    // Types whose instances have items keep their attributes in a dict.
+    if (cls->ht_type.tp_itemsize == 0) {
+        shared_keys->dsk_shapes = new_type_shapes();
+        if (shared_keys->dsk_shapes == NULL) {
+            PyMem_Free(shared_keys);
+            return NULL;
+        }
+    }
+#endif
     PyDictKeysObject* keys = &shared_keys->dsk_keys;
     init_keys_object(keys, NEXT_LOG2_SHARED_KEYS_MAX_SIZE, log2_bytes, DICT_KEYS_SPLIT,
                      SHARED_KEYS_MAX_SIZE, sizeof(PyDictUnicodeEntry));
@@ -7317,6 +7433,11 @@ _PyDict_RemoveKeysForClass(PyHeapTypeObject *cls)
 {
     struct _instancekeysobject *shared_keys = _PyDictKeys_AsSharedKeys(cls->ht_cached_keys);
     FT_ATOMIC_STORE_PTR_RELEASE(shared_keys->dsk_owning_type, NULL);
+#ifdef Py_SHAPES
+    // No instance of the type is left to use its shapes.
+    PyMem_Free(shared_keys->dsk_shapes);
+    shared_keys->dsk_shapes = NULL;
+#endif
 
     _PyDictKeys_DecRef(cls->ht_cached_keys);
 }
@@ -7351,6 +7472,7 @@ _PyObject_InitInlineValues(PyObject *obj, PyTypeObject *tp)
     values->size = 0;
     values->embedded = 1;
     values->valid = 1;
+    _PyDictValues_SetShape(values, _Py_SHAPE_ROOT);
     for (size_t i = 0; i < size; i++) {
         values->values[i] = NULL;
     }
@@ -7385,6 +7507,8 @@ _PyObject_MaterializeManagedDict_LockHeld(PyObject *obj)
     if (values->valid) {
         PyDictKeysObject *keys = CACHED_KEYS(Py_TYPE(obj));
         dict = make_dict_from_instance_attributes(keys, values);
+        // The dict can change the values behind the shape's back.
+        _PyDictValues_SetShape(values, _Py_SHAPE_NONE);
     }
     else {
         dict = (PyDictObject *)PyDict_New();
@@ -7504,6 +7628,7 @@ store_instance_attr_lock_held(PyObject *obj, PyDictValues *values,
 
             FT_ATOMIC_STORE_PTR_RELEASE(_PyObject_ManagedDictPointer(obj)->dict,
                                         (PyDictObject *)dict);
+            _PyDictValues_SetShape(values, _Py_SHAPE_NONE);
             return 0;
         }
 
@@ -7533,6 +7658,10 @@ store_instance_attr_lock_held(PyObject *obj, PyDictValues *values,
 
     if (old_value == NULL) {
         _PyDictValues_AddToInsertionOrder(values, ix);
+        _PyDictValues_ShapeAfterAdd(Py_TYPE(obj), values, ix);
+#ifdef Py_SHAPES
+        assert(shape_matches_order(Py_TYPE(obj), values));
+#endif
         if (dict) {
             assert(dict->ma_values == values);
             STORE_USED(dict, dict->ma_used + 1);
@@ -7541,6 +7670,7 @@ store_instance_attr_lock_held(PyObject *obj, PyDictValues *values,
     else {
         if (value == NULL) {
             delete_index_from_values(values, ix);
+            shape_after_delete(Py_TYPE(obj), values);
             if (dict) {
                 assert(dict->ma_values == values);
                 STORE_USED(dict, dict->ma_used - 1);
@@ -7801,6 +7931,7 @@ clear_inline_values(PyDictValues *values)
 {
     if (values->valid) {
         FT_ATOMIC_STORE_UINT8(values->valid, 0);
+        _PyDictValues_SetShape(values, _Py_SHAPE_NONE);
         for (Py_ssize_t i = 0; i < values->capacity; i++) {
             Py_CLEAR(values->values[i]);
         }

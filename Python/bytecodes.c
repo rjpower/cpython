@@ -1999,6 +1999,8 @@ dummy_func(
             STORE_ATTR_INSTANCE_VALUE,
             STORE_ATTR_SLOT,
             STORE_ATTR_WITH_HINT,
+            STORE_ATTR_SHAPE,
+            STORE_ATTR_SHAPE_ADD,
         };
 
         specializing op(_SPECIALIZE_STORE_ATTR, (v, owner -- v, owner)) {
@@ -2655,6 +2657,7 @@ dummy_func(
             LOAD_ATTR_METHOD_LAZY_DICT,
             LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES,
             LOAD_ATTR_NONDESCRIPTOR_NO_DICT,
+            LOAD_ATTR_SHAPE,
         };
 
         specializing op(_SPECIALIZE_LOAD_ATTR, (owner -- owner)) {
@@ -2738,6 +2741,36 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             _CHECK_MANAGED_OBJECT_HAS_VALUES +
             _LOAD_ATTR_INSTANCE_VALUE +
+            POP_TOP +
+            unused/5 +
+            _PUSH_NULL_CONDITIONAL;
+
+        /* The shape handlers (Py_SHAPES, see pycore_dict.h).  They follow a
+         * type version guard, which proves that the owner has inline values
+         * to read the shape from and lets descriptors added to the class
+         * win.  The shape fields take no inline cache units.  Shapes exist
+         * only in builds with the GIL, so the stores take no object lock and
+         * need not check for a dict: an instance with a dict has no shape. */
+        op(_GUARD_SHAPE, (shape/0, owner -- owner)) {
+            EXIT_IF(_PyObject_Shape(PyStackRef_AsPyObjectBorrow(owner)) != shape);
+        }
+
+        op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr, o)) {
+            PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+            PyObject *attr_o = *(PyObject **)((char *)owner_o + offset);
+            // The shape proves the slot filled.
+            assert(attr_o != NULL);
+            attr = PyStackRef_FromPyObjectNew(attr_o);
+            STAT_INC(LOAD_ATTR, hit);
+            o = owner;
+            DEAD(owner);
+        }
+
+        macro(LOAD_ATTR_SHAPE) =
+            unused/1 +
+            _GUARD_TYPE_VERSION +
+            _GUARD_SHAPE +
+            _LOAD_ATTR_SHAPE +
             POP_TOP +
             unused/5 +
             _PUSH_NULL_CONDITIONAL;
@@ -2949,6 +2982,7 @@ dummy_func(
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 Py_ssize_t index = value_ptr - values->values;
                 _PyDictValues_AddToInsertionOrder(values, index);
+                _PyDictValues_ShapeAfterAdd(Py_TYPE(owner_o), values, index);
             }
             UNLOCK_OBJECT(owner_o);
             o = owner;
@@ -2966,6 +3000,45 @@ dummy_func(
             _GUARD_TYPE_VERSION_LOCKED +
             _GUARD_DORV_NO_DICT +
             _STORE_ATTR_INSTANCE_VALUE +
+            POP_TOP;
+
+        op(_STORE_ATTR_SHAPE, (offset/1, value, owner -- o)) {
+            PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+            PyObject **value_ptr = (PyObject **)((char *)owner_o + offset);
+            PyObject *old_value = *value_ptr;
+            assert(old_value != NULL);
+            *value_ptr = PyStackRef_AsPyObjectSteal(value);
+            STAT_INC(STORE_ATTR, hit);
+            o = owner;
+            DEAD(owner);
+            Py_DECREF(old_value);
+        }
+
+        macro(STORE_ATTR_SHAPE) =
+            unused/1 +
+            _GUARD_TYPE_VERSION +
+            _GUARD_SHAPE +
+            _STORE_ATTR_SHAPE +
+            POP_TOP;
+
+        op(_STORE_ATTR_SHAPE_ADD, (shape_to/0, offset/1, value, owner -- o)) {
+            PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+            PyObject **value_ptr = (PyObject **)((char *)owner_o + offset);
+            assert(*value_ptr == NULL);
+            *value_ptr = PyStackRef_AsPyObjectSteal(value);
+            PyDictValues *values = _PyObject_InlineValues(owner_o);
+            _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
+            _PyDictValues_SetShape(values, (uint8_t)shape_to);
+            STAT_INC(STORE_ATTR, hit);
+            o = owner;
+            DEAD(owner);
+        }
+
+        macro(STORE_ATTR_SHAPE_ADD) =
+            unused/1 +
+            _GUARD_TYPE_VERSION +
+            _GUARD_SHAPE +
+            _STORE_ATTR_SHAPE_ADD +
             POP_TOP;
 
         op(_STORE_ATTR_WITH_HINT, (hint/1, value, owner -- o)) {

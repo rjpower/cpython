@@ -116,8 +116,8 @@ typedef struct {
     const void *descr;              // _PyBinaryOpSpecializationDescr for BINARY_OP_EXTEND
 } _PyFbBinary;
 
-/* LOAD_ATTR, STORE_ATTR, LOAD_SUPER_ATTR.  Design note 04 (shapes) turns
- * _pad into the shape offset and appends a shape pointer, for 48 bytes. */
+/* LOAD_ATTR, STORE_ATTR, LOAD_SUPER_ATTR.  The shape fields are used with
+ * Py_SHAPES (Include/internal/pycore_dict.h). */
 typedef struct {
     _PyFbHeader h;
     uint32_t type_version;          // Py_TYPE(owner)
@@ -125,6 +125,7 @@ typedef struct {
         uint32_t dict_version;      // LOAD_ATTR_MODULE: keys version of the module dict
         uint32_t func_version;      // property getter or __getattribute__
         uint32_t class_version;     // owner, for loads from a class
+        uint32_t shape;             // the owner's shape index
     };
     union {
         uint32_t index;
@@ -137,6 +138,7 @@ typedef struct {
         PyObject *descr;
         PyObject *fget;
         PyObject *getattribute;
+        uint32_t shape_to;          // STORE_ATTR_SHAPE_ADD: the shape after the store
     };
 } _PyFbAttr;
 

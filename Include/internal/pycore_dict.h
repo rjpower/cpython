@@ -245,8 +245,46 @@ struct _dictkeysobject {
        see the DK_ENTRIES() / DK_UNICODE_ENTRIES() functions below */
 };
 
+/* Shapes, step one of boil/design/04-shapes.md, built with Py_SHAPES.
+ *
+ * Each type with inline values owns a table of shapes.  A shape stands for
+ * the attributes an instance has and the order in which they were added: it
+ * is a path of transitions from the root, and shape i adds slot
+ * shapes[i].slot to shape shapes[i].parent.  A slot is an index into the
+ * type's shared keys, so a name has the same slot in every shape of a type.
+ *
+ * An instance keeps the index of its shape in PyDictValues.shape.  While the
+ * instance has valid inline values and no __dict__, the shape describes the
+ * insertion order bytes exactly.  Otherwise, and past the per-type limit, the
+ * shape is _Py_SHAPE_NONE.  Specialised LOAD_ATTR and STORE_ATTR guard the
+ * type version and then the shape, which proves the cached slot filled.
+ */
+#define _Py_SHAPE_ROOT 0
+#define _Py_SHAPE_NONE 0xFF
+#define _Py_SHAPE_MAX_PER_TYPE 64
+
+typedef enum {
+    _Py_SLOT_BOXED = 0,     // a strong reference; the only kind written so far
+} _PySlotKind;
+
+typedef struct {
+    uint32_t present;       // bit i is set when slot i holds a value
+    uint8_t parent;         // _Py_SHAPE_NONE for the root
+    uint8_t slot;           // the slot added to the parent
+    uint8_t kind;           // _PySlotKind of that slot
+} _PyShape;
+
+typedef struct {
+    uint8_t nshapes;
+    uint8_t capacity;
+    _PyShape shapes[];
+} _PyTypeShapes;
+
 struct _instancekeysobject {
     PyTypeObject* dsk_owning_type;
+#ifdef Py_SHAPES
+    _PyTypeShapes *dsk_shapes;  // NULL for types without inline values
+#endif
     struct _dictkeysobject dsk_keys;
 };
 
@@ -271,6 +309,9 @@ struct _dictvalues {
     uint8_t size;
     uint8_t embedded;
     uint8_t valid;
+#ifdef Py_SHAPES
+    uint8_t shape;      // index into the type's shapes, or _Py_SHAPE_NONE
+#endif
     PyObject *values[1];
 };
 
@@ -358,6 +399,68 @@ _PyDictValues_AddToInsertionOrder(PyDictValues *values, Py_ssize_t ix)
     FT_ATOMIC_STORE_UINT8_RELEASE(values->size, size+1);
 }
 
+static inline void
+_PyDictValues_SetShape(PyDictValues *values, uint8_t shape)
+{
+#ifdef Py_SHAPES
+    values->shape = shape;
+#else
+    (void)values;
+    (void)shape;
+#endif
+}
+
+// Without Py_SHAPES no instance has a shape.
+static inline uint32_t
+_PyObject_Shape(PyObject *obj)
+{
+#ifdef Py_SHAPES
+    return _PyObject_InlineValues(obj)->shape;
+#else
+    (void)obj;
+    return _Py_SHAPE_NONE;
+#endif
+}
+
+#ifdef Py_SHAPES
+static_assert(SHARED_KEYS_MAX_SIZE <= 32, "_PyShape.present is 32 bits wide");
+static_assert(_Py_SHAPE_MAX_PER_TYPE < _Py_SHAPE_NONE, "shape index overflow");
+
+static inline _PyTypeShapes *
+_PyType_Shapes(PyTypeObject *tp)
+{
+    PyDictKeysObject *keys = ((PyHeapTypeObject *)tp)->ht_cached_keys;
+    return _PyDictKeys_AsSharedKeys(keys)->dsk_shapes;
+}
+
+static inline int
+_PyShape_HasSlot(PyTypeObject *tp, uint8_t shape, Py_ssize_t slot)
+{
+    assert(shape < _PyType_Shapes(tp)->nshapes);
+    return (_PyType_Shapes(tp)->shapes[shape].present >> slot) & 1;
+}
+
+// The shape reached from FROM by adding SLOT, or _Py_SHAPE_NONE past the
+// per-type limit.  Never sets an exception.  Exported for the test cases of
+// _testinternalcapi.
+PyAPI_FUNC(uint8_t) _PyShape_Add(PyTypeObject *tp, uint8_t from, Py_ssize_t slot);
+#endif
+
+// Follow the addition of slot IX to the inline VALUES of an instance of TP.
+static inline void
+_PyDictValues_ShapeAfterAdd(PyTypeObject *tp, PyDictValues *values, Py_ssize_t ix)
+{
+#ifdef Py_SHAPES
+    if (values->shape != _Py_SHAPE_NONE) {
+        values->shape = _PyShape_Add(tp, values->shape, ix);
+    }
+#else
+    (void)tp;
+    (void)values;
+    (void)ix;
+#endif
+}
+
 // Exported for external JIT support
 PyAPI_FUNC(void)
 _PyDict_InsertSplitValue(PyDictObject *mp, PyObject *key, PyObject *value, Py_ssize_t ix);
@@ -385,7 +488,7 @@ _PyInlineValuesSize(PyTypeObject *tp)
     size_t size = shared_keys_usable_size(keys);
     size_t prefix_size = _Py_SIZE_ROUND_UP(size, sizeof(PyObject *));
     assert(prefix_size < 256);
-    return prefix_size + (size + 1) * sizeof(PyObject *);
+    return prefix_size + offsetof(PyDictValues, values) + size * sizeof(PyObject *);
 }
 
 int

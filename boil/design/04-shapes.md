@@ -1,6 +1,8 @@
 # 04: Shapes (hidden classes) with inline slots (Phase 1, item 1e)
 
-Status: design, 2026-10-23. Line numbers refer to commit `8dc2e138d6d`; no
+Status: design, 2026-10-23; step one implemented behind `--with-shapes` on
+2026-10-24, see "Implementation decisions" at the end. Line numbers refer to
+commit `8dc2e138d6d`; no
 file cited here differs from `321925c92c9`, the base of notes 01 and 02.
 Measurements come from `build/baseline-default/python` with `perf stat -e
 instructions:u`, using the method of `boil/tools/micro_loops.py`.
@@ -530,3 +532,105 @@ end of Phase 1, after the IR interpreter (note 01 step 4) and typed feedback
 exist, so the first consumer of shape guards is the code that benefits. The
 Phase 1 gate for shapes is neutrality on richards, raytrace, deltablue, chaos
 and go, within 1 percent on time and RSS.
+
+## Implementation decisions (step one, 2026-10-24)
+
+Step one, as briefed, is smaller than steps 2 to 5 of section 11. Shapes sit
+on top of the shared keys and the insertion-order bytes instead of replacing
+them, and only `LOAD_ATTR` and `STORE_ATTR` on instances without a `__dict__`
+use them. `--with-shapes` defines `Py_SHAPES`; configure rejects it together
+with `--disable-gil` (coordinator decision 2).
+
+1. **A shape is a path of slot additions.** A slot is the attribute's index in
+   the type's shared keys, as it is today, so a name has the same slot in every
+   shape of its type and section 2's property table reduces to the edge label.
+   `_PyShape` (Include/internal/pycore_dict.h) holds the parent, the slot
+   added, that slot's kind byte (BOXED only) and a bitmask of the slots
+   present: 8 bytes. A type's shapes form one array, `_PyTypeShapes`, owned by
+   the shared-keys allocation (`struct _instancekeysobject.dsk_shapes`), so
+   `PyHeapTypeObject` and `type.__sizeof__` do not change. The array starts
+   with 4 entries, doubles up to 64 and is freed with the type in
+   `_PyDict_RemoveKeysForClass`. Types whose instances have items get none.
+2. **The instance stores an index, not a pointer.** `PyDictValues.shape` is
+   one byte in the padding after `valid`, so instances do not grow, and the
+   64-bit layout, the debug offsets and gdb stay as they are. The type version
+   is guarded first, so (type version, index) names one shape, and indices are
+   never reused while the type lives. The pointer of section 2 comes with the
+   block redesign of step 3.
+3. **An instance has a shape exactly while it has valid inline values and no
+   `__dict__`.** Otherwise the byte is `_Py_SHAPE_NONE`, as it is past 64
+   shapes per type or 30 slots. Materialising the dict (`__dict__`, `vars()`,
+   `copy`, `pickle`, `__class__` assignment) drops the shape instead of keeping
+   it, as section 4 proposes, because the dict can then add, delete and
+   reorder entries without the shape seeing it. Those objects keep today's
+   `LOAD_ATTR_INSTANCE_VALUE` and `STORE_ATTR_WITH_HINT`. The shape-backed dict
+   is step 4.
+4. **A delete follows the remaining order.** After `del o.x` the shape is the
+   path of the remaining insertion order from the root. Deleting the last
+   attribute therefore returns to the parent, as decision 5 says. Any other
+   delete reaches the shape of the shorter order instead of a shape with a
+   hole: slots are fixed by the keys, so a hole needs no representation.
+5. **Handlers.** `LOAD_ATTR_SHAPE`, `STORE_ATTR_SHAPE` (replace) and
+   `STORE_ATTR_SHAPE_ADD` (transition) guard the type version, then the shape
+   byte, and use the slot at the cached offset. The shape proves the slot
+   filled for loads and replacements and empty for additions, and proves that
+   no dict exists, so the `NULL`, `valid` and dict tests go. The type guard
+   stays (5.1). The handlers read the shape through `tp_basicsize`, not a
+   cached offset: the offset would be a second size-0 cache operand, which the
+   vestigial macro expansion table cannot describe, and it saves no
+   instruction.
+6. **Feedback fields without cache units.** `shape` and `shape_to` are
+   `_PyFbAttr` fields in existing unions, so the entry stays 40 bytes. They are
+   declared `shape/0` and `shape_to/0` in Python/bytecodes.c because
+   `STORE_ATTR`'s three reserved units are taken by `type_version/2` and
+   `offset/1`. `feedback_fields()` in the cases generator skips size-0 fields,
+   which have no units in the cache layout that dis is shown.
+7. **Several shapes at one site fall back to presence checks.** No
+   `LOAD_ATTR_SHAPE_POLY` yet. A site whose poly table already holds a shape
+   row for the same type and another shape specialises to
+   `LOAD_ATTR_INSTANCE_VALUE` or `STORE_ATTR_INSTANCE_VALUE` instead. Slots do
+   not move between shapes, so those handlers serve every shape of the type;
+   `STORE_ATTR_INSTANCE_VALUE` now follows the add transition, so it keeps
+   shapes right. The `Token` pattern of 5.3 and store sites that first add an
+   attribute and then replace it get these handlers. A polymorphic shape
+   handler pays only once slots differ between shapes, after step 3.
+8. **Default build.** The handlers and their opcodes exist in every build,
+   since the generated tables are shared, but without `Py_SHAPES` the guard
+   always fails and the specialiser never emits them. Apart from opcode
+   numbers and `__LINE__` constants, the default build's machine code matches
+   the base commit; ceval.o grows by 768 bytes of unreachable handlers.
+
+Measured with release builds, `perf stat -e instructions:u`, each benchmark
+run warm in a fresh process with `PYTHONHASHSEED=0`, and the difference of two
+iteration counts taken (noise below 0.05 percent):
+
+| Benchmark, instructions per iteration | `92cc151177c` | default | `--with-shapes` | shapes / default |
+|---|---|---|---|---|
+| richards | 563.50M | 563.50M | 561.95M | 0.9972 |
+| go | 1230.05M | 1229.87M | 1224.31M | 0.9953 |
+| deltablue | 41.44M | 41.45M | 41.26M | 0.9956 |
+| raytrace | 2929.82M | 2932.55M | 2925.38M | 0.9985 |
+
+| Loop body, instructions per iteration | `92cc151177c` | default | `--with-shapes` |
+|---|---|---|---|
+| `z = o.a` | 76.0 | 75.8 | 75.0 |
+| `o.a = i`, `a` present | 115.0 | 115.1 | 110.9 |
+| `z = s.a`, `__slots__` | 73.2 | 72.9 | 73.0 |
+| `z = o.a` after `o.__dict__` | 76.0 | 76.0 | 76.1 |
+| `o.a = i` after `o.__dict__` | 146.0 | 145.9 | 145.9 |
+| `z = O()`, four attributes set in `__init__` | 1746-1752 | 1746-1753 | 1751-1752 |
+
+The first five rows are the attribute rows of `boil/tools/micro_loops.py`,
+skeleton removed, median of three runs. The last row is the whole loop over a
+million creations, five runs, because the tool's instance rows vary by about
+10 instructions between runs: mimalloc purges memory on a timer.
+
+Limitations of step one:
+
+- Objects with a `__dict__`, which includes copies and unpickled objects, have
+  no shape and keep today's handlers.
+- No polymorphic shape handler (decision 7).
+- Method loads are unchanged: `LOAD_ATTR_METHOD_WITH_VALUES` still tests
+  `valid`, and there is no per-type name set.
+- The free-threaded build has no shapes.
+- `type.__sizeof__` does not count the shape array.

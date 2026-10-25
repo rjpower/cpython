@@ -8,7 +8,7 @@ import types
 import unittest
 from test.support import (threading_helper, check_impl_detail,
                           requires_specialization,
-                          cpython_only, reset_code, Py_IR_INTERP)
+                          cpython_only, reset_code, Py_IR_INTERP, Py_SHAPES)
 from test.support.import_helper import import_module
 
 # Skip this module on other interpreters, it is cpython specific:
@@ -20,6 +20,11 @@ _testinternalcapi = import_module("_testinternalcapi")
 # PYTHON_TAGGED_VALUES=0 turns off the specializations that produce inline
 # ints, which builds without inline values do not have.
 int_producers = getattr(_testinternalcapi, "TAGGED_VALUES", True)
+
+# Instances with inline values and no __dict__ get the shape handlers
+# under --with-shapes.
+LOAD_ATTR_INSTANCE = "LOAD_ATTR_SHAPE" if Py_SHAPES else "LOAD_ATTR_INSTANCE_VALUE"
+STORE_ATTR_INSTANCE = "STORE_ATTR_SHAPE" if Py_SHAPES else "STORE_ATTR_INSTANCE_VALUE"
 
 
 def have_dict_key_versions():
@@ -883,7 +888,7 @@ class TestRacesDoNotCrash(TestBase):
             for item in items:
                 item.__dict__[None] = None
 
-        opname = "LOAD_ATTR_INSTANCE_VALUE"
+        opname = LOAD_ATTR_INSTANCE
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1777,13 +1782,13 @@ class TestSpecializer(TestBase):
 
         set_value(_testinternalcapi.SPECIALIZATION_THRESHOLD)
 
-        self.assert_specialized(set_value, "STORE_ATTR_INSTANCE_VALUE")
+        self.assert_specialized(set_value, STORE_ATTR_INSTANCE)
         self.assert_no_opcode(set_value, "STORE_ATTR")
 
         # Adding a property for 'x' should unspecialize it.
         C.x = property(lambda self: None, lambda self, x: None)
         set_value(_testinternalcapi.SPECIALIZATION_COOLDOWN)
-        self.assert_no_opcode(set_value, "STORE_ATTR_INSTANCE_VALUE")
+        self.assert_no_opcode(set_value, STORE_ATTR_INSTANCE)
 
     @cpython_only
     @requires_specialization
@@ -2541,10 +2546,12 @@ class TestFeedback(TestBase):
         def f(o):
             return o.x
 
-        handler = dis._specialized_opmap["LOAD_ATTR_INSTANCE_VALUE"]
+        handler = dis._specialized_opmap[LOAD_ATTR_INSTANCE]
+        # A row's aux field holds the shape of the object, if it has one.
+        aux = _testinternalcapi.get_object_shape(objects[0]) if Py_SHAPES else 0
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             f(objects[0])
-        self.assert_specialized(f, "LOAD_ATTR_INSTANCE_VALUE")
+        self.assert_specialized(f, LOAD_ATTR_INSTANCE)
         [(kind, state, type_version, _, rows)] = self.feedback(f, "LOAD_ATTR")
         self.assertEqual((kind, state, rows), ("ATTR", "MONO", []))
         self.assertEqual(type_version, _testcapi.type_get_version(classes[0]))
@@ -2555,7 +2562,7 @@ class TestFeedback(TestBase):
             [(_, state, type_version, _, rows)] = self.feedback(f, "LOAD_ATTR")
             self.assertEqual(type_version,
                              _testcapi.type_get_version(classes[n]))
-            expected = [(_testcapi.type_get_version(cls), 0, handler)
+            expected = [(_testcapi.type_get_version(cls), aux, handler)
                         for cls in classes[:n + 1]]
             if n < 4:
                 self.assertEqual(state, "POLY")

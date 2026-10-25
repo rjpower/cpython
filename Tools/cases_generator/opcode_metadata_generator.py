@@ -184,13 +184,14 @@ def generate_cache_table(analysis: Analysis, out: CWriter) -> None:
 
 
 def feedback_fields(inst: Instruction) -> list[tuple[int, int, str]]:
-    "(unit, size, name) of each named cache effect of a specialised instruction"
+    """(unit, size, name) of each named cache effect of a specialised
+    instruction.  Fields of size 0 had no inline cache units to go back to."""
     fields: dict[int, tuple[int, int, str]] = {}
     offset = 1
     for part in inst.parts:
         if isinstance(part, Uop):
             for cache in part.caches:
-                if cache.name != "unused":
+                if cache.name != "unused" and cache.size:
                     fields.setdefault(offset, (offset, cache.size, cache.name))
                 offset += cache.size
         else:

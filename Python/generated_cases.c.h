@@ -10709,6 +10709,82 @@
             DISPATCH();
         }
 
+        TARGET(LOAD_ATTR_SHAPE) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = LOAD_ATTR_SHAPE;
+            (void)(opcode);
+            #endif
+            _Py_CODEUNIT* const this_instr = next_instr;
+            (void)this_instr;
+            _PyFb_LOAD_ATTR *fb = _PyFb_Entry(this_instr);
+            frame->instr_ptr = next_instr;
+            next_instr += 10;
+            INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
+            static_assert(INLINE_CACHE_ENTRIES_LOAD_ATTR == 9, "incorrect cache size");
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef o;
+            _PyStackRef value;
+            _PyStackRef *null;
+            /* Skip 1 cache entry */
+            // _GUARD_TYPE_VERSION
+            {
+                owner = stack_pointer[-1];
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _GUARD_SHAPE
+            {
+                uint32_t shape = fb->shape;
+                if (_PyObject_Shape(PyStackRef_AsPyObjectBorrow(owner)) != shape) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _LOAD_ATTR_SHAPE
+            {
+                uint32_t offset = fb->offset;
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                PyObject *attr_o = *(PyObject **)((char *)owner_o + offset);
+                assert(attr_o != NULL);
+                attr = PyStackRef_FromPyObjectNew(attr_o);
+                STAT_INC(LOAD_ATTR, hit);
+                o = owner;
+            }
+            // _POP_TOP
+            {
+                value = o;
+                stack_pointer[-1] = attr;
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                _PyStackRef_XCLOSE_POINTER(value);
+                _PyFrame_StackPointerInvalidate(frame);
+            }
+            /* Skip 5 cache entries */
+            // _PUSH_NULL_CONDITIONAL
+            {
+                null = &stack_pointer[0];
+                if (oparg & 1) {
+                    null[0] = PyStackRef_NULL;
+                }
+            }
+            stack_pointer += (oparg & 1);
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
         TARGET(LOAD_ATTR_SLOT) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_SLOT;
@@ -13632,6 +13708,7 @@
                     PyDictValues *values = _PyObject_InlineValues(owner_o);
                     Py_ssize_t index = value_ptr - values->values;
                     _PyDictValues_AddToInsertionOrder(values, index);
+                    _PyDictValues_ShapeAfterAdd(Py_TYPE(owner_o), values, index);
                 }
                 UNLOCK_OBJECT(owner_o);
                 o = owner;
@@ -13647,6 +13724,166 @@
             {
                 value = o;
                 stack_pointer += -1;
+                ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                _PyStackRef_XCLOSE_POINTER(value);
+                _PyFrame_StackPointerInvalidate(frame);
+            }
+            DISPATCH();
+        }
+
+        TARGET(STORE_ATTR_SHAPE) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = STORE_ATTR_SHAPE;
+            (void)(opcode);
+            #endif
+            _Py_CODEUNIT* const this_instr = next_instr;
+            (void)this_instr;
+            _PyFb_STORE_ATTR *fb = _PyFb_Entry(this_instr);
+            frame->instr_ptr = next_instr;
+            next_instr += 5;
+            INSTRUCTION_STATS(STORE_ATTR_SHAPE);
+            static_assert(INLINE_CACHE_ENTRIES_STORE_ATTR == 4, "incorrect cache size");
+            _PyStackRef owner;
+            _PyStackRef value;
+            _PyStackRef o;
+            /* Skip 1 cache entry */
+            // _GUARD_TYPE_VERSION
+            {
+                owner = stack_pointer[-1];
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
+            // _GUARD_SHAPE
+            {
+                uint32_t shape = fb->shape;
+                if (_PyObject_Shape(PyStackRef_AsPyObjectBorrow(owner)) != shape) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
+            // _STORE_ATTR_SHAPE
+            {
+                value = stack_pointer[-2];
+                uint32_t offset = fb->offset;
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
+                    value = PyStackRef_Box(value);
+                    if (PyStackRef_IsInline(value)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR_SHAPE);
+                    stack_pointer[-2] = value;
+                }
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                PyObject **value_ptr = (PyObject **)((char *)owner_o + offset);
+                PyObject *old_value = *value_ptr;
+                assert(old_value != NULL);
+                *value_ptr = _PyStackRef_AsPyObjectStealPointer(value);
+                STAT_INC(STORE_ATTR, hit);
+                o = owner;
+                stack_pointer[-2] = o;
+                stack_pointer += -1;
+                ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                Py_DECREF(old_value);
+                _PyFrame_StackPointerInvalidate(frame);
+            }
+            // _POP_TOP
+            {
+                value = o;
+                stack_pointer += -1;
+                ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+                _PyFrame_SetStackPointer(frame, stack_pointer);
+                _PyFrame_StackPointerValidate(frame);
+                _PyStackRef_XCLOSE_POINTER(value);
+                _PyFrame_StackPointerInvalidate(frame);
+            }
+            DISPATCH();
+        }
+
+        TARGET(STORE_ATTR_SHAPE_ADD) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = STORE_ATTR_SHAPE_ADD;
+            (void)(opcode);
+            #endif
+            _Py_CODEUNIT* const this_instr = next_instr;
+            (void)this_instr;
+            _PyFb_STORE_ATTR *fb = _PyFb_Entry(this_instr);
+            frame->instr_ptr = next_instr;
+            next_instr += 5;
+            INSTRUCTION_STATS(STORE_ATTR_SHAPE_ADD);
+            static_assert(INLINE_CACHE_ENTRIES_STORE_ATTR == 4, "incorrect cache size");
+            _PyStackRef owner;
+            _PyStackRef value;
+            _PyStackRef o;
+            /* Skip 1 cache entry */
+            // _GUARD_TYPE_VERSION
+            {
+                owner = stack_pointer[-1];
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
+            // _GUARD_SHAPE
+            {
+                uint32_t shape = fb->shape;
+                if (_PyObject_Shape(PyStackRef_AsPyObjectBorrow(owner)) != shape) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
+            // _STORE_ATTR_SHAPE_ADD
+            {
+                value = stack_pointer[-2];
+                uint32_t shape_to = fb->shape_to;
+                uint32_t offset = fb->offset;
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
+                    value = PyStackRef_Box(value);
+                    if (PyStackRef_IsInline(value)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR_SHAPE_ADD);
+                    stack_pointer[-2] = value;
+                }
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                PyObject **value_ptr = (PyObject **)((char *)owner_o + offset);
+                assert(*value_ptr == NULL);
+                *value_ptr = _PyStackRef_AsPyObjectStealPointer(value);
+                PyDictValues *values = _PyObject_InlineValues(owner_o);
+                _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
+                _PyDictValues_SetShape(values, (uint8_t)shape_to);
+                STAT_INC(STORE_ATTR, hit);
+                o = owner;
+            }
+            // _POP_TOP
+            {
+                value = o;
+                stack_pointer += -2;
                 ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);

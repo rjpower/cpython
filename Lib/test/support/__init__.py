@@ -1065,6 +1065,9 @@ def expected_failure_if_gil_disabled():
 # Code objects run as the register IR (--with-ir-interp)
 Py_IR_INTERP = bool(sysconfig.get_config_var('Py_IR_INTERP'))
 
+# Instance attribute access guards per-type shapes (--with-shapes)
+Py_SHAPES = bool(sysconfig.get_config_var('Py_SHAPES'))
+
 if Py_GIL_DISABLED:
     _header = 'PHBBInP'
 else:

@@ -2168,6 +2168,35 @@ get_object_dict_values(PyObject *self, PyObject *obj)
     return res;
 }
 
+#ifdef Py_SHAPES
+// The shape index of an object with inline values, or None if it has none.
+static PyObject *
+get_object_shape(PyObject *self, PyObject *obj)
+{
+    if (!_PyType_HasFeature(Py_TYPE(obj), Py_TPFLAGS_INLINE_VALUES)) {
+        Py_RETURN_NONE;
+    }
+    uint8_t shape = _PyObject_InlineValues(obj)->shape;
+    if (shape == _Py_SHAPE_NONE) {
+        Py_RETURN_NONE;
+    }
+    return PyLong_FromLong(shape);
+}
+
+// The number of shapes of a type with inline values.
+static PyObject *
+get_type_shape_count(PyObject *self, PyObject *type)
+{
+    if (!PyType_Check(type) ||
+        !_PyType_HasFeature((PyTypeObject *)type, Py_TPFLAGS_INLINE_VALUES))
+    {
+        PyErr_SetString(PyExc_TypeError, "expected a type with inline values");
+        return NULL;
+    }
+    return PyLong_FromLong(_PyType_Shapes((PyTypeObject *)type)->nshapes);
+}
+#endif
+
 
 static PyObject*
 new_hamt(PyObject *self, PyObject *args)
@@ -3491,6 +3520,10 @@ static PyMethodDef module_functions[] = {
                               check_pyobject_uninitialized_is_freed, METH_NOARGS},
     {"pymem_getallocatorsname", test_pymem_getallocatorsname, METH_NOARGS},
     {"get_object_dict_values", get_object_dict_values, METH_O},
+#ifdef Py_SHAPES
+    {"get_object_shape", get_object_shape, METH_O},
+    {"get_type_shape_count", get_type_shape_count, METH_O},
+#endif
     {"hamt", new_hamt, METH_NOARGS},
     {"dict_getitem_knownhash",  dict_getitem_knownhash,          METH_VARARGS},
     {"create_interpreter", _PyCFunction_CAST(create_interpreter),
@@ -3637,6 +3670,12 @@ module_exec(PyObject *module)
     // PYTHON_TAGGED_VALUES=0.
     if (PyModule_Add(module, "TAGGED_VALUES", PyBool_FromLong(
             _PyInterpreterState_GET()->opt_config.tagged_values_enabled)) < 0) {
+        return 1;
+    }
+#endif
+
+#ifdef Py_SHAPES
+    if (PyModule_AddIntMacro(module, _Py_SHAPE_MAX_PER_TYPE) < 0) {
         return 1;
     }
 #endif

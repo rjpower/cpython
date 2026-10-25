@@ -836,3 +836,41 @@ Step 6 adds the following.
     frame runs it any more (item 17). Removing it touches PyConfig and the
     remote debugging offsets, so it is a separate change. `--with-shapes`
     is unchanged.
+32. **Where the IR-only build loses time.** pyperformance timed the IR-only
+    build (fed4b13e878) at 1.006 of the tagged-values build, which ran the
+    stack interpreter, though both run about as many instructions. The
+    worst were unpack_sequence (1.19), generators (1.11) and deepcopy
+    (1.06); the best spectral_norm (0.88). Counts below come from
+    `perf stat` on the benchmark worker alone at two loop counts, so that
+    their difference, divided by the extra loops, excludes startup,
+    imports and lowering. The machine is a Ryzen 7 3800X (Zen 2).
+    - One-time lowering is not the cause: pyperf discards warmup values, and
+      the two builds' one-time cycles differ by a few million.
+    - unpack_sequence is code placement. Per loop the IR runs 5% fewer
+      instructions but 13% more cycles. It spends 13K cycles per loop with
+      an empty micro-op queue, against 2.3K, with no more icache, iTLB or
+      branch misses; its hot handlers are nearly the same machine code in
+      both builds. Rebuilding ceval.o with `-falign-jumps=32` gives 57.5K
+      cycles per loop, against 57.3K for the stack build;
+      `-falign-jumps=64` gives 60.6K. The generators change below, which
+      does not touch this path, moved the code and gave 58.3K, and pyperf
+      35.7 ns against 41.6 ns before and 34.3 ns for the stack build.
+    - spectral_norm and deepcopy show the same effect. Across the layouts
+      spectral_norm runs at 0.90 to 0.93 of the stack build per loop and
+      deepcopy at 0.99 to 1.03.
+    - generators is a real cost, which no layout recovered (1.10 to 1.15).
+      `YIELD_VALUE` found its return point through five dependent loads:
+      the caller's `instr_ptr`, the word there, the handler's format, its
+      `nwords`, then the next word. Generator resumption itself reads only
+      `frame->instr_ptr`; no block lookup happens per resume. Since
+      e55f2ce2586 the resuming instruction stores its width in
+      `gi_yield_offset`, padding in the generator header, and
+      `RETURN_TO_CALLER()` (above) is gone. pyperf generators: 35.8 ms
+      before, 32.8 ms after, 32.0 ms for the stack build. coroutines never
+      suspends, so the change leaves it alone.
+
+    The eval loop's layout moves single benchmarks of this kind by up to
+    20%, so a comparison of two builds needs several layouts or instruction
+    counts. Aligning jumps is no fix: in the same runs `-falign-jumps=32`
+    slowed generators by 3%. logging_simple and xml_etree_iterparse (1.03
+    to 1.04) were not examined.

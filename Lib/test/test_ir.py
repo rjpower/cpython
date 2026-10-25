@@ -1,6 +1,7 @@
 """Tests for the register IR of --with-ir-interp (Include/internal/pycore_ir.h)."""
 
 import dis
+import opcode
 import sys
 import unittest
 from test import support
@@ -27,6 +28,15 @@ def make_function(source, name="f"):
     namespace = {}
     exec(source, namespace)
     return namespace[name]
+
+
+def assemble(*instrs):
+    """co_code for (opname, oparg) pairs, with their inline caches"""
+    code = bytearray()
+    for name, arg in instrs:
+        code += bytes([dis.opmap[name], arg])
+        code += bytes(2 * opcode._inline_cache_entries.get(name, 0))
+    return bytes(code)
 
 
 def one_word_per_instruction(func):
@@ -403,6 +413,42 @@ class LoweringTest(unittest.TestCase):
             dis.opmap["POP_TOP"], 0,
             dis.opmap["RETURN_VALUE"], 0]))
         with self.assertRaisesRegex(SystemError, "stack underflow"):
+            get_ir(code)
+
+    def test_backward_jump_into_unreachable_code(self):
+        # The forward pass finds the LOAD_SMALL_INT unreachable, and only the
+        # JUMP_BACKWARD after it gives it a depth.
+        def f():
+            pass
+        f.__code__ = f.__code__.replace(co_code=assemble(
+            ("RESUME", 0),
+            ("JUMP_FORWARD", 2),
+            ("LOAD_SMALL_INT", 7),
+            ("RETURN_VALUE", 0),
+            ("JUMP_BACKWARD", 4)))
+        self.assertEqual(f(), 7)
+
+    def test_inconsistent_stack_depth(self):
+        def f():
+            pass
+        code = f.__code__.replace(co_code=assemble(
+            ("RESUME", 0),
+            ("LOAD_SMALL_INT", 0),
+            ("POP_JUMP_IF_FALSE", 1),
+            ("LOAD_SMALL_INT", 1),
+            ("RETURN_VALUE", 0)))
+        with self.assertRaisesRegex(SystemError, "inconsistent stack depth"):
+            get_ir(code)
+
+    def test_jump_into_an_instruction(self):
+        def f():
+            pass
+        code = f.__code__.replace(co_code=assemble(
+            ("RESUME", 0),
+            ("JUMP_FORWARD", 1),
+            ("POP_JUMP_IF_FALSE", 0),
+            ("RETURN_VALUE", 0)))
+        with self.assertRaisesRegex(SystemError, "jump into an instruction"):
             get_ir(code)
 
 

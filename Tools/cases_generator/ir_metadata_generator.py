@@ -7,7 +7,9 @@ Include/internal/pycore_ir_metadata.h, which pycore_ir.h includes:
   which follow the 256 opcodes in name order, and IR_NUM_HANDLERS;
 - _PyIR_Formats, the format of every handler, indexed by handler, as
   ir_generator.compute_formats() computes it for the handlers it generates;
-- _PyIR_OnlyNames, the names of the IR-only handlers.
+- _PyIR_OnlyNames, the names of the IR-only handlers;
+- _PyIR_StackEffects, the stack effect of each opcode whose effect does not
+  depend on its oparg, which spares the lowering two calls per instruction.
 
 The tables are defined where NEED_IR_METADATA is defined (Python/ir_lower.c)
 and declared elsewhere. Handler indices without an instruction have a zeroed
@@ -19,6 +21,7 @@ import argparse
 from analyzer import Analysis, analyze_files
 from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
+from stack import get_stack_effect
 from ir_generator import (
     FIRST_IR_ONLY_HANDLER,
     IRFormat,
@@ -61,6 +64,19 @@ def format_initializer(fmt: IRFormat, shadow: str) -> str:
     )
 
 
+def constant_stack_effect(inst) -> tuple[int, int]:
+    """The (popped, pushed) of inst as _PyOpcode_num_popped() and
+    _PyOpcode_num_pushed() compute them, or (-1, -1) if they depend on the
+    oparg."""
+    stack = get_stack_effect(inst)
+    popped = (-stack.base_offset).to_c()
+    pushed = (stack.logical_sp - stack.base_offset).to_c()
+    if not (popped.isdigit() and pushed.isdigit()):
+        return -1, -1
+    assert int(popped) < 128 and int(pushed) < 128, inst.name
+    return int(popped), int(pushed)
+
+
 def generate_ir_metadata(
     filenames: list[str], analysis: Analysis, outfile: TextIO
 ) -> None:
@@ -93,6 +109,18 @@ def generate_ir_metadata(
         out.emit(f"const char *const _PyIR_OnlyNames[{len(ir_only)}] = {{\n")
         for name in ir_only:
             out.emit(f'[{name} - {FIRST_IR_ONLY_HANDLER}] = "{name}",\n')
+        out.emit("};\n")
+        out.emit("#endif\n\n")
+
+        out.emit("/* Popped and pushed of each opcode whose stack effect does "
+                 "not depend on\n * its oparg, or -1 */\n")
+        out.emit("PyAPI_DATA(const int8_t) _PyIR_StackEffects[256][2];\n")
+        out.emit("#ifdef NEED_IR_METADATA\n")
+        out.emit("const int8_t _PyIR_StackEffects[256][2] = {\n")
+        for name, inst in sorted(analysis.instructions.items(),
+                                 key=lambda item: item[1].opcode):
+            popped, pushed = constant_stack_effect(inst)
+            out.emit(f"[{name}] = {{ {popped}, {pushed} }},\n")
         out.emit("};\n")
         out.emit("#endif\n")
 

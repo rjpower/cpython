@@ -755,3 +755,48 @@ Step 6 adds the following.
     about 4 of them per pair. richards runs 88K pairs per loop and nqueens
     150K. The point of the superinstructions is tier 0, which can compile a
     fused word to one compare and conditional jump.
+
+30. **Lowering in one forward pass.** One pass decodes the instructions,
+    follows the stack depth, records where each jump lands and the depth it
+    brings, chooses the handler and places the feedback entry. Exception
+    handlers seed their depths before it. A generated table,
+    `_PyIR_StackEffects`, gives the stack effect of every opcode whose
+    effect does not depend on its oparg, so most instructions skip
+    `_PyOpcode_num_popped` and `_PyOpcode_num_pushed`. A second pass
+    resolves jump targets, absorbs loads and places the words, and the
+    emitter encodes and writes them. The worklist of step 4,
+    `compute_depths`, runs only when a backward jump reaches code that the
+    forward pass found unreachable. Line
+    starts come from reading the line table directly, and only for code
+    that can absorb a load. The layout pass runs only when a field might
+    not fit in 16 bits.
+
+    On richards -l 1, the lowering costs 37 million instructions (measured
+    by lowering every code object twice). That is down from 49 million
+    after step 6b, but still 3.0 times the 12.3 million that quickening
+    costs in the stack build, not the 1.5 times that step 6 aimed for. The
+    gap is structural. Quickening's loop skips a code unit without caches
+    and fills an entry for one with them, about a dozen instructions per
+    code unit. Lowering does much more for each instruction: it decodes it,
+    follows the depth, chooses a handler, places a feedback entry and a
+    word, encodes three fields, and writes the word, its pcmap entries and
+    its feedback entry. On 2,159 code objects from 20 standard library
+    modules, that is about 390 instructions per instruction, or 160 per
+    code unit. The lowering runs only for code that runs, which partly
+    offsets this. Quickening runs for every code object created.
+
+    The one-time residual on richards is about 25 million instructions:
+    908 million at one loop, against 883 million for the stack build. Per
+    loop, the IR build costs less than the stack build:
+
+    | Benchmark | IR build | Stack build |
+    |---|---|---|
+    | richards | 562M | 563M |
+    | nqueens | 870M | 880M |
+    | go | 1190M | 1230M |
+    | float | 764M | 780M |
+
+    pyperformance runs each benchmark for many loops, so it amortises the
+    residual. The next cuts would be a fused per-opcode table for the
+    decoder and a smaller `lower_insn`, together worth an estimated fifth
+    of the cost.

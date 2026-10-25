@@ -31,7 +31,7 @@ OPARG_KINDS = {
     "OPARG_CACHE_4": 4,
     "OPARG_TOP": 5,
     "OPARG_BOTTOM": 6,
-    "OPARG_SAVE_RETURN_OFFSET": 7,
+    "OPARG_SAVE_RETURN_SLOT": 7,
     # Skip 8 as the other powers of 2 are sizes
     "OPARG_REPLACED": 9,
     "OPERAND1_1": 10,
@@ -306,8 +306,8 @@ def generate_expansion_table(analysis: Analysis, out: CWriter) -> None:
                         continue
                     # Add the primary expansion.
                     fmt = "OPARG_SIMPLE"
-                    if part.name == "_SAVE_RETURN_OFFSET":
-                        fmt = "OPARG_SAVE_RETURN_OFFSET"
+                    if part.name == "_SAVE_RETURN_SLOT":
+                        fmt = "OPARG_SAVE_RETURN_SLOT"
                     elif part.caches:
                         fmt = str(part.caches[0].size)
                     if "replaced" in part.annotations:

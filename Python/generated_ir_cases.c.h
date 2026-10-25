@@ -3354,7 +3354,6 @@
                 pushed_frame->localsplus[1] = sub;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                frame->return_offset = 1u ;
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                 new_frame = PyStackRef_Wrap(pushed_frame);
             }
@@ -4833,7 +4832,6 @@
                     if (new_frame == NULL) {
                         JUMP_TO_LABEL(error);
                     }
-                    frame->return_offset = 1u ;
                     frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                     DISPATCH_INLINED(new_frame);
                 }
@@ -4968,8 +4966,8 @@
                 init = callable;
                 _PyInterpreterFrame *shim = _PyFrame_PushTrampolineUnchecked(
                     tstate, (PyCodeObject *)&_Py_InitCleanup, 1, frame);
-                assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 0) == EXIT_INIT_CHECK);
-                assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 1) == RETURN_VALUE);
+                assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 1) == EXIT_INIT_CHECK);
+                assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 2) == RETURN_VALUE);
                 shim->localsplus[0] = _PyStackRef_DUP_POINTER(self);
                 _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
                     tstate, init, NULL, args-1, oparg+1, NULL, shim);
@@ -4978,7 +4976,6 @@
                     _PyEval_FrameClearAndPop(tstate, shim);
                     JUMP_TO_LABEL(error);
                 }
-                frame->return_offset = 1u;
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                 tstate->py_recursion_remaining--;
                 init_frame = PyStackRef_Wrap(temp);
@@ -5122,9 +5119,8 @@
                 }
                 new_frame = PyStackRef_Wrap(pushed_frame);
             }
-            // _SAVE_RETURN_OFFSET
+            // _SAVE_RETURN_SLOT
             {
-                frame->return_offset = (uint16_t)(next_instr - this_instr);
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
             }
             // _PUSH_FRAME
@@ -5250,9 +5246,8 @@
                 }
                 new_frame = PyStackRef_Wrap(temp);
             }
-            // _SAVE_RETURN_OFFSET
+            // _SAVE_RETURN_SLOT
             {
-                frame->return_offset = (uint16_t)(next_instr - this_instr);
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
             }
             // _PUSH_FRAME
@@ -5846,9 +5841,8 @@
                 }
                 ex_frame = PyStackRef_Wrap(new_frame);
             }
-            // _SAVE_RETURN_OFFSET
+            // _SAVE_RETURN_SLOT
             {
-                frame->return_offset = (uint16_t)(next_instr - this_instr);
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
             }
             // _PUSH_FRAME
@@ -6012,7 +6006,6 @@
                             JUMP_TO_LABEL(error);
                         }
                         assert( 1u == 1u);
-                        frame->return_offset = 1u ;
                         frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                         DISPATCH_INLINED(new_frame);
                     }
@@ -6344,7 +6337,6 @@
                         JUMP_TO_LABEL(error);
                     }
                     assert( 1u == 1u);
-                    frame->return_offset = 1u ;
                     frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                     DISPATCH_INLINED(new_frame);
                 }
@@ -6483,9 +6475,8 @@
                 }
                 new_frame = PyStackRef_Wrap(temp);
             }
-            // _SAVE_RETURN_OFFSET
+            // _SAVE_RETURN_SLOT
             {
-                frame->return_offset = (uint16_t)(next_instr - this_instr);
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
             }
             // _PUSH_FRAME
@@ -6674,9 +6665,8 @@
                 }
                 new_frame = PyStackRef_Wrap(temp);
             }
-            // _SAVE_RETURN_OFFSET
+            // _SAVE_RETURN_SLOT
             {
-                frame->return_offset = (uint16_t)(next_instr - this_instr);
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
             }
             // _PUSH_FRAME
@@ -7529,9 +7519,8 @@
                 }
                 new_frame = PyStackRef_Wrap(pushed_frame);
             }
-            // _SAVE_RETURN_OFFSET
+            // _SAVE_RETURN_SLOT
             {
-                frame->return_offset = (uint16_t)(next_instr - this_instr);
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
             }
             // _PUSH_FRAME
@@ -7631,9 +7620,8 @@
                 }
                 new_frame = PyStackRef_Wrap(temp);
             }
-            // _SAVE_RETURN_OFFSET
+            // _SAVE_RETURN_SLOT
             {
-                frame->return_offset = (uint16_t)(next_instr - this_instr);
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
             }
             // _PUSH_FRAME
@@ -9452,8 +9440,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_GEN);
-            int oparg = (int)IR_FIELD_D(this_instr);
-            (void)oparg;
             _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             if (IR_IS_LOCAL(IR_FIELD_A(this_instr))) {
@@ -9493,9 +9479,7 @@
                 gen->gi_exc_state.previous_item = tstate->exc_info;
                 tstate->exc_info = &gen->gi_exc_state;
                 pushed_frame->previous = frame;
-                frame->return_offset = (uint16_t)( 1u + oparg);
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
-                gen->gi_yield_offset = 1u ;
                 gen_frame = PyStackRef_Wrap(pushed_frame);
             }
             // _PUSH_FRAME
@@ -10289,7 +10273,6 @@
                     if (new_frame == NULL) {
                         JUMP_TO_LABEL(error);
                     }
-                    frame->return_offset = 1u ;
                     frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                     DISPATCH_INLINED(new_frame);
                 }
@@ -10449,7 +10432,6 @@
                             JUMP_TO_LABEL(error);
                         }
                         assert( 1u == 1u);
-                        frame->return_offset = 1u ;
                         frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                         DISPATCH_INLINED(new_frame);
                     }
@@ -10602,7 +10584,6 @@
                         JUMP_TO_LABEL(error);
                     }
                     assert( 1u == 1u);
-                    frame->return_offset = 1u ;
                     frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                     DISPATCH_INLINED(new_frame);
                 }
@@ -11500,10 +11481,16 @@
                 DTRACE_FUNCTION_RETURN();
                 _Py_LeaveRecursiveCallPy(tstate);
                 _PyInterpreterFrame *dying = frame;
+                int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
                 _PyEval_FrameClearAndPop(tstate, dying);
                 slots = _PyFrame_Slots(frame);
-                LOAD_IP(frame->return_offset);
+                if (generator_return) {
+                    next_instr = _PyEval_GeneratorReturnTarget(frame);
+                }
+                else {
+                    LOAD_IP(1);
+                }
                 res = temp;
                 LLTRACE_RESUME_FRAME();
             }
@@ -11589,10 +11576,9 @@
                         _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
                     assert(opcode == SEND || opcode == FOR_ITER);
                 }
-                assert(gen->gi_yield_offset == 1);
                 #endif
                 slots = _PyFrame_Slots(frame);
-                LOAD_IP(gen->gi_yield_offset);
+                LOAD_IP(1);
                 value = temp;
                 LLTRACE_RESUME_FRAME();
             }
@@ -12147,9 +12133,8 @@
                 pushed_frame->localsplus[1] = PyStackRef_FromPyObjectNew(name);
                 new_frame = PyStackRef_Wrap(pushed_frame);
             }
-            // _SAVE_RETURN_OFFSET
+            // _SAVE_RETURN_SLOT
             {
-                frame->return_offset = (uint16_t)(next_instr - this_instr);
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
             }
             // _PUSH_FRAME
@@ -12790,9 +12775,8 @@
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 new_frame = PyStackRef_Wrap(pushed_frame);
             }
-            // _SAVE_RETURN_OFFSET
+            // _SAVE_RETURN_SLOT
             {
-                frame->return_offset = (uint16_t)(next_instr - this_instr);
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
             }
             // _PUSH_FRAME
@@ -15918,7 +15902,7 @@
             _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);
             _PyThreadState_PopFrame(tstate, frame);
             frame = tstate->current_frame = prev;
-            LOAD_IP(frame->return_offset);
+            LOAD_IP(1);
             slots = _PyFrame_Slots(frame);
             res = PyStackRef_FromPyObjectStealMortal((PyObject *)gen);
             LLTRACE_RESUME_FRAME();
@@ -15954,10 +15938,16 @@
                 DTRACE_FUNCTION_RETURN();
                 _Py_LeaveRecursiveCallPy(tstate);
                 _PyInterpreterFrame *dying = frame;
+                int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
                 _PyEval_FrameClearAndPop(tstate, dying);
                 slots = _PyFrame_Slots(frame);
-                LOAD_IP(frame->return_offset);
+                if (generator_return) {
+                    next_instr = _PyEval_GeneratorReturnTarget(frame);
+                }
+                else {
+                    LOAD_IP(1);
+                }
                 res = temp;
                 LLTRACE_RESUME_FRAME();
             }
@@ -16031,10 +16021,7 @@
                     window[2] = PyStackRef_NULL;
                     gen->gi_exc_state.previous_item = tstate->exc_info;
                     tstate->exc_info = &gen->gi_exc_state;
-                    assert( 1u + oparg <= UINT16_MAX);
-                    frame->return_offset = (uint16_t)( 1u + oparg);
                     frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
-                    gen->gi_yield_offset = 1u ;
                     assert(gen_frame->previous == NULL);
                     gen_frame->previous = frame;
                     DISPATCH_INLINED(gen_frame);
@@ -16151,8 +16138,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SEND_GEN);
-            int oparg = (int)IR_FIELD_D(this_instr);
-            (void)oparg;
             _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             _PyStackRef receiver;
@@ -16195,10 +16180,7 @@
                 _PyFrame_SetReturnValue(pushed_frame, PyStackRef_MakeHeapSafe(v));
                 gen->gi_exc_state.previous_item = tstate->exc_info;
                 tstate->exc_info = &gen->gi_exc_state;
-                assert( 1u + oparg <= UINT16_MAX);
-                frame->return_offset = (uint16_t)( 1u + oparg);
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
-                gen->gi_yield_offset = 1u ;
                 pushed_frame->previous = frame;
                 gen_frame = PyStackRef_Wrap(pushed_frame);
             }
@@ -18434,10 +18416,9 @@
                         _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
                     assert(opcode == SEND || opcode == FOR_ITER);
                 }
-                assert(gen->gi_yield_offset == 1);
                 #endif
                 slots = _PyFrame_Slots(frame);
-                LOAD_IP(gen->gi_yield_offset);
+                LOAD_IP(1);
                 value = temp;
                 LLTRACE_RESUME_FRAME();
             }
@@ -18546,7 +18527,6 @@ JUMP_TO_LABEL(error);
             _PyInterpreterFrame *dying = frame;
             frame = tstate->current_frame = dying->previous;
             _PyEval_FrameClearAndPop(tstate, dying);
-            frame->return_offset = 0;
             if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
                 tstate->current_frame = frame->previous;
                 #if !_Py_TAIL_CALL_INTERP

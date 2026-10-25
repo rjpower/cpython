@@ -1526,7 +1526,6 @@ init_threadstate(_PyThreadStateImpl *_tstate,
     _tstate->base_frame.frame_obj = NULL;
     _tstate->base_frame.instr_ptr = NULL;
     _tstate->base_frame.return_slot = 0;
-    _tstate->base_frame.return_offset = 0;
     _tstate->base_frame.owner = FRAME_OWNED_BY_INTERPRETER;
     _tstate->base_frame.visited = 0;
 #ifdef Py_DEBUG

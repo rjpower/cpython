@@ -1309,7 +1309,6 @@ dummy_func(
             pushed_frame->localsplus[0] = container;
             pushed_frame->localsplus[1] = sub;
             INPUTS_DEAD();
-            frame->return_offset = INSTRUCTION_SIZE;
             frame->return_slot = (uint16_t)IR_DST_SLOT;
             new_frame = PyStackRef_Wrap(pushed_frame);
         }
@@ -1500,10 +1499,19 @@ dummy_func(
             _Py_LeaveRecursiveCallPy(tstate);
             // GH-99729: We need to unlink the frame *before* clearing it:
             _PyInterpreterFrame *dying = frame;
+            int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
             frame = tstate->current_frame = dying->previous;
             _PyEval_FrameClearAndPop(tstate, dying);
             RELOAD_STACK();
-            LOAD_IP(frame->return_offset);
+            // A frame resumes at the word after the one that made the call,
+            // except after a generator's return, when a SEND or FOR_ITER
+            // goes on to its exit.
+            if (generator_return) {
+                next_instr = _PyEval_GeneratorReturnTarget(frame);
+            }
+            else {
+                LOAD_IP(1);
+            }
             res = temp;
             LLTRACE_RESUME_FRAME();
         }
@@ -1608,10 +1616,7 @@ dummy_func(
                 SYNC_SP();
                 gen->gi_exc_state.previous_item = tstate->exc_info;
                 tstate->exc_info = &gen->gi_exc_state;
-                assert(INSTRUCTION_SIZE + oparg <= UINT16_MAX);
-                frame->return_offset = (uint16_t)(INSTRUCTION_SIZE + oparg);
                 frame->return_slot = (uint16_t)IR_DST_SLOT;
-                gen->gi_yield_offset = INSTRUCTION_SIZE;
                 assert(gen_frame->previous == NULL);
                 gen_frame->previous = frame;
                 DISPATCH_INLINED(gen_frame);
@@ -1654,10 +1659,7 @@ dummy_func(
             DEAD(v);
             gen->gi_exc_state.previous_item = tstate->exc_info;
             tstate->exc_info = &gen->gi_exc_state;
-            assert(INSTRUCTION_SIZE + oparg <= UINT16_MAX);
-            frame->return_offset = (uint16_t)(INSTRUCTION_SIZE + oparg);
             frame->return_slot = (uint16_t)IR_DST_SLOT;
-            gen->gi_yield_offset = INSTRUCTION_SIZE;
             pushed_frame->previous = frame;
             gen_frame = PyStackRef_Wrap(pushed_frame);
         }
@@ -1768,10 +1770,9 @@ dummy_func(
                     _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
                 assert(opcode == SEND || opcode == FOR_ITER);
             }
-            assert(gen->gi_yield_offset == 1);
             #endif
             RELOAD_STACK();
-            LOAD_IP(gen->gi_yield_offset);
+            LOAD_IP(1);
             value = temp;
             LLTRACE_RESUME_FRAME();
         }
@@ -2917,7 +2918,7 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             _CHECK_PEP_523 +
             _LOAD_ATTR_PROPERTY_FRAME +
-            _SAVE_RETURN_OFFSET +
+            _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
         op(_LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN_FRAME, (func_version/2, getattribute/4, owner -- new_frame)) {
@@ -2944,7 +2945,7 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             _CHECK_PEP_523 +
             _LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN_FRAME +
-            _SAVE_RETURN_OFFSET +
+            _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
         op(_GUARD_DORV_NO_DICT, (owner -- owner)) {
@@ -3851,10 +3852,7 @@ dummy_func(
             gen->gi_exc_state.previous_item = tstate->exc_info;
             tstate->exc_info = &gen->gi_exc_state;
             pushed_frame->previous = frame;
-            // oparg is the return offset from the next instruction.
-            frame->return_offset = (uint16_t)(INSTRUCTION_SIZE + oparg);
             frame->return_slot = (uint16_t)IR_DST_SLOT;
-            gen->gi_yield_offset = INSTRUCTION_SIZE;
             gen_frame = PyStackRef_Wrap(pushed_frame);
         }
 
@@ -4143,7 +4141,6 @@ dummy_func(
                 if (new_frame == NULL) {
                     ERROR_NO_POP();
                 }
-                frame->return_offset = INSTRUCTION_SIZE;
                 frame->return_slot = (uint16_t)IR_DST_SLOT;
                 DISPATCH_INLINED(new_frame);
             }
@@ -4228,7 +4225,7 @@ dummy_func(
             _CHECK_FUNCTION_VERSION +
             _CHECK_RECURSION_REMAINING +
             _PY_FRAME_GENERAL +
-            _SAVE_RETURN_OFFSET +
+            _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
         op(_CHECK_METHOD_VERSION, (func_version/2, callable, null, unused[oparg] -- callable, null, unused[oparg])) {
@@ -4260,7 +4257,7 @@ dummy_func(
             flush + // so that self is in the argument array
             _CHECK_RECURSION_REMAINING +
             _PY_FRAME_GENERAL +
-            _SAVE_RETURN_OFFSET +
+            _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
         op(_CHECK_IS_NOT_PY_CALLABLE, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
@@ -4373,7 +4370,7 @@ dummy_func(
             _CHECK_STACK_SPACE +
             _CHECK_RECURSION_REMAINING +
             _INIT_CALL_PY_EXACT_ARGS +
-            _SAVE_RETURN_OFFSET +
+            _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
         macro(CALL_PY_EXACT_ARGS) =
@@ -4384,7 +4381,7 @@ dummy_func(
             _CHECK_STACK_SPACE +
             _CHECK_RECURSION_REMAINING +
             _INIT_CALL_PY_EXACT_ARGS +
-            _SAVE_RETURN_OFFSET +
+            _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
         op(_GUARD_NOS_NULL, (null, unused -- null, unused)) {
@@ -4508,8 +4505,8 @@ dummy_func(
             /* The shim gets the result of __init__ in slot 1 */
             _PyInterpreterFrame *shim = _PyFrame_PushTrampolineUnchecked(
                 tstate, (PyCodeObject *)&_Py_InitCleanup, 1, frame);
-            assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 0) == EXIT_INIT_CHECK);
-            assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 1) == RETURN_VALUE);
+            assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 1) == EXIT_INIT_CHECK);
+            assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 2) == RETURN_VALUE);
             /* Push self onto stack of shim */
             shim->localsplus[0] = PyStackRef_DUP(self);
             _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
@@ -4522,7 +4519,6 @@ dummy_func(
                 _PyEval_FrameClearAndPop(tstate, shim);
                 ERROR_NO_POP();
             }
-            frame->return_offset = INSTRUCTION_SIZE_OF(CALL);
             frame->return_slot = (uint16_t)IR_DST_SLOT;
             /* Account for pushing the extra frame.
              * We don't check recursion depth here,
@@ -5113,7 +5109,6 @@ dummy_func(
                     ERROR_NO_POP();
                 }
                 assert(INSTRUCTION_SIZE == INSTRUCTION_SIZE_OF(CALL_KW));
-                frame->return_offset = INSTRUCTION_SIZE;
                 frame->return_slot = (uint16_t)IR_DST_SLOT;
                 DISPATCH_INLINED(new_frame);
             }
@@ -5177,7 +5172,7 @@ dummy_func(
             _CHECK_FUNCTION_VERSION_KW +
             _CHECK_RECURSION_REMAINING +
             _PY_FRAME_KW +
-            _SAVE_RETURN_OFFSET +
+            _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
         op(_CHECK_METHOD_VERSION_KW, (func_version/2, callable, null, unused[oparg], unused -- callable, null, unused[oparg], unused)) {
@@ -5208,7 +5203,7 @@ dummy_func(
             _EXPAND_METHOD_KW +
             flush + // so that self is in the argument array
             _PY_FRAME_KW +
-            _SAVE_RETURN_OFFSET +
+            _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
         specializing op(_SPECIALIZE_CALL_KW, (callable, self_or_null, unused[oparg], unused -- callable, self_or_null, unused[oparg], unused)) {
@@ -5356,7 +5351,6 @@ dummy_func(
                         ERROR_NO_POP();
                     }
                     assert(INSTRUCTION_SIZE == INSTRUCTION_SIZE_OF(CALL_FUNCTION_EX));
-                    frame->return_offset = INSTRUCTION_SIZE;
                     frame->return_slot = (uint16_t)IR_DST_SLOT;
                     DISPATCH_INLINED(new_frame);
                 }
@@ -5428,7 +5422,7 @@ dummy_func(
             _MAKE_CALLARGS_A_TUPLE +
             _CHECK_IS_PY_CALLABLE_EX +
             _PY_FRAME_EX +
-            _SAVE_RETURN_OFFSET +
+            _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
         op(_CHECK_IS_NOT_PY_CALLABLE_EX, (func_st, unused, unused, unused -- func_st, unused, unused, unused)) {
@@ -5516,7 +5510,7 @@ dummy_func(
             _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);
             _PyThreadState_PopFrame(tstate, frame);
             frame = tstate->current_frame = prev;
-            LOAD_IP(frame->return_offset);
+            LOAD_IP(1);
             RELOAD_STACK();
             res = PyStackRef_FromPyObjectStealMortal((PyObject *)gen);
             LLTRACE_RESUME_FRAME();
@@ -5752,8 +5746,7 @@ dummy_func(
             JUMPTO(oparg);
         }
 
-        op(_SAVE_RETURN_OFFSET, (--)) {
-            frame->return_offset = (uint16_t)(next_instr - this_instr);
+        op(_SAVE_RETURN_SLOT, (--)) {
             frame->return_slot = (uint16_t)IR_DST_SLOT;
         }
 
@@ -5843,7 +5836,6 @@ dummy_func(
             _PyInterpreterFrame *dying = frame;
             frame = tstate->current_frame = dying->previous;
             _PyEval_FrameClearAndPop(tstate, dying);
-            frame->return_offset = 0;
             if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
                 /* Restore previous frame and exit */
                 tstate->current_frame = frame->previous;

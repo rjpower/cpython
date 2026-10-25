@@ -220,7 +220,7 @@ class Uop:
         return self._size
 
     def why_not_viable(self) -> str | None:
-        if self.name == "_SAVE_RETURN_OFFSET":
+        if self.name == "_SAVE_RETURN_SLOT":
             return None  # Adjusts next_instr, but only in tier 1 code
         if "INSTRUMENTED" in self.name:
             return "is instrumented"
@@ -613,6 +613,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyFrame_SetReturnValue",
     "_PyFrame_Slots",
     "_PyFrame_AssertTemporariesClear",
+    "_PyEval_GeneratorReturnTarget",
     "_PyFunction_SetVersion",
     "_PyGen_GetGeneratorFromFrame",
     "gen_try_set_executing",

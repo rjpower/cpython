@@ -3294,7 +3294,8 @@ _Py_GatherStats_GetIter(_PyStackRef iterable)
  * CALL_ALLOC_AND_ENTER_INIT will set up
  * the frame to execute the EXIT_INIT_CHECK
  * instruction.
- * Ends with a RESUME so that it is not traced.
+ * Starts with a NOP, which never runs: the shim's instr_ptr stays there, and
+ * __init__ returns to the word after it.
  * This is used as a plain code object, not a function,
  * so must not access globals or builtins.
  * There are a few other constraints imposed on the code
@@ -3336,8 +3337,8 @@ const struct _PyCode3 _Py_InitCleanup = {
     // static code object starts with as its executing copy
     ._co_exec = &_PyIR_InitCleanupExec,
     .co_words = {
+        IR_WORD(NOP, 0, 0, 0, 0),
         IR_WORD(EXIT_INIT_CHECK, 1, 0, 0, 0),
         IR_WORD(RETURN_VALUE, 0, 0, 0, 0),
-        IR_WORD(RESUME, 0, 0, 0, 0),
     }
 };

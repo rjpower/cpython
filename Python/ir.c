@@ -36,7 +36,8 @@ static_assert(sizeof(_PyFbUnary) <= FB_STRIDE && sizeof(_PyFbBinary) <= FB_STRID
 
 /* _Py_InitCleanup (Python/specialize.c) runs with self in slot 0 and the
  * result of __init__ in slot 1: EXIT_INIT_CHECK checks slot 1, and
- * RETURN_VALUE returns slot 0.  Its third word, RESUME, never runs.  Both
+ * RETURN_VALUE returns slot 0.  Its first word, a NOP, never runs: the shim's
+ * instr_ptr stays there, and __init__ returns to the word after it.  Both
  * slots are temporaries, and the header precedes the words, as in every
  * executing copy, for IR_IS_LOCAL(). */
 _PyIRStaticExec _PyIR_InitCleanup = {
@@ -46,9 +47,9 @@ _PyIRStaticExec _PyIR_InitCleanup = {
         .nlocalsplus = 0,
     },
     .words = {
+        IR_WORD(NOP, 0, 0, 0, 0),
         IR_WORD(EXIT_INIT_CHECK, 1, 0, 0, 0),
         IR_WORD(RETURN_VALUE, 0, 0, 0, 0),
-        IR_WORD(RESUME, 0, 0, 0, 0),
     },
 };
 

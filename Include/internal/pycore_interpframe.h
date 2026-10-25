@@ -255,7 +255,6 @@ _PyFrame_Initialize(
     frame->frame_obj = NULL;
     (void)tstate;
     _PyFrame_InitIRInstrPtr(frame, code);
-    frame->return_offset = 0;
     frame->return_slot = 0;
     frame->owner = FRAME_OWNED_BY_THREAD;
     frame->visited = 0;
@@ -444,7 +443,6 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
 #ifdef Py_DEBUG
     frame->lltrace = 0;
 #endif
-    frame->return_offset = 0;
     int nslots = _PyFrame_NumSlotsForCodeObject(code);
     assert(return_slot < nslots);
     frame->return_slot = (uint16_t)return_slot;

@@ -1040,8 +1040,8 @@ static const struct {
         /* Put a NOP at the start, so that the IP points into
         * the code, rather than before it */
         IR_WORD(NOP, 0, 0, 0, 0),
-        IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),  /* reached on return */
-        IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),  /* reached on yield */
+        IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),  /* reached on return and yield */
+        IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),
     },
 };
 #define _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS (entry_trampoline.words)
@@ -1291,12 +1291,13 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     entry.frame.f_builtins = (PyObject*)0xaaa4;
 #endif
     entry.frame.f_executable = PyStackRef_None;
-    entry.frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS + 1;
+    /* A return or a yield resumes the entry frame at the word after its
+     * instr_ptr, the first INTERPRETER_EXIT */
+    entry.frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry.frame.ir_words = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry.frame.ir_feedback = NULL;
     entry.frame.owner = FRAME_OWNED_BY_INTERPRETER;
     entry.frame.visited = 0;
-    entry.frame.return_offset = 0;
     /* What the frame returns or yields lands in entry.stack[0] */
     entry.frame.return_slot = 1;
 #ifdef Py_DEBUG
@@ -1348,7 +1349,6 @@ early_exit:
     _PyInterpreterFrame *dying = frame;
     frame = tstate->current_frame = dying->previous;
     _PyEval_FrameClearAndPop(tstate, dying);
-    frame->return_offset = 0;
     assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
     /* Restore previous frame and exit */
     tstate->current_frame = frame->previous;
@@ -1932,6 +1932,20 @@ clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
     // gh-143939: There must not be any escaping calls between setting
     // the generator return kind and returning from _PyEval_EvalFrame.
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
+}
+
+_PyInstr *
+_PyEval_GeneratorReturnTarget(_PyInterpreterFrame *frame)
+{
+    _PyInstr *next = frame->instr_ptr + 1;
+    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
+        return next;
+    }
+    PyCodeObject *co = _PyFrame_GetCode(frame);
+    int i = (int)_PyFrame_InstrOffset(frame, frame->instr_ptr);
+    assert(_PyIR_BaseOpcode(_PyCode_InstrHandler(co, i)) == SEND ||
+           _PyIR_BaseOpcode(_PyCode_InstrHandler(co, i)) == FOR_ITER);
+    return next + _PyCode_InstrOparg(co, i);
 }
 
 void

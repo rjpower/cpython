@@ -43,7 +43,6 @@ struct _PyInterpreterFrame {
     /* Index of thread-local bytecode containing instr_ptr. */
     int32_t tlbc_index;
 #endif
-    uint16_t return_offset;  /* Only relevant during a function call */
     /* The slot that receives the value when control comes back to this
      * frame: the dst of the call it is making, or for a suspended
      * generator the slot of the value it yielded, where the value sent in
@@ -78,8 +77,6 @@ struct _PyInterpreterFrame {
     int8_t prefix##_hooks_inited;                                           \
     int8_t prefix##_closed;                                                 \
     int8_t prefix##_running_async;                                          \
-    /* IR words from the resuming instruction to where a yield returns */   \
-    uint8_t prefix##_yield_offset;                                          \
     /* The frame */                                                         \
     int8_t prefix##_frame_state;                                            \
     _PyInterpreterFrame prefix##_iframe;                                    \

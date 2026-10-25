@@ -1,6 +1,6 @@
 # 06: Architecture v2: a fixed-width register IR from the compiler, one value type, a tracing GC
 
-Status: design for review, 2026-10-25. Supersedes the encoding in note 01,
+Status: approved 2026-10-25 with two review amendments (sections 3.2 and 3.4, step 10). Supersedes the encoding in note 01,
 the ownership bits of note 02, and note 03 (deferred reference counting),
 which is dropped. Notes 04 (shapes) and 05 (tier 0) stand, with the changes in
 sections 3.5 and 5.
@@ -325,10 +325,16 @@ bits hold: mark, old (sticky mark for a later generational mode), finalizer
 queued, has weak references, static (not heap allocated), owns external
 resources, and spare. Only the collector writes them, with the world stopped.
 
-Alternative considered: the first word is the shape (V8's map in header), with
-the type reached through the shape. It saves two loads on `LOAD_ATTR` and
-costs one on every `Py_TYPE`, which the runtime's C code executes far more
-often. Rejected.
+The hidden-class layout is already the instance layout of section 3.3:
+header, shape, slots. The open choice is whether the shape should move into
+the header word in place of the type, as V8's map does, with the type reached
+through the shape. That saves two loads on every `LOAD_ATTR` and `STORE_ATTR`
+and costs one on every `Py_TYPE` in the runtime's C code. The right time to
+decide is step 6c, when shapes are on by default and we can count both: if
+attribute guards outnumber `Py_TYPE` loads in the C runtime on the benchmark
+set, the header becomes the shape. Until then the type stays in the header,
+and every type has a root shape so that the two layouts are
+interchangeable.
 
 ### 3.3 Instances
 
@@ -372,6 +378,18 @@ The collector:
   lies inside an allocated block; interior pointers mark their block. This is
   what lets `Objects/`, `Modules/` and every port keep holding raw `PyObject*`
   in C locals and static variables without a handle API.
+
+  Conservative scanning is the first pass, not the end state. A precise
+  moving collector (nursery bump allocation, compaction) is the target once
+  the ports are green on the tracing collector, and three things in this
+  design keep that door open: the collector's root set is an abstraction
+  (`gc_roots.c`) that the conservative scanner implements and a precise one
+  will replace; new C API functions take and return `PyValue` and are
+  written so that the handle discipline can be added at the signature
+  without changing callers' logic; and the ports tree records, per port,
+  which C code holds heap references across allocations, which is exactly
+  the inventory the handle migration will need. The moving collector and
+  its handle API are step 10, after tier 1.
 - **Traversal:** `tp_traverse` for every type that holds references, not only
   GC-tracked containers. Step 4 of the plan builds a verifier that finds the
   gaps while reference counting still protects us.
@@ -510,6 +528,7 @@ entry; nothing lives on a prototype branch.
 | 7 | Generational collection: sticky mark bits, remembered set, write barrier in the store macros, barrier verifier (full mark after each minor collection in debug builds). Kept only if pause and throughput both improve on the benchmark set. | nothing | verifier clean; pyperformance and RSS compared with step 6 | 5 days |
 | 8 | Tier 0 over the v2 IR (section 5), x86-64. | the Phase 1 `tier0.c` and `ceval_tier0.c.h` | geomean below the deleted upstream JIT's 0.834 against the Phase 0 baseline; suite with tier 0 on | 8 days |
 | 9 | Tier 1. | | 2x geomean over Phase 0 on pyperformance, 3x on the numeric subset; ports green | open |
+| 10 | Precise moving collector: nursery with bump allocation and evacuation, compaction of the old space, handle discipline in the C API for references held across allocations, ports migrated with the inventory from step 5. | the conservative scanner | ports green; allocation-heavy benchmarks and RSS compared with step 7 | open |
 
 Dependencies: 1 before 2a before 2b. Step 3 and step 4 are independent of
 each other and of 2b, and run in parallel once 2a has landed. Step 5 needs 4
@@ -532,11 +551,11 @@ only lasting part, root enumeration, is step 4.
 
 ## 7. Decisions needed
 
-1. **Non-moving collector with conservative C stacks, no handle API.** This
-   reverses thread #16. The trade is a permanent one: we give up compaction
-   and nursery bump allocation for a C API that existing extensions mostly
-   keep compiling against. My recommendation is to take it; Go, Lua and Ruby
-   run non-moving, and the ports cost of a handle API would dominate Phase 2.
+1. **Non-moving collector with conservative C stacks first, precise moving
+   collector later (step 10).** Decided in review: conservative scanning is
+   acceptable as a first pass; the design keeps the root set abstract and the
+   new API `PyValue`-typed so that the moving collector and its handle
+   discipline arrive as a step, not a rewrite.
 2. **Hard limits: 4,095 slots and 4,095 feedback sites per code object,
    16M words, 24-bit constant index.** Compile error beyond the slot limit;
    no specialisation beyond the feedback limit. Measured headroom is five

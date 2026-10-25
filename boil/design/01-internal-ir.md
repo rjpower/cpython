@@ -874,3 +874,38 @@ Step 6 adds the following.
     counts. Aligning jumps is no fix: in the same runs `-falign-jumps=32`
     slowed generators by 3%. logging_simple and xml_etree_iterparse (1.03
     to 1.04) were not examined.
+
+## 12. Superseded by note 06, step 1
+
+Step 1 of design note 06 replaces the encoding of sections 1 to 3 and keeps
+the lowering of section 4 as its producer. What changed:
+
+- **Word.** One 64-bit word per instruction: a 16-bit handler and four
+  12-bit fields A to D; C and D together form a 24-bit field CD. There is no
+  second word, no `IR_EXT` and no flag bit, so `_PyIRFormat` lost `nwords`
+  and the layout pass of section 4 no longer widens anything.
+- **Slots.** A slot field is a plain `localsplus` index. A code object whose
+  locals, cells, free variables and stack need more than 4095 slots raises
+  `SystemError` at lowering. `IR_BORROW` is gone: an absorbed load leaves its
+  consumer's input field naming the local, and the handler finds that the
+  input is borrowed because the field differs from the canonical slot, which
+  follows from dst.
+- **Feedback.** Entries are indexed, at a uniform 40-byte stride, from
+  `frame->ir_feedback`, not addressed by distance from the word. Index 0 is
+  shared by the sites past the 4095th: it never specialises, and those sites
+  read their static operand from the bytecode through the pcmap. A static
+  operand that does not fit in the word (an attribute or global name,
+  `COMPARE_OP`'s oparg, `CONTAINS_OP`'s invert) lives in the entry's `arg`.
+- **Jumps.** A jump keeps the absolute word index of its target in CD, from
+  `frame->ir_words`. `FOR_ITER` and `SEND` keep a 12-bit distance to their
+  exit in D, and a loop whose exit is more than 2047 words away exits through
+  `JUMP_FORWARD` words added after its own, which share its pcmap entry.
+- **Handlers.** Each handler extracts the fields it uses from the word in a
+  register in every dispatch build; the lazy decoding and the 16-bit memory
+  reads of section 2 are gone. `BINARY_OP` has a generic handler per `NB_`
+  operation, and its specialisations deoptimise to the handler of the
+  operation that their entry records. The compare-and-branch
+  superinstructions and tier 0 are deleted.
+
+The pcmap, absorption and the one-to-one relowering for INSTRUCTION events
+are unchanged.

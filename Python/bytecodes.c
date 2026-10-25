@@ -5798,7 +5798,7 @@ dummy_func(
             int first = exc_slot - lasti;
             assert(first >= _PyFrame_GetCode(frame)->co_nlocalsplus);
             _PyFrame_ClearTemporaries(frame, first);
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            slots = _PyFrame_Slots(frame);
             if (lasti) {
                 int frame_lasti = _PyInterpreterFrame_LASTI(frame);
                 slots[first] = PyStackRef_TagIndex(frame_lasti);

@@ -239,3 +239,34 @@ depart from design note 01 are recorded in its new section 11: IR_BORROW in
 bit 0, 32-bit immediate/jump and feedback fields in word 1, stack pointer kept
 through step 4, absorbed loads keep their word. Step 4 (lazy lowering, pcmap,
 static borrows) is in progress.
+
+### 2026-10-24 17:30 — final approach for Phase 1
+
+Course correction from the user: agents were wandering for hours. From here every
+brief carries a time budget, a smallest-path-first test ladder, a 30-minute
+report cadence, and a scope cut to take if the budget runs out. The coordinator
+checks each agent at least hourly and kills or redirects it when it misses a
+report.
+
+Remaining steps, in order, each one commit with instruction counts in its message:
+
+1. IR step 4, 1:1 lowering and execution behind `--with-ir-interp`. Budget 2h.
+   Ladder: one-liner through the IR → test_ir → six targeted test files → full
+   suite once → release build instruction counts on micro_loops.py.
+2. IR step 5, register form: dead temporaries dropped, true register reads, no
+   bytecode shadow for instrumentation. Budget 3h. Same ladder.
+3. IR step 6, fused compare-branch and oparg folding. Budget 2h. Gate: fewer
+   instructions on micro_loops and on nqueens, go, richards than step 5.
+4. IR made the default build; stack-interpreter `--with-ir-interp` flag removed.
+   Budget 1h. Gate: full test suite, ports tree `check`, clean pyperformance.
+5. Tier 0 baseline JIT: x86-64 assembler, one handler call per IR word with
+   inlined dispatch, feedback-guarded int and float fast paths. Budget 6h in
+   three commits (assembler + call-threaded code; inline fast paths; tests).
+   Ladder: one function JIT-compiled and compared to the interpreter →
+   test_ir → full suite → micro_loops → pyperformance.
+6. Shapes behind a flag, step one only (hidden class per type, LOAD_ATTR
+   instance fast path). Budget 3h. Gate: instruction counts; off by default
+   if neutral.
+7. Close out: fix ac60a9c3c73 history split, results table, PR.md, open PR.
+
+Steps 5 and 6 are independent and run as parallel agents once step 4 lands.

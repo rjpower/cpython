@@ -359,7 +359,7 @@ The extra cycles are in the front end: L1 instruction-cache misses rise 2.6 to 2
 
 ### Deletions
 
-Tier 2 and the copy-and-patch JIT are removed rather than disabled. This covers `Python/optimizer*.c`, `jit.c`, the uop headers, `Tools/jit`, the tier-2 generators, `--enable-experimental-jit`, the environment variables listed under "Pipeline", the executor fields on code objects and interpreter state, `ENTER_EXECUTOR`, the `*_JIT` instructions, and their tests and docs. About 68,700 lines go.
+Tier 2 and the copy-and-patch JIT are removed rather than disabled. This covers `Python/optimizer*.c`, `jit.c`, the uop headers, `Tools/jit`, the tier-2 generators, `--enable-experimental-jit`, the environment variables listed under "Pipeline", the executor fields on code objects and interpreter state, `ENTER_EXECUTOR`, the `*_JIT` instructions, and their tests and docs. About 68,700 lines go, across two commits: the design-note commit ac60a9c3c73 carries 36 of the generated and tooling files by mistake, and 69ffcec5a77 carries the rest. The split is left as it is, because rewriting it would change every later commit id that the work log, the design notes and the commit messages cite.
 
 Base opcode numbers and cache layouts are unchanged. RESUME and JUMP_BACKWARD keep a one-entry cache so pyc files are unaffected. The reason for deleting first: the new encoding never has to be taught to code the fork was going to remove.
 

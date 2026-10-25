@@ -486,3 +486,20 @@ Rebased twice without conflict; regen stable; dev-t0 rebuilt and 272 targeted
 tests pass; the tier 0 worktree and branch are removed. PR.md tier 0 section
 now carries the measurements. Remaining: IR agent's final handback, history
 fix for ac60a9c3c73, final clean timing of the head, results table, PR.
+
+### 2026-10-24 23:00 — all agents done; close-out
+
+IR agent final handback: 50,733 tests pass on dev-debug at bb1c8b7bca9 (one
+machine-local failure); stackref-debug passes its targeted set; all 7 ports
+pass on the release build at f0a16213124 with zero new patches; RSS within
++1% to +4% of ref-head (loops 10.9 vs 10.5 MiB). Remaining items it lists for
+Phase 2: TLBC removal on FT, the FT monitoring heap corruption, lowering cost
+(3x quickening), generator output coverage after dropping the tier-1 output
+tests, unexamined logging_simple and xml_etree_iterparse, and a layout-noise
+policy for build comparisons.
+
+Decision: the ac60a9c3c73 history split is documented in PR.md rather than
+rewritten, because a rewrite would invalidate every later commit id cited in
+this log, the design notes and the commit messages.
+
+Final clean timing of f655ef62814 (build/final-snapshot) started 23:00.

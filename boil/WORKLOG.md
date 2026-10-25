@@ -464,3 +464,18 @@ compilation laid out together.
 
 Next: rebase onto head (IR-only deleted tier1_generator.py; IR_DROP_BORROW),
 fix or narrow the leak, land, then history fix, results table, PR.
+
+### IR timing diagnosis: yield cost fixed (e55f2ce2586), the rest is layout
+
+YIELD_VALUE found its return point through five dependent loads; the resuming
+instruction now records INSTRUCTION_SIZE in a padding byte of the generator
+header. pyperf generators: stack/tagged 32.0 ms, IR 35.8 -> 32.8 ms.
+unpack_sequence (1.19), spectral_norm and deepcopy differences are eval-loop
+code placement: same hot machine code, 13K vs 2.3K cycles per loop with an
+empty uop queue, no extra cache or branch misses; -falign-jumps=32 or any
+unrelated edit moves single small benchmarks by up to 20%. One-time lowering
+is not a factor in pyperf's timings. Lesson recorded in design note 01 item 32:
+compare builds by instruction counts or across several layouts.
+
+Tier 0 rebased cleanly onto bb1c8b7bca9; regen check, build and targeted tests
+running before the fast-forward.

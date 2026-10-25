@@ -1061,3 +1061,62 @@ interpreter text does not explain. It is not yet investigated. Items 3 and
   specialisation, which the free-threaded IR does not do. That is the 73
   known before plus five, because test_to_bool now has five subtests and there
   is a new test_pop_jump_if.
+
+## 12. Step 3a decisions
+
+### 12.1 Milestone 1: no stack pointer
+
+**Invariant.** Every one of a frame's `co_nslots` slots holds a value or
+NULL. A slot at or above `co_nlocalsplus` is a temporary. A handler that
+consumes a temporary takes it and stores NULL. A handler writes a
+temporary result only into a NULL slot, which debug builds assert. A
+handler that writes a local releases the old value. An input is borrowed
+when its slot is below `co_nlocalsplus`. Everything that used to walk
+`localsplus` up to the stack pointer now walks all slots and skips NULL:
+unwinding, frame clear, both collectors, frame traversal, `f_locals`,
+`f_lineno` assignment, frame copy, and the remote debugger.
+
+**Exception table.** An entry names the handler, the slot that receives
+the exception, and the lasti flag; the depth is gone. When lasti is set,
+the slot below the exception's receives the offset. `dis` prints the
+slot as `[rN]`. The magic number is 3712.
+
+**The unwinder clears from the handler's first slot up, not every
+temporary.** A handler can run while temporaries below it are live: the
+iterator of an enclosing `for`, the exit method of a `with`. In the
+stack numbering these lie below the handler's depth, so clearing from
+the handler's first slot (the lasti slot, or the exception slot) upward
+releases exactly what the old pop-to-depth released. When no handler
+matches, every temporary is cleared.
+
+This is a constraint on 3b. **3b must either keep handler-live
+temporaries below the handler's first slot or give the exception table
+a liveness record.** Register compaction that numbers a temporary live
+across a handler above the handler's first slot would have the unwinder
+release a live value.
+
+**`return_slot`.** The frame gains a 16-bit `return_slot`. For a frame
+with a pending call it names the slot the callee's result goes to; for
+a suspended generator it names the slot where the value sent in goes.
+`gi_yieldfrom` reads the receiver at `return_slot - 2`, because SEND's
+window is receiver, index, value. `_PyFrame_SetReturnValue` writes
+there. The entry frame and the `__init__` shim use slot 1.
+
+**LOAD_SPECIAL is window style.** Its two outputs are written to its
+window rather than to `dst`, because register-style outputs could
+overlay a folded local input.
+
+**Free-threading risk, not yet addressed.** The generator now keeps
+some values in C variables rather than in slots across escaping calls
+(the values with no slot). On the free-threaded build, a deferred
+reference held only in a C variable is invisible to the collector. The
+rung-2 suite does not show it; the failures are the known 78.
+
+**Deleted.** `stack_pointer`, `stackpointer` and `stackpointer_valid` in
+the frame; `_PyFrame_GetStackPointer`, `_PyFrame_SetStackPointer`,
+`_PyFrame_StackPeek/Pop/Push`, the stack-pointer validity helpers;
+`STACK_LEVEL`, `WITHIN_STACK_BOUNDS`, `LOAD_SP`, `SAVE_SP`,
+`_Py_assert_within_stack_bounds`; the TOP role; `IR_CLEAR_IF_BORROWED`
+and the borrow test; the entry sync; the `pop_1_error` and
+`pop_2_error` labels; the GH-129236 NULL-stack-pointer skips in the
+collectors.

@@ -10,7 +10,7 @@ Timing is the 24-benchmark pyperformance subset in `boil/bench`, geometric mean 
 
 | Step | Commits | Time vs baseline | Instructions | Note |
 |---|---|---|---|---|
-| Baseline (main, default build) | 3a440b65695 | 1.000 | | `boil/bench/default.json`; the deleted JIT build measured 0.834, free-threaded 1.144 |
+| Baseline (main, default build) | 321925c92c9 | 1.000 | | gcc 15, no PGO, no LTO; `boil/bench/default.json`; the deleted JIT build measured 0.834, free-threaded 1.144 |
 | Delete tier 2 and the copy-and-patch JIT | ac60a9c3c73, 69ffcec5a77 | 0.980 | | `step1-delete-tier2.json` |
 | Typed feedback blocks | 3e7bca13a62 | not timed alone | +0.67% | code objects 424 to 875 bytes eager; import RSS +5.6% |
 | NaN-boxed stack encoding, no producers | 37b41c5f82e | not timed alone | +3.4% | cost of the tag tests before any value is inline |
@@ -56,14 +56,6 @@ Final build against the baseline, per benchmark:
 | **geometric mean** | | | **0.991** |
 
 Reading the table. The encoding and the IR pay off where values stay inline and loops are tight: spectral_norm 0.59, chaos 0.81, comprehensions 0.85. Object-heavy benchmarks are 3 to 9 percent slower: the eval loop grew from 58 KB to 86 KB, every handler now tests tags, and the IR handlers read fields from memory. Single small benchmarks move by up to 20 percent with code placement alone (design note 01, item 32), so per-benchmark deltas under that size are not conclusive; the instruction counts are. The interpreter was never where these changes were expected to win. They exist so that a JIT can keep inline values in registers and guard attribute access with one shape compare, and tier 0 shows that the first JIT needs register caching to pay for its front-end cost.
-
-| Step | pyperformance geomean vs baseline | Notes |
-|---|---|---|
-| baseline default | 1.000 | 321925c92c9, gcc 15, no PGO, no LTO |
-| typed feedback | <!-- TODO: fill --> | +0.67 percent instructions on richards, go, nqueens, chaos |
-| inline ints | <!-- TODO: fill --> | instructions against the encoding commit: chaos -0.7, nbody -1.0, spectral_norm -1.0, richards +1.4, go +2.1, nqueens +2.1, fannkuch +1.3 percent |
-| register IR, the only interpreter | <!-- TODO: fill --> | instructions per loop against the stack build: richards -0.2, nqueens -1.1, go -3.2, float -2.1 percent; lowering adds about 25M instructions once on richards |
-| tier 0, `--with-tier0` | <!-- TODO: fill --> | see "Tier 0 baseline JIT" |
 
 For reference, the upstream JIT measured 0.834 against baseline on the same subset (`boil/bench/README.md`). That is the bar for the fork's own tier 0.
 

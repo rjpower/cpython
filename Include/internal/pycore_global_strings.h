@@ -388,6 +388,7 @@ struct _Py_global_strings {
         STRUCT_FOR_ID(co_code)
         STRUCT_FOR_ID(co_consts)
         STRUCT_FOR_ID(co_exceptiontable)
+        STRUCT_FOR_ID(co_fbinit)
         STRUCT_FOR_ID(co_filename)
         STRUCT_FOR_ID(co_firstlineno)
         STRUCT_FOR_ID(co_flags)

@@ -9,6 +9,7 @@
 #include "pycore_code.h"
 #include "pycore_compile.h"
 #include "pycore_intrinsics.h"
+#include "pycore_ir.h"              // _PyIR_Formats
 #include "pycore_opcode_metadata.h" // IS_VALID_OPCODE, OPCODE_HAS_*, etc
 #include "pycore_opcode_utils.h"
 
@@ -368,6 +369,46 @@ _opcode_get_special_method_names_impl(PyObject *module)
     return list;
 }
 
+/*[clinic input]
+
+_opcode.get_ir_formats
+
+Return the formats of the handlers of the register IR.
+
+Item h describes handler h: None if there is none, else (flags, roles,
+imm, fb, base), where roles holds the roles of fields A to D, imm and fb
+say where the oparg and the feedback index are, and base is the opcode
+that the handler stands for.
+[clinic start generated code]*/
+
+static PyObject *
+_opcode_get_ir_formats_impl(PyObject *module)
+/*[clinic end generated code: output=b91aab5e76c20e98 input=17c4e4239d07ab2f]*/
+{
+    PyObject *formats = PyTuple_New(IR_NUM_HANDLERS);
+    if (formats == NULL) {
+        return NULL;
+    }
+    for (int h = 0; h < IR_NUM_HANDLERS; h++) {
+        const _PyIRFormat *fmt = &_PyIR_Formats[h];
+        PyObject *item;
+        if (fmt->flags & _PyIR_VALID) {
+            item = Py_BuildValue("(i(iiii)iii)", fmt->flags, fmt->roles[0],
+                                 fmt->roles[1], fmt->roles[2], fmt->roles[3],
+                                 fmt->imm, fmt->fb, _PyIR_BaseOpcode(h));
+            if (item == NULL) {
+                Py_DECREF(formats);
+                return NULL;
+            }
+        }
+        else {
+            item = Py_NewRef(Py_None);
+        }
+        PyTuple_SET_ITEM(formats, h, item);
+    }
+    return formats;
+}
+
 static PyMethodDef
 opcode_functions[] =  {
     _OPCODE_STACK_EFFECT_METHODDEF
@@ -384,6 +425,7 @@ opcode_functions[] =  {
     _OPCODE_GET_INTRINSIC1_DESCS_METHODDEF
     _OPCODE_GET_INTRINSIC2_DESCS_METHODDEF
     _OPCODE_GET_SPECIAL_METHOD_NAMES_METHODDEF
+    _OPCODE_GET_IR_FORMATS_METHODDEF
     {NULL, NULL, 0, NULL}
 };
 
@@ -392,6 +434,26 @@ _opcode_exec(PyObject *m) {
     if (PyModule_AddIntMacro(m, ENABLE_SPECIALIZATION) < 0) {
         return -1;
     }
+#define ADD_IR_CONSTANT(NAME, VALUE) \
+    if (PyModule_AddIntConstant(m, NAME, VALUE) < 0) { \
+        return -1; \
+    }
+    ADD_IR_CONSTANT("IR_FIRST_ONLY_HANDLER", IR_FIRST_ONLY_HANDLER);
+    ADD_IR_CONSTANT("IR_ROLE_DST", _PyIR_ROLE_DST);
+    ADD_IR_CONSTANT("IR_ROLE_BASE", _PyIR_ROLE_BASE);
+    ADD_IR_CONSTANT("IR_ROLE_FB", _PyIR_ROLE_FB);
+    ADD_IR_CONSTANT("IR_ROLE_IN0", _PyIR_ROLE_IN0);
+    ADD_IR_CONSTANT("IR_LOC_NONE", _PyIR_LOC_NONE);
+    ADD_IR_CONSTANT("IR_LOC_A", _PyIR_LOC_A);
+    ADD_IR_CONSTANT("IR_LOC_B", _PyIR_LOC_B);
+    ADD_IR_CONSTANT("IR_LOC_C", _PyIR_LOC_C);
+    ADD_IR_CONSTANT("IR_LOC_D", _PyIR_LOC_D);
+    ADD_IR_CONSTANT("IR_LOC_CD", _PyIR_LOC_CD);
+    ADD_IR_CONSTANT("IR_LOC_FBARG", _PyIR_LOC_FBARG);
+    ADD_IR_CONSTANT("IR_JUMPS", _PyIR_JUMPS);
+    ADD_IR_CONSTANT("IR_FORWARD", _PyIR_FORWARD);
+    ADD_IR_CONSTANT("IR_TRANSPARENT", _PyIR_TRANSPARENT);
+#undef ADD_IR_CONSTANT
     return 0;
 }
 

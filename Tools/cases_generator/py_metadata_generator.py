@@ -15,6 +15,7 @@ from generators_common import (
     write_header,
 )
 from cwriter import CWriter
+from ir_generator import FIRST_IR_ONLY_HANDLER, handler_ids
 from typing import TextIO
 
 
@@ -69,6 +70,16 @@ def generate_opmap(analysis: Analysis, out: CWriter) -> None:
     out.emit(")\n\n")
 
 
+def generate_ir_opmap(analysis: Analysis, out: CWriter) -> None:
+    "The handlers of the register IR that are not opcodes, by name"
+    out.emit("_ir_opmap = frozendict(\n")
+    ids = handler_ids(analysis)
+    for name, handler in sorted(ids.items(), key=lambda item: item[1]):
+        if handler >= FIRST_IR_ONLY_HANDLER:
+            out.emit(f"{name}={handler},\n")
+    out.emit(")\n\n")
+
+
 def generate_py_metadata(
     filenames: list[str], analysis: Analysis, outfile: TextIO
 ) -> None:
@@ -77,6 +88,7 @@ def generate_py_metadata(
     generate_specializations(analysis, out)
     generate_specialized_opmap(analysis, out)
     generate_opmap(analysis, out)
+    generate_ir_opmap(analysis, out)
     out.emit(f"HAVE_ARGUMENT = {analysis.have_arg}\n")
     out.emit(f"MIN_INSTRUMENTED_OPCODE = {analysis.min_instrumented}\n")
 

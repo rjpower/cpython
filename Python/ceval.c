@@ -1129,7 +1129,13 @@ _PyEval_GetIter(_PyStackRef iterable, _PyStackRef *index_or_null, int yield_from
         return iterable;
     }
     if (yield_from && tp == &PyCoro_Type) {
-        assert(yield_from != GET_ITER_YIELD_FROM);
+        if (yield_from == GET_ITER_YIELD_FROM) {
+            // The compiler cannot know whether types.coroutine() will be
+            // called, which sets the flag on a copy of the code object
+            int flags = _PyFrame_GetCode(_PyThreadState_GET()->current_frame)->co_flags;
+            yield_from = (flags & (CO_COROUTINE | CO_ITERABLE_COROUTINE))
+                ? GET_ITER_YIELD_FROM_NO_CHECK : GET_ITER_YIELD_FROM_CORO_CHECK;
+        }
         if (yield_from == GET_ITER_YIELD_FROM_CORO_CHECK) {
             /* `iterable` is a coroutine and it is used in a 'yield from'
             * expression of a regular generator. */

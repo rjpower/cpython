@@ -713,4 +713,27 @@ _opcode_get_special_method_names(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
     return _opcode_get_special_method_names_impl(module);
 }
-/*[clinic end generated code: output=5ebd5c326f552213 input=a9049054013a1b77]*/
+
+PyDoc_STRVAR(_opcode_get_ir_formats__doc__,
+"get_ir_formats($module, /)\n"
+"--\n"
+"\n"
+"Return the formats of the handlers of the register IR.\n"
+"\n"
+"Item h describes handler h: None if there is none, else (flags, roles,\n"
+"imm, fb, base), where roles holds the roles of fields A to D, imm and fb\n"
+"say where the oparg and the feedback index are, and base is the opcode\n"
+"that the handler stands for.");
+
+#define _OPCODE_GET_IR_FORMATS_METHODDEF    \
+    {"get_ir_formats", (PyCFunction)_opcode_get_ir_formats, METH_NOARGS, _opcode_get_ir_formats__doc__},
+
+static PyObject *
+_opcode_get_ir_formats_impl(PyObject *module);
+
+static PyObject *
+_opcode_get_ir_formats(PyObject *module, PyObject *Py_UNUSED(ignored))
+{
+    return _opcode_get_ir_formats_impl(module);
+}
+/*[clinic end generated code: output=8ea31e9aef99990e input=a9049054013a1b77]*/

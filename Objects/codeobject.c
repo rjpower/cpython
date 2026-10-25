@@ -776,6 +776,56 @@ _PyCode_New(struct _PyCodeConstructor *con)
  * the legacy "constructors"
  ******************/
 
+/* Check the fields of words from outside the compiler and marshal that the
+ * interpreter uses as indices without checking them: each handler exists,
+ * each slot is in the frame, and each feedback index has an entry, which
+ * for an operand kept in the entry is not the shared entry 0. */
+static int
+check_words(PyObject *code, PyObject *fbinit, int nslots)
+{
+    const char *bytes = PyBytes_AS_STRING(code);
+    Py_ssize_t nwords = PyBytes_GET_SIZE(code) / (Py_ssize_t)sizeof(_PyIRWord);
+    Py_ssize_t nfb = fbinit == NULL ? 0
+        : PyBytes_GET_SIZE(fbinit) / (Py_ssize_t)sizeof(uint32_t);
+    for (Py_ssize_t i = 0; i < nwords; i++) {
+        _PyIRWord word;
+        memcpy(&word, bytes + i * sizeof(_PyIRWord), sizeof(word));
+        int handler = IR_HANDLER(word);
+        if (handler >= IR_NUM_HANDLERS
+            || !(_PyIR_Formats[handler].flags & _PyIR_VALID))
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has no handler %d", i, handler);
+            return -1;
+        }
+        const _PyIRFormat *fmt = &_PyIR_Formats[handler];
+        for (int k = 0; k < 4; k++) {
+            int role = fmt->roles[k];
+            uint32_t value = (uint32_t)(word >> (16 + 12 * k)) & IR_FIELD_MAX;
+            if ((role == _PyIR_ROLE_DST || role == _PyIR_ROLE_BASE
+                 || role >= _PyIR_ROLE_IN0) && value >= (uint32_t)nslots)
+            {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd names slot %u of %d", i, value,
+                             nslots);
+                return -1;
+            }
+            if (role == _PyIR_ROLE_FB
+                && (value >= (uint32_t)nfb
+                    || (value == 0 && fmt->imm == _PyIR_LOC_FBARG
+                        && !(handler >= _PyIR_BINARY_OP_FIRST
+                             && handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST))))
+            {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd has no feedback entry %u", i,
+                             value);
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
 /* As PyUnstable_Code_NewWithPosOnlyArgs(), with the feedback table of the
  * words in fbinit, or NULL for none. */
 static PyCodeObject *
@@ -906,6 +956,9 @@ code_new_with_fbinit(
     };
 
     if (_PyCode_Validate(&con) < 0) {
+        goto error;
+    }
+    if (check_words(code, fbinit, nlocalsplus + stacksize) < 0) {
         goto error;
     }
     if (nlocals != PyTuple_GET_SIZE(varnames)) {
@@ -1455,7 +1508,7 @@ positionsiter_next(PyObject *self)
         }
         advance_with_locations(&pi->pi_range, &pi->pi_endline, &pi->pi_column, &pi->pi_endcolumn);
     }
-    pi->pi_offset += 2;
+    pi->pi_offset += 1;
     return Py_BuildValue("(O&O&O&O&)",
         _source_offset_converter, &pi->pi_range.ar_line,
         _source_offset_converter, &pi->pi_endline,
@@ -2258,6 +2311,7 @@ code.__new__ as code_new
     exceptiontable: object(subclass_of="&PyBytes_Type")
     freevars: object(subclass_of="&PyTuple_Type", c_default="NULL") = ()
     cellvars: object(subclass_of="&PyTuple_Type", c_default="NULL") = ()
+    fbinit: object(subclass_of="&PyBytes_Type", c_default="NULL") = b''
     /
 
 Create a code object.  Not for the faint of heart.
@@ -2270,8 +2324,8 @@ code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
               PyObject *varnames, PyObject *filename, PyObject *name,
               PyObject *qualname, int firstlineno, PyObject *linetable,
               PyObject *exceptiontable, PyObject *freevars,
-              PyObject *cellvars)
-/*[clinic end generated code: output=069fa20d299f9dda input=e31da3c41ad8064a]*/
+              PyObject *cellvars, PyObject *fbinit)
+/*[clinic end generated code: output=9e0481ed272aa222 input=9534933ed7e73334]*/
 {
     PyObject *co = NULL;
     PyObject *ournames = NULL;
@@ -2331,16 +2385,16 @@ code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
     if (ourcellvars == NULL)
         goto cleanup;
 
-    co = (PyObject *)PyCode_NewWithPosOnlyArgs(argcount, posonlyargcount,
-                                               kwonlyargcount,
-                                               nlocals, stacksize, flags,
-                                               code, consts, ournames,
-                                               ourvarnames, ourfreevars,
-                                               ourcellvars, filename,
-                                               name, qualname, firstlineno,
-                                               linetable,
-                                               exceptiontable
-                                              );
+    co = (PyObject *)code_new_with_fbinit(argcount, posonlyargcount,
+                                          kwonlyargcount,
+                                          nlocals, stacksize, flags,
+                                          code, fbinit, consts, ournames,
+                                          ourvarnames, ourfreevars,
+                                          ourcellvars, filename,
+                                          name, qualname, firstlineno,
+                                          linetable,
+                                          exceptiontable
+                                         );
   cleanup:
     Py_XDECREF(ournames);
     Py_XDECREF(ourvarnames);
@@ -2659,6 +2713,20 @@ code_getcodeadaptive(PyObject *self, void *closure)
                                      exec->nwords * sizeof(_PyIRWord));
 }
 
+/* The feedback entries of the executing copy, FB_STRIDE bytes each and
+ * entry 0 first, or None before the first call or without entries. */
+static PyObject *
+code_getfeedback(PyObject *self, void *closure)
+{
+    PyCodeObject *code = _PyCodeObject_CAST(self);
+    _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
+    if (exec == NULL || exec->entries == NULL) {
+        Py_RETURN_NONE;
+    }
+    return PyBytes_FromStringAndSize(exec->entries,
+                                     code->co_nfeedback * FB_STRIDE);
+}
+
 /* The feedback table: per feedback entry, its kind and static operand */
 static PyObject *
 code_getfbinit(PyObject *self, void *closure)
@@ -2678,6 +2746,7 @@ code_getcode(PyObject *self, void *closure)
 static PyGetSetDef code_getsetlist[] = {
     {"_co_code_adaptive", code_getcodeadaptive, NULL, NULL},
     {"co_fbinit",         code_getfbinit,       NULL, NULL},
+    {"_co_feedback",      code_getfeedback,     NULL, NULL},
     // The following old names are kept for backward compatibility.
     {"co_varnames",       code_getvarnames,     NULL, NULL},
     {"co_cellvars",       code_getcellvars,     NULL, NULL},
@@ -2739,6 +2808,7 @@ code.replace
     co_qualname: unicode(c_default="((PyCodeObject *)self)->co_qualname") = unchanged
     co_linetable: object(subclass_of="&PyBytes_Type", c_default="((PyCodeObject *)self)->co_linetable") = unchanged
     co_exceptiontable: object(subclass_of="&PyBytes_Type", c_default="((PyCodeObject *)self)->co_exceptiontable") = unchanged
+    co_fbinit: object(subclass_of="&PyBytes_Type", c_default="NULL") = unchanged
 
 Return a copy of the code object with new values for the specified fields.
 [clinic start generated code]*/
@@ -2752,8 +2822,8 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
                   PyObject *co_freevars, PyObject *co_cellvars,
                   PyObject *co_filename, PyObject *co_name,
                   PyObject *co_qualname, PyObject *co_linetable,
-                  PyObject *co_exceptiontable)
-/*[clinic end generated code: output=e75c48a15def18b9 input=e944fdac8b456114]*/
+                  PyObject *co_exceptiontable, PyObject *co_fbinit)
+/*[clinic end generated code: output=ca4997a8f05a288c input=f2236468f8933e03]*/
 {
 #define CHECK_INT_ARG(ARG) \
         if (ARG < 0) { \
@@ -2816,15 +2886,17 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
         co_freevars = freevars;
     }
 
-    // The words keep their feedback entries
-    fbinit = PyBytes_FromStringAndSize((const char *)_PyCode_FBINIT(self),
-                                       self->co_nfeedback * sizeof(uint32_t));
-    if (fbinit == NULL) {
-        goto error;
+    if (co_fbinit == NULL) {
+        fbinit = PyBytes_FromStringAndSize((const char *)_PyCode_FBINIT(self),
+                                           self->co_nfeedback * sizeof(uint32_t));
+        if (fbinit == NULL) {
+            goto error;
+        }
+        co_fbinit = fbinit;
     }
     co = code_new_with_fbinit(
         co_argcount, co_posonlyargcount, co_kwonlyargcount, co_nlocals,
-        co_stacksize, co_flags, co_code, fbinit, co_consts, co_names,
+        co_stacksize, co_flags, co_code, co_fbinit, co_consts, co_names,
         co_varnames, co_freevars, co_cellvars, co_filename, co_name,
         co_qualname, co_firstlineno,
         co_linetable, co_exceptiontable);

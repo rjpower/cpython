@@ -307,7 +307,7 @@ lazy_import_add_exception_cause(PyThreadState *tstate, PyLazyImportObject *lz)
     if (name == NULL) {
         goto done;
     }
-    int lineno = PyCode_Addr2Line(lz->lz_code, lz->lz_instr_offset * 2);
+    int lineno = PyCode_Addr2Line(lz->lz_code, lz->lz_instr_offset);
     const char *filename = PyUnicode_AsUTF8(lz->lz_code->co_filename);
     if (filename == NULL) {
         goto done;

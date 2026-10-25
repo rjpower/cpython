@@ -12,7 +12,7 @@ PyDoc_STRVAR(code_new__doc__,
 "code(argcount, posonlyargcount, kwonlyargcount, nlocals, stacksize,\n"
 "     flags, codestring, constants, names, varnames, filename, name,\n"
 "     qualname, firstlineno, linetable, exceptiontable, freevars=(),\n"
-"     cellvars=(), /)\n"
+"     cellvars=(), fbinit=b\'\', /)\n"
 "--\n"
 "\n"
 "Create a code object.  Not for the faint of heart.");
@@ -24,7 +24,7 @@ code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
               PyObject *varnames, PyObject *filename, PyObject *name,
               PyObject *qualname, int firstlineno, PyObject *linetable,
               PyObject *exceptiontable, PyObject *freevars,
-              PyObject *cellvars);
+              PyObject *cellvars, PyObject *fbinit);
 
 static PyObject *
 code_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
@@ -49,12 +49,13 @@ code_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *exceptiontable;
     PyObject *freevars = NULL;
     PyObject *cellvars = NULL;
+    PyObject *fbinit = NULL;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("code", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("code", PyTuple_GET_SIZE(args), 16, 18)) {
+    if (!_PyArg_CheckPositional("code", PyTuple_GET_SIZE(args), 16, 19)) {
         goto exit;
     }
     argcount = PyLong_AsInt(PyTuple_GET_ITEM(args, 0));
@@ -146,8 +147,16 @@ code_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         goto exit;
     }
     cellvars = PyTuple_GET_ITEM(args, 17);
+    if (PyTuple_GET_SIZE(args) < 19) {
+        goto skip_optional;
+    }
+    if (!PyBytes_Check(PyTuple_GET_ITEM(args, 18))) {
+        _PyArg_BadArgument("code", "argument 19", "bytes", PyTuple_GET_ITEM(args, 18));
+        goto exit;
+    }
+    fbinit = PyTuple_GET_ITEM(args, 18);
 skip_optional:
-    return_value = code_new_impl(type, argcount, posonlyargcount, kwonlyargcount, nlocals, stacksize, flags, code, consts, names, varnames, filename, name, qualname, firstlineno, linetable, exceptiontable, freevars, cellvars);
+    return_value = code_new_impl(type, argcount, posonlyargcount, kwonlyargcount, nlocals, stacksize, flags, code, consts, names, varnames, filename, name, qualname, firstlineno, linetable, exceptiontable, freevars, cellvars, fbinit);
 
 exit:
     return return_value;
@@ -171,7 +180,7 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
                   PyObject *co_freevars, PyObject *co_cellvars,
                   PyObject *co_filename, PyObject *co_name,
                   PyObject *co_qualname, PyObject *co_linetable,
-                  PyObject *co_exceptiontable);
+                  PyObject *co_exceptiontable, PyObject *co_fbinit);
 
 static PyObject *
 code_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
@@ -179,7 +188,7 @@ code_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *
     PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
-    #define NUM_KEYWORDS 18
+    #define NUM_KEYWORDS 19
     static struct {
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
@@ -188,7 +197,7 @@ code_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(co_argcount), &_Py_ID(co_posonlyargcount), &_Py_ID(co_kwonlyargcount), &_Py_ID(co_nlocals), &_Py_ID(co_stacksize), &_Py_ID(co_flags), &_Py_ID(co_firstlineno), &_Py_ID(co_code), &_Py_ID(co_consts), &_Py_ID(co_names), &_Py_ID(co_varnames), &_Py_ID(co_freevars), &_Py_ID(co_cellvars), &_Py_ID(co_filename), &_Py_ID(co_name), &_Py_ID(co_qualname), &_Py_ID(co_linetable), &_Py_ID(co_exceptiontable), },
+        .ob_item = { &_Py_ID(co_argcount), &_Py_ID(co_posonlyargcount), &_Py_ID(co_kwonlyargcount), &_Py_ID(co_nlocals), &_Py_ID(co_stacksize), &_Py_ID(co_flags), &_Py_ID(co_firstlineno), &_Py_ID(co_code), &_Py_ID(co_consts), &_Py_ID(co_names), &_Py_ID(co_varnames), &_Py_ID(co_freevars), &_Py_ID(co_cellvars), &_Py_ID(co_filename), &_Py_ID(co_name), &_Py_ID(co_qualname), &_Py_ID(co_linetable), &_Py_ID(co_exceptiontable), &_Py_ID(co_fbinit), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -197,14 +206,14 @@ code_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *
     #  define KWTUPLE NULL
     #endif  // !Py_BUILD_CORE
 
-    static const char * const _keywords[] = {"co_argcount", "co_posonlyargcount", "co_kwonlyargcount", "co_nlocals", "co_stacksize", "co_flags", "co_firstlineno", "co_code", "co_consts", "co_names", "co_varnames", "co_freevars", "co_cellvars", "co_filename", "co_name", "co_qualname", "co_linetable", "co_exceptiontable", NULL};
+    static const char * const _keywords[] = {"co_argcount", "co_posonlyargcount", "co_kwonlyargcount", "co_nlocals", "co_stacksize", "co_flags", "co_firstlineno", "co_code", "co_consts", "co_names", "co_varnames", "co_freevars", "co_cellvars", "co_filename", "co_name", "co_qualname", "co_linetable", "co_exceptiontable", "co_fbinit", NULL};
     static _PyArg_Parser _parser = {
         .keywords = _keywords,
         .fname = "replace",
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[18];
+    PyObject *argsbuf[19];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     int co_argcount = ((PyCodeObject *)self)->co_argcount;
     int co_posonlyargcount = ((PyCodeObject *)self)->co_posonlyargcount;
@@ -224,6 +233,7 @@ code_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *
     PyObject *co_qualname = ((PyCodeObject *)self)->co_qualname;
     PyObject *co_linetable = ((PyCodeObject *)self)->co_linetable;
     PyObject *co_exceptiontable = ((PyCodeObject *)self)->co_exceptiontable;
+    PyObject *co_fbinit = NULL;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -396,13 +406,23 @@ code_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *
             goto skip_optional_kwonly;
         }
     }
-    if (!PyBytes_Check(args[17])) {
-        _PyArg_BadArgument("replace", "argument 'co_exceptiontable'", "bytes", args[17]);
+    if (args[17]) {
+        if (!PyBytes_Check(args[17])) {
+            _PyArg_BadArgument("replace", "argument 'co_exceptiontable'", "bytes", args[17]);
+            goto exit;
+        }
+        co_exceptiontable = args[17];
+        if (!--noptargs) {
+            goto skip_optional_kwonly;
+        }
+    }
+    if (!PyBytes_Check(args[18])) {
+        _PyArg_BadArgument("replace", "argument 'co_fbinit'", "bytes", args[18]);
         goto exit;
     }
-    co_exceptiontable = args[17];
+    co_fbinit = args[18];
 skip_optional_kwonly:
-    return_value = code_replace_impl((PyCodeObject *)self, co_argcount, co_posonlyargcount, co_kwonlyargcount, co_nlocals, co_stacksize, co_flags, co_firstlineno, co_code, co_consts, co_names, co_varnames, co_freevars, co_cellvars, co_filename, co_name, co_qualname, co_linetable, co_exceptiontable);
+    return_value = code_replace_impl((PyCodeObject *)self, co_argcount, co_posonlyargcount, co_kwonlyargcount, co_nlocals, co_stacksize, co_flags, co_firstlineno, co_code, co_consts, co_names, co_varnames, co_freevars, co_cellvars, co_filename, co_name, co_qualname, co_linetable, co_exceptiontable, co_fbinit);
 
 exit:
     return return_value;
@@ -471,4 +491,4 @@ code__varname_from_oparg(PyObject *self, PyObject *const *args, Py_ssize_t nargs
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=5c22e29e430401b4 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=7504a8b6347e2057 input=a9049054013a1b77]*/

@@ -515,6 +515,17 @@ class CodeTest(unittest.TestCase):
             foo.__code__.replace(
                 co_code=b'\x7f\x00' + foo.__code__.co_code[2:])
 
+    def test_code_units_padded(self):
+        # Cython passes zeroed code in 2-byte units that only spans its line
+        # table; the constructor pads it to whole words of CACHE
+        def foo():
+            pass
+
+        code = foo.__code__.replace(co_code=bytes(12))
+        self.assertEqual(code.co_code, bytes(16))
+        with self.assertRaisesRegex(ValueError, "co_code is malformed"):
+            foo.__code__.replace(co_code=bytes(3))
+
     def test_replace_inline_constant(self):
         # The assembler loads a compact int or a float with an inline
         # constant handler; replacing the constant keeps the code valid

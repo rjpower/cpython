@@ -881,6 +881,7 @@ code_new_with_fbinit(
     PyObject *localsplusnames = NULL;
     PyObject *localspluskinds = NULL;
     PyObject *checked = NULL;
+    PyObject *padded = NULL;
 
     if (varnames == NULL || !PyTuple_Check(varnames) ||
         cellvars == NULL || !PyTuple_Check(cellvars) ||
@@ -888,6 +889,24 @@ code_new_with_fbinit(
         ) {
         PyErr_BadInternalCall();
         return NULL;
+    }
+
+    // Extensions built for 2-byte code units, such as Cython's, pass zeroed
+    // code that never runs and only spans the line table.  Pad it to whole
+    // words, which are CACHE.
+    if (code != NULL && PyBytes_Check(code)
+        && PyBytes_GET_SIZE(code) % (Py_ssize_t)sizeof(_PyIRWord) != 0
+        && PyBytes_GET_SIZE(code) % 2 == 0)
+    {
+        Py_ssize_t size = PyBytes_GET_SIZE(code);
+        Py_ssize_t words_size = _Py_SIZE_ROUND_UP(size, sizeof(_PyIRWord));
+        padded = PyBytes_FromStringAndSize(NULL, words_size);
+        if (padded == NULL) {
+            return NULL;
+        }
+        memcpy(PyBytes_AS_STRING(padded), PyBytes_AS_STRING(code), size);
+        memset(PyBytes_AS_STRING(padded) + size, 0, words_size - size);
+        code = padded;
     }
 
     // Set the "fast locals plus" info.
@@ -1016,6 +1035,7 @@ error:
     Py_XDECREF(localsplusnames);
     Py_XDECREF(localspluskinds);
     Py_XDECREF(checked);
+    Py_XDECREF(padded);
     return co;
 }
 

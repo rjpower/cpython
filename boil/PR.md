@@ -339,7 +339,21 @@ flowchart TB
 
 `_testinternalcapi` gains `tier0_compile()` and `tier0_has_code()`.
 
-<!-- TIER0 NUMBERS: coordinator fills in -->
+### Measurements and status
+
+Tier 0 runs fewer instructions than the interpreter and takes more cycles, so it ships off by default. Release builds with clang 21 on a Ryzen 7 3800X, each benchmark body run directly after one warm run, per run; base is the same tree without the flag.
+
+| Benchmark | Instructions, base | Instructions, tier 0 | Cycles, base | Cycles, tier 0 | ms, base | ms, tier 0 |
+|---|---|---|---|---|---|---|
+| nbody | 1489.8M | 1268.9M | 466.6M | 482.3M | 109.0 | 114.1 |
+| richards | 645.8M | 637.8M | 247.6M | 263.6M | 57.9 | 61.0 |
+| go | 1432.0M | 1406.5M | 532.0M | 600.2M | 123.6 | 139.1 |
+
+Instructions also fall on spectral_norm (1085M to 918M), nqueens (1068M to 1038M) and float (944M to 933M). Per iteration of the micro loops, an int add goes from 103 instructions to 29, a float add from 130 to 36, and the empty loop from 87 to 36.
+
+The extra cycles are in the front end: L1 instruction-cache misses rise 2.6 to 2.8 times (go 1.23M to 3.23M per run) and op-cache fetches 24 to 35 percent. Indirect and return mispredictions fall, the interpreter's copy of the handlers takes half a percent of cycles, and frame switches take none. A shared call stub that halved code size added five instructions per call and made cycles worse; a higher compile threshold only removed startup code; a contiguous code arena changed nothing. One concrete sink was fixed: clang merged the two stash stores on a frame push into one 16-byte store, which caused two store-to-load stalls per call between compiled frames; a volatile store separates them, and a call loop drops from 128.9 to 117.5 cycles per iteration against the interpreter's 105.7.
+
+`boil/design/05-tier0-jit.md` records the design and what tier 1 needs: values kept in registers across instructions, inline attribute, global, call and return paths, one shared copy of the handlers, state passed in registers rather than through the thread state, and compilation of hot code only, laid out together.
 
 ## Changes
 

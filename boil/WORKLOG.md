@@ -479,3 +479,10 @@ compare builds by instruction counts or across several layouts.
 
 Tier 0 rebased cleanly onto bb1c8b7bca9; regen check, build and targeted tests
 running before the fast-forward.
+
+### Tier 0 landed on the branch (299f9fe2026, bd6347d1fc6, 6023aeccc47)
+
+Rebased twice without conflict; regen stable; dev-t0 rebuilt and 272 targeted
+tests pass; the tier 0 worktree and branch are removed. PR.md tier 0 section
+now carries the measurements. Remaining: IR agent's final handback, history
+fix for ac60a9c3c73, final clean timing of the head, results table, PR.

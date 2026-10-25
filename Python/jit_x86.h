@@ -1,9 +1,10 @@
 /* A small x86-64 assembler for tier 0 (Python/tier0.c).
  *
  * It encodes the few instructions that tier 0 emits into a growable buffer:
- * moves, lea, integer arithmetic and compares, conditional and indirect
- * jumps, calls and stack operations, with 8- and 32-bit displacements,
- * 32-bit immediates and RIP-relative operands.  Branch targets and
+ * moves, lea, integer arithmetic, shifts and compares, scalar double
+ * arithmetic, conditional moves, conditional and indirect jumps, calls and
+ * stack operations, with 8- and 32-bit displacements, 32-bit immediates and
+ * RIP-relative operands.  Branch targets and
  * RIP-relative operands name labels, which may be bound after use; the
  * displacements are filled in by jit_resolve() once the code is complete.
  * Nothing here knows about Python.
@@ -234,22 +235,62 @@ jit_op_rip(jit_buf *b, int w, int opcode, int reg, int label)
 
 static inline void jit_load(jit_buf *b, jit_reg dst, jit_reg base, int32_t disp) { jit_op_mem(b, 1, 0x8B, dst, base, disp); }
 static inline void jit_store(jit_buf *b, jit_reg base, int32_t disp, jit_reg src) { jit_op_mem(b, 1, 0x89, src, base, disp); }
+static inline void jit_load32(jit_buf *b, jit_reg dst, jit_reg base, int32_t disp) { jit_op_mem(b, 0, 0x8B, dst, base, disp); }
 static inline void jit_load16(jit_buf *b, jit_reg dst, jit_reg base, int32_t disp) { jit_op_mem(b, 0, 0x0FB7, dst, base, disp); }
 static inline void jit_lea(jit_buf *b, jit_reg dst, jit_reg base, int32_t disp) { jit_op_mem(b, 1, 0x8D, dst, base, disp); }
 static inline void jit_cmp_mem(jit_buf *b, jit_reg reg, jit_reg base, int32_t disp) { jit_op_mem(b, 1, 0x3B, reg, base, disp); }
+static inline void jit_add_mem(jit_buf *b, jit_reg dst, jit_reg base, int32_t disp) { jit_op_mem(b, 1, 0x03, dst, base, disp); }
+static inline void jit_sub_mem(jit_buf *b, jit_reg dst, jit_reg base, int32_t disp) { jit_op_mem(b, 1, 0x2B, dst, base, disp); }
 static inline void jit_mov(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 1, 0x89, src, dst); }
 static inline void jit_mov32(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 0, 0x89, src, dst); }
+static inline void jit_movsxd(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 1, 0x63, dst, src); }
 static inline void jit_add(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 1, 0x01, src, dst); }
 static inline void jit_add32(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 0, 0x01, src, dst); }
 static inline void jit_sub(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 1, 0x29, src, dst); }
 static inline void jit_sub32(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 0, 0x29, src, dst); }
-static inline void jit_or(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 1, 0x09, src, dst); }
 static inline void jit_and(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 1, 0x21, src, dst); }
 static inline void jit_cmp(jit_buf *b, jit_reg a, jit_reg c) { jit_op_reg(b, 1, 0x39, c, a); }
 static inline void jit_cmp32(jit_buf *b, jit_reg a, jit_reg c) { jit_op_reg(b, 0, 0x39, c, a); }
+static inline void jit_test(jit_buf *b, jit_reg a, jit_reg c) { jit_op_reg(b, 1, 0x85, c, a); }
 static inline void jit_load_rip(jit_buf *b, jit_reg dst, int label) { jit_op_rip(b, 1, 0x8B, dst, label); }
 static inline void jit_cmp_rip(jit_buf *b, jit_reg reg, int label) { jit_op_rip(b, 1, 0x3B, reg, label); }
 static inline void jit_lea_rip(jit_buf *b, jit_reg dst, int label) { jit_op_rip(b, 1, 0x8D, dst, label); }
+static inline void jit_or_rip(jit_buf *b, jit_reg dst, int label) { jit_op_rip(b, 1, 0x0B, dst, label); }
+static inline void jit_test_rip(jit_buf *b, jit_reg reg, int label) { jit_op_rip(b, 1, 0x85, reg, label); }
+static inline void jit_cmov_rip(jit_buf *b, jit_cond cond, jit_reg dst, int label) { jit_op_rip(b, 1, 0x0F40 | cond, dst, label); }
+static inline void jit_imul32(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 0, 0x0FAF, dst, src); }
+
+/* mov word [base + disp], src */
+static inline void
+jit_store16(jit_buf *b, jit_reg base, int32_t disp, jit_reg src)
+{
+    jit_byte(b, 0x66);
+    jit_op_mem(b, 0, 0x89, src, base, disp);
+}
+
+/* Group 1 arithmetic on [base + disp], a qword if w else a dword, with an
+ * 8-bit immediate: /0 add, /5 sub, /7 cmp */
+static inline void
+jit_arith_mem_imm8(jit_buf *b, int w, int ext, jit_reg base, int32_t disp, int8_t imm)
+{
+    jit_op_mem(b, w, 0x83, ext, base, disp);
+    jit_byte(b, imm & 0xFF);
+}
+
+/* SSE2 on scalar doubles: PREFIX [REX] 0F OPCODE /r */
+static inline void
+jit_sse(jit_buf *b, int prefix, int w, int opcode, int reg, int rm)
+{
+    jit_byte(b, prefix);
+    jit_op_reg(b, w, 0x0F00 | opcode, reg, rm);
+}
+
+static inline void jit_movq_to_xmm(jit_buf *b, int xmm, jit_reg src) { jit_sse(b, 0x66, 1, 0x6E, xmm, src); }
+static inline void jit_movq_from_xmm(jit_buf *b, jit_reg dst, int xmm) { jit_sse(b, 0x66, 1, 0x7E, xmm, dst); }
+static inline void jit_addsd(jit_buf *b, int dst, int src) { jit_sse(b, 0xF2, 0, 0x58, dst, src); }
+static inline void jit_mulsd(jit_buf *b, int dst, int src) { jit_sse(b, 0xF2, 0, 0x59, dst, src); }
+static inline void jit_subsd(jit_buf *b, int dst, int src) { jit_sse(b, 0xF2, 0, 0x5C, dst, src); }
+static inline void jit_ucomisd(jit_buf *b, int a, int c) { jit_sse(b, 0x66, 0, 0x2E, a, c); }
 
 static inline void
 jit_mov_imm32(jit_buf *b, jit_reg dst, uint32_t imm)
@@ -288,17 +329,10 @@ jit_arith_imm(jit_buf *b, int ext, jit_reg dst, int32_t imm)
     }
 }
 
-static inline void jit_add_imm(jit_buf *b, jit_reg dst, int32_t imm) { jit_arith_imm(b, 0, dst, imm); }
+static inline void jit_or_imm(jit_buf *b, jit_reg dst, int32_t imm) { jit_arith_imm(b, 1, dst, imm); }
+static inline void jit_and_imm(jit_buf *b, jit_reg dst, int32_t imm) { jit_arith_imm(b, 4, dst, imm); }
 static inline void jit_sub_imm(jit_buf *b, jit_reg dst, int32_t imm) { jit_arith_imm(b, 5, dst, imm); }
 static inline void jit_cmp_imm(jit_buf *b, jit_reg dst, int32_t imm) { jit_arith_imm(b, 7, dst, imm); }
-
-/* cmp qword [base + disp], imm32 (sign-extended) */
-static inline void
-jit_cmp_mem_imm(jit_buf *b, jit_reg base, int32_t disp, int32_t imm)
-{
-    jit_op_mem(b, 1, 0x81, 7, base, disp);
-    jit_u32(b, (uint32_t)imm);
-}
 
 /* cmp word [base + disp], imm16 */
 static inline void
@@ -318,15 +352,34 @@ jit_test_mem_imm32(jit_buf *b, jit_reg base, int32_t disp, uint32_t imm)
     jit_u32(b, imm);
 }
 
-/* shr reg, imm8 */
+/* cmp byte [base + disp], imm8 */
 static inline void
-jit_shr_imm(jit_buf *b, jit_reg dst, int imm)
+jit_cmp8_mem_imm(jit_buf *b, jit_reg base, int32_t disp, uint8_t imm)
+{
+    jit_op_mem(b, 0, 0x80, 7, base, disp);
+    jit_byte(b, imm);
+}
+
+/* test reg, imm32 (sign-extended) */
+static inline void
+jit_test_imm(jit_buf *b, jit_reg reg, int32_t imm)
+{
+    jit_op_reg(b, 1, 0xF7, 0, reg);
+    jit_u32(b, (uint32_t)imm);
+}
+
+/* Shifts by an immediate: /4 shl, /5 shr */
+static inline void
+jit_shift_imm(jit_buf *b, int ext, jit_reg dst, int imm)
 {
     jit_rex(b, 1, 0, 0, dst);
     jit_byte(b, 0xC1);
-    jit_byte(b, 0xC0 | (5 << 3) | (dst & 7));
+    jit_byte(b, 0xC0 | (ext << 3) | (dst & 7));
     jit_byte(b, imm);
 }
+
+static inline void jit_shl_imm(jit_buf *b, jit_reg dst, int imm) { jit_shift_imm(b, 4, dst, imm); }
+static inline void jit_shr_imm(jit_buf *b, jit_reg dst, int imm) { jit_shift_imm(b, 5, dst, imm); }
 
 /* movsxd dst, dword [base + index * 1] */
 static inline void
@@ -351,14 +404,6 @@ jit_call_table(jit_buf *b, jit_reg base, jit_reg index)
 }
 
 static inline void
-jit_call_reg(jit_buf *b, jit_reg target)
-{
-    jit_rex(b, 0, 0, 0, target);
-    jit_byte(b, 0xFF);
-    jit_byte(b, 0xC0 | (2 << 3) | (target & 7));
-}
-
-static inline void
 jit_jmp_reg(jit_buf *b, jit_reg target)
 {
     jit_rex(b, 0, 0, 0, target);
@@ -372,6 +417,15 @@ jit_jmp_rip(jit_buf *b, int label)
 {
     jit_byte(b, 0xFF);
     jit_byte(b, (4 << 3) | 5);
+    jit_rel32(b, label);
+}
+
+/* call qword [rip + label] */
+static inline void
+jit_call_rip(jit_buf *b, int label)
+{
+    jit_byte(b, 0xFF);
+    jit_byte(b, (2 << 3) | 5);
     jit_rel32(b, label);
 }
 
@@ -395,13 +449,6 @@ jit_push(jit_buf *b, jit_reg reg)
 {
     jit_rex(b, 0, 0, 0, reg);
     jit_byte(b, 0x50 + (reg & 7));
-}
-
-static inline void
-jit_pop(jit_buf *b, jit_reg reg)
-{
-    jit_rex(b, 0, 0, 0, reg);
-    jit_byte(b, 0x58 + (reg & 7));
 }
 
 static inline void jit_leave(jit_buf *b) { jit_byte(b, 0xC9); }

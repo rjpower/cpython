@@ -2200,11 +2200,10 @@ tier0_compile(PyObject *self, PyObject *code)
         PyErr_SetString(PyExc_TypeError, "expected a code object");
         return NULL;
     }
-    _PyIRBlock *block = _PyIR_Lower((PyCodeObject *)code);
-    if (block == NULL) {
+    if (_PyIR_Lower((PyCodeObject *)code) == NULL) {
         return NULL;
     }
-    return PyBool_FromLong(_PyTier0_Compile(block) != NULL);
+    return PyBool_FromLong(_PyTier0_Compile((PyCodeObject *)code) != NULL);
 }
 
 // Whether a code object has valid tier 0 code.

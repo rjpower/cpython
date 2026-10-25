@@ -13,7 +13,8 @@ extern "C" {
 #include "pycore_ir.h"          // _PyIRBlock
 
 /* Tier 0, a baseline compiler of IR blocks to x86-64 machine code that
- * calls the handlers of the IR (boil/design/05-tier0-jit.md).  Built with
+ * runs common instructions inline and calls the handlers of the IR for the
+ * rest (boil/design/05-tier0-jit.md).  Built with
  * --with-tier0.  Python/tier0.c compiles; Python/ceval_tier0.c.h holds the
  * handlers in call mode and the hooks through which the interpreter enters
  * machine code. */
@@ -38,6 +39,7 @@ typedef struct _PyTier0Code {
     void *entry;
     const int32_t *offsets;     // per word, that offset, or 0 if none
     size_t size;                // of the mapping at entry
+    int32_t interpret;          // offset of the exit to the interpreter
     int valid;                  // 0 once instrumentation changed the block
     /* Code that this replaced, which frames may still be running: the
      * block frees all of it with the code object. */
@@ -52,12 +54,14 @@ typedef struct {
 
 extern const _PyTier0Runtime _PyTier0_Runtime;
 
-/* Compile block and return its code, or NULL if the block does
- * not qualify now (instrumented, too large) or ever.  Never raises. */
-PyAPI_FUNC(_PyTier0Code *) _PyTier0_Compile(_PyIRBlock *block);
+/* Compile the lowered block of co and return its code, or NULL if the
+ * block does not qualify now (instrumented) or ever (too large).  Never
+ * raises. */
+PyAPI_FUNC(_PyTier0Code *) _PyTier0_Compile(PyCodeObject *co);
 
-/* Discard the code of block, which instrumentation is about to change.
- * Frames that run it leave for the interpreter at their next word. */
+/* Discard the code of block, which instrumentation is about to change:
+ * every instruction of the code becomes a jump to the interpreter, so
+ * frames that run it leave at their next word. */
 extern void _PyTier0_Invalidate(_PyIRBlock *block);
 
 /* Free the code of a block that is being freed. */

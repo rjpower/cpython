@@ -10,8 +10,9 @@
  * _PyThreadStateImpl) and returns the frame it would go on with, which the
  * frame's instr_ptr does not change: INSTRUMENTED_LINE reads the previous
  * instruction there.  The machine code goes on with its next word if the
- * frame is its own and next_instr is that word, and otherwise passes the
- * result to _PyTier0_Continue().  Jumps to labels and predicted handlers
+ * frame is its own and next_instr is that word, and otherwise in the
+ * machine code of the frame for next_instr or, failing that, through
+ * _PyTier0_Continue().  Jumps to labels and predicted handlers
  * stay within call mode.  The result is NULL when an error leaves the entry
  * frame, as in the interpreter, and _PyTier0_INTERPRET marks a frame whose
  * next word only the interpreter runs.
@@ -131,12 +132,13 @@ const _PyTier0Runtime _PyTier0_Runtime = {
 static inline _PyTier0Code *
 tier0_heat(_PyInterpreterFrame *frame, int heat)
 {
-    _PyIRBlock *block = _PyFrame_GetCode(frame)->_co_ir;
+    PyCodeObject *co = _PyFrame_GetCode(frame);
+    _PyIRBlock *block = co->_co_ir;
     _PyTier0Code *code = _PyTier0_ValidCode(block);
     if (code == NULL) {
         block->tier0_heat += heat;
         if (block->tier0_heat >= _PyTier0_THRESHOLD) {
-            code = _PyTier0_Compile(block);
+            code = _PyTier0_Compile(co);
         }
     }
     return code;

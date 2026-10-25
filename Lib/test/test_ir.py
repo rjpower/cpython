@@ -250,6 +250,80 @@ class LoweringTest(unittest.TestCase):
         with self.assertRaises(StopIteration):
             next(g)
 
+    @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
+    def test_compare_and_branch(self):
+        # A specialised compare whose result a POP_JUMP_IF_FALSE or
+        # POP_JUMP_IF_TRUE consumes runs the jump too; the jump keeps its
+        # word.
+        source = ("def f(xs, y):\n"
+                  "    n = 0\n"
+                  "    for x in xs:\n"
+                  "        if x == y or y == x:\n"
+                  "            n += 1\n"
+                  "        if x != y:\n"
+                  "            n += 10\n"
+                  "    return n\n")
+        cases = (([1, 2, 3], 2, "IR_SUPER_COMPARE_OP_INT"),
+                 ([1.5, 2.5], 2.5, "IR_SUPER_COMPARE_OP_FLOAT"),
+                 (["a", "b"], "b", "IR_SUPER_COMPARE_OP_STR"))
+        for xs, y, handler in cases:
+            with self.subTest(handler=handler):
+                f = make_function(source)
+                xs = xs * _testinternalcapi.SPECIALIZATION_THRESHOLD
+                expected = xs.count(y) + 10 * (len(xs) - xs.count(y))
+                self.assertEqual(f(xs, y), expected)
+                ir = handlers(f)
+                self.assertEqual(ir.count(handler), 3)
+                self.assertIn("POP_JUMP_IF_FALSE", ir)
+                self.assertIn("POP_JUMP_IF_TRUE", ir)
+                self.assertEqual(f(xs, y), expected)
+                # Operands of another type deoptimise the compare
+                self.assertEqual(f([None, y], y), 11)
+                self.assertEqual(f(xs, y), expected)
+
+    @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
+    def test_branch_events_of_a_compare_and_branch(self):
+        # While BRANCH events instrument the jump, the compare deoptimises
+        # and specialises again without it.
+        def f(xs):
+            n = 0
+            for x in xs:
+                if x < 2:
+                    n += 1
+            return n
+
+        xs = [1, 2, 3] * _testinternalcapi.SPECIALIZATION_THRESHOLD
+        self.assertEqual(f(xs), len(xs) // 3)
+        self.assertIn("IR_SUPER_COMPARE_OP_INT", handlers(f))
+        jump = [instr for instr in dis.get_instructions(f)
+                if instr.opname.startswith("POP_JUMP_IF_")][0]
+        if_true = jump.opname == "POP_JUMP_IF_TRUE"
+        # More runs than the cooldown of a specialisation
+        xs = [1, 2, 3] * 100
+        expected = ["right" if (x < 2) == if_true else "left" for x in xs]
+        events = []
+        E = sys.monitoring.events
+        tool = sys.monitoring.DEBUGGER_ID
+        sys.monitoring.use_tool_id(tool, "test_ir")
+        try:
+            for event, name in ((E.BRANCH_LEFT, "left"),
+                                (E.BRANCH_RIGHT, "right")):
+                sys.monitoring.register_callback(
+                    tool, event,
+                    lambda code, src, dst, name=name:
+                        events.append(name) if src == jump.offset else None)
+            sys.monitoring.set_local_events(tool, f.__code__,
+                                            E.BRANCH_LEFT | E.BRANCH_RIGHT)
+            self.assertEqual(f(xs), len(xs) // 3)
+            ir = handlers(f)
+        finally:
+            sys.monitoring.set_local_events(tool, f.__code__, 0)
+            sys.monitoring.free_tool_id(tool)
+        self.assertEqual(events, expected)
+        self.assertIn("COMPARE_OP_INT", ir)
+        self.assertNotIn("IR_SUPER_COMPARE_OP_INT", ir)
+        self.assertEqual(f(xs), len(xs) // 3)
+
     def test_f_lasti(self):
         def f():
             return sys._getframe().f_lasti

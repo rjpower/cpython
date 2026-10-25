@@ -1167,11 +1167,12 @@ _PyIR_PrepareInstrumentation(PyCodeObject *co, int instructions)
     }
     FOR_EACH_INSTRUCTION(block, first, main, {
         // Not instrumented yet, so the handler is the lowering's choice
-        // or a specialisation of it.
+        // or a specialisation of it, as a superinstruction is.
         int handler = IR_HANDLER(block->words[main]);
         assert(!(_PyIR_FormatOf(handler)->flags & _PyIR_TRANSPARENT));
-        real[main] = (uint16_t)(handler >= IR_FIRST_ONLY_HANDLER
-                                ? handler : _PyOpcode_Deopt[handler]);
+        handler = lowered_opcode(handler);
+        assert(handler < IR_FIRST_ONLY_HANDLER);
+        real[main] = (uint16_t)_PyOpcode_Deopt[handler];
     })
     block->real = real;
     return 0;
@@ -1234,10 +1235,11 @@ _PyIR_WriteAdaptive(PyCodeObject *co, _Py_CODEUNIT *instructions,
         int offset = _PyIR_Anchor(block, instr);
         int handler = IR_HANDLER(*instr);
         _Py_CODEUNIT *unit = &instructions[offset];
-        if (handler < IR_FIRST_ONLY_HANDLER) {
-            // Specialised or instrumented; absorbed loads keep their opcode
-            unit->op.code = (uint8_t)handler;
-        }
+        // Specialised or instrumented; a superinstruction shows as the
+        // specialisation that it extends, and absorbed loads keep their
+        // opcode.
+        unit->op.code = (uint8_t)(handler < IR_FIRST_ONLY_HANDLER
+                                  ? handler : _PyIR_Formats[handler].shadow);
         int base = _Py_GetBaseCodeUnit(co, offset).op.code;
         int caches = _PyOpcode_Caches[base];
         if (caches) {

@@ -10118,6 +10118,241 @@
             DISPATCH();
         }
 
+        TARGET(IR_SUPER_COMPARE_OP_FLOAT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = IR_SUPER_COMPARE_OP_FLOAT;
+            (void)(opcode);
+            #endif
+            IR_ENTRY(IR_SUPER_COMPARE_OP_FLOAT);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 2;
+            INSTRUCTION_STATS(IR_SUPER_COMPARE_OP_FLOAT);
+            int oparg = (int)IR_D(this_instr[1]);
+            (void)oparg;
+            IR_CHECK_SLOT(ir_a, -2);
+            IR_CHECK_INPUT(ir_b, -2, 2);
+            IR_CHECK_INPUT(ir_c, -1, 2);
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef l;
+            _PyStackRef r;
+            // _GUARD_TOS_FLOAT
+            {
+                value = stack_pointer[-1];
+                if (!PyStackRef_FloatCheckExact(value)) {
+                    UPDATE_MISS_STATS(COMPARE_OP);
+                    JUMP_TO_PREDICTED(COMPARE_OP);
+                }
+            }
+            // _GUARD_NOS_FLOAT
+            {
+                left = stack_pointer[-2];
+                if (!PyStackRef_FloatCheckExact(left)) {
+                    UPDATE_MISS_STATS(COMPARE_OP);
+                    JUMP_TO_PREDICTED(COMPARE_OP);
+                }
+            }
+            // _IR_GUARD_JUMP_NEXT
+            {
+                int jump = IR_HANDLER(*next_instr);
+                if (jump != POP_JUMP_IF_FALSE && jump != POP_JUMP_IF_TRUE) {
+                    UPDATE_MISS_STATS(COMPARE_OP);
+                    JUMP_TO_PREDICTED(COMPARE_OP);
+                }
+            }
+            // _IR_COMPARE_OP_FLOAT_JUMP
+            {
+                right = value;
+                STAT_INC(COMPARE_OP, hit);
+                _PyIRWord jump = *next_instr;
+                double dleft = PyStackRef_FloatValue(left);
+                double dright = PyStackRef_FloatValue(right);
+                int res = (COMPARISON_BIT(dleft, dright) & oparg) != 0;
+                l = left;
+                r = right;
+                IR_JUMP_NEXT(jump, res == (IR_HANDLER(jump) == POP_JUMP_IF_TRUE));
+            }
+            // _POP_TOP_FLOAT
+            {
+                value = r;
+                assert(PyStackRef_FloatCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
+            }
+            // _POP_TOP_FLOAT
+            {
+                value = l;
+                assert(PyStackRef_FloatCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
+            }
+            stack_pointer += -2;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(IR_SUPER_COMPARE_OP_INT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = IR_SUPER_COMPARE_OP_INT;
+            (void)(opcode);
+            #endif
+            IR_ENTRY(IR_SUPER_COMPARE_OP_INT);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 2;
+            INSTRUCTION_STATS(IR_SUPER_COMPARE_OP_INT);
+            int oparg = (int)IR_D(this_instr[1]);
+            (void)oparg;
+            IR_CHECK_SLOT(ir_a, -2);
+            IR_CHECK_INPUT(ir_b, -2, 2);
+            IR_CHECK_INPUT(ir_c, -1, 2);
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef l;
+            _PyStackRef r;
+            // _GUARD_TOS_INT
+            {
+                value = stack_pointer[-1];
+                if (!PyStackRef_IsCompactInt(value)) {
+                    UPDATE_MISS_STATS(COMPARE_OP);
+                    JUMP_TO_PREDICTED(COMPARE_OP);
+                }
+            }
+            // _GUARD_NOS_INT
+            {
+                left = stack_pointer[-2];
+                if (!PyStackRef_IsCompactInt(left)) {
+                    UPDATE_MISS_STATS(COMPARE_OP);
+                    JUMP_TO_PREDICTED(COMPARE_OP);
+                }
+            }
+            // _IR_GUARD_JUMP_NEXT
+            {
+                int jump = IR_HANDLER(*next_instr);
+                if (jump != POP_JUMP_IF_FALSE && jump != POP_JUMP_IF_TRUE) {
+                    UPDATE_MISS_STATS(COMPARE_OP);
+                    JUMP_TO_PREDICTED(COMPARE_OP);
+                }
+            }
+            // _IR_COMPARE_OP_INT_JUMP
+            {
+                right = value;
+                STAT_INC(COMPARE_OP, hit);
+                _PyIRWord jump = *next_instr;
+                int32_t ileft = PyStackRef_CompactIntValue(left);
+                int32_t iright = PyStackRef_CompactIntValue(right);
+                int res = (COMPARISON_BIT(ileft, iright) & oparg) != 0;
+                l = left;
+                r = right;
+                IR_JUMP_NEXT(jump, res == (IR_HANDLER(jump) == POP_JUMP_IF_TRUE));
+            }
+            // _POP_TOP_INT
+            {
+                value = r;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            // _POP_TOP_INT
+            {
+                value = l;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+            stack_pointer += -2;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
+        TARGET(IR_SUPER_COMPARE_OP_STR) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = IR_SUPER_COMPARE_OP_STR;
+            (void)(opcode);
+            #endif
+            IR_ENTRY(IR_SUPER_COMPARE_OP_STR);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 2;
+            INSTRUCTION_STATS(IR_SUPER_COMPARE_OP_STR);
+            int oparg = (int)IR_D(this_instr[1]);
+            (void)oparg;
+            IR_CHECK_SLOT(ir_a, -2);
+            IR_CHECK_INPUT(ir_b, -2, 2);
+            IR_CHECK_INPUT(ir_c, -1, 2);
+            _PyStackRef value;
+            _PyStackRef nos;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef l;
+            _PyStackRef r;
+            // _GUARD_TOS_UNICODE
+            {
+                value = stack_pointer[-1];
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
+                    UPDATE_MISS_STATS(COMPARE_OP);
+                    JUMP_TO_PREDICTED(COMPARE_OP);
+                }
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
+                if (!PyUnicode_CheckExact(value_o)) {
+                    UPDATE_MISS_STATS(COMPARE_OP);
+                    JUMP_TO_PREDICTED(COMPARE_OP);
+                }
+            }
+            // _GUARD_NOS_UNICODE
+            {
+                nos = stack_pointer[-2];
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
+                    UPDATE_MISS_STATS(COMPARE_OP);
+                    JUMP_TO_PREDICTED(COMPARE_OP);
+                }
+                PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
+                if (!PyUnicode_CheckExact(o)) {
+                    UPDATE_MISS_STATS(COMPARE_OP);
+                    JUMP_TO_PREDICTED(COMPARE_OP);
+                }
+            }
+            // _IR_GUARD_JUMP_NEXT
+            {
+                int jump = IR_HANDLER(*next_instr);
+                if (jump != POP_JUMP_IF_FALSE && jump != POP_JUMP_IF_TRUE) {
+                    UPDATE_MISS_STATS(COMPARE_OP);
+                    JUMP_TO_PREDICTED(COMPARE_OP);
+                }
+            }
+            // _IR_COMPARE_OP_STR_JUMP
+            {
+                right = value;
+                left = nos;
+                STAT_INC(COMPARE_OP, hit);
+                _PyIRWord jump = *next_instr;
+                int eq = _PyUnicode_Equal(PyStackRef_AsPyObjectBorrow(left),
+                                      PyStackRef_AsPyObjectBorrow(right));
+                assert((oparg >> 5) == Py_EQ || (oparg >> 5) == Py_NE);
+                int res = ((COMPARISON_NOT_EQUALS + eq) & oparg) != 0;
+                l = left;
+                r = right;
+                IR_JUMP_NEXT(jump, res == (IR_HANDLER(jump) == POP_JUMP_IF_TRUE));
+            }
+            // _POP_TOP_UNICODE
+            {
+                value = r;
+                assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
+            }
+            // _POP_TOP_UNICODE
+            {
+                value = l;
+                assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
+            }
+            stack_pointer += -2;
+            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+            DISPATCH();
+        }
+
         TARGET(IS_OP) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = IS_OP;

@@ -733,3 +733,25 @@ Step 6 adds the following.
     moved by item 25 stay on the consumer, so the LINE event of such a line
     comes after the load's INSTRUCTION event. Out-of-process readers map a
     frame still in a fused block through the new block's pcmap.
+
+29. **Compare and branch.** When `COMPARE_OP` specialises to
+    `COMPARE_OP_INT`, `COMPARE_OP_FLOAT` or `COMPARE_OP_STR` and its next
+    word is a `POP_JUMP_IF_FALSE` or `POP_JUMP_IF_TRUE`, the specialiser
+    installs `IR_SUPER_COMPARE_OP_INT`, `_FLOAT` or `_STR` instead
+    (handlers 259 to 261, after `IR_REMAP`, so no handler index moves). They
+    share the `COMPARE_OP` format, and the jump keeps its word, so the
+    layout, the pcmap and the feedback distances do not change. The handler
+    runs the jump from that word's fields and records the branch in the
+    jump's entry, so the bool never reaches the stack and the jump is not
+    dispatched. It checks that the next handler is still a plain jump and
+    deoptimises to `COMPARE_OP` otherwise. That happens when BRANCH or LINE
+    events replace the jump; the compare then specialises again without the
+    jump. The specialiser and `real[]` see a superinstruction as the
+    specialisation it extends (its `shadow`), and `dis` with
+    `adaptive=True` shows it as that specialisation. The free-threaded build
+    does not specialise the IR, so it never installs them. In the
+    interpreter the gain is small: in this build `POP_JUMP_IF_FALSE` costs
+    about 26 instructions with its dispatch, and the fused handler saves
+    about 4 of them per pair. richards runs 88K pairs per loop and nqueens
+    150K. The point of the superinstructions is tier 0, which can compile a
+    fused word to one compare and conditional jump.

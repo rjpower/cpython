@@ -3,7 +3,7 @@
 //   Python/bytecodes.c
 // Do not edit!
 #if !_Py_TAIL_CALL_INTERP
-static void *opcode_targets[259] = {
+static void *opcode_targets[262] = {
     &&TARGET_CACHE,
     &&TARGET_BINARY_SLICE,
     &&TARGET_BUILD_TEMPLATE,
@@ -263,9 +263,12 @@ static void *opcode_targets[259] = {
     &&TARGET_IR_EXT,
     &&TARGET_IR_LOWER,
     &&TARGET_IR_REMAP,
+    &&TARGET_IR_SUPER_COMPARE_OP_FLOAT,
+    &&TARGET_IR_SUPER_COMPARE_OP_INT,
+    &&TARGET_IR_SUPER_COMPARE_OP_STR,
 };
 #if IR_LAZY_FIELDS
-static void *ir_body_targets[259] = {
+static void *ir_body_targets[262] = {
     &&IR_BODY_CACHE,
     &&IR_BODY_BINARY_SLICE,
     &&IR_BODY_BUILD_TEMPLATE,
@@ -525,10 +528,13 @@ static void *ir_body_targets[259] = {
     &&IR_BODY_IR_EXT,
     &&IR_BODY_IR_LOWER,
     &&IR_BODY_IR_REMAP,
+    &&IR_BODY_IR_SUPER_COMPARE_OP_FLOAT,
+    &&IR_BODY_IR_SUPER_COMPARE_OP_INT,
+    &&IR_BODY_IR_SUPER_COMPARE_OP_STR,
 };
 #endif
 #else /* _Py_TAIL_CALL_INTERP */
-static py_tail_call_funcptr instruction_funcptr_handler_table[259];
+static py_tail_call_funcptr instruction_funcptr_handler_table[262];
 
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_pop_2_error(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_pop_1_error(TAIL_CALL_PARAMS);
@@ -668,6 +674,9 @@ static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_INTERPRETER_EXIT(TAIL_CALL_PARAM
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_IR_EXT(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_IR_LOWER(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_IR_REMAP(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_IR_SUPER_COMPARE_OP_FLOAT(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_IR_SUPER_COMPARE_OP_INT(TAIL_CALL_PARAMS);
+static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_IR_SUPER_COMPARE_OP_STR(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_IS_OP(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_JUMP_BACKWARD(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_JUMP_BACKWARD_NO_INTERRUPT(TAIL_CALL_PARAMS);
@@ -792,7 +801,7 @@ static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_UNKNOWN_OPCODE(TAIL_CALL_PARAMS)
 JUMP_TO_LABEL(error);
 }
 
-static py_tail_call_funcptr instruction_funcptr_handler_table[259] = {
+static py_tail_call_funcptr instruction_funcptr_handler_table[262] = {
     [0] = _TAIL_CALL_CACHE,
     [1] = _TAIL_CALL_BINARY_SLICE,
     [2] = _TAIL_CALL_BUILD_TEMPLATE,
@@ -1052,5 +1061,8 @@ static py_tail_call_funcptr instruction_funcptr_handler_table[259] = {
     [256] = _TAIL_CALL_IR_EXT,
     [257] = _TAIL_CALL_IR_LOWER,
     [258] = _TAIL_CALL_IR_REMAP,
+    [259] = _TAIL_CALL_IR_SUPER_COMPARE_OP_FLOAT,
+    [260] = _TAIL_CALL_IR_SUPER_COMPARE_OP_INT,
+    [261] = _TAIL_CALL_IR_SUPER_COMPARE_OP_STR,
 };
 #endif /* _Py_TAIL_CALL_INTERP */

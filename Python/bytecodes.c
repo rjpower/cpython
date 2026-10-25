@@ -3206,6 +3206,69 @@ dummy_func(
             // It's always a bool, so we don't care about oparg & 16.
         }
 
+        /* Superinstructions of the register IR: a specialised COMPARE_OP
+         * whose next word is a POP_JUMP_IF_FALSE or POP_JUMP_IF_TRUE runs
+         * the jump too, so the bool never reaches the stack and the jump is
+         * not dispatched.  The jump keeps its word for code that jumps to it
+         * and for instrumentation; while instrumentation replaces its
+         * handler, the compare goes back to COMPARE_OP. */
+        ir_only op(_IR_GUARD_JUMP_NEXT, ( -- )) {
+            int jump = IR_HANDLER(*next_instr);
+            DEOPT_IF(jump != POP_JUMP_IF_FALSE && jump != POP_JUMP_IF_TRUE);
+        }
+
+        ir_only op(_IR_COMPARE_OP_FLOAT_JUMP, (left, right -- l, r)) {
+            STAT_INC(COMPARE_OP, hit);
+            _PyIRWord jump = *next_instr;
+            double dleft = PyStackRef_FloatValue(left);
+            double dright = PyStackRef_FloatValue(right);
+            int res = (COMPARISON_BIT(dleft, dright) & oparg) != 0;
+            l = left;
+            r = right;
+            DEAD(left);
+            DEAD(right);
+            IR_JUMP_NEXT(jump, res == (IR_HANDLER(jump) == POP_JUMP_IF_TRUE));
+        }
+
+        ir_only op(_IR_COMPARE_OP_INT_JUMP, (left, right -- l, r)) {
+            STAT_INC(COMPARE_OP, hit);
+            _PyIRWord jump = *next_instr;
+            int32_t ileft = PyStackRef_CompactIntValue(left);
+            int32_t iright = PyStackRef_CompactIntValue(right);
+            int res = (COMPARISON_BIT(ileft, iright) & oparg) != 0;
+            l = left;
+            r = right;
+            DEAD(left);
+            DEAD(right);
+            IR_JUMP_NEXT(jump, res == (IR_HANDLER(jump) == POP_JUMP_IF_TRUE));
+        }
+
+        ir_only op(_IR_COMPARE_OP_STR_JUMP, (left, right -- l, r)) {
+            STAT_INC(COMPARE_OP, hit);
+            _PyIRWord jump = *next_instr;
+            int eq = _PyUnicode_Equal(PyStackRef_AsPyObjectBorrow(left),
+                                      PyStackRef_AsPyObjectBorrow(right));
+            assert((oparg >> 5) == Py_EQ || (oparg >> 5) == Py_NE);
+            int res = ((COMPARISON_NOT_EQUALS + eq) & oparg) != 0;
+            l = left;
+            r = right;
+            DEAD(left);
+            DEAD(right);
+            IR_JUMP_NEXT(jump, res == (IR_HANDLER(jump) == POP_JUMP_IF_TRUE));
+        }
+
+        macro(IR_SUPER_COMPARE_OP_FLOAT) =
+            _GUARD_TOS_FLOAT + _GUARD_NOS_FLOAT + _IR_GUARD_JUMP_NEXT + unused/1 +
+            _IR_COMPARE_OP_FLOAT_JUMP + _POP_TOP_FLOAT + _POP_TOP_FLOAT;
+
+        macro(IR_SUPER_COMPARE_OP_INT) =
+            _GUARD_TOS_INT + _GUARD_NOS_INT + _IR_GUARD_JUMP_NEXT + unused/1 +
+            _IR_COMPARE_OP_INT_JUMP + _POP_TOP_INT + _POP_TOP_INT;
+
+        macro(IR_SUPER_COMPARE_OP_STR) =
+            _GUARD_TOS_UNICODE + _GUARD_NOS_UNICODE + _IR_GUARD_JUMP_NEXT + unused/1 +
+            _IR_COMPARE_OP_STR_JUMP + _POP_TOP_UNICODE + _POP_TOP_UNICODE;
+
         macro(IS_OP) = _IS_OP + POP_TOP + POP_TOP;
 
         // Value identity for inline ints and their boxes; see "Value

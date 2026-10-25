@@ -639,6 +639,17 @@ static_assert(IR_BORROW == Py_TAG_REFCNT,
 /* The feedback entry at distance F from the instruction. */
 #define IR_FB(INSTR, F) ((void *)((INSTR) + (F)))
 
+/* A superinstruction runs the POP_JUMP_IF_FALSE or POP_JUMP_IF_TRUE word
+ * JUMP at next_instr, which jumps if TAKEN, as that handler does. */
+#define IR_JUMP_NEXT(JUMP, TAKEN) \
+    do { \
+        _PyFbHeader *fb_ = (_PyFbHeader *)IR_FB(next_instr, IR_B(JUMP)); \
+        RECORD_BRANCH_TAKEN(fb_->history, (TAKEN)); \
+        next_instr++; \
+        next_instr += (TAKEN) ? (int)IR_C(JUMP) \
+                              : IR_HANDLER(*next_instr) == NOT_TAKEN; \
+    } while (0)
+
 /* The stack pointer before an instruction whose dst field F names the slot
  * at OFF from it.  The loads that an instruction absorbs have no words, so
  * the stack pointer at its dispatch may lag behind.  A dst never carries

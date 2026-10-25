@@ -395,10 +395,17 @@ current_block(void)
     return _PyFrame_IRBlock(_PyThreadState_GET()->current_frame);
 }
 
+/* The opcode of the handler; for a superinstruction of the IR, the
+ * specialisation that it extends. */
 static inline int
 instr_opcode(_PyInstr *instr)
 {
-    return IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
+    int handler = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
+    if (handler >= IR_FIRST_ONLY_HANDLER) {
+        handler = _PyIR_FormatOf(handler)->shadow;
+        assert(handler < IR_FIRST_ONLY_HANDLER);
+    }
+    return handler;
 }
 
 static inline int
@@ -2941,6 +2948,18 @@ failure:
     return;
 success:
     specialize(instr, specialized_op);
+#if defined(Py_IR_INTERP) && !defined(Py_GIL_DISABLED)
+    // The compare runs the jump that consumes its result too.  Its handler
+    // checks the jump each time, so instrumentation can still replace it.
+    int jump = IR_HANDLER(instr[_PyIR_FormatOf(COMPARE_OP)->nwords]);
+    if (jump == POP_JUMP_IF_FALSE || jump == POP_JUMP_IF_TRUE) {
+        _PyIR_SetHandler(instr, specialized_op == COMPARE_OP_FLOAT
+                                ? IR_SUPER_COMPARE_OP_FLOAT
+                                : specialized_op == COMPARE_OP_INT
+                                ? IR_SUPER_COMPARE_OP_INT
+                                : IR_SUPER_COMPARE_OP_STR);
+    }
+#endif
 }
 
 #ifdef Py_STATS

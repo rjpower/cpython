@@ -154,8 +154,9 @@ class IRFormat:
 
 
 # An instruction named PREFIX + X, for an instruction X, shares the format of
-# X: the instrumented twins.
-SHARED_FORMAT_PREFIXES = ("INSTRUMENTED_",)
+# X: the instrumented twins and the IR's superinstructions, which specialise X
+# further.
+SHARED_FORMAT_PREFIXES = ("INSTRUMENTED_", "IR_SUPER_")
 
 
 def is_transparent(inst: Instruction) -> bool:
@@ -558,6 +559,20 @@ class IREmitter(Emitter):
                 raise analysis_error(f"No instruction {family}", tkn)
             return f"{self.formats[family].nwords}u"
         return super().expand_instruction_macro(tkn, args, inst)
+
+    def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
+        assert inst is not None
+        if inst.family is not None:
+            super().emit_jump_to_predicted(inst)
+            return
+        # An IR-only handler has no opcode for _PyOpcode_Deopt to map; it
+        # deoptimises to the head of the family whose format it shares.
+        group = self.formats[inst.name].group
+        if group == inst.name:
+            raise analysis_error(f"{inst.name} deoptimises but has no family",
+                                 inst.where)
+        self.emit(f"UPDATE_MISS_STATS({group});\n")
+        self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{group});\n")
 
     def ir_instruction_size(
         self,

@@ -17,11 +17,14 @@ extern "C" {
 #define IR_EXT                                         256
 #define IR_LOWER                                       257
 #define IR_REMAP                                       258
-#define IR_NUM_HANDLERS                                259
+#define IR_SUPER_COMPARE_OP_FLOAT                      259
+#define IR_SUPER_COMPARE_OP_INT                        260
+#define IR_SUPER_COMPARE_OP_STR                        261
+#define IR_NUM_HANDLERS                                262
 
-PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[259];
+PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[262];
 #ifdef NEED_IR_METADATA
-const _PyIRFormat _PyIR_Formats[259] = {
+const _PyIRFormat _PyIR_Formats[262] = {
     [CACHE] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = CACHE },
     [BINARY_SLICE] = { .nwords = 1, .flags = _PyIR_WINDOW, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = BINARY_SLICE },
     [BUILD_TEMPLATE] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = -2, .borrow_mask = 0x3, .shadow = BUILD_TEMPLATE },
@@ -265,15 +268,21 @@ const _PyIRFormat _PyIR_Formats[259] = {
     [IR_EXT] = { .nwords = 1, .flags = _PyIR_TRANSPARENT, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = IR_EXT },
     [IR_LOWER] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = IR_LOWER },
     [IR_REMAP] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = IR_REMAP },
+    [IR_SUPER_COMPARE_OP_FLOAT] = { .nwords = 2, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1 }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_F, .ninputs = 2, .dst = -2, .borrow_mask = 0x0, .shadow = COMPARE_OP_FLOAT },
+    [IR_SUPER_COMPARE_OP_INT] = { .nwords = 2, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1 }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_F, .ninputs = 2, .dst = -2, .borrow_mask = 0x0, .shadow = COMPARE_OP_INT },
+    [IR_SUPER_COMPARE_OP_STR] = { .nwords = 2, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1 }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_F, .ninputs = 2, .dst = -2, .borrow_mask = 0x0, .shadow = COMPARE_OP_STR },
 };
 #endif
 
-PyAPI_DATA(const char *const) _PyIR_OnlyNames[3];
+PyAPI_DATA(const char *const) _PyIR_OnlyNames[6];
 #ifdef NEED_IR_METADATA
-const char *const _PyIR_OnlyNames[3] = {
+const char *const _PyIR_OnlyNames[6] = {
     [IR_EXT - 256] = "IR_EXT",
     [IR_LOWER - 256] = "IR_LOWER",
     [IR_REMAP - 256] = "IR_REMAP",
+    [IR_SUPER_COMPARE_OP_FLOAT - 256] = "IR_SUPER_COMPARE_OP_FLOAT",
+    [IR_SUPER_COMPARE_OP_INT - 256] = "IR_SUPER_COMPARE_OP_INT",
+    [IR_SUPER_COMPARE_OP_STR - 256] = "IR_SUPER_COMPARE_OP_STR",
 };
 #endif
 

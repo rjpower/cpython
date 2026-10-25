@@ -2771,5 +2771,43 @@ class TestIRCases(unittest.TestCase):
         ]:
             self.assertIn(expected, lines)
 
+    def test_superinstruction(self):
+        # IR_SUPER_X shares the format of X's family, stands for X and
+        # deoptimises to the family's head.
+        input = """
+        family(OP, 1) = { OP_INT };
+        inst(OP, (unused/1, left, right -- res)) {
+            res = SPAM(left, right);
+            DECREF_INPUTS();
+        }
+        op(_GUARD, (left, right -- left, right)) {
+            DEOPT_IF(!EGGS(left, right));
+        }
+        op(_OP_INT, (left, right -- res)) {
+            res = HAM(left, right);
+            DEAD(left);
+            DEAD(right);
+        }
+        macro(OP_INT) = unused/1 + _GUARD + _OP_INT;
+        ir_only op(_JUMP_NEXT, (cond -- )) {
+            next_instr += PyStackRef_IsTrue(cond);
+            DEAD(cond);
+        }
+        macro(IR_SUPER_OP_INT) = unused/1 + _GUARD + _OP_INT + _JUMP_NEXT;
+    """
+        analysis = self.analyze(input)
+        formats = ir_generator.compute_formats(analysis)
+        self.assertEqual(formats["IR_SUPER_OP_INT"], formats["OP"])
+        self.assertEqual(
+            ir_metadata_generator.shadow_of("IR_SUPER_OP_INT", analysis),
+            "OP_INT")
+        out = io.StringIO()
+        ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
+        code = out.getvalue()
+        handler = code[code.index("TARGET(IR_SUPER_OP_INT)"):]
+        handler = handler[:handler.index("DISPATCH();")]
+        self.assertIn("JUMP_TO_PREDICTED(OP);", handler)
+        self.assertNotIn("_PyOpcode_Deopt", handler)
+
 if __name__ == "__main__":
     unittest.main()

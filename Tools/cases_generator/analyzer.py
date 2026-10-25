@@ -1216,11 +1216,11 @@ def assign_opcodes(
         else:
             no_arg.append(name)
 
-    # Specialized ops appear in their own section
+    # Specialized ops appear in their own section, and those that do not fit
+    # take the numbers below RESUME that no other instruction uses.
     # Instrumented opcodes are at the end of the valid range
     min_internal = instmap["RESUME"] + 1
     min_instrumented = 256 - len(instrumented)
-    assert min_internal + len(specialized) < min_instrumented
 
     next_opcode = 1
 
@@ -1240,7 +1240,10 @@ def assign_opcodes(
     # For compatibility
     next_opcode = min_internal
     for name in sorted(specialized):
+        if next_opcode == min_instrumented:
+            next_opcode = 1
         add_instruction(name)
+        assert instmap[name] < min_instrumented
     next_opcode = min_instrumented
     for name in instrumented:
         add_instruction(name)

@@ -36,7 +36,6 @@
 #include "pycore_pylifecycle.h"   // _PyInterpreterConfig_InitFromDict()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
-#include "pycore_tier0.h"         // _PyTier0_Compile()
 #include "pycore_unicodeobject.h" // _PyUnicode_TransformDecimalAndSpaceToASCII()
 
 #include "clinic/_testinternalcapi.c.h"
@@ -2192,35 +2191,6 @@ get_type_shape_count(PyObject *self, PyObject *type)
 }
 #endif
 
-#ifdef Py_TIER0
-// Lower and compile a code object with tier 0; whether it now has code.
-static PyObject *
-tier0_compile(PyObject *self, PyObject *code)
-{
-    if (!PyCode_Check(code)) {
-        PyErr_SetString(PyExc_TypeError, "expected a code object");
-        return NULL;
-    }
-    if (_PyIR_Lower((PyCodeObject *)code) == NULL) {
-        return NULL;
-    }
-    return PyBool_FromLong(_PyTier0_Compile((PyCodeObject *)code) != NULL);
-}
-
-// Whether a code object has valid tier 0 code.
-static PyObject *
-tier0_has_code(PyObject *self, PyObject *code)
-{
-    if (!PyCode_Check(code)) {
-        PyErr_SetString(PyExc_TypeError, "expected a code object");
-        return NULL;
-    }
-    _PyIRBlock *block = ((PyCodeObject *)code)->_co_ir;
-    return PyBool_FromLong(block != &_PyIR_LowerStub
-                           && _PyTier0_ValidCode(block) != NULL);
-}
-#endif
-
 
 static PyObject*
 new_hamt(PyObject *self, PyObject *args)
@@ -3546,10 +3516,6 @@ static PyMethodDef module_functions[] = {
 #ifdef Py_SHAPES
     {"get_object_shape", get_object_shape, METH_O},
     {"get_type_shape_count", get_type_shape_count, METH_O},
-#endif
-#ifdef Py_TIER0
-    {"tier0_compile", tier0_compile, METH_O},
-    {"tier0_has_code", tier0_has_code, METH_O},
 #endif
     {"hamt", new_hamt, METH_NOARGS},
     {"dict_getitem_knownhash",  dict_getitem_knownhash,          METH_VARARGS},

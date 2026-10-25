@@ -517,7 +517,6 @@ PYTHON_OBJS=	\
 		Python/symtable.o \
 		Python/sysmodule.o \
 		Python/thread.o \
-		Python/tier0.o \
 		Python/traceback.o \
 		Python/tracemalloc.o \
 		Python/typecache.o \
@@ -1446,7 +1445,6 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_symtable.h \
 		$(srcdir)/Include/internal/pycore_sysmodule.h \
 		$(srcdir)/Include/internal/pycore_template.h \
-		$(srcdir)/Include/internal/pycore_tier0.h \
 		$(srcdir)/Include/internal/pycore_time.h \
 		$(srcdir)/Include/internal/pycore_token.h \
 		$(srcdir)/Include/internal/pycore_traceback.h \
@@ -2190,11 +2188,8 @@ Python/ceval.o: \
 		$(srcdir)/Python/condvar.h \
 		$(srcdir)/Python/generated_ir_cases.c.h \
 		$(srcdir)/Python/ir_targets.h \
-		$(srcdir)/Python/ceval_tier0.c.h \
 		$(srcdir)/Include/internal/pycore_ir.h \
 		$(srcdir)/Include/internal/pycore_ir_metadata.h
-
-Python/tier0.o: $(srcdir)/Python/jit_x86.h
 
 Python/flowgraph.o: \
 		$(srcdir)/Include/internal/pycore_opcode_metadata.h

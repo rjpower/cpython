@@ -60,16 +60,6 @@ typedef struct _PyThreadStateImpl {
         GENERATOR_YIELD = 1,
     } generator_return_kind;
 
-#ifdef Py_TIER0
-    // Where the last handler in tier 0's call mode went on: the next word
-    // of the frame it returned and that frame's stack pointer.  See
-    // Python/ceval_tier0.c.h.
-    struct {
-        _PyInstr *next_instr;
-        _PyStackRef *stack_pointer;
-    } tier0;
-#endif
-
     /* Head of circular linked-list of all tasks which are instances of `asyncio.Task`
        or subclasses of it used in `asyncio.all_tasks`.
     */

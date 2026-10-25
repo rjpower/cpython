@@ -7970,28 +7970,6 @@ AS_VAR_IF([with_shapes], [yes], [
     [Define to guard instance attribute access on per-type shapes.])
 ])
 
-# Check for --with-tier0
-AC_MSG_CHECKING([for --with-tier0])
-AC_ARG_WITH(
-  [tier0],
-  [AS_HELP_STRING(
-    [--with-tier0],
-    [compile hot code objects to x86-64 machine code that calls the IR handlers (default is no)]
-  )],
-  [],
-  [with_tier0=no])
-AC_MSG_RESULT([$with_tier0])
-AS_VAR_IF([with_tier0], [yes], [
-  AS_VAR_IF([with_tail_call_interp], [yes], [],
-    [AC_MSG_ERROR([--with-tier0 requires --with-tail-call-interp])])
-  AS_VAR_IF([disable_gil], [yes],
-    [AC_MSG_ERROR([--with-tier0 is not supported with --disable-gil])])
-  AS_CASE([$host_cpu], [x86_64], [],
-    [AC_MSG_ERROR([--with-tier0 requires an x86-64 host])])
-  AC_DEFINE([Py_TIER0], [1],
-    [Define to compile hot code objects to machine code that calls the IR handlers.])
-])
-
 # Check for --with-remote-debug
 AC_MSG_CHECKING([for --with-remote-debug])
 AC_ARG_WITH(

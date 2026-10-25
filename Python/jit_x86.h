@@ -1,6 +1,8 @@
-/* A small x86-64 assembler for tier 0 (Python/tier0.c).
+/* A small x86-64 assembler, written for tier 0, which step 1 of
+ * boil/design/06-architecture-v2.md removed.  Nothing includes it now; the
+ * JIT of step 8 will.
  *
- * It encodes the few instructions that tier 0 emits into a growable buffer:
+ * It encodes the few instructions that tier 0 emitted into a growable buffer:
  * moves, lea, integer arithmetic, shifts and compares, scalar double
  * arithmetic, conditional moves, conditional and indirect jumps, calls and
  * stack operations, with 8- and 32-bit displacements, 32-bit immediates and

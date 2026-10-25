@@ -773,3 +773,11 @@ magic and loads stale pycs, which invalidated one full-suite run. Builds
 that share `Lib/__pycache__` but have different magics also overwrite each
 other's pycs, which corrupts per-loop numbers unless each build gets its
 own PYTHONPYCACHEPREFIX.
+
+### 2026-10-25 15:00 — step 2b landed; step 3 split; 3a launched
+
+Coordinator gate check at 23fd882f9bd: targeted tests pass on dev-default,
+all 7 ports pass. Step 3 is split: 3a frames and calls (static frame, dead
+temporaries NULL, no stack pointer, frame header and value stacks with
+overlapping argument windows, RESUME into frame entry), 3b the register CFG
+and passes of note 07. 3a launched, budget 4 days.

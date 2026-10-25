@@ -56,13 +56,18 @@
                                            this_instr, TAIL_CALL_OPERAND_ARGS); \
     } while (0)
 /* The handler and fields that DISPATCH() decodes go unused: the machine code
- * reads them itself. */
+ * reads them itself.  The volatile store keeps the two stores apart.  Where
+ * a handler copies both from a new frame, clang would otherwise copy them
+ * with one 16-byte load and store, and neither the load from the frame nor
+ * the machine code's 8-byte load of stack_pointer could take its value
+ * from the store before it: each would wait for the store to complete. */
 #undef DISPATCH_GOTO
 #define DISPATCH_GOTO() \
     do { \
         (void)opcode; (void)ir_a; (void)ir_b; (void)ir_c; \
         TIER0_STATE(tstate).next_instr = next_instr; \
-        TIER0_STATE(tstate).stack_pointer = stack_pointer; \
+        *(_PyStackRef *volatile *)&TIER0_STATE(tstate).stack_pointer = \
+            stack_pointer; \
         return (PyObject *)frame; \
     } while (0)
 

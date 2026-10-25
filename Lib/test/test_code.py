@@ -281,7 +281,8 @@ class CodeTest(unittest.TestCase):
                 self.assertFalse(flags & _opcode.IR_JUMPS)
                 fields = [(word >> shift) & 0xFFF for shift in (16, 28, 40, 52)]
                 for k, role in enumerate(roles):
-                    is_slot = role in (_opcode.IR_ROLE_DST, _opcode.IR_ROLE_BASE) \
+                    is_slot = role in (_opcode.IR_ROLE_DST, _opcode.IR_ROLE_BASE,
+                                       _opcode.IR_ROLE_TOP) \
                               or role >= _opcode.IR_ROLE_IN0
                     if is_slot and fields[k] >= c.co_nlocals:
                         fields[k] += by

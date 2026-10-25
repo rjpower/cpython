@@ -235,6 +235,7 @@ annotations = {
     "inline_ok",
     "window",
     "no_fold",
+    "returns",
     "ir_only",
 }
 

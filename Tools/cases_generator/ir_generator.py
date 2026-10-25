@@ -605,9 +605,12 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     inputs = io[deepest.name][0]
     n_inputs = len(inputs)
     # Members that pass their first outputs through write later slots, which
-    # follow dst. Members that push a frame and no outputs write none.
+    # follow dst. Members that push a frame and no outputs write none, and
+    # members that return write theirs to the caller's frame.
     new_outputs = [
-        first_new_output(io[m.name][1], len(io[m.name][0])) for m in members
+        None if m.properties.returns
+        else first_new_output(io[m.name][1], len(io[m.name][0]))
+        for m in members
     ]
     dst_offset = min((o for o in new_outputs if o is not None), default=None)
     array_inputs = any(m.properties.window for m in members) or any(
@@ -651,7 +654,8 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     roles, imm, fb = placed
     slot_roles = tuple(slots)
     for m, m_dst in zip(members, new_outputs):
-        if not window and m_dst is not None and m.properties.switches_frame:
+        if (not window and m_dst is not None and m.properties.switches_frame
+                and not m.properties.returns):
             # Outputs that follow the switch belong to another frame
             raise analysis_error(
                 f"{m.name} switches frames and pushes outputs; "

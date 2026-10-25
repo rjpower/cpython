@@ -13183,24 +13183,28 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_B(next_instr - 1), 0);
             INSTRUCTION_STATS(INSTRUMENTED_RETURN_VALUE);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1 + 0);
-            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), 0);
             _PyStackRef val;
             _PyStackRef value;
             _PyStackRef retval;
             _PyStackRef res;
             // _RETURN_VALUE_EVENT
             {
-                val = stack_pointer[-1];
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
+                val = IR_SLOT(IR_FIELD_A(this_instr));
+                if (Py_UNLIKELY(PyStackRef_IsInline(val))) {
                     val = PyStackRef_Box(val);
                     if (PyStackRef_IsInline(val)) {
+                        IR_CLEAR_IF_BORROWED(IR_FIELD_A(this_instr), stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(INSTRUMENTED_RETURN_VALUE);
-                    stack_pointer[-1] = val;
+                    IR_SLOT(IR_FIELD_A(this_instr)) = val;
                 }
+                val = IR_BORROW_KNOWN(val, IR_FIELD_A(this_instr), IR_FIELD_B(this_instr) + -1);
+                stack_pointer[-1] = val;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 int err = _Py_call_instrumentation_arg(
@@ -17419,15 +17423,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
+            stack_pointer = IR_STACK_POINTER(IR_FIELD_B(next_instr - 1), 0);
             INSTRUCTION_STATS(RETURN_VALUE);
-            IR_CHECK_SLOT(IR_FIELD_A(this_instr), -1 + 0);
-            IR_CHECK_SLOT(IR_FIELD_B(this_instr), -1);
+            IR_CHECK_INPUT(IR_FIELD_A(this_instr), -1);
+            IR_CHECK_SLOT(IR_FIELD_B(this_instr), 0);
             _PyStackRef value;
             _PyStackRef retval;
             _PyStackRef res;
             // _MAKE_HEAP_SAFE
             {
-                value = stack_pointer[-1];
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr), IR_FIELD_B(this_instr) + -1);
                 value = PyStackRef_MakeHeapSafe(value);
             }
             // _RETURN_VALUE

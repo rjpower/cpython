@@ -306,6 +306,7 @@ Known values:
     Python 3.16a1 3706 (Add INTRINSIC_MATCH_CLASS_ISINSTANCE)
     Python 3.16a1 3707 (co_code holds register IR words; add the feedback table)
     Python 3.16a1 3708 (the assembler folds loads into their consumers)
+    Python 3.16a1 3709 (RETURN_VALUE reads its value through a field)
 
     Python 3.17 will start with 3750
 
@@ -315,7 +316,7 @@ Known values:
 
 */
 
-#define PYC_MAGIC_NUMBER 3708
+#define PYC_MAGIC_NUMBER 3709
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

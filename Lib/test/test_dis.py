@@ -57,7 +57,7 @@ dis_c_instance_method = """\
               COMPARE_OP              72 (==)  r2 <- r2, r3
               STORE_ATTR               0 (x)  <- r0, r2
               LOAD_COMMON_CONSTANT     7 (None)  r2 <-
-              RETURN_VALUE          r2 <- r2
+              RETURN_VALUE          <- r2
 """ % (_C.__init__.__code__.co_firstlineno, _C.__init__.__code__.co_firstlineno + 1,)
 
 dis_c_instance_method_bytes = """\
@@ -67,7 +67,7 @@ dis_c_instance_method_bytes = """\
           COMPARE_OP            r2 <- r2, r3
           STORE_ATTR            <- r0, r2
           LOAD_COMMON_CONSTANT     7 (None)  r2 <-
-          RETURN_VALUE          r2 <- r2
+          RETURN_VALUE          <- r2
 """
 
 dis_c_class_method = """\
@@ -78,7 +78,7 @@ dis_c_class_method = """\
               COMPARE_OP              72 (==)  r2 <- r2, r3
               STORE_ATTR               0 (x)  <- r0, r2
               LOAD_COMMON_CONSTANT     7 (None)  r2 <-
-              RETURN_VALUE          r2 <- r2
+              RETURN_VALUE          <- r2
 """ % (_C.cm.__code__.co_firstlineno, _C.cm.__code__.co_firstlineno + 2,)
 
 dis_c_static_method = """\
@@ -89,7 +89,7 @@ dis_c_static_method = """\
               COMPARE_OP              72 (==)  r1 <- r1, r2
               STORE_FAST               0 (x)  <- r1
               LOAD_COMMON_CONSTANT     7 (None)  r1 <-
-              RETURN_VALUE          r1 <- r1
+              RETURN_VALUE          <- r1
 """ % (_C.sm.__code__.co_firstlineno, _C.sm.__code__.co_firstlineno + 2,)
 
 # Class disassembling info has an extra newline at end.
@@ -117,7 +117,7 @@ dis_f = """\
               POP_TOP               <- r1
 
 %3d           LOAD_SMALL_INT           1  r1 <-
-              RETURN_VALUE          r1 <- r1
+              RETURN_VALUE          <- r1
 """ % (_f.__code__.co_firstlineno,
        _f.__code__.co_firstlineno + 1,
        _f.__code__.co_firstlineno + 2)
@@ -131,7 +131,7 @@ dis_f_with_offsets = """\
              4       POP_TOP               <- r1
 
 %3d          5       LOAD_SMALL_INT           1  r1 <-
-             6       RETURN_VALUE          r1 <- r1
+             6       RETURN_VALUE          <- r1
 """ % (_f.__code__.co_firstlineno,
        _f.__code__.co_firstlineno + 1,
        _f.__code__.co_firstlineno + 2)
@@ -145,7 +145,7 @@ dis_f_with_positions_format = f"""\
 %-14s           POP_TOP               <- r1
 
 %-14s           LOAD_SMALL_INT           1  r1 <-
-%-14s           RETURN_VALUE          r1 <- r1
+%-14s           RETURN_VALUE          <- r1
 """
 
 dis_f_co_code = """\
@@ -155,7 +155,7 @@ dis_f_co_code = """\
           CALL                     1  r1 <- r1
           POP_TOP               <- r1
           LOAD_SMALL_INT           1  r1 <-
-          RETURN_VALUE          r1 <- r1
+          RETURN_VALUE          <- r1
 """
 
 def bug708901():
@@ -181,7 +181,7 @@ dis_bug708901 = """\
 %3d   L2:     END_FOR               <- r1, r2, r3
               POP_ITER              <- r1, r2
               LOAD_COMMON_CONSTANT     7 (None)  r1 <-
-              RETURN_VALUE          r1 <- r1
+              RETURN_VALUE          <- r1
 """ % (bug708901.__code__.co_firstlineno,
        bug708901.__code__.co_firstlineno + 1,
        bug708901.__code__.co_firstlineno + 2,
@@ -228,7 +228,7 @@ bug42562.__code__ = bug42562.__code__.replace(co_linetable=b'\xf8')
 dis_bug42562 = """\
           RESUME                   0
           LOAD_COMMON_CONSTANT     7 (None)  r0 <-
-          RETURN_VALUE          r0 <- r0
+          RETURN_VALUE          <- r0
 """
 
 # Constant indices past a byte, and past a 12-bit field, which take CD
@@ -243,7 +243,7 @@ dis_bug_45757 = """\
           NOP
           LOAD_CONST             297  r0 <-
           LOAD_CONST            5001  r1 <-
-          RETURN_VALUE          r0 <- r0
+          RETURN_VALUE          <- r0
 """
 
 # A jump to the word before it
@@ -275,7 +275,7 @@ dis_kw_names = """\
               CALL_KW                  3  r0 <- r0
               POP_TOP               <- r0
               LOAD_COMMON_CONSTANT     7 (None)  r0 <-
-              RETURN_VALUE          r0 <- r0
+              RETURN_VALUE          <- r0
 """ % (wrap_func_w_kwargs.__code__.co_firstlineno,
        wrap_func_w_kwargs.__code__.co_firstlineno + 1)
 
@@ -288,7 +288,7 @@ dis_intrinsic_1_2 = """\
               CALL_INTRINSIC_1         2 (INTRINSIC_IMPORT_STAR)  r0 <- r0
               POP_TOP               <- r0
               LOAD_COMMON_CONSTANT     7 (None)  r0 <-
-              RETURN_VALUE          r0 <- r0
+              RETURN_VALUE          <- r0
 """
 
 dis_intrinsic_1_5 = """\
@@ -296,7 +296,7 @@ dis_intrinsic_1_5 = """\
 
   1           LOAD_NAME                0 (a)  r0 <-
               CALL_INTRINSIC_1         5 (INTRINSIC_UNARY_POSITIVE)  r0 <- r0
-              RETURN_VALUE          r0 <- r0
+              RETURN_VALUE          <- r0
 """
 
 dis_intrinsic_1_6 = """\
@@ -306,7 +306,7 @@ dis_intrinsic_1_6 = """\
               LOAD_NAME                0 (a)  r1 <-
               LIST_EXTEND              1  <- r0
               CALL_INTRINSIC_1         6 (INTRINSIC_LIST_TO_TUPLE)  r0 <- r0
-              RETURN_VALUE          r0 <- r0
+              RETURN_VALUE          <- r0
 """
 
 _BIG_LINENO_FORMAT = """\
@@ -315,7 +315,7 @@ _BIG_LINENO_FORMAT = """\
 %3d           LOAD_GLOBAL              0 (spam)  r0 <-
               POP_TOP               <- r0
               LOAD_COMMON_CONSTANT     7 (None)  r0 <-
-              RETURN_VALUE          r0 <- r0
+              RETURN_VALUE          <- r0
 """
 
 _BIG_LINENO_FORMAT2 = """\
@@ -324,19 +324,19 @@ _BIG_LINENO_FORMAT2 = """\
 %4d           LOAD_GLOBAL              0 (spam)  r0 <-
                POP_TOP               <- r0
                LOAD_COMMON_CONSTANT     7 (None)  r0 <-
-               RETURN_VALUE          r0 <- r0
+               RETURN_VALUE          <- r0
 """
 
 dis_module_expected_results = """\
 Disassembly of f:
   4           RESUME                   0
               LOAD_COMMON_CONSTANT     7 (None)  r0 <-
-              RETURN_VALUE          r0 <- r0
+              RETURN_VALUE          <- r0
 
 Disassembly of g:
   5           RESUME                   0
               LOAD_COMMON_CONSTANT     7 (None)  r0 <-
-              RETURN_VALUE          r0 <- r0
+              RETURN_VALUE          <- r0
 
 """
 
@@ -348,7 +348,7 @@ dis_expr_str = """\
   1           LOAD_NAME                0 (x)  r0 <-
               LOAD_SMALL_INT           1  r1 <-
               BINARY_OP                0 (+)  r0 <- r0, r1
-              RETURN_VALUE          r0 <- r0
+              RETURN_VALUE          <- r0
 """
 
 simple_stmt_str = "x = x + 1"
@@ -361,7 +361,7 @@ dis_simple_stmt_str = """\
               BINARY_OP                0 (+)  r0 <- r0, r1
               STORE_NAME               0 (x)  <- r0
               LOAD_COMMON_CONSTANT     7 (None)  r0 <-
-              RETURN_VALUE          r0 <- r0
+              RETURN_VALUE          <- r0
 """
 
 annot_stmt_str = """\
@@ -402,7 +402,7 @@ dis_annot_stmt_str = """\
                CALL                     1  r3 <- r3
                STORE_SUBSCR          <- r2, r3, r1
                LOAD_COMMON_CONSTANT     7 (None)  r1 <-
-               RETURN_VALUE          r1 <- r1
+               RETURN_VALUE          <- r1
 """
 
 fn_with_annotate_str = """
@@ -420,7 +420,7 @@ dis_fn_with_annotate_str = """\
               SET_FUNCTION_ATTRIBUTE  16 (annotate)  r0 <- r0, r1
               STORE_NAME               0 (foo)  <- r0
               LOAD_COMMON_CONSTANT     7 (None)  r0 <-
-              RETURN_VALUE          r0 <- r0
+              RETURN_VALUE          <- r0
 """
 
 compound_stmt_str = """\
@@ -455,7 +455,7 @@ dis_traceback = """\
                POP_TOP               <- r2
 
 %4d   L2:     LOAD_FAST_CHECK          1 (tb)  r2 <-
-               RETURN_VALUE          r2 <- r2
+               RETURN_VALUE          <- r2
 
   --   L3:     PUSH_EXC_INFO         r2 <- r2
 
@@ -474,7 +474,7 @@ dis_traceback = """\
                DELETE_FAST              0 (e)
 
 %4d           LOAD_FAST                1 (tb)  r2 <-
-               RETURN_VALUE          r2 <- r2
+               RETURN_VALUE          <- r2
 
   --   L6:     LOAD_COMMON_CONSTANT     7 (None)  r5 <-
                STORE_FAST               0 (e)  <- r5
@@ -519,7 +519,7 @@ dis_fstring = """\
               LOAD_CONST               1 ('4')  r11 <-
               FORMAT_WITH_SPEC      r10 <- r10, r11
               BUILD_STRING             7  r4 <- r4
-              RETURN_VALUE          r4 <- r4
+              RETURN_VALUE          <- r4
 """ % (_fstring.__code__.co_firstlineno, _fstring.__code__.co_firstlineno + 1)
 
 def _with(c):
@@ -551,7 +551,7 @@ dis_with = """\
 %4d           LOAD_SMALL_INT           2  r3 <-
                STORE_FAST               2 (y)  <- r3
                LOAD_COMMON_CONSTANT     7 (None)  r3 <-
-               RETURN_VALUE          r3 <- r3
+               RETURN_VALUE          <- r3
 
 %4d   L3:     PUSH_EXC_INFO         r6 <- r6
                WITH_EXCEPT_START     r8 <- r3
@@ -568,7 +568,7 @@ dis_with = """\
 %4d           LOAD_SMALL_INT           2  r3 <-
                STORE_FAST               2 (y)  <- r3
                LOAD_COMMON_CONSTANT     7 (None)  r3 <-
-               RETURN_VALUE          r3 <- r3
+               RETURN_VALUE          <- r3
 
   --   L6:     COPY                     3  <- r6
                POP_EXCEPT            <- r9
@@ -632,7 +632,7 @@ dis_asyncwith = """\
 %4d            LOAD_SMALL_INT           2  r3 <-
                 STORE_FAST               2 (y)  <- r3
                 LOAD_COMMON_CONSTANT     7 (None)  r3 <-
-                RETURN_VALUE          r3 <- r3
+                RETURN_VALUE          <- r3
 
 %4d   L12:     CLEANUP_THROW         r5 <- r5
        L13:     JUMP_BACKWARD_NO_INTERRUPT 17 (to L5)
@@ -662,7 +662,7 @@ dis_asyncwith = """\
 %4d            LOAD_SMALL_INT           2  r3 <-
                 STORE_FAST               2 (y)  <- r3
                 LOAD_COMMON_CONSTANT     7 (None)  r3 <-
-                RETURN_VALUE          r3 <- r3
+                RETURN_VALUE          <- r3
 
   --   L24:     COPY                     3  <- r6
                 POP_EXCEPT            <- r9
@@ -715,7 +715,7 @@ dis_tryfinally = """\
                PUSH_NULL             r4 <-
                CALL                     0  r3 <- r3
                POP_TOP               <- r3
-               RETURN_VALUE          r2 <- r2
+               RETURN_VALUE          <- r2
 
   --   L3:     PUSH_EXC_INFO         r2 <- r2
 
@@ -750,7 +750,7 @@ dis_tryfinallyconst = """\
                CALL                     0  r1 <- r1
                POP_TOP               <- r1
                LOAD_SMALL_INT           1  r1 <-
-               RETURN_VALUE          r1 <- r1
+               RETURN_VALUE          <- r1
 
   --   L1:     PUSH_EXC_INFO         r1 <- r1
 
@@ -800,8 +800,7 @@ dis_nested_0 = """\
                SET_FUNCTION_ATTRIBUTE   8 (closure)  r2 <- r2, r3
                STORE_FAST               1 (foo)  <- r2
 
-%4d           LOAD_FAST_BORROW         1 (foo)  r2 <-
-               RETURN_VALUE          r2 <- r2
+%4d           RETURN_VALUE          <- r1
 """ % (_h.__code__.co_firstlineno,
        _h.__code__.co_firstlineno + 1,
        __file__,
@@ -838,7 +837,7 @@ Disassembly of <code object foo at 0x..., file "%s", line %d>:
                JUMP_BACKWARD           19 (to L1)
        L2:     END_FOR               <- r3, r4, r5
                POP_ITER              <- r3, r4
-               RETURN_VALUE          r2 <- r2
+               RETURN_VALUE          <- r2
        L3:     PUSH_NULL             r3 <-
                LOAD_FAST_BORROW         0 (x)  r4 <-
                BUILD_TUPLE              1  r4 <- r4
@@ -848,7 +847,7 @@ Disassembly of <code object foo at 0x..., file "%s", line %d>:
                LOAD_DEREF               1 (y)  r5 <-
                CALL                     0  r4 <- r4
                CALL                     1  r2 <- r2
-               RETURN_VALUE          r2 <- r2
+               RETURN_VALUE          <- r2
 """ % (dis_nested_0,
        __file__,
        _h.__code__.co_firstlineno + 1,
@@ -883,7 +882,7 @@ Disassembly of <code object <genexpr> at 0x..., file "%s", line %d>:
        L3:     END_FOR               <- r3, r4, r5
                POP_ITER              <- r3, r4
                LOAD_COMMON_CONSTANT     7 (None)  r3 <-
-               RETURN_VALUE          r3 <- r3
+               RETURN_VALUE          <- r3
 
   --   L4:     CALL_INTRINSIC_1         3 (INTRINSIC_STOPITERATION_ERROR)  r6 <- r6
                RERAISE                  1  <- r5
@@ -910,7 +909,7 @@ dis_load_test_quickened_code = """\
 %3d           LOAD_FAST_BORROW         2 (a)  r4 <-
               LOAD_FAST_BORROW         3 (b)  r5 <-
               BUILD_TUPLE              2  r4 <- r4
-              RETURN_VALUE          r4 <- r4
+              RETURN_VALUE          <- r4
 """ % (load_test.__code__.co_firstlineno,
        load_test.__code__.co_firstlineno + 1,
        load_test.__code__.co_firstlineno + 2)
@@ -949,7 +948,7 @@ dis_loop_test_quickened_code = """\
 %3d   L2:     END_FOR               <- r1, r2, r3
               POP_ITER              <- r1, r2
               LOAD_COMMON_CONSTANT     7 (None)  r1 <-
-              RETURN_VALUE          r1 <- r1
+              RETURN_VALUE          <- r1
 """ % (loop_test.__code__.co_firstlineno,
        loop_test.__code__.co_firstlineno + 1,
        loop_test.__code__.co_firstlineno + 2,
@@ -966,7 +965,7 @@ dis_extended_arg_quick_code = """\
               POP_TOP               <- r2
               STORE_FAST               0 (_)  <- r1
               LOAD_COMMON_CONSTANT     7 (None)  r1 <-
-              RETURN_VALUE          r1 <- r1
+              RETURN_VALUE          <- r1
 """% (extended_arg_quick.__code__.co_firstlineno,
       extended_arg_quick.__code__.co_firstlineno + 1,)
 
@@ -1087,7 +1086,7 @@ class DisTests(DisTestBase):
             '2:3-3:15             NOP',
             '',
             '3:11-3:15            LOAD_COMMON_CONSTANT     7 (None)  r0 <-',
-            '3:11-3:15            RETURN_VALUE          r0 <- r0',
+            '3:11-3:15            RETURN_VALUE          <- r0',
             '',
             '  --         L1:     PUSH_EXC_INFO         r0 <- r0',
             '',
@@ -1118,7 +1117,7 @@ class DisTests(DisTestBase):
             '2:5-2:6            LOAD_SMALL_INT           1  r1 <-',
             '2:?-2:?            STORE_FAST               0 (x)  <- r1',
             '2:?-2:?            LOAD_COMMON_CONSTANT     7 (None)  r1 <-',
-            '2:?-2:?            RETURN_VALUE          r1 <- r1',
+            '2:?-2:?            RETURN_VALUE          <- r1',
             '',
         ])
         self.do_disassembly_test(f, expect, show_positions=True)
@@ -1131,7 +1130,7 @@ class DisTests(DisTestBase):
         expect = '\n'.join([
             '          RESUME                   0',
             '          LOAD_COMMON_CONSTANT     7 (None)  r0 <-',
-            '          RETURN_VALUE          r0 <- r0',
+            '          RETURN_VALUE          <- r0',
             '',
         ])
         self.do_disassembly_test(f, expect, show_positions=True)
@@ -1340,7 +1339,7 @@ class DisTests(DisTestBase):
 
   1           LOAD_CONST               0 ('a')  r0 <-
               LOAD_ATTR_SLOT           0 (__class__)  r0 <- r0
-              RETURN_VALUE          r0 <- r0
+              RETURN_VALUE          <- r0
 """
         co = compile("'a'.__class__", "", "eval")
         self.code_quicken(lambda: exec(co, {}, {}))
@@ -1357,7 +1356,7 @@ class DisTests(DisTestBase):
               PUSH_NULL             r1 <-
               LOAD_SMALL_INT           1  r2 <-
               CALL_STR_1               1  r0 <- r0
-              RETURN_VALUE          r0 <- r0
+              RETURN_VALUE          <- r0
 """
         co = compile("str(1)", "", "eval")
         self.code_quicken(lambda: exec(co, {}, {}))
@@ -1810,8 +1809,7 @@ expected_opinfo_outer = [
   make_inst(opname='LOAD_CONST', arg=2, argval='Hello world!', argrepr="'Hello world!'", offset=19, start_offset=19, starts_line=False, line_number=7, dst=11),
   make_inst(opname='CALL', arg=7, argval=7, argrepr='', offset=20, start_offset=20, starts_line=False, line_number=7, dst=3, srcs=(3,), fb=2, cache_info=[('kind', 1, b'\x06'), ('arg', 3, b'\x07\x00\x00')]),
   make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=21, start_offset=21, starts_line=False, line_number=7, srcs=(3,)),
-  make_inst(opname='LOAD_FAST_BORROW', arg=2, argval='f', argrepr='f', offset=22, start_offset=22, starts_line=True, line_number=8, dst=3),
-  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=23, start_offset=23, starts_line=False, line_number=8, dst=3, srcs=(3,)),
+  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=22, start_offset=22, starts_line=True, line_number=8, srcs=(2,)),
 ]
 
 expected_opinfo_f = [
@@ -1837,8 +1835,7 @@ expected_opinfo_f = [
   make_inst(opname='LOAD_DEREF', arg=1, argval='d', argrepr='d', offset=19, start_offset=19, starts_line=False, line_number=5, dst=10),
   make_inst(opname='CALL', arg=4, argval=4, argrepr='', offset=20, start_offset=20, starts_line=False, line_number=5, dst=5, srcs=(5,), fb=2, cache_info=[('kind', 1, b'\x06'), ('arg', 3, b'\x04\x00\x00')]),
   make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=21, start_offset=21, starts_line=False, line_number=5, srcs=(5,)),
-  make_inst(opname='LOAD_FAST_BORROW', arg=2, argval='inner', argrepr='inner', offset=22, start_offset=22, starts_line=True, line_number=6, dst=5),
-  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=23, start_offset=23, starts_line=False, line_number=6, dst=5, srcs=(5,)),
+  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=22, start_offset=22, starts_line=True, line_number=6, srcs=(2,)),
 ]
 
 expected_opinfo_inner = [
@@ -1854,7 +1851,7 @@ expected_opinfo_inner = [
   make_inst(opname='CALL', arg=6, argval=6, argrepr='', offset=9, start_offset=9, starts_line=False, line_number=4, dst=6, srcs=(6,), fb=2, cache_info=[('kind', 1, b'\x06'), ('arg', 3, b'\x06\x00\x00')]),
   make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=10, start_offset=10, starts_line=False, line_number=4, srcs=(6,)),
   make_inst(opname='LOAD_COMMON_CONSTANT', arg=7, argval=None, argrepr='None', offset=11, start_offset=11, starts_line=False, line_number=4, dst=6),
-  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=12, start_offset=12, starts_line=False, line_number=4, dst=6, srcs=(6,)),
+  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=12, start_offset=12, starts_line=False, line_number=4, srcs=(6,)),
 ]
 
 expected_opinfo_jumpy = [
@@ -1946,7 +1943,7 @@ expected_opinfo_jumpy = [
   make_inst(opname='CALL', arg=1, argval=1, argrepr='', offset=85, start_offset=85, starts_line=False, line_number=28, dst=2, srcs=(2,), fb=30, cache_info=[('kind', 1, b'\x06'), ('arg', 3, b'\x01\x00\x00')]),
   make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=86, start_offset=86, starts_line=False, line_number=28, srcs=(2,)),
   make_inst(opname='LOAD_COMMON_CONSTANT', arg=7, argval=None, argrepr='None', offset=87, start_offset=87, starts_line=False, line_number=28, dst=2),
-  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=88, start_offset=88, starts_line=False, line_number=28, dst=2, srcs=(2,)),
+  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=88, start_offset=88, starts_line=False, line_number=28, srcs=(2,)),
   make_inst(opname='PUSH_EXC_INFO', arg=None, argval=None, argrepr='', offset=89, start_offset=89, starts_line=True, line_number=25, dst=5, srcs=(5,)),
   make_inst(opname='WITH_EXCEPT_START', arg=None, argval=None, argrepr='', offset=90, start_offset=90, starts_line=False, line_number=25, dst=7, srcs=(2,)),
   make_inst(opname='TO_BOOL', arg=None, argval=None, argrepr='', offset=91, start_offset=91, starts_line=False, line_number=25, dst=7, srcs=(7,), fb=31, cache_info=[('kind', 1, b'\x02'), ('arg', 3, b'\x00\x00\x00')]),
@@ -1994,7 +1991,7 @@ def simple(): pass
 expected_opinfo_simple = [
   make_inst(opname='RESUME', arg=0, argval=0, argrepr='', offset=0, start_offset=0, starts_line=True, line_number=simple.__code__.co_firstlineno),
   make_inst(opname='LOAD_COMMON_CONSTANT', arg=7, argval=None, argrepr='None', offset=1, start_offset=1, starts_line=False, line_number=simple.__code__.co_firstlineno, dst=0),
-  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=2, start_offset=2, starts_line=False, line_number=simple.__code__.co_firstlineno, dst=0, srcs=(0,)),
+  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=2, start_offset=2, starts_line=False, line_number=simple.__code__.co_firstlineno, srcs=(0,)),
 ]
 
 
@@ -2506,7 +2503,7 @@ class TestDisCLI(unittest.TestCase):
                         FEEDBACK                 1 (kind: CALL, arg: 0)
                         POP_TOP               <- r0
                         LOAD_COMMON_CONSTANT     7 (None)  r0 <-
-                        RETURN_VALUE          r0 <- r0
+                        RETURN_VALUE          <- r0
         '''
         for flag in ['-C', '--show-caches']:
             self.check_output(source, expect, flag)
@@ -2518,7 +2515,7 @@ class TestDisCLI(unittest.TestCase):
             0          0       RESUME                   0
 
             1          1       LOAD_COMMON_CONSTANT     7 (None)  r0 <-
-                       2       RETURN_VALUE          r0 <- r0
+                       2       RETURN_VALUE          <- r0
         '''
         for flag in ['-O', '--show-offsets']:
             self.check_output(source, expect, flag)
@@ -2530,7 +2527,7 @@ class TestDisCLI(unittest.TestCase):
             0:0-1:0            RESUME                   0
 
             1:0-1:4            LOAD_COMMON_CONSTANT     7 (None)  r0 <-
-            1:0-1:4            RETURN_VALUE          r0 <- r0
+            1:0-1:4            RETURN_VALUE          <- r0
         '''
         for flag in ['-P', '--show-positions']:
             self.check_output(source, expect, flag)
@@ -2542,7 +2539,7 @@ class TestDisCLI(unittest.TestCase):
             0           RESUME                   0
 
             1           LOAD_COMMON_CONSTANT     7 (None)  r0 <-
-                        RETURN_VALUE          r0 <- r0
+                        RETURN_VALUE          <- r0
         '''
         for flag in ['-S', '--specialized']:
             self.check_output(source, expect, flag)

@@ -674,11 +674,28 @@ class FoldTest(unittest.TestCase):
             ("LOAD_ATTR", t, (0,)),
             ("LOAD_ATTR", t + 1, (0,)),
             ("BINARY_OP_ADD", t, (t, t + 1)),
-            ("RETURN_VALUE", t, (t,)),
+            ("RETURN_VALUE", None, (t,)),
         ])
         o = types.SimpleNamespace(x=2, y=3)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(g(o), 5)
+
+    def test_return_local(self):
+        # RETURN_VALUE takes a new reference to the local before the frame
+        # releases its locals
+        def f(x):
+            return x
+        def g():
+            y = [1, 2]
+            return y
+        self.assertEqual(words(f), [("RETURN_VALUE", None, (0,))])
+        self.assertEqual(words(g)[-1], ("RETURN_VALUE", None, (0,)))
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            o = object()
+            before = sys.getrefcount(o)
+            self.assertIs(f(o), o)
+            self.assertEqual(sys.getrefcount(o), before)
+            self.assertEqual(g(), [1, 2])
 
     def test_load_below_another_word_keeps_its_word(self):
         # The constant's word runs between the load of x and the add

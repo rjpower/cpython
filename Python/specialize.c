@@ -3298,7 +3298,7 @@ const struct _PyCode3 _Py_InitCleanup = {
     ._co_exec = &_PyIR_InitCleanupExec,
     .co_words = {
         IR_WORD(EXIT_INIT_CHECK, 1, 2, 0, 0),
-        IR_WORD(RETURN_VALUE, 0, 0, 0, 0),
+        IR_WORD(RETURN_VALUE, 0, 1, 0, 0),
         IR_WORD(RESUME, 0, 0, 0, 0),
     }
 };

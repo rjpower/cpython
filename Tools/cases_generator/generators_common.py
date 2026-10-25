@@ -783,6 +783,7 @@ class Emitter:
                                     var.memory_offset = None
                                     var.known_object = False
                                     var.ir_borrowed = False
+                                    var.ir_field = None
                                     break
                             for var in storage.outputs:
                                 if var.name == tkn.text:
@@ -790,6 +791,7 @@ class Emitter:
                                     var.memory_offset = None
                                     var.known_object = False
                                     var.ir_borrowed = False
+                                    var.ir_field = None
                                     break
                         if tkn.text.startswith("DISPATCH"):
                             reachable = False

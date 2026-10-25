@@ -45,6 +45,9 @@ class Properties:
     no_fold: bool = False
     # Assigns `frame`: what follows runs in another frame.
     switches_frame: bool = False
+    # Annotated `returns`: pops its frame, and pushes its outputs to the
+    # caller's.
+    returns: bool = False
 
     def dump(self, indent: str) -> None:
         simple_properties = self.__dict__.copy()
@@ -85,6 +88,7 @@ class Properties:
             window=any(p.window for p in properties),
             no_fold=any(p.no_fold for p in properties),
             switches_frame=any(p.switches_frame for p in properties),
+            returns=any(p.returns for p in properties),
         )
 
     @property
@@ -950,6 +954,7 @@ def compute_properties(op: parser.CodeDef) -> Properties:
     inline_ok = False if isinstance(op, parser.LabelDef) else "inline_ok" in op.annotations
     window = False if isinstance(op, parser.LabelDef) else "window" in op.annotations
     no_fold = False if isinstance(op, parser.LabelDef) else "no_fold" in op.annotations
+    returns = False if isinstance(op, parser.LabelDef) else "returns" in op.annotations
     return Properties(
         escaping_calls=escaping_calls,
         escapes=escapes,
@@ -978,6 +983,7 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         window=window,
         no_fold=no_fold,
         switches_frame=switches_frame(op),
+        returns=returns,
     )
 
 STACKREF_TO_OBJECT = (

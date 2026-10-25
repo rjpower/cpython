@@ -39,7 +39,7 @@ static_assert(sizeof(_PyFbUnary) <= FB_STRIDE && sizeof(_PyFbBinary) <= FB_STRID
  * RETURN_VALUE returns slot 0.  Its third word, RESUME, never runs. */
 static _PyIRWord init_cleanup_words[3] = {
     IR_WORD(EXIT_INIT_CHECK, 1, 2, 0, 0),
-    IR_WORD(RETURN_VALUE, 0, 0, 0, 0),
+    IR_WORD(RETURN_VALUE, 0, 1, 0, 0),
     IR_WORD(RESUME, 0, 0, 0, 0),
 };
 

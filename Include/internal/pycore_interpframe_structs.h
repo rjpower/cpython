@@ -29,6 +29,13 @@ enum _frameowner {
 struct _PyInterpreterFrame {
     _PyStackRef f_executable; /* Deferred or strong reference (code object or None) */
     struct _PyInterpreterFrame *previous;
+    /* Slot 0: co_nlocalsplus locals, cells and free variables, then
+     * co_stacksize temporaries.  Every slot holds a value or NULL; a
+     * temporary that no instruction has written or that an instruction
+     * consumed is NULL.  The slots of a frame on the frame stack are on the
+     * thread's value stack; a generator and a frame object keep them in
+     * owned_slots. */
+    _PyStackRef *base;
     _PyStackRef f_funcobj; /* Deferred or strong reference. Only valid if not on C stack */
     PyObject *f_globals; /* Borrowed reference. Only valid if not on C stack */
     PyObject *f_builtins; /* Borrowed reference. Only valid if not on C stack */
@@ -54,11 +61,8 @@ struct _PyInterpreterFrame {
 #ifdef Py_DEBUG
     uint8_t lltrace:5;
 #endif
-    /* The slots: co_nlocalsplus locals, cells and free variables, then
-     * co_stacksize temporaries.  Every slot holds a value or NULL; a
-     * temporary that no instruction has written or that an instruction
-     * consumed is NULL. */
-    _PyStackRef localsplus[1];
+    /* The slots of a frame that owns them, which base then points to */
+    _PyStackRef owned_slots[1];
 };
 
 

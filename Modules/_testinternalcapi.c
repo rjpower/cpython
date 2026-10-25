@@ -3088,7 +3088,7 @@ inline_locals(PyObject *self, PyObject *frame)
         return NULL;
     }
     for (int i = 0; i < co->co_nlocalsplus; i++) {
-        if (PyStackRef_IsInline(f->localsplus[i]) &&
+        if (PyStackRef_IsInline(f->base[i]) &&
             PySet_Add(names, PyTuple_GET_ITEM(co->co_localsplusnames, i)) < 0)
         {
             Py_DECREF(names);

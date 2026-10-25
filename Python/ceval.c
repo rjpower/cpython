@@ -1023,10 +1023,10 @@ int _Py_CheckRecursiveCallPy(
 }
 
 /* The value that a frame returns or yields to the entry frame lands in
- * entry.stack[0], localsplus[1] of the entry frame. */
+ * entry.stack[0], slot 1 of the entry frame. */
 static_assert(offsetof(_PyEntryFrame, stack) ==
-              offsetof(_PyInterpreterFrame, localsplus) + sizeof(_PyStackRef),
-              "the entry frame's stack must follow localsplus[0]");
+              offsetof(_PyInterpreterFrame, owned_slots) + sizeof(_PyStackRef),
+              "the entry frame's stack must follow owned_slots[0]");
 
 /* The entry frame's words.  Its slot 1 is a temporary, which
  * INTERPRETER_EXIT takes; the header precedes the words, as in every
@@ -1291,6 +1291,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     entry.frame.f_builtins = (PyObject*)0xaaa4;
 #endif
     entry.frame.f_executable = PyStackRef_None;
+    entry.frame.base = entry.frame.owned_slots;
     /* A return or a yield resumes the entry frame at the word after its
      * instr_ptr, the first INTERPRETER_EXIT */
     entry.frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
@@ -1978,8 +1979,8 @@ _PyEvalFramePushAndInit(PyThreadState *tstate, _PyStackRef func,
     if (frame == NULL) {
         goto fail;
     }
-    _PyFrame_Initialize(tstate, frame, func, locals, code, 0, previous);
-    if (initialize_locals(tstate, func_obj, frame->localsplus, args, argcount, kwnames)) {
+    _PyFrame_Initialize(tstate, frame, func, locals, code, frame->owned_slots, 0, previous);
+    if (initialize_locals(tstate, func_obj, frame->base, args, argcount, kwnames)) {
         assert(frame->owner == FRAME_OWNED_BY_THREAD);
         _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
         clear_thread_frame(tstate, frame);

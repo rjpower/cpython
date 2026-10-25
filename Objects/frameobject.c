@@ -1901,7 +1901,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     for (int i = 0; i < code->co_nlocalsplus; i++) {
         // Counting every unbound local is overly-cautious, but a full flow
         // analysis (like we do in the compiler) is probably too expensive:
-        unbound += PyStackRef_IsNull(self->f_frame->localsplus[i]);
+        unbound += PyStackRef_IsNull(self->f_frame->base[i]);
     }
     if (unbound) {
         const char *e = "assigning None to %d unbound local%s";
@@ -1912,8 +1912,8 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         // Do this in a second pass to avoid writing a bunch of Nones when
         // warnings are being treated as errors and the previous bit raises:
         for (int i = 0; i < code->co_nlocalsplus; i++) {
-            if (PyStackRef_IsNull(self->f_frame->localsplus[i])) {
-                self->f_frame->localsplus[i] = PyStackRef_None;
+            if (PyStackRef_IsNull(self->f_frame->base[i])) {
+                self->f_frame->base[i] = PyStackRef_None;
                 unbound--;
             }
         }
@@ -2147,7 +2147,7 @@ frame___sizeof___impl(PyFrameObject *self)
 /*[clinic end generated code: output=82948688e81078e2 input=908f90a83e73131d]*/
 {
     Py_ssize_t res;
-    res = offsetof(PyFrameObject, _f_frame_data) + offsetof(_PyInterpreterFrame, localsplus);
+    res = offsetof(PyFrameObject, _f_frame_data) + offsetof(_PyInterpreterFrame, owned_slots);
     PyCodeObject *code = _PyFrame_GetCode(self->f_frame);
     res += _PyFrame_NumSlotsForCodeObject(code) * sizeof(PyObject *);
     return PyLong_FromSsize_t(res);
@@ -2179,7 +2179,7 @@ PyTypeObject PyFrame_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "frame",
     offsetof(PyFrameObject, _f_frame_data) +
-    offsetof(_PyInterpreterFrame, localsplus),
+    offsetof(_PyInterpreterFrame, owned_slots),
     sizeof(PyObject *),
     frame_dealloc,                              /* tp_dealloc */
     0,                                          /* tp_vectorcall_offset */
@@ -2217,7 +2217,7 @@ init_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
 {
     PyCodeObject *code = (PyCodeObject *)func->func_code;
     _PyFrame_Initialize(tstate, frame, PyStackRef_FromPyObjectNew(func),
-                        Py_XNewRef(locals), code, 0, NULL);
+                        Py_XNewRef(locals), code, frame->owned_slots, 0, NULL);
 }
 
 PyFrameObject*
@@ -2307,7 +2307,7 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
     int offset = PyUnstable_Code_GetFirstFree(co);
     for (int i = 0; i < co->co_nfreevars; ++i) {
         PyObject *o = PyTuple_GET_ITEM(closure, i);
-        frame->localsplus[offset + i] = PyStackRef_FromPyObjectNew(o);
+        frame->base[offset + i] = PyStackRef_FromPyObjectNew(o);
     }
     // COPY_FREE_VARS doesn't have inline CACHEs, either:
     frame->instr_ptr = _PyFrame_InstrAt(frame, 0);
@@ -2336,15 +2336,15 @@ frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
 
     PyObject *value = NULL;
     {
-        if (PyStackRef_IsInline(frame->localsplus[i])) {
-            value = PyStackRef_AsPyObjectNewBoxed(frame->localsplus[i]);
+        if (PyStackRef_IsInline(frame->base[i])) {
+            value = PyStackRef_AsPyObjectNewBoxed(frame->base[i]);
             if (value == NULL) {
                 return -1;
             }
             *pvalue = value;
             return 1;
         }
-        value = PyStackRef_AsPyObjectBorrow(frame->localsplus[i]);
+        value = PyStackRef_AsPyObjectBorrow(frame->base[i]);
         if (kind & CO_FAST_FREE) {
             // The cell was set by COPY_FREE_VARS.
             assert(value != NULL && PyCell_Check(value));

@@ -263,7 +263,7 @@ gen_raise_already_executing_error(PyGenObject *gen)
 static inline _PyStackRef
 _PyGen_YieldFromRef(_PyInterpreterFrame *frame)
 {
-    _PyStackRef ref = frame->localsplus[frame->return_slot - 2];
+    _PyStackRef ref = frame->base[frame->return_slot - 2];
     assert(!PyStackRef_IsNull(ref));
     return ref;
 }
@@ -1036,7 +1036,7 @@ gen_sizeof(PyObject *op, PyObject *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(op);
     Py_ssize_t res;
-    res = offsetof(PyGenObject, gi_iframe) + offsetof(_PyInterpreterFrame, localsplus);
+    res = offsetof(PyGenObject, gi_iframe) + offsetof(_PyInterpreterFrame, owned_slots);
     PyCodeObject *code = _PyGen_GetCode(gen);
     res += _PyFrame_NumSlotsForCodeObject(code) * sizeof(PyObject *);
     return PyLong_FromSsize_t(res);
@@ -1066,7 +1066,7 @@ static PyAsyncMethods gen_as_async = {
 PyTypeObject PyGen_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "generator",                                /* tp_name */
-    offsetof(PyGenObject, gi_iframe.localsplus), /* tp_basicsize */
+    offsetof(PyGenObject, gi_iframe.owned_slots), /* tp_basicsize */
     sizeof(PyObject *),                         /* tp_itemsize */
     /* methods */
     gen_dealloc,                                /* tp_dealloc */
@@ -1419,7 +1419,7 @@ static PyAsyncMethods coro_as_async = {
 PyTypeObject PyCoro_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "coroutine",                                /* tp_name */
-    offsetof(PyCoroObject, cr_iframe.localsplus),/* tp_basicsize */
+    offsetof(PyCoroObject, cr_iframe.owned_slots),/* tp_basicsize */
     sizeof(PyObject *),                         /* tp_itemsize */
     /* methods */
     gen_dealloc,                                /* tp_dealloc */
@@ -1911,7 +1911,7 @@ static PyAsyncMethods async_gen_as_async = {
 PyTypeObject PyAsyncGen_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "async_generator",                          /* tp_name */
-    offsetof(PyAsyncGenObject, ag_iframe.localsplus), /* tp_basicsize */
+    offsetof(PyAsyncGenObject, ag_iframe.owned_slots), /* tp_basicsize */
     sizeof(PyObject *),                         /* tp_itemsize */
     /* methods */
     gen_dealloc,                                /* tp_dealloc */

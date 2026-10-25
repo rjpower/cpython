@@ -133,7 +133,7 @@ static inline PyFunctionObject *_PyFrame_GetFunction(_PyInterpreterFrame *f) {
 }
 
 static inline _PyStackRef *_PyFrame_Stackbase(_PyInterpreterFrame *f) {
-    return (f->localsplus + _PyFrame_GetCode(f)->co_nlocalsplus);
+    return (f->base + _PyFrame_GetCode(f)->co_nlocalsplus);
 }
 
 #define FRAME_SPECIALS_SIZE ((int)((sizeof(_PyInterpreterFrame)-1)/sizeof(PyObject *)))
@@ -151,7 +151,7 @@ _PyFrame_NumSlotsForCodeObject(PyCodeObject *code)
 static inline _PyStackRef *
 _PyFrame_Slots(_PyInterpreterFrame *f)
 {
-    return f->localsplus;
+    return f->base;
 }
 
 /* co_nlocalsplus + co_stacksize: the number of slots of f */
@@ -172,8 +172,8 @@ _PyFrame_SetReturnValue(_PyInterpreterFrame *f, _PyStackRef v)
         assert(f->return_slot < _PyFrame_NumSlots(f));
     }
 #endif
-    assert(PyStackRef_IsNull(f->localsplus[f->return_slot]));
-    f->localsplus[f->return_slot] = v;
+    assert(PyStackRef_IsNull(f->base[f->return_slot]));
+    f->base[f->return_slot] = v;
 }
 
 /* Release the temporaries of f from slot first on and leave them NULL */
@@ -182,9 +182,9 @@ _PyFrame_ClearTemporaries(_PyInterpreterFrame *f, int first)
 {
     int nslots = _PyFrame_NumSlots(f);
     for (int i = first; i < nslots; i++) {
-        _PyStackRef ref = f->localsplus[i];
+        _PyStackRef ref = f->base[i];
         if (!PyStackRef_IsNull(ref)) {
-            f->localsplus[i] = PyStackRef_NULL;
+            f->base[i] = PyStackRef_NULL;
             PyStackRef_CLOSE(ref);
         }
     }
@@ -197,7 +197,7 @@ _PyFrame_AssertTemporariesClear(_PyInterpreterFrame *f)
 #ifdef Py_DEBUG
     int nslots = _PyFrame_NumSlots(f);
     for (int i = _PyFrame_GetCode(f)->co_nlocalsplus; i < nslots; i++) {
-        assert(PyStackRef_IsNull(f->localsplus[i]));
+        assert(PyStackRef_IsNull(f->base[i]));
     }
 #else
     (void)f;
@@ -210,6 +210,7 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
     // closes src->f_executable
     int nslots = _PyFrame_NumSlots(src);
     dest->f_executable = PyStackRef_MakeHeapSafe(src->f_executable);
+    dest->base = dest->owned_slots;
     // Don't leave a dangling pointer to the old frame when creating generators
     // and coroutines:
     dest->previous = NULL;
@@ -231,7 +232,7 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
     dest->lltrace = src->lltrace;
 #endif
     for (int i = 0; i < nslots; i++) {
-        dest->localsplus[i] = PyStackRef_MakeHeapSafe(src->localsplus[i]);
+        dest->base[i] = PyStackRef_MakeHeapSafe(src->base[i]);
     }
 }
 
@@ -243,9 +244,11 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
 static inline void
 _PyFrame_Initialize(
     PyThreadState *tstate, _PyInterpreterFrame *frame, _PyStackRef func,
-    PyObject *locals, PyCodeObject *code, int null_locals_from, _PyInterpreterFrame *previous)
+    PyObject *locals, PyCodeObject *code, _PyStackRef *base,
+    int null_locals_from, _PyInterpreterFrame *previous)
 {
     frame->previous = previous;
+    frame->base = base;
     frame->f_funcobj = func;
     frame->f_executable = PyStackRef_FromPyObjectNew(code);
     PyFunctionObject *func_obj = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(func);
@@ -264,7 +267,7 @@ _PyFrame_Initialize(
 
     int nslots = _PyFrame_NumSlotsForCodeObject(code);
     for (int i = null_locals_from; i < nslots; i++) {
-        frame->localsplus[i] = PyStackRef_NULL;
+        frame->base[i] = PyStackRef_NULL;
     }
 }
 
@@ -274,7 +277,7 @@ _PyFrame_Initialize(
 static inline _PyStackRef*
 _PyFrame_GetLocalsArray(_PyInterpreterFrame *frame)
 {
-    return frame->localsplus;
+    return frame->base;
 }
 
 /* Determine whether a frame is incomplete.
@@ -414,8 +417,8 @@ _PyFrame_PushUnchecked(PyThreadState *tstate, _PyStackRef func, int null_locals_
     _PyInterpreterFrame *new_frame = (_PyInterpreterFrame *)tstate->datastack_top;
     tstate->datastack_top += code->co_framesize;
     assert(tstate->datastack_top < tstate->datastack_limit);
-    _PyFrame_Initialize(tstate, new_frame, func, NULL, code, null_locals_from,
-                        previous);
+    _PyFrame_Initialize(tstate, new_frame, func, NULL, code,
+                        new_frame->owned_slots, null_locals_from, previous);
     return new_frame;
 }
 
@@ -429,6 +432,7 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     tstate->datastack_top += code->co_framesize;
     assert(tstate->datastack_top < tstate->datastack_limit);
     frame->previous = previous;
+    frame->base = frame->owned_slots;
     frame->f_funcobj = PyStackRef_None;
     frame->f_executable = PyStackRef_FromPyObjectNew(code);
 #ifdef Py_DEBUG
@@ -447,7 +451,7 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     assert(return_slot < nslots);
     frame->return_slot = (uint16_t)return_slot;
     for (int i = 0; i < nslots; i++) {
-        frame->localsplus[i] = PyStackRef_NULL;
+        frame->base[i] = PyStackRef_NULL;
     }
     return frame;
 }

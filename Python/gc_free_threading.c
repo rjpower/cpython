@@ -266,8 +266,8 @@ frame_disable_deferred_refcounting(_PyInterpreterFrame *frame)
     }
 
     frame->f_funcobj = PyStackRef_AsStrongReference(frame->f_funcobj);
-    _PyStackRef *end = frame->localsplus + _PyFrame_NumSlots(frame);
-    for (_PyStackRef *ref = frame->localsplus; ref < end; ref++) {
+    _PyStackRef *end = frame->base + _PyFrame_NumSlots(frame);
+    for (_PyStackRef *ref = frame->base; ref < end; ref++) {
         if (PyStackRef_IsObject(*ref) && !PyStackRef_RefcountOnObject(*ref)) {
             *ref = PyStackRef_AsStrongReference(*ref);
         }
@@ -461,9 +461,9 @@ gc_visit_thread_stacks(PyInterpreterState *interp, struct collection_state *stat
                 continue;
             }
 
-            _PyStackRef *top = f->localsplus + _PyFrame_NumSlots(f);
+            _PyStackRef *top = f->base + _PyFrame_NumSlots(f);
             gc_visit_stackref(f->f_executable);
-            while (top != f->localsplus) {
+            while (top != f->base) {
                 --top;
                 gc_visit_stackref(*top);
             }
@@ -850,12 +850,12 @@ gc_visit_thread_stacks_mark_alive(PyInterpreterState *interp, gc_mark_args_t *ar
                 continue;
             }
 
-            _PyStackRef *top = f->localsplus + _PyFrame_NumSlots(f);
+            _PyStackRef *top = f->base + _PyFrame_NumSlots(f);
             if (gc_visit_stackref_mark_alive(args, f->f_executable) < 0) {
                 err = -1;
                 goto exit;
             }
-            while (top != f->localsplus) {
+            while (top != f->base) {
                 --top;
                 if (gc_visit_stackref_mark_alive(args, *top) < 0) {
                     err = -1;

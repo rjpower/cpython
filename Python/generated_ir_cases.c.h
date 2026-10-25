@@ -3350,8 +3350,8 @@
                 sub = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
                 STAT_INC(BINARY_OP, hit);
                 _PyInterpreterFrame* pushed_frame = _PyFrame_PushUnchecked(tstate, getitem, 2, frame);
-                pushed_frame->localsplus[0] = container;
-                pushed_frame->localsplus[1] = sub;
+                pushed_frame->base[0] = container;
+                pushed_frame->base[1] = sub;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
@@ -4968,7 +4968,7 @@
                     tstate, (PyCodeObject *)&_Py_InitCleanup, 1, frame);
                 assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 1) == EXIT_INIT_CHECK);
                 assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 2) == RETURN_VALUE);
-                shim->localsplus[0] = _PyStackRef_DUP_POINTER(self);
+                shim->base[0] = _PyStackRef_DUP_POINTER(self);
                 _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
                     tstate, init, NULL, args-1, oparg+1, NULL, shim);
                 IR_CLEAR_SLOTS(&window[0], 2 + oparg);
@@ -5112,8 +5112,8 @@
                 int has_self = !PyStackRef_IsNull(self_or_null);
                 STAT_INC(CALL, hit);
                 _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
-                _PyStackRef *first_non_self_local = pushed_frame->localsplus + has_self;
-                pushed_frame->localsplus[0] = self_or_null;
+                _PyStackRef *first_non_self_local = pushed_frame->base + has_self;
+                pushed_frame->base[0] = self_or_null;
                 for (int i = 0; i < oparg; i++) {
                     first_non_self_local[i] = args[i];
                 }
@@ -7512,8 +7512,8 @@
                 int has_self = !PyStackRef_IsNull(self_or_null);
                 STAT_INC(CALL, hit);
                 _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
-                _PyStackRef *first_non_self_local = pushed_frame->localsplus + has_self;
-                pushed_frame->localsplus[0] = self_or_null;
+                _PyStackRef *first_non_self_local = pushed_frame->base + has_self;
+                pushed_frame->base[0] = self_or_null;
                 for (int i = 0; i < oparg; i++) {
                     first_non_self_local[i] = args[i];
                 }
@@ -8894,7 +8894,7 @@
             int offset = co->co_nlocalsplus - oparg;
             for (int i = 0; i < oparg; ++i) {
                 PyObject *o = PyTuple_GET_ITEM(closure, i);
-                frame->localsplus[offset + i] = PyStackRef_FromPyObjectNew(o);
+                frame->base[offset + i] = PyStackRef_FromPyObjectNew(o);
             }
             DISPATCH();
         }
@@ -12128,9 +12128,9 @@
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(
                     tstate, PyStackRef_FromPyObjectNew(f), 2, frame);
-                pushed_frame->localsplus[0] = owner;
+                pushed_frame->base[0] = owner;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                pushed_frame->localsplus[1] = PyStackRef_FromPyObjectNew(name);
+                pushed_frame->base[1] = PyStackRef_FromPyObjectNew(name);
                 new_frame = PyStackRef_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -12771,7 +12771,7 @@
                 }
                 STAT_INC(LOAD_ATTR, hit);
                 _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyStackRef_FromPyObjectNew(fget), 1, frame);
-                pushed_frame->localsplus[0] = owner;
+                pushed_frame->base[0] = owner;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 new_frame = PyStackRef_Wrap(pushed_frame);
             }

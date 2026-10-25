@@ -1129,10 +1129,10 @@ class PyFramePtr:
 
         obj_ptr_ptr = gdb.lookup_type("PyObject").pointer().pointer()
 
-        localsplus = self._gdbval["localsplus"]
+        slots = self._gdbval["base"]
 
         for i in safe_range(self.co_nlocals):
-            pyop_value = PyObjectPtr.from_pyobject_ptr(localsplus[i])
+            pyop_value = PyObjectPtr.from_pyobject_ptr(slots[i])
             if pyop_value.is_null():
                 continue
             pyop_name = PyObjectPtr.from_pyobject_ptr(self.co_localsplusnames[i])

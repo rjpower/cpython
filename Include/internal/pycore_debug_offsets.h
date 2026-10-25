@@ -131,7 +131,7 @@ typedef struct _Py_DebugOffsets {
         uint64_t executable;
         uint64_t instr_ptr;
         uint64_t ir_words;
-        uint64_t localsplus;
+        uint64_t owned_slots;
         uint64_t owner;
         uint64_t return_slot;
         uint64_t tlbc_index;
@@ -323,7 +323,7 @@ typedef struct _Py_DebugOffsets {
         .executable = offsetof(_PyInterpreterFrame, f_executable), \
         .instr_ptr = offsetof(_PyInterpreterFrame, instr_ptr), \
         .ir_words = offsetof(_PyInterpreterFrame, ir_words), \
-        .localsplus = offsetof(_PyInterpreterFrame, localsplus), \
+        .owned_slots = offsetof(_PyInterpreterFrame, owned_slots), \
         .owner = offsetof(_PyInterpreterFrame, owner), \
         .return_slot = offsetof(_PyInterpreterFrame, return_slot), \
         .tlbc_index = _Py_Debug_interpreter_frame_tlbc_index, \

@@ -1534,7 +1534,8 @@ init_threadstate(_PyThreadStateImpl *_tstate,
 #ifdef Py_GIL_DISABLED
     _tstate->base_frame.tlbc_index = 0;
 #endif
-    _tstate->base_frame.localsplus[0] = PyStackRef_NULL;
+    _tstate->base_frame.base = _tstate->base_frame.owned_slots;
+    _tstate->base_frame.owned_slots[0] = PyStackRef_NULL;
 
     // current_frame starts pointing to the base frame
     tstate->current_frame = &_tstate->base_frame;

@@ -1820,9 +1820,9 @@ class SizeofTest(unittest.TestCase):
             return sys._getframe()
         x = func()
         if support.Py_GIL_DISABLED:
-            INTERPRETER_FRAME = '10PihhcP'
+            INTERPRETER_FRAME = '11PihccP'
         else:
-            INTERPRETER_FRAME = '10PhhcP'
+            INTERPRETER_FRAME = '11PhccP'
         check(x, size('3PiccPPPP' + INTERPRETER_FRAME + 'P'))
         # function
         def func(): pass

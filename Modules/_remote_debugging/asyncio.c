@@ -322,15 +322,16 @@ get_awaited_coro_address(
     }
 
     /* The receiver of the SEND whose yield suspended the frame is two
-     * slots below the slot of the yielded value, return_slot */
+     * slots below the slot of the yielded value, return_slot.  A generator
+     * keeps its slots in its frame, in owned_slots. */
     uint16_t return_slot = GET_MEMBER(uint16_t, iframe, unwinder->debug_offsets.interpreter_frame.return_slot);
 
     if (return_slot >= 2) {
-        uintptr_t localsplus_addr = gi_iframe_addr
-            + (uintptr_t)unwinder->debug_offsets.interpreter_frame.localsplus;
+        uintptr_t slots_addr = gi_iframe_addr
+            + (uintptr_t)unwinder->debug_offsets.interpreter_frame.owned_slots;
         err = read_py_ptr(
             unwinder,
-            localsplus_addr + sizeof(void*) * (return_slot - 2),
+            slots_addr + sizeof(void*) * (return_slot - 2),
             next_coro);
         if (err) {
             set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to read gi_await address");

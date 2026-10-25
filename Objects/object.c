@@ -2866,7 +2866,7 @@ PyUnstable_Object_IsUniqueReferencedTemporary(PyObject *op)
 
     /* The temporaries; NULL ones are not objects */
     _PyStackRef *base = _PyFrame_Stackbase(frame);
-    _PyStackRef *stackpointer = frame->localsplus + _PyFrame_NumSlots(frame);
+    _PyStackRef *stackpointer = frame->base + _PyFrame_NumSlots(frame);
     while (stackpointer > base) {
         stackpointer--;
         _PyStackRef ref = *stackpointer;

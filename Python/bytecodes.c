@@ -1306,8 +1306,8 @@ dummy_func(
         op(_BINARY_OP_SUBSCR_INIT_CALL, (container, sub, getitem -- new_frame)) {
             STAT_INC(BINARY_OP, hit);
             _PyInterpreterFrame* pushed_frame = _PyFrame_PushUnchecked(tstate, getitem, 2, frame);
-            pushed_frame->localsplus[0] = container;
-            pushed_frame->localsplus[1] = sub;
+            pushed_frame->base[0] = container;
+            pushed_frame->base[1] = sub;
             INPUTS_DEAD();
             frame->return_slot = (uint16_t)IR_DST_SLOT;
             new_frame = PyStackRef_Wrap(pushed_frame);
@@ -2275,7 +2275,7 @@ dummy_func(
             int offset = co->co_nlocalsplus - oparg;
             for (int i = 0; i < oparg; ++i) {
                 PyObject *o = PyTuple_GET_ITEM(closure, i);
-                frame->localsplus[offset + i] = PyStackRef_FromPyObjectNew(o);
+                frame->base[offset + i] = PyStackRef_FromPyObjectNew(o);
             }
         }
 
@@ -2908,7 +2908,7 @@ dummy_func(
             EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));
             STAT_INC(LOAD_ATTR, hit);
             _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyStackRef_FromPyObjectNew(fget), 1, frame);
-            pushed_frame->localsplus[0] = owner;
+            pushed_frame->base[0] = owner;
             DEAD(owner);
             new_frame = PyStackRef_Wrap(pushed_frame);
         }
@@ -2934,9 +2934,9 @@ dummy_func(
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
             _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(
                 tstate, PyStackRef_FromPyObjectNew(f), 2, frame);
-            pushed_frame->localsplus[0] = owner;
+            pushed_frame->base[0] = owner;
             DEAD(owner);
-            pushed_frame->localsplus[1] = PyStackRef_FromPyObjectNew(name);
+            pushed_frame->base[1] = PyStackRef_FromPyObjectNew(name);
             new_frame = PyStackRef_Wrap(pushed_frame);
         }
 
@@ -4335,8 +4335,8 @@ dummy_func(
             int has_self = !PyStackRef_IsNull(self_or_null);
             STAT_INC(CALL, hit);
             _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
-            _PyStackRef *first_non_self_local = pushed_frame->localsplus + has_self;
-            pushed_frame->localsplus[0] = self_or_null;
+            _PyStackRef *first_non_self_local = pushed_frame->base + has_self;
+            pushed_frame->base[0] = self_or_null;
             for (int i = 0; i < oparg; i++) {
                 first_non_self_local[i] = args[i];
             }
@@ -4508,7 +4508,7 @@ dummy_func(
             assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 1) == EXIT_INIT_CHECK);
             assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 2) == RETURN_VALUE);
             /* Push self onto stack of shim */
-            shim->localsplus[0] = PyStackRef_DUP(self);
+            shim->base[0] = PyStackRef_DUP(self);
             _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
                 tstate, init, NULL, args-1, oparg+1, NULL, shim);
             DEAD(init);

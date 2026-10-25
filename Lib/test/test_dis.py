@@ -55,8 +55,7 @@ dis_c_instance_method = """\
 %3d           LOAD_FAST_BORROW         1 (x)  r2 <-
               LOAD_SMALL_INT           1  r3 <-
               COMPARE_OP              72 (==)  r2 <- r2, r3
-              LOAD_FAST_BORROW         0 (self)  r3 <-
-              STORE_ATTR               0 (x)  <- r3, r2
+              STORE_ATTR               0 (x)  <- r0, r2
               LOAD_COMMON_CONSTANT     7 (None)  r2 <-
               RETURN_VALUE          r2 <- r2
 """ % (_C.__init__.__code__.co_firstlineno, _C.__init__.__code__.co_firstlineno + 1,)
@@ -66,8 +65,7 @@ dis_c_instance_method_bytes = """\
           LOAD_FAST_BORROW         1  r2 <-
           LOAD_SMALL_INT           1  r3 <-
           COMPARE_OP            r2 <- r2, r3
-          LOAD_FAST_BORROW         0  r3 <-
-          STORE_ATTR            <- r3, r2
+          STORE_ATTR            <- r0, r2
           LOAD_COMMON_CONSTANT     7 (None)  r2 <-
           RETURN_VALUE          r2 <- r2
 """
@@ -78,8 +76,7 @@ dis_c_class_method = """\
 %3d           LOAD_FAST_BORROW         1 (x)  r2 <-
               LOAD_SMALL_INT           1  r3 <-
               COMPARE_OP              72 (==)  r2 <- r2, r3
-              LOAD_FAST_BORROW         0 (cls)  r3 <-
-              STORE_ATTR               0 (x)  <- r3, r2
+              STORE_ATTR               0 (x)  <- r0, r2
               LOAD_COMMON_CONSTANT     7 (None)  r2 <-
               RETURN_VALUE          r2 <- r2
 """ % (_C.cm.__code__.co_firstlineno, _C.cm.__code__.co_firstlineno + 2,)
@@ -509,19 +506,16 @@ def _fstring(a, b, c, d):
 dis_fstring = """\
 %3d           RESUME                   0
 
-%3d           LOAD_FAST_BORROW         0 (a)  r4 <-
-              FORMAT_SIMPLE         r4 <- r4
+%3d           FORMAT_SIMPLE         r4 <- r0
               LOAD_CONST               0 (' ')  r5 <-
               LOAD_FAST_BORROW         1 (b)  r6 <-
               LOAD_CONST               1 ('4')  r7 <-
               FORMAT_WITH_SPEC      r6 <- r6, r7
               LOAD_CONST               0 (' ')  r7 <-
-              LOAD_FAST_BORROW         2 (c)  r8 <-
-              CONVERT_VALUE            2 (repr)  r8 <- r8
+              CONVERT_VALUE            2 (repr)  r8 <- r2
               FORMAT_SIMPLE         r8 <- r8
               LOAD_CONST               0 (' ')  r9 <-
-              LOAD_FAST_BORROW         3 (d)  r10 <-
-              CONVERT_VALUE            2 (repr)  r10 <- r10
+              CONVERT_VALUE            2 (repr)  r10 <- r3
               LOAD_CONST               1 ('4')  r11 <-
               FORMAT_WITH_SPEC      r10 <- r10, r11
               BUILD_STRING             7  r4 <- r4
@@ -878,11 +872,10 @@ Disassembly of <code object <genexpr> at 0x..., file "%s", line %d>:
                RETURN_GENERATOR      r5 <- r5
                POP_TOP               <- r5
        L1:     RESUME                   0
-       L2:     FOR_ITER                 8 (to L3)  r5 <- r3
+       L2:     FOR_ITER                 7 (to L3)  r5 <- r3
                STORE_FAST               1 (z)  <- r5
                LOAD_DEREF               2 (x)  r5 <-
-               LOAD_FAST_BORROW         1 (z)  r6 <-
-               BINARY_OP                0 (+)  r5 <- r5, r6
+               BINARY_OP                0 (+)  r5 <- r5, r1
                YIELD_VALUE              0  r5 <- r5
                RESUME                   9
                POP_TOP               <- r5
@@ -909,10 +902,13 @@ def load_test(x, y=0):
 dis_load_test_quickened_code = """\
 %3d           RESUME_CHECK             0
 
-%3d           LOAD_FAST_LOAD_FAST      1 (x, y)  r4 <-
-              STORE_FAST_STORE_FAST   50 (b, a)  <- r4, r5
+%3d           LOAD_FAST                0 (x)  r4 <-
+              LOAD_FAST                1 (y)  r5 <-
+              STORE_FAST               3 (b)  <- r5
+              STORE_FAST               2 (a)  <- r4
 
-%3d           LOAD_FAST_BORROW_LOAD_FAST_BORROW 35 (a, b)  r4 <-
+%3d           LOAD_FAST_BORROW         2 (a)  r4 <-
+              LOAD_FAST_BORROW         3 (b)  r5 <-
               BUILD_TUPLE              2  r4 <- r4
               RETURN_VALUE          r4 <- r4
 """ % (load_test.__code__.co_firstlineno,
@@ -1796,25 +1792,26 @@ expected_opinfo_outer = [
   make_inst(opname='MAKE_CELL', arg=1, argval='b', argrepr='b', offset=1, start_offset=1, starts_line=False, line_number=None),
   make_inst(opname='RESUME', arg=0, argval=0, argrepr='', offset=2, start_offset=2, starts_line=True, line_number=1),
   make_inst(opname='LOAD_CONST', arg=3, argval=(3, 4), argrepr='(3, 4)', offset=3, start_offset=3, starts_line=True, line_number=2, dst=3),
-  make_inst(opname='LOAD_FAST_BORROW_LOAD_FAST_BORROW', arg=1, argval=('a', 'b'), argrepr='a, b', offset=4, start_offset=4, starts_line=False, line_number=2, dst=4),
-  make_inst(opname='BUILD_TUPLE', arg=2, argval=2, argrepr='', offset=5, start_offset=5, starts_line=False, line_number=2, dst=4, srcs=(4,)),
-  make_inst(opname='LOAD_CONST', arg=1, argval=code_object_f, argrepr=repr(code_object_f), offset=6, start_offset=6, starts_line=False, line_number=2, dst=5),
-  make_inst(opname='MAKE_FUNCTION', arg=None, argval=None, argrepr='', offset=7, start_offset=7, starts_line=False, line_number=2, dst=5, srcs=(5,)),
-  make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=8, argval=8, argrepr='closure', offset=8, start_offset=8, starts_line=False, line_number=2, dst=4, srcs=(4, 5)),
-  make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=1, argval=1, argrepr='defaults', offset=9, start_offset=9, starts_line=False, line_number=2, dst=3, srcs=(3, 4)),
-  make_inst(opname='STORE_FAST', arg=2, argval='f', argrepr='f', offset=10, start_offset=10, starts_line=False, line_number=2, srcs=(3,)),
-  make_inst(opname='LOAD_GLOBAL', arg=1, argval='print', argrepr='print + NULL', offset=11, start_offset=11, starts_line=True, line_number=7, dst=3, fb=1, cache_info=[('kind', 1, b'\x05'), ('arg', 3, b'\x01\x00\x00')]),
-  make_inst(opname='LOAD_DEREF', arg=0, argval='a', argrepr='a', offset=12, start_offset=12, starts_line=False, line_number=7, dst=5),
-  make_inst(opname='LOAD_DEREF', arg=1, argval='b', argrepr='b', offset=13, start_offset=13, starts_line=False, line_number=7, dst=6),
-  make_inst(opname='LOAD_COMMON_CONSTANT', arg=8, argval='', argrepr="''", offset=14, start_offset=14, starts_line=False, line_number=7, dst=7),
-  make_inst(opname='LOAD_SMALL_INT', arg=1, argval=1, argrepr='', offset=15, start_offset=15, starts_line=False, line_number=7, handler='LOAD_SMALL_INT_INLINE', dst=8),
-  make_inst(opname='BUILD_LIST', arg=0, argval=0, argrepr='', offset=16, start_offset=16, starts_line=False, line_number=7, dst=9, srcs=(9,)),
-  make_inst(opname='BUILD_MAP', arg=0, argval=0, argrepr='', offset=17, start_offset=17, starts_line=False, line_number=7, dst=10, srcs=(10,)),
-  make_inst(opname='LOAD_CONST', arg=2, argval='Hello world!', argrepr="'Hello world!'", offset=18, start_offset=18, starts_line=False, line_number=7, dst=11),
-  make_inst(opname='CALL', arg=7, argval=7, argrepr='', offset=19, start_offset=19, starts_line=False, line_number=7, dst=3, srcs=(3,), fb=2, cache_info=[('kind', 1, b'\x06'), ('arg', 3, b'\x07\x00\x00')]),
-  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=20, start_offset=20, starts_line=False, line_number=7, srcs=(3,)),
-  make_inst(opname='LOAD_FAST_BORROW', arg=2, argval='f', argrepr='f', offset=21, start_offset=21, starts_line=True, line_number=8, dst=3),
-  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=22, start_offset=22, starts_line=False, line_number=8, dst=3, srcs=(3,)),
+  make_inst(opname='LOAD_FAST_BORROW', arg=0, argval='a', argrepr='a', offset=4, start_offset=4, starts_line=False, line_number=2, dst=4),
+  make_inst(opname='LOAD_FAST_BORROW', arg=1, argval='b', argrepr='b', offset=5, start_offset=5, starts_line=False, line_number=2, dst=5),
+  make_inst(opname='BUILD_TUPLE', arg=2, argval=2, argrepr='', offset=6, start_offset=6, starts_line=False, line_number=2, dst=4, srcs=(4,)),
+  make_inst(opname='LOAD_CONST', arg=1, argval=code_object_f, argrepr=repr(code_object_f), offset=7, start_offset=7, starts_line=False, line_number=2, dst=5),
+  make_inst(opname='MAKE_FUNCTION', arg=None, argval=None, argrepr='', offset=8, start_offset=8, starts_line=False, line_number=2, dst=5, srcs=(5,)),
+  make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=8, argval=8, argrepr='closure', offset=9, start_offset=9, starts_line=False, line_number=2, dst=4, srcs=(4, 5)),
+  make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=1, argval=1, argrepr='defaults', offset=10, start_offset=10, starts_line=False, line_number=2, dst=3, srcs=(3, 4)),
+  make_inst(opname='STORE_FAST', arg=2, argval='f', argrepr='f', offset=11, start_offset=11, starts_line=False, line_number=2, srcs=(3,)),
+  make_inst(opname='LOAD_GLOBAL', arg=1, argval='print', argrepr='print + NULL', offset=12, start_offset=12, starts_line=True, line_number=7, dst=3, fb=1, cache_info=[('kind', 1, b'\x05'), ('arg', 3, b'\x01\x00\x00')]),
+  make_inst(opname='LOAD_DEREF', arg=0, argval='a', argrepr='a', offset=13, start_offset=13, starts_line=False, line_number=7, dst=5),
+  make_inst(opname='LOAD_DEREF', arg=1, argval='b', argrepr='b', offset=14, start_offset=14, starts_line=False, line_number=7, dst=6),
+  make_inst(opname='LOAD_COMMON_CONSTANT', arg=8, argval='', argrepr="''", offset=15, start_offset=15, starts_line=False, line_number=7, dst=7),
+  make_inst(opname='LOAD_SMALL_INT', arg=1, argval=1, argrepr='', offset=16, start_offset=16, starts_line=False, line_number=7, handler='LOAD_SMALL_INT_INLINE', dst=8),
+  make_inst(opname='BUILD_LIST', arg=0, argval=0, argrepr='', offset=17, start_offset=17, starts_line=False, line_number=7, dst=9, srcs=(9,)),
+  make_inst(opname='BUILD_MAP', arg=0, argval=0, argrepr='', offset=18, start_offset=18, starts_line=False, line_number=7, dst=10, srcs=(10,)),
+  make_inst(opname='LOAD_CONST', arg=2, argval='Hello world!', argrepr="'Hello world!'", offset=19, start_offset=19, starts_line=False, line_number=7, dst=11),
+  make_inst(opname='CALL', arg=7, argval=7, argrepr='', offset=20, start_offset=20, starts_line=False, line_number=7, dst=3, srcs=(3,), fb=2, cache_info=[('kind', 1, b'\x06'), ('arg', 3, b'\x07\x00\x00')]),
+  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=21, start_offset=21, starts_line=False, line_number=7, srcs=(3,)),
+  make_inst(opname='LOAD_FAST_BORROW', arg=2, argval='f', argrepr='f', offset=22, start_offset=22, starts_line=True, line_number=8, dst=3),
+  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=23, start_offset=23, starts_line=False, line_number=8, dst=3, srcs=(3,)),
 ]
 
 expected_opinfo_f = [
@@ -1823,23 +1820,25 @@ expected_opinfo_f = [
   make_inst(opname='MAKE_CELL', arg=1, argval='d', argrepr='d', offset=2, start_offset=2, starts_line=False, line_number=None),
   make_inst(opname='RESUME', arg=0, argval=0, argrepr='', offset=3, start_offset=3, starts_line=True, line_number=2),
   make_inst(opname='LOAD_CONST', arg=2, argval=(5, 6), argrepr='(5, 6)', offset=4, start_offset=4, starts_line=True, line_number=3, dst=5),
-  make_inst(opname='LOAD_FAST_BORROW_LOAD_FAST_BORROW', arg=52, argval=('a', 'b'), argrepr='a, b', offset=5, start_offset=5, starts_line=False, line_number=3, dst=6),
-  make_inst(opname='LOAD_FAST_BORROW_LOAD_FAST_BORROW', arg=1, argval=('c', 'd'), argrepr='c, d', offset=6, start_offset=6, starts_line=False, line_number=3, dst=8),
-  make_inst(opname='BUILD_TUPLE', arg=4, argval=4, argrepr='', offset=7, start_offset=7, starts_line=False, line_number=3, dst=6, srcs=(6,)),
-  make_inst(opname='LOAD_CONST', arg=1, argval=code_object_inner, argrepr=repr(code_object_inner), offset=8, start_offset=8, starts_line=False, line_number=3, dst=7),
-  make_inst(opname='MAKE_FUNCTION', arg=None, argval=None, argrepr='', offset=9, start_offset=9, starts_line=False, line_number=3, dst=7, srcs=(7,)),
-  make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=8, argval=8, argrepr='closure', offset=10, start_offset=10, starts_line=False, line_number=3, dst=6, srcs=(6, 7)),
-  make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=1, argval=1, argrepr='defaults', offset=11, start_offset=11, starts_line=False, line_number=3, dst=5, srcs=(5, 6)),
-  make_inst(opname='STORE_FAST', arg=2, argval='inner', argrepr='inner', offset=12, start_offset=12, starts_line=False, line_number=3, srcs=(5,)),
-  make_inst(opname='LOAD_GLOBAL', arg=1, argval='print', argrepr='print + NULL', offset=13, start_offset=13, starts_line=True, line_number=5, dst=5, fb=1, cache_info=[('kind', 1, b'\x05'), ('arg', 3, b'\x01\x00\x00')]),
-  make_inst(opname='LOAD_DEREF', arg=3, argval='a', argrepr='a', offset=14, start_offset=14, starts_line=False, line_number=5, dst=7),
-  make_inst(opname='LOAD_DEREF', arg=4, argval='b', argrepr='b', offset=15, start_offset=15, starts_line=False, line_number=5, dst=8),
-  make_inst(opname='LOAD_DEREF', arg=0, argval='c', argrepr='c', offset=16, start_offset=16, starts_line=False, line_number=5, dst=9),
-  make_inst(opname='LOAD_DEREF', arg=1, argval='d', argrepr='d', offset=17, start_offset=17, starts_line=False, line_number=5, dst=10),
-  make_inst(opname='CALL', arg=4, argval=4, argrepr='', offset=18, start_offset=18, starts_line=False, line_number=5, dst=5, srcs=(5,), fb=2, cache_info=[('kind', 1, b'\x06'), ('arg', 3, b'\x04\x00\x00')]),
-  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=19, start_offset=19, starts_line=False, line_number=5, srcs=(5,)),
-  make_inst(opname='LOAD_FAST_BORROW', arg=2, argval='inner', argrepr='inner', offset=20, start_offset=20, starts_line=True, line_number=6, dst=5),
-  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=21, start_offset=21, starts_line=False, line_number=6, dst=5, srcs=(5,)),
+  make_inst(opname='LOAD_FAST_BORROW', arg=3, argval='a', argrepr='a', offset=5, start_offset=5, starts_line=False, line_number=3, dst=6),
+  make_inst(opname='LOAD_FAST_BORROW', arg=4, argval='b', argrepr='b', offset=6, start_offset=6, starts_line=False, line_number=3, dst=7),
+  make_inst(opname='LOAD_FAST_BORROW', arg=0, argval='c', argrepr='c', offset=7, start_offset=7, starts_line=False, line_number=3, dst=8),
+  make_inst(opname='LOAD_FAST_BORROW', arg=1, argval='d', argrepr='d', offset=8, start_offset=8, starts_line=False, line_number=3, dst=9),
+  make_inst(opname='BUILD_TUPLE', arg=4, argval=4, argrepr='', offset=9, start_offset=9, starts_line=False, line_number=3, dst=6, srcs=(6,)),
+  make_inst(opname='LOAD_CONST', arg=1, argval=code_object_inner, argrepr=repr(code_object_inner), offset=10, start_offset=10, starts_line=False, line_number=3, dst=7),
+  make_inst(opname='MAKE_FUNCTION', arg=None, argval=None, argrepr='', offset=11, start_offset=11, starts_line=False, line_number=3, dst=7, srcs=(7,)),
+  make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=8, argval=8, argrepr='closure', offset=12, start_offset=12, starts_line=False, line_number=3, dst=6, srcs=(6, 7)),
+  make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=1, argval=1, argrepr='defaults', offset=13, start_offset=13, starts_line=False, line_number=3, dst=5, srcs=(5, 6)),
+  make_inst(opname='STORE_FAST', arg=2, argval='inner', argrepr='inner', offset=14, start_offset=14, starts_line=False, line_number=3, srcs=(5,)),
+  make_inst(opname='LOAD_GLOBAL', arg=1, argval='print', argrepr='print + NULL', offset=15, start_offset=15, starts_line=True, line_number=5, dst=5, fb=1, cache_info=[('kind', 1, b'\x05'), ('arg', 3, b'\x01\x00\x00')]),
+  make_inst(opname='LOAD_DEREF', arg=3, argval='a', argrepr='a', offset=16, start_offset=16, starts_line=False, line_number=5, dst=7),
+  make_inst(opname='LOAD_DEREF', arg=4, argval='b', argrepr='b', offset=17, start_offset=17, starts_line=False, line_number=5, dst=8),
+  make_inst(opname='LOAD_DEREF', arg=0, argval='c', argrepr='c', offset=18, start_offset=18, starts_line=False, line_number=5, dst=9),
+  make_inst(opname='LOAD_DEREF', arg=1, argval='d', argrepr='d', offset=19, start_offset=19, starts_line=False, line_number=5, dst=10),
+  make_inst(opname='CALL', arg=4, argval=4, argrepr='', offset=20, start_offset=20, starts_line=False, line_number=5, dst=5, srcs=(5,), fb=2, cache_info=[('kind', 1, b'\x06'), ('arg', 3, b'\x04\x00\x00')]),
+  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=21, start_offset=21, starts_line=False, line_number=5, srcs=(5,)),
+  make_inst(opname='LOAD_FAST_BORROW', arg=2, argval='inner', argrepr='inner', offset=22, start_offset=22, starts_line=True, line_number=6, dst=5),
+  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=23, start_offset=23, starts_line=False, line_number=6, dst=5, srcs=(5,)),
 ]
 
 expected_opinfo_inner = [
@@ -1850,11 +1849,12 @@ expected_opinfo_inner = [
   make_inst(opname='LOAD_DEREF', arg=3, argval='b', argrepr='b', offset=4, start_offset=4, starts_line=False, line_number=4, dst=9),
   make_inst(opname='LOAD_DEREF', arg=4, argval='c', argrepr='c', offset=5, start_offset=5, starts_line=False, line_number=4, dst=10),
   make_inst(opname='LOAD_DEREF', arg=5, argval='d', argrepr='d', offset=6, start_offset=6, starts_line=False, line_number=4, dst=11),
-  make_inst(opname='LOAD_FAST_BORROW_LOAD_FAST_BORROW', arg=1, argval=('e', 'f'), argrepr='e, f', offset=7, start_offset=7, starts_line=False, line_number=4, dst=12),
-  make_inst(opname='CALL', arg=6, argval=6, argrepr='', offset=8, start_offset=8, starts_line=False, line_number=4, dst=6, srcs=(6,), fb=2, cache_info=[('kind', 1, b'\x06'), ('arg', 3, b'\x06\x00\x00')]),
-  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=9, start_offset=9, starts_line=False, line_number=4, srcs=(6,)),
-  make_inst(opname='LOAD_COMMON_CONSTANT', arg=7, argval=None, argrepr='None', offset=10, start_offset=10, starts_line=False, line_number=4, dst=6),
-  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=11, start_offset=11, starts_line=False, line_number=4, dst=6, srcs=(6,)),
+  make_inst(opname='LOAD_FAST_BORROW', arg=0, argval='e', argrepr='e', offset=7, start_offset=7, starts_line=False, line_number=4, dst=12),
+  make_inst(opname='LOAD_FAST_BORROW', arg=1, argval='f', argrepr='f', offset=8, start_offset=8, starts_line=False, line_number=4, dst=13),
+  make_inst(opname='CALL', arg=6, argval=6, argrepr='', offset=9, start_offset=9, starts_line=False, line_number=4, dst=6, srcs=(6,), fb=2, cache_info=[('kind', 1, b'\x06'), ('arg', 3, b'\x06\x00\x00')]),
+  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=10, start_offset=10, starts_line=False, line_number=4, srcs=(6,)),
+  make_inst(opname='LOAD_COMMON_CONSTANT', arg=7, argval=None, argrepr='None', offset=11, start_offset=11, starts_line=False, line_number=4, dst=6),
+  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=12, start_offset=12, starts_line=False, line_number=4, dst=6, srcs=(6,)),
 ]
 
 expected_opinfo_jumpy = [

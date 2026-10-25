@@ -853,7 +853,10 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         def f():
             x = 1
             y = x + x
-        self.assertInBytecode(f, 'LOAD_FAST_BORROW_LOAD_FAST_BORROW')
+        # Both borrowed loads fold into the add, which reads x twice
+        self.assertNotInBytecode(f, 'LOAD_FAST_CHECK')
+        add = [i for i in dis.get_instructions(f) if i.opname == 'BINARY_OP'][0]
+        self.assertEqual(add.srcs, (0, 0))
 
     def test_store_fast_load_fast_borrow(self):
         # gh-159493: a LOAD_FAST that can borrow must not be fused into
@@ -868,7 +871,10 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         for func in (f, g):
             with self.subTest(func=func.__name__):
                 self.assertNotInBytecode(func, 'STORE_FAST_LOAD_FAST')
-                self.assertInBytecode(func, 'LOAD_FAST_BORROW', 'shared')
+                # The borrowed load folds into the POP_TOP that reads it
+                pop = [i for i in dis.get_instructions(func)
+                       if i.opname == 'POP_TOP'][0]
+                self.assertEqual(pop.srcs, (0,))
         self.assertEqual([i.opname for i in dis.get_instructions(f)],
                          [i.opname for i in dis.get_instructions(g)])
 
@@ -876,9 +882,8 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         def f(x):
             y = x; z = y
             return z
-        # The load of y is stored into z, so it needs a strong reference and
-        # can still be fused.
-        self.assertInBytecode(f, 'STORE_FAST_LOAD_FAST', ('y', 'y'))
+        # The load of y is stored into z, so it needs a strong reference
+        self.assertInBytecode(f, 'LOAD_FAST', 'y')
 
     def test_load_fast_unknown_simple(self):
         def f():
@@ -982,7 +987,8 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
                 print(a00, a01, a62, a63)
                 print(a64, a65, a78, a79)
 
-        self.assertInBytecode(f, 'LOAD_FAST_BORROW_LOAD_FAST_BORROW', ("a00", "a01"))
+        self.assertInBytecode(f, 'LOAD_FAST_BORROW', "a00")
+        self.assertInBytecode(f, 'LOAD_FAST_BORROW', "a01")
         self.assertNotInBytecode(f, 'LOAD_FAST_CHECK', "a00")
         self.assertNotInBytecode(f, 'LOAD_FAST_CHECK', "a01")
         for i in 62, 63:
@@ -1154,7 +1160,9 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             self.x
             from heapq import heapify_max
             print(heapify_max)
-        self.assertInBytecode(f, "LOAD_FAST_BORROW", "self")
+        # The borrowed load of self folds into LOAD_ATTR
+        attr = [i for i in dis.get_instructions(f) if i.opname == 'LOAD_ATTR'][0]
+        self.assertEqual(attr.srcs, (0,))
 
 class DirectCfgOptimizerTests(CfgOptimizationTestCase):
 

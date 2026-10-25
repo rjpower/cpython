@@ -2689,60 +2689,6 @@ optimize_cfg(cfg_builder *g, PyObject *consts, PyObject *const_cache,
     return SUCCESS;
 }
 
-static void
-make_super_instruction(cfg_instr *inst1, cfg_instr *inst2, int super_op)
-{
-    int32_t line1 = inst1->i_loc.lineno;
-    int32_t line2 = inst2->i_loc.lineno;
-    /* Skip if instructions are on different lines */
-    if (line1 >= 0 && line2 >= 0 && line1 != line2) {
-        return;
-    }
-    if (inst1->i_oparg >= 16 || inst2->i_oparg >= 16) {
-        return;
-    }
-    INSTR_SET_OP1(inst1, super_op, (inst1->i_oparg << 4) | inst2->i_oparg);
-    INSTR_SET_OP0(inst2, NOP);
-}
-
-static int
-insert_superinstructions(cfg_builder *g)
-{
-    for (basicblock *b = g->g_entryblock; b != NULL; b = b->b_next) {
-
-        for (int i = 0; i < b->b_iused; i++) {
-            cfg_instr *inst = &b->b_instr[i];
-            int nextop = i+1 < b->b_iused ? b->b_instr[i+1].i_opcode : 0;
-            switch(inst->i_opcode) {
-                case LOAD_FAST:
-                    if (nextop == LOAD_FAST) {
-                        make_super_instruction(inst, &b->b_instr[i + 1], LOAD_FAST_LOAD_FAST);
-                    }
-                    break;
-                case LOAD_FAST_BORROW:
-                    if (nextop == LOAD_FAST_BORROW) {
-                        make_super_instruction(inst, &b->b_instr[i + 1],
-                                               LOAD_FAST_BORROW_LOAD_FAST_BORROW);
-                    }
-                    break;
-                case STORE_FAST:
-                    switch (nextop) {
-                        case LOAD_FAST:
-                            make_super_instruction(inst, &b->b_instr[i + 1], STORE_FAST_LOAD_FAST);
-                            break;
-                        case STORE_FAST:
-                            make_super_instruction(inst, &b->b_instr[i + 1], STORE_FAST_STORE_FAST);
-                            break;
-                    }
-                    break;
-            }
-        }
-    }
-    RETURN_IF_ERROR(remove_redundant_nops(g));
-    assert(no_redundant_nops(g));
-    return SUCCESS;
-}
-
 #define NOT_LOCAL -1
 #define DUMMY_INSTR -1
 
@@ -4172,7 +4118,10 @@ _PyCfg_OptimizedCfgToInstructionSequence(cfg_builder *g,
      * LOAD_FAST which can be borrowed is converted to LOAD_FAST_BORROW
      * instead of being fused into a STORE_FAST_LOAD_FAST. Fusing adjacent
      * instructions does not change which references are borrowed. */
-    RETURN_IF_ERROR(insert_superinstructions(g));
+    /* No superinstructions: the assembler folds the loads into the
+     * instructions that consume them (Python/regalloc.c). */
+    RETURN_IF_ERROR(remove_redundant_nops(g));
+    assert(no_redundant_nops(g));
 
     /* Can't modify the bytecode after computing jump offsets. */
     if (_PyCfg_ToInstructionSequence(g, seq) < 0) {
@@ -4271,7 +4220,7 @@ _PyCompile_OptimizeCfg(PyObject *seq, PyObject *consts, int nlocals)
         goto error;
     }
 
-    if (insert_superinstructions(g) < 0) {
+    if (remove_redundant_nops(g) < 0) {
         goto error;
     }
 

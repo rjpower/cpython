@@ -42,8 +42,10 @@ typedef struct {
     int handler;        // the generic handler, before relaxation
     int fb;             // index of its feedback entry, or -1
     int depth;          // stack depth before it, or -1 if unreachable
-    int word;           // index of its word
-    int nwords;         // 1, or with the words that a relaxed loop adds more
+    int word;           // index of its word, or of the next for a fold
+    int nwords;         // 1, 0 if folded, or with the words that a relaxed
+                        // loop adds more
+    _PyRegFold fold;    // what Python/regalloc.c folded
 } asm_instr;
 
 struct assembler {
@@ -167,7 +169,7 @@ assemble_exception_table(struct assembler *a, instr_sequence *instrs)
     for (int i = 0; i < instrs->s_used; i++) {
         instruction *instr = &instrs->s_instrs[i];
         if (instr->i_except_handler_info.h_label != handler.h_label) {
-            if (handler.h_label >= 0) {
+            if (handler.h_label >= 0 && ioffset > start) {
                 int handler_offset = instrs->s_instrs[handler.h_label].i_offset;
                 RETURN_IF_ERROR(
                     assemble_emit_exception_table_entry(a, start, ioffset,
@@ -179,7 +181,7 @@ assemble_exception_table(struct assembler *a, instr_sequence *instrs)
         }
         ioffset += a->a_instrs[i].nwords;
     }
-    if (handler.h_label >= 0) {
+    if (handler.h_label >= 0 && ioffset > start) {
         int handler_offset = instrs->s_instrs[handler.h_label].i_offset;
         RETURN_IF_ERROR(assemble_emit_exception_table_entry(a, start, ioffset,
                                                             handler_offset,
@@ -341,18 +343,6 @@ assemble_location_info(struct assembler *a, instr_sequence *instrs,
 {
     a->a_lineno = firstlineno;
     location loc = NO_LOCATION;
-    for (int i = instrs->s_used-1; i >= 0; i--) {
-        instruction *instr = &instrs->s_instrs[i];
-        if (same_location(instr->i_loc, NEXT_LOCATION)) {
-            if (IS_TERMINATOR_OPCODE(instr->i_opcode)) {
-                instr->i_loc = NO_LOCATION;
-            }
-            else {
-                assert(i < instrs->s_used-1);
-                instr->i_loc = instr[1].i_loc;
-            }
-        }
-    }
     int size = 0;
     for (int i = 0; i < instrs->s_used; i++) {
         instruction *instr = &instrs->s_instrs[i];
@@ -365,6 +355,25 @@ assemble_location_info(struct assembler *a, instr_sequence *instrs,
     }
     RETURN_IF_ERROR(assemble_emit_location(a, loc, size));
     return SUCCESS;
+}
+
+/* Give each instruction at NEXT_LOCATION the location of the next, which
+ * folding compares. */
+static void
+resolve_next_locations(instr_sequence *instrs)
+{
+    for (int i = instrs->s_used-1; i >= 0; i--) {
+        instruction *instr = &instrs->s_instrs[i];
+        if (same_location(instr->i_loc, NEXT_LOCATION)) {
+            if (IS_TERMINATOR_OPCODE(instr->i_opcode)) {
+                instr->i_loc = NO_LOCATION;
+            }
+            else {
+                assert(i < instrs->s_used-1);
+                instr->i_loc = instr[1].i_loc;
+            }
+        }
+    }
 }
 
 static int
@@ -759,6 +768,35 @@ assign_handlers(struct assembler *a, instr_sequence *instrs, PyObject *consts)
     return SUCCESS;
 }
 
+/* Fold the data movement that needs no word (Python/regalloc.c). */
+static int
+fold(struct assembler *a, instr_sequence *instrs, const int *depths)
+{
+    int n = instrs->s_used;
+    int *handlers = PyMem_Malloc(Py_MAX(n, 1) * sizeof(int));
+    _PyRegFold *folds = PyMem_Malloc(Py_MAX(n, 1) * sizeof(_PyRegFold));
+    if (handlers == NULL || folds == NULL) {
+        PyMem_Free(handlers);
+        PyMem_Free(folds);
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    for (int i = 0; i < n; i++) {
+        handlers[i] = a->a_instrs[i].handler;
+    }
+    int err = _PyRegAlloc_Fold(instrs, depths, handlers, folds);
+    for (int i = 0; err == 0 && i < n; i++) {
+        asm_instr *ai = &a->a_instrs[i];
+        ai->fold = folds[i];
+        if (folds[i].folded) {
+            ai->nwords = 0;
+        }
+    }
+    PyMem_Free(handlers);
+    PyMem_Free(folds);
+    return err;
+}
+
 /* Place the words, relaxing each FOR_ITER and SEND whose exit is too far,
  * until none is: relaxing only moves exits further away. */
 static int
@@ -816,12 +854,18 @@ encode(struct assembler *a, instr_sequence *instrs, int i, int nlocalsplus,
     int oparg = handler_oparg(a, instrs, i);
     // Every role's value, then a pick per field.  DST is meaningless when
     // fmt->dst is _PyIR_NO_DST.
+    for (int k = 0; k < 4; k++) {
+        if (ai->fold.in[k] >= 0) {
+            slots.in[k] = ai->fold.in[k];
+        }
+    }
     int values[_PyIR_ROLE_IN0 + 4] = {
         [_PyIR_ROLE_NONE] = 0,
         [_PyIR_ROLE_DST] = slots.dst,
         [_PyIR_ROLE_BASE] = slots.base,
         [_PyIR_ROLE_FB] = ai->fb > 0 ? ai->fb : 0,
         [_PyIR_ROLE_IMM] = oparg,
+        [_PyIR_ROLE_TOP] = nlocalsplus + depth,
         [_PyIR_ROLE_IN0] = slots.in[0],
         [_PyIR_ROLE_IN0 + 1] = slots.in[1],
         [_PyIR_ROLE_IN0 + 2] = slots.in[2],
@@ -893,9 +937,14 @@ assemble_words(struct assembler *a, instr_sequence *instrs, PyObject *consts,
     for (int i = 0; i < n; i++) {
         a->a_instrs[i].depth = depths[i];
     }
+    if (err == 0) {
+        err = assign_handlers(a, instrs, consts);
+    }
+    if (err == 0) {
+        err = fold(a, instrs, depths);
+    }
     PyMem_Free(depths);
     RETURN_IF_ERROR(err);
-    RETURN_IF_ERROR(assign_handlers(a, instrs, consts));
     RETURN_IF_ERROR(layout(a, instrs));
 
     a->a_bytecode = PyBytes_FromStringAndSize(NULL,
@@ -914,6 +963,9 @@ assemble_words(struct assembler *a, instr_sequence *instrs, PyObject *consts,
     for (int i = 0; i < n; i++) {
         asm_instr *ai = &a->a_instrs[i];
         int w = ai->word;
+        if (ai->nwords == 0) {
+            continue;
+        }
         RETURN_IF_ERROR(encode(a, instrs, i, nlocalsplus, &words[w]));
         if (ai->fb > 0) {
             int kind = fb_kind[instrs->s_instrs[i].i_opcode];
@@ -992,6 +1044,7 @@ _PyAssemble_MakeCodeObject(_PyCompile_CodeUnitMetadata *umd, PyObject *const_cac
     }
     PyCodeObject *co = NULL;
 
+    resolve_next_locations(instrs);
     struct assembler a;
     memset(&a, 0, sizeof(a));
     int res = assemble_words(&a, instrs, consts, nlocalsplus, maxdepth);

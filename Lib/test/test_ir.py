@@ -4,6 +4,7 @@ assembler (Python/assemble.c) emits."""
 import dis
 import io
 import sys
+import types
 import unittest
 from test import support
 from test.support import import_helper
@@ -82,30 +83,28 @@ class AssemblerTest(unittest.TestCase):
     def test_stack_slots(self):
         # The temporary at depth d lives in slot nlocalsplus + d
         def f(a, b):
-            return a in b
+            return a.x in b.y
         base = nlocalsplus(f)
         contains = [instr for instr in dis.get_instructions(f)
                     if instr.opname == "CONTAINS_OP"][0]
         self.assertEqual(contains.dst, base)
         self.assertEqual(contains.srcs, (base, base + 1))
-        self.assertTrue(f(1, [1]))
-        self.assertFalse(f(2, {1}))
+        o = types.SimpleNamespace(x=1, y=[1])
+        self.assertTrue(f(o, o))
 
-    def test_borrowed_load_keeps_a_word(self):
-        # The assembler folds nothing: the load of the owner has a word, and
-        # LOAD_ATTR reads the owner from the slot that the load writes.
+    def test_borrowed_load_folds(self):
+        # The load of the owner has no word: LOAD_ATTR reads the local
         def f(o):
             return o.attr
         ir = get_ir(f.__code__)
-        load = [word for word in ir if word[0] == "LOAD_FAST_BORROW"][0]
+        self.assertNotIn("LOAD_FAST_BORROW", [word[0] for word in ir])
         attr = [word for word in ir if word[0] == "LOAD_ATTR"][0]
-        self.assertEqual(attr[2], load[1])
-        self.assertEqual(load[1], nlocalsplus(f))
+        self.assertEqual(attr[1], nlocalsplus(f))
+        self.assertEqual(attr[2], 0)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(f(C()), 5)
         if SPECIALIZES:
             self.assertNotIn("LOAD_ATTR", handlers(f))
-        self.assertIn("LOAD_FAST_BORROW", handlers(f))
         # The words of the code object stay as the compiler emitted them
         self.assertEqual(get_ir(f.__code__), ir)
 
@@ -653,6 +652,115 @@ class RelaxationTest(unittest.TestCase):
         self.assertEqual(branches(relaxed), branches(plain))
         self.assertEqual(opcodes(relaxed), opcodes(plain))
 
+
+
+def words(func):
+    """The handler and slot fields of each word of func, RESUME excluded:
+    (handler, dst or None, srcs)"""
+    return [(instr.handler, instr.dst, instr.srcs)
+            for instr in dis.get_instructions(func)
+            if instr.opname != "RESUME"]
+
+
+class FoldTest(unittest.TestCase):
+    """Loads folded into the next word (Python/regalloc.c)"""
+
+    def test_attribute_sum(self):
+        # boil/design/06-architecture-v2.md, section 2.2
+        def g(o):
+            return o.x + o.y
+        t = nlocalsplus(g)
+        self.assertEqual(words(g), [
+            ("LOAD_ATTR", t, (0,)),
+            ("LOAD_ATTR", t + 1, (0,)),
+            ("BINARY_OP_ADD", t, (t, t + 1)),
+            ("RETURN_VALUE", t, (t,)),
+        ])
+        o = types.SimpleNamespace(x=2, y=3)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(g(o), 5)
+
+    def test_load_below_another_word_keeps_its_word(self):
+        # The constant's word runs between the load of x and the add
+        def f(x):
+            return x + 1
+        self.assertIn("LOAD_FAST_BORROW", [w[0] for w in words(f)])
+        self.assertEqual(f(1), 2)
+
+    def test_store_to_the_loaded_local(self):
+        def inc(x):
+            x = x + 1
+            return x
+        def swap(a, b):
+            a, b = b, a
+            return a, b
+        def walrus(x):
+            def f(p, q):
+                return (p, q)
+            def g():
+                return 7
+            x = f(x, x := g())
+            return x
+        def loop(n):
+            x = 0
+            out = []
+            for i in range(n):
+                y = x
+                x = i
+                out.append((y, x))
+            return out
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(inc(1), 2)
+            self.assertEqual(swap(1, 2), (2, 1))
+            self.assertEqual(walrus(3), (3, 7))
+            self.assertEqual(loop(3), [(0, 0), (0, 1), (1, 2)])
+
+    def test_augmented_assignment(self):
+        def attr(o):
+            o.a += 1
+            return o.a
+        def item(s, i):
+            s[i] += 1
+            return s[i]
+        o = types.SimpleNamespace(a=1)
+        s = [1, 2]
+        for k in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(attr(o), k + 2)
+            self.assertEqual(item(s, 1), k + 3)
+
+    def test_raise_in_the_first_word_of_a_try(self):
+        # The subscript is the first word of the try block: the loads of d
+        # and key before it have none.  A Python __getitem__ runs in a frame
+        # of its own once BINARY_OP specialises.
+        class M:
+            def __getitem__(self, k):
+                raise KeyError(k)
+        def pop(d, key):
+            try:
+                return d[key]
+            except KeyError:
+                return None
+        m = M()
+        for i in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
+            self.assertIsNone(pop(m, i))
+
+    def test_trace_sees_no_folded_value(self):
+        # A line event before the word that a load folds into: the frame's
+        # stack does not hold the value yet.
+        def f(o):
+            return o.x
+        lines = []
+        def trace(frame, event, arg):
+            if frame.f_code is f.__code__ and event == "line":
+                lines.append(frame.f_lineno)
+            return trace
+        o = types.SimpleNamespace(x=1)
+        sys.settrace(trace)
+        try:
+            self.assertEqual(f(o), 1)
+        finally:
+            sys.settrace(None)
+        self.assertEqual(lines, [f.__code__.co_firstlineno + 1])
 
 if __name__ == "__main__":
     unittest.main()

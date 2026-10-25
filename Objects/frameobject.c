@@ -1438,6 +1438,11 @@ mark_stacks(PyCodeObject *code_obj, int len)
                 i = next_i;
                 continue;
             }
+            // The loads folded into the word push their values only as it
+            // runs, so the stack before it holds none of them.
+            for (int k = _PyCode_InstrFoldedInputs(code_obj, i); k > 0; k--) {
+                next_stack = push_value(next_stack, Object);
+            }
             switch (opcode) {
                 case POP_JUMP_IF_FALSE:
                 case POP_JUMP_IF_TRUE:

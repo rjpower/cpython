@@ -3,12 +3,16 @@
 import dis
 import sys
 import unittest
+from test import support
 from test.support import import_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 get_ir = getattr(_testinternalcapi, "get_ir", None)
 
 IR_BORROW = 1
+# The free-threaded build does not specialise the IR.
+SPECIALIZES = not support.Py_GIL_DISABLED
+BORROWED_LOADS = ("LOAD_FAST_BORROW", "LOAD_FAST_BORROW_LOAD_FAST_BORROW")
 
 
 def slot(field):
@@ -25,6 +29,25 @@ def make_function(source, name="f"):
     return namespace[name]
 
 
+def trace(func, *args, opcodes=False):
+    """Run func under sys.settrace(): its result and its (event, f_lasti,
+    f_lineno) for the events of func's own frame."""
+    events = []
+
+    def tracer(frame, event, arg):
+        frame.f_trace_opcodes = opcodes
+        if frame.f_code is func.__code__:
+            events.append((event, frame.f_lasti, frame.f_lineno))
+        return tracer
+
+    sys.settrace(tracer)
+    try:
+        result = func(*args)
+    finally:
+        sys.settrace(None)
+    return result, events
+
+
 class C:
     attr = 5
 
@@ -33,12 +56,20 @@ class C:
 class LoweringTest(unittest.TestCase):
 
     def check_offsets(self, func):
-        # One IR instruction per bytecode instruction but EXTENDED_ARG,
-        # anchored at the bytecode offset of the instruction.
-        anchors = [instr[1] for instr in get_ir(func.__code__)]
-        offsets = [instr.offset for instr in dis.get_instructions(func)
-                   if instr.opname != "EXTENDED_ARG"]
-        self.assertEqual(anchors, offsets)
+        # One IR instruction per bytecode instruction but EXTENDED_ARG and
+        # the loads that their consumer absorbs, anchored at the bytecode
+        # offset of the instruction.  Its offsets start at the first of those
+        # before it.
+        instrs = list(dis.get_instructions(func))
+        i = 0
+        for start, anchor, *_ in get_ir(func.__code__):
+            self.assertEqual(start, instrs[i].offset)
+            while instrs[i].offset != anchor:
+                self.assertIn(instrs[i].opname,
+                              ("EXTENDED_ARG",) + BORROWED_LOADS)
+                i += 1
+            i += 1
+        self.assertEqual(i, len(instrs))
 
     def test_offsets(self):
         def f(a, b):
@@ -48,18 +79,63 @@ class LoweringTest(unittest.TestCase):
             return None
         self.check_offsets(f)
 
+    def load_attr_owner(self, func):
+        # Field B of the LOAD_ATTR of func
+        ir = get_ir(func.__code__)
+        return [instr for instr in ir if instr[2] == "LOAD_ATTR"][0][4]
+
     def test_absorbed_load(self):
         def f(o):
             return o.attr
+        load = [instr for instr in dis.get_instructions(f)
+                if instr.opname == "LOAD_FAST_BORROW"][0]
         ir = {instr[2]: instr for instr in get_ir(f.__code__)}
-        self.assertIn("IR_ABSORBED_LOAD_FAST_BORROW", ir)
-        # LOAD_ATTR reads its owner through field B, from local 0
-        b = ir["LOAD_ATTR"][4]
+        # The load has no word.  LOAD_ATTR covers its offset and reads the
+        # owner through field B, from local 0.
+        self.assertNotIn("LOAD_FAST_BORROW", ir)
+        start, anchor, _, _, b, *_ = ir["LOAD_ATTR"]
+        self.assertEqual(start, load.offset)
+        self.assertGreater(anchor, start)
         self.assertTrue(b & IR_BORROW)
         self.assertEqual(slot(b), 0)
+        self.check_offsets(f)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(f(C()), 5)
-        self.assertIn("IR_ABSORBED_LOAD_FAST_BORROW", handlers(f))
+        if SPECIALIZES:
+            self.assertNotIn("LOAD_ATTR", handlers(f))
+        self.assertNotIn("LOAD_FAST_BORROW", handlers(f))
+
+    def test_absorbed_pair(self):
+        def f(a, b):
+            return a in b
+        self.assertNotIn("LOAD_FAST_BORROW_LOAD_FAST_BORROW", handlers(f))
+        ir = {instr[2]: instr for instr in get_ir(f.__code__)}
+        # Field A is the destination
+        _, _, _, _, b, c, _ = ir["CONTAINS_OP"]
+        self.assertEqual((b, c), (0 << 1 | IR_BORROW, 1 << 1 | IR_BORROW))
+        self.check_offsets(f)
+        self.assertTrue(f(1, [1]))
+        self.assertFalse(f(2, {1}))
+
+    def test_exception_from_a_pushed_frame(self):
+        # LOAD_ATTR_PROPERTY pushes the frame of the getter.  When the getter
+        # raises, the unwinding of f looks up the code unit before LOAD_ATTR,
+        # the load that starts the try block, which LOAD_ATTR absorbs.
+        class P:
+            @property
+            def attr(self):
+                raise AttributeError
+
+        def f(o):
+            try:
+                return o.attr
+            except AttributeError:
+                return "caught"
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
+            self.assertEqual(f(P()), "caught")
+        if SPECIALIZES:
+            self.assertIn("LOAD_ATTR_PROPERTY", handlers(f))
+        self.assertNotIn("LOAD_FAST_BORROW", handlers(f))
 
     def test_no_absorption_into_a_join(self):
         # LOAD_ATTR starts a basic block, so its owner comes from the stack
@@ -73,7 +149,7 @@ class LoweringTest(unittest.TestCase):
         code[load_b[0].offset] = dis.opmap["LOAD_FAST_BORROW"]
         f.__code__ = f.__code__.replace(co_code=bytes(code))
         self.assertIn("LOAD_FAST_BORROW", handlers(f))
-        self.assertNotIn("IR_ABSORBED_LOAD_FAST_BORROW", handlers(f))
+        self.assertFalse(self.load_attr_owner(f) & IR_BORROW)
         self.assertEqual(f(C(), None), 5)
         self.assertEqual(f(None, C()), 5)
 
@@ -81,33 +157,49 @@ class LoweringTest(unittest.TestCase):
         def f(o):
             return (o
                     .attr)
-        self.assertNotIn("IR_ABSORBED_LOAD_FAST_BORROW", handlers(f))
+        self.assertIn("LOAD_FAST_BORROW", handlers(f))
+        self.assertFalse(self.load_attr_owner(f) & IR_BORROW)
         self.assertEqual(f(C()), 5)
 
-    def test_tracing_keeps_absorbed_loads(self):
+    def test_no_absorption_under_tracing(self):
         def f(o):
             return o.attr
-        f(C())
-        opcodes = []
-
-        def tracer(frame, event, arg):
-            frame.f_trace_opcodes = True
-            if event == "opcode" and frame.f_code is f.__code__:
-                opcodes.append(frame.f_lasti)
-            return tracer
-
-        sys.settrace(tracer)
-        try:
-            result = f(C())
-        finally:
-            sys.settrace(None)
+        result, events = trace(f, C(), opcodes=True)
         self.assertEqual(result, 5)
-        # One event per instruction from the first RESUME on
-        lasti = [instr.offset for instr in dis.get_instructions(f)][1:]
-        self.assertEqual(opcodes, lasti)
+        # A word per instruction, and one event per instruction from the
+        # first RESUME on
+        offsets = [instr.offset for instr in dis.get_instructions(f)]
+        self.assertEqual([instr[1] for instr in get_ir(f.__code__)], offsets)
+        lasti = offsets[1:]
+        self.assertEqual([e[1] for e in events if e[0] == "opcode"], lasti)
+
+    def test_line_starting_at_absorbed_load(self):
+        def f(o):
+            x = 1
+            return o.attr
+        self.assertEqual(f(C()), 5)
+        self.assertNotIn("LOAD_FAST_BORROW", handlers(f))
+        result, events = trace(f, C())
+        self.assertEqual(result, 5)
+        line = f.__code__.co_firstlineno
+        self.assertEqual([e[2] for e in events if e[0] == "line"],
+                         [line + 1, line + 2])
         # The next RESUME removes the instrumentation
         self.assertEqual(f(C()), 5)
-        self.assertIn("IR_ABSORBED_LOAD_FAST_BORROW", handlers(f))
+        self.assertNotIn("LOAD_FAST_BORROW", handlers(f))
+
+    # Code lowered before INSTRUCTION events were enabled has no word for
+    # an absorbed load to instrument, see section 11 of
+    # boil/design/01-internal-ir.md.
+    @unittest.expectedFailure
+    def test_opcode_events_of_absorbed_loads(self):
+        def f(o):
+            return o.attr
+        self.assertEqual(f(C()), 5)
+        result, events = trace(f, C(), opcodes=True)
+        self.assertEqual(result, 5)
+        lasti = [instr.offset for instr in dis.get_instructions(f)][1:]
+        self.assertEqual([e[1] for e in events if e[0] == "opcode"], lasti)
 
     def test_f_lasti(self):
         def f():
@@ -122,19 +214,9 @@ class LoweringTest(unittest.TestCase):
         n = 300
         source = "def f():\n" + "".join(f"    a = {i}.5\n" for i in range(n))
         f = make_function(source)
-        lines = []
-
-        def tracer(frame, event, arg):
-            if event == "line" and frame.f_code is f.__code__:
-                lines.append(frame.f_lineno)
-            return tracer
-
-        sys.settrace(tracer)
-        try:
-            f()
-        finally:
-            sys.settrace(None)
-        self.assertEqual(lines, list(range(2, n + 2)))
+        _, events = trace(f)
+        self.assertEqual([e[2] for e in events if e[0] == "line"],
+                         list(range(2, n + 2)))
         self.check_offsets(f)
 
     def test_wide_fields(self):
@@ -166,7 +248,8 @@ class LoweringTest(unittest.TestCase):
             attr = 6
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(f(C()), (40_000.5, 5))
-        self.assertNotIn("LOAD_ATTR", handlers(f))
+        if SPECIALIZES:
+            self.assertNotIn("LOAD_ATTR", handlers(f))
         self.assertEqual(f(D()), (40_000.5, 6))
         lines = 0
 

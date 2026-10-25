@@ -39,13 +39,16 @@ Invariants:
   of X, so specialisation and instrumentation rewrite only the handler field.
   INSTRUMENTED_LINE and INSTRUMENTED_INSTRUCTION take no format: they run
   another handler on the same fields.
-- In the 1:1 form of step 4, the temporary at depth d lives in slot
-  nlocalsplus + d, where the stack interpreter keeps it, and handlers keep
-  stack_pointer. A register field equals that canonical slot unless it carries
-  IR_BORROW, which debug builds check at every dispatch. Handlers read an
-  input through its field only where the family lets the lowering absorb a
-  LOAD_FAST_BORROW, that is where every member converts the input to an object
-  first; there the borrow tag is set statically after the object check.
+- The temporary at depth d lives in slot nlocalsplus + d, where the stack
+  interpreter keeps it, and handlers keep stack_pointer. A register field
+  equals that canonical slot unless it carries IR_BORROW, which debug builds
+  check at every dispatch. Handlers read an input through its field only where
+  the family lets the lowering absorb a LOAD_FAST_BORROW, that is where every
+  member converts the input to an object first and the format has a dst; there
+  the borrow tag is set statically after the object check. An absorbed load
+  has no word, so these handlers set stack_pointer from dst on entry, and
+  write a borrowed input to its canonical slot only where code that reads the
+  stack may run.
 - Instruction macros of the DSL (generators_common.STACK_INSTRUCTION_MACROS)
   expand to the IR forms of IR_INSTRUCTION_MACROS.
 - Each handler starts with IR_ENTRY(), which decodes its fields in the
@@ -151,9 +154,8 @@ class IRFormat:
 
 
 # An instruction named PREFIX + X, for an instruction X, shares the format of
-# X: the instrumented twins, and the handlers that the lowering puts in place
-# of an absorbed load.
-SHARED_FORMAT_PREFIXES = ("INSTRUMENTED_", "IR_ABSORBED_")
+# X: the instrumented twins.
+SHARED_FORMAT_PREFIXES = ("INSTRUMENTED_",)
 
 
 def is_transparent(inst: Instruction) -> bool:
@@ -396,6 +398,10 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
             if all(u[k] in ("object", "unused") for u in uses) and any(
                     u[k] == "object" for u in uses):
                 borrow_mask |= 1 << k
+        if dst_offset is None:
+            # The handler finds the stack pointer through dst, see
+            # generate_ir_cases(), so without one it borrows nothing.
+            borrow_mask = 0
     imm = LOC_NONE
     fb = LOC_NONE
     nwords = 1
@@ -502,6 +508,17 @@ class IRStack(Stack):
             local.ir_field = self.field_of(var, local.memory_offset)
         return local
 
+    def flush(self, out: CWriter) -> None:
+        # An input still read through its field may name a local, and then
+        # its canonical slot holds whatever the frame left there.  Clear it
+        # for whoever reads the stack.
+        for var in self.variables if self.physical_sp is not None else ():
+            if var.ir_field is not None and var.memory_offset is not None:
+                offset = (var.memory_offset - self.physical_sp).to_c()
+                out.emit(f"IR_CLEAR_IF_BORROWED({FIELD_VARS[var.ir_field]}, "
+                         f"stack_pointer[{offset}]);\n")
+        super().flush(out)
+
     def save_variables(self, out: CWriter) -> None:
         var_offset = self.base_offset
         for var in self.variables:
@@ -593,6 +610,9 @@ class IREmitter(Emitter):
             self.out.start_line()
             self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f});\n")
             var.known_object = True
+            # From here the value is safe in any slot, so a flush writes it to
+            # its canonical slot for code that reads the stack.
+            var.memory_offset = None
         super().emit_object_inputs(uop, storage, inst, stack_read_later)
 
 
@@ -684,6 +704,10 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         out.emit(f"(void)(opcode);\n")
         out.emit(f"#endif\n")
         out.emit(f"IR_ENTRY({name});\n")
+        if fmt.borrow_mask:
+            # Absorbed loads have no words, so stack_pointer may lag behind
+            dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+            out.emit(f"stack_pointer = IR_STACK_POINTER({dst}, {fmt.dst_offset});\n")
         this = needs_this(inst, fmt)
         if inst.properties.needs_prev:
             out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")

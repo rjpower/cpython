@@ -1729,6 +1729,16 @@ initialize_lines(_PyCoLineInstrumentationData *line_data, PyCodeObject *code, in
             set_original_opcode(line_data, i, _Py_GetBaseCodeUnit(code, i).op.code);
         }
     }
+    /* Nor for the loads that it absorbs into their consumer, which then
+     * starts the line. */
+    for (int i = 0; i < code_len; i += _PyInstruction_GetLength(code, i)) {
+        int anchor = _PyIR_WordAnchor(code, i);
+        if (anchor != i && _PyCode_GetOriginalOpcode(line_data, i)) {
+            set_original_opcode(line_data, i, 0);
+            set_original_opcode(line_data, anchor,
+                                _Py_GetBaseCodeUnit(code, anchor).op.code);
+        }
+    }
 #endif
 }
 

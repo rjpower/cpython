@@ -2303,6 +2303,7 @@ class TestIRCases(unittest.TestCase):
             (void)(opcode);
             #endif
             IR_ENTRY(OP);
+            stack_pointer = IR_STACK_POINTER(ir_a, -2);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
@@ -2317,6 +2318,8 @@ class TestIRCases(unittest.TestCase):
             if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
                 left = PyStackRef_Box(left);
                 if (PyStackRef_IsInline(left)) {
+                    IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-2]);
+                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(OP);
@@ -2326,6 +2329,8 @@ class TestIRCases(unittest.TestCase):
             if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
                 right = PyStackRef_Box(right);
                 if (PyStackRef_IsInline(right)) {
+                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
+                    stack_pointer[-2] = left;
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(OP);
@@ -2339,6 +2344,7 @@ class TestIRCases(unittest.TestCase):
             _PyFrame_StackPointerValidate(frame);
             _PyStackRef tmp = right;
             right = PyStackRef_NULL;
+            stack_pointer[-2] = left;
             stack_pointer[-1] = right;
             _PyStackRef_CLOSE_POINTER(tmp);
             _PyFrame_StackPointerInvalidate(frame);
@@ -2526,6 +2532,7 @@ class TestIRCases(unittest.TestCase):
             (void)(opcode);
             #endif
             IR_ENTRY(OP);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
@@ -2552,6 +2559,7 @@ class TestIRCases(unittest.TestCase):
                 if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
                     owner = PyStackRef_Box(owner);
                     if (PyStackRef_IsInline(owner)) {
+                        IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(OP);
@@ -2560,6 +2568,7 @@ class TestIRCases(unittest.TestCase):
                 owner = IR_BORROW_KNOWN(owner, ir_b);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
                 res = SPAM(o, oparg);
+                stack_pointer[-1] = owner;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 _PyStackRef tmp = owner;
@@ -2577,6 +2586,7 @@ class TestIRCases(unittest.TestCase):
             (void)(opcode);
             #endif
             IR_ENTRY(OP_SPECIALIZED);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2609,6 +2619,7 @@ class TestIRCases(unittest.TestCase):
             {
                 PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
                 res = SPAM(o, oparg);
+                stack_pointer[-1] = owner;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 _PyStackRef tmp = owner;
@@ -2717,10 +2728,13 @@ class TestIRCases(unittest.TestCase):
         self.assertTrue(self.formats(input)["IR_EXT"].transparent)
 
     def test_metadata(self):
-        # IR-only handlers follow the opcodes in name order. An absorbed load
-        # shares the format of the load and stands for it in co_code.
+        # IR-only handlers follow the opcodes in name order. An instrumented
+        # twin shares the format of its instruction.
         input = """
         inst(LOAD, ( -- value)) {
+            value = PyStackRef_DUP(GETLOCAL(oparg));
+        }
+        inst(INSTRUMENTED_LOAD, ( -- value)) {
             value = PyStackRef_DUP(GETLOCAL(oparg));
         }
         ir_only inst(IR_EXT, ( -- )) {
@@ -2728,8 +2742,8 @@ class TestIRCases(unittest.TestCase):
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
-        ir_only inst(IR_ABSORBED_LOAD, ( -- value)) {
-            value = PyStackRef_NULL;
+        ir_only inst(IR_LOWER, ( -- )) {
+            SPAM();
         }
     """
         analysis = self.analyze(input)
@@ -2742,19 +2756,20 @@ class TestIRCases(unittest.TestCase):
                 ".fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = 0, "
                 ".borrow_mask = 0x0, .shadow = LOAD }")
         for expected in [
-            "#define IR_ABSORBED_LOAD                               256",
-            "#define IR_EXT                                         257",
+            "#define IR_EXT                                         256",
+            "#define IR_LOWER                                       257",
             "#define IR_NUM_HANDLERS                                258",
             f"[LOAD] = {load},",
-            f"[IR_ABSORBED_LOAD] = {load},",
+            "[INSTRUMENTED_LOAD] = "
+            f"{load.replace('LOAD }', 'INSTRUMENTED_LOAD }')},",
             "[IR_EXT] = { .nwords = 1, .flags = _PyIR_TRANSPARENT, "
             ".roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, "
             ".imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, "
             ".dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = IR_EXT },",
             '[IR_EXT - 256] = "IR_EXT",',
+            '[IR_LOWER - 256] = "IR_LOWER",',
         ]:
             self.assertIn(expected, lines)
-
 
 if __name__ == "__main__":
     unittest.main()

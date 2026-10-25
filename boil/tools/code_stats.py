@@ -14,8 +14,9 @@ block on interpreters that have one.
 
 On a build with the register IR (``--with-ir-interp``), each code object is
 also lowered: ``ir_words`` counts its words, IR_EXT and second words included,
-``ir_absorbed`` its absorbed loads, and ``ir_bytes`` the growth of
-``sys.getsizeof(code)`` that lowering causes (words, feedback and pcmap).
+``ir_absorbed`` the loads that their consumer absorbs, which have no words,
+and ``ir_bytes`` the growth of ``sys.getsizeof(code)`` that lowering causes
+(words, feedback and pcmap).
 """
 
 from __future__ import annotations
@@ -90,11 +91,16 @@ def ir_stats(code):
     ir = get_ir(code)
     # get_ir folds an IR_EXT word into the fields that it widens
     ext = sum(max(a, b, c) > 0xFFFF for _, _, _, a, b, c, _ in ir)
+    # An instruction's offsets start at the absorbed loads before it
+    offsets = {instr.offset for instr in dis.get_instructions(code)
+               if instr.opname != "EXTENDED_ARG"}
+    absorbed = sum(o in offsets for start, anchor, *_ in ir
+                   for o in range(start, anchor, 2))
     return {
         "ir_instructions": len(ir),
         "ir_words": len(ir) + ext + sum(word1 is not None for *_, word1 in ir),
         "ir_ext": ext,
-        "ir_absorbed": sum(name.startswith("IR_ABSORBED") for _, _, name, *_ in ir),
+        "ir_absorbed": absorbed,
         "ir_bytes": sys.getsizeof(code) - before,
     }
 
@@ -179,9 +185,10 @@ def summary(name: str, r: dict) -> str:
     ]
     if "ir_words" in t:
         units = t["co_code_bytes"] / 2
+        ninstr = t["ir_instructions"] + t["ir_absorbed"]
         lines.append(
-            f"  IR: words per instruction={t['ir_words'] / t['ir_instructions']:.3f}"
-            f" IR_EXT={t['ir_ext']} absorbed loads={100 * t['ir_absorbed'] / t['ir_instructions']:.1f}%"
+            f"  IR: words per instruction={t['ir_words'] / ninstr:.3f}"
+            f" IR_EXT={t['ir_ext']} absorbed loads={100 * t['ir_absorbed'] / ninstr:.1f}%"
             f" block bytes per code unit={t['ir_bytes'] / units:.2f}")
     return "\n".join(lines)
 

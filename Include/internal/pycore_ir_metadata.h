@@ -14,15 +14,13 @@ extern "C" {
 #endif
 
 /* Handlers of the IR only, after the opcodes */
-#define IR_ABSORBED_LOAD_FAST_BORROW                   256
-#define IR_ABSORBED_LOAD_FAST_BORROW_LOAD_FAST_BORROW  257
-#define IR_EXT                                         258
-#define IR_LOWER                                       259
-#define IR_NUM_HANDLERS                                260
+#define IR_EXT                                         256
+#define IR_LOWER                                       257
+#define IR_NUM_HANDLERS                                258
 
-PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[260];
+PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[258];
 #ifdef NEED_IR_METADATA
-const _PyIRFormat _PyIR_Formats[260] = {
+const _PyIRFormat _PyIR_Formats[258] = {
     [CACHE] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = CACHE },
     [BINARY_SLICE] = { .nwords = 1, .flags = _PyIR_WINDOW, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = BINARY_SLICE },
     [BUILD_TEMPLATE] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = -2, .borrow_mask = 0x3, .shadow = BUILD_TEMPLATE },
@@ -31,17 +29,17 @@ const _PyIRFormat _PyIR_Formats[260] = {
     [CHECK_EG_MATCH] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = -2, .borrow_mask = 0x3, .shadow = CHECK_EG_MATCH },
     [CHECK_EXC_MATCH] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = -1, .borrow_mask = 0x2, .shadow = CHECK_EXC_MATCH },
     [CLEANUP_THROW] = { .nwords = 1, .flags = _PyIR_WINDOW | _PyIR_NO_FOLD, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = CLEANUP_THROW },
-    [DELETE_SUBSCR] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .shadow = DELETE_SUBSCR },
+    [DELETE_SUBSCR] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = DELETE_SUBSCR },
     [END_FOR] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IN0 + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 3, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = END_FOR },
     [END_SEND] = { .nwords = 1, .flags = _PyIR_WINDOW | _PyIR_NO_FOLD, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = END_SEND },
-    [EXIT_INIT_CHECK] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x1, .shadow = EXIT_INIT_CHECK },
+    [EXIT_INIT_CHECK] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = EXIT_INIT_CHECK },
     [FORMAT_SIMPLE] = { .nwords = 1, .flags = _PyIR_NO_FOLD, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = -1, .borrow_mask = 0x1, .shadow = FORMAT_SIMPLE },
     [FORMAT_WITH_SPEC] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = -2, .borrow_mask = 0x3, .shadow = FORMAT_WITH_SPEC },
     [GET_AITER] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = -1, .borrow_mask = 0x1, .shadow = GET_AITER },
     [GET_ANEXT] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = 0, .borrow_mask = 0x0, .shadow = GET_ANEXT },
     [GET_LEN] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = 0, .borrow_mask = 0x0, .shadow = GET_LEN },
     [RESERVED] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = RESERVED },
-    [INTERPRETER_EXIT] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x1, .shadow = INTERPRETER_EXIT },
+    [INTERPRETER_EXIT] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = INTERPRETER_EXIT },
     [LOAD_BUILD_CLASS] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = 0, .borrow_mask = 0x0, .shadow = LOAD_BUILD_CLASS },
     [LOAD_LOCALS] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = 0, .borrow_mask = 0x0, .shadow = LOAD_LOCALS },
     [MAKE_FUNCTION] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = -1, .borrow_mask = 0x1, .shadow = MAKE_FUNCTION },
@@ -50,7 +48,7 @@ const _PyIRFormat _PyIR_Formats[260] = {
     [MATCH_SEQUENCE] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = 0, .borrow_mask = 0x0, .shadow = MATCH_SEQUENCE },
     [NOP] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = NOP },
     [NOT_TAKEN] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = NOT_TAKEN },
-    [POP_EXCEPT] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x1, .shadow = POP_EXCEPT },
+    [POP_EXCEPT] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = POP_EXCEPT },
     [POP_ITER] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = POP_ITER },
     [POP_TOP] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = POP_TOP },
     [PUSH_EXC_INFO] = { .nwords = 1, .flags = _PyIR_WINDOW | _PyIR_NO_FOLD, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = PUSH_EXC_INFO },
@@ -59,7 +57,7 @@ const _PyIRFormat _PyIR_Formats[260] = {
     [RETURN_VALUE] = { .nwords = 1, .flags = _PyIR_WINDOW, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = RETURN_VALUE },
     [SETUP_ANNOTATIONS] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = SETUP_ANNOTATIONS },
     [STORE_SLICE] = { .nwords = 1, .flags = _PyIR_WINDOW, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = STORE_SLICE },
-    [STORE_SUBSCR] = { .nwords = 2, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IN0 + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_F, .ninputs = 3, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .shadow = STORE_SUBSCR },
+    [STORE_SUBSCR] = { .nwords = 2, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IN0 + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_F, .ninputs = 3, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = STORE_SUBSCR },
     [TO_BOOL] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .ninputs = 1, .dst = -1, .borrow_mask = 0x0, .shadow = TO_BOOL },
     [UNARY_INVERT] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = -1, .borrow_mask = 0x1, .shadow = UNARY_INVERT },
     [UNARY_NEGATIVE] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = -1, .borrow_mask = 0x0, .shadow = UNARY_NEGATIVE },
@@ -129,15 +127,15 @@ const _PyIRFormat _PyIR_Formats[260] = {
     [SET_ADD] = { .nwords = 1, .flags = _PyIR_WINDOW, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = SET_ADD },
     [SET_FUNCTION_ATTRIBUTE] = { .nwords = 2, .flags = _PyIR_NO_FOLD, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1 }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = -2, .borrow_mask = 0x3, .shadow = SET_FUNCTION_ATTRIBUTE },
     [SET_UPDATE] = { .nwords = 1, .flags = _PyIR_WINDOW, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = SET_UPDATE },
-    [STORE_ATTR] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_FBARG, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .shadow = STORE_ATTR },
-    [STORE_DEREF] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x1, .shadow = STORE_DEREF },
+    [STORE_ATTR] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_FBARG, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = STORE_ATTR },
+    [STORE_DEREF] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = STORE_DEREF },
     [STORE_FAST] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = STORE_FAST },
     [STORE_FAST_LOAD_FAST] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = -1, .borrow_mask = 0x0, .shadow = STORE_FAST_LOAD_FAST },
     [STORE_FAST_STORE_FAST] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = STORE_FAST_STORE_FAST },
-    [STORE_GLOBAL] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x1, .shadow = STORE_GLOBAL },
+    [STORE_GLOBAL] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = STORE_GLOBAL },
     [STORE_NAME] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = STORE_NAME },
     [SWAP] = { .nwords = 1, .flags = _PyIR_WINDOW, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = SWAP },
-    [UNPACK_EX] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x1, .shadow = UNPACK_EX },
+    [UNPACK_EX] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 1, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = UNPACK_EX },
     [UNPACK_SEQUENCE] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_FBARG, .fb = _PyIR_LOC_C, .ninputs = 1, .dst = -1, .borrow_mask = 0x1, .shadow = UNPACK_SEQUENCE },
     [YIELD_VALUE] = { .nwords = 1, .flags = _PyIR_WINDOW, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = YIELD_VALUE },
     [RESUME] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_A, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = RESUME },
@@ -225,11 +223,11 @@ const _PyIRFormat _PyIR_Formats[260] = {
     [SEND_ASYNC_GEN] = { .nwords = 1, .flags = _PyIR_WINDOW | _PyIR_JUMPS | _PyIR_NO_FOLD, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = SEND_ASYNC_GEN },
     [SEND_GEN] = { .nwords = 1, .flags = _PyIR_WINDOW | _PyIR_JUMPS | _PyIR_NO_FOLD, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = SEND_GEN },
     [SEND_VIRTUAL] = { .nwords = 1, .flags = _PyIR_WINDOW | _PyIR_JUMPS | _PyIR_NO_FOLD, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = SEND_VIRTUAL },
-    [STORE_ATTR_INSTANCE_VALUE] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_FBARG, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .shadow = STORE_ATTR_INSTANCE_VALUE },
-    [STORE_ATTR_SLOT] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_FBARG, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .shadow = STORE_ATTR_SLOT },
-    [STORE_ATTR_WITH_HINT] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_FBARG, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .shadow = STORE_ATTR_WITH_HINT },
-    [STORE_SUBSCR_DICT] = { .nwords = 2, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IN0 + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_F, .ninputs = 3, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .shadow = STORE_SUBSCR_DICT },
-    [STORE_SUBSCR_LIST_INT] = { .nwords = 2, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IN0 + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_F, .ninputs = 3, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .shadow = STORE_SUBSCR_LIST_INT },
+    [STORE_ATTR_INSTANCE_VALUE] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_FBARG, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = STORE_ATTR_INSTANCE_VALUE },
+    [STORE_ATTR_SLOT] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_FBARG, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = STORE_ATTR_SLOT },
+    [STORE_ATTR_WITH_HINT] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_FBARG, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = STORE_ATTR_WITH_HINT },
+    [STORE_SUBSCR_DICT] = { .nwords = 2, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IN0 + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_F, .ninputs = 3, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = STORE_SUBSCR_DICT },
+    [STORE_SUBSCR_LIST_INT] = { .nwords = 2, .flags = 0, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IN0 + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_F, .ninputs = 3, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = STORE_SUBSCR_LIST_INT },
     [TO_BOOL_ALWAYS_TRUE] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .ninputs = 1, .dst = -1, .borrow_mask = 0x0, .shadow = TO_BOOL_ALWAYS_TRUE },
     [TO_BOOL_BOOL] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .ninputs = 1, .dst = -1, .borrow_mask = 0x0, .shadow = TO_BOOL_BOOL },
     [TO_BOOL_INT] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .ninputs = 1, .dst = -1, .borrow_mask = 0x0, .shadow = TO_BOOL_INT },
@@ -260,18 +258,14 @@ const _PyIRFormat _PyIR_Formats[260] = {
     [INSTRUMENTED_CALL_FUNCTION_EX] = { .nwords = 1, .flags = _PyIR_WINDOW, .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_FB, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_B, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = INSTRUMENTED_CALL_FUNCTION_EX },
     [INSTRUMENTED_JUMP_BACKWARD] = { .nwords = 1, .flags = _PyIR_JUMPS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_A, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = INSTRUMENTED_JUMP_BACKWARD },
     [INSTRUMENTED_LINE] = { .nwords = 1, .flags = _PyIR_TRANSPARENT, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = INSTRUMENTED_LINE },
-    [IR_ABSORBED_LOAD_FAST_BORROW] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = 0, .borrow_mask = 0x0, .shadow = LOAD_FAST_BORROW },
-    [IR_ABSORBED_LOAD_FAST_BORROW_LOAD_FAST_BORROW] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = 0, .borrow_mask = 0x0, .shadow = LOAD_FAST_BORROW_LOAD_FAST_BORROW },
     [IR_EXT] = { .nwords = 1, .flags = _PyIR_TRANSPARENT, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = IR_EXT },
     [IR_LOWER] = { .nwords = 1, .flags = 0, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = IR_LOWER },
 };
 #endif
 
-PyAPI_DATA(const char *const) _PyIR_OnlyNames[4];
+PyAPI_DATA(const char *const) _PyIR_OnlyNames[2];
 #ifdef NEED_IR_METADATA
-const char *const _PyIR_OnlyNames[4] = {
-    [IR_ABSORBED_LOAD_FAST_BORROW - 256] = "IR_ABSORBED_LOAD_FAST_BORROW",
-    [IR_ABSORBED_LOAD_FAST_BORROW_LOAD_FAST_BORROW - 256] = "IR_ABSORBED_LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+const char *const _PyIR_OnlyNames[2] = {
     [IR_EXT - 256] = "IR_EXT",
     [IR_LOWER - 256] = "IR_LOWER",
 };

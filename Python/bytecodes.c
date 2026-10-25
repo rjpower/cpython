@@ -5614,17 +5614,6 @@ dummy_func(
             DISPATCH_GOTO();
         }
 
-        /* A load whose consumer reads the local through an IR_BORROW
-         * field.  The canonical slot holds NULL. */
-        ir_only inst(IR_ABSORBED_LOAD_FAST_BORROW, ( -- value)) {
-            value = PyStackRef_NULL;
-        }
-
-        ir_only inst(IR_ABSORBED_LOAD_FAST_BORROW_LOAD_FAST_BORROW, ( -- value1, value2)) {
-            value1 = PyStackRef_NULL;
-            value2 = PyStackRef_NULL;
-        }
-
         op(_SAVE_RETURN_OFFSET, (--)) {
             frame->return_offset = (uint16_t)(next_instr - this_instr);
         }
@@ -5744,6 +5733,15 @@ dummy_func(
                 return NULL;
             }
             next_instr = frame->instr_ptr;
+#ifdef Py_IR_INTERP
+            /* exception_unwind looks up the code unit before the call.  Where
+             * the call's word starts with absorbed loads or an EXTENDED_ARG,
+             * that unit is the word's own, not the previous word's. */
+            _PyIRBlock *block = _PyFrame_IRBlock(frame);
+            if (_PyIR_Start(block, next_instr) != _PyIR_Anchor(block, next_instr)) {
+                next_instr++;
+            }
+#endif
             RELOAD_STACK();
             goto error;
         }

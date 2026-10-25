@@ -2390,6 +2390,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(BUILD_TEMPLATE);
+            stack_pointer = IR_STACK_POINTER(ir_a, -2);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_TEMPLATE);
@@ -2404,6 +2405,8 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(strings))) {
                 strings = PyStackRef_Box(strings);
                 if (PyStackRef_IsInline(strings)) {
+                    IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-2]);
+                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(BUILD_TEMPLATE);
@@ -2413,6 +2416,8 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(interpolations))) {
                 interpolations = PyStackRef_Box(interpolations);
                 if (PyStackRef_IsInline(interpolations)) {
+                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
+                    stack_pointer[-2] = strings;
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(BUILD_TEMPLATE);
@@ -2421,10 +2426,13 @@
             interpolations = IR_BORROW_KNOWN(interpolations, ir_c);
             PyObject *strings_o = PyStackRef_AsPyObjectBorrow(strings);
             PyObject *interpolations_o = PyStackRef_AsPyObjectBorrow(interpolations);
+            stack_pointer[-2] = strings;
+            stack_pointer[-1] = interpolations;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
             PyObject *template_o = _PyTemplate_Build(strings_o, interpolations_o);
             _PyFrame_StackPointerInvalidate(frame);
+            IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-2]);
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
             _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -4004,6 +4012,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(CALL_INTRINSIC_1);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_INTRINSIC_1);
@@ -4020,6 +4029,7 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
                     value = PyStackRef_Box(value);
                     if (PyStackRef_IsInline(value)) {
+                        IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL_INTRINSIC_1);
@@ -4027,6 +4037,7 @@
                 }
                 value = IR_BORROW_KNOWN(value, ir_b);
                 assert(oparg <= MAX_INTRINSIC_1);
+                stack_pointer[-1] = value;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 PyObject *res_o = _PyIntrinsics_UnaryFunctions[oparg].func(tstate, PyStackRef_AsPyObjectBorrow(value));
@@ -4055,6 +4066,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(CALL_INTRINSIC_2);
+            stack_pointer = IR_STACK_POINTER(ir_a, -2);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -4078,6 +4090,8 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(value2_st))) {
                     value2_st = PyStackRef_Box(value2_st);
                     if (PyStackRef_IsInline(value2_st)) {
+                        IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-2]);
+                        IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL_INTRINSIC_2);
@@ -4087,6 +4101,8 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(value1_st))) {
                     value1_st = PyStackRef_Box(value1_st);
                     if (PyStackRef_IsInline(value1_st)) {
+                        IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
+                        stack_pointer[-2] = value2_st;
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL_INTRINSIC_2);
@@ -4096,6 +4112,8 @@
                 assert(oparg <= MAX_INTRINSIC_2);
                 PyObject *value1 = PyStackRef_AsPyObjectBorrow(value1_st);
                 PyObject *value2 = PyStackRef_AsPyObjectBorrow(value2_st);
+                stack_pointer[-2] = value2_st;
+                stack_pointer[-1] = value1_st;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 PyObject *res_o = _PyIntrinsics_BinaryFunctions[oparg].func(tstate, value2, value1);
@@ -6057,6 +6075,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(CHECK_EG_MATCH);
+            stack_pointer = IR_STACK_POINTER(ir_a, -2);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CHECK_EG_MATCH);
@@ -6072,6 +6091,8 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(exc_value_st))) {
                 exc_value_st = PyStackRef_Box(exc_value_st);
                 if (PyStackRef_IsInline(exc_value_st)) {
+                    IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-2]);
+                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(CHECK_EG_MATCH);
@@ -6081,6 +6102,8 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(match_type_st))) {
                 match_type_st = PyStackRef_Box(match_type_st);
                 if (PyStackRef_IsInline(match_type_st)) {
+                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
+                    stack_pointer[-2] = exc_value_st;
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(CHECK_EG_MATCH);
@@ -6089,6 +6112,8 @@
             match_type_st = IR_BORROW_KNOWN(match_type_st, ir_c);
             PyObject *exc_value = PyStackRef_AsPyObjectBorrow(exc_value_st);
             PyObject *match_type = PyStackRef_AsPyObjectBorrow(match_type_st);
+            stack_pointer[-2] = exc_value_st;
+            stack_pointer[-1] = match_type_st;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
             int err = _PyEval_CheckExceptStarTypeValid(tstate, match_type);
@@ -6113,7 +6138,8 @@
                 JUMP_TO_LABEL(error);
             }
             PyObject *match_o = NULL;
-            PyObject *rest_o = NULL;
+            PyObject *rest_o = NULL;IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-2]);
+            IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
             assert(stack_pointer == _PyFrame_GetStackPointer(frame));
             _PyFrame_StackPointerValidate(frame);
             int res = _PyEval_ExceptionGroupMatch(frame, exc_value, match_type,
@@ -6163,6 +6189,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(CHECK_EXC_MATCH);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CHECK_EXC_MATCH);
@@ -6177,6 +6204,7 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
                 right = PyStackRef_Box(right);
                 if (PyStackRef_IsInline(right)) {
+                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(CHECK_EXC_MATCH);
@@ -6186,6 +6214,7 @@
             if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
                 left = PyStackRef_Box(left);
                 if (PyStackRef_IsInline(left)) {
+                    stack_pointer[-1] = right;
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(CHECK_EXC_MATCH);
@@ -6194,13 +6223,14 @@
             PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
             PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
             assert(PyExceptionInstance_Check(left_o));
+            stack_pointer[-1] = right;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
             int err = _PyEval_CheckExceptTypeValid(tstate, right_o);
             _PyFrame_StackPointerInvalidate(frame);
             if (err < 0) {
                 JUMP_TO_LABEL(error);
-            }
+            }IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
             assert(stack_pointer == _PyFrame_GetStackPointer(frame));
             _PyFrame_StackPointerValidate(frame);
             int res = PyErr_GivenExceptionMatches(left_o, right_o);
@@ -6652,6 +6682,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(CONTAINS_OP);
+            stack_pointer = IR_STACK_POINTER(ir_a, -2);
             frame->instr_ptr = next_instr;
             next_instr += 2;
             INSTRUCTION_STATS(CONTAINS_OP);
@@ -6677,7 +6708,8 @@
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
+                    next_instr = this_instr;IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-2]);
+                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_ContainsOp(left, right, next_instr);
@@ -6693,6 +6725,8 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
                     left = PyStackRef_Box(left);
                     if (PyStackRef_IsInline(left)) {
+                        IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-2]);
+                        IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP);
@@ -6702,6 +6736,8 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
                     right = PyStackRef_Box(right);
                     if (PyStackRef_IsInline(right)) {
+                        IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
+                        stack_pointer[-2] = left;
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP);
@@ -6710,6 +6746,8 @@
                 right = IR_BORROW_KNOWN(right, ir_c);
                 PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
+                stack_pointer[-2] = left;
+                stack_pointer[-1] = right;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 int res = PySequence_Contains(right_o, left_o);
@@ -6750,6 +6788,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(CONTAINS_OP_DICT);
+            stack_pointer = IR_STACK_POINTER(ir_a, -2);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -6790,6 +6829,8 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
                     left = PyStackRef_Box(left);
                     if (PyStackRef_IsInline(left)) {
+                        IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-2]);
+                        stack_pointer[-1] = right;
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP_DICT);
@@ -6800,6 +6841,8 @@
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert(PyAnyDict_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
+                stack_pointer[-2] = left;
+                stack_pointer[-1] = right;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 int res = PyDict_Contains(right_o, left_o);
@@ -6840,6 +6883,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(CONTAINS_OP_SET);
+            stack_pointer = IR_STACK_POINTER(ir_a, -2);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -6880,6 +6924,8 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
                     left = PyStackRef_Box(left);
                     if (PyStackRef_IsInline(left)) {
+                        IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-2]);
+                        stack_pointer[-1] = right;
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP_SET);
@@ -6890,6 +6936,8 @@
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert(PyAnySet_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
+                stack_pointer[-2] = left;
+                stack_pointer[-1] = right;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 int res = _PySet_Contains((PySetObject *)right_o, left_o);
@@ -6930,6 +6978,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(CONVERT_VALUE);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CONVERT_VALUE);
@@ -6943,6 +6992,7 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
                 value = PyStackRef_Box(value);
                 if (PyStackRef_IsInline(value)) {
+                    IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(CONVERT_VALUE);
@@ -6952,6 +7002,7 @@
             conversion_func conv_fn;
             assert(oparg >= FVC_STR && oparg <= FVC_ASCII);
             conv_fn = _PyEval_ConversionFuncs[oparg];
+            stack_pointer[-1] = value;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
             PyObject *result_o = conv_fn(PyStackRef_AsPyObjectBorrow(value));
@@ -7089,26 +7140,24 @@
             IR_CHECK_INPUT(ir_b, -1, 2);
             _PyStackRef container;
             _PyStackRef sub;
-            sub = IR_SLOT(ir_b);
-            container = IR_SLOT(ir_a);
-            if (Py_UNLIKELY(PyStackRef_IsInline(container))) {
+            sub = stack_pointer[-1];
+            container = stack_pointer[-2];
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
                 container = PyStackRef_Box(container);
                 if (PyStackRef_IsInline(container)) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(DELETE_SUBSCR);
-                IR_SLOT(ir_a) = container;
+                stack_pointer[-2] = container;
             }
-            container = IR_BORROW_KNOWN(container, ir_a);
-            if (Py_UNLIKELY(PyStackRef_IsInline(sub))) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
                 sub = PyStackRef_Box(sub);
                 if (PyStackRef_IsInline(sub)) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(DELETE_SUBSCR);
-                IR_SLOT(ir_b) = sub;
+                stack_pointer[-1] = sub;
             }
-            sub = IR_BORROW_KNOWN(sub, ir_b);
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
             int err = PyObject_DelItem(PyStackRef_AsPyObjectBorrow(container),
@@ -7436,16 +7485,15 @@
             INSTRUCTION_STATS(EXIT_INIT_CHECK);
             IR_CHECK_INPUT(ir_a, -1, 1);
             _PyStackRef should_be_none;
-            should_be_none = IR_SLOT(ir_a);
-            if (Py_UNLIKELY(PyStackRef_IsInline(should_be_none))) {
+            should_be_none = stack_pointer[-1];
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
                 should_be_none = PyStackRef_Box(should_be_none);
                 if (PyStackRef_IsInline(should_be_none)) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(EXIT_INIT_CHECK);
-                IR_SLOT(ir_a) = should_be_none;
+                stack_pointer[-1] = should_be_none;
             }
-            should_be_none = IR_BORROW_KNOWN(should_be_none, ir_a);
             if (!PyStackRef_IsNone(should_be_none)) {
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
@@ -7485,6 +7533,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(FORMAT_SIMPLE);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FORMAT_SIMPLE);
@@ -7496,6 +7545,7 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
                 value = PyStackRef_Box(value);
                 if (PyStackRef_IsInline(value)) {
+                    IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(FORMAT_SIMPLE);
@@ -7504,6 +7554,7 @@
             value = IR_BORROW_KNOWN(value, ir_b);
             PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
             if (!PyUnicode_CheckExact(value_o)) {
+                stack_pointer[-1] = value;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 PyObject *res_o = PyObject_Format(value_o, NULL);
@@ -7535,6 +7586,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(FORMAT_WITH_SPEC);
+            stack_pointer = IR_STACK_POINTER(ir_a, -2);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FORMAT_WITH_SPEC);
@@ -7549,6 +7601,8 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
                 value = PyStackRef_Box(value);
                 if (PyStackRef_IsInline(value)) {
+                    IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-2]);
+                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(FORMAT_WITH_SPEC);
@@ -7558,12 +7612,16 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(fmt_spec))) {
                 fmt_spec = PyStackRef_Box(fmt_spec);
                 if (PyStackRef_IsInline(fmt_spec)) {
+                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
+                    stack_pointer[-2] = value;
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(FORMAT_WITH_SPEC);
                 IR_SLOT(ir_c) = fmt_spec;
             }
             fmt_spec = IR_BORROW_KNOWN(fmt_spec, ir_c);
+            stack_pointer[-2] = value;
+            stack_pointer[-1] = fmt_spec;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
             PyObject *res_o = PyObject_Format(PyStackRef_AsPyObjectBorrow(value), PyStackRef_AsPyObjectBorrow(fmt_spec));
@@ -8020,6 +8078,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(GET_AITER);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_AITER);
@@ -8031,6 +8090,7 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(obj))) {
                 obj = PyStackRef_Box(obj);
                 if (PyStackRef_IsInline(obj)) {
+                    IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(GET_AITER);
@@ -8045,6 +8105,7 @@
                 getter = type->tp_as_async->am_aiter;
             }
             if (getter == NULL) {
+                stack_pointer[-1] = obj;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 _PyErr_Format(tstate, PyExc_TypeError,
@@ -8060,6 +8121,7 @@
                 _PyFrame_StackPointerInvalidate(frame);
                 JUMP_TO_LABEL(error);
             }
+            stack_pointer[-1] = obj;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
             iter_o = (*getter)(obj_o);
@@ -8137,6 +8199,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(GET_AWAITABLE);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_AWAITABLE);
@@ -8150,12 +8213,14 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(iterable))) {
                 iterable = PyStackRef_Box(iterable);
                 if (PyStackRef_IsInline(iterable)) {
+                    IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(GET_AWAITABLE);
                 IR_SLOT(ir_b) = iterable;
             }
             iterable = IR_BORROW_KNOWN(iterable, ir_b);
+            stack_pointer[-1] = iterable;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
             PyObject *iter_o = _PyEval_GetAwaitable(PyStackRef_AsPyObjectBorrow(iterable), oparg);
@@ -8409,6 +8474,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(IMPORT_NAME);
+            stack_pointer = IR_STACK_POINTER(ir_a, -2);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -8427,6 +8493,8 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(level))) {
                 level = PyStackRef_Box(level);
                 if (PyStackRef_IsInline(level)) {
+                    IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-2]);
+                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(IMPORT_NAME);
@@ -8436,6 +8504,8 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(fromlist))) {
                 fromlist = PyStackRef_Box(fromlist);
                 if (PyStackRef_IsInline(fromlist)) {
+                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
+                    stack_pointer[-2] = level;
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(IMPORT_NAME);
@@ -8445,6 +8515,8 @@
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
             if (!(oparg & 0x02)) {
+                stack_pointer[-2] = level;
+                stack_pointer[-1] = fromlist;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 res_o = _PyEval_LazyImportName(tstate, BUILTINS(), GLOBALS(),
@@ -8455,6 +8527,8 @@
                 _PyFrame_StackPointerInvalidate(frame);
             }
             else {
+                stack_pointer[-2] = level;
+                stack_pointer[-1] = fromlist;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 res_o = _PyEval_ImportName(tstate, BUILTINS(), GLOBALS(),
@@ -9974,16 +10048,14 @@
             INSTRUCTION_STATS(INTERPRETER_EXIT);
             IR_CHECK_INPUT(ir_a, -1, 1);
             _PyStackRef retval;
-            retval = IR_SLOT(ir_a);
-            if (Py_UNLIKELY(PyStackRef_IsInline(retval))) {
+            retval = stack_pointer[-1];
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
                 retval = PyStackRef_Box(retval);
                 if (PyStackRef_IsInline(retval)) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(INTERPRETER_EXIT);
-                IR_SLOT(ir_a) = retval;
             }
-            retval = IR_BORROW_KNOWN(retval, ir_a);
             assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
             assert(_PyFrame_IsIncomplete(frame));
             tstate->current_frame = frame->previous;
@@ -9994,45 +10066,6 @@
             #endif
             LLTRACE_RESUME_FRAME();
             return result;
-        }
-
-        TARGET(IR_ABSORBED_LOAD_FAST_BORROW) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = IR_ABSORBED_LOAD_FAST_BORROW;
-            (void)(opcode);
-            #endif
-            IR_ENTRY(IR_ABSORBED_LOAD_FAST_BORROW);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(IR_ABSORBED_LOAD_FAST_BORROW);
-            IR_CHECK_SLOT(ir_a, 0);
-            _PyStackRef value;
-            value = PyStackRef_NULL;
-            stack_pointer[0] = value;
-            stack_pointer += 1;
-            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-            DISPATCH();
-        }
-
-        TARGET(IR_ABSORBED_LOAD_FAST_BORROW_LOAD_FAST_BORROW) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = IR_ABSORBED_LOAD_FAST_BORROW_LOAD_FAST_BORROW;
-            (void)(opcode);
-            #endif
-            IR_ENTRY(IR_ABSORBED_LOAD_FAST_BORROW_LOAD_FAST_BORROW);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(IR_ABSORBED_LOAD_FAST_BORROW_LOAD_FAST_BORROW);
-            IR_CHECK_SLOT(ir_a, 0);
-            _PyStackRef value1;
-            _PyStackRef value2;
-            value1 = PyStackRef_NULL;
-            value2 = PyStackRef_NULL;
-            stack_pointer[0] = value1;
-            stack_pointer[1] = value2;
-            stack_pointer += 2;
-            ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-            DISPATCH();
         }
 
         TARGET(IR_EXT) {
@@ -10305,6 +10338,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_ATTR);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR);
@@ -10326,7 +10360,7 @@
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                    next_instr = this_instr;
+                    next_instr = this_instr;IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_LoadAttr(owner, next_instr, name);
@@ -10343,6 +10377,7 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
                     owner = PyStackRef_Box(owner);
                     if (PyStackRef_IsInline(owner)) {
+                        IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LOAD_ATTR);
@@ -10351,6 +10386,7 @@
                 owner = IR_BORROW_KNOWN(owner, ir_b);
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 if (oparg & 1) {
+                    stack_pointer[-1] = owner;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
                     attr = _Py_LoadAttr_StackRefSteal(tstate, owner, name, self_or_null);
@@ -10360,6 +10396,7 @@
                     }
                 }
                 else {
+                    stack_pointer[-1] = owner;
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
                     attr = _PyObject_GetAttrStackRef(PyStackRef_AsPyObjectBorrow(owner), name);
@@ -10389,6 +10426,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_ATTR_CLASS);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10431,6 +10469,7 @@
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
                 attr = PyStackRef_FromPyObjectNew(descr);
+                stack_pointer[-1] = owner;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 _PyStackRef tmp = owner;
@@ -10457,6 +10496,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10510,6 +10550,7 @@
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
                 attr = PyStackRef_FromPyObjectNew(descr);
+                stack_pointer[-1] = owner;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 _PyStackRef tmp = owner;
@@ -10536,6 +10577,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10636,6 +10678,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_ATTR_INSTANCE_VALUE);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10733,6 +10776,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_ATTR_METHOD_LAZY_DICT);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10798,6 +10842,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_ATTR_METHOD_NO_DICT);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10853,6 +10898,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_ATTR_METHOD_WITH_VALUES);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10918,6 +10964,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_ATTR_MODULE);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10941,6 +10988,7 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
                     owner = PyStackRef_Box(owner);
                     if (PyStackRef_IsInline(owner)) {
+                        IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LOAD_ATTR_MODULE);
@@ -11012,6 +11060,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_ATTR_NONDESCRIPTOR_NO_DICT);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11069,6 +11118,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11136,6 +11186,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_ATTR_PROPERTY);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11231,6 +11282,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_ATTR_SLOT);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11315,6 +11367,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_ATTR_WITH_HINT);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11747,6 +11800,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_FROM_DICT_OR_DEREF);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FROM_DICT_OR_DEREF);
@@ -11760,6 +11814,7 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(class_dict_st))) {
                 class_dict_st = PyStackRef_Box(class_dict_st);
                 if (PyStackRef_IsInline(class_dict_st)) {
+                    IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(LOAD_FROM_DICT_OR_DEREF);
@@ -11772,6 +11827,7 @@
             assert(oparg >= 0 && oparg < _PyFrame_GetCode(frame)->co_nlocalsplus);
             name = PyTuple_GET_ITEM(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
             int err;
+            stack_pointer[-1] = class_dict_st;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
             PyObject* value_o = _PyMapping_GetOptionalItem2(class_dict, name, &err);
@@ -11782,7 +11838,7 @@
             if (!value_o) {
                 PyCellObject *cell = (PyCellObject *)PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
                 value_o = PyCell_GetRef(cell);
-                if (value_o == NULL) {
+                if (value_o == NULL) {IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                     assert(stack_pointer == _PyFrame_GetStackPointer(frame));
                     _PyFrame_StackPointerValidate(frame);
                     _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
@@ -11790,7 +11846,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
-            else if (PyLazyImport_CheckExact(value_o)) {
+            else if (PyLazyImport_CheckExact(value_o)) {IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                 assert(stack_pointer == _PyFrame_GetStackPointer(frame));
                 _PyFrame_StackPointerValidate(frame);
                 Py_SETREF(value_o, _PyLazyImport_Reify(
@@ -11819,6 +11875,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(LOAD_FROM_DICT_OR_GLOBALS);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FROM_DICT_OR_GLOBALS);
@@ -11832,6 +11889,7 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(mod_or_class_dict))) {
                 mod_or_class_dict = PyStackRef_Box(mod_or_class_dict);
                 if (PyStackRef_IsInline(mod_or_class_dict)) {
+                    IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(LOAD_FROM_DICT_OR_GLOBALS);
@@ -11841,11 +11899,12 @@
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *namespace = PyStackRef_AsPyObjectBorrow(mod_or_class_dict);
             int err;
+            stack_pointer[-1] = mod_or_class_dict;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
             PyObject *v_o = _PyMapping_GetOptionalItem2(namespace, name, &err);
             _PyFrame_StackPointerInvalidate(frame);
-            if (v_o != NULL && PyLazyImport_CheckExact(v_o)) {
+            if (v_o != NULL && PyLazyImport_CheckExact(v_o)) {IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                 assert(stack_pointer == _PyFrame_GetStackPointer(frame));
                 _PyFrame_StackPointerValidate(frame);
                 Py_SETREF(v_o, _PyLazyImport_Reify(tstate, v_o, name, namespace));
@@ -12688,6 +12747,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(MAKE_FUNCTION);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MAKE_FUNCTION);
@@ -12703,6 +12763,7 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(codeobj_st))) {
                     codeobj_st = PyStackRef_Box(codeobj_st);
                     if (PyStackRef_IsInline(codeobj_st)) {
+                        IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(MAKE_FUNCTION);
@@ -12710,6 +12771,7 @@
                 }
                 codeobj_st = IR_BORROW_KNOWN(codeobj_st, ir_b);
                 PyObject *codeobj = PyStackRef_AsPyObjectBorrow(codeobj_st);
+                stack_pointer[-1] = codeobj_st;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 PyFunctionObject *func_obj = (PyFunctionObject *)
@@ -13027,16 +13089,15 @@
             INSTRUCTION_STATS(POP_EXCEPT);
             IR_CHECK_INPUT(ir_a, -1, 1);
             _PyStackRef exc_value;
-            exc_value = IR_SLOT(ir_a);
-            if (Py_UNLIKELY(PyStackRef_IsInline(exc_value))) {
+            exc_value = stack_pointer[-1];
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
                 exc_value = PyStackRef_Box(exc_value);
                 if (PyStackRef_IsInline(exc_value)) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(POP_EXCEPT);
-                IR_SLOT(ir_a) = exc_value;
+                stack_pointer[-1] = exc_value;
             }
-            exc_value = IR_BORROW_KNOWN(exc_value, ir_a);
             _PyErr_StackItem *exc_info = tstate->exc_info;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
@@ -14072,6 +14133,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(SET_FUNCTION_ATTRIBUTE);
+            stack_pointer = IR_STACK_POINTER(ir_a, -2);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14090,6 +14152,8 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(attr_st))) {
                 attr_st = PyStackRef_Box(attr_st);
                 if (PyStackRef_IsInline(attr_st)) {
+                    IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-2]);
+                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(SET_FUNCTION_ATTRIBUTE);
@@ -14099,6 +14163,8 @@
             if (Py_UNLIKELY(PyStackRef_IsInline(func_in))) {
                 func_in = PyStackRef_Box(func_in);
                 if (PyStackRef_IsInline(func_in)) {
+                    IR_CLEAR_IF_BORROWED(ir_c, stack_pointer[-1]);
+                    stack_pointer[-2] = attr_st;
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(SET_FUNCTION_ATTRIBUTE);
@@ -14200,8 +14266,8 @@
             _PyStackRef owner;
             // _SPECIALIZE_STORE_ATTR
             {
-                owner = IR_SLOT(ir_b);
-                v = IR_SLOT(ir_a);
+                owner = stack_pointer[-1];
+                v = stack_pointer[-2];
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -14221,24 +14287,22 @@
             }
             // _STORE_ATTR
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
                     v = PyStackRef_Box(v);
                     if (PyStackRef_IsInline(v)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(STORE_ATTR);
-                    IR_SLOT(ir_a) = v;
+                    stack_pointer[-2] = v;
                 }
-                v = IR_BORROW_KNOWN(v, ir_a);
-                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
                     owner = PyStackRef_Box(owner);
                     if (PyStackRef_IsInline(owner)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(STORE_ATTR);
-                    IR_SLOT(ir_b) = owner;
+                    stack_pointer[-1] = owner;
                 }
-                owner = IR_BORROW_KNOWN(owner, ir_b);
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
@@ -14283,13 +14347,12 @@
             _PyStackRef o;
             // _LOCK_OBJECT
             {
-                value = IR_SLOT(ir_b);
-                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(value))) {
+                value = stack_pointer[-1];
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                value = IR_BORROW_KNOWN(value, ir_b);
                 if (!LOCK_OBJECT(PyStackRef_AsPyObjectBorrow(value))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
@@ -14329,17 +14392,16 @@
             }
             // _STORE_ATTR_INSTANCE_VALUE
             {
-                value = IR_SLOT(ir_a);
+                value = stack_pointer[-2];
                 uint32_t offset = fb->offset;
-                if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
                     value = PyStackRef_Box(value);
                     if (PyStackRef_IsInline(value)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(STORE_ATTR_INSTANCE_VALUE);
-                    IR_SLOT(ir_a) = value;
+                    stack_pointer[-2] = value;
                 }
-                value = IR_BORROW_KNOWN(value, ir_a);
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 STAT_INC(STORE_ATTR, hit);
                 assert(_PyObject_GetManagedDict(owner_o) == NULL);
@@ -14393,14 +14455,13 @@
             _PyStackRef o;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(ir_b);
+                owner = stack_pointer[-1];
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, ir_b);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -14411,17 +14472,16 @@
             }
             // _STORE_ATTR_SLOT
             {
-                value = IR_SLOT(ir_a);
+                value = stack_pointer[-2];
                 uint32_t index = fb->index;
-                if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
                     value = PyStackRef_Box(value);
                     if (PyStackRef_IsInline(value)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(STORE_ATTR_SLOT);
-                    IR_SLOT(ir_a) = value;
+                    stack_pointer[-2] = value;
                 }
-                value = IR_BORROW_KNOWN(value, ir_a);
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 if (!LOCK_OBJECT(owner_o)) {
                     UPDATE_MISS_STATS(STORE_ATTR);
@@ -14476,14 +14536,13 @@
             _PyStackRef o;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(ir_b);
+                owner = stack_pointer[-1];
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-1]))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                owner = IR_BORROW_KNOWN(owner, ir_b);
                 PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -14494,17 +14553,16 @@
             }
             // _STORE_ATTR_WITH_HINT
             {
-                value = IR_SLOT(ir_a);
+                value = stack_pointer[-2];
                 uint32_t hint = fb->hint;
-                if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
                     value = PyStackRef_Box(value);
                     if (PyStackRef_IsInline(value)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(STORE_ATTR_WITH_HINT);
-                    IR_SLOT(ir_a) = value;
+                    stack_pointer[-2] = value;
                 }
-                value = IR_BORROW_KNOWN(value, ir_a);
                 PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
                 PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
@@ -14592,16 +14650,15 @@
             (void)oparg;
             IR_CHECK_INPUT(ir_a, -1, 1);
             _PyStackRef v;
-            v = IR_SLOT(ir_a);
-            if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
+            v = stack_pointer[-1];
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
                 v = PyStackRef_Box(v);
                 if (PyStackRef_IsInline(v)) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(STORE_DEREF);
-                IR_SLOT(ir_a) = v;
+                stack_pointer[-1] = v;
             }
-            v = IR_BORROW_KNOWN(v, ir_a);
             PyCellObject *cell = (PyCellObject *)PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
             _PyFrame_SetStackPointer(frame, stack_pointer);
             _PyFrame_StackPointerValidate(frame);
@@ -14726,16 +14783,15 @@
             (void)oparg;
             IR_CHECK_INPUT(ir_a, -1, 1);
             _PyStackRef v;
-            v = IR_SLOT(ir_a);
-            if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
+            v = stack_pointer[-1];
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
                 v = PyStackRef_Box(v);
                 if (PyStackRef_IsInline(v)) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(STORE_GLOBAL);
-                IR_SLOT(ir_a) = v;
+                stack_pointer[-1] = v;
             }
-            v = IR_BORROW_KNOWN(v, ir_a);
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             int err;
             if (PyStackRef_IsNull(v)) {
@@ -14900,7 +14956,7 @@
             // _SPECIALIZE_STORE_SUBSCR
             {
                 sub = stack_pointer[-1];
-                container = IR_SLOT(ir_b);
+                container = stack_pointer[-2];
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -14917,25 +14973,23 @@
             }
             // _STORE_SUBSCR
             {
-                v = IR_SLOT(ir_a);
-                if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
+                v = stack_pointer[-3];
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-3]))) {
                     v = PyStackRef_Box(v);
                     if (PyStackRef_IsInline(v)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(STORE_SUBSCR);
-                    IR_SLOT(ir_a) = v;
+                    stack_pointer[-3] = v;
                 }
-                v = IR_BORROW_KNOWN(v, ir_a);
-                if (Py_UNLIKELY(PyStackRef_IsInline(container))) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-2]))) {
                     container = PyStackRef_Box(container);
                     if (PyStackRef_IsInline(container)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(STORE_SUBSCR);
-                    IR_SLOT(ir_b) = container;
+                    stack_pointer[-2] = container;
                 }
-                container = IR_BORROW_KNOWN(container, ir_b);
                 if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
                     sub = PyStackRef_Box(sub);
                     if (PyStackRef_IsInline(sub)) {
@@ -14999,13 +15053,12 @@
             _PyStackRef st;
             // _GUARD_NOS_DICT_STORE_SUBSCRIPT
             {
-                nos = IR_SLOT(ir_b);
-                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
+                nos = stack_pointer[-2];
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
                     JUMP_TO_PREDICTED(STORE_SUBSCR);
                 }
-                nos = IR_BORROW_KNOWN(nos, ir_b);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!Py_TYPE(o)->tp_as_mapping) {
                     UPDATE_MISS_STATS(STORE_SUBSCR);
@@ -15022,16 +15075,15 @@
             {
                 sub = stack_pointer[-1];
                 dict_st = nos;
-                value = IR_SLOT(ir_a);
-                if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                value = stack_pointer[-3];
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-3]))) {
                     value = PyStackRef_Box(value);
                     if (PyStackRef_IsInline(value)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(STORE_SUBSCR_DICT);
-                    IR_SLOT(ir_a) = value;
+                    stack_pointer[-3] = value;
                 }
-                value = IR_BORROW_KNOWN(value, ir_a);
                 if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
                     sub = PyStackRef_Box(sub);
                     if (PyStackRef_IsInline(sub)) {
@@ -15104,13 +15156,12 @@
             }
             // _GUARD_NOS_LIST
             {
-                nos = IR_SLOT(ir_b);
-                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
+                nos = stack_pointer[-2];
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&stack_pointer[-2]))) {
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
                     JUMP_TO_PREDICTED(STORE_SUBSCR);
                 }
-                nos = IR_BORROW_KNOWN(nos, ir_b);
                 PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyList_CheckExact(o)) {
                     UPDATE_MISS_STATS(STORE_SUBSCR);
@@ -15122,16 +15173,15 @@
             {
                 sub_st = value;
                 list_st = nos;
-                value = IR_SLOT(ir_a);
-                if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                value = stack_pointer[-3];
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-3]))) {
                     value = PyStackRef_Box(value);
                     if (PyStackRef_IsInline(value)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(STORE_SUBSCR_LIST_INT);
-                    IR_SLOT(ir_a) = value;
+                    stack_pointer[-3] = value;
                 }
-                value = IR_BORROW_KNOWN(value, ir_a);
                 PyObject *list = PyStackRef_AsPyObjectBorrow(list_st);
                 assert(PyList_CheckExact(list));
                 Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
@@ -15537,6 +15587,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(UNARY_INVERT);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNARY_INVERT);
@@ -15551,12 +15602,14 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
                     value = PyStackRef_Box(value);
                     if (PyStackRef_IsInline(value)) {
+                        IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(UNARY_INVERT);
                     IR_SLOT(ir_b) = value;
                 }
                 value = IR_BORROW_KNOWN(value, ir_b);
+                stack_pointer[-1] = value;
                 _PyFrame_SetStackPointer(frame, stack_pointer);
                 _PyFrame_StackPointerValidate(frame);
                 PyObject *res_o = PyNumber_Invert(PyStackRef_AsPyObjectBorrow(value));
@@ -15672,17 +15725,16 @@
             IR_CHECK_INPUT(ir_a, -1, 1);
             _PyStackRef seq;
             _PyStackRef *top;
-            seq = IR_SLOT(ir_a);
+            seq = stack_pointer[-1];
             top = &stack_pointer[(oparg & 0xFF) + (oparg >> 8)];
-            if (Py_UNLIKELY(PyStackRef_IsInline(seq))) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&stack_pointer[-1]))) {
                 seq = PyStackRef_Box(seq);
                 if (PyStackRef_IsInline(seq)) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(UNPACK_EX);
-                IR_SLOT(ir_a) = seq;
+                stack_pointer[-1] = seq;
             }
-            seq = IR_BORROW_KNOWN(seq, ir_a);
             PyObject *seq_o = _PyStackRef_AsPyObjectStealPointer(seq);
             stack_pointer += -1;
             ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -15708,6 +15760,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(UNPACK_SEQUENCE);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNPACK_SEQUENCE);
@@ -15727,7 +15780,7 @@
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
+                    next_instr = this_instr;IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                     _PyFrame_SetStackPointer(frame, stack_pointer);
                     _PyFrame_StackPointerValidate(frame);
                     _Py_Specialize_UnpackSequence(seq, next_instr, oparg);
@@ -15745,6 +15798,7 @@
                 if (Py_UNLIKELY(PyStackRef_IsInline(seq))) {
                     seq = PyStackRef_Box(seq);
                     if (PyStackRef_IsInline(seq)) {
+                        IR_CLEAR_IF_BORROWED(ir_b, stack_pointer[-1]);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(UNPACK_SEQUENCE);
@@ -15777,6 +15831,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(UNPACK_SEQUENCE_LIST);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15847,6 +15902,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(UNPACK_SEQUENCE_TUPLE);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15908,6 +15964,7 @@
             (void)(opcode);
             #endif
             IR_ENTRY(UNPACK_SEQUENCE_TWO_TUPLE);
+            stack_pointer = IR_STACK_POINTER(ir_a, -1);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -16254,6 +16311,12 @@ JUMP_TO_LABEL(error);
                 return NULL;
             }
             next_instr = frame->instr_ptr;
+            #ifdef Py_IR_INTERP
+            _PyIRBlock *block = _PyFrame_IRBlock(frame);
+            if (_PyIR_Start(block, next_instr) != _PyIR_Anchor(block, next_instr)) {
+                next_instr++;
+            }
+            #endif
             stack_pointer = _PyFrame_GetStackPointer(frame);
             _PyFrame_StackPointerInvalidate(frame);
             JUMP_TO_LABEL(error);

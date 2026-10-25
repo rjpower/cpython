@@ -226,6 +226,11 @@ PyAPI_FUNC(int) _PyIR_OriginalHandler(struct _PyInterpreterFrame *frame,
 extern int _PyIR_PrepareInstrumentation(PyCodeObject *co);
 extern void _PyIR_SyncInstrumentation(PyCodeObject *co, int offset);
 
+/* The anchor of the instruction whose words cover bytecode offset offset:
+ * offset itself, unless offset is an EXTENDED_ARG prefix or a load that the
+ * lowering absorbed into its consumer.  Before lowering, offset. */
+extern int _PyIR_WordAnchor(PyCodeObject *co, int offset);
+
 /* Write into instructions, a copy of co_code_adaptive, the handlers and
  * feedback of the lowered block in the layout of the stack bytecode, for
  * code._co_code_adaptive and dis.  write_field writes the fields of an

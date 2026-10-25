@@ -15435,6 +15435,12 @@ JUMP_TO_LABEL(error);
                 return NULL;
             }
             next_instr = frame->instr_ptr;
+            #ifdef Py_IR_INTERP
+            _PyIRBlock *block = _PyFrame_IRBlock(frame);
+            if (_PyIR_Start(block, next_instr) != _PyIR_Anchor(block, next_instr)) {
+                next_instr++;
+            }
+            #endif
             stack_pointer = _PyFrame_GetStackPointer(frame);
             _PyFrame_StackPointerInvalidate(frame);
             JUMP_TO_LABEL(error);

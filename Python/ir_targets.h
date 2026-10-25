@@ -3,7 +3,7 @@
 //   Python/bytecodes.c
 // Do not edit!
 #if !_Py_TAIL_CALL_INTERP
-static void *opcode_targets[260] = {
+static void *opcode_targets[258] = {
     &&TARGET_CACHE,
     &&TARGET_BINARY_SLICE,
     &&TARGET_BUILD_TEMPLATE,
@@ -260,13 +260,11 @@ static void *opcode_targets[260] = {
     &&TARGET_INSTRUMENTED_CALL_FUNCTION_EX,
     &&TARGET_INSTRUMENTED_JUMP_BACKWARD,
     &&TARGET_INSTRUMENTED_LINE,
-    &&TARGET_IR_ABSORBED_LOAD_FAST_BORROW,
-    &&TARGET_IR_ABSORBED_LOAD_FAST_BORROW_LOAD_FAST_BORROW,
     &&TARGET_IR_EXT,
     &&TARGET_IR_LOWER,
 };
 #if IR_LAZY_FIELDS
-static void *ir_body_targets[260] = {
+static void *ir_body_targets[258] = {
     &&IR_BODY_CACHE,
     &&IR_BODY_BINARY_SLICE,
     &&IR_BODY_BUILD_TEMPLATE,
@@ -523,14 +521,12 @@ static void *ir_body_targets[260] = {
     &&IR_BODY_INSTRUMENTED_CALL_FUNCTION_EX,
     &&IR_BODY_INSTRUMENTED_JUMP_BACKWARD,
     &&IR_BODY_INSTRUMENTED_LINE,
-    &&IR_BODY_IR_ABSORBED_LOAD_FAST_BORROW,
-    &&IR_BODY_IR_ABSORBED_LOAD_FAST_BORROW_LOAD_FAST_BORROW,
     &&IR_BODY_IR_EXT,
     &&IR_BODY_IR_LOWER,
 };
 #endif
 #else /* _Py_TAIL_CALL_INTERP */
-static py_tail_call_funcptr instruction_funcptr_handler_table[260];
+static py_tail_call_funcptr instruction_funcptr_handler_table[258];
 
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_pop_2_error(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_pop_1_error(TAIL_CALL_PARAMS);
@@ -667,8 +663,6 @@ static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_INSTRUMENTED_RESUME(TAIL_CALL_PA
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_INSTRUMENTED_RETURN_VALUE(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_INSTRUMENTED_YIELD_VALUE(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_INTERPRETER_EXIT(TAIL_CALL_PARAMS);
-static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_IR_ABSORBED_LOAD_FAST_BORROW(TAIL_CALL_PARAMS);
-static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_IR_ABSORBED_LOAD_FAST_BORROW_LOAD_FAST_BORROW(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_IR_EXT(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_IR_LOWER(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_IS_OP(TAIL_CALL_PARAMS);
@@ -792,7 +786,7 @@ static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_UNKNOWN_OPCODE(TAIL_CALL_PARAMS)
 JUMP_TO_LABEL(error);
 }
 
-static py_tail_call_funcptr instruction_funcptr_handler_table[260] = {
+static py_tail_call_funcptr instruction_funcptr_handler_table[258] = {
     [0] = _TAIL_CALL_CACHE,
     [1] = _TAIL_CALL_BINARY_SLICE,
     [2] = _TAIL_CALL_BUILD_TEMPLATE,
@@ -1049,9 +1043,7 @@ static py_tail_call_funcptr instruction_funcptr_handler_table[260] = {
     [253] = _TAIL_CALL_INSTRUMENTED_CALL_FUNCTION_EX,
     [254] = _TAIL_CALL_INSTRUMENTED_JUMP_BACKWARD,
     [255] = _TAIL_CALL_INSTRUMENTED_LINE,
-    [256] = _TAIL_CALL_IR_ABSORBED_LOAD_FAST_BORROW,
-    [257] = _TAIL_CALL_IR_ABSORBED_LOAD_FAST_BORROW_LOAD_FAST_BORROW,
-    [258] = _TAIL_CALL_IR_EXT,
-    [259] = _TAIL_CALL_IR_LOWER,
+    [256] = _TAIL_CALL_IR_EXT,
+    [257] = _TAIL_CALL_IR_LOWER,
 };
 #endif /* _Py_TAIL_CALL_INTERP */

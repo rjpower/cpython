@@ -164,13 +164,34 @@
  * IR_BODY_ label, past the decoding, and sets ir_word to IR_FIELDS_PASSED.
  * A specialisation that deoptimises jumps to the PREDICTED_ label of its
  * family head, which takes the fields from wherever its entry found them.
- * The tail-call and switch builds decode the fields at dispatch. */
+ * The tail-call and switch builds decode the fields at dispatch.
+ *
+ * Fields never change once a block is lowered, so with the GIL a handler
+ * reads each from the word in memory with one 16-bit load, where shifting it
+ * out of ir_word takes three instructions.  The free-threaded build decodes
+ * ir_word, which it loaded atomically. */
 #if defined(Py_IR_INTERP) && USE_COMPUTED_GOTOS && !_Py_TAIL_CALL_INTERP
 #  define IR_LAZY_FIELDS 1
 /* No main word runs IR_EXT. */
 #  define IR_FIELDS_PASSED ((_PyIRWord)IR_EXT)
-#  define IR_DECODE_FIELDS() \
+#  define IR_DECODE_WORD_FIELDS() \
     (ir_a = IR_A(ir_word), ir_b = IR_B(ir_word), ir_c = IR_C(ir_word))
+#  if !defined(Py_GIL_DISABLED) && PY_LITTLE_ENDIAN
+/* 16-bit unit K of the word at W, through memcpy since W is a uint64_t */
+static inline uintptr_t
+ir_field_in_memory(const _PyIRWord *w, int k)
+{
+    uint16_t field;
+    memcpy(&field, (const char *)w + 2 * k, sizeof(field));
+    return field;
+}
+#    define IR_DECODE_FIELDS() \
+    (ir_a = ir_field_in_memory(next_instr, 1), \
+     ir_b = ir_field_in_memory(next_instr, 2), \
+     ir_c = ir_field_in_memory(next_instr, 3))
+#  else
+#    define IR_DECODE_FIELDS() IR_DECODE_WORD_FIELDS()
+#  endif
 #  define IR_TAKE_FIELDS() \
     (ir_a = ir_fields[0], ir_b = ir_fields[1], ir_c = ir_fields[2])
 #  undef DISPATCH_GOTO
@@ -198,7 +219,7 @@
             IR_TAKE_FIELDS(); \
         } \
         else { \
-            IR_DECODE_FIELDS(); \
+            IR_DECODE_WORD_FIELDS(); \
         } \
     }
 #else
@@ -618,16 +639,32 @@ static_assert(IR_BORROW == Py_TAG_REFCNT,
 /* The feedback entry at distance F from the instruction. */
 #define IR_FB(INSTR, F) ((void *)((INSTR) + (F)))
 
-/* Step 4 keeps every temporary in its canonical slot, at OFF from
- * stack_pointer.  An input of N may instead carry IR_BORROW and name a
- * local; its canonical slot then holds NULL. */
+/* The stack pointer before an instruction whose dst field F names the slot
+ * at OFF from it.  The loads that an instruction absorbs have no words, so
+ * the stack pointer at its dispatch may lag behind.  A dst never carries
+ * IR_BORROW, so F is the slot index times two. */
+#define IR_STACK_POINTER(F, OFF) \
+    ((_PyStackRef *)((char *)frame->localsplus + \
+                     (F) * (sizeof(_PyStackRef) / 2)) - (OFF))
+
+/* An absorbed load leaves the canonical slot of its value as it was, so
+ * before code that reads the stack runs, a handler clears the slot of an
+ * input that it reads through field F if F names a local. */
+#define IR_CLEAR_IF_BORROWED(F, SLOT) \
+    do { \
+        if ((F) & IR_BORROW) { \
+            (SLOT) = PyStackRef_NULL; \
+        } \
+    } while (0)
+
+/* Every temporary lives in its canonical slot, at OFF from stack_pointer.
+ * An input of N may instead carry IR_BORROW and name a local. */
 #ifdef Py_DEBUG
 #  define IR_CHECK_SLOT(F, OFF) \
     assert(((F) & IR_BORROW) == 0 && &IR_SLOT(F) == &stack_pointer[(OFF)])
 #  define IR_CHECK_INPUT(F, OFF, N) \
     assert(((F) & IR_BORROW) \
-           ? (PyStackRef_IsNull(stack_pointer[(OFF)]) && \
-              (int)IR_SLOT_INDEX(F) < _PyFrame_GetCode(frame)->co_nlocalsplus) \
+           ? (int)IR_SLOT_INDEX(F) < _PyFrame_GetCode(frame)->co_nlocalsplus \
            : &IR_SLOT(F) == &stack_pointer[(OFF)])
 #else
 #  define IR_CHECK_SLOT(F, OFF) ((void)0)

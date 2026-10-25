@@ -548,19 +548,18 @@ items 1 to 4 on 2026-10-24; the others settle points the note left open.
    Register-style handlers read through their fields only the inputs that may
    be borrowed locals; debug builds assert that every slot field names the
    canonical slot of its input or output (`IR_CHECK_SLOT`, `IR_CHECK_INPUT`).
-   Step 5 removes the stack pointer from register-style handlers.
+   Step 5 keeps the stack pointer too; see item 21.
 4. **Absorbed loads keep their word.** The lowering replaces a
    `LOAD_FAST_BORROW` whose consumer reads the local through `IR_BORROW` with
    `IR_ABSORBED_LOAD_FAST_BORROW`, which pushes NULL. Depths, offsets, jump
-   targets and instrumentation stay one word per instruction; step 5 deletes
-   these words.
+   targets and instrumentation stay one word per instruction. Step 5 deletes
+   these words; see item 20.
 5. **Inline values in borrowed inputs.** An input used as an object that holds
    an inline int or float is boxed, and the box is written back to its slot,
    local or temporary, so that the slot owns it and the borrow stays valid.
    Guards deoptimise instead of boxing.
 6. **Formats are computed per family.** A family's head, its specialisations,
-   its `INSTRUMENTED_` twin and any `IR_ABSORBED_` handler named after a member
-   share one format. Inputs are aligned at the top of the stack and cover the
+   and its `INSTRUMENTED_` twin share one format. Inputs are aligned at the top of the stack and cover the
    member that reads deepest, since `INSTRUMENTED_END_FOR` reads two inputs
    that `END_FOR` leaves alone. Dst is the lowest first new output of any
    member. A format is window style if a member is annotated `window`, takes
@@ -626,3 +625,81 @@ Step 4 adds the following.
     and an `ir_block` section (words, nwords, flags and pcmap); a reader maps
     `instr_ptr` to its anchor and reads the opcode from `co_code_adaptive`.
     `_remote_debugging` and Tools/gdb/libpython.py do so.
+
+Step 5 adds the following.
+
+20. **Absorbed loads have no word.** The lowering deletes a
+    `LOAD_FAST_BORROW` or `LOAD_FAST_BORROW_LOAD_FAST_BORROW` whose consumer
+    reads its locals through `IR_BORROW` fields, so the consumer is the only
+    dispatch. Only NOPs and other absorbed loads may lie between them, and no
+    line, jump target, exception handler or edge of an exception range may
+    start after the load. The consumer's pcmap start is the first absorbed
+    load, so `_PyIR_InstrAt` maps the load's offset to the consumer, and the
+    anchor stays the consumer's offset. Absorbed loads are 5.0 percent of the
+    standard library's instructions; against step 4, words fall 4.7 percent
+    and lowered bytes 2.6 percent.
+21. **Handlers find the stack pointer through dst.** An absorbed load leaves
+    its canonical slot alone, so `stack_pointer` lags behind at dispatch. A
+    register-style handler with a borrowable input sets `stack_pointer =
+    IR_STACK_POINTER(dst, dst_offset)` on entry. The assignment is
+    idempotent, so entries through `PREDICTED_`, `IR_BODY_` and
+    `DISPATCH_SAME_OPARG` stay correct. A format without a dst borrows
+    nothing, so `STORE_ATTR*` and `STORE_SUBSCR*` no longer absorb their
+    loads.
+22. **Dead temporaries are not written back.** The canonical slot of an
+    absorbed input holds whatever the frame left there, and is written only
+    where code that reads the stack can run: once the input is known to be a
+    pointer, a flush before an escaping call stores the borrowed reference,
+    which is harmless to close; an exit before that, such as a failed box,
+    clears the slot with `IR_CLEAR_IF_BORROWED`.
+23. **Unwinding into a consumer.** When a frame that a consumer pushed raises
+    (`LOAD_ATTR_PROPERTY`, `LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN`),
+    `exit_unwind` looks up the code unit before the call, as the stack
+    interpreter does. If the call's word starts with absorbed loads or an
+    `EXTENDED_ARG`, that unit belongs to the word itself, not to the previous
+    word, so `exit_unwind` looks up the word itself. Item 20 keeps the
+    consumer in the range of its loads.
+24. **Handlers read fields from memory.** In the default build a handler
+    reads A, B and C with one 16-bit load each from its word, to which
+    `next_instr` still points, instead of shifting them out of `ir_word`.
+    Fields never change once a block is lowered. The free-threaded build and
+    `IR_PREDICTED` decode `ir_word`. Profiling richards against the stack
+    build found this the largest cost per instruction.
+25. **Instrumentation stays on the bytecode shadow.** The lowering absorbs
+    nothing while the code object has monitoring data or any tool has global
+    events, so code lowered under a tracer runs one word per instruction. For
+    code lowered before, `initialize_lines` moves a line start from an
+    absorbed load to its consumer (`_PyIR_WordAnchor`), and no `INSTRUCTION`
+    event is raised for an absorbed load: `f_trace_opcodes` misses those
+    opcodes, which test_ir records as an expected failure. This falls short
+    of decision 10.5; step 6 re-lowers such code one word per instruction.
+26. **Lowering cost.** Line starts are marked only once a load could be
+    absorbed, layout takes one pass when every field fits in 16 bits, and
+    handler choice, absorption and feedback allocation share one loop. The
+    lowering still costs about 300 instructions per bytecode instruction:
+    about 66 million in a richards run, against 13 million for quickening in
+    the stack build. That is all of richards' gap, since its loop costs less
+    than the stack build's.
+27. **Free-threaded hang, a step 4 bug.**
+    `test_free_threading.test_monitoring` (SetPreTraceMultiThreaded,
+    test_instrumentation) hangs in the free-threaded IR build and passes in
+    63 ms in the free-threaded stack build. It must be fixed before the IR
+    becomes the default, in its own commit after step 5.
+
+Left for step 6, in order of measured cost:
+
+- Lowering within twice the cost of quickening, in a single pass.
+- `COMPARE_OP` fused with the following `POP_JUMP_IF`, with an int and float
+  fast path guarded by feedback.
+- Oparg folding: the specialised `LOAD_ATTR` handlers are still 7 to 8
+  instructions longer than the stack build's, from three field loads against
+  one oparg load, the `lea` for `stack_pointer`, the owner read through its
+  field and the borrow OR.
+- Re-lowering one word per instruction when opcode events are enabled,
+  which removes the expected failure in test_ir.
+- Absorption into formats without a dst (`STORE_ATTR*`, `STORE_SUBSCR*`), and
+  borrowable inputs for `BINARY_OP`, `COMPARE_OP` and `TO_BOOL` with tagged
+  values, where they take none today.
+- Smaller items: the dependent load of `co->_co_ir->words` at frame push,
+  `CALL_PY_EXACT_ARGS` (8 instructions over the stack build),
+  `STORE_ATTR_INSTANCE_VALUE` and `TO_BOOL`.

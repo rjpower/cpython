@@ -508,6 +508,11 @@ class GCTests(unittest.TestCase):
             while not exit:
                 make_nested()
 
+        if support.Py_GC:
+            # Reference counting finalizes these objects with the collector
+            # disabled; the tracing collector finalizes only when it runs.
+            gc.enable()
+            self.addCleanup(gc.disable)
         old_switchinterval = sys.getswitchinterval()
         support.setswitchinterval(1e-5)
         try:

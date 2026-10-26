@@ -95,6 +95,7 @@ struct _gc_live_state {
     size_t qhead;
     size_t qtail;
     size_t qcap;
+    // The number of threads in run_queue().
     int running_queue;
     // The second pass of an explicit collection is not verified again.
     int skip_verify;
@@ -253,16 +254,21 @@ run_destroy_hook(PyThreadState *tstate, PyObject *op)
 }
 
 /* Run the queued callbacks and finalizers.  A collection that one of them
-   triggers queues more at the tail, and this loop runs those too. */
+   triggers queues more at the tail, and this loop runs those too.  Every
+   thread that collects joins the threads already here, so that threads
+   whose finalizers release the GIL cannot make garbage faster than the
+   queue drains: each waits for the queue before it goes on. */
 static int
 run_queue(PyThreadState *tstate)
 {
     struct _gc_live_state *ls = tstate->interp->gc.live;
-    if (ls == NULL || ls->running_queue || ls->qhead == ls->qtail) {
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    if (ls == NULL || ts->gc_trace.running_queue || ls->qhead == ls->qtail) {
         return 0;
     }
     int nfinalized = 0;
-    ls->running_queue = 1;
+    ts->gc_trace.running_queue = 1;
+    ls->running_queue++;
     PyObject *exc = _PyErr_GetRaisedException(tstate);
     while (ls->qhead < ls->qtail) {
         // The call's objects stay reachable from this frame.
@@ -304,7 +310,8 @@ run_queue(PyThreadState *tstate)
         }
     }
     ls->qhead = ls->qtail = 0;
-    ls->running_queue = 0;
+    ls->running_queue--;
+    ts->gc_trace.running_queue = 0;
     _PyErr_SetRaisedException(tstate, exc);
     return nfinalized;
 }

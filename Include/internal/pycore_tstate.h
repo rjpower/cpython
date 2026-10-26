@@ -85,6 +85,8 @@ typedef struct _PyThreadStateImpl {
         // a collection.
         uintptr_t entry_regs[24];
         uintptr_t entry_sp;
+        // This thread is running the live collector's queue.
+        int running_queue;
 #endif
     } gc_trace;
 #endif

@@ -517,6 +517,14 @@ garbage collection runs.
    The caller must have an :term:`attached thread state`.
 
 
+.. c:macro:: Py_HAVE_PYGC_ADDROOT
+
+   Defined in every build that has :c:func:`PyGC_AddRoot` and
+   :c:func:`PyGC_RemoveRoot`, so that code that also builds against other
+   interpreters can register its roots wherever the functions exist, and
+   not only under ``--with-gc``.
+
+
 Querying Garbage Collector State
 --------------------------------
 

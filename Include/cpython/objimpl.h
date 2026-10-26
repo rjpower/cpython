@@ -113,3 +113,5 @@ PyAPI_FUNC(void) PyUnstable_GC_VisitObjects(gcvisitobjects_t callback, void* arg
  * set.  PyGC_RemoveRoot() removes a root added for the same address. */
 PyAPI_FUNC(int) PyGC_AddRoot(PyObject **ref);
 PyAPI_FUNC(void) PyGC_RemoveRoot(PyObject **ref);
+/* For code that also builds against interpreters without these. */
+#define Py_HAVE_PYGC_ADDROOT 1

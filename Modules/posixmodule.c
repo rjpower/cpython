@@ -17405,7 +17405,19 @@ static PyMethodDef ScandirIterator_methods[] = {
     {NULL}
 };
 
+/* The type is not a GC type, but the tracing mark must reach the path
+   objects.  The mark visits the heap type itself. */
+static int
+ScandirIterator_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    ScandirIterator *iterator = ScandirIterator_CAST(op);
+    Py_VISIT(iterator->path.object);
+    Py_VISIT(iterator->path.cleanup);
+    return 0;
+}
+
 static PyType_Slot ScandirIteratorType_slots[] = {
+    {Py_tp_traverse, ScandirIterator_traverse},
     {Py_tp_dealloc, ScandirIterator_dealloc},
     {Py_tp_finalize, ScandirIterator_finalize},
     {Py_tp_iter, PyObject_SelfIter},

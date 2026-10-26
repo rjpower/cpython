@@ -793,6 +793,19 @@ static PyMemberDef range_members[] = {
     {0}
 };
 
+/* range is not a GC type: its members are ints, which cannot form cycles.
+   The traverse function lets the tracing mark reach them. */
+static int
+range_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    rangeobject *r = (rangeobject *)op;
+    Py_VISIT(r->start);
+    Py_VISIT(r->stop);
+    Py_VISIT(r->step);
+    Py_VISIT(r->length);
+    return 0;
+}
+
 PyTypeObject PyRange_Type = {
         PyVarObject_HEAD_INIT(&PyType_Type, 0)
         "range",                /* Name of this type */
@@ -815,7 +828,7 @@ PyTypeObject PyRange_Type = {
         0,                      /* tp_as_buffer */
         Py_TPFLAGS_DEFAULT | Py_TPFLAGS_SEQUENCE,  /* tp_flags */
         range_doc,              /* tp_doc */
-        0,                      /* tp_traverse */
+        range_traverse,         /* tp_traverse */
         0,                      /* tp_clear */
         range_richcompare,      /* tp_richcompare */
         0,                      /* tp_weaklistoffset */
@@ -1186,6 +1199,16 @@ longrangeiter_next_impl(longrangeiterobject *self)
     return result;
 }
 
+static int
+longrangeiter_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    longrangeiterobject *r = (longrangeiterobject *)op;
+    Py_VISIT(r->start);
+    Py_VISIT(r->step);
+    Py_VISIT(r->len);
+    return 0;
+}
+
 PyTypeObject PyLongRangeIter_Type = {
         PyVarObject_HEAD_INIT(&PyType_Type, 0)
         "longrange_iterator",                   /* tp_name */
@@ -1209,7 +1232,7 @@ PyTypeObject PyLongRangeIter_Type = {
         0,                                      /* tp_as_buffer */
         Py_TPFLAGS_DEFAULT,                     /* tp_flags */
         0,                                      /* tp_doc */
-        0,                                      /* tp_traverse */
+        longrangeiter_traverse,                 /* tp_traverse */
         0,                                      /* tp_clear */
         0,                                      /* tp_richcompare */
         0,                                      /* tp_weaklistoffset */

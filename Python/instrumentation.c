@@ -3000,11 +3000,20 @@ dealloc_branch_handler(PyObject *op)
     PyObject_Free(self);
 }
 
+/* Not a GC type, but the tracing mark must reach the handler. */
+static int
+traverse_branch_handler(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(_PyLegacyBranchEventHandler_CAST(op)->handler);
+    return 0;
+}
+
 static PyTypeObject _PyLegacyBranchEventHandler_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "sys.monitoring.branch_event_handler",
     sizeof(_PyLegacyBranchEventHandler),
     .tp_dealloc = dealloc_branch_handler,
+    .tp_traverse = traverse_branch_handler,
     .tp_vectorcall_offset = offsetof(_PyLegacyBranchEventHandler, vectorcall),
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
         Py_TPFLAGS_HAVE_VECTORCALL | Py_TPFLAGS_DISALLOW_INSTANTIATION,
@@ -3218,6 +3227,13 @@ branchesiter_dealloc(PyObject *op)
     PyObject_Free(bi);
 }
 
+static int
+branchesiter_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(branchesiterator_CAST(op)->bi_code);
+    return 0;
+}
+
 static PyTypeObject _PyBranchesIterator = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "line_iterator",                    /* tp_name */
@@ -3225,6 +3241,7 @@ static PyTypeObject _PyBranchesIterator = {
     0,                                  /* tp_itemsize */
     /* methods */
     .tp_dealloc = branchesiter_dealloc,
+    .tp_traverse = branchesiter_traverse,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .tp_iter = PyObject_SelfIter,
     .tp_iternext = branchesiter_next,

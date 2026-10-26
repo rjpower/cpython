@@ -3482,6 +3482,15 @@ ContainerNoGC_dealloc(PyObject *op)
     Py_TYPE(self)->tp_free(self);
 }
 
+/* Without Py_TPFLAGS_HAVE_GC the cycle collector never calls this, so the
+   type still hides its value from it; the tracing mark does call it. */
+static int
+ContainerNoGC_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(((ContainerNoGCobject *)op)->value);
+    return 0;
+}
+
 static PyMemberDef ContainerNoGC_members[] = {
     {"value", _Py_T_OBJECT, offsetof(ContainerNoGCobject, value), Py_READONLY,
      PyDoc_STR("a container value for test purposes")},
@@ -3494,6 +3503,7 @@ static PyTypeObject ContainerNoGC_type = {
     sizeof(ContainerNoGCobject),
     .tp_dealloc = ContainerNoGC_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_traverse = ContainerNoGC_traverse,
     .tp_members = ContainerNoGC_members,
     .tp_new = ContainerNoGC_new,
 };

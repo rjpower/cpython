@@ -1484,6 +1484,13 @@ lineiter_next(PyObject *self)
                          _source_offset_converter, &line);
 }
 
+static int
+lineiter_traverse(PyObject *self, visitproc visit, void *arg)
+{
+    Py_VISIT(((lineiterator *)self)->li_code);
+    return 0;
+}
+
 PyTypeObject _PyLineIterator = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "line_iterator",                    /* tp_name */
@@ -1507,7 +1514,7 @@ PyTypeObject _PyLineIterator = {
     0,                                  /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,       /* tp_flags */
     0,                                  /* tp_doc */
-    0,                                  /* tp_traverse */
+    lineiter_traverse,                  /* tp_traverse */
     0,                                  /* tp_clear */
     0,                                  /* tp_richcompare */
     0,                                  /* tp_weaklistoffset */
@@ -1577,6 +1584,13 @@ positionsiter_next(PyObject *self)
         _source_offset_converter, &pi->pi_endcolumn);
 }
 
+static int
+positionsiter_traverse(PyObject *self, visitproc visit, void *arg)
+{
+    Py_VISIT(((positionsiterator *)self)->pi_code);
+    return 0;
+}
+
 PyTypeObject _PyPositionsIterator = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "positions_iterator",               /* tp_name */
@@ -1600,7 +1614,7 @@ PyTypeObject _PyPositionsIterator = {
     0,                                  /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,       /* tp_flags */
     0,                                  /* tp_doc */
-    0,                                  /* tp_traverse */
+    positionsiter_traverse,             /* tp_traverse */
     0,                                  /* tp_clear */
     0,                                  /* tp_richcompare */
     0,                                  /* tp_weaklistoffset */

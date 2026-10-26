@@ -636,6 +636,11 @@ stringio_traverse(PyObject *op, visitproc visit, void *arg)
     Py_VISIT(self->writenl);
     Py_VISIT(self->decoder);
     Py_VISIT(self->dict);
+    // The accumulating writer lives in PyMem memory, which the tracing
+    // mark does not scan; the string it builds is not a cycle member.
+    if (self->writer != NULL) {
+        Py_VISIT(((_PyUnicodeWriter *)self->writer)->buffer);
+    }
     return 0;
 }
 

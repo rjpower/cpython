@@ -7594,6 +7594,17 @@ traverse_state(datetime_state *st, visitproc visit, void *arg)
     /* heap types */
     Py_VISIT(st->isocalendar_date_type);
 
+    /* Atomic objects do not matter to the cycle collector, but a tracing
+       collector must reach them. */
+    Py_VISIT(st->us_per_ms);
+    Py_VISIT(st->us_per_second);
+    Py_VISIT(st->us_per_minute);
+    Py_VISIT(st->us_per_hour);
+    Py_VISIT(st->us_per_day);
+    Py_VISIT(st->us_per_week);
+    Py_VISIT(st->seconds_per_day);
+    Py_VISIT(st->epoch);
+
     Py_VISIT(st->time_struct_time);
     Py_VISIT(st->time_strftime);
 

@@ -47,6 +47,9 @@ PyAPI_FUNC(Py_ssize_t) _PyGC_TraceVerify(PyThreadState *tstate);
  * _testinternalcapi. */
 PyAPI_FUNC(PyObject *) _PyGC_TraceGetHoles(PyInterpreterState *interp);
 
+/* The number of verifications that ran.  Export for _testinternalcapi. */
+PyAPI_FUNC(Py_ssize_t) _PyGC_TraceCount(PyInterpreterState *interp);
+
 /* Remember a static (not heap allocated) type passed to PyType_Ready() so
  * that the mark can traverse it as a root. */
 extern void _PyGC_TraceRegisterStaticType(PyInterpreterState *interp,

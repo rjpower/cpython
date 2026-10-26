@@ -50,6 +50,7 @@
 #if defined(WITH_MIMALLOC) && !defined(Py_GIL_DISABLED)
 
 #include "pycore_frame.h"         // _PyInterpreterFrame
+#include "pycore_freelist_state.h" // struct _Py_freelists
 #include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
 #include "pycore_interp.h"        // _PyInterpreterState_GetFinalizing()
 #include "pycore_interpframe.h"   // _PyFrame_Traverse()
@@ -285,6 +286,7 @@ struct _gc_trace_state {
     trace_hole *holes;
     Py_ssize_t nholes;
     Py_ssize_t last_result;
+    Py_ssize_t count;     // the verifications that ran
 };
 
 typedef struct {
@@ -293,6 +295,7 @@ typedef struct {
     unsigned int roots;
     size_t debug_offset;
 
+    addrset freed;        // blocks on the object free lists
     addrset objects;      // every block of the object heaps, as its object
     rangelist pages;      // the object heaps' pages
     uintptr_t heap_lo;    // the bounds of the pages
@@ -347,13 +350,39 @@ walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
         return true;
     }
     if (a->objects != NULL) {
-        if (addrset_add(a->objects, (uintptr_t)block + a->offset) < 0) {
+        uintptr_t op = (uintptr_t)block + a->offset;
+        if (addrset_has(&a->t->freed, op)) {
+            return true;  // allocated, but dead
+        }
+        if (addrset_add(a->objects, op) < 0) {
             a->t->oom = 1;
             return false;
         }
         a->t->nobjects++;
     }
     return true;
+}
+
+/* The objects on the interpreter's free lists are allocated blocks, but
+   dead: their first word links the list and the rest is stale.  A full
+   collection empties the lists; other collections do not. */
+static int
+read_freelists(trace_t *t)
+{
+    // struct _Py_freelists has only struct _Py_freelist members.
+    Py_BUILD_ASSERT(sizeof(struct _Py_freelists)
+                    % sizeof(struct _Py_freelist) == 0);
+    struct _Py_freelists *fls = &t->interp->object_state.freelists;
+    struct _Py_freelist *fl = (struct _Py_freelist *)fls;
+    size_t n = sizeof(*fls) / sizeof(struct _Py_freelist);
+    for (size_t i = 0; i < n; i++) {
+        for (void *p = fl[i].freelist; p != NULL; p = *(void **)p) {
+            if (addrset_add(&t->freed, (uintptr_t)p) < 0) {
+                return -1;
+            }
+        }
+    }
+    return 0;
 }
 
 static size_t
@@ -1400,6 +1429,7 @@ roots_from_env(void)
 static void
 trace_fini(trace_t *t)
 {
+    addrset_fini(&t->freed);
     addrset_fini(&t->objects);
     addrset_fini(&t->marked);
     addrset_fini(&t->shallow);
@@ -1437,7 +1467,9 @@ verify(PyThreadState *tstate)
         .debug_offset = _PyMem_DebugEnabled() ? 2 * sizeof(size_t) : 0,
     };
     Py_ssize_t nholes = -1;
-    if (addrset_init(&t.objects, 1 << 16) < 0
+    if (addrset_init(&t.freed, 1024) < 0
+        || read_freelists(&t) < 0
+        || addrset_init(&t.objects, 1 << 16) < 0
         || addrset_init(&t.marked, 1 << 16) < 0
         || addrset_init(&t.shallow, 1024) < 0
         || addrset_init(&t.deepened, 1024) < 0
@@ -1468,6 +1500,9 @@ done:
     trace_fini(&t);
     ts->verifying = 0;
     ts->last_result = nholes;
+    if (nholes >= 0) {
+        ts->count++;
+    }
     return nholes;
 }
 
@@ -1502,6 +1537,12 @@ _PyGC_TraceVerify(PyThreadState *tstate)
     (void)_PyGC_Collect(tstate, NUM_GENERATIONS - 1, _Py_GC_REASON_MANUAL);
     ts->force = 0;
     return ts->last_result;
+}
+
+Py_ssize_t
+_PyGC_TraceCount(PyInterpreterState *interp)
+{
+    return interp->gc.trace == NULL ? 0 : interp->gc.trace->count;
 }
 
 PyObject *
@@ -1688,6 +1729,12 @@ Py_ssize_t
 _PyGC_TraceVerify(PyThreadState *tstate)
 {
     return -1;
+}
+
+Py_ssize_t
+_PyGC_TraceCount(PyInterpreterState *interp)
+{
+    return 0;
 }
 
 PyObject *

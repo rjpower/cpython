@@ -2178,13 +2178,8 @@ def check_free_after_iterating(test, iter, cls, args=()):
         test.assertRaises(StopIteration, next, it)
 
     # The sequence should be deallocated just after the end of iterating.
-    # A stale word on the C stack can keep one attempt's sequence alive;
-    # each attempt makes a new one.
-    for _ in range(5):
-        wrapper()
-        gc_collect()
-        if done:
-            break
+    wrapper()
+    gc_collect()
     test.assertTrue(done)
 
 

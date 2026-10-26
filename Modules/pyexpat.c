@@ -1744,8 +1744,11 @@ static int
 xmlparse_traverse(PyObject *op, visitproc visit, void *arg)
 {
     xmlparseobject *self = xmlparseobject_CAST(op);
-    for (size_t i = 0; handler_info[i].name != NULL; i++) {
-        Py_VISIT(self->handlers[i]);
+    // A parser that failed to build has no handlers.
+    if (self->handlers != NULL) {
+        for (size_t i = 0; handler_info[i].name != NULL; i++) {
+            Py_VISIT(self->handlers[i]);
+        }
     }
     Py_VISIT(self->parent);
     Py_VISIT(self->intern);
@@ -1765,6 +1768,23 @@ xmlparse_clear(PyObject *op)
     //       https://github.com/python/cpython/issues/139400
     return 0;
 }
+
+#ifdef Py_GC
+/* XML_ParserFree() on a subparser reads its parent's XML_Parser.  Reference
+   counting frees a subparser before its parent, but the sweep frees dead
+   objects in no particular order, so under Py_GC a dead subparser frees its
+   XML_Parser here, before the sweep, while the parent's is intact.  A
+   finalizer that resurrected the subparser would find it without one. */
+static void
+xmlparse_finalize(PyObject *op)
+{
+    xmlparseobject *self = xmlparseobject_CAST(op);
+    if (self->parent != NULL && self->itself != NULL) {
+        XML_ParserFree(self->itself);
+        self->itself = NULL;
+    }
+}
+#endif
 
 static void
 xmlparse_dealloc(PyObject *op)
@@ -2081,6 +2101,9 @@ PyDoc_STRVAR(Xmlparsetype__doc__, "XML parser");
 
 static PyType_Slot _xml_parse_type_spec_slots[] = {
     {Py_tp_dealloc, xmlparse_dealloc},
+#ifdef Py_GC
+    {Py_tp_finalize, xmlparse_finalize},
+#endif
     {Py_tp_doc, (void *)Xmlparsetype__doc__},
     {Py_tp_traverse, xmlparse_traverse},
     {Py_tp_clear, xmlparse_clear},

@@ -838,12 +838,11 @@ class ThreadTests(BaseTestCase):
                     print("main", main.name, type(main).__name__)
                     print("main ident", main.ident == ident)
                     print("current is main", threading.current_thread() is main)
-                    if support.Py_GC:
-                        # The old main thread dies at a collection.  Not
-                        # elsewhere: the tracing verifier of a debug build
-                        # would report what only the old main thread's
-                        # stack, which no thread runs on now, holds.
-                        support.gc_collect()
+                    # The old main thread dies at a collection.  Not
+                    # elsewhere: the tracing verifier of a debug build
+                    # would report what only the old main thread's
+                    # stack, which no thread runs on now, holds.
+                    support.gc_collect()
                     print("_dangling", [t.name for t in list(threading._dangling)])
                     # stdout is fully buffered because not a tty,
                     # we have to flush before exit.

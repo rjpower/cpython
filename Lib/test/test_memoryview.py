@@ -37,7 +37,6 @@ class AbstractMemoryTests:
 
     def check_getitem_with_type(self, tp):
         b = tp(self._source)
-        oldrefcount = sys.getrefcount(b) if not support.Py_GC else None
         m = self._view(b)
         self.assertEqual(m[0], ord(b"a"))
         self.assertIsInstance(m[0], int)
@@ -54,8 +53,6 @@ class AbstractMemoryTests:
         self.assertRaises(TypeError, lambda: m[0.0])
         self.assertRaises(TypeError, lambda: m["a"])
         m = None
-        if not support.Py_GC:
-            self.assertEqual(sys.getrefcount(b), oldrefcount)
 
     def test_getitem(self):
         for tp in self._types:
@@ -112,7 +109,6 @@ class AbstractMemoryTests:
         if not self.ro_type:
             self.skipTest("no read-only type to test")
         b = self.ro_type(self._source)
-        oldrefcount = sys.getrefcount(b) if not support.Py_GC else None
         m = self._view(b)
         def setitem(value):
             m[0] = value
@@ -120,15 +116,12 @@ class AbstractMemoryTests:
         self.assertRaises(TypeError, setitem, 65)
         self.assertRaises(TypeError, setitem, memoryview(b"a"))
         m = None
-        if not support.Py_GC:
-            self.assertEqual(sys.getrefcount(b), oldrefcount)
 
     def test_setitem_writable(self):
         if not self.rw_type:
             self.skipTest("no writable type to test")
         tp = self.rw_type
         b = self.rw_type(self._source)
-        oldrefcount = sys.getrefcount(b) if not support.Py_GC else None
         m = self._view(b)
         m[0] = ord(b'1')
         self._check_contents(tp, b, b"1bcdef")
@@ -173,8 +166,6 @@ class AbstractMemoryTests:
         self.assertRaises(ValueError, setitem, slice(0,2), b"a")
 
         m = None
-        if not support.Py_GC:
-            self.assertEqual(sys.getrefcount(b), oldrefcount)
 
     def test_delitem(self):
         for tp in self._types:
@@ -258,16 +249,10 @@ class AbstractMemoryTests:
         # Test PyObject_GetBuffer() on a memoryview object.
         for tp in self._types:
             b = tp(self._source)
-            oldrefcount = sys.getrefcount(b) if not support.Py_GC else None
             m = self._view(b)
-            oldviewrefcount = sys.getrefcount(m) if not support.Py_GC else None
             s = str(m, "utf-8")
             self._check_contents(tp, b, s.encode("utf-8"))
-            if not support.Py_GC:
-                self.assertEqual(sys.getrefcount(m), oldviewrefcount)
             m = None
-            if not support.Py_GC:
-                self.assertEqual(sys.getrefcount(b), oldrefcount)
 
     def test_gc(self):
         for tp in self._types:

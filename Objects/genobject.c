@@ -98,8 +98,11 @@ gen_traverse(PyObject *self, visitproc visit, void *arg)
         // ensure that it's kept alive if the reference is deferred.
         _Py_VISIT_STACKREF(gen->gi_iframe.f_executable);
     }
-    /* No need to visit cr_origin, because it's just tuples/str/int, so can't
-       participate in a reference cycle. */
+    /* cr_origin holds only tuples, strings and ints, which cannot form a
+       cycle, but the tracing mark must reach them. */
+    if (PyCoro_CheckExact(self)) {
+        Py_VISIT(((PyCoroObject *)self)->cr_origin_or_finalizer);
+    }
     Py_VISIT(gen->gi_exc_state.exc_value);
     return 0;
 }

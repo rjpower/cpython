@@ -364,11 +364,37 @@ zoneinfo_ZoneInfo_impl(PyTypeObject *type, PyObject *key)
 }
 
 static int
+traverse_ttinfo(const _ttinfo *ttinfo, visitproc visit, void *arg)
+{
+    Py_VISIT(ttinfo->utcoff);
+    Py_VISIT(ttinfo->dstoff);
+    Py_VISIT(ttinfo->tzname);
+    return 0;
+}
+
+static int
 zoneinfo_traverse(PyObject *op, visitproc visit, void *arg)
 {
     PyZoneInfo_ZoneInfo *self = PyZoneInfo_ZoneInfo_CAST(op);
     Py_VISIT(Py_TYPE(self));
     Py_VISIT(self->key);
+    /* The rest are timedeltas and strings, which cannot form cycles, kept
+       in PyMem arrays.  Only the tracing mark needs them. */
+    Py_VISIT(self->file_repr);
+    int err;
+    if (self->_ttinfos != NULL) {
+        for (size_t i = 0; i < self->num_ttinfos; ++i) {
+            if ((err = traverse_ttinfo(&self->_ttinfos[i], visit, arg))) {
+                return err;
+            }
+        }
+    }
+    if ((err = traverse_ttinfo(&self->tzrule_after.std, visit, arg))) {
+        return err;
+    }
+    if (!self->tzrule_after.std_only) {
+        return traverse_ttinfo(&self->tzrule_after.dst, visit, arg);
+    }
     return 0;
 }
 
@@ -1135,7 +1161,9 @@ load_data(zoneinfo_state *state, PyZoneInfo_ZoneInfo *self, PyObject *file_obj)
     }
 
     // Build _ttinfo objects from utcoff, dstoff and abbr
-    self->_ttinfos = PyMem_Malloc(self->num_ttinfos * sizeof(_ttinfo));
+    // Zeroed: building the entries allocates, and a collection that runs
+    // then traverses them.
+    self->_ttinfos = PyMem_Calloc(self->num_ttinfos, sizeof(_ttinfo));
     if (self->_ttinfos == NULL) {
         PyErr_NoMemory();
         goto error;

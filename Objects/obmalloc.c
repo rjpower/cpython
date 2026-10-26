@@ -1912,11 +1912,16 @@ PyObject_Free(void *ptr)
 {
     OBJECT_STAT_INC(frees);
 #ifdef Py_GC
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (ptr != NULL && tstate != NULL
+        && ptr == tstate->interp->gc.sweep_block)
+    {
+        return;  // the sweep frees it after the deallocs
+    }
     PyObject *op = ptr != NULL ? gc_block_object(ptr) : NULL;
     if (op != NULL) {
         if (op->ob_flags & _Py_GC_DEAD_FLAG) {
             // The sweep frees the blocks of dead objects after their deallocs.
-            PyThreadState *tstate = _PyThreadState_GET();
             if (tstate != NULL && tstate->interp->gc.sweeping) {
                 return;
             }
@@ -1926,6 +1931,17 @@ PyObject_Free(void *ptr)
 #endif
     _PyObject.free(_PyObject.ctx, ptr);
 }
+
+
+#ifdef Py_GC
+void
+_PyGC_FreeDeadBlock(PyObject *op, void *block)
+{
+    OBJECT_STAT_INC(frees);
+    op->ob_refcnt_full = 0;
+    _PyObject.free(_PyObject.ctx, block);
+}
+#endif
 
 
 /* Use __builtin_expect() where available to reduce overhead of

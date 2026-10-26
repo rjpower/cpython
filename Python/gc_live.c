@@ -336,11 +336,14 @@ invoke_gc_callback(PyThreadState *tstate, const char *phase,
 static int
 clear_callback_weakrefs(struct _gc_live_state *ls, _PyGCMarkResult *res)
 {
+    if (!(res->kinds & _PyGC_DEAD_WEAKREFS)) {
+        return 0;
+    }
     for (Py_ssize_t i = 0; i < res->ndead; i++) {
-        PyObject *op = res->dead[i].op;
-        if (!_PyType_SUPPORTS_WEAKREFS(Py_TYPE(op))) {
+        if (!(res->dead[i].kinds & _PyGC_DEAD_WEAKREFS)) {
             continue;
         }
+        PyObject *op = res->dead[i].op;
         PyWeakReference **list = _PyObject_GET_WEAKREFS_LISTPTR_FROM_OFFSET(op);
         PyWeakReference *next;
         for (PyWeakReference *wr = *list; wr != NULL; wr = next) {
@@ -415,11 +418,14 @@ finalizer_order(_PyGCMarkResult *res, objstack *order)
 {
     objstack stack = {0};
     objstack visited = {0};
-    for (Py_ssize_t i = 0; i < res->ndead; i++) {
+    for (Py_ssize_t i = 0;
+         (res->kinds & _PyGC_DEAD_FINALIZE) && i < res->ndead; i++)
+    {
+        if (!(res->dead[i].kinds & _PyGC_DEAD_FINALIZE)) {
+            continue;
+        }
         PyObject *root = res->dead[i].op;
-        if (Py_TYPE(root)->tp_finalize == NULL
-            || (root->ob_flags & _Py_GC_MARKED_FLAG))
-        {
+        if (root->ob_flags & _Py_GC_MARKED_FLAG) {
             continue;
         }
         objstack_push(&stack, root);
@@ -480,11 +486,14 @@ handle_finalizers(GCState *gc, struct _gc_live_state *ls,
     int saveall = gc->debug & _PyGC_DEBUG_SAVEALL;
     objstack s = {0};
     objstack legacy = {0};
-    for (Py_ssize_t i = 0; i < res->ndead; i++) {
+    for (Py_ssize_t i = 0; (res->kinds & _PyGC_DEAD_DEL) && i < res->ndead;
+         i++)
+    {
+        if (!(res->dead[i].kinds & _PyGC_DEAD_DEL)) {
+            continue;
+        }
         PyObject *op = res->dead[i].op;
-        if (Py_TYPE(op)->tp_del == NULL
-            || (op->ob_flags & _Py_GC_DEL_CALLED_FLAG))
-        {
+        if (op->ob_flags & _Py_GC_DEL_CALLED_FLAG) {
             continue;
         }
         if (_PyObject_IS_GC(op) && in_dead_cycle(op, &s)) {
@@ -532,12 +541,12 @@ handle_finalizers(GCState *gc, struct _gc_live_state *ls,
         }
     }
     free(order.items);
-    for (Py_ssize_t i = 0; i < res->ndead; i++) {
+    for (Py_ssize_t i = 0; saveall && i < res->ndead; i++) {
         PyObject *op = res->dead[i].op;
         if (!(op->ob_flags & _Py_GC_DEAD_FLAG)) {
             continue;  // reached from a legacy cycle
         }
-        if (saveall && _PyObject_IS_GC(op)) {
+        if (res->dead[i].kinds & _PyGC_DEAD_GC) {
             objstack_push(garbage, op);
             if (garbage->oom) {
                 goto error;
@@ -604,24 +613,31 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
     PyObject *exc = _PyErr_GetRaisedException(tstate);
     gc->sweeping = 1;
     for (int phase = 0; phase < 3; phase++) {
+        if ((phase == 0 && !(res->kinds & _PyGC_DEAD_MBUF))
+            || (phase == 2 && !(res->kinds & _PyGC_DEAD_TYPE)))
+        {
+            continue;
+        }
         for (Py_ssize_t i = 0; i < res->ndead; i++) {
+            int kinds = res->dead[i].kinds;
+            int op_phase = (kinds & _PyGC_DEAD_MBUF) ? 0
+                           : (kinds & _PyGC_DEAD_TYPE) ? 2 : 1;
+            if (op_phase != phase) {
+                continue;
+            }
             PyObject *op = res->dead[i].op;
             if ((op->ob_flags & (_Py_GC_DEAD_FLAG | _Py_GC_SWEPT_FLAG))
                 != _Py_GC_DEAD_FLAG)
             {
                 continue;
             }
-            int op_phase = Py_IS_TYPE(op, &_PyManagedBuffer_Type) ? 0
-                           : PyType_Check(op) ? 2 : 1;
-            if (op_phase != phase) {
-                continue;
-            }
-            if (_PyObject_IS_GC(op)) {
+            if (kinds & _PyGC_DEAD_GC) {
                 ncollected++;
             }
 #ifdef Py_DEBUG
             gc->sweep_op = op;
 #endif
+            gc->sweep_block = (char *)op - res->dead[i].presize;
             // The sweep stands in for _Py_Dealloc(), which reports each
             // destruction to the reference tracer.
             _PyReftracerTrack(op, PyRefTracer_DESTROY);
@@ -633,6 +649,7 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
         }
     }
     gc->sweeping = 0;
+    gc->sweep_block = NULL;
 #ifdef Py_DEBUG
     gc->sweep_op = NULL;
 #endif
@@ -645,7 +662,7 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
             continue;
         }
         freed += d->block_size;
-        PyObject_Free((char *)d->op - d->presize);
+        _PyGC_FreeDeadBlock(d->op, (char *)d->op - d->presize);
     }
     *bytes_freed = freed;
     return ncollected;
@@ -709,10 +726,12 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
         garbage.n = 0;
     }
     else {
-        for (Py_ssize_t i = 0; i < res.ndead; i++) {
+        for (Py_ssize_t i = 0;
+             (res.kinds & _PyGC_DEAD_WEAKREFS) && i < res.ndead; i++)
+        {
             PyObject *op = res.dead[i].op;
-            if ((op->ob_flags & _Py_GC_DEAD_FLAG)
-                && _PyType_SUPPORTS_WEAKREFS(Py_TYPE(op)))
+            if ((res.dead[i].kinds & _PyGC_DEAD_WEAKREFS)
+                && (op->ob_flags & _Py_GC_DEAD_FLAG))
             {
                 _PyWeakref_ClearWeakRefsNoCallbacks(op);
             }

@@ -67,6 +67,7 @@
 #include "pycore_interp.h"        // _PyInterpreterState_GetFinalizing()
 #include "pycore_interpframe.h"   // _PyFrame_Traverse()
 #include "pycore_mimalloc.h"      // mi_heap_visit_blocks()
+#include "pycore_memoryobject.h"  // _PyManagedBuffer_Type
 #include "pycore_object.h"        // _PyType_PreHeaderSize()
 #include "pycore_pymem.h"         // _PyMem_DebugEnabled()
 #include "pycore_tstate.h"        // _PyThreadStateImpl
@@ -1639,8 +1640,16 @@ live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
         w->dead_cap = cap;
     }
     op->ob_flags = flags | _Py_GC_DEAD_FLAG;
+    PyTypeObject *tp = Py_TYPE(op);
+    uint16_t kinds = (_PyType_SUPPORTS_WEAKREFS(tp) ? _PyGC_DEAD_WEAKREFS : 0)
+        | (tp->tp_finalize != NULL ? _PyGC_DEAD_FINALIZE : 0)
+        | (tp->tp_del != NULL ? _PyGC_DEAD_DEL : 0)
+        | (tp == &_PyManagedBuffer_Type ? _PyGC_DEAD_MBUF : 0)
+        | (PyType_Check(op) ? _PyGC_DEAD_TYPE : 0)
+        | (_PyObject_IS_GC(op) ? _PyGC_DEAD_GC : 0);
+    res->kinds |= kinds;
     res->dead[res->ndead++] = (_PyGCDeadObject){
-        op, (uint32_t)block_size, (uint32_t)w->presize};
+        op, (uint32_t)block_size, (uint16_t)w->presize, kinds};
     return true;
 }
 
@@ -1913,6 +1922,7 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
         free(res->dead);
         res->dead = NULL;
         res->ndead = 0;
+        res->kinds = 0;
         goto done;
     }
     rc = 0;

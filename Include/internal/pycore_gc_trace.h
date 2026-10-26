@@ -152,17 +152,28 @@ _PyGC_IsObjectHeader(const PyObject *op)
         && (refcnt == _Py_GC_REFCNT || refcnt == _Py_IMMORTAL_INITIAL_REFCNT);
 }
 
-/* An unreachable object found by the mark: its address, and the size and
- * pre-header size of its block. */
+/* What the collection does with a dead object, from its type, so that its
+ * passes over the dead objects skip most without reading them. */
+#define _PyGC_DEAD_WEAKREFS  (1 << 0)  /* the type supports weak references */
+#define _PyGC_DEAD_FINALIZE  (1 << 1)  /* tp_finalize */
+#define _PyGC_DEAD_DEL       (1 << 2)  /* a legacy tp_del */
+#define _PyGC_DEAD_MBUF      (1 << 3)  /* a managed buffer: swept first */
+#define _PyGC_DEAD_TYPE      (1 << 4)  /* a type: swept last */
+#define _PyGC_DEAD_GC        (1 << 5)  /* a GC object */
+
+/* An unreachable object found by the mark: its address, the size and
+ * pre-header size of its block, and its _PyGC_DEAD_* kinds. */
 typedef struct {
     PyObject *op;
     uint32_t block_size;
-    uint32_t presize;
+    uint16_t presize;
+    uint16_t kinds;
 } _PyGCDeadObject;
 
 typedef struct {
     _PyGCDeadObject *dead;    // from malloc(); the caller frees it
     Py_ssize_t ndead;
+    int kinds;                // the union of the dead objects' kinds
     Py_ssize_t nobjects;      // the objects in the heaps
     Py_ssize_t live_bytes;    // the blocks of the reachable objects
     Py_ssize_t nmarked;
@@ -226,6 +237,10 @@ extern void _PyGC_LiveAddImmortal(PyObject *op);
  * frames go next.  Their padding would otherwise keep the stale words that
  * earlier calls left there, which the scan takes for roots. */
 extern void _PyGC_LiveClearStack(void);
+
+/* Free the block of a dead object that the sweep has deallocated
+ * (PyObject_Free() without looking the block up). */
+extern void _PyGC_FreeDeadBlock(PyObject *op, void *block);
 
 /* The same for the eval loop's frame, which has padding too, and spill
  * slots that a call writes only on some paths. */

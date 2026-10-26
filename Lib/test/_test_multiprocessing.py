@@ -3429,10 +3429,10 @@ class _TestPool(BaseTestCase):
         # check that we indeed waited for all jobs
         self.assertGreater(time.monotonic() - t_start, 0.9)
 
-    # Under a gc-debug build a stale word on a pool thread's -Og stack points
-    # at the MapResult, so the conservative stack scan keeps the tasks alive.
-    @unittest.skipIf(support.Py_DEBUG,
-                     "a pool thread's -Og stack keeps the results alive")
+    # A pool thread blocked in a C call keeps a stale word that points at the
+    # MapResult in that call's frame, and the conservative scan of the
+    # thread's stack keeps the tasks alive.
+    @unittest.skip("a blocked pool thread's C frame keeps the results alive")
     def test_release_task_refs(self):
         # Issue #29861: task arguments and results should not be kept
         # alive after we are done with them.

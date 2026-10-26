@@ -157,7 +157,8 @@ _PyGC_IsObjectHeader(const PyObject *op)
 #define _PyGC_DEAD_WEAKREFS  (1 << 0)  /* the type supports weak references */
 #define _PyGC_DEAD_FINALIZE  (1 << 1)  /* tp_finalize */
 #define _PyGC_DEAD_DEL       (1 << 2)  /* a legacy tp_del */
-#define _PyGC_DEAD_MBUF      (1 << 3)  /* a managed buffer: swept first */
+#define _PyGC_DEAD_FIRST     (1 << 3)  /* its dealloc reads its referents:
+                                          swept first */
 #define _PyGC_DEAD_TYPE      (1 << 4)  /* a type: swept last */
 #define _PyGC_DEAD_GC        (1 << 5)  /* a GC object */
 #define _PyGC_DEAD_HOOK      (1 << 6)  /* its dealloc would notify watchers,

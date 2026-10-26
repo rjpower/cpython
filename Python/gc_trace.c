@@ -1817,7 +1817,8 @@ live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
     uint16_t kinds = (_PyType_SUPPORTS_WEAKREFS(tp) ? _PyGC_DEAD_WEAKREFS : 0)
         | (tp->tp_finalize != NULL ? _PyGC_DEAD_FINALIZE : 0)
         | (tp->tp_del != NULL ? _PyGC_DEAD_DEL : 0)
-        | (tp == &_PyManagedBuffer_Type ? _PyGC_DEAD_MBUF : 0)
+        | (PyType_HasFeature(tp, Py_TPFLAGS_DEALLOC_READS_REFERENTS)
+           ? _PyGC_DEAD_FIRST : 0)
         | (PyType_Check(op) ? _PyGC_DEAD_TYPE : 0)
         | (_PyObject_IS_GC(op) ? _PyGC_DEAD_GC : 0)
         | (live_has_destroy_hook(w, t->interp, op, tp) ? _PyGC_DEAD_HOOK : 0);

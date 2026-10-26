@@ -718,9 +718,12 @@ _PyGC_LiveSweepViolation(PyThreadState *tstate, const char *what)
 }
 #endif
 
-/* Call tp_dealloc on the dead objects, then free their blocks.  Managed
-   buffers go first, so that their exporters can still update their export
-   state, and instances before types, so that a dealloc can read its type. */
+/* Call tp_dealloc on the dead objects, then free their blocks.  Instances of
+   types with Py_TPFLAGS_DEALLOC_READS_REFERENTS go first, so that their
+   referents are intact (a managed buffer's exporter can still update its
+   export state), and instances before types, so that a dealloc can read its
+   type.  Among the flagged objects the order is the heap's, so one that
+   reads another flagged object is not yet safe. */
 static Py_ssize_t
 sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
       Py_ssize_t *bytes_freed)
@@ -729,15 +732,15 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
     PyObject *exc = _PyErr_GetRaisedException(tstate);
     gc->sweeping = 1;
     for (int phase = 0; phase < 3; phase++) {
-        if ((phase == 0 && !(res->kinds & _PyGC_DEAD_MBUF))
+        if ((phase == 0 && !(res->kinds & _PyGC_DEAD_FIRST))
             || (phase == 2 && !(res->kinds & _PyGC_DEAD_TYPE)))
         {
             continue;
         }
         for (Py_ssize_t i = 0; i < res->ndead; i++) {
             int kinds = res->dead[i].kinds;
-            int op_phase = (kinds & _PyGC_DEAD_MBUF) ? 0
-                           : (kinds & _PyGC_DEAD_TYPE) ? 2 : 1;
+            int op_phase = (kinds & _PyGC_DEAD_TYPE) ? 2
+                           : (kinds & _PyGC_DEAD_FIRST) ? 0 : 1;
             if (op_phase != phase) {
                 continue;
             }

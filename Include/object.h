@@ -555,6 +555,14 @@ given type object has a specified feature.
 /* Type is abstract and cannot be instantiated */
 #define Py_TPFLAGS_IS_ABSTRACT (1UL << 20)
 
+#ifndef Py_LIMITED_API
+/* The type's dealloc reads the C state of objects it refers to, not just
+   releases them.  Reference counting deallocates a referrer before its
+   referents; the tracing collector of --with-gc keeps that order for dead
+   instances of this type by deallocating them first.  Subtypes inherit it. */
+#define Py_TPFLAGS_DEALLOC_READS_REFERENTS (1UL << 21)
+#endif
+
 // This undocumented flag gives certain built-ins their unique pattern-matching
 // behavior, which allows a single positional subpattern to match against the
 // subject itself (rather than a mapped attribute on it):

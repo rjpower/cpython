@@ -1837,6 +1837,22 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertIsNone(ref())
 
     @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    def test_dealloc_reads_referents(self):
+        # A DeallocReader's dealloc reads its referent's state and aborts if
+        # the referent's dealloc ran first.  The referents are allocated
+        # first, so without Py_TPFLAGS_DEALLOC_READS_REFERENTS the sweep,
+        # which goes in heap order, would reach them first.
+        Py_TPFLAGS_DEALLOC_READS_REFERENTS = 1 << 21
+        class Sub(_testcapi.DeallocReader):
+            pass
+        self.assertTrue(Sub.__flags__ & Py_TPFLAGS_DEALLOC_READS_REFERENTS)
+        referents = [_testcapi.StatefulReferent() for _ in range(1000)]
+        readers = [(Sub if i % 2 else _testcapi.DeallocReader)(r)
+                   for i, r in enumerate(referents)]
+        del referents, readers
+        gc.collect()
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
     def test_add_root(self):
         class A:
             pass

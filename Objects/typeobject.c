@@ -8710,7 +8710,8 @@ inherit_special(PyTypeObject *type, PyTypeObject *base)
         if (type->tp_clear == NULL)
             type->tp_clear = base->tp_clear;
     }
-    type_add_flags(type, base->tp_flags & Py_TPFLAGS_PREHEADER);
+    type_add_flags(type, base->tp_flags & (Py_TPFLAGS_PREHEADER
+                                           | Py_TPFLAGS_DEALLOC_READS_REFERENTS));
 
     if (type->tp_basicsize == 0)
         type->tp_basicsize = base->tp_basicsize;

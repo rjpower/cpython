@@ -369,6 +369,112 @@ static PyType_Spec ObjExtraData_TypeSpec = {
     .slots = ObjExtraData_Slots,
 };
 
+/* A DeallocReader's dealloc reads the state of its StatefulReferent, whose
+   own dealloc destroys that state, and aborts if it finds the state
+   destroyed.  Reference counting always deallocates the reader first; the
+   tracing collector does so because the reader's type has
+   Py_TPFLAGS_DEALLOC_READS_REFERENTS. */
+#define REFERENT_ALIVE 0x5ca1ab1e
+
+typedef struct {
+    PyObject_HEAD
+    unsigned int state;
+} StatefulReferent;
+
+static PyObject *
+stateful_referent_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    StatefulReferent *self = (StatefulReferent *)type->tp_alloc(type, 0);
+    if (self == NULL) {
+        return NULL;
+    }
+    self->state = REFERENT_ALIVE;
+    return (PyObject *)self;
+}
+
+static void
+stateful_referent_dealloc(PyObject *self)
+{
+    PyTypeObject *tp = Py_TYPE(self);
+    ((StatefulReferent *)self)->state = 0;
+    tp->tp_free(self);
+    Py_DECREF(tp);
+}
+
+static PyType_Slot StatefulReferent_Slots[] = {
+    {Py_tp_new, stateful_referent_new},
+    {Py_tp_dealloc, stateful_referent_dealloc},
+    {0, NULL},
+};
+
+static PyType_Spec StatefulReferent_TypeSpec = {
+    .name = "_testcapi.StatefulReferent",
+    .basicsize = sizeof(StatefulReferent),
+    .flags = Py_TPFLAGS_DEFAULT,
+    .slots = StatefulReferent_Slots,
+};
+
+typedef struct {
+    PyObject_HEAD
+    StatefulReferent *referent;
+} DeallocReader;
+
+static PyObject *
+dealloc_reader_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    PyObject *referent;
+    if (!PyArg_ParseTuple(args, "O:DeallocReader", &referent)) {
+        return NULL;
+    }
+    if (Py_TYPE(referent)->tp_dealloc != stateful_referent_dealloc) {
+        PyErr_SetString(PyExc_TypeError, "expected a StatefulReferent");
+        return NULL;
+    }
+    DeallocReader *self = (DeallocReader *)type->tp_alloc(type, 0);
+    if (self == NULL) {
+        return NULL;
+    }
+    self->referent = (StatefulReferent *)Py_NewRef(referent);
+    return (PyObject *)self;
+}
+
+static int
+dealloc_reader_traverse(PyObject *self, visitproc visit, void *arg)
+{
+    Py_VISIT(Py_TYPE(self));
+    Py_VISIT(((DeallocReader *)self)->referent);
+    return 0;
+}
+
+static void
+dealloc_reader_dealloc(PyObject *self)
+{
+    PyTypeObject *tp = Py_TYPE(self);
+    PyObject_GC_UnTrack(self);
+    StatefulReferent *referent = ((DeallocReader *)self)->referent;
+    if (referent->state != REFERENT_ALIVE) {
+        Py_FatalError("a DeallocReader outlived its referent's dealloc");
+    }
+    Py_DECREF(referent);
+    tp->tp_free(self);
+    Py_DECREF(tp);
+}
+
+static PyType_Slot DeallocReader_Slots[] = {
+    {Py_tp_new, dealloc_reader_new},
+    {Py_tp_dealloc, dealloc_reader_dealloc},
+    {Py_tp_traverse, dealloc_reader_traverse},
+    {0, NULL},
+};
+
+static PyType_Spec DeallocReader_TypeSpec = {
+    .name = "_testcapi.DeallocReader",
+    .basicsize = sizeof(DeallocReader),
+    .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC
+              | Py_TPFLAGS_DEALLOC_READS_REFERENTS),
+    .slots = DeallocReader_Slots,
+};
+
 /* A reference held only in a PyMem block that a static points to: no
    tp_traverse visits it, so only a root registered with PyGC_AddRoot()
    keeps the object alive. */
@@ -487,6 +593,20 @@ int _PyTestCapi_Init_GC(PyObject *mod)
     Py_DECREF(ObjExtraData_Type);
     if (ret < 0) {
         return ret;
+    }
+
+    PyType_Spec *specs[] = {&StatefulReferent_TypeSpec,
+                            &DeallocReader_TypeSpec};
+    for (size_t i = 0; i < Py_ARRAY_LENGTH(specs); i++) {
+        PyObject *type = PyType_FromModuleAndSpec(mod, specs[i], NULL);
+        if (type == NULL) {
+            return -1;
+        }
+        ret = PyModule_AddType(mod, (PyTypeObject *)type);
+        Py_DECREF(type);
+        if (ret < 0) {
+            return ret;
+        }
     }
 
     return 0;

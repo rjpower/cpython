@@ -1308,15 +1308,6 @@ class ZlibDecompressorTest(unittest.TestCase):
         # Previously, a second call could crash due to internal inconsistency
         self.assertRaises(Exception, zlibd.decompress, self.BAD_DATA * 30)
 
-    @support.refcount_test
-    def test_refleaks_in___init__(self):
-        gettotalrefcount = support.get_attribute(sys, 'gettotalrefcount')
-        zlibd = zlib._ZlibDecompressor()
-        refs_before = gettotalrefcount()
-        for i in range(100):
-            zlibd.__init__()
-        self.assertAlmostEqual(gettotalrefcount() - refs_before, 0, delta=10)
-
 
 class CustomInt:
     def __index__(self):

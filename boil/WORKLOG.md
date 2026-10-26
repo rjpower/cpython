@@ -1086,3 +1086,27 @@ its worktree.
   it ran. It did find two more sources of holes: the _hmac hash-name
   table, now fixed, and a transient C-held dict. The full suites now run
   on a separate build/run-debug.
+
+### 2026-10-25 20:50 — step 4, milestone 3: the full debug suite is clean
+
+- **Full dev-debug suite with the verifier.** The only failure is test_sys's
+  known `test_remote_exec_deleted_static_executable`. Four runs found these
+  sources of holes, and each is fixed:
+  - **In the verifier:**
+    - PyMem blocks that a C stack points into, such as the JSON encoder's
+      PyUnicodeWriter, are now scanned (4fb07737fc3);
+    - new precise roots: atexit, the errno map, the cross-interpreter state
+      and the cached objects (3f258c5b81e).
+  - **Missing traverse functions:**
+    - coroutine `cr_origin` and ZoneInfo (5e5ca23c511);
+    - symbol-table entries, and datetime and time `tzinfo` (51205a6593e).
+- **The audit had a bug.** It took an include guard's `#ifndef` as false,
+  which hid every struct that a header defines; the symbol-table entry and
+  datetime structs were among them. With the fix (0d7b76c1f41) it also
+  found module `md_name` and the multibyte encoder's `pending`.
+- **The hole log** records `sys.argv`, which names the test file a
+  regrtest worker runs. That is how the last two files were found.
+- **Startup cost.** In `-c pass`, the new visits cost about 2.0M
+  instructions in the three startup young collections before
+  `_Py_VISIT_ATOMIC`, and about 1.4M with it (e8e2a43a3d3), which skips
+  immortal strings: the interned and static ones.

@@ -5098,15 +5098,21 @@ dict_traverse(PyObject *op, visitproc visit, void *arg)
     PyDictKeysObject *keys = mp->ma_keys;
     Py_ssize_t i, n = keys->dk_nentries;
 
+    /* The keys of a unicode-keyed table are strings, which the cycle
+       collector ignores, but the tracing collector must see them.  A split
+       table's keys are shared and owned by the keys object; visiting them
+       from each dict is harmless for both collectors. */
     if (DK_IS_UNICODE(keys)) {
+        PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
         if (_PyDict_HasSplitTable(mp)) {
             for (i = 0; i < n; i++) {
+                Py_VISIT(entries[i].me_key);
                 Py_VISIT(mp->ma_values->values[i]);
             }
         }
         else {
-            PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
             for (i = 0; i < n; i++) {
+                Py_VISIT(entries[i].me_key);
                 Py_VISIT(entries[i].me_value);
             }
         }
@@ -7426,6 +7432,24 @@ _PyDict_NewKeysForClass(PyHeapTypeObject *cls)
         }
     }
     return keys;
+}
+
+/* Visit the keys of a class's shared keys object, which instances with
+   inline values use without a dict; for the tracing collector. */
+int
+_PyDict_TraverseKeysForClass(PyHeapTypeObject *cls, visitproc visit, void *arg)
+{
+    PyDictKeysObject *keys = cls->ht_cached_keys;
+    if (keys == NULL) {
+        return 0;
+    }
+    assert(DK_IS_UNICODE(keys));
+    PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
+    Py_ssize_t n = keys->dk_nentries;
+    for (Py_ssize_t i = 0; i < n; i++) {
+        Py_VISIT(entries[i].me_key);
+    }
+    return 0;
 }
 
 void

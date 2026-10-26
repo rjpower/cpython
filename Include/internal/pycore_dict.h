@@ -96,6 +96,7 @@ typedef struct {
 
 extern PyDictKeysObject *_PyDict_NewKeysForClass(PyHeapTypeObject *);
 extern void _PyDict_RemoveKeysForClass(PyHeapTypeObject *);
+extern int _PyDict_TraverseKeysForClass(PyHeapTypeObject *, visitproc, void *);
 extern PyObject *_PyDict_FromKeys(PyObject *, PyObject *, PyObject *);
 
 /* Implementations of the `|` and `|=` operators for dict, used by the

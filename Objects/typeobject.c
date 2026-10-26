@@ -7116,16 +7116,18 @@ type_traverse(PyObject *self, visitproc visit, void *arg)
     Py_VISIT(type->tp_mro);
     Py_VISIT(type->tp_bases);
     Py_VISIT(type->tp_base);
-    Py_VISIT(((PyHeapTypeObject *)type)->ht_module);
+    PyHeapTypeObject *ht = (PyHeapTypeObject *)type;
+    Py_VISIT(ht->ht_module);
 
-    /* There's no need to visit others because they can't be involved
-       in cycles:
-       type->tp_subclasses is a list of weak references,
-       ((PyHeapTypeObject *)type)->ht_slots is a tuple of strings,
-       ((PyHeapTypeObject *)type)->ht_*name are strings.
-       */
-
-    return 0;
+    /* The rest cannot be involved in cycles, but the tracing collector
+       must see every reference the type owns: tp_subclasses is a dict of
+       weak references, ht_slots is a tuple of strings, ht_*name are
+       strings, and the shared keys hold strings. */
+    Py_VISIT(type->tp_subclasses);
+    Py_VISIT(ht->ht_name);
+    Py_VISIT(ht->ht_qualname);
+    Py_VISIT(ht->ht_slots);
+    return _PyDict_TraverseKeysForClass(ht, visit, arg);
 }
 
 /* Visit what a static type refers to, for the tracing verifier.  A static

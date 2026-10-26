@@ -2558,15 +2558,32 @@ code_dealloc(PyObject *self)
     PyObject_Free(co);
 }
 
-#ifdef Py_GIL_DISABLED
 static int
 code_traverse(PyObject *self, visitproc visit, void *arg)
 {
     PyCodeObject *co = _PyCodeObject_CAST(self);
     Py_VISIT(co->co_consts);
+#ifndef Py_GIL_DISABLED
+    /* Code objects are not GC objects in the default build, so the cycle
+       collector never calls this; the tracing collector (Python/gc_trace.c)
+       does, and must see every reference that the code object owns. */
+    Py_VISIT(co->co_names);
+    Py_VISIT(co->co_localsplusnames);
+    Py_VISIT(co->co_localspluskinds);
+    Py_VISIT(co->co_filename);
+    Py_VISIT(co->co_name);
+    Py_VISIT(co->co_qualname);
+    Py_VISIT(co->co_linetable);
+    Py_VISIT(co->co_exceptiontable);
+    if (co->_co_cached != NULL) {
+        Py_VISIT(co->_co_cached->_co_code);
+        Py_VISIT(co->_co_cached->_co_cellvars);
+        Py_VISIT(co->_co_cached->_co_freevars);
+        Py_VISIT(co->_co_cached->_co_varnames);
+    }
+#endif
     return 0;
 }
-#endif
 
 static PyObject *
 code_repr(PyObject *self)
@@ -3034,11 +3051,7 @@ PyTypeObject PyCode_Type = {
     Py_TPFLAGS_DEFAULT,                 /* tp_flags */
 #endif
     code_new__doc__,                    /* tp_doc */
-#ifdef Py_GIL_DISABLED
     code_traverse,                      /* tp_traverse */
-#else
-    0,                                  /* tp_traverse */
-#endif
     0,                                  /* tp_clear */
     code_richcompare,                   /* tp_richcompare */
     offsetof(PyCodeObject, co_weakreflist),     /* tp_weaklistoffset */

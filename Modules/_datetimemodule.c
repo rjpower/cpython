@@ -4382,6 +4382,16 @@ timezone_dealloc(PyObject *op)
     Py_TYPE(self)->tp_free(self);
 }
 
+/* The type is not GC; this is for the tracing collector. */
+static int
+timezone_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PyDateTime_TimeZone *self = PyTimeZone_CAST(op);
+    Py_VISIT(self->offset);
+    Py_VISIT(self->name);
+    return 0;
+}
+
 static PyObject *
 timezone_richcompare(PyObject *self, PyObject *other, int op)
 {
@@ -4596,7 +4606,7 @@ static PyTypeObject PyDateTime_TimeZoneType = {
     0,                                /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,               /* tp_flags */
     timezone_new__doc__,              /* tp_doc */
-    0,                                /* tp_traverse */
+    timezone_traverse,                /* tp_traverse */
     0,                                /* tp_clear */
     timezone_richcompare,             /* tp_richcompare */
     0,                                /* tp_weaklistoffset */

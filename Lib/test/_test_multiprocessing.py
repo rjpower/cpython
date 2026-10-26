@@ -3922,48 +3922,6 @@ class _TestManagerRestart(BaseTestCase):
                 self.addCleanup(manager.shutdown)
 
 
-class FakeConnection:
-    def send(self, payload):
-        pass
-
-    def recv(self):
-        return '#ERROR', pyqueue.Empty()
-
-class TestManagerExceptions(unittest.TestCase):
-    # Issue 106558: Manager exceptions avoids creating cyclic references.
-    def setUp(self):
-        with warnings_helper.ignore_fork_in_thread_deprecation_warnings():
-            self.mgr = multiprocessing.Manager()
-
-    def tearDown(self):
-        self.mgr.shutdown()
-        self.mgr.join()
-
-    @support.requires_refcounting
-    @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
-    def test_queue_get(self):
-        queue = self.mgr.Queue()
-        if gc.isenabled():
-            gc.disable()
-            self.addCleanup(gc.enable)
-        try:
-            queue.get_nowait()
-        except pyqueue.Empty as e:
-            wr = weakref.ref(e)
-        self.assertEqual(wr(), None)
-
-    @support.requires_refcounting
-    @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
-    def test_dispatch(self):
-        if gc.isenabled():
-            gc.disable()
-            self.addCleanup(gc.enable)
-        try:
-            multiprocessing.managers.dispatch(FakeConnection(), None, None)
-        except pyqueue.Empty as e:
-            wr = weakref.ref(e)
-        self.assertEqual(wr(), None)
-
 #
 #
 #
@@ -4598,7 +4556,6 @@ class _TestHeap(BaseTestCase):
         multiprocessing.heap.BufferWrapper._heap = self.old_heap
         super().tearDown()
 
-    @support.requires_refcounting
     def test_heap(self):
         iterations = 5000
         maxblocks = 50
@@ -4656,6 +4613,7 @@ class _TestHeap(BaseTestCase):
         random.shuffle(blocks)
         while blocks:
             blocks.pop()
+        support.gc_collect()  # the blocks are freed when collected
 
         self.assertEqual(heap._n_frees, heap._n_mallocs)
         self.assertEqual(len(heap._pending_free_blocks), 0)

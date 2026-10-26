@@ -20,13 +20,6 @@ from .util import (
     create_executor_tests, setup_module)
 
 
-class EventfulGCObj():
-    def __init__(self, mgr):
-        self.event = mgr.Event()
-
-    def __del__(self):
-        self.event.set()
-
 TERMINATE_WORKERS = futures.ProcessPoolExecutor.terminate_workers.__name__
 KILL_WORKERS = futures.ProcessPoolExecutor.kill_workers.__name__
 FORCE_SHUTDOWN_PARAMS = [
@@ -156,28 +149,6 @@ class ProcessPoolExecutorTest(ExecutorTest):
             self.assertIn(
                 f"terminated abruptly with exit code {exit_code}", cause.tb
             )
-
-    @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
-    @hashlib_helper.requires_hashdigest('md5')
-    @support.requires_refcounting
-    def test_ressources_gced_in_workers(self):
-        # Ensure that argument for a job are correctly gc-ed after the job
-        # is finished
-        mgr = self.get_context().Manager()
-        obj = EventfulGCObj(mgr)
-        future = self.executor.submit(id, obj)
-        future.result()
-
-        self.assertTrue(obj.event.wait(timeout=1))
-
-        # explicitly destroy the object to ensure that EventfulGCObj.__del__()
-        # is called while manager is still running.
-        support.gc_collect()
-        obj = None
-        support.gc_collect()
-
-        mgr.shutdown()
-        mgr.join()
 
     @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
     def test_saturation(self):

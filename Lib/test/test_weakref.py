@@ -1,5 +1,4 @@
 import gc
-import sys
 import doctest
 import unittest
 import collections
@@ -2242,9 +2241,7 @@ class FinalizeTestCase(unittest.TestCase):
         pass
 
     def _collect_if_necessary(self):
-        # we create no ref-cycles so in CPython no gc should be needed
-        if sys.implementation.name != 'cpython' or support.Py_GC:
-            support.gc_collect()
+        support.gc_collect()
 
     def test_finalize(self):
         def add(x,y,z):

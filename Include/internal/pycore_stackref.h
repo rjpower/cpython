@@ -17,52 +17,20 @@ extern "C" {
 
 
 /*
-  This file introduces a new API for handling references on the stack, called
-  _PyStackRef. This API is inspired by HPy.
+  _PyStackRef is the value type of the interpreter: a frame slot, an
+  argument array element, a value passed between handlers.  Nothing is
+  reference counted (the tracing collector owns memory, note 06 section 3.4),
+  so a _PyStackRef owns nothing and copying one is all that "taking" or
+  "giving up" a value means.  PyStackRef_FromPyObject() and
+  PyStackRef_AsPyObjectBorrow() convert between a heap object and a
+  reference to it; neither changes anything about the object.
 
-  There are 3 main operations, that convert _PyStackRef to PyObject* and
-  vice versa:
-
-    1. Borrow (discouraged)
-    2. Steal
-    3. New
-
-  Borrow means that the reference is converted without any change in ownership.
-  This is discouraged because it makes verification much harder. It also makes
-  unboxed integers harder in the future.
-
-  Steal means that ownership is transferred to something else. The total
-  number of references to the object stays the same.  The old reference is no
-  longer valid.
-
-  New creates a new reference from the old reference. The old reference
-  is still valid.
-
-  All _PyStackRef must be operated on by the new reference operations:
-
-    1. DUP
-    2. CLOSE
-
-   DUP is roughly equivalent to Py_NewRef. It creates a new reference from an old
-   reference. The old reference remains unchanged.
-
-   CLOSE is roughly equivalent to Py_DECREF. It destroys a reference.
-
-   Note that it is unsafe to borrow a _PyStackRef and then do normal
-   CPython refcounting operations on it!
-
-  Encoding
-
-  On 64-bit builds without Py_GIL_DISABLED (Py_STACKREF_INLINE_VALUES), a
-  _PyStackRef also holds exact ints that fit in int32 and exact non-NaN floats
-  without a heap object, and interpreter-internal indices. The bits are laid
-  out as follows (boil/design/02-tagged-values.md, section 2.1):
+  Encoding (boil/design/02-tagged-values.md, section 2.1)
 
     Top 16 bits     Low 48 bits         Meaning
-    0x0000          0x000000000001      NULL
-    0x0000          0x000000000002      ERROR
-    0x0000          ptr, bit 0 = 0      owned reference
-    0x0000          ptr, bit 0 = 1      borrowed, immortal or deferred reference
+    0x0000          0                   NULL
+    0x0000          2                   ERROR
+    0x0000          ptr                 heap object; low 3 bits zero
     0x0000          ptr | 2             PyStackRef_Wrap() pointer (debug builds)
     0x0001          int48               index (Py_INDEX_BASE)
     0x0002-0x7FF2   double + 2^49       inline float, +0.0 to +inf
@@ -70,10 +38,8 @@ extern "C" {
     0xFFFE          0x0000 then int32   inline int (Py_INT_BASE)
     other                               unused: images of NaNs, and 0xFFFF
 
-  Values below Py_PTR_LIMIT are pointer space; Py_TAG_REFCNT and
-  Py_TAG_INVALID have meaning only there. Indices and inline values own
-  nothing, so CLOSE, DUP and Borrow leave them unchanged. NaN results are
-  always boxed, because some NaN images overlap the other regions.
+  Values below Py_PTR_LIMIT are pointer space. NaN results are always
+  boxed, because some NaN images overlap the other regions.
 
   An index is the position of a virtual iterator in the FOR_ITER family
   (null_or_index) or the saved lasti during exception unwinding. It never
@@ -83,22 +49,18 @@ extern "C" {
   converted to a PyObject *. The cases generator does this for instruction
   inputs; see "Inline values" in
   Tools/cases_generator/interpreter_definition.md.
-
-  Py_STACKREF_DEBUG builds use the same layout with table IDs, which stay
-  below Py_PTR_LIMIT, in place of addresses. Free-threaded and 32-bit builds
-  have no inline values: an index there is (i << Py_TAGGED_SHIFT) |
-  Py_INDEX_TAG and the inline predicates are constant false.
 */
 
-#define Py_TAG_REFCNT 1
+/* An object address has these bits clear; ERROR and the debug build's
+   wrapped pointers set Py_TAG_INVALID. */
 #define Py_TAG_INVALID 2
-#define Py_TAG_BITS 3
-
-#define Py_TAGGED_SHIFT 2
+#define Py_TAG_BITS 7
 
 #  define _PyStackRef_BITS(REF) ((REF).bits)
 
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_VOID_P != 8
+#  error "_PyStackRef needs 64-bit words"
+#endif
 
 #define Py_STACKREF_INLINE_VALUES 1
 
@@ -106,8 +68,6 @@ extern "C" {
 #define Py_INDEX_BASE    ((uintptr_t)1 << 48)
 #define Py_DOUBLE_OFFSET ((uintptr_t)1 << 49)
 #define Py_INT_BASE      ((uintptr_t)0xFFFE << 48)
-// A reference owns a count on its object only if all of these bits are 0.
-#define Py_OWNED_MASK    (((uintptr_t)0xFFFF << 48) | Py_TAG_REFCNT)
 
 static inline bool PyStackRef_IsPointerSpace(_PyStackRef r) { return _PyStackRef_BITS(r) < Py_PTR_LIMIT; }
 static inline bool PyStackRef_IsTaggedIndex(_PyStackRef r) { return _PyStackRef_BITS(r) - Py_INDEX_BASE < Py_DOUBLE_OFFSET - Py_INDEX_BASE; }
@@ -135,13 +95,6 @@ _PyStackRef_TopBitsAt(const _PyStackRef *ref)
 
 static inline bool PyStackRef_IsPointerSpaceAt(const _PyStackRef *ref) { return _PyStackRef_TopBitsAt(ref) == 0; }
 static inline bool PyStackRef_IsInlineAt(const _PyStackRef *ref) { return _PyStackRef_TopBitsAt(ref) >= (Py_DOUBLE_OFFSET >> 48); }
-
-// The bit that PyStackRef_Borrow() sets: Py_TAG_REFCNT in pointer space only.
-static inline uintptr_t
-_PyStackRef_BorrowBitAt(const _PyStackRef *ref)
-{
-    return (uintptr_t)PyStackRef_IsPointerSpaceAt(ref);
-}
 
 // The encoding of an inline int, which is also its identity (see "Value
 // identity" below).
@@ -232,64 +185,6 @@ PyStackRef_Box(_PyStackRef ref)
     return PyStackRef_IsInline(ref) ? _PyStackRef_BoxInlineValue(ref) : ref;
 }
 
-#else  // No inline values: free-threaded and 32-bit builds.
-
-#define Py_INDEX_TAG 3
-#define Py_OWNED_MASK Py_TAG_REFCNT
-
-static inline bool PyStackRef_IsTaggedIndex(_PyStackRef r) { return (_PyStackRef_BITS(r) & Py_TAG_BITS) == Py_INDEX_TAG; }
-static inline bool PyStackRef_IsPointerSpace(_PyStackRef r) { return !PyStackRef_IsTaggedIndex(r); }
-static inline bool PyStackRef_IsInline(_PyStackRef r) { (void)r; return false; }
-static inline bool PyStackRef_IsInlineInt(_PyStackRef r) { (void)r; return false; }
-static inline bool PyStackRef_IsInlineFloat(_PyStackRef r) { (void)r; return false; }
-static inline bool PyStackRef_BothInlineInt(_PyStackRef a, _PyStackRef b) { (void)a; (void)b; return false; }
-static inline bool PyStackRef_IsPointerSpaceAt(const _PyStackRef *ref) { return PyStackRef_IsPointerSpace(*ref); }
-static inline bool PyStackRef_IsInlineAt(const _PyStackRef *ref) { (void)ref; return false; }
-
-// Nothing is inline, so code behind the tests above never calls these.
-static inline int32_t PyStackRef_InlineInt(_PyStackRef r) { (void)r; Py_UNREACHABLE(); }
-static inline double PyStackRef_InlineFloat(_PyStackRef r) { (void)r; Py_UNREACHABLE(); }
-static inline _PyStackRef PyStackRef_FromDoubleNotNaN(double d) { (void)d; Py_UNREACHABLE(); }
-
-// Indices already have Py_TAG_REFCNT set.
-static inline uintptr_t
-_PyStackRef_BorrowBitAt(const _PyStackRef *ref)
-{
-    (void)ref;
-    return Py_TAG_REFCNT;
-}
-
-static inline _PyStackRef
-PyStackRef_TagIndex(intptr_t i)
-{
-    assert(Py_ARITHMETIC_RIGHT_SHIFT(intptr_t, (intptr_t)(((uintptr_t)i) << Py_TAGGED_SHIFT),
-                                     Py_TAGGED_SHIFT) == i);
-    return (_PyStackRef){ .bits = ((((uintptr_t)i) << Py_TAGGED_SHIFT) | Py_INDEX_TAG) };
-}
-
-static inline intptr_t
-PyStackRef_UntagIndex(_PyStackRef r)
-{
-    assert(PyStackRef_IsTaggedIndex(r));
-    return Py_ARITHMETIC_RIGHT_SHIFT(intptr_t, (intptr_t)r.bits, Py_TAGGED_SHIFT);
-}
-
-/* Increments a tagged index, but does not check for overflow */
-static inline _PyStackRef
-PyStackRef_IncrementTaggedIndexNoOverflow(_PyStackRef r)
-{
-    assert(PyStackRef_IsTaggedIndex(r));
-    assert((r.bits & (~Py_TAG_BITS)) != (INTPTR_MAX & (~Py_TAG_BITS))); // Isn't about to overflow
-    return (_PyStackRef){ .bits = r.bits + (1 << Py_TAGGED_SHIFT) };
-}
-
-static inline _PyStackRef
-PyStackRef_Box(_PyStackRef ref)
-{
-    return ref;
-}
-
-#endif  // SIZEOF_VOID_P == 8
 
 /* Value identity (boil/design/02-tagged-values.md, section 3)
 
@@ -307,9 +202,7 @@ PyStackRef_Box(_PyStackRef ref)
    exactly when x is y, and id() of a value is the same before and after it
    is boxed. 0.0 and -0.0 differ in bits, so `0.0 is -0.0` is False. NaN is
    never inline and keeps object identity. Bools and int subclasses keep
-   object identity. Py_Is() stays pointer equality: C code sees only boxes.
-
-   Builds without inline values use object identity throughout. */
+   object identity. Py_Is() stays pointer equality: C code sees only boxes. */
 
 // The identity of op: its value encoding or its address.
 PyAPI_FUNC(uintptr_t) _PyObject_ValueIdentity(PyObject *op);
@@ -320,9 +213,6 @@ PyAPI_FUNC(uintptr_t) _PyObject_ValueIdentity(PyObject *op);
 PyAPI_FUNC(int) _PyStackRef_IsSameValue(_PyStackRef a, _PyStackRef b);
 #endif
 
-
-// Only the Py_STACKREF_DEBUG checker tracks borrows.
-#define _Py_stackref_allow_borrows_outlive_close(ref) ((void)(ref))
 
 static const _PyStackRef PyStackRef_ERROR = { .bits = Py_TAG_INVALID };
 
@@ -366,346 +256,68 @@ PyStackRef_IsValid(_PyStackRef ref)
     return ref.bits > Py_TAG_INVALID;
 }
 
-/* References to immortal objects always have their tag bit set to Py_TAG_REFCNT
- * as they can (must) have their reclamation deferred */
-
-#if _Py_IMMORTAL_FLAGS != Py_TAG_REFCNT
-#  error "_Py_IMMORTAL_FLAGS != Py_TAG_REFCNT"
-#endif
-
-#define BITS_TO_PTR(REF) ((PyObject *)((REF).bits))
-#define BITS_TO_PTR_MASKED(REF) ((PyObject *)(((REF).bits) & (~Py_TAG_REFCNT)))
-
-#define PyStackRef_NULL_BITS Py_TAG_REFCNT
+#define PyStackRef_NULL_BITS 0
 static const _PyStackRef PyStackRef_NULL = { .bits = PyStackRef_NULL_BITS };
 
 #define PyStackRef_IsNull(ref) ((ref).bits == PyStackRef_NULL_BITS)
-#define PyStackRef_True ((_PyStackRef){.bits = ((uintptr_t)&_Py_TrueStruct) | Py_TAG_REFCNT })
-#define PyStackRef_False ((_PyStackRef){.bits = ((uintptr_t)&_Py_FalseStruct) | Py_TAG_REFCNT })
-#define PyStackRef_None ((_PyStackRef){.bits = ((uintptr_t)&_Py_NoneStruct) | Py_TAG_REFCNT })
+#define PyStackRef_True ((_PyStackRef){.bits = (uintptr_t)&_Py_TrueStruct })
+#define PyStackRef_False ((_PyStackRef){.bits = (uintptr_t)&_Py_FalseStruct })
+#define PyStackRef_None ((_PyStackRef){.bits = (uintptr_t)&_Py_NoneStruct })
 
-#define PyStackRef_IsTrue(REF) ((REF).bits == (((uintptr_t)&_Py_TrueStruct) | Py_TAG_REFCNT))
-#define PyStackRef_IsFalse(REF) ((REF).bits == (((uintptr_t)&_Py_FalseStruct) | Py_TAG_REFCNT))
-#define PyStackRef_IsNone(REF) ((REF).bits == (((uintptr_t)&_Py_NoneStruct) | Py_TAG_REFCNT))
+#define PyStackRef_IsTrue(REF) ((REF).bits == (uintptr_t)&_Py_TrueStruct)
+#define PyStackRef_IsFalse(REF) ((REF).bits == (uintptr_t)&_Py_FalseStruct)
+#define PyStackRef_IsNone(REF) ((REF).bits == (uintptr_t)&_Py_NoneStruct)
 
-#if defined(Py_DEBUG)
-
-static inline void
-PyStackRef_CheckValid(_PyStackRef ref)
-{
-    assert(ref.bits != 0);
-    assert(PyStackRef_IsPointerSpace(ref));
-    int tag = ref.bits & Py_TAG_BITS;
-    PyObject *obj = BITS_TO_PTR_MASKED(ref);
-    switch (tag) {
-        case 0:
-            /* Can be immortal if object was made immortal after reference came into existence */
-            assert(!_Py_IsStaticImmortal(obj));
-            break;
-        case Py_TAG_REFCNT:
-            break;
-        default:
-            assert(0);
-    }
-}
-
-#else
-
-#define PyStackRef_CheckValid(REF) ((void)0)
-
-#endif
-
-#ifdef _WIN32
-#define PyStackRef_RefcountOnObject(REF) (((REF).bits & Py_OWNED_MASK) == 0)
-#define PyStackRef_AsPyObjectBorrow BITS_TO_PTR_MASKED
-#define PyStackRef_Borrow(REF) (_PyStackRef){ .bits = ((REF).bits) | _PyStackRef_BorrowBitAt(&(REF))};
-#define PyStackRef_BorrowAt(REF) (_PyStackRef){ .bits = ((REF)->bits) | _PyStackRef_BorrowBitAt(REF)};
-#else
-/* Does this ref own a count on its object? False for references to immortal
-   objects, borrowed and deferred references, indices and inline values. */
-static inline int
-PyStackRef_RefcountOnObject(_PyStackRef ref)
-{
-    return (ref.bits & Py_OWNED_MASK) == 0;
-}
-
+/* The object that ref refers to.  ref must be in pointer space: box an
+   inline value first. */
 static inline PyObject *
 PyStackRef_AsPyObjectBorrow(_PyStackRef ref)
 {
     assert(PyStackRef_IsPointerSpace(ref));
-    return BITS_TO_PTR_MASKED(ref);
+    return (PyObject *)ref.bits;
 }
 
-/* Borrow the reference in *ref, typically a local: see PyStackRef_Borrow().
-   Passing the slot's address lets the pointer-space test read it in place. */
+/* A reference to obj, which must not be NULL. */
 static inline _PyStackRef
-PyStackRef_BorrowAt(const _PyStackRef *ref)
-{
-    return (_PyStackRef){ .bits = ref->bits | _PyStackRef_BorrowBitAt(ref) };
-}
-
-static inline _PyStackRef
-PyStackRef_Borrow(_PyStackRef ref)
-{
-    return PyStackRef_BorrowAt(&ref);
-}
-#endif
-
-static inline PyObject *
-PyStackRef_AsPyObjectSteal(_PyStackRef ref)
-{
-    assert(!PyStackRef_IsNull(ref));
-    assert(PyStackRef_IsPointerSpace(ref));
-    if (PyStackRef_RefcountOnObject(ref)) {
-        return BITS_TO_PTR(ref);
-    }
-    else {
-        return Py_NewRef(BITS_TO_PTR_MASKED(ref));
-    }
-}
-
-static inline _PyStackRef
-PyStackRef_FromPyObjectSteal(PyObject *obj)
+_PyStackRef_FromPyObject(PyObject *obj)
 {
     assert(obj != NULL);
-#  if SIZEOF_VOID_P > 4
-    unsigned int tag = obj->ob_flags & Py_TAG_REFCNT;
-#  else
-    unsigned int tag = _Py_IsImmortal(obj) ? Py_TAG_REFCNT : 0;
-#  endif
-    _PyStackRef ref = ((_PyStackRef){.bits = ((uintptr_t)(obj)) | tag});
-    PyStackRef_CheckValid(ref);
-    return ref;
+    assert(((uintptr_t)obj & Py_TAG_BITS) == 0);
+    return (_PyStackRef){ .bits = (uintptr_t)obj };
 }
+#define PyStackRef_FromPyObject(obj) _PyStackRef_FromPyObject(_PyObject_CAST(obj))
 
-static inline _PyStackRef
-PyStackRef_FromPyObjectStealMortal(PyObject *obj)
-{
-    assert(obj != NULL);
-    assert(!_Py_IsImmortal(obj));
-    _PyStackRef ref = (_PyStackRef){ .bits = (uintptr_t)obj };
-    PyStackRef_CheckValid(ref);
-    return ref;
-}
+/* The names below come from reference counting, where they took, gave or
+   copied a count.  Each is now a plain copy. */
+#define PyStackRef_FromPyObjectSteal PyStackRef_FromPyObject
+#define PyStackRef_FromPyObjectStealMortal PyStackRef_FromPyObject
+#define PyStackRef_FromPyObjectNew PyStackRef_FromPyObject
+#define PyStackRef_FromPyObjectNewMortal PyStackRef_FromPyObject
+#define PyStackRef_FromPyObjectBorrow PyStackRef_FromPyObject
+#define PyStackRef_AsPyObjectSteal PyStackRef_AsPyObjectBorrow
+#define _PyStackRef_AsPyObjectStealPointer PyStackRef_AsPyObjectBorrow
+#define PyStackRef_AsPyObjectNew PyStackRef_AsPyObjectBorrow
+#define PyStackRef_Borrow(REF) (REF)
+#define PyStackRef_BorrowAt(REF) (*(REF))
+#define PyStackRef_DUP(REF) (REF)
+#define _PyStackRef_DUP_POINTER(REF) (REF)
+#define PyStackRef_DupImmortal(REF) (REF)
+#define PyStackRef_MakeHeapSafe(REF) (REF)
+#define PyStackRef_AsStrongReference(REF) (REF)
+#define PyStackRef_CLOSE(REF) ((void)(REF))
+#define PyStackRef_XCLOSE(REF) ((void)(REF))
+#define PyStackRef_CLOSE_SPECIALIZED(REF, DESTRUCT) ((void)(REF))
+#define _PyStackRef_CLOSE_POINTER(REF) ((void)(REF))
+#define _PyStackRef_XCLOSE_POINTER(REF) ((void)(REF))
+#define _PyStackRef_CLOSE_SPECIALIZED_POINTER(REF, DESTRUCT) ((void)(REF))
+#define PyStackRef_CLEAR(REF) ((REF) = PyStackRef_NULL)
+#define _Py_stackref_allow_borrows_outlive_close(ref) ((void)(ref))
 
-static inline _PyStackRef
-_PyStackRef_FromPyObjectNew(PyObject *obj)
-{
-    assert(obj != NULL);
-    if (_Py_IsImmortal(obj)) {
-        return (_PyStackRef){ .bits = (uintptr_t)obj | Py_TAG_REFCNT };
-    }
-    _Py_INCREF_MORTAL(obj);
-    _PyStackRef ref = (_PyStackRef){ .bits = (uintptr_t)obj };
-    PyStackRef_CheckValid(ref);
-    return ref;
-}
-#define PyStackRef_FromPyObjectNew(obj) _PyStackRef_FromPyObjectNew(_PyObject_CAST(obj))
-
-static inline _PyStackRef
-_PyStackRef_FromPyObjectNewMortal(PyObject *obj)
-{
-    assert(obj != NULL);
-    _Py_INCREF_MORTAL(obj);
-    _PyStackRef ref = (_PyStackRef){ .bits = (uintptr_t)obj };
-    PyStackRef_CheckValid(ref);
-    return ref;
-}
-#define PyStackRef_FromPyObjectNewMortal(obj) _PyStackRef_FromPyObjectNewMortal(_PyObject_CAST(obj))
-
-/* Create a new reference from an object with an embedded reference count */
-static inline _PyStackRef
-PyStackRef_FromPyObjectBorrow(PyObject *obj)
-{
-    assert(obj != NULL);
-    return (_PyStackRef){ .bits = (uintptr_t)obj | Py_TAG_REFCNT};
-}
-
-/* WARNING: This macro evaluates its argument more than once */
-#ifdef _WIN32
-#define PyStackRef_DUP(REF) \
-    (PyStackRef_RefcountOnObject(REF) ? (_Py_INCREF_MORTAL(BITS_TO_PTR(REF)), (REF)) : (REF))
-#else
-static inline _PyStackRef
-PyStackRef_DUP(_PyStackRef ref)
-{
-    assert(!PyStackRef_IsNull(ref));
-    if (PyStackRef_RefcountOnObject(ref)) {
-        _Py_INCREF_MORTAL(BITS_TO_PTR(ref));
-    }
-    return ref;
-}
-#endif
-
-static inline _PyStackRef
-PyStackRef_DupImmortal(_PyStackRef ref)
-{
-    assert(!PyStackRef_IsNull(ref));
-    assert(!PyStackRef_RefcountOnObject(ref));
-    assert(_Py_IsImmortal(BITS_TO_PTR_MASKED(ref)));
-    return ref;
-}
-
-static inline bool
-PyStackRef_IsHeapSafe(_PyStackRef ref)
-{
-    return (ref.bits & Py_TAG_BITS) != Py_TAG_REFCNT || ref.bits == PyStackRef_NULL_BITS ||
-           !PyStackRef_IsPointerSpace(ref) || _Py_IsImmortal(BITS_TO_PTR_MASKED(ref));
-}
-
-static inline _PyStackRef
-PyStackRef_MakeHeapSafe(_PyStackRef ref)
-{
-    if (PyStackRef_IsHeapSafe(ref)) {
-        return ref;
-    }
-    PyObject *obj = BITS_TO_PTR_MASKED(ref);
-    Py_INCREF(obj);
-    ref.bits = (uintptr_t)obj;
-    PyStackRef_CheckValid(ref);
-    return ref;
-}
-
-// Convert a possibly deferred reference to a strong reference.
-static inline _PyStackRef
-PyStackRef_AsStrongReference(_PyStackRef stackref)
-{
-    return PyStackRef_FromPyObjectSteal(PyStackRef_AsPyObjectSteal(stackref));
-}
-
-#ifdef _WIN32
-#define PyStackRef_CLOSE(REF) \
-do { \
-    _PyStackRef _temp = (REF); \
-    if (PyStackRef_RefcountOnObject(_temp)) Py_DECREF_MORTAL(BITS_TO_PTR(_temp)); \
-} while (0)
-#else
-static inline void
-PyStackRef_CLOSE(_PyStackRef ref)
-{
-    assert(!PyStackRef_IsNull(ref));
-    if (PyStackRef_RefcountOnObject(ref)) {
-        Py_DECREF_MORTAL(BITS_TO_PTR(ref));
-    }
-}
-#endif
-
-static inline void
-PyStackRef_CLOSE_SPECIALIZED(_PyStackRef ref, destructor destruct)
-{
-    assert(!PyStackRef_IsNull(ref));
-    if (PyStackRef_RefcountOnObject(ref)) {
-        Py_DECREF_MORTAL_SPECIALIZED(BITS_TO_PTR(ref), destruct);
-    }
-}
-
-#ifdef _WIN32
-#define PyStackRef_XCLOSE PyStackRef_CLOSE
-#else
-static inline void
-PyStackRef_XCLOSE(_PyStackRef ref)
-{
-    assert(ref.bits != 0);
-    if (PyStackRef_RefcountOnObject(ref)) {
-        assert(!PyStackRef_IsNull(ref));
-        Py_DECREF_MORTAL(BITS_TO_PTR(ref));
-    }
-}
-#endif
-
-#define PyStackRef_CLEAR(REF) \
-    do { \
-        _PyStackRef *_tmp_op_ptr = &(REF); \
-        _PyStackRef _tmp_old_op = (*_tmp_op_ptr); \
-        *_tmp_op_ptr = PyStackRef_NULL; \
-        PyStackRef_XCLOSE(_tmp_old_op); \
-    } while (0)
-
-
-// Python's `is`: the same reference, ignoring bit 0 of a pointer, or else
-// the same value (see "Value identity" below), which only the out-of-line
-// test can establish. Indices compare exactly.
+// Python's `is`: the same encoding, or else the same value (see "Value
+// identity" above), which only the out-of-line test can establish.
 // Note: this is a macro because MSVC (Windows) has trouble inlining it.
-#ifdef Py_STACKREF_INLINE_VALUES
 #define PyStackRef_Is(a, b) \
-    (((((a).bits ^ (b).bits) & ~(uintptr_t)PyStackRef_IsPointerSpace(a)) == 0) \
-     || _PyStackRef_IsSameValue((a), (b)))
-#else
-#define PyStackRef_Is(a, b) \
-    ((((a).bits ^ (b).bits) & ~(uintptr_t)PyStackRef_IsPointerSpace(a)) == 0)
-#endif
-
-
-
-/* Close, dup or steal a reference known to be in pointer space, which
-   includes PyStackRef_NULL: the cases generator knows this of a value that
-   passed a guard, was boxed or was built from an object (see "Inline values"
-   in Tools/cases_generator/interpreter_definition.md). There a reference owns
-   a count unless Py_TAG_REFCNT is set, so these test that bit alone instead
-   of Py_OWNED_MASK. */
-#if defined(Py_STACKREF_INLINE_VALUES)
-
-static inline int
-_PyStackRef_PointerOwnsCount(_PyStackRef ref)
-{
-    assert(PyStackRef_IsPointerSpace(ref));
-    return (ref.bits & Py_TAG_REFCNT) == 0;
-}
-
-// PyStackRef_NULL owns no count, so this also serves as XCLOSE.
-static inline void
-_PyStackRef_XCLOSE_POINTER(_PyStackRef ref)
-{
-    if (_PyStackRef_PointerOwnsCount(ref)) {
-        Py_DECREF_MORTAL(BITS_TO_PTR(ref));
-    }
-}
-
-static inline void
-_PyStackRef_CLOSE_POINTER(_PyStackRef ref)
-{
-    assert(!PyStackRef_IsNull(ref));
-    _PyStackRef_XCLOSE_POINTER(ref);
-}
-
-static inline void
-_PyStackRef_CLOSE_SPECIALIZED_POINTER(_PyStackRef ref, destructor destruct)
-{
-    assert(!PyStackRef_IsNull(ref));
-    if (_PyStackRef_PointerOwnsCount(ref)) {
-        Py_DECREF_MORTAL_SPECIALIZED(BITS_TO_PTR(ref), destruct);
-    }
-}
-
-static inline _PyStackRef
-_PyStackRef_DUP_POINTER(_PyStackRef ref)
-{
-    assert(!PyStackRef_IsNull(ref));
-    if (_PyStackRef_PointerOwnsCount(ref)) {
-        _Py_INCREF_MORTAL(BITS_TO_PTR(ref));
-    }
-    return ref;
-}
-
-static inline PyObject *
-_PyStackRef_AsPyObjectStealPointer(_PyStackRef ref)
-{
-    assert(!PyStackRef_IsNull(ref));
-    if (_PyStackRef_PointerOwnsCount(ref)) {
-        return BITS_TO_PTR(ref);
-    }
-    return Py_NewRef(BITS_TO_PTR_MASKED(ref));
-}
-
-#else
-
-#define _PyStackRef_CLOSE_POINTER PyStackRef_CLOSE
-#define _PyStackRef_XCLOSE_POINTER PyStackRef_XCLOSE
-#define _PyStackRef_CLOSE_SPECIALIZED_POINTER PyStackRef_CLOSE_SPECIALIZED
-#define _PyStackRef_DUP_POINTER PyStackRef_DUP
-#define _PyStackRef_AsPyObjectStealPointer PyStackRef_AsPyObjectSteal
-
-#endif
+    (((a).bits == (b).bits) || _PyStackRef_IsSameValue((a), (b)))
 
 static inline bool
 PyStackRef_IsMalformed(_PyStackRef ref)
@@ -727,10 +339,6 @@ PyStackRef_TYPE(_PyStackRef stackref) {
     }
     return Py_TYPE(PyStackRef_AsPyObjectBorrow(stackref));
 }
-
-// Converts a PyStackRef back to a PyObject *, converting the
-// stackref to a new reference.
-#define PyStackRef_AsPyObjectNew(stackref) Py_NewRef(PyStackRef_AsPyObjectBorrow(stackref))
 
 // StackRef type checks. Indices and inline values are not objects of these types.
 

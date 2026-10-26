@@ -37,7 +37,7 @@ stackref_identity(_PyStackRef ref)
     if (!PyStackRef_IsPointerSpace(ref)) {
         return _PyStackRef_BITS(ref);
     }
-    return _PyObject_ValueIdentity(BITS_TO_PTR_MASKED(ref));
+    return _PyObject_ValueIdentity(PyStackRef_AsPyObjectBorrow(ref));
 }
 
 int

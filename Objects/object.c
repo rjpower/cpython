@@ -2352,28 +2352,8 @@ PyUnstable_Object_EnableDeferredRefcount(PyObject *op)
 int
 PyUnstable_Object_IsUniqueReferencedTemporary(PyObject *op)
 {
-    if (!_PyObject_IsUniquelyReferenced(op)) {
-        return 0;
-    }
-
-    _PyInterpreterFrame *frame = _PyEval_GetFrame();
-    if (frame == NULL) {
-        return 0;
-    }
-
-    /* The temporaries; NULL ones are not objects */
-    _PyStackRef *base = _PyFrame_Stackbase(frame);
-    _PyStackRef *stackpointer = frame->base + _PyFrame_NumSlots(frame);
-    while (stackpointer > base) {
-        stackpointer--;
-        _PyStackRef ref = *stackpointer;
-        if (!PyStackRef_IsObject(ref)) {
-            continue;
-        }
-        if (op == PyStackRef_AsPyObjectBorrow(ref)) {
-            return PyStackRef_IsHeapSafe(ref);
-        }
-    }
+    // Nothing is reference counted, so no object is known to be unique.
+    (void)op;
     return 0;
 }
 

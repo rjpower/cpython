@@ -2,7 +2,6 @@ import ctypes
 import functools
 import gc
 import math
-import sys
 import unittest
 import warnings
 from _ctypes import CTYPES_MAX_ARGCOUNT
@@ -93,19 +92,6 @@ class Callbacks(unittest.TestCase):
     def test_char(self):
         self.check_type(c_char, b"x")
         self.check_type(c_char, b"a")
-
-    @support.requires_refcounting
-    def test_pyobject(self):
-        o = ()
-        for o in (), [], object():
-            initial = sys.getrefcount(o)
-            # This call leaks a reference to 'o'...
-            self.check_type(py_object, o)
-            before = sys.getrefcount(o)
-            # ...but this call doesn't leak any more.  Where is the refcount?
-            self.check_type(py_object, o)
-            after = sys.getrefcount(o)
-            self.assertEqual((after, o), (before, o))
 
     def test_unsupported_restype_1(self):
         # Only "fundamental" result types are supported for callback

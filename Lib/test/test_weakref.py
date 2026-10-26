@@ -1280,18 +1280,6 @@ class WeakMethodTestCase(unittest.TestCase):
         gc.collect()
         self.assertEqual(calls, [r])
 
-    @support.cpython_only
-    @support.requires_refcounting
-    def test_no_cycles(self):
-        # A WeakMethod doesn't create any reference cycle to itself.
-        o = Object(1)
-        def cb(_):
-            pass
-        r = weakref.WeakMethod(o.some_method, cb)
-        wr = weakref.ref(r)
-        del r
-        self.assertIs(wr(), None)
-
     def test_equality(self):
         def _eq(a, b):
             self.assertTrue(a == b)

@@ -31,16 +31,27 @@
      the registered static types and every immortal heap object;
    - conservative: every thread's C stack from its saved stack pointer to
      its base, its callee-saved registers, the writable segments of every
-     loaded object, and the thread and interpreter state structs.  A word is
-     a root if it points into an allocated object block; an interior pointer
-     marks its block.
+     loaded object, the thread and interpreter state structs and the thread
+     data stacks.  A word is a root if it points into an allocated object
+     block; an interior pointer marks its block.  A word on a C stack or in
+     a register that points into a PyMem block (the tstate's mem heap) has
+     the block scanned too, transitively, because a function's buffers are
+     its locals.  PyMem blocks reached from objects or statics are not
+     scanned: a type that keeps references there must visit them.
 
    Every pointer, precise or conservative, is checked before it is followed:
    it must be an allocated object's address or point to readable memory
    outside the heap, and its type must be a known type.  A conservative scan
    can find an object that is still being built, so an untracked GC object
    other than a tuple that only a conservative root reaches is marked but not
-   traversed, until a precise reference reaches it. */
+   traversed, until a precise reference reaches it.
+
+   Unmarked objects are not all holes.  Garbage that a finalizer or another
+   thread created during the collection is unreachable too.  As the cycle
+   collector does, each unmarked object's references to other unmarked
+   objects are subtracted from their counts; whatever keeps an external
+   reference, and everything it reaches, is a hole, and the rest is counted
+   as garbage. */
 
 #include "Python.h"
 #include "pycore_gc_trace.h"
@@ -473,7 +484,6 @@ walk_heaps(trace_t *t)
     return 0;
 }
 
-/* Map an address anywhere in an object block to the object, or 0. */
 /* Queue the mem heap block that contains addr for a conservative scan. */
 static void
 queue_mem_block(trace_t *t, uintptr_t addr)
@@ -503,6 +513,7 @@ queue_mem_block(trace_t *t, uintptr_t addr)
     t->nmemblocks++;
 }
 
+/* Map an address anywhere in an object block to the object, or 0. */
 static uintptr_t
 heap_lookup(const trace_t *t, uintptr_t addr)
 {

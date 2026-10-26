@@ -983,18 +983,13 @@ class DictTest(unittest.TestCase):
             pass
         views = (dict.items, dict.values, dict.keys)
         for v in views:
-            # A stale word on the C stack can keep one attempt's cycle
-            # alive; each attempt makes a new one.
-            for _ in range(5):
-                obj = C()
-                ref = weakref.ref(obj)
-                container = {obj: 1}
-                obj.v = v(container)
-                obj.x = iter(obj.v)
-                del obj, container
-                gc.collect()
-                if ref() is None:
-                    break
+            obj = C()
+            ref = weakref.ref(obj)
+            container = {obj: 1}
+            obj.v = v(container)
+            obj.x = iter(obj.v)
+            del obj, container
+            gc.collect()
             self.assertIs(ref(), None, "Cycle was not collected")
 
     def make_shared_key_dict(self, n):

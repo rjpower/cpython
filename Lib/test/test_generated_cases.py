@@ -274,6 +274,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = OP;
             (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -469,6 +470,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = OP;
             (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -576,6 +578,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = OP;
             (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -622,6 +625,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = OP_NOFB;
             (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -667,6 +671,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = OP_SPECIALIZED;
             (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -728,6 +733,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = OP;
             (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -757,6 +763,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = OP_NOFB;
             (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -834,6 +841,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = IR_PASS;
             (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;

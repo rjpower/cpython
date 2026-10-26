@@ -603,6 +603,7 @@ static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_WITH_EXCEPT_START(TAIL_CALL_PARA
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_YIELD_VALUE(TAIL_CALL_PARAMS);
 
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_UNKNOWN_OPCODE(TAIL_CALL_PARAMS) {
+    TAIL_CALL_LOAD_FRAME();
     int opcode = IR_HANDLER(*next_instr);
     _PyErr_Format(tstate, PyExc_SystemError,
               "%U:%d: unknown opcode %d",

@@ -1316,3 +1316,21 @@ and tests that assumed reference-count timing or `sys.getrefcount`,
 adjusted one commit per file with the assumption named. The mark finds
 pages through a segment map (bacb0d499ec): 17% fewer cycles per
 collection. Rung 3, the gc-debug full suite, is next.
+
+### 2026-10-26 10:05 — step 5b milestone 3: the full suite passes on gc-debug; eight ports pass
+
+Full suite at 8a85454903f on build/gc-debug (verifier and sweep check
+on), -j8: 556 files, 50,818 tests, 15 min 22 s, one failure (test_sys's
+remote-exec timeout, pre-existing). The gc-debug run found six crash
+classes: two missing traverse visits (zlib, the C Unpickler), two
+deallocs that ran code in the sweep (co_extra free functions, the
+cross-interpreter buffer view), and pyexpat's subparser reading a parent
+the sweep had freed. The verifier over the whole suite on dev-debug
+reports no stdlib traverse omissions beyond those. `requires_precise_gc`
+is gone: seven tests run under Py_GC, one is skipped on debug builds for
+a stale -Og frame word. Ports: all seven plus the new cython port pass
+`ports check` on gc-v0, gc-debug-v0 and refcnt-v0; patch lines numpy 128
+(uncommitted traverses and roots), cython 43, cffi 10, others 0. Open:
+numpy's array dealloc reads its descr, which the sweep may free first;
+ruled a type flag "dealloc reads its referents" whose dead objects are
+freed in the sweep's first pass, the first stage of the 5c ordering.

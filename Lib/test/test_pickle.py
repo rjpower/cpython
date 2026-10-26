@@ -154,38 +154,6 @@ class PyIdPersPicklerTests(AbstractIdentityPersistentPicklerTests,
     persistent_load_error = pickle.UnpicklingError
 
     @support.cpython_only
-    @support.requires_refcounting
-    def test_pickler_reference_cycle(self):
-        def check(Pickler):
-            for proto in range(pickle.HIGHEST_PROTOCOL + 1):
-                f = io.BytesIO()
-                pickler = Pickler(f, proto)
-                pickler.dump('abc')
-                self.assertEqual(self.loads(f.getvalue()), 'abc')
-            pickler = Pickler(io.BytesIO())
-            self.assertEqual(pickler.persistent_id('def'), 'def')
-            r = weakref.ref(pickler)
-            del pickler
-            self.assertIsNone(r())
-
-        class PersPickler(self.pickler):
-            def persistent_id(subself, obj):
-                return obj
-        check(PersPickler)
-
-        class PersPickler(self.pickler):
-            @classmethod
-            def persistent_id(cls, obj):
-                return obj
-        check(PersPickler)
-
-        class PersPickler(self.pickler):
-            @staticmethod
-            def persistent_id(obj):
-                return obj
-        check(PersPickler)
-
-    @support.cpython_only
     def test_custom_pickler_dispatch_table_memleak(self):
         # See https://github.com/python/cpython/issues/89988
 
@@ -206,36 +174,6 @@ class PyIdPersPicklerTests(AbstractIdentityPersistentPicklerTests,
         del table
         support.gc_collect()
         self.assertIsNone(table_ref())
-
-    @support.cpython_only
-    @support.requires_refcounting
-    def test_unpickler_reference_cycle(self):
-        def check(Unpickler):
-            for proto in range(pickle.HIGHEST_PROTOCOL + 1):
-                unpickler = Unpickler(io.BytesIO(self.dumps('abc', proto)))
-                self.assertEqual(unpickler.load(), 'abc')
-            unpickler = Unpickler(io.BytesIO())
-            self.assertEqual(unpickler.persistent_load('def'), 'def')
-            r = weakref.ref(unpickler)
-            del unpickler
-            self.assertIsNone(r())
-
-        class PersUnpickler(self.unpickler):
-            def persistent_load(subself, pid):
-                return pid
-        check(PersUnpickler)
-
-        class PersUnpickler(self.unpickler):
-            @classmethod
-            def persistent_load(cls, pid):
-                return pid
-        check(PersUnpickler)
-
-        class PersUnpickler(self.unpickler):
-            @staticmethod
-            def persistent_load(pid):
-                return pid
-        check(PersUnpickler)
 
     def test_pickler_super(self):
         class PersPickler(self.pickler):

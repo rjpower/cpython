@@ -359,9 +359,9 @@ typedef struct {
     uintptr_t mem_hi;
     PyInterpreterState *domain[64];
     int ndomain;
-    // Weak caches that the conservative scans skip
-    uintptr_t skip_lo[128];
-    uintptr_t skip_hi[128];
+    // Weak caches and lists that the conservative scans skip
+    uintptr_t skip_lo[256];
+    uintptr_t skip_hi[256];
     int nskip;
 #endif
 } trace_t;
@@ -1122,13 +1122,24 @@ scan_data_segments(trace_t *t)
 #endif
 }
 
+/* Scan the struct at p conservatively, except for the list head at head:
+ * the list of the asyncio module's C tasks, which is weak, since each task
+ * unlinks itself as it dies. */
+static void
+scan_struct_except(trace_t *t, void *p, size_t size, struct llist_node *head)
+{
+    scan_range(t, (uintptr_t)p, (uintptr_t)head);
+    scan_range(t, (uintptr_t)(head + 1), (uintptr_t)p + size);
+}
+
 static void
 scan_structs(trace_t *t)
 {
-    scan_range(t, (uintptr_t)t->interp,
-               (uintptr_t)t->interp + sizeof(PyInterpreterState));
+    scan_struct_except(t, t->interp, sizeof(PyInterpreterState),
+                       &t->interp->asyncio_tasks_head);
     _Py_FOR_EACH_TSTATE_UNLOCKED(t->interp, p) {
-        scan_range(t, (uintptr_t)p, (uintptr_t)p + sizeof(_PyThreadStateImpl));
+        scan_struct_except(t, p, sizeof(_PyThreadStateImpl),
+                           &((_PyThreadStateImpl *)p)->asyncio_tasks_head);
         /* The data stack.  A frame that is returning is unlinked from
          * current_frame before its slots are cleared, and a finalizer that
          * clearing a slot triggers can collect while the later slots still
@@ -1330,22 +1341,32 @@ shares_main_heap(PyInterpreterState *interp)
 }
 
 /* The interpreters collected with interp.  The caller holds the head lock. */
-/* The caches of borrowed references in an interpreter, which the
-   deallocs of their objects clear.  Scanning them would keep the objects. */
+static void
+live_skip(trace_t *t, void *p, size_t size)
+{
+    assert(t->nskip < (int)Py_ARRAY_LENGTH(t->skip_lo));
+    t->skip_lo[t->nskip] = (uintptr_t)p;
+    t->skip_hi[t->nskip++] = (uintptr_t)p + size;
+}
+
+/* The caches of borrowed references in an interpreter, and its lists of
+   asyncio tasks, which the deallocs of their objects clear.  Scanning them
+   would keep the objects.  The main interpreter and its initial thread state
+   are in _PyRuntime, which the scan of the data segments reads; the struct
+   scan skips the lists of the other thread states. */
 static void
 live_skip_caches(trace_t *t)
 {
     t->nskip = 0;
     for (int d = 0; d < t->ndomain; d++) {
         PyInterpreterState *interp = t->domain[d];
-        void *p = interp->func_state.func_version_cache;
-        t->skip_lo[t->nskip] = (uintptr_t)p;
-        t->skip_hi[t->nskip++] = (uintptr_t)p
-            + sizeof(interp->func_state.func_version_cache);
-        p = interp->types.type_version_cache;
-        t->skip_lo[t->nskip] = (uintptr_t)p;
-        t->skip_hi[t->nskip++] = (uintptr_t)p
-            + sizeof(interp->types.type_version_cache);
+        live_skip(t, interp->func_state.func_version_cache,
+                  sizeof(interp->func_state.func_version_cache));
+        live_skip(t, interp->types.type_version_cache,
+                  sizeof(interp->types.type_version_cache));
+        live_skip(t, &interp->asyncio_tasks_head, sizeof(struct llist_node));
+        live_skip(t, &interp->_initial_thread.asyncio_tasks_head,
+                  sizeof(struct llist_node));
     }
 }
 

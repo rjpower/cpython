@@ -691,6 +691,7 @@ class LineMonitoringTest(MonitoringTestBase, unittest.TestCase):
 
         self.check_lines(func2, [1,2,3,4,5,6])
 
+    @test.support.requires_refcounting
     def test_generator_with_line(self):
 
         def f():

@@ -1713,6 +1713,7 @@ class CoroutineTest(unittest.TestCase):
         self.assertEqual(buffer, [i for i in range(1, 21)] +
                                  ['what?', 'end'])
 
+    @support.requires_refcounting
     def test_for_2(self):
         tup = (1, 2, 3)
         refs_before = sys.getrefcount(tup)
@@ -1728,6 +1729,7 @@ class CoroutineTest(unittest.TestCase):
 
         self.assertEqual(sys.getrefcount(tup), refs_before)
 
+    @support.requires_refcounting
     def test_for_3(self):
         class I:
             def __aiter__(self):
@@ -1748,6 +1750,7 @@ class CoroutineTest(unittest.TestCase):
 
         self.assertEqual(sys.getrefcount(aiter), refs_before)
 
+    @support.requires_refcounting
     def test_for_4(self):
         class I:
             def __aiter__(self):
@@ -1771,6 +1774,7 @@ class CoroutineTest(unittest.TestCase):
 
         self.assertEqual(sys.getrefcount(aiter), refs_before)
 
+    @support.requires_refcounting
     def test_for_6(self):
         I = 0
 
@@ -2340,6 +2344,7 @@ class CoroutineTest(unittest.TestCase):
             pass
         with self.assertWarns(RuntimeWarning):
             frame = f().cr_frame
+            support.gc_collect()  # For other GCs.
         frame.clear()
 
     def test_bpo_45813_2(self):

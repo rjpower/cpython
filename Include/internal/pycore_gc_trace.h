@@ -222,6 +222,11 @@ extern void _Py_NO_RETURN _PyGC_LiveSweepViolation(PyThreadState *tstate,
 /* Remember an immortal heap object: what it refers to is a root. */
 extern void _PyGC_LiveAddImmortal(PyObject *op);
 
+/* Zero the C stack below the caller's frame, where the collector's entry
+ * frames go next.  Their padding would otherwise keep the stale words that
+ * earlier calls left there, which the scan takes for roots. */
+extern void _PyGC_LiveClearStack(void);
+
 /* Totals for gc.get_stats(): the bytes the sweeps freed, the bytes the last
  * collection found live, and the longest pause in seconds. */
 extern void _PyGC_LiveGetStats(PyInterpreterState *interp,

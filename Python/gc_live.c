@@ -859,6 +859,12 @@ clear_stack_below(void)
     __asm__ volatile("" : : "r"(buf) : "memory");
 }
 
+void
+_PyGC_LiveClearStack(void)
+{
+    clear_stack_below();
+}
+
 /* Inlined, so that the frame of collect_from_entry() is made in the cleared
    stack. */
 static inline Py_ssize_t

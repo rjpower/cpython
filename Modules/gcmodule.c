@@ -92,6 +92,12 @@ gc_collect_impl(PyObject *module, int generation)
         return -1;
     }
 
+#ifdef Py_GC
+    // The call that just returned, often the one that dropped the garbage
+    // that this collection is meant to free, left words where the frame of
+    // _PyGC_Collect() goes next.
+    _PyGC_LiveClearStack();
+#endif
     return _PyGC_Collect(tstate, generation, _Py_GC_REASON_MANUAL);
 }
 

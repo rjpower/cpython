@@ -184,10 +184,11 @@ class CmdLineTest(unittest.TestCase):
         self.assertEqual(proc.err, b'')
 
         # "-X showrefcount" shows the refcount, but only in debug builds
+        # that count references, which Py_GC builds do not.
         proc = assert_python_ok('-I', '-X', 'showrefcount', '-c', code)
         self.assertEqual(proc.out.rstrip(),
                          b"{'faulthandler': True, 'showrefcount': True}")
-        if support.Py_DEBUG:
+        if support.Py_DEBUG and not support.Py_GC:
             # bpo-46417: Tolerate negative reference count which can occur
             # because of bugs in C extensions. This test is only about checking
             # the showrefcount feature.

@@ -3935,6 +3935,7 @@ class TestManagerExceptions(unittest.TestCase):
         self.mgr.shutdown()
         self.mgr.join()
 
+    @support.requires_refcounting
     @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
     def test_queue_get(self):
         queue = self.mgr.Queue()
@@ -3947,6 +3948,7 @@ class TestManagerExceptions(unittest.TestCase):
             wr = weakref.ref(e)
         self.assertEqual(wr(), None)
 
+    @support.requires_refcounting
     @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
     def test_dispatch(self):
         if gc.isenabled():
@@ -4592,6 +4594,7 @@ class _TestHeap(BaseTestCase):
         multiprocessing.heap.BufferWrapper._heap = self.old_heap
         super().tearDown()
 
+    @support.requires_refcounting
     def test_heap(self):
         iterations = 5000
         maxblocks = 50
@@ -4771,6 +4774,7 @@ class _TestSharedMemory(BaseTestCase):
         else:
             local_sms = shmem_name_or_obj
         local_sms.buf[:len(binary_data)] = binary_data
+        support.gc_collect()  # For other GCs.
         local_sms.close()
 
     def _new_shm_name(self, prefix):
@@ -5009,6 +5013,8 @@ class _TestSharedMemory(BaseTestCase):
         p.join()
         self.assertEqual(bytes(sms.buf[:5]), b'HELLO')
 
+        # The sliced views must be released before the mmap closes.
+        support.gc_collect()  # For other GCs.
         sms.close()
 
     @warnings_helper.ignore_fork_in_thread_deprecation_warnings()

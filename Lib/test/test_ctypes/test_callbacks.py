@@ -94,6 +94,7 @@ class Callbacks(unittest.TestCase):
         self.check_type(c_char, b"x")
         self.check_type(c_char, b"a")
 
+    @support.requires_refcounting
     def test_pyobject(self):
         o = ()
         for o in (), [], object():

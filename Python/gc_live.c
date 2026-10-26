@@ -792,6 +792,33 @@ debug_cycle(struct _gc_live_state *ls, const char *msg, PyObject *op)
     debug_write(ls, "gc: %s <%s %p>\n", msg, Py_TYPE(op)->tp_name, (void *)op);
 }
 
+/* Add a collection to the totals in the ring of generation 2's stats, which
+   gc.get_stats() and _remote_debugging read, as add_stats() in gc.c does.
+   There is one generation: every collection is a full one. */
+static void
+record_stats(GCState *gc, const struct gc_generation_stats *cur)
+{
+    struct gc_stats *gs = gc->generation_stats;
+    uint32_t seq = _Py_atomic_load_uint32_relaxed(&gs->update_seq);
+    // An odd sequence number tells a reader that an update is in progress.
+    _Py_atomic_store_uint32_relaxed(&gs->update_seq, seq + 1);
+    _Py_atomic_fence_seq_cst();
+    struct gc_old_stats_buffer *ring = &gs->old[1];
+    struct gc_generation_stats *prev = &ring->items[ring->index];
+    ring->index = (ring->index + 1) % GC_OLD_STATS_SIZE;
+    struct gc_generation_stats *stats = &ring->items[ring->index];
+    *stats = *prev;
+    stats->ts_start = cur->ts_start;
+    stats->ts_stop = cur->ts_stop;
+    stats->collections += cur->collections;
+    stats->collected += cur->collected;
+    stats->uncollectable += cur->uncollectable;
+    stats->candidates += cur->candidates;
+    stats->duration += cur->duration;
+    stats->heap_size = cur->heap_size;
+    _Py_atomic_store_uint32_release(&gs->update_seq, seq + 2);
+}
+
 static Py_ssize_t
 collect(PyThreadState *tstate, _PyGC_Reason reason)
 {
@@ -805,9 +832,9 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
         return 0;  // before _PyGC_Init() or after _PyGC_Fini()
     }
     gc->collecting = 1;
+    // The frame that a sampling profiler shows a "<GC>" frame above
+    gc->frame = tstate->current_frame;
     ls->exc = _PyErr_GetRaisedException(tstate);
-    struct gc_generation_stats *stats =
-        &gc->generation_stats->old[1].items[gc->generation_stats->old[1].index];
     struct gc_generation_stats cur = {0};
     invoke_gc_callback(tstate, "start", &cur);
 
@@ -862,11 +889,10 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
     cur.uncollectable = (Py_ssize_t)garbage.n;
     cur.candidates = res.nobjects;
     cur.duration = PyTime_AsSecondsDouble(t1 - t0);
-    stats->collections++;
-    stats->collected += cur.collected;
-    stats->uncollectable += cur.uncollectable;
-    stats->candidates += cur.candidates;
-    stats->duration += cur.duration;
+    cur.ts_start = t0;
+    cur.ts_stop = t1;
+    cur.heap_size = res.nobjects;
+    record_stats(gc, &cur);
     gc->heap_size = res.nobjects - res.ndead;
     gc->long_lived_total = gc->heap_size;
 
@@ -899,6 +925,7 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
 done:
     free(garbage.items);
     invoke_gc_callback(tstate, "stop", &cur);
+    gc->frame = NULL;
     gc->collecting = 0;
     _PyErr_SetRaisedException(tstate, ls->exc);
     ls->exc = NULL;

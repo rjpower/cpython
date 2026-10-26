@@ -25,6 +25,7 @@ except ImportError:
     )
 
 from test.support import (
+    Py_GC,
     requires_remote_subprocess_debugging,
     SHORT_TIMEOUT,
 )
@@ -461,6 +462,9 @@ do_work()
             ]
             self.assertGreater(len(function_entries), 0)
 
+    @unittest.skipIf(Py_GC, "the collector runs on allocated bytes, so samples "
+                     "of this workload include <GC> frames, which the test "
+                     "does not expect")
     def test_sampling_with_collapsed_export(self):
         collapsed_file = tempfile.NamedTemporaryFile(
             suffix=".txt", delete=False

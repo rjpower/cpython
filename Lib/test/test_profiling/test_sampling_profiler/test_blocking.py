@@ -20,6 +20,7 @@ except ImportError:
     )
 
 from test.support import (
+    Py_GC,
     SHORT_TIMEOUT,
     os_helper,
     requires_remote_subprocess_debugging,
@@ -83,6 +84,9 @@ class TestBlockingModeStackAccuracy(unittest.TestCase):
         # result = ...       -> line 19
         cls.ARITHMETIC_LINES = {16, 17, 18, 19}
 
+    @unittest.skipIf(Py_GC, "the collector runs on allocated bytes, so samples "
+                     "of this workload include <GC> frames, which the test "
+                     "does not expect")
     def test_generator_not_under_consumer_arithmetic(self):
         """Test that fibonacci_generator doesn't appear when consume_generator does arithmetic.
 

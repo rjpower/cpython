@@ -9449,6 +9449,22 @@ type_ready_managed_dict(PyTypeObject *type)
     return 0;
 }
 
+#ifdef Py_GC
+/* The types for which live_has_destroy_hook() in Python/gc_trace.c may
+   return true: dict and type subclasses, modules, and five exact types. */
+static void
+type_ready_destroy_hook(PyTypeObject *type)
+{
+    if ((type->tp_flags & (Py_TPFLAGS_DICT_SUBCLASS | Py_TPFLAGS_TYPE_SUBCLASS))
+        || type == &PyFunction_Type || type == &PyCode_Type
+        || type == &PyCapsule_Type || type == &_PyManagedBuffer_Type
+        || type == &PyMemoryView_Type || PyType_IsSubtype(type, &PyModule_Type))
+    {
+        type_add_flags(type, _Py_TPFLAGS_DESTROY_HOOK);
+    }
+}
+#endif
+
 static int
 type_ready_post_checks(PyTypeObject *type)
 {
@@ -9542,6 +9558,9 @@ type_ready(PyTypeObject *type, int initial, int add_subclasses)
         if (type_ready_preheader(type) < 0) {
             goto error;
         }
+#ifdef Py_GC
+        type_ready_destroy_hook(type);
+#endif
     }
     if (type_ready_set_hash(type) < 0) {
         goto error;

@@ -1698,15 +1698,14 @@ struct live_walk {
 /* Would op's dealloc, under reference counting, make a call that may run
    code or allocate: a dealloc watcher's DESTROY event, a code object's
    co_extra free functions, a module's m_free, a capsule's destructor, or
-   the release of a buffer whose exporter defines __release_buffer__?  The sweep forbids both, so gc_live.c makes these
-   calls before it (queue_destroy_hooks()).  Each runs once per object. */
+   the release of a buffer whose exporter defines __release_buffer__?  The
+   sweep forbids both, so gc_live.c makes these calls before it
+   (queue_destroy_hooks()).  Each runs once per object.  Only the types with
+   _Py_TPFLAGS_DESTROY_HOOK have such instances. */
 static inline int
-live_has_destroy_hook(const struct live_walk *w, PyInterpreterState *interp,
-                      PyObject *op, PyTypeObject *tp)
+live_destroy_hook_of(const struct live_walk *w, PyInterpreterState *interp,
+                     PyObject *op, PyTypeObject *tp)
 {
-    if (op->ob_flags & _Py_GC_NOTIFIED_FLAG) {
-        return 0;
-    }
     if (tp->tp_flags & Py_TPFLAGS_DICT_SUBCLASS) {
         return (((PyDictObject *)op)->_ma_watcher_tag & w->dict_watchers) != 0;
     }
@@ -1732,6 +1731,20 @@ live_has_destroy_hook(const struct live_walk *w, PyInterpreterState *interp,
         return ((PyModuleObject *)op)->md_state_free != NULL;
     }
     return 0;
+}
+
+static inline int
+live_has_destroy_hook(const struct live_walk *w, PyInterpreterState *interp,
+                      PyObject *op, PyTypeObject *tp)
+{
+    if (!(tp->tp_flags & _Py_TPFLAGS_DESTROY_HOOK)) {
+        assert(!live_destroy_hook_of(w, interp, op, tp));
+        return 0;
+    }
+    if (op->ob_flags & _Py_GC_NOTIFIED_FLAG) {
+        return 0;
+    }
+    return live_destroy_hook_of(w, interp, op, tp);
 }
 
 static bool

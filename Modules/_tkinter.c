@@ -976,7 +976,18 @@ static PyGetSetDef PyTclObject_getsetlist[] = {
     {0},
 };
 
+/* The type is not a GC type, but the tracing mark must reach the cached
+   string.  The mark visits the heap type itself. */
+static int
+PyTclObject_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PyTclObject *self = PyTclObject_CAST(op);
+    Py_VISIT(self->string);
+    return 0;
+}
+
 static PyType_Slot PyTclObject_Type_slots[] = {
+    {Py_tp_traverse, PyTclObject_traverse},
     {Py_tp_dealloc, PyTclObject_dealloc},
     {Py_tp_repr, PyTclObject_repr},
     {Py_tp_str, PyTclObject_str},

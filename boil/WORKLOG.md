@@ -877,3 +877,12 @@ step 1. The loop's `%rbp` references fall from 10176 to 3736. Stubbing
 the run-time local test brings them to 2021, so step 5 should remove most
 of the rest. Peak RSS is 0.3 to 1.0 MB above 2b, and the cause has not
 been investigated. Note 06 section 12.4 has the tables.
+
+### 2026-10-25 18:10 — step 3a landed; 3b and 4 launched in parallel
+
+Coordinator gate check at 03a9bccb5f9: targeted tests pass on dev-default,
+all 7 ports pass. Step 3a took one day of four. Step 3b (register CFG and
+passes, note 07) launches in this worktree; step 4 (collector in verifier
+mode) launches in worktree .worktrees/boil-step4 on branch weaver/boil-step4,
+to be rebased and merged here when it lands. SSH agent has no identities;
+pushes go over HTTPS with the gh token.

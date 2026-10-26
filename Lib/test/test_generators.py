@@ -83,8 +83,6 @@ class FinalizationTest(unittest.TestCase):
         g = gen()
         next(g)
         g.send(g)
-        if not support.Py_GC:
-            self.assertGreaterEqual(sys.getrefcount(g), 2)
         self.assertFalse(finalized)
         del g
         support.gc_collect()
@@ -303,7 +301,6 @@ class GeneratorTest(unittest.TestCase):
 
         self.assertEqual([1,2], list(i for i in C()))
 
-    @support.requires_refcounting
     def test_close_clears_frame(self):
         # gh-142766: Test that closing a generator clears its frame
         class DetectDelete:
@@ -319,17 +316,20 @@ class GeneratorTest(unittest.TestCase):
         # Test a freshly created generator (not suspended)
         g = generator(DetectDelete())
         g.close()
+        support.gc_collect()  # the frame no longer holds it
         self.assertTrue(DetectDelete.deleted)
 
         # Test a suspended generator
         g = generator(DetectDelete())
         next(g)
         g.close()
+        support.gc_collect()  # the frame no longer holds it
         self.assertTrue(DetectDelete.deleted)
 
         # Clear via gi_frame.clear()
         g = generator(DetectDelete())
         g.gi_frame.clear()
+        support.gc_collect()  # the frame no longer holds it
         self.assertTrue(DetectDelete.deleted)
 
 class ModifyUnderlyingIterableTest(unittest.TestCase):

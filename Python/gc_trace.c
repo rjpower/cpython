@@ -70,6 +70,12 @@
 #ifdef HAVE_PTHREAD_H
 #  include <pthread.h>            // pthread_getattr_np()
 #endif
+#ifdef MS_WINDOWS
+#  include <process.h>            // _getpid()
+#  define getpid _getpid
+#else
+#  include <unistd.h>             // getpid()
+#endif
 
 /* The verifier's own memory comes from the C library's malloc, never from
    mimalloc, so that verifying cannot change the heaps it walks. */
@@ -1355,13 +1361,10 @@ find_holes(trace_t *t)
 }
 
 static void
-report(trace_t *t, Py_ssize_t nholes)
+report_to(FILE *out, trace_t *t, Py_ssize_t nholes)
 {
-    if (nholes == 0) {
-        return;
-    }
     Py_ssize_t unheaped = _PyMem_MiUnheapedAllocs();
-    fprintf(stderr,
+    fprintf(out,
             "gc verify: %zd holes; %zd objects, %zd marked (%zd shallow), "
             "%zd non-object references, %zd allocations outside the heaps, "
             "%zd unreachable garbage\n",
@@ -1381,16 +1384,62 @@ report(trace_t *t, Py_ssize_t nholes)
             if (secondary != pass) {
                 continue;
             }
-            fprintf(stderr, "gc verify: hole %s%s at %p refcnt %zd; referrer: %s\n",
+            fprintf(out, "gc verify: hole %s%s at %p refcnt %zd; referrer: %s\n",
                     h->type_name, h->value, (void *)h->addr, h->refcnt,
                     h->referrer);
             shown++;
         }
     }
     if (shown < nholes) {
-        fprintf(stderr, "gc verify: ... and %zd more\n", nholes - shown);
+        fprintf(out, "gc verify: ... and %zd more\n", nholes - shown);
     }
-    fflush(stderr);
+    fflush(out);
+}
+
+/* Write an ASCII str's characters, which needs no allocation. */
+static void
+write_ascii(FILE *out, PyObject *s)
+{
+    if (s != NULL && PyUnicode_Check(s) && PyUnicode_IS_ASCII(s)) {
+        fprintf(out, "%.200s", (const char *)PyUnicode_DATA(s));
+    }
+    else {
+        fputs("?", out);
+    }
+}
+
+/* Report to stderr and, if PYTHON_GCVERIFY_LOG names a file, append the
+   report there too, with the process and the Python function that ran the
+   collection, so that the holes of a whole test run can be collected. */
+static void
+report(trace_t *t, PyThreadState *tstate, Py_ssize_t nholes)
+{
+    if (nholes == 0) {
+        return;
+    }
+    report_to(stderr, t, nholes);
+    const char *path = getenv("PYTHON_GCVERIFY_LOG");
+    if (path == NULL || *path == '\0') {
+        return;
+    }
+    FILE *log = fopen(path, "a");
+    if (log == NULL) {
+        return;
+    }
+    fprintf(log, "== pid %ld in ", (long)getpid());
+    _PyInterpreterFrame *f = tstate->current_frame;
+    while (f != NULL && f->owner >= FRAME_OWNED_BY_INTERPRETER) {
+        f = f->previous;
+    }
+    if (f != NULL && PyCode_Check(PyStackRef_AsPyObjectBorrow(f->f_executable))) {
+        PyCodeObject *co = _PyFrame_GetCode(f);
+        write_ascii(log, co->co_qualname);
+        fputs(" at ", log);
+        write_ascii(log, co->co_filename);
+    }
+    fputs("\n", log);
+    report_to(log, t, nholes);
+    fclose(log);
 }
 
 
@@ -1495,7 +1544,7 @@ verify(PyThreadState *tstate)
         goto done;
     }
     nholes = find_holes(&t);
-    report(&t, nholes);
+    report(&t, tstate, nholes);
 done:
     trace_fini(&t);
     ts->verifying = 0;

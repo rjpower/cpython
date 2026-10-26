@@ -154,6 +154,7 @@ class PyIdPersPicklerTests(AbstractIdentityPersistentPicklerTests,
     persistent_load_error = pickle.UnpicklingError
 
     @support.cpython_only
+    @support.requires_refcounting
     def test_pickler_reference_cycle(self):
         def check(Pickler):
             for proto in range(pickle.HIGHEST_PROTOCOL + 1):
@@ -207,6 +208,7 @@ class PyIdPersPicklerTests(AbstractIdentityPersistentPicklerTests,
         self.assertIsNone(table_ref())
 
     @support.cpython_only
+    @support.requires_refcounting
     def test_unpickler_reference_cycle(self):
         def check(Unpickler):
             for proto in range(pickle.HIGHEST_PROTOCOL + 1):

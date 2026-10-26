@@ -1009,3 +1009,80 @@ agent's measurement scripts (per-loop differencing, Py_STATS mix, slot
 distribution, compile-time) move from /tmp into boil/tools/measure/ so the
 next steps reuse them. Step 5 waits on step 4 (verifier), still running in
 its worktree.
+||||||| parent of 9641b189f38 (boil: worklog entries for step 4 milestones 1 and 2 and milestone 3 so far)
+
+### 2026-10-25 18:30 — step 4, milestone 1: mimalloc default, precise roots, first hole count
+
+- **Allocator.** mimalloc is now the default object allocator in the GIL
+  build (ec3a296179d). Each thread state gets the free-threaded build's
+  object, GC, GC-pre and mem heaps, and exited threads abandon their
+  segments to a per-interpreter subprocess. The verifier can therefore
+  enumerate every object block.
+  - test_cmd_line now expects `mimalloc` and `mimalloc_debug`.
+  - test_embed's leak check counts only the thread-state heaps.
+  - `python -c pass` costs 47.15M instructions, against 47.45M on
+    base-default.
+  - Peak RSS rises by 0.6 to 1.6 MB.
+- **Mark phase.** Python/gc_trace.c (7819b9342dc).
+  - Mark state lives in side tables (address sets) and the mark stack is
+    iterative.
+  - Every tp_traverse is followed.
+  - Precise roots: thread frames, thread-state and interpreter fields,
+    the GC lists, static types (registered at PyType_Ready) and immortal
+    heap objects.
+- **First counts.** `-c "import gc; gc.collect()"` on dev-debug showed
+  3292 holes with all roots and 5009 with precise roots only. Almost all
+  of them were strings and constants that the default build's code,
+  dict-key and type traverse functions skip, because they cannot form
+  cycles.
+
+### 2026-10-25 19:00 — step 4, milestone 2: conservative roots, zero holes on -c and test_grammar
+
+- **Conservative roots.**
+  - C stacks are scanned, along with callee-saved registers. Inline asm
+    captures the registers, because glibc's setjmp mangles rbp, rsp and
+    pc. They are captured first thing in PyEval_SaveThread,
+    PyEval_ReleaseThread and the detach path.
+  - Writable data segments are scanned through dl_iterate_phdr.
+  - Interior pointers mark their block.
+  - An untracked GC object reached only conservatively is marked without
+    being traversed.
+- **Traverse fixes.**
+  - Code objects, dict keys, type names and slots, timezone, descriptor
+    names, and the PyArena's object list (5a210627510, c803fb1b4cd,
+    a45c4732fe9).
+  - The arena list is the first user of `_PyGCRoot`: a registered root
+    for references in non-object memory.
+- **Hole counts.**
+  - `-c "import gc; gc.collect()"`: 0 with all roots, 146 with precise
+    roots only (mostly objects that only C statics reach).
+  - test_grammar: 0.
+
+### 2026-10-25 21:00 — step 4, milestone 3 (in progress): audit, core fixes, test file, rung 2
+
+- **Audit.** Tools/boil/traverse_audit.py (2596feb2368, e00fe928264)
+  parses the struct definitions, the static type initializers and the
+  PyType_Spec slots. It started with 31 types that hold object references
+  and have no tp_traverse, plus 7 traverse functions that skip members
+  their dealloc releases. Now 10 remain: test and example types, Tcl_Obj
+  and ssl.SSLError. SSLError inherits OSError's traverse at run time,
+  which the parser cannot see. Section 14 of note 06 lists them.
+- **The verifier's own fixes.**
+  - Garbage is now separated from holes. Cyclic garbage created by
+    finalizers or by another thread during a collection is unreachable,
+    so it is counted but not reported. Members still held by an object
+    being deallocated, and free-list objects, are handled the same way.
+  - New roots: the trashcan's deferred chain and the thread data stacks.
+    A returning frame is unlinked from `current_frame` before its slots
+    are cleared.
+  - Verification is skipped during finalization.
+- **Real leak found.** importdl leaked the module on the non-ASCII
+  single-phase error path; fixed in 51c8f326e36.
+- **Tests.** Lib/test/test_gc_verify.py has 20 tests and passes on
+  dev-debug and dev-default.
+- **Rung 2.** All the rung-2 tests pass with zero holes, except
+  test_sys's known `test_remote_exec_deleted_static_executable`.
+- **First full-suite attempt.** It was spoiled: I rebuilt dev-debug while
+  it ran. It did find two more sources of holes: the _hmac hash-name
+  table, now fixed, and a transient C-held dict. The full suites now run
+  on a separate build/run-debug.

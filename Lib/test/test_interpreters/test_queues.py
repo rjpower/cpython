@@ -5,6 +5,7 @@ import time
 import unittest
 from unittest import mock
 
+from test import support
 from test.support import import_helper, Py_DEBUG
 # Raise SkipTest if subinterpreters not supported.
 _queues = import_helper.import_module('_interpqueues')
@@ -489,6 +490,7 @@ class TestQueueOps(TestBase):
             queue = queues.create()
             interp = common(queue)
             del interp
+            support.gc_collect()  # For other GCs.
             obj1 = queue.get()
             self.assertIs(obj1, queues.UNBOUND)
             self.assertEqual(queue.qsize(), 0)
@@ -499,6 +501,7 @@ class TestQueueOps(TestBase):
             queue = queues.create()
             interp = common(queue, queues.UNBOUND)
             del interp
+            support.gc_collect()  # For other GCs.
             obj1 = queue.get()
             self.assertIs(obj1, queues.UNBOUND)
             self.assertEqual(queue.qsize(), 0)
@@ -510,6 +513,7 @@ class TestQueueOps(TestBase):
             interp = common(queue, queues.UNBOUND_ERROR)
 
             del interp
+            support.gc_collect()  # For other GCs.
             self.assertEqual(queue.qsize(), 1)
             with self.assertRaises(queues.ItemInterpreterDestroyed):
                 queue.get()
@@ -523,6 +527,7 @@ class TestQueueOps(TestBase):
 
             interp = common(queue, queues.UNBOUND_REMOVE)
             del interp
+            support.gc_collect()  # For other GCs.
             self.assertEqual(queue.qsize(), 0)
             with self.assertRaises(queues.QueueEmpty):
                 queue.get_nowait()
@@ -534,6 +539,7 @@ class TestQueueOps(TestBase):
             queue.put(42, unbounditems=queues.UNBOUND_REMOVE)
             self.assertEqual(queue.qsize(), 4)
             del interp
+            support.gc_collect()  # For other GCs.
             self.assertEqual(queue.qsize(), 2)
             obj1 = queue.get()
             obj2 = queue.get()
@@ -558,6 +564,7 @@ class TestQueueOps(TestBase):
         self.assertEqual(queue.qsize(), 5)
 
         del interp
+        support.gc_collect()  # For other GCs.
         self.assertEqual(queue.qsize(), 4)
 
         obj1 = queue.get()
@@ -625,6 +632,7 @@ class TestQueueOps(TestBase):
         self.assertEqual(queue.qsize(), 8)
 
         del interp1
+        support.gc_collect()  # For other GCs.
         self.assertEqual(queue.qsize(), 6)
 
         # obj5 was removed
@@ -638,6 +646,7 @@ class TestQueueOps(TestBase):
         self.assertEqual(queue.qsize(), 4)
 
         del interp2
+        support.gc_collect()  # For other GCs.
         self.assertEqual(queue.qsize(), 3)
 
         # obj1

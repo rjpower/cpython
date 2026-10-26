@@ -3472,6 +3472,13 @@ gc_verify_holes(PyObject *self, PyObject *Py_UNUSED(args))
     return _PyGC_TraceGetHoles(_PyInterpreterState_GET());
 }
 
+/* The number of verifications that ran in this interpreter. */
+static PyObject *
+gc_verify_count(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    return PyLong_FromSsize_t(_PyGC_TraceCount(_PyInterpreterState_GET()));
+}
+
 /* Call factory() and keep the result only in a C local across a verified
    collection.  Return (holes, id of the object). */
 static PyObject *
@@ -3490,6 +3497,26 @@ gc_verify_with_c_local(PyObject *self, PyObject *factory)
     return res;
 }
 
+/* Call factory() and keep the result only in a C local while calling
+   func(id of the object), which may block in another thread.  Return the
+   result of func. */
+static PyObject *
+call_with_c_local(PyObject *self, PyObject *args)
+{
+    PyObject *factory, *func;
+    if (!PyArg_ParseTuple(args, "OO", &factory, &func)) {
+        return NULL;
+    }
+    PyObject *obj = PyObject_CallNoArgs(factory);
+    if (obj == NULL) {
+        return NULL;
+    }
+    PyObject *res = PyObject_CallFunction(func, "K",
+                                          (unsigned long long)(uintptr_t)obj);
+    Py_DECREF(obj);
+    return res;
+}
+
 static Py_NO_INLINE int
 store_in_array(PyObject **array, PyObject *factory)
 {
@@ -3502,13 +3529,16 @@ store_in_array(PyObject **array, PyObject *factory)
 static Py_NO_INLINE void
 clear_dead_stack(void)
 {
+    // Volatile stores, which the compiler may not remove as dead.
     volatile char buf[16384];
-    memset((char *)buf, 0, sizeof(buf));
+    for (size_t i = 0; i < sizeof(buf); i++) {
+        buf[i] = 0;
+    }
 }
 
 /* Call factory() and keep the result only in a PyMem_Malloc() array across
    a verified collection: the pattern that a tracing collector cannot see,
-   which the verifier must report.  Return (holes, id of the object). */
+   which the verifier must report.  Return (holes, the object). */
 static PyObject *
 gc_verify_with_pymem_array(PyObject *self, PyObject *factory)
 {
@@ -3524,10 +3554,13 @@ gc_verify_with_pymem_array(PyObject *self, PyObject *factory)
     PyObject *holes = verify_and_get_holes();
     PyObject *res = NULL;
     if (holes != NULL) {
-        res = Py_BuildValue("(NK)", holes,
-                            (unsigned long long)(uintptr_t)array[2]);
+        // Pass on the array's reference, so that the caller can keep the
+        // object and with it its address.
+        res = Py_BuildValue("(NN)", holes, array[2]);
     }
-    Py_DECREF(array[2]);
+    else {
+        Py_DECREF(array[2]);
+    }
     PyMem_Free(array);
     return res;
 }
@@ -3536,8 +3569,10 @@ static PyMethodDef module_functions[] = {
     {"get_configs", get_configs, METH_NOARGS},
     {"gc_verify", gc_verify, METH_NOARGS},
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
+    {"gc_verify_count", gc_verify_count, METH_NOARGS},
     {"gc_verify_with_c_local", gc_verify_with_c_local, METH_O},
     {"gc_verify_with_pymem_array", gc_verify_with_pymem_array, METH_O},
+    {"call_with_c_local", call_with_c_local, METH_VARARGS},
     {"get_eval_frame_stats", get_eval_frame_stats, METH_NOARGS, NULL},
     {"get_recursion_depth", get_recursion_depth, METH_NOARGS},
     {"get_c_recursion_remaining", get_c_recursion_remaining, METH_NOARGS},

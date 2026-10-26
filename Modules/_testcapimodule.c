@@ -2913,7 +2913,21 @@ uptime_bsd(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(args))
 #endif
 
 
+/* A reference that only an extension's static variable holds, as many
+   extensions keep cached objects.  The tracing mark finds it by scanning
+   the extension's data segment. */
+static PyObject *static_object = NULL;
+
+static PyObject *
+set_static_object(PyObject *self, PyObject *obj)
+{
+    Py_XSETREF(static_object, Py_IsNone(obj) ? NULL : Py_NewRef(obj));
+    Py_RETURN_NONE;
+}
+
+
 static PyMethodDef TestMethods[] = {
+    {"set_static_object",       set_static_object,               METH_O},
     {"set_errno",               set_errno,                       METH_VARARGS},
     {"test_config",             test_config,                     METH_NOARGS},
     {"test_sizeof_c_types",     test_sizeof_c_types,             METH_NOARGS},

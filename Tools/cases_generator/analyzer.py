@@ -610,6 +610,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyFrame_GetCode",
     "_PyFrame_IsIncomplete",
     "_PyFrame_PushUnchecked",
+    "_PyFrame_PushOverlapping",
     "_PyFrame_SetReturnValue",
     "_PyFrame_Slots",
     "_PyFrame_AssertTemporariesClear",

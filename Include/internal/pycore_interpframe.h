@@ -441,6 +441,36 @@ _PyFrame_PushUnchecked(PyThreadState *tstate, _PyStackRef func, int null_locals_
     return new_frame;
 }
 
+/* Pushes a frame for the function func whose slots start at base, among the
+ * slots of previous, the current frame, where its nargs arguments already
+ * are: the frame overlaps the window of the call.  The slots of previous
+ * above base are dead temporaries, which are NULL and which the callee
+ * leaves NULL.  Must be guarded by _PyThreadState_HasStackSpace(), for
+ * co_framesize.  Consumes the reference to func. */
+static inline _PyInterpreterFrame *
+_PyFrame_PushOverlapping(PyThreadState *tstate, _PyStackRef func,
+                         _PyStackRef *base, int nargs,
+                         _PyInterpreterFrame *previous)
+{
+    CALL_STAT_INC(frames_pushed);
+    PyFunctionObject *func_obj = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(func);
+    PyCodeObject *code = (PyCodeObject *)func_obj->func_code;
+    assert(previous->owner == FRAME_OWNED_BY_THREAD);
+    assert(base > previous->base &&
+           base <= (_PyStackRef *)tstate->datastack_top);
+    _PyInterpreterFrame *frame =
+        (_PyInterpreterFrame *)(tstate->datastack_limit - FRAME_SPECIALS_SIZE);
+    frame->saved_top = (_PyStackRef *)tstate->datastack_top;
+    tstate->datastack_limit = (PyObject **)frame;
+    _PyStackRef *end = base + _PyFrame_NumSlotsForCodeObject(code);
+    if (end > frame->saved_top) {
+        tstate->datastack_top = (PyObject **)end;
+    }
+    assert(tstate->datastack_top < tstate->datastack_limit);
+    _PyFrame_Initialize(tstate, frame, func, NULL, code, base, nargs, previous);
+    return frame;
+}
+
 /* Pushes a trampoline frame without checking for space.
  * Must be guarded by _PyThreadState_HasStackSpace() */
 static inline _PyInterpreterFrame *

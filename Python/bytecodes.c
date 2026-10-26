@@ -4334,13 +4334,32 @@ dummy_func(
         pure op(_INIT_CALL_PY_EXACT_ARGS, (callable, self_or_null, args[oparg] -- new_frame)) {
             int has_self = !PyStackRef_IsNull(self_or_null);
             STAT_INC(CALL, hit);
-            _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
-            _PyStackRef *first_non_self_local = pushed_frame->base + has_self;
-            pushed_frame->base[0] = self_or_null;
-            for (int i = 0; i < oparg; i++) {
-                first_non_self_local[i] = args[i];
+            // The window: callable, self_or_null, then the arguments
+            _PyStackRef *window_base = args - 2;
+            _PyInterpreterFrame *pushed_frame;
+            if (frame->owner == FRAME_OWNED_BY_THREAD) {
+                // The callee's slots start at its first argument, which is
+                // self_or_null if there is a self: no copy.
+                pushed_frame = _PyFrame_PushOverlapping(
+                    tstate, callable, args - has_self, oparg + has_self, frame);
             }
+            else {
+                // A generator's slots are in the generator object, not on
+                // the value stack.
+                pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
+                _PyStackRef *first_non_self_local = pushed_frame->base + has_self;
+                pushed_frame->base[0] = self_or_null;
+                for (int i = 0; i < oparg; i++) {
+                    first_non_self_local[i] = args[i];
+                }
+                for (int i = 1; i < 2 + oparg; i++) {
+                    window_base[i] = PyStackRef_NULL;
+                }
+            }
+            // The callee holds callable as its f_funcobj
+            window_base[0] = PyStackRef_NULL;
             INPUTS_DEAD();
+            IR_WINDOW_TAKEN();
             new_frame = PyStackRef_Wrap(pushed_frame);
         }
 

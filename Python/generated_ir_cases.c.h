@@ -5111,12 +5111,24 @@
                 args = &window[2];
                 int has_self = !PyStackRef_IsNull(self_or_null);
                 STAT_INC(CALL, hit);
-                _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
-                _PyStackRef *first_non_self_local = pushed_frame->base + has_self;
-                pushed_frame->base[0] = self_or_null;
-                for (int i = 0; i < oparg; i++) {
-                    first_non_self_local[i] = args[i];
+                _PyStackRef *window_base = args - 2;
+                _PyInterpreterFrame *pushed_frame;
+                if (frame->owner == FRAME_OWNED_BY_THREAD) {
+                    pushed_frame = _PyFrame_PushOverlapping(
+                        tstate, callable, args - has_self, oparg + has_self, frame);
                 }
+                else {
+                    pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
+                    _PyStackRef *first_non_self_local = pushed_frame->base + has_self;
+                    pushed_frame->base[0] = self_or_null;
+                    for (int i = 0; i < oparg; i++) {
+                        first_non_self_local[i] = args[i];
+                    }
+                    for (int i = 1; i < 2 + oparg; i++) {
+                        window_base[i] = PyStackRef_NULL;
+                    }
+                }
+                window_base[0] = PyStackRef_NULL;
                 new_frame = PyStackRef_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -5127,7 +5139,6 @@
             {
                 assert(!IS_PEP523_HOOKED(tstate));
                 _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
-                IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -7511,12 +7522,24 @@
                 args = &window[2];
                 int has_self = !PyStackRef_IsNull(self_or_null);
                 STAT_INC(CALL, hit);
-                _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
-                _PyStackRef *first_non_self_local = pushed_frame->base + has_self;
-                pushed_frame->base[0] = self_or_null;
-                for (int i = 0; i < oparg; i++) {
-                    first_non_self_local[i] = args[i];
+                _PyStackRef *window_base = args - 2;
+                _PyInterpreterFrame *pushed_frame;
+                if (frame->owner == FRAME_OWNED_BY_THREAD) {
+                    pushed_frame = _PyFrame_PushOverlapping(
+                        tstate, callable, args - has_self, oparg + has_self, frame);
                 }
+                else {
+                    pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
+                    _PyStackRef *first_non_self_local = pushed_frame->base + has_self;
+                    pushed_frame->base[0] = self_or_null;
+                    for (int i = 0; i < oparg; i++) {
+                        first_non_self_local[i] = args[i];
+                    }
+                    for (int i = 1; i < 2 + oparg; i++) {
+                        window_base[i] = PyStackRef_NULL;
+                    }
+                }
+                window_base[0] = PyStackRef_NULL;
                 new_frame = PyStackRef_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -7527,7 +7550,6 @@
             {
                 assert(!IS_PEP523_HOOKED(tstate));
                 _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
-                IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;

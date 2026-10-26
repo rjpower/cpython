@@ -835,12 +835,16 @@ class IRStack(Stack):
         self.final = False
         self.reloaded = False
         self.error_exit = False
+        # Set by IR_WINDOW_TAKEN(): the handler disposed of its window, so
+        # that the slots of the dead inputs stay as it left them.
+        self.window_taken = False
 
     def copy(self) -> "IRStack":
         other = super().copy()
         assert isinstance(other, IRStack)
         other.owner = dict(self.owner)
         other.raw_inputs = set(self.raw_inputs)
+        other.window_taken = self.window_taken
         return other
 
     def input_field(self, p: int) -> str:
@@ -991,6 +995,8 @@ class IRStack(Stack):
         count = high - low
         n = count.as_int()
         if lay.window:
+            if self.window_taken:
+                return
             if n is None:
                 out.emit(f"IR_CLEAR_SLOTS(&{self.window_slot(low)}, {count.to_c()});\n")
                 return
@@ -1098,6 +1104,7 @@ class IREmitter(Emitter):
         self._replacers["IR_DST"] = self.ir_dst
         self._replacers["IR_DST_SLOT"] = self.ir_dst_slot
         self._replacers["IR_BASE"] = self.ir_base
+        self._replacers["IR_WINDOW_TAKEN"] = self.ir_window_taken
         # The storage at a deopt or exit being emitted
         self.deopt_storage: Storage | None = None
         # The format of the handler being emitted, which for a NOFB form
@@ -1329,6 +1336,26 @@ class IREmitter(Emitter):
             return
         raise analysis_error(f"{inst.name} deoptimises but has no family",
                              inst.where)
+
+    def ir_window_taken(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        """IR_WINDOW_TAKEN(): a window-style handler has cleared the slots of
+        its dead inputs or handed them to the frame it pushes, whose slots
+        overlap them; nothing clears them after it."""
+        next(tkn_iter)
+        next(tkn_iter)
+        next(tkn_iter)
+        stack = storage.stack
+        if not isinstance(stack, IRStack) or not stack.layout.window:
+            raise analysis_error("IR_WINDOW_TAKEN() needs a window-style handler", tkn)
+        stack.window_taken = True
+        return True
 
     def ir_instruction_size(
         self,

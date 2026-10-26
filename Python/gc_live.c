@@ -622,6 +622,9 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
 #ifdef Py_DEBUG
             gc->sweep_op = op;
 #endif
+            // The sweep stands in for _Py_Dealloc(), which reports each
+            // destruction to the reference tracer.
+            _PyReftracerTrack(op, PyRefTracer_DESTROY);
             Py_TYPE(op)->tp_dealloc(op);
             op->ob_flags |= _Py_GC_SWEPT_FLAG;
             if (_PyErr_Occurred(tstate)) {

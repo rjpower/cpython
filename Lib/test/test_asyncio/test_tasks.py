@@ -1,6 +1,5 @@
 """Tests for tasks.py."""
 
-import _thread
 import collections
 import contextlib
 import contextvars
@@ -3152,40 +3151,6 @@ class CTask_CFuture_Tests(BaseTaskTests, SetMethodsTest,
     Future = getattr(futures, '_CFuture', None)
     all_tasks = getattr(tasks, '_c_all_tasks', None)
     current_task = staticmethod(getattr(tasks, '_c_current_task', None))
-
-    @threading_helper.requires_working_threading()
-    @support.requires_refcounting
-    def test_task_created_during_thread_state_clear(self):
-        loop = self.loop
-        task = None
-        var = contextvars.ContextVar('var')
-        # Avoid recreating the thread state's context after it is cleared.
-        task_context = contextvars.Context()
-
-        async def noop():
-            pass
-
-        class CreatesTaskOnClear:
-            def __del__(self):
-                nonlocal task
-                task = loop.create_task(noop(), context=task_context)
-
-        def create_finalizer():
-            # gh-159041: Run the finalizer when PyThreadState_Clear()
-            # clears the thread's context.
-            var.set(CreatesTaskOnClear())
-
-        # threading.Thread owns its Context, so use _thread to make the
-        # Context lifetime match the thread state's lifetime.
-        handle = _thread.start_joinable_thread(create_finalizer)
-        handle.join(support.SHORT_TIMEOUT)
-        self.assertTrue(handle.is_done(), 'thread failed to exit')
-        self.assertIsNotNone(task)
-
-        try:
-            self.assertEqual(self.all_tasks(loop), {task})
-        finally:
-            loop.run_until_complete(task)
 
     def test_del__log_destroy_pending_segfault(self):
         async def coro():

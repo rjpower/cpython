@@ -3137,7 +3137,7 @@ _PyList_FromStackRefStealOnSuccess(const _PyStackRef *src, Py_ssize_t n)
     }
     for (Py_ssize_t i = 0; i < n; i++) {
         if (!PyStackRef_IsInline(src[i])) {
-            dst[i] = PyStackRef_AsPyObjectSteal(src[i]);
+            dst[i] = PyStackRef_AsPyObjectBorrow(src[i]);
         }
     }
 

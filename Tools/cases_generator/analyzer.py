@@ -427,7 +427,6 @@ def analyze_stack(
         for input in inputs:
             if (
                 variable_used(op, input.name)
-                or variable_used(op, "DECREF_INPUTS")
                 or (not input.peek and input.name in output_names)
             ):
                 input.used = True
@@ -551,17 +550,9 @@ NON_ESCAPING_FUNCTIONS = (
     "PyLong_FromSsize_t",
     "PySlice_New",
     "PyStackRef_AsPyObjectBorrow",
-    "PyStackRef_AsPyObjectNew",
-    "PyStackRef_FromPyObjectNewMortal",
-    "PyStackRef_AsPyObjectSteal",
-    "PyStackRef_Borrow",
-    "PyStackRef_BorrowAt",
     "PyStackRef_CLEAR",
-    # Nothing is reference counted: a close, a decref or a clear releases
-    # nothing and runs no code.
-    "PyStackRef_CLOSE",
-    "PyStackRef_XCLOSE",
-    "PyStackRef_CLOSE_SPECIALIZED",
+    # Nothing is reference counted: a decref or a clear releases nothing
+    # and runs no code.
     "Py_DECREF",
     "Py_XDECREF",
     "Py_CLEAR",
@@ -576,23 +567,14 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyThreadState_PushCStackRef",
     "_PyThreadState_PopCStackRef",
     "PyStackRef_FromPyObject",
-    "PyStackRef_DUP",
-    "PyStackRef_DupImmortal",
     "PyStackRef_False",
-    "PyStackRef_FromPyObjectBorrow",
-    "PyStackRef_FromPyObjectNew",
-    "PyStackRef_FromPyObjectSteal",
     "PyStackRef_IsExactly",
-    "PyStackRef_FromPyObjectStealMortal",
     "PyStackRef_IsNone",
     "PyStackRef_Is",
-    "PyStackRef_IsHeapSafe",
     "PyStackRef_IsTrue",
     "PyStackRef_IsFalse",
     "PyStackRef_IsNull",
-    "PyStackRef_MakeHeapSafe",
     "PyStackRef_None",
-    "PyStackRef_RefcountOnObject",
     "PyStackRef_TYPE",
     "PyStackRef_True",
     "PyBytes_GET_SIZE",
@@ -887,9 +869,6 @@ def stmt_escapes(stmt: Stmt) -> bool:
     if isinstance(stmt, BlockStmt):
         return stmt_list_escapes(stmt.body)
     elif isinstance(stmt, SimpleStmt):
-        for tkn in stmt.contents:
-            if tkn.text == "DECREF_INPUTS":
-                return True
         d: dict[SimpleStmt, EscapingCall] = {}
         escaping_call_in_simple_stmt(stmt, d)
         return bool(d)
@@ -1000,8 +979,6 @@ def compute_properties(op: parser.CodeDef) -> Properties:
 
 STACKREF_TO_OBJECT = (
     "PyStackRef_AsPyObjectBorrow",
-    "PyStackRef_AsPyObjectNew",
-    "PyStackRef_AsPyObjectSteal",
 )
 
 

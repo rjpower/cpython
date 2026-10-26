@@ -621,7 +621,7 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
     _PyCStackRef self, method;
     _PyThreadState_PushCStackRef(tstate, &self);
     _PyThreadState_PushCStackRef(tstate, &method);
-    self.ref = PyStackRef_FromPyObjectBorrow(obj);
+    self.ref = PyStackRef_FromPyObject(obj);
 
     int res = _PyObject_GetMethodStackRef(tstate, &self.ref, name, &method.ref);
     if (res < 0) {
@@ -929,7 +929,7 @@ PyObject_VectorcallMethod(PyObject *name, PyObject *const *args,
     _PyThreadState_PushCStackRef(tstate, &self);
     _PyThreadState_PushCStackRef(tstate, &method);
     /* Use args[0] as "self" argument */
-    self.ref = PyStackRef_FromPyObjectBorrow(args[0]);
+    self.ref = PyStackRef_FromPyObject(args[0]);
     int unbound = _PyObject_GetMethodStackRef(tstate, &self.ref, name, &method.ref);
     if (unbound < 0) {
         _PyThreadState_PopCStackRef(tstate, &method);
@@ -978,7 +978,7 @@ PyObject_CallMethodObjArgs(PyObject *obj, PyObject *name, ...)
     _PyCStackRef self, method;
     _PyThreadState_PushCStackRef(tstate, &self);
     _PyThreadState_PushCStackRef(tstate, &method);
-    self.ref = PyStackRef_FromPyObjectBorrow(obj);
+    self.ref = PyStackRef_FromPyObject(obj);
     int res = _PyObject_GetMethodStackRef(tstate, &self.ref, name, &method.ref);
     if (res < 0) {
         _PyThreadState_PopCStackRef(tstate, &method);

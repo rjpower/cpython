@@ -160,8 +160,7 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
 
 /* Hand v to f, which a call returns to or a send resumes: it goes to the
  * slot that f named.  A temporary's slot holds NULL; a local's old value,
- * where a call stores its result in a local, is released as STORE_FAST
- * releases it. */
+ * where a call stores its result in a local, is overwritten. */
 static inline void
 _PyFrame_SetReturnValue(_PyInterpreterFrame *f, _PyStackRef v)
 {
@@ -172,22 +171,16 @@ _PyFrame_SetReturnValue(_PyInterpreterFrame *f, _PyStackRef v)
                || PyStackRef_IsNull(f->base[f->return_slot]));
     }
 #endif
-    _PyStackRef old = f->base[f->return_slot];
     f->base[f->return_slot] = v;
-    PyStackRef_XCLOSE(old);
 }
 
-/* Release the temporaries of f from slot first on and leave them NULL */
+/* Leave the temporaries of f from slot first on NULL */
 static inline void
 _PyFrame_ClearTemporaries(_PyInterpreterFrame *f, int first)
 {
     int nslots = _PyFrame_NumSlots(f);
     for (int i = first; i < nslots; i++) {
-        _PyStackRef ref = f->base[i];
-        if (!PyStackRef_IsNull(ref)) {
-            f->base[i] = PyStackRef_NULL;
-            PyStackRef_CLOSE(ref);
-        }
+        f->base[i] = PyStackRef_NULL;
     }
 }
 
@@ -207,15 +200,13 @@ _PyFrame_AssertTemporariesClear(_PyInterpreterFrame *f)
 
 static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 {
-    // Before the executable moves, which in Py_STACKREF_DEBUG builds
-    // closes src->f_executable
     int nslots = _PyFrame_NumSlots(src);
-    dest->f_executable = PyStackRef_MakeHeapSafe(src->f_executable);
+    dest->f_executable = src->f_executable;
     dest->base = dest->owned_slots;
     // Don't leave a dangling pointer to the old frame when creating generators
     // and coroutines:
     dest->previous = NULL;
-    dest->f_funcobj = PyStackRef_MakeHeapSafe(src->f_funcobj);
+    dest->f_funcobj = src->f_funcobj;
     dest->f_globals = src->f_globals;
     dest->f_builtins = src->f_builtins;
     dest->f_locals = src->f_locals;
@@ -231,7 +222,7 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
 #endif
     // A move: the slots that src leaves behind may be the caller's
     for (int i = 0; i < nslots; i++) {
-        dest->base[i] = PyStackRef_MakeHeapSafe(src->base[i]);
+        dest->base[i] = src->base[i];
         src->base[i] = PyStackRef_NULL;
     }
 }
@@ -250,7 +241,7 @@ _PyFrame_Initialize(
     frame->previous = previous;
     frame->base = base;
     frame->f_funcobj = func;
-    frame->f_executable = PyStackRef_FromPyObjectNew(code);
+    frame->f_executable = PyStackRef_FromPyObject(code);
     PyFunctionObject *func_obj = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(func);
     frame->f_builtins = func_obj->func_builtins;
     frame->f_globals = func_obj->func_globals;
@@ -499,7 +490,7 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     _PyInterpreterFrame *frame = _PyThreadState_PushFrameUnchecked(tstate, nslots);
     frame->previous = previous;
     frame->f_funcobj = PyStackRef_None;
-    frame->f_executable = PyStackRef_FromPyObjectNew(code);
+    frame->f_executable = PyStackRef_FromPyObject(code);
 #ifdef Py_DEBUG
     frame->f_builtins = NULL;
     frame->f_globals = NULL;

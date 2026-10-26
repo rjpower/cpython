@@ -29,13 +29,7 @@ NOT_OBJECT_TYPES = {"PyDictKeysObject"}
 # reference to the argument, part of it, or a view of it
 BORROWING = {
     "PyStackRef_AsPyObjectBorrow",
-    "PyStackRef_AsPyObjectSteal",
-    "_PyStackRef_AsPyObjectStealPointer",
-    "PyStackRef_AsPyObjectNew",
-    "PyStackRef_FromPyObjectBorrow",
-    "PyStackRef_Borrow",
-    "PyStackRef_DUP",
-    "_PyStackRef_DUP_POINTER",
+    "PyStackRef_FromPyObject",
     "Py_TYPE",
     "PyStackRef_TYPE",
     "_PyObject_CAST",
@@ -76,13 +70,11 @@ ANCHORED_CALLS = {
     "_Py_LATIN1_CHR",
     "_PyLong_GetZero",
     "_PyLong_GetOne",
-    "PyStackRef_FromPyObjectImmortal",
 }
 
 # Releases, which release nothing: an argument of one is not a use
 RELEASES = {
-    "Py_DECREF", "Py_XDECREF", "Py_CLEAR", "PyStackRef_CLOSE",
-    "PyStackRef_XCLOSE", "PyStackRef_CLOSE_SPECIALIZED", "PyStackRef_CLEAR",
+    "Py_DECREF", "Py_XDECREF", "Py_CLEAR", "PyStackRef_CLEAR",
     "_Py_DECREF_SPECIALIZED", "DEAD",
 }
 

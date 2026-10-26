@@ -206,7 +206,7 @@ _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name)
         PyObject *entry_name = FT_ATOMIC_LOAD_PTR_ACQUIRE(cache->hashtable[index].name);
         if (entry_name == name) {
             PyObject *v = cache->hashtable[index].value;
-            out_ref = v ? PyStackRef_FromPyObjectNew(v) : PyStackRef_NULL;
+            out_ref = v ? PyStackRef_FromPyObject(v) : PyStackRef_NULL;
             break;
         }
         else if (entry_name == NULL) {
@@ -217,7 +217,6 @@ _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name)
     // Check the cache version against the type version tag to maintain
     // consistency with find_name_in_mro and prevent stale cache reads
     if (cache->version_tag != FT_ATOMIC_LOAD_UINT_RELAXED(type->tp_version_tag)) {
-        PyStackRef_XCLOSE(out_ref);
         return miss;
     }
     return (struct _PyTypeCacheLookupResult){out_ref, 1, cache->version_tag};

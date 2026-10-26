@@ -2801,7 +2801,7 @@ _PyObject_LookupSpecialMethod(PyObject *attr, _PyStackRef *method,
             return -1;
         }
         PyStackRef_CLEAR(*method); // clear method
-        *method = PyStackRef_FromPyObjectSteal(func);
+        *method = PyStackRef_FromPyObject(func);
     }
     PyStackRef_CLEAR(*self); // clear self
     return 1;
@@ -2837,7 +2837,7 @@ lookup_method_ex(PyObject *self, PyObject *attr, _PyStackRef *out,
             }
             return -1;
         }
-        *out = PyStackRef_FromPyObjectSteal(value);
+        *out = PyStackRef_FromPyObject(value);
     }
     return 0;
 }
@@ -5821,7 +5821,7 @@ find_name_in_mro(PyTypeObject *type, PyObject *name, _PyStackRef *out)
        during dict lookup, e.g. when comparing to non-string keys. */
     _PyCStackRef mro_ref;
     _PyThreadState_PushCStackRef(tstate, &mro_ref);
-    mro_ref.ref = PyStackRef_FromPyObjectNew(mro);
+    mro_ref.ref = PyStackRef_FromPyObject(mro);
     Py_ssize_t n = PyTuple_GET_SIZE(mro);
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *base = PyTuple_GET_ITEM(mro, i);
@@ -5878,7 +5878,7 @@ _PyType_LookupRefAndVersion(PyTypeObject *type, PyObject *name, unsigned int *ve
     if (PyStackRef_IsNull(out)) {
         return NULL;
     }
-    return PyStackRef_AsPyObjectSteal(out);
+    return PyStackRef_AsPyObjectBorrow(out);
 }
 
 static int
@@ -6098,7 +6098,7 @@ _Py_type_getattro_impl(PyTypeObject *type, PyObject *name, int *suppress_missing
     if (PyStackRef_IsNull(ref)) {
         return NULL;
     }
-    return PyStackRef_AsPyObjectSteal(ref);
+    return PyStackRef_AsPyObjectBorrow(ref);
 }
 
 /* This is similar to PyObject_GenericGetAttr(),
@@ -6162,7 +6162,7 @@ _Py_type_getattro_stackref(PyTypeObject *type, PyObject *name,
             PyObject *res = meta_get(meta_attr_obj, (PyObject *)type,
                                      (PyObject *)metatype);
             if (res != NULL) {
-                result_ref.ref = PyStackRef_FromPyObjectSteal(res);
+                result_ref.ref = PyStackRef_FromPyObject(res);
             }
             goto done;
         }
@@ -6185,7 +6185,7 @@ _Py_type_getattro_stackref(PyTypeObject *type, PyObject *name,
             if (Py_TYPE(attr_obj) == &PyStaticMethod_Type) {
                 PyObject *callable = _PyStaticMethod_GetFunc(attr_obj);
                 if (callable) {
-                    result_ref.ref = PyStackRef_FromPyObjectNew(callable);
+                    result_ref.ref = PyStackRef_FromPyObject(callable);
                     goto done;
                 }
             }
@@ -6194,7 +6194,7 @@ _Py_type_getattro_stackref(PyTypeObject *type, PyObject *name,
             PyObject *res = local_get(attr_obj, (PyObject *)NULL,
                                       (PyObject *)type);
             if (res != NULL) {
-                result_ref.ref = PyStackRef_FromPyObjectSteal(res);
+                result_ref.ref = PyStackRef_FromPyObject(res);
             }
             goto done;
         }
@@ -6212,7 +6212,7 @@ _Py_type_getattro_stackref(PyTypeObject *type, PyObject *name,
         PyObject *res = meta_get(meta_attr_obj, (PyObject *)type,
                                  (PyObject *)metatype);
         if (res != NULL) {
-            result_ref.ref = PyStackRef_FromPyObjectSteal(res);
+            result_ref.ref = PyStackRef_FromPyObject(res);
         }
         goto done;
     }
@@ -11642,7 +11642,6 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
                 }
             }
         }
-        PyStackRef_CLOSE(descr_ref);
     } while ((++p)->offset == offset);
 
     void *slot_value;
@@ -12418,7 +12417,7 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
     }
     else {
         // The argument may be an inline value, which this boxes.
-        firstarg = PyStackRef_AsPyObjectNewBoxed(firstref);
+        firstarg = PyStackRef_AsPyObjectBoxed(firstref);
         if (firstarg == NULL) {
             return -1;
         }

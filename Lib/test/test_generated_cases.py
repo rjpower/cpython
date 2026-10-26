@@ -193,9 +193,9 @@ class TestAnalysisErrors(unittest.TestCase):
         self.check_error("""
         inst(OP, (a, b -- c)) {
             c = b;
-            PyStackRef_CLOSE(a);
+            DEAD(a);
             escaping_call();
-            PyStackRef_CLOSE(b);
+            DEAD(b);
         }
         """, "Input 'a' is not live, but 'b' is")
 
@@ -206,18 +206,18 @@ class TestAnalysisErrors(unittest.TestCase):
         inst(OP, (a -- c)) {
             PyObject *o = PyObject_Repr(PyStackRef_AsPyObjectBorrow(a));
             escaping_call();
-            c = PyStackRef_FromPyObjectSteal(o);
-            DECREF_INPUTS();
+            c = PyStackRef_FromPyObject(o);
+            INPUTS_DEAD();
         }
         """, "'o' is held only in a C local across the escaping call "
              "to 'escaping_call'")
         self.check_error("""
         inst(OP, (a -- c)) {
-            _PyStackRef r = PyStackRef_FromPyObjectSteal(
+            _PyStackRef r = PyStackRef_FromPyObject(
                 PyObject_Repr(PyStackRef_AsPyObjectBorrow(a)));
             escaping_call();
             c = r;
-            DECREF_INPUTS();
+            INPUTS_DEAD();
         }
         """, "'r' is held only in a C local")
 
@@ -228,17 +228,17 @@ class TestAnalysisErrors(unittest.TestCase):
         inst(OP, (a -- c)) {
             _PyCStackRef held;
             _PyThreadState_PushCStackRef(tstate, &held);
-            held.ref = PyStackRef_FromPyObjectSteal(
+            held.ref = PyStackRef_FromPyObject(
                 PyObject_Repr(PyStackRef_AsPyObjectBorrow(a)));
             escaping_call();
             c = _PyThreadState_PopCStackRefSteal(tstate, &held);
-            DECREF_INPUTS();
+            INPUTS_DEAD();
         }
         inst(OP2, (a -- c)) {
             PyObject *o = PyObject_Repr(PyStackRef_AsPyObjectBorrow(a));
-            DECREF_INPUTS();
+            INPUTS_DEAD();
             ERROR_IF(o == NULL);
-            c = PyStackRef_FromPyObjectSteal(o);
+            c = PyStackRef_FromPyObject(o);
         }
         """)
 
@@ -311,9 +311,9 @@ class TestIRCases(unittest.TestCase):
             PyObject *l = PyStackRef_AsPyObjectBorrow(left);
             PyObject *r = PyStackRef_AsPyObjectBorrow(right);
             PyObject *o = SPAM(l, r);
-            DECREF_INPUTS();
+            INPUTS_DEAD();
             ERROR_IF(o == NULL);
-            res = PyStackRef_FromPyObjectSteal(o);
+            res = PyStackRef_FromPyObject(o);
         }
     """
         output = """
@@ -357,7 +357,7 @@ class TestIRCases(unittest.TestCase):
                 IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 JUMP_TO_LABEL(error);
             }
-            res = PyStackRef_FromPyObjectSteal(o);
+            res = PyStackRef_FromPyObject(o);
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
@@ -381,15 +381,15 @@ class TestIRCases(unittest.TestCase):
         }
         inst(OP_OBJ, (value -- res)) {
             res = SPAM(PyStackRef_AsPyObjectBorrow(value));
-            PyStackRef_CLOSE(value);
+            DEAD(value);
         }
         inst(OP_FAMILY, (value -- res)) {
             res = SPAM(PyStackRef_AsPyObjectBorrow(value));
-            PyStackRef_CLOSE(value);
+            DEAD(value);
         }
         inst(OP_FAMILY_RAW, (value -- res)) {
             res = SPAM_RAW(value);
-            PyStackRef_CLOSE(value);
+            DEAD(value);
         }
         family(OP_FAMILY, 0) = { OP_FAMILY_RAW };
     """
@@ -411,7 +411,7 @@ class TestIRCases(unittest.TestCase):
         input = """
         inst(STORE, (owner, value --)) {
             SPAM(owner, value);
-            DECREF_INPUTS();
+            INPUTS_DEAD();
         }
         inst(BRANCH, (counter/1, cond --)) {
             _PyFbHeader *feedback = FB_COUNTER();
@@ -446,18 +446,18 @@ class TestIRCases(unittest.TestCase):
         inst(OP, (left, right -- res)) {
             res = SPAM(PyStackRef_AsPyObjectBorrow(left),
                        PyStackRef_AsPyObjectBorrow(right));
-            DECREF_INPUTS();
+            INPUTS_DEAD();
         }
         inst(ATTR, (owner -- attr, null[oparg & 1])) {
             attr = SPAM(PyStackRef_AsPyObjectBorrow(owner));
-            DECREF_INPUTS();
+            INPUTS_DEAD();
             if (oparg & 1) {
                 null[0] = PyStackRef_NULL;
             }
         }
         no_fold inst(ALIAS, (value -- res)) {
             res = SPAM(PyStackRef_AsPyObjectBorrow(value));
-            DECREF_INPUTS();
+            INPUTS_DEAD();
         }
         inst(PAIR, (-- a, b)) {
             a = SPAM();
@@ -489,7 +489,7 @@ class TestIRCases(unittest.TestCase):
         }
         op(_USE, (left, right -- left, res)) {
             res = SPAM(PyStackRef_AsPyObjectBorrow(right));
-            PyStackRef_CLOSE(right);
+            DEAD(right);
         }
         macro(OP) = _GUARD + _USE;
     """
@@ -607,7 +607,7 @@ class TestIRCases(unittest.TestCase):
         op(_OP, (owner -- res)) {
             PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
             res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
-            DECREF_INPUTS();
+            INPUTS_DEAD();
         }
         macro(OP) = _SPECIALIZE_OP + _OP;
         op(_GUARD, (type_version/2, owner -- owner)) {
@@ -892,10 +892,10 @@ class TestIRCases(unittest.TestCase):
         # twin shares the format of its instruction.
         input = """
         inst(LOAD, ( -- value)) {
-            value = PyStackRef_DUP(GETLOCAL(oparg));
+            value = GETLOCAL(oparg);
         }
         inst(INSTRUMENTED_LOAD, ( -- value)) {
-            value = PyStackRef_DUP(GETLOCAL(oparg));
+            value = GETLOCAL(oparg);
         }
         ir_only inst(IR_BACON, ( -- )) {
             SPAM();

@@ -265,7 +265,7 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
     /* arg goes to the slot of the yield that suspended the frame, or of
        the value that RETURN_GENERATOR returned */
     PyObject *arg_obj = arg ? arg : Py_None;
-    _PyFrame_SetReturnValue(frame, PyStackRef_FromPyObjectNew(arg_obj));
+    _PyFrame_SetReturnValue(frame, PyStackRef_FromPyObject(arg_obj));
 
     _PyErr_StackItem *prev_exc_info = tstate->exc_info;
     gen->gi_exc_state.previous_item = prev_exc_info;
@@ -486,7 +486,7 @@ gen_close(PyObject *self, PyObject *args)
     int err = 0;
     _PyInterpreterFrame *frame = &gen->gi_iframe;
     if (frame_state == FRAME_SUSPENDED_YIELD_FROM) {
-        PyObject *yf = PyStackRef_AsPyObjectNew(_PyGen_YieldFromRef(frame));
+        PyObject *yf = PyStackRef_AsPyObjectBorrow(_PyGen_YieldFromRef(frame));
         err = gen_close_iter(yf);
         Py_DECREF(yf);
     }
@@ -646,7 +646,7 @@ _gen_throw(PyGenObject *gen, int close_on_genexit,
 
     if (frame_state == FRAME_SUSPENDED_YIELD_FROM) {
         _PyInterpreterFrame *frame = &gen->gi_iframe;
-        PyObject *yf = PyStackRef_AsPyObjectNew(_PyGen_YieldFromRef(frame));
+        PyObject *yf = PyStackRef_AsPyObjectBorrow(_PyGen_YieldFromRef(frame));
         PyObject *ret;
         int err;
         if (PyErr_GivenExceptionMatches(typ, PyExc_GeneratorExit) &&
@@ -891,7 +891,7 @@ gen_getyieldfrom(PyObject *self, void *Py_UNUSED(ignored))
     if (frame_state != FRAME_SUSPENDED_YIELD_FROM) {
         Py_RETURN_NONE;
     }
-    return PyStackRef_AsPyObjectNew(_PyGen_YieldFromRef(&gen->gi_iframe));
+    return PyStackRef_AsPyObjectBorrow(_PyGen_YieldFromRef(&gen->gi_iframe));
 }
 
 

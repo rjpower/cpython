@@ -1185,34 +1185,6 @@ class IREmitter(Emitter):
 
     exit_if = deopt_if
 
-    def decref_inputs(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-        """In register style the inputs die; their slots keep them until the
-        handler ends, so that what the handler took from them stays held
-        across its escaping calls (_PyEvalActivation)."""
-        stack = storage.stack
-        assert isinstance(stack, IRStack)
-        if stack.layout.window or self.cannot_escape:
-            return super().decref_inputs(tkn, tkn_iter, uop, storage, inst)
-        next(tkn_iter)
-        next(tkn_iter)
-        next(tkn_iter)
-        storage.clear_dead_inputs()
-        for var in storage.inputs:
-            if var.is_dead():
-                continue
-            if var.is_array():
-                raise analysis_error("register-style array input", tkn)
-            var.kill()
-        storage.clear_inputs("after DECREF_INPUTS")
-        return True
-
     def goto_error(self, offset: int, storage: Storage) -> str:
         """Clear the slots that the stack gave up, which the stack machine
         left above its stack pointer, and leave the rest to

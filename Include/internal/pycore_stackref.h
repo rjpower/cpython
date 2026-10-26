@@ -288,31 +288,7 @@ _PyStackRef_FromPyObject(PyObject *obj)
 }
 #define PyStackRef_FromPyObject(obj) _PyStackRef_FromPyObject(_PyObject_CAST(obj))
 
-/* The names below come from reference counting, where they took, gave or
-   copied a count.  Each is now a plain copy. */
-#define PyStackRef_FromPyObjectSteal PyStackRef_FromPyObject
-#define PyStackRef_FromPyObjectStealMortal PyStackRef_FromPyObject
-#define PyStackRef_FromPyObjectNew PyStackRef_FromPyObject
-#define PyStackRef_FromPyObjectNewMortal PyStackRef_FromPyObject
-#define PyStackRef_FromPyObjectBorrow PyStackRef_FromPyObject
-#define PyStackRef_AsPyObjectSteal PyStackRef_AsPyObjectBorrow
-#define _PyStackRef_AsPyObjectStealPointer PyStackRef_AsPyObjectBorrow
-#define PyStackRef_AsPyObjectNew PyStackRef_AsPyObjectBorrow
-#define PyStackRef_Borrow(REF) (REF)
-#define PyStackRef_BorrowAt(REF) (*(REF))
-#define PyStackRef_DUP(REF) (REF)
-#define _PyStackRef_DUP_POINTER(REF) (REF)
-#define PyStackRef_DupImmortal(REF) (REF)
-#define PyStackRef_MakeHeapSafe(REF) (REF)
-#define PyStackRef_AsStrongReference(REF) (REF)
-#define PyStackRef_CLOSE(REF) ((void)(REF))
-#define PyStackRef_XCLOSE(REF) ((void)(REF))
-#define PyStackRef_CLOSE_SPECIALIZED(REF, DESTRUCT) ((void)(REF))
-#define _PyStackRef_CLOSE_POINTER(REF) ((void)(REF))
-#define _PyStackRef_XCLOSE_POINTER(REF) ((void)(REF))
-#define _PyStackRef_CLOSE_SPECIALIZED_POINTER(REF, DESTRUCT) ((void)(REF))
 #define PyStackRef_CLEAR(REF) ((REF) = PyStackRef_NULL)
-#define _Py_stackref_allow_borrows_outlive_close(ref) ((void)(ref))
 
 // Python's `is`: the same encoding, or else the same value (see "Value
 // identity" above), which only the out-of-line test can establish.
@@ -411,7 +387,7 @@ static inline _PyStackRef
 PyStackRef_FromInt32(int32_t i)
 {
     PyObject *op = PyLong_FromLong(i);
-    return op == NULL ? PyStackRef_NULL : PyStackRef_FromPyObjectSteal(op);
+    return op == NULL ? PyStackRef_NULL : PyStackRef_FromPyObject(op);
 }
 #endif
 
@@ -522,17 +498,13 @@ PyStackRef_FromDouble(double value)
     return _PyStackRef_BoxDouble(value);
 }
 
-/* A new reference to the object that ref holds, a new box if ref holds an
-   inline value, or NULL with an exception set if boxing fails. For C code
-   that needs an object for a reference it does not own. */
+/* The object that ref holds, a new box if ref holds an inline value, or
+   NULL with an exception set if boxing fails. */
 static inline PyObject *
-PyStackRef_AsPyObjectNewBoxed(_PyStackRef ref)
+PyStackRef_AsPyObjectBoxed(_PyStackRef ref)
 {
-    if (PyStackRef_IsInline(ref)) {
-        ref = PyStackRef_Box(ref);
-        return PyStackRef_IsInline(ref) ? NULL : PyStackRef_AsPyObjectSteal(ref);
-    }
-    return PyStackRef_AsPyObjectNew(ref);
+    ref = PyStackRef_Box(ref);
+    return PyStackRef_IsInline(ref) ? NULL : PyStackRef_AsPyObjectBorrow(ref);
 }
 
 /* For each inline value src[i], store a new box in dst[i]; leave the other
@@ -543,7 +515,7 @@ _PyStackRef_BoxInto(const _PyStackRef *src, PyObject **dst, Py_ssize_t n)
 {
     for (Py_ssize_t i = 0; i < n; i++) {
         if (PyStackRef_IsInline(src[i])) {
-            dst[i] = PyStackRef_AsPyObjectNewBoxed(src[i]);
+            dst[i] = PyStackRef_AsPyObjectBoxed(src[i]);
             if (dst[i] == NULL) {
                 while (--i >= 0) {
                     if (PyStackRef_IsInline(src[i])) {
@@ -589,7 +561,7 @@ static inline void
 _PyThreadState_PushCStackRefNew(PyThreadState *tstate, _PyCStackRef *ref, PyObject *obj)
 {
     _PyThreadState_PushCStackRef(tstate, ref);
-    ref->ref = PyStackRef_FromPyObjectNew(obj);
+    ref->ref = PyStackRef_FromPyObject(obj);
 }
 
 /* The collector scans most C frames conservatively, so a popped reference
@@ -619,13 +591,6 @@ _PyThreadState_PopCStackRefSteal(PyThreadState *tstate, _PyCStackRef *ref)
 }
 
 
-#define PyStackRef_XSETREF(dst, src) \
-    do { \
-        _PyStackRef _tmp_dst_ref = (dst); \
-        (dst) = (src); \
-        PyStackRef_XCLOSE(_tmp_dst_ref); \
-    } while(0)
-
 // Like Py_VISIT but for _PyStackRef fields
 #define _Py_VISIT_STACKREF(ref)                                         \
     do {                                                                \
@@ -636,15 +601,12 @@ _PyThreadState_PopCStackRefSteal(PyThreadState *tstate, _PyCStackRef *ref)
         }                                                               \
     } while (0)
 
+/* Leave the arguments NULL, so that the slots keep nothing alive */
 static inline void
-_PyStackRef_CloseStack(_PyStackRef *arguments, int total_args)
+_PyStackRef_ClearStack(_PyStackRef *arguments, int total_args)
 {
-    // arguments is a pointer into the GC visible stack,
-    // so we must NULL out values as we clear them.
-    for (int i = total_args-1; i >= 0; i--) {
-        _PyStackRef tmp = arguments[i];
+    for (int i = 0; i < total_args; i++) {
         arguments[i] = PyStackRef_NULL;
-        PyStackRef_CLOSE(tmp);
     }
 }
 

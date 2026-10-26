@@ -7,7 +7,7 @@
 
 #include "pycore_critical_section.h"
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
-#include "pycore_stackref.h"      // PyStackRef_AsPyObjectSteal()
+#include "pycore_stackref.h"      // PyStackRef_AsPyObjectBorrow()
 #include "pycore_typecache.h"     // _PyTypeCache_Lookup()
 
 
@@ -56,7 +56,7 @@ type_cache_lookup(PyObject *Py_UNUSED(self), PyObject *args)
         value = Py_NewRef(Py_None);
     }
     else {
-        value = PyStackRef_AsPyObjectSteal(r.value);
+        value = PyStackRef_AsPyObjectBorrow(r.value);
     }
     return Py_BuildValue("(iNk)",
                          r.cache_hit, value,

@@ -1302,7 +1302,7 @@ _Py_dict_lookup_threadsafe_stackref(PyDictObject *mp, PyObject *key, Py_hash_t h
         *value_addr = PyStackRef_NULL;
     }
     else {
-        *value_addr = PyStackRef_FromPyObjectNew(val);
+        *value_addr = PyStackRef_FromPyObject(val);
     }
     return ix;
 }
@@ -1326,7 +1326,7 @@ _PyDict_GetMethodStackRef(PyDictObject *mp, PyObject *key, _PyStackRef *method)
         return -1;
     }
     else if (ix >= 0 && obj != NULL) {
-        PyStackRef_XSETREF(*method, PyStackRef_FromPyObjectSteal(obj));
+        *method = PyStackRef_FromPyObject(obj);
         return 1;
     }
     return 0;  // not found
@@ -2199,10 +2199,7 @@ _PyDict_LoadBuiltinsFromGlobals(PyObject *globals)
     PyObject *key = &_Py_ID(__builtins__);
     Py_hash_t hash = unicode_get_hash(key);
 
-    // Use the stackref variant to avoid reference count contention on the
-    // builtins module in the free threading build. It's important not to
-    // make any escaping calls between the lookup and the `PyStackRef_CLOSE()`
-    // because the `ref` is not visible to the GC.
+    // The lookup makes no escaping call, so `ref` needs no root.
     _PyStackRef ref;
     Py_ssize_t ix = _Py_dict_lookup_threadsafe_stackref(mp, key, hash, &ref);
     if (ix == DKIX_ERROR) {
@@ -2217,7 +2214,6 @@ _PyDict_LoadBuiltinsFromGlobals(PyObject *globals)
         assert(builtins != NULL);
     }
     _Py_INCREF_BUILTINS(builtins);
-    PyStackRef_CLOSE(ref);
     return builtins;
 }
 

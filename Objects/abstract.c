@@ -2650,7 +2650,7 @@ call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
 {
     _PyCStackRef cref;
     _PyThreadState_PushCStackRef(tstate, &cref);
-    _PyStackRef self = PyStackRef_FromPyObjectBorrow(cls);
+    _PyStackRef self = PyStackRef_FromPyObject(cls);
     int found = _PyObject_LookupSpecialMethod(name, &cref.ref, &self);
     if (found > 0) {
         *res = NULL;
@@ -2670,7 +2670,6 @@ call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
             found = -1;
         }
     }
-    PyStackRef_XCLOSE(self);
     _PyThreadState_PopCStackRef(tstate, &cref);
     return found;
 }

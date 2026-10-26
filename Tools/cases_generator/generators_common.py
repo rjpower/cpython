@@ -99,12 +99,7 @@ def always_true(tkn: Token | None) -> bool:
 
 # Calls that always return a reference in pointer space.
 POINTER_CONSTRUCTORS = {
-    "PyStackRef_FromPyObjectBorrow",
-    "PyStackRef_FromPyObjectImmortal",
-    "PyStackRef_FromPyObjectNew",
-    "PyStackRef_FromPyObjectNewMortal",
-    "PyStackRef_FromPyObjectSteal",
-    "PyStackRef_FromPyObjectStealMortal",
+    "PyStackRef_FromPyObject",
 }
 
 
@@ -195,16 +190,11 @@ class Emitter:
             "DEOPT_IF": self.deopt_if,
             "ERROR_IF": self.error_if,
             "ERROR_NO_POP": self.error_no_pop,
-            "DECREF_INPUTS": self.decref_inputs,
             "DEAD": self.kill,
             "INPUTS_DEAD": self.kill_inputs,
             "SYNC_SP": self.sync_sp,
             "SAVE_STACK": self.save_stack,
             "RELOAD_STACK": self.reload_stack,
-            "PyStackRef_CLOSE_SPECIALIZED": self.stackref_kill_first,
-            "PyStackRef_CLOSE": self.stackref_kill_first,
-            "PyStackRef_XCLOSE": self.stackref_kill_first,
-            "PyStackRef_AsPyObjectSteal": self.stackref_kill_first,
             "DISPATCH": self.dispatch,
             "INSTRUCTION_SIZE": self.instruction_size,
             "stack_pointer": self.stack_pointer,
@@ -395,23 +385,6 @@ class Emitter:
         self.out.emit_at(self.goto_error(0, storage), tkn)
         return False
 
-    def decref_inputs(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-        next(tkn_iter)
-        next(tkn_iter)
-        next(tkn_iter)
-        self._print_storage("DECREF_INPUTS", storage)
-        # Nothing is released: the inputs die, as with INPUTS_DEAD()
-        for var in storage.inputs:
-            var.kill()
-        return True
-
     def kill_inputs(
         self,
         tkn: Token,
@@ -448,45 +421,6 @@ class Emitter:
             raise analysis_error(
                 f"'{name}' is not a live input-only variable", name_tkn
             )
-        return True
-
-    def stackref_kill(
-        self,
-        name: Token,
-        storage: Storage,
-        escapes: bool
-    ) -> bool:
-        live = ""
-        for var in reversed(storage.inputs):
-            if var.name == name.text:
-                if live and escapes:
-                    raise analysis_error(
-                        f"Cannot close '{name.text}' when "
-                        f"'{live}' is still live", name)
-                var.kill()
-                break
-            if var.in_local:
-                live = var.name
-        return True
-
-    def stackref_kill_first(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-        """A close or a steal of an input: the input is dead after it, and
-        its slot keeps it until the handler ends."""
-        self.out.emit(tkn)
-        lparen = next(tkn_iter)
-        assert lparen.kind == "LPAREN"
-        self.out.emit(lparen)
-        name = next(tkn_iter)
-        self.out.emit(name)
-        if name.kind == "IDENTIFIER":
-            return self.stackref_kill(name, storage, False)
         return True
 
     def sync_sp(

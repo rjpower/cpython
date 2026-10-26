@@ -2605,8 +2605,8 @@ _Py_Specialize_BinaryOp(_PyStackRef lhs_st, _PyStackRef rhs_st, _PyInstr *instr,
     assert(_PyOpcode_Caches[BINARY_OP] == INLINE_CACHE_ENTRIES_BINARY_OP);
     // The boxes are temporary: BINARY_OP_EXTEND, for one, boxes inline
     // operands each time it runs.
-    PyObject *lhs = PyStackRef_AsPyObjectNewBoxed(lhs_st);
-    PyObject *rhs = PyStackRef_AsPyObjectNewBoxed(rhs_st);
+    PyObject *lhs = PyStackRef_AsPyObjectBoxed(lhs_st);
+    PyObject *rhs = PyStackRef_AsPyObjectBoxed(rhs_st);
     if (lhs == NULL || rhs == NULL) {
         PyErr_Clear();
         unspecialize(instr);

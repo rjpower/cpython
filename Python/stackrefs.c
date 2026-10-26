@@ -27,7 +27,7 @@ _PyStackRef_BoxInlineValue(_PyStackRef ref)
     if (box == NULL) {
         return ref;
     }
-    return PyStackRef_FromPyObjectSteal(box);
+    return PyStackRef_FromPyObject(box);
 }
 
 // The identity of a reference that is not NULL or ERROR.
@@ -78,7 +78,7 @@ _PyStackRef_BoxInt64(int64_t value)
     if (op == NULL) {
         return PyStackRef_NULL;
     }
-    return PyStackRef_FromPyObjectSteal(op);
+    return PyStackRef_FromPyObject(op);
 }
 
 _PyStackRef
@@ -94,7 +94,7 @@ _PyStackRef_LshiftInt32(int32_t value, int32_t shift)
     if (res == NULL) {
         return PyStackRef_NULL;
     }
-    return PyStackRef_FromPyObjectSteal(res);
+    return PyStackRef_FromPyObject(res);
 }
 
 _PyStackRef
@@ -104,5 +104,5 @@ _PyStackRef_BoxDouble(double value)
     if (op == NULL) {
         return PyStackRef_NULL;
     }
-    return PyStackRef_FromPyObjectSteal(op);
+    return PyStackRef_FromPyObject(op);
 }

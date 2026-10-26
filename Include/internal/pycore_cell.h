@@ -52,7 +52,7 @@ _PyCell_GetStackRef(PyCellObject *cell)
     if (value == NULL) {
         return PyStackRef_NULL;
     }
-    return PyStackRef_FromPyObjectSteal(value);
+    return PyStackRef_FromPyObject(value);
 }
 
 #ifdef __cplusplus

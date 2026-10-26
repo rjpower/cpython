@@ -691,7 +691,6 @@ common_constants_clear(PyInterpreterState *interp)
             continue;
         }
         PyObject *obj = PyStackRef_AsPyObjectBorrow(ref);
-        PyStackRef_XCLOSE(ref);
         interp->common_consts[i] = PyStackRef_NULL;
         // Refcount reclamation skips heap immortals; release manually.
         if (_Py_IsImmortal(obj) && !_Py_IsStaticImmortal(obj)) {

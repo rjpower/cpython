@@ -8,7 +8,7 @@
 #include "pycore_list.h"          // _Py_memory_repeat()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
-#include "pycore_stackref.h"      // PyStackRef_AsPyObjectSteal()
+#include "pycore_stackref.h"      // PyStackRef_AsPyObjectBorrow()
 #include "pycore_tuple.h"         // _PyTupleIterObject
 
 
@@ -489,7 +489,7 @@ _PyTuple_FromStackRefStealOnSuccess(const _PyStackRef *src, Py_ssize_t n)
     bool track = false;
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *item = PyStackRef_IsInline(src[i])
-                         ? dst[i] : PyStackRef_AsPyObjectSteal(src[i]);
+                         ? dst[i] : PyStackRef_AsPyObjectBorrow(src[i]);
         if (!track && maybe_tracked(item)) {
             track = true;
         }

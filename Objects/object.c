@@ -32,7 +32,7 @@
 #include "pycore_tuple.h"         // _PyTuple_DebugMallocStats()
 #include "pycore_typeobject.h"    // _PyBufferWrapper_Type
 #include "pycore_typevarobject.h" // _PyTypeAlias_Type
-#include "pycore_stackref.h"      // PyStackRef_FromPyObjectSteal
+#include "pycore_stackref.h"      // PyStackRef_FromPyObject
 #include "pycore_unionobject.h"   // _PyUnion_Type
 
 
@@ -964,7 +964,7 @@ _PyObject_GetAttrStackRef(PyObject *v, PyObject *name)
         _PyObject_SetAttributeErrorContext(v, name);
         return PyStackRef_NULL;
     }
-    return PyStackRef_FromPyObjectSteal(result);
+    return PyStackRef_FromPyObject(result);
 }
 
 int
@@ -1352,7 +1352,7 @@ _PyObject_GetMethodStackRef(PyThreadState *ts, _PyStackRef *self,
         PyObject *res = PyObject_GetAttr(obj, name);
         PyStackRef_CLEAR(*self);
         if (res != NULL) {
-            *method = PyStackRef_FromPyObjectSteal(res);
+            *method = PyStackRef_FromPyObject(res);
             return 0;
         }
         return -1;
@@ -1372,7 +1372,7 @@ _PyObject_GetMethodStackRef(PyThreadState *ts, _PyStackRef *self,
                 PyStackRef_CLEAR(*method);
                 PyStackRef_CLEAR(*self);
                 if (value != NULL) {
-                    *method = PyStackRef_FromPyObjectSteal(value);
+                    *method = PyStackRef_FromPyObject(value);
                     return 0;
                 }
                 return -1;
@@ -1383,7 +1383,7 @@ _PyObject_GetMethodStackRef(PyThreadState *ts, _PyStackRef *self,
     if ((tp->tp_flags & Py_TPFLAGS_INLINE_VALUES) &&
          _PyObject_TryGetInstanceAttribute(obj, name, &attr)) {
         if (attr != NULL) {
-            PyStackRef_XSETREF(*method, PyStackRef_FromPyObjectSteal(attr));
+            *method = PyStackRef_FromPyObject(attr);
             PyStackRef_CLEAR(*self);
             return 0;
         }
@@ -1423,13 +1423,13 @@ _PyObject_GetMethodStackRef(PyThreadState *ts, _PyStackRef *self,
     if (f != NULL) {
         if (Py_IS_TYPE(descr, &PyClassMethod_Type)) {
             PyObject *callable = _PyClassMethod_GetFunc(descr);
-            PyStackRef_XSETREF(*method, PyStackRef_FromPyObjectNew(callable));
-            PyStackRef_XSETREF(*self, PyStackRef_FromPyObjectNew((PyObject *)tp));
+            *method = PyStackRef_FromPyObject(callable);
+            *self = PyStackRef_FromPyObject((PyObject *)tp);
             return 1;
         }
         else if (Py_IS_TYPE(descr, &PyStaticMethod_Type)) {
             PyObject *callable = _PyStaticMethod_GetFunc(descr);
-            PyStackRef_XSETREF(*method, PyStackRef_FromPyObjectNew(callable));
+            *method = PyStackRef_FromPyObject(callable);
             PyStackRef_CLEAR(*self);
             return 0;
         }
@@ -1437,7 +1437,7 @@ _PyObject_GetMethodStackRef(PyThreadState *ts, _PyStackRef *self,
         PyStackRef_CLEAR(*method);
         PyStackRef_CLEAR(*self);
         if (value) {
-            *method = PyStackRef_FromPyObjectSteal(value);
+            *method = PyStackRef_FromPyObject(value);
             return 0;
         }
         return -1;
@@ -1576,7 +1576,7 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     }
 
     if (descr != NULL) {
-        res = PyStackRef_AsPyObjectSteal(cref.ref);
+        res = PyStackRef_AsPyObjectBorrow(cref.ref);
         cref.ref = PyStackRef_NULL;
         goto done;
     }

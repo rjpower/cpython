@@ -52,9 +52,6 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
     assert(frame->owner != FRAME_OWNED_BY_FRAME_OBJECT);
     _PyInterpreterFrame *new_frame = (_PyInterpreterFrame *)f->_f_frame_data;
     _PyFrame_Copy(frame, new_frame);
-    // _PyFrame_Copy moves the reference to the executable, but the caller
-    // still clears frame->f_executable, so give the source frame its own.
-    frame->f_executable = PyStackRef_DUP(new_frame->f_executable);
     f->f_frame = new_frame;
     new_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
     if (_PyFrame_IsIncomplete(new_frame)) {
@@ -139,9 +136,7 @@ clear_slots(_PyInterpreterFrame *frame, int n)
     _PyStackRef *sp = locals + n;
     while (sp > locals) {
         sp--;
-        _PyStackRef ref = *sp;
         *sp = PyStackRef_NULL;
-        PyStackRef_XCLOSE(ref);
     }
     Py_CLEAR(frame->f_locals);
 }
@@ -189,7 +184,7 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
 PyObject *
 PyUnstable_InterpreterFrame_GetCode(struct _PyInterpreterFrame *frame)
 {
-    return PyStackRef_AsPyObjectNew(frame->f_executable);
+    return PyStackRef_AsPyObjectBorrow(frame->f_executable);
 }
 
 // NOTE: We allow racy accesses to the instruction pointer from other threads

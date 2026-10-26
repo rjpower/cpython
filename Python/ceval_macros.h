@@ -328,8 +328,7 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 //  UNLOCK_OBJECT(op);
 //
 // NOTE: The object must be unlocked on every exit code path and you should
-// avoid any potentially escaping calls (like PyStackRef_CLOSE) while the
-// object is locked.
+// avoid any potentially escaping calls while the object is locked.
 #  define LOCK_OBJECT(op) (1)
 #  define UNLOCK_OBJECT(op) ((void)0)
 

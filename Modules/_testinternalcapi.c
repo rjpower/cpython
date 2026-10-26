@@ -2979,30 +2979,26 @@ stackref_box_roundtrip(PyObject *self, PyObject *arg)
         PyErr_SetString(PyExc_TypeError, "expected an exact int or float");
         return NULL;
     }
-    _PyStackRef dup = PyStackRef_DUP(ref);
     if (!PyStackRef_IsInline(ref) || PyStackRef_IsPointerSpace(ref)
         || PyStackRef_IsTaggedIndex(ref) || PyStackRef_IsNull(ref)
         || PyStackRef_IsError(ref) || !PyStackRef_IsValid(ref)
         || PyStackRef_TYPE(ref) != Py_TYPE(arg)
-        || !PyStackRef_Is(dup, ref) || !PyStackRef_Is(PyStackRef_Borrow(ref), ref)
-        || !PyStackRef_Is(PyStackRef_BorrowAt(&ref), ref)
+        || !PyStackRef_Is(ref, ref)
         || !PyStackRef_IsInlineAt(&ref) || PyStackRef_IsPointerSpaceAt(&ref)
         || PyStackRef_Is(ref, PyStackRef_None))
     {
         PyErr_SetString(PyExc_AssertionError, "inline value predicates disagree");
         return NULL;
     }
-    PyStackRef_CLOSE(dup);
     _PyStackRef boxed = PyStackRef_Box(ref);
     if (PyStackRef_IsInline(boxed)) {
         return NULL;
     }
     if (!PyStackRef_IsPointerSpaceAt(&boxed) || PyStackRef_IsInlineAt(&boxed)) {
-        PyStackRef_CLOSE(boxed);
         PyErr_SetString(PyExc_AssertionError, "box is not a pointer");
         return NULL;
     }
-    return PyStackRef_AsPyObjectSteal(boxed);
+    return PyStackRef_AsPyObjectBorrow(boxed);
 }
 
 // The names of the frame's local variables that hold inline values.

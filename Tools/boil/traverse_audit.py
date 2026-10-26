@@ -194,8 +194,40 @@ def split_top(body: str, sep: str) -> list[str]:
 OBJ_PTR_RE = re.compile(r"^(?:const\s+)?(?:struct\s+)?([A-Za-z_]\w*)\s*(\*+)\s*([A-Za-z_]\w*)\s*(\[[^\]]*\])?$")
 
 
+def member_refs(members: list[str], structs: dict[str, Struct],
+                plain: dict[str, list[str]]) -> list[str]:
+    """The object references among a struct's members.  A member that is a
+    plain struct (not an object) contributes that struct's references, as
+    "member.field"."""
+    refs = []
+    for mem in members:
+        mem = re.sub(r"\s+", " ", mem.replace("\n", " ")).strip()
+        if "(" in mem:      # function pointers, macros
+            continue
+        decl = mem.split(",")
+        em = re.match(r"^(?:struct\s+)?([A-Za-z_]\w*)\s+([A-Za-z_]\w*)$", mem)
+        if em and plain.get(em.group(1)):
+            refs.extend(f"{em.group(2)}.{r}" for r in plain[em.group(1)])
+            continue
+        mm = OBJ_PTR_RE.match(decl[0].strip())
+        if not mm:
+            continue
+        typ, stars = mm.group(1), mm.group(2)
+        if not is_object_type(typ, structs):
+            continue
+        refs.append(mm.group(3) + ("[]" if mm.group(4) or len(stars) > 1 else ""))
+        for d in decl[1:]:
+            dm = re.match(r"\s*(\*+)\s*([A-Za-z_]\w*)\s*(\[[^\]]*\])?\s*$", d)
+            if dm:
+                refs.append(dm.group(2) + ("[]" if dm.group(3) or len(dm.group(1)) > 1 else ""))
+    return refs
+
+
 def parse_structs(path: Path, text: str, macros: dict[str, str],
-                  structs: dict[str, Struct]) -> None:
+                  structs: dict[str, Struct],
+                  plain: dict[str, list[str]]) -> None:
+    """Record object structs in structs, and the object references of plain
+    structs, which objects can embed, in plain."""
     pat = re.compile(r"\b(typedef\s+)?struct\s*([A-Za-z_]\w*)?\s*\{")
     for m in pat.finditer(text):
         start = m.end()
@@ -223,9 +255,7 @@ def parse_structs(path: Path, text: str, macros: dict[str, str],
         first = members[0]
         base = None
         head = re.match(r"([A-Za-z_]\w*)(\s*\([^)]*\))?", first)
-        if not head:
-            continue
-        h = head.group(1)
+        h = head.group(1) if head else ""
         if h in ("PyObject_HEAD", "PyObject_VAR_HEAD"):
             # The macro has no trailing semicolon.
             base = h
@@ -243,26 +273,15 @@ def parse_structs(path: Path, text: str, macros: dict[str, str],
             if typ in ("PyObject", "PyVarObject") or typ in structs:
                 base = typ
             else:
-                continue
-        else:
+                base = None
+        if base is None:
+            refs = member_refs(members, structs, plain)
+            for n in names:
+                if n not in structs:
+                    plain[n] = refs
             continue
-        refs = []
-        for mem in members[1:] if first is not None else members:
-            mem = re.sub(r"\s+", " ", mem.replace("\n", " ")).strip()
-            if "(" in mem:      # function pointers, macros
-                continue
-            decl = mem.split(",")
-            mm = OBJ_PTR_RE.match(decl[0].strip())
-            if not mm:
-                continue
-            typ, stars = mm.group(1), mm.group(2)
-            if not is_object_type(typ, structs):
-                continue
-            refs.append(mm.group(3) + ("[]" if mm.group(4) or len(stars) > 1 else ""))
-            for d in decl[1:]:
-                dm = re.match(r"\s*(\*+)\s*([A-Za-z_]\w*)\s*(\[[^\]]*\])?\s*$", d)
-                if dm:
-                    refs.append(dm.group(2) + ("[]" if dm.group(3) or len(dm.group(1)) > 1 else ""))
+        refs = member_refs(members[1:] if first is not None else members,
+                           structs, plain)
         line = text.count("\n", 0, m.start()) + 1
         for n in names:
             structs[n] = Struct(n, path, line, base, refs)
@@ -416,10 +435,11 @@ def main() -> int:
 
     macros = head_macros(list(texts.values()))
     structs: dict[str, Struct] = {}
+    plain: dict[str, list[str]] = {}
     # Two passes, so that a struct can start with one defined later.
     for _ in range(2):
         for p, t in texts.items():
-            parse_structs(p, t, macros, structs)
+            parse_structs(p, t, macros, structs, plain)
     types: list[TypeDef] = []
     funcs: dict[Path, dict[str, str]] = {}
     for p, t in texts.items():

@@ -699,6 +699,11 @@ traverse(PyObject *op, visitproc visit, void *arg)
     {
         return _PyType_TraverseStatic((PyTypeObject *)op, visit, arg);
     }
+    /* An instance owns a reference to its heap type.  The traverse function
+       of a GC type visits it; other types have none or do not. */
+    if ((tp->tp_flags & Py_TPFLAGS_HEAPTYPE) && !_PyType_IS_GC(tp)) {
+        Py_VISIT(tp);
+    }
     if (tp->tp_traverse != NULL) {
         return tp->tp_traverse(op, visit, arg);
     }
@@ -1426,16 +1431,29 @@ report(trace_t *t, PyThreadState *tstate, Py_ssize_t nholes)
     if (log == NULL) {
         return;
     }
-    fprintf(log, "== pid %ld in ", (long)getpid());
-    _PyInterpreterFrame *f = tstate->current_frame;
-    while (f != NULL && f->owner >= FRAME_OWNED_BY_INTERPRETER) {
-        f = f->previous;
-    }
-    if (f != NULL && PyCode_Check(PyStackRef_AsPyObjectBorrow(f->f_executable))) {
+    // The innermost Python function and the innermost test method
+    fprintf(log, "== pid %ld in", (long)getpid());
+    int shown = 0;
+    for (_PyInterpreterFrame *f = tstate->current_frame; f != NULL && shown < 2;
+         f = f->previous)
+    {
+        if (f->owner >= FRAME_OWNED_BY_INTERPRETER
+            || !PyCode_Check(PyStackRef_AsPyObjectBorrow(f->f_executable)))
+        {
+            continue;
+        }
         PyCodeObject *co = _PyFrame_GetCode(f);
+        if (shown == 1 && !(PyUnicode_IS_ASCII(co->co_name)
+                            && strncmp((const char *)PyUnicode_DATA(co->co_name),
+                                       "test", 4) == 0))
+        {
+            continue;
+        }
+        fputs(shown ? ", from " : " ", log);
         write_ascii(log, co->co_qualname);
         fputs(" at ", log);
         write_ascii(log, co->co_filename);
+        shown++;
     }
     fputs("\n", log);
     report_to(log, t, nholes);

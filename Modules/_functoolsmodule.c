@@ -1866,6 +1866,10 @@ lru_cache_tp_traverse(PyObject *op, visitproc visit, void *arg)
     lru_list_elem *link = self->root.next;
     while (link != &self->root) {
         lru_list_elem *next = link->next;
+        /* The list owns its links.  A link is not a GC object, so the
+           cycle collector needs its members visited here; the tracing
+           mark needs the link itself. */
+        Py_VISIT(link);
         Py_VISIT(link->key);
         Py_VISIT(link->result);
         Py_VISIT(Py_TYPE(link));

@@ -8,6 +8,9 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include <setjmp.h>               // jmp_buf
+#include <string.h>               // memcpy()
+
 /* The mark phase of the tracing collector, run as a verifier under
  * reference counting (note 06, step 4).  After a full collection it marks
  * everything reachable from the roots, then reports every object with a
@@ -75,6 +78,130 @@ extern void _PyGC_RemoveRoot(_PyGCRoot *root);
 
 extern PyStatus _PyGC_TraceInit(PyInterpreterState *interp);
 extern void _PyGC_TraceFini(PyInterpreterState *interp);
+
+/* The root visitors, shared by the verifier and the live collector
+ * (Python/gc_live.c).  Each visits the objects one class of precise roots
+ * holds (section 14.2 of note 06). */
+extern int _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg);
+extern int _PyGC_TraceVisitThreadState(PyThreadState *p, visitproc visit,
+                                       void *arg);
+extern int _PyGC_TraceVisitInterp(PyInterpreterState *interp, visitproc visit,
+                                  void *arg);
+/* The static types passed to PyType_Ready() in interp. */
+extern PyTypeObject **_PyGC_TraceStaticTypes(PyInterpreterState *interp,
+                                             Py_ssize_t *n);
+/* Visit what op refers to: tp_traverse, _PyType_TraverseStatic() for a
+ * static type, and the heap type of a non-GC instance. */
+extern int _PyGC_TraceTraverse(PyObject *op, visitproc visit, void *arg);
+
+/* Store the callee-saved registers in regs[24].  regs is passed in a
+ * register that is not callee-saved, so that computing it cannot overwrite
+ * one.  Inlined, so that the registers are the caller's. */
+static inline __attribute__((always_inline)) void
+_PyGC_CaptureRegisters(uintptr_t *regs)
+{
+#if defined(__GNUC__) && defined(__x86_64__)
+    __asm__ volatile(
+        "movq %%rbx, 0(%0)\n\t"
+        "movq %%rbp, 8(%0)\n\t"
+        "movq %%r12, 16(%0)\n\t"
+        "movq %%r13, 24(%0)\n\t"
+        "movq %%r14, 32(%0)\n\t"
+        "movq %%r15, 40(%0)\n\t"
+        : : "D"(regs) : "memory");
+#elif defined(__GNUC__) && defined(__aarch64__)
+    register uintptr_t *p __asm__("x9") = regs;
+    __asm__ volatile(
+        "stp x19, x20, [%0, #0]\n\t"
+        "stp x21, x22, [%0, #16]\n\t"
+        "stp x23, x24, [%0, #32]\n\t"
+        "stp x25, x26, [%0, #48]\n\t"
+        "stp x27, x28, [%0, #64]\n\t"
+        "str x29, [%0, #80]\n\t"
+        "stp d8, d9, [%0, #88]\n\t"
+        "stp d10, d11, [%0, #104]\n\t"
+        "stp d12, d13, [%0, #120]\n\t"
+        "stp d14, d15, [%0, #136]\n\t"
+        : : "r"(p) : "memory");
+#else
+    // setjmp() stores the callee-saved registers, though some C libraries
+    // mangle the stack and frame pointers.
+    jmp_buf buf;
+    (void)setjmp(buf);
+    memcpy(regs, &buf, Py_MIN(sizeof(buf), 24 * sizeof(uintptr_t)));
+#endif
+}
+
+#ifdef Py_GC
+/* The live collector, which owns memory under Py_GC.  Python/gc_live.c has
+ * the policy: when to collect, finalizers, weak references, the sweep and
+ * the gc module's view.  The mark and the heap walks are here, in
+ * Python/gc_trace.c, beside the verifier's, whose roots they share. */
+
+/* Does the block at op hold an initialized object?  _Py_NewReference()
+ * writes the header word; freeing the block clears it.  The reference count
+ * half is a constant under Py_GC, which makes a stray match in a block of
+ * raw data unlikely. */
+static inline int
+_PyGC_IsObjectHeader(const PyObject *op)
+{
+    uint64_t w = (uint64_t)op->ob_refcnt_full;
+    uint32_t refcnt = (uint32_t)w;
+    return ((w >> 32) & 0xffff) == _Py_GC_OBJECT_MAGIC
+        && ((w >> 48) & _Py_GC_HEAP_FLAG) != 0
+        && (refcnt == _Py_GC_REFCNT || refcnt == _Py_IMMORTAL_INITIAL_REFCNT);
+}
+
+/* An unreachable object found by the mark: its address, and the size and
+ * pre-header size of its block. */
+typedef struct {
+    PyObject *op;
+    uint32_t block_size;
+    uint32_t presize;
+} _PyGCDeadObject;
+
+typedef struct {
+    _PyGCDeadObject *dead;    // from malloc(); the caller frees it
+    Py_ssize_t ndead;
+    Py_ssize_t nobjects;      // the objects in the heaps
+    Py_ssize_t live_bytes;    // the blocks of the reachable objects
+    Py_ssize_t nmarked;
+    Py_ssize_t nshallow;
+} _PyGCMarkResult;
+
+/* Mark everything reachable from the roots of the interpreters that share
+ * tstate's object heaps, then walk the heaps: a marked object is unmarked,
+ * an unmarked one gets _Py_GC_DEAD_FLAG and is listed.  Returns -1, with
+ * nothing listed or flagged, if the collector's own memory ran out. */
+extern int _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res);
+
+/* Every object in the heaps that interp shares, in an array from malloc(),
+ * or NULL with *n set to -1 if memory ran out.  The objects are not
+ * kept alive: the caller must not let a collection run before it holds
+ * them. */
+extern PyObject **_PyGC_TraceLiveHeapObjects(PyInterpreterState *interp,
+                                             Py_ssize_t *n);
+
+/* The roots the live collector itself holds for interp: the immortal heap
+ * objects that refer to others, and the queue of finalizers and weak
+ * reference callbacks. */
+extern int _PyGC_LiveVisitRoots(PyInterpreterState *interp, visitproc visit,
+                                void *arg);
+
+/* Called by an object allocation when alloc_bytes passes alloc_limit.  It
+ * collects, then runs the finalizers and weak reference callbacks it queued,
+ * unless a collection cannot run here; the allocation follows. */
+extern void _PyGC_LiveOnThreshold(PyThreadState *tstate);
+
+/* Remember an immortal heap object: what it refers to is a root. */
+extern void _PyGC_LiveAddImmortal(PyObject *op);
+
+/* Totals for gc.get_stats(): the bytes the sweeps freed, the bytes the last
+ * collection found live, and the longest pause in seconds. */
+extern void _PyGC_LiveGetStats(PyInterpreterState *interp,
+                               Py_ssize_t *bytes_freed, Py_ssize_t *live_bytes,
+                               double *pause_max);
+#endif
 
 /* Record the calling thread's callee-saved registers and stack pointer in
  * its thread state, before it releases the GIL, so that a collection in

@@ -645,6 +645,7 @@
     <ClCompile Include="..\Python\gc.c" />
     <ClCompile Include="..\Python\gc_free_threading.c" />
     <ClCompile Include="..\Python\gc_gil.c" />
+    <ClCompile Include="..\Python\gc_live.c" />
     <ClCompile Include="..\Python\gc_trace.c" />
     <ClCompile Include="..\Python\getargs.c" />
     <ClCompile Include="..\Python\getcompiler.c" />

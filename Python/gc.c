@@ -19,7 +19,8 @@
 #include "pycore_weakref.h"       // _PyWeakref_ClearRef()
 #include "pydtrace.h"
 
-#if !defined(Py_GIL_DISABLED)
+/* Under Py_GC the tracing collector in Python/gc_live.c replaces this one. */
+#if !defined(Py_GIL_DISABLED) && !defined(Py_GC)
 
 typedef struct _gc_runtime_state GCState;
 
@@ -2204,4 +2205,4 @@ done:
     gcstate->enabled = original_state;
 }
 
-#endif  // !Py_GIL_DISABLED
+#endif  // !Py_GIL_DISABLED && !Py_GC

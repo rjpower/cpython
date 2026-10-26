@@ -344,9 +344,29 @@ typedef struct {
     Py_ssize_t nshallow;
     Py_ssize_t nrejected; // precise references that were not objects
     Py_ssize_t ngarbage;  // unmarked objects that only garbage refers to
+    // Under Py_GC: precise references into the heap that are not live
+    // objects, which means the collector freed something reachable.
+    PyObject *current;    // the object being traversed
+    Py_ssize_t ndangling;
+    struct {
+        uintptr_t addr;
+        char referrer[80];
+    } dangling[16];
+#ifdef Py_GC
+    // The live collector: mark bits in the headers instead of the sets.
+    int live;
+    uintptr_t mem_lo;     // the bounds of mem_pages
+    uintptr_t mem_hi;
+    PyInterpreterState *domain[64];
+    int ndomain;
+#endif
 } trace_t;
 
 static int mark_visit(PyObject *op, void *arg);
+#ifdef Py_GC
+static int live_visit(PyObject *op, void *arg);
+static void live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop);
+#endif
 static void scan_threads_only(trace_t *t, PyThreadState *current);
 
 
@@ -381,6 +401,12 @@ walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
         if (addrset_has(&a->t->freed, op)) {
             return true;  // allocated, but dead
         }
+#ifdef Py_GC
+        // A block without the header magic is not an initialized object.
+        if (!_PyGC_IsObjectHeader((PyObject *)op)) {
+            return true;
+        }
+#endif
         if (addrset_add(a->objects, op) < 0) {
             a->t->oom = 1;
             return false;
@@ -709,6 +735,24 @@ mark(trace_t *t, PyObject *op, int heap)
         }
         return;
     }
+#ifdef Py_GC
+    if (!heap && !t->conservative && addr >= t->heap_lo && addr < t->heap_hi
+        && rangelist_find(&t->pages, addr) != NULL)
+    {
+        // A precise reference into an object page, to a block that is free
+        // or holds no object: the collector freed a reachable object.
+        if (t->ndangling < (Py_ssize_t)Py_ARRAY_LENGTH(t->dangling)) {
+            t->dangling[t->ndangling].addr = addr;
+            PyOS_snprintf(t->dangling[t->ndangling].referrer,
+                          sizeof(t->dangling[0].referrer), "%.60s at %p",
+                          t->current ? Py_TYPE(t->current)->tp_name : "a root",
+                          (void *)t->current);
+        }
+        t->ndangling++;
+        t->nrejected++;
+        return;
+    }
+#endif
     if (!is_object(t, op, heap)) {
         if (!t->conservative) {
             t->nrejected++;
@@ -757,14 +801,19 @@ mark(trace_t *t, PyObject *op, int heap)
 static int
 mark_visit(PyObject *op, void *arg)
 {
+#ifdef Py_GC
+    if (((trace_t *)arg)->live) {
+        return live_visit(op, arg);
+    }
+#endif
     if (op != NULL) {
         mark((trace_t *)arg, op, 0);
     }
     return 0;
 }
 
-static int
-traverse(PyObject *op, visitproc visit, void *arg)
+int
+_PyGC_TraceTraverse(PyObject *op, visitproc visit, void *arg)
 {
     PyTypeObject *tp = Py_TYPE(op);
     if (PyType_Check(op)
@@ -792,9 +841,11 @@ drain(trace_t *t)
     t->conservative = 0;
     while (t->sp > 0 && !t->oom) {
         PyObject *op = t->stack[--t->sp];
+        t->current = op;
         mark(t, (PyObject *)Py_TYPE(op), 0);
-        (void)traverse(op, mark_visit, t);
+        (void)_PyGC_TraceTraverse(op, mark_visit, t);
     }
+    t->current = NULL;
     t->conservative = conservative;
 }
 
@@ -812,6 +863,14 @@ static void
 scan_range(trace_t *t, uintptr_t start, uintptr_t end)
 {
     start = _Py_SIZE_ROUND_UP(start, sizeof(uintptr_t));
+#ifdef Py_GC
+    // With one thread, every range the live collector scans is mapped, and
+    // it does not read the mappings.
+    if (t->live && t->readable.n == 0) {
+        live_scan_words(t, start, end);
+        return;
+    }
+#endif
     while (start < end) {
         // Clip to readable memory.
         const range_t *r = rangelist_find(&t->readable, start);
@@ -834,6 +893,13 @@ scan_range(trace_t *t, uintptr_t start, uintptr_t end)
             continue;
         }
         uintptr_t stop = Py_MIN(end, r->end);
+#ifdef Py_GC
+        if (t->live) {
+            live_scan_words(t, start, stop);
+            start = stop;
+            continue;
+        }
+#endif
         int conservative = t->conservative;
         t->conservative = 1;
         for (uintptr_t *p = (uintptr_t *)start; (uintptr_t)p + sizeof(uintptr_t) <= stop; p++) {
@@ -875,48 +941,11 @@ scan_queued(trace_t *t)
 
 /* --- register capture ---------------------------------------------------- */
 
-/* Store the callee-saved registers in regs.  regs is passed in a register
-   that is not callee-saved, so that computing it cannot overwrite one. */
-static inline __attribute__((always_inline)) void
-capture_registers(uintptr_t *regs)
-{
-#if defined(__GNUC__) && defined(__x86_64__)
-    __asm__ volatile(
-        "movq %%rbx, 0(%0)\n\t"
-        "movq %%rbp, 8(%0)\n\t"
-        "movq %%r12, 16(%0)\n\t"
-        "movq %%r13, 24(%0)\n\t"
-        "movq %%r14, 32(%0)\n\t"
-        "movq %%r15, 40(%0)\n\t"
-        : : "D"(regs) : "memory");
-#elif defined(__GNUC__) && defined(__aarch64__)
-    register uintptr_t *p __asm__("x9") = regs;
-    __asm__ volatile(
-        "stp x19, x20, [%0, #0]\n\t"
-        "stp x21, x22, [%0, #16]\n\t"
-        "stp x23, x24, [%0, #32]\n\t"
-        "stp x25, x26, [%0, #48]\n\t"
-        "stp x27, x28, [%0, #64]\n\t"
-        "str x29, [%0, #80]\n\t"
-        "stp d8, d9, [%0, #88]\n\t"
-        "stp d10, d11, [%0, #104]\n\t"
-        "stp d12, d13, [%0, #120]\n\t"
-        "stp d14, d15, [%0, #136]\n\t"
-        : : "r"(p) : "memory");
-#else
-    // setjmp() stores the callee-saved registers, though some C libraries
-    // mangle the stack and frame pointers.
-    jmp_buf buf;
-    (void)setjmp(buf);
-    memcpy(regs, &buf, Py_MIN(sizeof(buf), 24 * sizeof(uintptr_t)));
-#endif
-}
-
 Py_NO_INLINE void
 _PyGC_TraceCaptureThread(void)
 {
     uintptr_t regs[24] = {0};
-    capture_registers(regs);
+    _PyGC_CaptureRegisters(regs);
     PyThreadState *tstate = _PyThreadState_GET();
     if (tstate == NULL) {
         return;
@@ -945,7 +974,7 @@ static Py_NO_INLINE void
 scan_current_thread(trace_t *t, PyThreadState *tstate)
 {
     uintptr_t regs[24] = {0};
-    capture_registers(regs);
+    _PyGC_CaptureRegisters(regs);
     scan_range(t, (uintptr_t)regs, (uintptr_t)(regs + 24));
     uintptr_t top = stack_top(tstate);
     uintptr_t here = (uintptr_t)__builtin_frame_address(0);
@@ -1058,8 +1087,8 @@ scan_structs(trace_t *t)
 
 /* --- precise roots ------------------------------------------------------- */
 
-static int
-visit_frames(PyThreadState *p, visitproc visit, void *arg)
+int
+_PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
 {
     for (_PyInterpreterFrame *f = p->current_frame; f != NULL; f = f->previous) {
         if (f->owner >= FRAME_OWNED_BY_INTERPRETER) {
@@ -1075,8 +1104,8 @@ visit_frames(PyThreadState *p, visitproc visit, void *arg)
     return 0;
 }
 
-static int
-visit_tstate(PyThreadState *p, visitproc visit, void *arg)
+int
+_PyGC_TraceVisitThreadState(PyThreadState *p, visitproc visit, void *arg)
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)p;
     Py_VISIT(p->c_profileobj);
@@ -1105,8 +1134,8 @@ visit_tstate(PyThreadState *p, visitproc visit, void *arg)
     return 0;
 }
 
-static int
-visit_interp(PyInterpreterState *interp, visitproc visit, void *arg)
+int
+_PyGC_TraceVisitInterp(PyInterpreterState *interp, visitproc visit, void *arg)
 {
     Py_VISIT(interp->sysdict);
     Py_VISIT(interp->builtins);
@@ -1178,17 +1207,17 @@ mark_precise_roots(trace_t *t)
     if (t->roots & (_PyGC_TRACE_ROOT_FRAMES | _PyGC_TRACE_ROOT_TSTATE)) {
         _Py_FOR_EACH_TSTATE_UNLOCKED(interp, p) {
             if (t->roots & _PyGC_TRACE_ROOT_FRAMES) {
-                (void)visit_frames(p, mark_visit, t);
+                (void)_PyGC_TraceVisitFrames(p, mark_visit, t);
                 drain(t);
             }
             if (t->roots & _PyGC_TRACE_ROOT_TSTATE) {
-                (void)visit_tstate(p, mark_visit, t);
+                (void)_PyGC_TraceVisitThreadState(p, mark_visit, t);
                 drain(t);
             }
         }
     }
     if (t->roots & _PyGC_TRACE_ROOT_INTERP) {
-        (void)visit_interp(interp, mark_visit, t);
+        (void)_PyGC_TraceVisitInterp(interp, mark_visit, t);
         drain(t);
     }
     if (t->roots & _PyGC_TRACE_ROOT_TYPES) {
@@ -1208,6 +1237,529 @@ mark_precise_roots(trace_t *t)
         }
     }
 }
+
+
+#ifdef Py_GC
+/* --- the live collector (note 06, step 5a) ----------------------------------
+
+   The same roots and the same conservative scans as the verifier, but the
+   mark state is in the object headers: _Py_GC_MARKED_FLAG, and
+   _Py_GC_SHALLOW_FLAG for an object that a conservative root reached and
+   that was not safe to traverse.  An address is an object if it lies in a
+   page of the object heaps, at the object's offset in its block, and the
+   block has the header magic (_PyGC_IsObjectHeader()).  A precise reference
+   to anything else is not followed: it is a static object, whose memory the
+   data segment scan covers, or an object of another interpreter's heaps.
+   Immortal heap objects are never marked; the live collector keeps a list of
+   those that refer to others and traverses them as roots.
+
+   The interpreters that share the main interpreter's object allocator share
+   objects (a single-phase init module's m_copy), so they are collected
+   together, as one domain. */
+
+static int
+shares_main_heap(PyInterpreterState *interp)
+{
+    return _Py_IsMainInterpreter(interp)
+        || (interp->feature_flags & Py_RTFLAGS_USE_MAIN_OBMALLOC);
+}
+
+/* The interpreters collected with interp.  The caller holds the head lock. */
+static int
+live_domain(trace_t *t, PyInterpreterState *interp)
+{
+    t->ndomain = 0;
+    if (!shares_main_heap(interp)) {
+        t->domain[t->ndomain++] = interp;
+        return 0;
+    }
+    for (PyInterpreterState *i = _PyRuntime.interpreters.head; i != NULL;
+         i = i->next)
+    {
+        if (!shares_main_heap(i)) {
+            continue;
+        }
+        if (t->ndomain == (int)Py_ARRAY_LENGTH(t->domain)) {
+            return -1;
+        }
+        t->domain[t->ndomain++] = i;
+    }
+    return 0;
+}
+
+/* The object at addr, or containing addr if interior is set, or NULL. */
+static inline PyObject *
+live_lookup(const trace_t *t, uintptr_t addr, int interior)
+{
+    if (addr < t->heap_lo || addr >= t->heap_hi) {
+        return NULL;
+    }
+    const range_t *r = rangelist_find(&t->pages, addr);
+    if (r == NULL) {
+        return NULL;
+    }
+    uintptr_t block = r->start + (addr - r->start) / r->bsize * r->bsize;
+    uintptr_t op = block + r->offset;
+    if (op != addr && !interior) {
+        return NULL;
+    }
+    if (!_PyGC_IsObjectHeader((PyObject *)op)) {
+        return NULL;
+    }
+    return (PyObject *)op;
+}
+
+/* Can an object that only a conservative root reached be traversed?  An
+   untracked GC object other than a tuple may be under construction, and a
+   non-GC type with a traverse function has no flag to say that it is not. */
+static inline int
+live_safe_to_traverse(PyObject *op)
+{
+    PyTypeObject *tp = Py_TYPE(op);
+    if (tp->tp_traverse == NULL) {
+        return 1;
+    }
+    if (!_PyObject_IS_GC(op)) {
+        return 0;
+    }
+    return (op->ob_flags & _Py_GC_TRACKED_FLAG) || PyTuple_Check(op);
+}
+
+static inline void
+live_mark(trace_t *t, PyObject *op, int conservative)
+{
+    uint16_t flags = op->ob_flags;
+    if (flags & _Py_IMMORTAL_FLAGS) {
+        return;  // a root, traversed from the immortal list
+    }
+    if (flags & _Py_GC_MARKED_FLAG) {
+        if ((flags & _Py_GC_SHALLOW_FLAG) && !conservative) {
+            // A precise reference to an object marked without traversal
+            op->ob_flags = flags & ~_Py_GC_SHALLOW_FLAG;
+            push(t, op);
+        }
+        return;
+    }
+    t->nmarked++;
+    if (conservative && !live_safe_to_traverse(op)) {
+        op->ob_flags = flags | _Py_GC_MARKED_FLAG | _Py_GC_SHALLOW_FLAG;
+        t->nshallow++;
+        /* Its fields cannot be trusted as objects, but its words can be
+           scanned: a set or dict being filled holds its members in a table
+           it owns. */
+        queue_object_block(t, (uintptr_t)op);
+        return;
+    }
+    op->ob_flags = flags | _Py_GC_MARKED_FLAG;
+    PyTypeObject *tp = Py_TYPE(op);
+    if (tp->tp_traverse == NULL && !(tp->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
+        return;  // a leaf
+    }
+    push(t, op);
+}
+
+#ifdef Py_DEBUG
+/* A precise reference into an object page that is not an object: in a debug
+   build a freed block is filled with PYMEM_DEADBYTE, and finding that where
+   the type should be means the collector freed a reachable object. */
+static void
+live_check_dangling(trace_t *t, uintptr_t addr)
+{
+    if (addr < t->heap_lo || addr >= t->heap_hi
+        || rangelist_find(&t->pages, addr) == NULL
+        || (addr & (sizeof(void *) - 1)) != 0)
+    {
+        return;
+    }
+    if (*(uintptr_t *)(addr + sizeof(uintptr_t)) == (uintptr_t)0xDDDDDDDDDDDDDDDDULL) {
+        fprintf(stderr, "gc: %s at %p refers to a freed object at %p\n",
+                t->current ? Py_TYPE(t->current)->tp_name : "a root",
+                (void *)t->current, (void *)addr);
+        Py_FatalError("the collector freed a reachable object");
+    }
+}
+#endif
+
+static int
+live_visit(PyObject *op, void *arg)
+{
+    trace_t *t = arg;
+    PyObject *o = live_lookup(t, (uintptr_t)op, 0);
+    if (o != NULL) {
+        live_mark(t, o, 0);
+    }
+#ifdef Py_DEBUG
+    else if (op != NULL) {
+        live_check_dangling(t, (uintptr_t)op);
+    }
+#endif
+    return 0;
+}
+
+static void
+live_drain(trace_t *t)
+{
+    while (t->sp > 0 && !t->oom) {
+        PyObject *op = t->stack[--t->sp];
+        t->current = op;
+        (void)live_visit((PyObject *)Py_TYPE(op), t);
+        (void)_PyGC_TraceTraverse(op, live_visit, t);
+    }
+    t->current = NULL;
+}
+
+/* Traverse a root object that is not marked: a static type, or an immortal
+   heap object. */
+static int
+live_traverse_root(PyObject *op, void *arg)
+{
+    trace_t *t = arg;
+    t->current = op;
+    (void)_PyGC_TraceTraverse(op, live_visit, t);
+    live_drain(t);
+    return 0;
+}
+
+static void
+live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop)
+{
+    for (uintptr_t *p = (uintptr_t *)start;
+         (uintptr_t)p + sizeof(uintptr_t) <= stop; p++)
+    {
+        uintptr_t w = *p;
+        PyObject *op = live_lookup(t, w, 1);
+        if (op != NULL) {
+            live_mark(t, op, 1);
+            live_drain(t);
+        }
+        else if (t->scan_mem && w >= t->mem_lo && w < t->mem_hi) {
+            queue_mem_block(t, w);
+        }
+    }
+}
+
+struct live_walk {
+    trace_t *t;
+    size_t offset;
+    size_t presize;
+    int pages;            // record the pages, not the blocks
+    int mem;              // the pages are mem heap pages
+    _PyGCMarkResult *res;
+    size_t dead_cap;
+    PyObject **objs;      // for _PyGC_TraceLiveHeapObjects()
+    size_t nobjs;
+    size_t objs_cap;
+    int failed;
+};
+
+static bool
+live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
+                void *block, size_t block_size, void *arg)
+{
+    struct live_walk *w = arg;
+    trace_t *t = w->t;
+    if (w->pages) {
+        if (block != NULL || area->used == 0) {
+            return true;
+        }
+        uintptr_t start = (uintptr_t)area->blocks;
+        rangelist *l = w->mem ? &t->mem_pages : &t->pages;
+        if (rangelist_add(l, start, start + area->reserved,
+                          area->full_block_size, w->offset) < 0) {
+            t->oom = 1;
+            return false;
+        }
+        return true;
+    }
+    if (block == NULL) {
+        return true;
+    }
+    PyObject *op = (PyObject *)((char *)block + w->offset);
+    if (!_PyGC_IsObjectHeader(op)) {
+        return true;
+    }
+    if (w->objs != NULL || w->res == NULL) {
+        // Listing the objects
+        if (w->failed) {
+            return false;
+        }
+        if (w->nobjs == w->objs_cap) {
+            size_t cap = w->objs_cap ? w->objs_cap * 2 : 4096;
+            PyObject **objs = realloc(w->objs, cap * sizeof(PyObject *));
+            if (objs == NULL) {
+                w->failed = 1;
+                return false;
+            }
+            w->objs = objs;
+            w->objs_cap = cap;
+        }
+        w->objs[w->nobjs++] = op;
+        return true;
+    }
+    _PyGCMarkResult *res = w->res;
+    res->nobjects++;
+    uint16_t flags = op->ob_flags;
+    if (flags & _Py_GC_MARKED_FLAG) {
+        op->ob_flags = flags & ~(_Py_GC_MARKED_FLAG | _Py_GC_SHALLOW_FLAG);
+        res->live_bytes += block_size;
+        return true;
+    }
+    if ((flags & _Py_IMMORTAL_FLAGS) || w->failed) {
+        // After a failure everything is kept, and the walk goes on only to
+        // clear the marks.
+        res->live_bytes += block_size;
+        return true;
+    }
+    if ((size_t)res->ndead == w->dead_cap) {
+        size_t cap = w->dead_cap ? w->dead_cap * 2 : 4096;
+        _PyGCDeadObject *dead = realloc(res->dead, cap * sizeof(*dead));
+        if (dead == NULL) {
+            w->failed = 1;
+            res->live_bytes += block_size;
+            return true;
+        }
+        res->dead = dead;
+        w->dead_cap = cap;
+    }
+    op->ob_flags = flags | _Py_GC_DEAD_FLAG;
+    res->dead[res->ndead++] = (_PyGCDeadObject){
+        op, (uint32_t)block_size, (uint32_t)w->presize};
+    return true;
+}
+
+/* Visit the object heaps (and, for the page tables, the mem heaps) of every
+   thread state of the domain and of its exited threads.  The caller holds
+   the head lock. */
+static int
+live_walk_heaps(trace_t *t, struct live_walk *w)
+{
+    static const int tags[] = {
+        _Py_MIMALLOC_HEAP_OBJECT, _Py_MIMALLOC_HEAP_GC, _Py_MIMALLOC_HEAP_GC_PRE,
+    };
+    bool all = !w->pages;
+    int ok = 1;
+    for (int d = 0; ok && d < t->ndomain; d++) {
+        PyInterpreterState *interp = t->domain[d];
+        _Py_FOR_EACH_TSTATE_UNLOCKED(interp, p) {
+            struct _mimalloc_thread_state *m =
+                &((_PyThreadStateImpl *)p)->mimalloc;
+            if (m->current_object_heap == NULL) {
+                continue;  // not bound yet
+            }
+            for (size_t i = 0; ok && i < Py_ARRAY_LENGTH(tags); i++) {
+                w->offset = heap_offset(t, tags[i]);
+                w->presize = w->offset - t->debug_offset;
+                w->mem = 0;
+                ok = mi_heap_visit_blocks(&m->heaps[tags[i]], all,
+                                          live_walk_block, w);
+            }
+            if (ok && w->pages) {
+                w->offset = 0;
+                w->mem = 1;
+                ok = mi_heap_visit_blocks(&m->heaps[_Py_MIMALLOC_HEAP_MEM],
+                                          false, live_walk_block, w);
+            }
+            if (!ok) {
+                break;
+            }
+        }
+        mi_subproc_t *subproc = interp->mimalloc.subproc;
+        for (size_t i = 0; ok && i < Py_ARRAY_LENGTH(tags); i++) {
+            w->offset = heap_offset(t, tags[i]);
+            w->presize = w->offset - t->debug_offset;
+            w->mem = 0;
+            ok = mi_abandoned_visit_blocks(subproc, tags[i], all,
+                                           live_walk_block, w);
+        }
+        if (ok && w->pages) {
+            w->offset = 0;
+            w->mem = 1;
+            ok = mi_abandoned_visit_blocks(subproc, _Py_MIMALLOC_HEAP_MEM,
+                                           false, live_walk_block, w);
+        }
+    }
+    if (!ok || t->oom || w->failed) {
+        return -1;
+    }
+    return 0;
+}
+
+static int
+live_build_pages(trace_t *t)
+{
+    struct live_walk w = {.t = t, .pages = 1};
+    if (live_walk_heaps(t, &w) < 0) {
+        return -1;
+    }
+    rangelist_sort(&t->pages);
+    rangelist_sort(&t->mem_pages);
+    t->heap_lo = t->heap_hi = 0;
+    if (t->pages.n > 0) {
+        t->heap_lo = t->pages.items[0].start;
+        t->heap_hi = t->pages.items[t->pages.n - 1].end;
+    }
+    t->mem_lo = t->mem_hi = 0;
+    if (t->mem_pages.n > 0) {
+        t->mem_lo = t->mem_pages.items[0].start;
+        t->mem_hi = t->mem_pages.items[t->mem_pages.n - 1].end;
+    }
+    return 0;
+}
+
+/* Does another thread of the domain have a stack to scan?  Then the scans
+   clip to the readable mappings: a recorded stack can belong to a thread
+   that has exited. */
+static int
+live_other_threads(trace_t *t, PyThreadState *current)
+{
+    for (int d = 0; d < t->ndomain; d++) {
+        _Py_FOR_EACH_TSTATE_UNLOCKED(t->domain[d], p) {
+            if (p != current && ((_PyThreadStateImpl *)p)->gc_trace.valid) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+static void
+live_mark_roots(trace_t *t, PyThreadState *tstate)
+{
+    // Precise roots
+    t->conservative = 0;
+    for (int d = 0; d < t->ndomain && !t->oom; d++) {
+        PyInterpreterState *interp = t->domain[d];
+        t->interp = interp;
+        _Py_FOR_EACH_TSTATE_UNLOCKED(interp, p) {
+            (void)_PyGC_TraceVisitFrames(p, live_visit, t);
+            live_drain(t);
+            (void)_PyGC_TraceVisitThreadState(p, live_visit, t);
+            live_drain(t);
+        }
+        (void)_PyGC_TraceVisitInterp(interp, live_visit, t);
+        live_drain(t);
+        Py_ssize_t ntypes;
+        PyTypeObject **types = _PyGC_TraceStaticTypes(interp, &ntypes);
+        for (Py_ssize_t i = 0; i < ntypes; i++) {
+            (void)live_traverse_root((PyObject *)types[i], t);
+        }
+        (void)_PyGC_LiveVisitRoots(interp, live_visit, t);
+        live_drain(t);
+    }
+    // Conservative roots: the C stacks and registers, and the mem blocks
+    // they point into, transitively.
+    t->scan_mem = 1;
+    scan_current_thread(t, tstate);
+    for (int d = 0; d < t->ndomain && !t->oom; d++) {
+        t->interp = t->domain[d];
+        _Py_FOR_EACH_TSTATE_UNLOCKED(t->interp, p) {
+            if (p == tstate) {
+                continue;
+            }
+            _PyThreadStateImpl *ts = (_PyThreadStateImpl *)p;
+            if (!ts->gc_trace.valid) {
+                continue;  // never attached
+            }
+            scan_range(t, (uintptr_t)ts->gc_trace.regs,
+                       (uintptr_t)(ts->gc_trace.regs + 24));
+            uintptr_t top = stack_top(p);
+            if (top > ts->gc_trace.sp) {
+                scan_range(t, ts->gc_trace.sp, top);
+            }
+        }
+    }
+    t->scan_mem = 0;
+    scan_queued(t);
+    // The data segments, then the thread and interpreter structs
+    scan_data_segments(t);
+    scan_queued(t);
+    for (int d = 0; d < t->ndomain && !t->oom; d++) {
+        t->interp = t->domain[d];
+        scan_structs(t);
+        scan_queued(t);
+    }
+    t->interp = tstate->interp;
+}
+
+static void
+live_fini(trace_t *t)
+{
+    addrset_fini(&t->mem_scanned);
+    free(t->mem_stack);
+    rangelist_fini(&t->pages);
+    rangelist_fini(&t->mem_pages);
+    rangelist_fini(&t->readable);
+    free(t->stack);
+}
+
+int
+_PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
+{
+    *res = (_PyGCMarkResult){0};
+    trace_t t = {
+        .interp = tstate->interp,
+        .live = 1,
+        .debug_offset = _PyMem_DebugEnabled() ? 2 * sizeof(size_t) : 0,
+    };
+    int rc = -1;
+    if (addrset_init(&t.mem_scanned, 256) < 0) {
+        goto done;
+    }
+    HEAD_LOCK(&_PyRuntime);
+    if (live_domain(&t, tstate->interp) < 0
+        || live_build_pages(&t) < 0
+        || (live_other_threads(&t, tstate) && read_mappings(&t) < 0))
+    {
+        HEAD_UNLOCK(&_PyRuntime);
+        goto done;
+    }
+    live_mark_roots(&t, tstate);
+    /* The walk clears every mark, also after a failure, when it lists
+       nothing. */
+    struct live_walk w = {.t = &t, .res = res, .failed = t.oom};
+    int walked = live_walk_heaps(&t, &w);
+    HEAD_UNLOCK(&_PyRuntime);
+    res->nmarked = t.nmarked;
+    res->nshallow = t.nshallow;
+    if (walked < 0 || w.failed) {
+        for (Py_ssize_t i = 0; i < res->ndead; i++) {
+            res->dead[i].op->ob_flags &= ~_Py_GC_DEAD_FLAG;
+        }
+        free(res->dead);
+        res->dead = NULL;
+        res->ndead = 0;
+        goto done;
+    }
+    rc = 0;
+done:
+    live_fini(&t);
+    return rc;
+}
+
+PyObject **
+_PyGC_TraceLiveHeapObjects(PyInterpreterState *interp, Py_ssize_t *n)
+{
+    trace_t t = {
+        .interp = interp,
+        .live = 1,
+        .debug_offset = _PyMem_DebugEnabled() ? 2 * sizeof(size_t) : 0,
+    };
+    struct live_walk w = {.t = &t};
+    HEAD_LOCK(&_PyRuntime);
+    int rc = live_domain(&t, interp);
+    if (rc == 0) {
+        rc = live_walk_heaps(&t, &w);
+    }
+    HEAD_UNLOCK(&_PyRuntime);
+    if (rc < 0) {
+        free(w.objs);
+        *n = -1;
+        return NULL;
+    }
+    *n = (Py_ssize_t)w.nobjs;
+    return w.objs;
+}
+#endif  /* Py_GC */
 
 
 /* --- holes ------------------------------------------------------------------ */
@@ -1348,7 +1900,7 @@ remove_garbage(trace_t *t, trace_hole *list, Py_ssize_t n)
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *op = (PyObject *)list[i].addr;
         if (safe_to_traverse(op)) {
-            (void)traverse(op, subtract_visit, &s);
+            (void)_PyGC_TraceTraverse(op, subtract_visit, &s);
         }
     }
     for (size_t i = 0; i <= t->objects.mask; i++) {
@@ -1368,7 +1920,7 @@ remove_garbage(trace_t *t, trace_hole *list, Py_ssize_t n)
         if (!addrset_has(&t->shallow, addr) || addrset_has(&t->deepened, addr)) {
             continue;
         }
-        (void)traverse(op, subtract_visit, &s);
+        (void)_PyGC_TraceTraverse(op, subtract_visit, &s);
     }
     held_search hs = {.s = &s, .stack = malloc(n * sizeof(trace_hole *))};
     if (hs.stack == NULL) {
@@ -1384,7 +1936,7 @@ remove_garbage(trace_t *t, trace_hole *list, Py_ssize_t n)
     while (hs.sp > 0) {
         PyObject *op = (PyObject *)hs.stack[--hs.sp]->addr;
         if (safe_to_traverse(op)) {
-            (void)traverse(op, held_visit, &hs);
+            (void)_PyGC_TraceTraverse(op, held_visit, &hs);
         }
     }
     free(hs.stack);
@@ -1512,7 +2064,7 @@ find_referrers(trace_t *t, trace_hole *list, Py_ssize_t n)
             continue;
         }
         s.referrer = (PyObject *)op;
-        (void)traverse((PyObject *)op, referrer_visit, &s);
+        (void)_PyGC_TraceTraverse((PyObject *)op, referrer_visit, &s);
     }
     HEAD_LOCK(&_PyRuntime);
     _Py_FOR_EACH_TSTATE_UNLOCKED(t->interp, p) {
@@ -1808,8 +2360,27 @@ verify(PyThreadState *tstate)
     if (t.oom) {
         goto done;
     }
+#ifdef Py_GC
+    /* Nothing is counted, so there are no holes to find.  The check is that
+       the collector freed nothing the mark reaches. */
+    (void)find_holes;
+    (void)report;
+    nholes = t.ndangling;
+    if (nholes > 0) {
+        fprintf(stderr, "gc verify: %zd dangling references; %zd objects, "
+                "%zd marked\n", nholes, t.nobjects, t.nmarked);
+        for (Py_ssize_t i = 0;
+             i < Py_MIN(nholes, (Py_ssize_t)Py_ARRAY_LENGTH(t.dangling)); i++)
+        {
+            fprintf(stderr, "gc verify: dangling %p from %s\n",
+                    (void *)t.dangling[i].addr, t.dangling[i].referrer);
+        }
+        fflush(stderr);
+    }
+#else
     nholes = find_holes(&t);
     report(&t, tstate, nholes);
+#endif
 done:
     trace_fini(&t);
     ts->verifying = 0;
@@ -1883,6 +2454,18 @@ _PyGC_TraceGetHoles(PyInterpreterState *interp)
         Py_DECREF(item);
     }
     return list;
+}
+
+PyTypeObject **
+_PyGC_TraceStaticTypes(PyInterpreterState *interp, Py_ssize_t *n)
+{
+    struct _gc_trace_state *ts = interp->gc.trace;
+    if (ts == NULL) {
+        *n = 0;
+        return NULL;
+    }
+    *n = ts->n_static_types;
+    return ts->static_types;
 }
 
 void
@@ -2019,7 +2602,58 @@ _PyGC_RemoveRoot(_PyGCRoot *root)
     root->prev = root->next = NULL;
 }
 
+/* The public pair: a root for one PyObject* variable.  The node comes from
+   the raw allocator so that it is not itself in a scanned heap. */
+int
+PyGC_AddRoot(PyObject **ref)
+{
+    _PyGCRoot *root = PyMem_RawMalloc(sizeof(_PyGCRoot));
+    if (root == NULL) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    _PyGC_AddRoot(root, ref, 1);
+    return 0;
+}
+
+void
+PyGC_RemoveRoot(PyObject **ref)
+{
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    _PyGCRoot *found = NULL;
+    HEAD_LOCK(&_PyRuntime);
+    for (_PyGCRoot *r = interp->gc.trace_roots; r != NULL; r = r->next) {
+        if (r->objs == ref && r->n == 1) {
+            found = r;
+            break;
+        }
+    }
+    HEAD_UNLOCK(&_PyRuntime);
+    if (found != NULL) {
+        _PyGC_RemoveRoot(found);
+        PyMem_RawFree(found);
+    }
+}
+
 #else  /* !WITH_MIMALLOC || Py_GIL_DISABLED */
+
+int
+PyGC_AddRoot(PyObject **ref)
+{
+    return 0;
+}
+
+void
+PyGC_RemoveRoot(PyObject **ref)
+{
+}
+
+PyTypeObject **
+_PyGC_TraceStaticTypes(PyInterpreterState *interp, Py_ssize_t *n)
+{
+    *n = 0;
+    return NULL;
+}
 
 void
 _PyGC_AddRoot(_PyGCRoot *root, PyObject **objs, Py_ssize_t n)

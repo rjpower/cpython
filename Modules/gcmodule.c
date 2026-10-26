@@ -6,6 +6,7 @@
 
 #include "Python.h"
 #include "pycore_gc.h"
+#include "pycore_gc_trace.h"  // _PyGC_LiveGetStats()
 #include "pycore_object.h"      // _PyObject_IS_GC()
 #include "pycore_pyatomic_ft_wrappers.h"  // FT_ATOMIC_LOAD_INT_RELAXED()
 #include "pycore_pystate.h"     // _PyInterpreterState_GET()
@@ -159,7 +160,20 @@ gc_set_threshold_impl(PyObject *module, int threshold0, int group_right_1,
 {
     GCState *gcstate = get_gc_state();
 
-#ifndef Py_GIL_DISABLED
+#if defined(Py_GC)
+    /* The tracing collector collects when the bytes allocated since the last
+       collection pass max(threshold0, the bytes live after it).  The other
+       thresholds are kept but unused. */
+    gcstate->alloc_threshold = threshold0 > 0 ? threshold0 : 0;
+    gcstate->alloc_limit = threshold0 > 0
+        ? gcstate->alloc_bytes + threshold0 : PY_SSIZE_T_MAX;
+    if (group_right_1) {
+        gcstate->generations[1].threshold = threshold1;
+    }
+    if (group_right_2) {
+        gcstate->generations[2].threshold = threshold2;
+    }
+#elif !defined(Py_GIL_DISABLED)
     gcstate->generations[0].threshold = threshold0;
     if (group_right_1) {
         gcstate->generations[1].threshold = threshold1;
@@ -193,7 +207,12 @@ gc_get_threshold_impl(PyObject *module)
 /*[clinic end generated code: output=7902bc9f41ecbbd8 input=286d79918034d6e6]*/
 {
     GCState *gcstate = get_gc_state();
-#ifndef Py_GIL_DISABLED
+#if defined(Py_GC)
+    return Py_BuildValue("(nii)",
+                         gcstate->alloc_threshold,
+                         gcstate->generations[1].threshold,
+                         gcstate->generations[2].threshold);
+#elif !defined(Py_GIL_DISABLED)
     return Py_BuildValue("(iii)",
                          gcstate->generations[0].threshold,
                          gcstate->generations[1].threshold,
@@ -230,7 +249,10 @@ gc_get_count_impl(PyObject *module)
     }
 #endif
 
-#ifndef Py_GIL_DISABLED
+#if defined(Py_GC)
+    // The bytes allocated since the last collection
+    return Py_BuildValue("(nii)", gcstate->alloc_bytes, 0, 0);
+#elif !defined(Py_GIL_DISABLED)
     return Py_BuildValue("(iii)",
                          gcstate->generations[0].count,
                          gcstate->generations[1].count,
@@ -404,6 +426,25 @@ gc_get_stats_impl(PyObject *module)
                             );
         if (dict == NULL)
             goto error;
+#ifdef Py_GC
+        // Every collection is of the whole heap, counted as generation 2.
+        if (i == NUM_GENERATIONS - 1) {
+            Py_ssize_t bytes_freed, live_bytes;
+            double pause_max;
+            _PyGC_LiveGetStats(_PyInterpreterState_GET(), &bytes_freed,
+                               &live_bytes, &pause_max);
+            PyObject *v = Py_BuildValue("{snsnsd}",
+                                        "bytes_freed", bytes_freed,
+                                        "live_bytes", live_bytes,
+                                        "max_pause", pause_max);
+            if (v == NULL || PyDict_Update(dict, v) < 0) {
+                Py_XDECREF(v);
+                Py_DECREF(dict);
+                goto error;
+            }
+            Py_DECREF(v);
+        }
+#endif
         if (PyList_Append(result, dict)) {
             Py_DECREF(dict);
             goto error;

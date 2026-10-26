@@ -278,9 +278,34 @@ struct _gc_runtime_state {
     int trace_mode;
     struct _gc_trace_state *trace;
     struct _PyGCRoot *trace_roots;
+
+#ifdef Py_GC
+    /* The live tracing collector (Python/gc_live.c).  PyObject_Malloc() and
+       PyMem_Malloc() add to alloc_bytes; an object allocation collects when
+       it passes alloc_limit.  alloc_limit is alloc_threshold after a
+       collection, and further while a collection cannot run. */
+    Py_ssize_t alloc_bytes;
+    Py_ssize_t alloc_limit;
+    Py_ssize_t alloc_threshold;
+    /* Set while the sweep calls tp_dealloc: PyObject_Free() leaves the
+       blocks of dead objects for the sweep to free afterwards. */
+    int sweeping;
+    struct _gc_live_state *live;
+#endif
 };
 
-#ifndef Py_GIL_DISABLED
+#if defined(Py_GC)
+/* No automatic collection until _PyGC_Init() has set alloc_limit. */
+#define GC_GENERATION_INIT \
+    .generations = { \
+        { .threshold = 2000, }, \
+        { .threshold = 10, }, \
+        { .threshold = 10, }, \
+    }, \
+    .heap_size = 0, \
+    .alloc_limit = PY_SSIZE_T_MAX, \
+    .alloc_threshold = 32 * 1024 * 1024,
+#elif !defined(Py_GIL_DISABLED)
 #define GC_GENERATION_INIT \
     .generations = { \
         { .threshold = 2000, }, \

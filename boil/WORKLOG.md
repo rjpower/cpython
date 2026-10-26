@@ -1369,3 +1369,28 @@ Since milestone 3:
 
 Note 06 §16 records the decisions, the ports and the measurements.
 Step 5b took about seven and a quarter hours of a three-day budget.
+
+### 2026-10-26 13:15 — step 5b landed; step 5c launched
+
+Step 5b handed back at f58c4aeb94a (pushed) and the gate was re-run here:
+dev-default rung 2 plus test_gc_verify (9 files, 1,067 tests, pass);
+all eight ports rebuilt from scratch and checked on gc-default under
+cpython-3.16-gc-v0 (PASS; patch lines numpy 535, cython 44, cffi 10,
+others 0); full suite on gc-default, -j8 (556 files, 50,819 tests,
+5 min 21 s). The full suite failed test_sys (pre-existing remote-exec
+timeout) and test_profiling. test_profiling passes alone (481 tests) and
+fails when four copies run concurrently: test_profile
+`test_calling_conventions` reports no `:0(max)` entry and a negative
+total time for `max(*([0],), key=int)`, so the profile hook missed or
+mis-paired the C call. Repro: `build/gc-default/python -m test
+test_profiling -j4 -F --timeout 300` fails in the first round. The 5b
+agent's three full runs did not hit it. Recorded as an open item and
+handed to 5c, rung 1, since it will be a flaky test on the default build
+once the collector is default. Step 5b took about 7.25 hours of a
+three-day budget.
+
+Step 5c launched: the collector becomes the only build, the reference
+counting code is deleted, the 52 uniqueness sites are resolved, flagged
+objects are swept referrer first, trivial deallocs are freed by block,
+the ports are rebuilt on the new ABI, and the performance is measured
+against step 1 and the 5b snapshot. Budget 4 days.

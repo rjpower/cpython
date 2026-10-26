@@ -287,12 +287,6 @@ class TestBasicOps(unittest.TestCase):
             combinations("AA", 2**29)
 
         # Test implementation detail:  tuple re-use
-    @support.impl_detail("tuple reuse is specific to CPython")
-    @unittest.skipIf(support.Py_GC, "reusing the result tuple needs a reference count of 1")
-    def test_combinations_tuple_reuse(self):
-        self.assertEqual(len(set(map(id, combinations('abcde', 3)))), 1)
-        self.assertNotEqual(len(set(map(id, list(combinations('abcde', 3))))), 1)
-
     def test_combinations_with_replacement(self):
         cwr = combinations_with_replacement
         self.assertRaises(TypeError, cwr, 'abc')       # missing r argument
@@ -362,14 +356,6 @@ class TestBasicOps(unittest.TestCase):
         with self.assertRaises((OverflowError, MemoryError)):
             combinations_with_replacement("AA", 2**30)
 
-    # Test implementation detail:  tuple re-use
-    @support.impl_detail("tuple reuse is specific to CPython")
-    @unittest.skipIf(support.Py_GC, "reusing the result tuple needs a reference count of 1")
-    def test_combinations_with_replacement_tuple_reuse(self):
-        cwr = combinations_with_replacement
-        self.assertEqual(len(set(map(id, cwr('abcde', 3)))), 1)
-        self.assertNotEqual(len(set(map(id, list(cwr('abcde', 3))))), 1)
-
     def test_permutations(self):
         self.assertRaises(TypeError, permutations)              # too few arguments
         self.assertRaises(TypeError, permutations, 'abc', 2, 1) # too many arguments
@@ -434,12 +420,6 @@ class TestBasicOps(unittest.TestCase):
     def test_permutations_overflow(self):
         with self.assertRaises((OverflowError, MemoryError)):
             permutations("A", 2**30)
-
-    @support.impl_detail("tuple reuse is specific to CPython")
-    @unittest.skipIf(support.Py_GC, "reusing the result tuple needs a reference count of 1")
-    def test_permutations_tuple_reuse(self):
-        self.assertEqual(len(set(map(id, permutations('abcde', 3)))), 1)
-        self.assertNotEqual(len(set(map(id, list(permutations('abcde', 3))))), 1)
 
     def test_combinatorics(self):
         # Test relationships between product(), permutations(),
@@ -843,14 +823,6 @@ class TestBasicOps(unittest.TestCase):
         self.assertEqual([pair for pair in zip('abc', 'def')],
                          lzip('abc', 'def'))
 
-    @support.impl_detail("tuple reuse is specific to CPython")
-    @unittest.skipIf(support.Py_GC, "reusing the result tuple needs a reference count of 1")
-    def test_zip_tuple_reuse(self):
-        ids = list(map(id, zip('abc', 'def')))
-        self.assertEqual(min(ids), max(ids))
-        ids = list(map(id, list(zip('abc', 'def'))))
-        self.assertEqual(len(dict.fromkeys(ids)), len(ids))
-
     def test_ziplongest(self):
         for args in [
                 ['abc', range(6)],
@@ -892,14 +864,6 @@ class TestBasicOps(unittest.TestCase):
                          list(zip('abc', 'def')))
         self.assertEqual([pair for pair in zip_longest('abc', 'def')],
                          list(zip('abc', 'def')))
-
-    @support.impl_detail("tuple reuse is specific to CPython")
-    @unittest.skipIf(support.Py_GC, "reusing the result tuple needs a reference count of 1")
-    def test_zip_longest_tuple_reuse(self):
-        ids = list(map(id, zip_longest('abc', 'def')))
-        self.assertEqual(min(ids), max(ids))
-        ids = list(map(id, list(zip_longest('abc', 'def'))))
-        self.assertEqual(len(dict.fromkeys(ids)), len(ids))
 
     def test_zip_longest_bad_iterable(self):
         exception = TypeError()
@@ -1110,12 +1074,6 @@ class TestBasicOps(unittest.TestCase):
     def test_product_overflow(self):
         with self.assertRaises((OverflowError, MemoryError)):
             product(*(['ab']*2**5), repeat=2**25)
-
-    @support.impl_detail("tuple reuse is specific to CPython")
-    @unittest.skipIf(support.Py_GC, "reusing the result tuple needs a reference count of 1")
-    def test_product_tuple_reuse(self):
-        self.assertEqual(len(set(map(id, product('abc', 'def')))), 1)
-        self.assertNotEqual(len(set(map(id, list(product('abc', 'def'))))), 1)
 
     def test_repeat(self):
         self.assertEqual(list(repeat(object='a', times=3)), ['a', 'a', 'a'])

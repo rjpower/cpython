@@ -1714,6 +1714,146 @@ class GCTogglingTests(unittest.TestCase):
         self.assertEqual(i, 50001)
 
 
+@unittest.skipUnless(support.Py_GC, "needs the tracing collector")
+class TracingCollectorTests(unittest.TestCase):
+    """The behaviour that the tracing collector of --with-gc adds."""
+
+    # The conservative scan of C stacks can keep one attempt's garbage alive;
+    # the tests that need garbage freed try again with new objects.
+    ATTEMPTS = 5
+
+    def setUp(self):
+        gc.collect()
+        gc.enable()
+        self.addCleanup(gc.disable)
+
+    def test_threshold_is_bytes(self):
+        self.assertEqual(gc.get_threshold()[0], 32 * 1024 * 1024)
+        gc.collect()
+        before = gc.get_count()[0]
+        junk = [bytes(1000) for _ in range(1000)]
+        self.assertGreaterEqual(gc.get_count()[0] - before, 1000 * 1000)
+        self.assertEqual(gc.get_count()[1:], (0, 0))
+        gc.collect()
+        self.assertLess(gc.get_count()[0], 1000 * 1000)
+        del junk
+
+    def collections_while_allocating(self, nbytes):
+        starts = []
+        def callback(phase, info):
+            if phase == "start":
+                starts.append(info["generation"])
+        gc.callbacks.append(callback)
+        try:
+            for _ in range(nbytes // 1000):
+                bytes(1000)
+        finally:
+            gc.callbacks.remove(callback)
+        return starts
+
+    @gc_threshold(1024 * 1024)
+    def test_allocation_triggers_collection(self):
+        # The garbage keeps the live heap below the allocated bytes.
+        self.assertGreater(len(self.collections_while_allocating(20 << 20)),
+                           0)
+
+    @gc_threshold(1024 * 1024)
+    def test_disable_stops_automatic_collection(self):
+        gc.disable()
+        self.assertEqual(self.collections_while_allocating(20 << 20), [])
+
+    @gc_threshold(0)
+    def test_threshold_zero(self):
+        self.assertEqual(self.collections_while_allocating(20 << 20), [])
+
+    def test_get_stats(self):
+        stats = gc.get_stats()[2]
+        for key in ("bytes_freed", "live_bytes", "max_pause"):
+            self.assertIn(key, stats)
+        freed = stats["bytes_freed"]
+        junk = [bytes(1000) for _ in range(1000)]
+        del junk
+        gc.collect()
+        stats = gc.get_stats()[2]
+        self.assertGreater(stats["bytes_freed"], freed)
+        self.assertGreater(stats["live_bytes"], 0)
+        self.assertGreater(stats["max_pause"], 0)
+
+    def test_collect_frees_garbage_without_cycles(self):
+        class A:
+            pass
+        for _ in range(self.ATTEMPTS):
+            a = A()
+            ref = weakref.ref(a)
+            del a
+            gc.collect()
+            if ref() is None:
+                break
+        self.assertIsNone(ref())
+
+    def test_finalizer_order(self):
+        # A referrer is finalized before what it refers to, as reference
+        # counting would do: a buffered file flushes before its raw file
+        # closes.
+        order = []
+        class F:
+            def __init__(self, name, other=None):
+                self.name = name
+                self.other = other
+            def __del__(self):
+                order.append(self.name)
+        for _ in range(self.ATTEMPTS):
+            order.clear()
+            F("outer", F("middle", F("inner")))
+            gc.collect()
+            if len(order) == 3:
+                break
+        self.assertEqual(order, ["outer", "middle", "inner"])
+
+    def test_weakref_callback_runs_after_collection(self):
+        class A:
+            pass
+        called = []
+        for _ in range(self.ATTEMPTS):
+            a = A()
+            ref = weakref.ref(a, called.append)
+            del a
+            gc.collect()
+            if called:
+                break
+        self.assertEqual(called, [ref])
+        self.assertIsNone(ref())
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    def test_add_root(self):
+        class A:
+            pass
+        a = A()
+        ref = weakref.ref(a)
+        _testcapi.gc_hold_in_pymem(a, True)
+        del a
+        gc.collect()
+        self.assertIsNotNone(ref())
+        a = _testcapi.gc_release_pymem()
+        self.assertIs(a, ref())
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    def test_unrooted_pymem_reference_is_freed(self):
+        # The pattern that PyGC_AddRoot() fixes.
+        class A:
+            pass
+        for _ in range(self.ATTEMPTS):
+            a = A()
+            ref = weakref.ref(a)
+            _testcapi.gc_hold_in_pymem(a, False)
+            del a
+            gc.collect()
+            _testcapi.gc_release_pymem()
+            if ref() is None:
+                break
+        self.assertIsNone(ref())
+
+
 class PythonFinalizationTests(unittest.TestCase):
     def test_ast_fini(self):
         # bpo-44184: Regression test for subtype_dealloc() when deallocating

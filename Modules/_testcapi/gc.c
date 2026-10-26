@@ -369,7 +369,65 @@ static PyType_Spec ObjExtraData_TypeSpec = {
     .slots = ObjExtraData_Slots,
 };
 
+/* A reference held only in a PyMem block that a static points to: no
+   tp_traverse visits it, so only a root registered with PyGC_AddRoot()
+   keeps the object alive. */
+static PyObject **pymem_slot = NULL;
+static int pymem_slot_rooted = 0;
+
+static PyObject *
+gc_hold_in_pymem(PyObject *self, PyObject *args)
+{
+    PyObject *obj;
+    int rooted;
+    if (!PyArg_ParseTuple(args, "Op", &obj, &rooted)) {
+        return NULL;
+    }
+    if (pymem_slot != NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "an object is already held");
+        return NULL;
+    }
+    PyObject **slot = PyMem_Malloc(sizeof(PyObject *));
+    if (slot == NULL) {
+        return PyErr_NoMemory();
+    }
+    *slot = Py_NewRef(obj);
+    if (rooted && PyGC_AddRoot(slot) < 0) {
+        Py_DECREF(obj);
+        PyMem_Free(slot);
+        return NULL;
+    }
+    pymem_slot = slot;
+    pymem_slot_rooted = rooted;
+    Py_RETURN_NONE;
+}
+
+/* Free the block.  Return the object if it was rooted; an object that was
+   not may have been freed, so it is not touched. */
+static PyObject *
+gc_release_pymem(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    if (pymem_slot == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "no object is held");
+        return NULL;
+    }
+    PyObject **slot = pymem_slot;
+    pymem_slot = NULL;
+    if (!pymem_slot_rooted) {
+        // The reference counting build leaks the object, which is harmless
+        // in a test.
+        PyMem_Free(slot);
+        Py_RETURN_NONE;
+    }
+    PyObject *obj = *slot;  // the block's reference passes to the caller
+    PyGC_RemoveRoot(slot);
+    PyMem_Free(slot);
+    return obj;
+}
+
 static PyMethodDef test_methods[] = {
+    {"gc_hold_in_pymem", gc_hold_in_pymem, METH_VARARGS},
+    {"gc_release_pymem", gc_release_pymem, METH_NOARGS},
     {"test_gc_control", test_gc_control, METH_NOARGS},
     {"test_gc_visit_objects_basic", test_gc_visit_objects_basic, METH_NOARGS, NULL},
     {"test_gc_visit_objects_frozen", test_gc_visit_objects_frozen, METH_NOARGS, NULL},

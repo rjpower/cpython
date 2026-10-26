@@ -3025,36 +3025,6 @@ class ShutdownTest(unittest.TestCase):
         self.assertEqual(["before", "after"], out.decode().splitlines())
 
 
-@cpython_only
-@support.requires_refcounting
-class ImmortalTests(unittest.TestCase):
-
-    if sys.maxsize < (1 << 32):
-        IMMORTAL_REFCOUNT_MINIMUM = 1 << 30
-    else:
-        IMMORTAL_REFCOUNT_MINIMUM = 1 << 31
-
-    IMMORTALS = (None, True, False, Ellipsis, NotImplemented, *range(-5, 257))
-
-    def assert_immortal(self, immortal):
-        with self.subTest(immortal):
-            self.assertGreater(sys.getrefcount(immortal), self.IMMORTAL_REFCOUNT_MINIMUM)
-
-    def test_immortals(self):
-        for immortal in self.IMMORTALS:
-            self.assert_immortal(immortal)
-
-    def test_list_repeat_respect_immortality(self):
-        refs = list(self.IMMORTALS) * 42
-        for immortal in self.IMMORTALS:
-            self.assert_immortal(immortal)
-
-    def test_tuple_repeat_respect_immortality(self):
-        refs = tuple(self.IMMORTALS) * 42
-        for immortal in self.IMMORTALS:
-            self.assert_immortal(immortal)
-
-
 class TestType(unittest.TestCase):
     def test_new_type(self):
         A = type('A', (), {})

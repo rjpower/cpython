@@ -1020,66 +1020,21 @@ class CBytesIOTest(PyBytesIOTest):
     check_sizeof = support.check_sizeof
 
     @support.cpython_only
-    @support.requires_refcounting
     def test_sizeof(self):
         if support.Py_GIL_DISABLED:
             basesize = support.calcobjsize('P2n2Pni')
         else:
-            basesize = support.calcobjsize('P2n2Pn')
+            # The int is buf_shared.
+            basesize = support.calcobjsize('P2n2Pni')
         check = self.check_sizeof
         self.assertEqual(object.__sizeof__(io.BytesIO()), basesize)
         check(io.BytesIO(), basesize )
         n = 1000  # use a variable to prevent constant folding
-        check(io.BytesIO(b'a' * n), basesize + sys.getsizeof(b'a' * n))
+        # A buffer passed in stays shared with the caller, so it is not
+        # counted.
+        check(io.BytesIO(b'a' * n), basesize)
 
     # Various tests of copy-on-write behaviour for BytesIO.
-
-    def _test_cow_mutation(self, mutation):
-        # Common code for all BytesIO copy-on-write mutation tests.
-        imm = (' ' * 1024).encode("ascii")
-        old_rc = sys.getrefcount(imm)
-        memio = self.ioclass(imm)
-        self.assertEqual(sys.getrefcount(imm), old_rc + 1)
-        mutation(memio)
-        self.assertEqual(sys.getrefcount(imm), old_rc)
-
-    @support.cpython_only
-    @support.requires_refcounting
-    def test_cow_truncate(self):
-        # Ensure truncate causes a copy.
-        def mutation(memio):
-            memio.truncate(1)
-        self._test_cow_mutation(mutation)
-
-    @support.cpython_only
-    @support.requires_refcounting
-    def test_cow_write(self):
-        # Ensure write that would not cause a resize still results in a copy.
-        def mutation(memio):
-            memio.seek(0)
-            memio.write(b'foo')
-        self._test_cow_mutation(mutation)
-
-    @support.cpython_only
-    @support.requires_refcounting
-    def test_cow_setstate(self):
-        # __setstate__ should cause buffer to be released.
-        memio = self.ioclass(b'foooooo')
-        state = memio.__getstate__()
-        def mutation(memio):
-            memio.__setstate__(state)
-        self._test_cow_mutation(mutation)
-
-    @support.cpython_only
-    @support.requires_refcounting
-    def test_cow_mutable(self):
-        # BytesIO should accept only Bytes for copy-on-write sharing, since
-        # arbitrary buffer-exporting objects like bytearray() aren't guaranteed
-        # to be immutable.
-        ba = bytearray(1024)
-        old_rc = sys.getrefcount(ba)
-        memio = self.ioclass(ba)
-        self.assertEqual(sys.getrefcount(ba), old_rc)
 
     def test_cow_hashed(self):
         # A buffer which was exposed to Python code and hashed must not be

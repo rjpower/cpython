@@ -1105,7 +1105,12 @@ _PyGC_LiveOnThreshold(PyThreadState *tstate)
     }
     struct _gc_live_state *ls = get_live(tstate->interp);
     ls->no_python = 1;
+    // A handler may hold what it allocated only in a C local.
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    int scan_activations = ts->gc_trace.scan_activations;
+    ts->gc_trace.scan_activations = 1;
     (void)collect_and_run_queue(tstate, _Py_GC_REASON_HEAP);
+    ts->gc_trace.scan_activations = scan_activations;
     ls->no_python = 0;
     if (ls->qhead < ls->qtail) {
         _Py_ScheduleGC(tstate);

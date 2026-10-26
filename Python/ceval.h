@@ -309,7 +309,7 @@ no_tools_for_local_event(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     }
 }
 
-static int
+static Py_NO_INLINE int
 monitor_handled(PyThreadState *tstate,
                 _PyInterpreterFrame *frame,
                 _PyInstr *instr, PyObject *exc)
@@ -320,7 +320,7 @@ monitor_handled(PyThreadState *tstate,
     return _Py_call_instrumentation_arg(tstate, PY_MONITORING_EVENT_EXCEPTION_HANDLED, frame, instr, exc);
 }
 
-static void
+static Py_NO_INLINE void
 monitor_throw(PyThreadState *tstate,
               _PyInterpreterFrame *frame,
               _PyInstr *instr)
@@ -331,7 +331,7 @@ monitor_throw(PyThreadState *tstate,
     do_monitor_exc(tstate, frame, instr, PY_MONITORING_EVENT_PY_THROW);
 }
 
-static void
+static Py_NO_INLINE void
 monitor_reraise(PyThreadState *tstate, _PyInterpreterFrame *frame,
               _PyInstr *instr)
 {
@@ -341,7 +341,7 @@ monitor_reraise(PyThreadState *tstate, _PyInterpreterFrame *frame,
     do_monitor_exc(tstate, frame, instr, PY_MONITORING_EVENT_RERAISE);
 }
 
-static int
+static Py_NO_INLINE int
 monitor_stop_iteration(PyThreadState *tstate, _PyInterpreterFrame *frame,
                        _PyInstr *instr, PyObject *value)
 {
@@ -358,7 +358,7 @@ monitor_stop_iteration(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return 0;
 }
 
-static void
+static Py_NO_INLINE void
 monitor_unwind(PyThreadState *tstate,
                _PyInterpreterFrame *frame,
                _PyInstr *instr)
@@ -440,7 +440,7 @@ get_exception_handler(PyCodeObject *code, int index, int *exc_slot, int *handler
 
 /* Logic for the raise statement (too complicated for inlining).
    This *consumes* a reference count to each of its arguments. */
-static int
+static Py_NO_INLINE int
 do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
 {
     PyObject *type = NULL, *value = NULL;

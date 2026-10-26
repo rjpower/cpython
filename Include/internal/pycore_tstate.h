@@ -16,6 +16,23 @@ extern "C" {
 
 
 
+/* An activation of the eval loop on a thread's C stack, which
+ * _PyEval_EvalFrameEntry() records.  [lo, hi) is the eval loop's own C
+ * frame.  Every value a handler holds across an escaping call is in a frame
+ * slot, which the mark visits precisely, so the words of that range are
+ * copies or stale and a collection entered from the eval breaker or from an
+ * escaping call does not scan them; one that an allocation runs at once
+ * scans them (Python/gc_trace.c).  regs holds the callee-saved registers as
+ * the entry found them, which the eval loop saves in its range: they may be
+ * the caller's references.  The record is in the entry's frame, above
+ * hi, which the scan covers. */
+typedef struct _PyEvalActivation {
+    uintptr_t lo;
+    uintptr_t hi;
+    struct _PyEvalActivation *prev;
+    uintptr_t regs[24];
+} _PyEvalActivation;
+
 // Every PyThreadState is actually allocated as a _PyThreadStateImpl. The
 // PyThreadState fields are exposed as part of the C API, although most fields
 // are intended to be private. The _PyThreadStateImpl fields not exposed.
@@ -78,6 +95,14 @@ typedef struct _PyThreadStateImpl {
         uintptr_t entry_sp;
         // This thread is running the live collector's queue.
         int running_queue;
+        // The innermost eval loop activation, NULL outside the eval loop.
+        _PyEvalActivation *activation;
+        // The C stack refs, innermost first (_PyThreadState_PushCStackRef())
+        struct _PyCStackRef *c_stack_refs;
+        // The live collector runs at once in an allocation, where a
+        // handler may hold a value only in a C local: the scan of this
+        // thread covers its eval loop activations too.
+        int scan_activations;
     } gc_trace;
 
 

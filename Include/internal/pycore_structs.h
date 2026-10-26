@@ -69,11 +69,13 @@ typedef union _PyStackRef {
     uintptr_t bits;
 } _PyStackRef;
 
-// A stackref that can be stored in a regular C local variable and be visible
-// to the GC in the free threading build.
-// Used in combination with _PyThreadState_PushCStackRef().
+// A stackref that a C local holds, linked into the thread state so that the
+// collector visits it: the way a handler of the eval loop, whose own C frame
+// the collector does not scan (_PyEvalActivation), holds a value across an
+// escaping call.  Used with _PyThreadState_PushCStackRef().
 typedef struct _PyCStackRef {
     _PyStackRef ref;
+    struct _PyCStackRef *next;
 } _PyCStackRef;
 
 

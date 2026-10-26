@@ -437,7 +437,7 @@ const size_t _Py_FunctionAttributeOffsets[] = {
 
 // Return a tuple of values corresponding to keys, with error checks for
 // duplicate/missing keys.
-PyObject *
+Py_NO_INLINE PyObject *
 _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
 {
     assert(PyTuple_CheckExact(keys));
@@ -551,7 +551,7 @@ match_class_attr(PyThreadState *tstate, PyObject *subject, PyObject *type,
 
 // On success (match), return a tuple of extracted attributes. On failure (no
 // match), return NULL. Use _PyErr_Occurred(tstate) to disambiguate.
-PyObject*
+Py_NO_INLINE PyObject*
 _PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type,
                    Py_ssize_t nargs, PyObject *kwargs)
 {
@@ -725,9 +725,39 @@ PyEval_EvalFrameEx(PyFrameObject *f, int throwflag)
 #include "ceval_macros.h"
 
 
-/* Helper functions to keep the size of the largest uops down */
+/* WITH_EXCEPT_START's call of an __exit__ or __aexit__ with the type, the
+ * value and the traceback of the exception val.  The traceback may be held
+ * only by the argument array, which is in this frame: not inlined, so that
+ * the frame is outside the eval loop's (_PyEvalActivation). */
+Py_NO_INLINE PyObject *
+_PyEval_CallExitWithException(PyObject *exit_func, PyObject *exit_self,
+                              PyObject *val)
+{
+    assert(val && PyExceptionInstance_Check(val));
+    PyObject *exc = PyExceptionInstance_Class(val);
+    PyObject *tb = PyException_GetTraceback(val);
+    if (tb == NULL) {
+        tb = Py_None;
+    }
+    PyObject *stack[5] = {NULL, exit_self, exc, val, tb};
+    int has_self = exit_self != NULL;
+    PyObject *res = PyObject_Vectorcall(exit_func, stack + 2 - has_self,
+                                        (3 + has_self) | PY_VECTORCALL_ARGUMENTS_OFFSET,
+                                        NULL);
+    _PyGC_CLEAR_ARRAY(stack);
+    return res;
+}
 
-PyObject *
+/* Helper functions to keep the size of the largest uops down.
+ *
+ * The helpers that handlers call and that may run code are Py_NO_INLINE,
+ * here and in ceval.h.  The collector does not scan the eval loop's own C
+ * frame (_PyEvalActivation), and the cases generator checks only the
+ * handlers' bodies: inlined, a helper's locals, which may hold the only
+ * reference to what it made, as an argument array (STACKREFS_TO_PYOBJECTS)
+ * holds the boxes of inline values, would be in that frame. */
+
+Py_NO_INLINE PyObject *
 _Py_VectorCall_StackRefSteal(
     _PyStackRef callable,
     _PyStackRef *arguments,
@@ -765,7 +795,7 @@ cleanup:
     return res;
 }
 
-PyObject*
+Py_NO_INLINE PyObject *
 _Py_VectorCallInstrumentation_StackRefSteal(
     _PyStackRef callable,
     _PyStackRef* arguments,
@@ -824,7 +854,7 @@ cleanup:
     return res;
 }
 
-PyObject *
+Py_NO_INLINE PyObject *
 _Py_BuiltinCallFast_StackRef(
     _PyStackRef callable,
     _PyStackRef *arguments,
@@ -847,7 +877,7 @@ _Py_BuiltinCallFast_StackRef(
     return res;
 }
 
-PyObject *
+Py_NO_INLINE PyObject *
 _Py_BuiltinCallFastWithKeywords_StackRef(
     _PyStackRef callable,
     _PyStackRef *arguments,
@@ -867,7 +897,7 @@ _Py_BuiltinCallFastWithKeywords_StackRef(
     return res;
 }
 
-PyObject *
+Py_NO_INLINE PyObject *
 _PyCallMethodDescriptorFast_StackRef(
     _PyStackRef callable,
     PyCFunctionFast cfunc,
@@ -888,7 +918,7 @@ _PyCallMethodDescriptorFast_StackRef(
     return res;
 }
 
-PyObject *
+Py_NO_INLINE PyObject *
 _PyCallMethodDescriptorFastWithKeywords_StackRef(
     _PyStackRef callable,
     PyCFunctionFastWithKeywords cfunc,
@@ -909,7 +939,7 @@ _PyCallMethodDescriptorFastWithKeywords_StackRef(
     return res;
 }
 
-PyObject *
+Py_NO_INLINE PyObject *
 _Py_CallBuiltinClass_StackRef(
     _PyStackRef callable,
     _PyStackRef *arguments,
@@ -927,7 +957,7 @@ _Py_CallBuiltinClass_StackRef(
     return res;
 }
 
-PyObject *
+Py_NO_INLINE PyObject *
 _Py_BuildString_StackRefSteal(
     _PyStackRef *arguments,
     int total_args)
@@ -952,7 +982,7 @@ cleanup:
     return res;
 }
 
-PyObject *
+Py_NO_INLINE PyObject *
 _Py_BuildMap_StackRefSteal(
     _PyStackRef *arguments,
     int half_args)
@@ -981,7 +1011,7 @@ cleanup:
     return res;
 }
 
-_PyStackRef
+Py_NO_INLINE _PyStackRef
 _Py_LoadAttr_StackRefSteal(
     PyThreadState *tstate, _PyStackRef owner,
     PyObject *name, _PyStackRef *self_or_null)
@@ -1102,7 +1132,7 @@ _PyObjectArray_Free(PyObject **array, PyObject **scratch)
 #endif
 
 
-_PyStackRef
+Py_NO_INLINE _PyStackRef
 _PyEval_GetIter(_PyStackRef iterable, _PyStackRef *index_or_null, int yield_from)
 {
     PyTypeObject *tp = PyStackRef_TYPE(iterable);
@@ -1248,10 +1278,41 @@ dtrace_function_return(_PyInterpreterFrame *frame)
 }
 #endif
 
-PyObject* _Py_HOT_FUNCTION DONT_SLP_VECTORIZE
+/* The entry records the eval loop's activation, whose C frame the
+ * collector does not scan (_PyEvalActivation): the registers as they are
+ * here, which may hold the caller's references and which the eval loop
+ * saves in its frame, and the stack pointer, above which the eval loop's
+ * frame begins.  _PyEval_EvalFrameDefault() records where its frame ends;
+ * entered otherwise, through a PEP 523 hook, it records nothing and its
+ * frame is scanned. */
+Py_NO_INLINE PyObject *
+_PyEval_EvalFrameEntry(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       int throwflag)
+{
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    _PyEvalActivation act;
+    _PyGC_CaptureRegisters(act.regs);
+    act.lo = 0;
+    act.hi = _PyGC_StackAddress();
+    act.prev = ts->gc_trace.activation;
+    ts->gc_trace.activation = &act;
+    PyObject *res = _PyEval_EvalFrameDefault(tstate, frame, throwflag);
+    ts->gc_trace.activation = act.prev;
+    return res;
+}
+
+Py_NO_INLINE PyObject* _Py_HOT_FUNCTION DONT_SLP_VECTORIZE
 _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     _Py_EnsureTstateNotNULL(tstate);
+    {
+        // The stack pointer is fixed in the body: below it are callees
+        _PyEvalActivation *act =
+            ((_PyThreadStateImpl *)tstate)->gc_trace.activation;
+        if (act != NULL && act->lo == 0) {
+            act->lo = _PyGC_StackAddress();
+        }
+    }
     check_invalid_reentrancy();
     CALL_STAT_INC(pyeval_calls);
     _PyGC_CHECK_NOT_SWEEPING(tstate, "runs Python code");
@@ -2195,7 +2256,7 @@ fail:
    complicated for inlining).
 */
 
-int
+Py_NO_INLINE int
 _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
                             PyObject *match_type, PyObject **match, PyObject **rest)
 {
@@ -2289,7 +2350,7 @@ _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
    with a variable target.
 */
 
-int
+Py_NO_INLINE int
 _PyEval_UnpackIterableStackRef(PyThreadState *tstate, PyObject *v,
                        int argcnt, int argcntafter, _PyStackRef *sp)
 {
@@ -2399,7 +2460,7 @@ Error:
 
 
 
-void
+Py_NO_INLINE void
 _PyEval_MonitorRaise(PyThreadState *tstate, _PyInterpreterFrame *frame,
               _PyInstr *instr)
 {
@@ -3016,7 +3077,7 @@ binary_slice(PyObject *container, PyObject *start, PyObject *stop)
 }
 
 // container[start:stop], for BINARY_SLICE.
-PyObject *
+Py_NO_INLINE PyObject *
 _PyEval_BinarySlice(_PyStackRef container_st, _PyStackRef start_st, _PyStackRef stop_st)
 {
     Py_ssize_t start, stop;
@@ -3060,7 +3121,7 @@ done:
 
 // container[start:stop] = v, for STORE_SLICE. Return 0, or -1 with an
 // exception set.
-int
+Py_NO_INLINE int
 _PyEval_StoreSlice(_PyStackRef v_st, _PyStackRef container_st,
                    _PyStackRef start_st, _PyStackRef stop_st)
 {
@@ -3108,7 +3169,7 @@ done:
    An int or float has no __class__ of its own, so against an exact type, or
    a tuple of them, the answer is that of PyObject_IsInstance(), whose
    object_isinstance() then tests the subtype relation alone. */
-int
+Py_NO_INLINE int
 _PyEval_IsInstanceStackRef(_PyStackRef inst_st, _PyStackRef cls_st)
 {
     if (PyStackRef_IsInline(inst_st) && PyStackRef_IsPointerSpace(cls_st)) {
@@ -3144,7 +3205,7 @@ _PyEval_IsInstanceStackRef(_PyStackRef inst_st, _PyStackRef cls_st)
     return res;
 }
 
-PyObject *
+Py_NO_INLINE PyObject *
 _PyEval_ImportName(PyThreadState *tstate, PyObject *builtins,
             PyObject *globals, PyObject *locals, PyObject *name,
             PyObject *fromlist, PyObject *level)
@@ -3238,7 +3299,7 @@ is_lazy_import_module_level(void)
     return frame != NULL && frame->f_globals == frame->f_locals;
 }
 
-PyObject *
+Py_NO_INLINE PyObject *
 _PyEval_LazyImportName(PyThreadState *tstate, PyObject *builtins,
                        PyObject *globals, PyObject *locals, PyObject *name,
                        PyObject *fromlist, PyObject *level, int lazy)
@@ -3309,7 +3370,7 @@ error:
     return res;
 }
 
-PyObject *
+Py_NO_INLINE PyObject *
 _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
 {
     PyObject *x;
@@ -3483,7 +3544,7 @@ done:
 #define CANNOT_EXCEPT_STAR_EG "catching ExceptionGroup with except* "\
                               "is not allowed. Use except instead."
 
-int
+Py_NO_INLINE int
 _PyEval_CheckExceptTypeValid(PyThreadState *tstate, PyObject* right)
 {
     if (PyTuple_Check(right)) {
@@ -3508,7 +3569,7 @@ _PyEval_CheckExceptTypeValid(PyThreadState *tstate, PyObject* right)
     return 0;
 }
 
-int
+Py_NO_INLINE int
 _PyEval_CheckExceptStarTypeValid(PyThreadState *tstate, PyObject* right)
 {
     if (_PyEval_CheckExceptTypeValid(tstate, right) < 0) {
@@ -3545,7 +3606,7 @@ _PyEval_CheckExceptStarTypeValid(PyThreadState *tstate, PyObject* right)
     return 0;
 }
 
-int
+Py_NO_INLINE int
 _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args)
 {
     if (Py_TYPE(args)->tp_iter == NULL && !PySequence_Check(args)) {
@@ -3557,7 +3618,7 @@ _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args)
     return 0;
 }
 
-void
+Py_NO_INLINE void
 _PyEval_FormatKwargsError(PyThreadState *tstate, PyObject *func, PyObject *kwargs, PyObject *dupkey)
 {
     if (dupkey != NULL) {
@@ -3591,7 +3652,7 @@ _PyEval_FormatKwargsError(PyThreadState *tstate, PyObject *func, PyObject *kwarg
     }
 }
 
-void
+Py_NO_INLINE void
 _PyEval_FormatExcCheckArg(PyThreadState *tstate, PyObject *exc,
                           const char *format_str, PyObject *obj)
 {
@@ -3620,7 +3681,7 @@ _PyEval_FormatExcCheckArg(PyThreadState *tstate, PyObject *exc,
     }
 }
 
-void
+Py_NO_INLINE void
 _PyEval_FormatExcUnbound(PyThreadState *tstate, PyCodeObject *co, int oparg)
 {
     PyObject *name;
@@ -3690,7 +3751,7 @@ void Py_LeaveRecursiveCall(void)
     _Py_LeaveRecursiveCall();
 }
 
-PyObject *
+Py_NO_INLINE PyObject *
 _PyEval_GetANext(PyObject *aiter)
 {
     unaryfunc getter = NULL;
@@ -3729,7 +3790,7 @@ _PyEval_GetANext(PyObject *aiter)
     return awaitable;
 }
 
-void
+Py_NO_INLINE void
 _PyEval_LoadGlobalStackRef(PyObject *globals, PyObject *builtins, PyObject *name, _PyStackRef *writeto)
 {
     PyObject *namespace = globals;
@@ -3778,7 +3839,7 @@ _PyEval_LoadGlobalStackRef(PyObject *globals, PyObject *builtins, PyObject *name
     }
 }
 
-PyObject *
+Py_NO_INLINE PyObject *
 _PyEval_GetAwaitable(PyObject *iterable, int oparg)
 {
     PyObject *iter = _PyCoro_GetAwaitableIter(iterable);
@@ -3802,7 +3863,7 @@ _PyEval_GetAwaitable(PyObject *iterable, int oparg)
     return iter;
 }
 
-PyObject *
+Py_NO_INLINE PyObject *
 _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name)
 {
     PyObject *value;
@@ -3884,7 +3945,7 @@ type_has_special_method(PyTypeObject *cls, PyObject *name)
     return r != NULL && Py_TYPE(r)->tp_descr_get != NULL;
 }
 
-int
+Py_NO_INLINE int
 _PyEval_SpecialMethodCanSuggest(PyObject *self, int oparg)
 {
     PyTypeObject *type = Py_TYPE(self);

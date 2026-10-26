@@ -1262,6 +1262,29 @@ class TracingCollectorTests(unittest.TestCase):
                 break
         self.assertIsNone(ref())
 
+    def test_eval_loop_frame_is_not_a_root(self):
+        # The collector does not scan the eval loop's own C frames, whose
+        # spill slots hold stale copies of values the frame no longer has,
+        # so a dead local is freed at the first collection, every time.
+        class A:
+            pass
+        def dead_local():
+            a = A()
+            a.self = a
+            ref = weakref.ref(a)
+            del a
+            gc.collect()
+            return ref() is None
+        def dead_item():
+            items = [A()]
+            ref = weakref.ref(items[0])
+            del items
+            gc.collect()
+            return ref() is None
+        for func in dead_local, dead_item:
+            with self.subTest(func=func.__name__):
+                self.assertEqual(sum(func() for _ in range(20)), 20)
+
     def test_sweep_frees_exported_memoryview(self):
         # A struct iterator holds an export of its memoryview, and the sweep
         # may deallocate the view first.

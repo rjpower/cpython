@@ -132,6 +132,26 @@ _PyGC_CaptureRegisters(uintptr_t *regs)
 #endif
 }
 
+/* The stack pointer, or 0 where it cannot be read.  Inlined, so that it is
+ * the caller's. */
+static inline __attribute__((always_inline)) uintptr_t
+_PyGC_StackAddress(void)
+{
+#if _Py__has_builtin(__builtin_stack_address)
+    return (uintptr_t)__builtin_stack_address();
+#elif defined(__GNUC__) && defined(__x86_64__)
+    uintptr_t sp;
+    __asm__ volatile("movq %%rsp, %0" : "=r"(sp));
+    return sp;
+#elif defined(__GNUC__) && defined(__aarch64__)
+    uintptr_t sp;
+    __asm__ volatile("mov %0, sp" : "=r"(sp));
+    return sp;
+#else
+    return 0;
+#endif
+}
+
 /* The live collector, which owns memory.  Python/gc_live.c has
  * the policy: when to collect, finalizers, weak references, the sweep and
  * the gc module's view.  The mark and the heap walks are here, in

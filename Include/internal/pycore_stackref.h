@@ -12,6 +12,7 @@ extern "C" {
 #include "pycore_object.h"        // Py_DECREF_MORTAL
 #include "pycore_object_deferred.h" // _PyObject_HasDeferredRefcount()
 #include "pycore_stats.h"         // OBJECT_STAT_INC()
+#include "pycore_tstate.h"        // _PyThreadStateImpl
 
 #include <stdbool.h>              // bool
 
@@ -578,7 +579,10 @@ _PyStackRef_BoxArray(_PyStackRef *refs, Py_ssize_t n)
 static inline void
 _PyThreadState_PushCStackRef(PyThreadState *tstate, _PyCStackRef *ref)
 {
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
     ref->ref = PyStackRef_NULL;
+    ref->next = ts->gc_trace.c_stack_refs;
+    ts->gc_trace.c_stack_refs = ref;
 }
 
 static inline void
@@ -588,9 +592,9 @@ _PyThreadState_PushCStackRefNew(PyThreadState *tstate, _PyCStackRef *ref, PyObje
     ref->ref = PyStackRef_FromPyObjectNew(obj);
 }
 
-/* The collector scans the C stack conservatively, so a popped reference
-   left in its slot keeps the object alive until the stack memory is reused.
-   The barrier keeps the store, which is dead to the compiler. */
+/* The collector scans most C frames conservatively, so a popped reference
+   left in its slot would keep the object alive until the stack memory is
+   reused.  The barrier keeps the store, which is dead to the compiler. */
 #  define _PyCStackRef_CLEAR(REF) \
     do { \
         (REF)->ref = PyStackRef_NULL; \
@@ -600,7 +604,9 @@ _PyThreadState_PushCStackRefNew(PyThreadState *tstate, _PyCStackRef *ref, PyObje
 static inline void
 _PyThreadState_PopCStackRef(PyThreadState *tstate, _PyCStackRef *ref)
 {
-    PyStackRef_XCLOSE(ref->ref);
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    assert(ts->gc_trace.c_stack_refs == ref);
+    ts->gc_trace.c_stack_refs = ref->next;
     _PyCStackRef_CLEAR(ref);
 }
 
@@ -608,7 +614,7 @@ static inline _PyStackRef
 _PyThreadState_PopCStackRefSteal(PyThreadState *tstate, _PyCStackRef *ref)
 {
     _PyStackRef res = ref->ref;
-    _PyCStackRef_CLEAR(ref);
+    _PyThreadState_PopCStackRef(tstate, ref);
     return res;
 }
 

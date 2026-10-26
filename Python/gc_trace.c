@@ -1026,6 +1026,37 @@ stack_top(PyThreadState *p)
     return ts->c_stack_top;
 }
 
+/* Scan [start, top) of p's C stack, except the eval loop's own frames
+   (_PyEvalActivation): the values a handler holds across an escaping call
+   or the eval breaker are in frame slots, and what else those frames hold
+   is copies or stale words, which would keep garbage.  The registers that
+   each activation saved are scanned with the record, which is above it.  A
+   collection that an allocation runs at once may find a handler between
+   escaping calls, holding a value only in a C local: it scans its own
+   thread's activations too. */
+static void
+scan_stack(trace_t *t, PyThreadState *p, uintptr_t start, uintptr_t top)
+{
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)p;
+    _PyEvalActivation *act = ts->gc_trace.activation;
+    if (p == _PyThreadState_GET() && ts->gc_trace.scan_activations) {
+        act = NULL;
+    }
+    // Innermost first, so at increasing addresses
+    for (; act != NULL && start < top; act = act->prev) {
+        if (act->lo == 0 || act->hi <= start) {
+            continue;
+        }
+        if (act->lo > start) {
+            scan_range(t, start, Py_MIN(act->lo, top));
+        }
+        start = act->hi;
+    }
+    if (top > start) {
+        scan_range(t, start, top);
+    }
+}
+
 /* This thread's stack and registers.  Not inlined, so that its frame and
    everything below the caller's are on the stack it scans. */
 static Py_NO_INLINE void
@@ -1049,9 +1080,7 @@ scan_current_thread(trace_t *t, PyThreadState *tstate)
         }
     }
 #endif
-    if (top > here) {
-        scan_range(t, here, top);
-    }
+    scan_stack(t, tstate, here, top);
 }
 
 /* C code keeps references in PyMem memory that only its stack frame
@@ -1080,10 +1109,7 @@ scan_other_thread(trace_t *t, PyThreadState *p)
     }
     scan_range(t, (uintptr_t)ts->gc_trace.regs,
                (uintptr_t)(ts->gc_trace.regs + 24));
-    uintptr_t top = stack_top(p);
-    if (top > ts->gc_trace.sp) {
-        scan_range(t, ts->gc_trace.sp, top);
-    }
+    scan_stack(t, p, ts->gc_trace.sp, stack_top(p));
 }
 
 /* The thread states that finalization unlinked, whose daemon threads may
@@ -1217,6 +1243,11 @@ _PyGC_TraceVisitThreadState(PyThreadState *p, visitproc visit, void *arg)
     Py_VISIT(ts->asyncio_running_loop);
     Py_VISIT(ts->asyncio_running_task);
     Py_VISIT(ts->lazy_imports);
+    for (_PyCStackRef *r = ts->gc_trace.c_stack_refs; r != NULL; r = r->next) {
+        if (PyStackRef_IsObject(r->ref)) {
+            Py_VISIT(PyStackRef_AsPyObjectBorrow(r->ref));
+        }
+    }
     /* Objects the trashcan deferred: their reference count is already zero
      * but they still own their members until the chain is destroyed. */
     for (PyObject *op = p->delete_later; op != NULL;
@@ -1959,10 +1990,7 @@ live_mark_roots(trace_t *t, PyThreadState *tstate)
         if (cur->gc_trace.entry_sp != 0) {
             scan_range(t, (uintptr_t)cur->gc_trace.entry_regs,
                        (uintptr_t)(cur->gc_trace.entry_regs + 24));
-            uintptr_t top = stack_top(tstate);
-            if (top > cur->gc_trace.entry_sp) {
-                scan_range(t, cur->gc_trace.entry_sp, top);
-            }
+            scan_stack(t, tstate, cur->gc_trace.entry_sp, stack_top(tstate));
         }
         else {
             scan_current_thread(t, tstate);

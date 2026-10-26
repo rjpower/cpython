@@ -115,13 +115,19 @@ extern void _PyPerfJit_WriteNamedCode(const void *code_addr,
                                       const char *filename);
 #endif
 
+/* _PyEval_EvalFrameDefault(), with its activation recorded for the
+ * collector (_PyEvalActivation). */
+extern PyObject *_PyEval_EvalFrameEntry(PyThreadState *tstate,
+                                        _PyInterpreterFrame *frame,
+                                        int throwflag);
+
 static inline PyObject*
 _PyEval_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     EVAL_CALL_STAT_INC(EVAL_CALL_TOTAL);
     _PyGC_LiveClearEvalStack();
     if (tstate->interp->eval_frame == NULL) {
-        return _PyEval_EvalFrameDefault(tstate, frame, throwflag);
+        return _PyEval_EvalFrameEntry(tstate, frame, throwflag);
     }
     return tstate->interp->eval_frame(tstate, frame, throwflag);
 }
@@ -272,6 +278,8 @@ PyAPI_FUNC(int)
 _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args);
 PyAPI_FUNC(_PyStackRef) _PyEval_GetIter(_PyStackRef iterable, _PyStackRef *null_or_index, int yield_from);
 PyAPI_FUNC(int) _PyEval_StoreName(PyThreadState *tstate, _PyStackRef v, PyObject *name, PyObject* ns);
+PyAPI_FUNC(PyObject *) _PyEval_CallExitWithException(
+    PyObject *exit_func, PyObject *exit_self, PyObject *val);
 PyAPI_FUNC(PyObject *) _PyEval_BinarySlice(_PyStackRef container, _PyStackRef start, _PyStackRef stop);
 PyAPI_FUNC(int) _PyEval_StoreSlice(_PyStackRef v, _PyStackRef container, _PyStackRef start, _PyStackRef stop);
 PyAPI_FUNC(int) _PyEval_IsInstanceStackRef(_PyStackRef inst, _PyStackRef cls);

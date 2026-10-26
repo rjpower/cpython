@@ -8845,6 +8845,51 @@ then
 
 printf "%s\n" "#define Py_GC 1" >>confdefs.h
 
+  # The collector scans C stacks conservatively.  Zero-initialized locals
+  # leave fewer stale pointers in live frames, which keep garbage alive.
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether C compiler accepts -ftrivial-auto-var-init=zero" >&5
+printf %s "checking whether C compiler accepts -ftrivial-auto-var-init=zero... " >&6; }
+if test ${ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e)
+  ax_check_save_flags=$CFLAGS
+  CFLAGS="$CFLAGS -Werror -ftrivial-auto-var-init=zero"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero=yes
+else case e in #(
+  e) ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+  CFLAGS=$ax_check_save_flags ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero" >&5
+printf "%s\n" "$ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero" >&6; }
+if test "x$ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero" = xyes
+then :
+
+    CFLAGS_NODIST="$CFLAGS_NODIST -ftrivial-auto-var-init=zero"
+
+else case e in #(
+  e) : ;;
+esac
+fi
+
 fi
 
 # Check for --enable-pystats

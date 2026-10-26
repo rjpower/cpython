@@ -2055,6 +2055,11 @@ then
   esac
   AC_DEFINE([Py_GC], [1],
             [Define if the tracing collector owns memory and reference counting is off])
+  # The collector scans C stacks conservatively.  Zero-initialized locals
+  # leave fewer stale pointers in live frames, which keep garbage alive.
+  AX_CHECK_COMPILE_FLAG([-ftrivial-auto-var-init=zero], [
+    CFLAGS_NODIST="$CFLAGS_NODIST -ftrivial-auto-var-init=zero"
+  ], [], [-Werror])
 fi
 
 # Check for --enable-pystats

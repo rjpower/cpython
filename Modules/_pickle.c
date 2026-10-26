@@ -434,9 +434,20 @@ Pdata_dealloc(PyObject *op)
     Py_DECREF(tp);
 }
 
+static int
+Pdata_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Pdata *self = Pdata_CAST(op);
+    Py_VISIT(Py_TYPE(self));
+    for (Py_ssize_t i = 0; i < Py_SIZE(self); i++) {
+        Py_VISIT(self->data[i]);
+    }
+    return 0;
+}
+
 static PyType_Slot pdata_slots[] = {
     {Py_tp_dealloc, Pdata_dealloc},
-    {Py_tp_traverse, _PyObject_VisitType},
+    {Py_tp_traverse, Pdata_traverse},
     {0, NULL},
 };
 

@@ -919,8 +919,10 @@ def _warn_unawaited_coroutine(coro):
 
 
 def _setup_defaults():
-    # Several warning categories are ignored by default in regular builds
-    if hasattr(sys, 'gettotalrefcount'):
+    # Several warning categories are ignored by default in regular builds.
+    # A debug build has sys.gettotalrefcount() unless it has no reference
+    # counts (--with-gc).
+    if hasattr(sys, 'gettotalrefcount') or 'd' in getattr(sys, 'abiflags', ''):
         return
     _wm.filterwarnings("default", category=DeprecationWarning, module="__main__", append=1)
     _wm.simplefilter("ignore", category=DeprecationWarning, append=1)

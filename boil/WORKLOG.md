@@ -1110,3 +1110,40 @@ its worktree.
   instructions in the three startup young collections before
   `_Py_VISIT_ATOMIC`, and about 1.4M with it (e8e2a43a3d3), which skips
   immortal strings: the interned and static ones.
+
+### 2026-10-25 22:40 — step 4, milestone 4: AUTO mode, ports, measurements
+
+- **AUTO mode** verifies after every collection of generation 1 and up,
+  at arbitrary points, so it found holes that explicit collections
+  cannot reach. Fixed:
+  - the blocks of shallow-marked objects are scanned conservatively,
+    for sets being filled (a7a92ab8d3a);
+  - scandir's `path_t` (0e5e79ce2bb);
+  - lru_cache's links (d89d6b5438f);
+  - the unpickler's stack (43a37af34db).
+- **The audit** now follows embedded plain structs and flags the generic
+  type-only traverse.
+- **The report** lists the holes with unexplained references first, and
+  names the object that owns a referring PyMem block.
+- **Final suites.** These are clean apart from the known test_sys
+  failure:
+  - dev-debug, verifier on;
+  - dev-default with `-X gcverify`;
+  - dev-default with `PYTHON_GCVERIFY=auto`, except for one compile in a
+    pip subprocess. Its cause is the compiler's capsule-held enclosing
+    units, which are out of scope; see section 14.5.
+- **Ports.** All seven pass. With the verifier, five are clean. pyyaml has
+  14 holes, from Cython's PyMem code cache behind a static. numpy has
+  about 6,100, from DTypeMeta's `dt_slots` and its libc-malloc tables.
+  By decision these wait for step 5's public root API (option B). The
+  brief's `ports check` command never enabled the verifier, because it
+  drops PYTHON* variables and runs with `-I`; the smoke tests were run
+  directly instead.
+- **Measurements** (section 14.6):
+  - per-loop instructions are within 0.5 percent on all four
+    benchmarks;
+  - `-c pass` is +2.3 percent;
+  - peak RSS at startup is +1.3 MB, from mimalloc and the per-tstate
+    heap split;
+  - a verified full collection of 1M objects takes about 10 times as
+    long (415 ms against 41 ms).

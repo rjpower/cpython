@@ -34,7 +34,7 @@ __all__ = [
     "is_resource_enabled", "get_resource_value", "requires", "requires_resource",
     "requires_freebsd_version",
     "requires_gil_enabled", "requires_linux_version", "requires_mac_ver",
-    "requires_refcounting", "requires_precise_gc",
+    "requires_refcounting",
     "requires_ios_ver",
     "check_syntax_error",
     "requires_gzip", "requires_bz2", "requires_lzma", "requires_zstd",
@@ -1075,12 +1075,6 @@ def requires_refcounting(test):
     """Skip a test that needs reference counts: sys.getrefcount(), or an
     object that dies, and runs its finalizer, as its last reference goes."""
     return unittest.skipIf(Py_GC, "needs reference counting")(test)
-
-def requires_precise_gc(test):
-    """Skip a test that needs gc.collect() to free a given object, which the
-    tracing collector's conservative stack scan does not promise."""
-    return unittest.skipIf(Py_GC, "needs a collector without "
-                           "conservative roots")(test)
 
 if Py_GIL_DISABLED:
     _header = 'PHBBInP'

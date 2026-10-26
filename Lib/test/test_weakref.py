@@ -586,7 +586,6 @@ class ReferencesTestCase(TestBase):
         self.assertEqual(weakref.getweakrefcount(1), 0,
                      "got wrong number of weak reference objects for int")
 
-    @support.requires_precise_gc
     def test_getweakrefs(self):
         o = C()
         ref1 = weakref.ref(o, self.callback)

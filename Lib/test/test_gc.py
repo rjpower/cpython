@@ -107,7 +107,6 @@ class GCTests(unittest.TestCase):
         del l
         self.assertEqual(gc.collect(), 2)
 
-    @support.requires_precise_gc
     def test_class(self):
         class A:
             pass
@@ -123,7 +122,6 @@ class GCTests(unittest.TestCase):
         del A
         self.assertNotEqual(gc.collect(), 0)
 
-    @support.requires_precise_gc
     def test_instance(self):
         class A:
             pass
@@ -133,7 +131,6 @@ class GCTests(unittest.TestCase):
         del a
         self.assertNotEqual(gc.collect(), 0)
 
-    @support.requires_precise_gc
     def test_newinstance(self):
         class A(object):
             pass
@@ -1005,7 +1002,6 @@ class GCTests(unittest.TestCase):
 
         gc.enable()
 
-    @support.requires_precise_gc
     def test_resurrection_is_transitive(self):
         class Cargo:
             def __init__(self):
@@ -1110,7 +1106,6 @@ class GCTests(unittest.TestCase):
 
     @unittest.skipIf(ContainerNoGC is None,
                      'requires ContainerNoGC extension type')
-    @support.requires_precise_gc
     def test_trash_weakref_clear(self):
         # Test that trash weakrefs are properly cleared (bpo-38006).
         #
@@ -1188,7 +1183,6 @@ class GCTests(unittest.TestCase):
         gc.get_referents(tracked_capsule)
 
     @cpython_only
-    @support.requires_precise_gc
     def test_get_objects_during_gc(self):
         # gh-125859: Calling gc.get_objects() or gc.get_referrers() during a
         # collection should not crash.

@@ -1286,3 +1286,18 @@ destructor notifications moved out of the sweep, shutdown collections
 reduced to one mark, and all seven ports on the gc builds (Cython
 code-cache root registration for pyyaml, DTypeMeta traverse and table
 roots for numpy). Budget 3 days.
+
+### 2026-10-26 06:50 — step 5b milestone 1: rung 1 done
+
+Watchers, module `m_free` and capsule destructors run in the queue phase
+before the sweep (ac9a9a0062c); the interpreter's own dict watchers,
+which neither allocate nor run code, stay in `dict_dealloc`
+(e05e10575ef). The seven watcher dealloc tests are un-skipped. Shutdown
+marks five times instead of seven (8cfb3a08aaf): the two remaining
+intermediate marks observe reachability states that module-level
+finalizers can see, so they stay. `-c pass` went from 83.9M to 69.4M
+instructions (dev-default 48.6M). Two retention bugs on the way: a
+`PyDict_Next` out-parameter kept the last module alive through shutdown,
+and cross-interpreter data held objects the collector did not scan
+(38e41caef2e). The 5a lists pass on both gc builds. The full suite is
+running on gc-default and dev-default for the rung 2 inventory.

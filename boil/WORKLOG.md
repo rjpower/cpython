@@ -969,7 +969,7 @@ copy propagation, store elimination, POP_TOP removal and truth folding
   - Without a magic bump, cached pycs keep the old compiler's output.
     Every run now uses a fresh PYTHONPYCACHEPREFIX.
 
-### 2026-10-25 22:00 — step 3b, milestone 4: call results into locals, measurements, docs
+### 2026-10-25 21:35 — step 3b, milestone 4: call results into locals, measurements, docs
 
 - **A call stores its result in a local** (691c92537c6, magic 3716). Store
   elimination now folds the STORE_FAST after a call:

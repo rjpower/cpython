@@ -822,6 +822,16 @@ PyBuffer_Release(Py_buffer *view)
     if (obj == NULL)
         return;
     pb = Py_TYPE(obj)->tp_as_buffer;
+#ifdef Py_GC
+    /* The sweep deallocates managed buffers first, but another holder of a
+       view can come after its exporter, which is garbage too: once the
+       exporter's dealloc has run, it has no export state to update. */
+    if ((obj->ob_flags & (_Py_GC_DEAD_FLAG | _Py_GC_SWEPT_FLAG))
+        == (_Py_GC_DEAD_FLAG | _Py_GC_SWEPT_FLAG))
+    {
+        pb = NULL;
+    }
+#endif
     if (pb && pb->bf_releasebuffer) {
         pb->bf_releasebuffer(obj, view);
     }

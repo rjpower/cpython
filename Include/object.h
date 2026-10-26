@@ -607,6 +607,8 @@ given type object has a specified feature.
  * bits are the collector's (Python/gc_live.c and Python/gc_trace.c); it
  * writes them while it holds the GIL. */
 #  define _Py_GC_MARKED_FLAG     (1 << 8)   /* reached by the current mark */
+#  define _Py_GC_SWEPT_FLAG      _Py_GC_MARKED_FLAG  /* on a dead object:
+                                               its tp_dealloc has run */
 #  define _Py_GC_DEAD_FLAG       (1 << 9)   /* unreachable, being swept */
 #  define _Py_GC_FINALIZED_FLAG  (1 << 10)  /* tp_finalize called (PEP 442) */
 #  define _Py_GC_OWNS_RESOURCES_FLAG (1 << 11) /* reserved: dealloc releases

@@ -34,6 +34,7 @@
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interp.h"        // PyInterpreterState.gc
 #include "pycore_interpframe.h"   // _PyFrame_GetLocalsArray()
+#include "pycore_memoryobject.h"  // _PyManagedBuffer_Type
 #include "pycore_object.h"
 #include "pycore_gc_trace.h"      // _PyGC_TraceLiveMark()
 #include "pycore_object_alloc.h"  // _PyObject_MallocWithType()
@@ -586,8 +587,9 @@ _PyGC_LiveSweepViolation(PyThreadState *tstate, const char *what)
 }
 #endif
 
-/* Call tp_dealloc on the dead objects, then free their blocks.  Instances
-   go before types, so that a dealloc can read its type. */
+/* Call tp_dealloc on the dead objects, then free their blocks.  Managed
+   buffers go first, so that their exporters can still update their export
+   state, and instances before types, so that a dealloc can read its type. */
 static Py_ssize_t
 sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
       Py_ssize_t *bytes_freed)
@@ -595,12 +597,17 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
     Py_ssize_t ncollected = 0;
     PyObject *exc = _PyErr_GetRaisedException(tstate);
     gc->sweeping = 1;
-    for (int types = 0; types < 2; types++) {
+    for (int phase = 0; phase < 3; phase++) {
         for (Py_ssize_t i = 0; i < res->ndead; i++) {
             PyObject *op = res->dead[i].op;
-            if (!(op->ob_flags & _Py_GC_DEAD_FLAG)
-                || (PyType_Check(op) != 0) != types)
+            if ((op->ob_flags & (_Py_GC_DEAD_FLAG | _Py_GC_SWEPT_FLAG))
+                != _Py_GC_DEAD_FLAG)
             {
+                continue;
+            }
+            int op_phase = Py_IS_TYPE(op, &_PyManagedBuffer_Type) ? 0
+                           : PyType_Check(op) ? 2 : 1;
+            if (op_phase != phase) {
                 continue;
             }
             if (_PyObject_IS_GC(op)) {
@@ -610,6 +617,7 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
             gc->sweep_op = op;
 #endif
             Py_TYPE(op)->tp_dealloc(op);
+            op->ob_flags |= _Py_GC_SWEPT_FLAG;
             if (_PyErr_Occurred(tstate)) {
                 _PyErr_Clear(tstate);
             }

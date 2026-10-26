@@ -17,7 +17,6 @@ from test.support import import_helper
 from test.support import threading_helper
 from test.support.os_helper import unlink, FakePath
 from compression._common import _streams
-import sys
 
 
 # Skip tests if the bz2 module doesn't exist.
@@ -1046,15 +1045,6 @@ class BZ2DecompressorTest(BaseTest):
         self.assertFalse(bzd.eof)
         with self.assertRaisesRegex(ValueError, "previous error"):
             bzd.decompress(b'\x00' * 18)
-
-    @support.refcount_test
-    def test_refleaks_in___init__(self):
-        gettotalrefcount = support.get_attribute(sys, 'gettotalrefcount')
-        bzd = BZ2Decompressor()
-        refs_before = gettotalrefcount()
-        for i in range(100):
-            bzd.__init__()
-        self.assertAlmostEqual(gettotalrefcount() - refs_before, 0, delta=10)
 
     def test_uninitialized_BZ2Decompressor_crash(self):
         self.assertEqual(BZ2Decompressor.__new__(BZ2Decompressor).

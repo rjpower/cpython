@@ -10,10 +10,12 @@
       object gets _Py_GC_DEAD_FLAG and is listed.
    2. Weak references with callbacks to dead objects are cleared; the
       callbacks of those that are themselves live are queued.
-   3. Each dead object with a finalizer that has not run (PEP 442) is queued,
-      and it and every dead object it reaches are resurrected for this
-      cycle.  Objects with a legacy tp_del are resurrected and go to
-      gc.garbage, as everything does with DEBUG_SAVEALL.
+   3. A dead GC object with a legacy tp_del that is in a cycle of dead
+      objects goes to gc.garbage, as everything does with DEBUG_SAVEALL; it
+      and what it reaches are resurrected and not finalized.  Each other
+      dead object with a finalizer that has not run (PEP 442), or with a
+      tp_del that has not run since it was last reachable, is queued, and it
+      and every dead object it reaches are resurrected for this cycle.
    4. The remaining weak references to dead objects are cleared.
    5. The sweep calls tp_dealloc on every object still dead, with the frees
       of their blocks deferred (PyObject_Free() sees GCState.sweeping), then
@@ -52,11 +54,12 @@ typedef struct _gc_runtime_state GCState;
 /* While a collection cannot run, try again after this many more bytes. */
 #define RETRY_BYTES (1024 * 1024)
 
-/* A queued call: a weak reference callback, callback(op), or op's
-   finalizer if callback is NULL. */
+/* A queued call: a weak reference callback, callback(op), or, if callback
+   is NULL, op's finalizer or its legacy tp_del. */
 typedef struct {
     PyObject *op;
     PyObject *callback;
+    int legacy;
 } live_call;
 
 /* The collector's own memory comes from the C library's malloc: the heap
@@ -72,6 +75,8 @@ struct _gc_live_state {
     size_t qtail;
     size_t qcap;
     int running_queue;
+    // The second pass of an explicit collection is not verified again.
+    int skip_verify;
     // The exception that was set when the collection started.  The stack
     // below the collection's entry is not scanned (collect_and_run_queue()).
     PyObject *exc;
@@ -169,19 +174,20 @@ queue_push(struct _gc_live_state *ls, PyObject *op, PyObject *callback)
             ls->qcap = cap;
         }
     }
-    ls->queue[ls->qtail++] = (live_call){op, callback};
+    ls->queue[ls->qtail++] = (live_call){op, callback, 0};
     return 0;
 }
 
 /* Run the queued callbacks and finalizers.  A collection that one of them
    triggers queues more at the tail, and this loop runs those too. */
-static void
+static int
 run_queue(PyThreadState *tstate)
 {
     struct _gc_live_state *ls = tstate->interp->gc.live;
     if (ls == NULL || ls->running_queue || ls->qhead == ls->qtail) {
-        return;
+        return 0;
     }
+    int nfinalized = 0;
     ls->running_queue = 1;
     PyObject *exc = _PyErr_GetRaisedException(tstate);
     while (ls->qhead < ls->qtail) {
@@ -198,7 +204,21 @@ run_queue(PyThreadState *tstate)
                 wr->wr_callback = NULL;
             }
         }
+        else if (call.legacy) {
+            // As subtype_dealloc() does under reference counting: the weak
+            // references go first.
+            nfinalized++;
+            if (_PyType_SUPPORTS_WEAKREFS(Py_TYPE(call.op))) {
+                PyObject_ClearWeakRefs(call.op);
+            }
+            Py_TYPE(call.op)->tp_del(call.op);
+            if (_PyErr_Occurred(tstate)) {
+                PyErr_FormatUnraisable("Exception ignored in tp_del of %R",
+                                       call.op);
+            }
+        }
         else {
+            nfinalized++;
             PyObject_CallFinalizer(call.op);
             if (_PyErr_Occurred(tstate)) {
                 PyErr_FormatUnraisable("Exception ignored while finalizing "
@@ -209,6 +229,7 @@ run_queue(PyThreadState *tstate)
     ls->qhead = ls->qtail = 0;
     ls->running_queue = 0;
     _PyErr_SetRaisedException(tstate, exc);
+    return nfinalized;
 }
 
 
@@ -333,37 +354,197 @@ clear_callback_weakrefs(struct _gc_live_state *ls, _PyGCMarkResult *res)
     return 0;
 }
 
-/* Queue the finalizers of dead objects and resurrect what they reach.
-   Objects with a legacy tp_del, and everything with DEBUG_SAVEALL, are
-   resurrected and listed in *garbage, for gc.garbage. */
+static int
+cycle_visit(PyObject *op, void *arg)
+{
+    objstack *s = arg;
+    if (op != NULL && is_dead(op) && !(op->ob_flags & _Py_GC_MARKED_FLAG)) {
+        op->ob_flags |= _Py_GC_MARKED_FLAG;
+        objstack_push(s, op);
+    }
+    return 0;
+}
+
+/* Does op reach itself through dead objects?  Only for the rare objects with
+   a legacy tp_del.  The mark flag, clear on every dead object, records the
+   objects visited; it is cleared again before returning. */
+static int
+in_dead_cycle(PyObject *op, objstack *seen)
+{
+    seen->n = 0;
+    (void)_PyGC_TraceTraverse(op, cycle_visit, seen);
+    int found = 0;
+    for (size_t i = 0; i < seen->n && !found && !seen->oom; i++) {
+        PyObject *o = seen->items[i];
+        if (o == op) {
+            found = 1;
+            break;
+        }
+        (void)_PyGC_TraceTraverse(o, cycle_visit, seen);
+    }
+    for (size_t i = 0; i < seen->n; i++) {
+        seen->items[i]->ob_flags &= ~_Py_GC_MARKED_FLAG;
+    }
+    return found || seen->oom;
+}
+
+static int
+order_visit(PyObject *op, void *arg)
+{
+    if (op != NULL && is_dead(op) && !(op->ob_flags & _Py_GC_MARKED_FLAG)) {
+        objstack_push((objstack *)arg, op);
+    }
+    return 0;
+}
+
+/* List the dead objects that reach a dead object with a finalizer, and those
+   objects, in the order their finalizers run: an object before the objects
+   it reaches, as reference counting finalizes them, so that a file's
+   TextIOWrapper flushes before its FileIO closes.  The order is the reverse
+   of a depth-first postorder over the dead objects; within a cycle it is
+   arbitrary.  The visited mark is cleared before returning. */
+static int
+finalizer_order(_PyGCMarkResult *res, objstack *order)
+{
+    objstack stack = {0};
+    objstack visited = {0};
+    for (Py_ssize_t i = 0; i < res->ndead; i++) {
+        PyObject *root = res->dead[i].op;
+        if (Py_TYPE(root)->tp_finalize == NULL
+            || (root->ob_flags & _Py_GC_MARKED_FLAG))
+        {
+            continue;
+        }
+        objstack_push(&stack, root);
+        while (stack.n > 0 && !stack.oom) {
+            // An entry with bit 0 set is an object whose children are done.
+            uintptr_t top = (uintptr_t)stack.items[--stack.n];
+            PyObject *op = (PyObject *)(top & ~(uintptr_t)1);
+            if (top & 1) {
+                if (Py_TYPE(op)->tp_finalize != NULL) {
+                    objstack_push(order, op);
+                }
+                continue;
+            }
+            if (op->ob_flags & _Py_GC_MARKED_FLAG) {
+                continue;
+            }
+            op->ob_flags |= _Py_GC_MARKED_FLAG;
+            objstack_push(&visited, op);
+            objstack_push(&stack, (PyObject *)((uintptr_t)op | 1));
+            (void)_PyGC_TraceTraverse(op, order_visit, &stack);
+        }
+    }
+    for (size_t i = 0; i < visited.n; i++) {
+        visited.items[i]->ob_flags &= ~_Py_GC_MARKED_FLAG;
+    }
+    int oom = stack.oom || visited.oom || order->oom;
+    free(stack.items);
+    free(visited.items);
+    // Reverse the postorder
+    for (size_t i = 0, j = order->n; !oom && i + 1 < j; i++, j--) {
+        PyObject *tmp = order->items[i];
+        order->items[i] = order->items[j - 1];
+        order->items[j - 1] = tmp;
+    }
+    return oom ? -1 : 0;
+}
+
+static int
+queue_legacy(struct _gc_live_state *ls, PyObject *op)
+{
+    if (queue_push(ls, op, NULL) < 0) {
+        return -1;
+    }
+    ls->queue[ls->qtail - 1].legacy = 1;
+    op->ob_flags |= _Py_GC_DEL_CALLED_FLAG;
+    return 0;
+}
+
+/* Queue the finalizers and legacy tp_dels of dead objects and resurrect what
+   they reach, as gc.c does: the GC objects with a tp_del in a cycle of
+   garbage, and what they reach, are not finalized but listed in *garbage,
+   for gc.garbage, as is everything with DEBUG_SAVEALL.  A tp_del outside a
+   cycle runs, as it does when its count drops to zero. */
 static int
 handle_finalizers(GCState *gc, struct _gc_live_state *ls,
                   _PyGCMarkResult *res, objstack *garbage)
 {
     int saveall = gc->debug & _PyGC_DEBUG_SAVEALL;
-    size_t first = ls->qtail;
-    // Queue every finalizer first: a resurrected object needs its own.
+    objstack s = {0};
+    objstack legacy = {0};
     for (Py_ssize_t i = 0; i < res->ndead; i++) {
         PyObject *op = res->dead[i].op;
-        PyTypeObject *tp = Py_TYPE(op);
-        if (tp->tp_finalize != NULL
+        if (Py_TYPE(op)->tp_del == NULL
+            || (op->ob_flags & _Py_GC_DEL_CALLED_FLAG))
+        {
+            continue;
+        }
+        if (_PyObject_IS_GC(op) && in_dead_cycle(op, &s)) {
+            objstack_push(garbage, op);
+        }
+        else {
+            objstack_push(&legacy, op);
+        }
+    }
+    if (garbage->oom || legacy.oom) {
+        goto error;
+    }
+    s.n = 0;
+    for (size_t i = 0; i < garbage->n; i++) {
+        resurrect(&s, garbage->items[i]);
+    }
+    // A tp_del that a cycle in gc.garbage reaches does not run either: its
+    // object goes to gc.garbage too.
+    for (size_t i = 0; i < legacy.n; i++) {
+        PyObject *op = legacy.items[i];
+        if (!(op->ob_flags & _Py_GC_DEAD_FLAG) && _PyObject_IS_GC(op)) {
+            objstack_push(garbage, op);
+        }
+    }
+    if (garbage->oom) {
+        goto error;
+    }
+    size_t first = ls->qtail;
+    // Queue every finalizer first: a resurrected object needs its own.
+    objstack order = {0};
+    if (finalizer_order(res, &order) < 0) {
+        free(order.items);
+        goto error;
+    }
+    for (size_t i = 0; i < order.n; i++) {
+        PyObject *op = order.items[i];
+        if ((op->ob_flags & _Py_GC_DEAD_FLAG)  // not reached from a legacy cycle
             && !(op->ob_flags & _Py_GC_FINALIZED_FLAG)
             && !_PyGen_FinalizerIsNoop(op))
         {
             if (queue_push(ls, op, NULL) < 0) {
-                return -1;
-            }
-        }
-        if (saveall || tp->tp_del != NULL) {
-            if (_PyObject_IS_GC(op)) {
-                objstack_push(garbage, op);
-                if (garbage->oom) {
-                    return -1;
-                }
+                free(order.items);
+                goto error;
             }
         }
     }
-    objstack s = {0};
+    free(order.items);
+    for (Py_ssize_t i = 0; i < res->ndead; i++) {
+        PyObject *op = res->dead[i].op;
+        if (!(op->ob_flags & _Py_GC_DEAD_FLAG)) {
+            continue;  // reached from a legacy cycle
+        }
+        if (saveall && _PyObject_IS_GC(op)) {
+            objstack_push(garbage, op);
+            if (garbage->oom) {
+                goto error;
+            }
+        }
+    }
+    // tp_del after tp_finalize, as subtype_dealloc() calls them
+    for (size_t i = 0; i < legacy.n; i++) {
+        if ((legacy.items[i]->ob_flags & _Py_GC_DEAD_FLAG)
+            && queue_legacy(ls, legacy.items[i]) < 0)
+        {
+            goto error;
+        }
+    }
     for (size_t i = first; i < ls->qtail; i++) {
         resurrect(&s, ls->queue[i].op);
     }
@@ -376,7 +557,13 @@ handle_finalizers(GCState *gc, struct _gc_live_state *ls,
         }
     }
     free(s.items);
+    free(legacy.items);
     return s.oom ? -1 : 0;
+
+error:
+    free(s.items);
+    free(legacy.items);
+    return -1;
 }
 
 static void
@@ -429,6 +616,12 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
     return ncollected;
 }
 
+static void
+debug_cycle(const char *msg, PyObject *op)
+{
+    PySys_FormatStderr("gc: %s <%s %p>\n", msg, Py_TYPE(op)->tp_name, op);
+}
+
 static Py_ssize_t
 collect(PyThreadState *tstate, _PyGC_Reason reason)
 {
@@ -472,6 +665,16 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
                 _PyWeakref_ClearWeakRefsNoCallbacks(op);
             }
         }
+        if (gc->debug & _PyGC_DEBUG_COLLECTABLE) {
+            // Only the names and addresses: Python code that the write runs
+            // cannot reach the dead objects, whose weak references are clear.
+            for (Py_ssize_t i = 0; i < res.ndead; i++) {
+                PyObject *op = res.dead[i].op;
+                if ((op->ob_flags & _Py_GC_DEAD_FLAG) && _PyObject_IS_GC(op)) {
+                    debug_cycle("collectable", op);
+                }
+            }
+        }
         ncollected = sweep(tstate, gc, &res, &bytes_freed);
     }
     (void)PyTime_PerfCounterRaw(&t1);
@@ -503,8 +706,15 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
                           res.nobjects, ncollected, bytes_freed,
                           res.live_bytes, cur.duration);
     }
-    _PyGC_TraceAfterCollect(tstate, NUM_GENERATIONS - 1,
-                            reason == _Py_GC_REASON_MANUAL);
+    if (!ls->skip_verify) {
+        _PyGC_TraceAfterCollect(tstate, NUM_GENERATIONS - 1,
+                                reason == _Py_GC_REASON_MANUAL);
+    }
+    for (size_t i = 0; i < garbage.n; i++) {
+        if (gc->debug & _PyGC_DEBUG_UNCOLLECTABLE) {
+            debug_cycle("uncollectable", garbage.items[i]);
+        }
+    }
     for (size_t i = 0; gc->garbage != NULL && i < garbage.n; i++) {
         if (PyList_Append(gc->garbage, garbage.items[i]) < 0) {
             PyErr_Clear();
@@ -520,14 +730,36 @@ done:
     return ncollected + cur.uncollectable;
 }
 
-/* Collect, with the object allocations of the collection and of the queue
-   going to the heap for non-GC objects, whatever the allocation that
-   triggered it had selected (_PyObject_MallocWithType()).
+/* One pass: collect, then run the queue.  The object allocations of the
+   collection and of the queue go to the heap for non-GC objects, whatever
+   the allocation that triggered it had selected
+   (_PyObject_MallocWithType()).  Returns the number of finalizers and
+   tp_dels that ran in *nfinalized. */
+static Py_NO_INLINE Py_ssize_t
+collect_pass(PyThreadState *tstate, _PyGC_Reason reason, int *nfinalized)
+{
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    struct _mimalloc_thread_state *m = &ts->mimalloc;
+    mi_heap_t *heap = m->current_object_heap;
+    if (heap != NULL) {
+        m->current_object_heap = &m->heaps[_Py_MIMALLOC_HEAP_OBJECT];
+    }
+    Py_ssize_t n = collect(tstate, reason);
+    // A collection that the queue's code triggers records its own entry.
+    ts->gc_trace.entry_sp = 0;
+    *nfinalized = run_queue(tstate);
+    if (heap != NULL) {
+        m->current_object_heap = heap;
+    }
+    return n;
+}
 
-   The mark scans this thread's stack from here up, with the registers as
-   they are here: the frames below are the collector's own, over stale
-   words that earlier, deeper calls left, which would keep garbage alive.
-   Not inlined, so that the callers' frames are above. */
+/* The entry of every collection.  The mark scans this thread's stack from
+   here up, with the registers as they are here: the frames below are the
+   collector's own, over stale words that earlier, deeper calls left, which
+   would keep garbage alive.  Not inlined, so that the callers' frames are
+   above, and kept small, since its own frame is scanned too: the work is in
+   collect_pass(). */
 static Py_NO_INLINE Py_ssize_t
 collect_and_run_queue(PyThreadState *tstate, _PyGC_Reason reason)
 {
@@ -538,17 +770,19 @@ collect_and_run_queue(PyThreadState *tstate, _PyGC_Reason reason)
     if (outer_entry == 0) {
         _PyGC_TraceCaptureEntry();
     }
-    struct _mimalloc_thread_state *m = &((_PyThreadStateImpl *)tstate)->mimalloc;
-    mi_heap_t *heap = m->current_object_heap;
-    if (heap != NULL) {
-        m->current_object_heap = &m->heaps[_Py_MIMALLOC_HEAP_OBJECT];
-    }
-    Py_ssize_t n = collect(tstate, reason);
-    // A collection that the queue's code triggers records its own entry.
-    ts->gc_trace.entry_sp = 0;
-    run_queue(tstate);
-    if (heap != NULL) {
-        m->current_object_heap = heap;
+    int nfinalized;
+    Py_ssize_t n = collect_pass(tstate, reason, &nfinalized);
+    /* The objects that finalizers did not resurrect are garbage again.  An
+       explicit collection frees them, as the reference counting build
+       does within one collection; an automatic one leaves them to the
+       next.  Finalizers do not run twice, so one more pass is enough for
+       the objects the first one found. */
+    if (nfinalized > 0 && reason != _Py_GC_REASON_HEAP && outer_entry == 0) {
+        struct _gc_live_state *ls = get_live(tstate->interp);
+        _PyGC_TraceCaptureEntry();
+        ls->skip_verify = 1;
+        n += collect_pass(tstate, reason, &nfinalized);
+        ls->skip_verify = 0;
     }
     ts->gc_trace.entry_sp = outer_entry;
     return n;

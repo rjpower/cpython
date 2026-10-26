@@ -367,6 +367,11 @@ _PyIOBase_finalize(PyObject *self)
 {
     int is_zombie;
 
+#ifdef Py_GC
+    /* Only the deallocs call this, from the collector's sweep, which ran
+       the finalizer from its queue before. */
+    return PyObject_CallFinalizerFromDealloc(self);
+#endif
     /* If _PyIOBase_finalize() is called from a destructor, we need to
        resurrect the object as calling close() can invoke arbitrary code. */
     is_zombie = (Py_REFCNT(self) == 0);

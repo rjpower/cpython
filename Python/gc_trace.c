@@ -1586,7 +1586,17 @@ live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
     res->nobjects++;
     uint16_t flags = op->ob_flags;
     if (flags & _Py_GC_MARKED_FLAG) {
-        op->ob_flags = flags & ~(_Py_GC_MARKED_FLAG | _Py_GC_SHALLOW_FLAG);
+        uint16_t clear = _Py_GC_MARKED_FLAG | _Py_GC_SHALLOW_FLAG;
+        if (flags & (_Py_GC_FINALIZED_FLAG | _Py_GC_DEL_CALLED_FLAG)) {
+            /* Reachable again: tp_del runs at its next death, as it does
+               at each one under reference counting, and so does the
+               finalizer of a non-GC object, which PEP 442 does not cover. */
+            clear |= _Py_GC_DEL_CALLED_FLAG;
+            if (!_PyObject_IS_GC(op)) {
+                clear |= _Py_GC_FINALIZED_FLAG;
+            }
+        }
+        op->ob_flags = flags & ~clear;
         res->live_bytes += block_size;
         return true;
     }

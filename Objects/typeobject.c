@@ -2709,14 +2709,15 @@ subtype_dealloc(PyObject *self)
             if (PyObject_CallFinalizerFromDealloc(self) < 0)
                 return;
         }
+#ifndef Py_GC
+        // Under Py_GC the collector calls tp_del, from its queue.
         if (type->tp_del) {
             type->tp_del(self);
-#ifndef Py_GC
             if (Py_REFCNT(self) > 0) {
                 return;
             }
-#endif
         }
+#endif
 
         /* Find the nearest base with a different tp_dealloc */
         base = type;
@@ -2787,19 +2788,19 @@ subtype_dealloc(PyObject *self)
         PyObject_ClearWeakRefs(self);
     }
 
+#ifndef Py_GC
+    // Under Py_GC the collector calls tp_del, from its queue, in the
+    // collection before the one that sweeps self.
     if (type->tp_del) {
         _PyObject_GC_TRACK(self);
         type->tp_del(self);
-#ifndef Py_GC
-        /* Under Py_GC the count is constant; resurrection is the collector's
-           business, which ran tp_del before this sweep. */
         if (Py_REFCNT(self) > 0) {
             /* Resurrected */
             return;
         }
-#endif
         _PyObject_GC_UNTRACK(self);
     }
+#endif
     if (has_finalizer) {
         /* New weakrefs could be created during the finalizer call.
            If this occurs, clear them out without calling their

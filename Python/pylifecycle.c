@@ -1937,6 +1937,12 @@ finalize_modules(PyThreadState *tstate)
         Py_DECREF(weaklist);
     }
 
+#ifdef Py_GC
+    // What the cleared modules held dies here under reference counting,
+    // while sys.stdout and the builtins still work for its finalizers.
+    _PyGC_CollectNoFail(tstate);
+#endif
+
     // Clear sys and builtins modules dict
     finalize_clear_sys_builtins_dict(interp, verbose);
 

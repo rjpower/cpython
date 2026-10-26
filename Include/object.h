@@ -615,6 +615,8 @@ given type object has a specified feature.
                                                the object is fully built */
 #  define _Py_GC_SHALLOW_FLAG    (1 << 13)  /* marked by a conservative root
                                                without being traversed */
+#  define _Py_GC_DEL_CALLED_FLAG (1 << 14)  /* tp_del called since the mark
+                                               last reached the object */
 #  define _Py_GC_HEAP_FLAG       (1 << 15)  /* see above */
 #  define _Py_GC_OBJECT_MAGIC    0x6C0B
 #  define _Py_GC_REFCNT          ((uint32_t)1 << 30)

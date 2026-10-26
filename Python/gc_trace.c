@@ -318,6 +318,12 @@ typedef struct {
     size_t stack_cap;
 
     int conservative;     // the root being scanned is conservative
+    int scan_mem;         // follow words into mem heap blocks
+    addrset mem_scanned;  // mem blocks queued for scanning
+    uintptr_t *mem_stack; // (start, end) pairs of mem blocks to scan
+    size_t mem_sp;
+    size_t mem_cap;
+    Py_ssize_t nmemblocks;
     int oom;
     Py_ssize_t nobjects;
     Py_ssize_t nmarked;
@@ -327,6 +333,7 @@ typedef struct {
 } trace_t;
 
 static int mark_visit(PyObject *op, void *arg);
+static void scan_threads_only(trace_t *t, PyThreadState *current);
 
 
 /* --- the heaps --------------------------------------------------------- */
@@ -466,6 +473,35 @@ walk_heaps(trace_t *t)
 }
 
 /* Map an address anywhere in an object block to the object, or 0. */
+/* Queue the mem heap block that contains addr for a conservative scan. */
+static void
+queue_mem_block(trace_t *t, uintptr_t addr)
+{
+    const range_t *r = rangelist_find(&t->mem_pages, addr);
+    if (r == NULL) {
+        return;
+    }
+    uintptr_t block = r->start + (addr - r->start) / r->bsize * r->bsize;
+    int added = addrset_add(&t->mem_scanned, block);
+    if (added <= 0) {
+        t->oom |= added < 0;
+        return;
+    }
+    if (t->mem_sp + 2 > t->mem_cap) {
+        size_t cap = t->mem_cap ? t->mem_cap * 2 : 256;
+        uintptr_t *stack = realloc(t->mem_stack, cap * sizeof(uintptr_t));
+        if (stack == NULL) {
+            t->oom = 1;
+            return;
+        }
+        t->mem_stack = stack;
+        t->mem_cap = cap;
+    }
+    t->mem_stack[t->mem_sp++] = block;
+    t->mem_stack[t->mem_sp++] = block + r->bsize;
+    t->nmemblocks++;
+}
+
 static uintptr_t
 heap_lookup(const trace_t *t, uintptr_t addr)
 {
@@ -774,6 +810,9 @@ scan_range(trace_t *t, uintptr_t start, uintptr_t end)
                 drain(t);
                 t->conservative = 1;
             }
+            else if (t->scan_mem) {
+                queue_mem_block(t, w);
+            }
         }
         t->conservative = conservative;
         start = stop;
@@ -875,8 +914,27 @@ scan_current_thread(trace_t *t, PyThreadState *tstate)
     }
 }
 
+/* C code keeps references in PyMem memory that only its stack frame
+   points to: a PyUnicodeWriter's buffer, the keys list.sort() computes, a
+   long vectorcall's argument array.  The blocks that the stacks and
+   registers point into are scanned conservatively too, and the blocks
+   they point into in turn.  Memory that only objects or static variables
+   point to is not: an object must visit what it holds there. */
 static void
 scan_threads(trace_t *t, PyThreadState *current)
+{
+    t->scan_mem = 1;
+    scan_threads_only(t, current);
+    while (t->mem_sp > 0 && !t->oom) {
+        uintptr_t end = t->mem_stack[--t->mem_sp];
+        uintptr_t start = t->mem_stack[--t->mem_sp];
+        scan_range(t, start, end);
+    }
+    t->scan_mem = 0;
+}
+
+static void
+scan_threads_only(trace_t *t, PyThreadState *current)
 {
     scan_current_thread(t, current);
     _Py_FOR_EACH_TSTATE_UNLOCKED(t->interp, p) {
@@ -1372,9 +1430,9 @@ report_to(FILE *out, trace_t *t, Py_ssize_t nholes)
     fprintf(out,
             "gc verify: %zd holes; %zd objects, %zd marked (%zd shallow), "
             "%zd non-object references, %zd allocations outside the heaps, "
-            "%zd unreachable garbage\n",
+            "%zd unreachable garbage, %zd mem blocks scanned\n",
             nholes, t->nobjects, t->nmarked, t->nshallow, t->nrejected,
-            unheaped, t->ngarbage);
+            unheaped, t->ngarbage, t->nmemblocks);
     Py_ssize_t limit = 50;
     const char *env = getenv("PYTHON_GCVERIFY_LIMIT");
     if (env != NULL && *env != '\0') {
@@ -1431,10 +1489,10 @@ report(trace_t *t, PyThreadState *tstate, Py_ssize_t nholes)
     if (log == NULL) {
         return;
     }
-    // The innermost Python function and the innermost test method
+    // The innermost Python functions, then the innermost test method
     fprintf(log, "== pid %ld in", (long)getpid());
-    int shown = 0;
-    for (_PyInterpreterFrame *f = tstate->current_frame; f != NULL && shown < 2;
+    int depth = 0;
+    for (_PyInterpreterFrame *f = tstate->current_frame; f != NULL;
          f = f->previous)
     {
         if (f->owner >= FRAME_OWNED_BY_INTERPRETER
@@ -1443,17 +1501,19 @@ report(trace_t *t, PyThreadState *tstate, Py_ssize_t nholes)
             continue;
         }
         PyCodeObject *co = _PyFrame_GetCode(f);
-        if (shown == 1 && !(PyUnicode_IS_ASCII(co->co_name)
-                            && strncmp((const char *)PyUnicode_DATA(co->co_name),
-                                       "test", 4) == 0))
-        {
+        int is_test = PyUnicode_IS_ASCII(co->co_name)
+            && strncmp((const char *)PyUnicode_DATA(co->co_name), "test", 4) == 0;
+        if (depth >= 4 && !is_test) {
             continue;
         }
-        fputs(shown ? ", from " : " ", log);
+        fputs(depth ? ", from " : " ", log);
         write_ascii(log, co->co_qualname);
         fputs(" at ", log);
         write_ascii(log, co->co_filename);
-        shown++;
+        depth++;
+        if (is_test) {
+            break;
+        }
     }
     fputs("\n", log);
     report_to(log, t, nholes);
@@ -1497,6 +1557,8 @@ static void
 trace_fini(trace_t *t)
 {
     addrset_fini(&t->freed);
+    addrset_fini(&t->mem_scanned);
+    free(t->mem_stack);
     addrset_fini(&t->objects);
     addrset_fini(&t->marked);
     addrset_fini(&t->shallow);
@@ -1541,6 +1603,7 @@ verify(PyThreadState *tstate)
         || addrset_init(&t.shallow, 1024) < 0
         || addrset_init(&t.deepened, 1024) < 0
         || addrset_init(&t.good_types, 4096) < 0
+        || addrset_init(&t.mem_scanned, 256) < 0
         || read_mappings(&t) < 0
         || walk_heaps(&t) < 0)
     {

@@ -3517,11 +3517,28 @@ call_with_c_local(PyObject *self, PyObject *args)
     return res;
 }
 
+/* The array's address, masked so that no word of memory holds it: the
+   verifier scans the PyMem blocks that the C stack points to. */
+static uintptr_t hidden_array;
+#define HIDE_MASK ((uintptr_t)0x5a5a5a5a5a5a5a5aULL)
+
+/* Store factory() in a new array, keeping its address only in
+   hidden_array.  The registers that held it are restored on return. */
 static Py_NO_INLINE int
-store_in_array(PyObject **array, PyObject *factory)
+store_in_hidden_array(PyObject *factory)
 {
+    PyObject **array = PyMem_Calloc(4, sizeof(PyObject *));
+    if (array == NULL) {
+        PyErr_NoMemory();
+        return -1;
+    }
     array[2] = PyObject_CallNoArgs(factory);
-    return array[2] == NULL ? -1 : 0;
+    if (array[2] == NULL) {
+        PyMem_Free(array);
+        return -1;
+    }
+    hidden_array = (uintptr_t)array ^ HIDE_MASK;
+    return 0;
 }
 
 /* Overwrite the dead stack below the caller, where the call to the
@@ -3542,16 +3559,13 @@ clear_dead_stack(void)
 static PyObject *
 gc_verify_with_pymem_array(PyObject *self, PyObject *factory)
 {
-    PyObject **array = PyMem_Calloc(4, sizeof(PyObject *));
-    if (array == NULL) {
-        return PyErr_NoMemory();
-    }
-    if (store_in_array(array, factory) < 0) {
-        PyMem_Free(array);
+    if (store_in_hidden_array(factory) < 0) {
         return NULL;
     }
     clear_dead_stack();
     PyObject *holes = verify_and_get_holes();
+    PyObject **array = (PyObject **)(hidden_array ^ HIDE_MASK);
+    hidden_array = 0;
     PyObject *res = NULL;
     if (holes != NULL) {
         // Pass on the array's reference, so that the caller can keep the

@@ -68,6 +68,8 @@ typedef struct _PyRegOp {
     int except;             // the exception handler's block, or -1
     int depth;              // stack depth before the op
     int flags;
+    int reader;             // a folded load: the op that reads the local,
+    int reader_k;           // and its input index
     _Py_SourceLocation loc;
     int base;               // the slot of a window, set by compaction
     /* Set by the assembler */
@@ -174,7 +176,6 @@ int _PyRegCfg_Compact(_PyRegCfg *cfg);
 int _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical);
 
 /* The passes, in the order the driver runs them */
-int _PyRegPass_CopyToLoad(_PyRegCfg *cfg);
 int _PyRegPass_SwapRename(_PyRegCfg *cfg);
 int _PyRegPass_CopyProp(_PyRegCfg *cfg);
 int _PyRegPass_StoreElim(_PyRegCfg *cfg);

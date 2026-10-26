@@ -136,6 +136,7 @@ _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
     op->target = OPCODE_HAS_JUMP(opcode) ? target : -1;
     op->except = except;
     op->dst = -1;
+    op->reader = -1;
     op->depth = -1;
     op->fb = -1;
     cfg->blocks[self].end = cfg->nops;
@@ -797,6 +798,8 @@ typedef struct {
     int *occ;               // per slot less nlocalsplus, its register or -1
     int top;                // the slots from top up are free
     int lenient;            // unreachable code, which never runs
+    _PyRegOp **reserved;    // folded loads that hold their slot
+    int nreserved;
 } occupancy;
 
 static inline void
@@ -957,6 +960,51 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op)
     return SUCCESS;
 }
 
+/* A folded load under a temporary that its reader also reads keeps its
+ * slot until the reader runs.  A handler may write an output only to the
+ * slot of the input at the output's own stack position, or to a slot no
+ * input holds; were the load's slot given to the values above it, the
+ * reader's result would have to go above them, and a window that then
+ * reads it would not be consecutive. */
+static int
+reserve_folded(_PyRegCfg *cfg, occupancy *o, _PyRegOp *load)
+{
+    int nl = cfg->nlocalsplus;
+    const _PyRegOp *reader = &cfg->ops[load->reader];
+    const int *in = _PyReg_IN(cfg, reader);
+    int above = 0;
+    for (int k = load->reader_k + 1; k < reader->nread; k++) {
+        above |= in[k] >= nl;
+    }
+    if (!above) {
+        return SUCCESS;
+    }
+    int v = _PyReg_OUT(cfg, load)[0];
+    RETURN_IF_ERROR(assign(cfg, o, v, nl + o->top, load));
+    RETURN_IF_ERROR(occ_take(o, o->top, v, load));
+    cfg->ntemps = Py_MAX(cfg->ntemps, o->top);
+    o->reserved[o->nreserved++] = load;
+    return SUCCESS;
+}
+
+/* The reader of folded loads frees the slots they kept. */
+static void
+release_folded(_PyRegCfg *cfg, occupancy *o, int reader)
+{
+    int n = 0;
+    for (int r = 0; r < o->nreserved; r++) {
+        _PyRegOp *load = o->reserved[r];
+        if (load->reader == reader) {
+            int v = _PyReg_OUT(cfg, load)[0];
+            occ_free(o, _PyRegCfg_Slot(cfg, v) - cfg->nlocalsplus, v);
+        }
+        else {
+            o->reserved[n++] = load;
+        }
+    }
+    o->nreserved = n;
+}
+
 static int run_passes(_PyRegCfg *cfg);
 
 int
@@ -976,7 +1024,13 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
         cfg->slot[i] = i < IR_MAX_SLOTS ? nl + i : -1;
     }
     cfg->ntemps = 0;
-    occupancy o = {.occ = occ, .top = 0};
+    _PyRegOp **reserved = PyMem_Malloc(Py_MAX(cfg->nops, 1) * sizeof(_PyRegOp *));
+    if (reserved == NULL) {
+        PyMem_Free(occ);
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    occupancy o = {.occ = occ, .top = 0, .reserved = reserved};
     int err = SUCCESS;
     for (int b = 0; b < cfg->nblocks && err == SUCCESS; b++) {
         _PyRegBlock *blk = &cfg->blocks[b];
@@ -988,6 +1042,7 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
             // The stack at a region's entry is canonical, and every value
             // on it holds its slot until an op takes it
             o.top = 0;
+            o.nreserved = 0;
             for (int k = 0; k < blk->startdepth; k++) {
                 occ[k] = _PyReg_CANON(cfg, k);
                 o.top = k + 1;
@@ -996,10 +1051,15 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
         for (int i = blk->start; err == SUCCESS && i < blk->end; i++) {
             _PyRegOp *op = &cfg->ops[i];
             if (op->opcode != _PyReg_DEAD) {
+                release_folded(cfg, &o, i);
                 err = compact_op(cfg, &o, op);
+            }
+            else if (op->flags & _PyReg_LOAD_FOLDED) {
+                err = reserve_folded(cfg, &o, op);
             }
         }
     }
+    PyMem_Free(reserved);
     PyMem_Free(occ);
     return err;
 }
@@ -1281,7 +1341,6 @@ static const struct {
     const char *name;
     pass_fn fn;
 } passes[] = {
-    {"copy to load", _PyRegPass_CopyToLoad},
     {"swap renaming", _PyRegPass_SwapRename},
     {"copy propagation", _PyRegPass_CopyProp},
     {"store elimination", _PyRegPass_StoreElim},

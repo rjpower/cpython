@@ -849,6 +849,12 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         self.addCleanup(sys.settrace, sys.gettrace())
         sys.settrace(None)
 
+    def assertAddReadsX(self, f):
+        # x + k reads x through the add's field: the borrowed load of x,
+        # under the constant, folds into the add
+        add = [i for i in dis.get_instructions(f) if i.opname == 'BINARY_OP'][0]
+        self.assertEqual(add.srcs[0], f.__code__.co_varnames.index('x'))
+
     def test_load_fast_known_simple(self):
         def f():
             x = 1
@@ -1026,7 +1032,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         ns = {}
         exec(code, ns)
         f = ns['f']
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         co_code = f.__code__.co_code
         def trace(frame, event, arg):
@@ -1038,7 +1044,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         sys.settrace(trace)
         result = f()
         self.assertIsNone(result)
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         self.assertEqual(f.__code__.co_code, co_code)
 
@@ -1058,7 +1064,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         ns = {}
         exec(code, ns)
         f = ns['f']
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         co_code = f.__code__.co_code
         def trace(frame, event, arg):
@@ -1072,7 +1078,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             sys.settrace(trace)
             result = f()
         self.assertEqual(result, 4)
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         self.assertEqual(f.__code__.co_code, co_code)
 
@@ -1092,7 +1098,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         ns = {}
         exec(code, ns)
         f = ns['f']
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         co_code = f.__code__.co_code
         def trace(frame, event, arg):
@@ -1106,7 +1112,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             sys.settrace(trace)
             result = f()
         self.assertEqual(result, 4)
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         self.assertEqual(f.__code__.co_code, co_code)
 
@@ -1124,7 +1130,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         ns = {}
         exec(code, ns)
         f = ns['f']
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         return f
 
@@ -1138,7 +1144,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             return trace
         sys.settrace(trace)
         f()
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
 
     def test_initializing_local_does_not_add_check(self):
@@ -1151,7 +1157,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             return trace
         sys.settrace(trace)
         f()
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
 
     def test_import_from_doesnt_clobber_load_fast_borrow(self):

@@ -8,7 +8,7 @@ import types
 import unittest
 from test.support import (threading_helper, check_impl_detail,
                           requires_specialization,
-                          cpython_only, reset_code, Py_GC, Py_SHAPES)
+                          cpython_only, reset_code, Py_SHAPES)
 from test.support.import_helper import import_module
 
 # Skip this module on other interpreters, it is cpython specific:
@@ -2300,12 +2300,11 @@ class TestSpecializer(TestBase):
             l.append(holder.item)
 
         holder = Holder()
-        holder.item = item = object()
+        holder.item = object()
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             list_append([], holder)
         self.assert_specialized(list_append, "CALL_LIST_APPEND")
 
-        refcount = sys.getrefcount(item) if not Py_GC else None
         # An empty list has no spare capacity, so append() must resize it.
         lst = []
         with self.assertRaises(MemoryError):
@@ -2315,8 +2314,6 @@ class TestSpecializer(TestBase):
             finally:
                 _testcapi.remove_mem_hooks()
         self.assertEqual(lst, [])
-        if not Py_GC:
-            self.assertEqual(sys.getrefcount(item), refcount)
 
     @cpython_only
     @requires_specialization

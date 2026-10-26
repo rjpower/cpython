@@ -2052,7 +2052,7 @@ class ArgsTestCase(BaseTestCase):
         code = textwrap.dedent(r"""
             import unittest
             import weakref
-            from test.support import captured_stderr
+            from test.support import captured_stderr, gc_collect
 
             class MyObject:
                 pass
@@ -2068,6 +2068,7 @@ class ArgsTestCase(BaseTestCase):
                         # call weakref_callback() which logs
                         # an unraisable exception
                         obj = None
+                        gc_collect()  # For other GCs.
                     self.assertEqual(stderr.getvalue(), '')
         """)
         testname = self.create_test(code=code)

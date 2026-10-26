@@ -1343,6 +1343,35 @@ class TracingCollectorTests(unittest.TestCase):
         gc.collect()
 
     @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    def test_dealloc_reads_flagged_referents(self):
+        # Each reader in a chain reads the reader it refers to, which was
+        # allocated before it: the sweep must go referrer first among the
+        # flagged objects, not in heap order.
+        class Sub(_testcapi.DeallocReader):
+            pass
+        chains = []
+        for i in range(300):
+            r = _testcapi.StatefulReferent()
+            for j in range(5):
+                r = (Sub if (i + j) % 2 else _testcapi.DeallocReader)(r)
+            chains.append(r)
+        del chains, r
+        gc.collect()
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    def test_dealloc_reads_referents_in_a_cycle(self):
+        # Readers that refer to each other through their attributes, which
+        # their deallocs do not read: the sweep breaks the cycle.
+        class Sub(_testcapi.DeallocReader):
+            pass
+        for n in (1, 2, 3, 50):
+            readers = [Sub(_testcapi.StatefulReferent()) for _ in range(n)]
+            for i, r in enumerate(readers):
+                r.next = readers[(i + 1) % n]
+            del readers, r
+            gc.collect()
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
     def test_add_root(self):
         class A:
             pass

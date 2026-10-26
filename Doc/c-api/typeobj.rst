@@ -1554,9 +1554,12 @@ and :c:data:`PyType_Type` effectively act as defaults.)
       reads the C state of objects that the instance refers to, rather than
       only releasing its references to them.  The collector deallocates
       unreachable objects in no particular order, except that it deallocates
-      the instances of types with this flag before other objects.  Two
-      unreachable flagged instances are still deallocated in no particular
-      order.
+      the instances of types with this flag before other objects, and among
+      them a referrer before its referent, as reference counting would.  A
+      referent counts if the referrer's :c:member:`~PyTypeObject.tp_traverse`
+      visits it directly.  Flagged instances that refer to each other in a
+      cycle are deallocated in an order that breaks the cycle at one of its
+      references.
 
       **Inheritance:**
 

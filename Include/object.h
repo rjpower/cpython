@@ -509,7 +509,8 @@ given type object has a specified feature.
 /* The type's dealloc reads the C state of objects it refers to, not just
    releases them.  Reference counting deallocates a referrer before its
    referents; the tracing collector keeps that order for dead
-   instances of this type by deallocating them first.  Subtypes inherit it. */
+   instances of this type by deallocating them first, referrer first among
+   themselves.  Subtypes inherit it. */
 #define Py_TPFLAGS_DEALLOC_READS_REFERENTS (1UL << 21)
 #endif
 

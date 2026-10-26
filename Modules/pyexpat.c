@@ -1769,21 +1769,6 @@ xmlparse_clear(PyObject *op)
     return 0;
 }
 
-/* XML_ParserFree() on a subparser reads its parent's XML_Parser.  Reference
-   counting frees a subparser before its parent, but the sweep frees dead
-   objects in no particular order, so a dead subparser frees its
-   XML_Parser here, before the sweep, while the parent's is intact.  A
-   finalizer that resurrected the subparser would find it without one. */
-static void
-xmlparse_finalize(PyObject *op)
-{
-    xmlparseobject *self = xmlparseobject_CAST(op);
-    if (self->parent != NULL && self->itself != NULL) {
-        XML_ParserFree(self->itself);
-        self->itself = NULL;
-    }
-}
-
 static void
 xmlparse_dealloc(PyObject *op)
 {
@@ -2099,7 +2084,6 @@ PyDoc_STRVAR(Xmlparsetype__doc__, "XML parser");
 
 static PyType_Slot _xml_parse_type_spec_slots[] = {
     {Py_tp_dealloc, xmlparse_dealloc},
-    {Py_tp_finalize, xmlparse_finalize},
     {Py_tp_doc, (void *)Xmlparsetype__doc__},
     {Py_tp_traverse, xmlparse_traverse},
     {Py_tp_clear, xmlparse_clear},
@@ -2112,8 +2096,10 @@ static PyType_Slot _xml_parse_type_spec_slots[] = {
 static PyType_Spec _xml_parse_type_spec = {
     .name = "pyexpat.xmlparser",
     .basicsize = sizeof(xmlparseobject),
+    // XML_ParserFree() on a subparser reads its parent's XML_Parser.
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_DISALLOW_INSTANTIATION | Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_DISALLOW_INSTANTIATION | Py_TPFLAGS_IMMUTABLETYPE |
+              Py_TPFLAGS_DEALLOC_READS_REFERENTS),
     .slots = _xml_parse_type_spec_slots,
 };
 

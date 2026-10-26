@@ -97,10 +97,10 @@ port's C code:
   as `ndarray`'s reads its descriptor to clear object items. Reference
   counting frees the referrer first; the sweep has no order. Set
   `Py_TPFLAGS_DEALLOC_READS_REFERENTS`, and the sweep deallocates the
-  type's dead instances before other objects. Two flagged objects are
-  still deallocated in no particular order, so a dealloc that reads
-  another flagged object (an expat subparser reads its parent's parser)
-  must do that work in `tp_finalize` instead.
+  type's dead instances before other objects, and among flagged objects
+  a referrer before what its `tp_traverse` visits (an expat subparser
+  before its parent parser). Only a cycle of flagged objects is broken
+  at an arbitrary reference.
 - Anything that reads `ob_refcnt` or `Py_REFCNT()` to decide behaviour.
 
 ## Adding a port

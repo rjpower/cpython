@@ -24,9 +24,10 @@
       and what it reaches are resurrected (queue_destroy_hooks()).
    5. The remaining weak references to dead objects, and those to the
       objects of step 4, are cleared.
-   6. The sweep calls tp_dealloc on every object still dead, managed
-      buffers first and types last, with the frees of their blocks deferred
-      (PyObject_Free() sees GCState.sweeping), then frees the blocks.  A
+   6. The sweep calls tp_dealloc on every object still dead, those whose
+      dealloc reads its referents first, referrer first, and types last,
+      with the frees of their blocks deferred (PyObject_Free() sees
+      GCState.sweeping), then frees the blocks.  A
       dealloc can therefore read the other dead objects' memory; it must not
       allocate objects or run Python code, which debug builds check.
    7. After the collection the queue runs: the weak reference callbacks,
@@ -717,12 +718,222 @@ _PyGC_LiveSweepViolation(PyThreadState *tstate, const char *what)
 }
 #endif
 
+/* --- referrer first ------------------------------------------------------ */
+
+/* Reference counting deallocates a referrer before its referent, and a type
+   with Py_TPFLAGS_DEALLOC_READS_REFERENTS relies on that.  The sweep
+   deallocates the dead instances of such types first, and among themselves
+   in this order: each is traversed for its references to the others, and
+   the order is the reverse postorder of a depth-first search over those
+   references, started from each in heap order.  A referrer therefore comes
+   before its referent, except along a cycle, which the search breaks where
+   it entered it.  The cost is that of the flagged objects and their
+   references, not of the heap. */
+
+typedef struct {
+    PyObject *op;
+    Py_ssize_t node;
+} first_key;
+
+typedef struct {
+    first_key *keys;       // the flagged objects, sorted by address
+    Py_ssize_t nkeys;
+    Py_ssize_t from;       // the node being traversed
+    Py_ssize_t *edges;     // pairs: from, to
+    Py_ssize_t nedges;
+    Py_ssize_t cap;
+    int oom;
+} first_graph;
+
+static int
+first_key_cmp(const void *a, const void *b)
+{
+    uintptr_t x = (uintptr_t)((const first_key *)a)->op;
+    uintptr_t y = (uintptr_t)((const first_key *)b)->op;
+    return (x > y) - (x < y);
+}
+
+static int
+first_edge_visit(PyObject *op, void *arg)
+{
+    first_graph *g = arg;
+    if (op == NULL || g->oom || !is_dead(op)) {
+        return 0;
+    }
+    first_key key = {op, 0};
+    first_key *k = bsearch(&key, g->keys, g->nkeys, sizeof(first_key),
+                           first_key_cmp);
+    if (k == NULL || k->node == g->from) {
+        return 0;
+    }
+    if (g->nedges == g->cap) {
+        Py_ssize_t cap = g->cap ? 2 * g->cap : 64;
+        Py_ssize_t *edges = realloc(g->edges, 2 * cap * sizeof(Py_ssize_t));
+        if (edges == NULL) {
+            g->oom = 1;
+            return 0;
+        }
+        g->edges = edges;
+        g->cap = cap;
+    }
+    g->edges[2 * g->nedges] = g->from;
+    g->edges[2 * g->nedges + 1] = k->node;
+    g->nedges++;
+    return 0;
+}
+
+/* The indices into res->dead of the dead objects swept first, in sweep
+   order, and their number in *pn.  NULL if memory runs out, after which
+   they are swept in heap order. */
+static Py_ssize_t *
+order_dead_first(_PyGCMarkResult *res, Py_ssize_t *pn)
+{
+    Py_ssize_t n = 0;
+    for (Py_ssize_t i = 0; i < res->ndead; i++) {
+        int kinds = res->dead[i].kinds;
+        if ((kinds & (_PyGC_DEAD_FIRST | _PyGC_DEAD_TYPE)) == _PyGC_DEAD_FIRST
+            && is_dead(res->dead[i].op))
+        {
+            n++;
+        }
+    }
+    first_graph g = {0};
+    // node: its index into res->dead.  The others are indexed by node.
+    Py_ssize_t *node = malloc((n + 1) * sizeof(Py_ssize_t));
+    Py_ssize_t *start = calloc(n + 1, sizeof(Py_ssize_t));
+    Py_ssize_t *cursor = malloc((n + 1) * sizeof(Py_ssize_t));
+    Py_ssize_t *stack = malloc((n + 1) * sizeof(Py_ssize_t));
+    char *seen = calloc(n + 1, 1);
+    Py_ssize_t *order = malloc((n + 1) * sizeof(Py_ssize_t));
+    Py_ssize_t *succ = NULL;
+    g.keys = malloc((n + 1) * sizeof(first_key));
+    if (node == NULL || start == NULL || cursor == NULL || stack == NULL
+        || seen == NULL || order == NULL || g.keys == NULL)
+    {
+        goto error;
+    }
+    n = 0;
+    for (Py_ssize_t i = 0; i < res->ndead; i++) {
+        int kinds = res->dead[i].kinds;
+        if ((kinds & (_PyGC_DEAD_FIRST | _PyGC_DEAD_TYPE)) == _PyGC_DEAD_FIRST
+            && is_dead(res->dead[i].op))
+        {
+            g.keys[n] = (first_key){res->dead[i].op, n};
+            node[n++] = i;
+        }
+    }
+    g.nkeys = n;
+    qsort(g.keys, n, sizeof(first_key), first_key_cmp);
+    for (g.from = 0; g.from < n; g.from++) {
+        (void)_PyGC_TraceTraverse(res->dead[node[g.from]].op,
+                                  first_edge_visit, &g);
+    }
+    if (g.oom) {
+        goto error;
+    }
+    // The references of node u are succ[start[u]:start[u + 1]].
+    succ = malloc((g.nedges + 1) * sizeof(Py_ssize_t));
+    if (succ == NULL) {
+        goto error;
+    }
+    for (Py_ssize_t e = 0; e < g.nedges; e++) {
+        start[g.edges[2 * e] + 1]++;
+    }
+    for (Py_ssize_t u = 0; u < n; u++) {
+        start[u + 1] += start[u];
+        cursor[u] = start[u];
+    }
+    for (Py_ssize_t e = 0; e < g.nedges; e++) {
+        succ[cursor[g.edges[2 * e]]++] = g.edges[2 * e + 1];
+    }
+    for (Py_ssize_t u = 0; u < n; u++) {
+        cursor[u] = start[u];
+    }
+    // Each node is appended to order when the search leaves it; order is
+    // then reversed.
+    Py_ssize_t norder = 0;
+    for (Py_ssize_t root = 0; root < n; root++) {
+        if (seen[root]) {
+            continue;
+        }
+        Py_ssize_t sp = 0;
+        stack[sp++] = root;
+        seen[root] = 1;
+        while (sp > 0) {
+            Py_ssize_t u = stack[sp - 1];
+            if (cursor[u] < start[u + 1]) {
+                Py_ssize_t v = succ[cursor[u]++];
+                if (!seen[v]) {
+                    seen[v] = 1;
+                    stack[sp++] = v;
+                }
+            }
+            else {
+                sp--;
+                order[norder++] = u;
+            }
+        }
+    }
+    assert(norder == n);
+    for (Py_ssize_t i = 0; i < n / 2; i++) {
+        Py_ssize_t t = order[i];
+        order[i] = order[n - 1 - i];
+        order[n - 1 - i] = t;
+    }
+    for (Py_ssize_t i = 0; i < n; i++) {
+        order[i] = node[order[i]];
+    }
+    *pn = n;
+    goto done;
+
+error:
+    free(order);
+    order = NULL;
+done:
+    free(node);
+    free(start);
+    free(cursor);
+    free(stack);
+    free(seen);
+    free(succ);
+    free(g.keys);
+    free(g.edges);
+    return order;
+}
+
+static void
+sweep_one(PyThreadState *tstate, GCState *gc, _PyGCDeadObject *d,
+          Py_ssize_t *ncollected)
+{
+    PyObject *op = d->op;
+    if ((op->ob_flags & (_Py_GC_DEAD_FLAG | _Py_GC_SWEPT_FLAG))
+        != _Py_GC_DEAD_FLAG)
+    {
+        return;
+    }
+    if (d->kinds & _PyGC_DEAD_GC) {
+        (*ncollected)++;
+    }
+#ifdef Py_DEBUG
+    gc->sweep_op = op;
+#endif
+    gc->sweep_block = (char *)op - d->presize;
+    // The sweep stands in for _Py_Dealloc(), which reports each
+    // destruction to the reference tracer.
+    _PyReftracerTrack(op, PyRefTracer_DESTROY);
+    Py_TYPE(op)->tp_dealloc(op);
+    op->ob_flags |= _Py_GC_SWEPT_FLAG;
+    if (_PyErr_Occurred(tstate)) {
+        _PyErr_Clear(tstate);
+    }
+}
+
 /* Call tp_dealloc on the dead objects, then free their blocks.  Instances of
-   types with Py_TPFLAGS_DEALLOC_READS_REFERENTS go first, so that their
-   referents are intact (a managed buffer's exporter can still update its
-   export state), and instances before types, so that a dealloc can read its
-   type.  Among the flagged objects the order is the heap's, so one that
-   reads another flagged object is not yet safe. */
+   types with Py_TPFLAGS_DEALLOC_READS_REFERENTS go first, referrer first
+   (order_dead_first()), so that their referents are intact (a managed
+   buffer's exporter can still update its export state, a pyexpat subparser
+   can still reach its parent's XML_Parser), and instances before types, so
+   that a dealloc can read its type. */
 static Py_ssize_t
 sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
       Py_ssize_t *bytes_freed)
@@ -736,33 +947,23 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
         {
             continue;
         }
+        if (phase == 0) {
+            Py_ssize_t nfirst;
+            Py_ssize_t *first = order_dead_first(res, &nfirst);
+            if (first != NULL) {
+                for (Py_ssize_t j = 0; j < nfirst; j++) {
+                    sweep_one(tstate, gc, &res->dead[first[j]], &ncollected);
+                }
+                free(first);
+                continue;
+            }
+        }
         for (Py_ssize_t i = 0; i < res->ndead; i++) {
             int kinds = res->dead[i].kinds;
             int op_phase = (kinds & _PyGC_DEAD_TYPE) ? 2
                            : (kinds & _PyGC_DEAD_FIRST) ? 0 : 1;
-            if (op_phase != phase) {
-                continue;
-            }
-            PyObject *op = res->dead[i].op;
-            if ((op->ob_flags & (_Py_GC_DEAD_FLAG | _Py_GC_SWEPT_FLAG))
-                != _Py_GC_DEAD_FLAG)
-            {
-                continue;
-            }
-            if (kinds & _PyGC_DEAD_GC) {
-                ncollected++;
-            }
-#ifdef Py_DEBUG
-            gc->sweep_op = op;
-#endif
-            gc->sweep_block = (char *)op - res->dead[i].presize;
-            // The sweep stands in for _Py_Dealloc(), which reports each
-            // destruction to the reference tracer.
-            _PyReftracerTrack(op, PyRefTracer_DESTROY);
-            Py_TYPE(op)->tp_dealloc(op);
-            op->ob_flags |= _Py_GC_SWEPT_FLAG;
-            if (_PyErr_Occurred(tstate)) {
-                _PyErr_Clear(tstate);
+            if (op_phase == phase) {
+                sweep_one(tstate, gc, &res->dead[i], &ncollected);
             }
         }
     }

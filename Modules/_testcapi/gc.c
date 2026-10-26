@@ -344,11 +344,11 @@ static PyType_Spec ObjExtraData_TypeSpec = {
     .slots = ObjExtraData_Slots,
 };
 
-/* A DeallocReader's dealloc reads the state of its StatefulReferent, whose
-   own dealloc destroys that state, and aborts if it finds the state
-   destroyed.  Reference counting always deallocates the reader first; the
-   tracing collector does so because the reader's type has
-   Py_TPFLAGS_DEALLOC_READS_REFERENTS. */
+/* A DeallocReader's dealloc reads the state of its referent, a
+   StatefulReferent or another DeallocReader, whose own dealloc destroys that
+   state, and aborts if it finds the state destroyed.  Reference counting
+   always deallocates the reader first; the tracing collector does so because
+   the reader's type has Py_TPFLAGS_DEALLOC_READS_REFERENTS. */
 #define REFERENT_ALIVE 0x5ca1ab1e
 
 typedef struct {
@@ -390,9 +390,25 @@ static PyType_Spec StatefulReferent_TypeSpec = {
 };
 
 typedef struct {
-    PyObject_HEAD
+    StatefulReferent base;      // a reader is also a referent
     StatefulReferent *referent;
 } DeallocReader;
+
+static void dealloc_reader_dealloc(PyObject *self);
+
+/* Is tp a StatefulReferent, a DeallocReader or a subclass of either? */
+static int
+has_referent_state(PyTypeObject *tp)
+{
+    for (; tp != NULL; tp = tp->tp_base) {
+        if (tp->tp_dealloc == stateful_referent_dealloc
+            || tp->tp_dealloc == dealloc_reader_dealloc)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
 
 static PyObject *
 dealloc_reader_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
@@ -401,14 +417,16 @@ dealloc_reader_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     if (!PyArg_ParseTuple(args, "O:DeallocReader", &referent)) {
         return NULL;
     }
-    if (Py_TYPE(referent)->tp_dealloc != stateful_referent_dealloc) {
-        PyErr_SetString(PyExc_TypeError, "expected a StatefulReferent");
+    if (!has_referent_state(Py_TYPE(referent))) {
+        PyErr_SetString(PyExc_TypeError,
+                        "expected a StatefulReferent or a DeallocReader");
         return NULL;
     }
     DeallocReader *self = (DeallocReader *)type->tp_alloc(type, 0);
     if (self == NULL) {
         return NULL;
     }
+    self->base.state = REFERENT_ALIVE;
     self->referent = (StatefulReferent *)Py_NewRef(referent);
     return (PyObject *)self;
 }
@@ -430,6 +448,7 @@ dealloc_reader_dealloc(PyObject *self)
     if (referent->state != REFERENT_ALIVE) {
         Py_FatalError("a DeallocReader outlived its referent's dealloc");
     }
+    ((DeallocReader *)self)->base.state = 0;
     Py_DECREF(referent);
     tp->tp_free(self);
     Py_DECREF(tp);

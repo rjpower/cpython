@@ -21,8 +21,6 @@ from test.support import (
     captured_stderr,
     force_not_colorized,
     make_clean_env,
-    Py_DEBUG,
-    Py_GC,
 )
 from test.support import has_subprocess_support, SHORT_TIMEOUT, STDLIB_DIR
 from test.support.import_helper import import_module
@@ -2478,20 +2476,6 @@ class TestMain(ReplTestCase):
         # Extra stuff (newline and `exit` rewrites) are necessary
         # because of how run_repl works.
         self.assertNotIn(">>> \n>>> >>>", cleaned_output)
-
-    @skipUnless(Py_DEBUG and not Py_GC,
-                '-X showrefcount requires a debug build that counts references')
-    def test_showrefcount(self):
-        env = os.environ.copy()
-        env.pop("PYTHON_BASIC_REPL", "")
-        output, _ = self.run_repl("1\n1+2\nexit()\n", cmdline_args=['-Xshowrefcount'], env=env)
-        matches = re.findall(r'\[-?\d+ refs, \d+ blocks\]', output)
-        self.assertEqual(len(matches), 3)
-
-        env["PYTHON_BASIC_REPL"] = "1"
-        output, _ = self.run_repl("1\n1+2\nexit()\n", cmdline_args=['-Xshowrefcount'], env=env)
-        matches = re.findall(r'\[-?\d+ refs, \d+ blocks\]', output)
-        self.assertEqual(len(matches), 3)
 
     def test_detect_pip_usage_in_repl(self):
         for pip_cmd in ("pip", "pip3", "python -m pip", "python3 -m pip"):

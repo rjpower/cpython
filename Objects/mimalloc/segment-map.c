@@ -145,3 +145,67 @@ void _mi_segment_map_unsafe_destroy(void) {
     }
   }
 }
+
+#ifdef Py_GC
+/* -----------------------------------------------------------
+  CPython: the tracing collector's segment map (see internal.h).
+  Unlike the bitmap above it covers arena segments too, and it maps
+  every slot of a huge segment to the segment's start.  A segment
+  enters the map once its metadata is initialized and leaves it before
+  its memory is released, so a segment freed and mapped again at the
+  same address between two collections leaves no stale entry.
+----------------------------------------------------------- */
+
+_Atomic(mi_gc_segmap_leaf_t*) _mi_gc_segmap[MI_GC_SEGMAP_TOP_ENTRIES];
+_Atomic(uintptr_t) _mi_gc_segmap_lo = UINTPTR_MAX;
+_Atomic(uintptr_t) _mi_gc_segmap_hi = 0;
+
+static bool mi_gc_segmap_range(uintptr_t start, size_t size, uintptr_t* first, uintptr_t* last) {
+  const uintptr_t end = start + size;
+  if (((end - 1) >> MI_GC_SEGMAP_ADDRESS_BITS) != 0) return false;
+  *first = start >> MI_SEGMENT_SHIFT;
+  *last = (end - 1) >> MI_SEGMENT_SHIFT;
+  return true;
+}
+
+// Allocate the leaves that will hold the entries of a segment at
+// [start, start + size).  A segment the
+// map cannot hold must not be used: the collector would not see its objects.
+bool _mi_gc_segmap_reserve(const void* start, size_t size) {
+  uintptr_t first, last;
+  if (!mi_gc_segmap_range((uintptr_t)start, size, &first, &last)) return false;
+  for (uintptr_t top = first >> MI_GC_SEGMAP_LEAF_BITS; top <= (last >> MI_GC_SEGMAP_LEAF_BITS); top++) {
+    if (mi_atomic_load_ptr_acquire(mi_gc_segmap_leaf_t, &_mi_gc_segmap[top]) != NULL) continue;
+    mi_memid_t memid;
+    mi_gc_segmap_leaf_t* leaf = (mi_gc_segmap_leaf_t*)_mi_os_zalloc(sizeof(mi_gc_segmap_leaf_t), &memid);
+    if (leaf == NULL) return false;
+    mi_gc_segmap_leaf_t* expected = NULL;
+    if (!mi_atomic_cas_ptr_strong_release(mi_gc_segmap_leaf_t, &_mi_gc_segmap[top], &expected, leaf)) {
+      _mi_os_free(leaf, sizeof(mi_gc_segmap_leaf_t), memid);  // another thread installed it
+    }
+  }
+  return true;
+}
+
+// Enter the segment in the map, or remove it.  The leaves exist: the
+// segment was reserved.
+void _mi_gc_segmap_publish(const mi_segment_t* segment, bool present) {
+  uintptr_t first, last;
+  if (!mi_gc_segmap_range((uintptr_t)segment, segment->segment_size, &first, &last)) return;
+  mi_segment_t* value = present ? (mi_segment_t*)segment : NULL;
+  if (present) {
+    // Widen the bounds before the entries appear.
+    const uintptr_t start = (uintptr_t)segment;
+    const uintptr_t end = start + segment->segment_size;
+    uintptr_t lo = mi_atomic_load_relaxed(&_mi_gc_segmap_lo);
+    while (start < lo && !mi_atomic_cas_weak_release(&_mi_gc_segmap_lo, &lo, start)) {}
+    uintptr_t hi = mi_atomic_load_relaxed(&_mi_gc_segmap_hi);
+    while (end > hi && !mi_atomic_cas_weak_release(&_mi_gc_segmap_hi, &hi, end)) {}
+  }
+  for (uintptr_t slot = first; slot <= last; slot++) {
+    mi_gc_segmap_leaf_t* leaf = mi_atomic_load_ptr_acquire(mi_gc_segmap_leaf_t, &_mi_gc_segmap[slot >> MI_GC_SEGMAP_LEAF_BITS]);
+    mi_assert_internal(leaf != NULL);
+    mi_atomic_store_ptr_release(mi_segment_t, &leaf->segment[slot & (MI_GC_SEGMAP_LEAF_ENTRIES - 1)], value);
+  }
+}
+#endif

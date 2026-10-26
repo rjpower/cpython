@@ -417,6 +417,9 @@ static void mi_segments_track_size(long segment_size, mi_segments_tld_t* tld) {
 static void mi_segment_os_free(mi_segment_t* segment, mi_segments_tld_t* tld) {
   segment->thread_id = 0;
   _mi_segment_map_freed_at(segment);
+  #ifdef Py_GC
+  _mi_gc_segmap_publish(segment, false);
+  #endif
   mi_segments_track_size(-((long)mi_segment_size(segment)),tld);
   if (segment->was_reclaimed) {
     tld->reclaim_count--;
@@ -867,6 +870,12 @@ static mi_segment_t* mi_segment_os_alloc( size_t required, size_t page_alignment
   if (segment == NULL) {
     return NULL;  // failed to allocate
   }
+  #ifdef Py_GC
+  if (!_mi_gc_segmap_reserve(segment, segment_size)) {
+    _mi_arena_free(segment, segment_size, 0, memid);
+    return NULL;
+  }
+  #endif
 
   // ensure metadata part of the segment is committed
   mi_commit_mask_t commit_mask;
@@ -981,6 +990,9 @@ static mi_segment_t* mi_segment_alloc(size_t required, size_t page_alignment, mi
     *huge_page = mi_segment_span_allocate(segment, info_slices, segment_slices - info_slices - guard_slices);
     mi_assert_internal(*huge_page != NULL); // cannot fail as we commit in advance
   }
+  #ifdef Py_GC
+  _mi_gc_segmap_publish(segment, true);  // the metadata is initialized
+  #endif
 
   mi_assert_expensive(mi_segment_is_valid(segment,tld));
   return segment;

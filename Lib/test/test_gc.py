@@ -1875,6 +1875,49 @@ class TracingCollectorTests(unittest.TestCase):
                 break
         self.assertIsNone(ref())
 
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_segment_map_rejects_words_outside_blocks(self):
+        # The mark finds a word's object through mimalloc's segments: words
+        # in a segment's metadata, in a free span or past the blocks a page
+        # has handed out are not objects.
+        lookup = _testinternalcapi.gc_live_lookup
+        objs = [object() for _ in range(100)]
+        op = id(objs[-1])
+        self.assertEqual(lookup(op, False), op)
+        self.assertEqual(lookup(op + 8, True), op)
+        self.assertEqual(lookup(op + 8, False), 0)
+        probes = _testinternalcapi.gc_segment_probes(objs[-1])
+        for addr in probes:
+            if addr:
+                self.assertEqual(lookup(addr, True), 0, hex(addr))
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_segment_map_follows_huge_segments(self):
+        # A block larger than a 32 MiB segment gets a huge segment of its
+        # own; a word past its first 32 MiB still finds it.  Freeing the
+        # segment removes it from the map, so that a word into the freed
+        # memory finds no segment, and a new segment at the address is
+        # entered again.
+        lookup = _testinternalcapi.gc_live_lookup
+        segment_of = _testinternalcapi.gc_segment_of
+        size = 40 << 20
+        for _ in range(self.ATTEMPTS):
+            big = bytes(size)
+            op = id(big)
+            far = op + size - 64
+            self.assertEqual(lookup(far, True), op)
+            self.assertNotEqual(segment_of(far), 0)
+            del big
+            gc.collect()
+            if lookup(far, True) == 0:
+                break
+        self.assertEqual(lookup(far, True), 0)
+        self.assertEqual(segment_of(far), 0)
+        again = bytes(size)
+        if id(again) <= far < id(again) + size:
+            self.assertEqual(lookup(far, True), id(again))
+        self.assertEqual(lookup(id(again) + size - 64, True), id(again))
+
 
 class PythonFinalizationTests(unittest.TestCase):
     def test_ast_fini(self):

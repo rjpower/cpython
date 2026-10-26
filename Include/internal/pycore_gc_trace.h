@@ -200,6 +200,15 @@ extern void _PyGC_TraceCaptureEntry(void);
  * at addr, or -1.  For debugging; export for _testinternalcapi. */
 PyAPI_FUNC(int) _PyGC_TraceLiveRootsOf(PyThreadState *tstate, uintptr_t addr);
 
+/* For tests of the segment map that the live mark looks objects up in: the
+ * object found at addr (or containing it, if interior is set), or 0; four
+ * addresses in op's segment that hold no block, or 0 where there is no such
+ * address (see gc_trace.c); and the segment the map holds for addr, or 0.  Export for _testinternalcapi. */
+PyAPI_FUNC(uintptr_t) _PyGC_TraceLiveLookup(PyThreadState *tstate,
+                                            uintptr_t addr, int interior);
+PyAPI_FUNC(void) _PyGC_TraceSegmentProbes(PyObject *op, uintptr_t probes[4]);
+PyAPI_FUNC(uintptr_t) _PyGC_TraceSegmentOf(uintptr_t addr);
+
 /* Every object in the heaps that interp shares, in an array from malloc(),
  * or NULL with *n set to -1 if memory ran out.  The objects are not
  * kept alive: the caller must not let a collection run before it holds

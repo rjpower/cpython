@@ -363,6 +363,14 @@ typedef struct {
     uintptr_t mem_hi;
     PyInterpreterState *domain[64];
     int ndomain;
+    mi_subproc_t *subproc[64];  // the domain's mimalloc sub-processes
+    // The bounds of the segment map when the mark began.  A segment entered
+    // since can hold no object: allocating one needs the GIL.
+    uintptr_t seg_lo;
+    uintptr_t seg_span;
+    // The offset of the object in a block of each heap tag; -1 for the mem
+    // heap, which holds no objects.
+    Py_ssize_t tag_offset[_Py_MIMALLOC_HEAP_COUNT];
     // Weak caches and lists that the conservative scans skip
     uintptr_t skip_lo[256];
     uintptr_t skip_hi[256];
@@ -1380,37 +1388,125 @@ live_domain(trace_t *t, PyInterpreterState *interp)
     t->ndomain = 0;
     if (!shares_main_heap(interp)) {
         t->domain[t->ndomain++] = interp;
-        live_skip_caches(t);
-        return 0;
     }
-    for (PyInterpreterState *i = _PyRuntime.interpreters.head; i != NULL;
-         i = i->next)
-    {
-        if (!shares_main_heap(i)) {
-            continue;
+    else {
+        for (PyInterpreterState *i = _PyRuntime.interpreters.head; i != NULL;
+             i = i->next)
+        {
+            if (!shares_main_heap(i)) {
+                continue;
+            }
+            if (t->ndomain == (int)Py_ARRAY_LENGTH(t->domain)) {
+                return -1;
+            }
+            t->domain[t->ndomain++] = i;
         }
-        if (t->ndomain == (int)Py_ARRAY_LENGTH(t->domain)) {
-            return -1;
-        }
-        t->domain[t->ndomain++] = i;
     }
+    for (int d = 0; d < t->ndomain; d++) {
+        t->subproc[d] = t->domain[d]->mimalloc.subproc;
+    }
+    t->seg_lo = mi_atomic_load_acquire(&_mi_gc_segmap_lo);
+    uintptr_t hi = mi_atomic_load_acquire(&_mi_gc_segmap_hi);
+    t->seg_span = hi > t->seg_lo ? hi - t->seg_lo : 0;
+    t->tag_offset[_Py_MIMALLOC_HEAP_MEM] = -1;
+    t->tag_offset[_Py_MIMALLOC_HEAP_OBJECT] =
+        heap_offset(t, _Py_MIMALLOC_HEAP_OBJECT);
+    t->tag_offset[_Py_MIMALLOC_HEAP_GC] = heap_offset(t, _Py_MIMALLOC_HEAP_GC);
+    t->tag_offset[_Py_MIMALLOC_HEAP_GC_PRE] =
+        heap_offset(t, _Py_MIMALLOC_HEAP_GC_PRE);
     live_skip_caches(t);
     return 0;
+}
+
+/* The object heap page of the domain that holds addr, through the segment
+   map that mimalloc keeps for the collector (_mi_gc_segment_of()), or NULL.
+   An address in a segment's metadata, in a free span or in a mem heap page
+   is not in an object page.  The slices of a free span keep stale back
+   offsets, so the page a slice leads to must start at offset 0, be in use
+   and cover the slice. */
+static inline mi_page_t *
+live_page_of(const trace_t *t, uintptr_t addr)
+{
+    if (addr - t->seg_lo >= t->seg_span) {
+        return NULL;
+    }
+    mi_segment_t *seg = _mi_gc_segment_of(addr);
+    if (seg == NULL) {
+        return NULL;
+    }
+    if (seg->subproc != t->subproc[0]) {
+        int d = 1;
+        while (d < t->ndomain && seg->subproc != t->subproc[d]) {
+            d++;
+        }
+        if (d == t->ndomain) {
+            return NULL;  // another interpreter's heap
+        }
+    }
+    size_t info = seg->segment_info_slices;
+    size_t idx = (addr - (uintptr_t)seg) >> MI_SEGMENT_SLICE_SHIFT;
+    if (idx < info) {
+        return NULL;  // the segment's metadata
+    }
+    mi_slice_t *slice;
+    if (seg->kind == MI_SEGMENT_HUGE) {
+        slice = &seg->slices[info];  // the only page
+    }
+    else {
+        slice = &seg->slices[idx];
+        size_t back = slice->slice_offset / sizeof(mi_slice_t);
+        if (back > idx - info) {
+            return NULL;
+        }
+        slice -= back;
+        if (slice->slice_offset != 0
+            || (size_t)(slice - seg->slices) + slice->slice_count <= idx)
+        {
+            return NULL;
+        }
+    }
+    if (slice->block_size <= 1) {
+        return NULL;  // a free span (0) or not a page (1)
+    }
+    mi_page_t *page = (mi_page_t *)slice;
+    if (page->heap_tag >= _Py_MIMALLOC_HEAP_COUNT
+        || t->tag_offset[page->heap_tag] < 0)
+    {
+        return NULL;
+    }
+    return page;
+}
+
+/* The start of the block of page that holds addr, or 0 if addr is before
+   the first block or past the blocks the page has handed out. */
+static inline uintptr_t
+live_block_of(const mi_page_t *page, uintptr_t addr)
+{
+    uintptr_t start = (uintptr_t)page->page_start;
+    if (addr < start) {
+        return 0;
+    }
+    size_t bsize = page->block_size;
+    size_t n = (addr - start) / bsize;
+    if (n >= page->capacity) {
+        return 0;
+    }
+    return start + n * bsize;
 }
 
 /* The object at addr, or containing addr if interior is set, or NULL. */
 static inline PyObject *
 live_lookup(const trace_t *t, uintptr_t addr, int interior)
 {
-    if (addr < t->heap_lo || addr >= t->heap_hi) {
+    mi_page_t *page = live_page_of(t, addr);
+    if (page == NULL) {
         return NULL;
     }
-    const range_t *r = rangelist_find(&t->pages, addr);
-    if (r == NULL) {
+    uintptr_t block = live_block_of(page, addr);
+    if (block == 0) {
         return NULL;
     }
-    uintptr_t block = r->start + (addr - r->start) / r->bsize * r->bsize;
-    uintptr_t op = block + r->offset;
+    uintptr_t op = block + t->tag_offset[page->heap_tag];
     if (op != addr && !interior) {
         return NULL;
     }
@@ -1458,7 +1554,9 @@ live_mark(trace_t *t, PyObject *op, int conservative)
         /* Its fields cannot be trusted as objects, but its words can be
            scanned: a set or dict being filled holds its members in a table
            it owns. */
-        queue_object_block(t, (uintptr_t)op);
+        mi_page_t *page = live_page_of(t, (uintptr_t)op);
+        uintptr_t block = live_block_of(page, (uintptr_t)op);
+        queue_range(t, block, block + page->block_size);
         return;
     }
     op->ob_flags = flags | _Py_GC_MARKED_FLAG;
@@ -1476,10 +1574,11 @@ live_mark(trace_t *t, PyObject *op, int conservative)
 static void
 live_check_dangling(trace_t *t, uintptr_t addr)
 {
-    if (addr < t->heap_lo || addr >= t->heap_hi
-        || rangelist_find(&t->pages, addr) == NULL
-        || (addr & (sizeof(void *) - 1)) != 0)
-    {
+    if ((addr & (sizeof(void *) - 1)) != 0) {
+        return;
+    }
+    mi_page_t *page = live_page_of(t, addr);
+    if (page == NULL || live_block_of(page, addr) == 0) {
         return;
     }
     if (*(uintptr_t *)(addr + sizeof(uintptr_t)) == (uintptr_t)0xDDDDDDDDDDDDDDDDULL) {
@@ -1553,8 +1652,7 @@ struct live_walk {
     trace_t *t;
     size_t offset;
     size_t presize;
-    int pages;            // record the pages, not the blocks
-    int mem;              // the pages are mem heap pages
+    int pages;            // record the mem heaps' pages, not the blocks
     _PyGCMarkResult *res;
     size_t dead_cap;
     PyObject **objs;      // for _PyGC_TraceLiveHeapObjects()
@@ -1612,8 +1710,7 @@ live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
             return true;
         }
         uintptr_t start = (uintptr_t)area->blocks;
-        rangelist *l = w->mem ? &t->mem_pages : &t->pages;
-        if (rangelist_add(l, start, start + area->reserved,
+        if (rangelist_add(&t->mem_pages, start, start + area->reserved,
                           area->full_block_size, w->offset) < 0) {
             t->oom = 1;
             return false;
@@ -1695,9 +1792,10 @@ live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
     return true;
 }
 
-/* Visit the object heaps (and, for the page tables, the mem heaps) of every
-   thread state of the domain and of its exited threads.  The caller holds
-   the head lock. */
+/* Visit the blocks of the object heaps or, for the page table, the pages of
+   the mem heaps, of every thread state of the domain and of its exited
+   threads.  The object pages need no table: live_page_of() finds them
+   through the segment map.  The caller holds the head lock. */
 static int
 live_walk_heaps(trace_t *t, struct live_walk *w)
 {
@@ -1714,16 +1812,14 @@ live_walk_heaps(trace_t *t, struct live_walk *w)
             if (m->current_object_heap == NULL) {
                 continue;  // not bound yet
             }
-            for (size_t i = 0; ok && i < Py_ARRAY_LENGTH(tags); i++) {
+            for (size_t i = 0; ok && all && i < Py_ARRAY_LENGTH(tags); i++) {
                 w->offset = heap_offset(t, tags[i]);
                 w->presize = w->offset - t->debug_offset;
-                w->mem = 0;
                 ok = mi_heap_visit_blocks(&m->heaps[tags[i]], all,
                                           live_walk_block, w);
             }
             if (ok && w->pages) {
                 w->offset = 0;
-                w->mem = 1;
                 ok = mi_heap_visit_blocks(&m->heaps[_Py_MIMALLOC_HEAP_MEM],
                                           false, live_walk_block, w);
             }
@@ -1732,16 +1828,14 @@ live_walk_heaps(trace_t *t, struct live_walk *w)
             }
         }
         mi_subproc_t *subproc = interp->mimalloc.subproc;
-        for (size_t i = 0; ok && i < Py_ARRAY_LENGTH(tags); i++) {
+        for (size_t i = 0; ok && all && i < Py_ARRAY_LENGTH(tags); i++) {
             w->offset = heap_offset(t, tags[i]);
             w->presize = w->offset - t->debug_offset;
-            w->mem = 0;
             ok = mi_abandoned_visit_blocks(subproc, tags[i], all,
                                            live_walk_block, w);
         }
         if (ok && w->pages) {
             w->offset = 0;
-            w->mem = 1;
             ok = mi_abandoned_visit_blocks(subproc, _Py_MIMALLOC_HEAP_MEM,
                                            false, live_walk_block, w);
         }
@@ -1759,13 +1853,7 @@ live_build_pages(trace_t *t)
     if (live_walk_heaps(t, &w) < 0) {
         return -1;
     }
-    rangelist_sort(&t->pages);
     rangelist_sort(&t->mem_pages);
-    t->heap_lo = t->heap_hi = 0;
-    if (t->pages.n > 0) {
-        t->heap_lo = t->pages.items[0].start;
-        t->heap_hi = t->pages.items[t->pages.n - 1].end;
-    }
     t->mem_lo = t->mem_hi = 0;
     if (t->mem_pages.n > 0) {
         t->mem_lo = t->mem_pages.items[0].start;
@@ -1983,6 +2071,62 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
 done:
     live_fini(&t);
     return rc;
+}
+
+/* For tests of the segment map: the object that the mark finds at addr, or
+   that contains it if interior is set, or 0. */
+uintptr_t
+_PyGC_TraceLiveLookup(PyThreadState *tstate, uintptr_t addr, int interior)
+{
+    trace_t t = {
+        .interp = tstate->interp,
+        .live = 1,
+        .debug_offset = _PyMem_DebugEnabled() ? 2 * sizeof(size_t) : 0,
+    };
+    HEAD_LOCK(&_PyRuntime);
+    int ok = live_domain(&t, tstate->interp) == 0;
+    HEAD_UNLOCK(&_PyRuntime);
+    return ok ? (uintptr_t)live_lookup(&t, addr, interior) : 0;
+}
+
+/* For tests of the segment map: the segment that the map holds for addr,
+   or 0. */
+uintptr_t
+_PyGC_TraceSegmentOf(uintptr_t addr)
+{
+    return (uintptr_t)_mi_gc_segment_of(addr);
+}
+
+/* For tests of the segment map: addresses in op's segment that hold no
+   block, or 0 where the segment has none: its start, the last word of its
+   metadata, a word in a free span, and the first word past the blocks that
+   op's page has handed out. */
+void
+_PyGC_TraceSegmentProbes(PyObject *op, uintptr_t probes[4])
+{
+    mi_segment_t *seg = _mi_ptr_segment(op);
+    size_t info = seg->segment_info_slices;
+    probes[0] = (uintptr_t)seg;
+    probes[1] = (uintptr_t)seg + info * MI_SEGMENT_SLICE_SIZE - sizeof(void *);
+    probes[2] = 0;
+    if (seg->kind != MI_SEGMENT_HUGE) {
+        for (size_t i = info; i < seg->slice_entries;) {
+            mi_slice_t *s = &seg->slices[i];
+            if (s->block_size == 0) {
+                // The span's last slice, whose back offset is stale
+                probes[2] = (uintptr_t)seg
+                    + (i + s->slice_count - 1) * MI_SEGMENT_SLICE_SIZE + 64;
+                break;
+            }
+            i += s->slice_count;
+        }
+    }
+    mi_page_t *page = _mi_ptr_page(op);
+    probes[3] = 0;
+    if (page->capacity < page->reserved) {
+        probes[3] = (uintptr_t)page->page_start
+            + page->capacity * page->block_size;
+    }
 }
 
 /* For finding out why an object is kept: mark from each class of roots

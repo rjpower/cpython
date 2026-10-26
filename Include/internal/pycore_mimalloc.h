@@ -14,6 +14,7 @@ typedef enum {
     _Py_MIMALLOC_HEAP_OBJECT = 1,   // non-GC objects
     _Py_MIMALLOC_HEAP_GC = 2,       // GC objects without pre-header
     _Py_MIMALLOC_HEAP_GC_PRE = 3,   // GC objects with pre-header
+    _Py_MIMALLOC_HEAP_NOSCAN = 4,   // _PyMem_NoScanMalloc(): no references
     _Py_MIMALLOC_HEAP_COUNT
 } _Py_mimalloc_heap_id;
 

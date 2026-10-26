@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 #include "pycore_backoff.h"     // _Py_BackoffCounter
+#include "pycore_pymem.h"       // _PyMem_NoScanFree()
 #include "opcode_ids.h"         // RESUME, LOAD_ATTR, ...
 
 /* Typed feedback.
@@ -225,7 +226,7 @@ _PyFb_HasEntry(int opcode)
 static inline void
 _PyFb_Clear(_PyFbBlock *block)
 {
-    PyMem_Free(block->poly);
+    _PyMem_NoScanFree(block->poly);
     block->poly = NULL;
     block->npoly = 0;
 }

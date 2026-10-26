@@ -1409,6 +1409,7 @@ live_domain(trace_t *t, PyInterpreterState *interp)
     uintptr_t hi = mi_atomic_load_acquire(&_mi_gc_segmap_hi);
     t->seg_span = hi > t->seg_lo ? hi - t->seg_lo : 0;
     t->tag_offset[_Py_MIMALLOC_HEAP_MEM] = -1;
+    t->tag_offset[_Py_MIMALLOC_HEAP_NOSCAN] = -1;
     t->tag_offset[_Py_MIMALLOC_HEAP_OBJECT] =
         heap_offset(t, _Py_MIMALLOC_HEAP_OBJECT);
     t->tag_offset[_Py_MIMALLOC_HEAP_GC] = heap_offset(t, _Py_MIMALLOC_HEAP_GC);

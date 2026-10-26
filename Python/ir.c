@@ -287,7 +287,8 @@ make_exec(PyCodeObject *co)
     int nfb = co->co_nfeedback;
     size_t words_size = (size_t)nwords * sizeof(_PyIRWord);
     size_t fb_size = nfb ? sizeof(_PyFbBlock) + (size_t)nfb * FB_STRIDE : 0;
-    _PyCodeExec *exec = PyMem_Malloc(sizeof(_PyCodeExec) + words_size + fb_size);
+    // Feedback entries hold borrowed pointers only.
+    _PyCodeExec *exec = _PyMem_NoScanMalloc(sizeof(_PyCodeExec) + words_size + fb_size);
     if (exec == NULL) {
         PyErr_NoMemory();
         return NULL;
@@ -371,7 +372,7 @@ _PyCode_ClearExec(PyCodeObject *co)
     if (exec->feedback != NULL) {
         _PyFb_Clear(exec->feedback);
     }
-    PyMem_Free(exec);
+    _PyMem_NoScanFree(exec);
     co->_co_exec = NULL;
 }
 

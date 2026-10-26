@@ -412,7 +412,7 @@ fb_save_mono(_PyInstr *instr, _PyFbHeader *h, int opcode)
     uint32_t n = block->npoly;
     if ((n & (n - 1)) == 0) {
         size_t capacity = n ? 2 * (size_t)n : 1;
-        _PyFbPoly *poly = PyMem_Realloc(block->poly, capacity * sizeof(_PyFbPoly));
+        _PyFbPoly *poly = _PyMem_NoScanRealloc(block->poly, capacity * sizeof(_PyFbPoly));
         if (poly == NULL) {
             return;
         }

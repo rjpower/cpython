@@ -325,6 +325,18 @@ _PyMem_MiFree(void *ctx, void *ptr)
     mi_free(ptr);
 }
 
+#ifdef Py_GC
+// The thread state's no-scan heap, which no walk of the tracing collector
+// visits.
+static inline mi_heap_t *
+_PyMem_NoScanHeap(void)
+{
+    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
+    assert(tstate != NULL && tstate->mimalloc.current_object_heap != NULL);
+    return &tstate->mimalloc.heaps[_Py_MIMALLOC_HEAP_NOSCAN];
+}
+#endif
+
 #ifndef Py_GIL_DISABLED
 
 Py_ssize_t
@@ -2030,6 +2042,36 @@ get_mimalloc_allocated_blocks(PyInterpreterState *interp)
     return allocated_blocks;
 }
 #endif
+
+void *
+_PyMem_NoScanMalloc(size_t size)
+{
+#ifdef Py_GC
+    return mi_heap_malloc(_PyMem_NoScanHeap(), size);
+#else
+    return PyMem_Malloc(size);
+#endif
+}
+
+void *
+_PyMem_NoScanRealloc(void *ptr, size_t size)
+{
+#ifdef Py_GC
+    return mi_heap_realloc(_PyMem_NoScanHeap(), ptr, size);
+#else
+    return PyMem_Realloc(ptr, size);
+#endif
+}
+
+void
+_PyMem_NoScanFree(void *ptr)
+{
+#ifdef Py_GC
+    mi_free(ptr);
+#else
+    PyMem_Free(ptr);
+#endif
+}
 
 Py_ssize_t
 _PyInterpreterState_GetAllocatedBlocks(PyInterpreterState *interp)

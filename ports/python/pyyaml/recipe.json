@@ -10,8 +10,10 @@
     "native/libyaml"
   ],
   "build_requires": [
-    "setuptools==84.2.1",
-    "Cython==3.3.0"
+    "setuptools==84.2.1"
+  ],
+  "build_ports": [
+    "python/cython"
   ],
   "tests": [
     {

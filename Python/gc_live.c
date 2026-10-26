@@ -72,6 +72,9 @@ struct _gc_live_state {
     size_t qtail;
     size_t qcap;
     int running_queue;
+    // The exception that was set when the collection started.  The stack
+    // below the collection's entry is not scanned (collect_and_run_queue()).
+    PyObject *exc;
     // Totals for gc.get_stats()
     Py_ssize_t bytes_freed;
     Py_ssize_t live_bytes;
@@ -142,6 +145,7 @@ _PyGC_LiveVisitRoots(PyInterpreterState *interp, visitproc visit, void *arg)
         Py_VISIT(ls->queue[i].op);
         Py_VISIT(ls->queue[i].callback);
     }
+    Py_VISIT(ls->exc);
     return 0;
 }
 
@@ -438,7 +442,7 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
         return 0;  // before _PyGC_Init() or after _PyGC_Fini()
     }
     gc->collecting = 1;
-    PyObject *exc = _PyErr_GetRaisedException(tstate);
+    ls->exc = _PyErr_GetRaisedException(tstate);
     struct gc_generation_stats *stats =
         &gc->generation_stats->old[1].items[gc->generation_stats->old[1].index];
     struct gc_generation_stats cur = {0};
@@ -511,26 +515,42 @@ done:
     free(garbage.items);
     invoke_gc_callback(tstate, "stop", &cur);
     gc->collecting = 0;
-    _PyErr_SetRaisedException(tstate, exc);
+    _PyErr_SetRaisedException(tstate, ls->exc);
+    ls->exc = NULL;
     return ncollected + cur.uncollectable;
 }
 
 /* Collect, with the object allocations of the collection and of the queue
    going to the heap for non-GC objects, whatever the allocation that
-   triggered it had selected (_PyObject_MallocWithType()). */
-static Py_ssize_t
+   triggered it had selected (_PyObject_MallocWithType()).
+
+   The mark scans this thread's stack from here up, with the registers as
+   they are here: the frames below are the collector's own, over stale
+   words that earlier, deeper calls left, which would keep garbage alive.
+   Not inlined, so that the callers' frames are above. */
+static Py_NO_INLINE Py_ssize_t
 collect_and_run_queue(PyThreadState *tstate, _PyGC_Reason reason)
 {
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    // Called again from a gc callback, inside a collection: the outer entry
+    // stays, since the mark that may follow is the outer collection's.
+    uintptr_t outer_entry = ts->gc_trace.entry_sp;
+    if (outer_entry == 0) {
+        _PyGC_TraceCaptureEntry();
+    }
     struct _mimalloc_thread_state *m = &((_PyThreadStateImpl *)tstate)->mimalloc;
     mi_heap_t *heap = m->current_object_heap;
     if (heap != NULL) {
         m->current_object_heap = &m->heaps[_Py_MIMALLOC_HEAP_OBJECT];
     }
     Py_ssize_t n = collect(tstate, reason);
+    // A collection that the queue's code triggers records its own entry.
+    ts->gc_trace.entry_sp = 0;
     run_queue(tstate);
     if (heap != NULL) {
         m->current_object_heap = heap;
     }
+    ts->gc_trace.entry_sp = outer_entry;
     return n;
 }
 

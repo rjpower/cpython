@@ -175,6 +175,16 @@ typedef struct {
  * nothing listed or flagged, if the collector's own memory ran out. */
 extern int _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res);
 
+/* Record the caller's callee-saved registers and stack pointer as the place
+ * the collection was entered: the mark scans the calling thread's stack from
+ * there up, not from its own frame, below which lie stale words.  Call it
+ * first; reset gc_trace.entry_sp to the value it had before when done. */
+extern void _PyGC_TraceCaptureEntry(void);
+
+/* The classes of roots (_PyGC_TRACE_ROOT_*) that each alone reach the object
+ * at addr, or -1.  For debugging; export for _testinternalcapi. */
+PyAPI_FUNC(int) _PyGC_TraceLiveRootsOf(PyThreadState *tstate, uintptr_t addr);
+
 /* Every object in the heaps that interp shares, in an array from malloc(),
  * or NULL with *n set to -1 if memory ran out.  The objects are not
  * kept alive: the caller must not let a collection run before it holds

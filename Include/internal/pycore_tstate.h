@@ -79,6 +79,13 @@ typedef struct _PyThreadStateImpl {
         uintptr_t regs[24];
         uintptr_t sp;
         int valid;
+#ifdef Py_GC
+        // The same, recorded where the live collector was entered, for the
+        // scan of the collecting thread's own stack; entry_sp is 0 outside
+        // a collection.
+        uintptr_t entry_regs[24];
+        uintptr_t entry_sp;
+#endif
     } gc_trace;
 #endif
 

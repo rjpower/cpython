@@ -231,6 +231,7 @@ class TestTracemallocEnabled(unittest.TestCase):
         domain2, size2, traceback2, length2 = trace2
         self.assertIs(traceback2, traceback1)
 
+    @support.requires_refcounting
     def test_get_traced_memory(self):
         # Python allocates some internals objects, so the test must tolerate
         # a small difference between the expected size and the real usage
@@ -283,6 +284,7 @@ class TestTracemallocEnabled(unittest.TestCase):
 
         # Example: allocate a large piece of memory, temporarily
         large_sum = sum(list(range(100000)))
+        support.gc_collect()  # For other GCs.
         size1, peak1 = tracemalloc.get_traced_memory()
 
         # reset_peak() resets peak to traced memory: peak2 < peak1

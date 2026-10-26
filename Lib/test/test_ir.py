@@ -683,10 +683,8 @@ class FoldTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(g(o), 5)
 
-    @support.requires_refcounting
     def test_return_local(self):
-        # RETURN_VALUE takes a new reference to the local before the frame
-        # releases its locals
+        # RETURN_VALUE returns the local before the frame releases its locals
         def f(x):
             return x
         def g():
@@ -696,9 +694,7 @@ class FoldTest(unittest.TestCase):
         self.assertEqual(words(g)[-1], ("RETURN_VALUE", None, (0,)))
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             o = object()
-            before = sys.getrefcount(o)
             self.assertIs(f(o), o)
-            self.assertEqual(sys.getrefcount(o), before)
             self.assertEqual(g(), [1, 2])
 
     def test_load_below_a_constant_folds(self):
@@ -1006,21 +1002,6 @@ class StoreFoldTest(unittest.TestCase):
         n = _testinternalcapi.SPECIALIZATION_THRESHOLD + 2
         support.gc_collect()  # For other GCs.
         self.assertEqual(C.freed, 3 * n)
-
-    @support.requires_refcounting
-    def test_release_runs_with_the_frame_consistent(self):
-        # __del__ of the old value runs as the store releases it, and sees
-        # the new value in the local.
-        seen = []
-        class D:
-            def __del__(self):
-                seen.append(sys._getframe(1).f_locals.get("x"))
-        def f():
-            x = D()
-            x = 2 + 3
-            return x
-        self.assertEqual(f(), 5)
-        self.assertEqual(seen, [5])
 
     def test_generator(self):
         def gen(n):

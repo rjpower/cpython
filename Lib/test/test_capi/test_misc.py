@@ -2810,13 +2810,16 @@ class Test_Pep523API(unittest.TestCase):
         actual_calls = []
         start = SUFFICIENT_TO_DEOPT_AND_SPECIALIZE
         count = start + SUFFICIENT_TO_DEOPT_AND_SPECIALIZE
-        try:
-            for i in range(count):
-                if i == start:
-                    _testinternalcapi.set_eval_frame_record(actual_calls)
-                func()
-        finally:
-            _testinternalcapi.set_eval_frame_default()
+        # A collection would run finalizers, whose frames the recorder
+        # would see too.
+        with support.disable_gc():
+            try:
+                for i in range(count):
+                    if i == start:
+                        _testinternalcapi.set_eval_frame_record(actual_calls)
+                    func()
+            finally:
+                _testinternalcapi.set_eval_frame_default()
         expected_calls = names * SUFFICIENT_TO_DEOPT_AND_SPECIALIZE
         self.assertEqual(len(expected_calls), len(actual_calls))
         for expected, actual in zip(expected_calls, actual_calls, strict=True):
@@ -2928,12 +2931,15 @@ class Test_Pep523AllowSpecialization(unittest.TestCase):
             func()
 
         actual_calls = []
-        try:
-            _testinternalcapi.set_eval_frame_record(actual_calls)
-            for _ in range(SUFFICIENT_TO_DEOPT_AND_SPECIALIZE):
-                func()
-        finally:
-            _testinternalcapi.set_eval_frame_default()
+        # A collection would run finalizers, whose frames the recorder
+        # would see too.
+        with support.disable_gc():
+            try:
+                _testinternalcapi.set_eval_frame_record(actual_calls)
+                for _ in range(SUFFICIENT_TO_DEOPT_AND_SPECIALIZE):
+                    func()
+            finally:
+                _testinternalcapi.set_eval_frame_default()
 
         # Without allow_specialization, every call including inner() goes
         # through the eval frame

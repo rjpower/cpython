@@ -8107,6 +8107,13 @@ if test "$block_huge_inlining_in_ceval" = yes && test "$ac_cv_computed_gotos" = 
     # interpreter.
     CFLAGS_CEVAL="$CFLAGS_CEVAL -finline-max-stacksize=512"
 fi
+if test "$ac_cv_cc_name" = "gcc" && test "$ac_cv_computed_gotos" = yes; then
+    # GCC's global common subexpression elimination keeps values shared
+    # between the handlers of the computed-goto loop live and spills the
+    # interpreter's frame, word pointer and slots to make room.  The GCC
+    # manual advises -fno-gcse for computed gotos.
+    CFLAGS_CEVAL="$CFLAGS_CEVAL -fno-gcse"
+fi
 AC_SUBST([CFLAGS_CEVAL])
 
 if test "$ac_cv_gcc_asm_for_x87" = yes; then

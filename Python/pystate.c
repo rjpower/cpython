@@ -3179,27 +3179,20 @@ _PyThreadState_PushFrame(PyThreadState *tstate, size_t size)
 }
 
 void
-_PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame * frame)
+_PyThreadState_PopChunk(PyThreadState *tstate, _PyInterpreterFrame *frame)
 {
     _PyStackChunk *chunk = tstate->datastack_chunk;
-    assert(chunk);
-    assert((PyObject **)frame == tstate->datastack_limit);
-    PyObject **header_end = (PyObject **)frame + FRAME_SPECIALS_SIZE;
-    // The root chunk stays, for the next frame
-    if (header_end == chunk_frames_end(chunk) && chunk->previous != NULL) {
-        _PyStackChunk *previous = chunk->previous;
-        _PyStackChunk *cached = tstate->datastack_cached_chunk;
-        tstate->datastack_limit = &previous->data[previous->top];
-        tstate->datastack_chunk = previous;
-        chunk->previous = NULL;
-        if (cached != NULL) {
-            _PyObject_VirtualFree(cached, cached->size);
-        }
-        tstate->datastack_cached_chunk = chunk;
+    _PyStackChunk *previous = chunk->previous;
+    _PyStackChunk *cached = tstate->datastack_cached_chunk;
+    assert(previous != NULL);
+    assert((PyObject **)frame + FRAME_SPECIALS_SIZE == chunk_frames_end(chunk));
+    tstate->datastack_limit = &previous->data[previous->top];
+    tstate->datastack_chunk = previous;
+    chunk->previous = NULL;
+    if (cached != NULL) {
+        _PyObject_VirtualFree(cached, cached->size);
     }
-    else {
-        tstate->datastack_limit = header_end;
-    }
+    tstate->datastack_cached_chunk = chunk;
     tstate->datastack_top = (PyObject **)frame->saved_top;
     assert(tstate->datastack_top < tstate->datastack_limit);
 }

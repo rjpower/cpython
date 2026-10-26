@@ -134,16 +134,17 @@ _PyStackRef_CheckFrame(_PyInterpreterFrame *frame)
 }
 #endif
 
-void
-_PyFrame_ClearLocals(_PyInterpreterFrame *frame)
+/* Release the first n slots of frame, from the top, so that a finalizer
+ * that looks at the frame finds the slots that it has not reached yet intact
+ * and the rest NULL */
+static inline void
+clear_slots(_PyInterpreterFrame *frame, int n)
 {
 #ifdef Py_DEBUG
     _PyStackRef_CheckFrame(frame);
 #endif
-    /* From the top, so that a finalizer that looks at the frame finds the
-     * slots that it has not reached yet intact and the rest NULL */
     _PyStackRef *locals = frame->base;
-    _PyStackRef *sp = locals + _PyFrame_NumSlots(frame);
+    _PyStackRef *sp = locals + n;
     while (sp > locals) {
         sp--;
         _PyStackRef ref = *sp;
@@ -151,6 +152,12 @@ _PyFrame_ClearLocals(_PyInterpreterFrame *frame)
         PyStackRef_XCLOSE(ref);
     }
     Py_CLEAR(frame->f_locals);
+}
+
+void
+_PyFrame_ClearLocals(_PyInterpreterFrame *frame)
+{
+    clear_slots(frame, _PyFrame_NumSlots(frame));
 }
 
 void
@@ -173,7 +180,15 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
         }
         Py_DECREF(f);
     }
-    _PyFrame_ClearLocals(frame);
+    if (frame->owner == FRAME_OWNED_BY_THREAD) {
+        // A frame on the frame stack ends with its temporaries NULL: a
+        // return leaves them so, and so does the unwinding of an exception.
+        _PyFrame_AssertTemporariesClear(frame);
+        clear_slots(frame, _PyFrame_GetCode(frame)->co_nlocalsplus);
+    }
+    else {
+        _PyFrame_ClearLocals(frame);
+    }
     PyStackRef_CLEAR(frame->f_funcobj);
 }
 

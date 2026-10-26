@@ -4535,6 +4535,8 @@ dummy_func(
             DEAD(args);
             SYNC_SP();
             if (temp == NULL) {
+                // self, a temporary of the shim
+                _PyFrame_ClearTemporaries(shim, 0);
                 _PyEval_FrameClearAndPop(tstate, shim);
                 ERROR_NO_POP();
             }

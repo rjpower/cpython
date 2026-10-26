@@ -4973,6 +4973,7 @@
                     tstate, init, NULL, args-1, oparg+1, NULL, shim);
                 IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                 if (temp == NULL) {
+                    _PyFrame_ClearTemporaries(shim, 0);
                     _PyEval_FrameClearAndPop(tstate, shim);
                     JUMP_TO_LABEL(error);
                 }

@@ -423,7 +423,27 @@ _PyThreadState_PushFrameUnchecked(PyThreadState *tstate, int nslots)
 PyAPI_FUNC(_PyInterpreterFrame *)
 _PyThreadState_PushFrame(PyThreadState *tstate, size_t size);
 
-PyAPI_FUNC(void) _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame *frame);
+/* Pop frame, the first frame of the current chunk, and the chunk */
+PyAPI_FUNC(void) _PyThreadState_PopChunk(PyThreadState *tstate, _PyInterpreterFrame *frame);
+
+/* Pop frame, the last frame pushed, from the frame stack and its slots from
+ * the value stack */
+static inline void
+_PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    _PyStackChunk *chunk = tstate->datastack_chunk;
+    assert(chunk);
+    assert((PyObject **)frame == tstate->datastack_limit);
+    // Only the frame that a chunk was allocated for has its first slot.  The
+    // root chunk stays, for the next frame.
+    if (frame->base == (_PyStackRef *)&chunk->data[0] && chunk->previous != NULL) {
+        _PyThreadState_PopChunk(tstate, frame);
+        return;
+    }
+    tstate->datastack_limit = (PyObject **)frame + FRAME_SPECIALS_SIZE;
+    tstate->datastack_top = (PyObject **)frame->saved_top;
+    assert(tstate->datastack_top < tstate->datastack_limit);
+}
 
 /* Pushes a frame without checking for space.
  * Must be guarded by _PyThreadState_HasStackSpace()

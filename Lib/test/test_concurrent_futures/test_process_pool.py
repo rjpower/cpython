@@ -159,6 +159,7 @@ class ProcessPoolExecutorTest(ExecutorTest):
 
     @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
     @hashlib_helper.requires_hashdigest('md5')
+    @support.requires_refcounting
     def test_ressources_gced_in_workers(self):
         # Ensure that argument for a job are correctly gc-ed after the job
         # is finished

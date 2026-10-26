@@ -252,6 +252,7 @@
     <ClInclude Include="..\Include\internal\pycore_freelist_state.h" />
     <ClInclude Include="..\Include\internal\pycore_function.h" />
     <ClInclude Include="..\Include\internal\pycore_gc.h" />
+    <ClInclude Include="..\Include\internal\pycore_gc_trace.h" />
     <ClInclude Include="..\Include\internal\pycore_genobject.h" />
     <ClInclude Include="..\Include\internal\pycore_getopt.h" />
     <ClInclude Include="..\Include\internal\pycore_gil.h" />
@@ -644,6 +645,7 @@
     <ClCompile Include="..\Python\gc.c" />
     <ClCompile Include="..\Python\gc_free_threading.c" />
     <ClCompile Include="..\Python\gc_gil.c" />
+    <ClCompile Include="..\Python\gc_trace.c" />
     <ClCompile Include="..\Python\getargs.c" />
     <ClCompile Include="..\Python\getcompiler.c" />
     <ClCompile Include="..\Python\getcopyright.c" />

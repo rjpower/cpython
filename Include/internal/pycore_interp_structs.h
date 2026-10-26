@@ -272,6 +272,12 @@ struct _gc_runtime_state {
 #else
     PyGC_Head *generation0;
 #endif
+
+    /* The tracing verifier (Python/gc_trace.c): when to run it, and its
+       registered static types and last results. */
+    int trace_mode;
+    struct _gc_trace_state *trace;
+    struct _PyGCRoot *trace_roots;
 };
 
 #ifndef Py_GIL_DISABLED

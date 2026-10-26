@@ -1,6 +1,7 @@
 #include "Python.h"
 #include "pycore_ceval.h"         // _PyEval_SignalReceived()
 #include "pycore_gc.h"            // _Py_RunGC()
+#include "pycore_gc_trace.h"      // _PyGC_TRACE_CAPTURE_THREAD()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_pyatomic_ft_wrappers.h" // FT_MUTEX_LOCK()
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
@@ -613,6 +614,7 @@ PyEval_AcquireThread(PyThreadState *tstate)
 void
 PyEval_ReleaseThread(PyThreadState *tstate)
 {
+    _PyGC_TRACE_CAPTURE_THREAD();
     assert(_PyThreadState_CheckConsistency(tstate));
     _PyThreadState_Detach(tstate);
 }
@@ -643,6 +645,10 @@ _PyEval_ReInitThreads(PyThreadState *tstate)
 PyThreadState *
 PyEval_SaveThread(void)
 {
+    // First, before this function can change a callee-saved register: the
+    // caller's values are what the tracing verifier must see while the
+    // caller blocks.
+    _PyGC_TRACE_CAPTURE_THREAD();
     PyThreadState *tstate = _PyThreadState_GET();
     _PyThreadState_Detach(tstate);
     return tstate;

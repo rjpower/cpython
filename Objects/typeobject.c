@@ -7,6 +7,7 @@
 #include "pycore_descrobject.h"   // _PyMember_GetOffset()
 #include "pycore_dict.h"          // _PyDict_KeysSize()
 #include "pycore_function.h"      // _PyFunction_GetVersionForCurrentState()
+#include "pycore_gc_trace.h"      // _PyGC_TraceRegisterStaticType()
 #include "pycore_interpframe.h"   // _PyInterpreterFrame
 #include "pycore_long.h"          // _PyLong_IsNegative(), _PyLong_GetOne()
 #include "pycore_memoryobject.h"  // _PyMemoryView_FromBufferProc()
@@ -7127,6 +7128,24 @@ type_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
+/* Visit what a static type refers to, for the tracing verifier.  A static
+   builtin type keeps its dict and subclasses per interpreter. */
+int
+_PyType_TraverseStatic(PyTypeObject *type, visitproc visit, void *arg)
+{
+    assert(!(type->tp_flags & Py_TPFLAGS_HEAPTYPE));
+    if (!(type->tp_flags & Py_TPFLAGS_READY)) {
+        return 0;
+    }
+    Py_VISIT(lookup_tp_dict(type));
+    Py_VISIT(lookup_tp_subclasses(type));
+    Py_VISIT(type->tp_cache);
+    Py_VISIT(lookup_tp_mro(type));
+    Py_VISIT(lookup_tp_bases(type));
+    Py_VISIT(type->tp_base);
+    return 0;
+}
+
 static int
 type_clear(PyObject *self)
 {
@@ -9441,6 +9460,12 @@ type_ready(PyTypeObject *type, int initial, int add_subclasses)
     }
 
     _PyTypeCache_InitType(type);
+
+    if (!(type->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
+        // A static type is a root for the tracing collector: its dict and
+        // the rest are reachable from nothing else on the heap.
+        _PyGC_TraceRegisterStaticType(_PyInterpreterState_GET(), type);
+    }
 
 #ifdef Py_TRACE_REFS
     /* PyType_Ready is the closest thing we have to a choke point

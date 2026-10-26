@@ -91,6 +91,8 @@ _PyType_GetModuleState(PyTypeObject *type)
 // Export for 'math' shared extension, used via _PyType_IsReady() static inline
 // function
 PyAPI_FUNC(PyObject *) _PyType_GetDict(PyTypeObject *);
+// Visit what a static type refers to; for the tracing verifier.
+extern int _PyType_TraverseStatic(PyTypeObject *, visitproc, void *);
 
 PyAPI_FUNC(PyObject *) _PyType_LookupSubclasses(PyTypeObject *);
 PyAPI_FUNC(PyObject *) _PyType_InitSubclasses(PyTypeObject *);

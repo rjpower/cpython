@@ -71,6 +71,17 @@ typedef struct _PyThreadStateImpl {
     struct _mimalloc_thread_state mimalloc;
 #endif
 
+#ifndef Py_GIL_DISABLED
+    // The callee-saved registers and stack pointer of the thread when it
+    // last released the GIL, for the tracing verifier's scan of its C stack
+    // (Python/gc_trace.c).  "valid" is cleared when the thread attaches.
+    struct {
+        uintptr_t regs[24];
+        uintptr_t sp;
+        int valid;
+    } gc_trace;
+#endif
+
 #ifdef Py_GIL_DISABLED
     // Stack references for the current thread that exist on the C stack
     struct _PyCStackRef *c_stack_refs;

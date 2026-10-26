@@ -78,6 +78,10 @@ struct _gc_live_state {
     int running_queue;
     // The second pass of an explicit collection is not verified again.
     int skip_verify;
+    // Set during a collection that an allocation runs, where Python code
+    // cannot run: the gc.callbacks are not called, debug output goes to the
+    // C stderr, and the queue waits for the eval breaker.
+    int no_python;
     // The exception that was set when the collection started.  The stack
     // below the collection's entry is not scanned (collect_and_run_queue()).
     PyObject *exc;
@@ -295,7 +299,9 @@ invoke_gc_callback(PyThreadState *tstate, const char *phase,
                    struct gc_generation_stats *stats)
 {
     GCState *gcstate = &tstate->interp->gc;
-    if (gcstate->callbacks == NULL || PyList_GET_SIZE(gcstate->callbacks) == 0) {
+    if (gcstate->callbacks == NULL || PyList_GET_SIZE(gcstate->callbacks) == 0
+        || gcstate->live->no_python)
+    {
         return;
     }
     assert(PyList_CheckExact(gcstate->callbacks));
@@ -642,10 +648,27 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
     return ncollected;
 }
 
+/* sys.stderr, unless Python code cannot run here. */
 static void
-debug_cycle(const char *msg, PyObject *op)
+debug_write(struct _gc_live_state *ls, const char *format, ...)
 {
-    PySys_FormatStderr("gc: %s <%s %p>\n", msg, Py_TYPE(op)->tp_name, op);
+    char buf[1000];
+    va_list va;
+    va_start(va, format);
+    PyOS_vsnprintf(buf, sizeof(buf), format, va);
+    va_end(va);
+    if (ls->no_python) {
+        fputs(buf, stderr);
+    }
+    else {
+        PySys_WriteStderr("%s", buf);
+    }
+}
+
+static void
+debug_cycle(struct _gc_live_state *ls, const char *msg, PyObject *op)
+{
+    debug_write(ls, "gc: %s <%s %p>\n", msg, Py_TYPE(op)->tp_name, (void *)op);
 }
 
 static Py_ssize_t
@@ -697,7 +720,7 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
             for (Py_ssize_t i = 0; i < res.ndead; i++) {
                 PyObject *op = res.dead[i].op;
                 if ((op->ob_flags & _Py_GC_DEAD_FLAG) && _PyObject_IS_GC(op)) {
-                    debug_cycle("collectable", op);
+                    debug_cycle(ls, "collectable", op);
                 }
             }
         }
@@ -727,10 +750,10 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
     free(res.dead);
 
     if (gc->debug & _PyGC_DEBUG_STATS) {
-        PySys_WriteStderr("gc: %zd objects, %zd collected, %zd bytes freed, "
-                          "%zd live bytes, %.4fs elapsed\n",
-                          res.nobjects, ncollected, bytes_freed,
-                          res.live_bytes, cur.duration);
+        debug_write(ls, "gc: %zd objects, %zd collected, %zd bytes freed, "
+                    "%zd live bytes, %.4fs elapsed\n",
+                    res.nobjects, ncollected, bytes_freed,
+                    res.live_bytes, cur.duration);
     }
     if (!ls->skip_verify) {
         _PyGC_TraceAfterCollect(tstate, NUM_GENERATIONS - 1,
@@ -738,7 +761,7 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
     }
     for (size_t i = 0; i < garbage.n; i++) {
         if (gc->debug & _PyGC_DEBUG_UNCOLLECTABLE) {
-            debug_cycle("uncollectable", garbage.items[i]);
+            debug_cycle(ls, "uncollectable", garbage.items[i]);
         }
     }
     for (size_t i = 0; gc->garbage != NULL && i < garbage.n; i++) {
@@ -773,7 +796,7 @@ collect_pass(PyThreadState *tstate, _PyGC_Reason reason, int *nfinalized)
     Py_ssize_t n = collect(tstate, reason);
     // A collection that the queue's code triggers records its own entry.
     ts->gc_trace.entry_sp = 0;
-    *nfinalized = run_queue(tstate);
+    *nfinalized = get_live(tstate->interp)->no_python ? 0 : run_queue(tstate);
     if (heap != NULL) {
         m->current_object_heap = heap;
     }
@@ -845,8 +868,10 @@ collect_and_run_queue(PyThreadState *tstate, _PyGC_Reason reason)
     return n;
 }
 
-void
-_PyGC_LiveOnThreshold(PyThreadState *tstate)
+/* Can an automatic collection run now?  If not, it is tried again after
+   RETRY_BYTES more. */
+static int
+can_collect(PyThreadState *tstate)
 {
     PyInterpreterState *interp = tstate->interp;
     GCState *gc = &interp->gc;
@@ -867,9 +892,33 @@ _PyGC_LiveOnThreshold(PyThreadState *tstate)
     }
     if (!ok) {
         gc->alloc_limit = gc->alloc_bytes + RETRY_BYTES;
+    }
+    return ok;
+}
+
+void
+_PyGC_LiveOnThreshold(PyThreadState *tstate)
+{
+    GCState *gc = &tstate->interp->gc;
+    /* Finalizers, weak reference callbacks and gc.callbacks run Python code,
+       which is safe only where the eval loop checks its breaker: the
+       collection waits for that, as the cycle collector's does.  Code that
+       allocates a further threshold without reaching the eval loop collects
+       here, and leaves the Python code to the breaker. */
+    if (gc->alloc_bytes - gc->alloc_limit < gc->alloc_threshold) {
+        _Py_ScheduleGC(tstate);
         return;
     }
+    if (!can_collect(tstate)) {
+        return;
+    }
+    struct _gc_live_state *ls = get_live(tstate->interp);
+    ls->no_python = 1;
     (void)collect_and_run_queue(tstate, _Py_GC_REASON_HEAP);
+    ls->no_python = 0;
+    if (ls->qhead < ls->qtail) {
+        _Py_ScheduleGC(tstate);
+    }
 }
 
 
@@ -1236,13 +1285,19 @@ _PyObject_GC_Link(PyObject *op)
     gc->_gc_prev = 0;
 }
 
+/* The eval breaker's call, scheduled by _PyGC_LiveOnThreshold(). */
 void
 _Py_RunGC(PyThreadState *tstate)
 {
-    if (!tstate->interp->gc.enabled) {
+    GCState *gc = &tstate->interp->gc;
+    if (gc->alloc_bytes < gc->alloc_limit) {
+        // A collection that an allocation ran left its queue.
+        (void)run_queue(tstate);
         return;
     }
-    (void)collect_and_run_queue(tstate, _Py_GC_REASON_HEAP);
+    if (can_collect(tstate)) {
+        (void)collect_and_run_queue(tstate, _Py_GC_REASON_HEAP);
+    }
 }
 
 static PyObject *

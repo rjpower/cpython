@@ -2840,6 +2840,7 @@ class CircularImportLazyTests(unittest.TestCase):
 class LazyImportFinalizationTests(unittest.TestCase):
     """Destructors that use lazy imports after finalization freed their state."""
 
+    @support.requires_refcounting
     def test_declare(self):
         code = textwrap.dedent("""
             import builtins, os

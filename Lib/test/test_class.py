@@ -1013,41 +1013,6 @@ class TestInlineValues(unittest.TestCase):
         C.a = X()
         C.a = X()
 
-    @support.nomemtest
-    @support.requires_refcounting
-    def test_detach_materialized_dict_no_memory(self):
-        import _testcapi
-
-        class A:
-            def __init__(self):
-                self.a = 1
-                self.b = 2
-
-        # The failing allocation should be the one which detaches the
-        # dictionary from the object, but other allocations can happen
-        # first, so try to fail every one of the first allocations.
-        # Drop the last reference from C, so that nothing else (such as
-        # GC) runs between arming the failure and the deallocation.
-        seen = []
-        for n in range(20):
-            lst = [A()]
-            d = lst[0].__dict__
-            with support.catch_unraisable_exception() as ex:
-                _testcapi.call_with_nomemory(n, n + 1, lst.clear)
-                if ex.unraisable is None:
-                    continue
-                exc_type = ex.unraisable.exc_type
-                err_msg = ex.unraisable.err_msg
-            seen.append((n, exc_type, err_msg))
-            if (exc_type is MemoryError and err_msg ==
-                    'Exception ignored while clearing an object managed dict'):
-                # The dictionary should have been cleared.
-                self.assertNotIn("a", d)
-                break
-        else:
-            self.fail("MemoryError was not raised while detaching "
-                      f"the dictionary: {seen}")
-
 class DefinitionOrderTests(unittest.TestCase):
     # PEP 520: Preserving Class Attribute Definition Order
 

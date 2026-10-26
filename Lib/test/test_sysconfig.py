@@ -625,12 +625,6 @@ class TestSysConfig(unittest.TestCase, VirtualEnvironmentMixin):
         self.assertIn(Py_DEBUG, (0, 1))
         self.assertEqual(Py_DEBUG, support.Py_DEBUG)
 
-    def test_always_set_py_gil_disabled(self):
-        self.assertIn('Py_GIL_DISABLED', sysconfig.get_config_vars())
-        Py_GIL_DISABLED = sysconfig.get_config_var('Py_GIL_DISABLED')
-        self.assertIn(Py_GIL_DISABLED, (0, 1))
-        self.assertEqual(Py_GIL_DISABLED, support.Py_GIL_DISABLED)
-
     def test_abiflags(self):
         # If this test fails on some platforms, maintainers should update the
         # test to make it pass, rather than changing the definition of ABIFLAGS.

@@ -16835,7 +16835,21 @@ static PyMethodDef DirEntry_methods[] = {
     {NULL}
 };
 
+/* The type is not a GC type, but the tracing mark must reach its
+   members.  The mark visits the heap type itself. */
+static int
+DirEntry_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    DirEntry *self = DirEntry_CAST(op);
+    Py_VISIT(self->name);
+    Py_VISIT(self->path);
+    Py_VISIT(self->stat);
+    Py_VISIT(self->lstat);
+    return 0;
+}
+
 static PyType_Slot DirEntryType_slots[] = {
+    {Py_tp_traverse, DirEntry_traverse},
     {Py_tp_dealloc, DirEntry_dealloc},
     {Py_tp_repr, DirEntry_repr},
     {Py_tp_methods, DirEntry_methods},

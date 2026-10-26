@@ -1748,6 +1748,7 @@ xmlparse_traverse(PyObject *op, visitproc visit, void *arg)
         Py_VISIT(self->handlers[i]);
     }
     Py_VISIT(self->parent);
+    Py_VISIT(self->intern);
     Py_VISIT(Py_TYPE(op));
     return 0;
 }

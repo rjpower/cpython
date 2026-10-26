@@ -2510,7 +2510,18 @@ static PyMethodDef poll_methods[] = {
 };
 
 
+/* The type is not a GC type, but the tracing mark must reach its
+   members.  The mark visits the heap type itself. */
+static int
+poll_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    pollObject *self = pollObject_CAST(op);
+    Py_VISIT(self->dict);
+    return 0;
+}
+
 static PyType_Slot poll_Type_slots[] = {
+    {Py_tp_traverse, poll_traverse},
     {Py_tp_dealloc, poll_dealloc},
     {Py_tp_methods, poll_methods},
     {0, 0},

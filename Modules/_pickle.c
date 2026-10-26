@@ -5265,6 +5265,7 @@ Pickler_traverse(PyObject *op, visitproc visit, void *arg)
     Py_VISIT(self->fast_memo);
     Py_VISIT(self->reducer_override);
     Py_VISIT(self->buffer_callback);
+    Py_VISIT(self->output_buffer);
     PyMemoTable *memo = self->memo;
     if (memo && memo->mt_table) {
         Py_ssize_t i = memo->mt_allocated;

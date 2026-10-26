@@ -1364,7 +1364,18 @@ static PyMemberDef Decompressor_members[] = {
     {NULL}
 };
 
+/* The type is not a GC type, but the tracing mark must reach its
+   members.  The mark visits the heap type itself. */
+static int
+Decompressor_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Decompressor *self = Decompressor_CAST(op);
+    Py_VISIT(self->unused_data);
+    return 0;
+}
+
 static PyType_Slot lzma_decompressor_type_slots[] = {
+    {Py_tp_traverse, Decompressor_traverse},
     {Py_tp_dealloc, Decompressor_dealloc},
     {Py_tp_methods, Decompressor_methods},
     {Py_tp_new, _lzma_LZMADecompressor},

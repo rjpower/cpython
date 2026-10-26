@@ -1198,7 +1198,19 @@ lru_list_elem_dealloc(PyObject *op)
     Py_DECREF(tp);
 }
 
+/* The type is not a GC type, but the tracing mark must reach its
+   members.  The mark visits the heap type itself. */
+static int
+lru_list_elem_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    lru_list_elem *self = lru_list_elem_CAST(op);
+    Py_VISIT(self->key);
+    Py_VISIT(self->result);
+    return 0;
+}
+
 static PyType_Slot lru_list_elem_type_slots[] = {
+    {Py_tp_traverse, lru_list_elem_traverse},
     {Py_tp_dealloc, lru_list_elem_dealloc},
     {0, 0}
 };

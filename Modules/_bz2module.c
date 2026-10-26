@@ -726,7 +726,18 @@ static PyMemberDef BZ2Decompressor_members[] = {
     {NULL}
 };
 
+/* The type is not a GC type, but the tracing mark must reach its
+   members.  The mark visits the heap type itself. */
+static int
+BZ2Decompressor_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    BZ2Decompressor *self = _BZ2Decompressor_CAST(op);
+    Py_VISIT(self->unused_data);
+    return 0;
+}
+
 static PyType_Slot bz2_decompressor_type_slots[] = {
+    {Py_tp_traverse, BZ2Decompressor_traverse},
     {Py_tp_dealloc, BZ2Decompressor_dealloc},
     {Py_tp_methods, BZ2Decompressor_methods},
     {Py_tp_doc, (char *)_bz2_BZ2Decompressor__doc__},

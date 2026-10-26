@@ -3938,6 +3938,7 @@ xmlparser_gc_traverse(PyObject *op, visitproc visit, void *arg)
     Py_VISIT(self->target);
     Py_VISIT(self->entity);
     Py_VISIT(self->names);
+    Py_VISIT(self->elementtree_module);
 
     return 0;
 }

@@ -1112,6 +1112,7 @@ enable_profiling
 enable_gil
 with_pydebug
 with_trace_refs
+with_gc
 enable_pystats
 with_assertions
 enable_optimizations
@@ -1918,6 +1919,8 @@ Optional Packages:
   --with-pydebug          build with Py_DEBUG defined (default is no)
   --with-trace-refs       enable tracing references for debugging purpose
                           (default is no)
+  --with-gc               let the tracing collector own memory instead of
+                          reference counting (experimental, default is no)
   --with-assertions       build with C assertions enabled (default is no)
   --with-lto=[full|thin|no|yes]
                           enable Link-Time-Optimization in any build (default
@@ -8808,6 +8811,40 @@ fi
 if test "$disable_gil" = "yes" -a "$with_trace_refs" = "yes";
 then
   as_fn_error $? "--disable-gil cannot be used with --with-trace-refs" "$LINENO" 5
+fi
+
+# Check for --with-gc
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-gc" >&5
+printf %s "checking for --with-gc... " >&6; }
+
+# Check whether --with-gc was given.
+if test ${with_gc+y}
+then :
+  withval=$with_gc;
+else case e in #(
+  e) with_gc=no
+ ;;
+esac
+fi
+
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $with_gc" >&5
+printf "%s\n" "$with_gc" >&6; }
+
+if test "$with_gc" = "yes"
+then
+  if test "$disable_gil" = "yes"; then
+    as_fn_error $? "--with-gc cannot be used with --disable-gil" "$LINENO" 5
+  fi
+  if test "$with_trace_refs" = "yes"; then
+    as_fn_error $? "--with-gc cannot be used with --with-trace-refs" "$LINENO" 5
+  fi
+  case "$CFLAGS $CPPFLAGS" in
+    *Py_STACKREF_DEBUG*)
+      as_fn_error $? "--with-gc cannot be used with Py_STACKREF_DEBUG" "$LINENO" 5 ;;
+  esac
+
+printf "%s\n" "#define Py_GC 1" >>confdefs.h
+
 fi
 
 # Check for --enable-pystats
@@ -20357,6 +20394,9 @@ printf "%s\n" "#define WITH_MIMALLOC 1" >>confdefs.h
 
 elif test "$disable_gil" = "yes"; then
   as_fn_error $? "--disable-gil requires mimalloc memory allocator (--with-mimalloc)." "$LINENO" 5
+fi
+if test "$with_gc" = "yes" -a "$with_mimalloc" != yes; then
+  as_fn_error $? "--with-gc requires mimalloc memory allocator (--with-mimalloc)." "$LINENO" 5
 fi
 
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $with_mimalloc" >&5

@@ -1886,6 +1886,10 @@
 /* Defined if Python is built as a shared library. */
 #undef Py_ENABLE_SHARED
 
+/* Define if the tracing collector owns memory and reference counting is off
+   */
+#undef Py_GC
+
 /* Define if you want to disable the GIL */
 #undef Py_GIL_DISABLED
 

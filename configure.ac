@@ -2033,6 +2033,30 @@ then
   AC_MSG_ERROR([--disable-gil cannot be used with --with-trace-refs])
 fi
 
+# Check for --with-gc
+AC_MSG_CHECKING([for --with-gc])
+AC_ARG_WITH([gc],
+  [AS_HELP_STRING([--with-gc], [let the tracing collector own memory instead of reference counting (experimental, default is no)])],
+  [], [with_gc=no]
+)
+AC_MSG_RESULT([$with_gc])
+
+if test "$with_gc" = "yes"
+then
+  if test "$disable_gil" = "yes"; then
+    AC_MSG_ERROR([--with-gc cannot be used with --disable-gil])
+  fi
+  if test "$with_trace_refs" = "yes"; then
+    AC_MSG_ERROR([--with-gc cannot be used with --with-trace-refs])
+  fi
+  case "$CFLAGS $CPPFLAGS" in
+    *Py_STACKREF_DEBUG*)
+      AC_MSG_ERROR([--with-gc cannot be used with Py_STACKREF_DEBUG]) ;;
+  esac
+  AC_DEFINE([Py_GC], [1],
+            [Define if the tracing collector owns memory and reference counting is off])
+fi
+
 # Check for --enable-pystats
 AC_MSG_CHECKING([for --enable-pystats])
 AC_ARG_ENABLE([pystats],
@@ -5512,6 +5536,9 @@ if test "$with_mimalloc" != no; then
   AC_SUBST([MIMALLOC_HEADERS], ['$(MIMALLOC_HEADERS)'])
 elif test "$disable_gil" = "yes"; then
   AC_MSG_ERROR([--disable-gil requires mimalloc memory allocator (--with-mimalloc).])
+fi
+if test "$with_gc" = "yes" -a "$with_mimalloc" != yes; then
+  AC_MSG_ERROR([--with-gc requires mimalloc memory allocator (--with-mimalloc).])
 fi
 
 AC_MSG_RESULT([$with_mimalloc])

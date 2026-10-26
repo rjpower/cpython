@@ -108,9 +108,9 @@ class AssemblerTest(unittest.TestCase):
         # The words of the code object stay as the compiler emitted them
         self.assertEqual(get_ir(f.__code__), ir)
 
-    def test_deopt_after_borrowing_a_local(self):
-        # A Py_STACKREF_DEBUG build aborts when the frame closes a local
-        # whose borrow a deoptimising LOAD_ATTR left out.
+    def test_deopt_after_reading_a_local(self):
+        # A LOAD_ATTR that deoptimises after reading a local leaves the
+        # local intact for the generic path and the exception handler.
         def f(o):
             try:
                 return o.attr

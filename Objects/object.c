@@ -2409,57 +2409,6 @@ finally:
     PyErr_SetRaisedException(exc);
 }
 
-/* Trashcan support. */
-
-/* Add op to the tstate->delete_later list.  Called when the current
- * call-stack depth gets large.  op must be a gc'ed object, with refcount 0.
- *  Py_DECREF must already have been called on it.
- */
-void
-_PyTrash_thread_deposit_object(PyThreadState *tstate, PyObject *op)
-{
-    _PyObject_ASSERT(op, Py_REFCNT(op) == 0);
-    PyTypeObject *tp = Py_TYPE(op);
-    assert(tp->tp_flags & Py_TPFLAGS_HAVE_GC);
-    int tracked = 0;
-    if (tp->tp_is_gc == NULL || tp->tp_is_gc(op)) {
-        tracked = _PyObject_GC_IS_TRACKED(op);
-        if (tracked) {
-            _PyObject_GC_UNTRACK(op);
-        }
-    }
-    uintptr_t tagged_ptr = ((uintptr_t)tstate->delete_later) | tracked;
-    _Py_AS_GC(op)->_gc_next = tagged_ptr;
-    tstate->delete_later = op;
-}
-
-/* Deallocate all the objects in the tstate->delete_later list.
- * Called when the call-stack unwinds again. */
-void
-_PyTrash_thread_destroy_chain(PyThreadState *tstate)
-{
-    while (tstate->delete_later) {
-        PyObject *op = tstate->delete_later;
-        destructor dealloc = Py_TYPE(op)->tp_dealloc;
-
-        uintptr_t tagged_ptr = _Py_AS_GC(op)->_gc_next;
-        _Py_AS_GC(op)->_gc_next = 0;
-        tstate->delete_later = (PyObject *)(tagged_ptr & ~1);
-        if (tagged_ptr & 1) {
-            _PyObject_GC_TRACK(op);
-        }
-        /* Call the deallocator directly.  This used to try to
-         * fool Py_DECREF into calling it indirectly, but
-         * Py_DECREF was already called on this object, and in
-         * assorted non-release builds calling Py_DECREF again ends
-         * up distorting allocation statistics.
-         */
-        _PyObject_ASSERT(op, Py_REFCNT(op) == 0);
-        _PyReftracerTrack(op, PyRefTracer_DESTROY);
-        (*dealloc)(op);
-    }
-}
-
 void _Py_NO_RETURN
 _PyObject_AssertFailed(PyObject *obj, const char *expr, const char *msg,
                        const char *file, int line, const char *function)
@@ -2511,76 +2460,6 @@ _PyObject_AssertFailed(PyObject *obj, const char *expr, const char *msg,
 }
 
 
-/*
-When deallocating a container object, it's possible to trigger an unbounded
-chain of deallocations, as each Py_DECREF in turn drops the refcount on "the
-next" object in the chain to 0.  This can easily lead to stack overflows.
-To avoid that, if the C stack is nearing its limit, instead of calling
-dealloc on the object, it is added to a queue to be freed later when the
-stack is shallower */
-static Py_NO_INLINE void
-py_dealloc(PyObject *op)
-{
-    PyTypeObject *type = Py_TYPE(op);
-    unsigned long gc_flag = type->tp_flags & Py_TPFLAGS_HAVE_GC;
-    destructor dealloc = type->tp_dealloc;
-    PyThreadState *tstate = NULL;
-    intptr_t margin = 0;
-    if (gc_flag) {
-        tstate = _PyThreadState_GET();
-        margin = _Py_RecursionLimit_GetMargin(tstate);
-        if (margin < 2) {
-            _PyTrash_thread_deposit_object(tstate, (PyObject *)op);
-            return;
-        }
-    }
-#ifdef Py_DEBUG
-    if (tstate == NULL) {
-        tstate = _PyThreadState_GET();
-    }
-    PyObject *old_exc = tstate != NULL ? tstate->current_exception : NULL;
-    // Keep the old exception type alive to prevent undefined behavior
-    // on (tstate->curexc_type != old_exc_type) below
-    Py_XINCREF(old_exc);
-    // Make sure that type->tp_name remains valid
-    Py_INCREF(type);
-#endif
-
-    _PyReftracerTrack(op, PyRefTracer_DESTROY);
-    (*dealloc)(op);
-
-#ifdef Py_DEBUG
-    // gh-89373: The tp_dealloc function must leave the current exception
-    // unchanged.
-    if (tstate != NULL && tstate->current_exception != old_exc) {
-        const char *err;
-        if (old_exc == NULL) {
-            err = "Deallocator of type '%s' raised an exception";
-        }
-        else if (tstate->current_exception == NULL) {
-            err = "Deallocator of type '%s' cleared the current exception";
-        }
-        else {
-            // It can happen if dealloc() normalized the current exception.
-            // A deallocator function must not change the current exception,
-            // not even normalize it.
-            err = "Deallocator of type '%s' overrode the current exception";
-        }
-        _Py_FatalErrorFormat(__func__, err, type->tp_name);
-    }
-    Py_XDECREF(old_exc);
-    Py_DECREF(type);
-#endif
-    if (gc_flag && tstate->delete_later && margin >= 4) {
-        _PyTrash_thread_destroy_chain(tstate);
-    }
-}
-
-/*
- * gh-130706: Keep the GC/reftracer path in the non-inlined py_dealloc().
- * Inlining it makes the compiler save callee-saved registers at entry,
- * so the non-GC objects path would have unnecessary register spills.
- */
 void
 _Py_Dealloc(PyObject *op)
 {
@@ -2588,19 +2467,6 @@ _Py_Dealloc(PyObject *op)
     // reached from extensions built for reference counting whose decrefs
     // reached zero.
     (void)op;
-    return;
-#if !defined(Py_DEBUG)
-    // gh-130706: Avoid unnecessary register spills for non-GC objects.
-    PyTypeObject *type = Py_TYPE(op);
-    if (_PyRuntime.ref_tracer.tracer_func == NULL
-        && !(type->tp_flags & Py_TPFLAGS_HAVE_GC))
-    {
-        type->tp_dealloc(op);
-        return;
-    }
-#endif
-    // GC objects (trashcan), reftracer set, or debug builds.
-    py_dealloc(op);
 }
 
 

@@ -38,7 +38,6 @@ echo.  --test-marker  Enable the test marker within the build.
 echo.  --regen        Regenerate all opcodes, grammar and tokens.
 echo.  --pystats      Enable PyStats collection.
 echo.  --tail-call-interp  Enable tail-calling interpreter (requires LLVM 19 or higher).
-echo.  --enable-stackref-debug  Enable stackref debugging mode.
 echo.  --pymalloc-hugepages  Enable huge page support for pymalloc arenas.
 echo.
 echo.Available flags to avoid building certain modules.
@@ -93,7 +92,6 @@ if "%~1"=="--regen" (set Regen=true) & shift & goto CheckOpts
 if "%~1"=="--without-remote-debug" (set DisableRemoteDebug=true) & shift & goto CheckOpts
 if "%~1"=="--pystats" (set PyStats=1) & shift & goto CheckOpts
 if "%~1"=="--tail-call-interp" (set UseTailCallInterp=true) & shift & goto CheckOpts
-if "%~1"=="--enable-stackref-debug" (set StackRefDebug=true) & shift & goto CheckOpts
 if "%~1"=="--pymalloc-hugepages" (set UsePymallocHugepages=true) & shift & goto CheckOpts
 rem These use the actual property names used by MSBuild.  We could just let
 rem them in through the environment, but we specify them on the command line
@@ -202,7 +200,6 @@ echo on
  /p:PyStats=%PyStats%^
  /p:UseTailCallInterp=%UseTailCallInterp%^
  /p:DisableRemoteDebug=%DisableRemoteDebug%^
- /p:StackRefDebug=%StackRefDebug%^
  /p:UsePymallocHugepages=%UsePymallocHugepages%^
  %1 %2 %3 %4 %5 %6 %7 %8 %9
 

@@ -2172,7 +2172,7 @@ Optimizations
 
 * The interpreter now avoids some reference count modifications internally
   when it's safe to do so.
-  This can lead to different values being returned from :func:`sys.getrefcount`
+  This can lead to different values being returned from :func:`!sys.getrefcount`
   and :c:func:`Py_REFCNT` compared to previous versions of Python.
   See :ref:`below <whatsnew314-refcount>` for details.
 

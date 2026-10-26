@@ -473,9 +473,7 @@ static const char usage_xoptions[] =
 #ifdef Py_STATS
 "#s{-X} #L{pystats}: enable pystats collection at startup; also #e{PYTHONSTATS}\n"
 #endif
-"#s{-X} #L{showrefcount}: output the total reference count and number of used\n"
-"         memory blocks when the program finishes or after each statement in\n"
-"         the interactive interpreter; only works on debug builds\n"
+"#s{-X} #L{showrefcount}: accepted and ignored; nothing is reference counted\n"
 "#s{-X} #L{thread_inherit_context}#b{=[0|1]}: enable (#B{1}) or disable (#B{0}) threads inheriting\n"
 "         context vars by default; enabled by default in the free-threaded\n"
 "         build and disabled otherwise; also #e{PYTHON_THREAD_INHERIT_CONTEXT}\n"

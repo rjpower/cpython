@@ -3331,7 +3331,6 @@ exc_info() -- return information about the current thread's active exception\n\
 exit() -- exit the interpreter by raising SystemExit\n\
 getdlopenflags() -- returns flags to be used for dlopen() calls\n\
 getprofile() -- get the global profiling function\n\
-getrefcount() -- return the reference count for an object (plus one :-)\n\
 getrecursionlimit() -- return the max recursion depth for the interpreter\n\
 getsizeof() -- return the size of an object in bytes\n\
 gettrace() -- get the global debug tracing function\n\

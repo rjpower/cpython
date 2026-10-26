@@ -972,27 +972,6 @@ always available. Unless explicitly noted otherwise, all variables are read-only
    .. versionadded:: 3.15
 
 
-.. function:: getrefcount(object)
-
-   Return the reference count of the *object*.  The count returned is generally one
-   higher than you might expect, because it includes the (temporary) reference as
-   an argument to :func:`getrefcount`.
-
-   Note that the returned value may not actually reflect how many
-   references to the object are actually held.  For example, some
-   objects are :term:`immortal` and have a very high refcount that does not
-   reflect the actual number of references.  Consequently, do not rely
-   on the returned value to be accurate, other than a value of 0 or 1.
-
-   .. impl-detail::
-
-      :term:`Immortal <immortal>` objects with a large reference count can be
-      identified via :func:`_is_immortal`.
-
-   .. versionchanged:: 3.12
-      Immortal objects have very large refcounts that do not match
-      the actual number of references to the object.
-
 .. function:: getrecursionlimit()
 
    Return the current value of the recursion limit, the maximum depth of the Python

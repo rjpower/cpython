@@ -1,63 +1,36 @@
 # Stack references (`_PyStackRef`)
 
-Stack references are the interpreter's tagged representation of values on the evaluation stack.
-They carry metadata to track ownership and can hold interpreter-internal indices, and on most
-64-bit builds small ints and floats, without a heap object.
+Stack references are the interpreter's representation of values: frame slots, evaluation stack
+entries and argument arrays. A stackref holds an object pointer, an interpreter-internal index, or
+an inline int or float.
 
-## Shape and tagging
+## Shape and encoding
 
-- A `_PyStackRef` is a tagged pointer-sized value. The header comment in
-  `Include/internal/pycore_stackref.h` gives the full bit layout.
-- Values below `Py_PTR_LIMIT` are pointer space, where bit 0 distinguishes two cases:
-  - `Py_TAG_REFCNT` unset - reference count lives on the pointed-to object.
-  - `Py_TAG_REFCNT` set - ownership is "borrowed" (no refcount to drop on close) or the object is immortal.
-- Above pointer space lie interpreter-internal indices and inline values, which own nothing.
-  Free-threaded and 32-bit builds have no inline values and mark indices with `Py_INDEX_TAG`.
-- Special constants: `PyStackRef_NULL`, `PyStackRef_ERROR`, and embedded `None`/`True`/`False`.
+- A `_PyStackRef` is a 64-bit word. The header comment in `Include/internal/pycore_stackref.h`
+  gives the full bit layout.
+- Values below `Py_PTR_LIMIT` are pointer space: `PyStackRef_NULL`, `PyStackRef_ERROR`, and object
+  pointers, including `None`, `True` and `False`.
+- Above pointer space lie interpreter-internal indices and inline values.
 
-In GIL builds, most objects carry their refcount; tagged borrowed refs skip decref on close. In free
-threading builds, the tag is also used to mark deferred refcounted objects so the GC can see them and
-to avoid refcount contention on commonly shared objects.
+## Ownership
+
+Nothing is reference counted: the tracing collector owns memory. A stackref owns nothing, and
+copying one is all that taking or giving up a value means. Dropping a value needs no operation;
+`PyStackRef_CLEAR` sets a stackref to `PyStackRef_NULL` so that the collector no longer sees what
+it held.
+
+The collector finds stackrefs precisely in frames and in `_PyCStackRef` records linked on the
+thread state, and conservatively in other C stack frames. The eval loop's own C frames are not
+roots, so the cases generator rejects a handler that keeps a value only in a C local across an
+escaping call; see "Roots" in `Tools/cases_generator/interpreter_definition.md`.
 
 ## Converting to and from PyObject*
 
-Three conversions control ownership:
-
-- `PyStackRef_FromPyObjectNew(obj)` - create a new reference (INCREF if mortal).
-- `PyStackRef_FromPyObjectSteal(obj)` - take over ownership without changing the count unless the
-  object is immortal.
-- `PyStackRef_FromPyObjectBorrow(obj)` - create a borrowed stackref (never decref on close).
-
-The `obj` argument must not be `NULL`.
-
-Going back to `PyObject*` mirrors this:
-
-- `PyStackRef_AsPyObjectBorrow(ref)` - borrow the underlying pointer
-- `PyStackRef_AsPyObjectSteal(ref)` - transfer ownership from the stackref; if ref is borrowed or
-   deferred, this creates a new owning `PyObject*` reference.
-- `PyStackRef_AsPyObjectNew(ref)` - create a new owning reference
-
-Only `PyStackRef_AsPyObjectBorrow` allows ref to be `PyStackRef_NULL`.
-
-## Operations on stackrefs
-
-The interpreter treats `_PyStackRef` as the unit of stack storage. Ownership must be managed with
-the stackref primitives:
-
-- `PyStackRef_DUP` - like `Py_NewRef` for stackrefs; preserves the original.
-- `PyStackRef_Borrow` - create a borrowed stackref from another stackref.
-- `PyStackRef_CLOSE` / `PyStackRef_XCLOSE` - like `Py_DECREF`; invalidates the stackref.
-- `PyStackRef_CLEAR` - like `Py_CLEAR`; closes and sets the stackref to `PyStackRef_NULL`
-- `PyStackRef_MakeHeapSafe` - converts borrowed reference to owning reference
-
-Borrow tracking (for debug builds with `Py_STACKREF_DEBUG`) records who you borrowed from and reports
-double-close, leaked borrows, or use-after-close via fatal errors.
-
-## Borrow-friendly opcodes
-
-The interpreter can push borrowed references directly. For example, `LOAD_FAST_BORROW` loads a local
-variable as a borrowed `_PyStackRef`, avoiding both INCREF and DECREF for the temporary lifetime on
-the evaluation stack.
+- `PyStackRef_FromPyObject(obj)` makes a stackref for an object. `obj` must not be `NULL`.
+- `PyStackRef_AsPyObjectBorrow(ref)` returns the object pointer. It allows `PyStackRef_NULL` and
+  must not be given an inline value or an index.
+- `PyStackRef_AsPyObjectBoxed(ref)` boxes an inline value first, and returns `NULL` with an
+  exception set if boxing fails.
 
 ## Tagged indices on the stack
 
@@ -70,22 +43,21 @@ GC.
 
 ## Inline values
 
-On 64-bit builds without free threading (`Py_STACKREF_INLINE_VALUES`), a stackref can hold an
-exact int that fits in 32 bits or an exact float other than NaN. `PyStackRef_IsInline`,
-`PyStackRef_IsInlineInt` and `PyStackRef_IsInlineFloat` test for them; `PyStackRef_TYPE`,
-`PyStackRef_LongCheck` and `PyStackRef_FloatCheck` report `int` or `float`. CLOSE, DUP and Borrow
-leave them unchanged and the GC skips them.
+A stackref can hold an exact int that fits in 32 bits or an exact float other than NaN.
+`PyStackRef_IsInline`, `PyStackRef_IsInlineInt` and `PyStackRef_IsInlineFloat` test for them;
+`PyStackRef_TYPE`, `PyStackRef_LongCheck` and `PyStackRef_FloatCheck` report `int` or `float`. The
+GC skips them.
 
 Such a value has value identity: `is`, `id()` and `operator.is_` give the same answer whether it is
 held inline or boxed, and however many boxes exist. `PyStackRef_Is` and `_PyObject_ValueIdentity`
 implement this; see "Value identity" in `Include/internal/pycore_stackref.h`.
 
 An inline value must be boxed with `PyStackRef_Box` before it is converted to a `PyObject*`.
-Boxing returns a new reference to an int or float, or the inline value unchanged with an exception
+Boxing returns a reference to an int or float, or the inline value unchanged with an exception
 set if allocation fails. The cases generator does this for instruction inputs, and guards exit
 on them; see "Inline values" in `Tools/cases_generator/interpreter_definition.md`. C code that
 converts stackref arrays boxes their elements (`_PyStackRef_BoxArray`, `_PyStackRef_BoxInto`), and
-C code that needs an object for a stackref it does not own uses `PyStackRef_AsPyObjectNewBoxed`.
+C code that needs an object for a stackref uses `PyStackRef_AsPyObjectBoxed`.
 
 Inline ints are made by `LOAD_SMALL_INT_INLINE` and `LOAD_CONST_INLINE_INT`, to which
 `_PyCode_Quicken` rewrites loads of compact int constants, by the `BINARY_OP_*_INT`
@@ -107,18 +79,8 @@ Instructions that store into the heap, such as `STORE_ATTR` and `LIST_APPEND`, b
 does not choose the producing `BINARY_OP` and `FOR_ITER` specializations, and `CALL_LEN` and
 `UNARY_NEGATIVE` box their results.
 
-## Free threading considerations
-
-Objects that support deferred reference counting can be pushed to the evaluation
-stack and stored in local variables without directly incrementing the reference
-count because they are only freed during cyclic garbage collection. This avoids
-reference count contention on commonly shared objects such as methods and types. The GC
-scans each thread's locals and evaluation stack to keep objects that use
-deferred reference counting alive.
-
 ## Debugging support
 
-`Py_STACKREF_DEBUG` builds replace the inline tags with table-backed IDs so the runtime can track
-creation sites, borrows, closes, and leaks. Enabling `Py_STACKREF_CLOSE_DEBUG` additionally records
-double closes. The tables live on `PyInterpreterState` and are initialized in `pystate.c`; helper
+Debug builds check stackrefs with `PyStackRef_IsValid` and `PyStackRef_IsMalformed`, and can wrap
+non-object pointers with `PyStackRef_Wrap` so that they are told apart from objects. Helper
 routines reside in `Python/stackrefs.c`.

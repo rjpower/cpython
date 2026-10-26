@@ -918,15 +918,13 @@ Effects of a debug build:
 * Display all warnings by default: the list of default warning filters is empty
   in the :mod:`warnings` module.
 * Add ``d`` to :data:`sys.abiflags`.
-* Add :func:`!sys.gettotalrefcount` function.
-* Add :option:`-X showrefcount <-X>` command line option.
 * Add :option:`-d` command line option and :envvar:`PYTHONDEBUG` environment
   variable to debug the parser.
 * Add support for the ``__lltrace__`` variable: enable low-level tracing in the
   bytecode evaluation loop if the variable is defined.
 * Install :ref:`debug hooks on memory allocators <default-memory-allocators>`
   to detect buffer overflow and other memory errors.
-* Define ``Py_DEBUG`` and ``Py_REF_DEBUG`` macros.
+* Define the ``Py_DEBUG`` macro.
 * Add runtime checks: code surrounded by ``#ifdef Py_DEBUG`` and ``#endif``.
   Enable ``assert(...)`` and ``_PyObject_ASSERT(...)`` assertions: don't set
   the ``NDEBUG`` macro (see also the :option:`--with-assertions` configure
@@ -943,8 +941,7 @@ Effects of a debug build:
   * The :c:macro:`!Py_SAFE_DOWNCAST()` macro checks for integer underflow and
     overflow when downcasting from wide types to narrow types.
 
-See also the :ref:`Python Development Mode <devmode>` and the
-:option:`--with-trace-refs` configure option.
+See also the :ref:`Python Development Mode <devmode>`.
 
 .. versionchanged:: 3.8
    Release builds are now ABI compatible with debug builds: defining the

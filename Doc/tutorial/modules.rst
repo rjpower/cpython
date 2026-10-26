@@ -327,7 +327,7 @@ defines.  It returns a sorted list of strings::
     'float_repr_style', 'get_asyncgen_hooks', 'get_coroutine_origin_tracking_depth',
     'getallocatedblocks', 'getdefaultencoding', 'getdlopenflags',
     'getfilesystemencodeerrors', 'getfilesystemencoding', 'getprofile',
-    'getrecursionlimit', 'getrefcount', 'getsizeof', 'getswitchinterval',
+    'getrecursionlimit', 'getsizeof', 'getswitchinterval',
     'gettrace', 'hash_info', 'hexversion', 'implementation', 'int_info',
     'intern', 'is_finalizing', 'last_traceback', 'last_type', 'last_value',
     'maxsize', 'maxunicode', 'meta_path', 'modules', 'path', 'path_hooks',

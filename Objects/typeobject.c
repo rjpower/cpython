@@ -2585,8 +2585,6 @@ subtype_dealloc(PyObject *self)
 
     /* We get here only if the type has GC */
 
-    /* UnTrack and re-Track around the trashcan macro, alas */
-    /* See explanation at end of function for full disclosure */
     PyObject_GC_UnTrack(self);
 
     /* Find the nearest base with a different tp_dealloc */

@@ -1476,8 +1476,6 @@ init_threadstate(_PyThreadStateImpl *_tstate,
     _tstate->asyncio_running_task = NULL;
     _tstate->lazy_imports = NULL;
 
-    tstate->delete_later = NULL;
-
     llist_init(&_tstate->mem_free_queue);
     llist_init(&_tstate->asyncio_tasks_head);
     if (interp->stoptheworld.requested || _PyRuntime.stoptheworld.requested) {

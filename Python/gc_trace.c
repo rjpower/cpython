@@ -1221,13 +1221,6 @@ _PyGC_TraceVisitThreadState(PyThreadState *p, visitproc visit, void *arg)
             Py_VISIT(PyStackRef_AsPyObjectBorrow(r->ref));
         }
     }
-    /* Objects the trashcan deferred: their reference count is already zero
-     * but they still own their members until the chain is destroyed. */
-    for (PyObject *op = p->delete_later; op != NULL;
-         op = (PyObject *)(_Py_AS_GC(op)->_gc_next & ~(uintptr_t)1))
-    {
-        Py_VISIT(op);
-    }
     return 0;
 }
 
@@ -2375,9 +2368,8 @@ remove_garbage(trace_t *t, trace_hole *list, Py_ssize_t n)
         }
         /* A dying object is still referenced from its dealloc function's C
          * stack frame, so the conservative scan marked it without
-         * traversing it.  Unmarked objects with no references may sit on a
-         * free list with stale members; those the mark traversed, such as
-         * the trashcan's, already marked their members. */
+         * traversing it.  Those the mark traversed already marked their
+         * members. */
         if (!addrset_has(&t->shallow, addr) || addrset_has(&t->deepened, addr)) {
             continue;
         }

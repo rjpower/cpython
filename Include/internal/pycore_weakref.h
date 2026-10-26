@@ -32,19 +32,6 @@ extern "C" {
     } while (0)
 
 
-static inline int _is_dead(PyObject *obj)
-{
-    // Explanation for the Py_REFCNT() check: when a weakref's target is part
-    // of a long chain of deallocations which triggers the trashcan mechanism,
-    // clearing the weakrefs can be delayed long after the target's refcount
-    // has dropped to zero.  In the meantime, code accessing the weakref will
-    // be able to "see" the target object even though it is supposed to be
-    // unreachable.  See issue gh-60806.
-    // The collector clears weak references to an object before it is swept.
-    (void)obj;
-    return 0;
-}
-
 static inline PyObject* _PyWeakref_GET_REF(PyObject *ref_obj)
 {
     assert(PyWeakref_Check(ref_obj));
@@ -68,20 +55,10 @@ static inline PyObject* _PyWeakref_GET_REF(PyObject *ref_obj)
 static inline int _PyWeakref_IS_DEAD(PyObject *ref_obj)
 {
     assert(PyWeakref_Check(ref_obj));
-    int ret = 0;
     PyWeakReference *ref = _Py_CAST(PyWeakReference*, ref_obj);
-    PyObject *obj = FT_ATOMIC_LOAD_PTR(ref->wr_object);
-    if (obj == Py_None) {
-        // clear_weakref() was called
-        ret = 1;
-    }
-    else {
-        LOCK_WEAKREFS(obj);
-        // See _PyWeakref_GET_REF() for the rationale of this test
-        ret = _is_dead(obj);
-        UNLOCK_WEAKREFS(obj);
-    }
-    return ret;
+    // The collector clears weak references to an object before it is
+    // swept, so a reference is dead exactly when it has been cleared.
+    return FT_ATOMIC_LOAD_PTR(ref->wr_object) == Py_None;
 }
 
 extern Py_ssize_t _PyWeakref_GetWeakrefCount(PyObject *obj);

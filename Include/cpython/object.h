@@ -366,10 +366,9 @@ PyAPI_FUNC(void) _Py_NO_RETURN _PyObject_AssertFailed(
     const char *function);
 
 
-PyAPI_FUNC(void) _PyTrash_thread_deposit_object(PyThreadState *tstate, PyObject *op);
-PyAPI_FUNC(void) _PyTrash_thread_destroy_chain(PyThreadState *tstate);
-
-/* For backwards compatibility with the old trashcan mechanism */
+/* The trashcan bounded the C stack depth of recursive deallocation.  The
+   collector frees objects in its sweep, which does not recurse, so these
+   remain only so that extension source still compiles. */
 #define Py_TRASHCAN_BEGIN(op, dealloc)
 #define Py_TRASHCAN_END
 

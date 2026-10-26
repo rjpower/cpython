@@ -2050,10 +2050,9 @@ frame_dealloc(PyObject *op)
 
     FT_CLEAR_WEAKREFS(op, f->f_weakreflist);
 
-    /* GH-106092: If f->f_frame was on the stack and we reached the maximum
-     * nesting depth for deallocations, the trashcan may have delayed this
-     * deallocation until after f->f_frame is freed. Avoid dereferencing
-     * f->f_frame unless we know it still points to valid memory. */
+    /* GH-106092: f->f_frame may point to a frame that no longer exists.
+     * Avoid dereferencing it unless we know it still points to valid
+     * memory. */
     _PyInterpreterFrame *frame = (_PyInterpreterFrame *)f->_f_frame_data;
 
     /* Kill all local variables including specials, if we own them */

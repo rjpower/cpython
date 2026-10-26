@@ -1552,14 +1552,11 @@ and :c:data:`PyType_Type` effectively act as defaults.)
 
       This bit indicates that the type's :c:member:`~PyTypeObject.tp_dealloc`
       reads the C state of objects that the instance refers to, rather than
-      only releasing its references to them.  Reference counting deallocates
-      an object before the objects it refers to.  The tracing collector of a
-      ``--with-gc`` build deallocates unreachable objects in no particular
-      order, except that it deallocates the instances of types with this flag
-      before other objects.  Two unreachable flagged instances are still
-      deallocated in no particular order.
-
-      The flag has no effect in other builds.
+      only releasing its references to them.  The collector deallocates
+      unreachable objects in no particular order, except that it deallocates
+      the instances of types with this flag before other objects.  Two
+      unreachable flagged instances are still deallocated in no particular
+      order.
 
       **Inheritance:**
 

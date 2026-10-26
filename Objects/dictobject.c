@@ -919,11 +919,6 @@ clone_combined_dict_keys(PyDictObject *orig)
         pvalue += offs;
         pkey += offs;
     }
-
-    /* Since we copied the keys table we now have an extra reference
-       in the system.  Manually call increment _Py_RefTotal to signal that
-       we have it now; calling dictkeys_incref would be an error as
-       keys->dk_refcnt is already set to 1 (after memcpy). */
     return keys;
 }
 

@@ -170,13 +170,6 @@ struct _ts {
      */
     unsigned long native_thread_id;
 
-    /* List of objects that still need to be cleaned up, singly linked
-     * via their gc headers' gc_next pointers. The list is populated by
-     * _PyTrash_thread_deposit_object and cleaned up by
-     * _PyTrash_thread_destroy_chain.
-     */
-    PyObject *delete_later;
-
     /* Tagged pointer to top-most critical section, or zero if there is no
      * active critical section. Critical sections are only used in
      * `--disable-gil` builds (i.e., when Py_GIL_DISABLED is defined to 1). In the

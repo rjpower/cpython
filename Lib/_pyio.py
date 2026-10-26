@@ -34,10 +34,8 @@ DEFAULT_BUFFER_SIZE = 128 * 1024  # bytes
 # Rebind for compatibility
 BlockingIOError = BlockingIOError
 
-# Does open() check its 'errors' argument?  It does in a debug build, which
-# has sys.gettotalrefcount() unless it has no reference counts (--with-gc).
-_CHECK_ERRORS = (hasattr(sys, "gettotalrefcount")
-                 or "d" in getattr(sys, "abiflags", "")
+# Does open() check its 'errors' argument?
+_CHECK_ERRORS = ("d" in getattr(sys, "abiflags", "")
                  or sys.flags.dev_mode)
 
 

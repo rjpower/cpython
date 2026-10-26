@@ -1270,3 +1270,19 @@ Measurements (§15.6), against dev-default:
 with their runtime cost, the test adjustments, the 5b items (watchers in
 the sweep, shutdown collections) and the 5c items (sweeping trivial
 deallocs by block, the 52 uniqueness sites).
+
+### 2026-10-26 05:15 — step 5a landed; step 5b launched
+
+Step 5a handed back at 0edda3738fa and the gate was re-run here:
+gc-debug on test_gc, test_weakref, test_finalization, test_io,
+test_capi, test_threading, test_generators and test_asyncio.test_tasks
+(16 files, 4,044 tests, all pass); dev-default rung 2 plus test_gc_verify
+(9 files, 1,067 tests, all pass); six, attrs and markupsafe rebuilt and
+checked on gc-default under abi_id cpython-3.16-gc-v0 (PASS, 0 patch
+lines). Step 5a took six hours of a four-day budget.
+
+Step 5b launched: full suite on both gc builds, the watcher and
+destructor notifications moved out of the sweep, shutdown collections
+reduced to one mark, and all seven ports on the gc builds (Cython
+code-cache root registration for pyyaml, DTypeMeta traverse and table
+roots for numpy). Budget 3 days.

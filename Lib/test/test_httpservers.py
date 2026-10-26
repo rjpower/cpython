@@ -492,6 +492,9 @@ class RequestHandlerLoggingTestCase(BaseTestCase):
         with support.captured_stderr() as err:
             self.con.request('GET', '/')
             self.con.getresponse()
+        # The discarded response holds the socket's last file reference: the
+        # server's keep-alive read ends only when the response dies.
+        support.gc_collect()  # For other GCs.
 
         self.assertEndsWith(err.getvalue(), '"GET / HTTP/1.1" 200 -\n')
 
@@ -520,6 +523,7 @@ class RequestHandlerColorizedLoggingTestCase(RequestHandlerLoggingTestCase):
         with support.captured_stderr() as err:
             self.con.request("GET", "/")
             self.con.getresponse()
+        support.gc_collect()  # For other GCs.
 
         output = err.getvalue()
         self.assertIn(f"{t.path}/{t.reset}", output)

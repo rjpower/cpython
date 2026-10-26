@@ -4237,6 +4237,7 @@ class TestBufferProtocol(unittest.TestCase):
         m = memoryview(nd)
         self.assertRaises(ValueError, m.__hash__)
 
+    @support.requires_refcounting
     def test_memoryview_release(self):
 
         # Create re-exporter from getbuffer(memoryview), then release the view.
@@ -4859,6 +4860,9 @@ class TestPythonBufferProtocol(unittest.TestCase):
         c = C(b"hello C")
         with memoryview(c) as mv:
             self.assertEqual(mv.tobytes(), b"hello C")
+        # The view that bytearray.__buffer__ returned holds the export until
+        # it dies.
+        support.gc_collect()  # For other GCs.
         c.clear()
         with self.assertRaises(ValueError):
             c.buffer.tobytes()
@@ -4891,6 +4895,9 @@ class TestPythonBufferProtocol(unittest.TestCase):
         c = C(b"hello")
         with memoryview(c) as mv:
             self.assertEqual(mv.tobytes(), b"hello")
+        # The view that bytearray.__buffer__ returned holds the export until
+        # it dies.
+        support.gc_collect()  # For other GCs.
         c.clear()
         self.assertIs(c.buffer, None)
 

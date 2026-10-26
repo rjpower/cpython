@@ -215,11 +215,13 @@ compiler_unit_free(struct compiler_unit *u)
 static int
 compiler_unit_capsule_traverse(PyObject *capsule, visitproc visit, void *arg)
 {
-    struct compiler_unit *u = (struct compiler_unit *)PyCapsule_GetPointer(
-        capsule, CAPSULE_NAME);
-    if (u == NULL) {
+    // A capsule popped from c_stack has no name: the compiler may have
+    // freed its unit (_PyCompile_ExitScope()).
+    if (!PyCapsule_IsValid(capsule, CAPSULE_NAME)) {
         return 0;
     }
+    struct compiler_unit *u = (struct compiler_unit *)PyCapsule_GetPointer(
+        capsule, CAPSULE_NAME);
     Py_VISIT(u->u_instr_sequence);
     Py_VISIT(u->u_stashed_instr_sequence);
     Py_VISIT(u->u_ste);
@@ -872,6 +874,9 @@ _PyCompile_ExitScope(compiler *c)
         PyObject *capsule = PyList_GET_ITEM(c->c_stack, n);
         c->u = (struct compiler_unit *)PyCapsule_GetPointer(capsule, CAPSULE_NAME);
         assert(c->u);
+        // The capsule can outlive the unit, which its traverse must then
+        // not read; cannot fail for a valid capsule.
+        (void)PyCapsule_SetName(capsule, NULL);
         /* we are deleting from a list so this really shouldn't fail */
         if (PySequence_DelItem(c->c_stack, n) < 0) {
             PyErr_FormatUnraisable("Exception ignored while removing "

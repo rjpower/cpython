@@ -83,7 +83,8 @@ class FinalizationTest(unittest.TestCase):
         g = gen()
         next(g)
         g.send(g)
-        self.assertGreaterEqual(sys.getrefcount(g), 2)
+        if not support.Py_GC:
+            self.assertGreaterEqual(sys.getrefcount(g), 2)
         self.assertFalse(finalized)
         del g
         support.gc_collect()
@@ -302,6 +303,7 @@ class GeneratorTest(unittest.TestCase):
 
         self.assertEqual([1,2], list(i for i in C()))
 
+    @support.requires_refcounting
     def test_close_clears_frame(self):
         # gh-142766: Test that closing a generator clears its frame
         class DetectDelete:
@@ -2731,6 +2733,7 @@ Our ill-behaved code should be invoked during GC:
 ...     next(g)
 ...     gen_repr = repr(g)
 ...     del g
+...     support.gc_collect()  # For other GCs.
 ...
 ...     cm.unraisable.err_msg == (f'Exception ignored while closing '
 ...                               f'generator {gen_repr}')
@@ -2848,6 +2851,7 @@ to test.
 ...     leaker = Leaker()
 ...     del_repr = repr(type(leaker).__del__)
 ...     del leaker
+...     support.gc_collect()  # For other GCs.
 ...
 ...     cm.unraisable.err_msg == (f'Exception ignored while '
 ...                               f'calling deallocator {del_repr}')

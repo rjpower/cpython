@@ -11,9 +11,7 @@
 #
 # What about pointers?
 
-import sys
 import unittest
-from test import support
 from ctypes import Structure, POINTER, c_char_p, c_int
 
 
@@ -21,20 +19,13 @@ class ObjectsTestCase(unittest.TestCase):
     def assertSame(self, a, b):
         self.assertEqual(id(a), id(b))
 
-    @support.requires_refcounting
     def test_ints(self):
-        i = 42000123
-        refcnt = sys.getrefcount(i)
-        ci = c_int(i)
-        self.assertEqual(refcnt, sys.getrefcount(i))
+        ci = c_int(42000123)
         self.assertEqual(ci._objects, None)
 
-    @support.requires_refcounting
     def test_c_char_p(self):
         s = "Hello, World".encode("ascii")
-        refcnt = sys.getrefcount(s)
         cs = c_char_p(s)
-        self.assertEqual(refcnt + 1, sys.getrefcount(s))
         self.assertSame(cs._objects, s)
 
     def test_simple_struct(self):

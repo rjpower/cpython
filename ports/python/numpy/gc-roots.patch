@@ -1,0 +1,183 @@
+--- a/numpy/_core/src/multiarray/array_method.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/array_method.c	2026-10-26 09:40:28.387507443 -0700
+@@ -516,11 +516,26 @@
+ }
+ 
+ 
++/* Not GC types, but the tracing collector (Py_GC) traverses them. */
++static int
++arraymethod_traverse(PyObject *self, visitproc visit, void *arg)
++{
++    PyArrayMethodObject *meth = (PyArrayMethodObject *)self;
++    if (meth->wrapped_meth != NULL) {
++        Py_VISIT(meth->wrapped_meth);
++        for (int i = 0; i < meth->nin + meth->nout; i++) {
++            Py_VISIT(meth->wrapped_dtypes[i]);
++        }
++    }
++    return 0;
++}
++
+ NPY_NO_EXPORT PyTypeObject PyArrayMethod_Type = {
+     PyVarObject_HEAD_INIT(NULL, 0)
+     .tp_name = "numpy._ArrayMethod",
+     .tp_basicsize = sizeof(PyArrayMethodObject),
+     .tp_dealloc = arraymethod_dealloc,
++    .tp_traverse = arraymethod_traverse,
+     .tp_flags = Py_TPFLAGS_DEFAULT,
+ };
+ 
+@@ -985,11 +1000,25 @@
+ };
+ 
+ 
++static int
++boundarraymethod_traverse(PyObject *self, visitproc visit, void *arg)
++{
++    PyBoundArrayMethodObject *meth = (PyBoundArrayMethodObject *)self;
++    if (meth->method != NULL && meth->dtypes != NULL) {
++        for (int i = 0; i < meth->method->nin + meth->method->nout; i++) {
++            Py_VISIT(meth->dtypes[i]);
++        }
++    }
++    Py_VISIT(meth->method);
++    return 0;
++}
++
+ NPY_NO_EXPORT PyTypeObject PyBoundArrayMethod_Type = {
+     PyVarObject_HEAD_INIT(NULL, 0)
+     .tp_name = "numpy._BoundArrayMethod",
+     .tp_basicsize = sizeof(PyBoundArrayMethodObject),
+     .tp_dealloc = boundarraymethod_dealloc,
++    .tp_traverse = boundarraymethod_traverse,
+     .tp_repr = (reprfunc)boundarraymethod_repr,
+     .tp_flags = Py_TPFLAGS_DEFAULT,
+     .tp_methods = boundarraymethod_methods,
+--- a/numpy/_core/src/multiarray/arrayfunction_override.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/arrayfunction_override.c	2026-10-26 09:40:28.387507443 -0700
+@@ -429,6 +429,20 @@
+ }
+ 
+ 
++/* Not a GC type, but the tracing collector (Py_GC) traverses it. */
++static int
++dispatcher_traverse(PyArray_ArrayFunctionDispatcherObject *self,
++                    visitproc visit, void *arg)
++{
++    Py_VISIT(self->relevant_arg_func);
++    Py_VISIT(self->default_impl);
++    Py_VISIT(self->dict);
++    Py_VISIT(self->dispatcher_name);
++    Py_VISIT(self->public_name);
++    return 0;
++}
++
++
+ static void
+ fix_name_if_typeerror(PyArray_ArrayFunctionDispatcherObject *self)
+ {
+@@ -762,6 +776,7 @@
+      /* We have a dict, so in theory could traverse, but in practice... */
+      .tp_dictoffset = offsetof(PyArray_ArrayFunctionDispatcherObject, dict),
+      .tp_dealloc = (destructor)dispatcher_dealloc,
++     .tp_traverse = (traverseproc)dispatcher_traverse,
+      .tp_new = (newfunc)dispatcher_new,
+      .tp_str = (reprfunc)dispatcher_str,
+      .tp_repr = (reprfunc)dispatcher_repr,
+--- a/numpy/_core/src/multiarray/dtypemeta.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/dtypemeta.c	2026-10-26 09:53:54.044889387 -0700
+@@ -33,10 +33,60 @@
+ 
+ 
+ 
++/*
++ * The tracing collector does not see a DType's references: legacy DTypes
++ * live in PyMem memory and are traversed as static types, and dt_slots is
++ * PyMem memory that no traverse visits.  Each field is a root instead,
++ * including the legacy cast dict in the ArrFuncs copy.
++ */
++#define NPY_DT_ROOT_FIELDS 9
++
++static void
++dtypemeta_root_fields(PyArray_DTypeMeta *DType, PyObject ***fields)
++{
++    NPY_DType_Slots *slots = NPY_DT_SLOTS(DType);
++    fields[0] = (PyObject **)&DType->singleton;
++    fields[1] = (PyObject **)&DType->scalar_type;
++    fields[2] = &slots->castingimpls;
++    fields[3] = (PyObject **)&slots->within_dtype_castingimpl;
++    fields[4] = (PyObject **)&slots->sort_meth;
++    fields[5] = (PyObject **)&slots->argsort_meth;
++    fields[6] = (PyObject **)&slots->real_meth;
++    fields[7] = (PyObject **)&slots->imag_meth;
++    fields[8] = &slots->f.castdict;
++}
++
++static int
++dtypemeta_add_roots(PyArray_DTypeMeta *DType)
++{
++    PyObject **fields[NPY_DT_ROOT_FIELDS];
++    dtypemeta_root_fields(DType, fields);
++    for (int i = 0; i < NPY_DT_ROOT_FIELDS; i++) {
++        if (PyGC_AddRoot(fields[i]) < 0) {
++            while (--i >= 0) {
++                PyGC_RemoveRoot(fields[i]);
++            }
++            return -1;
++        }
++    }
++    return 0;
++}
++
++static void
++dtypemeta_remove_roots(PyArray_DTypeMeta *DType)
++{
++    PyObject **fields[NPY_DT_ROOT_FIELDS];
++    dtypemeta_root_fields(DType, fields);
++    for (int i = 0; i < NPY_DT_ROOT_FIELDS; i++) {
++        PyGC_RemoveRoot(fields[i]);
++    }
++}
++
+ static void
+ dtypemeta_dealloc(PyArray_DTypeMeta *self) {
+     /* Do not accidentally delete a statically defined DType: */
+     assert(((PyTypeObject *)self)->tp_flags & Py_TPFLAGS_HEAPTYPE);
++    dtypemeta_remove_roots(self);
+ 
+     Py_XDECREF(self->scalar_type);
+     Py_XDECREF(self->singleton);
+@@ -215,6 +265,11 @@
+         PyErr_NoMemory();
+         return -1;
+     }
++    if (dtypemeta_add_roots(DType) < 0) {
++        PyMem_Free(DType->dt_slots);
++        DType->dt_slots = NULL;
++        return -1;
++    }
+ 
+     /* Set default values (where applicable) */
+     NPY_DT_SLOTS(DType)->discover_descr_from_pyobject =
+@@ -1280,6 +1335,10 @@
+         Py_DECREF(dtype_class);
+         return NULL;
+     }
++    if (dtypemeta_add_roots(dtype_class) < 0) {
++        Py_DECREF(dtype_class);
++        return NULL;
++    }
+     dt_slots->castingimpls = PyDict_New();
+     if (dt_slots->castingimpls == NULL) {
+         Py_DECREF(dtype_class);
+--- a/numpy/_core/src/umath/ufunc_object.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/umath/ufunc_object.c	2026-10-26 09:40:28.386507436 -0700
+@@ -5571,6 +5571,8 @@
+         Py_VISIT(self->identity_value);
+     }
+     Py_VISIT(self->dict);
++    Py_VISIT(self->userloops);
++    Py_VISIT(self->_loops);
+     return 0;
+ }
+ 

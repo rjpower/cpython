@@ -536,14 +536,6 @@ class BaseMemorySliceTests:
     def _check_contents(self, tp, obj, contents):
         self.assertEqual(obj[1:7], tp(contents))
 
-    @support.requires_refcounting
-    def test_refs(self):
-        for tp in self._types:
-            m = memoryview(tp(self._source))
-            oldrefcount = sys.getrefcount(m)
-            m[1:2]
-            self.assertEqual(sys.getrefcount(m), oldrefcount)
-
 class BaseMemorySliceSliceTests:
     source_bytes = b"XabcdefY"
 

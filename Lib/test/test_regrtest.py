@@ -1363,7 +1363,8 @@ class ArgsTestCase(BaseTestCase):
         else:
             self.assertFalse(os.path.exists(filename))
 
-    @unittest.skipUnless(support.Py_DEBUG, 'need a debug build')
+    @unittest.skipUnless(hasattr(sys, 'gettotalrefcount'),
+                         'need a debug build that counts references')
     def check_huntrleaks(self, *, run_workers: bool):
         # test --huntrleaks
         code = textwrap.dedent("""
@@ -1383,7 +1384,8 @@ class ArgsTestCase(BaseTestCase):
     def test_huntrleaks_mp(self):
         self.check_huntrleaks(run_workers=True)
 
-    @unittest.skipUnless(support.Py_DEBUG, 'need a debug build')
+    @unittest.skipUnless(hasattr(sys, 'gettotalrefcount'),
+                         'need a debug build that counts references')
     def test_huntrleaks_bisect(self):
         # test --huntrleaks --bisect
         code = textwrap.dedent("""
@@ -1424,7 +1426,8 @@ class ArgsTestCase(BaseTestCase):
             f"* {test}.RefLeakTest.test3\n",
             output)
 
-    @unittest.skipUnless(support.Py_DEBUG, 'need a debug build')
+    @unittest.skipUnless(hasattr(sys, 'gettotalrefcount'),
+                         'need a debug build that counts references')
     def test_huntrleaks_fd_leak(self):
         # test --huntrleaks for file descriptor leak
         code = textwrap.dedent("""
@@ -1463,7 +1466,8 @@ class ArgsTestCase(BaseTestCase):
         self.check_leak(code, 'file descriptors',
                         name='no_fd_leak', deltas=(1, -1, 0))
 
-    @unittest.skipUnless(support.Py_DEBUG, 'need a debug build')
+    @unittest.skipUnless(hasattr(sys, 'gettotalrefcount'),
+                         'need a debug build that counts references')
     @unittest.skipUnless(support.MS_WINDOWS, 'test specific to Windows')
     def test_huntrleaks_handle_leak(self):
         # test --huntrleaks for Windows handle leak
@@ -2589,8 +2593,8 @@ class ArgsTestCase(BaseTestCase):
         self.check_executed_tests(output, testname, stats=1)
         self.assertNotIn('SPAM SPAM SPAM', output)
 
-        # -R option needs a debug build
-        if support.Py_DEBUG:
+        # -R option needs a debug build that counts references
+        if hasattr(sys, 'gettotalrefcount'):
             # Check for reference leaks, run in parallel
             output = self.run_tests("-R", "3:3", "-j1", "--verbose3", testname)
             self.check_executed_tests(output, testname, stats=1, parallel=True)

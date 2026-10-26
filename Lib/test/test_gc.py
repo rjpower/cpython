@@ -1791,6 +1791,14 @@ class TracingCollectorTests(unittest.TestCase):
                 break
         self.assertIsNone(ref())
 
+    def test_sweep_frees_exported_memoryview(self):
+        # A struct iterator holds an export of its memoryview, and the sweep
+        # may deallocate the view first.
+        import struct
+        for _ in range(100):
+            struct.iter_unpack('b', memoryview(bytes(8)))
+        gc.collect()
+
     def test_finalizer_order(self):
         # A referrer is finalized before what it refers to, as reference
         # counting would do: a buffered file flushes before its raw file

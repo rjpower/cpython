@@ -22,7 +22,8 @@ _SHA256 = re.compile(r"[0-9a-f]{64}")
 _PIN = re.compile(r"[A-Za-z0-9._-]+==[A-Za-z0-9.!+_-]+")
 _REQUIRED = {"name", "version", "kind", "source"}
 _OPTIONAL = {
-    "requires", "build_requires", "build_options", "patches", "tests", "bench",
+    "requires", "build_requires", "build_ports", "build_options", "patches",
+    "tests", "bench",
 }
 _PATCH_FIELDS = {"file", "sha256", "touches"}
 _SUFFIX = {
@@ -63,6 +64,7 @@ class Recipe:
     source: Source
     requires: tuple[str, ...]
     build_requires: tuple[str, ...]
+    build_ports: tuple[str, ...]  # ports whose wheels the build installs
     build_options: tuple[str, ...]  # extra `pip wheel` arguments (sdist only)
     patches: tuple[Patch, ...]
     tests: tuple[str, ...]
@@ -123,6 +125,10 @@ def _parse(
     build_requires = tuple(
         _pin(ref, item) for item in _items(ref, document, "build_requires")
     )
+    build_ports = tuple(
+        check_ref(_string(ref, item, "build_ports"))
+        for item in _items(ref, document, "build_ports")
+    )
     patches = tuple(
         _patch(ref, directory, item)
         for item in _items(ref, document, "patches")
@@ -131,15 +137,17 @@ def _parse(
         _string(ref, item, "build_options")
         for item in _items(ref, document, "build_options")
     )
-    if kind == "pure-wheel" and (patches or build_requires or build_options):
+    if kind == "pure-wheel" and (patches or build_requires or build_ports
+                                 or build_options):
         raise PortError(
             f"{ref}: a pure-wheel port installs the published wheel as is;"
-            " it takes no patches, build_requires or build_options"
+            " it takes no patches, build_requires, build_ports or"
+            " build_options"
         )
     tests = _scripts(ref, directory, document, "tests")
     if kind == NATIVE:
-        if (patches or build_requires or build_options or requires or tests
-                or "bench" in document):
+        if (patches or build_requires or build_ports or build_options
+                or requires or tests or "bench" in document):
             raise PortError(f"{ref}: a {kind} library takes only name,"
                             " version, kind and source")
     elif not tests:
@@ -147,7 +155,7 @@ def _parse(
     return Recipe(
         ref, directory, digest, name, version, kind,
         _source(ref, document["source"], kind), requires, build_requires,
-        build_options, patches, tests, _scripts(ref, directory, document, "bench"),
+        build_ports, build_options, patches, tests, _scripts(ref, directory, document, "bench"),
     )
 
 

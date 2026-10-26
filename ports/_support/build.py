@@ -104,6 +104,11 @@ def fingerprint(recipe: Recipe, sdk: SDK) -> str:
         "native": {
             dep.ref: fingerprint(dep, sdk) for dep in native_requires(recipe)
         },
+        # A rebuilt build tool (Cython) must regenerate what it generated.
+        "build_ports": {
+            ref: fingerprint(load_recipe(ref), sdk)
+            for ref in recipe.build_ports
+        },
         "driver": {name: sha256_file(PORTS / name) for name in _DRIVER},
     }
     encoded = json.dumps(inputs, sort_keys=True).encode()
@@ -224,8 +229,12 @@ def _build_sdist(
     env = _sdist_env(recipe, sdk)
     # Build tools installed as wheels (ninja) are found by PATH lookup.
     env["PATH"] = f"{python.parent}{os.pathsep}{env['PATH']}"
-    if recipe.build_requires:
-        wheels = [fetch_requirement(pin) for pin in recipe.build_requires]
+    wheels = [fetch_requirement(pin) for pin in recipe.build_requires]
+    wheels += [
+        REPO / verified_result(load_recipe(ref), sdk).wheel
+        for ref in recipe.build_ports
+    ]
+    if wheels:
         run([python, "-m", "pip", "install", "--no-index", "--no-deps",
              *wheels], output, env=env)
     ctx = BuildContext(recipe, tree, python, fresh_dir(work / "dist"), env,

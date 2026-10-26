@@ -97,6 +97,20 @@ def test_graph_orders_dependencies_first(tmp_path: Path) -> None:
     assert order == ["python/base", "python/lib", "python/app"]
 
 
+def test_graph_builds_build_ports_first_without_requiring_them(
+    tmp_path: Path,
+) -> None:
+    sdist = {"url": "https://example.invalid/app-1.0.tar.gz", "sha256": ZEROS}
+    write_recipe(tmp_path, "app", kind="sdist", source=sdist,
+                 build_ports=["python/tool"], requires=["python/base"])
+    write_recipe(tmp_path, "tool")
+    write_recipe(tmp_path, "base")
+    nodes = resolve(["python/app"], tmp_path)
+    assert [node.ref for node in nodes] == [
+        "python/tool", "python/base", "python/app"]
+    assert [dep.ref for dep in nodes[-1].requires] == ["python/base"]
+
+
 def test_graph_rejects_cycles(tmp_path: Path) -> None:
     write_recipe(tmp_path, "a", requires=["python/b"])
     write_recipe(tmp_path, "b", requires=["python/a"])
@@ -106,7 +120,8 @@ def test_graph_rejects_cycles(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(("fields", "message"), [
     ({"kind": "sdist", "build_options": [3]}, "build_options must be a non-"),
-    ({"build_options": ["-Cx=1"]}, "takes no patches, build_requires or"),
+    ({"build_options": ["-Cx=1"]}, "takes no patches, build_requires,"),
+    ({"build_ports": ["python/tool"]}, "takes no patches, build_requires,"),
 ])
 def test_build_options_are_validated(
     tmp_path: Path, fields: dict[str, object], message: str

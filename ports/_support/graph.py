@@ -35,6 +35,9 @@ def resolve(refs: Sequence[str], root: Path = PORTS) -> list[Node]:
         if ref in order:
             return order[ref]
         recipe = load_recipe(ref, root)
+        # A build port is built first, but is not installed with ref.
+        for dep in recipe.build_ports:
+            visit(dep, (*chain, ref))
         requires = tuple(visit(dep, (*chain, ref)) for dep in recipe.requires)
         order[ref] = Node(recipe, requires)
         return order[ref]

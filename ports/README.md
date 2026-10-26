@@ -39,6 +39,7 @@ ABI changes; until then, wheels survive interpreter rebuilds.
 | `source` | `{url, sha256}`, from `https://pypi.org/pypi/<name>/<version>/json` |
 | `requires` | exact port references, such as `python/pycparser` or `native/libyaml` |
 | `build_requires` | `name==version` for every build requirement, transitively; each needs a universal wheel, which the host fetches, so the target interpreter needs no network or ssl. A tool that ships only binaries (ninja) may use the `py3-none-manylinux*` wheel for the host's machine; the host has no system ninja |
+| `build_ports` | port references, such as `python/cython`, whose wheels the build venv installs with `build_requires`; each is built first, is not installed with the port, and rebuilding it rebuilds the port (sdist only) |
 | `build_options` | extra arguments appended to `pip wheel`, such as `-Csetup-args=-Dfoo=true` (sdist only) |
 | `patches` | `[{file, sha256, touches: {path: sha256}}]` |
 | `tests`, `bench` | `[{script}]`, relative to the recipe directory |

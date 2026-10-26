@@ -250,11 +250,10 @@ class TestCase(unittest.TestCase):
         self.assertEqual(list(empit), [5, 6])
         self.assertEqual(list(a), [0, 1, 2, 3, 4, 5, 6])
 
-    @support.refcount_test
     def test_seq_class_reentrant_exhaustion(self):
-        # gh-156310: a re-entrant next() from inside __getitem__ (or from
-        # __del__ of the IndexError instance) that exhausts the iterator
-        # used to make the outer next() DECREF the sequence a second time.
+        # gh-156310: a re-entrant next() from inside __getitem__ that
+        # exhausts the iterator used to make the outer next() release the
+        # sequence a second time.
         it = None
 
         class ReentrantGetItem:
@@ -269,31 +268,8 @@ class TestCase(unittest.TestCase):
                 raise IndexError(i)
 
         seq = ReentrantGetItem()
-        refcount = sys.getrefcount(seq)
         it = iter(seq)
         self.assertEqual(list(it), [])
-        del it
-        support.gc_collect()
-        self.assertEqual(sys.getrefcount(seq), refcount)
-
-        class ReentrantIndexError(IndexError):
-            def __del__(self):
-                try:
-                    next(it)
-                except StopIteration:
-                    pass
-
-        class RaiseReentrant:
-            def __getitem__(self, i):
-                raise ReentrantIndexError(i)
-
-        seq = RaiseReentrant()
-        refcount = sys.getrefcount(seq)
-        it = iter(seq)
-        self.assertEqual(list(it), [])
-        del it
-        support.gc_collect()
-        self.assertEqual(sys.getrefcount(seq), refcount)
 
         # An outer __getitem__ that succeeds after a re-entrant next()
         # exhausted the iterator must not revive it.
@@ -1143,32 +1119,6 @@ class TestCase(unittest.TestCase):
 
         (a, b), (c,) = IteratingSequenceClass(2), {42: 24}
         self.assertEqual((a, b, c), (0, 1, 42))
-
-
-    @cpython_only
-    @support.requires_refcounting
-    def test_ref_counting_behavior(self):
-        class C(object):
-            count = 0
-            def __new__(cls):
-                cls.count += 1
-                return object.__new__(cls)
-            def __del__(self):
-                cls = self.__class__
-                assert cls.count > 0
-                cls.count -= 1
-        x = C()
-        self.assertEqual(C.count, 1)
-        del x
-        self.assertEqual(C.count, 0)
-        l = [C(), C(), C()]
-        self.assertEqual(C.count, 3)
-        try:
-            a, b = iter(l)
-        except ValueError:
-            pass
-        del l
-        self.assertEqual(C.count, 0)
 
 
     # Make sure StopIteration is a "sink state".

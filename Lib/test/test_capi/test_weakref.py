@@ -1,5 +1,6 @@
 import weakref
 import unittest
+from test import support
 from test.support import import_helper
 
 _testcapi = import_helper.import_module('_testcapi')
@@ -67,6 +68,7 @@ class CAPIWeakrefTest(unittest.TestCase):
         self.assertEqual(getref(wr), (1, obj))
         self.assertEqual(getref(wp), (1, obj))
         del obj
+        support.gc_collect()  # For other GCs.
         self.assertEqual(getref(wr), 0)
         self.assertEqual(getref(wp), 0)
 
@@ -82,6 +84,7 @@ class CAPIWeakrefTest(unittest.TestCase):
         self.assertEqual(isdead(wr), 0)
         self.assertEqual(isdead(wp), 0)
         del obj
+        support.gc_collect()  # For other GCs.
         self.assertEqual(isdead(wr), 1)
         self.assertEqual(isdead(wp), 1)
 
@@ -103,6 +106,7 @@ class CAPIWeakrefTest(unittest.TestCase):
         self.assertIs(type(wr), weakref.ReferenceType)
         self.assertEqual(log, [])
         del obj
+        support.gc_collect()  # For other GCs.
         self.assertEqual(log, [wr])
 
         self.assertRaises(TypeError, newref, [])
@@ -123,6 +127,7 @@ class CAPIWeakrefTest(unittest.TestCase):
         self.assertIs(type(wp), weakref.ProxyType)
         self.assertEqual(log, [])
         del obj
+        support.gc_collect()  # For other GCs.
         self.assertEqual(log, [wp])
 
         def func():

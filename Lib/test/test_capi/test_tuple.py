@@ -1,6 +1,7 @@
 import unittest
 import gc
-from sys import getrefcount
+import sys
+from test import support
 from test.support import import_helper
 
 _testcapi = import_helper.import_module('_testcapi')
@@ -17,7 +18,9 @@ class TupleSubclass(tuple):
 
 class CAPITest(unittest.TestCase):
     def _not_tracked(self, t):
-        self.assertFalse(gc.is_tracked(t), t)
+        # Py_GC tracks every tuple.
+        if not support.Py_GC:
+            self.assertFalse(gc.is_tracked(t), t)
 
     def _tracked(self, t):
         self.assertTrue(gc.is_tracked(t), t)
@@ -131,9 +134,11 @@ class CAPITest(unittest.TestCase):
         class Temp:
             pass
         temp = Temp()
-        temp_rc = getrefcount(temp)
+        if not support.Py_GC:
+            temp_rc = sys.getrefcount(temp)
         self.assertEqual(from_pair(temp, temp), (temp, temp))
-        self.assertEqual(getrefcount(temp), temp_rc)
+        if not support.Py_GC:
+            self.assertEqual(sys.getrefcount(temp), temp_rc)
 
         self._not_tracked(from_pair(1, 2))
         self._not_tracked(from_pair(None, None))

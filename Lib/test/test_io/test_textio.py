@@ -514,7 +514,6 @@ class TextIOWrapperTest:
         support.gc_collect()
         self.assertEqual(record, [1, 2, 3])
 
-    @support.requires_precise_gc
     def test_error_through_destructor(self):
         # Test that the exception state is not modified by a destructor,
         # even if close() fails.
@@ -522,6 +521,7 @@ class TextIOWrapperTest:
         with support.catch_unraisable_exception() as cm:
             with self.assertRaises(AttributeError):
                 self.TextIOWrapper(rawio, encoding="utf-8").xyzzy
+            support.gc_collect()  # For other GCs.
 
             self.assertEqual(cm.unraisable.exc_type, OSError)
 

@@ -24,7 +24,10 @@ typedef struct {
     PyObject *dict;
     PyObject *weakreflist;
     Py_ssize_t exports;
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GIL_DISABLED) || defined(Py_GC)
+    /* buf may be referenced from outside: the free-threaded build sets it
+       when buf escapes; Py_GC, which cannot count references, also when buf
+       comes from outside. */
     int buf_shared;
 #endif
 } bytesio;
@@ -83,7 +86,9 @@ check_exports(bytesio *self)
 #define HASHED_BUF(self) \
     (_PyBytes_GET_CACHED_HASH((PyBytesObject *)(self)->buf) != -1)
 
-#ifdef Py_GIL_DISABLED
+#ifdef Py_GC
+#define SHARED_BUF(self) ((self)->buf_shared || HASHED_BUF(self))
+#elif defined(Py_GIL_DISABLED)
 #define SHARED_BUF(self) \
     ((self)->buf_shared || !_PyObject_IsUniquelyReferenced((self)->buf) \
      || HASHED_BUF(self))
@@ -95,7 +100,7 @@ check_exports(bytesio *self)
 static inline void
 set_shared_buf(bytesio *self)
 {
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GIL_DISABLED) || defined(Py_GC)
     self->buf_shared = 1;
 #endif
 }
@@ -103,7 +108,7 @@ set_shared_buf(bytesio *self)
 static inline void
 clear_shared_buf(bytesio *self)
 {
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GIL_DISABLED) || defined(Py_GC)
     self->buf_shared = 0;
 #endif
 }
@@ -1112,6 +1117,9 @@ bytesio_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         Py_DECREF(self);
         return PyErr_NoMemory();
     }
+#ifdef Py_GC
+    set_shared_buf(self);
+#endif
 
     return (PyObject *)self;
 }
@@ -1141,7 +1149,11 @@ _io_BytesIO___init___impl(bytesio *self, PyObject *initvalue)
     if (initvalue && initvalue != Py_None) {
         if (PyBytes_CheckExact(initvalue)) {
             Py_XSETREF(self->buf, Py_NewRef(initvalue));
+#ifdef Py_GC
+            set_shared_buf(self);  // the caller holds initvalue
+#else
             clear_shared_buf(self);
+#endif
             self->string_size = PyBytes_GET_SIZE(initvalue);
         }
         else {

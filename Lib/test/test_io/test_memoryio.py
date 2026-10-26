@@ -1020,6 +1020,7 @@ class CBytesIOTest(PyBytesIOTest):
     check_sizeof = support.check_sizeof
 
     @support.cpython_only
+    @support.requires_refcounting
     def test_sizeof(self):
         if support.Py_GIL_DISABLED:
             basesize = support.calcobjsize('P2n2Pni')
@@ -1043,6 +1044,7 @@ class CBytesIOTest(PyBytesIOTest):
         self.assertEqual(sys.getrefcount(imm), old_rc)
 
     @support.cpython_only
+    @support.requires_refcounting
     def test_cow_truncate(self):
         # Ensure truncate causes a copy.
         def mutation(memio):
@@ -1050,6 +1052,7 @@ class CBytesIOTest(PyBytesIOTest):
         self._test_cow_mutation(mutation)
 
     @support.cpython_only
+    @support.requires_refcounting
     def test_cow_write(self):
         # Ensure write that would not cause a resize still results in a copy.
         def mutation(memio):
@@ -1058,6 +1061,7 @@ class CBytesIOTest(PyBytesIOTest):
         self._test_cow_mutation(mutation)
 
     @support.cpython_only
+    @support.requires_refcounting
     def test_cow_setstate(self):
         # __setstate__ should cause buffer to be released.
         memio = self.ioclass(b'foooooo')
@@ -1067,6 +1071,7 @@ class CBytesIOTest(PyBytesIOTest):
         self._test_cow_mutation(mutation)
 
     @support.cpython_only
+    @support.requires_refcounting
     def test_cow_mutable(self):
         # BytesIO should accept only Bytes for copy-on-write sharing, since
         # arbitrary buffer-exporting objects like bytearray() aren't guaranteed

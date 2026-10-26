@@ -162,6 +162,7 @@ class VerifierTests(unittest.TestCase):
             self.verify_held(addr, ref)
         finally:
             _testcapi.set_static_object(None)
+        support.gc_collect()  # For other GCs.
         self.assertIsNone(ref())
 
     def test_cycle_held_by_c_reference(self):
@@ -183,6 +184,7 @@ class VerifierTests(unittest.TestCase):
                 return holes
         self.fail(f"the object is not reported as a hole: {holes}")
 
+    @support.requires_refcounting
     def test_pymem_array_is_a_hole(self):
         # An object referenced only from PyMem_Malloc() memory is invisible
         # to a tracing collector, and the verifier must say so.  Ports must
@@ -199,6 +201,7 @@ class VerifierTests(unittest.TestCase):
         self.assertRegex(referrer, r"^non-object block at 0x[0-9a-f]+ "
                                    r"\(\d+ bytes\)$")
 
+    @support.requires_refcounting
     def test_hole_list_is_kept(self):
         holes = self.verify_pymem_array()
         self.assertEqual(_testinternalcapi.gc_verify_holes(), holes)
@@ -240,6 +243,7 @@ class ModeTests(unittest.TestCase):
     # Enough live allocations for several collections of generation 1.
     ALLOCATE = "gc.enable(); keep = [[] for i in range(100_000)]"
 
+    @unittest.skipIf(support.Py_GC, "Py_GC has one generation")
     def test_explicit_collections_only(self):
         # Without "auto", only explicit full collections are verified.
         count, _ = self.count_verifications(
@@ -247,11 +251,13 @@ class ModeTests(unittest.TestCase):
             PYTHON_GCVERIFY="1")
         self.assertEqual(count, 0)
 
+    @unittest.skipIf(support.Py_GC, "Py_GC has one generation")
     def test_auto(self):
         code = (self.ALLOCATE + "\nassert gc.get_stats()[1]['collections']")
         count, _ = self.count_verifications(code, PYTHON_GCVERIFY="auto")
         self.assertGreater(count, 0)
 
+    @support.requires_refcounting
     def test_report(self):
         # Holes go to stderr.
         code = textwrap.dedent("""
@@ -284,6 +290,7 @@ class ModeTests(unittest.TestCase):
             outs.append(out)
         self.assertEqual(outs[0], outs[1])
 
+    @unittest.skipIf(support.Py_GC, "Py_GC always uses mimalloc")
     def test_other_allocator(self):
         # The command line option is an error with another allocator; the
         # environment variable is ignored, so that child processes started

@@ -107,6 +107,7 @@ class GCTests(unittest.TestCase):
         del l
         self.assertEqual(gc.collect(), 2)
 
+    @support.requires_precise_gc
     def test_class(self):
         class A:
             pass
@@ -122,6 +123,7 @@ class GCTests(unittest.TestCase):
         del A
         self.assertNotEqual(gc.collect(), 0)
 
+    @support.requires_precise_gc
     def test_instance(self):
         class A:
             pass
@@ -131,6 +133,7 @@ class GCTests(unittest.TestCase):
         del a
         self.assertNotEqual(gc.collect(), 0)
 
+    @support.requires_precise_gc
     def test_newinstance(self):
         class A(object):
             pass
@@ -329,6 +332,7 @@ class GCTests(unittest.TestCase):
         f()
         self.assertEqual(gc.collect(), 1)
 
+    @unittest.skipIf(support.Py_GC, "Py_GC collects all garbage, not only cycles")
     def test_saveall(self):
         # Verify that cyclic garbage like lists show up in gc.garbage if the
         # SAVEALL option is enabled.
@@ -802,6 +806,7 @@ class GCTests(unittest.TestCase):
             self.assertEqual(out.strip(), b'__del__ called')
 
     @unittest.skipIf(Py_GIL_DISABLED, "requires GC generations or increments")
+    @unittest.skipIf(support.Py_GC, "Py_GC has one generation")
     def test_gc_debug_stats(self):
         # Checks that debug information is printed to stderr
         # when DEBUG_STATS is set.
@@ -841,6 +846,7 @@ class GCTests(unittest.TestCase):
         rc, out, err = assert_python_ok(TESTFN)
         self.assertEqual(out.strip(), b'__del__ called')
 
+    @unittest.skipIf(support.Py_GC, "Py_GC has one generation")
     def test_get_stats(self):
         stats = gc.get_stats()
         self.assertEqual(len(stats), 3)
@@ -885,6 +891,7 @@ class GCTests(unittest.TestCase):
             self.assertEqual(new[1][stat], old[1][stat])
             self.assertGreaterEqual(new[2][stat], old[2][stat])
 
+    @unittest.skipIf(support.Py_GC, "gc.freeze() does nothing under Py_GC")
     def test_freeze(self):
         gc.freeze()
         self.assertGreater(gc.get_freeze_count(), 0)
@@ -900,6 +907,7 @@ class GCTests(unittest.TestCase):
         )
 
     @requires_gil_enabled('need generational GC')
+    @unittest.skipIf(support.Py_GC, "Py_GC has one generation")
     def test_get_objects_generations(self):
         gc.collect()
         l = []
@@ -992,6 +1000,7 @@ class GCTests(unittest.TestCase):
 
         gc.enable()
 
+    @support.requires_precise_gc
     def test_resurrection_is_transitive(self):
         class Cargo:
             def __init__(self):
@@ -1026,6 +1035,7 @@ class GCTests(unittest.TestCase):
         gc.collect()
         gc.enable()
 
+    @unittest.skipIf(support.Py_GC, "Py_GC collects all garbage, not only cycles")
     def test_resurrection_does_not_block_cleanup_of_other_objects(self):
 
         # When a finalizer resurrects objects, stats were reporting them as
@@ -1095,6 +1105,7 @@ class GCTests(unittest.TestCase):
 
     @unittest.skipIf(ContainerNoGC is None,
                      'requires ContainerNoGC extension type')
+    @support.requires_precise_gc
     def test_trash_weakref_clear(self):
         # Test that trash weakrefs are properly cleared (bpo-38006).
         #
@@ -1153,6 +1164,8 @@ class GCTests(unittest.TestCase):
         gc.enable()
 
     @cpython_only
+    @unittest.skipIf(support.Py_GC, "Py_GC tracks every object whose type "
+                     "has a traverse")
     def test_get_referents_on_capsule(self):
         # gh-124538: Calling gc.get_referents() on an untracked capsule must not crash.
         import _datetime
@@ -1170,6 +1183,7 @@ class GCTests(unittest.TestCase):
         gc.get_referents(tracked_capsule)
 
     @cpython_only
+    @support.requires_precise_gc
     def test_get_objects_during_gc(self):
         # gh-125859: Calling gc.get_objects() or gc.get_referrers() during a
         # collection should not crash.
@@ -1281,6 +1295,7 @@ class GCTests(unittest.TestCase):
         self.assertTrue(new_count - count > (n // 2))
 
     @requires_gil_enabled('need generational GC')
+    @unittest.skipIf(support.Py_GC, "Py_GC has one generation")
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_heap_size(self):
         count = _testinternalcapi.get_tracked_heap_size()
@@ -1378,6 +1393,7 @@ class GCCallbackTests(unittest.TestCase):
             self.assertEqual(info["generation"], 2)
 
     @cpython_only
+    @unittest.skipIf(support.Py_GC, "Py_GC collects all garbage, not only cycles")
     def test_collect_garbage(self):
         self.preclean()
         # Each of these cause two objects to be garbage:
@@ -1416,6 +1432,7 @@ class GCCallbackTests(unittest.TestCase):
     @requires_subprocess()
     @unittest.skipIf(not support.built_with_c_assertions(),
                      'built without C assertions')
+    @support.requires_refcounting
     def test_refcount_errors(self):
         self.preclean()
         # Verify the "handling" of objects with broken refcounts
@@ -1484,6 +1501,7 @@ class GCTogglingTests(unittest.TestCase):
         gc.disable()
 
     @unittest.skipIf(Py_GIL_DISABLED, "requires GC generations or increments")
+    @unittest.skipIf(support.Py_GC, "Py_GC has one generation")
     def test_bug1055820c(self):
         # Corresponds to temp2c.py in the bug report.  This is pretty
         # elaborate.
@@ -1541,9 +1559,9 @@ class GCTogglingTests(unittest.TestCase):
         junk = []
         i = 0
         detector = GC_Detector()
-        if Py_GIL_DISABLED:
-            # The free-threaded build doesn't have multiple generations, so
-            # just trigger a GC manually.
+        if Py_GIL_DISABLED or support.Py_GC:
+            # The free-threaded and Py_GC builds don't have multiple
+            # generations, so just trigger a GC manually.
             gc.collect()
         assert not detector.gc_happened
         while not detector.gc_happened:
@@ -1615,9 +1633,9 @@ class GCTogglingTests(unittest.TestCase):
         detector = GC_Detector()
         junk = []
         i = 0
-        if Py_GIL_DISABLED:
-            # The free-threaded build doesn't have multiple generations, so
-            # just trigger a GC manually.
+        if Py_GIL_DISABLED or support.Py_GC:
+            # The free-threaded and Py_GC builds don't have multiple
+            # generations, so just trigger a GC manually.
             gc.collect()
         while not detector.gc_happened:
             i += 1
@@ -1633,6 +1651,8 @@ class GCTogglingTests(unittest.TestCase):
             self.assertEqual(x, None)
 
     @gc_threshold(1000, 0, 0)
+    @unittest.skipIf(support.Py_GC, "Py_GC's trigger is at least the live "
+                     "heap")
     def test_indirect_calls_with_gc_disabled(self):
         junk = []
         i = 0
@@ -1665,6 +1685,8 @@ class GCTogglingTests(unittest.TestCase):
         self.assertGreaterEqual(gc.get_count()[0], 0)
 
     @gc_threshold(1000, 0, 0)
+    @unittest.skipIf(support.Py_GC, "Py_GC's trigger is at least the live "
+                     "heap")
     def test_get_count_does_not_prevent_collection(self):
         junk = []
         gc.collect()

@@ -983,13 +983,18 @@ class DictTest(unittest.TestCase):
             pass
         views = (dict.items, dict.values, dict.keys)
         for v in views:
-            obj = C()
-            ref = weakref.ref(obj)
-            container = {obj: 1}
-            obj.v = v(container)
-            obj.x = iter(obj.v)
-            del obj, container
-            gc.collect()
+            # Under Py_GC a stale word on the C stack can keep one attempt's
+            # cycle alive; each attempt makes a new one.
+            for _ in range(5 if support.Py_GC else 1):
+                obj = C()
+                ref = weakref.ref(obj)
+                container = {obj: 1}
+                obj.v = v(container)
+                obj.x = iter(obj.v)
+                del obj, container
+                gc.collect()
+                if ref() is None:
+                    break
             self.assertIs(ref(), None, "Cycle was not collected")
 
     def make_shared_key_dict(self, n):
@@ -1382,6 +1387,7 @@ class DictTest(unittest.TestCase):
         pair = [X(), 123]
         dict([pair])
 
+    @support.requires_refcounting
     def test_oob_indexing_dictiter_iternextitem(self):
         class X(int):
             def __del__(self):
@@ -1835,6 +1841,7 @@ class DictTest(unittest.TestCase):
         d = x.__dict__
         d.clear()
 
+    @support.requires_refcounting
     def test_clear_reentrant_detached_split(self):
         # gh-158198 follow-up: dict.clear() on a detached split-table dict
         # must not expose (Py_EMPTY_KEYS, non-NULL ma_values) to a
@@ -1855,6 +1862,7 @@ class DictTest(unittest.TestCase):
         d.clear()
         self.assertEqual(d, {'reentrant': 1})
 
+    @support.requires_refcounting
     def test_clear_reentrant_detached_split_update(self):
         # Same as above but with a reentrant update large enough to force
         # a resize.  On the buggy code this frees the values array that

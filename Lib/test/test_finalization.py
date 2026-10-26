@@ -354,6 +354,7 @@ class SuicidalChained(ChainedBase, Simple):
         self.right = None
 
 
+@support.requires_precise_gc
 class CycleChainFinalizationTest(TestBase, unittest.TestCase):
     """
     Test finalization of a cyclic chain.  These tests are similar in
@@ -529,6 +530,7 @@ class LegacyFinalizationTest(TestBase, unittest.TestCase):
             self.assert_survivors(ids)
         self.assertIsNone(wr())
 
+    @support.requires_precise_gc
     def test_legacy_self_cycle(self):
         # Self-cycles with legacy finalizers end up in gc.garbage.
         with SimpleBase.test():

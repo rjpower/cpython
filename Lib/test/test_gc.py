@@ -1194,10 +1194,15 @@ class GCTests(unittest.TestCase):
                 nonlocal collected
                 collected = True
                 objs = gc.get_objects()
+                referrers = gc.get_referrers(self)
+                if support.Py_GC:
+                    # The finalizer runs after the collection, on a live
+                    # object that both functions see.
+                    return
                 # NB: can't use "in" here because some objects override __eq__
                 for obj in objs:
                     test.assertTrue(obj is not self)
-                test.assertEqual(gc.get_referrers(self), [])
+                test.assertEqual(referrers, [])
 
         obj = GetObjectsOnDel()
         obj.cycle = obj

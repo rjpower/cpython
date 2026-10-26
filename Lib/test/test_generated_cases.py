@@ -455,9 +455,9 @@ class TestIRCases(unittest.TestCase):
                 null[0] = PyStackRef_NULL;
             }
         }
-        no_fold inst(ALIAS, (value -- res)) {
-            res = SPAM(PyStackRef_AsPyObjectBorrow(value));
-            INPUTS_DEAD();
+        inst(ALIAS, (value -- res)) {
+            res = value;
+            DEAD(value);
         }
         inst(PAIR, (-- a, b)) {
             a = SPAM();
@@ -467,7 +467,8 @@ class TestIRCases(unittest.TestCase):
         formats = self.formats(input)
         self.assertTrue(formats["OP"].store_dst)
         self.assertTrue(formats["ATTR"].store_dst)
-        self.assertFalse(formats["ALIAS"].store_dst)
+        # A result copied from an input is a value like any other
+        self.assertTrue(formats["ALIAS"].store_dst)
         # PAIR never pushes its first output alone
         self.assertTrue(formats["PAIR"].store_dst)
         output = self.ir_output(input)
@@ -475,8 +476,7 @@ class TestIRCases(unittest.TestCase):
                       self.handler(output, "OP"))
         self.assertIn("IR_STORE_DST(IR_FIELD_A(this_instr), attr);",
                       self.handler(output, "ATTR"))
-        self.assertNotIn("IR_STORE_DST", self.handler(output, "ALIAS"))
-        self.assertIn("IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);",
+        self.assertIn("IR_STORE_DST(IR_FIELD_A(this_instr), res);",
                       self.handler(output, "ALIAS"))
         self.assertNotIn("IR_STORE_DST", self.handler(output, "PAIR"))
         self.assertIn("assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));",

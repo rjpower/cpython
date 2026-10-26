@@ -53,8 +53,6 @@ def format_initializer(fmt: IRFormat, shadow: str, nofb: str) -> str:
         flags.append("_PyIR_JUMPS")
     if fmt.forward:
         flags.append("_PyIR_FORWARD")
-    if fmt.no_fold:
-        flags.append("_PyIR_NO_FOLD")
     if fmt.transparent:
         flags.append("_PyIR_TRANSPARENT")
     if fmt.store_dst:

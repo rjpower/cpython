@@ -8670,7 +8670,7 @@
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_D(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), val);
+            IR_STORE_DST(IR_FIELD_A(this_instr), val);
             DISPATCH();
         }
 
@@ -8761,7 +8761,7 @@
                 res = value;
             }
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
+            IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
 
@@ -10133,7 +10133,7 @@
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_D(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), val);
+            IR_STORE_DST(IR_FIELD_A(this_instr), val);
             DISPATCH();
         }
 
@@ -10273,7 +10273,7 @@
                 res = PyStackRef_NULL;
             }
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
+            IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
 
@@ -10305,7 +10305,7 @@
                 res = PyStackRef_NULL;
             }
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
+            IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
 
@@ -11172,7 +11172,7 @@
                 JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
             }
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
+            IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
 
@@ -11205,7 +11205,7 @@
                 JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
             }
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
+            IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
 
@@ -15641,7 +15641,7 @@
             *ptr = attr;
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), func_out);
+            IR_STORE_DST(IR_FIELD_A(this_instr), func_out);
             DISPATCH();
         }
 

@@ -39,10 +39,6 @@ class Properties:
     inline_ok: bool = False
     # The IR binds this instruction in window style (see ir_generator.py).
     window: bool = False
-    # Annotated `no_fold`: outputs may alias a borrowed input, so the IR
-    # must not fold a store into them. Uop.aliased_outputs covers the
-    # outputs that the body assigns from an input.
-    no_fold: bool = False
     # Assigns `frame`: what follows runs in another frame.
     switches_frame: bool = False
     # Annotated `returns`: pops its frame, and pushes its outputs to the
@@ -86,7 +82,6 @@ class Properties:
             no_save_ip=all(p.no_save_ip for p in properties),
             inline_ok=all(p.inline_ok for p in properties),
             window=any(p.window for p in properties),
-            no_fold=any(p.no_fold for p in properties),
             switches_frame=any(p.switches_frame for p in properties),
             returns=any(p.returns for p in properties),
         )
@@ -943,7 +938,6 @@ def compute_properties(op: parser.CodeDef) -> Properties:
     no_save_ip = False if isinstance(op, parser.LabelDef) else "no_save_ip" in op.annotations
     inline_ok = False if isinstance(op, parser.LabelDef) else "inline_ok" in op.annotations
     window = False if isinstance(op, parser.LabelDef) else "window" in op.annotations
-    no_fold = False if isinstance(op, parser.LabelDef) else "no_fold" in op.annotations
     returns = False if isinstance(op, parser.LabelDef) else "returns" in op.annotations
     return Properties(
         escaping_calls=escaping_calls,
@@ -971,7 +965,6 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         tier=tier_variable(op),
         needs_prev=variable_used(op, "prev_instr"),
         window=window,
-        no_fold=no_fold,
         switches_frame=switches_frame(op),
         returns=returns,
     )

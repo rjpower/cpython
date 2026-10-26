@@ -203,7 +203,6 @@ class IRFormat:
     fb: str                         # where the feedback index lives
     jumps: bool                     # the oparg is an absolute target
     forward: bool = False           # the oparg is a forward distance
-    no_fold: bool = False
     transparent: bool = False       # see is_transparent()
     # What place_fields() placed, from which the NOFB form follows
     slot_roles: tuple[str, ...] = ()
@@ -297,7 +296,6 @@ class Entry:
     "An item on the abstract stack of external_io()"
     external: int                   # index of the external input, or -1
     item: StackItem
-    aliased: bool = False           # assigned from an input, `out = in;`
 
 
 def passed_through(uop: Uop, j: int) -> int | None:
@@ -341,11 +339,11 @@ def external_io(inst: Instruction) -> tuple[list[StackItem], list[Entry]]:
             if i is not None:
                 stack.append(popped[i])
             else:
-                stack.append(Entry(-1, item, item.name in part.aliased_outputs))
+                stack.append(Entry(-1, item))
     n = len(external)
     inputs = list(reversed(external))
     outputs = [
-        Entry(n - 1 - e.external if e.external >= 0 else -1, e.item, e.aliased)
+        Entry(n - 1 - e.external if e.external >= 0 else -1, e.item)
         for e in stack
     ]
     return inputs, outputs
@@ -623,8 +621,6 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         imm_kind = "wide"
     else:
         imm_kind = "narrow"
-    no_fold = any(m.properties.no_fold for m in members) or any(
-        e.aliased for m in members for e in io[m.name][1])
 
     placed = None
     if not array_inputs:
@@ -677,7 +673,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         group=group, window=window, roles=roles, inputs=names,
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
         imm=imm, fb=fb, jumps=jumps and not forward, forward=forward,
-        no_fold=no_fold, slot_roles=slot_roles, imm_kind=imm_kind,
+        slot_roles=slot_roles, imm_kind=imm_kind,
         store_dst=store_dst,
     )
 
@@ -693,7 +689,7 @@ STORE_NEVER = "never"      # pushes more than the result, so dst never names
 def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     """How inst, a member of a family whose dst may name a local, treats
     such a dst; None if it cannot.  The result must be the first new output
-    of inst, not an alias of an input, which may be a borrow.  Members of a
+    of inst; it may be a copy of an input (`out = in;`).  Members of a
     family share their stack effect for each oparg, and the assembler folds
     a store only where the instruction pushes the result alone, so a member
     that always pushes more never sees a local dst.  The result of a frame
@@ -708,10 +704,8 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
             return STORE_LEAVE
         if pushes_always(inst):
             return STORE_RETURN
-    if inst.properties.no_fold:
-        return None
     j = result_offset(inst, outputs)
-    if j is None or outputs[j].aliased:
+    if j is None:
         return None
     if all(e.item.is_array() and not e.item.size.isdigit()
            for e in outputs[j + 1:]):

@@ -234,7 +234,6 @@ annotations = {
     "no_save_ip",
     "inline_ok",
     "window",
-    "no_fold",
     "returns",
     "ir_only",
 }

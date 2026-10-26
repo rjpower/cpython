@@ -11,6 +11,7 @@
 #include "pycore_fileutils.h"     // _Py_ResetForceASCII()
 #include "pycore_floatobject.h"   // _PyFloat_InitTypes()
 #include "pycore_freelist.h"      // _PyObject_ClearFreeLists()
+#include "pycore_gc_trace.h"      // _PyGC_CLEAR_LOCAL()
 #include "pycore_global_objects_fini_generated.h"  // _PyStaticObjects_CheckAll()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interpolation.h" // _PyInterpolation_InitTypes()
@@ -1761,6 +1762,9 @@ finalize_remove_modules(PyObject *modules, int verbose)
         while (PyDict_Next(modules, &pos, &key, &value)) {
             CLEAR_MODULE(key, value);
         }
+        // The last module must not outlive its removal in this frame.
+        _PyGC_CLEAR_LOCAL(key);
+        _PyGC_CLEAR_LOCAL(value);
     }
     else {
         PyObject *iterator = PyObject_GetIter(modules);
@@ -1960,8 +1964,15 @@ finalize_modules(PyThreadState *tstate)
     // destructor.
     _PyImport_ClearModules(interp);
 
+#ifndef Py_GC
     // Collect garbage once more
     _PyGC_CollectNoFail(tstate);
+#else
+    // Under Py_GC each collection marks the whole heap, and the last one,
+    // in interpreter_clear(), follows soon: no Python code needs to run in
+    // between, and these objects are not finalized later than the ones
+    // that interpreter_clear() releases.
+#endif
 }
 
 

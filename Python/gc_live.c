@@ -950,9 +950,15 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
     /* The objects that finalizers did not resurrect are garbage again.  An
        explicit collection frees them, as the reference counting build
        does within one collection; an automatic one leaves them to the
-       next.  Finalizers do not run twice, so one more pass is enough for
-       the objects the first one found. */
-    if (nfinalized > 0 && reason != _Py_GC_REASON_HEAP && outer_entry == 0) {
+       next, and so does a shutdown collection before the modules are
+       cleared, which a later one follows.  Finalizers do not run twice, so
+       one more pass is enough for the objects the first one found. */
+    PyInterpreterState *interp = tstate->interp;
+    int later_follows = _PyInterpreterState_GetFinalizing(interp) != NULL
+                        && interp->imports.modules != NULL;
+    if (nfinalized > 0 && reason != _Py_GC_REASON_HEAP && !later_follows
+        && outer_entry == 0)
+    {
         struct _gc_live_state *ls = get_live(tstate->interp);
         _PyGC_TraceCaptureEntry();
         ls->skip_verify = 1;

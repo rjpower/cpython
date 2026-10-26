@@ -234,6 +234,16 @@ extern void _Py_NO_RETURN _PyGC_LiveSweepViolation(PyThreadState *tstate,
 #  define _PyGC_CHECK_NOT_SWEEPING(tstate, what) ((void)0)
 #endif
 
+/* Clear a local whose address was taken, such as PyDict_Next()'s
+ * out-parameters: it stays in its frame after its last use, where the
+ * conservative scan of the stack would keep its object alive.  The barrier
+ * keeps the store, which is dead to the compiler. */
+#  define _PyGC_CLEAR_LOCAL(var) \
+    do { \
+        (var) = NULL; \
+        __asm__ volatile("" : : "r"(&(var)) : "memory"); \
+    } while (0)
+
 /* Remember an immortal heap object: what it refers to is a root. */
 extern void _PyGC_LiveAddImmortal(PyObject *op);
 
@@ -255,6 +265,10 @@ extern void _PyGC_LiveClearEvalStack(void);
 extern void _PyGC_LiveGetStats(PyInterpreterState *interp,
                                Py_ssize_t *bytes_freed, Py_ssize_t *live_bytes,
                                double *pause_max);
+#endif
+
+#ifndef Py_GC
+#  define _PyGC_CLEAR_LOCAL(var) ((void)0)
 #endif
 
 /* Record the calling thread's callee-saved registers and stack pointer in

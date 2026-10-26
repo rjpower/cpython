@@ -348,6 +348,11 @@ _xidata_clear(_PyXIData_t *xidata)
         }
         xidata->data = NULL;
     }
+#ifdef Py_GC
+    if (xidata->obj != NULL) {
+        _PyGC_RemoveRoot(&xidata->obj_root);
+    }
+#endif
     Py_CLEAR(xidata->obj);
 }
 
@@ -365,6 +370,9 @@ _PyXIData_Init(_PyXIData_t *xidata,
         assert(interp != NULL);
         // released in _PyXIData_Clear()
         xidata->obj = Py_NewRef(obj);
+#ifdef Py_GC
+        _PyGC_AddRoot(&xidata->obj_root, &xidata->obj, 1);
+#endif
     }
     // Ideally every object would know its owning interpreter.
     // Until then, we have to rely on the caller to identify it

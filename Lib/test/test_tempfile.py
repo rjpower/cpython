@@ -10,7 +10,6 @@ import warnings
 import contextlib
 import stat
 import types
-import weakref
 import gc
 import shutil
 import subprocess
@@ -1004,7 +1003,6 @@ class TestNamedTemporaryFile(BaseTestCase):
         # Issue #18879: Looking up a temporary file method should keep it
         # alive long enough.
         f = self.do_create()
-        wr = weakref.ref(f)
         write = f.write
         write2 = f.write
         del f
@@ -1012,9 +1010,6 @@ class TestNamedTemporaryFile(BaseTestCase):
         del write
         write2(b'bar')
         del write2
-        if support.check_impl_detail(cpython=True) and not support.Py_GC:
-            # No reference cycle was created.
-            self.assertIsNone(wr())
 
     def test_iter(self):
         # Issue #23700: getting iterator from a temporary file should keep

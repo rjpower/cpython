@@ -231,7 +231,6 @@ class TestTracemallocEnabled(unittest.TestCase):
         domain2, size2, traceback2, length2 = trace2
         self.assertIs(traceback2, traceback1)
 
-    @support.requires_refcounting
     def test_get_traced_memory(self):
         # Python allocates some internals objects, so the test must tolerate
         # a small difference between the expected size and the real usage
@@ -250,6 +249,7 @@ class TestTracemallocEnabled(unittest.TestCase):
 
         # destroy the object
         obj = None
+        support.gc_collect()
         size2, peak_size2 = tracemalloc.get_traced_memory()
         self.assertLess(size2, size)
         self.assertGreaterEqual(size - size2, obj_size - max_error)

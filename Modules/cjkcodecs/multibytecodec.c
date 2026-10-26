@@ -1130,6 +1130,7 @@ mbiencoder_traverse(PyObject *op, visitproc visit, void *arg)
     if (ERROR_ISCUSTOM(self->errors))
         Py_VISIT(self->errors);
     Py_VISIT(self->codec_owner);
+    Py_VISIT(self->pending);
     return 0;
 }
 

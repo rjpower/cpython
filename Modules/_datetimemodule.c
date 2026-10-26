@@ -4858,6 +4858,17 @@ datetime_time_strptime_impl(PyTypeObject *type, PyObject *string,
  * Destructor.
  */
 
+/* The type is not a GC type, but the tracing mark must reach the tzinfo. */
+static int
+time_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PyDateTime_Time *self = PyTime_CAST(op);
+    if (HASTZINFO(self)) {
+        Py_VISIT(self->tzinfo);
+    }
+    return 0;
+}
+
 static void
 time_dealloc(PyObject *op)
 {
@@ -5424,7 +5435,7 @@ static PyTypeObject PyDateTime_TimeType = {
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
     datetime_time__doc__,                       /* tp_doc */
-    0,                                          /* tp_traverse */
+    time_traverse,                              /* tp_traverse */
     0,                                          /* tp_clear */
     time_richcompare,                           /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
@@ -6270,6 +6281,17 @@ error:
 /*
  * Destructor.
  */
+
+/* The type is not a GC type, but the tracing mark must reach the tzinfo. */
+static int
+datetime_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PyDateTime_DateTime *self = PyDateTime_CAST(op);
+    if (HASTZINFO(self)) {
+        Py_VISIT(self->tzinfo);
+    }
+    return 0;
+}
 
 static void
 datetime_dealloc(PyObject *op)
@@ -7412,7 +7434,7 @@ static PyTypeObject PyDateTime_DateTimeType = {
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
     datetime_datetime__doc__,                   /* tp_doc */
-    0,                                          /* tp_traverse */
+    datetime_traverse,                          /* tp_traverse */
     0,                                          /* tp_clear */
     datetime_richcompare,                       /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */

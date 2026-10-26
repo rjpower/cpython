@@ -1542,6 +1542,7 @@ module_traverse(PyObject *self, visitproc visit, void *arg)
     }
 
     Py_VISIT(m->md_dict);
+    _Py_VISIT_ATOMIC(m->md_name);
     return 0;
 }
 

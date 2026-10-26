@@ -2523,6 +2523,7 @@ dummy_func(
                 // scope to tell MSVC that stack is not escaping
                 PyObject *stack[] = {class, self};
                 super = PyObject_Vectorcall(global_super, stack, oparg & 2, NULL);
+                _PyGC_CLEAR_ARRAY(stack);
             }
             if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                 PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
@@ -3949,6 +3950,7 @@ dummy_func(
                 int has_self = !PyStackRef_IsNull(exit_self);
                 res_o = PyObject_Vectorcall(exit_func_o, stack + 2 - has_self,
                         (3 + has_self) | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
+                _PyGC_CLEAR_ARRAY(stack);
             }
             Py_XDECREF(original_tb);
             ERROR_IF(res_o == NULL);

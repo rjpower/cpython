@@ -22,8 +22,10 @@ typedef enum {
 #ifdef WITH_MIMALLOC
 #  ifdef Py_GIL_DISABLED
 #    define MI_PRIM_THREAD_ID   _Py_ThreadId
-#    define MI_VISIT_ABANDONED  1
 #  endif
+// Both collectors visit the blocks of exited threads' abandoned segments:
+// the free-threaded one, and the tracing verifier (Python/gc_trace.c).
+#  define MI_VISIT_ABANDONED  1
 #  define MI_DEBUG_UNINIT     PYMEM_CLEANBYTE
 #  define MI_DEBUG_FREED      PYMEM_DEADBYTE
 #  define MI_DEBUG_PADDING    PYMEM_FORBIDDENBYTE
@@ -56,7 +58,11 @@ extern "C++" {
 
 #endif
 
-#ifdef Py_GIL_DISABLED
+#ifdef WITH_MIMALLOC
+// Each thread state allocates objects from its own mimalloc heaps, one per
+// _Py_mimalloc_heap_id, so that a collector can enumerate every object by
+// visiting the heaps and knows from the heap where the object starts in its
+// block.  PyMem_RawMalloc() uses mimalloc's per-OS-thread default heap.
 struct _mimalloc_interp_state {
     // When exiting, threads abandon any segments with live blocks. The
     // abandoned segments are tracked per mimalloc sub-process so that other

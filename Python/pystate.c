@@ -465,7 +465,7 @@ alloc_interpreter(void)
 static void
 free_interpreter(PyInterpreterState *interp)
 {
-#ifdef Py_GIL_DISABLED
+#ifdef WITH_MIMALLOC
     mi_subproc_t *subproc = interp->mimalloc.subproc;
     if (subproc != NULL) {
         // Delete the sub-process only when no abandoned segment points to it.
@@ -561,7 +561,8 @@ init_interpreter(PyInterpreterState *interp,
     PyConfig_InitPythonConfig(&interp->config);
 #ifdef Py_GIL_DISABLED
     _Py_brc_init_state(interp);
-
+#endif
+#ifdef WITH_MIMALLOC
     interp->mimalloc.subproc = mi_subproc_new();
     if (interp->mimalloc.subproc == NULL) {
         return _PyStatus_NO_MEMORY();
@@ -3246,7 +3247,7 @@ _PyThreadState_HangThread(PyThreadState *tstate)
 static void
 tstate_mimalloc_bind(PyThreadState *tstate)
 {
-#ifdef Py_GIL_DISABLED
+#ifdef WITH_MIMALLOC
     struct _mimalloc_thread_state *mts = &((_PyThreadStateImpl*)tstate)->mimalloc;
 
     // Initialize the mimalloc thread state. This must be called from the
@@ -3262,6 +3263,7 @@ tstate_mimalloc_bind(PyThreadState *tstate)
     assert(tstate->interp->mimalloc.subproc != NULL);
     tld->segments.subproc = tstate->interp->mimalloc.subproc;
 
+#ifdef Py_GIL_DISABLED
     // Don't fill in the first N bytes up to ob_type in debug builds. We may
     // access ob_tid and the refcount fields in the dict and list lock-less
     // accesses, so they must remain valid for a while after deallocation.
@@ -3275,18 +3277,23 @@ tstate_mimalloc_bind(PyThreadState *tstate)
         [_Py_MIMALLOC_HEAP_GC] = base_offset,
         [_Py_MIMALLOC_HEAP_GC_PRE] = base_offset + 2 * sizeof(PyObject *),
     };
+#endif
 
     // Initialize each heap
     for (uint8_t i = 0; i < _Py_MIMALLOC_HEAP_COUNT; i++) {
         _mi_heap_init(&mts->heaps[i], tld, _mi_arena_id_none(), false, i);
+#ifdef Py_GIL_DISABLED
         mts->heaps[i].debug_offset = (uint8_t)debug_offsets[i];
+#endif
     }
 
+#ifdef Py_GIL_DISABLED
     // Heaps that store Python objects should use QSBR to delay freeing
     // mimalloc pages while there may be concurrent lock-free readers.
     mts->heaps[_Py_MIMALLOC_HEAP_OBJECT].page_use_qsbr = true;
     mts->heaps[_Py_MIMALLOC_HEAP_GC].page_use_qsbr = true;
     mts->heaps[_Py_MIMALLOC_HEAP_GC_PRE].page_use_qsbr = true;
+#endif
 
     // By default, object allocations use _Py_MIMALLOC_HEAP_OBJECT.
     // _PyObject_GC_New() and similar functions temporarily override this to
@@ -3300,7 +3307,7 @@ tstate_mimalloc_bind(PyThreadState *tstate)
 void
 _PyThreadState_ClearMimallocHeaps(PyThreadState *tstate)
 {
-#ifdef Py_GIL_DISABLED
+#ifdef WITH_MIMALLOC
     if (!tstate->_status.bound) {
         // The mimalloc heaps are only initialized when the thread is bound.
         return;

@@ -259,6 +259,29 @@ _PyMem_mi_heap_collect_qsbr(mi_heap_t *heap)
 #endif
 }
 
+#ifndef Py_GIL_DISABLED
+// Allocations that could not use a thread state's heap; see
+// _PyObject_MiHeap().
+static Py_ssize_t mi_unheaped_allocs = 0;
+
+// The mem domain uses the thread state's mem heap, as in the free-threaded
+// build, so that sys.getallocatedblocks() counts the mem and object domains
+// but not the raw one, as it does with pymalloc, and so that the verifier can
+// search PyMem_Malloc() blocks for references to objects it did not reach.
+static inline mi_heap_t *
+_PyMem_MiHeap(void)
+{
+    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
+    if (tstate != NULL && tstate->mimalloc.current_object_heap != NULL) {
+        mi_heap_t *heap = &tstate->mimalloc.heaps[_Py_MIMALLOC_HEAP_MEM];
+        if (heap->thread_id == _mi_thread_id()) {
+            return heap;
+        }
+    }
+    return mi_prim_get_default_heap();
+}
+#endif
+
 void *
 _PyMem_MiMalloc(void *ctx, size_t size)
 {
@@ -267,7 +290,7 @@ _PyMem_MiMalloc(void *ctx, size_t size)
     mi_heap_t *heap = &tstate->mimalloc.heaps[_Py_MIMALLOC_HEAP_MEM];
     return mi_heap_malloc(heap, size);
 #else
-    return mi_malloc(size);
+    return mi_heap_malloc(_PyMem_MiHeap(), size);
 #endif
 }
 
@@ -279,7 +302,7 @@ _PyMem_MiCalloc(void *ctx, size_t nelem, size_t elsize)
     mi_heap_t *heap = &tstate->mimalloc.heaps[_Py_MIMALLOC_HEAP_MEM];
     return mi_heap_calloc(heap, nelem, elsize);
 #else
-    return mi_calloc(nelem, elsize);
+    return mi_heap_calloc(_PyMem_MiHeap(), nelem, elsize);
 #endif
 }
 
@@ -291,7 +314,7 @@ _PyMem_MiRealloc(void *ctx, void *ptr, size_t size)
     mi_heap_t *heap = &tstate->mimalloc.heaps[_Py_MIMALLOC_HEAP_MEM];
     return mi_heap_realloc(heap, ptr, size);
 #else
-    return mi_realloc(ptr, size);
+    return mi_heap_realloc(_PyMem_MiHeap(), ptr, size);
 #endif
 }
 
@@ -301,16 +324,47 @@ _PyMem_MiFree(void *ctx, void *ptr)
     mi_free(ptr);
 }
 
+#ifndef Py_GIL_DISABLED
+
+Py_ssize_t
+_PyMem_MiUnheapedAllocs(void)
+{
+    return _Py_atomic_load_ssize_relaxed(&mi_unheaped_allocs);
+}
+
+// In the default build the object domain allocates from the current thread
+// state's object heaps, as the free-threaded build does, so that the tracing
+// verifier (Python/gc_trace.c) can enumerate the objects and find where each
+// one starts in its block.  There is no such heap when no thread state is
+// attached, before the thread state is bound, or when a thread state bound
+// to one OS thread is attached in another (mimalloc heaps are thread-local);
+// those blocks go to mimalloc's default heap and are invisible to the
+// verifier, which reports how many there were.
+static inline mi_heap_t *
+_PyObject_MiHeap(void)
+{
+    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
+    if (tstate != NULL) {
+        mi_heap_t *heap = tstate->mimalloc.current_object_heap;
+        if (heap != NULL && heap->thread_id == _mi_thread_id()) {
+            return heap;
+        }
+    }
+    _Py_atomic_add_ssize(&mi_unheaped_allocs, 1);
+    return mi_prim_get_default_heap();
+}
+#endif
+
 void *
 _PyObject_MiMalloc(void *ctx, size_t nbytes)
 {
 #ifdef Py_GIL_DISABLED
     _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
     mi_heap_t *heap = tstate->mimalloc.current_object_heap;
-    return mi_heap_malloc(heap, nbytes);
 #else
-    return mi_malloc(nbytes);
+    mi_heap_t *heap = _PyObject_MiHeap();
 #endif
+    return mi_heap_malloc(heap, nbytes);
 }
 
 void *
@@ -319,10 +373,10 @@ _PyObject_MiCalloc(void *ctx, size_t nelem, size_t elsize)
 #ifdef Py_GIL_DISABLED
     _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
     mi_heap_t *heap = tstate->mimalloc.current_object_heap;
-    return mi_heap_calloc(heap, nelem, elsize);
 #else
-    return mi_calloc(nelem, elsize);
+    mi_heap_t *heap = _PyObject_MiHeap();
 #endif
+    return mi_heap_calloc(heap, nelem, elsize);
 }
 
 
@@ -374,7 +428,7 @@ _PyObject_MiRealloc(void *ctx, void *ptr, size_t nbytes)
     mi_free(ptr);
     return newp;
 #else
-    return mi_realloc(ptr, nbytes);
+    return mi_heap_realloc(_PyObject_MiHeap(), ptr, nbytes);
 #endif
 }
 
@@ -442,6 +496,14 @@ void* _PyObject_Realloc(void *ctx, void *ptr, size_t size);
 #  define PYRAW_ALLOC MALLOC_ALLOC
 #  define PYMEM_ALLOC MALLOC_ALLOC
 #  define PYOBJ_ALLOC MALLOC_ALLOC
+#elif defined(WITH_MIMALLOC)
+// The tracing collector needs every object in a mimalloc heap, where it can
+// enumerate the objects and resolve an address to its block (note 06,
+// section 3.4), so mimalloc is the default.  pymalloc can still be selected
+// at runtime.
+#  define PYRAW_ALLOC MIMALLOC_RAWALLOC
+#  define PYMEM_ALLOC MIMALLOC_ALLOC
+#  define PYOBJ_ALLOC MIMALLOC_OBJALLOC
 #elif defined(WITH_PYMALLOC)
 #  define PYRAW_ALLOC MALLOC_ALLOC
 #  define PYMEM_ALLOC PYMALLOC_ALLOC
@@ -1024,7 +1086,7 @@ _PyMem_PymallocEnabled(void)
 }
 
 #ifdef WITH_MIMALLOC
-static int
+int
 _PyMem_MimallocEnabled(void)
 {
 #ifdef Py_GIL_DISABLED
@@ -1818,7 +1880,6 @@ static Py_ssize_t
 get_mimalloc_allocated_blocks(PyInterpreterState *interp)
 {
     size_t allocated_blocks = 0;
-#ifdef Py_GIL_DISABLED
     _Py_FOR_EACH_TSTATE_UNLOCKED(interp, t) {
         _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)t;
         for (int i = 0; i < _Py_MIMALLOC_HEAP_COUNT; i++) {
@@ -1832,11 +1893,7 @@ get_mimalloc_allocated_blocks(PyInterpreterState *interp)
         mi_abandoned_visit_blocks(subproc, tag, false, &count_blocks,
                                   &allocated_blocks);
     }
-#else
-    // TODO(sgross): this only counts the current thread's blocks.
-    mi_heap_t *heap = mi_heap_get_default();
-    mi_heap_visit_blocks(heap, false, &count_blocks, &allocated_blocks);
-#endif
+
     return allocated_blocks;
 }
 #endif

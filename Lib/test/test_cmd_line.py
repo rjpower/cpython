@@ -845,6 +845,8 @@ class CmdLineTest(unittest.TestCase):
             elif support.check_sanitizer(address=True, memory=True):
                 # ASan and MSan builds default to malloc, even with pymalloc.
                 alloc_name = "malloc_debug"
+            elif support.with_mimalloc():
+                alloc_name = "mimalloc_debug"
             elif support.with_pymalloc():
                 alloc_name = "pymalloc_debug"
             else:
@@ -934,6 +936,10 @@ class CmdLineTest(unittest.TestCase):
             # ASan and MSan builds default to malloc, even with pymalloc.
             default_name = 'malloc_debug' if support.Py_DEBUG else 'malloc'
             default_name_debug = 'malloc_debug'
+        elif mimalloc:
+            # mimalloc is the default when built in, for the tracing collector.
+            default_name = 'mimalloc_debug' if support.Py_DEBUG else 'mimalloc'
+            default_name_debug = 'mimalloc_debug'
         elif pymalloc:
             default_name = 'pymalloc_debug' if support.Py_DEBUG else 'pymalloc'
             default_name_debug = 'pymalloc_debug'

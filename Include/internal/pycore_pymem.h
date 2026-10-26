@@ -110,6 +110,16 @@ extern wchar_t *_PyMem_DefaultRawWcsdup(const wchar_t *str);
 /* Is the debug allocator enabled? */
 extern int _PyMem_DebugEnabled(void);
 
+#if defined(WITH_MIMALLOC)
+// True if the object domain allocates from mimalloc.
+extern int _PyMem_MimallocEnabled(void);
+#endif
+#if defined(WITH_MIMALLOC) && !defined(Py_GIL_DISABLED)
+// The number of object allocations that could not use a thread state's
+// mimalloc heap and so are invisible to the tracing verifier.
+extern Py_ssize_t _PyMem_MiUnheapedAllocs(void);
+#endif
+
 // Enqueue a pointer to be freed possibly after some delay.
 extern void _PyMem_FreeDelayed(void *ptr, size_t size);
 

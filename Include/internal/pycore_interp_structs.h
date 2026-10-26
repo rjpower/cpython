@@ -934,8 +934,10 @@ struct _is {
     struct _stoptheworld_state stoptheworld;
     struct _qsbr_shared qsbr;
 
-#if defined(Py_GIL_DISABLED)
+#if defined(WITH_MIMALLOC)
     struct _mimalloc_interp_state mimalloc;
+#endif
+#if defined(Py_GIL_DISABLED)
     struct _brc_state brc;  // biased reference counting state
     struct _Py_unique_id_pool unique_ids;  // object ids for per-thread refcounts
     PyMutex weakref_locks[NUM_WEAKREF_LIST_LOCKS];

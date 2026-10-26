@@ -13,6 +13,7 @@
 
 import sys
 import unittest
+from test import support
 from ctypes import Structure, POINTER, c_char_p, c_int
 
 
@@ -20,6 +21,7 @@ class ObjectsTestCase(unittest.TestCase):
     def assertSame(self, a, b):
         self.assertEqual(id(a), id(b))
 
+    @support.requires_refcounting
     def test_ints(self):
         i = 42000123
         refcnt = sys.getrefcount(i)
@@ -27,6 +29,7 @@ class ObjectsTestCase(unittest.TestCase):
         self.assertEqual(refcnt, sys.getrefcount(i))
         self.assertEqual(ci._objects, None)
 
+    @support.requires_refcounting
     def test_c_char_p(self):
         s = "Hello, World".encode("ascii")
         refcnt = sys.getrefcount(s)

@@ -66,11 +66,7 @@ typedef struct {
 // gh-117649: The free-threaded build does not currently support single-phase
 // init extensions in subinterpreters. For now, we ensure that
 // `check_multi_interp_extensions` is always `1`, even in the legacy config.
-#ifdef Py_GIL_DISABLED
-#  define _PyInterpreterConfig_LEGACY_CHECK_MULTI_INTERP_EXTENSIONS 1
-#else
 #  define _PyInterpreterConfig_LEGACY_CHECK_MULTI_INTERP_EXTENSIONS 0
-#endif
 
 #define _PyInterpreterConfig_LEGACY_INIT \
     { \

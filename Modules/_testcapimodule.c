@@ -2351,15 +2351,6 @@ test_critical_sections(PyObject *module, PyObject *Py_UNUSED(args))
     Py_BEGIN_CRITICAL_SECTION2(module, module);
     Py_END_CRITICAL_SECTION2();
 
-#ifdef Py_GIL_DISABLED
-    // avoid unused variable compiler warning on GIL-enabled build
-    PyMutex mut = {0};
-    Py_BEGIN_CRITICAL_SECTION_MUTEX(&mut);
-    Py_END_CRITICAL_SECTION();
-
-    Py_BEGIN_CRITICAL_SECTION2_MUTEX(&mut, &mut);
-    Py_END_CRITICAL_SECTION2();
-#endif
 
     Py_RETURN_NONE;
 }
@@ -2915,7 +2906,7 @@ uptime_bsd(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(args))
 
 /* A reference that only an extension's static variable holds, as many
    extensions keep cached objects.  The tracing mark finds it by scanning
-   the extension's data segment.  Nothing reads it, and under Py_GC
+   the extension's data segment.  Nothing reads it, and
    Py_XSETREF() does not read the old value either: volatile keeps the
    compiler from removing the variable. */
 static PyObject *volatile static_object = NULL;

@@ -58,7 +58,7 @@
 #include "pycore_initconfig.h"    // _PyStatus_ERR()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 
-#if defined(WITH_MIMALLOC) && !defined(Py_GIL_DISABLED)
+#if defined(WITH_MIMALLOC)
 
 #include "pycore_capsule.h"       // _PyCapsule_HasDestructor()
 #include "pycore_code.h"          // _PyCode_HasExtraFree()
@@ -349,7 +349,7 @@ typedef struct {
     Py_ssize_t nshallow;
     Py_ssize_t nrejected; // precise references that were not objects
     Py_ssize_t ngarbage;  // unmarked objects that only garbage refers to
-    // Under Py_GC: precise references into the heap that are not live
+    // Precise references into the heap that are not live
     // objects, which means the collector freed something reachable.
     PyObject *current;    // the object being traversed
     Py_ssize_t ndangling;
@@ -357,7 +357,6 @@ typedef struct {
         uintptr_t addr;
         char referrer[80];
     } dangling[16];
-#ifdef Py_GC
     // The live collector: mark bits in the headers instead of the sets.
     int live;
     uintptr_t mem_lo;     // the bounds of mem_pages
@@ -376,14 +375,11 @@ typedef struct {
     uintptr_t skip_lo[256];
     uintptr_t skip_hi[256];
     int nskip;
-#endif
 } trace_t;
 
 static int mark_visit(PyObject *op, void *arg);
-#ifdef Py_GC
 static int live_visit(PyObject *op, void *arg);
 static void live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop);
-#endif
 static void scan_threads_only(trace_t *t, PyThreadState *current);
 
 
@@ -418,12 +414,10 @@ walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
         if (addrset_has(&a->t->freed, op)) {
             return true;  // allocated, but dead
         }
-#ifdef Py_GC
         // A block without the header magic is not an initialized object.
         if (!_PyGC_IsObjectHeader((PyObject *)op)) {
             return true;
         }
-#endif
         if (addrset_add(a->objects, op) < 0) {
             a->t->oom = 1;
             return false;
@@ -547,7 +541,6 @@ queue_range(trace_t *t, uintptr_t start, uintptr_t end)
     t->mem_stack[t->mem_sp++] = end;
 }
 
-#ifdef Py_GC
 static int
 block_in_list(const mi_page_t *page, mi_block_t *list, uintptr_t block)
 {
@@ -576,7 +569,6 @@ mem_block_is_free(uintptr_t block)
         || block_in_list(page, page->local_free, block)
         || block_in_list(page, mi_page_thread_free(page), block);
 }
-#endif
 
 /* Queue the mem heap block that contains addr for a conservative scan. */
 static void
@@ -587,13 +579,11 @@ queue_mem_block(trace_t *t, uintptr_t addr)
         return;
     }
     uintptr_t block = r->start + (addr - r->start) / r->bsize * r->bsize;
-#ifdef Py_GC
     // Only the live collector checks, which keeps the verifier's results
     // comparable with step 4's.
     if (t->live && mem_block_is_free(block)) {
         return;
     }
-#endif
     int added = addrset_add(&t->mem_scanned, block);
     if (added <= 0) {
         t->oom |= added < 0;
@@ -790,7 +780,6 @@ mark(trace_t *t, PyObject *op, int heap)
         }
         return;
     }
-#ifdef Py_GC
     if (!heap && !t->conservative && addr >= t->heap_lo && addr < t->heap_hi
         && rangelist_find(&t->pages, addr) != NULL)
     {
@@ -807,7 +796,6 @@ mark(trace_t *t, PyObject *op, int heap)
         t->nrejected++;
         return;
     }
-#endif
     if (!is_object(t, op, heap)) {
         if (!t->conservative) {
             t->nrejected++;
@@ -856,11 +844,9 @@ mark(trace_t *t, PyObject *op, int heap)
 static int
 mark_visit(PyObject *op, void *arg)
 {
-#ifdef Py_GC
     if (((trace_t *)arg)->live) {
         return live_visit(op, arg);
     }
-#endif
     if (op != NULL) {
         mark((trace_t *)arg, op, 0);
     }
@@ -918,7 +904,6 @@ static void
 scan_range(trace_t *t, uintptr_t start, uintptr_t end)
 {
     start = _Py_SIZE_ROUND_UP(start, sizeof(uintptr_t));
-#ifdef Py_GC
     for (int i = 0; i < t->nskip; i++) {
         if (start < t->skip_hi[i] && end > t->skip_lo[i]) {
             if (start < t->skip_lo[i]) {
@@ -936,7 +921,6 @@ scan_range(trace_t *t, uintptr_t start, uintptr_t end)
         live_scan_words(t, start, end);
         return;
     }
-#endif
     while (start < end) {
         // Clip to readable memory.
         const range_t *r = rangelist_find(&t->readable, start);
@@ -959,13 +943,11 @@ scan_range(trace_t *t, uintptr_t start, uintptr_t end)
             continue;
         }
         uintptr_t stop = Py_MIN(end, r->end);
-#ifdef Py_GC
         if (t->live) {
             live_scan_words(t, start, stop);
             start = stop;
             continue;
         }
-#endif
         int conservative = t->conservative;
         t->conservative = 1;
         for (uintptr_t *p = (uintptr_t *)start; (uintptr_t)p + sizeof(uintptr_t) <= stop; p++) {
@@ -1024,7 +1006,6 @@ _PyGC_TraceCaptureThread(void)
     ts->gc_trace.valid = 1;
 }
 
-#ifdef Py_GC
 Py_NO_INLINE void
 _PyGC_TraceCaptureEntry(void)
 {
@@ -1034,7 +1015,6 @@ _PyGC_TraceCaptureEntry(void)
     memcpy(ts->gc_trace.entry_regs, regs, sizeof(regs));
     ts->gc_trace.entry_sp = (uintptr_t)__builtin_frame_address(0);
 }
-#endif
 
 
 /* --- conservative roots ----------------------------------------------------- */
@@ -1111,12 +1091,7 @@ scan_other_thread(trace_t *t, PyThreadState *p)
 static PyThreadState *
 kept_threads(PyInterpreterState *interp)
 {
-#ifdef Py_GC
     return _PyGC_LiveKeptThreads(interp);
-#else
-    (void)interp;
-    return NULL;
-#endif
 }
 
 static void
@@ -1357,7 +1332,6 @@ mark_precise_roots(trace_t *t)
 }
 
 
-#ifdef Py_GC
 /* --- the live collector (note 06, step 5a) ----------------------------------
 
    The same roots and the same conservative scans as the verifier, but the
@@ -2246,7 +2220,6 @@ _PyGC_TraceLiveHeapObjects(PyInterpreterState *interp, Py_ssize_t *n)
     *n = (Py_ssize_t)w.nobjs;
     return w.objs;
 }
-#endif  /* Py_GC */
 
 
 /* --- holes ------------------------------------------------------------------ */
@@ -2847,7 +2820,6 @@ verify(PyThreadState *tstate)
     if (t.oom) {
         goto done;
     }
-#ifdef Py_GC
     /* Nothing is counted, so there are no holes to find.  The check is that
        the collector freed nothing the mark reaches. */
     (void)find_holes;
@@ -2864,10 +2836,6 @@ verify(PyThreadState *tstate)
         }
         fflush(stderr);
     }
-#else
-    nholes = find_holes(&t);
-    report(&t, tstate, nholes);
-#endif
 done:
     trace_fini(&t);
     ts->verifying = 0;
@@ -3122,7 +3090,7 @@ PyGC_RemoveRoot(PyObject **ref)
     }
 }
 
-#else  /* !WITH_MIMALLOC || Py_GIL_DISABLED */
+#else  /* !WITH_MIMALLOC */
 
 int
 PyGC_AddRoot(PyObject **ref)

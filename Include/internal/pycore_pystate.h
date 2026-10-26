@@ -150,23 +150,6 @@ extern void _PyThreadState_Detach(PyThreadState *tstate);
 // to the "detached" state.
 extern void _PyThreadState_Suspend(PyThreadState *tstate);
 
-#ifdef Py_GIL_DISABLED
-// Try to atomically transition a *different* thread's state from "detached"
-// to "suspended". On success, the target thread cannot attach until
-// _PyThreadState_ResumeDetached() is called, and the caller may safely
-// perform operations that are normally only permitted for the owning thread
-// (such as merging the biased reference counts of objects it owns).
-//
-// The caller must not run arbitrary Python code, allocate GC objects, or
-// stop the world while holding the thread in the suspended state.
-// Returns 1 on success, 0 if the thread was not in the "detached" state.
-extern int _PyThreadState_TrySuspendDetached(PyThreadState *tstate);
-
-// Resume a thread suspended by _PyThreadState_TrySuspendDetached() or a
-// stop-the-world pause: switch it back to "detached" or "detached-waiting"
-// and wake it if it is waiting to attach.
-extern void _PyThreadState_ResumeDetached(PyThreadState *tstate);
-#endif
 
 // Mark the thread state as "shutting down". This is used during interpreter
 // and runtime finalization. The thread may no longer attach to the
@@ -194,18 +177,10 @@ static inline void
 _Py_EnsureFuncTstateNotNULL(const char *func, PyThreadState *tstate)
 {
     if (tstate == NULL) {
-#ifndef Py_GIL_DISABLED
         _Py_FatalErrorFunc(func,
             "the function must be called with the GIL held, "
             "after Python initialization and before Python finalization, "
             "but the GIL is released (the current Python thread state is NULL)");
-#else
-        _Py_FatalErrorFunc(func,
-            "the function must be called with an active thread state, "
-            "after Python initialization and before Python finalization, "
-            "but it was called without an active thread state. "
-            "Are you trying to call the C API inside of a Py_BEGIN_ALLOW_THREADS block?");
-#endif
     }
 }
 

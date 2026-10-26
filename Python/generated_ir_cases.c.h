@@ -552,10 +552,6 @@
                     JUMP_TO_LABEL(error);
                 }
                 assert(d->result_type == NULL || Py_TYPE(res_o) == d->result_type);
-                #ifndef Py_GC  // reference counts are constant under Py_GC
-                assert(!d->result_unique || Py_REFCNT(res_o) == 1 || _Py_IsImmortal(res_o));
-                #endif
-
                 res = PyStackRef_FromPyObjectSteal(res_o);
                 l = left;
                 r = right;
@@ -3466,16 +3462,6 @@
                 if (index < 0) {
                     index += PyList_GET_SIZE(list);
                 }
-                #ifdef Py_GIL_DISABLED
-                PyObject *res_o = _PyList_GetItemRef((PyListObject*)list, index);
-                if (res_o == NULL) {
-                    IR_DROP_BORROW(list_st, IR_FIELD_B(this_instr));
-                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
-                }
-                res = PyStackRef_FromPyObjectSteal(res_o);
-                #else
                 if (index < 0 || index >= PyList_GET_SIZE(list)) {
                     IR_DROP_BORROW(list_st, IR_FIELD_B(this_instr));
                     IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
@@ -3485,7 +3471,6 @@
                 PyObject *res_o = PyList_GET_ITEM(list, index);
                 assert(res_o != NULL);
                 res = PyStackRef_FromPyObjectNew(res_o);
-                #endif
                 STAT_INC(BINARY_OP, hit);
                 ls = list_st;
                 ss = sub_st;
@@ -9701,19 +9686,9 @@
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
                 assert(PyStackRef_IsTaggedIndex(null_or_index));
-                #ifdef Py_GIL_DISABLED
-                if (!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o)) {
-                    UPDATE_MISS_STATS(FOR_ITER);
-                    assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
-                    JUMP_TO_PREDICTED(FOR_ITER);
-                }
-                #endif
             }
             // _ITER_JUMP_LIST
             {
-                #ifdef Py_GIL_DISABLED
-
-                #else
                 PyObject *list_o = PyStackRef_AsPyObjectBorrow(iter);
                 assert(Py_TYPE(list_o) == &PyList_Type);
                 STAT_INC(FOR_ITER, hit);
@@ -9723,31 +9698,12 @@
                     window[1] = null_or_index;
                     DISPATCH();
                 }
-                #endif
             }
             // _ITER_NEXT_LIST
             {
                 PyObject *list_o = PyStackRef_AsPyObjectBorrow(iter);
                 assert(PyList_CheckExact(list_o));
-                #ifdef Py_GIL_DISABLED
-                assert(_Py_IsOwnedByCurrentThread(list_o) ||
-                  _PyObject_GC_IS_SHARED(list_o));
-                STAT_INC(FOR_ITER, hit);
-                int result = _PyList_GetItemRefNoLock((PyListObject *)list_o, PyStackRef_UntagIndex(null_or_index), &next);
-                if (result < 0) {
-                    UPDATE_MISS_STATS(FOR_ITER);
-                    assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
-                    JUMP_TO_PREDICTED(FOR_ITER);
-                }
-                if (result == 0) {
-                    null_or_index = PyStackRef_TagIndex(-1);
-                    JUMPBY(oparg + 1);
-                    window[1] = null_or_index;
-                    DISPATCH();
-                }
-                #else
                 next = PyStackRef_FromPyObjectNew(PyList_GET_ITEM(list_o, PyStackRef_UntagIndex(null_or_index)));
-                #endif
                 null_or_index = PyStackRef_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             window[1] = null_or_index;
@@ -9783,23 +9739,11 @@
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
-                #ifdef Py_GIL_DISABLED
-                if (!_PyObject_IsUniquelyReferenced((PyObject *)r)) {
-                    UPDATE_MISS_STATS(FOR_ITER);
-                    assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
-                    JUMP_TO_PREDICTED(FOR_ITER);
-                }
-                #endif
             }
             // _ITER_JUMP_RANGE
             {
                 _PyRangeIterObject *r = (_PyRangeIterObject *)PyStackRef_AsPyObjectBorrow(iter);
                 assert(Py_TYPE(r) == &PyRangeIter_Type);
-                #ifdef Py_GIL_DISABLED
-                #ifndef Py_GC  // reference counts are constant under Py_GC
-                assert(_PyObject_IsUniquelyReferenced((PyObject *)r));
-                #endif
-                #endif
                 STAT_INC(FOR_ITER, hit);
                 if (r->len <= 0) {
                     JUMPBY(oparg + 1);
@@ -9810,11 +9754,6 @@
             {
                 _PyRangeIterObject *r = (_PyRangeIterObject *)PyStackRef_AsPyObjectBorrow(iter);
                 assert(Py_TYPE(r) == &PyRangeIter_Type);
-                #ifdef Py_GIL_DISABLED
-                #ifndef Py_GC  // reference counts are constant under Py_GC
-                assert(_PyObject_IsUniquelyReferenced((PyObject *)r));
-                #endif
-                #endif
                 assert(r->len > 0);
                 long value = r->start;
                 r->start = value + r->step;
@@ -11671,12 +11610,7 @@
             (void)oparg;
             // _MAYBE_INSTRUMENT
             {
-                #ifdef Py_GIL_DISABLED
-
-                int check_instrumentation = 1;
-                #else
                 int check_instrumentation = (tstate->tracing == 0);
-                #endif
                 if (check_instrumentation) {
                     uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
                     uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
@@ -12581,19 +12515,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                #ifdef Py_GIL_DISABLED
-                int increfed = _Py_TryIncrefCompareStackRef(value_ptr, attr_o, &attr);
-                if (!increfed) {
-                    if (true) {
-                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
-                        UPDATE_MISS_STATS(LOAD_ATTR);
-                        assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                        JUMP_TO_PREDICTED(LOAD_ATTR);
-                    }
-                }
-                #else
                 attr = PyStackRef_FromPyObjectNew(attr_o);
-                #endif
                 STAT_INC(LOAD_ATTR, hit);
                 o = owner;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -12860,19 +12782,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                #ifdef Py_GIL_DISABLED
-                int increfed = _Py_TryIncrefCompareStackRef(&ep->me_value, attr_o, &attr);
-                if (!increfed) {
-                    if (true) {
-                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
-                        UPDATE_MISS_STATS(LOAD_ATTR);
-                        assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                        JUMP_TO_PREDICTED(LOAD_ATTR);
-                    }
-                }
-                #else
                 attr = PyStackRef_FromPyObjectNew(attr_o);
-                #endif
                 STAT_INC(LOAD_ATTR, hit);
                 o = owner;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -13292,17 +13202,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                #ifdef Py_GIL_DISABLED
-                int increfed = _Py_TryIncrefCompareStackRef(addr, attr_o, &attr);
-                if (!increfed) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                #else
                 attr = PyStackRef_FromPyObjectNew(attr_o);
-                #endif
                 STAT_INC(LOAD_ATTR, hit);
                 o = owner;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -13376,14 +13276,6 @@
                 }
                 PyDictKeysObject *dk = FT_ATOMIC_LOAD_PTR(dict->ma_keys);
                 assert(PyDict_CheckExact((PyObject *)dict));
-                #ifdef Py_GIL_DISABLED
-                if (!_Py_IsOwnedByCurrentThread((PyObject *)dict) && !_PyObject_GC_IS_SHARED(dict)) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                #endif
                 PyObject *attr_o;
                 if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries)) {
                     if (true) {
@@ -13421,19 +13313,7 @@
                     }
                 }
                 STAT_INC(LOAD_ATTR, hit);
-                #ifdef Py_GIL_DISABLED
-                int increfed = _Py_TryIncrefCompareStackRef(&ep->me_value, attr_o, &attr);
-                if (!increfed) {
-                    if (true) {
-                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
-                        UPDATE_MISS_STATS(LOAD_ATTR);
-                        assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                        JUMP_TO_PREDICTED(LOAD_ATTR);
-                    }
-                }
-                #else
                 attr = PyStackRef_FromPyObjectNew(attr_o);
-                #endif
                 o = owner;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             }
@@ -13954,16 +13834,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
                 }
-                #if Py_GIL_DISABLED
-                int increfed = _Py_TryIncrefCompareStackRef(&entries[index].me_value, res_o, &res);
-                if (!increfed) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                #else
                 res = PyStackRef_FromPyObjectNew(res_o);
-                #endif
                 STAT_INC(LOAD_GLOBAL, hit);
             }
             // _PUSH_NULL_CONDITIONAL
@@ -14018,16 +13889,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
                 }
-                #if Py_GIL_DISABLED
-                int increfed = _Py_TryIncrefCompareStackRef(&entries[index].me_value, res_o, &res);
-                if (!increfed) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                #else
                 res = PyStackRef_FromPyObjectNew(res_o);
-                #endif
                 STAT_INC(LOAD_GLOBAL, hit);
             }
             // _PUSH_NULL_CONDITIONAL
@@ -16235,12 +16097,7 @@
             (void)oparg;
             // _MAYBE_INSTRUMENT
             {
-                #ifdef Py_GIL_DISABLED
-
-                int check_instrumentation = 1;
-                #else
                 int check_instrumentation = (tstate->tracing == 0);
-                #endif
                 if (check_instrumentation) {
                     uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
                     uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);

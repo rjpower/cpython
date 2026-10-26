@@ -1986,45 +1986,7 @@ sys_getsizeof_impl(PyObject *module, PyObject *o, PyObject *dflt)
     return PyLong_FromSize_t(size);
 }
 
-#ifndef Py_GC
-/* Under Py_GC nothing is counted, so sys.getrefcount() does not exist. */
 
-/*[clinic input]
-sys.getrefcount -> Py_ssize_t
-
-    object:  object
-    /
-
-Return the reference count of object.
-
-The count returned is generally one higher than you might expect,
-because it includes the (temporary) reference as an argument to
-getrefcount().
-[clinic start generated code]*/
-
-static Py_ssize_t
-sys_getrefcount_impl(PyObject *module, PyObject *object)
-/*[clinic end generated code: output=5fd477f2264b85b2 input=bf474efd50a21535]*/
-{
-    return Py_REFCNT(object);
-}
-#endif /* !Py_GC */
-
-#ifdef Py_REF_DEBUG
-/*[clinic input]
-sys.gettotalrefcount -> Py_ssize_t
-[clinic start generated code]*/
-
-static Py_ssize_t
-sys_gettotalrefcount_impl(PyObject *module)
-/*[clinic end generated code: output=4103886cf17c25bc input=53b744faa5d2e4f6]*/
-{
-    /* It may make sense to return the total for the current interpreter
-       or have a second function that does so. */
-    return _Py_GetGlobalRefTotal();
-}
-
-#endif /* Py_REF_DEBUG */
 
 /*[clinic input]
 sys.getallocatedblocks -> Py_ssize_t
@@ -2185,10 +2147,6 @@ sys__debugmallocstats_impl(PyObject *module)
     Py_RETURN_NONE;
 }
 
-#ifdef Py_TRACE_REFS
-/* Defined in objects.c because it uses static globals in that file */
-extern PyObject *_Py_GetObjects(PyObject *, PyObject *);
-#endif
 
 
 /*[clinic input]
@@ -2223,11 +2181,6 @@ static PyObject *
 sys__clear_internal_caches_impl(PyObject *module)
 /*[clinic end generated code: output=0ee128670a4966d6 input=253e741ca744f6e8]*/
 {
-#ifdef Py_GIL_DISABLED
-    if (_Py_ClearUnusedTLBC(_PyInterpreterState_GET()) < 0) {
-        return NULL;
-    }
-#endif
     PyType_ClearCache();
     Py_RETURN_NONE;
 }
@@ -2608,11 +2561,7 @@ static int
 sys__is_gil_enabled_impl(PyObject *module)
 /*[clinic end generated code: output=57732cf53f5b9120 input=7e9c47f15a00e809]*/
 {
-#ifdef Py_GIL_DISABLED
-    return _PyEval_IsGILEnabled(_PyThreadState_GET());
-#else
     return 1;
-#endif
 }
 
 
@@ -2870,9 +2819,6 @@ static PyMethodDef sys_methods[] = {
     SYS_GETUNICODEINTERNEDSIZE_METHODDEF
     SYS_GETFILESYSTEMENCODING_METHODDEF
     SYS_GETFILESYSTEMENCODEERRORS_METHODDEF
-#ifdef Py_TRACE_REFS
-    {"getobjects", _Py_GetObjects, METH_VARARGS},
-#endif
     SYS_GETTOTALREFCOUNT_METHODDEF
     SYS_GETREFCOUNT_METHODDEF
     SYS_GETRECURSIONLIMIT_METHODDEF
@@ -3547,16 +3493,7 @@ set_flags_from_config(PyInterpreterState *interp, PyObject *flags)
     SetFlag(config->warn_default_encoding);
     SetFlagObj(PyBool_FromLong(config->safe_path));
     SetFlag(config->int_max_str_digits);
-#ifdef Py_GIL_DISABLED
-    if (config->enable_gil == _PyConfig_GIL_DEFAULT) {
-        SetFlagObj(Py_NewRef(Py_None));
-    }
-    else {
-        SetFlag(config->enable_gil);
-    }
-#else
     SetFlagObj(PyLong_FromLong(1));
-#endif
     SetFlag(config->thread_inherit_context);
     SetFlag(config->context_aware_warnings);
     SetFlag(config->lazy_imports);
@@ -3767,11 +3704,7 @@ make_abi_info(void)
     }
     Py_DECREF(value);
 
-#ifdef Py_GIL_DISABLED
-    value = Py_True;
-#else
     value = Py_False;
-#endif
     if (PyDict_SetItem(abi_info, &_Py_ID(free_threaded), value) < 0) {
         goto error;
     }
@@ -4336,9 +4269,6 @@ _PySys_Create(PyThreadState *tstate, PyObject **sysmod_p)
     if (sysmod == NULL) {
         return _PyStatus_ERR("failed to create a module object");
     }
-#ifdef Py_GIL_DISABLED
-    PyUnstable_Module_SetGIL(sysmod, Py_MOD_GIL_NOT_USED);
-#endif
 
     PyModule_AddIntMacro(sysmod, EXIT_SUCCESS);
     PyModule_AddIntMacro(sysmod, EXIT_FAILURE);

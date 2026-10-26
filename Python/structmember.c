@@ -99,16 +99,7 @@ PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
     case _Py_T_OBJECT:
         v = FT_ATOMIC_LOAD_PTR(*(PyObject **) addr);
         if (v != NULL) {
-#ifdef Py_GIL_DISABLED
-            if (!_Py_TryIncrefCompare((PyObject **) addr, v)) {
-                Py_BEGIN_CRITICAL_SECTION((PyObject *) obj_addr);
-                v = FT_ATOMIC_LOAD_PTR(*(PyObject **) addr);
-                Py_XINCREF(v);
-                Py_END_CRITICAL_SECTION();
-            }
-#else
             Py_INCREF(v);
-#endif
         }
         if (v == NULL) {
             v = Py_None;
@@ -116,18 +107,7 @@ PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
         break;
     case Py_T_OBJECT_EX:
         v = member_get_object(addr, obj_addr, l);
-#ifndef Py_GIL_DISABLED
         Py_XINCREF(v);
-#else
-        if (v != NULL) {
-            if (!_Py_TryIncrefCompare((PyObject **) addr, v)) {
-                Py_BEGIN_CRITICAL_SECTION((PyObject *) obj_addr);
-                v = member_get_object(addr, obj_addr, l);
-                Py_XINCREF(v);
-                Py_END_CRITICAL_SECTION();
-            }
-        }
-#endif
         break;
     case Py_T_LONGLONG:
         v = PyLong_FromLongLong(FT_ATOMIC_LOAD_LLONG_RELAXED(*(long long *)addr));

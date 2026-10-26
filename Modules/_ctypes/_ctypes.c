@@ -975,9 +975,6 @@ CDataType_from_buffer_copy_impl(PyObject *type, PyTypeObject *cls,
 
     result = generic_pycdata_new(st, (PyTypeObject *)type, NULL, NULL);
     if (result != NULL) {
-#ifndef Py_GC  // reference counts are constant under Py_GC
-        assert(_PyObject_IsUniquelyReferenced(result));
-#endif
         memcpy(((CDataObject *) result)->b_ptr, (char *)buffer->buf + offset, info->size);
     }
     return result;
@@ -3262,9 +3259,6 @@ PyCData_MallocBuffer(CDataObject *obj, StgInfo *info)
      * used in constructors and therefore does not have concurrent
      * access.
      */
-#ifndef Py_GC  // reference counts are constant under Py_GC
-   assert (Py_REFCNT(obj) == 1);
-#endif
    assert(stginfo_get_dict_final(info) == 1);
 
     if ((size_t)info->size <= sizeof(obj->b_value)) {
@@ -3613,13 +3607,7 @@ generic_pycdata_new(ctypes_state *st,
 static inline void
 atomic_xsetref(PyObject **field, PyObject *value)
 {
-#ifdef Py_GIL_DISABLED
-    PyObject *old = *field;
-    _Py_atomic_store_ptr(field, value);
-    Py_XDECREF(old);
-#else
     Py_XSETREF(*field, value);
-#endif
 }
 /*
     This function atomically loads the reference from *field, and
@@ -3630,21 +3618,7 @@ atomic_xsetref(PyObject **field, PyObject *value)
 static inline PyObject *
 atomic_xgetref(PyObject *obj, PyObject **field)
 {
-#ifdef Py_GIL_DISABLED
-    PyObject *value = _Py_atomic_load_ptr(field);
-    if (value == NULL) {
-        return NULL;
-    }
-    if (_Py_TryIncrefCompare(field, value)) {
-        return value;
-    }
-    Py_BEGIN_CRITICAL_SECTION(obj);
-    value = Py_XNewRef(*field);
-    Py_END_CRITICAL_SECTION();
-    return value;
-#else
     return Py_XNewRef(*field);
-#endif
 }
 
 static int

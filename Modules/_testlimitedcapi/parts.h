@@ -4,14 +4,11 @@
 // Always enable assertions
 #undef NDEBUG
 
-#include "pyconfig.h"   // Py_GIL_DISABLED
 
 // Use the limited C API
-#ifdef Py_GIL_DISABLED
-   // Cannot test the limited C API
-#elif !defined(Py_LIMITED_API)
-   // Need limited C API version 3.5 for PyModule_AddFunctions()
-#  define Py_LIMITED_API 0x03050000
+#if !defined(Py_LIMITED_API)
+// Need limited C API version 3.5 for PyModule_AddFunctions()
+#define Py_LIMITED_API 0x03050000
 #endif
 
 // Make sure that the internal C API cannot be used.

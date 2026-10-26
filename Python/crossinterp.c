@@ -348,11 +348,9 @@ _xidata_clear(_PyXIData_t *xidata)
         }
         xidata->data = NULL;
     }
-#ifdef Py_GC
     if (xidata->obj != NULL) {
         _PyGC_RemoveRoot(&xidata->obj_root);
     }
-#endif
     Py_CLEAR(xidata->obj);
 }
 
@@ -370,9 +368,7 @@ _PyXIData_Init(_PyXIData_t *xidata,
         assert(interp != NULL);
         // released in _PyXIData_Clear()
         xidata->obj = Py_NewRef(obj);
-#ifdef Py_GC
         _PyGC_AddRoot(&xidata->obj_root, &xidata->obj, 1);
-#endif
     }
     // Ideally every object would know its owning interpreter.
     // Until then, we have to rely on the caller to identify it
@@ -965,15 +961,8 @@ get_script_xidata(PyThreadState *tstate, PyObject *obj, int pure,
             }
             goto error;
         }
-#ifdef Py_GIL_DISABLED
-        // Don't immortalize code constants to avoid memory leaks.
-        ((_PyThreadStateImpl *)tstate)->suppress_co_const_immortalization++;
-#endif
         code = Py_CompileStringExFlags(
                     script, filename, Py_file_input, &cf, optimize);
-#ifdef Py_GIL_DISABLED
-        ((_PyThreadStateImpl *)tstate)->suppress_co_const_immortalization--;
-#endif
         Py_XDECREF(ref);
         if (code == NULL) {
             goto error;

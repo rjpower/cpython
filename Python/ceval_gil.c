@@ -73,11 +73,6 @@ copy_eval_breaker_bits(uintptr_t *from, uintptr_t *to, uintptr_t mask)
 static inline void
 update_eval_breaker_for_thread(PyInterpreterState *interp, PyThreadState *tstate)
 {
-#ifdef Py_GIL_DISABLED
-    // Free-threaded builds eagerly update the eval_breaker on *all* threads as
-    // needed, so this function doesn't apply.
-    return;
-#endif
 
     int32_t npending = _Py_atomic_load_int32_relaxed(
         &interp->ceval.pending.npending);
@@ -229,14 +224,6 @@ drop_gil(PyInterpreterState *interp, PyThreadState *tstate, int final_release)
 
     assert(final_release || tstate != NULL);
     struct _gil_runtime_state *gil = ceval->gil;
-#ifdef Py_GIL_DISABLED
-    // Check if we have the GIL before dropping it. tstate will be NULL if
-    // take_gil() detected that this thread has been destroyed, in which case
-    // we know we have the GIL.
-    if (tstate != NULL && !tstate->holds_gil) {
-        return;
-    }
-#endif
     if (!_Py_atomic_load_int_relaxed(&gil->locked)) {
         Py_FatalError("drop_gil: GIL is not locked");
     }
@@ -311,11 +298,6 @@ take_gil(PyThreadState *tstate)
     assert(_PyThreadState_CheckConsistency(tstate));
     PyInterpreterState *interp = tstate->interp;
     struct _gil_runtime_state *gil = interp->ceval.gil;
-#ifdef Py_GIL_DISABLED
-    if (!_Py_atomic_load_int_relaxed(&gil->enabled)) {
-        return;
-    }
-#endif
 
     /* Check that _PyEval_InitThreads() was called to create the lock */
     assert(gil_created(gil));
@@ -365,16 +347,6 @@ take_gil(PyThreadState *tstate)
         }
     }
 
-#ifdef Py_GIL_DISABLED
-    if (!_Py_atomic_load_int_relaxed(&gil->enabled)) {
-        // Another thread disabled the GIL between our check above and
-        // now. Don't take the GIL, signal any other waiting threads, and
-        // return.
-        COND_SIGNAL(gil->cond);
-        MUTEX_UNLOCK(gil->mutex);
-        return;
-    }
-#endif
 
 #ifdef FORCE_SWITCHING
     /* This mutex must be taken before modifying gil->last_holder:
@@ -490,10 +462,6 @@ static void
 init_own_gil(PyInterpreterState *interp, struct _gil_runtime_state *gil)
 {
     assert(!gil_created(gil));
-#ifdef Py_GIL_DISABLED
-    const PyConfig *config = _PyInterpreterState_GetConfig(interp);
-    gil->enabled = config->enable_gil == _PyConfig_GIL_ENABLE ? INT_MAX : 0;
-#endif
     create_gil(gil);
     assert(gil_created(gil));
     interp->ceval.gil = gil;
@@ -677,7 +645,6 @@ _PyEval_SignalReceived(void)
 }
 
 
-#ifndef Py_GIL_DISABLED
 static void
 signal_active_thread(PyInterpreterState *interp, uintptr_t bit)
 {
@@ -695,7 +662,6 @@ signal_active_thread(PyInterpreterState *interp, uintptr_t bit)
     }
     MUTEX_UNLOCK(gil->mutex);
 }
-#endif
 
 
 /* Mechanism whereby asynchronously executing callbacks (e.g. UNIX
@@ -804,11 +770,7 @@ _PyEval_AddPendingCall(PyInterpreterState *interp,
         _Py_set_eval_breaker_bit(_PyRuntime.main_tstate, _PY_CALLS_TO_DO_BIT);
     }
     else {
-#ifdef Py_GIL_DISABLED
-        _Py_set_eval_breaker_bit_all(interp, _PY_CALLS_TO_DO_BIT);
-#else
         signal_active_thread(interp, _PY_CALLS_TO_DO_BIT);
-#endif
     }
 
     return result;
@@ -898,21 +860,13 @@ finally:
 static void
 signal_pending_calls(PyThreadState *tstate, PyInterpreterState *interp)
 {
-#ifdef Py_GIL_DISABLED
-    _Py_set_eval_breaker_bit_all(interp, _PY_CALLS_TO_DO_BIT);
-#else
     _Py_set_eval_breaker_bit(tstate, _PY_CALLS_TO_DO_BIT);
-#endif
 }
 
 static void
 unsignal_pending_calls(PyThreadState *tstate, PyInterpreterState *interp)
 {
-#ifdef Py_GIL_DISABLED
-    _Py_unset_eval_breaker_bit_all(interp, _PY_CALLS_TO_DO_BIT);
-#else
     _Py_unset_eval_breaker_bit(tstate, _PY_CALLS_TO_DO_BIT);
-#endif
 }
 
 static void
@@ -1083,121 +1037,6 @@ _PyEval_InitState(PyInterpreterState *interp)
     _gil_initialize(&interp->_gil);
 }
 
-#ifdef Py_GIL_DISABLED
-int
-_PyEval_EnableGILTransient(PyThreadState *tstate)
-{
-    const PyConfig *config = _PyInterpreterState_GetConfig(tstate->interp);
-    if (config->enable_gil != _PyConfig_GIL_DEFAULT) {
-        return 0;
-    }
-    struct _gil_runtime_state *gil = tstate->interp->ceval.gil;
-
-    int enabled = _Py_atomic_load_int_relaxed(&gil->enabled);
-    if (enabled == INT_MAX) {
-        // The GIL is already enabled permanently.
-        return 0;
-    }
-    if (enabled == INT_MAX - 1) {
-        Py_FatalError("Too many transient requests to enable the GIL");
-    }
-    if (enabled > 0) {
-        // If enabled is nonzero, we know we hold the GIL. This means that no
-        // other threads are attached, and nobody else can be concurrently
-        // mutating it.
-        _Py_atomic_store_int_relaxed(&gil->enabled, enabled + 1);
-        return 0;
-    }
-
-    // Enabling the GIL changes what it means to be an "attached" thread. To
-    // safely make this transition, we:
-    // 1. Detach the current thread.
-    // 2. Stop the world to detach (and suspend) all other threads.
-    // 3. Enable the GIL, if nobody else did between our check above and when
-    //    our stop-the-world begins.
-    // 4. Start the world.
-    // 5. Attach the current thread. Other threads may attach and hold the GIL
-    //    before this thread, which is harmless.
-    _PyThreadState_Detach(tstate);
-
-    // This could be an interpreter-local stop-the-world in situations where we
-    // know that this interpreter's GIL is not shared, and that it won't become
-    // shared before the stop-the-world begins. For now, we always stop all
-    // interpreters for simplicity.
-    _PyEval_StopTheWorldAll(&_PyRuntime);
-
-    enabled = _Py_atomic_load_int_relaxed(&gil->enabled);
-    int this_thread_enabled = enabled == 0;
-    _Py_atomic_store_int_relaxed(&gil->enabled, enabled + 1);
-
-    _PyEval_StartTheWorldAll(&_PyRuntime);
-    _PyThreadState_Attach(tstate);
-
-    return this_thread_enabled;
-}
-
-int
-_PyEval_EnableGILPermanent(PyThreadState *tstate)
-{
-    const PyConfig *config = _PyInterpreterState_GetConfig(tstate->interp);
-    if (config->enable_gil != _PyConfig_GIL_DEFAULT) {
-        return 0;
-    }
-
-    struct _gil_runtime_state *gil = tstate->interp->ceval.gil;
-    assert(current_thread_holds_gil(gil, tstate));
-
-    int enabled = _Py_atomic_load_int_relaxed(&gil->enabled);
-    if (enabled == INT_MAX) {
-        return 0;
-    }
-
-    _Py_atomic_store_int_relaxed(&gil->enabled, INT_MAX);
-    return 1;
-}
-
-int
-_PyEval_DisableGIL(PyThreadState *tstate)
-{
-    const PyConfig *config = _PyInterpreterState_GetConfig(tstate->interp);
-    if (config->enable_gil != _PyConfig_GIL_DEFAULT) {
-        return 0;
-    }
-
-    struct _gil_runtime_state *gil = tstate->interp->ceval.gil;
-    assert(current_thread_holds_gil(gil, tstate));
-
-    int enabled = _Py_atomic_load_int_relaxed(&gil->enabled);
-    if (enabled == INT_MAX) {
-        return 0;
-    }
-
-    assert(enabled >= 1);
-    enabled--;
-
-    // Disabling the GIL is much simpler than enabling it, since we know we are
-    // the only attached thread. Other threads may start free-threading as soon
-    // as this store is complete, if it sets gil->enabled to 0.
-    _Py_atomic_store_int_relaxed(&gil->enabled, enabled);
-
-    if (enabled == 0) {
-        // We're attached, so we know the GIL will remain disabled until at
-        // least the next time we detach, which must be after this function
-        // returns.
-        //
-        // Drop the GIL, which will wake up any threads waiting in take_gil()
-        // and let them resume execution without the GIL.
-        drop_gil_impl(tstate, gil);
-
-        // If another thread asked us to drop the GIL, they should be
-        // free-threading by now. Remove any such request so we have a clean
-        // slate if/when the GIL is enabled again.
-        _Py_unset_eval_breaker_bit(tstate, _PY_GIL_DROP_REQUEST_BIT);
-        return 1;
-    }
-    return 0;
-}
-#endif
 
 #if defined(Py_REMOTE_DEBUG) && defined(Py_SUPPORTS_REMOTE_DEBUG)
 // Note that this function is inline to avoid creating a PLT entry
@@ -1388,17 +1227,6 @@ _Py_HandlePending(PyThreadState *tstate)
         }
     }
 
-#ifdef Py_GIL_DISABLED
-    /* Objects with refcounts to merge */
-    if ((breaker & _PY_EVAL_EXPLICIT_MERGE_BIT) != 0) {
-        _Py_unset_eval_breaker_bit(tstate, _PY_EVAL_EXPLICIT_MERGE_BIT);
-        _Py_brc_merge_refcounts(tstate);
-    }
-    /* Process deferred memory frees held by QSBR */
-    if (_Py_qsbr_should_process(((_PyThreadStateImpl *)tstate)->qsbr)) {
-        _PyMem_ProcessDelayed(tstate);
-    }
-#endif
 
     /* GC scheduled to run */
     if ((breaker & _PY_GC_SCHEDULED_BIT) != 0) {

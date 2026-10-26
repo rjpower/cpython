@@ -320,12 +320,8 @@ make_exec(PyCodeObject *co)
     shared->kind = FB_COUNTER;
     shared->state = FB_OFF;
     shared->counter = initial_unreachable_backoff_counter();
-#ifdef Py_GIL_DISABLED
-    int enable_counters = 0;
-#else
     int enable_counters = ENABLE_SPECIALIZATION
         && _PyInterpreterState_GET()->opt_config.specialization_enabled;
-#endif
     _Py_BackoffCounter counter = enable_counters
         ? adaptive_counter_warmup() : initial_unreachable_backoff_counter();
     const uint32_t *fbinit = _PyCode_FBINIT(co);

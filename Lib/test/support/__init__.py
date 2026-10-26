@@ -1069,7 +1069,7 @@ Py_SHAPES = bool(sysconfig.get_config_var('Py_SHAPES'))
 # A tracing collector owns memory instead of reference counts (--with-gc):
 # an object dies at a collection, not when its last reference goes away,
 # and the conservative scan of C stacks can keep garbage alive.
-Py_GC = bool(sysconfig.get_config_var('Py_GC'))
+Py_GC = True  # the tracing collector is the only build
 
 def requires_refcounting(test):
     """Skip a test that needs reference counts: sys.getrefcount(), or an

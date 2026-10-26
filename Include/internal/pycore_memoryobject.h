@@ -14,7 +14,6 @@ PyObject *
 _PyMemoryView_FromBufferProc(PyObject *v, int flags,
                              getbufferproc bufferproc);
 
-#ifdef Py_GC
 /* Would releasing a buffer that exporter exported run Python code: does the
  * exporter's class define __release_buffer__, or is it the wrapper of a
  * buffer that __buffer__ returned?  Then the collector releases a dead
@@ -28,7 +27,6 @@ extern int _PyMemoryView_DeallocReleasesWithCode(PyObject *op);
 
 /* Make that release now: what the dealloc would do, apart from freeing. */
 extern void _PyMemoryView_ReleaseForDealloc(PyObject *op);
-#endif
 
 #ifdef __cplusplus
 }

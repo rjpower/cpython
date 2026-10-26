@@ -35,53 +35,14 @@ static inline PyObject* _Py_FROM_GC(PyGC_Head *gc) {
  * Reading the bits requires using a relaxed load, but does not require holding
  * the per-object lock.
  */
-#ifdef Py_GIL_DISABLED
-#  define _PyGC_BITS_TRACKED        (1<<0)     // Tracked by the GC
-#  define _PyGC_BITS_FINALIZED      (1<<1)     // tp_finalize was called
-#  define _PyGC_BITS_UNREACHABLE    (1<<2)
-#  define _PyGC_BITS_FROZEN         (1<<3)
-#  define _PyGC_BITS_SHARED         (1<<4)
-#  define _PyGC_BITS_ALIVE          (1<<5)    // Reachable from a known root.
-#  define _PyGC_BITS_DEFERRED       (1<<6)    // Use deferred reference counting
-#endif
 
-#ifdef Py_GIL_DISABLED
-
-static inline void
-_PyObject_SET_GC_BITS(PyObject *op, uint8_t new_bits)
-{
-    uint8_t bits = _Py_atomic_load_uint8_relaxed(&op->ob_gc_bits);
-    _Py_atomic_store_uint8_relaxed(&op->ob_gc_bits, bits | new_bits);
-}
-
-static inline int
-_PyObject_HAS_GC_BITS(PyObject *op, uint8_t bits)
-{
-    return (_Py_atomic_load_uint8_relaxed(&op->ob_gc_bits) & bits) != 0;
-}
-
-static inline void
-_PyObject_CLEAR_GC_BITS(PyObject *op, uint8_t bits_to_clear)
-{
-    uint8_t bits = _Py_atomic_load_uint8_relaxed(&op->ob_gc_bits);
-    _Py_atomic_store_uint8_relaxed(&op->ob_gc_bits, bits & ~bits_to_clear);
-}
-
-#endif
 
 /* True if the object is currently tracked by the GC. */
 static inline int _PyObject_GC_IS_TRACKED(PyObject *op) {
-#if defined(Py_GC)
-    /* Under Py_GC there are no generation lists.  The bit survives so that a
+    /* There are no generation lists.  The bit survives so that a
        conservative root can tell an object still being built (untracked)
        from one whose fields are all set (Python/gc_live.c). */
     return (op->ob_flags & _Py_GC_TRACKED_FLAG) != 0;
-#elif defined(Py_GIL_DISABLED)
-    return _PyObject_HAS_GC_BITS(op, _PyGC_BITS_TRACKED);
-#else
-    PyGC_Head *gc = _Py_AS_GC(op);
-    return (gc->_gc_next != 0);
-#endif
 }
 #define _PyObject_GC_IS_TRACKED(op) _PyObject_GC_IS_TRACKED(_Py_CAST(PyObject*, op))
 
@@ -97,25 +58,6 @@ static inline int _PyObject_GC_MAY_BE_TRACKED(PyObject *obj) {
     return 1;
 }
 
-#ifdef Py_GIL_DISABLED
-
-/* True if memory the object references is shared between
- * multiple threads and needs special purpose when freeing
- * those references due to the possibility of in-flight
- * lock-free reads occurring.  The object is responsible
- * for calling _PyMem_FreeDelayed on the referenced
- * memory. */
-static inline int _PyObject_GC_IS_SHARED(PyObject *op) {
-    return _PyObject_HAS_GC_BITS(op, _PyGC_BITS_SHARED);
-}
-#define _PyObject_GC_IS_SHARED(op) _PyObject_GC_IS_SHARED(_Py_CAST(PyObject*, op))
-
-static inline void _PyObject_GC_SET_SHARED(PyObject *op) {
-    _PyObject_SET_GC_BITS(op, _PyGC_BITS_SHARED);
-}
-#define _PyObject_GC_SET_SHARED(op) _PyObject_GC_SET_SHARED(_Py_CAST(PyObject*, op))
-
-#endif
 
 /* Bit flags for _gc_prev */
 /* Bit 0 is set when tp_finalize is called */
@@ -169,34 +111,13 @@ static inline void _PyGCHead_SET_PREV(PyGC_Head *gc, PyGC_Head *prev) {
 }
 
 static inline int _PyGC_FINALIZED(PyObject *op) {
-#if defined(Py_GC)
     return (op->ob_flags & _Py_GC_FINALIZED_FLAG) != 0;
-#elif defined(Py_GIL_DISABLED)
-    return _PyObject_HAS_GC_BITS(op, _PyGC_BITS_FINALIZED);
-#else
-    PyGC_Head *gc = _Py_AS_GC(op);
-    return ((gc->_gc_prev & _PyGC_PREV_MASK_FINALIZED) != 0);
-#endif
 }
 static inline void _PyGC_SET_FINALIZED(PyObject *op) {
-#if defined(Py_GC)
     op->ob_flags |= _Py_GC_FINALIZED_FLAG;
-#elif defined(Py_GIL_DISABLED)
-    _PyObject_SET_GC_BITS(op, _PyGC_BITS_FINALIZED);
-#else
-    PyGC_Head *gc = _Py_AS_GC(op);
-    gc->_gc_prev |= _PyGC_PREV_MASK_FINALIZED;
-#endif
 }
 static inline void _PyGC_CLEAR_FINALIZED(PyObject *op) {
-#if defined(Py_GC)
     op->ob_flags &= ~_Py_GC_FINALIZED_FLAG;
-#elif defined(Py_GIL_DISABLED)
-    _PyObject_CLEAR_GC_BITS(op, _PyGC_BITS_FINALIZED);
-#else
-    PyGC_Head *gc = _Py_AS_GC(op);
-    gc->_gc_prev &= ~_PyGC_PREV_MASK_FINALIZED;
-#endif
 }
 
 extern void _Py_ScheduleGC(PyThreadState *tstate);
@@ -225,26 +146,7 @@ static inline void _PyObject_GC_TRACK(
     _PyObject_ASSERT_FROM(op, !_PyObject_GC_IS_TRACKED(op),
                           "object already tracked by the garbage collector",
                           filename, lineno, __func__);
-#if defined(Py_GC)
     op->ob_flags |= _Py_GC_TRACKED_FLAG;
-#elif defined(Py_GIL_DISABLED)
-    _PyObject_SET_GC_BITS(op, _PyGC_BITS_TRACKED);
-#else
-    PyGC_Head *gc = _Py_AS_GC(op);
-    _PyObject_ASSERT_FROM(op,
-                          (gc->_gc_prev & _PyGC_PREV_MASK_COLLECTING) == 0,
-                          "object is in generation which is garbage collected",
-                          filename, lineno, __func__);
-
-    struct _gc_runtime_state *gcstate = &_PyInterpreterState_GET()->gc;
-    PyGC_Head *generation0 = gcstate->generation0;
-    PyGC_Head *last = (PyGC_Head*)(generation0->_gc_prev);
-    _PyGCHead_SET_NEXT(last, gc);
-    _PyGCHead_SET_PREV(gc, last);
-    _PyGCHead_SET_NEXT(gc, generation0);
-    generation0->_gc_prev = (uintptr_t)gc;
-    gcstate->heap_size++;
-#endif
 }
 
 /* Tell the GC to stop tracking this object.
@@ -268,21 +170,7 @@ static inline void _PyObject_GC_UNTRACK(
                           "object not tracked by the garbage collector",
                           filename, lineno, __func__);
 
-#if defined(Py_GC)
     op->ob_flags &= ~_Py_GC_TRACKED_FLAG;
-#elif defined(Py_GIL_DISABLED)
-    _PyObject_CLEAR_GC_BITS(op, _PyGC_BITS_TRACKED);
-#else
-    PyGC_Head *gc = _Py_AS_GC(op);
-    PyGC_Head *prev = _PyGCHead_PREV(gc);
-    PyGC_Head *next = _PyGCHead_NEXT(gc);
-    _PyGCHead_SET_NEXT(prev, next);
-    _PyGCHead_SET_PREV(next, prev);
-    gc->_gc_next = 0;
-    gc->_gc_prev &= _PyGC_PREV_MASK_FINALIZED;
-    struct _gc_runtime_state *gcstate = &_PyInterpreterState_GET()->gc;
-    gcstate->heap_size--;
-#endif
 }
 
 
@@ -369,10 +257,6 @@ PyAPI_FUNC(int) _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visi
     } while (0)
 PyAPI_FUNC(int) _PyGC_VisitStackRef(union _PyStackRef *ref, visitproc visit, void *arg);
 
-#ifdef Py_GIL_DISABLED
-extern void _PyGC_VisitObjectsWorldStopped(PyInterpreterState *interp,
-                                           gcvisitobjects_t callback, void *arg);
-#endif
 
 #ifdef __cplusplus
 }

@@ -85,12 +85,6 @@ slot_tp_del(PyObject *self)
 {
     PyObject *del, *res;
 
-#ifndef Py_GC
-    /* Temporarily resurrect the object.  Under Py_GC there is no count: the
-       collector resurrects the object around the call. */
-    assert(Py_REFCNT(self) == 0);
-    Py_SET_REFCNT(self, 1);
-#endif
 
     /* Save the current exception, if any. */
     PyObject *exc = PyErr_GetRaisedException();
@@ -119,25 +113,6 @@ slot_tp_del(PyObject *self)
     /* Restore the saved exception. */
     PyErr_SetRaisedException(exc);
 
-#ifndef Py_GC
-    /* Undo the temporary resurrection; can't use DECREF here, it would
-     * cause a recursive call.
-     */
-    assert(Py_REFCNT(self) > 0);
-    Py_SET_REFCNT(self, Py_REFCNT(self) - 1);
-    if (Py_REFCNT(self) == 0) {
-        /* this is the normal path out */
-        return;
-    }
-
-    /* __del__ resurrected it!  Make it look like the original Py_DECREF
-     * never happened.
-     */
-    {
-        _Py_ResurrectReference(self);
-    }
-    assert(!PyType_IS_GC(Py_TYPE(self)) || PyObject_GC_IsTracked(self));
-#endif
 }
 
 static PyObject *

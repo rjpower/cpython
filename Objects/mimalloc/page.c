@@ -425,12 +425,6 @@ void _mi_page_abandon(mi_page_t* page, mi_page_queue_t* pq) {
 
   mi_heap_t* pheap = mi_page_heap(page);
 
-#ifdef Py_GIL_DISABLED
-  if (page->qsbr_node.next != NULL) {
-    // CPython: remove from the QSBR queue, but keep the goal
-    llist_remove(&page->qsbr_node);
-  }
-#endif
 
   // remove from our page list
   mi_segments_tld_t* segments_tld = &pheap->tld->segments;
@@ -492,10 +486,6 @@ void _mi_page_free(mi_page_t* page, mi_page_queue_t* pq, bool force) {
 
   mi_heap_t* heap = mi_page_heap(page);
 
-#ifdef Py_GIL_DISABLED
-  mi_assert_internal(page->qsbr_goal == 0);
-  mi_assert_internal(page->qsbr_node.next == NULL);
-#endif
 
   // remove from the page list
   // (no need to do _mi_heap_delayed_free first as all blocks are already free)
@@ -564,9 +554,6 @@ void _mi_heap_collect_retired(mi_heap_t* heap, bool force) {
       if (mi_page_all_free(page)) {
         page->retire_expire--;
         if (force || page->retire_expire == 0) {
-#ifdef Py_GIL_DISABLED
-          mi_assert_internal(page->qsbr_goal == 0);
-#endif
           _PyMem_mi_page_maybe_free(page, pq, force);
         }
         else {
@@ -781,10 +768,6 @@ static void mi_page_init(mi_heap_t* heap, mi_page_t* page, size_t block_size, mi
   mi_assert_internal(page->xthread_free == 0);
   mi_assert_internal(page->next == NULL);
   mi_assert_internal(page->prev == NULL);
-#ifdef Py_GIL_DISABLED
-  mi_assert_internal(page->qsbr_goal == 0);
-  mi_assert_internal(page->qsbr_node.next == NULL);
-#endif
   mi_assert_internal(page->retire_expire == 0);
   mi_assert_internal(!mi_page_has_aligned(page));
   #if (MI_PADDING || MI_ENCODE_FREELIST)

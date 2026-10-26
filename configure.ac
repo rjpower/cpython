@@ -1979,23 +1979,8 @@ AC_SUBST([ABI_THREAD])
 ABIFLAGS=""
 ABI_THREAD=""
 
-# Check for --disable-gil
-# --disable-gil
-AC_MSG_CHECKING([for --disable-gil])
-AC_ARG_ENABLE([gil],
-  [AS_HELP_STRING([--disable-gil], [enable support for running without the GIL (default is no)])],
-  [AS_VAR_IF([enable_gil], [yes], [disable_gil=no], [disable_gil=yes])], [disable_gil=no]
-)
-AC_MSG_RESULT([$disable_gil])
-
-if test "$disable_gil" = "yes"
-then
-  AC_DEFINE([Py_GIL_DISABLED], [1],
-            [Define if you want to disable the GIL])
-  # Add "t" for "threaded"
-  ABIFLAGS="${ABIFLAGS}t"
-  ABI_THREAD="t"
-fi
+# There is no free-threaded build (note 06, decision 4), so ABI_THREAD is
+# always empty; it stays for the install paths and sysconfig that name it.
 
 # Check for --with-pydebug
 AC_MSG_CHECKING([for --with-pydebug])
@@ -2013,54 +1998,12 @@ else AC_MSG_RESULT([no]); Py_DEBUG='false'
 fi],
 [AC_MSG_RESULT([no])])
 
-# Check for --with-trace-refs
-# --with-trace-refs
-AC_MSG_CHECKING([for --with-trace-refs])
-AC_ARG_WITH([trace-refs],
-  [AS_HELP_STRING([--with-trace-refs], [enable tracing references for debugging purpose (default is no)])],
-  [], [with_trace_refs=no]
-)
-AC_MSG_RESULT([$with_trace_refs])
-
-if test "$with_trace_refs" = "yes"
-then
-  AC_DEFINE([Py_TRACE_REFS], [1],
-            [Define if you want to enable tracing references for debugging purpose])
-fi
-
-if test "$disable_gil" = "yes" -a "$with_trace_refs" = "yes";
-then
-  AC_MSG_ERROR([--disable-gil cannot be used with --with-trace-refs])
-fi
-
-# Check for --with-gc
-AC_MSG_CHECKING([for --with-gc])
-AC_ARG_WITH([gc],
-  [AS_HELP_STRING([--with-gc], [let the tracing collector own memory instead of reference counting (experimental, default is no)])],
-  [], [with_gc=no]
-)
-AC_MSG_RESULT([$with_gc])
-
-if test "$with_gc" = "yes"
-then
-  if test "$disable_gil" = "yes"; then
-    AC_MSG_ERROR([--with-gc cannot be used with --disable-gil])
-  fi
-  if test "$with_trace_refs" = "yes"; then
-    AC_MSG_ERROR([--with-gc cannot be used with --with-trace-refs])
-  fi
-  case "$CFLAGS $CPPFLAGS" in
-    *Py_STACKREF_DEBUG*)
-      AC_MSG_ERROR([--with-gc cannot be used with Py_STACKREF_DEBUG]) ;;
-  esac
-  AC_DEFINE([Py_GC], [1],
-            [Define if the tracing collector owns memory and reference counting is off])
-  # The collector scans C stacks conservatively.  Zero-initialized locals
-  # leave fewer stale pointers in live frames, which keep garbage alive.
-  AX_CHECK_COMPILE_FLAG([-ftrivial-auto-var-init=zero], [
-    CFLAGS_NODIST="$CFLAGS_NODIST -ftrivial-auto-var-init=zero"
-  ], [], [-Werror])
-fi
+# The tracing collector owns memory (note 06, step 5).  It scans C stacks
+# conservatively, and zero-initialized locals leave fewer stale pointers in
+# live frames, which keep garbage alive.
+AX_CHECK_COMPILE_FLAG([-ftrivial-auto-var-init=zero], [
+  CFLAGS_NODIST="$CFLAGS_NODIST -ftrivial-auto-var-init=zero"
+], [], [-Werror])
 
 # Check for --enable-pystats
 AC_MSG_CHECKING([for --enable-pystats])
@@ -5539,11 +5482,8 @@ if test "$with_mimalloc" != no; then
   with_mimalloc=yes
   AC_DEFINE([WITH_MIMALLOC], [1], [Define if you want to compile in mimalloc memory allocator.])
   AC_SUBST([MIMALLOC_HEADERS], ['$(MIMALLOC_HEADERS)'])
-elif test "$disable_gil" = "yes"; then
-  AC_MSG_ERROR([--disable-gil requires mimalloc memory allocator (--with-mimalloc).])
-fi
-if test "$with_gc" = "yes" -a "$with_mimalloc" != yes; then
-  AC_MSG_ERROR([--with-gc requires mimalloc memory allocator (--with-mimalloc).])
+else
+  AC_MSG_ERROR([the tracing collector requires the mimalloc memory allocator (--with-mimalloc).])
 fi
 
 AC_MSG_RESULT([$with_mimalloc])
@@ -7036,7 +6976,6 @@ AC_C_BIGENDIAN
 #
 # * The Python implementation (always 'cpython-' for us)
 # * The major and minor version numbers
-# * --disable-gil (adds a 't')
 # * --with-pydebug (adds a 'd')
 #
 # Thus for example, Python 3.2 built with wide unicode, pydebug, and pymalloc,
@@ -7052,7 +6991,7 @@ AC_MSG_CHECKING([SOABI])
 SOABI='cpython-'`echo $VERSION | tr -d .`${ABIFLAGS}${SOABI_PLATFORM:+-$SOABI_PLATFORM}
 AC_MSG_RESULT([$SOABI])
 
-# Release build, debug build (Py_DEBUG), and trace refs build (Py_TRACE_REFS)
+# Release and debug (Py_DEBUG) builds
 # are ABI compatible
 if test "$Py_DEBUG" = 'true'; then
   # Similar to SOABI but remove "d" flag from ABIFLAGS
@@ -7996,8 +7935,6 @@ AC_ARG_WITH(
   [with_shapes=no])
 AC_MSG_RESULT([$with_shapes])
 AS_VAR_IF([with_shapes], [yes], [
-  AS_VAR_IF([disable_gil], [yes],
-    [AC_MSG_ERROR([--with-shapes is not supported with --disable-gil])])
   AC_DEFINE([Py_SHAPES], [1],
     [Define to guard instance attribute access on per-type shapes.])
 ])
@@ -8537,15 +8474,11 @@ AC_ARG_WITH([build-details-suffix],
     AS_VAR_IF(
       [with_build_details_suffix], [yes], [
         colocated_install=yes
-        threading_suffix=""
-        if [[ "$ABI_THREAD" = "t" ]]; then
-          threading_suffix=-free-threading
-        fi
         debug_suffix=""
         if [[ "$Py_DEBUG" = "true" ]]; then
           debug_suffix=-debug
         fi
-        BUILD_DETAILS=build-details.$MULTIARCH$threading_suffix$debug_suffix.json
+        BUILD_DETAILS=build-details.$MULTIARCH$debug_suffix.json
       ], [
         BUILD_DETAILS=build-details.$with_build_details_suffix.json
       ]

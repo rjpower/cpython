@@ -404,9 +404,6 @@ typedef struct {
                                    arbitrary object or NULL */
     PyObject *module;
     int flags;                  /* calling convention and such */
-#ifdef Py_GIL_DISABLED
-    PyMutex mutex;              /* critical section mutex */
-#endif
     uint8_t dict_final;
 
     /* pep3118 fields, pointers need PyMem_Free */

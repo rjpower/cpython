@@ -37,25 +37,8 @@ static PyObject* async_gen_athrow_new(PyAsyncGenObject *, PyObject *);
 #define _PyAsyncGenObject_CAST(op) \
     _Py_CAST(PyAsyncGenObject*, (op))
 
-#ifdef Py_GIL_DISABLED
-static bool
-gen_try_set_frame_state(PyGenObject *gen, int8_t *expected, int8_t state)
-{
-    if (*expected == FRAME_SUSPENDED_YIELD_FROM_LOCKED) {
-        // Wait for the in-progress gi_yieldfrom read to complete
-        _Py_yield();
-        *expected = _Py_atomic_load_int8_relaxed(&gen->gi_frame_state);
-        return false;
-    }
-    return _Py_atomic_compare_exchange_int8(&gen->gi_frame_state, expected, state);
-}
-
-# define _Py_GEN_TRY_SET_FRAME_STATE(gen, expected, state) \
-    gen_try_set_frame_state((gen), &(expected), (state))
-#else
 # define _Py_GEN_TRY_SET_FRAME_STATE(gen, expected, state) \
     ((gen)->gi_frame_state = (state), true)
-#endif
 
 
 static const char *NON_INIT_CORO_MSG = "can't send non-None value to a "
@@ -298,11 +281,9 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
     EVAL_CALL_STAT_INC(EVAL_CALL_GENERATOR);
     PyObject *result = _PyEval_EvalFrame(tstate, frame, exc);
     assert(tstate->exc_info == prev_exc_info);
-#ifndef Py_GIL_DISABLED
     assert(gen->gi_exc_state.previous_item == NULL);
     assert(frame->previous == NULL);
     assert(gen->gi_frame_state != FRAME_EXECUTING);
-#endif
 
     // The generator_return_kind field is used to distinguish between a
     // yield and a return from within _PyEval_EvalFrame(). Earlier versions
@@ -312,9 +293,7 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
 
     if (return_kind == GENERATOR_YIELD) {
         assert(result != NULL && !_PyErr_Occurred(tstate));
-#ifndef Py_GIL_DISABLED
         assert(FRAME_STATE_SUSPENDED(gen->gi_frame_state));
-#endif
         *presult = result;
         return PYGEN_NEXT;
     }
@@ -908,26 +887,11 @@ static PyObject *
 gen_getyieldfrom(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
-#ifdef Py_GIL_DISABLED
-    int8_t frame_state = _Py_atomic_load_int8_relaxed(&gen->gi_frame_state);
-    do {
-        if (frame_state != FRAME_SUSPENDED_YIELD_FROM &&
-            frame_state != FRAME_SUSPENDED_YIELD_FROM_LOCKED)
-        {
-            Py_RETURN_NONE;
-        }
-    } while (!_Py_GEN_TRY_SET_FRAME_STATE(gen, frame_state, FRAME_SUSPENDED_YIELD_FROM_LOCKED));
-
-    PyObject *result = PyStackRef_AsPyObjectNew(_PyGen_YieldFromRef(&gen->gi_iframe));
-    _Py_atomic_store_int8_release(&gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
-    return result;
-#else
     int8_t frame_state = gen->gi_frame_state;
     if (frame_state != FRAME_SUSPENDED_YIELD_FROM) {
         Py_RETURN_NONE;
     }
     return PyStackRef_AsPyObjectNew(_PyGen_YieldFromRef(&gen->gi_iframe));
-#endif
 }
 
 
@@ -1632,19 +1596,8 @@ typedef enum {
     AWAITABLE_STATE_CLOSED, /* closed */
 } AwaitableState;
 
-#ifdef Py_GIL_DISABLED
-static bool
-async_gen_try_set_state(int8_t *state, int8_t *expected, int8_t new_state)
-{
-    return _Py_atomic_compare_exchange_int8(state, expected, new_state);
-}
-
-# define _Py_ASYNC_GEN_TRY_SET_STATE(state, expected, new_state) \
-    async_gen_try_set_state(&(state), &(expected), (new_state))
-#else
 # define _Py_ASYNC_GEN_TRY_SET_STATE(state, expected, new_state) \
     ((state) = (new_state), true)
-#endif
 
 // Try to transition the async generator to the running state.
 // Returns false if it is already running.
@@ -1657,17 +1610,11 @@ async_gen_try_set_state(int8_t *state, int8_t *expected, int8_t new_state)
 static bool
 async_gen_try_claim_running(PyAsyncGenObject *agen)
 {
-#ifdef Py_GIL_DISABLED
-    int8_t expected = 0;
-    return _Py_atomic_compare_exchange_int8(&agen->ag_running_async,
-                                            &expected, 1);
-#else
     if (agen->ag_running_async) {
         return false;
     }
     agen->ag_running_async = 1;
     return true;
-#endif
 }
 
 
@@ -1738,17 +1685,11 @@ async_gen_init_hooks(PyAsyncGenObject *o)
     PyObject *finalizer;
     PyObject *firstiter;
 
-#ifdef Py_GIL_DISABLED
-    if (_Py_atomic_exchange_int8(&o->ag_hooks_inited, 1)) {
-        return 0;
-    }
-#else
     if (o->ag_hooks_inited) {
         return 0;
     }
 
     o->ag_hooks_inited = 1;
-#endif
 
     tstate = _PyThreadState_GET();
 

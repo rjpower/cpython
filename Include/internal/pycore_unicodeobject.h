@@ -119,9 +119,6 @@ _PyUnicodeWriter_CanWrite(_PyUnicodeWriter *writer)
     // Do not use _PyObject_IsUniquelyReferenced(): the caller can have its own
     // lock to prevent a writer from being used by two threads at the same
     // time.
-#ifndef Py_GC  // reference counts are constant under Py_GC
-    assert(Py_REFCNT(buffer) == 1);
-#endif
     assert(PyUnstable_Unicode_GET_CACHED_HASH(buffer) == -1);
     assert(!PyUnicode_CHECK_INTERNED(buffer));
     assert(!_Py_IsImmortal(buffer));

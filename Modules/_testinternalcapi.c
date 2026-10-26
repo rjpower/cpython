@@ -211,17 +211,6 @@ get_stack_margin(PyObject *self, PyObject *Py_UNUSED(args))
 static PyObject *
 test_stop_the_world(PyObject *self, PyObject *Py_UNUSED(args))
 {
-#ifdef Py_GIL_DISABLED
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    // Request consecutive pauses without running Python code between them.
-    for (int i = 0; i < 100; i++) {
-        _PyEval_StopTheWorld(interp);
-        // Give detached threads time to try to reattach during the pause.
-        PyEvent event = {0};
-        PyEvent_WaitTimed(&event, 10 * 1000 * 1000, /*detach=*/0);
-        _PyEval_StartTheWorld(interp);
-    }
-#endif
     Py_RETURN_NONE;
 }
 
@@ -2844,63 +2833,6 @@ reset_rare_event_counters(PyObject *self, PyObject *Py_UNUSED(type))
 }
 
 
-#ifdef Py_GIL_DISABLED
-static PyObject *
-get_py_thread_id(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    uintptr_t tid = _Py_ThreadId();
-    Py_BUILD_ASSERT(sizeof(unsigned long long) >= sizeof(tid));
-    return PyLong_FromUnsignedLongLong(tid);
-}
-
-static PyCodeObject *
-get_code(PyObject *obj)
-{
-    if (PyCode_Check(obj)) {
-        return (PyCodeObject *)obj;
-    }
-    else if (PyFunction_Check(obj)) {
-        return (PyCodeObject *)PyFunction_GetCode(obj);
-    }
-    return (PyCodeObject *)PyErr_Format(
-        PyExc_TypeError, "expected function or code object, got %T", obj);
-}
-
-static PyObject *
-get_tlbc(PyObject *Py_UNUSED(module), PyObject *obj)
-{
-    PyCodeObject *code = get_code(obj);
-    if (code == NULL) {
-        return NULL;
-    }
-    _Py_CODEUNIT *bc = _PyCode_GetTLBCFast(PyThreadState_GET(), code);
-    if (bc == NULL) {
-        Py_RETURN_NONE;
-    }
-    return PyBytes_FromStringAndSize((const char *)bc, _PyCode_NBYTES(code));
-}
-
-static PyObject *
-get_tlbc_id(PyObject *Py_UNUSED(module), PyObject *obj)
-{
-    PyCodeObject *code = get_code(obj);
-    if (code == NULL) {
-        return NULL;
-    }
-    _Py_CODEUNIT *bc = _PyCode_GetTLBCFast(PyThreadState_GET(), code);
-    if (bc == NULL) {
-        Py_RETURN_NONE;
-    }
-    return PyLong_FromVoidPtr(bc);
-}
-
-static PyObject *
-get_long_lived_total(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    return PyLong_FromInt64(PyInterpreterState_Get()->gc.long_lived_total);
-}
-
-#endif
 
 static PyObject *
 has_inline_values(PyObject *self, PyObject *obj)
@@ -3479,7 +3411,6 @@ gc_verify_count(PyObject *self, PyObject *Py_UNUSED(args))
     return PyLong_FromSsize_t(_PyGC_TraceCount(_PyInterpreterState_GET()));
 }
 
-#ifdef Py_GC
 /* The classes of roots that keep the object at an address (an int, so that
    the argument does not keep it), as a _PyGC_TRACE_ROOT_* mask. */
 static PyObject *
@@ -3534,7 +3465,6 @@ gc_segment_probes(PyObject *self, PyObject *op)
                          (unsigned long long)probes[2],
                          (unsigned long long)probes[3]);
 }
-#endif
 
 /* Call factory() and keep the result only in a C local across a verified
    collection.  Return (holes, id of the object). */
@@ -3641,12 +3571,10 @@ static PyMethodDef module_functions[] = {
     {"gc_verify", gc_verify, METH_NOARGS},
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
     {"gc_verify_count", gc_verify_count, METH_NOARGS},
-#ifdef Py_GC
     {"gc_live_roots_of", gc_live_roots_of, METH_O},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
     {"gc_segment_of", gc_segment_of, METH_O},
     {"gc_segment_probes", gc_segment_probes, METH_O},
-#endif
     {"gc_verify_with_c_local", gc_verify_with_c_local, METH_O},
     {"gc_verify_with_pymem_array", gc_verify_with_pymem_array, METH_O},
     {"call_with_c_local", call_with_c_local, METH_VARARGS},
@@ -3746,12 +3674,6 @@ static PyMethodDef module_functions[] = {
     {"type_assign_specific_version_unsafe", type_assign_specific_version_unsafe, METH_VARARGS,
      PyDoc_STR("forcefully assign type->tp_version_tag")},
 
-#ifdef Py_GIL_DISABLED
-    {"py_thread_id", get_py_thread_id, METH_NOARGS},
-    {"get_tlbc", get_tlbc, METH_O, NULL},
-    {"get_tlbc_id", get_tlbc_id, METH_O, NULL},
-    {"get_long_lived_total", get_long_lived_total, METH_NOARGS},
-#endif
     GH_119213_GETARGS_METHODDEF
     {"get_static_builtin_types", get_static_builtin_types, METH_NOARGS},
     {"identify_type_slot_wrappers", identify_type_slot_wrappers, METH_NOARGS},
@@ -3812,9 +3734,7 @@ module_exec(PyObject *module)
     }
 
     Py_ssize_t sizeof_gc_head = 0;
-#ifndef Py_GIL_DISABLED
     sizeof_gc_head = sizeof(PyGC_Head);
-#endif
 
     if (PyModule_Add(module, "SIZEOF_PYGC_HEAD",
                         PyLong_FromSsize_t(sizeof_gc_head)) < 0) {

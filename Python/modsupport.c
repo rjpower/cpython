@@ -767,17 +767,10 @@ int PyABIInfo_Check(PyABIInfo *info, const char *module_name)
 
     /* Free-threading/GIL */
     uint16_t gilflags = info->flags & (PyABIInfo_GIL | PyABIInfo_FREETHREADED);
-#if Py_GIL_DISABLED
-    if (gilflags == PyABIInfo_GIL) {
-        return _abiinfo_raise(module_name,
-                              "incompatible with free-threaded CPython");
-    }
-#else
     if (gilflags == PyABIInfo_FREETHREADED) {
         return _abiinfo_raise(module_name,
                               "only compatible with free-threaded CPython");
     }
-#endif
 
     return 0;
 }

@@ -1,6 +1,6 @@
 /* The live tracing collector (note 06, step 5a).
 
-   Under Py_GC nothing is reference counted and this collector owns the
+   Nothing is reference counted and this collector owns the
    memory of every object.  When the bytes allocated since the last
    collection pass a threshold (the trigger), an object allocation schedules
    a collection, which runs where the eval loop next checks its breaker; one
@@ -57,7 +57,6 @@
 #include "pycore_typeobject.h"    // _PyType_NotifyDestroy()
 #include "pycore_weakref.h"       // _PyWeakref_ClearRef()
 
-#ifdef Py_GC
 
 #include <stdlib.h>
 
@@ -1641,4 +1640,3 @@ _PyGC_LiveGetStats(PyInterpreterState *interp, Py_ssize_t *bytes_freed,
     *pause_max = ls ? PyTime_AsSecondsDouble(ls->pause_max_ns) : 0.0;
 }
 
-#endif  /* Py_GC */

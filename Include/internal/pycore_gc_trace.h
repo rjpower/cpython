@@ -132,15 +132,14 @@ _PyGC_CaptureRegisters(uintptr_t *regs)
 #endif
 }
 
-#ifdef Py_GC
-/* The live collector, which owns memory under Py_GC.  Python/gc_live.c has
+/* The live collector, which owns memory.  Python/gc_live.c has
  * the policy: when to collect, finalizers, weak references, the sweep and
  * the gc module's view.  The mark and the heap walks are here, in
  * Python/gc_trace.c, beside the verifier's, whose roots they share. */
 
 /* Does the block at op hold an initialized object?  _Py_NewReference()
  * writes the header word; freeing the block clears it.  The reference count
- * half is a constant under Py_GC, which makes a stray match in a block of
+ * half is a constant, which makes a stray match in a block of
  * raw data unlikely. */
 static inline int
 _PyGC_IsObjectHeader(const PyObject *op)
@@ -230,8 +229,8 @@ extern int _PyGC_LiveVisitRoots(PyInterpreterState *interp, visitproc visit,
 extern void _PyGC_LiveOnThreshold(PyThreadState *tstate);
 
 #ifdef Py_DEBUG
-/* A dealloc that the sweep called did what a dealloc must not do under
-   Py_GC: allocate an object, which may refer to the dead, or run Python
+/* A dealloc that the sweep called did what a dealloc must not do in
+   the sweep: allocate an object, which may refer to the dead, or run Python
    code, which may reach them.  what says which; this aborts. */
 extern void _Py_NO_RETURN _PyGC_LiveSweepViolation(PyThreadState *tstate,
                                                   const char *what);
@@ -283,17 +282,13 @@ extern void _PyGC_LiveClearEvalStack(void);
 extern void _PyGC_LiveGetStats(PyInterpreterState *interp,
                                Py_ssize_t *bytes_freed, Py_ssize_t *live_bytes,
                                double *pause_max);
-#endif
 
-#ifndef Py_GC
-#  define _PyGC_CLEAR_LOCAL(var) ((void)0)
-#endif
 
 /* Record the calling thread's callee-saved registers and stack pointer in
  * its thread state, before it releases the GIL, so that a collection in
  * another thread can scan them.  It must be called before the caller
  * changes any callee-saved register, so call it first. */
-#if defined(WITH_MIMALLOC) && !defined(Py_GIL_DISABLED)
+#if defined(WITH_MIMALLOC)
 PyAPI_FUNC(void) _PyGC_TraceCaptureThread(void);
 #  define _PyGC_TRACE_CAPTURE_THREAD() _PyGC_TraceCaptureThread()
 #else

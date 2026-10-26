@@ -146,7 +146,6 @@ void _mi_segment_map_unsafe_destroy(void) {
   }
 }
 
-#ifdef Py_GC
 /* -----------------------------------------------------------
   CPython: the tracing collector's segment map (see internal.h).
   Unlike the bitmap above it covers arena segments too, and it maps
@@ -208,4 +207,3 @@ void _mi_gc_segmap_publish(const mi_segment_t* segment, bool present) {
     mi_atomic_store_ptr_release(mi_segment_t, &leaf->segment[slot & (MI_GC_SEGMAP_LEAF_ENTRIES - 1)], value);
   }
 }
-#endif

@@ -668,22 +668,10 @@ PyStructSequence_InitType2(PyTypeObject *type, PyStructSequence_Desc *desc)
     PyMemberDef *members;
     Py_ssize_t n_members, n_unnamed_members;
 
-#ifdef Py_TRACE_REFS
-    /* if the type object was traced, remove it first
-       before overwriting its storage */
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    if (_PyRefchain_IsTraced(interp, (PyObject *)type)) {
-        _Py_ForgetReference((PyObject *)type);
-    }
-#endif
 
     /* PyTypeObject has already been initialized */
-#ifdef Py_GC
     // Py_REFCNT() is a constant; the header of a fresh static type is zero.
     if (((PyObject *)type)->ob_refcnt_full != 0) {
-#else
-    if (Py_REFCNT(type) != 0) {
-#endif
         PyErr_BadInternalCall();
         return -1;
     }

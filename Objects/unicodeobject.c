@@ -593,13 +593,8 @@ _PyUnicode_CheckConsistency(PyObject *op, int check_content)
 {
 #define CHECK(expr) \
     do { if (!(expr)) { _PyObject_ASSERT_FAILED_MSG(op, Py_STRINGIFY(expr)); } } while (0)
-#ifdef Py_GIL_DISABLED
-# define CHECK_IF_GIL(expr) (void)(expr)
-# define CHECK_IF_FT(expr) CHECK(expr)
-#else
 # define CHECK_IF_GIL(expr) CHECK(expr)
 # define CHECK_IF_FT(expr) (void)(expr)
-#endif
 
     assert(op != NULL);
     CHECK(PyUnicode_Check(op));
@@ -639,10 +634,8 @@ _PyUnicode_CheckConsistency(PyObject *op, int check_content)
                 CHECK(_PyUnicode_UTF8(op) != data);
             }
         }
-#ifndef Py_GIL_DISABLED
         if (_PyUnicode_UTF8(op) == NULL)
             CHECK(compact->utf8_length == 0);
-#endif
     }
 
     /* check that the best kind is used: O(n) operation */
@@ -1117,9 +1110,6 @@ _PyUnicode_ResizeCompact(PyObject *unicode, Py_ssize_t length)
         PyUnicode_SET_UTF8_LENGTH(unicode, 0);
         PyUnicode_SET_UTF8(unicode, NULL);
     }
-#ifdef Py_TRACE_REFS
-    _Py_ForgetReference(unicode);
-#endif
     _PyReftracerTrack(unicode, PyRefTracer_DESTROY);
 
     new_unicode = (PyObject *)PyObject_Realloc(unicode, new_size);
@@ -1145,9 +1135,6 @@ static int
 resize_inplace(PyObject *unicode, Py_ssize_t length)
 {
     assert(!PyUnicode_IS_COMPACT(unicode));
-#ifndef Py_GC  // reference counts are constant under Py_GC
-    assert(Py_REFCNT(unicode) == 1);
-#endif
 
     Py_ssize_t new_size;
     Py_ssize_t char_size;
@@ -1384,7 +1371,6 @@ PyUnicode_New(Py_ssize_t size, Py_UCS4 maxchar)
 static int
 unicode_check_modifiable(PyObject *unicode)
 {
-#ifdef Py_GC
     /* The public writers (PyUnicode_WriteChar(), PyUnicode_Fill(),
        PyUnicode_CopyCharacters()) are for strings the caller just created;
        without counts that is the caller's contract.  The other conditions
@@ -1392,9 +1378,6 @@ unicode_check_modifiable(PyObject *unicode)
     if (!PyUnicode_CheckExact(unicode) || PyUnicode_HASH(unicode) != -1
         || PyUnicode_CHECK_INTERNED(unicode))
     {
-#else
-    if (!_PyUnicode_IsModifiable(unicode)) {
-#endif
         PyErr_SetString(PyExc_SystemError,
                         "Cannot modify a string currently used");
         return -1;
@@ -1684,15 +1667,7 @@ unicode_dealloc(PyObject *unicode)
              * Before doing so, we set the refcount to 2: the key and value
              * in the interned_dict.
              */
-#ifndef Py_GC  // reference counts are constant under Py_GC
-            assert(Py_REFCNT(unicode) == 0);
-#endif
             Py_SET_REFCNT(unicode, 2);
-#ifdef Py_REF_DEBUG
-            /* let's be pedantic with the ref total */
-            _Py_IncRefTotal(_PyThreadState_GET());
-            _Py_IncRefTotal(_PyThreadState_GET());
-#endif
             PyInterpreterState *interp = _PyInterpreterState_GET();
             PyObject *interned = get_interned_dict(interp);
             assert(interned != NULL);
@@ -1722,20 +1697,10 @@ unicode_dealloc(PyObject *unicode)
             // Successfully popped.
             assert(popped == unicode);
             // Only our `popped` reference should be left; remove it too.
-#ifndef Py_GC  // reference counts are constant under Py_GC
-            assert(Py_REFCNT(unicode) == 1);
-#endif
             Py_SET_REFCNT(unicode, 0);
-#ifdef Py_REF_DEBUG
-            /* let's be pedantic with the ref total */
-            _Py_DecRefTotal(_PyThreadState_GET());
-#endif
             break;
         default:
             // As with `statically_allocated` above.
-#ifdef Py_REF_DEBUG
-            Py_UNREACHABLE();
-#endif
             _Py_SetImmortal(unicode);
             return;
     }
@@ -10637,9 +10602,6 @@ _PyUnicode_FastFill(PyObject *unicode, Py_ssize_t start, Py_ssize_t length,
 {
     const int kind = PyUnicode_KIND(unicode);
     void *data = PyUnicode_DATA(unicode);
-#ifndef Py_GC  // reference counts are constant under Py_GC
-    assert(_PyUnicode_IsModifiable(unicode));
-#endif
     assert(fill_char <= PyUnicode_MAX_CHAR_VALUE(unicode));
     assert(start >= 0);
     assert(start + length <= PyUnicode_GET_LENGTH(unicode));
@@ -14685,14 +14647,6 @@ immortalize_interned(PyObject *s)
 {
     assert(PyUnicode_CHECK_INTERNED(s) == SSTATE_INTERNED_MORTAL);
     assert(!_Py_IsImmortal(s));
-#ifdef Py_REF_DEBUG
-    /* The reference count value should be excluded from the RefTotal.
-       The decrements to these objects will not be registered so they
-       need to be accounted for in here. */
-    for (Py_ssize_t i = 0; i < Py_REFCNT(s); i++) {
-        _Py_DecRefTotal(_PyThreadState_GET());
-    }
-#endif
     _Py_SetImmortal(s);
     // The switch to SSTATE_INTERNED_IMMORTAL must be the last thing done here
     // to synchronize with the check in intern_common() that avoids locking if
@@ -14700,17 +14654,6 @@ immortalize_interned(PyObject *s)
     FT_ATOMIC_STORE_UINT8(_PyUnicode_STATE(s).interned, SSTATE_INTERNED_IMMORTAL);
 }
 
-#ifdef Py_GIL_DISABLED
-static bool
-can_immortalize_safely(PyObject *s)
-{
-    if (_Py_IsOwnedByCurrentThread(s) || _Py_IsImmortal(s)) {
-        return true;
-    }
-    Py_ssize_t shared = _Py_atomic_load_ssize(&s->ob_ref_shared);
-    return _Py_REF_IS_MERGED(shared);
-}
-#endif
 
 static /* non-null */ PyObject*
 intern_common(PyInterpreterState *interp, PyObject *s /* stolen */,
@@ -14740,16 +14683,11 @@ intern_common(PyInterpreterState *interp, PyObject *s /* stolen */,
             // no, go on
             break;
         case SSTATE_INTERNED_MORTAL:
-#ifndef Py_GIL_DISABLED
             // yes but we might need to make it immortal
             if (immortalize) {
                 immortalize_interned(s);
             }
             return s;
-#else
-            // not fully interned yet; fall through to the locking path
-            break;
-#endif
         default:
             // all done
             return s;
@@ -14758,10 +14696,6 @@ intern_common(PyInterpreterState *interp, PyObject *s /* stolen */,
     /* Statically allocated strings must be already interned. */
     assert(!_PyUnicode_STATE(s).statically_allocated);
 
-#if Py_GIL_DISABLED
-    /* In the free-threaded build, all interned strings are immortal */
-    immortalize = 1;
-#endif
 
     /* If it's already immortal, intern it as such */
     if (_Py_IsImmortal(s)) {
@@ -14794,42 +14728,7 @@ intern_common(PyInterpreterState *interp, PyObject *s /* stolen */,
     /* Do a setdefault on the per-interpreter cache. */
     PyObject *interned = get_interned_dict(interp);
     assert(interned != NULL);
-#ifdef Py_GIL_DISABLED
-#  define INTERN_MUTEX &_Py_INTERP_CACHED_OBJECT(interp, interned_mutex)
-    // Lock-free fast path: check if there's already an interned copy that
-    // is in its final immortal state.
-    PyObject *r;
-    int res = PyDict_GetItemRef(interned, s, &r);
-    if (res < 0) {
-        PyErr_Clear();
-        return s;
-    }
-    if (res > 0) {
-        unsigned int state = _Py_atomic_load_uint8(&_PyUnicode_STATE(r).interned);
-        if (state == SSTATE_INTERNED_IMMORTAL) {
-            Py_DECREF(s);
-            return r;
-        }
-        // Not yet fully interned; fall through to the locking path.
-        Py_DECREF(r);
-    }
-#endif
 
-#ifdef Py_GIL_DISABLED
-    // Immortalization writes to the refcount fields non-atomically. That
-    // races with Py_INCREF / Py_DECREF on the thread that owns `s`. If we
-    // don't own it (and its refcount hasn't been merged), intern a copy
-    // we own instead.
-    if (!can_immortalize_safely(s)) {
-        PyObject *copy = _PyUnicode_Copy(s);
-        if (copy == NULL) {
-            PyErr_Clear();
-            return s;
-        }
-        Py_DECREF(s);
-        s = copy;
-    }
-#endif
 
     // Why _Py_LOCK_DONT_DETACH is used here: waiting for the interned mutex
     // must not detach the thread state. Extension code is expected to
@@ -14977,11 +14876,6 @@ _PyUnicode_ClearInterned(PyInterpreterState *interp)
             // the two references (key and value) ignored
             // by PyUnicode_InternInPlace().
             _Py_SetMortal(s, 2);
-#ifdef Py_REF_DEBUG
-            /* let's be pedantic with the ref total */
-            _Py_IncRefTotal(_PyThreadState_GET());
-            _Py_IncRefTotal(_PyThreadState_GET());
-#endif
 #ifdef INTERNED_STATS
             total_length += PyUnicode_GET_LENGTH(s);
 #endif
@@ -15000,11 +14894,6 @@ _PyUnicode_ClearInterned(PyInterpreterState *interp)
             // Restore 2 references held by the interned dict; these will
             // be decref'd by clear_interned_dict's PyDict_Clear.
             _Py_RefcntAdd(s, 2);
-#ifdef Py_REF_DEBUG
-            /* let's be pedantic with the ref total */
-            _Py_IncRefTotal(_PyThreadState_GET());
-            _Py_IncRefTotal(_PyThreadState_GET());
-#endif
             break;
         case SSTATE_NOT_INTERNED:
             _Py_FALLTHROUGH;

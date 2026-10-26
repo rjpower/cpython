@@ -1,10 +1,5 @@
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#ifdef Py_GIL_DISABLED
-   // Cannot test the limited C API
-#else
-   // Need limited C API version 3.15 for _DuringGC functions
-#  define Py_LIMITED_API 0x030f0000
-#endif
+// Need limited C API version 3.15 for _DuringGC functions
+#define Py_LIMITED_API 0x030f0000
 
 #include "parts.h"
 #include <stddef.h>               // max_align_t

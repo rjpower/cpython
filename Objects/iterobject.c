@@ -67,10 +67,8 @@ iter_iternext(PyObject *iterator)
     if (index < 0)
         return NULL;
     seq = it->it_seq;
-#ifndef Py_GIL_DISABLED
     if (seq == NULL)
         return NULL;
-#endif
     if (index == PY_SSIZE_T_MAX) {
         PyErr_SetString(PyExc_OverflowError,
                         "iter index too large");
@@ -94,9 +92,7 @@ iter_iternext(PyObject *iterator)
         /* Mark the iterator exhausted before anything that can run
          * arbitrary code. */
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, -1);
-#ifndef Py_GIL_DISABLED
         Py_CLEAR(it->it_seq);
-#endif
         PyErr_Clear();
     }
     return NULL;

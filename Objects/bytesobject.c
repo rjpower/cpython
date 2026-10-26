@@ -66,11 +66,7 @@ set_ob_shash(PyBytesObject *a, Py_hash_t hash)
 {
 _Py_COMP_DIAG_PUSH
 _Py_COMP_DIAG_IGNORE_DEPR_DECLS
-#ifdef Py_GIL_DISABLED
-    _Py_atomic_store_ssize_relaxed(&a->ob_shash, hash);
-#else
     a->ob_shash = hash;
-#endif
 _Py_COMP_DIAG_POP
 }
 
@@ -81,9 +77,6 @@ set_ob_shash_unsafe(PyBytesObject *a, Py_hash_t hash)
 {
     // Don't test _PyObject_IsUniquelyReferenced(), so the function can be
     // called by bytes_resize_inplace().
-#ifndef Py_GC  // reference counts are constant under Py_GC
-    assert(Py_REFCNT(a) == 1);
-#endif
 
 _Py_COMP_DIAG_PUSH
 _Py_COMP_DIAG_IGNORE_DEPR_DECLS
@@ -3258,14 +3251,12 @@ bytes_iteritem(PyObject *obj, Py_ssize_t index)
 void
 _PyBytes_CheckOverflow(PyObject *self, void *addr, const char *type_name)
 {
-#ifdef Py_GC
     /* The sweep deallocates in heap order: a PyBytesWriter's canary byte
        can still replace the null byte, because the writer's owner, which
        discards it, may be deallocated after the object. */
     if (self->ob_flags & _Py_GC_DEAD_FLAG) {
         return;
     }
-#endif
     // Make sure that the trailing null byte was not modified
     char *data = PyBytes_AS_STRING(self);
     Py_ssize_t size = PyBytes_GET_SIZE(self);
@@ -3406,9 +3397,6 @@ _PyBytes_IsMutable(PyObject *self)
     assert(PyBytes_Check(self));
     // Do not use _PyObject_IsUniquelyReferenced(): this function is called
     // by bytearray and PyBytesWriter which can be used by multiple threads.
-#ifndef Py_GC  // reference counts are constant under Py_GC
-    assert(Py_REFCNT(self) == 1);
-#endif
     assert(!_Py_IsImmortal(self));
 
     // Check that the object is not a singleton
@@ -3437,9 +3425,6 @@ bytes_resize_inplace(PyObject **pv, Py_ssize_t newsize)
     PyObject *v = *pv;
     // Do not test _PyObject_IsUniquelyReferenced(). The function is used by
     // PyBytesWriter_FinishWithSize() and its caller can have its own lock.
-#ifndef Py_GC  // reference counts are constant under Py_GC
-    assert(Py_REFCNT(v) == 1);
-#endif
     assert(PyBytes_GET_SIZE(v) >= 1);
     assert(newsize >= 1);
     assert(get_ob_shash((PyBytesObject *)v) == -1);
@@ -3453,16 +3438,10 @@ bytes_resize_inplace(PyObject **pv, Py_ssize_t newsize)
         return -1;
     }
 
-#ifdef Py_TRACE_REFS
-    _Py_ForgetReference(v);
-#endif
     _PyReftracerTrack(v, PyRefTracer_DESTROY);
 
     PyObject *result = PyObject_Realloc(v, PyBytesObject_SIZE + newsize);
     if (result == NULL) {
-#ifdef Py_TRACE_REFS
-        _Py_AddToAllObjects(v);
-#endif
         _PyReftracerTrack(v, PyRefTracer_CREATE);
 
         PyErr_NoMemory();
@@ -3806,9 +3785,6 @@ byteswriter_check_consistency(PyBytesWriter *writer)
             // Do not use _PyObject_IsUniquelyReferenced(): the caller can have
             // its own lock to prevent a writer from being used by two threads
             // at the same time.
-#ifndef Py_GC  // reference counts are constant under Py_GC
-            assert(Py_REFCNT(obj) == 1);
-#endif
             PyByteArrayObject *bytearray = (PyByteArrayObject*)obj;
             obj = bytearray->ob_bytes_object;
             assert(obj != NULL);

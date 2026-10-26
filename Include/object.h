@@ -51,25 +51,10 @@ A standard interface exists for objects that contain an array of items
 whose size is determined when the object is allocated.
 */
 
-/* Py_GC: the tracing collector owns memory and reference counting is off
-   (configure --with-gc; note 06, step 5).  There are no reference counts to
-   debug, so Py_DEBUG does not imply Py_REF_DEBUG there. */
-#ifdef Py_GC
-   /* abi3t defines Py_GIL_DISABLED for its users, but PyObject is opaque to
-      them, so they see no difference. */
-#  if (defined(Py_GIL_DISABLED) && !defined(_Py_OPAQUE_PYOBJECT)) \
-      || defined(Py_TRACE_REFS) \
-      || defined(Py_STACKREF_DEBUG) || defined(Py_REF_DEBUG)
-#    error "Py_GC cannot be combined with Py_GIL_DISABLED, Py_TRACE_REFS, Py_STACKREF_DEBUG or Py_REF_DEBUG"
-#  endif
-#  if SIZEOF_VOID_P != 8
-#    error "Py_GC requires a 64-bit platform"
-#  endif
-#endif
-
-/* Py_DEBUG implies Py_REF_DEBUG. */
-#if defined(Py_DEBUG) && !defined(Py_REF_DEBUG) && !defined(Py_GC)
-#  define Py_REF_DEBUG
+/* The tracing collector owns memory and nothing is reference counted (note
+   06, step 5).  Its header flags live in the high half of the first word. */
+#if SIZEOF_VOID_P != 8
+#  error "the tracing collector requires a 64-bit platform"
 #endif
 
 #if defined(_Py_OPAQUE_PYOBJECT) && !defined(Py_LIMITED_API)
@@ -90,24 +75,11 @@ whose size is determined when the object is allocated.
  *
  * Before changing this, see the check in PyModuleDef_Init().
  */
-#if defined(Py_GIL_DISABLED)
-#define PyObject_HEAD_INIT(type)    \
-    {                               \
-        0,                          \
-        _Py_STATICALLY_ALLOCATED_FLAG, \
-        { 0 },                      \
-        0,                          \
-        _Py_IMMORTAL_REFCNT_LOCAL,  \
-        0,                          \
-        (type),                     \
-    },
-#else
 #define PyObject_HEAD_INIT(type)    \
     {                               \
         { _Py_STATIC_IMMORTAL_INITIAL_REFCNT },    \
         (type)                      \
     },
-#endif
 
 #define PyVarObject_HEAD_INIT(type, size) \
     {                                     \
@@ -139,7 +111,7 @@ whose size is determined when the object is allocated.
  */
 #ifdef _Py_OPAQUE_PYOBJECT
   /* PyObject is opaque */
-#elif !defined(Py_GIL_DISABLED)
+#else
 struct _object {
     _Py_ANONYMOUS union {
 #if SIZEOF_VOID_P > 4
@@ -163,25 +135,7 @@ struct _object {
 
     PyTypeObject *ob_type;  // part of stable ABI; do not change
 };
-#else
-// Objects that are not owned by any thread use a thread id (tid) of zero.
-// This includes both immortal objects and objects whose reference count
-// fields have been merged.
-#define _Py_UNOWNED_TID             0
-
-struct _object {
-    // ob_tid stores the thread id (or zero). It is also used by the GC and the
-    // trashcan mechanism as a linked list pointer and by the GC to store the
-    // computed "gc_refs" refcount.
-    _Py_ALIGNED_DEF(_PyObject_MIN_ALIGNMENT, uintptr_t) ob_tid;
-    uint16_t ob_flags;
-    PyMutex ob_mutex;           // per-object lock
-    uint8_t ob_gc_bits;         // gc-related state
-    uint32_t ob_ref_local;      // local reference count
-    Py_ssize_t ob_ref_shared;   // shared (atomic) reference count
-    PyTypeObject *ob_type;
-};
-#endif // !defined(_Py_OPAQUE_PYOBJECT)
+#endif
 
 /* Cast argument to PyObject* type. */
 #define _PyObject_CAST(op) _Py_CAST(PyObject*, (op))
@@ -270,11 +224,7 @@ _Py_SET_SIZE_impl(PyVarObject *ob, Py_ssize_t size)
 {
     assert(Py_TYPE(_PyObject_CAST(ob)) != &PyLong_Type);
     assert(Py_TYPE(_PyObject_CAST(ob)) != &PyBool_Type);
-#ifdef Py_GIL_DISABLED
-    _Py_atomic_store_ssize_relaxed(&ob->ob_size, size);
-#else
     ob->ob_size = size;
-#endif
 }
 
 #endif // !defined(_Py_OPAQUE_PYOBJECT)
@@ -558,7 +508,7 @@ given type object has a specified feature.
 #ifndef Py_LIMITED_API
 /* The type's dealloc reads the C state of objects it refers to, not just
    releases them.  Reference counting deallocates a referrer before its
-   referents; the tracing collector of --with-gc keeps that order for dead
+   referents; the tracing collector keeps that order for dead
    instances of this type by deallocating them first.  Subtypes inherit it. */
 #define Py_TPFLAGS_DEALLOC_READS_REFERENTS (1UL << 21)
 #endif
@@ -605,8 +555,7 @@ given type object has a specified feature.
 #define _Py_IMMORTAL_FLAGS (1 << 0)
 #define _Py_LEGACY_ABI_CHECK_FLAG (1 << 1) /* see PyModuleDef_Init() */
 #define _Py_STATICALLY_ALLOCATED_FLAG (1 << 2)
-#ifdef Py_GC
-/* Under Py_GC, ob_refcnt holds the constant _Py_GC_REFCNT for every mortal
+/* ob_refcnt holds the constant _Py_GC_REFCNT for every mortal
  * object and counts nothing.  _Py_NewReference() stores _Py_GC_OBJECT_MAGIC
  * in ob_overflow and sets _Py_GC_HEAP_FLAG, which together tell the
  * collector's heap walk that a block holds an initialized object; freeing an
@@ -636,11 +585,7 @@ given type object has a specified feature.
 #  define _Py_GC_HEADER_INIT \
     ((int64_t)_Py_GC_REFCNT | ((int64_t)_Py_GC_OBJECT_MAGIC << 32) \
      | ((int64_t)_Py_GC_HEAP_FLAG << 48))
-#endif
 #if !defined(Py_LIMITED_API)
-#  if defined(Py_GIL_DISABLED) && defined(Py_DEBUG)
-#    define _Py_TYPE_REVEALED_FLAG (1 << 3)
-#  endif
 #endif
 
 #define Py_CONSTANT_NONE 0

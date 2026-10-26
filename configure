@@ -1109,10 +1109,7 @@ enable_shared
 with_static_libpython
 enable_static_libpython_for_interpreter
 enable_profiling
-enable_gil
 with_pydebug
-with_trace_refs
-with_gc
 enable_pystats
 with_assertions
 enable_optimizations
@@ -1862,8 +1859,6 @@ Optional Features:
                           library)
   --enable-profiling      enable C-level code profiling with gprof (default is
                           no)
-  --disable-gil           enable support for running without the GIL (default
-                          is no)
   --enable-pystats        enable internal statistics gathering (default is no)
   --enable-optimizations  enable expensive, stable optimizations (PGO, etc.)
                           (default is no)
@@ -1917,10 +1912,6 @@ Optional Packages:
                           do not build libpythonMAJOR.MINOR.a and do not
                           install python.o (default is yes)
   --with-pydebug          build with Py_DEBUG defined (default is no)
-  --with-trace-refs       enable tracing references for debugging purpose
-                          (default is no)
-  --with-gc               let the tracing collector own memory instead of
-                          reference counting (experimental, default is no)
   --with-assertions       build with C assertions enabled (default is no)
   --with-lto=[full|thin|no|yes]
                           enable Link-Time-Optimization in any build (default
@@ -8723,38 +8714,8 @@ fi
 ABIFLAGS=""
 ABI_THREAD=""
 
-# Check for --disable-gil
-# --disable-gil
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --disable-gil" >&5
-printf %s "checking for --disable-gil... " >&6; }
-# Check whether --enable-gil was given.
-if test ${enable_gil+y}
-then :
-  enableval=$enable_gil; if test "x$enable_gil" = xyes
-then :
-  disable_gil=no
-else case e in #(
-  e) disable_gil=yes ;;
-esac
-fi
-else case e in #(
-  e) disable_gil=no
- ;;
-esac
-fi
-
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $disable_gil" >&5
-printf "%s\n" "$disable_gil" >&6; }
-
-if test "$disable_gil" = "yes"
-then
-
-printf "%s\n" "#define Py_GIL_DISABLED 1" >>confdefs.h
-
-  # Add "t" for "threaded"
-  ABIFLAGS="${ABIFLAGS}t"
-  ABI_THREAD="t"
-fi
+# There is no free-threaded build (note 06, decision 4), so ABI_THREAD is
+# always empty; it stays for the install paths and sysconfig that name it.
 
 # Check for --with-pydebug
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-pydebug" >&5
@@ -8783,71 +8744,10 @@ esac
 fi
 
 
-# Check for --with-trace-refs
-# --with-trace-refs
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-trace-refs" >&5
-printf %s "checking for --with-trace-refs... " >&6; }
-
-# Check whether --with-trace-refs was given.
-if test ${with_trace_refs+y}
-then :
-  withval=$with_trace_refs;
-else case e in #(
-  e) with_trace_refs=no
- ;;
-esac
-fi
-
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $with_trace_refs" >&5
-printf "%s\n" "$with_trace_refs" >&6; }
-
-if test "$with_trace_refs" = "yes"
-then
-
-printf "%s\n" "#define Py_TRACE_REFS 1" >>confdefs.h
-
-fi
-
-if test "$disable_gil" = "yes" -a "$with_trace_refs" = "yes";
-then
-  as_fn_error $? "--disable-gil cannot be used with --with-trace-refs" "$LINENO" 5
-fi
-
-# Check for --with-gc
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-gc" >&5
-printf %s "checking for --with-gc... " >&6; }
-
-# Check whether --with-gc was given.
-if test ${with_gc+y}
-then :
-  withval=$with_gc;
-else case e in #(
-  e) with_gc=no
- ;;
-esac
-fi
-
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $with_gc" >&5
-printf "%s\n" "$with_gc" >&6; }
-
-if test "$with_gc" = "yes"
-then
-  if test "$disable_gil" = "yes"; then
-    as_fn_error $? "--with-gc cannot be used with --disable-gil" "$LINENO" 5
-  fi
-  if test "$with_trace_refs" = "yes"; then
-    as_fn_error $? "--with-gc cannot be used with --with-trace-refs" "$LINENO" 5
-  fi
-  case "$CFLAGS $CPPFLAGS" in
-    *Py_STACKREF_DEBUG*)
-      as_fn_error $? "--with-gc cannot be used with Py_STACKREF_DEBUG" "$LINENO" 5 ;;
-  esac
-
-printf "%s\n" "#define Py_GC 1" >>confdefs.h
-
-  # The collector scans C stacks conservatively.  Zero-initialized locals
-  # leave fewer stale pointers in live frames, which keep garbage alive.
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether C compiler accepts -ftrivial-auto-var-init=zero" >&5
+# The tracing collector owns memory (note 06, step 5).  It scans C stacks
+# conservatively, and zero-initialized locals leave fewer stale pointers in
+# live frames, which keep garbage alive.
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether C compiler accepts -ftrivial-auto-var-init=zero" >&5
 printf %s "checking whether C compiler accepts -ftrivial-auto-var-init=zero... " >&6; }
 if test ${ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero+y}
 then :
@@ -8890,7 +8790,6 @@ else case e in #(
 esac
 fi
 
-fi
 
 # Check for --enable-pystats
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --enable-pystats" >&5
@@ -20437,11 +20336,8 @@ printf "%s\n" "#define WITH_MIMALLOC 1" >>confdefs.h
 
   MIMALLOC_HEADERS='$(MIMALLOC_HEADERS)'
 
-elif test "$disable_gil" = "yes"; then
-  as_fn_error $? "--disable-gil requires mimalloc memory allocator (--with-mimalloc)." "$LINENO" 5
-fi
-if test "$with_gc" = "yes" -a "$with_mimalloc" != yes; then
-  as_fn_error $? "--with-gc requires mimalloc memory allocator (--with-mimalloc)." "$LINENO" 5
+else
+  as_fn_error $? "the tracing collector requires the mimalloc memory allocator (--with-mimalloc)." "$LINENO" 5
 fi
 
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $with_mimalloc" >&5
@@ -29112,7 +29008,6 @@ printf "%s\n" "#define AC_APPLE_UNIVERSAL_BUILD 1" >>confdefs.h
 #
 # * The Python implementation (always 'cpython-' for us)
 # * The major and minor version numbers
-# * --disable-gil (adds a 't')
 # * --with-pydebug (adds a 'd')
 #
 # Thus for example, Python 3.2 built with wide unicode, pydebug, and pymalloc,
@@ -29132,7 +29027,7 @@ SOABI='cpython-'`echo $VERSION | tr -d .`${ABIFLAGS}${SOABI_PLATFORM:+-$SOABI_PL
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $SOABI" >&5
 printf "%s\n" "$SOABI" >&6; }
 
-# Release build, debug build (Py_DEBUG), and trace refs build (Py_TRACE_REFS)
+# Release and debug (Py_DEBUG) builds
 # are ABI compatible
 if test "$Py_DEBUG" = 'true'; then
   # Similar to SOABI but remove "d" flag from ABIFLAGS
@@ -34910,10 +34805,6 @@ printf "%s\n" "$with_shapes" >&6; }
 if test "x$with_shapes" = xyes
 then :
 
-  if test "x$disable_gil" = xyes
-then :
-  as_fn_error $? "--with-shapes is not supported with --disable-gil" "$LINENO" 5
-fi
 
 printf "%s\n" "#define Py_SHAPES 1" >>confdefs.h
 
@@ -36100,15 +35991,11 @@ fi
 then :
 
         colocated_install=yes
-        threading_suffix=""
-        if [ "$ABI_THREAD" = "t" ]; then
-          threading_suffix=-free-threading
-        fi
         debug_suffix=""
         if [ "$Py_DEBUG" = "true" ]; then
           debug_suffix=-debug
         fi
-        BUILD_DETAILS=build-details.$MULTIARCH$threading_suffix$debug_suffix.json
+        BUILD_DETAILS=build-details.$MULTIARCH$debug_suffix.json
 
 else case e in #(
   e)

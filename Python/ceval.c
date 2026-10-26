@@ -1254,9 +1254,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     _Py_EnsureTstateNotNULL(tstate);
     check_invalid_reentrancy();
     CALL_STAT_INC(pyeval_calls);
-#ifdef Py_GC
     _PyGC_CHECK_NOT_SWEEPING(tstate, "runs Python code");
-#endif
 
 #if USE_COMPUTED_GOTOS && !_Py_TAIL_CALL_INTERP
 /* Import the static jump table */
@@ -1283,9 +1281,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     _PyInstr *next_instr;
     _PyStackRef *slots;
     entry.stack[0] = PyStackRef_NULL;
-#ifdef Py_STACKREF_DEBUG
-    entry.frame.f_funcobj = PyStackRef_None;
-#elif defined(Py_DEBUG)
+#if defined(Py_DEBUG)
     /* Set these to invalid but identifiable values for debugging. */
     entry.frame.f_funcobj = (_PyStackRef){.bits = 0xaaa0};
     entry.frame.f_locals = (PyObject*)0xaaa1;
@@ -2858,27 +2854,7 @@ PyEval_MergeCompilerFlags(PyCompilerFlags *cf)
 static const char *
 functionobject_get_name(PyFunctionObject *f)
 {
-#ifdef Py_GIL_DISABLED
-    for (;;) {
-        PyObject *name = Py_NewRef(FT_ATOMIC_LOAD_PTR_ACQUIRE(f->func_name));
-        // UTF-8 conversion may detach while acquiring the string's lock.
-        // This could result in func_name being freed if func_name was
-        // recently replaced using _PyObject_XSetRefDelayed().  The returned
-        // char* is only valid until the next quiescent point.
-        const char *result = PyUnicode_AsUTF8(name);
-        if (result == NULL) {
-            Py_DECREF(name);
-            return NULL;
-        }
-        int unchanged = name == FT_ATOMIC_LOAD_PTR_ACQUIRE(f->func_name);
-        Py_DECREF(name);
-        if (unchanged) {
-            return result;
-        }
-    }
-#else
     return PyUnicode_AsUTF8(f->func_name);
-#endif
 }
 
 const char *
@@ -3687,15 +3663,8 @@ PyUnstable_Eval_RequestCodeExtraIndex(freefunc free)
     PyInterpreterState *interp = _PyInterpreterState_GET();
     Py_ssize_t new_index;
 
-#ifdef Py_GIL_DISABLED
-    struct _py_code_state *state = &interp->code_state;
-    FT_MUTEX_LOCK(&state->mutex);
-#endif
 
     if (interp->co_extra_user_count >= MAX_CO_EXTRA_USERS - 1) {
-#ifdef Py_GIL_DISABLED
-        FT_MUTEX_UNLOCK(&state->mutex);
-#endif
         return -1;
     }
 
@@ -3705,9 +3674,6 @@ PyUnstable_Eval_RequestCodeExtraIndex(freefunc free)
     // Publish freefuncs[new_index] before making the index visible.
     FT_ATOMIC_STORE_SSIZE_RELEASE(interp->co_extra_user_count, new_index + 1);
 
-#ifdef Py_GIL_DISABLED
-    FT_MUTEX_UNLOCK(&state->mutex);
-#endif
     return new_index;
 }
 

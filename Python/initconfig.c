@@ -149,10 +149,6 @@ static const PyConfigSpec PYCONFIG_SPEC[] = {
     SPEC(dev_mode, BOOL, READ_ONLY, NO_SYS),  // sys.flags.dev_mode
     SPEC(dump_refs, BOOL, READ_ONLY, NO_SYS),
     SPEC(dump_refs_file, WSTR_OPT, READ_ONLY, NO_SYS),
-#ifdef Py_GIL_DISABLED
-    SPEC(enable_gil, INT, READ_ONLY, NO_SYS),
-    SPEC(tlbc_enabled, INT, READ_ONLY, NO_SYS),
-#endif
     SPEC(faulthandler, BOOL, READ_ONLY, NO_SYS),
     SPEC(filesystem_encoding, WSTR, READ_ONLY, NO_SYS),
     SPEC(filesystem_errors, WSTR, READ_ONLY, NO_SYS),
@@ -455,9 +451,6 @@ static const char usage_xoptions[] =
 "#s{-X} #L{frozen_modules}#b{=[on|off]}: whether to use frozen modules; the default is \"#B{on}\"\n"
 "         for installed Python and \"#B{off}\" for a local build;\n"
 "         also #e{PYTHON_FROZEN_MODULES}\n"
-#ifdef Py_GIL_DISABLED
-"#s{-X} #L{gil}#b{=[0|1]}: enable (#B{1}) or disable (#B{0}) the GIL; also #e{PYTHON_GIL}\n"
-#endif
 "#s{-X} #L{importtime}#b{[=2]}: show how long each import takes; use #S{-X} #e{importtime}#B{=2} to\n"
 "         log imports of already-loaded modules; also #e{PYTHONPROFILEIMPORTTIME}\n"
 "#s{-X} #L{int_max_str_digits}#b{=N}: limit the size of int<->str conversions;\n"
@@ -486,10 +479,6 @@ static const char usage_xoptions[] =
 "#s{-X} #L{thread_inherit_context}#b{=[0|1]}: enable (#B{1}) or disable (#B{0}) threads inheriting\n"
 "         context vars by default; enabled by default in the free-threaded\n"
 "         build and disabled otherwise; also #e{PYTHON_THREAD_INHERIT_CONTEXT}\n"
-#ifdef Py_GIL_DISABLED
-"#s{-X} #L{tlbc}#b{=[0|1]}: enable (#B{1}) or disable (#B{0}) thread-local bytecode. Also\n"
-"         #e{PYTHON_TLBC}\n"
-#endif
 "#s{-X} #L{tracemalloc}#b{[=N]}: trace Python memory allocations; N sets a traceback limit\n"
 "         of #B{N} frames (default: #B{1}); also #e{PYTHONTRACEMALLOC}#B{=N}\n"
 "#s{-X} #L{utf8}#b{[=0|1]}: enable (#B{1}) or disable (#B{0}) UTF-8 mode; also #e{PYTHONUTF8}\n"
@@ -513,10 +502,6 @@ static const char usage_envvars[] =
 "#E{PYTHON_COLORS}   : if this variable is set to #B{1}, the interpreter will colorize\n"
 "                  various kinds of output.  Setting it to #B{0} deactivates\n"
 "                  this behavior.\n"
-#ifdef Py_TRACE_REFS
-"#E{PYTHONDUMPREFS}  : dump objects and reference counts still alive after shutdown\n"
-"#E{PYTHONDUMPREFSFILE}: dump objects and reference counts to the specified file\n"
-#endif
 #ifdef __APPLE__
 "#E{PYTHONEXECUTABLE}: set sys.argv[0] to this value (macOS only)\n"
 #endif
@@ -553,9 +538,6 @@ static const char usage_envvars[] =
 "#E{PYTHON_FROZEN_MODULES}: whether to use frozen modules; the default is \"#B{on}\"\n"
 "                  for installed Python and \"#B{off}\" for a local build\n"
 "                  (#S{-X} #e{frozen_modules})\n"
-#ifdef Py_GIL_DISABLED
-"#E{PYTHON_GIL}      : when set to #B{0}, disables the GIL (#S{-X} #e{gil})\n"
-#endif
 "#E{PYTHONINSPECT}   : inspect interactively after running script (#S{-i})\n"
 "#E{PYTHONINTMAXSTRDIGITS}: limit the size of int<->str conversions;\n"
 "                  0 disables the limit (#S{-X} #e{int_max_str_digits}#B{=N})\n"
@@ -579,9 +561,6 @@ static const char usage_envvars[] =
 #endif
 "#E{PYTHON_THREAD_INHERIT_CONTEXT}: if true (#B{1}), threads inherit context vars\n"
 "                  (#S{-X} #e{thread_inherit_context})\n"
-#ifdef Py_GIL_DISABLED
-"#E{PYTHON_TLBC}     : when set to #B{0}, disables thread-local bytecode (#S{-X} #e{tlbc})\n"
-#endif
 "#E{PYTHONTRACEMALLOC}: trace Python memory allocations (#S{-X} #e{tracemalloc})\n"
 "#E{PYTHONUNBUFFERED}: disable stdout/stderr buffering (#S{-u})\n"
 "#E{PYTHONUTF8}      : control the UTF-8 mode (#S{-X} #e{utf8})\n"
@@ -1157,19 +1136,10 @@ _PyConfig_InitCompatConfig(PyConfig *config)
     config->code_debug_ranges = 1;
     config->cpu_count = -1;
     config->lazy_imports = -1;
-#ifdef Py_GIL_DISABLED
-    config->thread_inherit_context = 1;
-    config->context_aware_warnings = 1;
-#else
     config->thread_inherit_context = 0;
     config->context_aware_warnings = 0;
-#endif
 #ifdef __APPLE__
     config->use_system_logger = USE_SYSTEM_LOGGER_DEFAULT;
-#endif
-#ifdef Py_GIL_DISABLED
-    config->enable_gil = _PyConfig_GIL_DEFAULT;
-    config->tlbc_enabled = 1;
 #endif
 }
 
@@ -1196,13 +1166,8 @@ config_init_defaults(PyConfig *config)
 #ifdef MS_WINDOWS
     config->legacy_windows_stdio = 0;
 #endif
-#ifdef Py_GIL_DISABLED
-    config->thread_inherit_context = 1;
-    config->context_aware_warnings = 1;
-#else
     config->thread_inherit_context = 0;
     config->context_aware_warnings = 0;
-#endif
 #ifdef __APPLE__
     config->use_system_logger = USE_SYSTEM_LOGGER_DEFAULT;
 #endif
@@ -1237,11 +1202,7 @@ PyConfig_InitIsolatedConfig(PyConfig *config)
     config->int_max_str_digits = _PY_LONG_DEFAULT_MAX_STR_DIGITS;
     config->safe_path = 1;
     config->pathconfig_warnings = 0;
-#ifdef Py_GIL_DISABLED
-    config->thread_inherit_context = 1;
-#else
     config->thread_inherit_context = 0;
-#endif
 #ifdef MS_WINDOWS
     config->legacy_windows_stdio = 0;
 #endif
@@ -1853,18 +1814,10 @@ static PyStatus
 config_read_gil(PyConfig *config, size_t len, wchar_t first_char)
 {
     if (len == 1 && first_char == L'0') {
-#ifdef Py_GIL_DISABLED
-        config->enable_gil = _PyConfig_GIL_DISABLE;
-#else
         return _PyStatus_ERR("Disabling the GIL is not supported by this build");
-#endif
     }
     else if (len == 1 && first_char == L'1') {
-#ifdef Py_GIL_DISABLED
-        config->enable_gil = _PyConfig_GIL_ENABLE;
-#else
         return _PyStatus_OK();
-#endif
     }
     else {
         return _PyStatus_ERR("PYTHON_GIL / -X gil must be \"0\" or \"1\"");
@@ -2069,31 +2022,7 @@ config_init_context_aware_warnings(PyConfig *config)
 static PyStatus
 config_init_tlbc(PyConfig *config)
 {
-#ifdef Py_GIL_DISABLED
-    const char *env = config_get_env(config, "PYTHON_TLBC");
-    if (env) {
-        int enabled;
-        if (_Py_str_to_int(env, &enabled) < 0 || (enabled < 0) || (enabled > 1)) {
-            return _PyStatus_ERR(
-                "PYTHON_TLBC=N: N is missing or invalid");
-        }
-        config->tlbc_enabled = enabled;
-    }
-
-    const wchar_t *xoption = config_get_xoption(config, L"tlbc");
-    if (xoption) {
-        int enabled;
-        const wchar_t *sep = wcschr(xoption, L'=');
-        if (!sep || (config_wstr_to_int(sep + 1, &enabled) < 0) || (enabled < 0) || (enabled > 1)) {
-            return _PyStatus_ERR(
-                "-X tlbc=n: n is missing or invalid");
-        }
-        config->tlbc_enabled = enabled;
-    }
     return _PyStatus_OK();
-#else
-    return _PyStatus_OK();
-#endif
 }
 
 static PyStatus

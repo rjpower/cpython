@@ -58,11 +58,7 @@ _sysconfig_config_vars_impl(PyObject *module)
     }
 #endif
 
-#ifdef Py_GIL_DISABLED
-    PyObject *py_gil_disabled = _PyLong_GetOne();
-#else
     PyObject *py_gil_disabled = _PyLong_GetZero();
-#endif
     if (PyDict_SetItemString(config, "Py_GIL_DISABLED", py_gil_disabled) < 0) {
         Py_DECREF(config);
         return NULL;

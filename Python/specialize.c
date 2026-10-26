@@ -300,23 +300,8 @@ instr_entry(_PyInstr *instr)
 static inline int
 set_opcode(_PyInstr *instr, int opcode)
 {
-#ifdef Py_GIL_DISABLED
-    _PyIRWord old = _Py_atomic_load_uint64_relaxed(instr);
-    int handler = IR_HANDLER(old);
-    if (handler >= MIN_INSTRUMENTED_OPCODE && handler < IR_FIRST_ONLY_HANDLER) {
-        /* Lost race with instrumentation */
-        return 0;
-    }
-    _PyIRWord new = (old & ~(_PyIRWord)0xFFFF) | (uint16_t)opcode;
-    if (!_Py_atomic_compare_exchange_uint64(instr, &old, new)) {
-        /* Lost race with instrumentation */
-        return 0;
-    }
-    return 1;
-#else
     _PyIR_SetHandler(instr, opcode);
     return 1;
-#endif
 }
 
 static inline void
@@ -584,19 +569,6 @@ static int function_kind(PyCodeObject *code);
 static bool function_check_args(PyObject *o, int expected_argcount, int opcode);
 static uint32_t function_get_version(PyObject *o, int opcode);
 
-#ifdef Py_GIL_DISABLED
-static void
-maybe_enable_deferred_ref_count(PyObject *op)
-{
-    if (!_Py_IsOwnedByCurrentThread(op) && _PyObject_GC_IS_TRACKED(op)) {
-        // For module level variables that are heavily used from multiple
-        // threads, deferred reference counting provides good scaling
-        // benefits.  The downside is that the object will only be deallocated
-        // by a GC run.
-        PyUnstable_Object_EnableDeferredRefcount(op);
-    }
-}
-#endif
 
 
 static int
@@ -624,9 +596,6 @@ specialize_module_load_attr_lock_held(PyDictObject *dict, _PyInstr *instr, PyObj
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
         return -1;
     }
-#ifdef Py_GIL_DISABLED
-    maybe_enable_deferred_ref_count(value);
-#endif
     fb->dict_version = keys_version;
     fb->index = (uint32_t)index;
     specialize(instr, LOAD_ATTR_MODULE);
@@ -920,9 +889,6 @@ specialize_dict_access_hint(
     _PyFbAttr *fb = instr_entry(instr);
 
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(dict);
-#ifdef Py_GIL_DISABLED
-    _PyDict_EnsureSharedOnRead(dict);
-#endif
 
     // We found an instance with a __dict__.
     // STORE_ATTR_WITH_HINT can write the values of a split table, such as a
@@ -1100,12 +1066,6 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
                 SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OTHER);
                 return -1;
             }
-            #ifdef Py_GIL_DISABLED
-            if (!_PyObject_HasDeferredRefcount(fget)) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_DESCR_NOT_DEFERRED);
-                return -1;
-            }
-            #endif
             uint32_t func_version = function_get_version(fget, LOAD_ATTR);
             if (func_version == 0) {
                 return -1;
@@ -1180,12 +1140,6 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
                 SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OTHER);
                 return -1;
             }
-            #ifdef Py_GIL_DISABLED
-            if (!_PyObject_HasDeferredRefcount(descr)) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_DESCR_NOT_DEFERRED);
-                return -1;
-            }
-            #endif
             fb->func_version = version;
             fb->getattribute = descr;  /* borrowed */
             fb->type_version = tp_version;
@@ -1492,9 +1446,6 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
             _Py_FALLTHROUGH;
         case METHOD:
         case NON_DESCRIPTOR:
-#ifdef Py_GIL_DISABLED
-            maybe_enable_deferred_ref_count(descr);
-#endif
             fb->descr = descr;
             fb->class_version = tp_version;
             if (metaclass_check) {
@@ -1535,20 +1486,12 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
     assert(descr != NULL);
     assert((is_method && kind == METHOD) || (!is_method && kind == NON_DESCRIPTOR));
 
-    #ifdef Py_GIL_DISABLED
-    if (!_PyObject_HasDeferredRefcount(descr)) {
-        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_DESCR_NOT_DEFERRED);
-        return 0;
-    }
-    #endif
 
     int opcode;
     unsigned long tp_flags = PyType_GetFlags(owner_cls);
     if (tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-        #ifndef Py_GIL_DISABLED
         assert(_PyDictKeys_StringLookup(
                    ((PyHeapTypeObject *)owner_cls)->ht_cached_keys, name) < 0);
-        #endif
         if (shared_keys_version == 0) {
             SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
             return 0;
@@ -1645,9 +1588,6 @@ specialize_load_global_lock_held(
             goto fail;
         }
         PyDict_Watch(MODULE_WATCHER_ID, globals);
-#ifdef Py_GIL_DISABLED
-        maybe_enable_deferred_ref_count(value);
-#endif
         fb->index = (uint32_t)index;
         fb->globals_version = keys_version;
         specialize(instr, LOAD_GLOBAL_MODULE);
@@ -1703,14 +1643,6 @@ _Py_Specialize_LoadGlobal(
     PyObject *globals, PyObject *builtins,
     _PyInstr *instr, PyObject *name)
 {
-#ifdef Py_GIL_DISABLED
-    if (PyMutex_IsLocked(&globals->ob_mutex) || PyMutex_IsLocked(&builtins->ob_mutex)) {
-        // Skip specialization if either dictionary is locked to avoid lock
-        // contention.
-        unspecialize(instr);
-        return;
-    }
-#endif
     Py_BEGIN_CRITICAL_SECTION2(globals, builtins);
     specialize_load_global_lock_held(globals, builtins, instr, name);
     Py_END_CRITICAL_SECTION2();
@@ -2909,16 +2841,6 @@ _Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _PyInstr *in
 
     if (PyStackRef_IsNull(null_or_index)) {
         if (tp == &PyRangeIter_Type && inline_producers_allowed()) {
-#ifdef Py_GIL_DISABLED
-            // Only specialize for uniquely referenced iterators, so that we know
-            // they're only referenced by this one thread. This is more limiting
-            // than we need (even `it = iter(mylist); for item in it:` won't get
-            // specialized) but we don't have a way to check whether we're the only
-            // _thread_ who has access to the object.
-            if (!_PyObject_IsUniquelyReferenced(iter_o)) {
-                goto failure;
-            }
-#endif
             specialize(instr, FOR_ITER_RANGE);
             return;
         }
@@ -2939,12 +2861,6 @@ _Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _PyInstr *in
     else {
         if (tp->_tp_iteritem != NULL) {
             if (tp == &PyList_Type) {
-    #ifdef Py_GIL_DISABLED
-                // Only specialize for lists owned by this thread or shared
-                if (!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o)) {
-                    goto failure;
-                }
-    #endif
                 specialize(instr, FOR_ITER_LIST);
                 return;
             }

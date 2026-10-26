@@ -774,10 +774,6 @@ PyOS_AfterFork_Child(void)
     tstate->native_thread_id = PyThread_get_thread_native_id();
 #endif
 
-#ifdef Py_GIL_DISABLED
-    _Py_brc_after_fork(tstate->interp);
-    _Py_qsbr_after_fork((_PyThreadStateImpl *)tstate);
-#endif
 
     // Ideally we could guarantee tstate is running main.
     _PyInterpreterState_ReinitRunningMain(tstate);

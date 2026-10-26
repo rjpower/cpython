@@ -3,9 +3,8 @@
 // even if it's likely to crash.
 
 // Need limited C API version 3.14 for PyType_Freeze()
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#if !defined(Py_GIL_DISABLED) && !defined(Py_LIMITED_API)
-#  define Py_LIMITED_API 0x030e0000
+#if !defined(Py_LIMITED_API)
+#define Py_LIMITED_API 0x030e0000
 #endif
 
 #include "parts.h"

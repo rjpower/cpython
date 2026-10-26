@@ -15,13 +15,11 @@ extern "C" {
 
 /* state */
 
-#ifdef Py_GC
 /* An instance's dealloc may make a call that the tracing collector makes
    before the sweep instead (live_has_destroy_hook() in Python/gc_trace.c).
    type_ready() sets it, so that the heap walk tests one bit for most dead
-   objects.  Bit 16 is reserved for Stackless, which Py_GC does not support. */
+   objects.  Bit 16 is reserved for Stackless, which this build does not support. */
 #define _Py_TPFLAGS_DESTROY_HOOK (1UL << 16)
-#endif
 
 #define _Py_TYPE_VERSION_INT 1
 #define _Py_TYPE_VERSION_FLOAT 2
@@ -101,11 +99,9 @@ _PyType_GetModuleState(PyTypeObject *type)
 PyAPI_FUNC(PyObject *) _PyType_GetDict(PyTypeObject *);
 // Visit what a static type refers to; for the tracing verifier.
 extern int _PyType_TraverseStatic(PyTypeObject *, visitproc, void *);
-#ifdef Py_GC
-/* Under Py_GC the collector makes this call of the dealloc's before the
+/* The collector makes this call of the dealloc's before the
    sweep, where it may run code (Python/gc_live.c); the dealloc does not. */
 extern void _PyType_NotifyDestroy(PyTypeObject *type);
-#endif
 
 PyAPI_FUNC(PyObject *) _PyType_LookupSubclasses(PyTypeObject *);
 PyAPI_FUNC(PyObject *) _PyType_InitSubclasses(PyTypeObject *);

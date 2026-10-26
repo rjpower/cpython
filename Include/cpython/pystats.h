@@ -120,17 +120,6 @@ typedef struct _gc_stats {
     uint64_t objects_not_transitively_reachable;
 } GCStats;
 
-#ifdef Py_GIL_DISABLED
-// stats specific to free-threaded build
-typedef struct _ft_stats {
-    // number of times interpreter had to spin or park when trying to acquire a mutex
-    uint64_t mutex_sleeps;
-    // number of times that the QSBR mechanism polled (compute read sequence value)
-    uint64_t qsbr_polls;
-    // number of times stop-the-world mechanism was used
-    uint64_t world_stops;
-} FTStats;
-#endif
 
 typedef struct _rare_event_stats {
     /* Setting an object's class, obj.__class__ = ... */
@@ -152,9 +141,6 @@ typedef struct _stats {
     OpcodeStats opcode_stats[256];
     CallStats call_stats;
     ObjectStats object_stats;
-#ifdef Py_GIL_DISABLED
-    FTStats ft_stats;
-#endif
     RareEventStats rare_event_stats;
     GCStats gc_stats[3]; // must match NUM_GENERATIONS
 } PyStats;

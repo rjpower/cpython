@@ -29,13 +29,11 @@ extern "C" {
 
 
 extern PyStatus _PyCode_Init(PyInterpreterState *interp);
-#ifdef Py_GC
-/* Under Py_GC the collector makes these calls of the dealloc's before the
+/* The collector makes these calls of the dealloc's before the
    sweep, where they may run code (Python/gc_live.c): the code watchers'
    DESTROY event and the co_extra free functions.  The dealloc does not. */
 extern int _PyCode_HasExtraFree(PyObject *co);
 extern void _PyCode_Destroy(PyObject *co);
-#endif
 extern void _PyCode_Fini(PyInterpreterState *interp);
 
 
@@ -372,47 +370,6 @@ struct _PyCode3 _PyCode_DEF(3);
 
 PyAPI_DATA(const struct _PyCode3) _Py_InitCleanup;
 
-#ifdef Py_GIL_DISABLED
-
-static inline _PyCodeArray *
-_PyCode_GetTLBCArray(PyCodeObject *co)
-{
-    return _Py_STATIC_CAST(_PyCodeArray *,
-                           _Py_atomic_load_ptr_acquire(&co->co_tlbc));
-}
-
-// Return a pointer to the thread-local bytecode for the current thread, if it
-// exists.
-static inline _Py_CODEUNIT *
-_PyCode_GetTLBCFast(PyThreadState *tstate, PyCodeObject *co)
-{
-    _PyCodeArray *code = _PyCode_GetTLBCArray(co);
-    int32_t idx = ((_PyThreadStateImpl*) tstate)->tlbc_index;
-    if (idx < code->size && code->entries[idx] != NULL) {
-        return (_Py_CODEUNIT *) code->entries[idx];
-    }
-    return NULL;
-}
-
-
-// Reserve an index for the current thread into thread-local bytecode
-// arrays
-//
-// Returns the reserved index or -1 on error.
-extern int32_t _Py_ReserveTLBCIndex(PyInterpreterState *interp);
-
-// Release an index returned by _Py_ReserveTLBCIndex() that was never stored
-// in a PyThreadState.
-extern void _Py_UnreserveTLBCIndex(PyInterpreterState *interp, int32_t index);
-
-// Release the current thread's index into thread-local bytecode arrays
-extern void _Py_ClearTLBCIndex(_PyThreadStateImpl *tstate);
-
-// Free all TLBC copies not associated with live threads.
-//
-// Returns 0 on success or -1 on error.
-extern int _Py_ClearUnusedTLBC(PyInterpreterState *interp);
-#endif
 
 
 typedef struct {

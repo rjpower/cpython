@@ -166,14 +166,7 @@ dummy_func(
         }
 
         tier1 op(_MAYBE_INSTRUMENT, (--)) {
-            #ifdef Py_GIL_DISABLED
-            // For thread-safety, we need to check instrumentation version
-            // even when tracing. Otherwise, another thread may concurrently
-            // re-write the bytecode while we are executing this function.
-            int check_instrumentation = 1;
-            #else
             int check_instrumentation = (tstate->tracing == 0);
-            #endif
             if (check_instrumentation) {
                 uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
                 uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
@@ -1047,9 +1040,6 @@ dummy_func(
                 ERROR_NO_POP();
             }
             assert(d->result_type == NULL || Py_TYPE(res_o) == d->result_type);
-#ifndef Py_GC  // reference counts are constant under Py_GC
-            assert(!d->result_unique || Py_REFCNT(res_o) == 1 || _Py_IsImmortal(res_o));
-#endif
 
             res = PyStackRef_FromPyObjectSteal(res_o);
             l = left;
@@ -1110,16 +1100,10 @@ dummy_func(
             if (index < 0) {
                 index += PyList_GET_SIZE(list);
             }
-#ifdef Py_GIL_DISABLED
-            PyObject *res_o = _PyList_GetItemRef((PyListObject*)list, index);
-            EXIT_IF(res_o == NULL);
-            res = PyStackRef_FromPyObjectSteal(res_o);
-#else
             EXIT_IF(index < 0 || index >= PyList_GET_SIZE(list));
             PyObject *res_o = PyList_GET_ITEM(list, index);
             assert(res_o != NULL);
             res = PyStackRef_FromPyObjectNew(res_o);
-#endif
             STAT_INC(BINARY_OP, hit);
             ls = list_st;
             ss = sub_st;
@@ -2118,12 +2102,7 @@ dummy_func(
             assert(index < DK_SIZE(keys));
             PyObject *res_o = FT_ATOMIC_LOAD_PTR_CONSUME(entries[index].me_value);
             DEOPT_IF(res_o == NULL);
-            #if Py_GIL_DISABLED
-            int increfed = _Py_TryIncrefCompareStackRef(&entries[index].me_value, res_o, &res);
-            DEOPT_IF(!increfed);
-            #else
             res = PyStackRef_FromPyObjectNew(res_o);
-            #endif
             STAT_INC(LOAD_GLOBAL, hit);
         }
 
@@ -2137,12 +2116,7 @@ dummy_func(
             PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
             PyObject *res_o = FT_ATOMIC_LOAD_PTR_CONSUME(entries[index].me_value);
             DEOPT_IF(res_o == NULL);
-            #if Py_GIL_DISABLED
-            int increfed = _Py_TryIncrefCompareStackRef(&entries[index].me_value, res_o, &res);
-            DEOPT_IF(!increfed);
-            #else
             res = PyStackRef_FromPyObjectNew(res_o);
-            #endif
             STAT_INC(LOAD_GLOBAL, hit);
         }
 
@@ -2694,14 +2668,7 @@ dummy_func(
             PyObject **value_ptr = (PyObject**)(((char *)owner_o) + offset);
             PyObject *attr_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(*value_ptr);
             DEOPT_IF(attr_o == NULL);
-            #ifdef Py_GIL_DISABLED
-            int increfed = _Py_TryIncrefCompareStackRef(value_ptr, attr_o, &attr);
-            if (!increfed) {
-                DEOPT_IF(true);
-            }
-            #else
             attr = PyStackRef_FromPyObjectNew(attr_o);
-            #endif
             STAT_INC(LOAD_ATTR, hit);
             o = owner;
             DEAD(owner);
@@ -2758,14 +2725,7 @@ dummy_func(
             PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(keys) + index;
             PyObject *attr_o = FT_ATOMIC_LOAD_PTR_CONSUME(ep->me_value);
             EXIT_IF(attr_o == NULL);
-            #ifdef Py_GIL_DISABLED
-            int increfed = _Py_TryIncrefCompareStackRef(&ep->me_value, attr_o, &attr);
-            if (!increfed) {
-                EXIT_IF(true);
-            }
-            #else
             attr = PyStackRef_FromPyObjectNew(attr_o);
-            #endif
             STAT_INC(LOAD_ATTR, hit);
             o = owner;
             DEAD(owner);
@@ -2785,9 +2745,6 @@ dummy_func(
             EXIT_IF(dict == NULL);
             PyDictKeysObject *dk = FT_ATOMIC_LOAD_PTR(dict->ma_keys);
             assert(PyDict_CheckExact((PyObject *)dict));
-#ifdef Py_GIL_DISABLED
-            EXIT_IF(!_Py_IsOwnedByCurrentThread((PyObject *)dict) && !_PyObject_GC_IS_SHARED(dict));
-#endif
             PyObject *attr_o;
             if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries)) {
                 EXIT_IF(true);
@@ -2806,14 +2763,7 @@ dummy_func(
                 EXIT_IF(true);
             }
             STAT_INC(LOAD_ATTR, hit);
-#ifdef Py_GIL_DISABLED
-            int increfed = _Py_TryIncrefCompareStackRef(&ep->me_value, attr_o, &attr);
-            if (!increfed) {
-                EXIT_IF(true);
-            }
-#else
             attr = PyStackRef_FromPyObjectNew(attr_o);
-#endif
             o = owner;
             DEAD(owner);
         }
@@ -2832,12 +2782,7 @@ dummy_func(
             PyObject **addr = (PyObject **)((char *)owner_o + index);
             PyObject *attr_o = FT_ATOMIC_LOAD_PTR(*addr);
             EXIT_IF(attr_o == NULL);
-            #ifdef Py_GIL_DISABLED
-            int increfed = _Py_TryIncrefCompareStackRef(addr, attr_o, &attr);
-            EXIT_IF(!increfed);
-            #else
             attr = PyStackRef_FromPyObjectNew(attr_o);
-            #endif
             STAT_INC(LOAD_ATTR, hit);
             o = owner;
             DEAD(owner);
@@ -3726,18 +3671,9 @@ dummy_func(
             PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
             EXIT_IF(Py_TYPE(iter_o) != &PyList_Type);
             assert(PyStackRef_IsTaggedIndex(null_or_index));
-#ifdef Py_GIL_DISABLED
-            EXIT_IF(!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o));
-#endif
         }
 
         replaced op(_ITER_JUMP_LIST, (iter, null_or_index -- iter, null_or_index)) {
-#ifdef Py_GIL_DISABLED
-            // For free-threaded Python, the loop exit can happen at any point during
-            // item retrieval, so it doesn't make much sense to check and jump
-            // separately before item retrieval. Any length check we do here can be
-            // invalid by the time we actually try to fetch the item.
-#else
             PyObject *list_o = PyStackRef_AsPyObjectBorrow(iter);
             assert(Py_TYPE(list_o) == &PyList_Type);
             STAT_INC(FOR_ITER, hit);
@@ -3747,29 +3683,12 @@ dummy_func(
                 JUMPBY(oparg + 1);
                 DISPATCH();
             }
-#endif
         }
 
         replaced op(_ITER_NEXT_LIST, (iter, null_or_index -- iter, null_or_index, next)) {
             PyObject *list_o = PyStackRef_AsPyObjectBorrow(iter);
             assert(PyList_CheckExact(list_o));
-#ifdef Py_GIL_DISABLED
-            assert(_Py_IsOwnedByCurrentThread(list_o) ||
-                   _PyObject_GC_IS_SHARED(list_o));
-            STAT_INC(FOR_ITER, hit);
-            int result = _PyList_GetItemRefNoLock((PyListObject *)list_o, PyStackRef_UntagIndex(null_or_index), &next);
-            // A negative result means we lost a race with another thread
-            // and we need to take the slow path.
-            DEOPT_IF(result < 0);
-            if (result == 0) {
-                null_or_index = PyStackRef_TagIndex(-1);
-                /* Jump forward oparg, then skip following END_FOR instruction */
-                JUMPBY(oparg + 1);
-                DISPATCH();
-            }
-#else
             next = PyStackRef_FromPyObjectNew(PyList_GET_ITEM(list_o, PyStackRef_UntagIndex(null_or_index)));
-#endif
             null_or_index = PyStackRef_IncrementTaggedIndexNoOverflow(null_or_index);
         }
 
@@ -3818,19 +3737,11 @@ dummy_func(
             assert(PyStackRef_IsObject(iter));
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyStackRef_AsPyObjectBorrow(iter);
             EXIT_IF(Py_TYPE(r) != &PyRangeIter_Type);
-#ifdef Py_GIL_DISABLED
-            EXIT_IF(!_PyObject_IsUniquelyReferenced((PyObject *)r));
-#endif
         }
 
         replaced op(_ITER_JUMP_RANGE, (iter, null_or_index -- iter, null_or_index)) {
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyStackRef_AsPyObjectBorrow(iter);
             assert(Py_TYPE(r) == &PyRangeIter_Type);
-#ifdef Py_GIL_DISABLED
-#ifndef Py_GC  // reference counts are constant under Py_GC
-            assert(_PyObject_IsUniquelyReferenced((PyObject *)r));
-#endif
-#endif
             STAT_INC(FOR_ITER, hit);
             if (r->len <= 0) {
                 // Jump over END_FOR instruction.
@@ -3842,11 +3753,6 @@ dummy_func(
         op(_ITER_NEXT_RANGE, (iter, null_or_index -- iter, null_or_index, next)) {
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyStackRef_AsPyObjectBorrow(iter);
             assert(Py_TYPE(r) == &PyRangeIter_Type);
-#ifdef Py_GIL_DISABLED
-#ifndef Py_GC  // reference counts are constant under Py_GC
-            assert(_PyObject_IsUniquelyReferenced((PyObject *)r));
-#endif
-#endif
             assert(r->len > 0);
             long value = r->start;
             r->start = value + r->step;

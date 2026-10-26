@@ -1324,15 +1324,7 @@ compile_template(_sremodulestate *module_state,
         if (func == NULL) {
             return NULL;
         }
-#ifdef Py_GIL_DISABLED
-        PyObject *other_func = NULL;
-        if (!_Py_atomic_compare_exchange_ptr(&module_state->compile_template, &other_func, func))  {
-            Py_DECREF(func);
-            func = other_func;
-        }
-#else
         Py_XSETREF(module_state->compile_template, func);
-#endif
     }
 
     PyObject *args[] = {(PyObject *)pattern, template};
@@ -3045,12 +3037,8 @@ scanner_dealloc(PyObject *self)
 static int
 scanner_begin(ScannerObject* self)
 {
-#ifdef Py_GIL_DISABLED
-    int was_executing = _Py_atomic_exchange_int(&self->executing, 1);
-#else
     int was_executing = self->executing;
     self->executing = 1;
-#endif
     if (was_executing) {
         PyErr_SetString(PyExc_ValueError,
                         "regular expression scanner already executing");

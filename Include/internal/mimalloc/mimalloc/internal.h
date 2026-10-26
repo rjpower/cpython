@@ -227,10 +227,8 @@ void          _mi_arena_field_cursor_done(mi_arena_field_cursor_t* current);
 // "segment-map.c"
 void        _mi_segment_map_allocated_at(const mi_segment_t* segment);
 void        _mi_segment_map_freed_at(const mi_segment_t* segment);
-#ifdef Py_GC
 bool        _mi_gc_segmap_reserve(const void* start, size_t size);
 void        _mi_gc_segmap_publish(const mi_segment_t* segment, bool present);
-#endif
 void        _mi_segment_map_unsafe_destroy(void);
 
 // "segment.c"
@@ -540,7 +538,6 @@ static inline mi_page_t* _mi_heap_get_free_small_page(mi_heap_t* heap, size_t si
   return heap->pages_free_direct[idx];
 }
 
-#ifdef Py_GC
 // CPython: the tracing collector's segment map (segment-map.c).  For each
 // MI_SEGMENT_SIZE-aligned slot of the low 2^48 bytes of the address space it
 // holds the segment that covers the slot, or NULL, so that Python/gc_trace.c
@@ -569,7 +566,6 @@ static inline mi_segment_t* _mi_gc_segment_of(uintptr_t p) {
   if (leaf == NULL) return NULL;
   return mi_atomic_load_ptr_acquire(mi_segment_t, &leaf->segment[slot & (MI_GC_SEGMAP_LEAF_ENTRIES - 1)]);
 }
-#endif
 
 // Segment that contains the pointer
 // Large aligned blocks may be aligned at N*MI_SEGMENT_SIZE (inside a huge segment > MI_SEGMENT_SIZE),

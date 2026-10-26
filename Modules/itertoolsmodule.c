@@ -232,9 +232,7 @@ batched_next(PyObject *op)
         if (!PyErr_ExceptionMatches(PyExc_StopIteration)) {
             /* Input raised an exception other than StopIteration */
             FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
-#ifndef Py_GIL_DISABLED
             Py_CLEAR(bo->it);
-#endif
             Py_DECREF(result);
             return NULL;
         }
@@ -242,17 +240,13 @@ batched_next(PyObject *op)
     }
     if (i == 0) {
         FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
-#ifndef Py_GIL_DISABLED
         Py_CLEAR(bo->it);
-#endif
         Py_DECREF(result);
         return NULL;
     }
     if (bo->strict) {
         FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
-#ifndef Py_GIL_DISABLED
         Py_CLEAR(bo->it);
-#endif
         Py_DECREF(result);
         PyErr_SetString(PyExc_ValueError, "batched(): incomplete batch");
         return NULL;
@@ -963,7 +957,6 @@ tee_next(PyObject *op)
     teeobject *to = teeobject_CAST(op);
     PyObject *value;
 
-#ifndef Py_GIL_DISABLED
     /* The GIL already serializes access, so keep the simple path without the
        snapshot and revalidation that the free-threaded build needs. */
     if (to->index >= LINKCELLS) {
@@ -980,48 +973,6 @@ tee_next(PyObject *op)
     }
     to->index++;
     return value;
-#else
-    for (;;) {
-        teedataobject *dataobj;
-        int index;
-
-        /* Snapshot the branch position (strong ref to the shared data object)
-           under the tee lock; the data object is locked separately, not nested,
-           then the advance is revalidated. */
-        Py_BEGIN_CRITICAL_SECTION(op);
-        dataobj = (teedataobject *)Py_NewRef((PyObject *)to->dataobj);
-        index = to->index;
-        Py_END_CRITICAL_SECTION();
-
-        if (index < LINKCELLS) {
-            value = teedataobject_getitem(dataobj, index);
-            if (value != NULL) {
-                Py_BEGIN_CRITICAL_SECTION(op);
-                if (to->dataobj == dataobj && to->index == index) {
-                    to->index = index + 1;
-                }
-                Py_END_CRITICAL_SECTION();
-            }
-            Py_DECREF(dataobj);
-            return value;
-        }
-
-        PyObject *link = teedataobject_jumplink(to->state, dataobj);
-        if (link == NULL) {
-            Py_DECREF(dataobj);
-            return NULL;
-        }
-        Py_BEGIN_CRITICAL_SECTION(op);
-        if (to->dataobj == dataobj) {
-            Py_SETREF(to->dataobj, (teedataobject *)link);
-            to->index = 0;
-            link = NULL;
-        }
-        Py_END_CRITICAL_SECTION();
-        Py_XDECREF(link);
-        Py_DECREF(dataobj);
-    }
-#endif
 }
 
 static int
@@ -1305,9 +1256,7 @@ cycle_next(PyObject *op)
             return NULL;
         index = 0;
         FT_ATOMIC_STORE_SSIZE_RELAXED(lz->index, 0);
-#ifndef Py_GIL_DISABLED
         Py_CLEAR(lz->it);
-#endif
     }
     if (PyList_GET_SIZE(lz->saved) == 0)
         return NULL;
@@ -2244,9 +2193,6 @@ product_next_impl(productobject *self)
             _PyTuple_Recycle(result);
         }
         /* Now, we've got the only copy so we can update it in-place */
-#ifndef Py_GC  // reference counts are constant under Py_GC
-        assert (npools==0 || Py_REFCNT(result) == 1);
-#endif
 
         /* Update the pool indices right-to-left.  Only advance to the
            next pool when the previous one rolls-over */
@@ -2480,9 +2426,6 @@ combinations_next_impl(combinationsobject *self)
          * CPython's empty tuple is a singleton and cached in
          * PyTuple's freelist.
          */
-#ifndef Py_GC  // reference counts are constant under Py_GC
-        assert(r == 0 || Py_REFCNT(result) == 1);
-#endif
 
         /* Scan indices right-to-left until finding one that is not
            at its maximum (i + n - r). */
@@ -2730,9 +2673,6 @@ cwr_next_impl(cwrobject *self)
         }
         /* Now, we've got the only copy so we can update it in-place CPython's
            empty tuple is a singleton and cached in PyTuple's freelist. */
-#ifndef Py_GC  // reference counts are constant under Py_GC
-        assert(r == 0 || Py_REFCNT(result) == 1);
-#endif
 
        /* Scan indices right-to-left until finding one that is not
         * at its maximum (n-1). */
@@ -2998,9 +2938,6 @@ permutations_next_impl(permutationsobject *self)
             _PyTuple_Recycle(result);
         }
         /* Now, we've got the only copy so we can update it in-place */
-#ifndef Py_GC  // reference counts are constant under Py_GC
-        assert(r == 0 || Py_REFCNT(result) == 1);
-#endif
 
         /* Decrement rightmost cycle, moving leftward upon zero rollover */
         for (i=r-1 ; i>=0 ; i--) {
@@ -3641,30 +3578,9 @@ static PyObject *
 count_next(PyObject *op)
 {
     countobject *lz = countobject_CAST(op);
-#ifndef Py_GIL_DISABLED
     if (lz->cnt == PY_SSIZE_T_MAX)
         return count_nextlong(lz);
     return PyLong_FromSsize_t(lz->cnt++);
-#else
-    // free-threading version
-    // fast mode uses compare-exchange loop
-    // slow mode uses a critical section
-    PyObject *returned;
-    Py_ssize_t cnt;
-
-    cnt = _Py_atomic_load_ssize_relaxed(&lz->cnt);
-    for (;;) {
-        if (cnt == PY_SSIZE_T_MAX) {
-            Py_BEGIN_CRITICAL_SECTION(lz);
-            returned = count_nextlong(lz);
-            Py_END_CRITICAL_SECTION();
-            return returned;
-        }
-        if (_Py_atomic_compare_exchange_ssize(&lz->cnt, &cnt, cnt + 1)) {
-            return PyLong_FromSsize_t(cnt);
-        }
-    }
-#endif
 }
 
 static PyObject *

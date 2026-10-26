@@ -69,9 +69,6 @@ _PyFrame_InitIRInstrPtr(_PyInterpreterFrame *frame, PyCodeObject *code)
     assert(exec != NULL);
     frame->instr_ptr = exec->words;
     _PyFrame_SetExec(frame, exec);
-#ifdef Py_GIL_DISABLED
-    frame->tlbc_index = 0;
-#endif
 }
 
 // Similar to _PyFrame_GetCode(), but return NULL if the frame is invalid or
@@ -226,9 +223,6 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
     dest->instr_ptr = src->instr_ptr;
     dest->ir_words = src->ir_words;
     dest->ir_feedback = src->ir_feedback;
-#ifdef Py_GIL_DISABLED
-    dest->tlbc_index = src->tlbc_index;
-#endif
     dest->return_slot = src->return_slot;
     // visited is GC bookkeeping for the current stack walk, not frame state.
     dest->visited = 0;

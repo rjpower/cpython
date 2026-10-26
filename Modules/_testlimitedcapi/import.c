@@ -1,10 +1,5 @@
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#ifdef Py_GIL_DISABLED
-#  define Py_TARGET_ABI3T 0x030f0000
-#else
-   // Need limited C API version 3.13 for PyImport_AddModuleRef()
-#  define Py_LIMITED_API 0x030d0000
-#endif
+// Need limited C API version 3.13 for PyImport_AddModuleRef()
+#define Py_LIMITED_API 0x030d0000
 
 #include "parts.h"
 #include "util.h"

@@ -18,10 +18,9 @@ extern void * _PyMem_RawRealloc(void *, void *, size_t);
 extern void _PyMem_RawFree(void *, void *);
 #define PYRAW_ALLOC {NULL, _PyMem_RawMalloc, _PyMem_RawCalloc, _PyMem_RawRealloc, _PyMem_RawFree}
 
-#if defined(Py_GIL_DISABLED) || (defined(WITH_MIMALLOC) \
-     && !defined(_Py_ADDRESS_SANITIZER) && !defined(_Py_MEMORY_SANITIZER))
-// Py_GIL_DISABLED requires mimalloc.  The default build uses it by default
-// when it is built in, for the tracing collector; keep in sync with the
+#if defined(WITH_MIMALLOC) \
+     && !defined(_Py_ADDRESS_SANITIZER) && !defined(_Py_MEMORY_SANITIZER)
+// The tracing collector walks mimalloc's heaps; keep in sync with the
 // default allocators in Objects/obmalloc.c.
 extern void* _PyObject_MiMalloc(void *, size_t);
 extern void* _PyObject_MiCalloc(void *, size_t, size_t);

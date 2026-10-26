@@ -378,9 +378,7 @@ reversed_next(PyObject *op)
             PyErr_Clear();
     }
     FT_ATOMIC_STORE_SSIZE_RELAXED(ro->index, -1);
-#ifndef Py_GIL_DISABLED
     Py_CLEAR(ro->seq);
-#endif
     return NULL;
 }
 

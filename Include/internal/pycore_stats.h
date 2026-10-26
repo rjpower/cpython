@@ -26,15 +26,9 @@ extern "C" {
 #define RARE_EVENT_STAT_INC(name) _Py_STATS_EXPR(rare_event_stats.name++)
 #define OPCODE_DEFERRED_INC(opname) _Py_STATS_COND_EXPR(opcode==opname, opcode_stats[opname].specialization.deferred++)
 
-#ifdef Py_GIL_DISABLED
-#define FT_STAT_MUTEX_SLEEP_INC() _Py_STATS_EXPR(ft_stats.mutex_sleeps++)
-#define FT_STAT_QSBR_POLL_INC() _Py_STATS_EXPR(ft_stats.qsbr_polls++)
-#define FT_STAT_WORLD_STOP_INC() _Py_STATS_EXPR(ft_stats.world_stops++)
-#else
 #define FT_STAT_MUTEX_SLEEP_INC()
 #define FT_STAT_QSBR_POLL_INC()
 #define FT_STAT_WORLD_STOP_INC()
-#endif
 
 // Export for '_opcode' shared extension
 PyAPI_FUNC(PyObject*) _Py_GetSpecializationStats(void);

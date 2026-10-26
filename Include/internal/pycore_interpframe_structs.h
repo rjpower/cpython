@@ -49,10 +49,6 @@ struct _PyInterpreterFrame {
      * into: the bases of jump targets and feedback indices. */
     _PyInstr *ir_words;
     char *ir_feedback;
-#ifdef Py_GIL_DISABLED
-    /* Index of thread-local bytecode containing instr_ptr. */
-    int32_t tlbc_index;
-#endif
     /* The slot that receives the value when control comes back to this
      * frame: the dst of the call it is making, or for a suspended
      * generator the slot of the value it yielded, where the value sent in

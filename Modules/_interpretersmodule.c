@@ -197,10 +197,9 @@ xibufferview_release(xibufferview *self)
     }
 }
 
-#ifdef Py_GC
 /* The release may run the exporter's bf_releasebuffer or schedule a call in
    the exporter's interpreter, and the collector's sweep may do neither, so
-   under Py_GC it happens here, before the sweep. */
+   it happens here, before the sweep. */
 static void
 xibufferview_finalize(PyObject *op)
 {
@@ -209,7 +208,6 @@ xibufferview_finalize(PyObject *op)
         xibufferview_release(self);
     }
 }
-#endif
 
 static void
 xibufferview_dealloc(PyObject *op)
@@ -246,9 +244,7 @@ xibufferview_getbuf(PyObject *op, Py_buffer *view, int flags)
 
 static PyType_Slot XIBufferViewType_slots[] = {
     {Py_tp_dealloc, xibufferview_dealloc},
-#ifdef Py_GC
     {Py_tp_finalize, xibufferview_finalize},
-#endif
     {Py_bf_getbuffer, xibufferview_getbuf},
     // We don't bother with Py_bf_releasebuffer since we don't need it.
     {0, NULL},

@@ -32,9 +32,6 @@ PyCStgInfo_clone(StgInfo *dst_info, StgInfo *src_info)
     dst_info->format = NULL;
     dst_info->shape = NULL;
     dst_info->ffi_type_pointer.elements = NULL;
-#ifdef Py_GIL_DISABLED
-    dst_info->mutex = (PyMutex){0};
-#endif
     dst_info->dict_final = 0;
 
     Py_XINCREF(dst_info->proto);

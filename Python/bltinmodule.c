@@ -954,21 +954,11 @@ builtin_compile_impl(PyObject *module, PyObject *source, PyObject *filename,
     if (str == NULL)
         goto error;
 
-#ifdef Py_GIL_DISABLED
-    // Disable immortalization of code constants for explicit
-    // compile() calls to get consistent frozen outputs between the default
-    // and free-threaded builds.
-    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-    tstate->suppress_co_const_immortalization++;
-#endif
 
     result = _Py_CompileString(str, filename,
                                start[compile_mode], &cf,
                                optimize, modname);
 
-#ifdef Py_GIL_DISABLED
-    tstate->suppress_co_const_immortalization--;
-#endif
 
     Py_XDECREF(source_copy);
     goto finally;
@@ -1128,16 +1118,7 @@ builtin_eval_impl(PyObject *module, PyObject *source, PyObject *globals,
             str++;
 
         (void)PyEval_MergeCompilerFlags(&cf);
-#ifdef Py_GIL_DISABLED
-        // Don't immortalize code constants for explicit eval() calls
-        // to avoid memory leaks.
-        _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-        tstate->suppress_co_const_immortalization++;
-#endif
         result = PyRun_StringFlags(str, Py_eval_input, globals, locals, &cf);
-#ifdef Py_GIL_DISABLED
-        tstate->suppress_co_const_immortalization--;
-#endif
         Py_XDECREF(source_copy);
     }
 
@@ -3529,22 +3510,9 @@ _PyBuiltin_Init(PyInterpreterState *interp)
     mod = _PyModule_CreateInitialized(&builtinsmodule, PYTHON_API_VERSION);
     if (mod == NULL)
         return NULL;
-#ifdef Py_GIL_DISABLED
-    PyUnstable_Module_SetGIL(mod, Py_MOD_GIL_NOT_USED);
-#endif
     dict = PyModule_GetDict(mod);
 
-#ifdef Py_TRACE_REFS
-    /* "builtins" exposes a number of statically allocated objects
-     * that, before this code was added in 2.3, never showed up in
-     * the list of "all objects" maintained by Py_TRACE_REFS.  As a
-     * result, programs leaking references to None and False (etc)
-     * couldn't be diagnosed by examining sys.getobjects(0).
-     */
-#define ADD_TO_ALL(OBJECT) _Py_AddToAllObjects((PyObject *)(OBJECT))
-#else
 #define ADD_TO_ALL(OBJECT) (void)0
-#endif
 
 #define SETBUILTIN(NAME, OBJECT) \
     if (PyDict_SetItemString(dict, NAME, (PyObject *)OBJECT) < 0)       \

@@ -35,21 +35,13 @@ get_abc_state(PyObject *module)
 static inline uint64_t
 get_invalidation_counter(_abcmodule_state *state)
 {
-#ifdef Py_GIL_DISABLED
-    return _Py_atomic_load_uint64(&state->abc_invalidation_counter);
-#else
     return state->abc_invalidation_counter;
-#endif
 }
 
 static inline void
 increment_invalidation_counter(_abcmodule_state *state)
 {
-#ifdef Py_GIL_DISABLED
-    _Py_atomic_add_uint64(&state->abc_invalidation_counter, 1);
-#else
     state->abc_invalidation_counter++;
-#endif
 }
 
 /* This object stores internal state for ABCs.
@@ -72,21 +64,13 @@ typedef struct {
 static inline uint64_t
 get_cache_version(_abc_data *impl)
 {
-#ifdef Py_GIL_DISABLED
-    return _Py_atomic_load_uint64(&impl->_abc_negative_cache_version);
-#else
     return impl->_abc_negative_cache_version;
-#endif
 }
 
 static inline void
 set_cache_version(_abc_data *impl, uint64_t version)
 {
-#ifdef Py_GIL_DISABLED
-    _Py_atomic_store_uint64(&impl->_abc_negative_cache_version, version);
-#else
     impl->_abc_negative_cache_version = version;
-#endif
 }
 
 static int

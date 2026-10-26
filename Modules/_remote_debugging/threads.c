@@ -406,11 +406,6 @@ unwind_stack_for_thread(
     // Check GIL status
     int has_gil = 0;
     int gil_requested = 0;
-#ifdef Py_GIL_DISABLED
-    int active = GET_MEMBER(_thread_status, ts, unwinder->debug_offsets.thread_state.status).active;
-    has_gil = active;
-    (void)gil_requested;  // unused
-#else
     // Read holds_gil directly from thread state
     has_gil = GET_MEMBER(int, ts, unwinder->debug_offsets.thread_state.holds_gil);
 
@@ -423,7 +418,6 @@ unwind_stack_for_thread(
     if (!has_gil && gil_requested) {
         status_flags |= THREAD_STATUS_GIL_REQUESTED;
     }
-#endif
     if (has_gil) {
         status_flags |= THREAD_STATUS_HAS_GIL;
         // gh-142207 for remote debugging.

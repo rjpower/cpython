@@ -136,11 +136,7 @@ extern int _PyImport_RunModInitFunc(
 #  define PYD_DEBUG_SUFFIX ""
 #endif
 
-#ifdef Py_GIL_DISABLED
-#  define PYD_THREADING_TAG "t"
-#else
 #  define PYD_THREADING_TAG ""
-#endif
 
 #ifdef PYD_PLATFORM_TAG
 #  define PYD_SOABI "cp" Py_STRINGIFY(PY_MAJOR_VERSION) Py_STRINGIFY(PY_MINOR_VERSION) PYD_THREADING_TAG "-" PYD_PLATFORM_TAG

@@ -64,7 +64,6 @@ cache_free_delayed(struct type_cache *cache)
     if (cache == NULL || cache == &empty_cache) {
         return;
     }
-#ifndef Py_GIL_DISABLED
     // On gil-enabled builds, the cache owns strong references to the interned strings,
     // so we need to decref them before freeing the cache memory.
     for (uint32_t i = 0; i < cache_size(cache); i++) {
@@ -72,7 +71,6 @@ cache_free_delayed(struct type_cache *cache)
             Py_DECREF(cache->hashtable[i].name);
         }
     }
-#endif
     // Delay the freeing of old cache for concurrent lock-free readers
     _PyMem_FreeDelayed(cache, cache_nbytes(cache));
 }
@@ -117,10 +115,8 @@ cache_insert(struct type_cache *cache, PyObject *name,
     uint32_t index = hash & cache->mask;
     for (;;) {
         if (cache->hashtable[index].name == NULL) {
-#ifndef Py_GIL_DISABLED
             // On free-threading, all interned strings are immortal.
             Py_INCREF(name);
-#endif
             cache->hashtable[index].value = value;
             FT_ATOMIC_STORE_PTR_RELEASE(cache->hashtable[index].name, name);
             cache->used++;
@@ -209,14 +205,8 @@ _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name)
     for (;;) {
         PyObject *entry_name = FT_ATOMIC_LOAD_PTR_ACQUIRE(cache->hashtable[index].name);
         if (entry_name == name) {
-#ifdef Py_GIL_DISABLED
-            if (!_Py_TryXGetStackRef(&cache->hashtable[index].value, &out_ref)) {
-                return miss;
-            }
-#else
             PyObject *v = cache->hashtable[index].value;
             out_ref = v ? PyStackRef_FromPyObjectNew(v) : PyStackRef_NULL;
-#endif
             break;
         }
         else if (entry_name == NULL) {

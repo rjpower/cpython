@@ -118,13 +118,9 @@ int
 PyTuple_SetItem(PyObject *op, Py_ssize_t i, PyObject *newitem)
 {
     PyObject **p;
-#ifdef Py_GC
     // Uniqueness cannot be checked without counts; it is the caller's
     // contract, as for PyTuple_SET_ITEM().
     if (!PyTuple_Check(op)) {
-#else
-    if (!PyTuple_Check(op) || !_PyObject_IsUniquelyReferenced(op)) {
-#endif
         Py_XDECREF(newitem);
         PyErr_BadInternalCall();
         return -1;
@@ -1043,13 +1039,8 @@ _PyTuple_Resize(PyObject **pv, Py_ssize_t newsize)
     Py_ssize_t oldsize;
 
     v = (PyTupleObject *) *pv;
-#ifdef Py_GC
     // As in PyTuple_SetItem(), uniqueness is the caller's contract.
     if (v == NULL || !Py_IS_TYPE(v, &PyTuple_Type) || newsize < 0) {
-#else
-    if (v == NULL || !Py_IS_TYPE(v, &PyTuple_Type) || newsize < 0 ||
-        (Py_SIZE(v) != 0 && !_PyObject_IsUniquelyReferenced(*pv))) {
-#endif
         *pv = 0;
         Py_XDECREF(v);
         PyErr_BadInternalCall();
@@ -1087,9 +1078,6 @@ _PyTuple_Resize(PyObject **pv, Py_ssize_t newsize)
     if (_PyObject_GC_IS_TRACKED(v)) {
         _PyObject_GC_UNTRACK(v);
     }
-#ifdef Py_TRACE_REFS
-    _Py_ForgetReference((PyObject *) v);
-#endif
     /* DECREF items deleted by shrinkage */
     for (i = newsize; i < oldsize; i++) {
         Py_CLEAR(v->ob_item[i]);
@@ -1098,9 +1086,6 @@ _PyTuple_Resize(PyObject **pv, Py_ssize_t newsize)
     sv = PyObject_GC_Resize(PyTupleObject, v, newsize);
     if (sv == NULL) {
         *pv = NULL;
-#ifdef Py_REF_DEBUG
-        _Py_DecRefTotal(_PyThreadState_GET());
-#endif
         /* The failed reallocation leaves the original items owned by v. */
         i = oldsize;
         while (--i >= 0) {
@@ -1150,10 +1135,8 @@ tupleiter_next(PyObject *self)
 
     assert(it != NULL);
     seq = it->it_seq;
-#ifndef Py_GIL_DISABLED
     if (seq == NULL)
         return NULL;
-#endif
     assert(PyTuple_Check(seq));
 
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
@@ -1163,10 +1146,8 @@ tupleiter_next(PyObject *self)
         return Py_NewRef(item);
     }
 
-#ifndef Py_GIL_DISABLED
     it->it_seq = NULL;
     Py_DECREF(seq);
-#endif
     return NULL;
 }
 
@@ -1175,15 +1156,8 @@ tupleiter_len(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     _PyTupleIterObject *it = _PyTupleIterObject_CAST(self);
     Py_ssize_t len = 0;
-#ifdef Py_GIL_DISABLED
-    Py_ssize_t idx = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
-    Py_ssize_t seq_len = PyTuple_GET_SIZE(it->it_seq);
-    if (idx < seq_len)
-        len = seq_len - idx;
-#else
     if (it->it_seq)
         len = PyTuple_GET_SIZE(it->it_seq) - it->it_index;
-#endif
     return PyLong_FromSsize_t(len);
 }
 
@@ -1199,14 +1173,8 @@ tupleiter_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
      * see issue #101765 */
     _PyTupleIterObject *it = _PyTupleIterObject_CAST(self);
 
-#ifdef Py_GIL_DISABLED
-    Py_ssize_t idx = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
-    if (idx < PyTuple_GET_SIZE(it->it_seq))
-        return Py_BuildValue("N(O)n", iter, it->it_seq, idx);
-#else
     if (it->it_seq)
         return Py_BuildValue("N(O)n", iter, it->it_seq, it->it_index);
-#endif
     return Py_BuildValue("N(())", iter);
 }
 

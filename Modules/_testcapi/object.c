@@ -189,12 +189,6 @@ test_py_try_inc_ref(PyObject *self, PyObject *unused)
     }
 
     PyUnstable_EnableTryIncRef(op);
-#ifdef Py_GIL_DISABLED
-    // PyUnstable_EnableTryIncRef sets the shared flags to
-    // `_Py_REF_MAYBE_WEAKREF` if the flags are currently zero to ensure that
-    // the shared reference count is merged on deallocation.
-    assert((op->ob_ref_shared & _Py_REF_SHARED_FLAG_MASK) >= _Py_REF_MAYBE_WEAKREF);
-#endif
 
     if (!PyUnstable_TryIncRef(op)) {
         PyErr_SetString(PyExc_AssertionError, "PyUnstable_TryIncRef failed");
@@ -215,14 +209,7 @@ test_py_set_immortal(PyObject *self, PyObject *unused)
     // is made immortal and leak memory, for the same
     // reason we cannot call PyObject_Init() on it.
     PyObject object = {0};
-#ifdef Py_GIL_DISABLED
-    object.ob_tid = _Py_ThreadId();
-    object.ob_gc_bits = 0;
-    object.ob_ref_local = 1;
-    object.ob_ref_shared = 0;
-#else
     object.ob_refcnt = 1;
-#endif
     object.ob_type = &PyBaseObject_Type;
 
     assert(!PyUnstable_IsImmortal(&object));
@@ -246,44 +233,6 @@ test_py_set_immortal(PyObject *self, PyObject *unused)
     Py_RETURN_NONE;
 }
 
-#ifdef Py_REF_DEBUG
-static PyObject *
-negative_refcount(PyObject *self, PyObject *Py_UNUSED(args))
-{
-    PyObject *obj = PyUnicode_FromString("negative_refcount");
-    if (obj == NULL) {
-        return NULL;
-    }
-    assert(Py_REFCNT(obj) == 1);
-
-    Py_SET_REFCNT(obj,  0);
-    /* Py_DECREF() must call _Py_NegativeRefcount() and abort Python */
-    Py_DECREF(obj);
-
-    Py_RETURN_NONE;
-}
-
-
-static PyObject *
-decref_freed_object(PyObject *self, PyObject *Py_UNUSED(args))
-{
-    PyObject *obj = PyUnicode_FromString("decref_freed_object");
-    if (obj == NULL) {
-        return NULL;
-    }
-    assert(Py_REFCNT(obj) == 1);
-
-    // Deallocate the memory
-    Py_DECREF(obj);
-    // obj is a now a dangling pointer
-
-    // gh-109496: If Python is built in debug mode, Py_DECREF() must call
-    // _Py_NegativeRefcount() and abort Python.
-    Py_DECREF(obj);
-
-    Py_RETURN_NONE;
-}
-#endif
 
 
 static PyObject *
@@ -360,10 +309,6 @@ static PyMethodDef test_methods[] = {
     {"pyobject_is_unique_temporary_new_object", pyobject_is_unique_temporary_new_object, METH_NOARGS},
     {"test_py_try_inc_ref", test_py_try_inc_ref, METH_NOARGS},
     {"test_py_set_immortal", test_py_set_immortal, METH_NOARGS},
-#ifdef Py_REF_DEBUG
-    {"negative_refcount", negative_refcount, METH_NOARGS},
-    {"decref_freed_object", decref_freed_object, METH_NOARGS},
-#endif
     {"clear_managed_dict", clear_managed_dict, METH_O, NULL},
     {"is_uniquely_referenced", is_uniquely_referenced, METH_O},
     {"pyobject_dump", pyobject_dump, METH_VARARGS},

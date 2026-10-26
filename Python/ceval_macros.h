@@ -229,11 +229,7 @@ do { \
 #define LLTRACE_RESUME_FRAME() ((void)0)
 #endif
 
-#ifdef Py_GIL_DISABLED
-#define QSBR_QUIESCENT_STATE(tstate) _Py_qsbr_quiescent_state(((_PyThreadStateImpl *)tstate)->qsbr)
-#else
 #define QSBR_QUIESCENT_STATE(tstate)
-#endif
 
 
 /* Do interpreter dispatch accounting for tracing and instrumentation */
@@ -334,13 +330,8 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 // NOTE: The object must be unlocked on every exit code path and you should
 // avoid any potentially escaping calls (like PyStackRef_CLOSE) while the
 // object is locked.
-#ifdef Py_GIL_DISABLED
-#  define LOCK_OBJECT(op) PyMutex_LockFast(&(_PyObject_CAST(op))->ob_mutex)
-#  define UNLOCK_OBJECT(op) PyMutex_Unlock(&(_PyObject_CAST(op))->ob_mutex)
-#else
 #  define LOCK_OBJECT(op) (1)
 #  define UNLOCK_OBJECT(op) ((void)0)
-#endif
 
 #define GLOBALS() frame->f_globals
 #define BUILTINS() frame->f_builtins
@@ -371,24 +362,6 @@ static void dtrace_function_return(_PyInterpreterFrame *);
 #define ADAPTIVE_COUNTER_TRIGGERS(FB) \
     ((FB) != NULL && backoff_counter_triggers((FB)->counter))
 
-#ifdef Py_GIL_DISABLED
-/* Counters are unreachable when thread-local bytecode is disabled,
- * so there is no need to update them. */
-#define ADVANCE_ADAPTIVE_COUNTER(FB) \
-    do { \
-        if ((FB) != NULL && !backoff_counter_is_unreachable((FB)->counter)) { \
-            (FB)->counter = advance_backoff_counter((FB)->counter); \
-        } \
-    } while (0);
-
-#define PAUSE_ADAPTIVE_COUNTER(FB) \
-    do { \
-        _PyFbHeader *fb_ = (FB); \
-        if (fb_ != NULL && !backoff_counter_is_unreachable(fb_->counter)) { \
-            fb_->counter = pause_backoff_counter(fb_->counter); \
-        } \
-    } while (0);
-#else
 #define ADVANCE_ADAPTIVE_COUNTER(FB) \
     do { \
         if ((FB) != NULL) { \
@@ -403,7 +376,6 @@ static void dtrace_function_return(_PyInterpreterFrame *);
             fb_->counter = pause_backoff_counter(fb_->counter); \
         } \
     } while (0);
-#endif
 
 #ifdef ENABLE_SPECIALIZATION
 /* Multiple threads may execute these concurrently if thread-local bytecode is
@@ -467,7 +439,6 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 /* How much scratch space to give stackref to PyObject* conversion. */
 #define MAX_STACKREF_SCRATCH 10
 
-#ifdef Py_GC
 /* The collector scans the C stack conservatively, which includes the eval
    loop's frame: a C array of object pointers there keeps its last objects
    alive until another instruction reuses the slots.  Such an array is
@@ -485,14 +456,6 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
     /* +1 because vectorcall might use -1 to write self */ \
     PyObject *NAME##_temp[MAX_STACKREF_SCRATCH+1] = {0}; \
     PyObject **NAME = _PyObjectArray_FromStackRefArray(ARGS, ARG_COUNT, NAME##_temp);
-#else
-#define _PyGC_CLEAR_ARRAY(ARR) ((void)0)
-
-#define STACKREFS_TO_PYOBJECTS(ARGS, ARG_COUNT, NAME) \
-    /* +1 because vectorcall might use -1 to write self */ \
-    PyObject *NAME##_temp[MAX_STACKREF_SCRATCH+1]; \
-    PyObject **NAME = _PyObjectArray_FromStackRefArray(ARGS, ARG_COUNT, NAME##_temp);
-#endif
 
 #define STACKREFS_TO_PYOBJECTS_CLEANUP(NAME) \
     /* +1 because we +1 previously */ \
@@ -534,21 +497,6 @@ check_periodics_at_end(PyThreadState *tstate, _PyInterpreterFrame *frame) {
 static inline bool
 gen_try_set_executing(PyGenObject *gen)
 {
-#ifdef Py_GIL_DISABLED
-    if (!_PyObject_IsUniquelyReferenced((PyObject *)gen)) {
-        int8_t frame_state = _Py_atomic_load_int8_relaxed(&gen->gi_frame_state);
-        while (frame_state < FRAME_SUSPENDED_YIELD_FROM_LOCKED) {
-            if (_Py_atomic_compare_exchange_int8(&gen->gi_frame_state,
-                                                 &frame_state,
-                                                 FRAME_EXECUTING)) {
-                return true;
-            }
-        }
-        // NB: We return false for FRAME_SUSPENDED_YIELD_FROM_LOCKED as well.
-        // That case is rare enough that we can just handle it in the deopt.
-        return false;
-    }
-#endif
     // Use faster non-atomic modifications in the GIL-enabled build and when
     // the object is uniquely referenced in the free-threaded build.
     if (gen->gi_frame_state < FRAME_EXECUTING) {
@@ -580,13 +528,8 @@ gen_try_set_executing(PyGenObject *gen)
 /* REF, read through field F and known to be a pointer, borrowed if F names
  * a local. */
 static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
-#ifdef Py_STACKREF_DEBUG
-#  define IR_BORROW_KNOWN(REF, F) \
-    (IR_IS_LOCAL(F) ? PyStackRef_Borrow(REF) : (REF))
-#else
 #  define IR_BORROW_KNOWN(REF, F) \
     ((_PyStackRef){ .bits = (REF).bits | (uintptr_t)IR_IS_LOCAL(F) })
-#endif
 
 /* The box of an inline value read through field F, which belongs to the
  * slot if F names a temporary.  A local keeps its inline value, and the
@@ -612,7 +555,7 @@ static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
 /* An input that the handler consumes as it is, through field F: a
  * temporary, or a borrow of the local that F names, which is what
  * LOAD_FAST_BORROW would have pushed. */
-#if defined(Py_STACKREF_DEBUG) || !defined(Py_STACKREF_INLINE_VALUES)
+#if !defined(Py_STACKREF_INLINE_VALUES)
 #  define IR_LOAD_BORROWED(F) \
     (IR_IS_LOCAL(F) ? PyStackRef_BorrowAt(&IR_SLOT(F)) : IR_SLOT(F))
 #else
@@ -751,12 +694,7 @@ _PyStackRef_Truth(_PyStackRef ref)
 #else
 #  define IR_SKIP_RESUME_EMSCRIPTEN() 1
 #endif
-#ifdef Py_GIL_DISABLED
-#  define IR_SKIP_RESUME_TLBC() \
-    (frame->tlbc_index == ((_PyThreadStateImpl *)tstate)->tlbc_index)
-#else
 #  define IR_SKIP_RESUME_TLBC() 1
-#endif
 #define IR_SKIP_RESUME() \
     do { \
         if (IR_HANDLER(*next_instr) == RESUME && \

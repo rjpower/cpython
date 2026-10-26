@@ -14,32 +14,6 @@ class weakref "PyWeakReference *" "&_PyWeakref_RefType"
 
 #include "clinic/weakrefobject.c.h"
 
-#ifdef Py_GIL_DISABLED
-/*
- * Thread-safety for free-threaded builds
- * ======================================
- *
- * In free-threaded builds we need to protect mutable state of:
- *
- * - The weakref (wr_object, hash, wr_callback)
- * - The referenced object (its head-of-list pointer)
- * - The linked list of weakrefs
- *
- * For now we've chosen to address this in a straightforward way:
- *
- * - The weakref's hash is protected using the weakref's per-object lock.
- * - The other mutable is protected by a striped lock keyed on the referenced
- *   object's address.
- * - The striped lock must be locked using `_Py_LOCK_DONT_DETACH` in order to
- *   support atomic deletion from WeakValueDictionaries. As a result, we must
- *   be careful not to perform any operations that could suspend while the
- *   lock is held.
- *
- * Since the world is stopped when the GC runs, it is free to clear weakrefs
- * without acquiring any locks.
- */
-
-#endif
 
 #define GET_WEAKREFS_LISTPTR(o) \
         ((PyWeakReference **) _PyObject_GET_WEAKREFS_LISTPTR(o))
@@ -74,11 +48,6 @@ init_weakref(PyWeakReference *self, PyObject *ob, PyObject *callback)
     self->wr_next = NULL;
     self->wr_callback = Py_XNewRef(callback);
     self->vectorcall = weakref_vectorcall;
-#ifdef Py_GIL_DISABLED
-    self->weakrefs_lock = &WEAKREF_LIST_LOCK(ob);
-    _PyObject_SetMaybeWeakref(ob);
-    _PyObject_SetMaybeWeakref((PyObject *)self);
-#endif
 }
 
 // Clear the weakref and steal its callback into `callback`, if provided.
@@ -1048,9 +1017,6 @@ PyObject_ClearWeakRefs(PyObject *object)
 
     if (object == NULL
         || !_PyType_SUPPORTS_WEAKREFS(Py_TYPE(object))
-#ifndef Py_GC
-        || Py_REFCNT(object) != 0
-#endif
         )
     {
         PyErr_BadInternalCall();

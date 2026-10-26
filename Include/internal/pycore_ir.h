@@ -267,11 +267,7 @@ static inline void
 _PyIR_SetHandler(_PyIRWord *instr, int handler)
 {
     _PyIRWord word = (*instr & ~(_PyIRWord)0xFFFF) | (uint16_t)handler;
-#ifdef Py_GIL_DISABLED
-    _Py_atomic_store_uint64_relaxed(instr, word);
-#else
     *instr = word;
-#endif
 }
 
 static inline const _PyIRFormat *

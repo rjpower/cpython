@@ -299,14 +299,12 @@ functions is running.
 
 */
 
-#ifndef Py_GIL_DISABLED
 static inline struct _func_version_cache_item *
 get_cache_item(PyInterpreterState *interp, uint32_t version)
 {
     return interp->func_state.func_version_cache +
            (version % FUNC_VERSION_CACHE_SIZE);
 }
-#endif
 
 void
 _PyFunction_SetVersion(PyFunctionObject *func, uint32_t version)
@@ -316,12 +314,10 @@ _PyFunction_SetVersion(PyFunctionObject *func, uint32_t version)
     // This should only be called from MAKE_FUNCTION. No code is specialized
     // based on the version, so we do not need to stop the world to set it.
     func->func_version = version;
-#ifndef Py_GIL_DISABLED
     PyInterpreterState *interp = _PyInterpreterState_GET();
     struct _func_version_cache_item *slot = get_cache_item(interp, version);
     slot->func = func;
     slot->code = func->func_code;
-#endif
 }
 
 static void
@@ -331,21 +327,18 @@ func_clear_version(PyInterpreterState *interp, PyFunctionObject *func)
         // Version was never set or has already been cleared.
         return;
     }
-#ifndef Py_GIL_DISABLED
     struct _func_version_cache_item *slot =
         get_cache_item(interp, func->func_version);
     if (slot->func == func) {
         slot->func = NULL;
         // Leave slot->code alone, there may be use for it.
     }
-#endif
     func->func_version = FUNC_VERSION_CLEARED;
 }
 
 void
 _PyFunction_ClearCodeByVersion(uint32_t version)
 {
-#ifndef Py_GIL_DISABLED
     PyInterpreterState *interp = _PyInterpreterState_GET();
     struct _func_version_cache_item *slot = get_cache_item(interp, version);
     if (slot->code) {
@@ -356,7 +349,6 @@ _PyFunction_ClearCodeByVersion(uint32_t version)
             slot->func = NULL;
         }
     }
-#endif
 }
 
 uint32_t
@@ -1205,13 +1197,6 @@ static void
 func_dealloc(PyObject *self)
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
-#ifndef Py_GC
-    _PyObject_ResurrectStart(self);
-    handle_func_event(PyFunction_EVENT_DESTROY, op, NULL);
-    if (_PyObject_ResurrectEnd(self)) {
-        return;
-    }
-#endif
     _PyObject_GC_UNTRACK(op);
     FT_CLEAR_WEAKREFS(self, op->func_weakreflist);
     (void)func_clear((PyObject*)op);
@@ -1222,13 +1207,11 @@ func_dealloc(PyObject *self)
     PyObject_GC_Del(op);
 }
 
-#ifdef Py_GC
 void
 _PyFunction_NotifyDestroy(PyObject *func)
 {
     handle_func_event(PyFunction_EVENT_DESTROY, _PyFunction_CAST(func), NULL);
 }
-#endif
 
 static PyObject*
 func_repr(PyObject *self)

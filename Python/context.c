@@ -235,12 +235,8 @@ _PyContext_Enter(PyThreadState *ts, PyObject *octx)
 {
     ENSURE_Context(octx, -1)
     PyContext *ctx = (PyContext *)octx;
-#ifdef Py_GIL_DISABLED
-    int already_entered = _Py_atomic_exchange_int(&ctx->ctx_entered, 1);
-#else
     int already_entered = ctx->ctx_entered;
     ctx->ctx_entered = 1;
-#endif
 
     if (already_entered) {
         _PyErr_Format(ts, PyExc_RuntimeError,
@@ -327,7 +323,6 @@ PyContextVar_Get(PyObject *ovar, PyObject *def, PyObject **val)
         goto not_found;
     }
 
-#ifndef Py_GIL_DISABLED
     if (var->var_cached != NULL &&
             var->var_cached_tsid == ts->id &&
             var->var_cached_tsver == ts->context_ver)
@@ -335,7 +330,6 @@ PyContextVar_Get(PyObject *ovar, PyObject *def, PyObject **val)
         *val = var->var_cached;
         goto found;
     }
-#endif
 
     assert(PyContext_CheckExact(ts->context));
     PyHamtObject *vars = context_get_current_vars((PyContext *)ts->context);
@@ -347,11 +341,9 @@ PyContextVar_Get(PyObject *ovar, PyObject *def, PyObject **val)
     }
     if (res == 1) {
         assert(found != NULL);
-#ifndef Py_GIL_DISABLED
         var->var_cached = found;  /* borrow */
         var->var_cached_tsid = ts->id;
         var->var_cached_tsver = ts->context_ver;
-#endif
 
         *val = found;
         goto found;
@@ -856,10 +848,8 @@ PyTypeObject PyContext_Type = {
 static int
 contextvar_set(PyContextVar *var, PyObject *val)
 {
-#ifndef Py_GIL_DISABLED
     var->var_cached = NULL;
     PyThreadState *ts = _PyThreadState_GET();
-#endif
 
     PyContext *ctx = context_get();
     if (ctx == NULL) {
@@ -872,11 +862,9 @@ contextvar_set(PyContextVar *var, PyObject *val)
         return -1;
     }
 
-#ifndef Py_GIL_DISABLED
     var->var_cached = val;  /* borrow */
     var->var_cached_tsid = ts->id;
     var->var_cached_tsver = ts->context_ver;
-#endif
     /* Releasing the old variables may run a finalizer that updates the cache. */
     context_set_vars(ctx, new_vars);
     return 0;
@@ -885,9 +873,7 @@ contextvar_set(PyContextVar *var, PyObject *val)
 static int
 contextvar_del(PyContextVar *var)
 {
-#ifndef Py_GIL_DISABLED
     var->var_cached = NULL;
-#endif
 
     PyContext *ctx = context_get();
     if (ctx == NULL) {
@@ -955,11 +941,9 @@ contextvar_new(PyObject *name, PyObject *def)
     var->var_name = Py_NewRef(name);
     var->var_default = Py_XNewRef(def);
 
-#ifndef Py_GIL_DISABLED
     var->var_cached = NULL;
     var->var_cached_tsid = 0;
     var->var_cached_tsver = 0;
-#endif
 
     var->var_hash = contextvar_generate_hash(var, name);
     if (var->var_hash == -1) {
@@ -1007,11 +991,9 @@ contextvar_tp_clear(PyObject *op)
     PyContextVar *self = _PyContextVar_CAST(op);
     Py_CLEAR(self->var_name);
     Py_CLEAR(self->var_default);
-#ifndef Py_GIL_DISABLED
     self->var_cached = NULL;
     self->var_cached_tsid = 0;
     self->var_cached_tsver = 0;
-#endif
     return 0;
 }
 

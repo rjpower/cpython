@@ -39,16 +39,8 @@ _PyFrame_MakeAndSetFrameObject(_PyInterpreterFrame *frame)
     // here.
     assert(frame->owner != FRAME_OWNED_BY_FRAME_OBJECT);
     f->f_frame = frame;
-#ifdef Py_GIL_DISABLED
-    PyFrameObject *expected = NULL;
-    if (!_Py_atomic_compare_exchange_ptr(&frame->frame_obj, &expected, f)) {
-        Py_DECREF(f);
-        return expected;
-    }
-#else
     assert(frame->frame_obj == NULL);
     frame->frame_obj = f;
-#endif
     return f;
 }
 

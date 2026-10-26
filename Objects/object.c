@@ -2,7 +2,6 @@
 /* Generic object operations; and implementation of None */
 
 #include "Python.h"
-#include "pycore_brc.h"           // _Py_brc_queue_object()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
 #include "pycore_context.h"       // _PyContextTokenMissing_Type
@@ -69,270 +68,13 @@ _PyObject_CheckConsistency(PyObject *op, int check_content)
 }
 
 
-#ifdef Py_REF_DEBUG
-/* We keep the legacy symbol around for backward compatibility. */
-Py_ssize_t _Py_RefTotal;
 
-static inline Py_ssize_t
-get_legacy_reftotal(void)
-{
-    return _Py_RefTotal;
-}
-#endif
-
-#ifdef Py_REF_DEBUG
-
-#  define REFTOTAL(interp) \
-    interp->object_state.reftotal
-
-static inline void
-reftotal_add(PyThreadState *tstate, Py_ssize_t n)
-{
-#ifdef Py_GIL_DISABLED
-    _PyThreadStateImpl *tstate_impl = (_PyThreadStateImpl *)tstate;
-    // relaxed store to avoid data race with read in get_reftotal()
-    Py_ssize_t reftotal = tstate_impl->reftotal + n;
-    _Py_atomic_store_ssize_relaxed(&tstate_impl->reftotal, reftotal);
-#else
-    REFTOTAL(tstate->interp) += n;
-#endif
-}
-
-static inline Py_ssize_t get_global_reftotal(_PyRuntimeState *);
-
-/* We preserve the number of refs leaked during runtime finalization,
-   so they can be reported if the runtime is initialized again. */
-// XXX We don't lose any information by dropping this,
-// so we should consider doing so.
-static Py_ssize_t last_final_reftotal = 0;
-
-void
-_Py_FinalizeRefTotal(_PyRuntimeState *runtime)
-{
-    last_final_reftotal = get_global_reftotal(runtime);
-    runtime->object_state.interpreter_leaks = 0;
-}
-
-void
-_PyInterpreterState_FinalizeRefTotal(PyInterpreterState *interp)
-{
-    interp->runtime->object_state.interpreter_leaks += REFTOTAL(interp);
-    REFTOTAL(interp) = 0;
-}
-
-static inline Py_ssize_t
-get_reftotal(PyInterpreterState *interp)
-{
-    /* For a single interpreter, we ignore the legacy _Py_RefTotal,
-       since we can't determine which interpreter updated it. */
-    Py_ssize_t total = REFTOTAL(interp);
-#ifdef Py_GIL_DISABLED
-    _Py_FOR_EACH_TSTATE_UNLOCKED(interp, p) {
-        /* This may race with other threads modifications to their reftotal */
-        _PyThreadStateImpl *tstate_impl = (_PyThreadStateImpl *)p;
-        total += _Py_atomic_load_ssize_relaxed(&tstate_impl->reftotal);
-    }
-#endif
-    return total;
-}
-
-static inline Py_ssize_t
-get_global_reftotal(_PyRuntimeState *runtime)
-{
-    Py_ssize_t total = 0;
-
-    /* Add up the total from each interpreter. */
-    HEAD_LOCK(&_PyRuntime);
-    PyInterpreterState *interp = PyInterpreterState_Head();
-    for (; interp != NULL; interp = PyInterpreterState_Next(interp)) {
-        total += get_reftotal(interp);
-    }
-    HEAD_UNLOCK(&_PyRuntime);
-
-    /* Add in the updated value from the legacy _Py_RefTotal. */
-    total += get_legacy_reftotal();
-    total += last_final_reftotal;
-    total += runtime->object_state.interpreter_leaks;
-
-    return total;
-}
-
-#undef REFTOTAL
-
-void
-_PyDebug_PrintTotalRefs(void) {
-    _PyRuntimeState *runtime = &_PyRuntime;
-    fprintf(stderr,
-            "[%zd refs, %zd blocks]\n",
-            get_global_reftotal(runtime), _Py_GetGlobalAllocatedBlocks());
-    /* It may be helpful to also print the "legacy" reftotal separately.
-       Likewise for the total for each interpreter. */
-}
-#endif /* Py_REF_DEBUG */
 
 /* Object allocation routines used by NEWOBJ and NEWVAROBJ macros.
    These are used by the individual routines for object creation.
    Do not call them otherwise, they do not initialize the object! */
 
-#ifdef Py_TRACE_REFS
 
-#define REFCHAIN(interp) interp->object_state.refchain
-#define REFCHAIN_VALUE ((void*)(uintptr_t)1)
-
-static inline int
-has_own_refchain(PyInterpreterState *interp)
-{
-    if (interp->feature_flags & Py_RTFLAGS_USE_MAIN_OBMALLOC) {
-        return (_Py_IsMainInterpreter(interp)
-            || _PyInterpreterState_Main() == NULL);
-    }
-    return 1;
-}
-
-static int
-refchain_init(PyInterpreterState *interp)
-{
-    if (!has_own_refchain(interp)) {
-        // Legacy subinterpreters share a refchain with the main interpreter.
-        REFCHAIN(interp) = REFCHAIN(_PyInterpreterState_Main());
-        return 0;
-    }
-    _Py_hashtable_allocator_t alloc = {
-        // Use directly malloc() and free() of the C library. Using
-        // PyMem_RawMalloc() and PyMem_RawFree() prevents testing
-        // _testcapi.set_nomemory().
-        .malloc = malloc,
-        .free = free,
-    };
-    REFCHAIN(interp) = _Py_hashtable_new_full(
-        _Py_hashtable_hash_ptr, _Py_hashtable_compare_direct,
-        NULL, NULL, &alloc);
-    if (REFCHAIN(interp) == NULL) {
-        return -1;
-    }
-    return 0;
-}
-
-static void
-refchain_fini(PyInterpreterState *interp)
-{
-    if (has_own_refchain(interp) && REFCHAIN(interp) != NULL) {
-        _Py_hashtable_destroy(REFCHAIN(interp));
-    }
-    REFCHAIN(interp) = NULL;
-}
-
-bool
-_PyRefchain_IsTraced(PyInterpreterState *interp, PyObject *obj)
-{
-    return (_Py_hashtable_get(REFCHAIN(interp), obj) == REFCHAIN_VALUE);
-}
-
-
-static void
-_PyRefchain_Trace(PyInterpreterState *interp, PyObject *obj)
-{
-    if (_Py_hashtable_set(REFCHAIN(interp), obj, REFCHAIN_VALUE) < 0) {
-        // Use a fatal error because _Py_NewReference() cannot report
-        // the error to the caller.
-        Py_FatalError("_Py_hashtable_set() memory allocation failed");
-    }
-}
-
-
-static void
-_PyRefchain_Remove(PyInterpreterState *interp, PyObject *obj)
-{
-    void *value = _Py_hashtable_steal(REFCHAIN(interp), obj);
-#ifndef NDEBUG
-    assert(value == REFCHAIN_VALUE);
-#else
-    (void)value;
-#endif
-}
-
-
-/* Add an object to the refchain hash table.
- *
- * Note that objects are normally added to the list by PyObject_Init()
- * indirectly.  Not all objects are initialized that way, though; exceptions
- * include statically allocated type objects, and statically allocated
- * singletons (like Py_True and Py_None). */
-void
-_Py_AddToAllObjects(PyObject *op)
-{
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    if (!_PyRefchain_IsTraced(interp, op)) {
-        _PyRefchain_Trace(interp, op);
-    }
-}
-#endif  /* Py_TRACE_REFS */
-
-#ifdef Py_REF_DEBUG
-/* Log a fatal error; doesn't return. */
-void
-_Py_NegativeRefcount(const char *filename, int lineno, PyObject *op)
-{
-    _PyObject_AssertFailed(op, NULL, "object has negative ref count",
-                           filename, lineno, __func__);
-}
-
-/* This is used strictly by Py_INCREF(). */
-void
-_Py_INCREF_IncRefTotal(void)
-{
-    reftotal_add(_PyThreadState_GET(), 1);
-}
-
-/* This is used strictly by Py_DECREF(). */
-void
-_Py_DECREF_DecRefTotal(void)
-{
-    reftotal_add(_PyThreadState_GET(), -1);
-}
-
-void
-_Py_IncRefTotal(PyThreadState *tstate)
-{
-    reftotal_add(tstate, 1);
-}
-
-void
-_Py_DecRefTotal(PyThreadState *tstate)
-{
-    reftotal_add(tstate, -1);
-}
-
-void
-_Py_AddRefTotal(PyThreadState *tstate, Py_ssize_t n)
-{
-    reftotal_add(tstate, n);
-}
-
-/* This includes the legacy total
-   and any carried over from the last runtime init/fini cycle. */
-Py_ssize_t
-_Py_GetGlobalRefTotal(void)
-{
-    return get_global_reftotal(&_PyRuntime);
-}
-
-Py_ssize_t
-_Py_GetLegacyRefTotal(void)
-{
-    return get_legacy_reftotal();
-}
-
-Py_ssize_t
-_PyInterpreterState_GetRefTotal(PyInterpreterState *interp)
-{
-    HEAD_LOCK(&_PyRuntime);
-    Py_ssize_t total = get_reftotal(interp);
-    HEAD_UNLOCK(&_PyRuntime);
-    return total;
-}
-
-#endif /* Py_REF_DEBUG */
 
 void
 Py_IncRef(PyObject *o)
@@ -358,173 +100,6 @@ _Py_DecRef(PyObject *o)
     Py_DECREF(o);
 }
 
-#ifdef Py_GIL_DISABLED
-# ifdef Py_REF_DEBUG
-static int
-is_dead(PyObject *o)
-{
-#  if SIZEOF_SIZE_T == 8
-    return (uintptr_t)o->ob_type == 0xDDDDDDDDDDDDDDDD;
-#  else
-    return (uintptr_t)o->ob_type == 0xDDDDDDDD;
-#  endif
-}
-# endif
-
-// Decrement the shared reference count of an object. Return 1 if the object
-// is dead and should be deallocated, 0 otherwise.
-static int
-_Py_DecRefSharedIsDead(PyObject *o, const char *filename, int lineno)
-{
-    // Should we queue the object for the owning thread to merge?
-    int should_queue;
-
-    Py_ssize_t new_shared;
-    Py_ssize_t shared = _Py_atomic_load_ssize_relaxed(&o->ob_ref_shared);
-    do {
-        should_queue = (shared == 0 || shared == _Py_REF_MAYBE_WEAKREF);
-
-        if (should_queue) {
-            // If the object had refcount zero, not queued, and not merged,
-            // then we enqueue the object to be merged by the owning thread.
-            // In this case, we don't subtract one from the reference count
-            // because the queue holds a reference.
-            new_shared = _Py_REF_QUEUED;
-        }
-        else {
-            // Otherwise, subtract one from the reference count. This might
-            // be negative!
-            new_shared = shared - (1 << _Py_REF_SHARED_SHIFT);
-        }
-
-#ifdef Py_REF_DEBUG
-        if ((new_shared < 0 && _Py_REF_IS_MERGED(new_shared)) ||
-            (should_queue && is_dead(o)))
-        {
-            _Py_NegativeRefcount(filename, lineno, o);
-        }
-#endif
-    } while (!_Py_atomic_compare_exchange_ssize(&o->ob_ref_shared,
-                                                &shared, new_shared));
-
-    if (should_queue) {
-#ifdef Py_REF_DEBUG
-        _Py_IncRefTotal(_PyThreadState_GET());
-#endif
-        _Py_brc_queue_object(o);
-    }
-    else if (new_shared == _Py_REF_MERGED) {
-        // refcount is zero AND merged
-        return 1;
-    }
-    return 0;
-}
-
-void
-_Py_DecRefSharedDebug(PyObject *o, const char *filename, int lineno)
-{
-    if (_Py_DecRefSharedIsDead(o, filename, lineno)) {
-        _Py_Dealloc(o);
-    }
-}
-
-void
-_Py_DecRefShared(PyObject *o)
-{
-    _Py_DecRefSharedDebug(o, NULL, 0);
-}
-
-void
-_Py_MergeZeroLocalRefcount(PyObject *op)
-{
-    assert(op->ob_ref_local == 0);
-
-    Py_ssize_t shared = _Py_atomic_load_ssize_acquire(&op->ob_ref_shared);
-    if (shared == 0) {
-        // Fast-path: shared refcount is zero (including flags)
-        _Py_Dealloc(op);
-        return;
-    }
-
-    // gh-121794: This must be before the store to `ob_ref_shared` (gh-119999),
-    // but should outside the fast-path to maintain the invariant that
-    // a zero `ob_tid` implies a merged refcount.
-    _Py_atomic_store_uintptr_relaxed(&op->ob_tid, 0);
-
-    // Slow-path: atomically set the flags (low two bits) to _Py_REF_MERGED.
-    Py_ssize_t new_shared;
-    do {
-        new_shared = (shared & ~_Py_REF_SHARED_FLAG_MASK) | _Py_REF_MERGED;
-    } while (!_Py_atomic_compare_exchange_ssize(&op->ob_ref_shared,
-                                                &shared, new_shared));
-
-    if (new_shared == _Py_REF_MERGED) {
-        // i.e., the shared refcount is zero (only the flags are set) so we
-        // deallocate the object.
-        _Py_Dealloc(op);
-    }
-}
-
-Py_ssize_t
-_Py_ExplicitMergeRefcount(PyObject *op, Py_ssize_t extra)
-{
-    assert(!_Py_IsImmortal(op));
-
-#ifdef Py_REF_DEBUG
-    _Py_AddRefTotal(_PyThreadState_GET(), extra);
-#endif
-
-    // gh-119999: Write to ob_ref_local and ob_tid before merging the refcount.
-    Py_ssize_t local = (Py_ssize_t)op->ob_ref_local;
-    _Py_atomic_store_uint32_relaxed(&op->ob_ref_local, 0);
-    _Py_atomic_store_uintptr_relaxed(&op->ob_tid, 0);
-
-    Py_ssize_t refcnt;
-    Py_ssize_t new_shared;
-    Py_ssize_t shared = _Py_atomic_load_ssize_relaxed(&op->ob_ref_shared);
-    do {
-        refcnt = Py_ARITHMETIC_RIGHT_SHIFT(Py_ssize_t, shared, _Py_REF_SHARED_SHIFT);
-        refcnt += local;
-        refcnt += extra;
-
-        new_shared = _Py_REF_SHARED(refcnt, _Py_REF_MERGED);
-    } while (!_Py_atomic_compare_exchange_ssize(&op->ob_ref_shared,
-                                                &shared, new_shared));
-    return refcnt;
-}
-
-// The more complicated "slow" path for undoing the resurrection of an object.
-int
-_PyObject_ResurrectEndSlow(PyObject *op)
-{
-    if (_Py_IsImmortal(op)) {
-        return 1;
-    }
-    if (_Py_IsOwnedByCurrentThread(op)) {
-        // If the object is owned by the current thread, give up ownership and
-        // merge the refcount. This isn't necessary in all cases, but it
-        // simplifies the implementation.
-        Py_ssize_t refcount = _Py_ExplicitMergeRefcount(op, -1);
-        if (refcount == 0) {
-#ifdef Py_TRACE_REFS
-            _Py_ForgetReference(op);
-#endif
-            return 0;
-        }
-        return 1;
-    }
-    int is_dead = _Py_DecRefSharedIsDead(op, NULL, 0);
-    if (is_dead) {
-#ifdef Py_TRACE_REFS
-        _Py_ForgetReference(op);
-#endif
-        return 0;
-    }
-    return 1;
-}
-
-
-#endif  /* Py_GIL_DISABLED */
 
 
 /**************************************/
@@ -583,33 +158,21 @@ PyObject_CallFinalizer(PyObject *self)
     if (tp->tp_finalize == NULL)
         return;
     /* tp_finalize should only be called once. */
-#ifdef Py_GC
     // The flag is in the object header, so it works for every type.
     if (_PyGC_FINALIZED(self)) {
         return;
     }
     _PyGC_SET_FINALIZED(self);
     tp->tp_finalize(self);
-#else
-    if (_PyType_IS_GC(tp) && _PyGC_FINALIZED(self))
-        return;
-
-    tp->tp_finalize(self);
-    if (_PyType_IS_GC(tp)) {
-        _PyGC_SET_FINALIZED(self);
-    }
-#endif
 }
 
 int
 PyObject_CallFinalizerFromDealloc(PyObject *self)
 {
-#ifdef Py_GC
     /* The collector ran the finalizer, from its queue, in the collection
        before the one that is sweeping self. */
     (void)self;
     return 0;
-#endif
     if (Py_REFCNT(self) != 0) {
         _PyObject_ASSERT_FAILED_MSG(self,
                                     "PyObject_CallFinalizerFromDealloc called "
@@ -1982,11 +1545,7 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
         else {
             PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
             if (dictptr) {
-#ifdef Py_GIL_DISABLED
-                dict = _Py_atomic_load_ptr_acquire(dictptr);
-#else
                 dict = *dictptr;
-#endif
             }
         }
     }
@@ -2531,20 +2090,12 @@ PyObject _Py_NotImplementedStruct = _PyObject_HEAD_INIT(&_PyNotImplemented_Type)
 PyStatus
 _PyObject_InitState(PyInterpreterState *interp)
 {
-#ifdef Py_TRACE_REFS
-    if (refchain_init(interp) < 0) {
-        return _PyStatus_NO_MEMORY();
-    }
-#endif
     return _PyStatus_OK();
 }
 
 void
 _PyObject_FiniState(PyInterpreterState *interp)
 {
-#ifdef Py_TRACE_REFS
-    refchain_fini(interp);
-#endif
 }
 
 
@@ -2747,44 +2298,14 @@ static inline void
 new_reference(PyObject *op)
 {
     // Skip the immortal object check in Py_SET_REFCNT; always set refcnt to 1
-#if defined(Py_GC)
     // Mark the block as an initialized object for the collector's heap walk.
     op->ob_refcnt_full = _Py_GC_HEADER_INIT;
-#elif !defined(Py_GIL_DISABLED)
-#if SIZEOF_VOID_P > 4
-    op->ob_refcnt_full = 1;
-    assert(op->ob_refcnt == 1);
-    assert(op->ob_flags == 0);
-#else
-    op->ob_refcnt = 1;
-#endif
-#else
-    op->ob_flags = 0;
-    op->ob_mutex = (PyMutex){ 0 };
-#ifdef _Py_THREAD_SANITIZER
-    _Py_atomic_store_uintptr_relaxed(&op->ob_tid, _Py_ThreadId());
-    _Py_atomic_store_uint8_relaxed(&op->ob_gc_bits, 0);
-    _Py_atomic_store_uint32_relaxed(&op->ob_ref_local, 1);
-    _Py_atomic_store_ssize_relaxed(&op->ob_ref_shared, 0);
-#else
-    op->ob_tid = _Py_ThreadId();
-    op->ob_gc_bits = 0;
-    op->ob_ref_local = 1;
-    op->ob_ref_shared = 0;
-#endif
-#endif
-#ifdef Py_TRACE_REFS
-    _Py_AddToAllObjects(op);
-#endif
     _PyReftracerTrack(op, PyRefTracer_CREATE);
 }
 
 void
 _Py_NewReference(PyObject *op)
 {
-#ifdef Py_REF_DEBUG
-    _Py_IncRefTotal(_PyThreadState_GET());
-#endif
     new_reference(op);
 }
 
@@ -2801,23 +2322,11 @@ _Py_SetImmortalUntracked(PyObject *op)
     if (_Py_IsImmortal(op)) {
         return;
     }
-#ifdef Py_GIL_DISABLED
-    _Py_atomic_store_uintptr_relaxed(&op->ob_tid, _Py_UNOWNED_TID);
-    _Py_atomic_store_uint32_relaxed(&op->ob_ref_local, _Py_IMMORTAL_REFCNT_LOCAL);
-    _Py_atomic_store_ssize_relaxed(&op->ob_ref_shared, 0);
-    _Py_atomic_or_uint8(&op->ob_gc_bits, _PyGC_BITS_DEFERRED);
-#elif defined(Py_GC)
     // Keep the collector's bits: the object stays an object in the heap walk,
     // which never sweeps it, and its references are roots.
     op->ob_flags |= _Py_IMMORTAL_FLAGS;
     op->ob_refcnt = _Py_IMMORTAL_INITIAL_REFCNT;
     _PyGC_LiveAddImmortal(op);
-#elif SIZEOF_VOID_P > 4
-    op->ob_flags = _Py_IMMORTAL_FLAGS;
-    op->ob_refcnt = _Py_IMMORTAL_INITIAL_REFCNT;
-#else
-    op->ob_refcnt = _Py_IMMORTAL_INITIAL_REFCNT;
-#endif
 }
 
 void
@@ -2832,49 +2341,12 @@ _Py_SetImmortal(PyObject *op)
 void
 _PyObject_SetDeferredRefcount(PyObject *op)
 {
-#ifdef Py_GIL_DISABLED
-    assert(PyType_IS_GC(Py_TYPE(op)));
-    assert(_Py_IsOwnedByCurrentThread(op));
-    assert(op->ob_ref_shared == 0);
-    _PyObject_SET_GC_BITS(op, _PyGC_BITS_DEFERRED);
-    op->ob_ref_shared = _Py_REF_SHARED(_Py_REF_DEFERRED, 0);
-#endif
 }
 
 int
 PyUnstable_Object_EnableDeferredRefcount(PyObject *op)
 {
-#ifdef Py_GIL_DISABLED
-    if (!PyType_IS_GC(Py_TYPE(op))) {
-        // Deferred reference counting doesn't work
-        // on untracked types.
-        return 0;
-    }
-
-    if (!PyObject_GC_IsTracked(op)) {
-        // When deferred refcount is enabled, the object will only be
-        // deallocated by the tracing garbage collector. So it must be tracked
-        // by the garbage collector.
-        return 0;
-    }
-
-    uint8_t bits = _Py_atomic_load_uint8(&op->ob_gc_bits);
-    if ((bits & _PyGC_BITS_DEFERRED) != 0)
-    {
-        // Nothing to do.
-        return 0;
-    }
-
-    if (_Py_atomic_compare_exchange_uint8(&op->ob_gc_bits, &bits, bits | _PyGC_BITS_DEFERRED) == 0)
-    {
-        // Someone beat us to it!
-        return 0;
-    }
-    _Py_atomic_add_ssize(&op->ob_ref_shared, _Py_REF_SHARED(_Py_REF_DEFERRED, 0));
-    return 1;
-#else
     return 0;
-#endif
 }
 
 int
@@ -2914,9 +2386,6 @@ PyUnstable_TryIncRef(PyObject *op)
 void
 PyUnstable_EnableTryIncRef(PyObject *op)
 {
-#ifdef Py_GIL_DISABLED
-    _PyObject_SetMaybeWeakref(op);
-#endif
 }
 
 int
@@ -2933,180 +2402,14 @@ PyUnstable_SetImmortal(PyObject *op)
 void
 _Py_ResurrectReference(PyObject *op)
 {
-#ifdef Py_TRACE_REFS
-    _Py_AddToAllObjects(op);
-#endif
 }
 
 void
 _Py_ForgetReference(PyObject *op)
 {
-#ifdef Py_TRACE_REFS
-    if (Py_REFCNT(op) < 0) {
-        _PyObject_ASSERT_FAILED_MSG(op, "negative refcnt");
-    }
-
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-
-#ifdef SLOW_UNREF_CHECK
-    if (!_PyRefchain_Get(interp, op)) {
-        /* Not found */
-        _PyObject_ASSERT_FAILED_MSG(op,
-                                    "object not found in the objects list");
-    }
-#endif
-
-    _PyRefchain_Remove(interp, op);
-#endif
 }
 
 
-#ifdef Py_TRACE_REFS
-static int
-_Py_PrintReference(_Py_hashtable_t *ht,
-                   const void *key, const void *value,
-                   void *user_data)
-{
-    PyObject *op = (PyObject*)key;
-    FILE *fp = (FILE *)user_data;
-    fprintf(fp, "%p [%zd] ", (void *)op, Py_REFCNT(op));
-    if (PyObject_Print(op, fp, 0) != 0) {
-        PyErr_Clear();
-    }
-    putc('\n', fp);
-    return 0;
-}
-
-
-/* Print all live objects.  Because PyObject_Print is called, the
- * interpreter must be in a healthy state.
- */
-void
-_Py_PrintReferences(PyInterpreterState *interp, FILE *fp)
-{
-    if (interp == NULL) {
-        interp = _PyInterpreterState_Main();
-    }
-    fprintf(fp, "Remaining objects:\n");
-    _Py_hashtable_foreach(REFCHAIN(interp), _Py_PrintReference, fp);
-}
-
-
-static int
-_Py_PrintReferenceAddress(_Py_hashtable_t *ht,
-                          const void *key, const void *value,
-                          void *user_data)
-{
-    PyObject *op = (PyObject*)key;
-    FILE *fp = (FILE *)user_data;
-    fprintf(fp, "%p [%zd] %s\n",
-            (void *)op, Py_REFCNT(op), Py_TYPE(op)->tp_name);
-    return 0;
-}
-
-
-/* Print the addresses of all live objects.  Unlike _Py_PrintReferences, this
- * doesn't make any calls to the Python C API, so is always safe to call.
- */
-// XXX This function is not safe to use if the interpreter has been
-// freed or is in an unhealthy state (e.g. late in finalization).
-// The call in Py_FinalizeEx() is okay since the main interpreter
-// is statically allocated.
-void
-_Py_PrintReferenceAddresses(PyInterpreterState *interp, FILE *fp)
-{
-    fprintf(fp, "Remaining object addresses:\n");
-    _Py_hashtable_foreach(REFCHAIN(interp), _Py_PrintReferenceAddress, fp);
-}
-
-
-typedef struct {
-    PyObject *self;
-    PyObject *args;
-    PyObject *list;
-    PyObject *type;
-    Py_ssize_t limit;
-} _Py_GetObjectsData;
-
-enum {
-    _PY_GETOBJECTS_IGNORE = 0,
-    _PY_GETOBJECTS_ERROR = 1,
-    _PY_GETOBJECTS_STOP = 2,
-};
-
-static int
-_Py_GetObject(_Py_hashtable_t *ht,
-              const void *key, const void *value,
-              void *user_data)
-{
-    PyObject *op = (PyObject *)key;
-    _Py_GetObjectsData *data = user_data;
-    if (data->limit > 0) {
-        if (PyList_GET_SIZE(data->list) >= data->limit) {
-            return _PY_GETOBJECTS_STOP;
-        }
-    }
-
-    if (op == data->self) {
-        return _PY_GETOBJECTS_IGNORE;
-    }
-    if (op == data->args) {
-        return _PY_GETOBJECTS_IGNORE;
-    }
-    if (op == data->list) {
-        return _PY_GETOBJECTS_IGNORE;
-    }
-    if (data->type != NULL) {
-        if (op == data->type) {
-            return _PY_GETOBJECTS_IGNORE;
-        }
-        if (!Py_IS_TYPE(op, (PyTypeObject *)data->type)) {
-            return _PY_GETOBJECTS_IGNORE;
-        }
-    }
-
-    if (PyList_Append(data->list, op) < 0) {
-        return _PY_GETOBJECTS_ERROR;
-    }
-    return 0;
-}
-
-
-/* The implementation of sys.getobjects(). */
-PyObject *
-_Py_GetObjects(PyObject *self, PyObject *args)
-{
-    Py_ssize_t limit;
-    PyObject *type = NULL;
-    if (!PyArg_ParseTuple(args, "n|O", &limit, &type)) {
-        return NULL;
-    }
-
-    PyObject *list = PyList_New(0);
-    if (list == NULL) {
-        return NULL;
-    }
-
-    _Py_GetObjectsData data = {
-        .self = self,
-        .args = args,
-        .list = list,
-        .type = type,
-        .limit = limit,
-    };
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    int res = _Py_hashtable_foreach(REFCHAIN(interp), _Py_GetObject, &data);
-    if (res == _PY_GETOBJECTS_ERROR) {
-        Py_DECREF(list);
-        return NULL;
-    }
-    return list;
-}
-
-#undef REFCHAIN
-#undef REFCHAIN_VALUE
-
-#endif  /* Py_TRACE_REFS */
 
 
 /* Hack to force loading of abstract.o */
@@ -3219,11 +2522,7 @@ _PyTrash_thread_deposit_object(PyThreadState *tstate, PyObject *op)
         }
     }
     uintptr_t tagged_ptr = ((uintptr_t)tstate->delete_later) | tracked;
-#ifdef Py_GIL_DISABLED
-    op->ob_tid = tagged_ptr;
-#else
     _Py_AS_GC(op)->_gc_next = tagged_ptr;
-#endif
     tstate->delete_later = op;
 }
 
@@ -3236,14 +2535,8 @@ _PyTrash_thread_destroy_chain(PyThreadState *tstate)
         PyObject *op = tstate->delete_later;
         destructor dealloc = Py_TYPE(op)->tp_dealloc;
 
-#ifdef Py_GIL_DISABLED
-        uintptr_t tagged_ptr = op->ob_tid;
-        op->ob_tid = 0;
-        _Py_atomic_store_ssize_relaxed(&op->ob_ref_shared, _Py_REF_MERGED);
-#else
         uintptr_t tagged_ptr = _Py_AS_GC(op)->_gc_next;
         _Py_AS_GC(op)->_gc_next = 0;
-#endif
         tstate->delete_later = (PyObject *)(tagged_ptr & ~1);
         if (tagged_ptr & 1) {
             _PyObject_GC_TRACK(op);
@@ -3255,9 +2548,6 @@ _PyTrash_thread_destroy_chain(PyThreadState *tstate)
          * up distorting allocation statistics.
          */
         _PyObject_ASSERT(op, Py_REFCNT(op) == 0);
-#ifdef Py_TRACE_REFS
-        _Py_ForgetReference(op);
-#endif
         _PyReftracerTrack(op, PyRefTracer_DESTROY);
         (*dealloc)(op);
     }
@@ -3349,9 +2639,6 @@ py_dealloc(PyObject *op)
     Py_INCREF(type);
 #endif
 
-#ifdef Py_TRACE_REFS
-    _Py_ForgetReference(op);
-#endif
     _PyReftracerTrack(op, PyRefTracer_DESTROY);
     (*dealloc)(op);
 
@@ -3390,13 +2677,12 @@ py_dealloc(PyObject *op)
 void
 _Py_Dealloc(PyObject *op)
 {
-#ifdef Py_GC
     // Only the collector's sweep deallocates (Python/gc_live.c).  This is
-    // reached from extensions built without Py_GC whose decrefs reached zero.
+    // reached from extensions built for reference counting whose decrefs
+    // reached zero.
     (void)op;
     return;
-#endif
-#if !defined(Py_DEBUG) && !defined(Py_TRACE_REFS)
+#if !defined(Py_DEBUG)
     // gh-130706: Avoid unnecessary register spills for non-GC objects.
     PyTypeObject *type = Py_TYPE(op);
     if (_PyRuntime.ref_tracer.tracer_func == NULL

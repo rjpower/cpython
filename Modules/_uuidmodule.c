@@ -1059,10 +1059,8 @@ Uuid_dealloc(PyObject *obj)
     Py_CLEAR(uuid->is_safe);
 
     int skip_dealloc = 0;
-#ifdef Py_GC
     // The collector frees the object after this returns; no free list.
     goto dealloc;
-#endif
     // Only the base UUID type uses the freelist. Do not search a subclass's
     // MRO: GC may already have cleared its base type's module reference.
     PyObject *module = PyType_GetModule_DuringGC(type);

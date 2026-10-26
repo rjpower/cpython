@@ -21,9 +21,6 @@ typedef enum {
 #include "pycore_pymem.h"
 
 #ifdef WITH_MIMALLOC
-#  ifdef Py_GIL_DISABLED
-#    define MI_PRIM_THREAD_ID   _Py_ThreadId
-#  endif
 // Both collectors visit the blocks of exited threads' abandoned segments:
 // the free-threaded one, and the tracing verifier (Python/gc_trace.c).
 #  define MI_VISIT_ABANDONED  1

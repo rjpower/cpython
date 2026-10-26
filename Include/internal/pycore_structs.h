@@ -66,11 +66,7 @@ typedef struct {
 
 
 typedef union _PyStackRef {
-#if !defined(Py_GIL_DISABLED) && defined(Py_STACKREF_DEBUG)
-    uint64_t index;
-#else
     uintptr_t bits;
-#endif
 } _PyStackRef;
 
 // A stackref that can be stored in a regular C local variable and be visible
@@ -78,9 +74,6 @@ typedef union _PyStackRef {
 // Used in combination with _PyThreadState_PushCStackRef().
 typedef struct _PyCStackRef {
     _PyStackRef ref;
-#ifdef Py_GIL_DISABLED
-    struct _PyCStackRef *next;
-#endif
 } _PyCStackRef;
 
 

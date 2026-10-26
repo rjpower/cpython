@@ -81,59 +81,6 @@ _PyModule_IsExtension(PyObject *obj)
 PyObject*
 PyModuleDef_Init(PyModuleDef* def)
 {
-#ifdef Py_GIL_DISABLED
-    // Check that this def does not come from a non-free-threading ABI.
-    //
-    // This is meant as a "sanity check"; users should never rely on it.
-    // In particular, if we run out of ob_flags bits, or otherwise need to
-    // change some of the internals, this check can go away. Still, it
-    // would be nice to keep it for the free-threading transition.
-    //
-    // A PyModuleDef must be initialized with PyModuleDef_HEAD_INIT,
-    // which (via PyObject_HEAD_INIT) sets _Py_STATICALLY_ALLOCATED_FLAG
-    // and not _Py_LEGACY_ABI_CHECK_FLAG. For PyModuleDef, these flags never
-    // change.
-    // This means that the lower nibble of a valid PyModuleDef's ob_flags is
-    // always `_10_` (in binary; `_` is don't care).
-    //
-    // So, a check for these bits won't reject valid PyModuleDef.
-    // Rejecting incompatible extensions is slightly less important; here's
-    // how that works:
-    //
-    // In the pre-free-threading stable ABI, PyModuleDef_HEAD_INIT is big
-    // enough to overlap with free-threading ABI's ob_flags, is all zeros
-    // except for the refcount field.
-    // The refcount field can be:
-    // - 1 (3.11 and below)
-    // - UINT_MAX >> 2 (32-bit 3.12 & 3.13)
-    // - UINT_MAX (64-bit 3.12 & 3.13)
-    // - 7L << 28 (3.14)
-    //
-    // This means that the lower nibble of *any byte* in PyModuleDef_HEAD_INIT
-    // is not `_10_` -- it can be:
-    // - 0b0000
-    // - 0b0001
-    // - 0b0011 (from UINT_MAX >> 2)
-    // - 0b0111 (from 7L << 28)
-    // - 0b1111 (e.g. from UINT_MAX)
-    // (The values may change at runtime as the PyModuleDef is used, but
-    // PyModuleDef_Init is required before using the def as a Python object,
-    // so we check at least once with the initial values.
-    uint16_t flags = ((PyObject*)def)->ob_flags;
-    uint16_t bits = _Py_STATICALLY_ALLOCATED_FLAG | _Py_LEGACY_ABI_CHECK_FLAG;
-    if ((flags & bits) != _Py_STATICALLY_ALLOCATED_FLAG) {
-        const char *message = "invalid PyModuleDef, extension possibly "
-            "compiled for non-free-threaded Python";
-        // Write the error as unraisable: if the extension tries calling
-        // any API, it's likely to segfault and lose the exception.
-        PyErr_SetString(PyExc_SystemError, message);
-        PyErr_WriteUnraisable(NULL);
-        // But also raise the exception normally -- this is technically
-        // a recoverable state.
-        PyErr_SetString(PyExc_SystemError, message);
-        return NULL;
-    }
-#endif
     assert(PyModuleDef_Type.tp_flags & Py_TPFLAGS_READY);
     if (def->m_base.m_index == 0) {
         Py_SET_REFCNT(def, 1);
@@ -179,9 +126,6 @@ new_module_notrack(PyTypeObject *mt)
     m->md_weaklist = NULL;
     m->md_name = NULL;
     m->md_token_is_def = false;
-#ifdef Py_GIL_DISABLED
-    m->md_requires_gil = true;
-#endif
     m->md_state_size = 0;
     m->md_state_traverse = NULL;
     m->md_state_clear = NULL;
@@ -391,9 +335,6 @@ _PyModule_CreateInitialized(PyModuleDef* module, int module_api_version)
     m->md_token = module;
     m->md_token_is_def = true;
     module_copy_members_from_deflike(m, module);
-#ifdef Py_GIL_DISABLED
-    m->md_requires_gil = true;
-#endif
     return (PyObject*)m;
 }
 
@@ -530,21 +471,6 @@ module_from_slots_and_spec(
         goto error;
     }
 
-#ifdef Py_GIL_DISABLED
-    // For modules created directly from slots (not from a def), we enable
-    // the GIL here (pairing `_PyEval_EnableGILTransient` with
-    // an immediate `_PyImport_EnableGILAndWarn`).
-    // For modules created from a def, the caller is responsible for this.
-    if (!original_def && requires_gil) {
-        PyThreadState *tstate = _PyThreadState_GET();
-        if (_PyEval_EnableGILTransient(tstate) < 0) {
-            goto error;
-        }
-        if (_PyImport_EnableGILAndWarn(tstate, nameobj) < 0) {
-            goto error;
-        }
-    }
-#endif
 
     if (def_like->m_size < 0) {
         PyErr_Format(
@@ -609,11 +535,7 @@ module_from_slots_and_spec(
         else {
             mod->md_token = token;
         }
-#ifdef Py_GIL_DISABLED
-        mod->md_requires_gil = requires_gil;
-#else
         (void)requires_gil;
-#endif
         mod->md_exec = m_exec;
     } else {
         if (def_like->m_size > 0 || def_like->m_traverse || def_like->m_clear
@@ -687,19 +609,6 @@ PyModule_FromSlotsAndSpec(const PySlot *slots, PyObject *spec)
                                       NULL);
 }
 
-#ifdef Py_GIL_DISABLED
-int
-PyUnstable_Module_SetGIL(PyObject *module, void *gil)
-{
-    bool requires_gil = (gil != Py_MOD_GIL_NOT_USED);
-    if (!PyModule_Check(module)) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-    ((PyModuleObject *)module)->md_requires_gil = requires_gil;
-    return 0;
-}
-#endif
 
 static int
 run_exec_func(PyObject *module, int (*exec)(PyObject *))
@@ -1143,24 +1052,9 @@ module_dealloc(PyObject *self)
 
     PyObject_GC_UnTrack(m);
 
-#ifndef Py_GC
-    /* Under Py_GC only the collector's sweep deallocates, and writing to
-       sys.stderr there would run code. */
-    int verbose = _Py_GetConfig()->verbose;
-    if (verbose && m->md_name) {
-        PySys_FormatStderr("# destroy %U\n", m->md_name);
-    }
-#endif
     FT_CLEAR_WEAKREFS(self, m->md_weaklist);
 
     assert_def_missing_or_redundant(m);
-#ifndef Py_GC
-    /* bpo-39824: Don't call m_free() if m_size > 0 and md_state=NULL */
-    if (m->md_state_free && (m->md_state_size <= 0 || m->md_state != NULL))
-    {
-        m->md_state_free(m);
-    }
-#endif
 
     Py_XDECREF(m->md_dict);
     Py_XDECREF(m->md_name);
@@ -1170,7 +1064,6 @@ module_dealloc(PyObject *self)
     Py_TYPE(m)->tp_free((PyObject *)m);
 }
 
-#ifdef Py_GC
 /* m_free is extension code, which may run Python code or allocate, so it
    runs before the sweep, while the module's state is intact.  The collector
    calls it once (_Py_GC_NOTIFIED_FLAG); the state's memory is freed with the
@@ -1184,7 +1077,6 @@ _PyModule_FreeState(PyObject *self)
         m->md_state_free(m);
     }
 }
-#endif
 
 static PyObject *
 module_repr(PyObject *self)

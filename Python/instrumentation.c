@@ -22,35 +22,15 @@
 /* Uncomment this to dump debugging output when assertions fail */
 // #define INSTRUMENT_DEBUG 1
 
-#if defined(Py_DEBUG) && defined(Py_GIL_DISABLED)
-
-#define ASSERT_WORLD_STOPPED_OR_LOCKED(obj)                         \
-    if (!_PyInterpreterState_GET()->stoptheworld.world_stopped) {   \
-        _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(obj);             \
-    }
-#define ASSERT_WORLD_STOPPED() assert(_PyInterpreterState_GET()->stoptheworld.world_stopped);
-
-#else
 
 #define ASSERT_WORLD_STOPPED_OR_LOCKED(obj)
 #define ASSERT_WORLD_STOPPED()
 
-#endif
 
-#ifdef Py_GIL_DISABLED
-
-#define LOCK_CODE(code)                                             \
-    assert(!_PyInterpreterState_GET()->stoptheworld.world_stopped); \
-    Py_BEGIN_CRITICAL_SECTION(code)
-
-#define UNLOCK_CODE()   Py_END_CRITICAL_SECTION()
-
-#else
 
 #define LOCK_CODE(code)
 #define UNLOCK_CODE()
 
-#endif
 
 /* Instrumentation rewrites the handlers of the executing copy of a code
  * object, which force_instrument_lock_held() makes sure exists, and indexes
@@ -704,7 +684,6 @@ sanity_check_instrumentation(PyCodeObject *code)
 static void
 warm_up(PyCodeObject *code, int i)
 {
-#ifndef Py_GIL_DISABLED
     if (!(ENABLE_SPECIALIZATION
           && _PyInterpreterState_GET()->opt_config.specialization_enabled))
     {
@@ -716,7 +695,6 @@ warm_up(PyCodeObject *code, int i)
     }
     _PyFbHeader *h = _PyIR_FbEntry(code->_co_exec->entries, (uint32_t)fb);
     h->counter = adaptive_counter_warmup();
-#endif
 }
 
 /* Where the instrumentation of the word at index i keeps the opcode that
@@ -1104,17 +1082,9 @@ set_global_version(PyThreadState *tstate, uint32_t version)
     PyInterpreterState *interp = tstate->interp;
     set_version_raw(&interp->ceval.instrumentation_version, version);
 
-#ifdef Py_GIL_DISABLED
-    // Set the version on all threads in free-threaded builds.
-    _Py_FOR_EACH_TSTATE_BEGIN(interp, tstate) {
-        set_version_raw(&tstate->eval_breaker, version);
-    };
-    _Py_FOR_EACH_TSTATE_END(interp);
-#else
     // Normal builds take the current version from instrumentation_version when
     // attaching a thread, so we only have to set the current thread's version.
     set_version_raw(&tstate->eval_breaker, version);
-#endif
 }
 
 static bool

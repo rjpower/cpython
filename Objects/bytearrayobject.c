@@ -1280,13 +1280,6 @@ bytearray_dealloc(PyObject *op)
     }
 #endif
 
-#ifndef Py_GC  // the sweep can deallocate the exporter before its views
-    if (self->ob_exports > 0) {
-        PyErr_SetString(PyExc_SystemError,
-                        "deallocated bytearray object has exported buffers");
-        PyErr_Print();
-    }
-#endif
     Py_XDECREF(self->ob_bytes_object);
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
@@ -3090,9 +3083,7 @@ bytearrayiter_next(PyObject *self)
 
     if (val == -1) {
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, -1);
-#ifndef Py_GIL_DISABLED
         Py_CLEAR(it->it_seq);
-#endif
         return NULL;
     }
     FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index + 1);

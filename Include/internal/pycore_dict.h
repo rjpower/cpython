@@ -181,9 +181,6 @@ extern int _PyDict_Pop_KnownHash(
 
 extern void _PyDict_Clear_LockHeld(PyObject *op);
 
-#ifdef Py_GIL_DISABLED
-PyAPI_FUNC(void) _PyDict_EnsureSharedOnRead(PyDictObject *mp);
-#endif
 
 // Export for '_elementtree' shared extension
 PyAPI_FUNC(PyObject*) _PyDict_CopyAsDict(PyObject *op);
@@ -212,10 +209,6 @@ struct _dictkeysobject {
     /* Kind of keys */
     uint8_t dk_kind;
 
-#ifdef Py_GIL_DISABLED
-    /* Lock used to protect shared keys */
-    PyMutex dk_mutex;
-#endif
 
     /* Version number -- Reset to 0 by any modification to keys */
     uint32_t dk_version;
@@ -502,58 +495,10 @@ extern void _PyDict_EnablePerThreadRefcounting(PyObject *op);
 PyDictObject *_PyObject_MaterializeManagedDict_LockHeld(PyObject *);
 
 // See `_Py_INCREF_TYPE()` in pycore_object.h
-#ifndef Py_GIL_DISABLED
 #  define _Py_INCREF_DICT Py_INCREF
 #  define _Py_DECREF_DICT Py_DECREF
 #  define _Py_INCREF_BUILTINS Py_INCREF
 #  define _Py_DECREF_BUILTINS Py_DECREF
-#else
-static inline Py_ssize_t
-_PyDict_UniqueId(PyDictObject *mp)
-{
-    return (Py_ssize_t)(FT_ATOMIC_LOAD_UINT64_RELAXED(mp->_ma_watcher_tag) >> DICT_UNIQUE_ID_SHIFT);
-}
-
-static inline void
-_Py_INCREF_DICT(PyObject *op)
-{
-    assert(PyAnyDict_Check(op));
-    Py_ssize_t id = _PyDict_UniqueId((PyDictObject *)op);
-    _Py_THREAD_INCREF_OBJECT(op, id);
-}
-
-static inline void
-_Py_DECREF_DICT(PyObject *op)
-{
-    assert(PyAnyDict_Check(op));
-    Py_ssize_t id = _PyDict_UniqueId((PyDictObject *)op);
-    _Py_THREAD_DECREF_OBJECT(op, id);
-}
-
-// Like `_Py_INCREF_DICT`, but also handles non-dict objects because builtins
-// may not be a dict.
-static inline void
-_Py_INCREF_BUILTINS(PyObject *op)
-{
-    if (PyDict_CheckExact(op)) {
-        _Py_INCREF_DICT(op);
-    }
-    else {
-        Py_INCREF(op);
-    }
-}
-
-static inline void
-_Py_DECREF_BUILTINS(PyObject *op)
-{
-    if (PyDict_CheckExact(op)) {
-        _Py_DECREF_DICT(op);
-    }
-    else {
-        Py_DECREF(op);
-    }
-}
-#endif
 
 /* frozendict */
 typedef struct {

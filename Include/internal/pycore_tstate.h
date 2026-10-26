@@ -8,19 +8,12 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#include "pycore_brc.h"             // struct _brc_thread_state
 #include "pycore_freelist_state.h"  // struct _Py_freelists
 #include "pycore_interpframe_structs.h"  // _PyInterpreterFrame
 #include "pycore_mimalloc.h"        // struct _mimalloc_thread_state
 #include "pycore_qsbr.h"            // struct qsbr
 #include "pycore_structs.h"
 
-#ifdef Py_GIL_DISABLED
-struct _gc_thread_state {
-    /* Thread-local allocation count. */
-    Py_ssize_t alloc_count;
-};
-#endif
 
 
 // Every PyThreadState is actually allocated as a _PyThreadStateImpl. The
@@ -71,7 +64,6 @@ typedef struct _PyThreadStateImpl {
     struct _mimalloc_thread_state mimalloc;
 #endif
 
-#ifndef Py_GIL_DISABLED
     // The callee-saved registers and stack pointer of the thread when it
     // last released the GIL, for the tracing verifier's scan of its C stack
     // (Python/gc_trace.c).  "valid" is cleared when the thread attaches.
@@ -79,7 +71,6 @@ typedef struct _PyThreadStateImpl {
         uintptr_t regs[24];
         uintptr_t sp;
         int valid;
-#ifdef Py_GC
         // The same, recorded where the live collector was entered, for the
         // scan of the collecting thread's own stack; entry_sp is 0 outside
         // a collection.
@@ -87,49 +78,10 @@ typedef struct _PyThreadStateImpl {
         uintptr_t entry_sp;
         // This thread is running the live collector's queue.
         int running_queue;
-#endif
     } gc_trace;
-#endif
 
-#ifdef Py_GIL_DISABLED
-    // Stack references for the current thread that exist on the C stack
-    struct _PyCStackRef *c_stack_refs;
-    struct _gc_thread_state gc;
-    struct _Py_freelists freelists;
-    struct _brc_thread_state brc;
-    struct {
-        // The per-thread refcounts
-        Py_ssize_t *values;
 
-        // Size of the refcounts array.
-        Py_ssize_t size;
 
-        // If set, don't use per-thread refcounts
-        int is_finalized;
-    } refcounts;
-
-    // Index to use to retrieve thread-local bytecode for this thread
-    int32_t tlbc_index;
-
-    // When >1, code objects do not immortalize their non-string constants.
-    int suppress_co_const_immortalization;
-
-#ifdef Py_STATS
-     // per-thread stats, will be merged into interp->pystats_struct
-     PyStats *pystats_struct; // allocated by _PyStats_ThreadInit()
-#endif
-
-#endif // Py_GIL_DISABLED
-
-#if defined(Py_REF_DEBUG) && defined(Py_GIL_DISABLED)
-    Py_ssize_t reftotal;  // this thread's total refcount operations
-#endif
-
-#ifdef Py_GIL_DISABLED
-    // gh-144438: Add padding to ensure that the fields above don't share a
-    // cache line with other allocations.
-    char __padding[_Py_QSBR_CACHE_LINE_SIZE];
-#endif
 } _PyThreadStateImpl;
 
 #ifdef __cplusplus

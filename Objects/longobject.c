@@ -330,12 +330,8 @@ _PyLong_Negate(PyLongObject **x_p)
     PyLongObject *x;
 
     x = (PyLongObject *)*x_p;
-#ifdef Py_GC
     // There is no count; the shared fresh ints are the immortal small ones.
     if (!_Py_IsImmortal((PyObject *)x)) {
-#else
-    if (_PyObject_IsUniquelyReferenced((PyObject *)x)) {
-#endif
          _PyLong_FlipSign(x);
         return;
     }
@@ -3824,9 +3820,6 @@ long_add(PyLongObject *a, PyLongObject *b)
                    and thus z must be a multiple-digit int.
                    That also means z is not an element of
                    small_ints, so negating it in-place is safe. */
-#ifndef Py_GC  // reference counts are constant under Py_GC
-                assert(Py_REFCNT(z) == 1);
-#endif
                 _PyLong_FlipSign(z);
             }
         }
@@ -3865,9 +3858,6 @@ long_sub(PyLongObject *a, PyLongObject *b)
         else {
             z = x_add(a, b);
             if (z != NULL) {
-#ifndef Py_GC  // reference counts are constant under Py_GC
-                assert(_PyLong_IsZero(z) || Py_REFCNT(z) == 1);
-#endif
                 _PyLong_FlipSign(z);
             }
         }
@@ -5426,9 +5416,6 @@ long_lshift1(PyLongObject *a, Py_ssize_t wordshift, digit remshift)
     if (z == NULL)
         return NULL;
     if (_PyLong_IsNegative(a)) {
-#ifndef Py_GC  // reference counts are constant under Py_GC
-        assert(Py_REFCNT(z) == 1);
-#endif
         _PyLong_FlipSign(z);
     }
     for (i = 0; i < wordshift; i++)
@@ -6924,9 +6911,6 @@ PyLongWriter_Discard(PyLongWriter *writer)
     }
 
     PyLongObject *obj = (PyLongObject *)writer;
-#ifndef Py_GC  // reference counts are constant under Py_GC
-    assert(Py_REFCNT(obj) == 1);
-#endif
     Py_DECREF(obj);
 }
 
@@ -6935,9 +6919,6 @@ PyObject*
 PyLongWriter_Finish(PyLongWriter *writer)
 {
     PyLongObject *obj = (PyLongObject *)writer;
-#ifndef Py_GC  // reference counts are constant under Py_GC
-    assert(Py_REFCNT(obj) == 1);
-#endif
 
 #ifdef Py_DEBUG
     // gh-147988: Detect uninitialized digits: long_alloc() fills digits with

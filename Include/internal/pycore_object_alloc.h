@@ -42,11 +42,9 @@ _PyObject_MallocWithType(PyTypeObject *tp, size_t size)
 {
 #ifdef WITH_MIMALLOC
     _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-#  ifndef Py_GIL_DISABLED
     if (tstate == NULL || tstate->mimalloc.current_object_heap == NULL) {
         return PyObject_Malloc(size);
     }
-#  endif
     struct _mimalloc_thread_state *m = &tstate->mimalloc;
     m->current_object_heap = _PyObject_GetAllocationHeap(tstate, tp);
 #endif
@@ -62,11 +60,9 @@ _PyObject_ReallocWithType(PyTypeObject *tp, void *ptr, size_t size)
 {
 #ifdef WITH_MIMALLOC
     _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-#  ifndef Py_GIL_DISABLED
     if (tstate == NULL || tstate->mimalloc.current_object_heap == NULL) {
         return PyObject_Realloc(ptr, size);
     }
-#  endif
     struct _mimalloc_thread_state *m = &tstate->mimalloc;
     m->current_object_heap = _PyObject_GetAllocationHeap(tstate, tp);
 #endif

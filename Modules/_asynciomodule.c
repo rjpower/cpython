@@ -67,10 +67,6 @@ typedef struct TaskObj {
     PyObject *task_name;
     PyObject *task_context;
     struct llist_node task_node;
-#ifdef Py_GIL_DISABLED
-    // thread id of the thread where this task was created
-    uintptr_t task_tid;
-#endif
 } TaskObj;
 
 typedef struct {
@@ -2186,23 +2182,7 @@ unregister_task_safe(TaskObj *task)
 static void
 unregister_task(TaskObj *task)
 {
-#ifdef Py_GIL_DISABLED
-    // check if we are in the same thread
-    // if so, we can avoid locking
-    if (task->task_tid == _Py_ThreadId()) {
-        unregister_task_safe(task);
-    }
-    else {
-        // we are in a different thread
-        // stop the world then check and remove the task
-        PyThreadState *tstate = _PyThreadState_GET();
-        _PyEval_StopTheWorld(tstate->interp);
-        unregister_task_safe(task);
-        _PyEval_StartTheWorld(tstate->interp);
-    }
-#else
     unregister_task_safe(task);
-#endif
 }
 
 static int
@@ -2323,9 +2303,6 @@ _asyncio_Task___init___impl(TaskObj *self, PyObject *coro, PyObject *loop,
     }
 
     Py_CLEAR(self->task_fut_waiter);
-#ifdef Py_GIL_DISABLED
-    self->task_tid = _Py_ThreadId();
-#endif
     self->task_must_cancel = 0;
     self->task_log_destroy_pending = 1;
     self->task_num_cancels_requested = 0;
@@ -2335,11 +2312,7 @@ _asyncio_Task___init___impl(TaskObj *self, PyObject *coro, PyObject *loop,
         // optimization: defer task name formatting
         // store the task counter as PyLong in the name
         // for deferred formatting in get_name
-#ifdef Py_GIL_DISABLED
-        unsigned long long counter = _Py_atomic_add_uint64(&state->task_name_counter, 1) + 1;
-#else
         unsigned long long counter = ++state->task_name_counter;
-#endif
         name = PyLong_FromUnsignedLongLong(counter);
     } else if (!PyUnicode_CheckExact(name)) {
         name = PyObject_Str(name);
@@ -2351,11 +2324,6 @@ _asyncio_Task___init___impl(TaskObj *self, PyObject *coro, PyObject *loop,
         return -1;
     }
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
-#ifdef Py_GIL_DISABLED
-    // This is required so that _Py_TryIncref(self)
-    // works correctly in non-owning threads.
-    _PyObject_SetMaybeWeakref((PyObject *)self);
-#endif
     if (eager_start) {
         // gh-154695: loop may be None here, future_init() resolved it into task_loop.
         PyObject *res = PyObject_CallMethodNoArgs(self->task_loop,
@@ -3986,9 +3954,6 @@ add_tasks_llist(struct llist_node *head, PyListObject *tasks)
 static inline int
 add_tasks_interp(PyInterpreterState *interp, PyListObject *tasks)
 {
-#ifdef Py_GIL_DISABLED
-    assert(interp->stoptheworld.world_stopped);
-#endif
     // Start traversing from interpreter's linked list
     struct llist_node *head = &interp->asyncio_tasks_head;
 

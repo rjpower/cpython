@@ -158,9 +158,6 @@ _PyRun_InteractiveLoop(FILE *fp, PyObject *filename, PyCompilerFlags *flags)
     }
     Py_XDECREF(v);
 
-#ifdef Py_REF_DEBUG
-    int show_ref_count = _Py_GetConfig()->show_ref_count;
-#endif
     int nomem_count = 0;
     int ret;
     do {
@@ -188,11 +185,6 @@ _PyRun_InteractiveLoop(FILE *fp, PyObject *filename, PyCompilerFlags *flags)
             nomem_count = 0;
         }
 
-#ifdef Py_REF_DEBUG
-        if (show_ref_count) {
-            _PyDebug_PrintTotalRefs();
-        }
-#endif
     } while (ret != E_EOF);
 
     Py_RETURN_NONE;

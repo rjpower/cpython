@@ -156,18 +156,10 @@ typedef enum _WIN32_THREADSTATE {
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
-#ifdef Py_GIL_DISABLED
-#define INTERP_STATE_MIN_SIZE MAX(MAX(MAX(MAX(offsetof(PyInterpreterState, _code_object_generation) + sizeof(uint64_t), \
-                                              offsetof(PyInterpreterState, tlbc_indices.tlbc_generation) + sizeof(uint32_t)), \
-                                          offsetof(PyInterpreterState, threads.head) + sizeof(void*)), \
-                                      offsetof(PyInterpreterState, _gil.last_holder) + sizeof(PyThreadState*)), \
-                                  offsetof(PyInterpreterState, gc.frame) + sizeof(_PyInterpreterFrame *))
-#else
 #define INTERP_STATE_MIN_SIZE MAX(MAX(MAX(offsetof(PyInterpreterState, _code_object_generation) + sizeof(uint64_t), \
                                           offsetof(PyInterpreterState, threads.head) + sizeof(void*)), \
                                       offsetof(PyInterpreterState, _gil.last_holder) + sizeof(PyThreadState*)), \
                                   offsetof(PyInterpreterState, gc.frame) + sizeof(_PyInterpreterFrame *))
-#endif
 #define INTERP_STATE_BUFFER_SIZE MAX(INTERP_STATE_MIN_SIZE, 256)
 
 #define MAX_TLBC_SIZE 2048
@@ -384,10 +376,6 @@ typedef struct {
     UnwinderStats stats;  // statistics for performance analysis
     InterpreterTstateCacheEntry cached_tstates[INTERPRETER_THREAD_CACHE_SIZE];
     InterpreterGenerationCacheEntry cached_generations[INTERPRETER_THREAD_CACHE_SIZE];
-#ifdef Py_GIL_DISABLED
-    uint32_t tlbc_generation;
-    _Py_hashtable_t *tlbc_cache;
-#endif
 #ifdef __APPLE__
     uint64_t thread_id_offset;
     int thread_id_offset_initialized;
@@ -569,17 +557,6 @@ extern bool parse_linetable(
 );
 
 /* TLBC cache (only for Py_GIL_DISABLED) */
-#ifdef Py_GIL_DISABLED
-typedef struct {
-    void *tlbc_array;
-    Py_ssize_t tlbc_array_size;
-    uint32_t generation;
-} TLBCCacheEntry;
-
-extern void tlbc_cache_entry_destroy(void *ptr);
-extern TLBCCacheEntry *get_tlbc_cache_entry(RemoteUnwinderObject *self, uintptr_t code_addr, uint32_t current_generation);
-extern int cache_tlbc_array(RemoteUnwinderObject *unwinder, uintptr_t code_addr, uintptr_t tlbc_array_addr, uint32_t generation);
-#endif
 
 /* ============================================================================
  * FRAME FUNCTION DECLARATIONS

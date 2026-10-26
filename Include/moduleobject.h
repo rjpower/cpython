@@ -89,9 +89,6 @@ struct PyModuleDef_Slot {
 #endif
 
 #if !defined(Py_LIMITED_API)
-#  if defined(Py_GIL_DISABLED)
-PyAPI_FUNC(int) PyUnstable_Module_SetGIL(PyObject *module, void *gil);
-#  endif
 #endif
 
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= _Py_PACK_VERSION(3, 15)

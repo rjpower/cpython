@@ -350,13 +350,6 @@ _remote_debugging_RemoteUnwinder___init___impl(RemoteUnwinderObject *self,
         return -1;
     }
 
-#ifdef Py_GIL_DISABLED
-    if (only_active_thread) {
-        PyErr_SetString(PyExc_ValueError,
-                       "only_active_thread is not supported in free-threaded builds");
-        return -1;
-    }
-#endif
 
     self->native = native;
     self->gc = gc;
@@ -439,22 +432,6 @@ _remote_debugging_RemoteUnwinder___init___impl(RemoteUnwinderObject *self,
         return -1;
     }
 
-#ifdef Py_GIL_DISABLED
-    // Initialize TLBC cache
-    self->tlbc_generation = 0;
-    self->tlbc_cache = _Py_hashtable_new_full(
-        _Py_hashtable_hash_ptr,
-        _Py_hashtable_compare_direct,
-        NULL,  // keys are stable pointers, don't destroy
-        tlbc_cache_entry_destroy,
-        NULL
-    );
-    if (self->tlbc_cache == NULL) {
-        PyErr_NoMemory();
-        set_exception_cause(self, PyExc_MemoryError, "Failed to create TLBC cache");
-        return -1;
-    }
-#endif
 
 #if defined(__APPLE__)
     self->thread_id_offset = 0;
@@ -568,14 +545,6 @@ refresh_generation_caches_from_interp_state(
         self->cached_code_object_generation = code_object_generation;
     }
 
-#ifdef Py_GIL_DISABLED
-    uint32_t current_tlbc_generation = GET_MEMBER(uint32_t, interp_state_buffer,
-                                                  self->debug_offsets.interpreter_state.tlbc_generation);
-    if (current_tlbc_generation != self->tlbc_generation) {
-        self->tlbc_generation = current_tlbc_generation;
-        _Py_hashtable_clear(self->tlbc_cache);
-    }
-#endif
 }
 
 static int
@@ -1327,11 +1296,6 @@ RemoteUnwinder_dealloc(PyObject *op)
     }
 #endif
 
-#ifdef Py_GIL_DISABLED
-    if (self->tlbc_cache) {
-        _Py_hashtable_destroy(self->tlbc_cache);
-    }
-#endif
     if (self->handle.pid != 0) {
         _Py_RemoteDebug_ClearCache(&self->handle);
         _Py_RemoteDebug_CleanupProcHandle(&self->handle);

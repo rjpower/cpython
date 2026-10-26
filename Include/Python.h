@@ -48,11 +48,6 @@
 #endif
 
 #if !defined(Py_LIMITED_API)
-#  if defined(Py_GIL_DISABLED)
-#    if defined(_MSC_VER) || defined(__MINGW32__)
-#      include <intrin.h>             // __readgsqword()
-#    endif
-#  endif
 #endif // Py_GIL_DISABLED
 
 #ifdef _MSC_VER

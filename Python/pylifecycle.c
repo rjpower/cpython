@@ -36,7 +36,6 @@
 #include "pycore_typeobject.h"    // _PyTypes_InitTypes()
 #include "pycore_typevarobject.h" // _Py_clear_generic_types()
 #include "pycore_unicodeobject.h" // _PyUnicode_InitTypes()
-#include "pycore_uniqueid.h"      // _PyObject_FinalizeUniqueIdPool()
 #include "pycore_warnings.h"      // _PyWarnings_InitState()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 
@@ -595,15 +594,6 @@ init_interp_settings(PyInterpreterState *interp,
         return _PyStatus_ERR("per-interpreter obmalloc does not support "
                              "single-phase init extension modules");
     }
-#ifdef Py_GIL_DISABLED
-    if (!_Py_IsMainInterpreter(interp) &&
-        !config->check_multi_interp_extensions)
-    {
-        return _PyStatus_ERR("The free-threaded build does not support "
-                             "single-phase init extension modules in "
-                             "subinterpreters");
-    }
-#endif
 
     if (config->allow_fork) {
         interp->feature_flags |= Py_RTFLAGS_FORK;
@@ -1941,11 +1931,9 @@ finalize_modules(PyThreadState *tstate)
         Py_DECREF(weaklist);
     }
 
-#ifdef Py_GC
     // What the cleared modules held dies here under reference counting,
     // while sys.stdout and the builtins still work for its finalizers.
     _PyGC_CollectNoFail(tstate);
-#endif
 
     // Clear sys and builtins modules dict
     finalize_clear_sys_builtins_dict(interp, verbose);
@@ -1964,15 +1952,10 @@ finalize_modules(PyThreadState *tstate)
     // destructor.
     _PyImport_ClearModules(interp);
 
-#ifndef Py_GC
-    // Collect garbage once more
-    _PyGC_CollectNoFail(tstate);
-#else
-    // Under Py_GC each collection marks the whole heap, and the last one,
+    // Each collection marks the whole heap, and the last one,
     // in interpreter_clear(), follows soon: no Python code needs to run in
     // between, and these objects are not finalized later than the ones
     // that interpreter_clear() releases.
-#endif
 }
 
 
@@ -2061,9 +2044,6 @@ finalize_interp_types(PyInterpreterState *interp)
     _PyTypes_FiniTypes(interp);
 
     _PyTypes_Fini(interp);
-#ifdef Py_GIL_DISABLED
-    _PyObject_FinalizeUniqueIdPool(interp);
-#endif
 
     _PyCode_Fini(interp);
 
@@ -2073,12 +2053,10 @@ finalize_interp_types(PyInterpreterState *interp)
 
     _PyUnicode_Fini(interp);
 
-#ifndef Py_GIL_DISABLED
     // With Py_GIL_DISABLED:
     // the freelists for the current thread state have already been cleared.
     struct _Py_freelists *freelists = _Py_freelists_GET();
     _PyObject_ClearFreeLists(freelists, 1);
-#endif
 
 #ifdef Py_DEBUG
     _PyStaticObjects_CheckAll(interp);
@@ -2199,11 +2177,7 @@ resolve_final_tstate(_PyRuntimeState *runtime)
     return main_tstate;
 }
 
-#ifdef Py_GIL_DISABLED
-#define ASSERT_WORLD_STOPPED(interp) assert(interp->runtime->stoptheworld.world_stopped)
-#else
 #define ASSERT_WORLD_STOPPED(interp)
-#endif
 
 static int
 interp_has_threads(PyInterpreterState *interp)
@@ -2383,13 +2357,6 @@ _Py_Finalize(_PyRuntimeState *runtime)
 
     /* Copy the core config, PyInterpreterState_Delete() free
        the core config memory */
-#ifdef Py_REF_DEBUG
-    int show_ref_count = tstate->interp->config.show_ref_count;
-#endif
-#ifdef Py_TRACE_REFS
-    int dump_refs = tstate->interp->config.dump_refs;
-    wchar_t *dump_refs_file = tstate->interp->config.dump_refs_file;
-#endif
 #ifdef WITH_PYMALLOC
     int malloc_stats = tstate->interp->config.malloc_stats;
 #endif
@@ -2510,29 +2477,6 @@ _Py_Finalize(_PyRuntimeState *runtime)
     /* dump hash stats */
     _PyHash_Fini();
 
-#ifdef Py_TRACE_REFS
-    /* Display all objects still alive -- this can invoke arbitrary
-     * __repr__ overrides, so requires a mostly-intact interpreter.
-     * Alas, a lot of stuff may still be alive now that will be cleaned
-     * up later.
-     */
-
-    FILE *dump_refs_fp = NULL;
-    if (dump_refs_file != NULL) {
-        dump_refs_fp = _Py_wfopen(dump_refs_file, L"w");
-        if (dump_refs_fp == NULL) {
-            fprintf(stderr, "PYTHONDUMPREFSFILE: cannot create file: %ls\n", dump_refs_file);
-        }
-    }
-
-    if (dump_refs) {
-        _Py_PrintReferences(tstate->interp, stderr);
-    }
-
-    if (dump_refs_fp != NULL) {
-        _Py_PrintReferences(tstate->interp, dump_refs_fp);
-    }
-#endif /* Py_TRACE_REFS */
 
     /* At this point there's almost no other Python code that will run,
        nor interpreter state needed.  The only possibility is the
@@ -2550,18 +2494,6 @@ _Py_Finalize(_PyRuntimeState *runtime)
 
     finalize_interp_clear(tstate);
 
-#ifdef Py_TRACE_REFS
-    /* Display addresses (& refcnts) of all objects still alive.
-     * An address can be used to find the repr of the object, printed
-     * above by _Py_PrintReferences. */
-    if (dump_refs) {
-        _Py_PrintReferenceAddresses(tstate->interp, stderr);
-    }
-    if (dump_refs_fp != NULL) {
-        _Py_PrintReferenceAddresses(tstate->interp, dump_refs_fp);
-        fclose(dump_refs_fp);
-    }
-#endif /* Py_TRACE_REFS */
 
 #ifdef WITH_PYMALLOC
     if (malloc_stats) {
@@ -2571,12 +2503,6 @@ _Py_Finalize(_PyRuntimeState *runtime)
 
     finalize_interp_delete(tstate->interp);
 
-#ifdef Py_REF_DEBUG
-    if (show_ref_count) {
-        _PyDebug_PrintTotalRefs();
-    }
-    _Py_FinalizeRefTotal(runtime);
-#endif
     _Py_FinalizeAllocatedBlocks(runtime);
 
     call_ll_exitfuncs(runtime);
@@ -3376,11 +3302,7 @@ _Py_FatalError_DumpTracebacks(int fd, PyInterpreterState *interp,
     PUTS(fd, "\n");
 
     /* display the current Python stack */
-#ifndef Py_GIL_DISABLED
     PyUnstable_DumpTracebackThreads(fd, interp, tstate, 0);
-#else
-    PyUnstable_DumpTraceback(fd, tstate);
-#endif
 }
 
 /* Print the current exception (if an exception is set) with its traceback,
@@ -3512,26 +3434,12 @@ fatal_error_exit(int status)
 static inline int
 acquire_dict_lock_for_dump(PyObject *obj)
 {
-#ifdef Py_GIL_DISABLED
-    PyMutex *mutex = &obj->ob_mutex;
-    if (_PyMutex_LockTimed(mutex, 0, 0) == PY_LOCK_ACQUIRED) {
-        return 1;
-    }
-    return 0;
-#else
     return 1;
-#endif
 }
 
 static inline void
 release_dict_lock_for_dump(PyObject *obj)
 {
-#ifdef Py_GIL_DISABLED
-    PyMutex *mutex = &obj->ob_mutex;
-    // We can not call PyMutex_Unlock because it's not async-signal-safe.
-    // So not to wake up other threads, we just use a simple atomic store in here.
-    _Py_atomic_store_uint8(&mutex->_bits, _Py_UNLOCKED);
-#endif
 }
 
 // Dump the list of extension modules of sys.modules, excluding stdlib modules

@@ -84,11 +84,9 @@ struct _xidata {
     // to PyMem_RawFree (the default if not explicitly set to NULL).
     // The call will happen with the original interpreter activated.
     xid_freefunc free;
-#ifdef Py_GC
     // The data lives in memory that the collector does not scan; while it
     // holds obj, this root keeps obj alive.
     _PyGCRoot obj_root;
-#endif
 };
 
 PyAPI_FUNC(_PyXIData_t *) _PyXIData_New(void);

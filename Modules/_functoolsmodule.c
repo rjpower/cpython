@@ -1126,9 +1126,6 @@ _functools_reduce_impl(PyObject *module, PyObject *func, PyObject *seq,
             result = op2;
         else {
             /* Update the args tuple in-place */
-#ifndef Py_GC  // reference counts are constant under Py_GC
-            assert(Py_REFCNT(args) == 1);
-#endif
             Py_XSETREF(_PyTuple_ITEMS(args)[0], result);
             Py_XSETREF(_PyTuple_ITEMS(args)[1], op2);
             if ((result = PyObject_Call(func, args, NULL)) == NULL) {

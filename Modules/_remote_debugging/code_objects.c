@@ -13,115 +13,6 @@
  * TLBC CACHING FUNCTIONS (Py_GIL_DISABLED only)
  * ============================================================================ */
 
-#ifdef Py_GIL_DISABLED
-
-void
-tlbc_cache_entry_destroy(void *ptr)
-{
-    TLBCCacheEntry *entry = (TLBCCacheEntry *)ptr;
-    if (entry->tlbc_array) {
-        PyMem_RawFree(entry->tlbc_array);
-    }
-    PyMem_RawFree(entry);
-}
-
-TLBCCacheEntry *
-get_tlbc_cache_entry(RemoteUnwinderObject *self, uintptr_t code_addr, uint32_t current_generation)
-{
-    void *key = (void *)code_addr;
-    TLBCCacheEntry *entry = _Py_hashtable_get(self->tlbc_cache, key);
-
-    if (entry && entry->generation != current_generation) {
-        // Entry is stale, remove it from the cache and destroy it
-        TLBCCacheEntry *old = _Py_hashtable_steal(self->tlbc_cache, key);
-        if (old != NULL) {
-            tlbc_cache_entry_destroy(old);
-        }
-        return NULL;
-    }
-
-    return entry;
-}
-
-int
-cache_tlbc_array(RemoteUnwinderObject *unwinder, uintptr_t code_addr, uintptr_t tlbc_array_addr, uint32_t generation)
-{
-    uintptr_t tlbc_array_ptr;
-    void *tlbc_array = NULL;
-    TLBCCacheEntry *entry = NULL;
-
-    // Read the TLBC array pointer
-    if (read_ptr(unwinder, tlbc_array_addr, &tlbc_array_ptr) != 0) {
-        set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to read TLBC array pointer");
-        return 0; // Read error
-    }
-
-    // Validate TLBC array pointer
-    if (tlbc_array_ptr == 0) {
-        PyErr_SetString(PyExc_RuntimeError, "TLBC array pointer is NULL");
-        return 0; // No TLBC array
-    }
-
-    // Read the TLBC array size
-    Py_ssize_t tlbc_size;
-    if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle, tlbc_array_ptr, sizeof(tlbc_size), &tlbc_size) != 0) {
-        set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to read TLBC array size");
-        return 0; // Read error
-    }
-
-    // Validate TLBC array size
-    if (tlbc_size <= 0) {
-        PyErr_SetString(PyExc_RuntimeError, "Invalid TLBC array size");
-        return 0; // Invalid size
-    }
-
-    if (tlbc_size > MAX_TLBC_SIZE) {
-        PyErr_SetString(PyExc_RuntimeError, "TLBC array size exceeds maximum limit");
-        return 0; // Invalid size
-    }
-    assert(tlbc_size > 0 && tlbc_size <= MAX_TLBC_SIZE);
-
-    // Allocate and read the entire TLBC array
-    size_t array_data_size = tlbc_size * sizeof(void*);
-    tlbc_array = PyMem_RawMalloc(sizeof(Py_ssize_t) + array_data_size);
-    if (!tlbc_array) {
-        PyErr_NoMemory();
-        set_exception_cause(unwinder, PyExc_MemoryError, "Failed to allocate TLBC array");
-        return 0; // Memory error
-    }
-
-    if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle, tlbc_array_ptr, sizeof(Py_ssize_t) + array_data_size, tlbc_array) != 0) {
-        PyMem_RawFree(tlbc_array);
-        set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to read TLBC array data");
-        return 0; // Read error
-    }
-
-    // Create cache entry
-    entry = PyMem_RawMalloc(sizeof(TLBCCacheEntry));
-    if (!entry) {
-        PyErr_NoMemory();
-        PyMem_RawFree(tlbc_array);
-        set_exception_cause(unwinder, PyExc_MemoryError, "Failed to allocate TLBC cache entry");
-        return 0; // Memory error
-    }
-
-    entry->tlbc_array = tlbc_array;
-    entry->tlbc_array_size = tlbc_size;
-    entry->generation = generation;
-
-    // Store in cache
-    void *key = (void *)code_addr;
-    if (_Py_hashtable_set(unwinder->tlbc_cache, key, entry) < 0) {
-        tlbc_cache_entry_destroy(entry);
-        PyErr_NoMemory();
-        set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to store TLBC entry in cache");
-        return 0; // Cache error
-    }
-
-    return 1; // Success
-}
-
-#endif
 
 /* ============================================================================
  * LINE TABLE PARSING FUNCTIONS
@@ -352,13 +243,7 @@ parse_code_object(RemoteUnwinderObject *unwinder,
     PyObject *linetable = NULL;
     int code_metadata_incomplete = 0;
 
-#ifdef Py_GIL_DISABLED
-    // In free threading builds, code object addresses might have the low bit set
-    // as a flag, so we need to mask it off to get the real address
-    uintptr_t real_address = ctx->code_addr & (~1);
-#else
     uintptr_t real_address = ctx->code_addr;
-#endif
 
     if (unwinder && unwinder->code_object_cache != NULL) {
         meta = _Py_hashtable_get(unwinder->code_object_cache, key);

@@ -431,15 +431,15 @@ General Options
    .. c:macro:: Py_GIL_DISABLED
       :no-typesetting:
 
-   Enables support for running Python without the :term:`global interpreter
+   Enabled support for running Python without the :term:`global interpreter
    lock` (GIL): :term:`free-threaded build`.
 
-   Defines the ``Py_GIL_DISABLED`` macro and adds ``"t"`` to
-   :data:`sys.abiflags`.
-
-   See :ref:`whatsnew313-free-threaded-cpython` for more detail.
-
    .. versionadded:: 3.13
+
+   .. versionchanged:: 3.16
+      Removed.  The tracing collector, which owns the memory of every object,
+      is single-threaded, so there is no free-threaded build and
+      ``Py_GIL_DISABLED`` is never defined.
 
 .. option:: PKG_CONFIG
 
@@ -821,8 +821,8 @@ also be used to improve performance.
    Disable the fast :ref:`mimalloc <mimalloc>` allocator
    (enabled by default).
 
-   This option cannot be used together with :option:`--disable-gil`
-   because the :term:`free-threaded <free threading>` build requires mimalloc.
+   This option is rejected: the tracing collector finds objects and frees
+   them through mimalloc's heaps.
 
    See also :envvar:`PYTHONMALLOC` environment variable.
 
@@ -964,24 +964,17 @@ Debug options
 
 .. option:: --with-trace-refs
 
-   Enable tracing references for debugging purpose (disabled by default).
-
-   Effects:
-
-   * Define the ``Py_TRACE_REFS`` macro.
-   * Add :func:`sys.getobjects` function.
-   * Add :envvar:`PYTHONDUMPREFS` environment variable.
-
-   The :envvar:`PYTHONDUMPREFS` environment variable can be used to dump
-   objects and reference counts still alive at Python exit.
-
-   :ref:`Statically allocated objects <static-types>` are not traced.
+   Enabled tracing references for debugging purpose.
 
    .. versionadded:: 3.8
 
    .. versionchanged:: 3.13
       This build is now ABI compatible with release build and :ref:`debug build
       <debug-build>`.
+
+   .. versionchanged:: 3.16
+      Removed, with reference counting: the tracing collector owns memory.
+      :func:`gc.get_objects` lists the live objects.
 
 .. option:: --with-assertions
 

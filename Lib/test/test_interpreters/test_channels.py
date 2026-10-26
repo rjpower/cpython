@@ -4,6 +4,7 @@ from textwrap import dedent
 import unittest
 import time
 
+from test import support
 from test.support import import_helper
 # Raise SkipTest if subinterpreters not supported.
 _channels = import_helper.import_module('_interpchannels')
@@ -76,6 +77,8 @@ class TestChannels(TestBase):
         self.assertIsInstance(s, channels.SendChannel)
 
     def test_list_all(self):
+        # The channels of earlier tests close when their last handle dies.
+        support.gc_collect()  # For other GCs.
         self.assertEqual(channels.list_all(), [])
         created = set()
         for _ in range(3):
@@ -85,6 +88,8 @@ class TestChannels(TestBase):
         self.assertEqual(after, created)
 
     def test_list_all_closed(self):
+        # The channels of earlier tests close when their last handle dies.
+        support.gc_collect()  # For other GCs.
         created = [channels.create() for _ in range(3)]
         rch, sch = created.pop(1)
         rch.close()
@@ -460,6 +465,7 @@ class TestSendRecv(TestBase):
             rch, sch = channels.create()
             interp = common(rch, sch)
             del interp
+            support.gc_collect()  # For other GCs.
             self.assertEqual(_channels.get_count(rch.id), 1)
             obj1 = rch.recv()
             self.assertEqual(_channels.get_count(rch.id), 0)
@@ -472,6 +478,7 @@ class TestSendRecv(TestBase):
             rch, sch = channels.create()
             interp = common(rch, sch, channels.UNBOUND)
             del interp
+            support.gc_collect()  # For other GCs.
             self.assertEqual(_channels.get_count(rch.id), 1)
             obj1 = rch.recv()
             self.assertIs(obj1, channels.UNBOUND)
@@ -484,6 +491,7 @@ class TestSendRecv(TestBase):
             interp = common(rch, sch, channels.UNBOUND_ERROR)
 
             del interp
+            support.gc_collect()  # For other GCs.
             self.assertEqual(_channels.get_count(rch.id), 1)
             with self.assertRaises(channels.ItemInterpreterDestroyed):
                 rch.recv()
@@ -497,6 +505,7 @@ class TestSendRecv(TestBase):
 
             interp = common(rch, sch, channels.UNBOUND_REMOVE)
             del interp
+            support.gc_collect()  # For other GCs.
             self.assertEqual(_channels.get_count(rch.id), 0)
             with self.assertRaises(channels.ChannelEmptyError):
                 rch.recv_nowait()
@@ -508,6 +517,7 @@ class TestSendRecv(TestBase):
             sch.send_nowait(42, unbounditems=channels.UNBOUND_REMOVE)
             self.assertEqual(_channels.get_count(rch.id), 4)
             del interp
+            support.gc_collect()  # For other GCs.
             self.assertEqual(_channels.get_count(rch.id), 2)
             obj1 = rch.recv()
             obj2 = rch.recv()
@@ -540,6 +550,7 @@ class TestSendRecv(TestBase):
         self.assertEqual(_channels.get_count(rch.id), 5)
 
         del interp
+        support.gc_collect()  # For other GCs.
         self.assertEqual(_channels.get_count(rch.id), 4)
 
         obj1 = rch.recv()
@@ -609,6 +620,7 @@ class TestSendRecv(TestBase):
         self.assertEqual(_channels.get_count(rch.id), 8)
 
         del interp1
+        support.gc_collect()  # For other GCs.
         self.assertEqual(_channels.get_count(rch.id), 6)
 
         # obj5 was removed
@@ -622,6 +634,7 @@ class TestSendRecv(TestBase):
         self.assertEqual(_channels.get_count(rch.id), 4)
 
         del interp2
+        support.gc_collect()  # For other GCs.
         self.assertEqual(_channels.get_count(rch.id), 3)
 
         # obj1

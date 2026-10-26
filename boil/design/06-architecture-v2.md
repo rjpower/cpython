@@ -1562,3 +1562,389 @@ free.
 - dev-ft, rung 2: the known 78 failures (test_opcache 69, test_dis 8,
   test_monitoring 1), plus test_sys.
 - Ports: all seven pass.
+||||||| parent of e5fd158238f (boil: note 06 section 14, step 4 decisions)
+
+## 14. Step 4 decisions
+
+Step 4 adds the tracing collector's mark phase, `Python/gc_trace.c`, and
+runs it as a verifier: after a full collection it marks everything
+reachable from the roots and reports every live object it did not reach.
+Reference counting still frees everything. A reported object, a "hole",
+is a reference that step 5's collector would not see, so it would free
+a live object.
+
+### 14.1 Allocator and heaps
+
+**mimalloc is the default allocator in the default build** (ec3a296179d),
+as it already was in the free-threaded build. Each thread state owns its
+mimalloc heaps, as in the free-threaded build. The object heaps are
+split, as there, into non-GC objects, GC objects, and GC objects with a
+pre-header. The heap therefore says where in its block an object starts,
+and every block in an object heap is an object. `PyMem_Malloc` uses the
+tstate's mem heap. The heaps of an exited thread are abandoned to the
+interpreter's subprocess and are walked with `mi_abandoned_visit_blocks`.
+The debug hooks add their header, and the verifier allows for it.
+
+**Modes.**
+
+- Debug builds verify after every explicit full collection.
+- Release builds verify with `-X gcverify` or `PYTHON_GCVERIFY=1`.
+- `PYTHON_GCVERIFY=auto` also verifies after automatic collections of
+  generation 1 and up. Generation 0 is too frequent, and the young
+  collections of step 7 will need their own barrier verifier.
+- `-X gcverify` with a non-mimalloc allocator is a startup error. The
+  environment variable and the debug-build default are dropped silently
+  instead, so that tests which start children with
+  `PYTHONMALLOC=malloc` still run.
+
+**Reporting.**
+
+- Holes go to stderr and to `_testinternalcapi.gc_verify_holes()`.
+- `PYTHON_GCVERIFY_LOG=file` appends each report to a file, with:
+  - the process id;
+  - the innermost Python frames and the running test method;
+  - `sys.argv`, which names a regrtest worker's test file.
+- `PYTHON_GCVERIFY_ROOTS` restricts the roots to a bitmask of the
+  classes in 14.2, or to `precise`; it exists to measure what each class
+  contributes.
+- `PYTHON_GCVERIFY_LIMIT` caps the holes printed.
+
+**Verifying does not change behaviour.** The verifier's own memory comes
+from the C library's malloc. It never allocates a Python object, runs
+Python code or touches a reference count. It also skips verification
+while the interpreter or the runtime is finalizing. The garbage counts and
+`gc.garbage` are the same with and without it
+(`test_behaviour_unchanged`).
+
+### 14.2 Root inventory
+
+The mark uses an explicit stack. Mark bits are a hash set of addresses on
+the side, so no header field is used.
+
+Every pointer is checked before it is followed. It must be either an
+allocated object block or readable memory outside the heaps; the
+`/proc/self/maps` ranges decide what is readable. Its type must also be a
+known type.
+
+Precise roots (`PYTHON_GCVERIFY_ROOTS` bits 1 to 16):
+
+| Bit | Class | Contents |
+|---|---|---|
+| 1 | frames | every thread frame owned by a thread or generator: all slots, code, function, globals, builtins, locals, frame object |
+| 2 | thread state | profile and trace objects, current exception, the exception-info chain, dict, async exception, async-gen hooks, context, the threading-local key and sentinel, asyncio's running loop and task, lazy imports, the trashcan's `delete_later` chain |
+| 4 | interpreter | sys and builtins dicts and their copies, `interp->dict`, the import state (modules, modules by index, importlib, the import function and the lazy-import fields), the codec registry, the fork hooks, audit hooks, monitoring tool names and callables, atexit callbacks, the errno map, `ExceptionGroup`, the cross-interpreter exceptions, pickle functions and registry, `cached_objects`, `gc.garbage`, `gc.callbacks`, and every registered `_PyGCRoot` |
+| 8 | static types | every static type passed to `PyType_Ready`, traversed with `_PyType_TraverseStatic` |
+| 16 | immortal objects | every immortal object in the heaps, because what it refers to stays live |
+
+Conservative roots (bits 32 to 128):
+
+| Bit | Class | Contents |
+|---|---|---|
+| 32 | stacks | each thread's C stack, from its saved stack pointer to its base, and its callee-saved registers; PyMem blocks that those words point into, scanned transitively |
+| 64 | data | the writable segments of every loaded object, found with `dl_iterate_phdr` |
+| 128 | structs | the thread-state and interpreter structs, and the thread data stacks: the current chunk's slots up to `datastack_top` and frame headers from `datastack_limit`, and earlier chunks whole |
+
+**Registers.** Inline assembly captures them, not `setjmp`, because
+glibc's `setjmp` mangles rbp, rsp and the pc. A thread captures its
+registers first thing in `PyEval_SaveThread`, `PyEval_ReleaseThread` and
+the detach path, before any callee-saved register changes. The
+collecting thread captures its own registers when it starts. Attaching
+clears the capture's valid flag.
+
+**`_PyGCRoot`** is the remedy for object references that C code keeps in
+memory the collector does not scan. Two users register one: a
+PyArena's object list, and a new thread's bootstate (its callable, args
+and kwargs).
+
+Adding and removing take the runtime's head lock. Removing needs no
+thread state, because a bootstate is freed after its thread has
+detached.
+
+**What each class contributes**, on dev-debug, for
+`-c "import gc; gc.collect()"` (16,103 objects):
+
+| Roots | Holes |
+|---|---|
+| precise | 2: the `-c` source str and its bytes, held only in C locals |
+| precise + stacks | 0 |
+| all | 0 |
+
+The data-segment and struct scans matter for extension statics, and for
+values in transit between C locals and slots. `test_extension_static_variable`
+tests the first. The suite found the second: a finalizer that collects
+while a returning frame's slots are being cleared.
+
+### 14.3 Conservative rules
+
+- **Interior pointers count.** A word anywhere inside an object block
+  marks that block's object. Without this, a pointer into a tuple's or
+  list's items, or a pointer past a pre-header, would miss.
+- **Shallow marking.** A conservative root can find an object that is
+  still being built. Such an object is GC-tracked late, after its fields
+  are set. So an untracked GC object (other than a tuple) that only a
+  conservative root reaches is marked but not traversed. If a precise
+  reference later reaches it, it is traversed then. Its block is scanned
+  conservatively instead, along with the PyMem blocks it points into: a
+  set or dict that C code is filling keeps its members in a table it
+  owns (AUTO mode found this in test_set).
+- **PyMem blocks from stacks only.** A C function's buffers are its
+  locals. The JSON encoder's `PyUnicodeWriter` is an example: it lives
+  in a PyMem block that only the stack points to. Such a block is scanned,
+  and so is any PyMem block it points into. A PyMem block reached from an
+  object or a static is not scanned. That pattern is the one ports must
+  fix: give the owner a tp_traverse that visits the block, or register a
+  `_PyGCRoot`. `test_pymem_array_is_a_hole` checks that it is still
+  reported.
+- **Unmarked is not the same as hole.** The cycle collector's finalizers,
+  and another thread during the collection, can create new cyclic
+  garbage, which is unreachable. The filter works like `subtract_refs`:
+  - Each unmarked object's references to other unmarked objects are
+    subtracted from their counts.
+  - So are the references from objects that are being deallocated
+    (count zero, shallow-marked), because they still hold the members
+    they have not released yet.
+  - What keeps an external count is a hole, and so is everything it
+    reaches. The rest is reported only as a count of unreachable garbage.
+- **Free lists.** Objects on the interpreter's free lists are allocated
+  blocks with stale contents. They are left out of the heap snapshot.
+- **Heap types of non-GC instances.** A non-GC instance holds a strong
+  reference to its heap type, and no tp_traverse reports it. The mark
+  visits it.
+- **False retention.** Conservative roots can keep garbage alive. The
+  two observed causes are:
+  - stale stack words, left by frames that have returned;
+  - mimalloc's free-list pointer in a freed block, which points to the
+    next free block, where a new object can be allocated.
+
+  Retention cannot produce a false hole. It can hide a real one, so the
+  negative tests allocate a fresh object for each attempt and retry.
+- **Stale slots mislead the referrer search, not the mark.** The referrer
+  search reads every word of every PyMem block, so it can name a list's
+  storage beyond `ob_size`, or a popped stack slot, as the referrer of a
+  hole whose real holder is elsewhere. The report therefore lists first
+  the holes with references that no other hole explains; each group of
+  holes hangs from one of them.
+
+### 14.4 The audit
+
+`Tools/boil/traverse_audit.py` reports two things:
+
+- every type whose struct holds an object reference and that has no
+  tp_traverse;
+- every traverse function that skips a member its dealloc or clear
+  releases.
+
+It parses the C struct definitions, the static type initializers and the
+`PyType_Spec` slots. Weak-reference lists are treated as not owned. A
+plain struct that an object embeds, such as `path_t` or `Py_buffer`,
+contributes its references as `member.field`. A traverse function that is
+the generic `_PyObject_VisitType` is reported as missing every
+reference. A type with a base, or one sharing a struct that some other
+type traverses, is listed separately as probably inheriting. The first
+run found 31 types without a traverse and 7 partial traverse functions.
+
+The first version took an include guard's `#ifndef` as false, which hid
+every struct that a header defines; it did not expand a head macro that
+starts with another (`_PyDateTime_DATETIMEHEAD`). The full suite found
+three of the types it missed (symbol-table entries, datetime, time)
+before the fix did.
+
+Fixed in the core and the stdlib:
+
+- **Objects:**
+  - code objects, which are not GC objects in the default build, get a
+    traverse that visits everything they own;
+  - unicode-keyed dicts visit their keys;
+  - heap types visit their subclasses dict, names, slots and shared keys;
+  - descriptors visit their names;
+  - range objects and their iterators, bytearray, and the line-table and
+    position iterators get a traverse;
+  - coroutines visit `cr_origin`;
+  - modules visit `md_name`.
+- **Python:** the instrumentation branch handlers and iterators; symbol
+  table entries; the PyArena list, as a root; the importdl leak below.
+- **Modules:**
+  - non-GC types given a traverse:
+    - the bz2 and lzma decompressors;
+    - functools' lru list elements;
+    - `uuid.UUID`, `_hmac.HMAC`, `os.DirEntry`, `select.poll`;
+    - `datetime.datetime` and `datetime.time` (their `tzinfo`);
+    - `os.scandir`'s iterator (its `path_t` objects);
+    - `_tkinter.Tcl_Obj`;
+  - members that a traverse skipped: ctypes `CField.name`,
+    ElementTree's module, the pickler's output buffer, the zstd and
+    zlib decompressors' unused data, expat's intern dict, StringIO's
+    writer buffer, `_datetime`'s module constants, timezone's offset
+    and name, ZoneInfo's transition infos, names and file repr, and
+    the multibyte incremental encoder's pending string;
+  - `_pickle.Pdata`, the unpickler's stack, whose traverse visited only
+    its type: the cycle collector could not see its objects either;
+  - `functools.lru_cache`, which visited its links' members but not the
+    links, which its list owns;
+  - the _hmac module's hash-name table;
+  - the thread bootstate, as a root.
+
+  bz2, zstd and Tcl are not installed on the build machine, so their
+  changes were checked only by reading.
+
+**`_Py_VISIT_ATOMIC`.** Most of the new visits are to strings, which
+cannot form cycles, so the cycle collector need not see them. The macro
+skips immortal objects, such as interned and static strings, and visits
+the rest. Mortal strings must still be visited: the tracing mark needs
+them, and visiting a non-GC object costs the cycle collector one
+untracked check.
+
+**Remaining** (11 without a traverse, 3 probably inherited, 0 partial):
+
+| Type | Why it stays |
+|---|---|
+| `ssl.SSLError` | inherits OSError's traverse at run time; the parser cannot see it |
+| `_testcapi.HeapCTypeWithDict`, `HeapCTypeWithDict2`, `HeapCTypeWithNegativeDict` | test types for the dict offset |
+| `_testcapi` `awaitType`, `MyList`, `GenericAlias` | test types; `MyList` inherits list's traverse |
+| `xxsubtype.spamlist`, `xxsubtype.spamdict` | examples that subclass list and dict and inherit their traverse |
+| `RecursingInfinitelyError`, `xxmodule.Xxo`, `builtin_method` | inherit from their base |
+| `_testbuffer.ndarray` | test type; its static buffer's `obj` |
+| `PyModuleDef.m_copy` | static data, which the data-segment scan covers |
+
+**A real leak found.** On the error path for a non-ASCII name,
+single-phase extension init leaked the module it was returned
+(51c8f326e36). The verifier found it as a hole with no referrer.
+
+### 14.5 What remains
+
+**The compiler's enclosing units.** compile.c keeps the units of the
+enclosing scopes in `c->c_stack`, a list of PyCapsules. Each capsule
+points to a compiler_unit, a PyMem block that holds the unit's metadata
+dicts and sets and its InstructionSequence. Nothing visits that pointer,
+so a collection in the middle of compiling a nested scope sees those
+objects as holes. Only AUTO mode can collect at that point; it happened
+once in the full suite, in the pip install under test_ensurepip. The
+compiler is outside this step. Before step 5 it must register the units
+with `_PyGCRoot`, or keep them in an object with a traverse function.
+
+**Ports.** `ports check` runs its tests with `-I` and drops PYTHON*
+variables, so it never enables the verifier. Each port's smoke test was
+run directly, with `PYTHON_GCVERIFY=auto` and a final `gc.collect()`.
+
+| Port | Holes | Cause |
+|---|---|---|
+| attrs, cffi, markupsafe, pycparser, six | 0 | |
+| pyyaml | 14 | Cython's code-object cache: `__pyx_code_cache.entries` is a PyMem block that a C static points to |
+| numpy | about 6,100 | the `NPY_DType_Slots` of the static DTypeMeta objects, 640-byte PyMem blocks holding casting dicts and ArrayMethods (about 130 roots); tables in libc malloc memory, which nothing scans (about 430 roots) |
+
+**The step 4 gate therefore reads: the suite is clean under AUTO (except
+the compiler units above), and 5 of the 7 ports are clean.**
+
+Both failures are the pattern that section 3 leaves to the ports:
+references in raw memory must be made visible by a traverse function or
+a registered root. The verifier does not scan PyMem blocks reached from
+statics, because that would hide exactly these places, and it would
+also start scanning large non-object buffers.
+
+The fixes:
+
+- **pyyaml.** Cython's generated code must register its code cache as a
+  root. Because the code is generated, this fix reaches every Cython
+  port.
+- **numpy.** DTypeMeta must visit `dt_slots`, and the libc-malloc tables
+  need registered roots.
+
+Neither can be done in this step: `_PyGC_AddRoot` is internal, and a
+public API is a header change. Step 5 adds a public
+`PyGC_AddRoot`/`PyGC_RemoveRoot` pair, and the ports use it for these.
+
+The step 5 brief must run the smoke tests the way this step did, with
+the venv python and the variables set, not through `ports check`.
+
+### 14.6 Tests and measurements
+
+**Tests at the end of the step.**
+
+- dev-debug, full suite, verifier on by default: there are no holes except
+  test_gc_verify's intentional ones. Only test_sys's
+  `test_remote_exec_deleted_static_executable` fails, as it does on the
+  3a head.
+- dev-default, full suite, with `PYTHON_GCVERIFY=1` and `-X gcverify`: the
+  same.
+- dev-default, full suite, with `PYTHON_GCVERIFY=auto`: the same, except
+  for one compile in a pip subprocess (14.5).
+- dev-ft builds and passes test_gc, test_threading, test_weakref and
+  test_capi; its collector is unchanged.
+- Ports: all seven pass `ports check`; the verifier results are in 14.5.
+
+**Holes over the step**, for `-c "import gc; gc.collect()"` on dev-debug:
+
+| | all roots | precise roots |
+|---|---|---|
+| milestone 1, precise roots and traverse only | 3,292 | 5,009 |
+| milestone 2, conservative roots, first traverse fixes | 0 | 146 |
+| end of step | 0 | 2 |
+
+Hole sources found in the full suite, all fixed:
+
+- the PyMem buffers of C functions (JSON's PyUnicodeWriter);
+- interpreter fields (atexit, the errno map, the cross-interpreter
+  state, the cached objects);
+- `_hmac`'s name table, `cr_origin`, ZoneInfo, symbol-table entries,
+  datetime's `tzinfo`;
+- under AUTO: sets being filled, the scandir iterator, lru_cache's links
+  and the unpickler's stack.
+
+**Measurements.** dev-default against base-default (the 3a head, pymalloc),
+gcc 15, Ryzen 7 3800X.
+
+Steady state, in user-mode instructions per loop of one pyperformance
+worker (2 and 10 loops, differenced; median of 3):
+
+| per loop (M) | 3a | step 4 | change |
+|---|---|---|---|
+| richards | 703.4 | 704.5 | +0.2% |
+| go | 1686.4 | 1684.2 | -0.1% |
+| nbody | 1509.3 | 1509.3 | 0.0% |
+| float | 973.0 | 968.7 | -0.4% |
+
+Startup, in user-mode instructions:
+
+| | 3a | step 4 | change |
+|---|---|---|---|
+| `-c pass` | 47.40M | 48.50M | +2.3% |
+| `import json, re, typing, asyncio` | 292.2M | 295.2M | +1.0% |
+
+Bisected over the step, the +1.1M of `-c pass` is:
+
+- mimalloc as the allocator: -0.3M;
+- the new traverse visits in the three startup young collections: about
+  +1.4M, after `_Py_VISIT_ATOMIC` removed 0.6M.
+
+Peak RSS, median of 3 (KiB):
+
+| | 3a pymalloc | 3a mimalloc | step 4 | step 4 pymalloc |
+|---|---|---|---|---|
+| `-c pass` | 11,416 | 11,864 | 12,700 | 11,716 |
+| `import json, re, typing, asyncio` | 20,844 | 22,128 | 23,516 | 21,160 |
+
+About a third of the growth comes from mimalloc itself. The rest comes
+from the per-thread-state split into object, GC, pre-header and mem
+heaps, each of which keeps its own partly filled pages.
+
+**The verifier's cost.** With 1,005,445 tracked objects (500,000 instances
+and 500,000 one-item lists), a full collection takes 40-42 ms on both
+builds with the verifier off, and 414-424 ms with it on: about ten times
+as long. Most of the time goes to the address-set inserts and the mark.
+That is acceptable for a debug-build check, and it is why release builds
+leave the verifier off by default.
+
+### 14.7 Other decisions
+
+- **One mimalloc heap per thread state for the mem domain.** PyMem blocks
+  live in the tstate's mem heap, so the verifier can tell them from
+  objects and from libc memory.
+- **AUTO means generation 1 and up.** Young collections are the most
+  frequent, and each verification walks the whole heap (14.6).
+- **The environment variable is lenient and `-X` is strict.** Tests start
+  children with other allocators and inherit the environment.
+- **`_PyGCRoot` takes the head lock.** Roots are added and removed by
+  threads that start and stop while another thread collects.
+- **Strings are visited, immortal ones skipped.** See 14.4. The
+  alternative, a separate traverse function for the tracing mark, would
+  mean a second function for every type.

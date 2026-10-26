@@ -892,6 +892,7 @@ class SysModuleTest(unittest.TestCase):
         self.assertIs(t, s)
 
         interp = interpreters.create()
+        self.addCleanup(interp.close)
         interp.exec(textwrap.dedent(f'''
             import sys
 
@@ -918,6 +919,7 @@ class SysModuleTest(unittest.TestCase):
                 t = sys.intern(s)
 
                 interp = interpreters.create()
+                self.addCleanup(interp.close)
                 interp.exec(textwrap.dedent(f'''
                     import sys
 
@@ -936,6 +938,7 @@ class SysModuleTest(unittest.TestCase):
         for s in '', '\n', '_', 'x', '\0', '\N{CEDILLA}', '\xff':
             with self.subTest(s=s):
                 interp = interpreters.create()
+                self.addCleanup(interp.close)
                 interp.exec(textwrap.dedent(f'''
                     import sys
 
@@ -1556,6 +1559,7 @@ class UnraisableHookTest(unittest.TestCase):
                                             sys.__unraisablehook__):
                     # Trigger obj.__del__()
                     del obj
+                    test.support.gc_collect()  # For other GCs.
 
                 report = stderr.getvalue()
                 self.assertIn("Exception ignored", report)

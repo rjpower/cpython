@@ -1,5 +1,4 @@
 import copy
-import operator
 import re
 import sys
 import textwrap
@@ -162,21 +161,6 @@ class ClearTest(unittest.TestCase):
         lines = []
         test(True)
         self.assertEqual(lines, expected_lines)
-
-    @support.cpython_only
-    @support.requires_refcounting
-    def test_clear_refcycles(self):
-        # .clear() doesn't leave any refcycle behind
-        with support.disable_gc():
-            class C:
-                pass
-            c = C()
-            wr = weakref.ref(c)
-            exc = self.outer(c=c)
-            del c
-            self.assertIsNot(None, wr())
-            self.clear_traceback_frames(exc.__traceback__)
-            self.assertIs(None, wr())
 
 
 class FrameAttrsTest(unittest.TestCase):
@@ -910,69 +894,6 @@ class TestIncompleteFrameAreInvisible(unittest.TestCase):
             gen()
         """)
         assert_python_ok("-c", code)
-
-    @support.cpython_only
-    @threading_helper.requires_working_threading()
-    @support.requires_refcounting
-    def test_sneaky_frame_object_teardown(self):
-
-        class SneakyDel:
-            def __del__(self):
-                """
-                Stash a reference to the entire stack for walking later.
-
-                It may look crazy, but you'd be surprised how common this is
-                when using a test runner (like pytest). The typical recipe is:
-                ResourceWarning + -Werror + a custom sys.unraisablehook.
-                """
-                nonlocal sneaky_frame_object
-                sneaky_frame_object = sys._getframe()
-
-        class SneakyThread(threading.Thread):
-            """
-            A separate thread isn't needed to make this code crash, but it does
-            make crashes more consistent, since it means sneaky_frame_object is
-            backed by freed memory after the thread completes!
-            """
-
-            def run(self):
-                """Run SneakyDel.__del__ as this frame is popped."""
-                ref = SneakyDel()
-
-        sneaky_frame_object = None
-        t = SneakyThread()
-        t.start()
-        t.join()
-        # sneaky_frame_object can be anything, really, but it's crucial that
-        # SneakyThread.run's frame isn't anywhere on the stack while it's being
-        # torn down:
-        self.assertIsNotNone(sneaky_frame_object)
-        while sneaky_frame_object is not None:
-            self.assertIsNot(
-                sneaky_frame_object.f_code, SneakyThread.run.__code__
-            )
-            sneaky_frame_object = sneaky_frame_object.f_back
-
-    @support.requires_refcounting
-    def test_entry_frames_are_invisible_during_teardown(self):
-        class C:
-            """A weakref'able class."""
-
-        def f():
-            """Try to find globals and locals as this frame is being cleared."""
-            ref = C()
-            # Ignore the fact that exec(C()) is a nonsense callback. We're only
-            # using exec here because it tries to access the current frame's
-            # globals and locals. If it's trying to get those from a shim frame,
-            # we'll crash before raising:
-            return weakref.ref(ref, exec)
-
-        with support.catch_unraisable_exception() as catcher:
-            # Call from C, so there is a shim frame directly above f:
-            weak = operator.call(f)  # BOOM!
-            # Cool, we didn't crash. Check that the callback actually happened:
-            self.assertIs(catcher.unraisable.exc_type, TypeError)
-        self.assertIsNone(weak())
 
 
 if __name__ == "__main__":

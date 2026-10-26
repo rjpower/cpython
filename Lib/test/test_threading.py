@@ -634,6 +634,7 @@ class ThreadTests(BaseTestCase):
         thread.join()
         assert not thread.is_alive()
 
+    @support.requires_refcounting
     def test_no_refcycle_through_target(self):
         class RunSelfFunction(object):
             def __init__(self, should_raise):
@@ -871,6 +872,7 @@ class ThreadTests(BaseTestCase):
                     print("main", main.name, type(main).__name__)
                     print("main ident", main.ident == ident)
                     print("current is main", threading.current_thread() is main)
+                    support.gc_collect()  # For other GCs.
                     print("_dangling", [t.name for t in list(threading._dangling)])
                     # stdout is fully buffered because not a tty,
                     # we have to flush before exit.

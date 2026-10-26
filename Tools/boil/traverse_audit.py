@@ -31,7 +31,8 @@ from pathlib import Path
 
 SOURCE_DIRS = ("Objects", "Python", "Modules", "Include")
 
-# Conditionals taken as false; every other #if/#ifdef is taken as true.
+# Conditionals taken as false; every other #if/#ifdef is taken as true, and
+# every #ifndef too.
 FALSE_MACROS = {"Py_GIL_DISABLED", "MS_WINDOWS", "__APPLE__", "Py_TRACE_REFS",
                 "Py_STATS", "_Py_TIER2", "Py_SHAPES", "__EMSCRIPTEN__"}
 
@@ -138,7 +139,9 @@ def evaluate(word: str, rest: str) -> bool:
     if word == "ifdef":
         return names[0] not in FALSE_MACROS if names else True
     if word == "ifndef":
-        return names[0] in FALSE_MACROS if names else True
+        # Taken as true, so that include guards and "#ifndef Py_LIMITED_API"
+        # keep their contents.
+        return True
     if rest.strip() == "0":
         return False
     neg = rest.lstrip().startswith("!")
@@ -150,14 +153,24 @@ def evaluate(word: str, rest: str) -> bool:
 
 def head_macros(texts: list[str]) -> dict[str, str]:
     """#define NAME[(args)] bodies that begin an object struct."""
-    macros = {}
+    defines = {}
     for text in texts:
         for m in re.finditer(r"^#define\s+([A-Za-z_]\w*)(\([^)]*\))?\s+(.*)$",
                              text, flags=re.M):
-            body = m.group(3)
-            if re.match(r"\s*(PyObject_HEAD|PyObject_VAR_HEAD|PyObject\s+ob_base|"
-                        r"PyVarObject\s+ob_base)", body):
-                macros[m.group(1)] = body
+            defines[m.group(1)] = m.group(3)
+    macros = {}
+    for name, body in defines.items():
+        # Expand a leading macro that is itself a head, such as
+        # _PyTZINFO_HEAD in _PyDateTime_DATETIMEHEAD.
+        for _ in range(5):
+            lead = re.match(r"\s*([A-Za-z_]\w*)\b", body)
+            if not lead or lead.group(1) not in defines \
+                    or lead.group(1).startswith("PyObject_"):
+                break
+            body = defines[lead.group(1)] + " " + body[lead.end():]
+        if re.match(r"\s*(PyObject_HEAD|PyObject_VAR_HEAD|PyObject\s+ob_base|"
+                    r"PyVarObject\s+ob_base)", body):
+            macros[name] = body
     return macros
 
 

@@ -283,21 +283,14 @@ class ExecutorTest:
         self.executor.submit(my_object.my_method)
         del my_object
 
-        if Py_GIL_DISABLED or support.Py_GC:
-            # Due to biased reference counting, my_object might only be
-            # deallocated while the thread that created it runs -- if the
-            # thread is paused waiting on an event, it may not merge the
-            # refcount of the queued object. For that reason, we alternate
-            # between running the GC and waiting for the event.  A tracing
-            # collector frees it only at a collection.
-            wait_time = 0
-            collected = False
-            while not collected and wait_time <= support.SHORT_TIMEOUT:
-                support.gc_collect()
-                collected = my_object_collected.wait(timeout=1.0)
-                wait_time += 1.0
-        else:
-            collected = my_object_collected.wait(timeout=support.SHORT_TIMEOUT)
+        # my_object is freed only at a collection, so alternate between
+        # running the collector and waiting for the event.
+        wait_time = 0
+        collected = False
+        while not collected and wait_time <= support.SHORT_TIMEOUT:
+            support.gc_collect()
+            collected = my_object_collected.wait(timeout=1.0)
+            wait_time += 1.0
         self.assertTrue(collected,
                         "Stale reference not collected within timeout.")
 

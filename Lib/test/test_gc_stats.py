@@ -5,7 +5,6 @@ import time
 import unittest
 
 from test.support import (
-    Py_GC,
     Py_GIL_DISABLED,
     import_helper,
     requires_gil_enabled,
@@ -27,8 +26,8 @@ GC_STATS_FIELDS = (
 
 
 # The generations whose stats a collection advances.  The tracing collector
-# of --with-gc has one generation and records every collection as the oldest.
-COLLECTED_GENERATIONS = (2,) if Py_GC else (0, 1, 2)
+# has one generation and records every collection as the oldest.
+COLLECTED_GENERATIONS = (2,)
 
 
 def get_interpreter_identifiers(gc_stats) -> tuple[int,...]:

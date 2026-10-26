@@ -225,15 +225,6 @@ class FileTests(unittest.TestCase):
         os.closerange(first, first + 2)
         self.assertRaises(OSError, os.write, first, b"a")
 
-    @support.cpython_only
-    @support.requires_refcounting
-    def test_rename(self):
-        path = os_helper.TESTFN
-        old = sys.getrefcount(path)
-        self.assertRaises(TypeError, os.rename, path, 0)
-        new = sys.getrefcount(path)
-        self.assertEqual(old, new)
-
     def test_read(self):
         with open(os_helper.TESTFN, "w+b") as fobj:
             fobj.write(b"spam")

@@ -1147,3 +1147,14 @@ its worktree.
     heap split;
   - a verified full collection of 1M objects takes about 10 times as
     long (415 ms against 41 ms).
+
+### 2026-10-25 23:00 — step 4 merged; step 5a launched
+
+weaver/boil-step4 rebased onto this branch (two append-only conflicts in
+this file and note 06, both kept) and fast-forward merged at 4e9d25010a7.
+Merged tree: debug and release builds, zero holes on a bare interpreter,
+targeted tests pass on both builds (verifier on), all 7 ports pass. Step 4
+worktree and branch removed. Step 5 is split: 5a collector live behind
+--with-gc; 5b full suite and ports on it; 5c default on and refcount code
+deleted; the 8-byte header and weakref side table move to 6a with the rest
+of the object layout. 5a launched, budget 4 days.

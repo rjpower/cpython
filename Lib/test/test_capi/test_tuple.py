@@ -270,7 +270,8 @@ class CAPITest(unittest.TestCase):
         self.assertTrue(checknull(tup2, 1))
 
         tup2 = TupleSubclass(([1], [2]))
-        self.assertRaises(SystemError, setitem, tup2, 0, [])
+        if not support.Py_GC:  # Py_GC cannot tell that tup2 is shared.
+            self.assertRaises(SystemError, setitem, tup2, 0, [])
 
         self.assertRaises(IndexError, setitem, tup, PY_SSIZE_T_MIN, [])
         self.assertRaises(IndexError, setitem, tup, -1, [])
@@ -338,8 +339,9 @@ class CAPITest(unittest.TestCase):
         self.assertRaises(SystemError, resize, a, PY_SSIZE_T_MIN)
         # refcount > 1
         a = (1, 2, 3)
-        self.assertRaises(SystemError, resize, a, 3, False)
-        self.assertRaises(SystemError, resize, a, 0, False)
+        if not support.Py_GC:
+            self.assertRaises(SystemError, resize, a, 3, False)
+            self.assertRaises(SystemError, resize, a, 0, False)
         # non-tuple
         self.assertRaises(SystemError, resize, [1, 2, 3], 0, False)
         self.assertRaises(SystemError, resize, NULL, 0, False)

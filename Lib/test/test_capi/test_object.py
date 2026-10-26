@@ -127,6 +127,7 @@ class PrintTest(unittest.TestCase):
         with open(output_filename, 'r') as output_file:
             self.assertEqual(output_file.read(), '<nil>')
 
+    @support.requires_refcounting
     def testPyObjectPrintNoRefObject(self):
         output_filename = os_helper.TESTFN
         self.addCleanup(os_helper.unlink, output_filename)
@@ -186,7 +187,8 @@ class EnableDeferredRefcountingTest(unittest.TestCase):
 
         # The object must be tracked by the GC
         not_gc_tracked = tuple([1, 2])
-        self.assertFalse(gc.is_tracked(not_gc_tracked))
+        if not support.Py_GC:  # Py_GC does not untrack tuples.
+            self.assertFalse(gc.is_tracked(not_gc_tracked))
         self.assertEqual(_testcapi.pyobject_enable_deferred_refcount(not_gc_tracked), 0)
 
         # Make sure reference counting works on foo now
@@ -216,6 +218,7 @@ class EnableDeferredRefcountingTest(unittest.TestCase):
 
 class IsUniquelyReferencedTest(unittest.TestCase):
     """Test PyUnstable_Object_IsUniquelyReferenced"""
+    @support.requires_refcounting
     def test_is_uniquely_referenced(self):
         self.assertTrue(_testcapi.is_uniquely_referenced(object()))
         self.assertTrue(_testcapi.is_uniquely_referenced([]))
@@ -288,6 +291,7 @@ class CAPITest(unittest.TestCase):
         s = sys.intern(s)
         gc.collect()
 
+    @support.requires_refcounting
     def test_is_unique_temporary(self):
         self.assertTrue(_testcapi.pyobject_is_unique_temporary(object()))
         obj = object()
@@ -366,6 +370,12 @@ class RefTracerTest(unittest.TestCase):
             chain = [chain]
         _testcapi.start_counting_list_destroys()
         del chain
+        if support.Py_GC:
+            # The collection may also free other lists.
+            support.gc_collect()
+            destroys = _testcapi.stop_counting_list_destroys()
+            self.assertGreaterEqual(destroys, depth)
+            return
         destroys = _testcapi.stop_counting_list_destroys()
         self.assertEqual(destroys, depth)
 

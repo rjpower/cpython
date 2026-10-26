@@ -176,6 +176,8 @@ class CAPITest(unittest.TestCase):
         # CRASHES resize(NULL, 0)
 
     @unittest.skipUnless(support.Py_DEBUG, 'need debug build (Py_DEBUG)')
+    @unittest.skipIf(support.Py_GC, "the sweep does not check dead objects "
+                     "for overflow")
     def test_detect_overflow(self):
         # Test detection of buffer overflow
         size = 123    # bytes

@@ -4,11 +4,16 @@ import contextvars
 from contextlib import contextmanager, ExitStack
 from test.support import (
     catch_unraisable_exception, import_helper,
-    gc_collect)
+    gc_collect, Py_GC)
 
 
 # Skip this test if the _testcapi module isn't available.
 _testcapi = import_helper.import_module('_testcapi')
+
+# Under Py_GC the collector's sweep runs the dealloc watchers, and these
+# watchers allocate, which the sweep forbids.
+skip_if_watchers_run_in_sweep = unittest.skipIf(
+    Py_GC, "dealloc watchers run in the collector's sweep")
 
 
 class TestDictWatchers(unittest.TestCase):
@@ -90,6 +95,7 @@ class TestDictWatchers(unittest.TestCase):
             d.clear()
             self.assert_events(["clear"])
 
+    @skip_if_watchers_run_in_sweep
     def test_dealloc(self):
         d = {"foo": "bar"}
         with self.watcher() as wid:
@@ -138,6 +144,7 @@ class TestDictWatchers(unittest.TestCase):
                 self.assertEqual(str(cm.unraisable.exc_value), "boom!")
             self.assert_events([])
 
+    @skip_if_watchers_run_in_sweep
     def test_dealloc_error(self):
         d = {}
         with self.watcher(kind=self.ERROR) as wid:
@@ -378,6 +385,7 @@ class TestTypeWatchers(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"No type watcher set for ID 1"):
             self.clear_watcher(1)
 
+    @skip_if_watchers_run_in_sweep
     def test_watch_type_dealloc(self):
         # Use the NAME watcher (kind=3) which records the type's name as a
         # string, avoiding any reference to the type object itself during
@@ -390,6 +398,7 @@ class TestTypeWatchers(unittest.TestCase):
             events = _testcapi.get_type_modified_events()
             self.assertIn("MyTestType", events)
 
+    @skip_if_watchers_run_in_sweep
     def test_watch_type_dealloc_error(self):
         with self.watcher(kind=self.ERROR) as wid:
             class MyTestType2: pass
@@ -473,6 +482,7 @@ class TestCodeObjectWatchers(unittest.TestCase):
                 self.assertIsNone(cm.unraisable.object)
                 self.assertEqual(str(cm.unraisable.exc_value), "boom!")
 
+    @skip_if_watchers_run_in_sweep
     def test_dealloc_error(self):
         co = _testcapi.code_newempty("test_watchers", "dummy0", 0)
         with self.code_watcher(2):
@@ -506,6 +516,7 @@ class TestFuncWatchers(unittest.TestCase):
         finally:
             _testcapi.clear_func_watcher(wid)
 
+    @skip_if_watchers_run_in_sweep
     def test_func_events_dispatched(self):
         events = []
         def watcher(*args):
@@ -583,6 +594,7 @@ class TestFuncWatchers(unittest.TestCase):
                 )
                 self.assertIsNone(cm.unraisable.object)
 
+    @skip_if_watchers_run_in_sweep
     def test_dealloc_watcher_raises_error(self):
         class MyError(Exception):
             pass

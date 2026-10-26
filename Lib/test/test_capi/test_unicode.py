@@ -78,8 +78,10 @@ class CAPITest(unittest.TestCase):
         self._test_check(_testlimitedcapi.unicode_checkexact, exact=True)
 
     def assert_is_mutable(self, result, refcnt):
-        # Check that result is a "mutable" Unicode string
-        self.assertEqual(refcnt, 1)
+        # Check that result is a "mutable" Unicode string.  Py_GC reports
+        # no reference counts.
+        if not support.Py_GC:
+            self.assertEqual(refcnt, 1)
         self.assertFalse(sys._is_immortal(result))
 
     def assert_is_empty_singleton(self, result):
@@ -94,7 +96,8 @@ class CAPITest(unittest.TestCase):
         def new(size, maxchar):
             result = _unicode_new(size, maxchar)
             if size != 0:
-                self.assert_is_mutable(result, sys.getrefcount(result))
+                refcnt = None if support.Py_GC else sys.getrefcount(result)
+                self.assert_is_mutable(result, refcnt)
             else:
                 self.assert_is_empty_singleton(result)
             return result
@@ -142,9 +145,11 @@ class CAPITest(unittest.TestCase):
                         self.assertEqual(fill(to, start, length, fill_char),
                                         (expected, filled))
 
-        # A string with 2 references cannot be modified
-        with self.assertRaisesRegex(SystemError, USED_STR_ERROR):
-            fill('abc', 0, 3, ord('x'), incref=True)
+        # A string with 2 references cannot be modified; Py_GC cannot
+        # tell that it has 2.
+        if not support.Py_GC:
+            with self.assertRaisesRegex(SystemError, USED_STR_ERROR):
+                fill('abc', 0, 3, ord('x'), incref=True)
 
         s = strings[0]
         self.assertRaises(IndexError, fill, s, -1, 0, 0x78)
@@ -188,9 +193,11 @@ class CAPITest(unittest.TestCase):
         writechar = _testlimitedcapi.unicode_writechar
         self._test_writechar(writechar, check=True)
 
-        # A string with 2 references cannot be modified
-        with self.assertRaisesRegex(SystemError, USED_STR_ERROR):
-            writechar('abc', 1, ord('x'), incref=True)
+        # A string with 2 references cannot be modified; Py_GC cannot
+        # tell that it has 2.
+        if not support.Py_GC:
+            with self.assertRaisesRegex(SystemError, USED_STR_ERROR):
+                writechar('abc', 1, ord('x'), incref=True)
 
     def test_write_macro(self):
         """Test PyUnicode_WRITE()"""
@@ -1820,9 +1827,11 @@ class CAPITest(unittest.TestCase):
         self.assertRaises(SystemError, unicode_copycharacters, s, 0, b'', 0, 0)
         self.assertRaises(SystemError, unicode_copycharacters, s, 0, [], 0, 0)
 
-        # A string with 2 references cannot be modified
-        with self.assertRaisesRegex(SystemError, USED_STR_ERROR):
-            unicode_copycharacters('abc', 0, 'abc', 0, 1, incref=True)
+        # A string with 2 references cannot be modified; Py_GC cannot
+        # tell that it has 2.
+        if not support.Py_GC:
+            with self.assertRaisesRegex(SystemError, USED_STR_ERROR):
+                unicode_copycharacters('abc', 0, 'abc', 0, 1, incref=True)
 
         # CRASHES unicode_copycharacters(s, 0, NULL, 0, 0)
         # TODO: Test PyUnicode_CopyCharacters() with non-unicode and

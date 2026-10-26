@@ -21,6 +21,12 @@ PyAPI_FUNC(PyObject *) _PyFunction_Vectorcall(
 
 extern PyFunctionObject* _PyFunction_FromConstructor(PyFrameConstructor *constr);
 
+#ifdef Py_GC
+/* Under Py_GC the collector makes this call of the dealloc's before the
+   sweep, where it may run code (Python/gc_live.c); the dealloc does not. */
+extern void _PyFunction_NotifyDestroy(PyObject *func);
+#endif
+
 static inline int
 _PyFunction_IsVersionValid(uint32_t version)
 {

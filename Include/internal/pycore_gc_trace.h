@@ -160,6 +160,10 @@ _PyGC_IsObjectHeader(const PyObject *op)
 #define _PyGC_DEAD_MBUF      (1 << 3)  /* a managed buffer: swept first */
 #define _PyGC_DEAD_TYPE      (1 << 4)  /* a type: swept last */
 #define _PyGC_DEAD_GC        (1 << 5)  /* a GC object */
+#define _PyGC_DEAD_HOOK      (1 << 6)  /* its dealloc would notify watchers,
+                                          call m_free or a capsule
+                                          destructor: the collector does that
+                                          before the sweep */
 
 /* An unreachable object found by the mark: its address, the size and
  * pre-header size of its block, and its _PyGC_DEAD_* kinds. */

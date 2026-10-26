@@ -606,6 +606,9 @@ given type object has a specified feature.
  * free-list link in the first word never looks like an object.  The other
  * bits are the collector's (Python/gc_live.c and Python/gc_trace.c); it
  * writes them while it holds the GIL. */
+#  define _Py_GC_NOTIFIED_FLAG   (1 << 7)   /* the collector ran the
+                                               destroy calls of the
+                                               object's dealloc */
 #  define _Py_GC_MARKED_FLAG     (1 << 8)   /* reached by the current mark */
 #  define _Py_GC_SWEPT_FLAG      _Py_GC_MARKED_FLAG  /* on a dead object:
                                                its tp_dealloc has run */

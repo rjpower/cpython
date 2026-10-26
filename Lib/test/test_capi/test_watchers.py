@@ -4,16 +4,11 @@ import contextvars
 from contextlib import contextmanager, ExitStack
 from test.support import (
     catch_unraisable_exception, import_helper,
-    gc_collect, Py_GC)
+    gc_collect)
 
 
 # Skip this test if the _testcapi module isn't available.
 _testcapi = import_helper.import_module('_testcapi')
-
-# Under Py_GC the collector's sweep runs the dealloc watchers, and these
-# watchers allocate, which the sweep forbids.
-skip_if_watchers_run_in_sweep = unittest.skipIf(
-    Py_GC, "dealloc watchers run in the collector's sweep")
 
 
 class TestDictWatchers(unittest.TestCase):
@@ -30,6 +25,10 @@ class TestDictWatchers(unittest.TestCase):
 
     @contextmanager
     def watcher(self, kind=EVENTS):
+        # For other GCs: the dicts that earlier tests watched die at a
+        # collection, not as their test returns, and would report to a
+        # watcher that reuses the ID.
+        gc_collect()
         wid = self.add_watcher(kind)
         try:
             yield wid
@@ -95,12 +94,12 @@ class TestDictWatchers(unittest.TestCase):
             d.clear()
             self.assert_events(["clear"])
 
-    @skip_if_watchers_run_in_sweep
     def test_dealloc(self):
         d = {"foo": "bar"}
         with self.watcher() as wid:
             self.watch(wid, d)
             del d
+            gc_collect()  # For other GCs.
             self.assert_events(["dealloc"])
 
     def test_object_dict(self):
@@ -144,13 +143,13 @@ class TestDictWatchers(unittest.TestCase):
                 self.assertEqual(str(cm.unraisable.exc_value), "boom!")
             self.assert_events([])
 
-    @skip_if_watchers_run_in_sweep
     def test_dealloc_error(self):
         d = {}
         with self.watcher(kind=self.ERROR) as wid:
             self.watch(wid, d)
             with catch_unraisable_exception() as cm:
                 del d
+                gc_collect()  # For other GCs.
                 self.assertEqual(str(cm.unraisable.exc_value), "boom!")
 
     def test_two_watchers(self):
@@ -385,7 +384,6 @@ class TestTypeWatchers(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"No type watcher set for ID 1"):
             self.clear_watcher(1)
 
-    @skip_if_watchers_run_in_sweep
     def test_watch_type_dealloc(self):
         # Use the NAME watcher (kind=3) which records the type's name as a
         # string, avoiding any reference to the type object itself during
@@ -398,7 +396,6 @@ class TestTypeWatchers(unittest.TestCase):
             events = _testcapi.get_type_modified_events()
             self.assertIn("MyTestType", events)
 
-    @skip_if_watchers_run_in_sweep
     def test_watch_type_dealloc_error(self):
         with self.watcher(kind=self.ERROR) as wid:
             class MyTestType2: pass
@@ -482,7 +479,6 @@ class TestCodeObjectWatchers(unittest.TestCase):
                 self.assertIsNone(cm.unraisable.object)
                 self.assertEqual(str(cm.unraisable.exc_value), "boom!")
 
-    @skip_if_watchers_run_in_sweep
     def test_dealloc_error(self):
         co = _testcapi.code_newempty("test_watchers", "dummy0", 0)
         with self.code_watcher(2):
@@ -516,7 +512,6 @@ class TestFuncWatchers(unittest.TestCase):
         finally:
             _testcapi.clear_func_watcher(wid)
 
-    @skip_if_watchers_run_in_sweep
     def test_func_events_dispatched(self):
         events = []
         def watcher(*args):
@@ -555,6 +550,7 @@ class TestFuncWatchers(unittest.TestCase):
             # Clear events reference to func
             events = []
             del myfunc
+            gc_collect()  # For other GCs.
             self.assertIn((_testcapi.PYFUNC_EVENT_DESTROY, myfunc_id, None), events)
 
     def test_multiple_watchers(self):
@@ -594,7 +590,6 @@ class TestFuncWatchers(unittest.TestCase):
                 )
                 self.assertIsNone(cm.unraisable.object)
 
-    @skip_if_watchers_run_in_sweep
     def test_dealloc_watcher_raises_error(self):
         class MyError(Exception):
             pass
@@ -608,6 +603,7 @@ class TestFuncWatchers(unittest.TestCase):
         with self.add_watcher(watcher):
             with catch_unraisable_exception() as cm:
                 del myfunc
+                gc_collect()  # For other GCs.
 
                 self.assertIsInstance(cm.unraisable.exc_value, MyError)
 

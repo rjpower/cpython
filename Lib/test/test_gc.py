@@ -1846,6 +1846,20 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertIs(a, ref())
 
     @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    def test_capsule_destructor_runs_python_code(self):
+        # The collector calls a capsule's destructor before the sweep, which
+        # may not run code (a debug build aborts if it does).
+        called = []
+        def callback():
+            called.append([1])
+        for _ in range(self.ATTEMPTS):
+            _testcapi.capsule_calling(callback)
+            gc.collect()
+            if called:
+                break
+        self.assertEqual(called, [[1]])
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
     def test_unrooted_pymem_reference_is_freed(self):
         # The pattern that PyGC_AddRoot() fixes.
         class A:

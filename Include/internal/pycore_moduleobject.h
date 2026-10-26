@@ -72,6 +72,12 @@ static inline PyObject* _PyModule_GetDict(PyObject *mod) {
 }
 
 extern PyObject * _PyModule_GetFilenameObject(PyObject *);
+
+#ifdef Py_GC
+/* Under Py_GC the collector calls a dead module's m_free before the sweep,
+   where it may run code (Python/gc_live.c); module_dealloc() does not. */
+extern void _PyModule_FreeState(PyObject *m);
+#endif
 extern Py_ssize_t _PyModule_GetFilenameUTF8(
         PyObject *module,
         char *buffer,

@@ -289,11 +289,37 @@ capsule_dealloc(PyObject *op)
 {
     PyCapsule *capsule = _PyCapsule_CAST(op);
     PyObject_GC_UnTrack(op);
+#ifndef Py_GC
     if (capsule->destructor) {
         capsule->destructor(op);
     }
+#else
+    (void)capsule;
+#endif
     PyObject_GC_Del(op);
 }
+
+#ifdef Py_GC
+int
+_PyCapsule_HasDestructor(PyObject *op)
+{
+    return _PyCapsule_CAST(op)->destructor != NULL;
+}
+
+/* The destructor runs once, while the capsule and what it refers to are
+   intact, before the sweep: it is extension code, which may run Python code
+   or allocate. */
+void
+_PyCapsule_Destroy(PyObject *op)
+{
+    PyCapsule *capsule = _PyCapsule_CAST(op);
+    PyCapsule_Destructor destructor = capsule->destructor;
+    capsule->destructor = NULL;
+    if (destructor != NULL) {
+        destructor(op);
+    }
+}
+#endif
 
 
 static PyObject *

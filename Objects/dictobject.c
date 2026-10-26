@@ -3658,11 +3658,14 @@ static void
 dict_dealloc(PyObject *self)
 {
     PyDictObject *mp = (PyDictObject *)self;
+#ifndef Py_GC
+    // Under Py_GC the collector notifies before the sweep (Python/gc_live.c).
     _PyObject_ResurrectStart(self);
     _PyDict_NotifyEvent(PyDict_EVENT_DEALLOCATED, mp, NULL, NULL);
     if (_PyObject_ResurrectEnd(self)) {
         return;
     }
+#endif
     PyDictValues *values = mp->ma_values;
     PyDictKeysObject *keys = mp->ma_keys;
     Py_ssize_t i, n;

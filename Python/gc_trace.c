@@ -60,7 +60,10 @@
 
 #if defined(WITH_MIMALLOC) && !defined(Py_GIL_DISABLED)
 
+#include "pycore_capsule.h"       // _PyCapsule_HasDestructor()
 #include "pycore_crossinterp.h"   // _PyXIData_regitem_t
+#include "pycore_dict.h"          // PyDictObject._ma_watcher_tag
+#include "pycore_moduleobject.h"  // PyModuleObject
 #include "pycore_frame.h"         // _PyInterpreterFrame
 #include "pycore_freelist_state.h" // struct _Py_freelists
 #include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
@@ -1558,7 +1561,45 @@ struct live_walk {
     size_t nobjs;
     size_t objs_cap;
     int failed;
+    // The dict and type watcher IDs with a callback (live_has_destroy_hook())
+    int dict_watchers;
+    int type_watchers;
 };
+
+/* Would op's dealloc, under reference counting, make a call that may run
+   code or allocate: a dealloc watcher's DESTROY event, a module's m_free or a
+   capsule's destructor?  The sweep forbids both, so gc_live.c makes these
+   calls before it (queue_destroy_hooks()).  Each runs once per object. */
+static inline int
+live_has_destroy_hook(const struct live_walk *w, PyInterpreterState *interp,
+                      PyObject *op, PyTypeObject *tp)
+{
+    if (op->ob_flags & _Py_GC_NOTIFIED_FLAG) {
+        return 0;
+    }
+    if (tp->tp_flags & Py_TPFLAGS_DICT_SUBCLASS) {
+        return (((PyDictObject *)op)->_ma_watcher_tag & w->dict_watchers) != 0;
+    }
+    if (tp->tp_flags & Py_TPFLAGS_TYPE_SUBCLASS) {
+        return (((PyTypeObject *)op)->tp_watched & w->type_watchers) != 0;
+    }
+    if (tp == &PyFunction_Type) {
+        return interp->active_func_watchers != 0;
+    }
+    if (tp == &PyCode_Type) {
+        return interp->active_code_watchers != 0;
+    }
+    if (tp == &PyCapsule_Type) {
+        return _PyCapsule_HasDestructor(op);
+    }
+    // Only a heap type can subclass module, so most types skip the MRO walk.
+    if (tp == &PyModule_Type
+        || ((tp->tp_flags & Py_TPFLAGS_HEAPTYPE) && PyModule_Check(op)))
+    {
+        return ((PyModuleObject *)op)->md_state_free != NULL;
+    }
+    return 0;
+}
 
 static bool
 live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
@@ -1646,7 +1687,8 @@ live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
         | (tp->tp_del != NULL ? _PyGC_DEAD_DEL : 0)
         | (tp == &_PyManagedBuffer_Type ? _PyGC_DEAD_MBUF : 0)
         | (PyType_Check(op) ? _PyGC_DEAD_TYPE : 0)
-        | (_PyObject_IS_GC(op) ? _PyGC_DEAD_GC : 0);
+        | (_PyObject_IS_GC(op) ? _PyGC_DEAD_GC : 0)
+        | (live_has_destroy_hook(w, t->interp, op, tp) ? _PyGC_DEAD_HOOK : 0);
     res->kinds |= kinds;
     res->dead[res->ndead++] = (_PyGCDeadObject){
         op, (uint32_t)block_size, (uint16_t)w->presize, kinds};
@@ -1908,6 +1950,17 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
     /* The walk clears every mark, also after a failure, when it lists
        nothing. */
     struct live_walk w = {.t = &t, .res = res, .failed = t.oom};
+    PyInterpreterState *interp = tstate->interp;
+    for (int i = 0; i < DICT_MAX_WATCHERS; i++) {
+        if (interp->dict_state.watchers[i] != NULL) {
+            w.dict_watchers |= 1 << i;
+        }
+    }
+    for (int i = 0; i < TYPE_MAX_WATCHERS; i++) {
+        if (interp->type_watchers[i] != NULL) {
+            w.type_watchers |= 1 << i;
+        }
+    }
     int walked = live_walk_heaps(&t, &w);
     if (walked >= 0 && !w.failed) {
         live_clear_weak_caches(&t);

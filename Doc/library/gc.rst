@@ -22,7 +22,11 @@ gc.garbage for inspection.
    A CPython build configured with ``--with-gc`` has no reference counts.
    A tracing collector owns memory: it frees every unreachable object, not
    only those in cycles, at a collection, and runs finalizers and weak
-   reference callbacks after it.  There is one generation, and the counts and
+   reference callbacks after it.  It also runs then, once per object, what a
+   deallocator would call that may run code: the destroy events of dict,
+   type, function and code watchers, a module's ``m_free`` and a capsule's
+   destructor; such an object is freed at a later collection, without
+   them.  There is one generation, and the counts and
    thresholds below are in bytes.  The collector scans C stacks
    conservatively, so a collection may leave an unreachable object alive
    until a later one.  :func:`freeze` and :func:`unfreeze` do nothing.

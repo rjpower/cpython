@@ -1205,11 +1205,13 @@ static void
 func_dealloc(PyObject *self)
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
+#ifndef Py_GC
     _PyObject_ResurrectStart(self);
     handle_func_event(PyFunction_EVENT_DESTROY, op, NULL);
     if (_PyObject_ResurrectEnd(self)) {
         return;
     }
+#endif
     _PyObject_GC_UNTRACK(op);
     FT_CLEAR_WEAKREFS(self, op->func_weakreflist);
     (void)func_clear((PyObject*)op);
@@ -1219,6 +1221,14 @@ func_dealloc(PyObject *self)
     Py_DECREF(op->func_qualname);
     PyObject_GC_Del(op);
 }
+
+#ifdef Py_GC
+void
+_PyFunction_NotifyDestroy(PyObject *func)
+{
+    handle_func_event(PyFunction_EVENT_DESTROY, _PyFunction_CAST(func), NULL);
+}
+#endif
 
 static PyObject*
 func_repr(PyObject *self)

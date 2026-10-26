@@ -93,6 +93,11 @@ _PyType_GetModuleState(PyTypeObject *type)
 PyAPI_FUNC(PyObject *) _PyType_GetDict(PyTypeObject *);
 // Visit what a static type refers to; for the tracing verifier.
 extern int _PyType_TraverseStatic(PyTypeObject *, visitproc, void *);
+#ifdef Py_GC
+/* Under Py_GC the collector makes this call of the dealloc's before the
+   sweep, where it may run code (Python/gc_live.c); the dealloc does not. */
+extern void _PyType_NotifyDestroy(PyTypeObject *type);
+#endif
 
 PyAPI_FUNC(PyObject *) _PyType_LookupSubclasses(PyTypeObject *);
 PyAPI_FUNC(PyObject *) _PyType_InitSubclasses(PyTypeObject *);

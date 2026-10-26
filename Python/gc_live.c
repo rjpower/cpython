@@ -18,33 +18,42 @@
       dead object with a finalizer that has not run (PEP 442), or with a
       tp_del that has not run since it was last reachable, is queued, and it
       and every dead object it reaches are resurrected for this cycle.
-   4. The remaining weak references to dead objects are cleared.
-   5. The sweep calls tp_dealloc on every object still dead, managed
+   4. Each remaining dead object whose dealloc would notify watchers or call
+      m_free or a capsule destructor has those calls queued, once, and it and
+      what it reaches are resurrected (queue_destroy_hooks()).
+   5. The remaining weak references to dead objects, and those to the
+      objects of step 4, are cleared.
+   6. The sweep calls tp_dealloc on every object still dead, managed
       buffers first and types last, with the frees of their blocks deferred
       (PyObject_Free() sees GCState.sweeping), then frees the blocks.  A
       dealloc can therefore read the other dead objects' memory; it must not
       allocate objects or run Python code, which debug builds check.
-   6. After the collection the queue runs: the weak reference callbacks,
-      then the finalizers.  After a collection that an allocation ran at
-      once, it waits for the eval breaker.
+   7. After the collection the queue runs: the weak reference callbacks,
+      the finalizers, then the destroy calls.  After a collection that an
+      allocation ran at once, it waits for the eval breaker.
 
    Collections and the queue run in the interpreter that allocates; the mark
    covers every interpreter that shares its object heaps. */
 
 #include "Python.h"
+#include "pycore_capsule.h"       // _PyCapsule_Destroy()
 #include "pycore_ceval.h"         // _Py_set_eval_breaker_bit()
+#include "pycore_code.h"          // _PyCode_NotifyDestroy()
 #include "pycore_dict.h"          // _PyInlineValuesSize()
+#include "pycore_function.h"      // _PyFunction_NotifyDestroy()
 #include "pycore_genobject.h"     // _PyGen_FinalizerIsNoop()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interp.h"        // PyInterpreterState.gc
 #include "pycore_interpframe.h"   // _PyFrame_GetLocalsArray()
 #include "pycore_memoryobject.h"  // _PyManagedBuffer_Type
+#include "pycore_moduleobject.h"  // _PyModule_FreeState()
 #include "pycore_object.h"
 #include "pycore_gc_trace.h"      // _PyGC_TraceLiveMark()
 #include "pycore_object_alloc.h"  // _PyObject_MallocWithType()
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tstate.h"        // _PyThreadStateImpl
+#include "pycore_typeobject.h"    // _PyType_NotifyDestroy()
 #include "pycore_weakref.h"       // _PyWeakref_ClearRef()
 
 #ifdef Py_GC
@@ -59,12 +68,18 @@ typedef struct _gc_runtime_state GCState;
 /* While a collection cannot run, try again after this many more bytes. */
 #define RETRY_BYTES (1024 * 1024)
 
-/* A queued call: a weak reference callback, callback(op), or, if callback
-   is NULL, op's finalizer or its legacy tp_del. */
+/* What a queued call does with op. */
+enum live_call_kind {
+    CALL_CALLBACK,   // callback(op), op a weak reference
+    CALL_FINALIZE,   // op's tp_finalize (PEP 442)
+    CALL_LEGACY,     // op's legacy tp_del
+    CALL_DESTROY,    // the destroy calls of op's dealloc (run_destroy_hook())
+};
+
 typedef struct {
     PyObject *op;
     PyObject *callback;
-    int legacy;
+    enum live_call_kind kind;
 } live_call;
 
 /* The collector's own memory comes from the C library's malloc: the heap
@@ -164,7 +179,8 @@ _PyGC_LiveVisitRoots(PyInterpreterState *interp, visitproc visit, void *arg)
 }
 
 static int
-queue_push(struct _gc_live_state *ls, PyObject *op, PyObject *callback)
+queue_push(struct _gc_live_state *ls, PyObject *op, PyObject *callback,
+           enum live_call_kind kind)
 {
     if (ls->qtail == ls->qcap) {
         if (ls->qhead > 0 && !ls->running_queue) {
@@ -183,8 +199,46 @@ queue_push(struct _gc_live_state *ls, PyObject *op, PyObject *callback)
             ls->qcap = cap;
         }
     }
-    ls->queue[ls->qtail++] = (live_call){op, callback, 0};
+    ls->queue[ls->qtail++] = (live_call){op, callback, kind};
     return 0;
+}
+
+/* What op's dealloc would call under reference counting, besides freeing:
+   the DESTROY event of the dict, type, function and code watchers, a
+   module's m_free, a capsule's destructor.  The sweep may not run code or
+   allocate, so the collector calls these first, with op and what it
+   reaches resurrected, as reference counting calls them while op is
+   intact.  op is swept at a later collection, without them. */
+static void
+run_destroy_hook(PyThreadState *tstate, PyObject *op)
+{
+    PyTypeObject *tp = Py_TYPE(op);
+    if (PyDict_Check(op)) {
+        _PyDict_NotifyEvent(PyDict_EVENT_DEALLOCATED, (PyDictObject *)op,
+                            NULL, NULL);
+    }
+    else if (PyType_Check(op)) {
+        _PyType_NotifyDestroy((PyTypeObject *)op);
+    }
+    else if (tp == &PyFunction_Type) {
+        _PyFunction_NotifyDestroy(op);
+    }
+    else if (tp == &PyCode_Type) {
+        _PyCode_NotifyDestroy(op);
+    }
+    else if (tp == &PyCapsule_Type) {
+        _PyCapsule_Destroy(op);
+    }
+    else {
+        assert(PyModule_Check(op));
+        _PyModule_FreeState(op);
+    }
+    if (_PyErr_Occurred(tstate)) {
+        // The watchers report their own errors; m_free and destructors
+        // have no way to.  The repr of a freed module could fail.
+        PyErr_FormatUnraisable("Exception ignored while destroying a %s "
+                               "object", tp->tp_name);
+    }
 }
 
 /* Run the queued callbacks and finalizers.  A collection that one of them
@@ -213,7 +267,10 @@ run_queue(PyThreadState *tstate)
                 wr->wr_callback = NULL;
             }
         }
-        else if (call.legacy) {
+        else if (call.kind == CALL_DESTROY) {
+            run_destroy_hook(tstate, call.op);
+        }
+        else if (call.kind == CALL_LEGACY) {
             // As subtype_dealloc() does under reference counting: the weak
             // references go first.
             nfinalized++;
@@ -360,7 +417,7 @@ clear_callback_weakrefs(struct _gc_live_state *ls, _PyGCMarkResult *res)
             if (((PyObject *)wr)->ob_flags & _Py_GC_DEAD_FLAG) {
                 continue;  // the weak reference is garbage too
             }
-            if (queue_push(ls, (PyObject *)wr, callback) < 0) {
+            if (queue_push(ls, (PyObject *)wr, callback, CALL_CALLBACK) < 0) {
                 return -1;
             }
         }
@@ -470,10 +527,9 @@ finalizer_order(_PyGCMarkResult *res, objstack *order)
 static int
 queue_legacy(struct _gc_live_state *ls, PyObject *op)
 {
-    if (queue_push(ls, op, NULL) < 0) {
+    if (queue_push(ls, op, NULL, CALL_LEGACY) < 0) {
         return -1;
     }
-    ls->queue[ls->qtail - 1].legacy = 1;
     op->ob_flags |= _Py_GC_DEL_CALLED_FLAG;
     return 0;
 }
@@ -538,7 +594,7 @@ handle_finalizers(GCState *gc, struct _gc_live_state *ls,
             && !(op->ob_flags & _Py_GC_FINALIZED_FLAG)
             && !_PyGen_FinalizerIsNoop(op))
         {
-            if (queue_push(ls, op, NULL) < 0) {
+            if (queue_push(ls, op, NULL, CALL_FINALIZE) < 0) {
                 free(order.items);
                 goto error;
             }
@@ -584,6 +640,42 @@ error:
     free(s.items);
     free(legacy.items);
     return -1;
+}
+
+/* Queue the destroy calls (run_destroy_hook()) of the dead objects that the
+   finalizers did not resurrect, and resurrect them and what they reach.  An
+   object with a finalizer that runs now was resurrected; its destroy calls
+   wait for the death after it, as its dealloc would.  Each object's run once
+   (_Py_GC_NOTIFIED_FLAG), also if a watcher makes it reachable again.  The
+   weak references to a queued object are cleared with those of the dead
+   (collect()): no Python code reaches it after m_free or a destructor. */
+static int
+queue_destroy_hooks(struct _gc_live_state *ls, _PyGCMarkResult *res)
+{
+    if (!(res->kinds & _PyGC_DEAD_HOOK)) {
+        return 0;
+    }
+    size_t first = ls->qtail;
+    for (Py_ssize_t i = 0; i < res->ndead; i++) {
+        _PyGCDeadObject *d = &res->dead[i];
+        if (!(d->kinds & _PyGC_DEAD_HOOK)
+            || !(d->op->ob_flags & _Py_GC_DEAD_FLAG))
+        {
+            d->kinds &= ~_PyGC_DEAD_HOOK;
+            continue;
+        }
+        if (queue_push(ls, d->op, NULL, CALL_DESTROY) < 0) {
+            return -1;
+        }
+        d->op->ob_flags |= _Py_GC_NOTIFIED_FLAG;
+    }
+    // Queue every one first: resurrecting one can reach another.
+    objstack s = {0};
+    for (size_t i = first; i < ls->qtail; i++) {
+        resurrect(&s, ls->queue[i].op);
+    }
+    free(s.items);
+    return s.oom ? -1 : 0;
 }
 
 static void
@@ -723,7 +815,8 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
         goto done;  // out of memory: nothing is freed
     }
     if (clear_callback_weakrefs(ls, &res) < 0
-        || handle_finalizers(gc, ls, &res, &garbage) < 0)
+        || handle_finalizers(gc, ls, &res, &garbage) < 0
+        || queue_destroy_hooks(ls, &res) < 0)
     {
         // Out of memory: keep everything.  What was queued runs.
         undo_dead(&res);
@@ -734,8 +827,10 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
              (res.kinds & _PyGC_DEAD_WEAKREFS) && i < res.ndead; i++)
         {
             PyObject *op = res.dead[i].op;
-            if ((res.dead[i].kinds & _PyGC_DEAD_WEAKREFS)
-                && (op->ob_flags & _Py_GC_DEAD_FLAG))
+            int kinds = res.dead[i].kinds;
+            if ((kinds & _PyGC_DEAD_WEAKREFS)
+                && ((op->ob_flags & _Py_GC_DEAD_FLAG)
+                    || (kinds & _PyGC_DEAD_HOOK)))
             {
                 _PyWeakref_ClearWeakRefsNoCallbacks(op);
             }

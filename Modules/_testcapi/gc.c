@@ -425,7 +425,39 @@ gc_release_pymem(PyObject *self, PyObject *Py_UNUSED(ignored))
     return obj;
 }
 
+/* A capsule whose destructor calls a Python callable, as an extension's
+   destructor may.  The capsule's context holds the callable without a
+   traverse, so the caller must keep it alive. */
+static void
+calling_capsule_destructor(PyObject *capsule)
+{
+    PyObject *callable = PyCapsule_GetContext(capsule);
+    PyObject *res = PyObject_CallNoArgs(callable);
+    if (res == NULL) {
+        PyErr_FormatUnraisable("Exception ignored in a capsule destructor");
+    }
+    Py_XDECREF(res);
+    Py_DECREF(callable);
+}
+
+static PyObject *
+capsule_calling(PyObject *self, PyObject *callable)
+{
+    PyObject *capsule = PyCapsule_New(&pymem_slot, "_testcapi.calling",
+                                      calling_capsule_destructor);
+    if (capsule == NULL) {
+        return NULL;
+    }
+    if (PyCapsule_SetContext(capsule, Py_NewRef(callable)) < 0) {
+        Py_DECREF(callable);
+        Py_DECREF(capsule);
+        return NULL;
+    }
+    return capsule;
+}
+
 static PyMethodDef test_methods[] = {
+    {"capsule_calling", capsule_calling, METH_O},
     {"gc_hold_in_pymem", gc_hold_in_pymem, METH_VARARGS},
     {"gc_release_pymem", gc_release_pymem, METH_NOARGS},
     {"test_gc_control", test_gc_control, METH_NOARGS},

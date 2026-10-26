@@ -11,6 +11,7 @@ from asyncio import taskgroups
 import unittest
 import warnings
 
+from test import support
 from test.test_asyncio.utils import await_without_task
 
 # To prevent a warning "test altered the execution environment"
@@ -978,6 +979,7 @@ class BaseTestTaskGroup:
         self.assertListEqual(gc.get_referrers(exc), no_other_refs())
 
 
+    @support.requires_refcounting
     async def test_exception_refcycles_errors(self):
         """Test that TaskGroup deletes self._errors, and __aexit__ args"""
         tg = asyncio.TaskGroup()
@@ -996,6 +998,7 @@ class BaseTestTaskGroup:
         self.assertListEqual(gc.get_referrers(exc), no_other_refs())
 
 
+    @support.requires_refcounting
     async def test_exception_refcycles_parent_task(self):
         """Test that TaskGroup deletes self._parent_task"""
         tg = asyncio.TaskGroup()
@@ -1018,6 +1021,7 @@ class BaseTestTaskGroup:
         self.assertListEqual(gc.get_referrers(exc), no_other_refs())
 
 
+    @support.requires_refcounting
     async def test_exception_refcycles_parent_task_wr(self):
         """Test that TaskGroup deletes self._parent_task and create_task() deletes task"""
         tg = asyncio.TaskGroup()

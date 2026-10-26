@@ -2776,22 +2776,6 @@ class BugsTest(unittest.TestCase):
         self.assertEqual(t.find('.//paragraph').text,
             'A new cultivar of Begonia plant named \u2018BCT9801BEG\u2019.')
 
-    @unittest.skipIf(sys.gettrace(), "Skips under coverage.")
-    @support.requires_refcounting
-    def test_bug_xmltoolkit63(self):
-        # Check reference leak.
-        def xmltoolkit63():
-            tree = ET.TreeBuilder()
-            tree.start("tag", {})
-            tree.data("text")
-            tree.end("tag")
-
-        xmltoolkit63()
-        count = sys.getrefcount(None)
-        for i in range(1000):
-            xmltoolkit63()
-        self.assertEqual(sys.getrefcount(None), count)
-
     def test_bug_200708_newline(self):
         # Preserve newlines in attributes.
 

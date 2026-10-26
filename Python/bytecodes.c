@@ -268,7 +268,7 @@ dummy_func(
             LOAD_CONST_INLINE_FLOAT,
         };
 
-        inst(LOAD_CONST, (-- value)) {
+        pure inst(LOAD_CONST, (-- value)) {
             PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
             value = PyStackRef_FromPyObjectBorrow(obj);
         }
@@ -293,7 +293,7 @@ dummy_func(
             LOAD_SMALL_INT_INLINE,
         };
 
-        inst(LOAD_SMALL_INT, (-- value)) {
+        pure inst(LOAD_SMALL_INT, (-- value)) {
             assert(oparg < _PY_NSMALLPOSINTS);
             PyObject *obj = (PyObject *)&_PyLong_SMALL_INTS[_PY_NSMALLNEGINTS + oparg];
             value = PyStackRef_FromPyObjectBorrow(obj);
@@ -1846,7 +1846,7 @@ dummy_func(
             }
         }
 
-        inst(LOAD_COMMON_CONSTANT, ( -- value)) {
+        pure inst(LOAD_COMMON_CONSTANT, ( -- value)) {
             // Keep in sync with _common_constants in opcode.py
             assert(oparg < NUM_COMMON_CONSTANTS);
             value = PyStackRef_DupImmortal(tstate->interp->common_consts[oparg]);

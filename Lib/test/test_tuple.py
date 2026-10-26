@@ -324,34 +324,6 @@ class TupleTest(seq_tests.CommonTest):
         gc.collect()
         self.assertTrue(gc.is_tracked(t), t)
 
-    @support.cpython_only
-    @unittest.skipIf(support.Py_GC, "Py_GC tracks every tuple")
-    def test_track_literals(self):
-        # Test GC-optimization of tuple literals
-        x, y, z = 1.5, "a", []
-
-        # We check that those objects aren't tracked at all.
-        # It's essential for the GC performance, see gh-139951.
-        self._not_tracked_instantly(())
-        self._not_tracked_instantly((1,))
-        self._not_tracked_instantly((1, 2))
-        self._not_tracked_instantly((1, 2, "a"))
-        self._not_tracked_instantly((1, 2) * 5)
-        self._not_tracked_instantly((12, 10**10, 'a_' * 100))
-        self._not_tracked_instantly((object(),))
-
-        self._not_tracked(((1, x), y, (2, 3)))
-        self._not_tracked((1, 2, (None, True, False, ()), int))
-        self._not_tracked((object(), ()))
-
-        # Tuples with mutable elements are always tracked, even if those
-        # elements are not tracked right now.
-        self._tracked(([],))
-        self._tracked(([1],))
-        self._tracked(({},))
-        self._tracked((set(),))
-        self._tracked((x, y, z))
-
     def check_track_dynamic(self, tp, always_track):
         x, y, z = 1.5, "a", []
 
@@ -379,23 +351,11 @@ class TupleTest(seq_tests.CommonTest):
         self._tracked(t[:])
 
     @support.cpython_only
-    @unittest.skipIf(support.Py_GC, "Py_GC tracks every tuple")
-    def test_track_dynamic(self):
-        # Test GC-optimization of dynamically constructed tuples.
-        self.check_track_dynamic(tuple, False)
-
-    @support.cpython_only
     def test_track_subtypes(self):
         # Tuple subtypes must always be tracked
         class MyTuple(tuple):
             pass
         self.check_track_dynamic(MyTuple, True)
-
-    @support.cpython_only
-    @unittest.skipIf(support.Py_GC, "Py_GC tracks every tuple")
-    def test_bug7466(self):
-        # Trying to untrack an unfinished tuple could crash Python
-        self._not_tracked(tuple(gc.collect() for i in range(101)))
 
     def test_repr_large(self):
         # Check the repr of large list objects

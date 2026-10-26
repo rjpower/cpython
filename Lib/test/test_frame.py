@@ -164,6 +164,7 @@ class ClearTest(unittest.TestCase):
         self.assertEqual(lines, expected_lines)
 
     @support.cpython_only
+    @support.requires_refcounting
     def test_clear_refcycles(self):
         # .clear() doesn't leave any refcycle behind
         with support.disable_gc():
@@ -912,6 +913,7 @@ class TestIncompleteFrameAreInvisible(unittest.TestCase):
 
     @support.cpython_only
     @threading_helper.requires_working_threading()
+    @support.requires_refcounting
     def test_sneaky_frame_object_teardown(self):
 
         class SneakyDel:
@@ -951,6 +953,7 @@ class TestIncompleteFrameAreInvisible(unittest.TestCase):
             )
             sneaky_frame_object = sneaky_frame_object.f_back
 
+    @support.requires_refcounting
     def test_entry_frames_are_invisible_during_teardown(self):
         class C:
             """A weakref'able class."""

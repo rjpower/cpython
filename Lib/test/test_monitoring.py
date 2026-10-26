@@ -2040,8 +2040,8 @@ class TestBranchAndJumpEvents(CheckEvents):
                 n += 1
             return None
 
-        in_loop = ('branch left', 'foo', 4, 6)
-        exit_loop = ('branch right', 'foo', 4, 11)
+        in_loop = ('branch left', 'foo', 3, 5)
+        exit_loop = ('branch right', 'foo', 3, 9)
         self.check_events(foo, recorders = BRANCH_OFFSET_RECORDERS, expected = [
             in_loop,
             in_loop,

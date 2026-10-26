@@ -93,6 +93,22 @@ class TestTranforms(BytecodeTestCase):
         self.assertInBytecode(unot, 'POP_JUMP_IF_TRUE')
         self.check_lnotab(unot)
 
+    def test_unot_value(self):
+        # UNARY_NOT tests the truth of any value, so no TO_BOOL precedes it
+        def unot(x):
+            return not x
+        self.assertInBytecode(unot, 'UNARY_NOT')
+        self.assertNotInBytecode(unot, 'TO_BOOL')
+        for value in (0, 1, 0.0, 2.5, 2**100, None, True, False,
+                      "", "a", [], [1], object()):
+            self.assertIs(unot(value), not bool(value), value)
+
+        class Raises:
+            def __bool__(self):
+                raise ZeroDivisionError
+        with self.assertRaises(ZeroDivisionError):
+            unot(Raises())
+
     def test_elim_inversion_of_is_or_in(self):
         for line, cmp_op, invert in (
             ('not a is b', 'IS_OP', 1,),
@@ -569,14 +585,18 @@ class TestTranforms(BytecodeTestCase):
                     and c)
         self.check_jump_targets(f)
         self.check_lnotab(f)
-        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_FALSE'), 2)
+        # The second jump keeps the value it jumps with and pops it where it
+        # falls through
+        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_FALSE'), 1)
+        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_FALSE_OR_POP'), 1)
         # POP_JUMP_IF_TRUE to POP_JUMP_IF_TRUE --> POP_JUMP_IF_TRUE to non-jump
         def f(a, b, c):
             return ((a or b)
                     or c)
         self.check_jump_targets(f)
         self.check_lnotab(f)
-        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_TRUE'), 2)
+        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_TRUE'), 1)
+        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_TRUE_OR_POP'), 1)
         # JUMP_IF_FALSE_OR_POP to JUMP_IF_TRUE_OR_POP --> POP_JUMP_IF_FALSE to non-jump
         def f(a, b, c):
             return ((a and b)

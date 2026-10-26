@@ -468,11 +468,13 @@ dummy_func(
             DEAD(value);
         }
 
+        // UNARY_NOT tests the truth of any value: the compiler drops the
+        // TO_BOOL before it (Python/flowgraph.c).  A bool is the fast path.
         inst(UNARY_NOT, (value -- res)) {
-            assert(PyStackRef_BoolCheck(value));
-            res = PyStackRef_IsFalse(value)
-                ? PyStackRef_True : PyStackRef_False;
-            DEAD(value);
+            int truth = _PyStackRef_Truth(value);
+            PyStackRef_CLOSE(value);
+            ERROR_IF(truth < 0);
+            res = truth ? PyStackRef_False : PyStackRef_True;
         }
 
         family(TO_BOOL, INLINE_CACHE_ENTRIES_TO_BOOL) = {
@@ -3473,6 +3475,46 @@ dummy_func(
 
         macro(POP_JUMP_IF_NOT_NONE) = unused/1 + _IS_NONE + _POP_JUMP_IF_FALSE;
 
+        // The value of "x and y" or "x or y": the jump keeps the value it
+        // tests where it jumps and releases it where it falls through, so
+        // neither a COPY before it nor a POP_TOP after it runs.  The
+        // register passes make it from those three (Python/regcfg_passes.c);
+        // the result slot is NULL where it falls through.  It has no
+        // feedback entry, since its fields fill the word.
+        inst(JUMP_IF_FALSE_OR_POP, (cond -- res)) {
+            int truth = _PyStackRef_Truth(cond);
+            if (truth < 0) {
+                ERROR_NO_POP();
+            }
+            if (!truth) {
+                res = cond;
+                DEAD(cond);
+                JUMPTO(oparg);
+            }
+            else {
+                PyStackRef_CLOSE(cond);
+                res = PyStackRef_NULL;
+                JUMPBY(INSTR_OPCODE(next_instr) == NOT_TAKEN);
+            }
+        }
+
+        inst(JUMP_IF_TRUE_OR_POP, (cond -- res)) {
+            int truth = _PyStackRef_Truth(cond);
+            if (truth < 0) {
+                ERROR_NO_POP();
+            }
+            if (truth) {
+                res = cond;
+                DEAD(cond);
+                JUMPTO(oparg);
+            }
+            else {
+                PyStackRef_CLOSE(cond);
+                res = PyStackRef_NULL;
+                JUMPBY(INSTR_OPCODE(next_instr) == NOT_TAKEN);
+            }
+        }
+
         replaced inst(JUMP_BACKWARD_NO_INTERRUPT, (--)) {
             /* This bytecode is used in the `yield from` or `await` loop.
              * If there is an interrupt, we want it handled in the innermost
@@ -5700,6 +5742,38 @@ dummy_func(
             }
             else {
                 PyStackRef_CLOSE(value);
+            }
+        }
+
+        inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond -- res)) {
+            int truth = _PyStackRef_Truth(cond);
+            if (truth < 0) {
+                ERROR_NO_POP();
+            }
+            if (!truth) {
+                res = cond;
+                DEAD(cond);
+                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+            }
+            else {
+                PyStackRef_CLOSE(cond);
+                res = PyStackRef_NULL;
+            }
+        }
+
+        inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond -- res)) {
+            int truth = _PyStackRef_Truth(cond);
+            if (truth < 0) {
+                ERROR_NO_POP();
+            }
+            if (truth) {
+                res = cond;
+                DEAD(cond);
+                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+            }
+            else {
+                PyStackRef_CLOSE(cond);
+                res = PyStackRef_NULL;
             }
         }
 

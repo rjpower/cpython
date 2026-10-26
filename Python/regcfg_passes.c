@@ -336,7 +336,10 @@ store_producer(_PyRegCfg *cfg, int region_start, int s)
         if (op->nout > 0 && out[op->nout - 1] == value) {
             return op;
         }
+        // An op that writes a local releases its old value, which may run
+        // other code, as STORE_FAST does
         if (op->loc.lineno != store->loc.lineno || op->target >= 0
+            || op->dst >= 0 || written_local(op) >= 0
             || OPCODE_HAS_ERROR(op->opcode) || OPCODE_HAS_ESCAPES(op->opcode)
             || reads_count(cfg, op, value) > 0 || touches_local(cfg, op, z))
         {
@@ -478,4 +481,70 @@ int
 _PyRegPass_PopTop(_PyRegCfg *cfg)
 {
     return for_each_region_backward(cfg, pop_top_region);
+}
+
+
+/* Truth folding in value context (pass d).
+ *
+ * "a.x and b" tests a copy of its first value and pops the value where it
+ * goes on:
+ *
+ *     COPY 1; POP_JUMP_IF_FALSE L; NOT_TAKEN; POP_TOP; <b>; L:
+ *
+ * JUMP_IF_FALSE_OR_POP does all three: it keeps the value where it jumps
+ * and releases it where it falls through.  The POP_TOP must be the next op
+ * on the fall-through path, which only the jump reaches, and all three on
+ * one line, so that no line's event goes.  A value loaded from a local
+ * does not come here: the flowgraph turns its COPY into a second load,
+ * which folds into the jump. */
+
+static int
+truth_fold_region(_PyRegCfg *cfg, int start, int end)
+{
+    for (int i = start; i < end; i++) {
+        _PyRegOp *copy = &cfg->ops[i];
+        if (copy->opcode != COPY || copy->oparg != 1 || copy->nout != 2) {
+            continue;
+        }
+        const int *cin = _PyReg_IN(cfg, copy);
+        int *cout = _PyReg_OUT(cfg, copy);
+        _PyRegOp *jump = live_neighbour(cfg, start, end, i, 1);
+        if (jump == NULL || jump->loc.lineno != copy->loc.lineno
+            || (jump->opcode != POP_JUMP_IF_FALSE
+                && jump->opcode != POP_JUMP_IF_TRUE)
+            || _PyReg_IN(cfg, jump)[0] != cout[1]
+            || !is_fresh(cfg, cin[0]) || !_PyReg_IS_CANON(cfg, cout[0]))
+        {
+            continue;
+        }
+        int j = (int)(jump - cfg->ops);
+        _PyRegOp *next = live_neighbour(cfg, start, end, j, 1);
+        if (next != NULL && next->opcode == NOT_TAKEN) {
+            next = live_neighbour(cfg, start, end, (int)(next - cfg->ops), 1);
+        }
+        if (next == NULL || next->opcode != POP_TOP
+            || next->loc.lineno != copy->loc.lineno
+            || _PyReg_IN(cfg, next)[0] != cout[0])
+        {
+            continue;
+        }
+        copy->opcode = jump->opcode == POP_JUMP_IF_FALSE
+            ? JUMP_IF_FALSE_OR_POP : JUMP_IF_TRUE_OR_POP;
+        copy->oparg = jump->oparg;
+        copy->target = jump->target;
+        copy->except = jump->except;
+        copy->loc = jump->loc;
+        copy->npop = 1;
+        copy->nout = 1;
+        copy->flags |= _PyReg_JUMP_OUTPUT;
+        jump->opcode = _PyReg_DEAD;
+        next->opcode = _PyReg_DEAD;
+    }
+    return SUCCESS;
+}
+
+int
+_PyRegPass_TruthFold(_PyRegCfg *cfg)
+{
+    return for_each_region_backward(cfg, truth_fold_region);
 }

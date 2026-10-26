@@ -952,7 +952,7 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op)
         cfg->ntemps = Py_MAX(cfg->ntemps, s - nl + 1);
         // A jump whose result a store elimination sent to a local leaves
         // the result's slot NULL where it falls through
-        if (op->dst >= 0 && j == stored) {
+        if ((op->dst >= 0 && j == stored) || (op->flags & _PyReg_JUMP_OUTPUT)) {
             continue;
         }
         RETURN_IF_ERROR(occ_take(o, s - nl, v, op));
@@ -1345,6 +1345,7 @@ static const struct {
     {"copy propagation", _PyRegPass_CopyProp},
     {"store elimination", _PyRegPass_StoreElim},
     {"pop top", _PyRegPass_PopTop},
+    {"truth folding", _PyRegPass_TruthFold},
 };
 
 static int

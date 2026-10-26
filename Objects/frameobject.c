@@ -1471,6 +1471,18 @@ mark_stacks(PyCodeObject *code_obj, int len)
                     stacks[next_i] = next_stack;
                     break;
                 }
+                case JUMP_IF_FALSE_OR_POP:
+                case JUMP_IF_TRUE_OR_POP:
+                {
+                    // The value stays where the jump goes and is popped
+                    // where it falls through
+                    j = _PyCode_InstrTarget(code_obj, i);
+                    assert(j < len);
+                    assert(stacks[j] == UNINITIALIZED || stacks[j] == next_stack);
+                    stacks[j] = next_stack;
+                    stacks[next_i] = pop_value(next_stack);
+                    break;
+                }
                 case SEND:
                     j = _PyCode_InstrTarget(code_obj, i);
                     assert(j < len);

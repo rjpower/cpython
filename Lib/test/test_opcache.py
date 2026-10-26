@@ -1853,9 +1853,10 @@ class TestSpecializer(TestBase):
     @cpython_only
     @requires_specialization
     def test_to_bool(self):
-        # TO_BOOL remains only where a bool is a value, as for "not x"
+        # UNARY_NOT and the conditional jumps test truth themselves, so
+        # TO_BOOL remains only for "not not x"
         def to_bool_value(elems):
-            return [not e for e in elems]
+            return [not not e for e in elems]
 
         cases = (("BOOL", [True, False]), ("INT", [0, 1, 2**40]),
                  ("LIST", [[], [1]]), ("NONE", [None]), ("STR", ["", "a"]))
@@ -1863,7 +1864,7 @@ class TestSpecializer(TestBase):
             with self.subTest(kind=kind):
                 f = types.FunctionType(to_bool_value.__code__.replace(), {})
                 elems = values * _testinternalcapi.SPECIALIZATION_THRESHOLD
-                self.assertEqual(f(elems), [not e for e in elems])
+                self.assertEqual(f(elems), [bool(e) for e in elems])
                 self.assert_specialized(f, f"TO_BOOL_{kind}")
                 self.assert_no_opcode(f, "TO_BOOL")
 
@@ -2527,7 +2528,7 @@ class TestFeedback(TestBase):
                         o[x] = o.z
                         a, b = o
                 print(len(args), *args, **kw)
-                print(a, end=not b)
+                print(a, end=not not b)
                 return super().m
 
         def g(it):

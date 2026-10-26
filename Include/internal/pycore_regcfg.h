@@ -53,6 +53,7 @@ extern "C" {
 /* _PyRegOp.flags */
 #define _PyReg_LOAD_FOLDED      1   // a load that its consumer reads in place
 #define _PyReg_STORE_FOLDED     2   // a store that its producer does
+#define _PyReg_JUMP_OUTPUT      4   // outputs only where it jumps
 
 typedef struct _PyRegOp {
     int opcode;             // the stack instruction, or _PyReg_DEAD
@@ -180,6 +181,7 @@ int _PyRegPass_SwapRename(_PyRegCfg *cfg);
 int _PyRegPass_CopyProp(_PyRegCfg *cfg);
 int _PyRegPass_StoreElim(_PyRegCfg *cfg);
 int _PyRegPass_PopTop(_PyRegCfg *cfg);
+int _PyRegPass_TruthFold(_PyRegCfg *cfg);
 
 /* Replace register from by to in every op of the region of block b. */
 void _PyRegCfg_Rename(_PyRegCfg *cfg, int b, int from, int to);

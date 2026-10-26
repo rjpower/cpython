@@ -698,11 +698,11 @@ class FoldTest(unittest.TestCase):
             self.assertEqual(sys.getrefcount(o), before)
             self.assertEqual(g(), [1, 2])
 
-    def test_load_below_another_word_keeps_its_word(self):
-        # The constant's word runs between the load of x and the add
+    def test_load_below_a_constant_folds(self):
+        # Nothing between the load of x and the add writes x
         def f(x):
             return x + 1
-        self.assertIn("LOAD_FAST_BORROW", [w[0] for w in words(f)])
+        self.assertNotIn("LOAD_FAST_BORROW", [w[0] for w in words(f)])
         self.assertEqual(f(1), 2)
 
     def test_store_to_the_loaded_local(self):

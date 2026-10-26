@@ -11045,6 +11045,76 @@
             DISPATCH();
         }
 
+        TARGET(INSTRUMENTED_JUMP_IF_FALSE_OR_POP) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = INSTRUMENTED_JUMP_IF_FALSE_OR_POP;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(INSTRUMENTED_JUMP_IF_FALSE_OR_POP);
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            _PyStackRef cond;
+            _PyStackRef res;
+            cond = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            int truth = _PyStackRef_Truth(cond);
+            if (truth < 0) {
+                IR_DROP_BORROW(cond, IR_FIELD_B(this_instr));
+                JUMP_TO_LABEL(error);
+            }
+            if (!truth) {
+                res = cond;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+            }
+            else {
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                PyStackRef_CLOSE(cond);
+                res = PyStackRef_NULL;
+            }
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
+            DISPATCH();
+        }
+
+        TARGET(INSTRUMENTED_JUMP_IF_TRUE_OR_POP) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = INSTRUMENTED_JUMP_IF_TRUE_OR_POP;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(INSTRUMENTED_JUMP_IF_TRUE_OR_POP);
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            _PyStackRef cond;
+            _PyStackRef res;
+            cond = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            int truth = _PyStackRef_Truth(cond);
+            if (truth < 0) {
+                IR_DROP_BORROW(cond, IR_FIELD_B(this_instr));
+                JUMP_TO_LABEL(error);
+            }
+            if (truth) {
+                res = cond;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+            }
+            else {
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                PyStackRef_CLOSE(cond);
+                res = PyStackRef_NULL;
+            }
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
+            DISPATCH();
+        }
+
         TARGET(INSTRUMENTED_LINE) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_LINE;
@@ -11933,6 +12003,78 @@
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             JUMPTO(oparg);
+            DISPATCH();
+        }
+
+        TARGET(JUMP_IF_FALSE_OR_POP) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = JUMP_IF_FALSE_OR_POP;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(JUMP_IF_FALSE_OR_POP);
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            _PyStackRef cond;
+            _PyStackRef res;
+            cond = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            int truth = _PyStackRef_Truth(cond);
+            if (truth < 0) {
+                IR_DROP_BORROW(cond, IR_FIELD_B(this_instr));
+                JUMP_TO_LABEL(error);
+            }
+            if (!truth) {
+                res = cond;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                JUMPTO(oparg);
+            }
+            else {
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                PyStackRef_CLOSE(cond);
+                res = PyStackRef_NULL;
+                JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+            }
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
+            DISPATCH();
+        }
+
+        TARGET(JUMP_IF_TRUE_OR_POP) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = JUMP_IF_TRUE_OR_POP;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(JUMP_IF_TRUE_OR_POP);
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            _PyStackRef cond;
+            _PyStackRef res;
+            cond = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            int truth = _PyStackRef_Truth(cond);
+            if (truth < 0) {
+                IR_DROP_BORROW(cond, IR_FIELD_B(this_instr));
+                JUMP_TO_LABEL(error);
+            }
+            if (truth) {
+                res = cond;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                JUMPTO(oparg);
+            }
+            else {
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                PyStackRef_CLOSE(cond);
+                res = PyStackRef_NULL;
+                JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
+            }
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
             DISPATCH();
         }
 
@@ -18294,10 +18436,13 @@
             _PyStackRef value;
             _PyStackRef res;
             value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-            assert(PyStackRef_BoolCheck(value));
-            res = PyStackRef_IsFalse(value)
-            ? PyStackRef_True : PyStackRef_False;
+            int truth = _PyStackRef_Truth(value);
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            PyStackRef_CLOSE(value);
+            if (truth < 0) {
+                JUMP_TO_LABEL(error);
+            }
+            res = truth ? PyStackRef_False : PyStackRef_True;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }

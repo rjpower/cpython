@@ -598,6 +598,25 @@ static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
         | ((uintptr_t)IR_IS_LOCAL(F) & _PyStackRef_BorrowBitAt(&IR_SLOT(F))) })
 #endif
 
+/* The truth of a value, as TO_BOOL tests it, or -1 with an exception set */
+static inline int
+_PyStackRef_Truth(_PyStackRef ref)
+{
+    if (PyStackRef_IsTrue(ref)) {
+        return 1;
+    }
+    if (PyStackRef_IsFalse(ref) || PyStackRef_IsNone(ref)) {
+        return 0;
+    }
+    if (PyStackRef_IsInlineInt(ref)) {
+        return PyStackRef_InlineInt(ref) != 0;
+    }
+    if (PyStackRef_IsInlineFloat(ref)) {
+        return PyStackRef_InlineFloat(ref) != 0.0;
+    }
+    return PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(ref));
+}
+
 /* The handler takes the input that it read through field F: a temporary's
  * slot becomes NULL, and a local keeps its value. */
 #define IR_CONSUME_INPUT(F) \

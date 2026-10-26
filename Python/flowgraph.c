@@ -799,6 +799,13 @@ get_stack_effects(int opcode, int oparg, int jump, stack_effects *effects)
         effects->net = 0;
         return 0;
     }
+    if ((opcode == JUMP_IF_FALSE_OR_POP || opcode == JUMP_IF_TRUE_OR_POP)
+        && jump == 0)
+    {
+        // The value is popped where the jump falls through
+        effects->net = -1;
+        return 0;
+    }
     effects->net = pushed - popped;
     return 0;
 }
@@ -2687,6 +2694,16 @@ fold_truth_tests(basicblock *entryblock)
                 break;
             }
             INSTR_SET_OP0(inst, NOP);
+        }
+    }
+    // UNARY_NOT tests the truth of any value, as the jumps do
+    for (basicblock *b = entryblock; b != NULL; b = b->b_next) {
+        for (int i = 0; i + 1 < b->b_iused; i++) {
+            if (b->b_instr[i].i_opcode == TO_BOOL
+                && b->b_instr[i + 1].i_opcode == UNARY_NOT)
+            {
+                INSTR_SET_OP0(&b->b_instr[i], NOP);
+            }
         }
     }
 }

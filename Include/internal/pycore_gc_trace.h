@@ -162,8 +162,9 @@ _PyGC_IsObjectHeader(const PyObject *op)
 #define _PyGC_DEAD_GC        (1 << 5)  /* a GC object */
 #define _PyGC_DEAD_HOOK      (1 << 6)  /* its dealloc would notify watchers,
                                           call m_free or a capsule
-                                          destructor: the collector does that
-                                          before the sweep */
+                                          destructor, or release a buffer to
+                                          Python code: the collector does
+                                          that before the sweep */
 
 /* An unreachable object found by the mark: its address, the size and
  * pre-header size of its block, and its _PyGC_DEAD_* kinds. */

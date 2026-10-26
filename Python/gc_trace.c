@@ -1665,8 +1665,9 @@ struct live_walk {
 };
 
 /* Would op's dealloc, under reference counting, make a call that may run
-   code or allocate: a dealloc watcher's DESTROY event, a module's m_free or a
-   capsule's destructor?  The sweep forbids both, so gc_live.c makes these
+   code or allocate: a dealloc watcher's DESTROY event, a module's m_free, a
+   capsule's destructor, or the release of a buffer whose exporter defines
+   __release_buffer__?  The sweep forbids both, so gc_live.c makes these
    calls before it (queue_destroy_hooks()).  Each runs once per object. */
 static inline int
 live_has_destroy_hook(const struct live_walk *w, PyInterpreterState *interp,
@@ -1689,6 +1690,9 @@ live_has_destroy_hook(const struct live_walk *w, PyInterpreterState *interp,
     }
     if (tp == &PyCapsule_Type) {
         return _PyCapsule_HasDestructor(op);
+    }
+    if (tp == &_PyManagedBuffer_Type || tp == &PyMemoryView_Type) {
+        return _PyMemoryView_DeallocReleasesWithCode(op);
     }
     // Only a heap type can subclass module, so most types skip the MRO walk.
     if (tp == &PyModule_Type

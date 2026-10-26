@@ -1875,6 +1875,25 @@ class TracingCollectorTests(unittest.TestCase):
                 break
         self.assertIsNone(ref())
 
+    def test_release_buffer_runs_python_code(self):
+        # A dead view of an exporter that defines __release_buffer__ is
+        # released before the sweep, which may not run code (a debug build
+        # aborts if it does).
+        released = []
+        class B(bytearray):
+            def __buffer__(self, flags):
+                return super().__buffer__(flags)
+            def __release_buffer__(self, view):
+                released.append(1)
+                super().__release_buffer__(view)
+        b = B(b"hello")
+        for _ in range(self.ATTEMPTS):
+            memoryview(b)
+            gc.collect()
+            if released:
+                break
+        self.assertTrue(released)
+
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_segment_map_rejects_words_outside_blocks(self):
         # The mark finds a word's object through mimalloc's segments: words

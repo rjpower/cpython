@@ -18,9 +18,10 @@
       dead object with a finalizer that has not run (PEP 442), or with a
       tp_del that has not run since it was last reachable, is queued, and it
       and every dead object it reaches are resurrected for this cycle.
-   4. Each remaining dead object whose dealloc would notify watchers or call
-      m_free or a capsule destructor has those calls queued, once, and it and
-      what it reaches are resurrected (queue_destroy_hooks()).
+   4. Each remaining dead object whose dealloc would notify watchers, call
+      m_free or a capsule destructor, or release a buffer to an exporter
+      that defines __release_buffer__ has those calls queued, once, and it
+      and what it reaches are resurrected (queue_destroy_hooks()).
    5. The remaining weak references to dead objects, and those to the
       objects of step 4, are cleared.
    6. The sweep calls tp_dealloc on every object still dead, managed
@@ -205,7 +206,9 @@ queue_push(struct _gc_live_state *ls, PyObject *op, PyObject *callback,
 
 /* What op's dealloc would call under reference counting, besides freeing:
    the DESTROY event of the dict, type, function and code watchers, a
-   module's m_free, a capsule's destructor.  The sweep may not run code or
+   module's m_free, a capsule's destructor, the release of a memoryview's or
+   managed buffer's buffer when the exporter's __release_buffer__ would run
+   (_PyBuffer_ReleaseRunsCode()).  The sweep may not run code or
    allocate, so the collector calls these first, with op and what it
    reaches resurrected, as reference counting calls them while op is
    intact.  op is swept at a later collection, without them. */
@@ -233,6 +236,9 @@ run_destroy_hook(PyThreadState *tstate, PyObject *op)
     }
     else if (tp == &PyCapsule_Type) {
         _PyCapsule_Destroy(op);
+    }
+    else if (tp == &_PyManagedBuffer_Type || tp == &PyMemoryView_Type) {
+        _PyMemoryView_ReleaseForDealloc(op);
     }
     else {
         assert(PyModule_Check(op));

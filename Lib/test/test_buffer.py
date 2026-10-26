@@ -4745,6 +4745,8 @@ class TestPythonBufferProtocol(unittest.TestCase):
         with memoryview(b) as mv:
             self.assertEqual(mv.tobytes(), b"hello")
             self.assertEqual(rb_call_count, 0)
+        # The view that __buffer__ returned is released when it dies.
+        support.gc_collect()  # For other GCs.
         self.assertEqual(rb_call_count, 1)
 
     def test_inherit_but_return_something_else(self):

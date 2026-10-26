@@ -7818,6 +7818,7 @@ Unpickler_traverse(PyObject *op, visitproc visit, void *arg)
     Py_VISIT(self->persistent_load_attr);
     Py_VISIT(self->buffers);
     Py_VISIT(self->memo_dict);
+    Py_VISIT(self->buffer.obj);
     PyObject **memo = self->memo;
     if (memo) {
         Py_ssize_t i = self->memo_size;

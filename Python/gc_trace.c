@@ -49,6 +49,7 @@
 
 #if defined(WITH_MIMALLOC) && !defined(Py_GIL_DISABLED)
 
+#include "pycore_crossinterp.h"   // _PyXIData_regitem_t
 #include "pycore_frame.h"         // _PyInterpreterFrame
 #include "pycore_freelist_state.h" // struct _Py_freelists
 #include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
@@ -1085,6 +1086,31 @@ visit_interp(PyInterpreterState *interp, visitproc visit, void *arg)
             Py_VISIT(interp->monitoring_callables[t][e]);
         }
     }
+    Py_VISIT(interp->atexit.callbacks);
+    Py_VISIT(interp->exc_state.errnomap);
+    Py_VISIT(interp->exc_state.PyExc_ExceptionGroup);
+    Py_VISIT(interp->xi.exceptions.PyExc_InterpreterError);
+    Py_VISIT(interp->xi.exceptions.PyExc_InterpreterNotFoundError);
+    Py_VISIT(interp->xi.exceptions.PyExc_NotShareableError);
+    Py_VISIT(interp->xi.pickle.dumps);
+    Py_VISIT(interp->xi.pickle.loads);
+    for (_PyXIData_regitem_t *item = interp->xi.data_lookup.registry.head;
+         item != NULL; item = item->next)
+    {
+        Py_VISIT(item->weakref);
+    }
+    struct _Py_interp_cached_objects *cached = &interp->cached_objects;
+    Py_VISIT(cached->interned_strings);
+    Py_VISIT(cached->objreduce);
+    Py_VISIT(cached->generic_type);
+    Py_VISIT(cached->typevar_type);
+    Py_VISIT(cached->typevartuple_type);
+    Py_VISIT(cached->paramspec_type);
+    Py_VISIT(cached->paramspecargs_type);
+    Py_VISIT(cached->paramspeckwargs_type);
+    Py_VISIT(cached->constevaluator_type);
+    Py_VISIT(cached->dict_descriptor);
+    Py_VISIT(cached->weakref_descriptor);
     // The GC's own lists
     Py_VISIT(interp->gc.garbage);
     Py_VISIT(interp->gc.callbacks);

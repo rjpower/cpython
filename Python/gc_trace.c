@@ -484,6 +484,24 @@ walk_heaps(trace_t *t)
     return 0;
 }
 
+/* Queue [start, end) for a conservative scan. */
+static void
+queue_range(trace_t *t, uintptr_t start, uintptr_t end)
+{
+    if (t->mem_sp + 2 > t->mem_cap) {
+        size_t cap = t->mem_cap ? t->mem_cap * 2 : 256;
+        uintptr_t *stack = realloc(t->mem_stack, cap * sizeof(uintptr_t));
+        if (stack == NULL) {
+            t->oom = 1;
+            return;
+        }
+        t->mem_stack = stack;
+        t->mem_cap = cap;
+    }
+    t->mem_stack[t->mem_sp++] = start;
+    t->mem_stack[t->mem_sp++] = end;
+}
+
 /* Queue the mem heap block that contains addr for a conservative scan. */
 static void
 queue_mem_block(trace_t *t, uintptr_t addr)
@@ -498,19 +516,20 @@ queue_mem_block(trace_t *t, uintptr_t addr)
         t->oom |= added < 0;
         return;
     }
-    if (t->mem_sp + 2 > t->mem_cap) {
-        size_t cap = t->mem_cap ? t->mem_cap * 2 : 256;
-        uintptr_t *stack = realloc(t->mem_stack, cap * sizeof(uintptr_t));
-        if (stack == NULL) {
-            t->oom = 1;
-            return;
-        }
-        t->mem_stack = stack;
-        t->mem_cap = cap;
-    }
-    t->mem_stack[t->mem_sp++] = block;
-    t->mem_stack[t->mem_sp++] = block + r->bsize;
+    queue_range(t, block, block + r->bsize);
     t->nmemblocks++;
+}
+
+/* Queue the block of an object that is marked without being traversed. */
+static void
+queue_object_block(trace_t *t, uintptr_t addr)
+{
+    const range_t *r = rangelist_find(&t->pages, addr);
+    if (r == NULL) {
+        return;
+    }
+    uintptr_t block = r->start + (addr - r->start) / r->bsize * r->bsize;
+    queue_range(t, block, block + r->bsize);
 }
 
 /* Map an address anywhere in an object block to the object, or 0. */
@@ -705,6 +724,10 @@ mark(trace_t *t, PyObject *op, int heap)
             if (addrset_add(&t->shallow, addr) < 0) {
                 t->oom = 1;
             }
+            /* Its fields cannot be trusted as objects, but its words can
+               be scanned: a set or dict being filled holds its members
+               in a table it owns. */
+            queue_object_block(t, addr);
         }
         return;
     }
@@ -832,6 +855,22 @@ scan_range(trace_t *t, uintptr_t start, uintptr_t end)
 }
 
 
+/* Scan the queued blocks: the mem blocks that C stacks and registers
+   point into, and the blocks of objects marked without traversal.  The
+   mem blocks these point into are scanned too. */
+static void
+scan_queued(trace_t *t)
+{
+    int scan_mem = t->scan_mem;
+    t->scan_mem = 1;
+    while (t->mem_sp > 0 && !t->oom) {
+        uintptr_t end = t->mem_stack[--t->mem_sp];
+        uintptr_t start = t->mem_stack[--t->mem_sp];
+        scan_range(t, start, end);
+    }
+    t->scan_mem = scan_mem;
+}
+
 /* --- register capture ---------------------------------------------------- */
 
 /* Store the callee-saved registers in regs.  regs is passed in a register
@@ -937,12 +976,8 @@ scan_threads(trace_t *t, PyThreadState *current)
 {
     t->scan_mem = 1;
     scan_threads_only(t, current);
-    while (t->mem_sp > 0 && !t->oom) {
-        uintptr_t end = t->mem_stack[--t->mem_sp];
-        uintptr_t start = t->mem_stack[--t->mem_sp];
-        scan_range(t, start, end);
-    }
     t->scan_mem = 0;
+    scan_queued(t);
 }
 
 static void
@@ -1663,9 +1698,11 @@ verify(PyThreadState *tstate)
     }
     if (t.roots & _PyGC_TRACE_ROOT_DATA) {
         scan_data_segments(&t);
+        scan_queued(&t);
     }
     if (t.roots & _PyGC_TRACE_ROOT_STRUCTS) {
         scan_structs(&t);
+        scan_queued(&t);
     }
     HEAD_UNLOCK(&_PyRuntime);
     if (t.oom) {

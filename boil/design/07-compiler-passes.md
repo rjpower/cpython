@@ -127,3 +127,62 @@ runtime feedback. `FuseBasicBlocks` is already done by `flowgraph.c`.
 - **Tier 1** later consumes the same register CFG for SSA construction, which
   is the second reason to build it as a data structure rather than a
   rewrite of a flat sequence.
+
+## 5. As built (step 3b)
+
+Status: built, 2026-10-25, at 691c92537c6. Note 06 section 13 records
+the decisions and the measurements.
+
+**Layers.** Python/regalloc.c is gone. After `optimize_load_fast`, the
+flowgraph converts its blocks into a `_PyRegCfg`:
+- ops over virtual registers: locals keep their numbers, and each push
+  makes a fresh register;
+- blocks with their entry depths;
+- regions: chains of blocks reached only by fallthrough, within which
+  fresh registers may live.
+
+At a region boundary every live value is canonical (temporary k at
+depth k), so predecessors agree without phi nodes, as section 3
+proposed. The driver (`run_passes` in Python/regcfg.c) runs the passes
+once each, in a fixed order, with the verifier after each in debug
+builds. Compaction then assigns slots, and the encoder in
+Python/assemble.c reads the slots. `PYTHONREGCFGDUMP` prints the CFG
+after each pass in a debug build.
+
+**The passes against section 3's list:**
+
+| Proposed | Built |
+|---|---|
+| copy propagation with a kill on redefinition | `_PyRegPass_CopyProp`: borrowed loads only, same line, killed by a write or a line change |
+| store elimination with the read and write check | `_PyRegPass_StoreElim`: also barred by any op that raises, escapes, jumps, has a dst or writes a local; calls included since 691c92537c6 |
+| COPY and SWAP by renaming; dead pure results removed | `_PyRegPass_SwapRename`, `_PyRegPass_PopTop`; a COPY of a local becomes a second load in the flowgraph instead |
+| TO_BOOL and UNARY_NOT into the jump | done by the flowgraph since step 2b; the value-context form is `_PyRegPass_TruthFold` (JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP), and UNARY_NOT takes any value |
+| window operands materialised only when not contiguous | not needed: conversion leaves window operands where the stack put them, and loads into windows do not fold |
+| liveness, backward with kill sets, to a fixpoint | `_PyRegCfg_Liveness`, used by the verifier |
+| compaction by live ranges | `_PyRegCfg_Compact`, LIFO by holding rather than by liveness (note 06 section 13.3) |
+| optional CLEAR | cut: consumers take their inputs, so no dead temporary holds a reference |
+
+**What compaction bought.** Less than section 3 expected. Liveness
+cannot drive slot reuse, because a value that no op takes, such as one
+below a loop that never exits, must keep its slot. Windows also need
+their operands consecutive at the top. Together these leave the
+temporaries within 0.6% of the stack depth. The gains came from fewer
+dispatches instead:
+- richards: -12.5% against step 3a;
+- go: -10.2%;
+- per-loop instructions: -1.6% to -6.8%.
+
+**Falcon's bugs, avoided:**
+- copy propagation kills a pending load on any write to its local, and
+  on a line change;
+- store elimination checks reads and writes of the target, and every
+  local write, between producer and store;
+- liveness has kill sets and iterates to a fixpoint over all blocks,
+  with exception edges;
+- "pure" comes from the DSL annotation and excludes ops that can raise
+  or escape;
+- the backward walks include the first and last op of each region.
+
+**For tier 1.** The register CFG is a data structure that tier 1 can
+build SSA from, as section 4 intended. Note that the conversion runs on
+every compile, so its cost counts toward compile time.

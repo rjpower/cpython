@@ -1323,3 +1323,240 @@ The clang build has 291 handler functions with 149.7K of text; 2b had
   thread frame's temporaries at clear;
 - `RESUME_CHECK`, `_QUICKEN_RESUME` and `_Py_Specialize_Resume`;
 - the `frame` parameter of the tail-call handlers.
+
+## 13. Step 3b decisions
+
+Step 3b replaces `Python/regalloc.c` with a register CFG
+(`Python/regcfg.c`) and a pass pipeline (`Python/regcfg_passes.c`), as
+note 07 proposed. Section 5 of note 07 records what was built; this
+section records the decisions and the measurements.
+
+### 13.1 Conversion and the verifier
+
+**The conversion runs after `optimize_load_fast`.** The borrow decisions
+are made on stack instructions, and the register passes keep them: only
+a load that the analysis marked LOAD_FAST_BORROW folds into its reader.
+A register-style handler reads a borrowed field without taking a
+reference, so a folded LOAD_FAST would let the reader keep a value it
+does not own. A STORE_FAST from a folded LOAD_FAST would store a
+borrowed reference.
+
+**A COPY of a local becomes a second load in the flowgraph, not in the
+register CFG.** The flowgraph simulates each block's stack. A `COPY n`
+of a value pushed by LOAD_FAST or LOAD_FAST_CHECK becomes another load
+of that local, provided nothing in between can escape or write the
+local. Doing this before `optimize_load_fast` lets the second load
+borrow.
+
+**Same-line rule.** A load folds, and a store is eliminated, only if
+every op between the two is on the same line. Line events and
+`f_lineno` assignment see the frame at line starts. `f_lineno`
+assignment pops slots by stack depth (`mark_stacks`), and a value that
+is pending across a line start would be in no slot it knows of.
+
+**A fold across a call reads the local after the call.** `return x +
+g()` reads x when the add runs. If g rebinds x through `f_locals` of
+its caller, the add sees the new value, where 3a's stack machine pushed
+x first. Python code cannot rebind a caller's local any other way.
+
+**The verifier runs after every pass in debug builds.** It checks:
+- every input is defined on every path;
+- windows hold only temporaries, and after compaction are consecutive;
+- only canonical temporaries cross a region boundary;
+- the two constraints of section 12 (handler-live temporaries lie below
+  the handler's first slot, and a temporary live across a call lies
+  below the call's window);
+- with liveness, that no two live temporaries share a slot and that
+  every live temporary is in the frame.
+
+A value that nothing reads is not an error: a loop without an exit
+keeps what is below it.
+
+### 13.2 The passes
+
+The driver runs SWAP renaming, copy propagation, store elimination,
+POP_TOP removal and truth folding, in that order, once each.
+
+- **Copy propagation** keeps the pending borrowed loads of a region and
+  folds one into its only reader if the reader takes it in a borrowable
+  field. A write to the local, or a line change, kills the pending load
+  (`y = x; x = x + 1; return y`).
+- **Store elimination** looks back from a STORE_FAST to the producer of
+  its value. The producer must have the STORE_DST format and be on the
+  same line. Nothing in between may raise, escape, jump, have a dst,
+  write any local, or read the value. An op that writes a local releases
+  the old value, which may run code, so store elimination must not move
+  a store across it (`a, b = x, y`).
+- **SWAP renaming** removes a SWAP whose outputs one register-style
+  reader pops, by permuting the reader's inputs.
+- **POP_TOP removal** removes a POP_TOP together with a pure producer
+  whose inputs are all locals. "Pure" is the DSL's annotation, and
+  LOAD_CONST, LOAD_SMALL_INT and LOAD_COMMON_CONSTANT now carry it. A
+  POP_TOP that copy propagation gave a local, as for the statement `x`,
+  goes on its own. If nothing else is left on the line, a NOP keeps the
+  line event.
+- **Truth folding** turns `COPY 1; POP_JUMP_IF_FALSE; [NOT_TAKEN];
+  POP_TOP` into JUMP_IF_FALSE_OR_POP, which keeps the value where it
+  jumps and releases it where it falls through. The same applies to the
+  TRUE sense and to the pattern after a LOAD_FAST of a local. These two
+  instructions have no feedback entry, because the jump target fills
+  fields CD. They test truth with `_PyStackRef_Truth`, which handles
+  bools, None, inline ints and inline floats before calling
+  PyObject_IsTrue.
+- **UNARY_NOT tests the truth of any value**, so the flowgraph drops the
+  TO_BOOL before it. TO_BOOL remains only for `not not x`.
+
+**A call stores its result in a local.** The CALL, CALL_KW and
+CALL_FUNCTION_EX families now have the STORE_DST format. A member that
+produces the result itself moves it to the local at its end. A member
+that pushes a frame names the local as the frame's `return_slot`, and
+`_PyFrame_SetReturnValue` releases the local's old value. Its only cost
+for a temporary slot is a test of NULL. The frames of properties and of
+a Python `__getitem__` now return to a local too.
+
+A generator's frame still leaves to the family head when dst names a
+local. It hands that slot every value it yields, and at the end of a
+FOR_ITER its return value would overwrite the loop variable. The
+generator calls a member that always pushes such a frame STORE_RETURN.
+
+### 13.3 Compaction
+
+**A temporary holds its slot until an op takes it.** Liveness would
+free a slot at the value's last read. But a consumer takes its inputs,
+and a value no op takes stays in its slot until the frame is cleared:
+the iterator under a loop that never exits, or the exception under a
+`finally` that never ends. Freeing such a slot by liveness would let a
+later value overwrite a live reference. So slots are allocated LIFO:
+- a value takes the lowest slot above every held slot;
+- a canonical temporary takes the slot of its stack position;
+- a window's outputs go where its window is.
+
+**Placement rule.** A handler may write output j only to the slot of
+the input at the same stack position, or to a slot that no input holds.
+The generated code may write an output before it has consumed every
+input. Hence two adjustments:
+- a folded load whose reader also reads a temporary above it reserves a
+  slot until the reader runs;
+- a single output that the rule would push above every held slot takes
+  its own-position input's slot instead.
+
+**`co_stacksize` is the slot count that compaction assigns.** It covers
+every slot a word names and the depth at every region's entry, where
+the unwinder puts an exception.
+
+**Windows pin the layout.** Over Lib (99,328 code objects) the
+temporaries total falls from 476,883 to 473,896 (0.6%). The frame-slot
+distribution is unchanged at the reported precision: mean 7.58 against
+7.61, median 7, p90 14, p99 25, maximum 803. The maximum is a test
+function with 800 locals.
+
+Call and BUILD_* windows need their operands consecutive at the top,
+which is exactly what the stack depth measures. As an experiment,
+disabling the placement rule and the reservation gained only another
+0.4%. A smaller frame needs constants as operands, so that constant
+loads do not take temporaries, or windows that do not need consecutive
+slots.
+
+### 13.4 What was cut, and what remains
+
+**CLEAR insertion (pass g) is cut.** Every consumer takes its inputs,
+so a dead temporary's slot is already NULL. The only values held are
+those below a loop that never exits. The RSS figures in 13.5 show no
+retention to recover.
+
+**COPY, SWAP and POP_TOP remain as instructions.** Their uses over Lib:
+- COPY (58,062):
+  - `with`: COPY 1 of the context manager before LOAD_SPECIAL, 20,625;
+  - exception-handler cleanup: COPY 3 before POP_EXCEPT, 29,444;
+  - chained assignment, and COPY of a temporary.
+- SWAP (57,561): 42,936 feed LOAD_SPECIAL's window in `with`. Most of
+  the rest are around comprehensions (LOAD_FAST_AND_CLEAR, BUILD_LIST)
+  and exception cleanup.
+- POP_TOP (344,153): 217,199 drop a call's result, 10,425 a CALL_KW's,
+  and 44,395 follow another POP_TOP in cleanup sequences.
+
+Renaming covers only the cases where one register-style reader takes
+the value. A window reader or a value that crosses a block boundary
+needs the instruction.
+
+**The largest remaining item** is POP_TOP after a call: 0.79M
+dispatches on go. A call whose dst names no slot would remove it.
+
+### 13.5 Measurements
+
+These were taken at 691c92537c6 by the section 12.4 method. The step 1
+and 3a columns are snapshot builds run with the current Lib; the step 1
+and 3a gcc figures reproduce those of 12.4.
+
+gcc 15, computed goto, user-mode instructions per loop (M):
+
+| per loop (M) | step 1 | 3a | 3b | 3b vs 3a | 3b vs step 1 |
+|---|---|---|---|---|---|
+| richards | 576.2 | 701.6 | 676.3 | -3.6% | +17.4% |
+| go | 1243.9 | 1685.9 | 1628.7 | -3.4% | +30.9% |
+| nbody | 1030.3 | 1509.3 | 1407.1 | -6.8% | +36.6% |
+| float | 780.5 | 971.5 | 952.7 | -1.9% | +22.1% |
+
+clang 21, tail calls. The 3a column is from 12.4; the 2b snapshot,
+measured again now, is within 0.7% of its 12.4 figures:
+
+| per loop (M) | 2b now | 3a (12.4) | 3b | 3b vs 3a |
+|---|---|---|---|---|
+| richards | 669.9 | 679.2 | 660.1 | -2.8% |
+| go | 1567.6 | 1578.2 | 1528.2 | -3.2% |
+| nbody | 1675.9 | 1620.2 | 1515.6 | -6.5% |
+| float | 988.7 | 1003.1 | 987.3 | -1.6% |
+
+**Dispatches** (Py_STATS, one worker at `-l 2`):
+
+| dispatches | 2a | 3a | 3b | 3b vs 3a | 3b vs 2a |
+|---|---|---|---|---|---|
+| richards | 21.83M | 14.60M | 12.77M | -12.5% | -41.5% |
+| go | 60.47M | 41.35M | 37.12M | -10.2% | -38.6% |
+
+| executions (M) | richards 3a | richards 3b | go 3a | go 3b |
+|---|---|---|---|---|
+| LOAD_FAST_BORROW | 0.711 | 0.555 | 3.489 | 1.483 |
+| COPY | 0.704 | 0.069 | 0.327 | 0.256 |
+| SWAP | 0.130 | 0.016 | 0.753 | 0.022 |
+| POP_TOP | 0.579 | 0.125 | 1.009 | 0.792 |
+| STORE_FAST | 0.261 | 0.038 | 1.507 | 0.355 |
+| TO_BOOL_BOOL | 0.249 | 0 | 0.063 | 0 |
+| JUMP_IF_*_OR_POP | 0 | 0.635 | 0 | 0.264 |
+
+The loads that remain are mostly window operands: on go, 1.0M of the
+1.48M LOAD_FAST_BORROWs are followed by CALL_PY_EXACT_ARGS.
+
+**Startup.** `python -c pass` takes 47.49M instructions under gcc
+(3a: 47.52M) and 50.23M under clang (3a, 12.4: 50.13M).
+
+**Memory.** Peak RSS from `boil/tools/rss.py` in KiB, gcc, the median of
+six paired runs. Three more runs, with both binaries read into the page
+cache first, agree:
+
+| max RSS | 3a | 3b |
+|---|---|---|
+| startup | 11086 | 11546 |
+| imports | 14914 | 16048 |
+| dicts | 64834 | 65636 |
+| loops | 10430 | 11156 |
+
+The difference is in the executable's clean, file-backed pages. After
+the imports workload, 3b has 3,680 of its 3,684 KiB of text resident and
+3a has 3,260 of 3,656, and rodata adds 240 KiB more. Heap and anonymous
+memory are 92 KiB smaller in 3b (13,356 against 13,448 KiB). The traced
+Python allocations are 89 KB smaller (11.78 MB against 11.86 MB), and
+the code objects of the loaded functions are 2.3% smaller. Which text
+pages a run touches depends on the layout, and this has not been
+investigated further. No private memory is retained that a CLEAR would
+free.
+
+**Tests at 691c92537c6.**
+
+- dev-debug and dev-default, full suite: only test_sys fails.
+- dev-stackrefdebug, full suite: the same 15 files as at 7025c33d2b2,
+  of the kinds in 12.4 (stackref leak reports at exit, faulthandler).
+- dev-tailcall, rung 2: passes.
+- dev-ft, rung 2: the known 78 failures (test_opcache 69, test_dis 8,
+  test_monitoring 1), plus test_sys.
+- Ports: all seven pass.

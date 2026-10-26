@@ -761,7 +761,7 @@ collect_pass(PyThreadState *tstate, _PyGC_Reason reason, int *nfinalized)
    above, and kept small, since its own frame is scanned too: the work is in
    collect_pass(). */
 static Py_NO_INLINE Py_ssize_t
-collect_and_run_queue(PyThreadState *tstate, _PyGC_Reason reason)
+collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
     // Called again from a gc callback, inside a collection: the outer entry
@@ -785,6 +785,32 @@ collect_and_run_queue(PyThreadState *tstate, _PyGC_Reason reason)
         ls->skip_verify = 0;
     }
     ts->gc_trace.entry_sp = outer_entry;
+    return n;
+}
+
+#define CLEAR_STACK_BYTES (16 * 1024)
+
+/* Zero the stack below the caller's frame.  No store reaches the padding
+   and some spill slots of the frames made there next; without this they
+   would hold stale words, which the scan takes for roots. */
+static Py_NO_INLINE void
+clear_stack_below(void)
+{
+    char buf[CLEAR_STACK_BYTES];
+    memset(buf, 0, sizeof(buf));
+    // Keep the stores, which are dead to the compiler.
+    __asm__ volatile("" : : "r"(buf) : "memory");
+}
+
+/* Inlined, so that the frame of collect_from_entry() is made in the cleared
+   stack. */
+static inline Py_ssize_t
+collect_and_run_queue(PyThreadState *tstate, _PyGC_Reason reason)
+{
+    clear_stack_below();
+    Py_ssize_t n = collect_from_entry(tstate, reason);
+    // The collector's frames held what it marked, some of it soon garbage.
+    clear_stack_below();
     return n;
 }
 

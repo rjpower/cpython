@@ -1143,10 +1143,14 @@ module_dealloc(PyObject *self)
 
     PyObject_GC_UnTrack(m);
 
+#ifndef Py_GC
+    /* Under Py_GC only the collector's sweep deallocates, and writing to
+       sys.stderr there would run code. */
     int verbose = _Py_GetConfig()->verbose;
     if (verbose && m->md_name) {
         PySys_FormatStderr("# destroy %U\n", m->md_name);
     }
+#endif
     FT_CLEAR_WEAKREFS(self, m->md_weaklist);
 
     assert_def_missing_or_redundant(m);

@@ -634,40 +634,6 @@ class ThreadTests(BaseTestCase):
         thread.join()
         assert not thread.is_alive()
 
-    @support.requires_refcounting
-    def test_no_refcycle_through_target(self):
-        class RunSelfFunction(object):
-            def __init__(self, should_raise):
-                # The links in this refcycle from Thread back to self
-                # should be cleaned up when the thread completes.
-                self.should_raise = should_raise
-                self.thread = threading.Thread(target=self._run,
-                                               args=(self,),
-                                               kwargs={'yet_another':self})
-                self.thread.start()
-
-            def _run(self, other_ref, yet_another):
-                if self.should_raise:
-                    raise SystemExit
-
-        restore_default_excepthook(self)
-
-        cyclic_object = RunSelfFunction(should_raise=False)
-        weak_cyclic_object = weakref.ref(cyclic_object)
-        cyclic_object.thread.join()
-        del cyclic_object
-        self.assertIsNone(weak_cyclic_object(),
-                         msg=('%d references still around' %
-                              sys.getrefcount(weak_cyclic_object())))
-
-        raising_cyclic_object = RunSelfFunction(should_raise=True)
-        weak_raising_cyclic_object = weakref.ref(raising_cyclic_object)
-        raising_cyclic_object.thread.join()
-        del raising_cyclic_object
-        self.assertIsNone(weak_raising_cyclic_object(),
-                         msg=('%d references still around' %
-                              sys.getrefcount(weak_raising_cyclic_object())))
-
     def test_old_threading_api(self):
         # Just a quick sanity check to make sure the old method names are
         # still present

@@ -721,8 +721,8 @@ descr_traverse(PyObject *self, visitproc visit, void *arg)
 {
     PyDescrObject *descr = (PyDescrObject *)self;
     Py_VISIT(descr->d_type);
-    Py_VISIT(descr->d_name);
-    Py_VISIT(descr->d_qualname);
+    _Py_VISIT_ATOMIC(descr->d_name);
+    _Py_VISIT_ATOMIC(descr->d_qualname);
     return 0;
 }
 

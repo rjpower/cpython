@@ -7124,8 +7124,8 @@ type_traverse(PyObject *self, visitproc visit, void *arg)
        weak references, ht_slots is a tuple of strings, ht_*name are
        strings, and the shared keys hold strings. */
     Py_VISIT(type->tp_subclasses);
-    Py_VISIT(ht->ht_name);
-    Py_VISIT(ht->ht_qualname);
+    _Py_VISIT_ATOMIC(ht->ht_name);
+    _Py_VISIT_ATOMIC(ht->ht_qualname);
     Py_VISIT(ht->ht_slots);
     return _PyDict_TraverseKeysForClass(ht, visit, arg);
 }

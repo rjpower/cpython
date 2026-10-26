@@ -5106,13 +5106,13 @@ dict_traverse(PyObject *op, visitproc visit, void *arg)
         PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
         if (_PyDict_HasSplitTable(mp)) {
             for (i = 0; i < n; i++) {
-                Py_VISIT(entries[i].me_key);
+                _Py_VISIT_ATOMIC(entries[i].me_key);
                 Py_VISIT(mp->ma_values->values[i]);
             }
         }
         else {
             for (i = 0; i < n; i++) {
-                Py_VISIT(entries[i].me_key);
+                _Py_VISIT_ATOMIC(entries[i].me_key);
                 Py_VISIT(entries[i].me_value);
             }
         }
@@ -7447,7 +7447,7 @@ _PyDict_TraverseKeysForClass(PyHeapTypeObject *cls, visitproc visit, void *arg)
     PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
     Py_ssize_t n = keys->dk_nentries;
     for (Py_ssize_t i = 0; i < n; i++) {
-        Py_VISIT(entries[i].me_key);
+        _Py_VISIT_ATOMIC(entries[i].me_key);
     }
     return 0;
 }

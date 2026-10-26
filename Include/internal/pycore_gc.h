@@ -337,6 +337,21 @@ union _PyStackRef;
 // GC visit callback for tracked interpreter frames
 // GH-150766: exported for greenlet
 PyAPI_FUNC(int) _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg);
+
+/* Visit a reference that cannot be part of a cycle, such as a string, and
+   that only the tracing collector (Python/gc_trace.c) needs.  Immortal
+   objects are skipped: they are roots of the tracing mark, and visiting
+   them would only slow the cycle collector. */
+#define _Py_VISIT_ATOMIC(op)                                        \
+    do {                                                            \
+        PyObject *_atomic_op = _PyObject_CAST(op);                  \
+        if (_atomic_op != NULL && !_Py_IsImmortal(_atomic_op)) {    \
+            int _atomic_vret = visit(_atomic_op, arg);              \
+            if (_atomic_vret) {                                     \
+                return _atomic_vret;                                \
+            }                                                       \
+        }                                                           \
+    } while (0)
 PyAPI_FUNC(int) _PyGC_VisitStackRef(union _PyStackRef *ref, visitproc visit, void *arg);
 
 #ifdef Py_GIL_DISABLED

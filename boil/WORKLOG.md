@@ -910,3 +910,61 @@ peepholes.
   `test_remote_exec_deleted_static_executable`.
 - **Pitfall.** Without its own PYTHONPYCACHEPREFIX, the step3a-snapshot
   build loads the new build's pyc files, and test_dis appears to fail.
+
+### 2026-10-25 20:40 — step 3b, milestones 2 and 3: passes a to f
+
+The passes in Python/regcfg_passes.c run in this order: SWAP renaming,
+copy propagation, store elimination, POP_TOP removal and truth folding
+(f6eb57ce376 to f46ed901d93). Compaction follows. The magic number is
+3715.
+
+- **Copy propagation (a).** A LOAD_FAST_BORROW folds into its one reader
+  if the reader is on the same line and nothing in between writes the
+  local. The reader may be under a constant, a global or a call. Only
+  borrowed loads fold, because a register-style handler reads a borrowed
+  field without taking a reference. A STORE_FAST from a folded LOAD_FAST
+  would store a borrowed reference.
+- **Store elimination (b).** A STORE_FAST becomes the dst of the op that
+  made its value. Nothing in between may raise, escape, jump, write a
+  local or read the value. The producer must have the STORE_DST format,
+  and CALL does not, so `x = f()` keeps its STORE_FAST.
+- **COPY, SWAP and POP_TOP (c).** The flowgraph turns a COPY of a local
+  loaded earlier in the block into a second load, so that the borrow
+  analysis sees it. A SWAP whose outputs one reader pops is renamed away.
+  A POP_TOP goes with its producer if the producer is pure and has only
+  local inputs. A POP_TOP of a folded local goes on its own.
+- **Truth folding (d).** COPY, POP_JUMP_IF_* and POP_TOP become
+  JUMP_IF_FALSE_OR_POP or JUMP_IF_TRUE_OR_POP, as does the same pattern
+  after a LOAD_FAST. The new instructions keep the value where they jump
+  and release it where they fall through. They have no feedback entry,
+  because the fields fill the word. UNARY_NOT now tests the truth of any
+  value itself, so TO_BOOL remains only for `not not x`.
+- **Liveness and compaction (e, f).** `co_stacksize` is now the number
+  of temporary slots that compaction assigns, not the deepest stack.
+  After compaction the verifier uses liveness to check that no two live
+  temporaries share a slot. Over Lib (99,328 code objects) the
+  temporaries total falls from 476,883 to 473,896 (0.6%). The frame-slot
+  maximum stays at 803: it is a function with 800 locals. The frame does
+  not shrink because call and BUILD_* windows need their operands
+  consecutive at the top, which is what the stack depth measures.
+  Disabling the placement rule and the folded-load reservation as an
+  experiment gained only 0.4% more.
+- **Py_STATS against 3a.** richards falls from 14.60M to 12.99M
+  dispatches (-11.0%) and go from 41.35M to 38.28M (-7.4%).
+  - richards: COPY 0.704M to 0.069M, POP_TOP 0.579M to 0.125M,
+    TO_BOOL_BOOL 0.249M to 0, LOAD_FAST_BORROW 0.711M to 0.555M.
+  - go: LOAD_FAST_BORROW 3.489M to 1.483M, SWAP 0.753M to 0.022M.
+  - The loads that remain are mostly window operands: of the
+    LOAD_FAST_BORROWs on go, 1.0M are followed by CALL_PY_EXACT_ARGS.
+  - The largest remaining item: STORE_FAST or POP_TOP after a
+    RETURN_VALUE, i.e. the result of a Python call stored or dropped. It
+    runs 1.5M times on go (3.9%) and 0.31M on richards. A CALL that
+    returns into a local would remove it.
+- **Tests.** dev-debug passes rung 2 and the full suite, except for
+  test_sys (known).
+- **Pitfalls.**
+  - The opcode renumbering needs Programs/test_frozenmain.h regenerated.
+    `make regen-test-frozenmain` writes it into the build directory, so
+    it must be copied back to the source tree.
+  - Without a magic bump, cached pycs keep the old compiler's output.
+    Every run now uses a fresh PYTHONPYCACHEPREFIX.

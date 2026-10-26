@@ -2270,6 +2270,11 @@ _PyThreadState_Attach(PyThreadState *tstate)
 #ifndef Py_GIL_DISABLED
     // The registers recorded at the last detach are stale now.
     ((_PyThreadStateImpl *)tstate)->gc_trace.valid = 0;
+#ifdef Py_GC
+    // The conservative scan of the thread state would take them for roots.
+    memset(((_PyThreadStateImpl *)tstate)->gc_trace.regs, 0,
+           sizeof(((_PyThreadStateImpl *)tstate)->gc_trace.regs));
+#endif
 #endif
 
     // Resume previous critical section. This acquires the lock(s) from the

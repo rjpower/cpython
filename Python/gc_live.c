@@ -811,6 +811,11 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
         ls->skip_verify = 0;
     }
     ts->gc_trace.entry_sp = outer_entry;
+    if (outer_entry == 0) {
+        // The conservative scan of the thread state would take them for
+        // roots.
+        memset(ts->gc_trace.entry_regs, 0, sizeof(ts->gc_trace.entry_regs));
+    }
     return n;
 }
 

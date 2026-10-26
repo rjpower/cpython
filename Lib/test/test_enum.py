@@ -2773,10 +2773,6 @@ class TestSpecial(unittest.TestCase):
         else:
             raise Exception('Exception not raised.')
 
-    # Under a gc-debug build a stale word in an -Og C frame points at a tuple
-    # that reaches the instance, so the conservative stack scan keeps it.
-    @unittest.skipIf(support.Py_DEBUG,
-                     "an -Og C frame keeps the instance alive")
     def test_missing_exceptions_reset(self):
         import gc
         import weakref

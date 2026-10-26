@@ -402,7 +402,9 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
  * producer: the value never exists.  Pure is the DSL's annotation; the
  * value must have no other reader.  Other POP_TOPs stay, as the CLEAR
  * that releases their value.  If the pair is all there is of its line, a
- * NOP keeps the line's event. */
+ * NOP keeps the line's event.  A POP_TOP that copy propagation gave a
+ * local, as for the statement "x", does nothing: only the loads that
+ * cannot fail fold. */
 
 static _PyRegOp *
 live_neighbour(_PyRegCfg *cfg, int start, int end, int i, int step)
@@ -415,6 +417,34 @@ live_neighbour(_PyRegCfg *cfg, int start, int end, int i, int step)
     return NULL;
 }
 
+/* Remove the ops prod (if not NULL) and pop, keeping a NOP for the line
+ * if nothing else in the region is on it. */
+static void
+remove_with_line(_PyRegCfg *cfg, int start, int end, _PyRegOp *prod,
+                 _PyRegOp *pop)
+{
+    _PyRegOp *first = prod != NULL ? prod : pop;
+    _PyRegOp *before = live_neighbour(cfg, start, end,
+                                      (int)(first - cfg->ops), -1);
+    _PyRegOp *after = live_neighbour(cfg, start, end,
+                                     (int)(pop - cfg->ops), 1);
+    int line = first->loc.lineno;
+    int keeps_line = (before != NULL && before->loc.lineno == line)
+                     || (after != NULL && after->loc.lineno == line);
+    if (prod != NULL) {
+        prod->opcode = _PyReg_DEAD;
+    }
+    if (keeps_line && pop->loc.lineno == line) {
+        pop->opcode = _PyReg_DEAD;
+    }
+    else {
+        pop->opcode = NOP;
+        pop->oparg = 0;
+        pop->loc = first->loc;
+        pop->nread = pop->npop = 0;
+    }
+}
+
 static int
 pop_top_region(_PyRegCfg *cfg, int start, int end)
 {
@@ -425,6 +455,10 @@ pop_top_region(_PyRegCfg *cfg, int start, int end)
             continue;
         }
         int v = _PyReg_IN(cfg, pop)[0];
+        if (v < nl) {
+            remove_with_line(cfg, start, end, NULL, pop);
+            continue;
+        }
         if (!is_fresh(cfg, v)) {
             continue;
         }
@@ -458,21 +492,7 @@ pop_top_region(_PyRegCfg *cfg, int start, int end)
         if (!locals_only) {
             continue;
         }
-        _PyRegOp *before = live_neighbour(cfg, start, end, p, -1);
-        _PyRegOp *after = live_neighbour(cfg, start, end, i, 1);
-        int line = prod->loc.lineno;
-        int keeps_line = (before != NULL && before->loc.lineno == line)
-                         || (after != NULL && after->loc.lineno == line);
-        prod->opcode = _PyReg_DEAD;
-        if (keeps_line && pop->loc.lineno == line) {
-            pop->opcode = _PyReg_DEAD;
-        }
-        else {
-            pop->opcode = NOP;
-            pop->oparg = 0;
-            pop->loc = prod->loc;
-            pop->nread = pop->npop = 0;
-        }
+        remove_with_line(cfg, start, end, prod, pop);
     }
     return SUCCESS;
 }

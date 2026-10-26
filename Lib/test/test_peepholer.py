@@ -897,10 +897,10 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         for func in (f, g):
             with self.subTest(func=func.__name__):
                 self.assertNotInBytecode(func, 'STORE_FAST_LOAD_FAST')
-                # The borrowed load folds into the POP_TOP that reads it
-                pop = [i for i in dis.get_instructions(func)
-                       if i.opname == 'POP_TOP'][0]
-                self.assertEqual(pop.srcs, (0,))
+                # The borrowed load and its POP_TOP go: the statement
+                # "shared" does nothing
+                self.assertNotInBytecode(func, 'LOAD_FAST_BORROW', 'shared')
+                self.assertNotInBytecode(func, 'POP_TOP')
         self.assertEqual([i.opname for i in dis.get_instructions(f)],
                          [i.opname for i in dis.get_instructions(g)])
 

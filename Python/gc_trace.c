@@ -1541,6 +1541,16 @@ report(trace_t *t, PyThreadState *tstate, Py_ssize_t nholes)
             break;
         }
     }
+    // A test worker's command line names its test.
+    PyObject *argv = PyDict_GetItemWithError(tstate->interp->sysdict,
+                                             &_Py_ID(argv));
+    if (argv != NULL && PyList_Check(argv)) {
+        fputs("; argv", log);
+        for (Py_ssize_t i = 0; i < PyList_GET_SIZE(argv); i++) {
+            fputs(" ", log);
+            write_ascii(log, PyList_GET_ITEM(argv, i));
+        }
+    }
     fputs("\n", log);
     report_to(log, t, nholes);
     fclose(log);

@@ -424,6 +424,19 @@ class TestSendRecv(TestBase):
         obj[4:8] = b'ham.'
         self.assertEqual(obj, buf)
 
+    def test_send_buffer_outlives_the_sender(self):
+        # The received memoryview reaches the sent buffer only through raw
+        # memory; the sending side keeps it alive until the view is released.
+        buf = bytearray(b'spamspamspam')
+        rch, sch = channels.create()
+        sch.send_buffer_nowait(buf)
+        obj = rch.recv()
+        del buf
+        support.gc_collect()
+        self.assertEqual(obj, b'spamspamspam')
+        del obj
+        support.gc_collect()
+
     def test_send_cleared_with_subinterpreter(self):
         def common(rch, sch, unbound=None, presize=0):
             if not unbound:

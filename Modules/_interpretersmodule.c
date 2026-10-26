@@ -12,7 +12,6 @@
 #include "pycore_interp.h"        // _PyInterpreterState_IDIncref()
 #include "pycore_modsupport.h"    // _PyArg_BadArgument()
 #include "pycore_namespace.h"     // _PyNamespace_New()
-#include "pycore_pybuffer.h"      // _PyBuffer_ReleaseInInterpreterAndRawFree()
 #include "pycore_pylifecycle.h"   // _PyInterpreterConfig_AsDict()
 #include "pycore_pystate.h"       // _PyInterpreterState_IsRunningMain()
 #include "pycore_tuple.h"         // _PyTuple_FromPairSteal
@@ -131,58 +130,93 @@ unwrap_not_shareable(PyThreadState *tstate, _PyXI_failure *failure)
 // require a careful fix.  In the meantime, users will have to be
 // diligent about avoiding the problematic situation.
 
+/* The buffer shared with another interpreter.  The exporting interpreter
+ * keeps view.obj as a root (PyGC_AddRoot()): no reference it can trace
+ * reaches it, since the receiving interpreter's memoryview reaches it only
+ * through raw memory.  Once received, the view belongs to the receiving
+ * xibufferview, which releases it, root and all, in the exporting
+ * interpreter. */
+struct xibuffer {
+    Py_buffer view;
+    int used;
+};
+
+static int
+xibuffer_release(void *arg)
+{
+    struct xibuffer *shared = (struct xibuffer *)arg;
+    PyGC_RemoveRoot(&shared->view.obj);
+    PyBuffer_Release(&shared->view);
+    return 0;
+}
+
 typedef struct {
     PyObject base;
-    Py_buffer *view;
+    struct xibuffer *shared;
     int64_t interpid;
 } xibufferview;
 
 static PyObject *
-xibufferview_from_buffer(PyTypeObject *cls, Py_buffer *view, int64_t interpid)
+xibufferview_from_buffer(PyTypeObject *cls, struct xibuffer *shared,
+                         int64_t interpid)
 {
     assert(interpid >= 0);
 
-    Py_buffer *copied = PyMem_RawMalloc(sizeof(Py_buffer));
-    if (copied == NULL) {
-        return PyErr_NoMemory();
-    }
-    /* This steals the view->obj reference  */
-    *copied = *view;
-
     xibufferview *self = PyObject_Malloc(sizeof(xibufferview));
     if (self == NULL) {
-        PyMem_RawFree(copied);
         return PyErr_NoMemory();
     }
     PyObject_Init(&self->base, cls);
     *self = (xibufferview){
         .base = self->base,
-        .view = copied,
+        .shared = shared,
         .interpid = interpid,
     };
+    shared->used = 1;
     return (PyObject *)self;
 }
+
+static void
+xibufferview_release(xibufferview *self)
+{
+    struct xibuffer *shared = self->shared;
+    self->shared = NULL;
+    PyInterpreterState *interp = _PyInterpreterState_LookUpID(self->interpid);
+    if (interp == NULL) {
+        /* The interpreter is no longer alive, and its roots with it. */
+        PyErr_Clear();
+        PyMem_RawFree(shared);
+    }
+    else {
+        if (_Py_CallInInterpreterAndRawFree(interp, xibuffer_release,
+                                            shared) < 0)
+        {
+            // XXX Emit a warning?
+            PyErr_Clear();
+        }
+    }
+}
+
+#ifdef Py_GC
+/* The release may run the exporter's bf_releasebuffer or schedule a call in
+   the exporter's interpreter, and the collector's sweep may do neither, so
+   under Py_GC it happens here, before the sweep. */
+static void
+xibufferview_finalize(PyObject *op)
+{
+    xibufferview *self = (xibufferview *)op;
+    if (self->shared != NULL) {
+        xibufferview_release(self);
+    }
+}
+#endif
 
 static void
 xibufferview_dealloc(PyObject *op)
 {
     xibufferview *self = (xibufferview *)op;
-    if (self->view != NULL) {
-        PyInterpreterState *interp =
-                        _PyInterpreterState_LookUpID(self->interpid);
-        if (interp == NULL) {
-            /* The interpreter is no longer alive. */
-            PyErr_Clear();
-            PyMem_RawFree(self->view);
-        }
-        else {
-            if (_PyBuffer_ReleaseInInterpreterAndRawFree(interp,
-                                                         self->view) < 0)
-            {
-                // XXX Emit a warning?
-                PyErr_Clear();
-            }
-        }
+    if (self->shared != NULL) {
+        xibufferview_release(self);
     }
 
     PyTypeObject *tp = Py_TYPE(self);
@@ -202,7 +236,7 @@ xibufferview_getbuf(PyObject *op, Py_buffer *view, int flags)
     /* Only PyMemoryView_FromObject() should ever call this,
        via _memoryview_from_xid() below. */
     xibufferview *self = (xibufferview *)op;
-    *view = *self->view;
+    *view = self->shared->view;
     /* This is the workaround mentioned earlier. */
     view->obj = op;
     // XXX Should we leave it alone?
@@ -212,6 +246,9 @@ xibufferview_getbuf(PyObject *op, Py_buffer *view, int flags)
 
 static PyType_Slot XIBufferViewType_slots[] = {
     {Py_tp_dealloc, xibufferview_dealloc},
+#ifdef Py_GC
+    {Py_tp_finalize, xibufferview_finalize},
+#endif
     {Py_bf_getbuffer, xibufferview_getbuf},
     // We don't bother with Py_bf_releasebuffer since we don't need it.
     {0, NULL},
@@ -229,19 +266,14 @@ static PyType_Spec XIBufferViewType_spec = {
 static PyTypeObject * _get_current_xibufferview_type(void);
 
 
-struct xibuffer {
-    Py_buffer view;
-    int used;
-};
-
 static PyObject *
 _memoryview_from_xid(_PyXIData_t *data)
 {
     assert(_PyXIData_DATA(data) != NULL);
     assert(_PyXIData_OBJ(data) == NULL);
     assert(_PyXIData_INTERPID(data) >= 0);
-    struct xibuffer *view = (struct xibuffer *)_PyXIData_DATA(data);
-    assert(!view->used);
+    struct xibuffer *shared = (struct xibuffer *)_PyXIData_DATA(data);
+    assert(!shared->used);
 
     PyTypeObject *cls = _get_current_xibufferview_type();
     if (cls == NULL) {
@@ -249,7 +281,7 @@ _memoryview_from_xid(_PyXIData_t *data)
     }
 
     PyObject *obj = xibufferview_from_buffer(
-                        cls, &view->view, _PyXIData_INTERPID(data));
+                        cls, shared, _PyXIData_INTERPID(data));
     if (obj == NULL) {
         return NULL;
     }
@@ -258,38 +290,44 @@ _memoryview_from_xid(_PyXIData_t *data)
         Py_DECREF(obj);
         return NULL;
     }
-    view->used = 1;
     return res;
 }
 
 static void
 _pybuffer_shared_free(void* data)
 {
-    struct xibuffer *view = (struct xibuffer *)data;
-    if (!view->used) {
-        PyBuffer_Release(&view->view);
+    struct xibuffer *shared = (struct xibuffer *)data;
+    if (shared->used) {
+        // The xibufferview that received it releases and frees it.
+        return;
     }
-    PyMem_RawFree(data);
+    xibuffer_release(shared);
+    PyMem_RawFree(shared);
 }
 
 static int
 _pybuffer_shared(PyThreadState *tstate, PyObject *obj, _PyXIData_t *data)
 {
-    struct xibuffer *view = PyMem_RawMalloc(sizeof(struct xibuffer));
-    if (view == NULL) {
+    struct xibuffer *shared = PyMem_RawMalloc(sizeof(struct xibuffer));
+    if (shared == NULL) {
         PyErr_NoMemory();
         return -1;
     }
-    view->used = 0;
+    shared->used = 0;
     /* This will increment the memoryview's export count, which won't get
      * decremented until the view sent to other interpreters is released. */
-    if (PyObject_GetBuffer(obj, &view->view, PyBUF_FULL_RO) < 0) {
-        PyMem_RawFree(view);
+    if (PyObject_GetBuffer(obj, &shared->view, PyBUF_FULL_RO) < 0) {
+        PyMem_RawFree(shared);
+        return -1;
+    }
+    if (PyGC_AddRoot(&shared->view.obj) < 0) {
+        PyBuffer_Release(&shared->view);
+        PyMem_RawFree(shared);
         return -1;
     }
     /* The view holds a reference to the object, so we don't worry
      * about also tracking it on the cross-interpreter data. */
-    _PyXIData_Init(data, tstate->interp, view, NULL, _memoryview_from_xid);
+    _PyXIData_Init(data, tstate->interp, shared, NULL, _memoryview_from_xid);
     data->free = _pybuffer_shared_free;
     return 0;
 }

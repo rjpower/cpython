@@ -29,7 +29,8 @@ extern int _Py_CallInInterpreter(
     PyInterpreterState *interp,
     _Py_simple_func func,
     void *arg);
-extern int _Py_CallInInterpreterAndRawFree(
+// Export for '_interpreters' shared extension
+PyAPI_FUNC(int) _Py_CallInInterpreterAndRawFree(
     PyInterpreterState *interp,
     _Py_simple_func func,
     void *arg);

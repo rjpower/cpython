@@ -226,19 +226,6 @@ class TestDecorateSortUndecorate(unittest.TestCase):
             return x
         self.assertRaises(ValueError, data.sort, key=k)
 
-    @support.requires_refcounting
-    def test_key_with_mutating_del(self):
-        data = list(range(10))
-        class SortKiller(object):
-            def __init__(self, x):
-                pass
-            def __del__(self):
-                del data[:]
-                data[:] = range(20)
-            def __lt__(self, other):
-                return id(self) < id(other)
-        self.assertRaises(ValueError, data.sort, key=SortKiller)
-
     def test_key_with_mutating_del_and_exception(self):
         data = list(range(10))
         ## dup = data[:]

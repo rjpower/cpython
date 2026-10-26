@@ -5552,6 +5552,7 @@ class AbstractHookTests:
                     p.dump(h)
 
     @support.cpython_only
+    @support.requires_refcounting
     def test_reducer_override_no_reference_cycle(self):
         # bpo-39492: reducer_override used to induce a spurious reference cycle
         # inside the Pickler object, that could prevent all serialized objects

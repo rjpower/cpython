@@ -70,6 +70,27 @@ mismatch is an error naming the file, so a pin bump fails loudly instead of
 fuzzing; refresh the patch and its hashes. Explain each patch in one sentence
 in the port's `README.md`.
 
+## Porting to the tracing collector
+
+Under `--with-gc` reference counts no longer free anything; a collection
+traces from roots and sweeps what it did not reach. Look for these in a
+port's C code:
+
+- A `PyObject*` in `malloc`ed or `PyMem` memory, or in a `Py_buffer`'s
+  `obj`, that no `tp_traverse` visits. Visit it, or register it with
+  `PyGC_AddRoot()` while it is held.
+- A traverse that leaves out members that cannot form cycles, such as bytes
+  and str. The cycle collector allows that; the tracing collector frees
+  them.
+- A dealloc that can run code or allocate: calling Python, a destructor
+  callback, `PyBuffer_Release()` on an arbitrary exporter. The sweep forbids
+  both; move the call into `tp_finalize`, which runs before the sweep.
+- A dealloc that reads a referent's C state rather than only releasing it,
+  as an expat subparser reads its parent's parser. Reference counting
+  frees the referrer first; the sweep has no order, so do that work in
+  `tp_finalize`.
+- Anything that reads `ob_refcnt` or `Py_REFCNT()` to decide behaviour.
+
 ## Adding a port
 
 1. Pin the latest release's url and sha256 from PyPI's JSON API.

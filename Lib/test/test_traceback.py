@@ -3746,6 +3746,7 @@ class TestTracebackException(unittest.TestCase):
         with self.assertWarns(DeprecationWarning):
             self.assertIsNone(te.exc_type)
 
+    @support.requires_refcounting
     def test_no_refs_to_exception_and_traceback_objects(self):
         exc_obj = None
         try:

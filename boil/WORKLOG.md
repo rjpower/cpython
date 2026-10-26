@@ -968,3 +968,36 @@ copy propagation, store elimination, POP_TOP removal and truth folding
     it must be copied back to the source tree.
   - Without a magic bump, cached pycs keep the old compiler's output.
     Every run now uses a fresh PYTHONPYCACHEPREFIX.
+
+### 2026-10-25 22:00 — step 3b, milestone 4: call results into locals, measurements, docs
+
+- **A call stores its result in a local** (691c92537c6, magic 3716). Store
+  elimination now folds the STORE_FAST after a call:
+  - the CALL, CALL_KW and CALL_FUNCTION_EX families gain STORE_DST;
+  - a member that pushes a frame names the local as `return_slot`;
+  - `_PyFrame_SetReturnValue` releases the local's old value;
+  - generator frames still leave to the head when dst is a local,
+    because a generator hands that slot every value it yields and,
+    at the end of a FOR_ITER, its return value.
+
+  STORE_FAST on go falls from 1.51M to 0.36M dispatches.
+- **Against 3a:**
+  - dispatches: richards -12.5% (12.77M), go -10.2% (37.12M);
+  - gcc instructions per loop: richards -3.6%, go -3.4%, nbody -6.8%,
+    float -1.9%;
+  - clang instructions per loop: -2.8%, -3.2%, -6.5%, -1.6%;
+  - `-c pass`: unchanged;
+  - compiling Lib: +16%.
+- **Pass g is cut.** No private memory is retained: heap and anonymous
+  RSS are 92 KiB below 3a. Peak RSS is 0.5 to 1.1 MB above 3a, and all
+  of it is in the executable's file-backed pages.
+- **Tests at 691c92537c6:**
+  - dev-debug and dev-default, full suite: only test_sys fails;
+  - dev-stackrefdebug, full suite: the same 15 files as before;
+  - dev-tailcall, rung 2: passes;
+  - dev-ft, rung 2: the known 78, plus test_sys;
+  - ports: 7/7 pass.
+- **Docs.** Note 06 section 13 and note 07 section 5.
+- **Pitfall.** A magic bump does not rebuild Python/import.o. Delete it
+  in every build directory, or `importlib.util.MAGIC_NUMBER` keeps the
+  old value.

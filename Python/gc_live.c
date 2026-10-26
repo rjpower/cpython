@@ -901,7 +901,9 @@ done:
     return order;
 }
 
-static void
+/* Inlined: the sweep calls it for every dead object, and the call alone
+   costs nbody 2% of its instructions. */
+static inline Py_ALWAYS_INLINE void
 sweep_one(PyThreadState *tstate, GCState *gc, _PyGCDeadObject *d,
           Py_ssize_t *ncollected)
 {

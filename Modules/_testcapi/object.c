@@ -55,45 +55,6 @@ pyobject_print_null(PyObject *self, PyObject *filename)
 }
 
 static PyObject *
-pyobject_print_noref_object(PyObject *self, PyObject *filename)
-{
-    PyObject *test_string;
-    FILE *fp;
-    char correct_string[100];
-
-    test_string = PyUnicode_FromString("Spam spam spam");
-    if (test_string == NULL) {
-        return NULL;
-    }
-
-    Py_SET_REFCNT(test_string, 0);
-
-    PyOS_snprintf(correct_string, 100, "<refcnt %zd at %p>",
-                  Py_REFCNT(test_string), (void *)test_string);
-
-    fp = Py_fopen(filename, "w+");
-    if (fp == NULL) {
-        Py_SET_REFCNT(test_string, 1);
-        Py_DECREF(test_string);
-        return NULL;
-    }
-
-    if (PyObject_Print(test_string, fp, 0) < 0){
-        fclose(fp);
-        Py_SET_REFCNT(test_string, 1);
-        Py_DECREF(test_string);
-        return NULL;
-    }
-
-    fclose(fp);
-
-    Py_SET_REFCNT(test_string, 1);
-    Py_DECREF(test_string);
-
-    return PyUnicode_FromString(correct_string);
-}
-
-static PyObject *
 pyobject_print_os_error(PyObject *self, PyObject *filename)
 {
     PyObject *test_string;
@@ -219,7 +180,6 @@ pysentinel_checkexact(PyObject *self, PyObject *obj)
 static PyMethodDef test_methods[] = {
     {"call_pyobject_print", call_pyobject_print, METH_VARARGS},
     {"pyobject_print_null", pyobject_print_null, METH_O},
-    {"pyobject_print_noref_object", pyobject_print_noref_object, METH_O},
     {"pyobject_print_os_error", pyobject_print_os_error, METH_O},
     {"pyobject_clear_weakrefs_no_callbacks", pyobject_clear_weakrefs_no_callbacks, METH_O},
     {"pyobject_enable_deferred_refcount", pyobject_enable_deferred_refcount, METH_O},

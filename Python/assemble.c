@@ -912,8 +912,9 @@ _PyAssemble_MakeCodeObject(_PyCompile_CodeUnitMetadata *umd, PyObject *const_cac
                            int nlocalsplus, int code_flags, PyObject *filename)
 {
     PyCodeObject *co = NULL;
-    // co_stacksize keeps its meaning for tools: the slots for temporaries
-    int stacksize = cfg->maxdepth;
+    // co_stacksize keeps its meaning for tools: the slots for temporaries,
+    // which compaction may make fewer than the deepest stack
+    int stacksize = cfg->ntemps;
     struct assembler a;
     memset(&a, 0, sizeof(a));
     int res = assemble_words(&a, cfg, consts, nlocalsplus, stacksize);

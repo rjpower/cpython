@@ -925,6 +925,18 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op)
                         }
                     }
                 }
+                // A single output may take the slot of the input at its
+                // own stack position, which the op takes
+                int own = op->depth - op->npop + through;
+                int k = own - (op->depth - op->nread);
+                if (bump && op->nout - through == 1 && k >= 0
+                    && k < op->nread && in[k] >= nl
+                    && k >= op->nread - op->npop
+                    && o->occ[_PyRegCfg_Slot(cfg, in[k]) - nl] < 0)
+                {
+                    bump = 0;
+                    dst = _PyRegCfg_Slot(cfg, in[k]) - through;
+                }
                 if (bump) {
                     int high = nl + o->top;
                     for (int k = 0; k < op->nread; k++) {
@@ -1061,7 +1073,38 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
     }
     PyMem_Free(reserved);
     PyMem_Free(occ);
-    return err;
+    RETURN_IF_ERROR(err);
+    // The frame holds the values at every region's entry, where the
+    // unwinder puts an exception, and every slot that a word names
+    for (int b = 0; b < cfg->nblocks; b++) {
+        cfg->ntemps = Py_MAX(cfg->ntemps, cfg->blocks[b].startdepth);
+    }
+    for (int i = 0; i < cfg->nops; i++) {
+        _PyRegOp *op = &cfg->ops[i];
+        if (op->opcode == _PyReg_DEAD) {
+            continue;
+        }
+        const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+        _PyRegSlots slots;
+        _PyRegCfg_OpSlots(cfg, op, &slots);
+        int high = -1;
+        for (int r = 0; r < 4; r++) {
+            int role = fmt->roles[r];
+            if (role == _PyIR_ROLE_DST && fmt->dst != _PyIR_NO_DST) {
+                high = Py_MAX(high, slots.dst);
+            }
+            else if (role == _PyIR_ROLE_BASE) {
+                // A window's handler reads and writes from its base up
+                int n = Py_MAX(op->nread, op->nout);
+                high = Py_MAX(high, slots.base + Py_MAX(n, 1) - 1);
+            }
+            else if (role >= _PyIR_ROLE_IN0) {
+                high = Py_MAX(high, slots.in[role - _PyIR_ROLE_IN0]);
+            }
+        }
+        cfg->ntemps = Py_MAX(cfg->ntemps, high + 1 - nl);
+    }
+    return SUCCESS;
 }
 
 
@@ -1218,7 +1261,29 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                         }
                     }
                 }
-                if (overlapping_call(op->opcode) && op->nread > 0) {
+                // Compaction shares a slot only between temporaries that
+                // are never live at once
+                uint64_t seen[IR_MAX_SLOTS / 64 + 1] = {0};
+                for (int bit = 0; bit < lv.nwords * 64 && err == SUCCESS; bit++) {
+                    if (!BIT_GET(work, bit)) {
+                        continue;
+                    }
+                    int v = bit < IR_MAX_SLOTS ? nl + bit
+                            : _PyReg_FRESH0(cfg) + bit - IR_MAX_SLOTS;
+                    int s = _PyRegCfg_Slot(cfg, v) - nl;
+                    if (s < 0 || s >= cfg->ntemps) {
+                        err = verify_error(after, op, "a live temporary "
+                                           "outside the frame");
+                    }
+                    else if ((seen[s >> 6] >> (s & 63)) & 1) {
+                        err = verify_error(after, op, "two live temporaries "
+                                           "in one slot");
+                    }
+                    else {
+                        seen[s >> 6] |= (uint64_t)1 << (s & 63);
+                    }
+                }
+                if (err == SUCCESS && overlapping_call(op->opcode) && op->nread > 0) {
                     int base = _PyRegCfg_Slot(cfg, in[0]);
                     for (int bit = 0; bit < lv.nwords * 64; bit++) {
                         if (!BIT_GET(work, bit)) {

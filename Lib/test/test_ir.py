@@ -375,13 +375,15 @@ class AssemblerTest(unittest.TestCase):
         def make(nlocals):
             source = ("def f():\n"
                       + "".join(f"    v{i} = {i}\n" for i in range(nlocals))
-                      + "    return v0\n")
+                      + "    return [v0]\n")
             return make_function(source)
+        # The list's window is the one temporary
         stacksize = make(1).__code__.co_stacksize
+        self.assertEqual(stacksize, 1)
         f = make(IR_MAX_SLOTS - stacksize)
         self.assertEqual(f.__code__.co_nlocals + f.__code__.co_stacksize,
                          IR_MAX_SLOTS)
-        self.assertEqual(f(), 0)
+        self.assertEqual(f(), [0])
         with self.assertRaisesRegex(SystemError, "slots"):
             make(IR_MAX_SLOTS - stacksize + 1)
 
@@ -1066,6 +1068,163 @@ class StoreFoldTest(unittest.TestCase):
             self.assertEqual(f(), 3)
         finally:
             sys.settrace(None)
+
+
+K = 3
+
+
+def one():
+    return 1
+
+
+class RegCfgTest(unittest.TestCase):
+    """The passes over the register CFG (Python/regcfg_passes.c) and its
+    compaction (Python/regcfg.c)"""
+
+    def run_specialized(self, check):
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
+            check()
+
+    def names(self, func):
+        return [w[0] for w in words(func)]
+
+    # a. Copy propagation
+
+    def test_load_folds_under_a_global_and_a_call(self):
+        def mul(x):
+            return x * K
+        def add(x):
+            return x + one()
+        for f in mul, add:
+            self.assertNotIn("LOAD_FAST_BORROW", self.names(f))
+            op = [w for w in words(f) if w[0].startswith("BINARY_OP")][0]
+            self.assertEqual(op[2][0], 0)
+        self.run_specialized(lambda: self.assertEqual(mul(2), 6))
+        self.run_specialized(lambda: self.assertEqual(add(2), 3))
+
+    def test_redefinition_kills_the_copy(self):
+        def copy(x):
+            y = x
+            x = x + 1
+            return y
+        def walrus(x):
+            return x + (x := x + 1)
+        # The first x of walrus is read before the store: it stays a load
+        self.assertIn("LOAD_FAST", self.names(walrus))
+        self.run_specialized(lambda: self.assertEqual(copy(1), 1))
+        self.run_specialized(lambda: self.assertEqual(walrus(1), 3))
+
+    # b. Store elimination
+
+    def test_store_elimination(self):
+        def f(a, b):
+            x = a + b
+            return x
+        self.assertEqual(words(f), [
+            ("BINARY_OP_ADD", 2, (0, 1)),
+            ("RETURN_VALUE", None, (2,)),
+        ])
+        self.run_specialized(lambda: self.assertEqual(f(1, 2), 3))
+
+    def test_raising_producer_keeps_the_old_value(self):
+        def fails(z):
+            raise ValueError
+        def call(z):
+            try:
+                z = fails(z)
+            except ValueError:
+                pass
+            return z
+        def add(z):
+            try:
+                z = z + 1
+            except TypeError:
+                pass
+            return z
+        self.run_specialized(lambda: self.assertEqual(call(5), 5))
+        self.run_specialized(lambda: self.assertEqual(add("a"), "a"))
+
+    # c. COPY, SWAP and POP_TOP
+
+    def test_swap_renaming(self):
+        def f(a, b):
+            a, b = b, a
+            return a - b
+        self.assertNotIn("SWAP", self.names(f))
+        self.run_specialized(lambda: self.assertEqual(f(1, 3), 2))
+
+    def test_pop_top_of_a_pure_value(self):
+        def f(x):
+            x
+            1
+            return x
+        self.assertNotIn("POP_TOP", self.names(f))
+        # Each line keeps its event
+        first = f.__code__.co_firstlineno
+        _, events = trace(f, 0)
+        self.assertEqual([e[2] - first for e in events if e[0] == "line"],
+                         [1, 2, 3])
+
+    def test_pop_top_of_a_call_stays(self):
+        def f(g):
+            g()
+        self.assertIn("POP_TOP", self.names(f))
+
+    # d. Truth folding in value context
+
+    def test_truth_folding(self):
+        def conj(o, b):
+            return o.x and b
+        def disj(o, b):
+            return o.x or b
+        self.assertIn("JUMP_IF_FALSE_OR_POP", self.names(conj))
+        self.assertIn("JUMP_IF_TRUE_OR_POP", self.names(disj))
+        for f in conj, disj:
+            self.assertNotIn("COPY", self.names(f))
+            self.assertNotIn("POP_TOP", self.names(f))
+        empty, full = [], [1]
+        for x, b in ((empty, "b"), (full, "b"), (0, None), (2.5, 0)):
+            o = types.SimpleNamespace(x=x)
+            self.assertIs(conj(o, b), x and b)
+            self.assertIs(disj(o, b), x or b)
+
+        class Raises:
+            def __bool__(self):
+                raise ZeroDivisionError
+        o = types.SimpleNamespace(x=Raises())
+        for f in conj, disj:
+            with self.assertRaises(ZeroDivisionError):
+                f(o, 1)
+
+    # f. Compaction
+
+    def test_compaction(self):
+        # The stack is three deep at c + d, but a and b fold into the first
+        # add and c and d into the second, so two temporaries are live
+        def f(a, b, c, d):
+            return (a + b) * (c + d)
+        t = nlocalsplus(f)
+        self.assertEqual(f.__code__.co_stacksize, 2)
+        self.assertEqual(words(f), [
+            ("BINARY_OP_ADD", t, (0, 1)),
+            ("BINARY_OP_ADD", t + 1, (2, 3)),
+            ("BINARY_OP_MULTIPLY", t, (t, t + 1)),
+            ("RETURN_VALUE", None, (t,)),
+        ])
+        self.run_specialized(lambda: self.assertEqual(f(1, 2, 3, 4), 21))
+
+    def test_frame_holds_the_handler_depth(self):
+        # The unwinder puts the exception above the loop's iterator, at the
+        # handler's depth, where no word of the try body writes
+        def f(xs):
+            for x in xs:
+                try:
+                    return 1 / x
+                except ZeroDivisionError as e:
+                    err = e
+            return err
+        self.assertEqual(f([0, 2]), 0.5)
+        self.assertIsInstance(f([0]), ZeroDivisionError)
 
 
 if __name__ == "__main__":

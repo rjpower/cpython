@@ -47,6 +47,7 @@ TYPE_FIELDS = [
 RELEASE_RE = re.compile(
     r"\bPy_(?:X?DECREF|CLEAR|X?SETREF)\s*\(\s*(?:\([^()]*\)\s*)?"
     r"[A-Za-z_][\w]*(?:\s*(?:->|\.)\s*[A-Za-z_]\w*)*\s*(?:->|\.)\s*([A-Za-z_]\w*)\s*[,)]")
+MEMBER_RE = re.compile(r"(?:->|\.)\s*([A-Za-z_]\w*)")
 VISIT_RE = re.compile(
     r"\b(?:Py_VISIT|_Py_VISIT_STACKREF|visit)\s*\(\s*(?:\([^()]*\)\s*)?"
     r"[A-Za-z_][\w]*(?:\s*(?:->|\.)\s*[A-Za-z_]\w*)*\s*(?:->|\.)\s*([A-Za-z_]\w*)\s*[,)]")
@@ -72,6 +73,7 @@ class TypeDef:
     dealloc: str | None
     clear: str | None
     gc: bool
+    base: str | None            # tp_base, from which it may inherit
 
 
 def strip_comments(text: str) -> str:
@@ -314,6 +316,7 @@ def parse_types(path: Path, text: str, types: list[TypeDef]) -> None:
             "tp_traverse": sl.get("Py_tp_traverse"),
             "tp_dealloc": sl.get("Py_tp_dealloc"),
             "tp_clear": sl.get("Py_tp_clear"),
+            "tp_base": sl.get("Py_tp_base"),
         }
         add_type(types, path, text, m, m.group(1), fields)
 
@@ -342,7 +345,7 @@ def func_name(expr: str | None) -> str | None:
 def add_type(types, path, text, m, var, fields) -> None:
     size = fields.get("tp_basicsize", "")
     sm = re.search(r"sizeof\s*\(\s*(?:struct\s+)?([A-Za-z_]\w*)\s*\)", size)
-    name = fields.get("tp_name", var)
+    name = re.sub(r"^\.tp_name\s*=\s*", "", fields.get("tp_name", var))
     types.append(TypeDef(
         name=name.strip('" \n'), var=var, path=path,
         line=text.count("\n", 0, m.start()) + 1,
@@ -351,6 +354,7 @@ def add_type(types, path, text, m, var, fields) -> None:
         dealloc=func_name(fields.get("tp_dealloc")),
         clear=func_name(fields.get("tp_clear")),
         gc="HAVE_GC" in fields.get("tp_flags", ""),
+        base=func_name(fields.get("tp_base")),
     ))
 
 
@@ -414,8 +418,8 @@ def main() -> int:
     missing = []
     inherited = []
     partial = []
-    # A type without tp_traverse whose struct another type with one uses is
-    # most likely a subtype that inherits it.
+    # A type without tp_traverse that has a base, or whose struct another
+    # type with a tp_traverse uses, most likely inherits one.
     traversed_structs = {t.struct for t in types if t.traverse}
     for t in types:
         if t.struct is None:
@@ -424,7 +428,7 @@ def main() -> int:
         if not refs:
             continue
         if t.traverse is None:
-            if t.struct in traversed_structs:
+            if t.struct in traversed_structs or t.base:
                 inherited.append((t, refs))
             else:
                 missing.append((t, refs))
@@ -435,7 +439,9 @@ def main() -> int:
         body = fs.get(t.traverse)
         if body is None:
             continue
-        visited = set(VISIT_RE.findall(body))
+        # Any member the traverse function names counts as visited, which
+        # also covers casts and helper functions taking the member.
+        visited = set(MEMBER_RE.findall(body))
         released = set()
         for f in (t.dealloc, t.clear):
             if f and f in fs:
@@ -448,8 +454,8 @@ def main() -> int:
     print(f"{len(missing)} types with object references and no tp_traverse:")
     for t, refs in sorted(missing, key=lambda x: (str(x[0].path), x[0].line)):
         print(f"  {rel(t.path)}:{t.line}: {t.name} ({t.struct}): {', '.join(refs)}")
-    print(f"\n{len(inherited)} types without tp_traverse whose struct a type "
-          f"with one shares (probably inherited):")
+    print(f"\n{len(inherited)} types without tp_traverse that have a base or "
+          f"share a traversed struct (probably inherited):")
     for t, refs in sorted(inherited, key=lambda x: (str(x[0].path), x[0].line)):
         print(f"  {rel(t.path)}:{t.line}: {t.name} ({t.struct})")
     if not args.missing_only:

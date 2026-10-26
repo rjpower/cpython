@@ -249,7 +249,7 @@ class InlineIntTest(unittest.TestCase):
         self.assertIn("BINARY_OP_ADD_INT", opnames(add3))
 
     def test_boxing_leaves_the_local_inline(self):
-        # x + k reads x through its field (Python/regalloc.c folds the load)
+        # x + k reads x through its field (Python/regcfg_passes.c folds the load)
         # and boxes it for the generic add.  The box is the handler's, as
         # the box of the borrowed temporary was: x keeps its inline value.
         class Keep:

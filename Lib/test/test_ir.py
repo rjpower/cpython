@@ -664,7 +664,7 @@ def words(func):
 
 
 class FoldTest(unittest.TestCase):
-    """Loads folded into the next word (Python/regalloc.c)"""
+    """Loads folded into the next word (Python/regcfg_passes.c)"""
 
     def test_attribute_sum(self):
         # boil/design/06-architecture-v2.md, section 2.2
@@ -930,7 +930,7 @@ class TruthTest(unittest.TestCase):
 
 
 class StoreFoldTest(unittest.TestCase):
-    """Stores folded into the word before them (Python/regalloc.c)"""
+    """Stores folded into the word before them (Python/regcfg_passes.c)"""
 
     def run_specialized(self, check):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):

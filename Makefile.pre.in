@@ -508,7 +508,8 @@ PYTHON_OBJS=	\
 		Python/pythonrun.o \
 		Python/pytime.o \
 		Python/qsbr.o \
-		Python/regalloc.o \
+		Python/regcfg.o \
+		Python/regcfg_passes.o \
 		Python/bootstrap_hash.o \
 		Python/specialize.o \
 		Python/slots.o \
@@ -1428,6 +1429,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_pythread.h \
 		$(srcdir)/Include/internal/pycore_qsbr.h \
 		$(srcdir)/Include/internal/pycore_range.h \
+		$(srcdir)/Include/internal/pycore_regcfg.h \
 		$(srcdir)/Include/internal/pycore_runtime.h \
 		$(srcdir)/Include/internal/pycore_runtime_init.h \
 		$(srcdir)/Include/internal/pycore_runtime_init_generated.h \
@@ -2177,12 +2179,14 @@ regen-ir-metadata:
 	    -o $(srcdir)/Include/internal/pycore_ir_metadata.h.new $(srcdir)/Python/bytecodes.c
 	$(UPDATE_FILE) $(srcdir)/Include/internal/pycore_ir_metadata.h $(srcdir)/Include/internal/pycore_ir_metadata.h.new
 
-Python/compile.o Python/codegen.o Python/assemble.o Python/flowgraph.o Python/instruction_sequence.o: \
+Python/compile.o Python/codegen.o Python/assemble.o Python/flowgraph.o Python/instruction_sequence.o Python/regcfg.o Python/regcfg_passes.o: \
                 $(srcdir)/Include/internal/pycore_compile.h \
                 $(srcdir)/Include/internal/pycore_flowgraph.h \
                 $(srcdir)/Include/internal/pycore_instruction_sequence.h \
+                $(srcdir)/Include/internal/pycore_ir_metadata.h \
                 $(srcdir)/Include/internal/pycore_opcode_metadata.h \
-                $(srcdir)/Include/internal/pycore_opcode_utils.h
+                $(srcdir)/Include/internal/pycore_opcode_utils.h \
+                $(srcdir)/Include/internal/pycore_regcfg.h
 
 Python/ceval.o: \
 		$(srcdir)/Python/ceval_macros.h \

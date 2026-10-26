@@ -741,11 +741,11 @@ dis_tryfinallyconst = """\
 
   --   L1:     PUSH_EXC_INFO         r1 <- r1
 
-%4d           LOAD_FAST                0 (b)  r1 <-
-               PUSH_NULL             r1 <-
-               CALL                     0  r1 <- r1
-               POP_TOP               <- r1
-               RERAISE                  0  <- r1
+%4d           LOAD_FAST                0 (b)  r3 <-
+               PUSH_NULL             r4 <-
+               CALL                     0  r3 <- r3
+               POP_TOP               <- r3
+               RERAISE                  0  <- r2
 
   --   L2:     COPY                     3  <- r1
                POP_EXCEPT            <- r4
@@ -1074,7 +1074,7 @@ class DisTests(DisTestBase):
             '',
             '  --         L1:     PUSH_EXC_INFO         r0 <- r0',
             '',
-            '3:11-3:15            RERAISE                  0  <- r0',
+            '3:11-3:15            RERAISE                  0  <- r1',
             '',
             '  --         L2:     COPY                     3  <- r0',
             '  --                 POP_EXCEPT            <- r3',

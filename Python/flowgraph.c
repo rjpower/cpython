@@ -11,6 +11,7 @@
 #include "pycore_opcode_utils.h"
 #include "pycore_opcode_metadata.h" // OPCODE_HAS_ARG, etc
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
+#include "pycore_regcfg.h"          // _PyRegCfg_Build()
 #include "pycore_stackref.h"        // PyStackRef_AsPyObjectBorrow()
 
 #include <stdbool.h>
@@ -4124,12 +4125,70 @@ _PyCfg_ToInstructionSequence(cfg_builder *g, _PyInstructionSequence *seq)
 }
 
 
-int
-_PyCfg_OptimizedCfgToInstructionSequence(cfg_builder *g,
-                                     _PyCompile_CodeUnitMetadata *umd,
-                                     int *stackdepth, int *nlocalsplus,
-                                     _PyInstructionSequence *seq)
+/* Hand the blocks to the register CFG (Python/regcfg.c), in layout order,
+ * with jump targets and exception handlers as block indices. */
+static int
+cfg_to_regcfg(cfg_builder *g, int nlocalsplus, int maxdepth,
+              _PyRegCfg **result)
 {
+    int nblocks = 0;
+    for (basicblock *b = g->g_entryblock; b != NULL; b = b->b_next) {
+        // b_predecessors is not needed any more: it numbers the blocks
+        b->b_predecessors = nblocks++;
+    }
+    uint8_t *is_handler = PyMem_Calloc(Py_MAX(nblocks, 1), 1);
+    if (is_handler == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    for (basicblock *b = g->g_entryblock; b != NULL; b = b->b_next) {
+        for (int i = 0; i < b->b_iused; i++) {
+            basicblock *h = b->b_instr[i].i_except;
+            if (h != NULL) {
+                is_handler[h->b_predecessors] = 1;
+            }
+        }
+    }
+    _PyRegCfg *cfg = _PyRegCfg_New(nlocalsplus, maxdepth);
+    if (cfg == NULL) {
+        PyMem_Free(is_handler);
+        return ERROR;
+    }
+    for (basicblock *b = g->g_entryblock; b != NULL; b = b->b_next) {
+        int handler_depth = is_handler[b->b_predecessors] ? b->b_startdepth : -1;
+        if (_PyRegCfg_AddBlock(cfg, handler_depth, b->b_preserve_lasti,
+                               b->b_startdepth) < 0)
+        {
+            goto error;
+        }
+        for (int i = 0; i < b->b_iused; i++) {
+            cfg_instr *instr = &b->b_instr[i];
+            int target = HAS_TARGET(instr->i_opcode)
+                ? instr->i_target->b_predecessors : -1;
+            int except = instr->i_except != NULL
+                ? instr->i_except->b_predecessors : -1;
+            if (_PyRegCfg_AddInstr(cfg, instr->i_opcode, instr->i_oparg,
+                                   instr->i_loc, target, except) < 0)
+            {
+                goto error;
+            }
+        }
+    }
+    PyMem_Free(is_handler);
+    *result = cfg;
+    return SUCCESS;
+error:
+    PyMem_Free(is_handler);
+    _PyRegCfg_Free(cfg);
+    return ERROR;
+}
+
+int
+_PyCfg_OptimizedCfgToRegCfg(cfg_builder *g, _PyCompile_CodeUnitMetadata *umd,
+                            int *stackdepth, int *nlocalsplus,
+                            _PyRegCfg **result)
+{
+    *result = NULL;
     RETURN_IF_ERROR(convert_pseudo_conditional_jumps(g));
     copy_local_as_load(g->g_entryblock);
 
@@ -4157,20 +4216,18 @@ _PyCfg_OptimizedCfgToInstructionSequence(cfg_builder *g,
      */
     RETURN_IF_ERROR(optimize_load_fast(g));
 
-    /* Superinstructions are inserted after optimize_load_fast() so that a
-     * LOAD_FAST which can be borrowed is converted to LOAD_FAST_BORROW
-     * instead of being fused into a STORE_FAST_LOAD_FAST. Fusing adjacent
-     * instructions does not change which references are borrowed. */
-    /* No superinstructions: the assembler folds the loads into the
-     * instructions that consume them (Python/regalloc.c). */
+    /* No superinstructions: the register CFG folds the loads into the
+     * instructions that consume them (Python/regcfg_passes.c). */
     RETURN_IF_ERROR(remove_redundant_nops(g));
     assert(no_redundant_nops(g));
 
-    /* Can't modify the bytecode after computing jump offsets. */
-    if (_PyCfg_ToInstructionSequence(g, seq) < 0) {
+    _PyRegCfg *cfg;
+    RETURN_IF_ERROR(cfg_to_regcfg(g, *nlocalsplus, *stackdepth, &cfg));
+    if (_PyRegCfg_Build(cfg) < 0) {
+        _PyRegCfg_Free(cfg);
         return ERROR;
     }
-
+    *result = cfg;
     return SUCCESS;
 }
 

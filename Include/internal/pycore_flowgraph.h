@@ -26,47 +26,16 @@ int _PyCfg_OptimizeCodeUnit(struct _PyCfgBuilder *g, PyObject *consts, PyObject 
 
 struct _PyCfgBuilder* _PyCfg_FromInstructionSequence(_PyInstructionSequence *seq);
 int _PyCfg_ToInstructionSequence(struct _PyCfgBuilder *g, _PyInstructionSequence *seq);
-int _PyCfg_OptimizedCfgToInstructionSequence(struct _PyCfgBuilder *g, _PyCompile_CodeUnitMetadata *umd,
-                                             int *stackdepth, int *nlocalsplus,
-                                             _PyInstructionSequence *seq);
-
-/* Slot assignment (Python/regalloc.c) */
-
-/* The stack depth before each instruction of instrs, whose jump targets are
- * instruction indices, or -1 for an instruction that no path reaches. */
-int _PyRegAlloc_Depths(_PyInstructionSequence *instrs, int *depths);
-
-/* The slot of each role of a word */
-typedef struct {
-    int dst;
-    int base;           // the deepest input of a window-style instruction
-    int in[4];          // the inputs of a register-style one, bottom first
-} _PyRegSlots;
-
-/* The slots of an instruction of format fmt that pops popped values, with
- * depth values on the stack before it. */
-struct _PyIRFormat;
-void _PyRegAlloc_Slots(const struct _PyIRFormat *fmt, int nlocalsplus,
-                       int depth, int popped, _PyRegSlots *slots);
-
-/* What folding decides for an instruction (Python/regalloc.c): whether it
- * keeps a word, and the slots that replace the canonical ones of its
- * inputs and of its dst, or -1. */
-typedef struct {
-    int folded;         // no word: a load that its consumer reads directly,
-                        // or a store that its producer does
-    int in[4];
-    int dst;
-} _PyRegFold;
-
-/* Fold the loads and stores of instrs, whose handlers are handlers[i] and
- * whose stack depths are depths[i], into folds[i]. */
-int _PyRegAlloc_Fold(_PyInstructionSequence *instrs, const int *depths,
-                     const int *handlers, _PyRegFold *folds);
+struct _PyRegCfg;
+/* Finish the code unit's CFG and convert it into the register CFG
+ * (Python/regcfg.c), with its passes run and its slots assigned. */
+int _PyCfg_OptimizedCfgToRegCfg(struct _PyCfgBuilder *g, _PyCompile_CodeUnitMetadata *umd,
+                                int *stackdepth, int *nlocalsplus,
+                                struct _PyRegCfg **result);
 
 PyCodeObject *
 _PyAssemble_MakeCodeObject(_PyCompile_CodeUnitMetadata *u, PyObject *const_cache,
-                           PyObject *consts, int maxdepth, _PyInstructionSequence *instrs,
+                           PyObject *consts, struct _PyRegCfg *cfg,
                            int nlocalsplus, int code_flags, PyObject *filename);
 
 // Export for '_testinternalcapi' shared extension

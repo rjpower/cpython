@@ -39,8 +39,9 @@ extern "C" {
  *     |      | words from the next word to the exit in D                    |
  *
  * Slots are numbered as in localsplus, so locals, cells, free variables and
- * temporaries share one numbering; the temporary at depth d is slot
- * co_nlocalsplus + d (Python/regalloc.c).  A register-style instruction
+ * temporaries share one numbering; the temporaries take the slots from
+ * co_nlocalsplus up, which the register CFG assigns (Python/regcfg.c), and
+ * the inputs of a window are consecutive.  A register-style instruction
  * names its first output (dst) and its inputs, bottom first, except that a
  * store names the object it stores into first and the value last.  A
  * window-style instruction names its dst, if it has one, and the slot of

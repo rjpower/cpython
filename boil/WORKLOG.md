@@ -886,3 +886,27 @@ passes, note 07) launches in this worktree; step 4 (collector in verifier
 mode) launches in worktree .worktrees/boil-step4 on branch weaver/boil-step4,
 to be rebased and merged here when it lands. SSH agent has no identities;
 pushes go over HTTPS with the gh token.
+
+### 2026-10-25 19:30 — step 3b, milestone 1: the register CFG, no new passes
+
+084e8468ed5 replaces Python/regalloc.c with Python/regcfg.c (conversion,
+liveness, compaction, verifier, driver) and Python/regcfg_passes.c (the
+passes). The conversion runs after `optimize_load_fast`, so the borrow
+decisions are in place. Load and store folding are still 2b's two
+peepholes.
+
+- **Equivalence.** I compiled every code object in Lib (99,294) with both
+  compilers. 71 differ, all of them in unreachable exception handlers.
+  These handlers are left behind when the NOP that named them is removed
+  (`try: pass`, `assert True`). 3a gave them an arbitrary depth; 3b gives
+  them the depth the handler implies. Two test_dis expectations change.
+- **Slots are held until taken.** A temporary keeps its slot until an op
+  consumes its value, not just until its last read. A loop that never
+  exits keeps the values below it: the iterator in
+  `locale._grouping_intervals`, and the exception in a `finally` that
+  never ends. Freeing by liveness would overwrite them. The verifier no
+  longer treats an unread value as an error.
+- **Tests.** dev-debug passes rung 2 and the full suite, except for
+  `test_remote_exec_deleted_static_executable`.
+- **Pitfall.** Without its own PYTHONPYCACHEPREFIX, the step3a-snapshot
+  build loads the new build's pyc files, and test_dis appears to fail.

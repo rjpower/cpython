@@ -1187,3 +1187,40 @@ Found on the way:
 Next: the day-2 tests. Their first run shows refcount-timing and
 `is_tracked` failures to adjust, and an overflow in a dead bytes object
 to find.
+
+### 2026-10-26 01:50 — step 5a milestone 2: the day-2 tests pass on both gc builds
+
+The ten day-2 test files (test_gc_verify, test_grammar, test_builtin,
+test_dict, test_list, test_set, test_tuple, test_weakref,
+test_finalization, test_gc) pass at -j8 on build/gc-debug and
+build/gc-default (1,391 tests, 62 skipped with a Py_GC reason).
+TracingCollectorTests covers the byte trigger, `gc.disable()`, the extra
+`get_stats()` keys, non-cycle garbage, finalizer order, weak reference
+callbacks and `PyGC_AddRoot()`. gc.rst and gcsupport.rst document them.
+
+Fixed on the way:
+- `PyBytesWriter` lost its debug canary across a copying resize;
+- a popped compiler unit capsule traversed its freed unit (SAVEALL
+  segfault);
+- finalizers ran in the wrong order (a FileIO closed before its
+  TextIOWrapper flushed); they now run referrer first. Legacy `tp_del`
+  ran in the sweep; it is queued, or goes to `gc.garbage` in a dead cycle.
+  An explicit collection frees, in a second pass, what its finalizers did
+  not resurrect. Shutdown collects once more after the modules are
+  cleared, so `__del__` output at exit appears;
+- `_testcapi`'s static object was write-only under Py_GC, so -O3
+  removed it.
+
+False retention was the largest source of failures: stale words in live
+C frames kept `del x; gc.collect()` garbage alive. In order of effect:
+scan the collecting thread from the collection's entry; skip freed
+mimalloc blocks; zero the builtin call scratch array;
+`-ftrivial-auto-var-init=zero` under `--with-gc` (gc-debug: 13 failures
+to 0); clear 16 KB of stack below the entry before and after a
+collection (gc-default: 10 to 8). What remains is a word in the padding of
+`gc_collect`'s own frame; seven tests that need precise collection are
+skipped with `requires_precise_gc`. test_trashcan_threads takes 2 minutes
+on gc-default: two threads create objects whose `__del__` sleeps, faster
+than the queue runs them.
+
+Next: the dealloc debug check, then the day-3 tests.

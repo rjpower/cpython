@@ -1158,3 +1158,32 @@ worktree and branch removed. Step 5 is split: 5a collector live behind
 --with-gc; 5b full suite and ports on it; 5c default on and refcount code
 deleted; the 8-byte header and weakref side table move to 6a with the rest
 of the object layout. 5a launched, budget 4 days.
+
+### 2026-10-25 23:45 — step 5a milestone 1: the collector is live behind --with-gc
+
+`configure --with-gc` defines Py_GC. Under it nothing is reference
+counted and Python/gc_live.c owns memory: an allocation that passes the
+byte threshold marks (step 4's roots, with the mark bits in the header),
+flags unmarked objects dead, handles weak references and finalizers, and
+sweeps in two phases. A dealloc runs while the dead blocks are still
+allocated; the blocks are freed afterwards. build/gc-debug (`--with-pydebug
+--with-gc`) builds; `-c pass` runs; `gc.collect()` marks and sweeps (4,967
+objects and 2 MB freed at startup, 5 ms). Ten million short-lived tuples
+run in 111 MB peak RSS with 38 collections, and the verifier
+(`-X gcverify=auto`) finds no dangling reference after each one.
+`__del__` with a weakref callback, resurrection (finalized once), a
+finalizer cycle, a suspended generator's `finally`, `__slots__` with a
+dict subclass, and a thread allocating while the main thread collects
+all work. dev-debug still builds, and its tests pass apart from the
+known test_sys remote-exec failure.
+
+Found on the way:
+- `_PyLong_Negate` assumed that a shared fresh int is a small one;
+- `PySet_Add` on a new frozenset checked the count;
+- deallocs checked buffer exports, which the sweep order breaks;
+- `type_dealloc` allocated a key to remove itself from its bases'
+  subclass dicts, which were perhaps already swept.
+
+Next: the day-2 tests. Their first run shows refcount-timing and
+`is_tracked` failures to adjust, and an overflow in a dead bytes object
+to find.

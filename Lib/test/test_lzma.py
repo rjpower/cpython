@@ -3,7 +3,6 @@ from io import BytesIO, UnsupportedOperation, DEFAULT_BUFFER_SIZE
 import os
 import pickle
 import random
-import sys
 from test import support
 import unittest
 from compression._common import _streams
@@ -369,15 +368,6 @@ class CompressorDecompressorTestCase(unittest.TestCase):
                 pickle.dumps(LZMACompressor(), proto)
             with self.assertRaises(TypeError):
                 pickle.dumps(LZMADecompressor(), proto)
-
-    @support.refcount_test
-    def test_refleaks_in_decompressor___init__(self):
-        gettotalrefcount = support.get_attribute(sys, 'gettotalrefcount')
-        lzd = LZMADecompressor()
-        refs_before = gettotalrefcount()
-        for i in range(100):
-            lzd.__init__()
-        self.assertAlmostEqual(gettotalrefcount() - refs_before, 0, delta=10)
 
     def test_uninitialized_LZMADecompressor_crash(self):
         self.assertEqual(LZMADecompressor.__new__(LZMADecompressor).

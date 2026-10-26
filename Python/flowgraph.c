@@ -3620,24 +3620,96 @@ convert_pseudo_conditional_jumps(cfg_builder *g)
     return SUCCESS;
 }
 
-/* A COPY 1 of a local just loaded becomes a second load of the local, which
- * the assembler can fold into the instruction that consumes the copy, as
- * the jump of "x and y" or the LOAD_ATTR of "o.a += 1".  This runs before
- * optimize_load_fast(), which decides whether each load borrows. */
-static void
+/* A COPY of a local loaded earlier in the block becomes a second load of
+ * the local, which the assembler can fold into the instruction that
+ * consumes the copy, as the jump of "x and y", the LOAD_ATTR of
+ * "o.a += 1" or the subscript of "a[i] += 1".  Nothing between the load
+ * and the copy may write the local or run other code, so that the second
+ * load reads what the first did.  This runs before optimize_load_fast(),
+ * which decides whether each load borrows. */
+static int
 copy_local_as_load(basicblock *entryblock)
 {
+    // Per stack position, the local that a load pushed there, or -1
+    int *stack = NULL;
+    int astack = 0;
     for (basicblock *b = entryblock; b != NULL; b = b->b_next) {
-        for (int i = 1; i < b->b_iused; i++) {
-            cfg_instr *load = &b->b_instr[i - 1];
-            cfg_instr *copy = &b->b_instr[i];
-            if (copy->i_opcode == COPY && copy->i_oparg == 1 &&
-                (load->i_opcode == LOAD_FAST ||
-                 load->i_opcode == LOAD_FAST_CHECK)) {
-                INSTR_SET_OP1(copy, LOAD_FAST, load->i_oparg);
+        int sp = 0;
+        for (int i = 0; i < b->b_iused; i++) {
+            cfg_instr *instr = &b->b_instr[i];
+            int opcode = instr->i_opcode;
+            int oparg = instr->i_oparg;
+            if (opcode == COPY && oparg <= sp && stack[sp - oparg] >= 0) {
+                INSTR_SET_OP1(instr, LOAD_FAST, stack[sp - oparg]);
+                opcode = LOAD_FAST;
+                oparg = instr->i_oparg;
+            }
+            int popped = _PyOpcode_num_popped(opcode, oparg);
+            int pushed = _PyOpcode_num_pushed(opcode, oparg);
+            if (popped < 0 || pushed < 0 || popped > sp) {
+                // Not simulated: forget the block's loads
+                sp = 0;
+                continue;
+            }
+            if (OPCODE_HAS_ESCAPES(opcode) || OPCODE_HAS_ERROR(opcode)) {
+                for (int k = 0; k < sp; k++) {
+                    stack[k] = -1;
+                }
+            }
+            else if (OPCODE_HAS_LOCAL(opcode) && opcode != LOAD_FAST
+                     && opcode != LOAD_FAST_CHECK)
+            {
+                for (int k = 0; k < sp; k++) {
+                    if (stack[k] == oparg) {
+                        stack[k] = -1;
+                    }
+                }
+            }
+            if (opcode == COPY || opcode == SWAP) {
+                // COPY copies a value that is not a load; SWAP permutes
+                int bottom = sp - oparg;
+                if (opcode == SWAP) {
+                    int top = stack[sp - 1];
+                    stack[sp - 1] = stack[bottom];
+                    stack[bottom] = top;
+                    continue;
+                }
+                if (sp + 1 > astack) {
+                    astack = 2 * (sp + 1);
+                    int *grown = PyMem_Realloc(stack, astack * sizeof(int));
+                    if (grown == NULL) {
+                        PyMem_Free(stack);
+                        PyErr_NoMemory();
+                        return ERROR;
+                    }
+                    stack = grown;
+                }
+                stack[sp++] = -1;
+                continue;
+            }
+            sp -= popped;
+            if (sp + pushed > astack) {
+                astack = 2 * (sp + pushed);
+                int *grown = PyMem_Realloc(stack, astack * sizeof(int));
+                if (grown == NULL) {
+                    PyMem_Free(stack);
+                    PyErr_NoMemory();
+                    return ERROR;
+                }
+                stack = grown;
+            }
+            for (int k = 0; k < pushed; k++) {
+                stack[sp++] = -1;
+            }
+            if ((opcode == LOAD_FAST || opcode == LOAD_FAST_CHECK)
+                && pushed == 1)
+            {
+                stack[sp - 1] = oparg;
             }
         }
     }
+    PyMem_Free(stack);
+    return SUCCESS;
 }
 
 static int
@@ -4190,7 +4262,7 @@ _PyCfg_OptimizedCfgToRegCfg(cfg_builder *g, _PyCompile_CodeUnitMetadata *umd,
 {
     *result = NULL;
     RETURN_IF_ERROR(convert_pseudo_conditional_jumps(g));
-    copy_local_as_load(g->g_entryblock);
+    RETURN_IF_ERROR(copy_local_as_load(g->g_entryblock));
 
     *stackdepth = calculate_stackdepth(g);
     if (*stackdepth < 0) {

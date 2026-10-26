@@ -1068,6 +1068,8 @@ exit:
     return return_value;
 }
 
+#if !defined(Py_GC)
+
 PyDoc_STRVAR(sys_getrefcount__doc__,
 "getrefcount($module, object, /)\n"
 "--\n"
@@ -1099,6 +1101,8 @@ sys_getrefcount(PyObject *module, PyObject *object)
 exit:
     return return_value;
 }
+
+#endif /* !defined(Py_GC) */
 
 #if defined(Py_REF_DEBUG)
 
@@ -2136,6 +2140,10 @@ exit:
     #define SYS_MDEBUG_METHODDEF
 #endif /* !defined(SYS_MDEBUG_METHODDEF) */
 
+#ifndef SYS_GETREFCOUNT_METHODDEF
+    #define SYS_GETREFCOUNT_METHODDEF
+#endif /* !defined(SYS_GETREFCOUNT_METHODDEF) */
+
 #ifndef SYS_GETTOTALREFCOUNT_METHODDEF
     #define SYS_GETTOTALREFCOUNT_METHODDEF
 #endif /* !defined(SYS_GETTOTALREFCOUNT_METHODDEF) */
@@ -2159,4 +2167,4 @@ exit:
 #ifndef SYS_GETANDROIDAPILEVEL_METHODDEF
     #define SYS_GETANDROIDAPILEVEL_METHODDEF
 #endif /* !defined(SYS_GETANDROIDAPILEVEL_METHODDEF) */
-/*[clinic end generated code: output=7cc16ce4e45d8b29 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6a3b887cb988b272 input=a9049054013a1b77]*/

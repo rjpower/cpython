@@ -2711,9 +2711,11 @@ subtype_dealloc(PyObject *self)
         }
         if (type->tp_del) {
             type->tp_del(self);
+#ifndef Py_GC
             if (Py_REFCNT(self) > 0) {
                 return;
             }
+#endif
         }
 
         /* Find the nearest base with a different tp_dealloc */
@@ -2788,10 +2790,14 @@ subtype_dealloc(PyObject *self)
     if (type->tp_del) {
         _PyObject_GC_TRACK(self);
         type->tp_del(self);
+#ifndef Py_GC
+        /* Under Py_GC the count is constant; resurrection is the collector's
+           business, which ran tp_del before this sweep. */
         if (Py_REFCNT(self) > 0) {
             /* Resurrected */
             return;
         }
+#endif
         _PyObject_GC_UNTRACK(self);
     }
     if (has_finalizer) {
@@ -6747,6 +6753,14 @@ done:
 static void
 type_dealloc_common(PyTypeObject *type)
 {
+#ifdef Py_GC
+    /* The sweep deallocates a dead type after the dead dicts, perhaps its
+       bases' subclass dicts, and a dealloc must not allocate the key.  The
+       collector has cleared the weak reference that a live base's entry
+       holds, and _PyType_GetSubclasses() skips such entries; a new subclass
+       at the same address replaces it. */
+    (void)type;
+#else
     PyObject *bases = lookup_tp_bases(type);
     if (bases != NULL) {
         PyObject *exc = PyErr_GetRaisedException();
@@ -6755,6 +6769,7 @@ type_dealloc_common(PyTypeObject *type)
         END_TYPE_LOCK();
         PyErr_SetRaisedException(exc);
     }
+#endif
 }
 
 
@@ -6915,7 +6930,9 @@ type_dealloc(PyObject *self)
     type_dealloc_common(type);
 
     // PyObject_ClearWeakRefs() raises an exception if Py_REFCNT() != 0
+#ifndef Py_GC  // reference counts are constant under Py_GC
     assert(Py_REFCNT(type) == 0);
+#endif
     PyObject_ClearWeakRefs((PyObject *)type);
 
     Py_XDECREF(type->tp_base);

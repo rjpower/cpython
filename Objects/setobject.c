@@ -1256,7 +1256,9 @@ set_update_lock_held(PySetObject *so, PyObject *other)
 static int
 set_update_local(PySetObject *so, PyObject *other)
 {
+#ifndef Py_GC  // reference counts are constant under Py_GC
     assert(Py_REFCNT(so) == 1);
+#endif
     if (PyAnySet_Check(other)) {
         int rv;
         Py_BEGIN_CRITICAL_SECTION(other);
@@ -1569,7 +1571,9 @@ _PySet_Freeze(PyObject *set)
 {
     assert(set != NULL);
     assert(PySet_CheckExact(set));
+#ifndef Py_GC  // reference counts are constant under Py_GC
     assert(_PyObject_IsUniquelyReferenced(set));
+#endif
     set->ob_type = &PyFrozenSet_Type;
     return Py_NewRef(set);
 }
@@ -3112,7 +3116,13 @@ PySet_Add(PyObject *anyset, PyObject *key)
         return rv;
     }
 
+#ifdef Py_GC
+    /* Without reference counts the API's condition, a brand new frozenset,
+       is the caller's to keep. */
+    if (PyFrozenSet_Check(anyset)) {
+#else
     if (PyFrozenSet_Check(anyset) && _PyObject_IsUniquelyReferenced(anyset)) {
+#endif
         // We can only change frozensets if they are uniquely referenced. The
         // API limits the usage of `PySet_Add` to "fill in the values of brand
         // new frozensets before they are exposed to other code". In this case,

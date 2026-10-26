@@ -1047,7 +1047,9 @@ dummy_func(
                 ERROR_NO_POP();
             }
             assert(d->result_type == NULL || Py_TYPE(res_o) == d->result_type);
+#ifndef Py_GC  // reference counts are constant under Py_GC
             assert(!d->result_unique || Py_REFCNT(res_o) == 1 || _Py_IsImmortal(res_o));
+#endif
 
             res = PyStackRef_FromPyObjectSteal(res_o);
             l = left;
@@ -3824,7 +3826,9 @@ dummy_func(
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyStackRef_AsPyObjectBorrow(iter);
             assert(Py_TYPE(r) == &PyRangeIter_Type);
 #ifdef Py_GIL_DISABLED
+#ifndef Py_GC  // reference counts are constant under Py_GC
             assert(_PyObject_IsUniquelyReferenced((PyObject *)r));
+#endif
 #endif
             STAT_INC(FOR_ITER, hit);
             if (r->len <= 0) {
@@ -3838,7 +3842,9 @@ dummy_func(
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyStackRef_AsPyObjectBorrow(iter);
             assert(Py_TYPE(r) == &PyRangeIter_Type);
 #ifdef Py_GIL_DISABLED
+#ifndef Py_GC  // reference counts are constant under Py_GC
             assert(_PyObject_IsUniquelyReferenced((PyObject *)r));
+#endif
 #endif
             assert(r->len > 0);
             long value = r->start;

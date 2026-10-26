@@ -51,8 +51,24 @@ A standard interface exists for objects that contain an array of items
 whose size is determined when the object is allocated.
 */
 
+/* Py_GC: the tracing collector owns memory and reference counting is off
+   (configure --with-gc; note 06, step 5).  There are no reference counts to
+   debug, so Py_DEBUG does not imply Py_REF_DEBUG there. */
+#ifdef Py_GC
+   /* abi3t defines Py_GIL_DISABLED for its users, but PyObject is opaque to
+      them, so they see no difference. */
+#  if (defined(Py_GIL_DISABLED) && !defined(_Py_OPAQUE_PYOBJECT)) \
+      || defined(Py_TRACE_REFS) \
+      || defined(Py_STACKREF_DEBUG) || defined(Py_REF_DEBUG)
+#    error "Py_GC cannot be combined with Py_GIL_DISABLED, Py_TRACE_REFS, Py_STACKREF_DEBUG or Py_REF_DEBUG"
+#  endif
+#  if SIZEOF_VOID_P != 8
+#    error "Py_GC requires a 64-bit platform"
+#  endif
+#endif
+
 /* Py_DEBUG implies Py_REF_DEBUG. */
-#if defined(Py_DEBUG) && !defined(Py_REF_DEBUG)
+#if defined(Py_DEBUG) && !defined(Py_REF_DEBUG) && !defined(Py_GC)
 #  define Py_REF_DEBUG
 #endif
 
@@ -581,6 +597,31 @@ given type object has a specified feature.
 #define _Py_IMMORTAL_FLAGS (1 << 0)
 #define _Py_LEGACY_ABI_CHECK_FLAG (1 << 1) /* see PyModuleDef_Init() */
 #define _Py_STATICALLY_ALLOCATED_FLAG (1 << 2)
+#ifdef Py_GC
+/* Under Py_GC, ob_refcnt holds the constant _Py_GC_REFCNT for every mortal
+ * object and counts nothing.  _Py_NewReference() stores _Py_GC_OBJECT_MAGIC
+ * in ob_overflow and sets _Py_GC_HEAP_FLAG, which together tell the
+ * collector's heap walk that a block holds an initialized object; freeing an
+ * object block clears them.  No pointer has bit 63 set, so a mimalloc
+ * free-list link in the first word never looks like an object.  The other
+ * bits are the collector's (Python/gc_live.c and Python/gc_trace.c); it
+ * writes them while it holds the GIL. */
+#  define _Py_GC_MARKED_FLAG     (1 << 8)   /* reached by the current mark */
+#  define _Py_GC_DEAD_FLAG       (1 << 9)   /* unreachable, being swept */
+#  define _Py_GC_FINALIZED_FLAG  (1 << 10)  /* tp_finalize called (PEP 442) */
+#  define _Py_GC_OWNS_RESOURCES_FLAG (1 << 11) /* reserved: dealloc releases
+                                                 external resources */
+#  define _Py_GC_TRACKED_FLAG    (1 << 12)  /* PyObject_GC_Track() was called:
+                                               the object is fully built */
+#  define _Py_GC_SHALLOW_FLAG    (1 << 13)  /* marked by a conservative root
+                                               without being traversed */
+#  define _Py_GC_HEAP_FLAG       (1 << 15)  /* see above */
+#  define _Py_GC_OBJECT_MAGIC    0x6C0B
+#  define _Py_GC_REFCNT          ((uint32_t)1 << 30)
+#  define _Py_GC_HEADER_INIT \
+    ((int64_t)_Py_GC_REFCNT | ((int64_t)_Py_GC_OBJECT_MAGIC << 32) \
+     | ((int64_t)_Py_GC_HEAP_FLAG << 48))
+#endif
 #if !defined(Py_LIMITED_API)
 #  if defined(Py_GIL_DISABLED) && defined(Py_DEBUG)
 #    define _Py_TYPE_REVEALED_FLAG (1 << 3)

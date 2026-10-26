@@ -1145,7 +1145,9 @@ static int
 resize_inplace(PyObject *unicode, Py_ssize_t length)
 {
     assert(!PyUnicode_IS_COMPACT(unicode));
+#ifndef Py_GC  // reference counts are constant under Py_GC
     assert(Py_REFCNT(unicode) == 1);
+#endif
 
     Py_ssize_t new_size;
     Py_ssize_t char_size;
@@ -1382,7 +1384,17 @@ PyUnicode_New(Py_ssize_t size, Py_UCS4 maxchar)
 static int
 unicode_check_modifiable(PyObject *unicode)
 {
+#ifdef Py_GC
+    /* The public writers (PyUnicode_WriteChar(), PyUnicode_Fill(),
+       PyUnicode_CopyCharacters()) are for strings the caller just created;
+       without counts that is the caller's contract.  The other conditions
+       still hold. */
+    if (!PyUnicode_CheckExact(unicode) || PyUnicode_HASH(unicode) != -1
+        || PyUnicode_CHECK_INTERNED(unicode))
+    {
+#else
     if (!_PyUnicode_IsModifiable(unicode)) {
+#endif
         PyErr_SetString(PyExc_SystemError,
                         "Cannot modify a string currently used");
         return -1;
@@ -1672,7 +1684,9 @@ unicode_dealloc(PyObject *unicode)
              * Before doing so, we set the refcount to 2: the key and value
              * in the interned_dict.
              */
+#ifndef Py_GC  // reference counts are constant under Py_GC
             assert(Py_REFCNT(unicode) == 0);
+#endif
             Py_SET_REFCNT(unicode, 2);
 #ifdef Py_REF_DEBUG
             /* let's be pedantic with the ref total */
@@ -1708,7 +1722,9 @@ unicode_dealloc(PyObject *unicode)
             // Successfully popped.
             assert(popped == unicode);
             // Only our `popped` reference should be left; remove it too.
+#ifndef Py_GC  // reference counts are constant under Py_GC
             assert(Py_REFCNT(unicode) == 1);
+#endif
             Py_SET_REFCNT(unicode, 0);
 #ifdef Py_REF_DEBUG
             /* let's be pedantic with the ref total */
@@ -10621,7 +10637,9 @@ _PyUnicode_FastFill(PyObject *unicode, Py_ssize_t start, Py_ssize_t length,
 {
     const int kind = PyUnicode_KIND(unicode);
     void *data = PyUnicode_DATA(unicode);
+#ifndef Py_GC  // reference counts are constant under Py_GC
     assert(_PyUnicode_IsModifiable(unicode));
+#endif
     assert(fill_char <= PyUnicode_MAX_CHAR_VALUE(unicode));
     assert(start >= 0);
     assert(start + length <= PyUnicode_GET_LENGTH(unicode));

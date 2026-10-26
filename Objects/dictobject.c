@@ -311,7 +311,9 @@ can_modify_dict(PyDictObject *mp)
 
         // No locking required to modify a newly created frozendict
         // since it's only accessible from the current thread.
+#ifndef Py_GC  // reference counts are constant under Py_GC
         assert(PyUnstable_Object_IsUniquelyReferenced(_PyObject_CAST(mp)));
+#endif
     }
     else {
         // Locking is only required if the dictionary is not

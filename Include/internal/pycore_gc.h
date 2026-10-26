@@ -71,7 +71,12 @@ _PyObject_CLEAR_GC_BITS(PyObject *op, uint8_t bits_to_clear)
 
 /* True if the object is currently tracked by the GC. */
 static inline int _PyObject_GC_IS_TRACKED(PyObject *op) {
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GC)
+    /* Under Py_GC there are no generation lists.  The bit survives so that a
+       conservative root can tell an object still being built (untracked)
+       from one whose fields are all set (Python/gc_live.c). */
+    return (op->ob_flags & _Py_GC_TRACKED_FLAG) != 0;
+#elif defined(Py_GIL_DISABLED)
     return _PyObject_HAS_GC_BITS(op, _PyGC_BITS_TRACKED);
 #else
     PyGC_Head *gc = _Py_AS_GC(op);
@@ -164,7 +169,9 @@ static inline void _PyGCHead_SET_PREV(PyGC_Head *gc, PyGC_Head *prev) {
 }
 
 static inline int _PyGC_FINALIZED(PyObject *op) {
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GC)
+    return (op->ob_flags & _Py_GC_FINALIZED_FLAG) != 0;
+#elif defined(Py_GIL_DISABLED)
     return _PyObject_HAS_GC_BITS(op, _PyGC_BITS_FINALIZED);
 #else
     PyGC_Head *gc = _Py_AS_GC(op);
@@ -172,7 +179,9 @@ static inline int _PyGC_FINALIZED(PyObject *op) {
 #endif
 }
 static inline void _PyGC_SET_FINALIZED(PyObject *op) {
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GC)
+    op->ob_flags |= _Py_GC_FINALIZED_FLAG;
+#elif defined(Py_GIL_DISABLED)
     _PyObject_SET_GC_BITS(op, _PyGC_BITS_FINALIZED);
 #else
     PyGC_Head *gc = _Py_AS_GC(op);
@@ -180,7 +189,9 @@ static inline void _PyGC_SET_FINALIZED(PyObject *op) {
 #endif
 }
 static inline void _PyGC_CLEAR_FINALIZED(PyObject *op) {
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GC)
+    op->ob_flags &= ~_Py_GC_FINALIZED_FLAG;
+#elif defined(Py_GIL_DISABLED)
     _PyObject_CLEAR_GC_BITS(op, _PyGC_BITS_FINALIZED);
 #else
     PyGC_Head *gc = _Py_AS_GC(op);
@@ -214,7 +225,9 @@ static inline void _PyObject_GC_TRACK(
     _PyObject_ASSERT_FROM(op, !_PyObject_GC_IS_TRACKED(op),
                           "object already tracked by the garbage collector",
                           filename, lineno, __func__);
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GC)
+    op->ob_flags |= _Py_GC_TRACKED_FLAG;
+#elif defined(Py_GIL_DISABLED)
     _PyObject_SET_GC_BITS(op, _PyGC_BITS_TRACKED);
 #else
     PyGC_Head *gc = _Py_AS_GC(op);
@@ -255,7 +268,9 @@ static inline void _PyObject_GC_UNTRACK(
                           "object not tracked by the garbage collector",
                           filename, lineno, __func__);
 
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GC)
+    op->ob_flags &= ~_Py_GC_TRACKED_FLAG;
+#elif defined(Py_GIL_DISABLED)
     _PyObject_CLEAR_GC_BITS(op, _PyGC_BITS_TRACKED);
 #else
     PyGC_Head *gc = _Py_AS_GC(op);

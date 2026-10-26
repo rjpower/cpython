@@ -233,11 +233,18 @@ _PyUnicode_FormatLong(PyObject *val, int alt, int prec, int type)
     if (!result)
         return NULL;
 
+#ifndef Py_GC
     assert(_PyUnicode_IsModifiable(result));
+#endif
     assert(PyUnicode_IS_ASCII(result));
 
     /* To modify the string in-place, there can only be one reference. */
+#ifndef Py_GC
     if (!_PyObject_IsUniquelyReferenced(result)) {
+#else
+    // The result is fresh from PyNumber_ToBase(), which caches nothing.
+    if (0) {
+#endif
         Py_DECREF(result);
         PyErr_BadInternalCall();
         return NULL;

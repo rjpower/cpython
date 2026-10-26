@@ -133,6 +133,11 @@ extern PyAPI_FUNC(void) _Py_DecRefTotal(PyThreadState *);
 // Increment reference count by n
 static inline void _Py_RefcntAdd(PyObject* op, Py_ssize_t n)
 {
+#ifdef Py_GC
+    (void)op;
+    (void)n;
+    return;
+#endif
     if (_Py_IsImmortal(op)) {
         _Py_INCREF_IMMORTAL_STAT_INC();
         return;
@@ -183,7 +188,11 @@ static inline void _Py_RefcntAdd(PyObject* op, Py_ssize_t n)
 static inline int
 _PyObject_IsUniquelyReferenced(PyObject *ob)
 {
-#if !defined(Py_GIL_DISABLED)
+#if defined(Py_GC)
+    // Without counts, uniqueness cannot be known.
+    (void)ob;
+    return 0;
+#elif !defined(Py_GIL_DISABLED)
     return Py_REFCNT(ob) == 1;
 #else
     // NOTE: the entire ob_ref_shared field must be zero, including flags, to
@@ -202,6 +211,12 @@ PyAPI_FUNC(void) _Py_SetImmortalUntracked(PyObject *op);
 // be used during runtime finalization.
 static inline void _Py_SetMortal(PyObject *op, short refcnt)
 {
+#ifdef Py_GC
+    // Immortal objects stay immortal: the collector never sweeps them.
+    (void)op;
+    (void)refcnt;
+    return;
+#endif
     if (op) {
         assert(_Py_IsImmortal(op));
 #ifdef Py_GIL_DISABLED
@@ -228,7 +243,14 @@ static inline void _Py_ClearImmortal(PyObject *op)
         op = NULL; \
     } while (0)
 
-#if !defined(Py_GIL_DISABLED)
+#if defined(Py_GC)
+static inline void
+_Py_DECREF_SPECIALIZED(PyObject *op, const destructor destruct)
+{
+    (void)op;
+    (void)destruct;
+}
+#elif !defined(Py_GIL_DISABLED)
 static inline void
 _Py_DECREF_SPECIALIZED(PyObject *op, const destructor destruct)
 {
@@ -400,7 +422,10 @@ _Py_DECREF_CODE(PyCodeObject *co)
 }
 #endif
 
-#ifndef Py_GIL_DISABLED
+#if defined(Py_GC)
+# define Py_DECREF_MORTAL(op) Py_DECREF(op)
+# define Py_DECREF_MORTAL_SPECIALIZED(op, destruct) Py_DECREF(op)
+#elif !defined(Py_GIL_DISABLED)
 #ifdef Py_REF_DEBUG
 
 static inline void Py_DECREF_MORTAL(const char *filename, int lineno, PyObject *op)
@@ -676,6 +701,11 @@ extern PyAPI_FUNC(int) _PyObject_ResurrectEndSlow(PyObject *op);
 static inline void
 _PyObject_ResurrectStart(PyObject *op)
 {
+#ifdef Py_GC
+    // The collector resurrects objects for their finalizers by marking them.
+    (void)op;
+    return;
+#endif
     assert(Py_REFCNT(op) == 0);
 #ifdef Py_REF_DEBUG
     _Py_IncRefTotal(_PyThreadState_GET());
@@ -698,6 +728,10 @@ _PyObject_ResurrectStart(PyObject *op)
 static inline int
 _PyObject_ResurrectEnd(PyObject *op)
 {
+#ifdef Py_GC
+    (void)op;
+    return 0;
+#endif
 #ifdef Py_REF_DEBUG
     _Py_DecRefTotal(_PyThreadState_GET());
 #endif
@@ -1001,7 +1035,9 @@ enum _PyAnnotateFormat {
 extern int _PyObject_SetDict(PyObject *obj, PyObject *value);
 extern int _PyObject_SetManagedDict(PyObject *obj, PyObject *new_dict);
 
-#ifndef Py_GIL_DISABLED
+#if defined(Py_GC)
+# define _Py_INCREF_MORTAL(op) Py_INCREF(op)
+#elif !defined(Py_GIL_DISABLED)
 static inline Py_ALWAYS_INLINE void _Py_INCREF_MORTAL(PyObject *op)
 {
     assert(!_Py_IsStaticImmortal(op));

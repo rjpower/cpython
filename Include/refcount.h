@@ -103,7 +103,12 @@ PyAPI_FUNC(Py_ssize_t) Py_REFCNT(PyObject *ob);
     // Py_REFCNT() is also a function call in abi3t.
 #else
     static inline Py_ssize_t _Py_REFCNT(PyObject *ob) {
-    #if !defined(Py_GIL_DISABLED)
+    #if defined(Py_GC)
+        // Nothing is counted.  The constant is large so that code testing
+        // Py_REFCNT(x) == 1 before mutating x in place takes its safe path.
+        (void)ob;
+        return _Py_GC_REFCNT;
+    #elif !defined(Py_GIL_DISABLED)
         return ob->ob_refcnt;
     #else
         uint32_t local = _Py_atomic_load_uint32_relaxed(&ob->ob_ref_local);
@@ -153,7 +158,10 @@ PyAPI_FUNC(void) _Py_SetRefcnt(PyObject *ob, Py_ssize_t refcnt);
 
 static inline void Py_SET_REFCNT(PyObject *ob, Py_ssize_t refcnt) {
     assert(refcnt >= 0);
-#if (defined(Py_LIMITED_API) && Py_LIMITED_API+0 >= 0x030d0000) \
+#if defined(Py_GC)
+    (void)ob;
+    (void)refcnt;
+#elif (defined(Py_LIMITED_API) && Py_LIMITED_API+0 >= 0x030d0000) \
     || defined(_Py_OPAQUE_PYOBJECT)
     // Stable ABI implements Py_SET_REFCNT() as a function call
     // on limited C API version 3.13 and newer, and abi3t.
@@ -254,7 +262,10 @@ PyAPI_FUNC(void) _Py_DecRef(PyObject *);
 
 static inline Py_ALWAYS_INLINE void Py_INCREF(PyObject *op)
 {
-#if (defined(Py_LIMITED_API) && (Py_LIMITED_API+0 >= 0x030c0000 || defined(Py_REF_DEBUG))) \
+#if defined(Py_GC)
+    // The tracing collector owns memory; there is nothing to count.
+    (void)op;
+#elif (defined(Py_LIMITED_API) && (Py_LIMITED_API+0 >= 0x030c0000 || defined(Py_REF_DEBUG))) \
     || defined(_Py_OPAQUE_PYOBJECT)
     // Stable ABI implements Py_INCREF() as a function call on limited C API
     // version 3.12 and newer, abi3t, and on Python built in debug mode.
@@ -324,7 +335,15 @@ PyAPI_FUNC(void) _Py_MergeZeroLocalRefcount(PyObject *);
 #endif  // Py_GIL_DISABLED
 #endif  // Py_LIMITED_API
 
-#if (defined(Py_LIMITED_API) && (Py_LIMITED_API+0 >= 0x030c0000 || defined(Py_REF_DEBUG))) \
+#if defined(Py_GC)
+// The tracing collector frees unreachable objects; there is nothing to count.
+static inline Py_ALWAYS_INLINE void Py_DECREF(PyObject *op)
+{
+    (void)op;
+}
+#define Py_DECREF(op) Py_DECREF(_PyObject_CAST(op))
+
+#elif (defined(Py_LIMITED_API) && (Py_LIMITED_API+0 >= 0x030c0000 || defined(Py_REF_DEBUG))) \
     || defined(_Py_OPAQUE_PYOBJECT)
 // Stable ABI implements Py_DECREF() as a function call on limited C API
 // version 3.12 and newer, abi3t, and on Python built in debug mode.

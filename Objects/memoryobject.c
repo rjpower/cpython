@@ -120,7 +120,9 @@ static void
 mbuf_dealloc(PyObject *_self)
 {
     _PyManagedBufferObject *self = (_PyManagedBufferObject *)_self;
+#ifndef Py_GC  // the sweep can deallocate the exporter before its views
     assert(self->exports == 0);
+#endif
     mbuf_release(self);
     if (self->flags&_Py_MANAGED_BUFFER_FREE_FORMAT)
         PyMem_Free(self->master.format);

@@ -52,6 +52,14 @@ _Py_freelists_GET(void)
 static inline int
 _PyFreeList_Push(struct _Py_freelist *fl, void *obj, Py_ssize_t maxsize)
 {
+#ifdef Py_GC
+    /* No free lists under Py_GC: a free-list object is a dead object that
+       looks alive to the heap walk.  Nothing is pushed, so nothing pops. */
+    (void)fl;
+    (void)obj;
+    (void)maxsize;
+    return 0;
+#endif
     if (fl->size < maxsize && fl->size >= 0) {
         FT_ATOMIC_STORE_PTR_RELAXED(*(void **)obj, fl->freelist);
         fl->freelist = obj;

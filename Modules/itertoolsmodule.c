@@ -2244,7 +2244,9 @@ product_next_impl(productobject *self)
             _PyTuple_Recycle(result);
         }
         /* Now, we've got the only copy so we can update it in-place */
+#ifndef Py_GC  // reference counts are constant under Py_GC
         assert (npools==0 || Py_REFCNT(result) == 1);
+#endif
 
         /* Update the pool indices right-to-left.  Only advance to the
            next pool when the previous one rolls-over */
@@ -2478,7 +2480,9 @@ combinations_next_impl(combinationsobject *self)
          * CPython's empty tuple is a singleton and cached in
          * PyTuple's freelist.
          */
+#ifndef Py_GC  // reference counts are constant under Py_GC
         assert(r == 0 || Py_REFCNT(result) == 1);
+#endif
 
         /* Scan indices right-to-left until finding one that is not
            at its maximum (i + n - r). */
@@ -2726,7 +2730,9 @@ cwr_next_impl(cwrobject *self)
         }
         /* Now, we've got the only copy so we can update it in-place CPython's
            empty tuple is a singleton and cached in PyTuple's freelist. */
+#ifndef Py_GC  // reference counts are constant under Py_GC
         assert(r == 0 || Py_REFCNT(result) == 1);
+#endif
 
        /* Scan indices right-to-left until finding one that is not
         * at its maximum (n-1). */
@@ -2992,7 +2998,9 @@ permutations_next_impl(permutationsobject *self)
             _PyTuple_Recycle(result);
         }
         /* Now, we've got the only copy so we can update it in-place */
+#ifndef Py_GC  // reference counts are constant under Py_GC
         assert(r == 0 || Py_REFCNT(result) == 1);
+#endif
 
         /* Decrement rightmost cycle, moving leftward upon zero rollover */
         for (i=r-1 ; i>=0 ; i--) {

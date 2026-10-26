@@ -118,7 +118,13 @@ int
 PyTuple_SetItem(PyObject *op, Py_ssize_t i, PyObject *newitem)
 {
     PyObject **p;
+#ifdef Py_GC
+    // Uniqueness cannot be checked without counts; it is the caller's
+    // contract, as for PyTuple_SET_ITEM().
+    if (!PyTuple_Check(op)) {
+#else
     if (!PyTuple_Check(op) || !_PyObject_IsUniquelyReferenced(op)) {
+#endif
         Py_XDECREF(newitem);
         PyErr_BadInternalCall();
         return -1;
@@ -1037,8 +1043,13 @@ _PyTuple_Resize(PyObject **pv, Py_ssize_t newsize)
     Py_ssize_t oldsize;
 
     v = (PyTupleObject *) *pv;
+#ifdef Py_GC
+    // As in PyTuple_SetItem(), uniqueness is the caller's contract.
+    if (v == NULL || !Py_IS_TYPE(v, &PyTuple_Type) || newsize < 0) {
+#else
     if (v == NULL || !Py_IS_TYPE(v, &PyTuple_Type) || newsize < 0 ||
         (Py_SIZE(v) != 0 && !_PyObject_IsUniquelyReferenced(*pv))) {
+#endif
         *pv = 0;
         Py_XDECREF(v);
         PyErr_BadInternalCall();

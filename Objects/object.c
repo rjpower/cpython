@@ -12,6 +12,7 @@
 #include "pycore_floatobject.h"   // _PyFloat_DebugMallocStats()
 #include "pycore_function.h"      // _PyClassMethod_GetFunc()
 #include "pycore_freelist.h"      // _PyObject_ClearFreeLists()
+#include "pycore_gc_trace.h"     // _PyGC_LiveAddImmortal()
 #include "pycore_genobject.h"     // _PyAsyncGenAThrow_Type
 #include "pycore_hamt.h"          // _PyHamtItems_Type
 #include "pycore_initconfig.h"    // _PyStatus_OK()
@@ -582,6 +583,14 @@ PyObject_CallFinalizer(PyObject *self)
     if (tp->tp_finalize == NULL)
         return;
     /* tp_finalize should only be called once. */
+#ifdef Py_GC
+    // The flag is in the object header, so it works for every type.
+    if (_PyGC_FINALIZED(self)) {
+        return;
+    }
+    _PyGC_SET_FINALIZED(self);
+    tp->tp_finalize(self);
+#else
     if (_PyType_IS_GC(tp) && _PyGC_FINALIZED(self))
         return;
 
@@ -589,11 +598,18 @@ PyObject_CallFinalizer(PyObject *self)
     if (_PyType_IS_GC(tp)) {
         _PyGC_SET_FINALIZED(self);
     }
+#endif
 }
 
 int
 PyObject_CallFinalizerFromDealloc(PyObject *self)
 {
+#ifdef Py_GC
+    /* The collector ran the finalizer, from its queue, in the collection
+       before the one that is sweeping self. */
+    (void)self;
+    return 0;
+#endif
     if (Py_REFCNT(self) != 0) {
         _PyObject_ASSERT_FAILED_MSG(self,
                                     "PyObject_CallFinalizerFromDealloc called "
@@ -2731,7 +2747,10 @@ static inline void
 new_reference(PyObject *op)
 {
     // Skip the immortal object check in Py_SET_REFCNT; always set refcnt to 1
-#if !defined(Py_GIL_DISABLED)
+#if defined(Py_GC)
+    // Mark the block as an initialized object for the collector's heap walk.
+    op->ob_refcnt_full = _Py_GC_HEADER_INIT;
+#elif !defined(Py_GIL_DISABLED)
 #if SIZEOF_VOID_P > 4
     op->ob_refcnt_full = 1;
     assert(op->ob_refcnt == 1);
@@ -2787,6 +2806,12 @@ _Py_SetImmortalUntracked(PyObject *op)
     _Py_atomic_store_uint32_relaxed(&op->ob_ref_local, _Py_IMMORTAL_REFCNT_LOCAL);
     _Py_atomic_store_ssize_relaxed(&op->ob_ref_shared, 0);
     _Py_atomic_or_uint8(&op->ob_gc_bits, _PyGC_BITS_DEFERRED);
+#elif defined(Py_GC)
+    // Keep the collector's bits: the object stays an object in the heap walk,
+    // which never sweeps it, and its references are roots.
+    op->ob_flags |= _Py_IMMORTAL_FLAGS;
+    op->ob_refcnt = _Py_IMMORTAL_INITIAL_REFCNT;
+    _PyGC_LiveAddImmortal(op);
 #elif SIZEOF_VOID_P > 4
     op->ob_flags = _Py_IMMORTAL_FLAGS;
     op->ob_refcnt = _Py_IMMORTAL_INITIAL_REFCNT;
@@ -3365,6 +3390,12 @@ py_dealloc(PyObject *op)
 void
 _Py_Dealloc(PyObject *op)
 {
+#ifdef Py_GC
+    // Only the collector's sweep deallocates (Python/gc_live.c).  This is
+    // reached from extensions built without Py_GC whose decrefs reached zero.
+    (void)op;
+    return;
+#endif
 #if !defined(Py_DEBUG) && !defined(Py_TRACE_REFS)
     // gh-130706: Avoid unnecessary register spills for non-GC objects.
     PyTypeObject *type = Py_TYPE(op);

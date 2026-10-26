@@ -122,7 +122,9 @@ PyUnicodeWriter_Discard(PyUnicodeWriter *writer)
 void
 _PyUnicodeWriter_InitWithBuffer(_PyUnicodeWriter *writer, PyObject *buffer)
 {
+#ifndef Py_GC  // reference counts are constant under Py_GC
     assert(PyUnstable_Object_IsUniquelyReferenced(buffer));
+#endif
 
     memset(writer, 0, sizeof(*writer));
     _PyUnicodeWriter_SetBuffer(writer, buffer);

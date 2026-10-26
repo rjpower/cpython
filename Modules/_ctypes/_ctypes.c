@@ -975,7 +975,9 @@ CDataType_from_buffer_copy_impl(PyObject *type, PyTypeObject *cls,
 
     result = generic_pycdata_new(st, (PyTypeObject *)type, NULL, NULL);
     if (result != NULL) {
+#ifndef Py_GC  // reference counts are constant under Py_GC
         assert(_PyObject_IsUniquelyReferenced(result));
+#endif
         memcpy(((CDataObject *) result)->b_ptr, (char *)buffer->buf + offset, info->size);
     }
     return result;
@@ -3260,7 +3262,9 @@ PyCData_MallocBuffer(CDataObject *obj, StgInfo *info)
      * used in constructors and therefore does not have concurrent
      * access.
      */
+#ifndef Py_GC  // reference counts are constant under Py_GC
    assert (Py_REFCNT(obj) == 1);
+#endif
    assert(stginfo_get_dict_final(info) == 1);
 
     if ((size_t)info->size <= sizeof(obj->b_value)) {

@@ -70,7 +70,11 @@
         } \
     } while (0)
 
-#ifndef Py_GIL_DISABLED
+#if defined(Py_GC)
+
+// Py_DECREF and _Py_DECREF_SPECIALIZED are already no-ops.
+
+#elif !defined(Py_GIL_DISABLED)
 
 #undef Py_DECREF
 #define Py_DECREF(arg) \

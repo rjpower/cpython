@@ -4218,6 +4218,9 @@ MemoryError_dealloc(PyObject *op)
         return;
     }
 
+#ifndef Py_GC
+    /* Under Py_GC the collector frees the object after this returns, so it
+       cannot be kept on the free list. */
     struct _Py_exc_state *state = get_exc_state();
     MEMERRORS_LOCK(state);
     if (state->memerrors_numfree < MEMERRORS_SAVE) {
@@ -4228,6 +4231,7 @@ MemoryError_dealloc(PyObject *op)
         return;
     }
     MEMERRORS_UNLOCK(state);
+#endif
 
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
@@ -4237,6 +4241,12 @@ preallocate_memerrors(void)
 {
     /* We create enough MemoryErrors and then decref them, which will fill
        up the freelist. */
+#ifdef Py_GC
+    /* Nothing is freed onto the free list (see MemoryError_dealloc), and
+       _PyErr_NoMemory() falls back to the interpreter's last-resort
+       MemoryError. */
+    return 0;
+#endif
     int i;
 
     PyObject *errors[MEMERRORS_SAVE];

@@ -1280,11 +1280,13 @@ bytearray_dealloc(PyObject *op)
     }
 #endif
 
+#ifndef Py_GC  // the sweep can deallocate the exporter before its views
     if (self->ob_exports > 0) {
         PyErr_SetString(PyExc_SystemError,
                         "deallocated bytearray object has exported buffers");
         PyErr_Print();
     }
+#endif
     Py_XDECREF(self->ob_bytes_object);
     Py_TYPE(self)->tp_free((PyObject *)self);
 }

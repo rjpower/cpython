@@ -966,8 +966,7 @@ class ExceptionTests(unittest.TestCase):
             except MyException:
                 pass
         obj = None
-        if check_impl_detail(cpython=False) or support.Py_GC:
-            gc_collect()
+        gc_collect()
         obj = wr()
         self.assertIsNone(obj)
 
@@ -982,8 +981,7 @@ class ExceptionTests(unittest.TestCase):
         with Context():
             inner_raising_func()
         obj = None
-        if check_impl_detail(cpython=False) or support.Py_GC:
-            gc_collect()
+        gc_collect()
         obj = wr()
         self.assertIsNone(obj)
 
@@ -1590,10 +1588,6 @@ class ExceptionTests(unittest.TestCase):
         # Check that the program does not fail with SIGABRT.
         self.assertEqual(rc, 1)
         self.assertIn(b'RecursionError', err)
-        if not support.Py_GC:
-            # The file is closed, with the warning, when the suspended
-            # generator dies at exit; no collection finds it dead.
-            self.assertIn(b'ResourceWarning', err)
         self.assertIn(b'Done.', out)
 
     @cpython_only

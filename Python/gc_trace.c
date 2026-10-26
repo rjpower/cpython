@@ -1088,23 +1088,43 @@ scan_threads(trace_t *t, PyThreadState *current)
     scan_queued(t);
 }
 
+/* The stack and registers of another thread, as it recorded them when it
+   released the GIL. */
+static void
+scan_other_thread(trace_t *t, PyThreadState *p)
+{
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)p;
+    if (!ts->gc_trace.valid) {
+        return;  // never attached
+    }
+    scan_range(t, (uintptr_t)ts->gc_trace.regs,
+               (uintptr_t)(ts->gc_trace.regs + 24));
+    uintptr_t top = stack_top(p);
+    if (top > ts->gc_trace.sp) {
+        scan_range(t, ts->gc_trace.sp, top);
+    }
+}
+
+/* The thread states that finalization unlinked, whose daemon threads may
+   still run C code and whose frames remain (_PyGC_LiveKeepThreads()). */
+static PyThreadState *
+kept_threads(PyInterpreterState *interp)
+{
+#ifdef Py_GC
+    return _PyGC_LiveKeptThreads(interp);
+#else
+    (void)interp;
+    return NULL;
+#endif
+}
+
 static void
 scan_threads_only(trace_t *t, PyThreadState *current)
 {
     scan_current_thread(t, current);
     _Py_FOR_EACH_TSTATE_UNLOCKED(t->interp, p) {
-        if (p == current) {
-            continue;
-        }
-        _PyThreadStateImpl *ts = (_PyThreadStateImpl *)p;
-        if (!ts->gc_trace.valid) {
-            continue;  // never attached
-        }
-        scan_range(t, (uintptr_t)ts->gc_trace.regs,
-                   (uintptr_t)(ts->gc_trace.regs + 24));
-        uintptr_t top = stack_top(p);
-        if (top > ts->gc_trace.sp) {
-            scan_range(t, ts->gc_trace.sp, top);
+        if (p != current) {
+            scan_other_thread(t, p);
         }
     }
 }
@@ -1145,30 +1165,39 @@ scan_struct_except(trace_t *t, void *p, size_t size, struct llist_node *head)
 }
 
 static void
+scan_thread_struct(trace_t *t, PyThreadState *p)
+{
+    scan_struct_except(t, p, sizeof(_PyThreadStateImpl),
+                       &((_PyThreadStateImpl *)p)->asyncio_tasks_head);
+    /* The data stack.  A frame that is returning is unlinked from
+     * current_frame before its slots are cleared, and a finalizer that
+     * clearing a slot triggers can collect while the later slots still
+     * hold their objects.  The current chunk holds slots up to
+     * datastack_top and frame headers from datastack_limit; earlier
+     * chunks are scanned whole. */
+    _PyStackChunk *chunk = p->datastack_chunk;
+    if (chunk == NULL) {
+        return;
+    }
+    uintptr_t end = (uintptr_t)chunk + chunk->size;
+    scan_range(t, (uintptr_t)&chunk->data[0], (uintptr_t)p->datastack_top);
+    scan_range(t, (uintptr_t)p->datastack_limit, end);
+    for (chunk = chunk->previous; chunk != NULL; chunk = chunk->previous) {
+        scan_range(t, (uintptr_t)&chunk->data[0],
+                   (uintptr_t)chunk + chunk->size);
+    }
+}
+
+static void
 scan_structs(trace_t *t)
 {
     scan_struct_except(t, t->interp, sizeof(PyInterpreterState),
                        &t->interp->asyncio_tasks_head);
     _Py_FOR_EACH_TSTATE_UNLOCKED(t->interp, p) {
-        scan_struct_except(t, p, sizeof(_PyThreadStateImpl),
-                           &((_PyThreadStateImpl *)p)->asyncio_tasks_head);
-        /* The data stack.  A frame that is returning is unlinked from
-         * current_frame before its slots are cleared, and a finalizer that
-         * clearing a slot triggers can collect while the later slots still
-         * hold their objects.  The current chunk holds slots up to
-         * datastack_top and frame headers from datastack_limit; earlier
-         * chunks are scanned whole. */
-        _PyStackChunk *chunk = p->datastack_chunk;
-        if (chunk == NULL) {
-            continue;
-        }
-        uintptr_t end = (uintptr_t)chunk + chunk->size;
-        scan_range(t, (uintptr_t)&chunk->data[0], (uintptr_t)p->datastack_top);
-        scan_range(t, (uintptr_t)p->datastack_limit, end);
-        for (chunk = chunk->previous; chunk != NULL; chunk = chunk->previous) {
-            scan_range(t, (uintptr_t)&chunk->data[0],
-                       (uintptr_t)chunk + chunk->size);
-        }
+        scan_thread_struct(t, p);
+    }
+    for (PyThreadState *p = kept_threads(t->interp); p; p = p->next) {
+        scan_thread_struct(t, p);
     }
 }
 
@@ -1879,8 +1908,24 @@ live_other_threads(trace_t *t, PyThreadState *current)
                 return 1;
             }
         }
+        if (kept_threads(t->domain[d]) != NULL) {
+            return 1;
+        }
     }
     return 0;
+}
+
+static void
+live_mark_thread(trace_t *t, PyThreadState *p, unsigned int roots)
+{
+    if (roots & _PyGC_TRACE_ROOT_FRAMES) {
+        (void)_PyGC_TraceVisitFrames(p, live_visit, t);
+        live_drain(t);
+    }
+    if (roots & _PyGC_TRACE_ROOT_TSTATE) {
+        (void)_PyGC_TraceVisitThreadState(p, live_visit, t);
+        live_drain(t);
+    }
 }
 
 static void
@@ -1893,14 +1938,10 @@ live_mark_roots(trace_t *t, PyThreadState *tstate)
         PyInterpreterState *interp = t->domain[d];
         t->interp = interp;
         _Py_FOR_EACH_TSTATE_UNLOCKED(interp, p) {
-            if (roots & _PyGC_TRACE_ROOT_FRAMES) {
-                (void)_PyGC_TraceVisitFrames(p, live_visit, t);
-                live_drain(t);
-            }
-            if (roots & _PyGC_TRACE_ROOT_TSTATE) {
-                (void)_PyGC_TraceVisitThreadState(p, live_visit, t);
-                live_drain(t);
-            }
+            live_mark_thread(t, p, roots);
+        }
+        for (PyThreadState *p = kept_threads(interp); p; p = p->next) {
+            live_mark_thread(t, p, roots);
         }
         if (roots & _PyGC_TRACE_ROOT_INTERP) {
             (void)_PyGC_TraceVisitInterp(interp, live_visit, t);
@@ -1940,19 +1981,12 @@ live_mark_roots(trace_t *t, PyThreadState *tstate)
         for (int d = 0; d < t->ndomain && !t->oom; d++) {
             t->interp = t->domain[d];
             _Py_FOR_EACH_TSTATE_UNLOCKED(t->interp, p) {
-                if (p == tstate) {
-                    continue;
+                if (p != tstate) {
+                    scan_other_thread(t, p);
                 }
-                _PyThreadStateImpl *ts = (_PyThreadStateImpl *)p;
-                if (!ts->gc_trace.valid) {
-                    continue;  // never attached
-                }
-                scan_range(t, (uintptr_t)ts->gc_trace.regs,
-                           (uintptr_t)(ts->gc_trace.regs + 24));
-                uintptr_t top = stack_top(p);
-                if (top > ts->gc_trace.sp) {
-                    scan_range(t, ts->gc_trace.sp, top);
-                }
+            }
+            for (PyThreadState *p = kept_threads(t->interp); p; p = p->next) {
+                scan_other_thread(t, p);
             }
         }
         t->scan_mem = 0;

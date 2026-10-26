@@ -257,6 +257,13 @@ extern void _Py_NO_RETURN _PyGC_LiveSweepViolation(PyThreadState *tstate,
 /* Remember an immortal heap object: what it refers to is a root. */
 extern void _PyGC_LiveAddImmortal(PyObject *op);
 
+/* Keep the thread states that finalization unlinks, linked through next,
+ * for the rest of the interpreter's life, and their threads' frames and C
+ * stacks as roots: the daemon threads never return to drop what they hold,
+ * as reference counting never frees it. */
+extern void _PyGC_LiveKeepThreads(PyThreadState *list);
+extern PyThreadState *_PyGC_LiveKeptThreads(PyInterpreterState *interp);
+
 /* Zero the C stack below the caller's frame, where the collector's entry
  * frames go next.  Their padding would otherwise keep the stale words that
  * earlier calls left there, which the scan takes for roots. */

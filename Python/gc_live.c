@@ -103,6 +103,8 @@ struct _gc_live_state {
     // cannot run: the gc.callbacks are not called, debug output goes to the
     // C stderr, and the queue waits for the eval breaker.
     int no_python;
+    // The thread states that finalization unlinked (_PyGC_LiveKeepThreads()).
+    PyThreadState *kept_threads;
     // The exception that was set when the collection started.  The stack
     // below the collection's entry is not scanned (collect_and_run_queue()).
     PyObject *exc;
@@ -1106,6 +1108,33 @@ _PyGC_LiveOnThreshold(PyThreadState *tstate)
     if (ls->qhead < ls->qtail) {
         _Py_ScheduleGC(tstate);
     }
+}
+
+
+void
+_PyGC_LiveKeepThreads(PyThreadState *list)
+{
+    if (list == NULL) {
+        return;
+    }
+    struct _gc_live_state *ls = get_live(list->interp);
+    if (ls == NULL) {
+        return;
+    }
+    // An interpreter is finalized once.
+    assert(ls->kept_threads == NULL);
+    // The reference keeps a thread that hangs from freeing its state.
+    for (PyThreadState *p = list; p != NULL; p = p->next) {
+        _Py_atomic_add_ssize(&((_PyThreadStateImpl *)p)->refcount, 1);
+    }
+    ls->kept_threads = list;
+}
+
+PyThreadState *
+_PyGC_LiveKeptThreads(PyInterpreterState *interp)
+{
+    struct _gc_live_state *ls = get_live(interp);
+    return ls == NULL ? NULL : ls->kept_threads;
 }
 
 

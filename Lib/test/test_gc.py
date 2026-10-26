@@ -1880,6 +1880,25 @@ class TracingCollectorTests(unittest.TestCase):
                 break
         self.assertIsNone(ref())
 
+    @threading_helper.requires_working_threading()
+    def test_daemon_thread_keeps_its_objects_at_shutdown(self):
+        # Finalization unlinks the state of a daemon thread blocked in a
+        # read, which holds the file's lock.  Its frames still hold the file:
+        # closing it at a shutdown collection would wait for the lock.
+        code = textwrap.dedent("""
+            import os, threading
+            r, w = os.pipe()
+            f = os.fdopen(r, 'rb')
+            started = threading.Event()
+            def reader():
+                started.set()
+                f.read(10)
+            threading.Thread(target=reader, daemon=True).start()
+            started.wait()
+            del f
+        """)
+        assert_python_ok("-c", code)
+
     def test_release_buffer_runs_python_code(self):
         # A dead view of an exporter that defines __release_buffer__ is
         # released before the sweep, which may not run code (a debug build

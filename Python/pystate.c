@@ -2030,6 +2030,11 @@ _PyThreadState_DeleteList(PyThreadState *list, int is_after_fork)
     // call destructors.
     assert(!_PyRuntime.stoptheworld.world_stopped);
 
+#ifdef Py_GC
+    if (!is_after_fork) {
+        _PyGC_LiveKeepThreads(list);
+    }
+#endif
     PyThreadState *p, *next;
     for (p = list; p; p = next) {
         next = p->next;

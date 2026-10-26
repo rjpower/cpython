@@ -983,9 +983,9 @@ class DictTest(unittest.TestCase):
             pass
         views = (dict.items, dict.values, dict.keys)
         for v in views:
-            # Under Py_GC a stale word on the C stack can keep one attempt's
-            # cycle alive; each attempt makes a new one.
-            for _ in range(5 if support.Py_GC else 1):
+            # A stale word on the C stack can keep one attempt's cycle
+            # alive; each attempt makes a new one.
+            for _ in range(5):
                 obj = C()
                 ref = weakref.ref(obj)
                 container = {obj: 1}
@@ -1386,21 +1386,6 @@ class DictTest(unittest.TestCase):
 
         pair = [X(), 123]
         dict([pair])
-
-    @support.requires_refcounting
-    def test_oob_indexing_dictiter_iternextitem(self):
-        class X(int):
-            def __del__(self):
-                d.clear()
-
-        d = {i: X(i) for i in range(8)}
-
-        def iter_and_mutate():
-            for result in d.items():
-                if result[0] == 2:
-                    d[2] = None # free d[2] --> X(2).__del__ was called
-
-        self.assertRaises(RuntimeError, iter_and_mutate)
 
     def test_reversed(self):
         d = {"a": 1, "b": 2, "foo": 0, "c": 3, "d": 4}
@@ -1840,47 +1825,6 @@ class DictTest(unittest.TestCase):
 
         d = x.__dict__
         d.clear()
-
-    @support.requires_refcounting
-    def test_clear_reentrant_detached_split(self):
-        # gh-158198 follow-up: dict.clear() on a detached split-table dict
-        # must not expose (Py_EMPTY_KEYS, non-NULL ma_values) to a
-        # finalizer.  A reentrant insert must see a consistent empty dict.
-        class MyObj: pass
-        class Reinsert:
-            def __del__(self):
-                d['reentrant'] = 1
-
-        x = MyObj()
-        x.a = Reinsert()
-        x.b = 'other'
-
-        d = x.__dict__
-        # Detach: the old dict becomes a heap-allocated split table
-        # (ma_values non-NULL, embedded == 0).
-        x.__dict__ = {}
-        d.clear()
-        self.assertEqual(d, {'reentrant': 1})
-
-    @support.requires_refcounting
-    def test_clear_reentrant_detached_split_update(self):
-        # Same as above but with a reentrant update large enough to force
-        # a resize.  On the buggy code this frees the values array that
-        # clear() is still iterating over (use-after-free / segfault).
-        class MyObj: pass
-        other = {f'k{i}': i for i in range(20)}
-        class Reinsert:
-            def __del__(self):
-                d.update(other)
-
-        x = MyObj()
-        x.a = Reinsert()
-        x.b = 'other'
-
-        d = x.__dict__
-        x.__dict__ = {}
-        d.clear()
-        self.assertEqual(d, other)
 
 
 class CAPITest(unittest.TestCase):

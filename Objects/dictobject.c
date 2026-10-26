@@ -3659,11 +3659,19 @@ dict_dealloc(PyObject *self)
 {
     PyDictObject *mp = (PyDictObject *)self;
 #ifndef Py_GC
-    // Under Py_GC the collector notifies before the sweep (Python/gc_live.c).
     _PyObject_ResurrectStart(self);
     _PyDict_NotifyEvent(PyDict_EVENT_DEALLOCATED, mp, NULL, NULL);
     if (_PyObject_ResurrectEnd(self)) {
         return;
+    }
+#else
+    /* Under Py_GC this runs in the collector's sweep, which may not run code
+       or allocate.  CPython's own watchers do neither and hear of the
+       deallocation here; the collector notified the others before the sweep
+       (Python/gc_live.c). */
+    int reserved = (int)(mp->_ma_watcher_tag & DICT_RESERVED_WATCHERS_MASK);
+    if (reserved) {
+        _PyDict_SendEvent(reserved, PyDict_EVENT_DEALLOCATED, mp, NULL, NULL);
     }
 #endif
     PyDictValues *values = mp->ma_values;

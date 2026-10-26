@@ -1951,7 +1951,8 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
        nothing. */
     struct live_walk w = {.t = &t, .res = res, .failed = t.oom};
     PyInterpreterState *interp = tstate->interp;
-    for (int i = 0; i < DICT_MAX_WATCHERS; i++) {
+    // CPython's own dict watchers hear of a deallocation in the sweep.
+    for (int i = FIRST_AVAILABLE_WATCHER; i < DICT_MAX_WATCHERS; i++) {
         if (interp->dict_state.watchers[i] != NULL) {
             w.dict_watchers |= 1 << i;
         }

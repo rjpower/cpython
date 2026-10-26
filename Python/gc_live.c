@@ -214,8 +214,13 @@ run_destroy_hook(PyThreadState *tstate, PyObject *op)
 {
     PyTypeObject *tp = Py_TYPE(op);
     if (PyDict_Check(op)) {
-        _PyDict_NotifyEvent(PyDict_EVENT_DEALLOCATED, (PyDictObject *)op,
-                            NULL, NULL);
+        // CPython's own watchers hear of it in dict_dealloc().
+        PyDictObject *mp = (PyDictObject *)op;
+        int bits = (int)(mp->_ma_watcher_tag & DICT_WATCHER_MASK
+                         & ~DICT_RESERVED_WATCHERS_MASK);
+        if (bits) {
+            _PyDict_SendEvent(bits, PyDict_EVENT_DEALLOCATED, mp, NULL, NULL);
+        }
     }
     else if (PyType_Check(op)) {
         _PyType_NotifyDestroy((PyTypeObject *)op);

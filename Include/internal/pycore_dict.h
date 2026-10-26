@@ -352,6 +352,7 @@ static inline PyDictUnicodeEntry* DK_UNICODE_ENTRIES(PyDictKeysObject *dk) {
 #define GLOBALS_WATCHER_ID      1
 #define MODULE_WATCHER_ID       2
 #define FIRST_AVAILABLE_WATCHER 3
+#define DICT_RESERVED_WATCHERS_MASK ((1 << FIRST_AVAILABLE_WATCHER) - 1)
 
 
 PyAPI_FUNC(void)

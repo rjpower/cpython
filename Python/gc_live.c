@@ -727,8 +727,18 @@ _PyGC_LiveSweepViolation(PyThreadState *tstate, const char *what)
    the order is the reverse postorder of a depth-first search over those
    references, started from each in heap order.  A referrer therefore comes
    before its referent, except along a cycle, which the search breaks where
-   it entered it.  The cost is that of the flagged objects and their
+   it entered it.  Most flagged objects refer to no other (a managed buffer
+   refers to its exporter), and then the order is the heap's and nothing
+   more is built.  The cost is that of the flagged objects and their
    references, not of the heap. */
+
+/* Is op, if dead, swept in the first pass? */
+static inline int
+sweeps_first(PyObject *op)
+{
+    return (PyType_HasFeature(Py_TYPE(op), Py_TPFLAGS_DEALLOC_READS_REFERENTS)
+            && !PyType_Check(op));
+}
 
 typedef struct {
     PyObject *op;
@@ -736,14 +746,12 @@ typedef struct {
 } first_key;
 
 typedef struct {
-    first_key *keys;       // the flagged objects, sorted by address
-    Py_ssize_t nkeys;
     Py_ssize_t from;       // the node being traversed
-    Py_ssize_t *edges;     // pairs: from, to
+    first_key *edges;      // a reference: from node, to op
     Py_ssize_t nedges;
     Py_ssize_t cap;
     int oom;
-} first_graph;
+} first_edges;
 
 static int
 first_key_cmp(const void *a, const void *b)
@@ -756,19 +764,13 @@ first_key_cmp(const void *a, const void *b)
 static int
 first_edge_visit(PyObject *op, void *arg)
 {
-    first_graph *g = arg;
-    if (op == NULL || g->oom || !is_dead(op)) {
-        return 0;
-    }
-    first_key key = {op, 0};
-    first_key *k = bsearch(&key, g->keys, g->nkeys, sizeof(first_key),
-                           first_key_cmp);
-    if (k == NULL || k->node == g->from) {
+    first_edges *g = arg;
+    if (op == NULL || g->oom || !is_dead(op) || !sweeps_first(op)) {
         return 0;
     }
     if (g->nedges == g->cap) {
         Py_ssize_t cap = g->cap ? 2 * g->cap : 64;
-        Py_ssize_t *edges = realloc(g->edges, 2 * cap * sizeof(Py_ssize_t));
+        first_key *edges = realloc(g->edges, cap * sizeof(first_key));
         if (edges == NULL) {
             g->oom = 1;
             return 0;
@@ -776,81 +778,58 @@ first_edge_visit(PyObject *op, void *arg)
         g->edges = edges;
         g->cap = cap;
     }
-    g->edges[2 * g->nedges] = g->from;
-    g->edges[2 * g->nedges + 1] = k->node;
-    g->nedges++;
+    g->edges[g->nedges++] = (first_key){op, g->from};
     return 0;
 }
 
-/* The indices into res->dead of the dead objects swept first, in sweep
-   order, and their number in *pn.  NULL if memory runs out, after which
-   they are swept in heap order. */
-static Py_ssize_t *
-order_dead_first(_PyGCMarkResult *res, Py_ssize_t *pn)
+/* Put node[0:n], indices into res->dead in heap order, in sweep order,
+   given the references edges[0:nedges].  Returns -1 if memory runs out. */
+static int
+order_by_edges(_PyGCMarkResult *res, Py_ssize_t *node, Py_ssize_t n,
+               first_key *edges, Py_ssize_t nedges)
 {
-    Py_ssize_t n = 0;
-    for (Py_ssize_t i = 0; i < res->ndead; i++) {
-        int kinds = res->dead[i].kinds;
-        if ((kinds & (_PyGC_DEAD_FIRST | _PyGC_DEAD_TYPE)) == _PyGC_DEAD_FIRST
-            && is_dead(res->dead[i].op))
-        {
-            n++;
-        }
-    }
-    first_graph g = {0};
-    // node: its index into res->dead.  The others are indexed by node.
-    Py_ssize_t *node = malloc((n + 1) * sizeof(Py_ssize_t));
+    int status = -1;
+    first_key *keys = malloc((n + 1) * sizeof(first_key));
     Py_ssize_t *start = calloc(n + 1, sizeof(Py_ssize_t));
     Py_ssize_t *cursor = malloc((n + 1) * sizeof(Py_ssize_t));
+    Py_ssize_t *target = malloc((nedges + 1) * sizeof(Py_ssize_t));
+    Py_ssize_t *succ = malloc((nedges + 1) * sizeof(Py_ssize_t));
     Py_ssize_t *stack = malloc((n + 1) * sizeof(Py_ssize_t));
-    char *seen = calloc(n + 1, 1);
     Py_ssize_t *order = malloc((n + 1) * sizeof(Py_ssize_t));
-    Py_ssize_t *succ = NULL;
-    g.keys = malloc((n + 1) * sizeof(first_key));
-    if (node == NULL || start == NULL || cursor == NULL || stack == NULL
-        || seen == NULL || order == NULL || g.keys == NULL)
+    char *seen = calloc(n + 1, 1);
+    if (keys == NULL || start == NULL || cursor == NULL || target == NULL
+        || succ == NULL || stack == NULL || order == NULL || seen == NULL)
     {
-        goto error;
+        goto done;
     }
-    n = 0;
-    for (Py_ssize_t i = 0; i < res->ndead; i++) {
-        int kinds = res->dead[i].kinds;
-        if ((kinds & (_PyGC_DEAD_FIRST | _PyGC_DEAD_TYPE)) == _PyGC_DEAD_FIRST
-            && is_dead(res->dead[i].op))
-        {
-            g.keys[n] = (first_key){res->dead[i].op, n};
-            node[n++] = i;
+    for (Py_ssize_t u = 0; u < n; u++) {
+        keys[u] = (first_key){res->dead[node[u]].op, u};
+    }
+    qsort(keys, n, sizeof(first_key), first_key_cmp);
+    // The node each reference is to, or -1 for a reference to the referrer
+    // itself or to an object that is not swept first (a dead type)
+    for (Py_ssize_t e = 0; e < nedges; e++) {
+        first_key *k = bsearch(&edges[e], keys, n, sizeof(first_key),
+                               first_key_cmp);
+        target[e] = (k != NULL && k->node != edges[e].node) ? k->node : -1;
+        if (target[e] >= 0) {
+            start[edges[e].node + 1]++;
         }
     }
-    g.nkeys = n;
-    qsort(g.keys, n, sizeof(first_key), first_key_cmp);
-    for (g.from = 0; g.from < n; g.from++) {
-        (void)_PyGC_TraceTraverse(res->dead[node[g.from]].op,
-                                  first_edge_visit, &g);
-    }
-    if (g.oom) {
-        goto error;
-    }
     // The references of node u are succ[start[u]:start[u + 1]].
-    succ = malloc((g.nedges + 1) * sizeof(Py_ssize_t));
-    if (succ == NULL) {
-        goto error;
-    }
-    for (Py_ssize_t e = 0; e < g.nedges; e++) {
-        start[g.edges[2 * e] + 1]++;
-    }
     for (Py_ssize_t u = 0; u < n; u++) {
         start[u + 1] += start[u];
         cursor[u] = start[u];
     }
-    for (Py_ssize_t e = 0; e < g.nedges; e++) {
-        succ[cursor[g.edges[2 * e]]++] = g.edges[2 * e + 1];
+    for (Py_ssize_t e = 0; e < nedges; e++) {
+        if (target[e] >= 0) {
+            succ[cursor[edges[e].node]++] = target[e];
+        }
     }
     for (Py_ssize_t u = 0; u < n; u++) {
         cursor[u] = start[u];
     }
-    // Each node is appended to order when the search leaves it; order is
-    // then reversed.
+    // Each node is appended to order when the search leaves it.
     Py_ssize_t norder = 0;
     for (Py_ssize_t root = 0; root < n; root++) {
         if (seen[root]) {
@@ -875,30 +854,66 @@ order_dead_first(_PyGCMarkResult *res, Py_ssize_t *pn)
         }
     }
     assert(norder == n);
-    for (Py_ssize_t i = 0; i < n / 2; i++) {
-        Py_ssize_t t = order[i];
-        order[i] = order[n - 1 - i];
-        order[n - 1 - i] = t;
-    }
+    // Reversed, as indices into res->dead
     for (Py_ssize_t i = 0; i < n; i++) {
-        order[i] = node[order[i]];
+        cursor[i] = node[order[n - 1 - i]];
     }
-    *pn = n;
-    goto done;
-
-error:
-    free(order);
-    order = NULL;
+    memcpy(node, cursor, n * sizeof(Py_ssize_t));
+    status = 0;
 done:
-    free(node);
+    free(keys);
     free(start);
     free(cursor);
-    free(stack);
-    free(seen);
+    free(target);
     free(succ);
-    free(g.keys);
+    free(stack);
+    free(order);
+    free(seen);
+    return status;
+}
+
+/* The indices into res->dead of the dead objects swept first, in sweep
+   order, and their number in *pn.  NULL if memory runs out, after which
+   they are swept in heap order. */
+static Py_ssize_t *
+order_dead_first(_PyGCMarkResult *res, Py_ssize_t *pn)
+{
+    Py_ssize_t n = 0;
+    for (Py_ssize_t i = 0; i < res->ndead; i++) {
+        int kinds = res->dead[i].kinds;
+        if ((kinds & (_PyGC_DEAD_FIRST | _PyGC_DEAD_TYPE)) == _PyGC_DEAD_FIRST
+            && is_dead(res->dead[i].op))
+        {
+            n++;
+        }
+    }
+    Py_ssize_t *node = malloc((n + 1) * sizeof(Py_ssize_t));
+    if (node == NULL) {
+        return NULL;
+    }
+    n = 0;
+    for (Py_ssize_t i = 0; i < res->ndead; i++) {
+        int kinds = res->dead[i].kinds;
+        if ((kinds & (_PyGC_DEAD_FIRST | _PyGC_DEAD_TYPE)) == _PyGC_DEAD_FIRST
+            && is_dead(res->dead[i].op))
+        {
+            node[n++] = i;
+        }
+    }
+    first_edges g = {0};
+    for (g.from = 0; g.from < n; g.from++) {
+        (void)_PyGC_TraceTraverse(res->dead[node[g.from]].op,
+                                  first_edge_visit, &g);
+    }
+    if (g.oom
+        || (g.nedges > 0 && order_by_edges(res, node, n, g.edges, g.nedges) < 0))
+    {
+        free(node);
+        node = NULL;
+    }
     free(g.edges);
-    return order;
+    *pn = n;
+    return node;
 }
 
 /* Inlined: the sweep calls it for every dead object, and the call alone

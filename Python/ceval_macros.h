@@ -467,10 +467,20 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 /* How much scratch space to give stackref to PyObject* conversion. */
 #define MAX_STACKREF_SCRATCH 10
 
+#ifdef Py_GC
+/* The collector scans the C stack conservatively: the unused slots of the
+   scratch array are cleared, or the words that earlier calls left in that
+   stack memory would keep their objects alive. */
+#define STACKREFS_TO_PYOBJECTS(ARGS, ARG_COUNT, NAME) \
+    /* +1 because vectorcall might use -1 to write self */ \
+    PyObject *NAME##_temp[MAX_STACKREF_SCRATCH+1] = {0}; \
+    PyObject **NAME = _PyObjectArray_FromStackRefArray(ARGS, ARG_COUNT, NAME##_temp);
+#else
 #define STACKREFS_TO_PYOBJECTS(ARGS, ARG_COUNT, NAME) \
     /* +1 because vectorcall might use -1 to write self */ \
     PyObject *NAME##_temp[MAX_STACKREF_SCRATCH+1]; \
     PyObject **NAME = _PyObjectArray_FromStackRefArray(ARGS, ARG_COUNT, NAME##_temp);
+#endif
 
 #define STACKREFS_TO_PYOBJECTS_CLEANUP(NAME) \
     /* +1 because we +1 previously */ \

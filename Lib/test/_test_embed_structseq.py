@@ -8,8 +8,9 @@ import unittest
 class TestStructSeq(unittest.TestCase):
     # test PyTypeObject members
     def check_structseq(self, obj_type):
-        # ob_refcnt
-        self.assertGreaterEqual(sys.getrefcount(obj_type), 1)
+        # ob_refcnt; a build without reference counts has no getrefcount()
+        if hasattr(sys, 'getrefcount'):
+            self.assertGreaterEqual(sys.getrefcount(obj_type), 1)
         # tp_base
         self.assertIsSubclass(obj_type, tuple)
         # tp_bases

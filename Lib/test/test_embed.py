@@ -2160,6 +2160,7 @@ class MiscTests(EmbeddingTestsMixin, unittest.TestCase):
 
     @unittest.skipUnless(support.Py_DEBUG,
                          '-X showrefcount requires a Python debug build')
+    @support.requires_refcounting
     def test_no_memleak(self):
         # bpo-1635741: Python must release all memory at exit
         tests = (

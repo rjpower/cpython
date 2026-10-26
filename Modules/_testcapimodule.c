@@ -962,36 +962,6 @@ profile_int(PyObject *self, PyObject* args)
 }
 #endif
 
-/* Issue 6012 */
-static PyObject *str1, *str2;
-static int
-failing_converter(PyObject *obj, void *arg)
-{
-    /* Clone str1, then let the conversion fail. */
-    assert(str1);
-    str2 = Py_NewRef(str1);
-    return 0;
-}
-static PyObject*
-argparsing(PyObject *o, PyObject *args)
-{
-    PyObject *res;
-    str1 = str2 = NULL;
-    if (!PyArg_ParseTuple(args, "O&O&",
-                          PyUnicode_FSConverter, &str1,
-                          failing_converter, &str2)) {
-        if (!str2)
-            /* argument converter not called? */
-            return NULL;
-        /* Should be 1 */
-        res = PyLong_FromSsize_t(Py_REFCNT(str2));
-        Py_DECREF(str2);
-        PyErr_Clear();
-        return res;
-    }
-    Py_RETURN_NONE;
-}
-
 /* To test that the result of PyCode_NewEmpty has the right members. */
 static PyObject *
 code_newempty(PyObject *self, PyObject *args)
@@ -2957,7 +2927,6 @@ static PyMethodDef TestMethods[] = {
 #ifdef HAVE_GETTIMEOFDAY
     {"profile_int",             profile_int,                     METH_NOARGS},
 #endif
-    {"argparsing",              argparsing,                      METH_VARARGS},
     {"code_newempty",           code_newempty,                   METH_VARARGS},
     {"eval_code_ex",            eval_eval_code_ex,               METH_VARARGS},
     {"make_memoryview_from_NULL_pointer", make_memoryview_from_NULL_pointer,

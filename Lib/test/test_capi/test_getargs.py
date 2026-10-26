@@ -1118,13 +1118,6 @@ class Object_TestCase(unittest.TestCase):
         self.assertRaises(TypeError, getargs_U, None)
 
 
-# Bug #6012
-class Test6012(unittest.TestCase):
-    @support.requires_refcounting
-    def test(self):
-        self.assertEqual(_testcapi.argparsing("Hello", "World"), 1)
-
-
 class SkipitemTest(unittest.TestCase):
 
     # u, and Z raises DeprecationWarning

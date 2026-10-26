@@ -354,10 +354,6 @@ class SuicidalChained(ChainedBase, Simple):
         self.right = None
 
 
-# Under a gc-debug build an -Og frame of the eval loop keeps a stale pointer
-# to the chain's list, so the conservative stack scan keeps it alive.
-@unittest.skipIf(support.Py_DEBUG,
-                 "the eval loop's -Og frame keeps the chain alive")
 class CycleChainFinalizationTest(TestBase, unittest.TestCase):
     """
     Test finalization of a cyclic chain.  These tests are similar in

@@ -1764,13 +1764,13 @@ class SizeofTest(unittest.TestCase):
         # dictionary-itemview
         check({}.items(), size('P'))
         # dictionary iterator
-        check(iter({}), size('P2nPn'))
+        check(iter({}), size('P2nn'))
         # dictionary-keyiterator
-        check(iter({}.keys()), size('P2nPn'))
+        check(iter({}.keys()), size('P2nn'))
         # dictionary-valueiterator
-        check(iter({}.values()), size('P2nPn'))
+        check(iter({}.values()), size('P2nn'))
         # dictionary-itemiterator
-        check(iter({}.items()), size('P2nPn'))
+        check(iter({}.items()), size('P2nn'))
         # dictproxy
         class C(object): pass
         check(C.__dict__, size('P'))
@@ -1789,7 +1789,7 @@ class SizeofTest(unittest.TestCase):
         x = codecs.charmap_build(encodings.iso8859_3.decoding_table)
         check(x, size('32B2iB'))
         # enumerate
-        check(enumerate([]), size('n4P'))
+        check(enumerate([]), size('n3P'))
         # reverse
         check(reversed(''), size('nP'))
         # float

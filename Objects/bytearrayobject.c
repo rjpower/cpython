@@ -1025,16 +1025,6 @@ bytearray___init___impl(PyByteArrayObject *self, PyObject *arg,
         }
         assert(PyBytes_Check(encoded));
 
-        /* Most encodes return a new unique bytes, just use it as buffer. */
-        if (_PyObject_IsUniquelyReferenced(encoded)
-            && PyBytes_CheckExact(encoded)
-            && _PyBytes_GET_CACHED_HASH((PyBytesObject*)encoded) == -1)
-        {
-            Py_ssize_t size = PyBytes_GET_SIZE(encoded);
-            self->ob_bytes_object = encoded;
-            bytearray_reinit_from_bytes(self, size);
-            return 0;
-        }
         new = bytearray_iconcat((PyObject*)self, encoded);
         Py_DECREF(encoded);
         if (new == NULL)

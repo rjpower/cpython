@@ -128,7 +128,7 @@ As a consequence of this, split keys have a maximum size of 16.
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_setobject.h"     // _PySet_NextEntry()
-#include "pycore_tuple.h"         // _PyTuple_Recycle()
+#include "pycore_tuple.h"         // _PyTuple_FromPair()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
 
 #include "stringlib/eq.h"                // unicode_eq()
@@ -5026,7 +5026,6 @@ typedef struct {
     PyDictObject *di_dict; /* Set to NULL when iterator is exhausted */
     Py_ssize_t di_used;
     Py_ssize_t di_pos;
-    PyObject* di_result; /* reusable result tuple for iteritems */
     Py_ssize_t len;
 } dictiterobject;
 
@@ -5043,7 +5042,6 @@ dictiter_new(PyDictObject *dict, PyTypeObject *itertype)
     used = GET_USED(dict);
     di->di_used = used;
     di->len = used;
-    di->di_result = NULL;
     if (itertype == &PyDictRevIterKey_Type ||
          itertype == &PyDictRevIterItem_Type ||
          itertype == &PyDictRevIterValue_Type) {
@@ -5057,18 +5055,7 @@ dictiter_new(PyDictObject *dict, PyTypeObject *itertype)
     else {
         di->di_pos = 0;
     }
-    /* gh-152107: track before allocating di_result. A dictiter with a NULL
-       di_result is a valid state for dictiter_traverse()/dictiter_dealloc(),
-       so a failure of the allocation below can safely DECREF a tracked di. */
     _PyObject_GC_TRACK(di);
-    if (itertype == &PyDictIterItem_Type ||
-        itertype == &PyDictRevIterItem_Type) {
-        di->di_result = _PyTuple_FromPairSteal(Py_None, Py_None);
-        if (di->di_result == NULL) {
-            Py_DECREF(di);
-            return NULL;
-        }
-    }
     return (PyObject *)di;
 }
 
@@ -5079,7 +5066,6 @@ dictiter_dealloc(PyObject *self)
     /* bpo-31095: UnTrack is needed before calling any callbacks */
     _PyObject_GC_UNTRACK(di);
     Py_XDECREF(di->di_dict);
-    Py_XDECREF(di->di_result);
     PyObject_GC_Del(di);
 }
 
@@ -5088,7 +5074,6 @@ dictiter_traverse(PyObject *self, visitproc visit, void *arg)
 {
     dictiterobject *di = (dictiterobject *)self;
     Py_VISIT(di->di_dict);
-    Py_VISIT(di->di_result);
     return 0;
 }
 
@@ -5427,16 +5412,6 @@ fail:
 }
 
 
-static bool
-acquire_iter_result(PyObject *result)
-{
-    if (_PyObject_IsUniquelyReferenced(result)) {
-        Py_INCREF(result);
-        return true;
-    }
-    return false;
-}
-
 static PyObject *
 dictiter_iternextitem(PyObject *self)
 {
@@ -5448,23 +5423,7 @@ dictiter_iternextitem(PyObject *self)
 
     PyObject *key, *value;
     if (dictiter_iternextitem_lock_held(d, self, &key, &value) == 0) {
-
-        PyObject *result = di->di_result;
-        if (acquire_iter_result(result)) {
-            PyObject *oldkey = PyTuple_GET_ITEM(result, 0);
-            PyObject *oldvalue = PyTuple_GET_ITEM(result, 1);
-            PyTuple_SET_ITEM(result, 0, key);
-            PyTuple_SET_ITEM(result, 1, value);
-            Py_DECREF(oldkey);
-            Py_DECREF(oldvalue);
-            // bpo-42536: The GC may have untracked this result tuple. Since we're
-            // recycling it, make sure it's tracked again:
-            _PyTuple_Recycle(result);
-        }
-        else {
-            result = _PyTuple_FromPairSteal(key, value);
-        }
-        return result;
+        return _PyTuple_FromPairSteal(key, value);
     }
     return NULL;
 }
@@ -5522,7 +5481,7 @@ dictreviter_iter_lock_held(PyDictObject *d, PyObject *self)
 
     Py_ssize_t i = di->di_pos;
     PyDictKeysObject *k = d->ma_keys;
-    PyObject *key, *value, *result;
+    PyObject *key, *value;
 
     if (i < 0) {
         goto fail;
@@ -5576,23 +5535,7 @@ dictreviter_iter_lock_held(PyDictObject *d, PyObject *self)
         return Py_NewRef(value);
     }
     else if (Py_IS_TYPE(di, &PyDictRevIterItem_Type)) {
-        result = di->di_result;
-        if (_PyObject_IsUniquelyReferenced(result)) {
-            PyObject *oldkey = PyTuple_GET_ITEM(result, 0);
-            PyObject *oldvalue = PyTuple_GET_ITEM(result, 1);
-            PyTuple_SET_ITEM(result, 0, Py_NewRef(key));
-            PyTuple_SET_ITEM(result, 1, Py_NewRef(value));
-            Py_INCREF(result);
-            Py_DECREF(oldkey);
-            Py_DECREF(oldvalue);
-            // bpo-42536: The GC may have untracked this result tuple. Since
-            // we're recycling it, make sure it's tracked again:
-            _PyTuple_Recycle(result);
-        }
-        else {
-            result = _PyTuple_FromPair(key, value);
-        }
-        return result;
+        return _PyTuple_FromPair(key, value);
     }
     else {
         Py_UNREACHABLE();

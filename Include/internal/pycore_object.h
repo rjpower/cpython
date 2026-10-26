@@ -78,16 +78,6 @@ PyAPI_FUNC(void) _Py_NO_RETURN _Py_FatalRefcountErrorFunc(
     } while(0)
 
 
-// Checks if an object has a single, unique reference. If the caller holds a
-// unique reference, it may be able to safely modify the object in-place.
-static inline int
-_PyObject_IsUniquelyReferenced(PyObject *ob)
-{
-    // Without counts, uniqueness cannot be known.
-    (void)ob;
-    return 0;
-}
-
 PyAPI_FUNC(void) _Py_SetImmortal(PyObject *op);
 PyAPI_FUNC(void) _Py_SetImmortalUntracked(PyObject *op);
 

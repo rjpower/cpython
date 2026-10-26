@@ -296,9 +296,6 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
         if (kw == NULL) {
             pto->kw = PyDict_New();
         }
-        else if (_PyObject_IsUniquelyReferenced(kw)) {
-            pto->kw = Py_NewRef(kw);
-        }
         else {
             pto->kw = PyDict_Copy(kw);
         }
@@ -1089,7 +1086,7 @@ _functools_reduce_impl(PyObject *module, PyObject *func, PyObject *seq,
                        PyObject *result)
 /*[clinic end generated code: output=30d898fe1267c79d input=ff4d5c73100e72e8]*/
 {
-    PyObject *args, *it;
+    PyObject *it;
 
     if (result != NULL)
         Py_INCREF(result);
@@ -1103,19 +1100,8 @@ _functools_reduce_impl(PyObject *module, PyObject *func, PyObject *seq,
         return NULL;
     }
 
-    if ((args = PyTuple_New(2)) == NULL)
-        goto Fail;
-
     for (;;) {
-        PyObject *op2;
-
-        if (!_PyObject_IsUniquelyReferenced(args)) {
-            Py_DECREF(args);
-            if ((args = PyTuple_New(2)) == NULL)
-                goto Fail;
-        }
-
-        op2 = PyIter_Next(it);
+        PyObject *op2 = PyIter_Next(it);
         if (op2 == NULL) {
             if (PyErr_Occurred())
                 goto Fail;
@@ -1125,19 +1111,13 @@ _functools_reduce_impl(PyObject *module, PyObject *func, PyObject *seq,
         if (result == NULL)
             result = op2;
         else {
-            /* Update the args tuple in-place */
-            Py_XSETREF(_PyTuple_ITEMS(args)[0], result);
-            Py_XSETREF(_PyTuple_ITEMS(args)[1], op2);
-            if ((result = PyObject_Call(func, args, NULL)) == NULL) {
+            PyObject *args[2] = {result, op2};
+            result = PyObject_Vectorcall(func, args, 2, NULL);
+            if (result == NULL) {
                 goto Fail;
             }
-            // bpo-42536: The GC may have untracked this args tuple. Since we're
-            // recycling it, make sure it's tracked again:
-            _PyTuple_Recycle(args);
         }
     }
-
-    Py_DECREF(args);
 
     if (result == NULL)
         PyErr_SetString(PyExc_TypeError,
@@ -1147,7 +1127,6 @@ _functools_reduce_impl(PyObject *module, PyObject *func, PyObject *seq,
     return result;
 
 Fail:
-    Py_XDECREF(args);
     Py_XDECREF(result);
     Py_DECREF(it);
     return NULL;

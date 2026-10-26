@@ -11,7 +11,7 @@
 #include "pycore_code.h"             // _PyCode_New()
 #include "pycore_hashtable.h"        // _Py_hashtable_t
 #include "pycore_long.h"             // _PyLong_IsZero()
-#include "pycore_object.h"           // _PyObject_IsUniquelyReferenced
+#include "pycore_object.h"
 #include "pycore_pystate.h"          // _PyInterpreterState_GET()
 #include "pycore_setobject.h"        // _PySet_NextEntryRef()
 #include "pycore_tuple.h"            // _PyTuple_FromPairSteal
@@ -503,16 +503,6 @@ w_ref(PyObject *v, WFILE *p)
     if (p->version < 3 || p->hashtable == NULL)
         return 0; /* not writing object references */
 
-    /* An object with only one reference cannot occur twice in the object
-     * graph, so there is no need to remember it.  This is only a shortcut:
-     * an object occurring twice has at least two references each time it is
-     * seen, so it is never skipped and the output does not depend on this
-     * test.
-     */
-    if (_PyObject_IsUniquelyReferenced(v)) {
-        return 0;
-    }
-
     entry = _Py_hashtable_get_entry(p->hashtable, v);
     if (entry != NULL) {
         /* write the reference index to the stream */
@@ -633,9 +623,6 @@ static void
 w_complete(PyObject *v, WFILE *p)
 {
     if (p->version < 3 || p->hashtable == NULL) {
-        return;
-    }
-    if (_PyObject_IsUniquelyReferenced(v)) {
         return;
     }
 

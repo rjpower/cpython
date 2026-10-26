@@ -18,7 +18,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_pythonrun.h"     // _Py_SourceAsString()
 #include "pycore_stackref.h"      // _PyObject_ValueIdentity()
-#include "pycore_tuple.h"         // _PyTuple_Recycle()
+#include "pycore_tuple.h"         // _PyTuple_FromPair()
 
 #include "clinic/bltinmodule.c.h"
 
@@ -3102,7 +3102,6 @@ typedef struct {
     PyObject_HEAD
     Py_ssize_t tuplesize;
     PyObject *ittuple;     /* tuple of iterators */
-    PyObject *result;
     int strict;
 } zipobject;
 
@@ -3114,7 +3113,6 @@ zip_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     zipobject *lz;
     Py_ssize_t i;
     PyObject *ittuple;  /* tuple of iterators */
-    PyObject *result;
     Py_ssize_t tuplesize;
     int strict = 0;
 
@@ -3150,26 +3148,14 @@ zip_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         PyTuple_SET_ITEM(ittuple, i, it);
     }
 
-    /* create a result holder */
-    result = PyTuple_New(tuplesize);
-    if (result == NULL) {
-        Py_DECREF(ittuple);
-        return NULL;
-    }
-    for (i=0 ; i < tuplesize ; i++) {
-        PyTuple_SET_ITEM(result, i, Py_NewRef(Py_None));
-    }
-
     /* create zipobject structure */
     lz = (zipobject *)type->tp_alloc(type, 0);
     if (lz == NULL) {
         Py_DECREF(ittuple);
-        Py_DECREF(result);
         return NULL;
     }
     lz->ittuple = ittuple;
     lz->tuplesize = tuplesize;
-    lz->result = result;
     lz->strict = strict;
 
     return (PyObject *)lz;
@@ -3181,7 +3167,6 @@ zip_dealloc(PyObject *self)
     zipobject *lz = _zipobject_CAST(self);
     PyObject_GC_UnTrack(lz);
     Py_XDECREF(lz->ittuple);
-    Py_XDECREF(lz->result);
     Py_TYPE(lz)->tp_free(lz);
 }
 
@@ -3190,7 +3175,6 @@ zip_traverse(PyObject *self, visitproc visit, void *arg)
 {
     zipobject *lz = _zipobject_CAST(self);
     Py_VISIT(lz->ittuple);
-    Py_VISIT(lz->result);
     return 0;
 }
 
@@ -3201,49 +3185,26 @@ zip_next(PyObject *self)
 
     Py_ssize_t i;
     Py_ssize_t tuplesize = lz->tuplesize;
-    PyObject *result = lz->result;
     PyObject *it;
     PyObject *item;
-    PyObject *olditem;
 
     if (tuplesize == 0)
         return NULL;
 
-    if (_PyObject_IsUniquelyReferenced(result)) {
-        Py_INCREF(result);
-        for (i=0 ; i < tuplesize ; i++) {
-            it = PyTuple_GET_ITEM(lz->ittuple, i);
-            item = (*Py_TYPE(it)->tp_iternext)(it);
-            if (item == NULL) {
-                Py_DECREF(result);
-                if (lz->strict) {
-                    goto check;
-                }
-                return NULL;
+    PyObject *result = PyTuple_New(tuplesize);
+    if (result == NULL)
+        return NULL;
+    for (i=0 ; i < tuplesize ; i++) {
+        it = PyTuple_GET_ITEM(lz->ittuple, i);
+        item = (*Py_TYPE(it)->tp_iternext)(it);
+        if (item == NULL) {
+            Py_DECREF(result);
+            if (lz->strict) {
+                goto check;
             }
-            olditem = PyTuple_GET_ITEM(result, i);
-            PyTuple_SET_ITEM(result, i, item);
-            Py_DECREF(olditem);
-        }
-        // bpo-42536: The GC may have untracked this result tuple. Since we're
-        // recycling it, make sure it's tracked again:
-        _PyTuple_Recycle(result);
-    } else {
-        result = PyTuple_New(tuplesize);
-        if (result == NULL)
             return NULL;
-        for (i=0 ; i < tuplesize ; i++) {
-            it = PyTuple_GET_ITEM(lz->ittuple, i);
-            item = (*Py_TYPE(it)->tp_iternext)(it);
-            if (item == NULL) {
-                Py_DECREF(result);
-                if (lz->strict) {
-                    goto check;
-                }
-                return NULL;
-            }
-            PyTuple_SET_ITEM(result, i, item);
         }
+        PyTuple_SET_ITEM(result, i, item);
     }
     return result;
 check:

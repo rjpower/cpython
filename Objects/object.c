@@ -2309,11 +2309,10 @@ int
 PyUnstable_SetImmortal(PyObject *op)
 {
     assert(op != NULL);
-    if (!_PyObject_IsUniquelyReferenced(op) || PyUnicode_Check(op)) {
-        return 0;
-    }
-    _Py_SetImmortal(op);
-    return 1;
+    // The object must be uniquely referenced. Nothing is reference counted,
+    // so that cannot be shown and no object is made immortal.
+    (void)op;
+    return 0;
 }
 
 void
@@ -2753,7 +2752,8 @@ PyUnstable_Object_IsUniquelyReferenced(PyObject *op)
 {
     _Py_AssertHoldsTstate();
     assert(op != NULL);
-    return _PyObject_IsUniquelyReferenced(op);
+    // Nothing is reference counted, so no object is known to be unique.
+    return 0;
 }
 
 int

@@ -44,7 +44,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_format.h"        // F_ALT
 #include "pycore_long.h"          // _PyLong_FormatWriter()
-#include "pycore_object.h"        // _PyObject_IsUniquelyReferenced()
+#include "pycore_object.h"
 #include "pycore_unicodeobject.h" // _Py_MAX_UNICODE
 
 

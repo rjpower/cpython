@@ -45,17 +45,6 @@ typedef struct {
         _PyTuple_CAST(op)->ob_hash = -1;    \
     } while (0)
 
-/* bpo-42536: If reusing a tuple object, this should be called to re-track it
-   with the garbage collector and reset its hash cache. */
-static inline void
-_PyTuple_Recycle(PyObject *op)
-{
-    _PyTuple_RESET_HASH_CACHE(op);
-    if (!_PyObject_GC_IS_TRACKED(op)) {
-        _PyObject_GC_TRACK(op);
-    }
-}
-
 /* Below are the official constants from the xxHash specification. Optimizing
    compilers should emit a single "rotate" instruction for the
    _PyTuple_HASH_XXROTATE() expansion. If that doesn't happen for some important

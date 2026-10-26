@@ -954,7 +954,7 @@ class CPythonOrderedDictTests(OrderedDictTests,
         check(od.items(), size('P'))
         check(od.values(), size('P'))
 
-        itersize = size('iP2n2P')
+        itersize = size('iP2nP')
         check(iter(od), itersize)
         check(iter(od.keys()), itersize)
         check(iter(od.items()), itersize)

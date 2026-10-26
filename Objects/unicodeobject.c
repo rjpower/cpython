@@ -1083,14 +1083,12 @@ _PyUnicode_ResizeCompact(PyObject *unicode, Py_ssize_t length)
     Py_ssize_t old_length = _PyUnicode_LENGTH(unicode);
 #endif
 
-    if (!_PyUnicode_IsModifiable(unicode)) {
-        PyObject *copy = resize_copy(unicode, length);
-        if (copy == NULL) {
-            return NULL;
-        }
-        Py_DECREF(unicode);
-        return copy;
-    }
+    // The caller, the unicode writer, owns the string: it was created by
+    // PyUnicode_New() and has not been shared, hashed or interned.
+    assert(PyUnicode_CheckExact(unicode));
+    assert(PyUnstable_Unicode_GET_CACHED_HASH(unicode) == -1);
+    assert(!PyUnicode_CHECK_INTERNED(unicode));
+    assert(!_Py_IsImmortal(unicode));
     assert(PyUnicode_IS_COMPACT(unicode));
 
     char_size = PyUnicode_KIND(unicode);
@@ -1129,61 +1127,6 @@ _PyUnicode_ResizeCompact(PyObject *unicode, Py_ssize_t length)
                     length, 0);
     assert(_PyUnicode_CheckConsistency(unicode, 0));
     return unicode;
-}
-
-static int
-resize_inplace(PyObject *unicode, Py_ssize_t length)
-{
-    assert(!PyUnicode_IS_COMPACT(unicode));
-
-    Py_ssize_t new_size;
-    Py_ssize_t char_size;
-    int share_utf8;
-    void *data;
-#ifdef Py_DEBUG
-    Py_ssize_t old_length = _PyUnicode_LENGTH(unicode);
-#endif
-
-    data = _PyUnicode_DATA_ANY(unicode);
-    char_size = PyUnicode_KIND(unicode);
-    share_utf8 = _PyUnicode_SHARE_UTF8(unicode);
-
-    if (length > (PY_SSIZE_T_MAX / char_size - 1)) {
-        PyErr_NoMemory();
-        return -1;
-    }
-    new_size = (length + 1) * char_size;
-
-    if (!share_utf8 && _PyUnicode_HAS_UTF8_MEMORY(unicode))
-    {
-        PyMem_Free(_PyUnicode_UTF8(unicode));
-        PyUnicode_SET_UTF8_LENGTH(unicode, 0);
-        PyUnicode_SET_UTF8(unicode, NULL);
-    }
-
-    data = (PyObject *)PyObject_Realloc(data, new_size);
-    if (data == NULL) {
-        PyErr_NoMemory();
-        return -1;
-    }
-    _PyUnicode_DATA_ANY(unicode) = data;
-    if (share_utf8) {
-        PyUnicode_SET_UTF8_LENGTH(unicode, length);
-        PyUnicode_SET_UTF8(unicode, data);
-    }
-    _PyUnicode_LENGTH(unicode) = length;
-    PyUnicode_WRITE(PyUnicode_KIND(unicode), data, length, 0);
-#ifdef Py_DEBUG
-    unicode_fill_invalid(unicode, old_length);
-#endif
-
-    /* check for integer overflow */
-    if (length > PY_SSIZE_T_MAX / (Py_ssize_t)sizeof(wchar_t) - 1) {
-        PyErr_NoMemory();
-        return -1;
-    }
-    assert(_PyUnicode_CheckConsistency(unicode, 0));
-    return 0;
 }
 
 static const char*
@@ -1733,28 +1676,6 @@ unicode_is_singleton(PyObject *unicode)
 }
 #endif
 
-// If this function is updated, update also _PyUnicodeWriter_CanWrite().
-int
-_PyUnicode_IsModifiable(PyObject *unicode)
-{
-    assert(_PyUnicode_CHECK(unicode));
-    if (!PyUnicode_CheckExact(unicode))
-        return 0;
-    // On Free Threading, this test fails if called from a thread other
-    // than the one which created the str object.
-    if (!_PyObject_IsUniquelyReferenced(unicode))
-        return 0;
-    if (PyUnicode_HASH(unicode) != -1)
-        return 0;
-    if (PyUnicode_CHECK_INTERNED(unicode))
-        return 0;
-#ifdef Py_DEBUG
-    /* singleton refcount is greater than 1 */
-    assert(!unicode_is_singleton(unicode));
-#endif
-    return 1;
-}
-
 static int
 unicode_resize(PyObject **p_unicode, Py_ssize_t length)
 {
@@ -1778,22 +1699,12 @@ unicode_resize(PyObject **p_unicode, Py_ssize_t length)
         return 0;
     }
 
-    if (!_PyUnicode_IsModifiable(unicode)) {
-        PyObject *copy = resize_copy(unicode, length);
-        if (copy == NULL)
-            return -1;
-        Py_SETREF(*p_unicode, copy);
-        return 0;
-    }
-
-    if (PyUnicode_IS_COMPACT(unicode)) {
-        PyObject *new_unicode = _PyUnicode_ResizeCompact(unicode, length);
-        if (new_unicode == NULL)
-            return -1;
-        *p_unicode = new_unicode;
-        return 0;
-    }
-    return resize_inplace(unicode, length);
+    // The string may be shared, so it is resized by copying.
+    PyObject *copy = resize_copy(unicode, length);
+    if (copy == NULL)
+        return -1;
+    Py_SETREF(*p_unicode, copy);
+    return 0;
 }
 
 int
@@ -11831,36 +11742,18 @@ PyUnicode_Append(PyObject **p_left, PyObject *right)
     }
     new_len = left_len + right_len;
 
-    if (_PyUnicode_IsModifiable(left)
-        && PyUnicode_CheckExact(right)
-        && PyUnicode_KIND(right) <= PyUnicode_KIND(left)
-        /* Don't resize for ascii += latin1. Convert ascii to latin1 requires
-           to change the structure size, but characters are stored just after
-           the structure, and so it requires to move all characters which is
-           not so different than duplicating the string. */
-        && !(PyUnicode_IS_ASCII(left) && !PyUnicode_IS_ASCII(right)))
-    {
-        /* append inplace */
-        if (unicode_resize(p_left, new_len) != 0)
-            goto error;
+    maxchar = PyUnicode_MAX_CHAR_VALUE(left);
+    maxchar2 = PyUnicode_MAX_CHAR_VALUE(right);
+    maxchar = Py_MAX(maxchar, maxchar2);
 
-        /* copy 'right' into the newly allocated area of 'left' */
-        _PyUnicode_FastCopyCharacters(*p_left, left_len, right, 0, right_len);
-    }
-    else {
-        maxchar = PyUnicode_MAX_CHAR_VALUE(left);
-        maxchar2 = PyUnicode_MAX_CHAR_VALUE(right);
-        maxchar = Py_MAX(maxchar, maxchar2);
-
-        /* Concat the two Unicode strings */
-        res = PyUnicode_New(new_len, maxchar);
-        if (res == NULL)
-            goto error;
-        _PyUnicode_FastCopyCharacters(res, 0, left, 0, left_len);
-        _PyUnicode_FastCopyCharacters(res, left_len, right, 0, right_len);
-        Py_DECREF(left);
-        *p_left = res;
-    }
+    /* Concat the two Unicode strings */
+    res = PyUnicode_New(new_len, maxchar);
+    if (res == NULL)
+        goto error;
+    _PyUnicode_FastCopyCharacters(res, 0, left, 0, left_len);
+    _PyUnicode_FastCopyCharacters(res, left_len, right, 0, right_len);
+    Py_DECREF(left);
+    *p_left = res;
     assert(_PyUnicode_CheckConsistency(*p_left, 1));
     return;
 

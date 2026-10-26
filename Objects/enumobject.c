@@ -6,7 +6,7 @@
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString
-#include "pycore_tuple.h"         // _PyTuple_Recycle()
+#include "pycore_tuple.h"         // _PyTuple_FromPairSteal()
 
 #include "clinic/enumobject.c.h"
 
@@ -20,7 +20,6 @@ typedef struct {
     PyObject_HEAD
     Py_ssize_t en_index;           /* current index of enumeration */
     PyObject* en_sit;              /* secondary iterator of enumeration */
-    PyObject* en_result;           /* result tuple  */
     PyObject* en_longindex;        /* index for sequences >= PY_SSIZE_T_MAX */
     PyObject* one;                 /* borrowed reference */
 } enumobject;
@@ -79,11 +78,6 @@ enum_new_impl(PyTypeObject *type, PyObject *iterable, PyObject *start)
         Py_DECREF(en);
         return NULL;
     }
-    en->en_result = _PyTuple_FromPairSteal(Py_None, Py_None);
-    if (en->en_result == NULL) {
-        Py_DECREF(en);
-        return NULL;
-    }
     en->one = _PyLong_GetOne();    /* borrowed reference */
     return (PyObject *)en;
 }
@@ -94,7 +88,6 @@ enum_dealloc(PyObject *op)
     enumobject *en = _enumobject_CAST(op);
     PyObject_GC_UnTrack(en);
     Py_XDECREF(en->en_sit);
-    Py_XDECREF(en->en_result);
     Py_XDECREF(en->en_longindex);
     Py_TYPE(en)->tp_free(en);
 }
@@ -104,7 +97,6 @@ enum_traverse(PyObject *op, visitproc visit, void *arg)
 {
     enumobject *en = _enumobject_CAST(op);
     Py_VISIT(en->en_sit);
-    Py_VISIT(en->en_result);
     Py_VISIT(en->en_longindex);
     return 0;
 }
@@ -135,11 +127,7 @@ increment_longindex_lock_held(enumobject *en)
 static PyObject *
 enum_next_long(enumobject *en, PyObject* next_item)
 {
-    PyObject *result = en->en_result;
     PyObject *next_index;
-    PyObject *old_index;
-    PyObject *old_item;
-
 
     Py_BEGIN_CRITICAL_SECTION(en);
     next_index = increment_longindex_lock_held(en);
@@ -149,19 +137,6 @@ enum_next_long(enumobject *en, PyObject* next_item)
         return NULL;
     }
 
-    if (_PyObject_IsUniquelyReferenced(result)) {
-        Py_INCREF(result);
-        old_index = PyTuple_GET_ITEM(result, 0);
-        old_item = PyTuple_GET_ITEM(result, 1);
-        PyTuple_SET_ITEM(result, 0, next_index);
-        PyTuple_SET_ITEM(result, 1, next_item);
-        Py_DECREF(old_index);
-        Py_DECREF(old_item);
-        // bpo-42536: The GC may have untracked this result tuple. Since we're
-        // recycling it, make sure it's tracked again:
-        _PyTuple_Recycle(result);
-        return result;
-    }
     return _PyTuple_FromPairSteal(next_index, next_item);
 }
 
@@ -171,10 +146,7 @@ enum_next(PyObject *op)
     enumobject *en = _enumobject_CAST(op);
     PyObject *next_index;
     PyObject *next_item;
-    PyObject *result = en->en_result;
     PyObject *it = en->en_sit;
-    PyObject *old_index;
-    PyObject *old_item;
 
     next_item = (*Py_TYPE(it)->tp_iternext)(it);
     if (next_item == NULL)
@@ -191,19 +163,6 @@ enum_next(PyObject *op)
     }
     FT_ATOMIC_STORE_SSIZE_RELAXED(en->en_index, en_index + 1);
 
-    if (_PyObject_IsUniquelyReferenced(result)) {
-        Py_INCREF(result);
-        old_index = PyTuple_GET_ITEM(result, 0);
-        old_item = PyTuple_GET_ITEM(result, 1);
-        PyTuple_SET_ITEM(result, 0, next_index);
-        PyTuple_SET_ITEM(result, 1, next_item);
-        Py_DECREF(old_index);
-        Py_DECREF(old_item);
-        // bpo-42536: The GC may have untracked this result tuple. Since we're
-        // recycling it, make sure it's tracked again:
-        _PyTuple_Recycle(result);
-        return result;
-    }
     return _PyTuple_FromPairSteal(next_index, next_item);
 }
 

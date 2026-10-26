@@ -947,34 +947,6 @@ deepcopy(elementtreestate *st, PyObject *object, PyObject *memo)
         return Py_NewRef(object);
     }
 
-    if (_PyObject_IsUniquelyReferenced(object)) {
-        if (PyDict_CheckExact(object)) {
-            PyObject *key, *value;
-            Py_ssize_t pos = 0;
-            int simple = 1;
-            while (PyDict_Next(object, &pos, &key, &value)) {
-                if (!PyUnicode_CheckExact(key) || !PyUnicode_CheckExact(value)) {
-                    simple = 0;
-                    break;
-                }
-            }
-            if (simple) {
-                return PyDict_Copy(object);
-            }
-            /* Fall through to general case */
-        }
-        else if (Element_CheckExact(st, object)) {
-            // The __deepcopy__() call may call arbitrary code even if the
-            // object to copy is a built-in XML element (one of its children
-            // any of its parents in its own __deepcopy__() implementation).
-            Py_INCREF(object);
-            PyObject *res = _elementtree_Element___deepcopy___impl(
-                (ElementObject *)object, memo);
-            Py_DECREF(object);
-            return res;
-        }
-    }
-
     /* General case */
     if (!st->deepcopy_obj) {
         PyErr_SetString(PyExc_RuntimeError,

@@ -17,7 +17,6 @@ extern "C" {
 #define _Py_MAX_UNICODE 0x10ffff
 
 
-extern int _PyUnicode_IsModifiable(PyObject *unicode);
 extern void _PyUnicodeWriter_InitWithBuffer(
     _PyUnicodeWriter *writer,
     PyObject *buffer);
@@ -115,10 +114,8 @@ _PyUnicodeWriter_CanWrite(_PyUnicodeWriter *writer)
     PyObject *buffer = writer->buffer;
     assert(buffer != NULL);
 
-    // Code adapted from _PyUnicode_IsModifiable().
-    // Do not use _PyObject_IsUniquelyReferenced(): the caller can have its own
-    // lock to prevent a writer from being used by two threads at the same
-    // time.
+    // The writer owns its buffer, which must not have been hashed or
+    // interned.
     assert(PyUnstable_Unicode_GET_CACHED_HASH(buffer) == -1);
     assert(!PyUnicode_CHECK_INTERNED(buffer));
     assert(!_Py_IsImmortal(buffer));

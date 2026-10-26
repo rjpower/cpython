@@ -8,7 +8,7 @@
 #include "pycore_interpframe.h"   // _PyFrame_GetLocals()
 #include "pycore_intrinsics.h"    // INTRINSIC_PRINT
 #include "pycore_list.h"          // _PyList_AsTupleAndClear()
-#include "pycore_object.h"        // _PyObject_IsUniquelyReferenced()
+#include "pycore_object.h"
 #include "pycore_setobject.h"     // _PySet_Freeze()
 #include "pycore_pyerrors.h"      // _PyErr_SetString()
 #include "pycore_runtime.h"       // _Py_ID()

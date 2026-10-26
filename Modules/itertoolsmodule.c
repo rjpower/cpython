@@ -283,7 +283,6 @@ typedef struct {
     PyObject_HEAD
     PyObject *it;
     PyObject *old;
-    PyObject *result;
 } pairwiseobject;
 
 #define pairwiseobject_CAST(op) ((pairwiseobject *)(op))
@@ -317,11 +316,6 @@ pairwise_new_impl(PyTypeObject *type, PyObject *iterable)
     }
     po->it = it;
     po->old = NULL;
-    po->result = _PyTuple_FromPairSteal(Py_None, Py_None);
-    if (po->result == NULL) {
-        Py_DECREF(po);
-        return NULL;
-    }
     return (PyObject *)po;
 }
 
@@ -333,7 +327,6 @@ pairwise_dealloc(PyObject *op)
     PyObject_GC_UnTrack(po);
     Py_XDECREF(po->it);
     Py_XDECREF(po->old);
-    Py_XDECREF(po->result);
     tp->tp_free(po);
     Py_DECREF(tp);
 }
@@ -345,7 +338,6 @@ pairwise_traverse(PyObject *op, visitproc visit, void *arg)
     Py_VISIT(Py_TYPE(po));
     Py_VISIT(po->it);
     Py_VISIT(po->old);
-    Py_VISIT(po->result);
     return 0;
 }
 
@@ -382,22 +374,7 @@ pairwise_next(PyObject *op)
         return NULL;
     }
 
-    result = po->result;
-    if (_PyObject_IsUniquelyReferenced(result)) {
-        Py_INCREF(result);
-        PyObject *last_old = PyTuple_GET_ITEM(result, 0);
-        PyObject *last_new = PyTuple_GET_ITEM(result, 1);
-        PyTuple_SET_ITEM(result, 0, Py_NewRef(old));
-        PyTuple_SET_ITEM(result, 1, Py_NewRef(new));
-        Py_DECREF(last_old);
-        Py_DECREF(last_new);
-        // bpo-42536: The GC may have untracked this result tuple. Since we're
-        // recycling it, make sure it's tracked again:
-        _PyTuple_Recycle(result);
-    }
-    else {
-        result = _PyTuple_FromPair(old, new);
-    }
+    result = _PyTuple_FromPair(old, new);
 
     Py_XSETREF(po->old, new);
     Py_DECREF(old);
@@ -834,36 +811,18 @@ teedataobject_traverse(PyObject *op, visitproc visit, void * arg)
     return 0;
 }
 
-static void
-teedataobject_safe_decref(PyObject *obj)
-{
-    while (obj && _PyObject_IsUniquelyReferenced(obj)) {
-        teedataobject *tmp = teedataobject_CAST(obj);
-        PyObject *nextlink;
-        Py_BEGIN_CRITICAL_SECTION(obj);
-        nextlink = tmp->nextlink;
-        tmp->nextlink = NULL;
-        Py_END_CRITICAL_SECTION();
-        Py_SETREF(obj, nextlink);
-    }
-    Py_XDECREF(obj);
-}
-
 static int
 teedataobject_clear(PyObject *op)
 {
     int i;
-    PyObject *tmp;
     teedataobject *tdo = teedataobject_CAST(op);
 
     Py_BEGIN_CRITICAL_SECTION(op);
     Py_CLEAR(tdo->it);
     for (i=0 ; i<tdo->numread ; i++)
         Py_CLEAR(tdo->values[i]);
-    tmp = tdo->nextlink;
-    tdo->nextlink = NULL;
+    Py_CLEAR(tdo->nextlink);
     Py_END_CRITICAL_SECTION();
-    teedataobject_safe_decref(tmp);
     return 0;
 }
 
@@ -2178,21 +2137,14 @@ product_next_impl(productobject *self)
     } else {
         Py_ssize_t *indices = lz->indices;
 
-        /* Copy the previous result tuple or re-use it if available */
-        if (!_PyObject_IsUniquelyReferenced(result)) {
-            PyObject *old_result = result;
-            result = PyTuple_FromArray(_PyTuple_ITEMS(old_result), npools);
-            if (result == NULL)
-                goto empty;
-            lz->result = result;
-            Py_DECREF(old_result);
-        }
-        // bpo-42536: The GC may have untracked this result tuple. Since we're
-        // recycling it, make sure it's tracked again:
-        else {
-            _PyTuple_Recycle(result);
-        }
-        /* Now, we've got the only copy so we can update it in-place */
+        /* The previous result may still be held by the caller, so update
+           a copy. The copy has not escaped yet. */
+        PyObject *old_result = result;
+        result = PyTuple_FromArray(_PyTuple_ITEMS(old_result), npools);
+        if (result == NULL)
+            goto empty;
+        lz->result = result;
+        Py_DECREF(old_result);
 
         /* Update the pool indices right-to-left.  Only advance to the
            next pool when the previous one rolls-over */
@@ -2408,24 +2360,14 @@ combinations_next_impl(combinationsobject *self)
             PyTuple_SET_ITEM(result, i, elem);
         }
     } else {
-        /* Copy the previous result tuple or re-use it if available */
-        if (!_PyObject_IsUniquelyReferenced(result)) {
-            PyObject *old_result = result;
-            result = PyTuple_FromArray(_PyTuple_ITEMS(old_result), r);
-            if (result == NULL)
-                goto empty;
-            co->result = result;
-            Py_DECREF(old_result);
-        }
-        // bpo-42536: The GC may have untracked this result tuple. Since we're
-        // recycling it, make sure it's tracked again:
-        else {
-            _PyTuple_Recycle(result);
-        }
-        /* Now, we've got the only copy so we can update it in-place
-         * CPython's empty tuple is a singleton and cached in
-         * PyTuple's freelist.
-         */
+        /* The previous result may still be held by the caller, so update
+           a copy. The copy has not escaped yet. */
+        PyObject *old_result = result;
+        result = PyTuple_FromArray(_PyTuple_ITEMS(old_result), r);
+        if (result == NULL)
+            goto empty;
+        co->result = result;
+        Py_DECREF(old_result);
 
         /* Scan indices right-to-left until finding one that is not
            at its maximum (i + n - r). */
@@ -2657,22 +2599,14 @@ cwr_next_impl(cwrobject *self)
             }
         }
     } else {
-        /* Copy the previous result tuple or re-use it if available */
-        if (!_PyObject_IsUniquelyReferenced(result)) {
-            PyObject *old_result = result;
-            result = PyTuple_FromArray(_PyTuple_ITEMS(old_result), r);
-            if (result == NULL)
-                goto empty;
-            co->result = result;
-            Py_DECREF(old_result);
-        }
-        // bpo-42536: The GC may have untracked this result tuple. Since we're
-        // recycling it, make sure it's tracked again:
-        else {
-            _PyTuple_Recycle(result);
-        }
-        /* Now, we've got the only copy so we can update it in-place CPython's
-           empty tuple is a singleton and cached in PyTuple's freelist. */
+        /* The previous result may still be held by the caller, so update
+           a copy. The copy has not escaped yet. */
+        PyObject *old_result = result;
+        result = PyTuple_FromArray(_PyTuple_ITEMS(old_result), r);
+        if (result == NULL)
+            goto empty;
+        co->result = result;
+        Py_DECREF(old_result);
 
        /* Scan indices right-to-left until finding one that is not
         * at its maximum (n-1). */
@@ -2923,21 +2857,14 @@ permutations_next_impl(permutationsobject *self)
         if (n == 0)
             goto empty;
 
-        /* Copy the previous result tuple or re-use it if available */
-        if (!_PyObject_IsUniquelyReferenced(result)) {
-            PyObject *old_result = result;
-            result = PyTuple_FromArray(_PyTuple_ITEMS(old_result), r);
-            if (result == NULL)
-                goto empty;
-            po->result = result;
-            Py_DECREF(old_result);
-        }
-        // bpo-42536: The GC may have untracked this result tuple. Since we're
-        // recycling it, make sure it's tracked again:
-        else {
-            _PyTuple_Recycle(result);
-        }
-        /* Now, we've got the only copy so we can update it in-place */
+        /* The previous result may still be held by the caller, so update
+           a copy. The copy has not escaped yet. */
+        PyObject *old_result = result;
+        result = PyTuple_FromArray(_PyTuple_ITEMS(old_result), r);
+        if (result == NULL)
+            goto empty;
+        po->result = result;
+        Py_DECREF(old_result);
 
         /* Decrement rightmost cycle, moving leftward upon zero rollover */
         for (i=r-1 ; i>=0 ; i--) {
@@ -3769,7 +3696,6 @@ struct ziplongestobject {
     Py_ssize_t tuplesize;
     Py_ssize_t numactive;
     PyObject *ittuple;                  /* tuple of iterators */
-    PyObject *result;
     PyObject *fillvalue;
 };
 
@@ -3781,7 +3707,6 @@ zip_longest_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     ziplongestobject *lz;
     Py_ssize_t i;
     PyObject *ittuple;  /* tuple of iterators */
-    PyObject *result;
     PyObject *fillvalue = Py_None;
     Py_ssize_t tuplesize;
 
@@ -3817,28 +3742,15 @@ zip_longest_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         PyTuple_SET_ITEM(ittuple, i, it);
     }
 
-    /* create a result holder */
-    result = PyTuple_New(tuplesize);
-    if (result == NULL) {
-        Py_DECREF(ittuple);
-        return NULL;
-    }
-    for (i=0 ; i < tuplesize ; i++) {
-        Py_INCREF(Py_None);
-        PyTuple_SET_ITEM(result, i, Py_None);
-    }
-
     /* create ziplongestobject structure */
     lz = (ziplongestobject *)type->tp_alloc(type, 0);
     if (lz == NULL) {
         Py_DECREF(ittuple);
-        Py_DECREF(result);
         return NULL;
     }
     lz->ittuple = ittuple;
     lz->tuplesize = tuplesize;
     lz->numactive = tuplesize;
-    lz->result = result;
     lz->fillvalue = Py_NewRef(fillvalue);
     return (PyObject *)lz;
 }
@@ -3850,7 +3762,6 @@ zip_longest_dealloc(PyObject *op)
     PyTypeObject *tp = Py_TYPE(lz);
     PyObject_GC_UnTrack(lz);
     Py_XDECREF(lz->ittuple);
-    Py_XDECREF(lz->result);
     Py_XDECREF(lz->fillvalue);
     tp->tp_free(lz);
     Py_DECREF(tp);
@@ -3862,7 +3773,6 @@ zip_longest_traverse(PyObject *op, visitproc visit, void *arg)
     ziplongestobject *lz = ziplongestobject_CAST(op);
     Py_VISIT(Py_TYPE(lz));
     Py_VISIT(lz->ittuple);
-    Py_VISIT(lz->result);
     Py_VISIT(lz->fillvalue);
     return 0;
 }
@@ -3879,68 +3789,36 @@ zip_longest_next_impl(ziplongestobject *self)
     ziplongestobject *lz = self;
     Py_ssize_t i;
     Py_ssize_t tuplesize = lz->tuplesize;
-    PyObject *result = lz->result;
     PyObject *it;
     PyObject *item;
-    PyObject *olditem;
 
     if (tuplesize == 0)
         return NULL;
     if (lz->numactive == 0)
         return NULL;
-    if (_PyObject_IsUniquelyReferenced(result)) {
-        Py_INCREF(result);
-        for (i=0 ; i < tuplesize ; i++) {
-            it = PyTuple_GET_ITEM(lz->ittuple, i);
-            if (it == NULL) {
-                item = Py_NewRef(lz->fillvalue);
-            } else {
-                item = PyIter_Next(it);
-                if (item == NULL) {
-                    lz->numactive -= 1;
-                    if (lz->numactive == 0 || PyErr_Occurred()) {
-                        lz->numactive = 0;
-                        Py_DECREF(result);
-                        return NULL;
-                    } else {
-                        item = Py_NewRef(lz->fillvalue);
-                        PyTuple_SET_ITEM(lz->ittuple, i, NULL);
-                        Py_DECREF(it);
-                    }
+    PyObject *result = PyTuple_New(tuplesize);
+    if (result == NULL)
+        return NULL;
+    for (i=0 ; i < tuplesize ; i++) {
+        it = PyTuple_GET_ITEM(lz->ittuple, i);
+        if (it == NULL) {
+            item = Py_NewRef(lz->fillvalue);
+        } else {
+            item = PyIter_Next(it);
+            if (item == NULL) {
+                lz->numactive -= 1;
+                if (lz->numactive == 0 || PyErr_Occurred()) {
+                    lz->numactive = 0;
+                    Py_DECREF(result);
+                    return NULL;
+                } else {
+                    item = Py_NewRef(lz->fillvalue);
+                    PyTuple_SET_ITEM(lz->ittuple, i, NULL);
+                    Py_DECREF(it);
                 }
             }
-            olditem = PyTuple_GET_ITEM(result, i);
-            PyTuple_SET_ITEM(result, i, item);
-            Py_DECREF(olditem);
         }
-        // bpo-42536: The GC may have untracked this result tuple. Since we're
-        // recycling it, make sure it's tracked again:
-        _PyTuple_Recycle(result);
-    } else {
-        result = PyTuple_New(tuplesize);
-        if (result == NULL)
-            return NULL;
-        for (i=0 ; i < tuplesize ; i++) {
-            it = PyTuple_GET_ITEM(lz->ittuple, i);
-            if (it == NULL) {
-                item = Py_NewRef(lz->fillvalue);
-            } else {
-                item = PyIter_Next(it);
-                if (item == NULL) {
-                    lz->numactive -= 1;
-                    if (lz->numactive == 0 || PyErr_Occurred()) {
-                        lz->numactive = 0;
-                        Py_DECREF(result);
-                        return NULL;
-                    } else {
-                        item = Py_NewRef(lz->fillvalue);
-                        PyTuple_SET_ITEM(lz->ittuple, i, NULL);
-                        Py_DECREF(it);
-                    }
-                }
-            }
-            PyTuple_SET_ITEM(result, i, item);
-        }
+        PyTuple_SET_ITEM(result, i, item);
     }
     return result;
 }

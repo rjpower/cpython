@@ -160,12 +160,11 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
     PyFrameObject *f = FT_ATOMIC_LOAD_PTR_RELAXED(frame->frame_obj);
     if (f != NULL) {
         FT_ATOMIC_STORE_PTR_RELAXED(frame->frame_obj, NULL);
-        if (!_PyObject_IsUniquelyReferenced((PyObject *)f)) {
-            take_ownership(f, frame);
-            Py_DECREF(f);
-            return;
-        }
+        // The frame object may outlive the frame, so it takes the frame's
+        // contents.
+        take_ownership(f, frame);
         Py_DECREF(f);
+        return;
     }
     if (frame->owner == FRAME_OWNED_BY_THREAD) {
         // A frame on the frame stack ends with its temporaries NULL: a

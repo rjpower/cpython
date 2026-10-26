@@ -74,9 +74,6 @@ _Py_COMP_DIAG_POP
 static inline void
 set_ob_shash_unsafe(PyBytesObject *a, Py_hash_t hash)
 {
-    // Don't test _PyObject_IsUniquelyReferenced(), so the function can be
-    // called by bytes_resize_inplace().
-
 _Py_COMP_DIAG_PUSH
 _Py_COMP_DIAG_IGNORE_DEPR_DECLS
     a->ob_shash = hash;
@@ -3340,42 +3337,9 @@ PyBytes_Concat(PyObject **pv, PyObject *w)
         return;
     }
 
-    if (_PyObject_IsUniquelyReferenced(*pv) && PyBytes_CheckExact(*pv)) {
-        /* Only one reference, so we can resize in place */
-        Py_ssize_t oldsize;
-        Py_buffer wb;
-
-        if (PyObject_GetBuffer(w, &wb, PyBUF_SIMPLE) != 0) {
-            PyErr_Format(PyExc_TypeError, "can't concat %.100s to %.100s",
-                         Py_TYPE(w)->tp_name, Py_TYPE(*pv)->tp_name);
-            Py_CLEAR(*pv);
-            return;
-        }
-
-        oldsize = PyBytes_GET_SIZE(*pv);
-        if (oldsize > PY_SSIZE_T_MAX - wb.len) {
-            PyErr_NoMemory();
-            goto error;
-        }
-        if (_PyBytes_Resize(pv, oldsize + wb.len) < 0)
-            goto error;
-
-        memcpy(PyBytes_AS_STRING(*pv) + oldsize, wb.buf, wb.len);
-        PyBuffer_Release(&wb);
-        return;
-
-      error:
-        PyBuffer_Release(&wb);
-        Py_CLEAR(*pv);
-        return;
-    }
-
-    else {
-        /* Multiple references, need to create new object */
-        PyObject *v;
-        v = _PyBytes_Concat(*pv, w);
-        Py_SETREF(*pv, v);
-    }
+    // *pv may be shared, so the result is a new object.
+    PyObject *v = _PyBytes_Concat(*pv, w);
+    Py_SETREF(*pv, v);
 }
 
 void
@@ -3394,8 +3358,6 @@ int
 _PyBytes_IsMutable(PyObject *self)
 {
     assert(PyBytes_Check(self));
-    // Do not use _PyObject_IsUniquelyReferenced(): this function is called
-    // by bytearray and PyBytesWriter which can be used by multiple threads.
     assert(!_Py_IsImmortal(self));
 
     // Check that the object is not a singleton
@@ -3422,8 +3384,7 @@ static inline int
 bytes_resize_inplace(PyObject **pv, Py_ssize_t newsize)
 {
     PyObject *v = *pv;
-    // Do not test _PyObject_IsUniquelyReferenced(). The function is used by
-    // PyBytesWriter_FinishWithSize() and its caller can have its own lock.
+    // The caller, PyBytesWriter_FinishWithSize(), owns the object.
     assert(PyBytes_GET_SIZE(v) >= 1);
     assert(newsize >= 1);
     assert(get_ob_shash((PyBytesObject *)v) == -1);
@@ -3507,26 +3468,20 @@ _PyBytes_ResizeKeepOnError(PyObject **pv, Py_ssize_t newsize)
         return 0;
     }
 
-    if (!_PyObject_IsUniquelyReferenced(v)
-        // Return a copy if the hash value was already computed
-        || get_ob_shash((PyBytesObject *)v) != -1)
-    {
-        // Allocate and then copy so we don't get a shared immortal
-        // one-character singleton!
-        PyObject *result = bytes_alloc(newsize);
-        if (!result) {
-            return -1;
-        }
-
-        memcpy(PyBytes_AS_STRING(result), PyBytes_AS_STRING(v),
-               Py_MIN(oldsize, newsize));
-        *pv = result;
-        Py_DECREF(v);
-        assert(_PyBytes_IsMutable(*pv));
-        return 0;
+    // Without reference counts the object may be shared, so it is resized
+    // by copying. Allocate and then copy so we don't get a shared immortal
+    // one-character singleton!
+    PyObject *result = bytes_alloc(newsize);
+    if (!result) {
+        return -1;
     }
 
-    return bytes_resize_inplace(pv, newsize);
+    memcpy(PyBytes_AS_STRING(result), PyBytes_AS_STRING(v),
+           Py_MIN(oldsize, newsize));
+    *pv = result;
+    Py_DECREF(v);
+    assert(_PyBytes_IsMutable(*pv));
+    return 0;
 }
 
 
@@ -3781,9 +3736,6 @@ byteswriter_check_consistency(PyBytesWriter *writer)
     if (obj != NULL) {
         if (writer->use_bytearray) {
             assert(PyByteArray_CheckExact(obj));
-            // Do not use _PyObject_IsUniquelyReferenced(): the caller can have
-            // its own lock to prevent a writer from being used by two threads
-            // at the same time.
             PyByteArrayObject *bytearray = (PyByteArrayObject*)obj;
             obj = bytearray->ob_bytes_object;
             assert(obj != NULL);

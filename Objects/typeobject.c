@@ -7353,15 +7353,10 @@ object_set_class(PyObject *self, PyObject *value, void *closure)
         return -1;
     }
 
-    int unique = _PyObject_IsUniquelyReferenced(self);
-    if (!unique) {
-        types_stop_world();
-    }
+    types_stop_world();
     PyTypeObject *oldto = Py_TYPE(self);
     int res = object_set_class_world_stopped(self, newto);
-    if (!unique) {
-        types_start_world();
-    }
+    types_start_world();
     if (res == 0) {
         if (oldto->tp_flags & Py_TPFLAGS_HEAPTYPE) {
             Py_DECREF(oldto);

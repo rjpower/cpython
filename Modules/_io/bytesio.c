@@ -39,8 +39,9 @@ typedef struct {
 #define bytesiobuf_CAST(op) ((bytesiobuf *)(op))
 
 /* The bytesio object can be in three states:
-  * Py_REFCNT(buf) == 1, the hash of buf is not cached, exports == 0.
-  * Py_REFCNT(buf) > 1 or the hash of buf is cached.  exports == 0,
+  * buf has not been handed out (buf_shared == 0), the hash of buf is not
+    cached, exports == 0.
+  * buf has been handed out or its hash is cached.  exports == 0,
     first modification or export causes the internal buffer copying.
   * exports > 0.  Any modifications are forbidden.  Every exported buffer
     keeps a reference to buf, so it outlives closing of the bytesio object.

@@ -1196,6 +1196,20 @@ class RegCfgTest(unittest.TestCase):
             with self.assertRaises(ZeroDivisionError):
                 f(o, 1)
 
+    def test_truth_folding_of_a_local(self):
+        # The flowgraph turns the COPY of a local into a second load, which
+        # folds into the jump
+        def disj(a, b):
+            return a or b
+        def window(a, b):
+            return list((a or b(), 1))
+        self.assertIn("JUMP_IF_TRUE_OR_POP", self.names(disj))
+        self.assertNotIn("POP_TOP", self.names(disj))
+        empty, full = [], [1]
+        for a in empty, full, 0, 2.5:
+            self.assertIs(disj(a, full), a or full)
+            self.assertEqual(window(a, lambda: full), [a or full, 1])
+
     # f. Compaction
 
     def test_compaction(self):

@@ -412,8 +412,8 @@ canonicalise_below(converter *c, int depth)
     return SUCCESS;
 }
 
-static int
-add_operands(_PyRegCfg *cfg, int n, int *index)
+int
+_PyRegCfg_AddOperands(_PyRegCfg *cfg, int n, int *index)
 {
     RETURN_IF_ERROR(grow((void **)&cfg->operands, &cfg->aoperands,
                          cfg->noperands + n, sizeof(int)));
@@ -453,8 +453,8 @@ convert_instr(converter *c, const _PyRegOp *instr)
     }
     int nimplicit = IS_RAISE_OPCODE(instr->opcode) ? depth - popped : 0;
     int in, out;
-    RETURN_IF_ERROR(add_operands(cfg, nread + nimplicit, &in));
-    RETURN_IF_ERROR(add_operands(cfg, pushed, &out));
+    RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, nread + nimplicit, &in));
+    RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, pushed, &out));
     for (int k = 0; k < nread; k++) {
         cfg->operands[in + k] = c->stack[depth - nread + k];
     }

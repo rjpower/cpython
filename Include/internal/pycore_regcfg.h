@@ -183,6 +183,9 @@ int _PyRegPass_StoreElim(_PyRegCfg *cfg);
 int _PyRegPass_PopTop(_PyRegCfg *cfg);
 int _PyRegPass_TruthFold(_PyRegCfg *cfg);
 
+/* Reserve n operands in the pool, which may move it; *index is the first. */
+int _PyRegCfg_AddOperands(_PyRegCfg *cfg, int n, int *index);
+
 /* Replace register from by to in every op of the region of block b. */
 void _PyRegCfg_Rename(_PyRegCfg *cfg, int b, int from, int to);
 

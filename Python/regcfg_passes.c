@@ -514,15 +514,86 @@ _PyRegPass_PopTop(_PyRegCfg *cfg)
  * JUMP_IF_FALSE_OR_POP does all three: it keeps the value where it jumps
  * and releases it where it falls through.  The POP_TOP must be the next op
  * on the fall-through path, which only the jump reaches, and all three on
- * one line, so that no line's event goes.  A value loaded from a local
- * does not come here: the flowgraph turns its COPY into a second load,
- * which folds into the jump. */
+ * one line, so that no line's event goes.  For a value loaded from a
+ * local the flowgraph turns the COPY into a second load, which copy
+ * propagation folds into the jump:
+ *
+ *     LOAD_FAST x; POP_JUMP_IF_FALSE L <- x; NOT_TAKEN; POP_TOP; <b>; L:
+ *
+ * and the jump becomes JUMP_IF_FALSE_OR_POP of the first load's value. */
+
+/* The POP_TOP that pops v where jump falls through, on jump's line */
+static _PyRegOp *
+fall_through_pop(_PyRegCfg *cfg, int start, int end, _PyRegOp *jump, int v)
+{
+    int j = (int)(jump - cfg->ops);
+    _PyRegOp *next = live_neighbour(cfg, start, end, j, 1);
+    if (next != NULL && next->opcode == NOT_TAKEN) {
+        next = live_neighbour(cfg, start, end, (int)(next - cfg->ops), 1);
+    }
+    if (next == NULL || next->opcode != POP_TOP
+        || next->loc.lineno != jump->loc.lineno
+        || _PyReg_IN(cfg, next)[0] != v)
+    {
+        return NULL;
+    }
+    return next;
+}
+
+static inline int
+truth_jump(int opcode)
+{
+    return opcode == POP_JUMP_IF_FALSE ? JUMP_IF_FALSE_OR_POP
+         : opcode == POP_JUMP_IF_TRUE ? JUMP_IF_TRUE_OR_POP : 0;
+}
+
+/* LOAD_FAST x (v); POP_JUMP_IF_* <- x; [NOT_TAKEN]; POP_TOP v */
+static int
+fold_local_truth(_PyRegCfg *cfg, int start, int end, _PyRegOp *load)
+{
+    int v = _PyReg_OUT(cfg, load)[0];
+    _PyRegOp *jump = live_neighbour(cfg, start, end,
+                                    (int)(load - cfg->ops), 1);
+    if (jump == NULL || !truth_jump(jump->opcode) || jump->nread != 1
+        || jump->loc.lineno != load->loc.lineno
+        || _PyReg_IN(cfg, jump)[0] != load->oparg
+        || !_PyReg_IS_CANON(cfg, v))
+    {
+        return SUCCESS;
+    }
+    _PyRegOp *pop = fall_through_pop(cfg, start, end, jump, v);
+    if (pop == NULL) {
+        return SUCCESS;
+    }
+    // The load gets a fresh register for the jump to take, and the jump
+    // gives the value its stack position's register where it goes
+    int in, out;
+    RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, 1, &in));
+    RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, 1, &out));
+    int t = cfg->nvregs++;
+    _PyReg_OUT(cfg, load)[0] = t;
+    cfg->operands[in] = t;
+    cfg->operands[out] = v;
+    jump->opcode = truth_jump(jump->opcode);
+    jump->in = in;
+    jump->out = out;
+    jump->nread = jump->npop = 1;
+    jump->nout = 1;
+    jump->depth = pop->depth;
+    jump->flags |= _PyReg_JUMP_OUTPUT;
+    pop->opcode = _PyReg_DEAD;
+    return SUCCESS;
+}
 
 static int
 truth_fold_region(_PyRegCfg *cfg, int start, int end)
 {
     for (int i = start; i < end; i++) {
         _PyRegOp *copy = &cfg->ops[i];
+        if (copy->opcode == LOAD_FAST && copy->nout == 1 && copy->dst < 0) {
+            RETURN_IF_ERROR(fold_local_truth(cfg, start, end, copy));
+            continue;
+        }
         if (copy->opcode != COPY || copy->oparg != 1 || copy->nout != 2) {
             continue;
         }
@@ -537,19 +608,11 @@ truth_fold_region(_PyRegCfg *cfg, int start, int end)
         {
             continue;
         }
-        int j = (int)(jump - cfg->ops);
-        _PyRegOp *next = live_neighbour(cfg, start, end, j, 1);
-        if (next != NULL && next->opcode == NOT_TAKEN) {
-            next = live_neighbour(cfg, start, end, (int)(next - cfg->ops), 1);
-        }
-        if (next == NULL || next->opcode != POP_TOP
-            || next->loc.lineno != copy->loc.lineno
-            || _PyReg_IN(cfg, next)[0] != cout[0])
-        {
+        _PyRegOp *next = fall_through_pop(cfg, start, end, jump, cout[0]);
+        if (next == NULL) {
             continue;
         }
-        copy->opcode = jump->opcode == POP_JUMP_IF_FALSE
-            ? JUMP_IF_FALSE_OR_POP : JUMP_IF_TRUE_OR_POP;
+        copy->opcode = truth_jump(jump->opcode);
         copy->oparg = jump->oparg;
         copy->target = jump->target;
         copy->except = jump->except;

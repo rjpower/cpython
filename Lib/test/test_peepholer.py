@@ -585,25 +585,25 @@ class TestTranforms(BytecodeTestCase):
                     and c)
         self.check_jump_targets(f)
         self.check_lnotab(f)
-        # The second jump keeps the value it jumps with and pops it where it
-        # falls through
-        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_FALSE'), 1)
-        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_FALSE_OR_POP'), 1)
+        # Both jumps keep the value they jump with and pop it where they
+        # fall through
+        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_FALSE'), 0)
+        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_FALSE_OR_POP'), 2)
         # POP_JUMP_IF_TRUE to POP_JUMP_IF_TRUE --> POP_JUMP_IF_TRUE to non-jump
         def f(a, b, c):
             return ((a or b)
                     or c)
         self.check_jump_targets(f)
         self.check_lnotab(f)
-        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_TRUE'), 1)
-        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_TRUE_OR_POP'), 1)
+        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_TRUE'), 0)
+        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_TRUE_OR_POP'), 2)
         # JUMP_IF_FALSE_OR_POP to JUMP_IF_TRUE_OR_POP --> POP_JUMP_IF_FALSE to non-jump
         def f(a, b, c):
             return ((a and b)
                     or c)
         self.check_jump_targets(f)
         self.check_lnotab(f)
-        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_FALSE'), 1)
+        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_FALSE_OR_POP'), 1)
         self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_TRUE'), 1)
         # POP_JUMP_IF_TRUE to POP_JUMP_IF_FALSE --> POP_JUMP_IF_TRUE to non-jump
         def f(a, b, c):
@@ -612,7 +612,7 @@ class TestTranforms(BytecodeTestCase):
         self.check_jump_targets(f)
         self.check_lnotab(f)
         self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_FALSE'), 1)
-        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_TRUE'), 1)
+        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_TRUE_OR_POP'), 1)
 
     def test_elim_jump_to_uncond_jump4(self):
         def f():

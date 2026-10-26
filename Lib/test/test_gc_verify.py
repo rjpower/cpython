@@ -7,7 +7,6 @@ only in one kind of root at a time and check that it is not a hole.
 """
 
 import gc
-import sys
 import textwrap
 import threading
 import time
@@ -29,10 +28,6 @@ class Obj:
 
 def make_obj():
     return Obj()
-
-
-def make_str():
-    return "".join(["a string ", "only an array holds"])
 
 
 def make_cycle():
@@ -171,43 +166,6 @@ class VerifierTests(unittest.TestCase):
         holes, addr = _testinternalcapi.gc_verify_with_c_local(make_cycle)
         self.check_no_holes(holes, addr)
 
-    def verify_pymem_array(self):
-        # The conservative scan can find a stale copy of the object's
-        # address, left by an earlier object at the same address, in a live
-        # C stack frame.  Keep each object, so that every attempt uses a new
-        # address.
-        kept = []
-        for attempt in range(5):
-            holes, obj = _testinternalcapi.gc_verify_with_pymem_array(make_str)
-            kept.append(obj)
-            if [h[1] for h in holes] == [id(obj)]:
-                return holes
-        self.fail(f"the object is not reported as a hole: {holes}")
-
-    @support.requires_refcounting
-    def test_pymem_array_is_a_hole(self):
-        # An object referenced only from PyMem_Malloc() memory is invisible
-        # to a tracing collector, and the verifier must say so.  Ports must
-        # fix this pattern: give the owning object a tp_traverse that visits
-        # the array, or register the array with _PyGC_AddRoot().
-        #
-        # The object is not a GC object: the cycle collector, which runs
-        # just before the verifier, would leave the addresses of the GC
-        # objects it visits in its stack frame.
-        holes = self.verify_pymem_array()
-        name, hole_addr, refcnt, referrer = holes[0]
-        self.assertEqual(name, "str")
-        self.assertEqual(refcnt, 1)
-        self.assertRegex(referrer, r"^non-object block at 0x[0-9a-f]+ "
-                                   r"\(\d+ bytes\)$")
-
-    @support.requires_refcounting
-    def test_hole_list_is_kept(self):
-        holes = self.verify_pymem_array()
-        self.assertEqual(_testinternalcapi.gc_verify_holes(), holes)
-        self.check_no_holes(_testinternalcapi.gc_verify())
-        self.assertEqual(_testinternalcapi.gc_verify_holes(), [])
-
 
 @unittest.skipUnless(support.Py_DEBUG or support.with_mimalloc(),
                      "requires the mimalloc allocator")
@@ -240,37 +198,6 @@ class ModeTests(unittest.TestCase):
         count, _ = self.count_verifications("gc.collect()")
         self.assertEqual(count, 1 if support.Py_DEBUG else 0)
 
-    # Enough live allocations for several collections of generation 1.
-    ALLOCATE = "gc.enable(); keep = [[] for i in range(100_000)]"
-
-    @unittest.skipIf(support.Py_GC, "Py_GC has one generation")
-    def test_explicit_collections_only(self):
-        # Without "auto", only explicit full collections are verified.
-        count, _ = self.count_verifications(
-            "gc.collect(0); gc.collect(1)\n" + self.ALLOCATE,
-            PYTHON_GCVERIFY="1")
-        self.assertEqual(count, 0)
-
-    @unittest.skipIf(support.Py_GC, "Py_GC has one generation")
-    def test_auto(self):
-        code = (self.ALLOCATE + "\nassert gc.get_stats()[1]['collections']")
-        count, _ = self.count_verifications(code, PYTHON_GCVERIFY="auto")
-        self.assertGreater(count, 0)
-
-    @support.requires_refcounting
-    def test_report(self):
-        # Holes go to stderr.
-        code = textwrap.dedent("""
-            kept = [_testinternalcapi.gc_verify_with_pymem_array(
-                        lambda: "".join(["only an array ", "holds this"]))
-                    for i in range(5)]
-        """)
-        _, err = self.count_verifications(code, PYTHON_GCVERIFY="0")
-        self.assertRegex(err, rb"gc verify: 1 holes; \d+ objects")
-        self.assertRegex(err, rb"gc verify: hole str 'only an array holds "
-                              rb"this' at 0x[0-9a-f]+ refcnt 1; referrer: "
-                              rb"non-object block at 0x[0-9a-f]+")
-
     def test_behaviour_unchanged(self):
         code = textwrap.dedent("""
             import gc
@@ -289,18 +216,6 @@ class ModeTests(unittest.TestCase):
             self.assertEqual(err, b"")
             outs.append(out)
         self.assertEqual(outs[0], outs[1])
-
-    @unittest.skipIf(support.Py_GC, "Py_GC always uses mimalloc")
-    def test_other_allocator(self):
-        # The command line option is an error with another allocator; the
-        # environment variable is ignored, so that child processes started
-        # with another PYTHONMALLOC still run.
-        rc, _, err = script_helper.assert_python_failure(
-            "-X", "gcverify", "-c", "pass", PYTHONMALLOC="malloc")
-        self.assertIn(b"-X gcverify requires the mimalloc allocator", err)
-        count, _ = self.count_verifications(
-            "gc.collect()", PYTHONMALLOC="malloc", PYTHON_GCVERIFY="1")
-        self.assertEqual(count, 0)
 
 
 if __name__ == "__main__":

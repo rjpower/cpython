@@ -1819,6 +1819,39 @@ live_fini(trace_t *t)
     free(t->stack);
 }
 
+static inline int
+is_dead(PyObject *op)
+{
+    return op != NULL && (op->ob_flags & _Py_GC_DEAD_FLAG);
+}
+
+/* The version caches hold weak references, which the scans skip.  The
+   deallocs clear their entries, but in the current interpreter's caches,
+   while an interpreter that shares the heaps can sweep another's objects:
+   clear the entries for the dead objects in every cache of the domain. */
+static void
+live_clear_weak_caches(trace_t *t)
+{
+    for (int d = 0; d < t->ndomain; d++) {
+        PyInterpreterState *interp = t->domain[d];
+        for (size_t i = 0; i < FUNC_VERSION_CACHE_SIZE; i++) {
+            struct _func_version_cache_item *slot =
+                &interp->func_state.func_version_cache[i];
+            if (is_dead((PyObject *)slot->func)) {
+                slot->func = NULL;
+            }
+            if (is_dead(slot->code)) {
+                slot->code = NULL;
+            }
+        }
+        for (size_t i = 0; i < TYPE_VERSION_CACHE_SIZE; i++) {
+            if (is_dead((PyObject *)interp->types.type_version_cache[i])) {
+                interp->types.type_version_cache[i] = NULL;
+            }
+        }
+    }
+}
+
 int
 _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
 {
@@ -1846,6 +1879,9 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
        nothing. */
     struct live_walk w = {.t = &t, .res = res, .failed = t.oom};
     int walked = live_walk_heaps(&t, &w);
+    if (walked >= 0 && !w.failed) {
+        live_clear_weak_caches(&t);
+    }
     HEAD_UNLOCK(&_PyRuntime);
     res->nmarked = t.nmarked;
     res->nshallow = t.nshallow;

@@ -188,11 +188,57 @@ class TestAnalysisErrors(unittest.TestCase):
         """)
 
     def test_kill_in_wrong_order(self):
+        # Releases do not escape, so the order of kills matters only where
+        # the stack is flushed, before an escaping call.
         self.check_error("""
         inst(OP, (a, b -- c)) {
             c = b;
             PyStackRef_CLOSE(a);
+            escaping_call();
             PyStackRef_CLOSE(b);
+        }
+        """, "Input 'a' is not live, but 'b' is")
+
+    def test_root_held_only_in_c_local(self):
+        # The collector does not scan the eval loop's C frame, so a handler
+        # must not hold a value only in a C local across an escaping call.
+        self.check_error("""
+        inst(OP, (a -- c)) {
+            PyObject *o = PyObject_Repr(PyStackRef_AsPyObjectBorrow(a));
+            escaping_call();
+            c = PyStackRef_FromPyObjectSteal(o);
+            DECREF_INPUTS();
+        }
+        """, "'o' is held only in a C local across the escaping call "
+             "to 'escaping_call'")
+        self.check_error("""
+        inst(OP, (a -- c)) {
+            _PyStackRef r = PyStackRef_FromPyObjectSteal(
+                PyObject_Repr(PyStackRef_AsPyObjectBorrow(a)));
+            escaping_call();
+            c = r;
+            DECREF_INPUTS();
+        }
+        """, "'r' is held only in a C local")
+
+    def test_root_held_in_c_stack_ref(self):
+        # A _PyCStackRef is a precise root, and a value that is dead before
+        # the escaping call needs no root.
+        self.generate("""
+        inst(OP, (a -- c)) {
+            _PyCStackRef held;
+            _PyThreadState_PushCStackRef(tstate, &held);
+            held.ref = PyStackRef_FromPyObjectSteal(
+                PyObject_Repr(PyStackRef_AsPyObjectBorrow(a)));
+            escaping_call();
+            c = _PyThreadState_PopCStackRefSteal(tstate, &held);
+            DECREF_INPUTS();
+        }
+        inst(OP2, (a -- c)) {
+            PyObject *o = PyObject_Repr(PyStackRef_AsPyObjectBorrow(a));
+            DECREF_INPUTS();
+            ERROR_IF(o == NULL);
+            c = PyStackRef_FromPyObjectSteal(o);
         }
         """)
 
@@ -257,8 +303,9 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(self.ir_output(input).strip(), expected.strip())
 
     def test_register_style(self):
-        # Inputs that are only used as objects are read through their fields
-        # and may be borrowed locals.
+        # Inputs that are only used as objects are read through their
+        # fields.  They stay in their slots until the handler leaves, so the
+        # slots keep them alive across calls that may collect.
         input = """
         inst(OP, (left, right -- res)) {
             PyObject *l = PyStackRef_AsPyObjectBorrow(left);
@@ -294,32 +341,25 @@ class TestIRCases(unittest.TestCase):
                 BOX_STAT_INC(OP);
                 IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
             }
-            else {
-                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
-            }
             if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
                 right = PyStackRef_Box(right);
                 if (PyStackRef_IsInline(right)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(OP);
                 IR_KEEP_BOX(right, IR_FIELD_C(this_instr));
             }
-            else {
-                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
-            }
             PyObject *l = PyStackRef_AsPyObjectBorrow(left);
             PyObject *r = PyStackRef_AsPyObjectBorrow(right);
             PyObject *o = SPAM(l, r);
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            _PyStackRef_CLOSE_POINTER(right);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            _PyStackRef_CLOSE_POINTER(left);
             if (o == NULL) {
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 JUMP_TO_LABEL(error);
             }
             res = PyStackRef_FromPyObjectSteal(o);
+            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -387,10 +427,13 @@ class TestIRCases(unittest.TestCase):
                          [ir_generator.ROLE_NONE, ir_generator.ROLE_NONE])
         output = self.ir_output(input)
         store = self.handler(output, "STORE")
-        self.assertIn("IR_CONSUME_INPUT(IR_FIELD_A(this_instr));\n"
-                      "            PyStackRef_CLOSE(owner);", store)
-        self.assertIn("IR_CONSUME_INPUT(IR_FIELD_B(this_instr));\n"
-                      "            PyStackRef_CLOSE(value);", store)
+        # The inputs stay in their slots across SPAM, which may collect,
+        # and are consumed as the handler leaves.
+        self.assertIn("SPAM(owner, value);\n"
+                      "            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));\n"
+                      "            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));\n"
+                      "            DISPATCH();", store)
+        self.assertNotIn("CLOSE", store)
         self.assertIn("IR_CONSUME_INPUT(IR_FIELD_A(this_instr));",
                       self.handler(output, "BRANCH"))
         self.assertNotIn("stack_pointer", output)
@@ -609,14 +652,10 @@ class TestIRCases(unittest.TestCase):
                     BOX_STAT_INC(OP);
                     IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
                 }
-                else {
-                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
-                }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                _PyStackRef_CLOSE_POINTER(owner);
             }
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -655,14 +694,10 @@ class TestIRCases(unittest.TestCase):
                     BOX_STAT_INC(OP);
                     IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
                 }
-                else {
-                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
-                }
                 PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                _PyStackRef_CLOSE_POINTER(owner);
             }
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -692,9 +727,7 @@ class TestIRCases(unittest.TestCase):
                     assert(_PyOpcode_Deopt[opcode] == (OP));
                     JUMP_TO_PREDICTED(OP);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
                 if (Py_TYPE(PyStackRef_AsPyObjectBorrow(owner))->tp_version_tag != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(OP);
                     assert(_PyOpcode_Deopt[opcode] == (OP));
                     JUMP_TO_PREDICTED(OP);
@@ -704,9 +737,8 @@ class TestIRCases(unittest.TestCase):
             {
                 PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                _PyStackRef_CLOSE_POINTER(owner);
             }
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -746,15 +778,15 @@ class TestIRCases(unittest.TestCase):
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
-            right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-            left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            right = IR_SLOT(IR_FIELD_C(this_instr));
+            left = IR_SLOT(IR_FIELD_B(this_instr));
             uint32_t counter = fb->counter;
             (void)counter;
             _PyFbHeader *feedback = ((_PyFbHeader *)fb);
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -776,15 +808,15 @@ class TestIRCases(unittest.TestCase):
             _PyStackRef left;
             _PyStackRef right;
             _PyStackRef res;
-            right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-            left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            right = IR_SLOT(IR_FIELD_C(this_instr));
+            left = IR_SLOT(IR_FIELD_B(this_instr));
             uint32_t counter = fb->counter;
             (void)counter;
             _PyFbHeader *feedback = ((_PyFbHeader *)fb);
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }

@@ -97,23 +97,6 @@ def always_true(tkn: Token | None) -> bool:
         return False
     return tkn.text in {"true", "1"}
 
-NON_ESCAPING_DEALLOCS = {
-    "_PyFloat_ExactDealloc",
-    "_PyFloat_OrLongExactDealloc",
-    "_PyLong_ExactDealloc",
-    "_PyUnicode_ExactDealloc",
-}
-
-# Cheaper forms of these calls for a reference known to be in pointer space
-# (see Local.known_object and _PyStackRef_CLOSE_POINTER()).
-POINTER_VARIANTS = {
-    "PyStackRef_CLOSE": "_PyStackRef_CLOSE_POINTER",
-    "PyStackRef_XCLOSE": "_PyStackRef_XCLOSE_POINTER",
-    "PyStackRef_CLOSE_SPECIALIZED": "_PyStackRef_CLOSE_SPECIALIZED_POINTER",
-    "PyStackRef_DUP": "_PyStackRef_DUP_POINTER",
-    "PyStackRef_AsPyObjectSteal": "_PyStackRef_AsPyObjectStealPointer",
-}
-
 # Calls that always return a reference in pointer space.
 POINTER_CONSTRUCTORS = {
     "PyStackRef_FromPyObjectBorrow",
@@ -218,11 +201,10 @@ class Emitter:
             "SYNC_SP": self.sync_sp,
             "SAVE_STACK": self.save_stack,
             "RELOAD_STACK": self.reload_stack,
-            "PyStackRef_CLOSE_SPECIALIZED": self.stackref_close_specialized,
-            "PyStackRef_CLOSE": self.stackref_pointer_variant,
-            "PyStackRef_XCLOSE": self.stackref_pointer_variant,
-            "PyStackRef_DUP": self.stackref_pointer_variant,
-            "PyStackRef_AsPyObjectSteal": self.stackref_steal,
+            "PyStackRef_CLOSE_SPECIALIZED": self.stackref_kill_first,
+            "PyStackRef_CLOSE": self.stackref_kill_first,
+            "PyStackRef_XCLOSE": self.stackref_kill_first,
+            "PyStackRef_AsPyObjectSteal": self.stackref_kill_first,
             "DISPATCH": self.dispatch,
             "INSTRUCTION_SIZE": self.instruction_size,
             "stack_pointer": self.stack_pointer,
@@ -231,7 +213,6 @@ class Emitter:
         for name in self.instruction_macros:
             self._replacers[name] = self.instruction_macro
         self.out = out
-        self.killed_pointer: str | None = None
         self.labels = labels
         self.cannot_escape = cannot_escape
         self.jump_prefix = jump_prefix
@@ -426,14 +407,9 @@ class Emitter:
         next(tkn_iter)
         next(tkn_iter)
         self._print_storage("DECREF_INPUTS", storage)
-        try:
-            if not self.cannot_escape:
-                storage.close_inputs(self.out)
-        except StackError as ex:
-            raise analysis_error(ex.args[0], tkn)
-        except Exception as ex:
-            ex.args = (ex.args[0] + str(tkn),)
-            raise
+        # Nothing is released: the inputs die, as with INPUTS_DEAD()
+        for var in storage.inputs:
+            var.kill()
         return True
 
     def kill_inputs(
@@ -493,17 +469,7 @@ class Emitter:
                 live = var.name
         return True
 
-    def emit_function_name(self, func: Token, arg: Token, storage: Storage) -> None:
-        "Emit func, or its pointer-only variant if arg is known to be a pointer"
-        var = find_local(arg.text, storage) if arg.kind == "IDENTIFIER" else None
-        if (var is not None and var.known_object) or (
-            arg.kind == "IDENTIFIER" and arg.text == self.killed_pointer
-        ):
-            self.out.emit_at(POINTER_VARIANTS[func.text], func)
-        else:
-            self.out.emit(func)
-
-    def stackref_pointer_variant(
+    def stackref_kill_first(
         self,
         tkn: Token,
         tkn_iter: TokenIterator,
@@ -511,62 +477,16 @@ class Emitter:
         storage: Storage,
         inst: Instruction | None,
     ) -> bool:
+        """A close or a steal of an input: the input is dead after it, and
+        its slot keeps it until the handler ends."""
+        self.out.emit(tkn)
         lparen = next(tkn_iter)
         assert lparen.kind == "LPAREN"
-        arg = tkn_iter.peek()
-        assert arg is not None
-        self.emit_function_name(tkn, arg, storage)
         self.out.emit(lparen)
-        return True
-
-    def stackref_close_specialized(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-
-        lparen = next(tkn_iter)
-        assert lparen.kind == "LPAREN"
         name = next(tkn_iter)
-        self.emit_function_name(tkn, name, storage)
-        self.out.emit(lparen)
-        self.out.emit(name)
-        comma = next(tkn_iter)
-        if comma.kind != "COMMA":
-            raise analysis_error("Expected comma", comma)
-        self.out.emit(comma)
-        dealloc = next(tkn_iter)
-        if dealloc.kind != "IDENTIFIER":
-            raise analysis_error("Expected identifier", dealloc)
-        self.out.emit(dealloc)
-        if name.kind == "IDENTIFIER":
-            escapes = dealloc.text not in NON_ESCAPING_DEALLOCS
-            return self.stackref_kill(name, storage, escapes)
-        rparen = emit_to(self.out, tkn_iter, "RPAREN")
-        self.emit(rparen)
-        return True
-
-    def stackref_steal(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-        lparen = next(tkn_iter)
-        assert lparen.kind == "LPAREN"
-        name = next(tkn_iter)
-        self.emit_function_name(tkn, name, storage)
-        self.out.emit(lparen)
         self.out.emit(name)
         if name.kind == "IDENTIFIER":
             return self.stackref_kill(name, storage, False)
-        rparen = emit_to(self.out, tkn_iter, "RPAREN")
-        self.emit(rparen)
         return True
 
     def sync_sp(
@@ -745,18 +665,13 @@ class Emitter:
         local_stores = set(uop.local_stores)
         reachable = True
         tkn = stmt.contents[-1]
-        self.killed_pointer = None
         try:
             if stmt in uop.properties.escaping_calls and not self.cannot_escape:
-                escape = uop.properties.escaping_calls[stmt]
-                if escape.kills is not None:
-                    # The kill drops the input from storage before its call
-                    # is emitted, so remember whether it holds a pointer.
-                    killed = find_local(escape.kills.text, storage)
-                    if killed is not None and killed.known_object:
-                        self.killed_pointer = killed.name
-                    self.stackref_kill(escape.kills, storage, True)
-                self.emit_save(storage)
+                storage.stack.escaping = True
+                try:
+                    self.emit_save(storage)
+                finally:
+                    storage.stack.escaping = False
             tkn_iter = TokenIterator(stmt.contents)
             for tkn in tkn_iter:
                 if tkn.kind == "GOTO":
@@ -779,7 +694,6 @@ class Emitter:
                                     var.in_local = True
                                     var.memory_offset = None
                                     var.known_object = False
-                                    var.ir_borrowed = False
                                     var.ir_field = None
                                     break
                             for var in storage.outputs:
@@ -787,7 +701,6 @@ class Emitter:
                                     var.in_local = True
                                     var.memory_offset = None
                                     var.known_object = False
-                                    var.ir_borrowed = False
                                     var.ir_field = None
                                     break
                         if tkn.text.startswith("DISPATCH"):

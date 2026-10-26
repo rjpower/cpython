@@ -3,6 +3,7 @@ import itertools
 import lexer
 import parser
 import re
+import root_check
 from typing import Optional, Callable
 
 from parser import Stmt, SimpleStmt, BlockStmt, IfStmt, WhileStmt, ForStmt, MacroIfStmt
@@ -11,7 +12,6 @@ from parser import Stmt, SimpleStmt, BlockStmt, IfStmt, WhileStmt, ForStmt, Macr
 class EscapingCall:
     stmt: SimpleStmt
     call: lexer.Token
-    kills: lexer.Token | None
 
 @dataclass
 class Properties:
@@ -557,7 +557,25 @@ NON_ESCAPING_FUNCTIONS = (
     "PyStackRef_Borrow",
     "PyStackRef_BorrowAt",
     "PyStackRef_CLEAR",
+    # Nothing is reference counted: a close, a decref or a clear releases
+    # nothing and runs no code.
+    "PyStackRef_CLOSE",
+    "PyStackRef_XCLOSE",
     "PyStackRef_CLOSE_SPECIALIZED",
+    "Py_DECREF",
+    "Py_XDECREF",
+    "Py_CLEAR",
+    "Py_SETREF",
+    "Py_XSETREF",
+    "_Py_DECREF_SPECIALIZED",
+    "_PyGC_CLEAR_ARRAY",
+    # Frame bookkeeping, which runs no code
+    "_PyFrame_Copy",
+    "_PyThreadState_PopFrame",
+    "_PyThreadState_UpdateLastProfiledFrame",
+    "_PyThreadState_PushCStackRef",
+    "_PyThreadState_PopCStackRef",
+    "PyStackRef_FromPyObject",
     "PyStackRef_DUP",
     "PyStackRef_DupImmortal",
     "PyStackRef_False",
@@ -775,15 +793,7 @@ def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, Esca
                 continue
         elif tkn.kind != "RBRACKET":
             continue
-        if tkn.text in ("PyStackRef_CLOSE", "PyStackRef_XCLOSE"):
-            if len(tokens) <= idx+2:
-                raise analysis_error("Unexpected end of file", next_tkn)
-            kills = tokens[idx+2]
-            if kills.kind != "IDENTIFIER":
-                raise analysis_error(f"Expected identifier, got '{kills.text}'", kills)
-        else:
-            kills = None
-        result[stmt] = EscapingCall(stmt, tkn, kills)
+        result[stmt] = EscapingCall(stmt, tkn)
 
 
 def find_escaping_api_calls(instr: parser.CodeDef) -> dict[SimpleStmt, EscapingCall]:
@@ -1326,6 +1336,9 @@ def analyze_forest(forest: list[parser.AstNode]) -> Analysis:
                 add_label(node, labels)
             case _:
                 pass
+    for code in [*uops.values(), *labels.values()]:
+        for tkn, msg in root_check.check_uop(code):
+            raise analysis_error(msg, tkn)
     ir_only: dict[str, Instruction] = {}
     for name, inst in list(instructions.items()):
         if any(isinstance(part, Uop) and "ir_only" in part.annotations

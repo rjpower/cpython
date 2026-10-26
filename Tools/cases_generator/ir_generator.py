@@ -89,6 +89,7 @@ from generators_common import (
     DEFAULT_INPUT,
     ROOT,
     Emitter,
+    ReplacementFunctionType,
     TokenIterator,
     type_and_null,
     write_header,
@@ -865,14 +866,9 @@ class IRStack(Stack):
     slot of its input (its home) until the handler writes another value
     there, which goes to the slot counted from dst."""
 
-    def __init__(self, layout: SlotLayout | None = None,
-                 raw_inputs: set[int] | None = None) -> None:
+    def __init__(self, layout: SlotLayout | None = None) -> None:
         super().__init__()
         self.layout = layout if layout is not None else SlotLayout.empty()
-        # The positions of the borrowable inputs that the handler consumes
-        # as they are: those read through a local come borrowed, as
-        # LOAD_FAST_BORROW would have pushed them.
-        self.raw_inputs = set(raw_inputs or ())
         # Register style: where the frame holds the value at a constant
         # position, "in" the slot of its input or "out" the slot from dst.
         # Positions that are not constant are outputs.
@@ -885,6 +881,9 @@ class IRStack(Stack):
         self.final = False
         self.reloaded = False
         self.error_exit = False
+        # Set at SYNC_SP(), SAVE_STACK() and RELOAD_STACK(), where the
+        # frame's slots must be as the stack is, as at the end.
+        self.syncing = False
         # Set by IR_WINDOW_TAKEN(): the handler disposed of its window, so
         # that the slots of the dead inputs stay as it left them.
         self.window_taken = False
@@ -893,7 +892,6 @@ class IRStack(Stack):
         other = super().copy()
         assert isinstance(other, IRStack)
         other.owner = dict(self.owner)
-        other.raw_inputs = set(self.raw_inputs)
         other.window_taken = self.window_taken
         return other
 
@@ -934,15 +932,6 @@ class IRStack(Stack):
             return "in"
         return None
 
-    def load(self, var: StackItem, memory_offset: PointerOffset) -> str:
-        lay = self.layout
-        if not lay.window and not var.is_array():
-            p = memory_offset.as_int()
-            if (p is not None and self.owner.get(p) == "in"
-                    and p in lay.borrowable and p in self.raw_inputs):
-                return f"IR_LOAD_BORROWED({self.input_field(p)})"
-        return super().load(var, memory_offset)
-
     def pop(self, var: StackItem, out: CWriter) -> Local:
         local = super().pop(var, out)
         lay = self.layout
@@ -953,7 +942,6 @@ class IRStack(Stack):
                 local.ir_input = p
                 if p in lay.borrowable:
                     local.ir_field = lay.in_fields[p]
-                    local.ir_borrowed = p in self.raw_inputs
         return local
 
     def consume(self, out: CWriter, p: int) -> None:
@@ -1009,7 +997,12 @@ class IRStack(Stack):
                 out.emit(f"IR_STORE_DST({FIELD_VARS[lay.dst]}, {var.name});\n")
                 return True
             # Before the end, dst gets the result only if it is a
-            # temporary; a local gets it at the end, releasing its value.
+            # temporary; a local gets it at the end.  Across an escaping
+            # call the result would be held only in C (_PyEvalActivation).
+            if self.escaping:
+                raise StackError(
+                    f"'{var.name}' is defined before an escaping call, and "
+                    "dst may name a local, which takes it only at the end")
             out.emit(f"IR_STORE_TEMP_DST({FIELD_VARS[lay.dst]}, {var.name});\n")
             return False
         if previous == "out":
@@ -1027,6 +1020,10 @@ class IRStack(Stack):
         leave with it."""
         if self.final or self.error_exit:
             raise StackError(f"'{var.name}' has no slot at position {p}")
+        if self.escaping:
+            # The collector does not scan the eval loop's C frame
+            # (_PyEvalActivation)
+            raise StackError(f"'{var.name}' has no slot across an escaping call")
         return False
 
     def save_variables(self, out: CWriter) -> None:
@@ -1077,10 +1074,16 @@ class IRStack(Stack):
                 raise StackError("flush while the frame is switching")
             return
         self._print(out)
-        if may_be_positive(self.physical_sp - self.logical_sp):
+        above = may_be_positive(self.physical_sp - self.logical_sp)
+        # Until the handler leaves, the slots that the stack gave up keep
+        # their values: what the handler took from its dead inputs is held
+        # there across its escaping calls (_PyEvalActivation).
+        leaving = self.final or self.error_exit or self.syncing
+        if above and leaving:
             self.vacate(out, self.logical_sp, self.physical_sp)
         self.save_variables(out)
-        self.physical_sp = self.logical_sp
+        if leaving or not above:
+            self.physical_sp = self.logical_sp
         out.start_line()
 
     def align(self, other: Stack, out: CWriter) -> None:
@@ -1182,49 +1185,6 @@ class IREmitter(Emitter):
 
     exit_if = deopt_if
 
-    def emit_borrow_drops(self, inst: Instruction | None,
-                          storage: Storage | None = None) -> None:
-        """Before a deopt, or a specialisation that runs the word again,
-        where the handler reads the locals again, drop the object inputs
-        read through fields that name locals: the borrows that
-        IR_BORROW_KNOWN and IR_LOAD_BORROWED made, which only the
-        Py_STACKREF_DEBUG checker tracks, and the boxes of inline values."""
-        if storage is None:
-            storage = self.deopt_storage
-        if storage is None:
-            return
-        seen = set()
-        for var in storage.inputs + storage.stack.variables + storage.outputs:
-            if (var.ir_borrowed and var.in_local and var.ir_field is not None
-                    and var.name not in seen):
-                seen.add(var.name)
-                self.emit(f"IR_DROP_BORROW({var.name}, "
-                          f"{FIELD_VARS[var.ir_field]});\n")
-
-    def consume_killed(self, storage: Storage) -> None:
-        """Clear the slots of the inputs that the handler has taken: a dead
-        input's slot holds NULL, on every path"""
-        stack = storage.stack
-        assert isinstance(stack, IRStack)
-        if stack.layout.window:
-            return
-        for var in storage.inputs:
-            p = var.ir_input
-            if var.is_dead() and p is not None and stack.owner.get(p) == "in":
-                self.out.start_line()
-                stack.consume(self.out, p)
-                del stack.owner[p]
-
-    def emit_SimpleStmt(self, stmt: SimpleStmt, uop: CodeSection,
-                        storage: Storage, inst: Instruction | None
-                        ) -> tuple[bool, Token | None, Storage]:
-        """A statement that kills an input, as DEAD(), a close or a steal,
-        gives up its slot"""
-        reachable, tkn, storage = super().emit_SimpleStmt(stmt, uop, storage, inst)
-        if reachable:
-            self.consume_killed(storage)
-        return reachable, tkn, storage
-
     def decref_inputs(
         self,
         tkn: Token,
@@ -1233,8 +1193,9 @@ class IREmitter(Emitter):
         storage: Storage,
         inst: Instruction | None,
     ) -> bool:
-        """In register style, close each input from the top after clearing
-        its slot; an output defined before stays in its variable."""
+        """In register style the inputs die; their slots keep them until the
+        handler ends, so that what the handler took from them stays held
+        across its escaping calls (_PyEvalActivation)."""
         stack = storage.stack
         assert isinstance(stack, IRStack)
         if stack.layout.window or self.cannot_escape:
@@ -1243,20 +1204,11 @@ class IREmitter(Emitter):
         next(tkn_iter)
         next(tkn_iter)
         storage.clear_dead_inputs()
-        for var in reversed(storage.inputs):
+        for var in storage.inputs:
             if var.is_dead():
                 continue
             if var.is_array():
                 raise analysis_error("register-style array input", tkn)
-            close = "PyStackRef_XCLOSE" if "null" in var.name else "PyStackRef_CLOSE"
-            if var.known_object:
-                close = f"_{close}_POINTER"
-            self.out.start_line()
-            p = var.ir_input
-            if p is not None and stack.owner.get(p) == "in":
-                stack.consume(self.out, p)
-                del stack.owner[p]
-            self.emit(f"{close}({var.name});\n")
             var.kill()
         storage.clear_inputs("after DECREF_INPUTS")
         return True
@@ -1281,7 +1233,6 @@ class IREmitter(Emitter):
     ) -> bool:
         "The inputs stay in their slots; drop what was read from locals"
         self.out.start_line()
-        self.emit_borrow_drops(inst, storage)
         return super().error_no_pop(tkn, tkn_iter, uop, storage, inst)
 
     def dispatch(
@@ -1295,6 +1246,29 @@ class IREmitter(Emitter):
         assert isinstance(storage.stack, IRStack)
         storage.stack.final = True
         return super().dispatch(tkn, tkn_iter, uop, storage, inst)
+
+    def synced(self, replacer: ReplacementFunctionType, tkn: Token,
+               tkn_iter: TokenIterator, uop: CodeSection, storage: Storage,
+               inst: Instruction | None) -> bool:
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        stack.syncing = True
+        try:
+            return replacer(tkn, tkn_iter, uop, storage, inst)
+        finally:
+            stack.syncing = False
+
+    def sync_sp(self, tkn: Token, tkn_iter: TokenIterator, uop: CodeSection,
+                storage: Storage, inst: Instruction | None) -> bool:
+        return self.synced(super().sync_sp, tkn, tkn_iter, uop, storage, inst)
+
+    def save_stack(self, tkn: Token, tkn_iter: TokenIterator, uop: CodeSection,
+                   storage: Storage, inst: Instruction | None) -> bool:
+        return self.synced(super().save_stack, tkn, tkn_iter, uop, storage, inst)
+
+    def reload_stack(self, tkn: Token, tkn_iter: TokenIterator, uop: CodeSection,
+                     storage: Storage, inst: Instruction | None) -> bool:
+        return self.synced(super().reload_stack, tkn, tkn_iter, uop, storage, inst)
 
     def expand_instruction_macro(self, tkn: Token, args: list[list[Token]],
                                  inst: Instruction | None) -> str:
@@ -1367,13 +1341,11 @@ class IREmitter(Emitter):
     ) -> bool:
         "The handler runs again on the same word, and reads its inputs again"
         assert inst is not None
-        self.emit_borrow_drops(inst, storage)
         self.emit(tkn)
         return True
 
     def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
         assert inst is not None
-        self.emit_borrow_drops(inst)
         fmt = self.format_of(inst)
         binary_op = inst.family is not None and inst.family.name == BINARY_OP_FAMILY
         if binary_op:
@@ -1421,10 +1393,9 @@ class IREmitter(Emitter):
     def emit_object_inputs(
         self, uop: Uop, storage: Storage, inst: Instruction | None, stack_read_later: bool
     ) -> None:
-        """Inputs read through a field: check, box and tag as borrowed when
-        the field names a local.  A box belongs to the handler, as the box of
-        the temporary that LOAD_FAST_BORROW pushed would: a temporary's goes
-        back to its slot, and a local keeps its inline value."""
+        """Inputs read through a field: check, or box.  The box goes to the
+        input's slot, a local's too, so that the frame holds it while the
+        handler does (_PyEvalActivation)."""
         self.deopt_storage = storage
         try:
             self.convert_object_inputs(uop, storage, inst, stack_read_later)
@@ -1434,20 +1405,14 @@ class IREmitter(Emitter):
     def convert_object_inputs(
         self, uop: Uop, storage: Storage, inst: Instruction | None, stack_read_later: bool
     ) -> None:
-        kept = {item.name for item in uop.stack.outputs}
         for var in storage.inputs:
-            if var.ir_field is None or var.known_object or var.ir_borrowed:
+            if var.ir_field is None or var.known_object:
                 continue
             f = FIELD_VARS[var.ir_field]
             converts = not uop.properties.inline_ok and (
                 var.name in uop.object_inputs or var.name in uop.asserted_objects)
             if not converts:
-                if var.name in kept and not assigns_to(uop, var.name):
-                    continue  # An inspection, see classify_inputs()
-                assert inst is not None
-                raise analysis_error(
-                    f"{inst.name}: input '{var.name}' may name a borrowed "
-                    f"local but {uop.name} consumes it as is", inst.where)
+                continue
             if var.name not in uop.asserted_objects:
                 self.out.start_line()
                 if uop.is_guard():
@@ -1457,24 +1422,14 @@ class IREmitter(Emitter):
                     self.emit(f"if (Py_UNLIKELY(PyStackRef_IsInline({var.name}))) {{\n")
                     self.emit(f"{var.name} = PyStackRef_Box({var.name});\n")
                     self.emit(f"if (PyStackRef_IsInline({var.name})) {{\n")
-                    # The inputs converted before this one, if they name
-                    # locals, hold borrows or boxes that only C owns
-                    self.emit_borrow_drops(inst, storage)
                     storage.stack.copy().flush(self.out)
                     self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
                     self.emit("}\n")
                     if inst is not None:
                         self.emit(f"BOX_STAT_INC({inst.name});\n")
                     self.emit(f"IR_KEEP_BOX({var.name}, {f});\n")
-                    self.emit("}\n")
-                    self.emit("else {\n")
-                    self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f});\n")
                 self.emit("}\n")
-            if uop.is_guard() or var.name in uop.asserted_objects:
-                self.out.start_line()
-                self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f});\n")
             var.known_object = True
-            var.ir_borrowed = True
         super().emit_object_inputs(uop, storage, inst, stack_read_later)
 
 
@@ -1601,12 +1556,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     elif mode == STORE_NEVER:
         out.emit(f"assert(!IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]}));\n")
     declare_variables(inst, out)
-    raw_inputs: set[int] = set()
-    if fmt.borrow_mask:
-        uses = classify_inputs(inst, fmt.n_inputs)
-        raw_inputs = {k - fmt.n_inputs for k in range(fmt.n_inputs)
-                      if fmt.borrow_mask & (1 << k) and uses[k] == "raw"}
-    stack: Stack = IRStack(slot_layout(inst, fmt, mode), raw_inputs)
+    stack: Stack = IRStack(slot_layout(inst, fmt, mode))
     insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
     reachable = True
     for part in inst.parts:

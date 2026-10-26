@@ -1001,7 +1001,6 @@ dummy_func(
              * only the locals reference, so PyUnicode_Append knows
              * that the string is safe to mutate.
              */
-            assert(Py_REFCNT(left_o) >= 2 || !PyStackRef_IsHeapSafe(left));
             /* gh-143403: It's critical to close this reference *before*
              * we append. Otherwise, append can move the underlying
              * unicode object, which will cause a use after free!
@@ -1788,6 +1787,7 @@ dummy_func(
         tier1 window op(_END_ASYNC_FOR, (awaitable_st, exc_st -- )) {
             JUMPBY(0); // Pretend jump as we need source offset for monitoring
             (void)oparg;
+            (void)awaitable_st;
             PyObject *exc = PyStackRef_AsPyObjectBorrow(exc_st);
 
             assert(exc && PyExceptionInstance_Check(exc));
@@ -1815,6 +1815,8 @@ dummy_func(
         macro(END_ASYNC_FOR) = _END_ASYNC_FOR;
 
         tier1 inst(CLEANUP_THROW, (sub_iter, null_in, last_sent_val, exc_value_st -- none, null_out, value)) {
+            (void)sub_iter;
+            (void)last_sent_val;
             PyObject *exc_value = PyStackRef_AsPyObjectBorrow(exc_value_st);
             #if !_Py_TAIL_CALL_INTERP
             assert(throwflag);
@@ -2207,11 +2209,12 @@ dummy_func(
 
         inst(LOAD_DEREF, ( -- value)) {
             PyCellObject *cell = (PyCellObject *)PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
-            value = _PyCell_GetStackRef(cell);
-            if (PyStackRef_IsNull(value)) {
+            _PyStackRef cell_value = _PyCell_GetStackRef(cell);
+            if (PyStackRef_IsNull(cell_value)) {
                 _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
                 ERROR_IF(true);
             }
+            value = cell_value;
         }
 
         inst(STORE_DEREF, (v --)) {
@@ -2334,27 +2337,23 @@ dummy_func(
                 ERROR_IF(true);
             }
 
+            // Until the handler pushes it, a C stack ref holds the set
+            // across the hashing of the values, which may run code.
+            _PyCStackRef set_ref;
+            _PyThreadState_PushCStackRef(tstate, &set_ref);
+            set_ref.ref = PyStackRef_FromPyObject(set_o);
             int err = 0;
-            for (Py_ssize_t i = 0; i < oparg; i++) {
-                _PyStackRef value = values[i];
-                values[i] = PyStackRef_NULL;
-                if (err == 0) {
-                    value = PyStackRef_Box(value);
-                    err = PyStackRef_IsInline(value) ? -1 :
-                        _PySet_AddTakeRef((PySetObject *)set_o, PyStackRef_AsPyObjectSteal(value));
-                }
-                else {
-                    PyStackRef_CLOSE(value);
-                }
+            for (Py_ssize_t i = 0; i < oparg && err == 0; i++) {
+                _PyStackRef value = PyStackRef_Box(values[i]);
+                err = PyStackRef_IsInline(value) ? -1 :
+                    _PySet_AddTakeRef(
+                        (PySetObject *)PyStackRef_AsPyObjectBorrow(set_ref.ref),
+                        PyStackRef_AsPyObjectBorrow(value));
             }
-            DEAD(values);
-            if (err) {
-                Py_DECREF(set_o);
-                ERROR_IF(true);
-            }
-
-            INPUTS_DEAD();
-            set = PyStackRef_FromPyObjectStealMortal(set_o);
+            _PyStackRef made = _PyThreadState_PopCStackRefSteal(tstate, &set_ref);
+            DECREF_INPUTS();
+            ERROR_IF(err);
+            set = made;
         }
 
         inst(BUILD_MAP, (values[oparg*2] -- map)) {
@@ -2400,16 +2399,20 @@ dummy_func(
             if (err < 0) {
                 int matches = _PyErr_ExceptionMatches(tstate, PyExc_AttributeError);
                 if (matches) {
-                    PyObject *exc = _PyErr_GetRaisedException(tstate);
+                    // A C stack ref holds the exception while the lookup
+                    // runs code.
+                    _PyCStackRef exc;
+                    _PyThreadState_PushCStackRef(tstate, &exc);
+                    exc.ref = PyStackRef_FromPyObject(_PyErr_GetRaisedException(tstate));
                     int has_keys = PyObject_HasAttrWithError(update_o, &_Py_ID(keys));
+                    _PyStackRef exc_ref = _PyThreadState_PopCStackRefSteal(tstate, &exc);
                     if (has_keys == 0) {
                         _PyErr_Format(tstate, PyExc_TypeError,
                                         "'%T' object is not a mapping",
                                         update_o);
-                        Py_DECREF(exc);
                     }
                     else {
-                        _PyErr_ChainExceptions1(exc);
+                        _PyErr_ChainExceptions1(PyStackRef_AsPyObjectBorrow(exc_ref));
                     }
                 }
                 ERROR_NO_POP();
@@ -2507,11 +2510,17 @@ dummy_func(
                         frame, this_instr, global_super, arg);
                 }
                 else {
+                    // A C stack ref holds super while the monitors run.
+                    _PyCStackRef super_ref;
+                    _PyThreadState_PushCStackRef(tstate, &super_ref);
+                    super_ref.ref = PyStackRef_FromPyObject(super);
                     int err = _Py_call_instrumentation_2args(
                         tstate, PY_MONITORING_EVENT_C_RETURN,
                         frame, this_instr, global_super, arg);
+                    super = PyStackRef_AsPyObjectBorrow(
+                        _PyThreadState_PopCStackRefSteal(tstate, &super_ref));
                     if (err < 0) {
-                        Py_CLEAR(super);
+                        super = NULL;
                     }
                 }
             }
@@ -3836,29 +3845,12 @@ dummy_func(
                We call FOURTH(type(TOP), TOP, GetTraceback(TOP)).
                Then we push the __exit__ return value.
             */
-            PyObject *exc, *tb;
-
-            PyObject *val_o = PyStackRef_AsPyObjectBorrow(val);
-            PyObject *exit_func_o = PyStackRef_AsPyObjectBorrow(exit_func);
-
-            assert(val_o && PyExceptionInstance_Check(val_o));
-            exc = PyExceptionInstance_Class(val_o);
-            PyObject *original_tb = tb = PyException_GetTraceback(val_o);
-            if (tb == NULL) {
-                tb = Py_None;
-            }
             assert(PyStackRef_IsTaggedIndex(lasti));
             (void)lasti; // Shut up compiler warning if asserts are off
-            PyObject* res_o;
-            {
-                // scope to tell MSVC that stack is not escaping
-                PyObject *stack[5] = {NULL, PyStackRef_AsPyObjectBorrow(exit_self), exc, val_o, tb};
-                int has_self = !PyStackRef_IsNull(exit_self);
-                res_o = PyObject_Vectorcall(exit_func_o, stack + 2 - has_self,
-                        (3 + has_self) | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
-                _PyGC_CLEAR_ARRAY(stack);
-            }
-            Py_XDECREF(original_tb);
+            PyObject *res_o = _PyEval_CallExitWithException(
+                PyStackRef_AsPyObjectBorrow(exit_func),
+                PyStackRef_AsPyObjectBorrow(exit_self),
+                PyStackRef_AsPyObjectBorrow(val));
             ERROR_IF(res_o == NULL);
             res = PyStackRef_FromPyObjectSteal(res_o);
         }

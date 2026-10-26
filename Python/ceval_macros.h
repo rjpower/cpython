@@ -518,51 +518,21 @@ gen_try_set_executing(PyGenObject *gen)
 #define IR_SLOT(F) (slots[(F)])
 
 /* Whether field F names a local, a cell or a free variable rather than a
- * temporary: the executing copy keeps co_nlocalsplus in its header.  An
- * input read through a local is borrowed; one read through a temporary is
- * the handler's, which it takes, leaving NULL in the slot. */
+ * temporary: the executing copy keeps co_nlocalsplus in its header.  A
+ * handler that consumes an input read through a temporary leaves NULL in
+ * the slot, so that a dead temporary keeps nothing alive (the collector
+ * marks every slot); a local keeps its value. */
 #define IR_NLOCALSPLUS() \
     ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
 #define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
 
-/* REF, read through field F and known to be a pointer, borrowed if F names
- * a local. */
-static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
-#  define IR_BORROW_KNOWN(REF, F) \
-    ((_PyStackRef){ .bits = (REF).bits | (uintptr_t)IR_IS_LOCAL(F) })
-
-/* The box of an inline value read through field F, which belongs to the
- * slot if F names a temporary.  A local keeps its inline value, and the
- * handler drops the box as it would a temporary's. */
-#define IR_KEEP_BOX(REF, F) \
-    do { \
-        if (!IR_IS_LOCAL(F)) { \
-            IR_SLOT(F) = (REF); \
-        } \
-    } while (0)
-
-/* Before a deopt, drop REF, an object input read through field F, if F
- * names a local: the family head reads the local again.  REF is a borrow,
- * which only the Py_STACKREF_DEBUG checker counts, or the box of the
- * local's inline value. */
-#define IR_DROP_BORROW(REF, F) \
-    do { \
-        if (IR_IS_LOCAL(F)) { \
-            PyStackRef_CLOSE(REF); \
-        } \
-    } while (0)
-
-/* An input that the handler consumes as it is, through field F: a
- * temporary, or a borrow of the local that F names, which is what
- * LOAD_FAST_BORROW would have pushed. */
-#if !defined(Py_STACKREF_INLINE_VALUES)
-#  define IR_LOAD_BORROWED(F) \
-    (IR_IS_LOCAL(F) ? PyStackRef_BorrowAt(&IR_SLOT(F)) : IR_SLOT(F))
-#else
-#  define IR_LOAD_BORROWED(F) \
-    ((_PyStackRef){ .bits = IR_SLOT(F).bits \
-        | ((uintptr_t)IR_IS_LOCAL(F) & _PyStackRef_BorrowBitAt(&IR_SLOT(F))) })
-#endif
+/* REF, the box of an inline value read through field F, replaces the value
+ * in its slot.  The handler holds REF in a C local across calls that may
+ * collect, and the collector does not scan the eval loop's own C frame, so
+ * the slot is what keeps the box alive.  A local may now hold the box rather
+ * than the inline value; the two have one identity, so the program cannot
+ * tell. */
+#define IR_KEEP_BOX(REF, F) (IR_SLOT(F) = (REF))
 
 /* The truth of a value, as TO_BOOL tests it, or -1 with an exception set */
 static inline int
@@ -609,21 +579,13 @@ _PyStackRef_Truth(_PyStackRef ref)
     } while (0)
 
 /* The result V goes to dst field F, which may name a local (a folded
- * STORE_FAST, _PyIR_STORE_DST): the local's old value is released after
- * it, as STORE_FAST does.  A temporary's slot holds NULL, or V when the
- * handler wrote it there before (IR_STORE_TEMP_DST). */
+ * STORE_FAST, _PyIR_STORE_DST).  A temporary's slot holds NULL, or V when
+ * the handler wrote it there before. */
 #define IR_STORE_DST(F, V) \
     do { \
-        if (IR_IS_LOCAL(F)) { \
-            _PyStackRef ir_old = IR_SLOT(F); \
-            IR_SLOT(F) = (V); \
-            PyStackRef_XCLOSE(ir_old); \
-        } \
-        else { \
-            assert(PyStackRef_IsNull(IR_SLOT(F)) \
-                   || _PyStackRef_BITS(IR_SLOT(F)) == _PyStackRef_BITS(V)); \
-            IR_SLOT(F) = (V); \
-        } \
+        assert(IR_IS_LOCAL(F) || PyStackRef_IsNull(IR_SLOT(F)) \
+               || _PyStackRef_BITS(IR_SLOT(F)) == _PyStackRef_BITS(V)); \
+        IR_SLOT(F) = (V); \
     } while (0)
 
 /* Before code that may run other code, the result V goes to dst field F
@@ -638,14 +600,12 @@ _PyStackRef_Truth(_PyStackRef ref)
     } while (0)
 
 /* A window-style handler whose dst field F may name a local moves its
- * result from SLOT of its window there, releasing the local's old value. */
+ * result from SLOT of its window there. */
 #define IR_MOVE_TO_DST(F, SLOT) \
     do { \
         if (IR_IS_LOCAL(F)) { \
-            _PyStackRef ir_old = IR_SLOT(F); \
             IR_SLOT(F) = (SLOT); \
             (SLOT) = PyStackRef_NULL; \
-            PyStackRef_XCLOSE(ir_old); \
         } \
     } while (0)
 

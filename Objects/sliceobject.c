@@ -15,7 +15,6 @@ this type and there is exactly one in existence.
 
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
-#include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
@@ -121,12 +120,9 @@ PyObject *
 _PyBuildSlice_ConsumeRefs(PyObject *start, PyObject *stop, PyObject *step)
 {
     assert(start != NULL && stop != NULL && step != NULL);
-    PySliceObject *obj = _Py_FREELIST_POP(PySliceObject, slices);
+    PySliceObject *obj = PyObject_GC_New(PySliceObject, &PySlice_Type);
     if (obj == NULL) {
-        obj = PyObject_GC_New(PySliceObject, &PySlice_Type);
-        if (obj == NULL) {
-            goto error;
-        }
+        goto error;
     }
 
     obj->start = start;
@@ -346,7 +342,7 @@ slice_dealloc(PyObject *op)
     Py_DECREF(r->step);
     Py_DECREF(r->start);
     Py_DECREF(r->stop);
-    _Py_FREELIST_FREE(slices, r, PyObject_GC_Del);
+    PyObject_GC_Del(r);
 }
 
 static PyObject *

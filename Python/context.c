@@ -2,7 +2,6 @@
 #include "pycore_call.h"          // _PyObject_VectorcallTstate()
 #include "pycore_context.h"
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
 #include "pycore_gc.h"            // _PyObject_GC_MAY_BE_TRACKED()
 #include "pycore_hamt.h"
 #include "pycore_initconfig.h"    // _PyStatus_OK()
@@ -460,12 +459,9 @@ class _contextvars.Context "PyContext *" "&PyContext_Type"
 static inline PyContext *
 _context_alloc(void)
 {
-    PyContext *ctx = _Py_FREELIST_POP(PyContext, contexts);
+    PyContext *ctx = PyObject_GC_New(PyContext, &PyContext_Type);
     if (ctx == NULL) {
-        ctx = PyObject_GC_New(PyContext, &PyContext_Type);
-        if (ctx == NULL) {
-            return NULL;
-        }
+        return NULL;
     }
 
     ctx->ctx_vars = NULL;
@@ -578,7 +574,7 @@ context_tp_dealloc(PyObject *self)
     }
     (void)context_tp_clear(self);
 
-    _Py_FREELIST_FREE(contexts, self, Py_TYPE(self)->tp_free);
+    Py_TYPE(self)->tp_free(self);
 }
 
 static PyObject *

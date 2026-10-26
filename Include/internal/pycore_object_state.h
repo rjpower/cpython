@@ -8,7 +8,6 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#include "pycore_freelist_state.h"  // _Py_freelists
 #include "pycore_hashtable.h"       // _Py_hashtable_t
 
 
@@ -24,7 +23,6 @@ struct _py_object_runtime_state {
 };
 
 struct _py_object_state {
-    struct _Py_freelists freelists;
     int _not_used;
 };
 

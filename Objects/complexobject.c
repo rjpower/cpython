@@ -8,7 +8,6 @@
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_complexobject.h" // _PyComplex_FormatAdvancedWriter()
 #include "pycore_floatobject.h"   // _Py_convert_int_to_double()
-#include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_object.h"        // _PyObject_Init()
 #include "pycore_pymath.h"        // _Py_ADJUST_ERANGE2()
@@ -424,16 +423,12 @@ complex_subtype_from_c_complex(PyTypeObject *type, Py_complex cval)
 PyObject *
 PyComplex_FromCComplex(Py_complex cval)
 {
-    PyComplexObject *op = _Py_FREELIST_POP(PyComplexObject, complexes);
-
+    /* Inline PyObject_New */
+    PyComplexObject *op = PyObject_Malloc(sizeof(PyComplexObject));
     if (op == NULL) {
-        /* Inline PyObject_New */
-        op = PyObject_Malloc(sizeof(PyComplexObject));
-        if (op == NULL) {
-            return PyErr_NoMemory();
-        }
-        _PyObject_Init((PyObject*)op, &PyComplex_Type);
+        return PyErr_NoMemory();
     }
+    _PyObject_Init((PyObject*)op, &PyComplex_Type);
     op->cval = cval;
     return (PyObject *) op;
 }
@@ -442,12 +437,7 @@ static void
 complex_dealloc(PyObject *op)
 {
     assert(PyComplex_Check(op));
-    if (PyComplex_CheckExact(op)) {
-        _Py_FREELIST_FREE(complexes, op, PyObject_Free);
-    }
-    else {
-        Py_TYPE(op)->tp_free(op);
-    }
+    Py_TYPE(op)->tp_free(op);
 }
 
 static PyObject *

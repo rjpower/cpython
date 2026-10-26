@@ -12,7 +12,6 @@ extern "C" {
 #include "pycore_structs.h"       // _PyStackRef
 
 extern void _PyTuple_MaybeUntrack(PyObject *);
-extern void _PyTuple_DebugMallocStats(FILE *out);
 
 /* runtime lifecycle */
 

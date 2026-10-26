@@ -3,7 +3,6 @@
 #endif
 
 #include "Python.h"
-#include "pycore_freelist.h"      // _Py_FREELIST_POP()
 #include "pycore_genobject.h"
 #include "pycore_llist.h"         // struct llist_node
 #include "pycore_list.h"          // _PyList_AppendTakeRef()
@@ -13,6 +12,7 @@
 #include "pycore_pylifecycle.h"   // _Py_IsInterpreterFinalizing()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime_init.h"  // _Py_ID()
+#include "pycore_stats.h"         // EVAL_CALL_STAT_INC_IF_FUNCTION()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 
 #include <stddef.h>               // offsetof()
@@ -1784,10 +1784,8 @@ FutureIter_dealloc(PyObject *it)
     PyObject_GC_UnTrack(it);
     tp->tp_clear(it);
 
-    if (!_Py_FREELIST_PUSH(futureiters, it, Py_futureiters_MAXFREELIST)) {
-        PyObject_GC_Del(it);
-        Py_DECREF(tp);
-    }
+    PyObject_GC_Del(it);
+    Py_DECREF(tp);
 }
 
 static PySendResult
@@ -2014,12 +2012,9 @@ future_new_iter(PyObject *fut)
     asyncio_state *state = get_asyncio_state_by_def((PyObject *)fut);
     ENSURE_FUTURE_ALIVE(state, fut)
 
-    it = _Py_FREELIST_POP(futureiterobject, futureiters);
+    it = PyObject_GC_New(futureiterobject, state->FutureIterType);
     if (it == NULL) {
-        it = PyObject_GC_New(futureiterobject, state->FutureIterType);
-        if (it == NULL) {
-            return NULL;
-        }
+        return NULL;
     }
 
     it->future = (FutureObj*)Py_NewRef(fut);

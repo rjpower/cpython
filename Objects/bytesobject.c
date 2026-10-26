@@ -8,7 +8,6 @@
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION_SEQUENCE_FAST()
 #include "pycore_format.h"        // F_LJUST
-#include "pycore_freelist.h"      // _Py_FREELIST_FREE()
 #include "pycore_global_objects.h"// _Py_GET_GLOBAL_OBJECT()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_long.h"          // _PyLong_DigitValue
@@ -3909,13 +3908,10 @@ byteswriter_create(Py_ssize_t size, int use_bytearray)
         return NULL;
     }
 
-    PyBytesWriter *writer = _Py_FREELIST_POP_MEM(bytes_writers);
+    PyBytesWriter *writer = (PyBytesWriter *)PyMem_Malloc(sizeof(PyBytesWriter));
     if (writer == NULL) {
-        writer = (PyBytesWriter *)PyMem_Malloc(sizeof(PyBytesWriter));
-        if (writer == NULL) {
-            PyErr_NoMemory();
-            return NULL;
-        }
+        PyErr_NoMemory();
+        return NULL;
     }
     writer->obj = NULL;
     writer->size = size;
@@ -3971,7 +3967,7 @@ PyBytesWriter_Discard(PyBytesWriter *writer)
 #endif
         Py_DECREF(writer->obj);
     }
-    _Py_FREELIST_FREE(bytes_writers, writer, PyMem_Free);
+    PyMem_Free(writer);
 }
 
 
@@ -4040,7 +4036,7 @@ byteswriter_finish_with_size(PyBytesWriter *writer, Py_ssize_t final_size)
     }
 
     assert(writer->obj == NULL);
-    _Py_FREELIST_FREE(bytes_writers, writer, PyMem_Free);
+    PyMem_Free(writer);
     return result;
 
 error:

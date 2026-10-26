@@ -3,7 +3,6 @@
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
-#include "pycore_freelist.h"
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_range.h"
@@ -72,13 +71,10 @@ make_range_object(PyTypeObject *type, PyObject *start,
     if (length == NULL) {
         return NULL;
     }
-    rangeobject *obj = _Py_FREELIST_POP(rangeobject, ranges);
+    rangeobject *obj = PyObject_New(rangeobject, type);
     if (obj == NULL) {
-        obj = PyObject_New(rangeobject, type);
-        if (obj == NULL) {
-            Py_DECREF(length);
-            return NULL;
-        }
+        Py_DECREF(length);
+        return NULL;
     }
     obj->start = start;
     obj->stop = stop;
@@ -189,7 +185,7 @@ range_dealloc(PyObject *op)
     Py_DECREF(r->stop);
     Py_DECREF(r->step);
     Py_DECREF(r->length);
-    _Py_FREELIST_FREE(ranges, r, PyObject_Free);
+    PyObject_Free(r);
 }
 
 static unsigned long
@@ -955,7 +951,7 @@ range_iterator___setstate___impl(_PyRangeIterObject *r, PyObject *state)
 static void
 rangeiter_dealloc(PyObject *self)
 {
-    _Py_FREELIST_FREE(range_iters, (_PyRangeIterObject *)self, PyObject_Free);
+    PyObject_Free(self);
 }
 
 static PyMethodDef rangeiter_methods[] = {
@@ -1032,12 +1028,9 @@ get_len_of_range(long lo, long hi, long step)
 static PyObject *
 fast_range_iter(long start, long stop, long step, long len)
 {
-    _PyRangeIterObject *it = _Py_FREELIST_POP(_PyRangeIterObject, range_iters);
+    _PyRangeIterObject *it = PyObject_New(_PyRangeIterObject, &PyRangeIter_Type);
     if (it == NULL) {
-        it = PyObject_New(_PyRangeIterObject, &PyRangeIter_Type);
-        if (it == NULL) {
-            return NULL;
-        }
+        return NULL;
     }
     assert(Py_IS_TYPE(it, &PyRangeIter_Type));
     it->start = start;

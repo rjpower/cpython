@@ -398,9 +398,7 @@ class Stats:
 
     def get_object_stats(self) -> dict[str, tuple[int, int]]:
         total_materializations = self._data.get("Object inline values", 0)
-        total_allocations = self._data.get("Object allocations", 0) + self._data.get(
-            "Object allocations from freelist", 0
-        )
+        total_allocations = self._data.get("Object allocations", 0)
         total_increfs = (
             self._data.get("Object interpreter mortal increfs", 0) +
             self._data.get("Object mortal increfs", 0) +
@@ -984,9 +982,6 @@ def object_stats_section() -> Section:
             )
         ],
         doc="""
-        Below, "allocations" means "allocations that are not from a freelist".
-        Total allocations = "Allocations from freelist" + "Allocations".
-
         "Inline values" is the number of values arrays inlined into objects.
 
         The cache hit/miss numbers are for the MRO cache, split into dunder and

@@ -5,7 +5,6 @@
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
 #include "pycore_critical_section.h"  // _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED()
 #include "pycore_dict.h"          // _PyDictViewObject
-#include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
 #include "pycore_interp.h"        // PyInterpreterState.list
 #include "pycore_list.h"          // struct _Py_list_freelist, _PyListIterObject
 #include "pycore_long.h"          // _PyLong_DigitCount
@@ -154,16 +153,6 @@ list_preallocate_exact(PyListObject *self, Py_ssize_t size)
     return 0;
 }
 
-/* Print summary info about the state of the optimized allocator */
-void
-_PyList_DebugMallocStats(FILE *out)
-{
-    _PyDebugAllocatorStats(out,
-                           "free PyListObject",
-                            _Py_FREELIST_SIZE(lists),
-                           _PyType_PreHeaderSize(&PyList_Type) + sizeof(PyListObject));
-}
-
 PyObject *
 PyList_New(Py_ssize_t size)
 {
@@ -172,12 +161,9 @@ PyList_New(Py_ssize_t size)
         return NULL;
     }
 
-    PyListObject *op = _Py_FREELIST_POP(PyListObject, lists);
+    PyListObject *op = PyObject_GC_New(PyListObject, &PyList_Type);
     if (op == NULL) {
-        op = PyObject_GC_New(PyListObject, &PyList_Type);
-        if (op == NULL) {
-            return NULL;
-        }
+        return NULL;
     }
     if (size <= 0) {
         op->ob_item = NULL;
@@ -428,12 +414,7 @@ list_dealloc(PyObject *self)
         free_list_items(op->ob_item, false);
         op->ob_item = NULL;
     }
-    if (PyList_CheckExact(op)) {
-        _Py_FREELIST_FREE(lists, op, PyObject_GC_Del);
-    }
-    else {
-        PyObject_GC_Del(op);
-    }
+    PyObject_GC_Del(op);
 }
 
 /*[clinic input]
@@ -3887,12 +3868,9 @@ list_iter(PyObject *seq)
         PyErr_BadInternalCall();
         return NULL;
     }
-    _PyListIterObject *it = _Py_FREELIST_POP(_PyListIterObject, list_iters);
+    _PyListIterObject *it = PyObject_GC_New(_PyListIterObject, &PyListIter_Type);
     if (it == NULL) {
-        it = PyObject_GC_New(_PyListIterObject, &PyListIter_Type);
-        if (it == NULL) {
-            return NULL;
-        }
+        return NULL;
     }
     it->it_index = 0;
     it->it_seq = (PyListObject *)Py_NewRef(seq);
@@ -3907,7 +3885,7 @@ listiter_dealloc(PyObject *self)
     _PyObject_GC_UNTRACK(it);
     Py_XDECREF(it->it_seq);
     assert(Py_IS_TYPE(self, &PyListIter_Type));
-    _Py_FREELIST_FREE(list_iters, it, PyObject_GC_Del);
+    PyObject_GC_Del(it);
 }
 
 static int

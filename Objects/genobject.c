@@ -6,7 +6,6 @@
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"         // _PyEval_EvalFrame()
 #include "pycore_frame.h"         // _PyInterpreterFrame
-#include "pycore_freelist.h"      // _Py_FREELIST_FREE()
 #include "pycore_gc.h"            // _PyGC_CLEAR_FINALIZED()
 #include "pycore_genobject.h"     // _PyGen_SetStopIterationValue()
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
@@ -1987,7 +1986,7 @@ async_gen_asend_dealloc(PyObject *self)
 
     _PyGC_CLEAR_FINALIZED(self);
 
-    _Py_FREELIST_FREE(async_gen_asends, self, PyObject_GC_Del);
+    PyObject_GC_Del(self);
 }
 
 static int
@@ -2211,12 +2210,9 @@ PyTypeObject _PyAsyncGenASend_Type = {
 static PyObject *
 async_gen_asend_new(PyAsyncGenObject *gen, PyObject *sendval)
 {
-    PyAsyncGenASend *ags = _Py_FREELIST_POP(PyAsyncGenASend, async_gen_asends);
+    PyAsyncGenASend *ags = PyObject_GC_New(PyAsyncGenASend, &_PyAsyncGenASend_Type);
     if (ags == NULL) {
-        ags = PyObject_GC_New(PyAsyncGenASend, &_PyAsyncGenASend_Type);
-        if (ags == NULL) {
-            return NULL;
-        }
+        return NULL;
     }
 
     ags->ags_gen = (PyAsyncGenObject*)Py_NewRef(gen);
@@ -2237,7 +2233,7 @@ async_gen_wrapped_val_dealloc(PyObject *self)
     _PyAsyncGenWrappedValue *agw = _PyAsyncGenWrappedValue_CAST(self);
     _PyObject_GC_UNTRACK(self);
     Py_CLEAR(agw->agw_val);
-    _Py_FREELIST_FREE(async_gens, self, PyObject_GC_Del);
+    PyObject_GC_Del(self);
 }
 
 
@@ -2298,13 +2294,10 @@ _PyAsyncGenValueWrapperNew(PyThreadState *tstate, PyObject *val)
 {
     assert(val);
 
-    _PyAsyncGenWrappedValue *o = _Py_FREELIST_POP(_PyAsyncGenWrappedValue, async_gens);
+    _PyAsyncGenWrappedValue *o = PyObject_GC_New(_PyAsyncGenWrappedValue,
+                        &_PyAsyncGenWrappedValue_Type);
     if (o == NULL) {
-        o = PyObject_GC_New(_PyAsyncGenWrappedValue,
-                            &_PyAsyncGenWrappedValue_Type);
-        if (o == NULL) {
-            return NULL;
-        }
+        return NULL;
     }
     assert(_PyAsyncGenWrappedValue_CheckExact(o));
     o->agw_val = Py_NewRef(val);

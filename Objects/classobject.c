@@ -3,7 +3,6 @@
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_VectorcallTstate()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
-#include "pycore_freelist.h"
 #include "pycore_object.h"
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -68,12 +67,9 @@ PyMethod_New(PyObject *func, PyObject *self)
         PyErr_BadInternalCall();
         return NULL;
     }
-    PyMethodObject *im = _Py_FREELIST_POP(PyMethodObject, pymethodobjects);
+    PyMethodObject *im = PyObject_GC_New(PyMethodObject, &PyMethod_Type);
     if (im == NULL) {
-        im = PyObject_GC_New(PyMethodObject, &PyMethod_Type);
-        if (im == NULL) {
-            return NULL;
-        }
+        return NULL;
     }
     im->im_weakreflist = NULL;
     im->im_func = Py_NewRef(func);
@@ -218,7 +214,7 @@ method_dealloc(PyObject *self)
     Py_DECREF(im->im_func);
     Py_XDECREF(im->im_self);
     assert(Py_IS_TYPE(self, &PyMethod_Type));
-    _Py_FREELIST_FREE(pymethodobjects, (PyObject *)im, PyObject_GC_Del);
+    PyObject_GC_Del(im);
 }
 
 static PyObject *

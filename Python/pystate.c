@@ -9,7 +9,6 @@
 #include "pycore_codecs.h"        // _PyCodec_Fini()
 #include "pycore_critical_section.h" // _PyCriticalSection_Resume()
 #include "pycore_dtoa.h"          // _dtoa_state_INIT()
-#include "pycore_freelist.h"      // _PyObject_ClearFreeLists()
 #include "pycore_gc_trace.h"      // _PyGC_TRACE_CAPTURE_THREAD()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interpframe.h"   // _PyThreadState_HasStackSpace()

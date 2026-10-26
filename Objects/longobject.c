@@ -6,7 +6,6 @@
 #include "pycore_bitutils.h"      // _Py_popcount32()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_call.h"          // _PyObject_MakeTpCall
-#include "pycore_freelist.h"      // _Py_FREELIST_FREE, _Py_FREELIST_POP
 #include "pycore_long.h"          // _Py_SmallInts
 #include "pycore_object.h"        // _PyObject_Init()
 #include "pycore_runtime.h"       // _PY_NSMALLPOSINTS
@@ -160,24 +159,19 @@ long_alloc(Py_ssize_t size)
      * assume that there is always at least one digit present. */
     Py_ssize_t ndigits = size ? size : 1;
 
-    if (ndigits == 1) {
-        result = (PyLongObject *)_Py_FREELIST_POP(PyLongObject, ints);
+    /* Number of bytes needed is: offsetof(PyLongObject, ob_digit) +
+    sizeof(digit)*size.  Previous incarnations of this code used
+    sizeof() instead of the offsetof, but this risks being
+    incorrect in the presence of padding between the header
+    and the digits. */
+    result = PyObject_Malloc(offsetof(PyLongObject, long_value.ob_digit) +
+                             ndigits*sizeof(digit));
+    if (!result) {
+        PyErr_NoMemory();
+        return NULL;
     }
-    if (result == NULL) {
-        /* Number of bytes needed is: offsetof(PyLongObject, ob_digit) +
-        sizeof(digit)*size.  Previous incarnations of this code used
-        sizeof() instead of the offsetof, but this risks being
-        incorrect in the presence of padding between the header
-        and the digits. */
-        result = PyObject_Malloc(offsetof(PyLongObject, long_value.ob_digit) +
-                                ndigits*sizeof(digit));
-        if (!result) {
-            PyErr_NoMemory();
-            return NULL;
-        }
-        _PyObject_Init((PyObject*)result, &PyLong_Type);
-        _PyLong_InitTag(result);
-    }
+    _PyObject_Init((PyObject*)result, &PyLong_Type);
+    _PyLong_InitTag(result);
     _PyLong_SetSignAndDigitCount(result, size != 0, size);
 #ifdef Py_DEBUG
     // gh-147988: Fill digits with an invalid pattern to catch usage
@@ -244,16 +238,13 @@ _PyLong_FromMedium(sdigit x)
     assert(!IS_SMALL_INT(x));
     assert(is_medium_int(x));
 
-    PyLongObject *v = (PyLongObject *)_Py_FREELIST_POP(PyLongObject, ints);
+    PyLongObject *v = PyObject_Malloc(sizeof(PyLongObject));
     if (v == NULL) {
-        v = PyObject_Malloc(sizeof(PyLongObject));
-        if (v == NULL) {
-            PyErr_NoMemory();
-            return NULL;
-        }
-        _PyObject_Init((PyObject*)v, &PyLong_Type);
-        _PyLong_InitTag(v);
+        PyErr_NoMemory();
+        return NULL;
     }
+    _PyObject_Init((PyObject*)v, &PyLong_Type);
+    _PyLong_InitTag(v);
     digit abs_x = x < 0 ? -x : x;
     _PyLong_SetSignAndDigitCount(v, x<0?-1:1, 1);
     v->long_value.ob_digit[0] = abs_x;
@@ -3604,10 +3595,6 @@ _PyLong_ExactDealloc(PyObject *self)
         _Py_SetImmortal(self);
         return;
     }
-    if (_PyLong_IsCompact((PyLongObject *)self)) {
-        _Py_FREELIST_FREE(ints, self, PyObject_Free);
-        return;
-    }
     PyObject_Free(self);
 }
 
@@ -3622,10 +3609,6 @@ long_dealloc(PyObject *self)
          * See PEP 683, section Accidental De-Immortalizing for details
          */
         _Py_SetImmortal(self);
-        return;
-    }
-    if (PyLong_CheckExact(self) && _PyLong_IsCompact((PyLongObject *)self)) {
-        _Py_FREELIST_FREE(ints, self, PyObject_Free);
         return;
     }
     Py_TYPE(self)->tp_free(self);

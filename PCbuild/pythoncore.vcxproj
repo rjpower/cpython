@@ -248,8 +248,6 @@
     <ClInclude Include="..\Include\internal\pycore_floatobject.h" />
     <ClInclude Include="..\Include\internal\pycore_format.h" />
     <ClInclude Include="..\Include\internal\pycore_frame.h" />
-    <ClInclude Include="..\Include\internal\pycore_freelist.h" />
-    <ClInclude Include="..\Include\internal\pycore_freelist_state.h" />
     <ClInclude Include="..\Include\internal\pycore_function.h" />
     <ClInclude Include="..\Include\internal\pycore_gc.h" />
     <ClInclude Include="..\Include\internal\pycore_gc_trace.h" />
@@ -644,7 +642,6 @@
     <ClCompile Include="..\Python\future.c" />
     <ClCompile Include="..\Python\gc.c" />
     <ClCompile Include="..\Python\gc_free_threading.c" />
-    <ClCompile Include="..\Python\gc_gil.c" />
     <ClCompile Include="..\Python\gc_live.c" />
     <ClCompile Include="..\Python\gc_trace.c" />
     <ClCompile Include="..\Python\getargs.c" />

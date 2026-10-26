@@ -122,7 +122,6 @@ As a consequence of this, split keys have a maximum size of 16.
 #include "pycore_code.h"          // stats
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION, Py_END_CRITICAL_SECTION
 #include "pycore_dict.h"          // export _PyDict_SizeOf()
-#include "pycore_freelist.h"      // _PyFreeListState_GET()
 #include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
 #include "pycore_object.h"        // _PyObject_GC_TRACK(), _PyDebugAllocatorStats()
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_SSIZE_RELAXED
@@ -358,18 +357,6 @@ static inline Py_hash_t
 unicode_get_hash(PyObject *o)
 {
     return PyUnstable_Unicode_GET_CACHED_HASH(o);
-}
-
-/* Print summary info about the state of the optimized allocator */
-void
-_PyDict_DebugMallocStats(FILE *out)
-{
-    _PyDebugAllocatorStats(out, "free PyDictObject",
-                           _Py_FREELIST_SIZE(dicts),
-                           _PyType_PreHeaderSize(&PyDict_Type) + sizeof(PyDictObject));
-    _PyDebugAllocatorStats(out, "free PyDictKeysObject",
-                           _Py_FREELIST_SIZE(dictkeys),
-                           sizeof(PyDictKeysObject));
 }
 
 #define DK_MASK(dk) (DK_SIZE(dk)-1)
@@ -745,18 +732,12 @@ new_keys_object(uint8_t log2_size, bool unicode)
 
     int log2_bytes = get_log2_bytes(log2_size);
 
-    PyDictKeysObject *dk = NULL;
-    if (log2_size == PyDict_LOG_MINSIZE && unicode) {
-        dk = _Py_FREELIST_POP_MEM(dictkeys);
-    }
+    PyDictKeysObject *dk = PyMem_Malloc(sizeof(PyDictKeysObject)
+                                        + ((size_t)1 << log2_bytes)
+                                        + entry_size * usable);
     if (dk == NULL) {
-        dk = PyMem_Malloc(sizeof(PyDictKeysObject)
-                          + ((size_t)1 << log2_bytes)
-                          + entry_size * usable);
-        if (dk == NULL) {
-            PyErr_NoMemory();
-            return NULL;
-        }
+        PyErr_NoMemory();
+        return NULL;
     }
     init_keys_object(dk, log2_size, log2_bytes,
                      unicode ? DICT_KEYS_UNICODE : DICT_KEYS_GENERAL,
@@ -771,12 +752,7 @@ free_keys_object(PyDictKeysObject *keys, bool use_qsbr)
     if (keys->dk_kind == DICT_KEYS_SPLIT) {
         ptr = _PyDictKeys_AsSharedKeys(keys);
     }
-    if (DK_LOG_SIZE(keys) == PyDict_LOG_MINSIZE && keys->dk_kind == DICT_KEYS_UNICODE) {
-        _Py_FREELIST_FREE(dictkeys, keys, PyMem_Free);
-    }
-    else {
-        PyMem_Free(ptr);
-    }
+    PyMem_Free(ptr);
 }
 
 static size_t
@@ -847,10 +823,7 @@ static PyObject*
 new_dict(PyDictKeysObject *keys, PyDictValues *values,
          Py_ssize_t used, int free_values_on_failure)
 {
-    PyDictObject *mp = _Py_FREELIST_POP(PyDictObject, dicts);
-    if (mp == NULL) {
-        mp = PyObject_GC_New(PyDictObject, &PyDict_Type);
-    }
+    PyDictObject *mp = PyObject_GC_New(PyDictObject, &PyDict_Type);
     assert(mp == NULL || Py_IS_TYPE(mp, &PyDict_Type));
 
     return new_dict_impl(mp, keys, values, used, free_values_on_failure, 0, 1);
@@ -861,10 +834,7 @@ static PyObject*
 new_dict_untracked(PyDictKeysObject *keys, PyDictValues *values,
                    Py_ssize_t used, int free_values_on_failure)
 {
-    PyDictObject *mp = _Py_FREELIST_POP(PyDictObject, dicts);
-    if (mp == NULL) {
-        mp = PyObject_GC_New(PyDictObject, &PyDict_Type);
-    }
+    PyDictObject *mp = PyObject_GC_New(PyDictObject, &PyDict_Type);
     assert(mp == NULL || Py_IS_TYPE(mp, &PyDict_Type));
 
     return new_dict_impl(mp, keys, values, used, free_values_on_failure, 0, 0);
@@ -3123,7 +3093,7 @@ dict_dealloc(PyObject *self)
         dictkeys_decref(keys, false);
     }
     if (Py_IS_TYPE(mp, &PyDict_Type)) {
-        _Py_FREELIST_FREE(dicts, mp, Py_TYPE(mp)->tp_free);
+        Py_TYPE(mp)->tp_free(mp);
     }
     else {
         Py_TYPE(mp)->tp_free((PyObject *)mp);

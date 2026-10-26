@@ -8,9 +8,7 @@
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION
 #include "pycore_descrobject.h"   // _PyMethodWrapper_Type
 #include "pycore_dict.h"          // _PyObject_MaterializeManagedDict()
-#include "pycore_floatobject.h"   // _PyFloat_DebugMallocStats()
 #include "pycore_function.h"      // _PyClassMethod_GetFunc()
-#include "pycore_freelist.h"      // _PyObject_ClearFreeLists()
 #include "pycore_gc_trace.h"     // _PyGC_LiveAddImmortal()
 #include "pycore_genobject.h"     // _PyAsyncGenAThrow_Type
 #include "pycore_hamt.h"          // _PyHamtItems_Type
@@ -19,7 +17,6 @@
 #include "pycore_interpframe.h"   // _PyFrame_Stackbase()
 #include "pycore_interpolation.h" // _PyInterpolation_Type
 #include "pycore_lazyimportobject.h" // PyLazyImport_Type
-#include "pycore_list.h"          // _PyList_DebugMallocStats()
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_memoryobject.h"  // _PyManagedBuffer_Type
 #include "pycore_namespace.h"     // _PyNamespace_Type
@@ -29,9 +26,9 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_symtable.h"      // PySTEntry_Type
 #include "pycore_template.h"      // _PyTemplate_Type _PyTemplateIter_Type
-#include "pycore_tuple.h"         // _PyTuple_DebugMallocStats()
 #include "pycore_typeobject.h"    // _PyBufferWrapper_Type
 #include "pycore_typevarobject.h" // _PyTypeAlias_Type
+#include "pycore_unicodeobject.h" // _PyUnicode_CheckConsistency()
 #include "pycore_stackref.h"      // PyStackRef_FromPyObject
 #include "pycore_unionobject.h"   // _PyUnion_Type
 
@@ -475,65 +472,6 @@ PyObject_Bytes(PyObject *v)
     else if (PyErr_Occurred())
         return NULL;
     return PyBytes_FromObject(v);
-}
-
-static void
-clear_freelist(struct _Py_freelist *freelist, int is_finalization,
-               freefunc dofree)
-{
-    void *ptr;
-    while ((ptr = _PyFreeList_PopNoStats(freelist)) != NULL) {
-        dofree(ptr);
-    }
-    assert(freelist->size == 0 || freelist->size == -1);
-    assert(freelist->freelist == NULL);
-    if (is_finalization) {
-        freelist->size = -1;
-    }
-}
-
-static void
-free_object(void *obj)
-{
-    PyObject *op = (PyObject *)obj;
-    PyTypeObject *tp = Py_TYPE(op);
-    tp->tp_free(op);
-    Py_DECREF(tp);
-}
-
-void
-_PyObject_ClearFreeLists(struct _Py_freelists *freelists, int is_finalization)
-{
-    // In the free-threaded build, freelists are per-PyThreadState and cleared in PyThreadState_Clear()
-    // In the default build, freelists are per-interpreter and cleared in finalize_interp_types()
-    clear_freelist(&freelists->floats, is_finalization, free_object);
-    clear_freelist(&freelists->complexes, is_finalization, free_object);
-    for (Py_ssize_t i = 0; i < PyTuple_MAXSAVESIZE; i++) {
-        clear_freelist(&freelists->tuples[i], is_finalization, free_object);
-    }
-    clear_freelist(&freelists->lists, is_finalization, free_object);
-    clear_freelist(&freelists->list_iters, is_finalization, free_object);
-    clear_freelist(&freelists->tuple_iters, is_finalization, free_object);
-    clear_freelist(&freelists->dicts, is_finalization, free_object);
-    clear_freelist(&freelists->dictkeys, is_finalization, PyMem_Free);
-    clear_freelist(&freelists->slices, is_finalization, free_object);
-    clear_freelist(&freelists->ranges, is_finalization, free_object);
-    clear_freelist(&freelists->range_iters, is_finalization, free_object);
-    clear_freelist(&freelists->contexts, is_finalization, free_object);
-    clear_freelist(&freelists->async_gens, is_finalization, free_object);
-    clear_freelist(&freelists->async_gen_asends, is_finalization, free_object);
-    clear_freelist(&freelists->futureiters, is_finalization, free_object);
-    if (is_finalization) {
-        // Only clear object stack chunks during finalization. We use object
-        // stacks during GC, so emptying the free-list is counterproductive.
-        clear_freelist(&freelists->object_stack_chunks, 1, PyMem_RawFree);
-    }
-    clear_freelist(&freelists->unicode_writers, is_finalization, PyMem_Free);
-    clear_freelist(&freelists->bytes_writers, is_finalization, PyMem_Free);
-    clear_freelist(&freelists->ints, is_finalization, free_object);
-    clear_freelist(&freelists->pycfunctionobject, is_finalization, PyObject_GC_Del);
-    clear_freelist(&freelists->pycmethodobject, is_finalization, PyObject_GC_Del);
-    clear_freelist(&freelists->pymethodobjects, is_finalization, free_object);
 }
 
 /*
@@ -2394,15 +2332,6 @@ _Py_ForgetReference(PyObject *op)
 /* Hack to force loading of abstract.o */
 Py_ssize_t (*_Py_abstract_hack)(PyObject *) = PyObject_Size;
 
-
-void
-_PyObject_DebugTypeStats(FILE *out)
-{
-    _PyDict_DebugMallocStats(out);
-    _PyFloat_DebugMallocStats(out);
-    _PyList_DebugMallocStats(out);
-    _PyTuple_DebugMallocStats(out);
-}
 
 /* These methods are used to control infinite recursion in repr, str, print,
    etc.  Container objects that may recursively contain themselves,

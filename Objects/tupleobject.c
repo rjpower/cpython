@@ -3,7 +3,6 @@
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
-#include "pycore_freelist.h"      // _Py_FREELIST_PUSH()
 #include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
 #include "pycore_list.h"          // _Py_memory_repeat()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
@@ -18,9 +17,6 @@ class tuple "PyTupleObject *" "&PyTuple_Type"
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=f051ba3cfdf9a189]*/
 
 #include "clinic/tupleobject.c.h"
-
-
-static inline int maybe_freelist_push(PyTupleObject *);
 
 
 /* Allocate an uninitialized tuple object. Before making it public, following
@@ -41,14 +37,6 @@ tuple_alloc(Py_ssize_t size)
         return NULL;
     }
     assert(size != 0);    // The empty tuple is statically allocated.
-    Py_ssize_t index = size - 1;
-    if (index < PyTuple_MAXSAVESIZE) {
-        PyTupleObject *op = _Py_FREELIST_POP(PyTupleObject, tuples[index]);
-        if (op != NULL) {
-            _PyTuple_RESET_HASH_CACHE(op);
-            return op;
-        }
-    }
     /* Check for overflow */
     if ((size_t)size > ((size_t)PY_SSIZE_T_MAX - (sizeof(PyTupleObject) -
                 sizeof(PyObject *))) / sizeof(PyObject *)) {
@@ -247,10 +235,7 @@ _PyStolenTuple_Free(PyObject *obj)
     PyTupleObject *op = _PyTuple_CAST(obj);
     assert(Py_SIZE(op) != 0);
     assert(!_PyObject_GC_IS_TRACKED(obj));
-    // This will abort on the empty singleton (if there is one).
-    if (!maybe_freelist_push(op)) {
-        PyTuple_Type.tp_free((PyObject *)op);
-    }
+    PyTuple_Type.tp_free((PyObject *)op);
 }
 
 static void
@@ -278,10 +263,7 @@ tuple_dealloc(PyObject *self)
     while (--i >= 0) {
         Py_XDECREF(op->ob_item[i]);
     }
-    // This will abort on the empty singleton (if there is one).
-    if (!maybe_freelist_push(op)) {
-        Py_TYPE(op)->tp_free((PyObject *)op);
-    }
+    Py_TYPE(op)->tp_free((PyObject *)op);
 }
 
 static PyObject *
@@ -1113,7 +1095,7 @@ tupleiter_dealloc(PyObject *self)
     _PyObject_GC_UNTRACK(it);
     Py_XDECREF(it->it_seq);
     assert(Py_IS_TYPE(self, &PyTupleIter_Type));
-    _Py_FREELIST_FREE(tuple_iters, it, PyObject_GC_Del);
+    PyObject_GC_Del(it);
 }
 
 static int
@@ -1243,46 +1225,11 @@ tuple_iter(PyObject *seq)
         PyErr_BadInternalCall();
         return NULL;
     }
-    _PyTupleIterObject *it = _Py_FREELIST_POP(_PyTupleIterObject, tuple_iters);
-    if (it == NULL) {
-        it = PyObject_GC_New(_PyTupleIterObject, &PyTupleIter_Type);
-        if (it == NULL)
-            return NULL;
-    }
+    _PyTupleIterObject *it = PyObject_GC_New(_PyTupleIterObject, &PyTupleIter_Type);
+    if (it == NULL)
+        return NULL;
     it->it_index = 0;
     it->it_seq = (PyTupleObject *)Py_NewRef(seq);
     _PyObject_GC_TRACK(it);
     return (PyObject *)it;
-}
-
-
-/*************
- * freelists *
- *************/
-
-static inline int
-maybe_freelist_push(PyTupleObject *op)
-{
-    if (!Py_IS_TYPE(op, &PyTuple_Type)) {
-        return 0;
-    }
-    Py_ssize_t index = Py_SIZE(op) - 1;
-    if (index < PyTuple_MAXSAVESIZE) {
-        return _Py_FREELIST_PUSH(tuples[index], op, Py_tuple_MAXFREELIST);
-    }
-    return 0;
-}
-
-/* Print summary info about the state of the optimized allocator */
-void
-_PyTuple_DebugMallocStats(FILE *out)
-{
-    for (int i = 0; i < PyTuple_MAXSAVESIZE; i++) {
-        int len = i + 1;
-        char buf[128];
-        PyOS_snprintf(buf, sizeof(buf),
-                      "free %d-sized PyTupleObject", len);
-        _PyDebugAllocatorStats(out, buf, _Py_FREELIST_SIZE(tuples[i]),
-                               _PyType_PreHeaderSize(&PyTuple_Type) + _PyObject_VAR_SIZE(&PyTuple_Type, len));
-    }
 }

@@ -8,7 +8,6 @@
 #include "pycore_bitutils.h"      // _Py_bswap16()
 #include "pycore_dtoa.h"          // _Py_dg_dtoa()
 #include "pycore_floatobject.h"   // _PyFloat_FormatAdvancedWriter()
-#include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_long.h"          // _PyLong_GetOne()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
@@ -125,14 +124,11 @@ PyFloat_GetInfo(void)
 PyObject *
 PyFloat_FromDouble(double fval)
 {
-    PyFloatObject *op = _Py_FREELIST_POP(PyFloatObject, floats);
-    if (op == NULL) {
-        op = PyObject_Malloc(sizeof(PyFloatObject));
-        if (!op) {
-            return PyErr_NoMemory();
-        }
-        _PyObject_Init((PyObject*)op, &PyFloat_Type);
+    PyFloatObject *op = PyObject_Malloc(sizeof(PyFloatObject));
+    if (!op) {
+        return PyErr_NoMemory();
     }
+    _PyObject_Init((PyObject*)op, &PyFloat_Type);
     op->ob_fval = fval;
     return (PyObject *) op;
 }
@@ -231,7 +227,7 @@ void
 _PyFloat_ExactDealloc(PyObject *obj)
 {
     assert(PyFloat_CheckExact(obj));
-    _Py_FREELIST_FREE(floats, obj, PyObject_Free);
+    PyObject_Free(obj);
 }
 
 static void
@@ -1857,16 +1853,6 @@ void
 _PyFloat_FiniType(PyInterpreterState *interp)
 {
     _PyStructSequence_FiniBuiltin(interp, &FloatInfoType);
-}
-
-/* Print summary info about the state of the optimized allocator */
-void
-_PyFloat_DebugMallocStats(FILE *out)
-{
-    _PyDebugAllocatorStats(out,
-                           "free PyFloatObject",
-                           _Py_FREELIST_SIZE(floats),
-                           sizeof(PyFloatObject));
 }
 
 

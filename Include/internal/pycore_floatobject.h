@@ -35,7 +35,6 @@ _PyFloat_OrLongExactDealloc(PyObject *op)
 }
 
 
-extern void _PyFloat_DebugMallocStats(FILE* out);
 
 
 /* Format the object based on the format_spec, as defined in PEP 3101

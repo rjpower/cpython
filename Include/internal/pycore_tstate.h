@@ -8,7 +8,6 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#include "pycore_freelist_state.h"  // struct _Py_freelists
 #include "pycore_interpframe_structs.h"  // _PyInterpreterFrame
 #include "pycore_mimalloc.h"        // struct _mimalloc_thread_state
 #include "pycore_qsbr.h"            // struct qsbr

@@ -1197,7 +1197,6 @@ class SysModuleTest(unittest.TestCase):
         if sys.platform != "win32":
             with_pymalloc = sysconfig.get_config_var("WITH_PYMALLOC")
             with_sanitizer = support.check_sanitizer(address=True, memory=True)
-            self.assertIn(b"free PyDictObjects", err)
             # ASan and MSan builds default to malloc, even with pymalloc.
             if with_pymalloc and not with_sanitizer:
                 self.assertIn(b'Small block threshold', err)

@@ -25,7 +25,7 @@ Data members:
 #include "pycore_long.h"          // _PY_LONG_MAX_STR_DIGITS_THRESHOLD
 #include "pycore_modsupport.h"    // _PyModule_CreateInitialized()
 #include "pycore_namespace.h"     // _PyNamespace_New()
-#include "pycore_object.h"        // _PyObject_DebugTypeStats()
+#include "pycore_object.h"
 #include "pycore_pathconfig.h"    // _PyPathConfig_ComputeSysPath0()
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
 #include "pycore_pylifecycle.h"   // _PyErr_WriteUnraisableDefaultHook()
@@ -2142,7 +2142,6 @@ sys__debugmallocstats_impl(PyObject *module)
         fputc('\n', stderr);
     }
 #endif
-    _PyObject_DebugTypeStats(stderr);
 
     Py_RETURN_NONE;
 }

@@ -231,8 +231,6 @@ extern Py_ssize_t _PyGC_GetFreezeCount(PyInterpreterState *interp);
 extern PyObject *_PyGC_GetObjects(PyInterpreterState *interp, int generation);
 extern PyObject *_PyGC_GetReferrers(PyInterpreterState *interp, PyObject *objs);
 
-// Functions to clear types free lists
-extern void _PyGC_ClearAllFreeLists(PyInterpreterState *interp);
 extern void _Py_RunGC(PyThreadState *tstate);
 
 union _PyStackRef;

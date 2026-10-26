@@ -67,7 +67,6 @@ extern Py_ssize_t _PyDict_SizeOf_LockHeld(PyDictObject *);
 */
 PyAPI_FUNC(int) _PyDict_MergeUniq(PyObject *mp, PyObject *other, PyObject **dupkey);
 
-extern void _PyDict_DebugMallocStats(FILE *out);
 
 
 /* _PyDictView */

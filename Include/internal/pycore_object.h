@@ -36,7 +36,6 @@ extern int _PyObject_CheckConsistency(PyObject *op, int check_content);
 extern void _PyDebugAllocatorStats(FILE *out, const char *block_name,
                                    int num_blocks, size_t sizeof_block);
 
-extern void _PyObject_DebugTypeStats(FILE *out);
 
 
 // Export for shared _testinternalcapi extension

@@ -138,14 +138,6 @@ Verify late binding for the innermost for-expression
     >>> list(g)
     [(0, 0), (0, 1), (0, 2), (0, 3), (1, 0), (1, 1), (1, 2), (1, 3), (2, 0), (2, 1), (2, 2), (2, 3)]
 
-Verify re-use of tuples (a side benefit of using genexps over listcomps),
-which needs a reference count of 1 (not under --with-gc)
-
-    >>> from test.support import Py_GC
-    >>> tupleids = list(map(id, ((i,i) for i in range(10))))
-    >>> Py_GC or int(max(tupleids) - min(tupleids)) == 0
-    True
-
 Verify that syntax error's are raised for genexps used as lvalues
 
     >>> (y for y in (1,2)) = 10

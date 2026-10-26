@@ -1510,18 +1510,26 @@ report_to(FILE *out, trace_t *t, Py_ssize_t nholes)
     if (env != NULL && *env != '\0') {
         limit = atol(env);
     }
-    // Holes that have a hole as referrer are listed after those that don't.
+    /* The holes with references that no other hole explains come first:
+       each group of holes hangs from one of them.  Then holes whose
+       referrer is not a hole, then the rest. */
     Py_ssize_t shown = 0;
-    for (int pass = 0; pass < 2; pass++) {
+    for (int pass = 0; pass < 3; pass++) {
         for (Py_ssize_t i = 0; i < nholes && shown < limit; i++) {
             trace_hole *h = &t->ts->holes[i];
-            int secondary = strstr(h->referrer, "(hole)") != NULL;
-            if (secondary != pass) {
+            int group = h->external > 0 ? 0
+                        : strstr(h->referrer, "(hole)") == NULL ? 1 : 2;
+            if (group != pass) {
                 continue;
             }
-            fprintf(out, "gc verify: hole %s%s at %p refcnt %zd; referrer: %s\n",
+            fprintf(out, "gc verify: hole %s%s at %p refcnt %zd; referrer: %s",
                     h->type_name, h->value, (void *)h->addr, h->refcnt,
                     h->referrer);
+            if (h->external > 0) {
+                fprintf(out, "; %zd references from outside the holes",
+                        h->external);
+            }
+            fputc('\n', out);
             shown++;
         }
     }

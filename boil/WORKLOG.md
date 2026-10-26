@@ -1001,3 +1001,11 @@ copy propagation, store elimination, POP_TOP removal and truth folding
 - **Pitfall.** A magic bump does not rebuild Python/import.o. Delete it
   in every build directory, or `importlib.util.MAGIC_NUMBER` keeps the
   old value.
+
+### 2026-10-25 21:45 — step 3b landed; coordinator gate check
+
+Targeted tests pass on dev-default at 0ba2538907c; all 7 ports pass. The
+agent's measurement scripts (per-loop differencing, Py_STATS mix, slot
+distribution, compile-time) move from /tmp into boil/tools/measure/ so the
+next steps reuse them. Step 5 waits on step 4 (verifier), still running in
+its worktree.

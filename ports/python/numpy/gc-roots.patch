@@ -84,6 +84,61 @@
       .tp_new = (newfunc)dispatcher_new,
       .tp_str = (reprfunc)dispatcher_str,
       .tp_repr = (reprfunc)dispatcher_repr,
+--- a/numpy/_core/src/multiarray/convert_datatype.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/convert_datatype.c	2026-10-26 10:08:03.982627650 -0700
+@@ -3534,9 +3534,24 @@
+     return res;
+ }
+ 
++/*
++ * A new ArrayMethod with its fields zeroed: arraymethod_traverse reads
++ * wrapped_meth, which these methods never set.
++ */
++static PyArrayMethodObject *
++new_zeroed_arraymethod(void)
++{
++    PyArrayMethodObject *method = PyObject_New(PyArrayMethodObject, &PyArrayMethod_Type);
++    if (method != NULL) {
++        memset((char *)method + offsetof(PyArrayMethodObject, name), 0,
++               sizeof(PyArrayMethodObject) - offsetof(PyArrayMethodObject, name));
++    }
++    return method;
++}
++
+ static int
+ initialize_void_and_object_globals(void) {
+-    PyArrayMethodObject *method = PyObject_New(PyArrayMethodObject, &PyArrayMethod_Type);
++    PyArrayMethodObject *method = new_zeroed_arraymethod();
+     if (method == NULL) {
+         PyErr_NoMemory();
+         return -1;
+@@ -3551,7 +3566,7 @@
+     method->nout = 1;
+     npy_static_pydata.VoidToGenericMethod = (PyObject *)method;
+ 
+-    method = PyObject_New(PyArrayMethodObject, &PyArrayMethod_Type);
++    method = new_zeroed_arraymethod();
+     if (method == NULL) {
+         PyErr_NoMemory();
+         return -1;
+@@ -3566,7 +3581,7 @@
+     method->nout = 1;
+     npy_static_pydata.GenericToVoidMethod = (PyObject *)method;
+ 
+-    method = PyObject_New(PyArrayMethodObject, &PyArrayMethod_Type);
++    method = new_zeroed_arraymethod();
+     if (method == NULL) {
+         PyErr_NoMemory();
+         return -1;
+@@ -3583,7 +3598,7 @@
+     method->get_strided_loop = &object_to_any_get_loop;
+     npy_static_pydata.ObjectToGenericMethod = (PyObject *)method;
+ 
+-    method = PyObject_New(PyArrayMethodObject, &PyArrayMethod_Type);
++    method = new_zeroed_arraymethod();
+     if (method == NULL) {
+         PyErr_NoMemory();
+         return -1;
 --- a/numpy/_core/src/multiarray/dtypemeta.c	2026-10-10 10:53:37.000000000 -0700
 +++ b/numpy/_core/src/multiarray/dtypemeta.c	2026-10-26 09:53:54.044889387 -0700
 @@ -33,10 +33,60 @@

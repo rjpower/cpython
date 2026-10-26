@@ -10,3 +10,6 @@ its singleton and scalar type as roots (`PyGC_AddRoot`), since legacy
 DTypes live in `PyMem` memory and are traversed as static types. ufuncs
 visit their loop dicts, and `_ArrayMethod`, `_BoundArrayMethod` and the
 array function dispatcher, which are not GC types, get a `tp_traverse`.
+The four ArrayMethods that numpy builds by hand start zeroed, since the
+traverse reads their wrapping fields. The roots are registered in every
+build: outside `Py_GC` they inform the tracing verifier.

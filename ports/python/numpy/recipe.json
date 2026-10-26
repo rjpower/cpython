@@ -22,10 +22,11 @@
   "patches": [
     {
       "file": "gc-roots.patch",
-      "sha256": "ce8443c2c013bab06ed2ca212a250791c4a9ea23ed8d37ef8d62eef203799282",
+      "sha256": "01ffb987063f96a62556f670bb311fd7e35f2eb19a9489243732bcf7ad03c47c",
       "touches": {
         "numpy/_core/src/multiarray/array_method.c": "ce6be28c79ef0c1b369a805f1b395508fca392cee1aa180b0c956e86106ebeed",
         "numpy/_core/src/multiarray/arrayfunction_override.c": "562a5c285ea6bf40041b0fa9f62749fcbd76a723acdfabc730273f994157c58e",
+        "numpy/_core/src/multiarray/convert_datatype.c": "4c4dba0c4313399305bedabb7b4e40c30370eab78edf543de224f93c186288a8",
         "numpy/_core/src/multiarray/dtypemeta.c": "c9ba204ba447c3dccc5d37da8edb5ac64fe77241a86edec783d2a668e3e319d3",
         "numpy/_core/src/umath/ufunc_object.c": "7526a7a9dd606beec78f6e9f687b65ce048555c8400659cb7dfab55cf9faf4ef"
       }

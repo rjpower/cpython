@@ -1,9 +1,11 @@
 /* The live tracing collector (note 06, step 5a).
 
    Under Py_GC nothing is reference counted and this collector owns the
-   memory of every object.  An object allocation collects when the bytes
-   allocated since the last collection pass a threshold (the trigger), with
-   the GIL held:
+   memory of every object.  When the bytes allocated since the last
+   collection pass a threshold (the trigger), an object allocation schedules
+   a collection, which runs where the eval loop next checks its breaker; one
+   that passes a second threshold without reaching it collects at once
+   (_PyGC_LiveOnThreshold()).  A collection runs with the GIL held:
 
    1. The mark (Python/gc_trace.c) marks everything reachable from the
       precise and conservative roots, then walks the heaps: each unmarked
@@ -17,12 +19,14 @@
       tp_del that has not run since it was last reachable, is queued, and it
       and every dead object it reaches are resurrected for this cycle.
    4. The remaining weak references to dead objects are cleared.
-   5. The sweep calls tp_dealloc on every object still dead, with the frees
-      of their blocks deferred (PyObject_Free() sees GCState.sweeping), then
-      frees the blocks.  A dealloc can therefore read the other dead objects'
-      memory; it must not allocate objects or run Python code.
-   6. After the collection, before the allocation returns, the queue runs:
-      the weak reference callbacks, then the finalizers.
+   5. The sweep calls tp_dealloc on every object still dead, managed
+      buffers first and types last, with the frees of their blocks deferred
+      (PyObject_Free() sees GCState.sweeping), then frees the blocks.  A
+      dealloc can therefore read the other dead objects' memory; it must not
+      allocate objects or run Python code, which debug builds check.
+   6. After the collection the queue runs: the weak reference callbacks,
+      then the finalizers.  After a collection that an allocation ran at
+      once, it waits for the eval breaker.
 
    Collections and the queue run in the interpreter that allocates; the mark
    covers every interpreter that shares its object heaps. */

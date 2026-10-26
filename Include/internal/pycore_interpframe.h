@@ -162,18 +162,22 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
 }
 
 /* Hand v to f, which a call returns to or a send resumes: it goes to the
- * slot that f named, which holds NULL. */
+ * slot that f named.  A temporary's slot holds NULL; a local's old value,
+ * where a call stores its result in a local, is released as STORE_FAST
+ * releases it. */
 static inline void
 _PyFrame_SetReturnValue(_PyInterpreterFrame *f, _PyStackRef v)
 {
 #ifdef Py_DEBUG
     if (f->owner != FRAME_OWNED_BY_INTERPRETER) {
-        assert(f->return_slot >= _PyFrame_GetCode(f)->co_nlocalsplus);
         assert(f->return_slot < _PyFrame_NumSlots(f));
+        assert(f->return_slot < _PyFrame_GetCode(f)->co_nlocalsplus
+               || PyStackRef_IsNull(f->base[f->return_slot]));
     }
 #endif
-    assert(PyStackRef_IsNull(f->base[f->return_slot]));
+    _PyStackRef old = f->base[f->return_slot];
     f->base[f->return_slot] = v;
+    PyStackRef_XCLOSE(old);
 }
 
 /* Release the temporaries of f from slot first on and leave them NULL */

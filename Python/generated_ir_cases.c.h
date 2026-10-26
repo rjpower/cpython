@@ -3326,10 +3326,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_GETITEM);
-            if (IR_IS_LOCAL(IR_FIELD_A(this_instr))) {
-                UPDATE_MISS_STATS(BINARY_OP);
-                IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
-            }
             _PyStackRef container;
             _PyStackRef getitem;
             _PyStackRef sub;
@@ -4924,6 +4920,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -5428,6 +5425,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -5513,6 +5511,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -5594,6 +5593,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -5702,6 +5702,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -5811,6 +5812,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -6125,6 +6127,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -6326,6 +6329,7 @@
                 assert((!PyStackRef_IsNull(res)) ^ (_PyErr_Occurred(tstate) != NULL));
             }
             window[0] = res;
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -6452,6 +6456,7 @@
             }
             IR_CLEAR_SLOTS(&window[1], 2 + oparg);
             window[0] = res;
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -6663,6 +6668,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -6868,6 +6874,7 @@
                 window[1] = PyStackRef_NULL;
                 _PyStackRef_XCLOSE_POINTER(value);
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -6987,6 +6994,7 @@
                 window[1] = PyStackRef_NULL;
                 _PyStackRef_XCLOSE_POINTER(value);
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -7097,6 +7105,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -7208,6 +7217,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -7326,6 +7336,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -7453,6 +7464,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -7527,6 +7539,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -7841,6 +7854,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -7925,6 +7939,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -7989,6 +8004,7 @@
                 window[0] = res;
                 PyStackRef_XCLOSE(value);
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -10467,6 +10483,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -10630,6 +10647,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -10773,6 +10791,7 @@
             }
             IR_CLEAR_SLOTS(&window[1], 2 + oparg);
             window[0] = res;
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
 
@@ -12409,11 +12428,6 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            if (IR_IS_LOCAL(IR_FIELD_A(this_instr))) {
-                UPDATE_MISS_STATS(LOAD_ATTR);
-                assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                JUMP_TO_PREDICTED(LOAD_ATTR);
-            }
             _PyStackRef owner;
             _PyStackRef new_frame;
             // _GUARD_TYPE_VERSION
@@ -13066,11 +13080,6 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            if (IR_IS_LOCAL(IR_FIELD_A(this_instr))) {
-                UPDATE_MISS_STATS(LOAD_ATTR);
-                assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                JUMP_TO_PREDICTED(LOAD_ATTR);
-            }
             _PyStackRef owner;
             _PyStackRef new_frame;
             // _GUARD_TYPE_VERSION

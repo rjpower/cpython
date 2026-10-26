@@ -1144,6 +1144,67 @@ class RegCfgTest(unittest.TestCase):
         self.run_specialized(lambda: self.assertEqual(call(5), 5))
         self.run_specialized(lambda: self.assertEqual(add("a"), "a"))
 
+    def test_call_result_to_a_local(self):
+        # The call's dst names the local: a Python callee's return, or the
+        # C call itself, releases the local's old value
+        class Counted:
+            freed = 0
+            def __del__(self):
+                Counted.freed += 1
+        def py(v):
+            return v
+        def f():
+            x = Counted()
+            x = py(1)
+            y = Counted()
+            y = len("ab")
+            return x, y
+        def fails(z):
+            raise ValueError
+        def keeps(z):
+            try:
+                z = fails(z)
+            except ValueError:
+                pass
+            return z
+        self.assertNotIn("STORE_FAST", self.names(f))
+        call = [w for w in words(f) if w[0].startswith("CALL")][1]
+        self.assertEqual(call[1], 0)
+        n = _testinternalcapi.SPECIALIZATION_THRESHOLD + 2
+        for _ in range(n):
+            self.assertEqual(f(), (1, 2))
+            self.assertEqual(keeps(5), 5)
+        self.assertEqual(Counted.freed, 2 * n)
+
+    def test_pushed_frame_result_to_a_local(self):
+        # LOAD_ATTR_PROPERTY and BINARY_OP_SUBSCR_GETITEM push the frame of
+        # the getter, which returns to the local
+        class C:
+            @property
+            def p(self):
+                return 7
+            def __getitem__(self, i):
+                return i + 1
+        def f(o):
+            x = o.p
+            y = o[1]
+            return x, y
+        self.run_specialized(lambda: self.assertEqual(f(C()), (7, 2)))
+
+    def test_generator_keeps_the_loop_variable(self):
+        # A generator's frame hands the slot of the loop variable each value
+        # it yields, and at the end its return value; the loop variable
+        # keeps the last value yielded
+        def gen():
+            yield 1
+            yield 2
+            return 3
+        def f():
+            for x in gen():
+                pass
+            return x
+        self.run_specialized(lambda: self.assertEqual(f(), 2))
+
     # c. COPY, SWAP and POP_TOP
 
     def test_swap_renaming(self):

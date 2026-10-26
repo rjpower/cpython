@@ -491,6 +491,25 @@ def window_dst(outputs: list[Entry]) -> int | None:
     return None
 
 
+def result_offset(inst: Instruction, outputs: list[Entry]) -> int | None:
+    """window_dst(), or for a window-style instruction that leaves its result
+    in the slot of an input, the offset of that slot: the output passes the
+    input through, and a uop reassigns it other than from an input (as
+    _CALL_BUILTIN_FAST puts its result where the callable was)."""
+    j = window_dst(outputs)
+    if j is not None:
+        return j
+    for j, e in enumerate(outputs):
+        if e.item.is_array():
+            return None
+        name = e.item.name
+        if any(assigns_to(part, name) and name not in part.aliased_outputs
+               and any(i.name == name for i in part.stack.inputs)
+               for part in inst.parts if isinstance(part, Uop)):
+            return j
+    return None
+
+
 def wide_oparg(inst: Instruction) -> bool:
     """Whether the oparg of inst may need more than 12 bits: an index into
     co_consts or co_names, or one of WIDE_OPARGS.  Other opargs are counts,
@@ -663,6 +682,8 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
 
 
 STORE_RESULT = "store"     # moves the result to the local dst names
+STORE_RETURN = "return"    # pushes a frame, which returns the result to the
+                           # slot that dst names, a local or a temporary
 STORE_LEAVE = "leave"      # leaves to the family head if dst names a local
 STORE_NEVER = "never"      # pushes more than the result, so dst never names
                            # a local
@@ -674,14 +695,21 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     of inst, not an alias of an input, which may be a borrow.  Members of a
     family share their stack effect for each oparg, and the assembler folds
     a store only where the instruction pushes the result alone, so a member
-    that always pushes more never sees a local dst.  A member that pushes a
-    frame leaves to the head: the result arrives in its slot only after
-    the callee returns."""
+    that always pushes more never sees a local dst.  The result of a frame
+    that a member pushes arrives only when the callee returns, in the slot
+    of frame->return_slot, which releases a local's old value
+    (_PyFrame_SetReturnValue).  A member that always pushes a frame and
+    names dst as its return slot needs nothing more; one that may also
+    produce the result itself moves it.  A member whose frames return
+    elsewhere leaves to the head."""
     if inst.properties.switches_frame:
-        return STORE_LEAVE
+        if not names_return_slot(inst):
+            return STORE_LEAVE
+        if pushes_always(inst):
+            return STORE_RETURN
     if inst.properties.no_fold:
         return None
-    j = window_dst(outputs)
+    j = result_offset(inst, outputs)
     if j is None or outputs[j].aliased:
         return None
     if all(e.item.is_array() and not e.item.size.isdigit()
@@ -690,22 +718,44 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     return STORE_NEVER
 
 
+def uop_tokens(inst: Instruction) -> list[str]:
+    return [t.text for part in inst.parts if isinstance(part, Uop)
+            for t in part.body.tokens()]
+
+
+def names_return_slot(inst: Instruction) -> bool:
+    """Whether the frames that inst pushes return only their result, to the
+    slot dst names.  A generator's frame also hands each value it yields to
+    that slot, and its return value at the end of a FOR_ITER."""
+    tokens = uop_tokens(inst)
+    return "IR_DST_SLOT" in tokens and "gi_iframe" not in tokens
+
+
+def pushes_always(inst: Instruction) -> bool:
+    """Whether inst ends by pushing a frame, rather than pushing one only on
+    some paths with DISPATCH_INLINED"""
+    return "DISPATCH_INLINED" not in uop_tokens(inst)
+
+
 def stores_to_dst(members: list[Instruction],
                   io: dict[str, tuple[list[Entry], list[Entry]]],
                   dst_offset: int | None, window: bool) -> bool:
     """Whether the assembler may fold a STORE_FAST of the result into the
-    family's words, so that dst names the local (see store_mode()).  A
-    family whose head pushes frames gains too little to pay for checking."""
-    if dst_offset is None or members[0].properties.switches_frame:
+    family's words, so that dst names the local (see store_mode())."""
+    if dst_offset is None:
+        return False
+    head = members[0]
+    if head.properties.switches_frame and (
+            store_mode(head, io[head.name][1]) != STORE_RESULT):
         return False
     for m in members:
         inputs, outputs = io[m.name]
         mode = store_mode(m, outputs)
         if mode is None:
             return False
-        if mode == STORE_LEAVE:
+        if mode in (STORE_LEAVE, STORE_RETURN):
             continue
-        offset = window_dst(outputs) if window else first_new_output(
+        offset = result_offset(m, outputs) if window else first_new_output(
             outputs, len(inputs))
         if offset != dst_offset:
             return False

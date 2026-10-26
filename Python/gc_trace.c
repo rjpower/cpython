@@ -61,6 +61,7 @@
 #if defined(WITH_MIMALLOC) && !defined(Py_GIL_DISABLED)
 
 #include "pycore_capsule.h"       // _PyCapsule_HasDestructor()
+#include "pycore_code.h"          // _PyCode_HasExtraFree()
 #include "pycore_crossinterp.h"   // _PyXIData_regitem_t
 #include "pycore_dict.h"          // PyDictObject._ma_watcher_tag
 #include "pycore_moduleobject.h"  // PyModuleObject
@@ -1695,9 +1696,9 @@ struct live_walk {
 };
 
 /* Would op's dealloc, under reference counting, make a call that may run
-   code or allocate: a dealloc watcher's DESTROY event, a module's m_free, a
-   capsule's destructor, or the release of a buffer whose exporter defines
-   __release_buffer__?  The sweep forbids both, so gc_live.c makes these
+   code or allocate: a dealloc watcher's DESTROY event, a code object's
+   co_extra free functions, a module's m_free, a capsule's destructor, or
+   the release of a buffer whose exporter defines __release_buffer__?  The sweep forbids both, so gc_live.c makes these
    calls before it (queue_destroy_hooks()).  Each runs once per object. */
 static inline int
 live_has_destroy_hook(const struct live_walk *w, PyInterpreterState *interp,
@@ -1716,7 +1717,7 @@ live_has_destroy_hook(const struct live_walk *w, PyInterpreterState *interp,
         return interp->active_func_watchers != 0;
     }
     if (tp == &PyCode_Type) {
-        return interp->active_code_watchers != 0;
+        return interp->active_code_watchers != 0 || _PyCode_HasExtraFree(op);
     }
     if (tp == &PyCapsule_Type) {
         return _PyCapsule_HasDestructor(op);

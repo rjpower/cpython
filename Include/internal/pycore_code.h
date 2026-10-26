@@ -30,9 +30,11 @@ extern "C" {
 
 extern PyStatus _PyCode_Init(PyInterpreterState *interp);
 #ifdef Py_GC
-/* Under Py_GC the collector makes this call of the dealloc's before the
-   sweep, where it may run code (Python/gc_live.c); the dealloc does not. */
-extern void _PyCode_NotifyDestroy(PyObject *co);
+/* Under Py_GC the collector makes these calls of the dealloc's before the
+   sweep, where they may run code (Python/gc_live.c): the code watchers'
+   DESTROY event and the co_extra free functions.  The dealloc does not. */
+extern int _PyCode_HasExtraFree(PyObject *co);
+extern void _PyCode_Destroy(PyObject *co);
 #endif
 extern void _PyCode_Fini(PyInterpreterState *interp);
 

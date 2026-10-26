@@ -39,7 +39,7 @@
 #include "Python.h"
 #include "pycore_capsule.h"       // _PyCapsule_Destroy()
 #include "pycore_ceval.h"         // _Py_set_eval_breaker_bit()
-#include "pycore_code.h"          // _PyCode_NotifyDestroy()
+#include "pycore_code.h"          // _PyCode_Destroy()
 #include "pycore_dict.h"          // _PyInlineValuesSize()
 #include "pycore_function.h"      // _PyFunction_NotifyDestroy()
 #include "pycore_genobject.h"     // _PyGen_FinalizerIsNoop()
@@ -208,8 +208,8 @@ queue_push(struct _gc_live_state *ls, PyObject *op, PyObject *callback,
 }
 
 /* What op's dealloc would call under reference counting, besides freeing:
-   the DESTROY event of the dict, type, function and code watchers, a
-   module's m_free, a capsule's destructor, the release of a memoryview's or
+   the DESTROY event of the dict, type, function and code watchers, a code
+   object's co_extra free functions, a module's m_free, a capsule's destructor, the release of a memoryview's or
    managed buffer's buffer when the exporter's __release_buffer__ would run
    (_PyBuffer_ReleaseRunsCode()).  The sweep may not run code or
    allocate, so the collector calls these first, with op and what it
@@ -235,7 +235,7 @@ run_destroy_hook(PyThreadState *tstate, PyObject *op)
         _PyFunction_NotifyDestroy(op);
     }
     else if (tp == &PyCode_Type) {
-        _PyCode_NotifyDestroy(op);
+        _PyCode_Destroy(op);
     }
     else if (tp == &PyCapsule_Type) {
         _PyCapsule_Destroy(op);

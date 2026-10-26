@@ -1146,6 +1146,7 @@ class TestCase(unittest.TestCase):
 
 
     @cpython_only
+    @support.requires_refcounting
     def test_ref_counting_behavior(self):
         class C(object):
             count = 0

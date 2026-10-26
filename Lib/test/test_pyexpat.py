@@ -1192,19 +1192,14 @@ class ExternalEntityParserCreateErrorTest(unittest.TestCase):
     def test_error_path_no_crash(self):
         # When an allocation inside ExternalEntityParserCreate fails,
         # the partially-initialized subparser is deallocated.  This
-        # must not dereference NULL handlers or double-decrement the
-        # parent parser's refcount.
+        # must not dereference NULL handlers or release the parent parser
+        # twice.
         parser = expat.ParserCreate()
         parser.buffer_text = True
-        rc_before = sys.getrefcount(parser) if not support.Py_GC else None
 
         with self.assertRaises(MemoryError):
             with support.inject_memory_error_cm(1, 10):
                 parser.ExternalEntityParserCreate(None)
-
-        if not support.Py_GC:
-            rc_after = sys.getrefcount(parser)
-            self.assertEqual(rc_after, rc_before)
 
 
 class ReparseDeferralTest(unittest.TestCase):

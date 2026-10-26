@@ -1324,6 +1324,7 @@ class CWarningsDisplayTests(WarningsDisplayTests, unittest.TestCase):
 class PyWarningsDisplayTests(WarningsDisplayTests, unittest.TestCase):
     module = py_warnings
 
+    @support.requires_refcounting
     def test_tracemalloc(self):
         self.addCleanup(os_helper.unlink, os_helper.TESTFN)
 
@@ -1693,7 +1694,11 @@ class LocksTest(unittest.TestCase):
                 assert ready.wait(support.LONG_TIMEOUT)
                 pid = os.fork()
                 if pid == 0:
-                    # The finalizer must run before os.fork() returns.
+                    # The finalizer must run before os.fork() returns, when
+                    # reference counting frees the dead thread's locals; a
+                    # tracing collector runs it at a collection.
+                    if support.Py_GC:
+                        support.gc_collect()
                     os._exit(0)
                 support.wait_process(pid, exitcode=0)
             finally:

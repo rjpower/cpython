@@ -3431,7 +3431,7 @@ class _TestPool(BaseTestCase):
 
     # Under a gc-debug build a stale word on a pool thread's -Og stack points
     # at the MapResult, so the conservative stack scan keeps the tasks alive.
-    @unittest.skipIf(support.Py_GC and support.Py_DEBUG,
+    @unittest.skipIf(support.Py_DEBUG,
                      "a pool thread's -Og stack keeps the results alive")
     def test_release_task_refs(self):
         # Issue #29861: task arguments and results should not be kept
@@ -7758,10 +7758,10 @@ class BaseMixin(object):
         processes = None
 
         threads = set(threading._dangling) - set(cls.dangling[1])
-        if threads and support.Py_GC and not any(t.is_alive() for t in threads):
+        if threads and not any(t.is_alive() for t in threads):
             # A queue's feeder thread that stopped after the collection
-            # above was still in threading._active then; under Py_GC only
-            # the next collection frees it.
+            # above was still in threading._active then; only the next
+            # collection frees it.
             threads = None
             test.support.gc_collect()
             threads = set(threading._dangling) - set(cls.dangling[1])

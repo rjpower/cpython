@@ -226,6 +226,7 @@ class FileTests(unittest.TestCase):
         self.assertRaises(OSError, os.write, first, b"a")
 
     @support.cpython_only
+    @support.requires_refcounting
     def test_rename(self):
         path = os_helper.TESTFN
         old = sys.getrefcount(path)
@@ -2093,6 +2094,8 @@ class FwalkTests(WalkTests):
             next(it)
             self.assertGreater(getfd(), old_fd)
             it.close()
+            # A wrapping generator's inner fwalk() closes its fds when it dies.
+            support.gc_collect()  # For other GCs.
             self.assertEqual(getfd(), old_fd)
 
     # fwalk() keeps file descriptors open

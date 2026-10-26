@@ -227,6 +227,10 @@ extern void _PyGC_LiveAddImmortal(PyObject *op);
  * earlier calls left there, which the scan takes for roots. */
 extern void _PyGC_LiveClearStack(void);
 
+/* The same for the eval loop's frame, which has padding too, and spill
+ * slots that a call writes only on some paths. */
+extern void _PyGC_LiveClearEvalStack(void);
+
 /* Totals for gc.get_stats(): the bytes the sweeps freed, the bytes the last
  * collection found live, and the longest pause in seconds. */
 extern void _PyGC_LiveGetStats(PyInterpreterState *interp,

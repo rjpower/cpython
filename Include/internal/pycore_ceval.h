@@ -11,6 +11,7 @@ extern "C" {
 #include "dynamic_annotations.h"  // _Py_ANNOTATE_RWLOCK_CREATE
 
 #include "pycore_code.h"          // _PyCode_GetTLBCFast()
+#include "pycore_gc_trace.h"      // _PyGC_LiveClearEvalStack()
 #include "pycore_interp.h"        // PyInterpreterState.eval_frame
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_stats.h"         // EVAL_CALL_STAT_INC()
@@ -118,6 +119,9 @@ static inline PyObject*
 _PyEval_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     EVAL_CALL_STAT_INC(EVAL_CALL_TOTAL);
+#ifdef Py_GC
+    _PyGC_LiveClearEvalStack();
+#endif
     if (tstate->interp->eval_frame == NULL) {
         return _PyEval_EvalFrameDefault(tstate, frame, throwflag);
     }

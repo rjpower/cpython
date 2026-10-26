@@ -865,6 +865,15 @@ _PyGC_LiveClearStack(void)
     clear_stack_below();
 }
 
+void
+_PyGC_LiveClearEvalStack(void)
+{
+    // More than the eval loop's frame.
+    char buf[1024];
+    memset(buf, 0, sizeof(buf));
+    __asm__ volatile("" : : "r"(buf) : "memory");
+}
+
 /* Inlined, so that the frame of collect_from_entry() is made in the cleared
    stack. */
 static inline Py_ssize_t

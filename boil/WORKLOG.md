@@ -1224,3 +1224,49 @@ on gc-default: two threads create objects whose `__del__` sleeps, faster
 than the queue runs them.
 
 Next: the dealloc debug check, then the day-3 tests.
+
+### 2026-10-26 05:00 — step 5a milestones 3 and 4: day-3 tests, measurements, note 06 §15
+
+The day-2 and day-3 lists pass on build/gc-debug and build/gc-default at
+-j8: 34 files and 6,390 tests. The day-3 files are test_io, test_threading,
+test_generators, test_capi, test_sys, test_embed and ten asyncio files.
+dev-debug and dev-default pass the same files plus the rung list. Every
+build fails only test_sys's remote-exec timeout, as dev-debug did before
+the step. six and attrs pass `ports check` on both gc builds.
+
+Fixed on the way:
+- Collector and dealloc fixes:
+  - the version caches of a legacy subinterpreter named code objects that
+    another interpreter's sweep had freed (the threading SIGSEGV);
+  - the debug sweep check now aborts when a dealloc allocates or runs
+    code. It found the BytesIO export error and `module_dealloc`'s `-v`
+    output. The memoryview export assertion was a separate sweep-order
+    bug;
+  - managed buffers are swept first, and the sweep reports to
+    `PyRefTracer`;
+  - the asyncio C task lists were scanned as roots, so pending tasks
+    never died.
+- Scheduling: automatic collections run at the eval breaker, with an
+  inline fallback one threshold later (decision 3 revised, §15.2).
+- False retention, for gc-default (17 failures to 0):
+  - clear the stack before `gc.collect()` enters the collector;
+  - clear popped C stack references;
+  - clear 1 KB below each C entry into the eval loop;
+  - clear the eval loop's C argument arrays;
+  - clear stale saved registers.
+- Speed: the collection's passes now skip dead objects by kinds recorded
+  in the mark. nbody went from +45% to +28% against dev-default.
+
+Measurements (§15.6), against dev-default:
+- per loop: richards -7.7%, go -4.4%, nbody +27.9%, float +30.1%. 99.2%
+  of nbody's dead objects are floats;
+- `-c pass`: 80.9M instructions against 48.6M, from seven shutdown
+  collections;
+- full collection of about 1M objects: 41 ms;
+- peak RSS for 10M garbage tuples: 57 MB;
+- zero-init and the 1 KB entry clear: each under 1%.
+
+§15 records the decisions, the dealloc fix list, the retention sources
+with their runtime cost, the test adjustments, the 5b items (watchers in
+the sweep, shutdown collections) and the 5c items (sweeping trivial
+deallocs by block, the 52 uniqueness sites).

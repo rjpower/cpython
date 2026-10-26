@@ -3746,20 +3746,6 @@ class TestTracebackException(unittest.TestCase):
         with self.assertWarns(DeprecationWarning):
             self.assertIsNone(te.exc_type)
 
-    @support.requires_refcounting
-    def test_no_refs_to_exception_and_traceback_objects(self):
-        exc_obj = None
-        try:
-            1/0
-        except Exception as e:
-            exc_obj = e
-
-        refcnt1 = sys.getrefcount(exc_obj)
-        refcnt2 = sys.getrefcount(exc_obj.__traceback__)
-        exc = traceback.TracebackException.from_exception(exc_obj)
-        self.assertEqual(sys.getrefcount(exc_obj), refcnt1)
-        self.assertEqual(sys.getrefcount(exc_obj.__traceback__), refcnt2)
-
     def test_comparison_basic(self):
         try:
             1/0

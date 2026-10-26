@@ -1527,8 +1527,10 @@ measured again now, is within 0.7% of its 12.4 figures:
 The loads that remain are mostly window operands: on go, 1.0M of the
 1.48M LOAD_FAST_BORROWs are followed by CALL_PY_EXACT_ARGS.
 
-**Startup.** `python -c pass` takes 47.49M instructions under gcc
-(3a: 47.52M) and 50.23M under clang (3a, 12.4: 50.13M).
+**Startup and compile time.** `python -c pass` takes 47.49M
+instructions under gcc (3a: 47.52M) and 50.23M under clang (3a, 12.4:
+50.13M). Compiling every file of Lib takes 5.62 s against 4.86 s in 3a
+(+16%, gcc, best of three).
 
 **Memory.** Peak RSS from `boil/tools/rss.py` in KiB, gcc, the median of
 six paired runs. Three more runs, with both binaries read into the page

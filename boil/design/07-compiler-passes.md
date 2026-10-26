@@ -147,7 +147,7 @@ proposed. The driver (`run_passes` in Python/regcfg.c) runs the passes
 once each, in a fixed order, with the verifier after each in debug
 builds. Compaction then assigns slots, and the encoder in
 Python/assemble.c reads the slots. `PYTHONREGCFGDUMP` prints the CFG
-after each pass in a debug build.
+after conversion and after compaction in a debug build.
 
 **The passes against section 3's list:**
 
@@ -184,5 +184,8 @@ dispatches instead:
 - the backward walks include the first and last op of each region.
 
 **For tier 1.** The register CFG is a data structure that tier 1 can
-build SSA from, as section 4 intended. Note that the conversion runs on
-every compile, so its cost counts toward compile time.
+build SSA from, as section 4 intended. It costs compile time:
+compiling every file of Lib takes 5.62 s against 4.86 s in step 3a
+(+16%, gcc, best of three). The conversion, the passes and the slot
+assignment each walk the ops, and debug builds also run the verifier,
+with liveness, after every pass. Nothing has been tuned yet.

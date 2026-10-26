@@ -51,6 +51,7 @@
 
 #include "pycore_frame.h"         // _PyInterpreterFrame
 #include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
+#include "pycore_interp.h"        // _PyInterpreterState_GetFinalizing()
 #include "pycore_interpframe.h"   // _PyFrame_Traverse()
 #include "pycore_mimalloc.h"      // mi_heap_visit_blocks()
 #include "pycore_object.h"        // _PyType_PreHeaderSize()
@@ -263,8 +264,11 @@ typedef struct {
     uintptr_t addr;
     Py_ssize_t refcnt;
     char type_name[80];
+    char value[48];       // the start of an ASCII str, to identify it
     char referrer[160];
     int has_referrer;
+    Py_ssize_t external;  // references from outside the unmarked objects
+    int held;             // reachable from an unmarked object with one
 } trace_hole;
 
 struct _gc_trace_state {
@@ -310,6 +314,7 @@ typedef struct {
     Py_ssize_t nmarked;
     Py_ssize_t nshallow;
     Py_ssize_t nrejected; // precise references that were not objects
+    Py_ssize_t ngarbage;  // unmarked objects that only garbage refers to
 } trace_t;
 
 static int mark_visit(PyObject *op, void *arg);
@@ -883,6 +888,23 @@ scan_structs(trace_t *t)
                (uintptr_t)t->interp + sizeof(PyInterpreterState));
     _Py_FOR_EACH_TSTATE_UNLOCKED(t->interp, p) {
         scan_range(t, (uintptr_t)p, (uintptr_t)p + sizeof(_PyThreadStateImpl));
+        /* The data stack.  A frame that is returning is unlinked from
+         * current_frame before its slots are cleared, and a finalizer that
+         * clearing a slot triggers can collect while the later slots still
+         * hold their objects.  The current chunk holds slots up to
+         * datastack_top and frame headers from datastack_limit; earlier
+         * chunks are scanned whole. */
+        _PyStackChunk *chunk = p->datastack_chunk;
+        if (chunk == NULL) {
+            continue;
+        }
+        uintptr_t end = (uintptr_t)chunk + chunk->size;
+        scan_range(t, (uintptr_t)&chunk->data[0], (uintptr_t)p->datastack_top);
+        scan_range(t, (uintptr_t)p->datastack_limit, end);
+        for (chunk = chunk->previous; chunk != NULL; chunk = chunk->previous) {
+            scan_range(t, (uintptr_t)&chunk->data[0],
+                       (uintptr_t)chunk + chunk->size);
+        }
     }
 }
 
@@ -926,6 +948,13 @@ visit_tstate(PyThreadState *p, visitproc visit, void *arg)
     Py_VISIT(ts->asyncio_running_loop);
     Py_VISIT(ts->asyncio_running_task);
     Py_VISIT(ts->lazy_imports);
+    /* Objects the trashcan deferred: their reference count is already zero
+     * but they still own their members until the chain is destroyed. */
+    for (PyObject *op = p->delete_later; op != NULL;
+         op = (PyObject *)(_Py_AS_GC(op)->_gc_next & ~(uintptr_t)1))
+    {
+        Py_VISIT(op);
+    }
     return 0;
 }
 
@@ -1092,6 +1121,109 @@ hole_cmp(const void *a, const void *b)
     return (x > y) - (x < y);
 }
 
+/* An unmarked object is not necessarily a hole.  Code that runs during the
+   collection, such as finalizers, weakref callbacks or another thread that
+   takes the GIL while they run, can create cyclic garbage that the
+   collection did not see.  Such garbage is unreachable, so a tracing
+   collector would rightly free it.  As the cycle collector does, subtract
+   from each unmarked object's reference count the references that other
+   unmarked objects hold; an object with references left is held from
+   outside the traced graph, and it and everything it reaches are holes.
+   The rest is garbage.
+
+   Objects whose reference count is already zero are being deallocated: a
+   finalizer that a dealloc function triggers can run a collection while
+   the dying container still holds the members it has not released yet.
+   Their references count as garbage references too.  Their traversal only
+   looks addresses up, without following them, so that members already
+   released are harmless. */
+
+typedef struct {
+    referrer_search *s;
+    trace_hole **stack;
+    Py_ssize_t sp;
+} held_search;
+
+static int
+subtract_visit(PyObject *op, void *arg)
+{
+    trace_hole *h = find_hole((referrer_search *)arg, (uintptr_t)op);
+    if (h != NULL) {
+        h->external--;
+    }
+    return 0;
+}
+
+static int
+held_visit(PyObject *op, void *arg)
+{
+    held_search *hs = (held_search *)arg;
+    trace_hole *h = find_hole(hs->s, (uintptr_t)op);
+    if (h != NULL && !h->held) {
+        h->held = 1;
+        hs->stack[hs->sp++] = h;
+    }
+    return 0;
+}
+
+/* Remove the garbage from the sorted list and return the number left. */
+static Py_ssize_t
+remove_garbage(trace_t *t, trace_hole *list, Py_ssize_t n)
+{
+    referrer_search s = {.t = t, .list = list, .n = n};
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *op = (PyObject *)list[i].addr;
+        if (safe_to_traverse(op)) {
+            (void)traverse(op, subtract_visit, &s);
+        }
+    }
+    for (size_t i = 0; i <= t->objects.mask; i++) {
+        uintptr_t addr = t->objects.keys[i];
+        if (addr == 0) {
+            continue;
+        }
+        PyObject *op = (PyObject *)addr;
+        if (Py_REFCNT(op) != 0 || !is_object(t, op, 1) || !_PyObject_IS_GC(op)) {
+            continue;
+        }
+        /* A dying object is still referenced from its dealloc function's C
+         * stack frame, so the conservative scan marked it without
+         * traversing it.  Unmarked objects with no references may sit on a
+         * free list with stale members; those the mark traversed, such as
+         * the trashcan's, already marked their members. */
+        if (!addrset_has(&t->shallow, addr) || addrset_has(&t->deepened, addr)) {
+            continue;
+        }
+        (void)traverse(op, subtract_visit, &s);
+    }
+    held_search hs = {.s = &s, .stack = malloc(n * sizeof(trace_hole *))};
+    if (hs.stack == NULL) {
+        return n;  // report everything
+    }
+    for (Py_ssize_t i = 0; i < n; i++) {
+        if (list[i].external > 0) {
+            list[i].held = 1;
+            hs.stack[hs.sp++] = &list[i];
+        }
+    }
+    // Each hole is pushed at most once, so the stack cannot overflow.
+    while (hs.sp > 0) {
+        PyObject *op = (PyObject *)hs.stack[--hs.sp]->addr;
+        if (safe_to_traverse(op)) {
+            (void)traverse(op, held_visit, &hs);
+        }
+    }
+    free(hs.stack);
+    Py_ssize_t kept = 0;
+    for (Py_ssize_t i = 0; i < n; i++) {
+        if (list[i].held) {
+            list[kept++] = list[i];
+        }
+    }
+    t->ngarbage = n - kept;
+    return kept;
+}
+
 /* Find the first referrer of each hole: an object whose tp_traverse visits
    it, or else a block of PyMem_Malloc() memory that holds its address. */
 static void
@@ -1166,12 +1298,25 @@ find_holes(trace_t *t)
         trace_hole *h = &list[n++];
         memset(h, 0, sizeof(*h));
         h->addr = addr;
-        h->refcnt = Py_REFCNT(op);
+        h->refcnt = h->external = Py_REFCNT(op);
         PyOS_snprintf(h->type_name, sizeof(h->type_name), "%.79s",
                       Py_TYPE(op)->tp_name);
+        // Reading the characters of an ASCII string allocates nothing.
+        if (PyUnicode_CheckExact(op) && PyUnicode_IS_ASCII(op)) {
+            PyOS_snprintf(h->value, sizeof(h->value), " '%.40s'",
+                          (const char *)PyUnicode_DATA(op));
+            for (char *c = h->value + 2; *c != '\0'; c++) {
+                if (*c < ' ' || *c > '~') {
+                    *c = '?';
+                }
+            }
+        }
     }
     if (n > 0) {
         qsort(list, n, sizeof(trace_hole), hole_cmp);
+        n = remove_garbage(t, list, n);
+    }
+    if (n > 0) {
         find_referrers(t, list, n);
     }
     free(t->ts->holes);
@@ -1189,9 +1334,10 @@ report(trace_t *t, Py_ssize_t nholes)
     Py_ssize_t unheaped = _PyMem_MiUnheapedAllocs();
     fprintf(stderr,
             "gc verify: %zd holes; %zd objects, %zd marked (%zd shallow), "
-            "%zd non-object references, %zd allocations outside the heaps\n",
+            "%zd non-object references, %zd allocations outside the heaps, "
+            "%zd unreachable garbage\n",
             nholes, t->nobjects, t->nmarked, t->nshallow, t->nrejected,
-            unheaped);
+            unheaped, t->ngarbage);
     Py_ssize_t limit = 50;
     const char *env = getenv("PYTHON_GCVERIFY_LIMIT");
     if (env != NULL && *env != '\0') {
@@ -1206,8 +1352,9 @@ report(trace_t *t, Py_ssize_t nholes)
             if (secondary != pass) {
                 continue;
             }
-            fprintf(stderr, "gc verify: hole %s at %p refcnt %zd; referrer: %s\n",
-                    h->type_name, (void *)h->addr, h->refcnt, h->referrer);
+            fprintf(stderr, "gc verify: hole %s%s at %p refcnt %zd; referrer: %s\n",
+                    h->type_name, h->value, (void *)h->addr, h->refcnt,
+                    h->referrer);
             shown++;
         }
     }
@@ -1269,6 +1416,13 @@ verify(PyThreadState *tstate)
 {
     PyInterpreterState *interp = tstate->interp;
     if (!_PyMem_MimallocEnabled()) {
+        return -1;
+    }
+    /* Finalization detaches the thread states of daemon threads, whose
+       frames keep their objects for good, and tears the roots down. */
+    if (_PyInterpreterState_GetFinalizing(interp) != NULL
+        || _PyRuntimeState_GetFinalizing(&_PyRuntime) != NULL)
+    {
         return -1;
     }
     struct _gc_trace_state *ts = get_trace_state(interp);
@@ -1472,6 +1626,9 @@ _PyGC_TraceFini(PyInterpreterState *interp)
     free(ts);
 }
 
+/* The runtime's head lock, which the verifier holds while it marks the
+   roots, protects the list, so that a thread without the GIL can remove
+   its root. */
 void
 _PyGC_AddRoot(_PyGCRoot *root, PyObject **objs, Py_ssize_t n)
 {
@@ -1480,16 +1637,19 @@ _PyGC_AddRoot(_PyGCRoot *root, PyObject **objs, Py_ssize_t n)
     root->objs = objs;
     root->n = n;
     root->prev = NULL;
+    HEAD_LOCK(&_PyRuntime);
     root->next = interp->gc.trace_roots;
     if (root->next != NULL) {
         root->next->prev = root;
     }
     interp->gc.trace_roots = root;
+    HEAD_UNLOCK(&_PyRuntime);
 }
 
 void
 _PyGC_RemoveRoot(_PyGCRoot *root)
 {
+    HEAD_LOCK(&_PyRuntime);
     if (root->prev != NULL) {
         root->prev->next = root->next;
     }
@@ -1500,6 +1660,7 @@ _PyGC_RemoveRoot(_PyGCRoot *root)
     if (root->next != NULL) {
         root->next->prev = root->prev;
     }
+    HEAD_UNLOCK(&_PyRuntime);
     root->prev = root->next = NULL;
 }
 

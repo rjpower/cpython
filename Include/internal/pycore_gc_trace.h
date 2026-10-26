@@ -56,8 +56,9 @@ extern void _PyGC_TraceRegisterStaticType(PyInterpreterState *interp,
  * collector does not scan, such as a PyMem_Malloc() block.  The node lives
  * in that memory; the default build links it into the interpreter's list
  * while the objects are held.  This is the fix for references hidden in
- * non-object memory that cannot be given a tp_traverse.  It requires the
- * GIL; the free-threaded build does not link the node. */
+ * non-object memory that cannot be given a tp_traverse.  Adding needs an
+ * attached thread state, for the interpreter; removing does not.  The
+ * free-threaded build does not link the node. */
 typedef struct _PyGCRoot {
     struct _PyGCRoot *prev;
     struct _PyGCRoot *next;

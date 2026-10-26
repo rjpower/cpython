@@ -79,6 +79,14 @@ port's C code:
 - A `PyObject*` in `malloc`ed or `PyMem` memory, or in a `Py_buffer`'s
   `obj`, that no `tp_traverse` visits. Visit it, or register it with
   `PyGC_AddRoot()` while it is held.
+- A type that holds references but has no `tp_traverse`. Every such type
+  needs one under the tracing collector, whether or not it is a GC type:
+  the collector traverses any type that has one, and treats an object
+  without one as holding nothing. NumPy's `ndarray` and `PyArray_Descr`
+  are not GC types, and without a traverse a view's base, an array's
+  descriptor, a structured dtype's fields and an object array's items were
+  freed while in use. A non-GC type does not inherit `tp_traverse`, so set
+  it on each subclass defined in C.
 - A traverse that leaves out members that cannot form cycles, such as bytes
   and str. The cycle collector allows that; the tracing collector frees
   them.
@@ -86,9 +94,13 @@ port's C code:
   callback, `PyBuffer_Release()` on an arbitrary exporter. The sweep forbids
   both; move the call into `tp_finalize`, which runs before the sweep.
 - A dealloc that reads a referent's C state rather than only releasing it,
-  as an expat subparser reads its parent's parser. Reference counting
-  frees the referrer first; the sweep has no order, so do that work in
-  `tp_finalize`.
+  as `ndarray`'s reads its descriptor to clear object items. Reference
+  counting frees the referrer first; the sweep has no order. Set
+  `Py_TPFLAGS_DEALLOC_READS_REFERENTS`, and the sweep deallocates the
+  type's dead instances before other objects. Two flagged objects are
+  still deallocated in no particular order, so a dealloc that reads
+  another flagged object (an expat subparser reads its parent's parser)
+  must do that work in `tp_finalize` instead.
 - Anything that reads `ob_refcnt` or `Py_REFCNT()` to decide behaviour.
 
 ## Adding a port
@@ -98,5 +110,13 @@ port's C code:
    exercises real functionality, including any C extension.
 3. Run `build` and `check` for the port. Patch only what the interpreter
    breaks.
+
+On an interpreter that counts references, `check` runs each test script a
+second time under the tracing verifier (`-X gcverify=auto`) and fails if any
+collection, or a final one while the script's globals are alive, finds a
+hole: an object that a reference keeps alive but that the collector could
+not reach. Objects are only verified while alive, so keep an instance of
+each type the port defines at module level; `python/numpy/tests/held.py`
+does this for NumPy.
 
 `uvx pytest ports/_support/tests` tests the driver.

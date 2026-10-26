@@ -22,7 +22,8 @@ _FIELDS = {"interpreter", "abi_id", "compiler", "cflags"}
 _PROBE = (
     "import sysconfig as s;"
     " print(s.get_config_var('SOABI'), s.get_config_var('srcdir'),"
-    " s.get_path('include'), s.get_path('platinclude'), sep='\\n')"
+    " s.get_path('include'), s.get_path('platinclude'),"
+    " int(bool(s.get_config_var('Py_GC'))), sep='\\n')"
 )
 
 
@@ -41,6 +42,10 @@ class InterpreterFacts:
     # Python.h and pyconfig.h; an uninstalled interpreter's venv reports
     # an installed prefix that does not exist, so ask the interpreter itself.
     include: tuple[Path, Path]
+    # Built --with-gc: nothing is reference counted, so the tracing
+    # verifier, which compares reference counts with reachability, has
+    # nothing to check.
+    tracing_gc: bool
 
 
 def load_sdk(interpreter: str | None, abi_id: str | None) -> SDK:
@@ -70,9 +75,10 @@ def interpreter_facts(sdk: SDK) -> InterpreterFacts:
             " --interpreter build/ports/cpython-default/python"
         )
     output = capture([sdk.interpreter, "-I", "-c", _PROBE])
-    soabi, srcdir, include, platinclude = output.splitlines()
+    soabi, srcdir, include, platinclude, tracing_gc = output.splitlines()
     return InterpreterFacts(
-        soabi, Path(srcdir), (Path(include), Path(platinclude))
+        soabi, Path(srcdir), (Path(include), Path(platinclude)),
+        tracing_gc == "1",
     )
 
 

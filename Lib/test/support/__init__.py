@@ -34,7 +34,6 @@ __all__ = [
     "is_resource_enabled", "get_resource_value", "requires", "requires_resource",
     "requires_freebsd_version",
     "requires_gil_enabled", "requires_linux_version", "requires_mac_ver",
-    "requires_refcounting",
     "requires_ios_ver",
     "check_syntax_error",
     "requires_gzip", "requires_bz2", "requires_lzma", "requires_zstd",
@@ -1066,16 +1065,6 @@ def expected_failure_if_gil_disabled():
 # Instance attribute access guards per-type shapes (--with-shapes)
 Py_SHAPES = bool(sysconfig.get_config_var('Py_SHAPES'))
 
-# A tracing collector owns memory instead of reference counts (--with-gc):
-# an object dies at a collection, not when its last reference goes away,
-# and the conservative scan of C stacks can keep garbage alive.
-Py_GC = True  # the tracing collector is the only build
-
-def requires_refcounting(test):
-    """Skip a test that needs reference counts: sys.getrefcount(), or an
-    object that dies, and runs its finalizer, as its last reference goes."""
-    return unittest.skipIf(Py_GC, "needs reference counting")(test)
-
 if Py_GIL_DISABLED:
     _header = 'PHBBInP'
 else:
@@ -1523,17 +1512,6 @@ def no_rerun(reason):
             _has_run = True
         return wrapper
     return deco
-
-
-def refcount_test(test):
-    """Decorator for tests which involve reference counting.
-
-    To start, the decorator does not run the test if is not run by CPython.
-    After that, any trace function is unset during the test to prevent
-    unexpected refcounts caused by the trace function.
-
-    """
-    return requires_refcounting(no_tracing(cpython_only(test)))
 
 
 def requires_limited_api(test):
@@ -2200,9 +2178,9 @@ def check_free_after_iterating(test, iter, cls, args=()):
         test.assertRaises(StopIteration, next, it)
 
     # The sequence should be deallocated just after the end of iterating.
-    # Under Py_GC a stale word on the C stack can keep one attempt's
-    # sequence alive; each attempt makes a new one.
-    for _ in range(5 if Py_GC else 1):
+    # A stale word on the C stack can keep one attempt's sequence alive;
+    # each attempt makes a new one.
+    for _ in range(5):
         wrapper()
         gc_collect()
         if done:
@@ -2749,9 +2727,7 @@ def setup_venv_with_pip_setuptools(venv_dir):
 
 # True if Python is built with the Py_DEBUG macro defined: if
 # Python is built in debug mode (./configure --with-pydebug).
-# sys.gettotalrefcount() does not exist under Py_GC, which counts nothing.
-Py_DEBUG = (hasattr(sys, 'gettotalrefcount')
-            or (Py_GC and bool(sysconfig.get_config_var('Py_DEBUG'))))
+Py_DEBUG = bool(sysconfig.get_config_var('Py_DEBUG'))
 
 
 def late_deletion(obj):

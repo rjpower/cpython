@@ -470,6 +470,10 @@ def main() -> int:
             continue
         fs = funcs.get(t.path, {})
         body = fs.get(t.traverse)
+        if t.traverse == "_PyObject_VisitType":
+            # The generic traverse function visits only the type.
+            partial.append((t, sorted(r.rstrip("[]") for r in refs)))
+            continue
         if body is None:
             continue
         # Any member the traverse function names counts as visited, which

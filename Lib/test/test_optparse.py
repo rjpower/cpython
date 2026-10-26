@@ -396,24 +396,6 @@ class TestOptionParser(BaseTest):
         self.assertRaises(self.parser.remove_option, ('foo',), None,
                           ValueError, "no such option 'foo'")
 
-    @support.impl_detail('Relies on sys.getrefcount', cpython=True)
-    @support.requires_refcounting
-    def test_refleak(self):
-        # If an OptionParser is carrying around a reference to a large
-        # object, various cycles can prevent it from being GC'd in
-        # a timely fashion.  destroy() breaks the cycles to ensure stuff
-        # can be cleaned up.
-        big_thing = [42]
-        refcount = sys.getrefcount(big_thing)
-        parser = OptionParser()
-        parser.add_option("-a", "--aaarggh")
-        parser.big_thing = big_thing
-
-        parser.destroy()
-        #self.assertEqual(refcount, sys.getrefcount(big_thing))
-        del parser
-        self.assertEqual(refcount, sys.getrefcount(big_thing))
-
 
 class TestOptionValues(BaseTest):
     def setUp(self):

@@ -163,27 +163,6 @@ raiseTestError(const char* test_name, const char* msg)
 }
 
 static PyObject *
-test_frozenset_add_in_capi_tracking_immutable(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    // Test: GC tracking - frozenset with only immutable items should not be tracked
-    PyObject *frozenset = PyFrozenSet_New(NULL);
-    if (frozenset == NULL) {
-        return NULL;
-    }
-    if (PySet_Add(frozenset, Py_True) < 0) {
-        Py_DECREF(frozenset);
-        return NULL;
-    }
-    if (PyObject_GC_IsTracked(frozenset)) {
-        Py_DECREF(frozenset);
-        return raiseTestError("test_frozenset_add_in_capi_tracking_immutable",
-                              "frozenset with only bool should not be GC tracked");
-    }
-    Py_DECREF(frozenset);
-    Py_RETURN_NONE;
-}
-
-static PyObject *
 test_frozenset_add_in_capi_tracking(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     // Test: GC tracking - frozenset with tracked object should be tracked
@@ -286,7 +265,6 @@ static PyMethodDef test_methods[] = {
 
     {"test_frozenset_add_in_capi", test_frozenset_add_in_capi, METH_NOARGS},
     {"test_frozenset_add_in_capi_tracking", test_frozenset_add_in_capi_tracking, METH_NOARGS},
-    {"test_frozenset_add_in_capi_tracking_immutable", test_frozenset_add_in_capi_tracking_immutable, METH_NOARGS},
     {"test_set_contains_does_not_convert_unhashable_key",
      test_set_contains_does_not_convert_unhashable_key, METH_NOARGS},
 

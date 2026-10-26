@@ -153,88 +153,6 @@ pyobject_is_unique_temporary_new_object(PyObject *self, PyObject *unused)
     return PyLong_FromLong(result);
 }
 
-static int MyObject_dealloc_called = 0;
-
-static void
-MyObject_dealloc(PyObject *op)
-{
-    // PyUnstable_TryIncRef should return 0 if object is being deallocated
-    assert(Py_REFCNT(op) == 0);
-    assert(!PyUnstable_TryIncRef(op));
-    assert(Py_REFCNT(op) == 0);
-
-    MyObject_dealloc_called++;
-    Py_TYPE(op)->tp_free(op);
-}
-
-static PyTypeObject MyType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "MyType",
-    .tp_basicsize = sizeof(PyObject),
-    .tp_dealloc = MyObject_dealloc,
-};
-
-static PyObject *
-test_py_try_inc_ref(PyObject *self, PyObject *unused)
-{
-    if (PyType_Ready(&MyType) < 0) {
-        return NULL;
-    }
-
-    MyObject_dealloc_called = 0;
-
-    PyObject *op = PyObject_New(PyObject, &MyType);
-    if (op == NULL) {
-        return NULL;
-    }
-
-    PyUnstable_EnableTryIncRef(op);
-
-    if (!PyUnstable_TryIncRef(op)) {
-        PyErr_SetString(PyExc_AssertionError, "PyUnstable_TryIncRef failed");
-        Py_DECREF(op);
-        return NULL;
-    }
-    Py_DECREF(op);  // undo try-incref
-    Py_DECREF(op);  // dealloc
-    assert(MyObject_dealloc_called == 1);
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-test_py_set_immortal(PyObject *self, PyObject *unused)
-{
-    // the object is allocated on C stack as otherwise,
-    // it would trip the refleak checker when the object
-    // is made immortal and leak memory, for the same
-    // reason we cannot call PyObject_Init() on it.
-    PyObject object = {0};
-    object.ob_refcnt = 1;
-    object.ob_type = &PyBaseObject_Type;
-
-    assert(!PyUnstable_IsImmortal(&object));
-    int rc = PyUnstable_SetImmortal(&object);
-    assert(rc == 1);
-    assert(PyUnstable_IsImmortal(&object));
-    Py_DECREF(&object);  // should not dealloc
-    assert(PyUnstable_IsImmortal(&object));
-
-    // Check already immortal object
-    rc = PyUnstable_SetImmortal(&object);
-    assert(rc == 0);
-
-    // Check unicode objects
-    PyObject *unicode = PyUnicode_FromString("test");
-    assert(!PyUnstable_IsImmortal(unicode));
-    rc = PyUnstable_SetImmortal(unicode);
-    assert(rc == 0);
-    assert(!PyUnstable_IsImmortal(unicode));
-    Py_DECREF(unicode);
-    Py_RETURN_NONE;
-}
-
-
-
 static PyObject *
 clear_managed_dict(PyObject *self, PyObject *obj)
 {
@@ -307,8 +225,6 @@ static PyMethodDef test_methods[] = {
     {"pyobject_enable_deferred_refcount", pyobject_enable_deferred_refcount, METH_O},
     {"pyobject_is_unique_temporary", pyobject_is_unique_temporary, METH_O},
     {"pyobject_is_unique_temporary_new_object", pyobject_is_unique_temporary_new_object, METH_NOARGS},
-    {"test_py_try_inc_ref", test_py_try_inc_ref, METH_NOARGS},
-    {"test_py_set_immortal", test_py_set_immortal, METH_NOARGS},
     {"clear_managed_dict", clear_managed_dict, METH_O, NULL},
     {"is_uniquely_referenced", is_uniquely_referenced, METH_O},
     {"pyobject_dump", pyobject_dump, METH_VARARGS},

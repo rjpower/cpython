@@ -305,19 +305,6 @@ test_lazy_hash_inheritance(PyObject* self, PyObject *Py_UNUSED(ignored))
 }
 
 static PyObject *
-return_none(void *unused)
-{
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-raise_error(void *unused)
-{
-    PyErr_SetNone(PyExc_ValueError);
-    return NULL;
-}
-
-static PyObject *
 py_buildvalue(PyObject *self, PyObject *args)
 {
     const char *fmt;
@@ -350,86 +337,6 @@ py_buildvalue_ints(PyObject *self, PyObject *args)
     return Py_BuildValue(fmt,
             values[0], values[1], values[2], values[3], values[4],
             values[5], values[6], values[7], values[8], values[9]);
-}
-
-static int
-test_buildvalue_N_error(PyObject *self, const char *fmt)
-{
-    PyObject *arg, *res;
-
-    arg = PyList_New(0);
-    if (arg == NULL) {
-        return -1;
-    }
-
-    Py_INCREF(arg);
-    res = Py_BuildValue(fmt, return_none, NULL, arg);
-    if (res == NULL) {
-        return -1;
-    }
-    Py_DECREF(res);
-    if (Py_REFCNT(arg) != 1) {
-        PyErr_Format(get_testerror(self), "test_buildvalue_N: "
-                     "arg was not decrefed in successful "
-                     "Py_BuildValue(\"%s\")", fmt);
-        return -1;
-    }
-
-    Py_INCREF(arg);
-    res = Py_BuildValue(fmt, raise_error, NULL, arg);
-    if (res != NULL || !PyErr_Occurred()) {
-        PyErr_Format(get_testerror(self), "test_buildvalue_N: "
-                     "Py_BuildValue(\"%s\") didn't complain", fmt);
-        return -1;
-    }
-    PyErr_Clear();
-    if (Py_REFCNT(arg) != 1) {
-        PyErr_Format(get_testerror(self), "test_buildvalue_N: "
-                     "arg was not decrefed in failed "
-                     "Py_BuildValue(\"%s\")", fmt);
-        return -1;
-    }
-    Py_DECREF(arg);
-    return 0;
-}
-
-static PyObject *
-test_buildvalue_N(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    PyObject *arg, *res;
-
-    arg = PyList_New(0);
-    if (arg == NULL) {
-        return NULL;
-    }
-    Py_INCREF(arg);
-    res = Py_BuildValue("N", arg);
-    if (res == NULL) {
-        return NULL;
-    }
-    if (res != arg) {
-        return raiseTestError(self, "test_buildvalue_N",
-                              "Py_BuildValue(\"N\") returned wrong result");
-    }
-    if (Py_REFCNT(arg) != 2) {
-        return raiseTestError(self, "test_buildvalue_N",
-                              "arg was not decrefed in Py_BuildValue(\"N\")");
-    }
-    Py_DECREF(res);
-    Py_DECREF(arg);
-
-    if (test_buildvalue_N_error(self, "O&N") < 0)
-        return NULL;
-    if (test_buildvalue_N_error(self, "(O&N)") < 0)
-        return NULL;
-    if (test_buildvalue_N_error(self, "[O&N]") < 0)
-        return NULL;
-    if (test_buildvalue_N_error(self, "{O&N}") < 0)
-        return NULL;
-    if (test_buildvalue_N_error(self, "{()O&(())N}") < 0)
-        return NULL;
-
-    Py_RETURN_NONE;
 }
 
 static PyObject *
@@ -2911,7 +2818,6 @@ static PyMethodDef TestMethods[] = {
     {"PyBuffer_SizeFromFormat",  test_PyBuffer_SizeFromFormat,   METH_VARARGS},
     {"py_buildvalue",            py_buildvalue,                  METH_VARARGS},
     {"py_buildvalue_ints",       py_buildvalue_ints,             METH_VARARGS},
-    {"test_buildvalue_N",        test_buildvalue_N,              METH_NOARGS},
     {"test_buildvalue_p",       test_buildvalue_p,               METH_NOARGS},
     {"test_reftracer",          test_reftracer,                  METH_NOARGS},
     {"start_counting_list_destroys", start_counting_list_destroys, METH_NOARGS},

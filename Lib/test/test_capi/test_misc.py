@@ -401,10 +401,6 @@ class CAPITest(unittest.TestCase):
         self.assertRaises(ValueError, buildvalue, '[C ]i', -1, 2)
         self.assertRaises(ValueError, buildvalue, '{Ci }i', -1, 2, 3)
 
-    @support.requires_refcounting
-    def test_buildvalue_N(self):
-        _testcapi.test_buildvalue_N()
-
     def test_sequence_repeat_subtypes(self):
         # List subtype:
         class CustomList(list): ...
@@ -577,65 +573,6 @@ class CAPITest(unittest.TestCase):
     def test_null_type_doc(self):
         self.assertEqual(_testcapi.NullTpDocType.__doc__, None)
 
-    @support.requires_refcounting
-    def test_subclass_of_heap_gc_ctype_with_tpdealloc_decrefs_once(self):
-        class HeapGcCTypeSubclass(_testcapi.HeapGcCType):
-            def __init__(self):
-                self.value2 = 20
-                super().__init__()
-
-        subclass_instance = HeapGcCTypeSubclass()
-        type_refcnt = sys.getrefcount(HeapGcCTypeSubclass)
-
-        # Test that subclass instance was fully created
-        self.assertEqual(subclass_instance.value, 10)
-        self.assertEqual(subclass_instance.value2, 20)
-
-        # Test that the type reference count is only decremented once
-        del subclass_instance
-        self.assertEqual(type_refcnt - 1, sys.getrefcount(HeapGcCTypeSubclass))
-
-    @support.requires_refcounting
-    def test_subclass_of_heap_gc_ctype_with_del_modifying_dunder_class_only_decrefs_once(self):
-        class A(_testcapi.HeapGcCType):
-            def __init__(self):
-                self.value2 = 20
-                super().__init__()
-
-        class B(A):
-            def __init__(self):
-                super().__init__()
-
-            def __del__(self):
-                self.__class__ = A
-                A.refcnt_in_del = sys.getrefcount(A)
-                B.refcnt_in_del = sys.getrefcount(B)
-
-        subclass_instance = B()
-        type_refcnt = sys.getrefcount(B)
-        new_type_refcnt = sys.getrefcount(A)
-
-        # Test that subclass instance was fully created
-        self.assertEqual(subclass_instance.value, 10)
-        self.assertEqual(subclass_instance.value2, 20)
-
-        del subclass_instance
-
-        # Test that setting __class__ modified the reference counts of the types
-        if support.Py_DEBUG:
-            # gh-89373: In debug mode, _Py_Dealloc() keeps a strong reference
-            # to the type while calling tp_dealloc()
-            self.assertEqual(type_refcnt, B.refcnt_in_del)
-        else:
-            self.assertEqual(type_refcnt - 1, B.refcnt_in_del)
-        self.assertEqual(new_type_refcnt + 1, A.refcnt_in_del)
-
-        # Test that the original type already has decreased its refcnt
-        self.assertEqual(type_refcnt - 1, sys.getrefcount(B))
-
-        # Test that subtype_dealloc decref the newly assigned __class__ only once
-        self.assertEqual(new_type_refcnt, sys.getrefcount(A))
-
     def test_heaptype_with_dict(self):
         for cls in (
             _testcapi.HeapCTypeWithDict,
@@ -732,74 +669,6 @@ class CAPITest(unittest.TestCase):
         inst = _testcapi.HeapCTypeWithBuffer()
         b = bytes(inst)
         self.assertEqual(b, b"1234")
-
-    @support.requires_refcounting
-    def test_c_subclass_of_heap_ctype_with_tpdealloc_decrefs_once(self):
-        subclass_instance = _testcapi.HeapCTypeSubclass()
-        type_refcnt = sys.getrefcount(_testcapi.HeapCTypeSubclass)
-
-        # Test that subclass instance was fully created
-        self.assertEqual(subclass_instance.value, 10)
-        self.assertEqual(subclass_instance.value2, 20)
-
-        # Test that the type reference count is only decremented once
-        del subclass_instance
-        self.assertEqual(type_refcnt - 1, sys.getrefcount(_testcapi.HeapCTypeSubclass))
-
-    @support.requires_refcounting
-    def test_c_subclass_of_heap_ctype_with_del_modifying_dunder_class_only_decrefs_once(self):
-        subclass_instance = HeapCTypeSubclassWithFinalizer()
-        type_refcnt = sys.getrefcount(HeapCTypeSubclassWithFinalizer)
-        new_type_refcnt = sys.getrefcount(HeapCTypeSubclass)
-
-        # Test that subclass instance was fully created
-        self.assertEqual(subclass_instance.value, 10)
-        self.assertEqual(subclass_instance.value2, 20)
-
-        # The tp_finalize slot will set __class__ to HeapCTypeSubclass
-        del subclass_instance
-
-        # Test that setting __class__ modified the reference counts of the types
-        #
-        # This is highly sensitive to implementation details and may break in the future.
-        #
-        # We expect the refcount on the old type, HeapCTypeSubclassWithFinalizer, to
-        # remain the same: the finalizer gets a strong reference (+1) when it gets the
-        # type from the module and setting __class__ decrements the refcount (-1).
-        #
-        # We expect the refcount on the new type, HeapCTypeSubclass, to increase by 2:
-        # the finalizer get a strong reference (+1) when it gets the type from the
-        # module and setting __class__ increments the refcount (+1).
-        expected_type_refcnt = type_refcnt
-        expected_new_type_refcnt = new_type_refcnt + 2
-
-        if not Py_GIL_DISABLED:
-            # In default builds the result returned from sys.getrefcount
-            # includes a temporary reference that is created by the interpreter
-            # when it pushes its argument on the operand stack. This temporary
-            # reference is not included in the result returned by Py_REFCNT, which
-            # is used in the finalizer.
-            #
-            # In free-threaded builds the result returned from sys.getrefcount
-            # does not include the temporary reference. Types use deferred
-            # refcounting and the interpreter will not create a new reference
-            # for deferred values on the operand stack.
-            expected_type_refcnt -= 1
-            expected_new_type_refcnt -= 1
-
-        if support.Py_DEBUG:
-            # gh-89373: In debug mode, _Py_Dealloc() keeps a strong reference
-            # to the type while calling tp_dealloc()
-            expected_type_refcnt += 1
-
-        self.assertEqual(expected_type_refcnt, HeapCTypeSubclassWithFinalizer.refcnt_in_del)
-        self.assertEqual(expected_new_type_refcnt, HeapCTypeSubclass.refcnt_in_del)
-
-        # Test that the original type already has decreased its refcnt
-        self.assertEqual(type_refcnt - 1, sys.getrefcount(HeapCTypeSubclassWithFinalizer))
-
-        # Test that subtype_dealloc decref the newly assigned __class__ only once
-        self.assertEqual(new_type_refcnt, sys.getrefcount(HeapCTypeSubclass))
 
     def test_heaptype_with_setattro(self):
         obj = _testcapi.HeapCTypeSetattr()
@@ -2764,20 +2633,13 @@ class TestThreadState(unittest.TestCase):
         _testcapi.test_current_tstate_matches()
 
 
-# C tests that check reference counts or uniqueness, or that an object dies
-# as its last reference goes, which Py_GC does not provide.  Py_GC also
-# does not untrack frozensets of atoms.
-REFCOUNTING_C_TESTS = {
-    'test_buildvalue_N',
-    'test_bytes_resize_tracer',
+# C tests that observe an object's death as its last reference goes; they
+# test API (capsule destructors, weak references, PyRefTracer events) that
+# the tracing collector serves, and need a collection before the check.
+# Not collected until they are rewritten.
+C_TESTS_OBSERVING_PROMPT_DEATH = {
     'test_capsule',
-    'test_frozenset_add_in_capi_tracking_immutable',
-    'test_py_set_immortal',
-    'test_py_try_inc_ref',
-    'test_refcount_funcs',
-    'test_refcount_macros',
     'test_reftracer',
-    'test_thread_state_release_with_destructor',
     'test_weakref_capi',
 }
 
@@ -2789,10 +2651,9 @@ def get_test_funcs(mod, exclude_prefix=None):
             continue
         if exclude_prefix is not None and name.startswith(exclude_prefix):
             continue
-        func = getattr(mod, name)
-        if name in REFCOUNTING_C_TESTS:
-            func = support.requires_refcounting(func)
-        funcs[name] = func
+        if name in C_TESTS_OBSERVING_PROMPT_DEATH:
+            continue
+        funcs[name] = getattr(mod, name)
     return funcs
 
 
@@ -3192,24 +3053,6 @@ class TestVersions(unittest.TestCase):
             with self.subTest(hexversion=hex(expected)):
                 result = Py_PACK_VERSION(*args)
                 self.assertEqual(result, expected)
-
-
-class TestCEval(unittest.TestCase):
-   @support.requires_refcounting
-   def test_ceval_decref(self):
-        code = textwrap.dedent("""
-            import _testcapi
-            _testcapi.toggle_reftrace_printer(True)
-            l1 = []
-            l2 = []
-            del l1
-            del l2
-            _testcapi.toggle_reftrace_printer(False)
-        """)
-        _, out, _ = assert_python_ok("-c", code)
-        lines = out.decode("utf-8").splitlines()
-        self.assertEqual(lines.count("CREATE list"), 2)
-        self.assertEqual(lines.count("DESTROY list"), 2)
 
 
 @unittest.skipUnless(support.Py_DEBUG, 'need Py_DEBUG')

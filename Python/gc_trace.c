@@ -288,6 +288,8 @@ typedef struct {
     int has_referrer;
     Py_ssize_t external;  // references from outside the unmarked objects
     int held;             // reachable from an unmarked object with one
+    uintptr_t block;      // the non-object block that refers to it, or 0
+    size_t block_size;
 } trace_hole;
 
 struct _gc_trace_state {
@@ -1278,6 +1280,8 @@ mem_block_visit(const mi_heap_t *heap, const mi_heap_area_t *area,
                           "non-object block at %p (%zu bytes)",
                           block, block_size);
             h->has_referrer = 1;
+            h->block = (uintptr_t)block;
+            h->block_size = block_size;
         }
     }
     return true;
@@ -1396,6 +1400,93 @@ remove_garbage(trace_t *t, trace_hole *list, Py_ssize_t n)
 
 /* Find the first referrer of each hole: an object whose tp_traverse visits
    it, or else a block of PyMem_Malloc() memory that holds its address. */
+typedef struct {
+    uintptr_t start;
+    uintptr_t end;
+    uintptr_t owner;
+} owned_block;
+
+static int
+owned_block_cmp(const void *a, const void *b)
+{
+    uintptr_t x = ((const owned_block *)a)->start;
+    uintptr_t y = ((const owned_block *)b)->start;
+    return x < y ? -1 : x > y;
+}
+
+/* Name an object that points into each non-object block named as a
+   referrer: the block is usually storage the object owns, such as a list's
+   items or a parser's stack. */
+static void
+find_block_owners(trace_t *t, trace_hole *list, Py_ssize_t n)
+{
+    enum { MAX_BLOCKS = 64 };
+    owned_block blocks[MAX_BLOCKS];
+    size_t nblocks = 0;
+    for (Py_ssize_t i = 0; i < n && nblocks < MAX_BLOCKS; i++) {
+        if (list[i].block == 0) {
+            continue;
+        }
+        size_t j = 0;
+        while (j < nblocks && blocks[j].start != list[i].block) {
+            j++;
+        }
+        if (j == nblocks) {
+            blocks[nblocks++] = (owned_block){
+                list[i].block, list[i].block + list[i].block_size, 0};
+        }
+    }
+    if (nblocks == 0) {
+        return;
+    }
+    qsort(blocks, nblocks, sizeof(owned_block), owned_block_cmp);
+    for (size_t i = 0; i <= t->objects.mask; i++) {
+        uintptr_t op = t->objects.keys[i];
+        if (op == 0) {
+            continue;
+        }
+        const range_t *r = rangelist_find(&t->pages, op);
+        if (r == NULL) {
+            continue;
+        }
+        uintptr_t start = r->start + (op - r->start) / r->bsize * r->bsize;
+        for (uintptr_t *w = (uintptr_t *)start;
+             (uintptr_t)w < start + r->bsize; w++)
+        {
+            uintptr_t v = *w;
+            if (v < blocks[0].start || v >= blocks[nblocks - 1].end) {
+                continue;
+            }
+            size_t lo = 0, hi = nblocks;
+            while (lo < hi) {
+                size_t mid = lo + (hi - lo) / 2;
+                if (blocks[mid].start <= v) {
+                    lo = mid + 1;
+                }
+                else {
+                    hi = mid;
+                }
+            }
+            if (lo > 0 && v < blocks[lo - 1].end && blocks[lo - 1].owner == 0) {
+                blocks[lo - 1].owner = op;
+            }
+        }
+    }
+    for (Py_ssize_t i = 0; i < n; i++) {
+        for (size_t j = 0; list[i].block != 0 && j < nblocks; j++) {
+            if (blocks[j].start != list[i].block || blocks[j].owner == 0) {
+                continue;
+            }
+            PyObject *owner = (PyObject *)blocks[j].owner;
+            size_t len = strlen(list[i].referrer);
+            PyOS_snprintf(list[i].referrer + len, sizeof(list[i].referrer) - len,
+                          " of %.60s at %p%s", Py_TYPE(owner)->tp_name,
+                          (void *)owner,
+                          addrset_has(&t->marked, blocks[j].owner) ? "" : " (unmarked)");
+        }
+    }
+}
+
 static void
 find_referrers(trace_t *t, trace_hole *list, Py_ssize_t n)
 {
@@ -1439,6 +1530,7 @@ find_referrers(trace_t *t, trace_hole *list, Py_ssize_t n)
             strcpy(list[i].referrer, "no heap referrer: C-held");
         }
     }
+    find_block_owners(t, list, n);
     addrset_fini(&s.holes);
 }
 

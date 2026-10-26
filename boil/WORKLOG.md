@@ -1334,3 +1334,38 @@ a stale -Og frame word. Ports: all seven plus the new cython port pass
 numpy's array dealloc reads its descr, which the sweep may free first;
 ruled a type flag "dealloc reads its referents" whose dead objects are
 freed in the sweep's first pass, the first stage of the 5c ordering.
+
+### 2026-10-26 12:26 — step 5b done: the full suite passes on both gc builds; eight ports pass with the verifier
+
+Full suite at 12619dbe138, -j8, 564 files, 50,819 tests: gc-default
+4 min 31 s; gc-debug 12 min 50 s; dev-default 2 min 53 s for
+comparison. The one failure on every build is test_sys's remote-exec
+timeout, which predates 5b.
+
+Since milestone 3:
+- `Py_TPFLAGS_DEALLOC_READS_REFERENTS` (bit 21, 9333cb51722) makes the
+  sweep deallocate a flagged type's dead instances first. It replaces the
+  managed-buffer special case; numpy's `ndarray`, `nditer` and `mapiter`
+  set it. Ordering among flagged objects is 5c's.
+- nbody's +54.6M against 5a was the destroy-hook type-check chain in the
+  heap walk, confirmed with perf by symbol. It is one type bit now
+  (f5a7bfc4ba0), and nbody is back to 1800.1M.
+- numpy: most of its core types had no traverse, so views' bases,
+  descriptors, dtype fields and object items were freed in use. The patch
+  adds traverses to every reference-holding type and allocates
+  reference-holding iterator buffers in PyMem; patch lines 535.
+- `ports check` runs each test script under the verifier on reference-
+  counting interpreters, with the globals alive at a final collection.
+  It found the nditer buffer bug and Cython's Py_GC-only root at once.
+  Cython now roots wherever `PyGC_AddRoot()` exists
+  (`Py_HAVE_PYGC_ADDROOT`, c018c6cdf9c).
+- test_weakset collects after deleting an iterator that held the
+  destroyed item (6ffa07821d9). The multiprocessing teardown collects
+  again when a queue's feeder thread stopped after the first collection
+  (9deb1ea266c); that was the env change both gc builds reported.
+- Three busy-loop children of test_profiling, orphaned by worker crashes
+  before e49b3dd476b, kept three cores busy during the measurements; the
+  wall times and pauses in §16.10 carry that note.
+
+Note 06 §16 records the decisions, the ports and the measurements.
+Step 5b took about seven and a quarter hours of a three-day budget.

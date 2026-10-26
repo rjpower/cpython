@@ -1394,3 +1394,27 @@ counting code is deleted, the 52 uniqueness sites are resolved, flagged
 objects are swept referrer first, trivial deallocs are freed by block,
 the ports are rebuilt on the new ABI, and the performance is measured
 against step 1 and the 5b snapshot. Budget 4 days.
+
+### 2026-10-26 14:30 — step 5c milestone 1: the flip, and the eval loop's frames are no longer roots
+
+The tracing collector is the only build (834938a4ffa): `--with-gc`,
+`--disable-gil` and `--with-trace-refs` are gone, with gc.c,
+gc_free_threading.c, brc.c, uniqueid.c and index_pool.c, about 10,200
+lines. The tests whose only subject was reference counting are deleted,
+one commit per file (rung 1c, 86 commits). The test_profile flake was an
+upstream bug: a dead cProfile object reset the thread's profile function
+(820e883eca3); 47 stress rounds clean after the fix.
+
+`_PyStackRef` owns nothing (4ce392155b3). That exposed stale copies of
+locals in the eval loop's C frame as exact pointers, so the first
+installment of step 10's precise roots went in: every eval-loop
+activation records its C frame extent and the scan skips it, C stack
+references are registered precise roots (3d91660d780), and the cases
+generator fails the build if a handler keeps an object only in a C
+local across an escaping call (a1ddf08f03a; five handlers fixed). The
+inline-fallback collection still scans everything. Stale-root probe:
+1/100 to 100/100 on debug. Per loop against step 1, 5b refcount and 5b
+collector (M instructions): richards 577/675/625 -> 518, go
+1244/1624/1549 -> 1226, nbody 1030/1407/1800 -> 1455, float
+780/949/1197 -> 1051. The three commits were built and tested as one
+tree; bisect them as a unit.

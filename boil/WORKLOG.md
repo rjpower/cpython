@@ -817,3 +817,63 @@ same flags fails the same 15, and where counted (test_faulthandler,
 test_threading, test_interpreters, test_embed) the same number of tests:
 stackref leak reports at exit, and faulthandler dumps that record a
 borrow without the GIL.
+
+### 2026-10-25 17:20 — step 3a, milestone 2: frame and value stacks, overlapping calls
+
+Item 3 landed (93055610963 to 13bd5fe37d5). A frame's header goes on the
+frame stack and its slots on the value stack, at `frame->base`. Both
+stacks live in the data-stack chunks and grow towards each other, so one
+bounds check covers both. A Python-to-Python call by `CALL_PY_EXACT_ARGS`
+or `CALL_BOUND_METHOD_EXACT_ARGS` overlaps the callee's frame with the
+argument window; the keyword, default and vectorcall paths and generator
+callers copy. A return or a yield resumes the caller at the word after
+its call, and `return_offset` and `gi_yield_offset` are gone. Generators
+keep their slots in the generator object.
+
+On the call benchmark, the split cost 27 instructions per call. The
+overlap won back 33, and clearing only the locals of a thread frame won
+back 21; the frame's temporaries are already NULL at that point, which
+debug builds check. That was the coordinator's suggested fix for
+milestone 1's 40-instruction rise. The overlap adds a constraint for 3b:
+temporaries live across a call must sit below its window, or the callee
+must copy. Note 06 section 12.2 records it.
+
+### 2026-10-25 17:45 — step 3a, milestone 3: RESUME, -fno-gcse, tail-call signature
+
+Items 4 and 5 landed (5119930d271, 4ed1d4ab1d1, 8cde9e61f7c), and
+InternalDocs/frames.md was rewritten (f4983b9da5e).
+
+- **RESUME.** Frame entry, inline calls and generator resumption skip a
+  `RESUME` that would do nothing. RESUME_CHECK is deleted, with magic
+  3713. The word stays: it still runs when the eval breaker is set,
+  after `MAKE_CELL` and `COPY_FREE_VARS`, and at a generator's first
+  start, about 6.8K dispatches per benchmark run.
+- **GCC.** `-fno-gcse` is set through `CFLAGS_CEVAL` for gcc with computed
+  gotos. configure was edited by hand to match configure.ac, not
+  regenerated.
+- **Tail calls.** The handlers take the slots, the word pointer and the
+  thread state, and read the frame from `tstate->current_frame`. That
+  costs 0.3 to 0.5 percent of instructions in the clang build.
+
+### 2026-10-25 18:45 — step 3a done: suites, ports, measurements
+
+At f4983b9da5e:
+
+- dev-debug and dev-default pass their full suites, except for
+  `test_remote_exec_deleted_static_executable`.
+  test_external_inspection's `test_cache_per_thread_isolation` failed
+  once in the dev-debug run, under load; alone it passed three times.
+- dev-stackrefdebug fails the baseline's 15 files.
+- dev-ft rung 2 has the known 78 failures.
+- dev-tailcall rung 2 passes.
+- All seven ports pass.
+
+Against 2b, per-loop instructions fall by 2 to 8 percent in the gcc
+build. In the clang tail-call build they move between -3.3 and +1.4
+percent. gcc is still 22 to 47 percent above step 1. Dispatches fall to
+14.57M on richards and 41.35M on go, 33 and 32 percent below 2a.
+`f(a, b)` costs 438 instructions per call against 453 in 2b and 353 in
+step 1. The loop's `%rbp` references fall from 10176 to 3736. Stubbing
+the run-time local test brings them to 2021, so step 5 should remove most
+of the rest. Peak RSS is 0.3 to 1.0 MB above 2b, and the cause has not
+been investigated. Note 06 section 12.4 has the tables.

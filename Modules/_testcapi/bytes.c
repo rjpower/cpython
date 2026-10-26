@@ -566,25 +566,6 @@ test_byteswriter_ptr(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
 }
 
 
-static PyObject *
-bytearray_overflow(PyObject *Py_UNUSED(module), PyObject *args)
-{
-    Py_ssize_t alloc, overflow = 1;
-    if (!PyArg_ParseTuple(args, "n|n", &alloc, &overflow))
-        return NULL;
-
-    PyObject *bytearray = PyObject_CallFunction((PyObject*)&PyByteArray_Type, "n", alloc);
-    if (bytearray == NULL) {
-        return NULL;
-    }
-
-    char *data = PyByteArray_AS_STRING(bytearray);
-    Py_ssize_t size = PyByteArray_GET_SIZE(bytearray);
-    memset(data + size, '#', overflow);  // Buffer overflow!
-    return bytearray;
-}
-
-
 // Write into an immutable bytes object to test _PyStaticObjects_CheckAll()
 static PyObject *
 corrupt_bytes(PyObject *Py_UNUSED(module), PyObject *args)
@@ -607,7 +588,6 @@ static PyMethodDef test_methods[] = {
     {"byteswriter_resize", byteswriter_resize, METH_NOARGS},
     {"byteswriter_highlevel", byteswriter_highlevel, METH_NOARGS},
     {"test_byteswriter_ptr", test_byteswriter_ptr, METH_NOARGS},
-    {"bytearray_overflow", bytearray_overflow, METH_VARARGS},
     {"corrupt_bytes", corrupt_bytes, METH_VARARGS},
     {NULL},
 };

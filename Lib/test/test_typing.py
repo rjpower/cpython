@@ -52,7 +52,7 @@ import types
 
 from test.support import (
     captured_stderr, cpython_only, requires_docstrings, import_helper, run_code,
-    subTests, EqualToForwardRef,
+    subTests, EqualToForwardRef, requires_refcounting,
     exceeds_recursion_limit, run_with_limited_c_stack,
     skip_wasi_stack_overflow, skip_emscripten_stack_overflow,
 )
@@ -10299,6 +10299,7 @@ class ParamSpecTests(BaseTestCase):
         self.assertEqual(repr(P.args), "P.args")
         self.assertEqual(repr(P.kwargs), "P.kwargs")
 
+    @requires_refcounting
     def test_args_kwargs_weakrefs(self):
         P = ParamSpec('P')
         for attr_name in ('args', 'kwargs'):

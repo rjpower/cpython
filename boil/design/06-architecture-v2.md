@@ -1120,3 +1120,206 @@ the frame; `_PyFrame_GetStackPointer`, `_PyFrame_SetStackPointer`,
 and the borrow test; the entry sync; the `pop_1_error` and
 `pop_2_error` labels; the GH-129236 NULL-stack-pointer skips in the
 collectors.
+
+### 12.2 Milestone 2: frame and value stacks
+
+**Layout.** The header (code, function, globals, builtins, locals,
+previous, `instr_ptr`, the IR bases, `return_slot`, owner) stays on the
+frame stack; the slots go on the value stack, and `frame->base` points at
+slot 0. The two stacks share each chunk of the thread's data stack and
+grow towards each other, so `_PyThreadState_HasStackSpace()` checks the
+room for both with one comparison and no second chunk allocator exists:
+
+```
+  chunk:  | slots of A | slots of B ... |    free    | header B | header A |
+          ^ data[0]                     ^ top        ^ limit
+```
+
+A header records `saved_top`, the value stack's top before its push,
+which popping it restores; an overlapping callee can end below or above
+its caller's last slot, so the top cannot be recomputed. Generators,
+frame objects, the entry frame and the base frame keep their slots in
+`owned_slots`, after the header. `_PyFrame_Copy` moves the slots and
+leaves NULL, because the slots it leaves may be the caller's.
+
+**Overlapping window.** `CALL_PY_EXACT_ARGS` and
+`CALL_BOUND_METHOD_EXACT_ARGS` push the callee with its base at
+`caller->base + c + 2`, or `c + 1` when there is a self; the callable
+moves to `f_funcobj` and its slot becomes NULL. Nothing is copied. A
+caller whose slots are not on the value stack, a generator, copies, as do
+the keyword, default and vectorcall paths. `IR_WINDOW_TAKEN()` tells the
+cases generator that the handler disposed of its window itself.
+
+The overlap relies on the slots above a call's window being dead, which
+holds while temporaries are numbered by stack depth. **3b must keep every
+temporary that is live across a call below the call's window, or make the
+callee copy when one is not.** Walkers of thread frames visit the
+overlapped slots once for each frame; the free-threaded collector's
+count of deferred references from stacks is then high for them, which
+only keeps live objects alive.
+
+**Clearing.** A frame on the frame stack ends with its temporaries NULL,
+after a return or an unwinding, so clearing walks its locals only; debug
+builds check the rest. Frame entry no longer fills the callee's
+temporaries in the overlapped region with anything but NULL over NULL.
+
+**Return.** A return or a yield resumes the caller at the word after its
+`instr_ptr`; `return_offset` and `gi_yield_offset` are gone. When a
+generator returns to the `SEND` or `FOR_ITER` that resumed it,
+`_PyEval_GeneratorReturnTarget()` reads the exit distance from the
+caller's word, which costs only generator returns. The entry trampoline and
+the `__init__` shim keep `instr_ptr` on a `NOP` before the word that a
+return reaches.
+
+### 12.3 Milestone 3: RESUME and the tail-call signature
+
+**RESUME.** `_PUSH_FRAME` and `start_frame` (frame entry, inline calls,
+`DISPATCH_INLINED` and generator resumption) skip a `RESUME` when it would
+do nothing: the eval breaker equals the code's instrumentation version,
+which is RESUME_CHECK's test, and in the free-threaded build the frame's
+bytecode is the thread's. Otherwise the `RESUME` word runs as before, so
+instrumentation, the periodic checks and the `PY_START` and `PY_RESUME`
+events are unchanged; it also runs after `MAKE_CELL` and `COPY_FREE_VARS`
+and at a generator's first start, which come before it. The word stays in
+the code, for its location, its offset and the exception table.
+RESUME_CHECK is deleted (magic 3713). `JUMP_BACKWARD` keeps its
+eval-breaker check.
+
+**Tail-call signature.** The handlers pass the slots, the word pointer and
+the thread state, with the word itself; a handler reads the frame from
+`tstate->current_frame`, which every frame switch sets together with
+`frame`, as debug builds check at each dispatch.
+
+**GCC.** ceval.c is compiled with `-fno-gcse` under GCC with computed
+gotos (`CFLAGS_CEVAL`), which the GCC manual advises for computed gotos.
+`#pragma GCC optimize` cannot do it: it stops the inlining of every header
+function into the loop. Removing the stack pointer and adding
+`-fno-gcse` leave the spills that the run-time local-or-temporary tests
+cause (section 11): with `IR_IS_LOCAL` stubbed to 0 the loop has 2021
+frame-pointer references rather than 3736 (2a had 2309). Step 5 removes
+those tests.
+
+### 12.4 Measurements
+
+These were taken at f4983b9da5e by the section 11 method:
+
+- user-mode instructions per loop of one pyperformance worker, from runs
+  at 2 and 10 loops, differenced;
+- the median of four runs;
+- a separate `PYTHONPYCACHEPREFIX` for each build.
+
+The step 1 and 2b columns are snapshot builds run with the current Lib.
+
+gcc 15, computed goto (`-fno-gcse` for 3a):
+
+| per loop (M) | step 1 | 2b | 3a | 3a vs 2b | 3a vs step 1 |
+|---|---|---|---|---|---|
+| richards | 574.8 | 731.9 | 702.3 | -4.0% | +22.2% |
+| go | 1243.9 | 1775.0 | 1686.4 | -5.0% | +35.6% |
+| nbody | 1030.3 | 1640.6 | 1509.3 | -8.0% | +46.5% |
+| float | 779.8 | 993.8 | 971.8 | -2.2% | +24.6% |
+
+clang 21, tail calls:
+
+| per loop (M) | 2b | 3a | 3a vs 2b |
+|---|---|---|---|
+| richards | 674.8 | 679.2 | +0.7% |
+| go | 1566.7 | 1578.2 | +0.7% |
+| nbody | 1675.8 | 1620.2 | -3.3% |
+| float | 989.4 | 1003.1 | +1.4% |
+
+-fno-gcse accounts for most of the gcc gain: before it, at 5119930d271,
+the figures were 726.4, 1758.8, 1587.0 and 1003.0. In the tail-call
+build, reading the frame from the thread state costs 0.3 to 0.5 percent
+against passing it, measured at 4ed1d4ab1d1 (675.6, 1574.0, 1611.4,
+999.4).
+
+**Dispatches** (Py_STATS, one worker at `-l 2`):
+
+| dispatches | 2a | 2b | 3a | 3a vs 2b | 3a vs 2a |
+|---|---|---|---|---|---|
+| richards | 21.83M | 15.33M | 14.57M | -5.0% | -33.3% |
+| go | 60.47M | 42.96M | 41.35M | -3.7% | -31.6% |
+
+Each run still dispatches about 6.8K `RESUME`, at first starts, after
+the cell prefix and when the eval breaker is set.
+
+**Calls.** These are instructions per call of `f(a, b)` and `o.m(a)`,
+from loops of 0.1M and 1.1M iterations, differenced (each the median of
+five), less the cost of an empty loop:
+
+| per call | step 1 | 2b | 3a |
+|---|---|---|---|
+| gcc `f(a, b)` | 353.2 | 453.3 | 438.2 |
+| gcc `o.m(a)` | 384.3 | 473.3 | 467.2 |
+| clang `f(a, b)` | | 425.0 | 420.0 |
+| clang `o.m(a)` | | 447.9 | 449.0 |
+
+During the work, the gcc figure for `f(a, b)` moved as follows:
+
+| commit | instructions |
+|---|---|
+| 2b | 453 |
+| milestone 1 | 494 |
+| split stacks | 521 |
+| overlap | 488 |
+| locals-only clearing | 467 |
+| inline pop | 461 |
+| `-fno-gcse` | 438 |
+
+The split stacks cost 27 instructions, the second bump pointer and the
+`saved_top` store. The overlap and the narrower clearing win back
+54 instructions.
+
+**Startup and memory.** `python -c pass` takes 54.08M instructions in
+step 1, 47.68M in 2b and 47.51M in 3a under gcc. Under clang it takes
+50.09M in 2b and 50.13M in 3a. Peak RSS from `boil/tools/rss.py`, in
+KiB, gcc:
+
+| max RSS | step 1 | 2b | 3a |
+|---|---|---|---|
+| startup | 9392 | 9500 | 10228 |
+| imports | 14620 | 15192 | 12684 |
+| dicts | 64536 | 64404 | 65488 |
+| loops | 10096 | 10248 | 11068 |
+
+Run to run, the figures vary by up to 1 MB at startup and 2.5 MB for
+imports. Two more paired runs put 3a above 2b by 0.8 to 1.0 MB for
+startup and loops, and by 0.3 to 0.8 MB for dicts and imports. The chunk
+size is unchanged, and the cause has not been investigated.
+
+**Code.** These are `%rbp`-relative references, instruction lines and
+text in `_PyEval_EvalFrameDefault`, in the gcc build:
+
+| build | %rbp refs | lines | text |
+|---|---|---|---|
+| 2b | 10176 | 44574 | 211.0K |
+| 3a without `-fno-gcse` | 6151 | 38241 | 176.0K |
+| 3a | 3736 | 36510 | 164.0K |
+| 3a, `IR_IS_LOCAL` stubbed to 0 | 2021 | | |
+
+The clang build has 291 handler functions with 149.7K of text; 2b had
+294, with 148.3K.
+
+**Tests at f4983b9da5e.**
+
+- dev-debug, full suite: only `test_remote_exec_deleted_static_executable`
+  fails. test_external_inspection `test_cache_per_thread_isolation`
+  failed once under load; it passed three times alone.
+- dev-default, full suite: the same test_sys failure.
+- dev-stackrefdebug, full suite: the 15 files that fail on 1b71d70deb4
+  with the same flags. Where counted, the tests are the same.
+  test_repl's failure, `test_asyncio_repl_is_ok`, fails on both builds.
+- dev-ft, rung 2: the known 78 failures, plus test_sys.
+- dev-tailcall, rung 2: passes.
+- Ports: all seven pass.
+
+**Deleted in milestones 2 and 3:**
+
+- `return_offset` and `gi_yield_offset`, with `_SAVE_RETURN_OFFSET`;
+- the argument copy in `CALL_PY_EXACT_ARGS` and
+  `CALL_BOUND_METHOD_EXACT_ARGS`;
+- the NULL fill of an overlapped callee's slots, and the walk over a
+  thread frame's temporaries at clear;
+- `RESUME_CHECK`, `_QUICKEN_RESUME` and `_Py_Specialize_Resume`;
+- the `frame` parameter of the tail-call handlers.

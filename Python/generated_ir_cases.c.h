@@ -3367,6 +3367,7 @@
                 tstate->py_recursion_remaining--;
                 slots = _PyFrame_Slots(frame);
                 LOAD_IP(0);
+                IR_SKIP_RESUME();
                 DTRACE_FUNCTION_ENTRY();
                 LLTRACE_RESUME_FRAME();
             }
@@ -4992,6 +4993,7 @@
                 tstate->py_recursion_remaining--;
                 slots = _PyFrame_Slots(frame);
                 LOAD_IP(0);
+                IR_SKIP_RESUME();
                 DTRACE_FUNCTION_ENTRY();
                 LLTRACE_RESUME_FRAME();
             }
@@ -5146,6 +5148,7 @@
                 tstate->py_recursion_remaining--;
                 slots = _PyFrame_Slots(frame);
                 LOAD_IP(0);
+                IR_SKIP_RESUME();
                 DTRACE_FUNCTION_ENTRY();
                 LLTRACE_RESUME_FRAME();
             }
@@ -5272,6 +5275,7 @@
                 tstate->py_recursion_remaining--;
                 slots = _PyFrame_Slots(frame);
                 LOAD_IP(0);
+                IR_SKIP_RESUME();
                 DTRACE_FUNCTION_ENTRY();
                 LLTRACE_RESUME_FRAME();
             }
@@ -5868,6 +5872,7 @@
                 tstate->py_recursion_remaining--;
                 slots = _PyFrame_Slots(frame);
                 LOAD_IP(0);
+                IR_SKIP_RESUME();
                 DTRACE_FUNCTION_ENTRY();
                 LLTRACE_RESUME_FRAME();
             }
@@ -6501,6 +6506,7 @@
                 tstate->py_recursion_remaining--;
                 slots = _PyFrame_Slots(frame);
                 LOAD_IP(0);
+                IR_SKIP_RESUME();
                 DTRACE_FUNCTION_ENTRY();
                 LLTRACE_RESUME_FRAME();
             }
@@ -6691,6 +6697,7 @@
                 tstate->py_recursion_remaining--;
                 slots = _PyFrame_Slots(frame);
                 LOAD_IP(0);
+                IR_SKIP_RESUME();
                 DTRACE_FUNCTION_ENTRY();
                 LLTRACE_RESUME_FRAME();
             }
@@ -7557,6 +7564,7 @@
                 tstate->py_recursion_remaining--;
                 slots = _PyFrame_Slots(frame);
                 LOAD_IP(0);
+                IR_SKIP_RESUME();
                 DTRACE_FUNCTION_ENTRY();
                 LLTRACE_RESUME_FRAME();
             }
@@ -7657,6 +7665,7 @@
                 tstate->py_recursion_remaining--;
                 slots = _PyFrame_Slots(frame);
                 LOAD_IP(0);
+                IR_SKIP_RESUME();
                 DTRACE_FUNCTION_ENTRY();
                 LLTRACE_RESUME_FRAME();
             }
@@ -9516,6 +9525,7 @@
                 tstate->py_recursion_remaining--;
                 slots = _PyFrame_Slots(frame);
                 LOAD_IP(0);
+                IR_SKIP_RESUME();
                 DTRACE_FUNCTION_ENTRY();
                 LLTRACE_RESUME_FRAME();
             }
@@ -12170,6 +12180,7 @@
                 tstate->py_recursion_remaining--;
                 slots = _PyFrame_Slots(frame);
                 LOAD_IP(0);
+                IR_SKIP_RESUME();
                 DTRACE_FUNCTION_ENTRY();
                 LLTRACE_RESUME_FRAME();
             }
@@ -12812,6 +12823,7 @@
                 tstate->py_recursion_remaining--;
                 slots = _PyFrame_Slots(frame);
                 LOAD_IP(0);
+                IR_SKIP_RESUME();
                 DTRACE_FUNCTION_ENTRY();
                 LLTRACE_RESUME_FRAME();
             }
@@ -15812,12 +15824,11 @@
             int opcode = RESUME;
             (void)(opcode);
             #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RESUME);
-            IR_PREDICTED(RESUME);
-            _PyIRWord* const this_instr = next_instr - 1;
-            (void)this_instr;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
             // _MAYBE_INSTRUMENT
@@ -15841,10 +15852,6 @@
                     }
                 }
             }
-            // _QUICKEN_RESUME
-            {
-                _Py_Specialize_Resume(this_instr, tstate);
-            }
             // _CHECK_PERIODIC_IF_NOT_YIELD_FROM
             {
                 if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
@@ -15854,43 +15861,6 @@
                     }
                 }
             }
-            DISPATCH();
-        }
-
-        TARGET(RESUME_CHECK) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = RESUME_CHECK;
-            (void)(opcode);
-            #endif
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(RESUME_CHECK);
-            #if defined(__EMSCRIPTEN__)
-            if (_Py_emscripten_signal_clock == 0) {
-                UPDATE_MISS_STATS(RESUME);
-                assert(_PyOpcode_Deopt[opcode] == (RESUME));
-                JUMP_TO_PREDICTED(RESUME);
-            }
-            _Py_emscripten_signal_clock -= Py_EMSCRIPTEN_SIGNAL_HANDLING;
-            #endif
-            uintptr_t eval_breaker = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker);
-            uintptr_t version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-            assert((version & _PY_EVAL_EVENTS_MASK) == 0);
-            if (eval_breaker != version) {
-                UPDATE_MISS_STATS(RESUME);
-                assert(_PyOpcode_Deopt[opcode] == (RESUME));
-                JUMP_TO_PREDICTED(RESUME);
-            }
-            #ifdef Py_GIL_DISABLED
-            if (frame->tlbc_index !=
-                ((_PyThreadStateImpl *)tstate)->tlbc_index) {
-                UPDATE_MISS_STATS(RESUME);
-                assert(_PyOpcode_Deopt[opcode] == (RESUME));
-                JUMP_TO_PREDICTED(RESUME);
-            }
-            #endif
             DISPATCH();
         }
 
@@ -16219,6 +16189,7 @@
                 tstate->py_recursion_remaining--;
                 slots = _PyFrame_Slots(frame);
                 LOAD_IP(0);
+                IR_SKIP_RESUME();
                 DTRACE_FUNCTION_ENTRY();
                 LLTRACE_RESUME_FRAME();
             }
@@ -18569,6 +18540,7 @@ JUMP_TO_LABEL(error);
             }
             DTRACE_FUNCTION_ENTRY();
             next_instr = frame->instr_ptr;
+            IR_SKIP_RESUME();
             #ifdef Py_DEBUG
             int lltrace = maybe_lltrace_resume_frame(frame, GLOBALS());
             if (lltrace < 0) {

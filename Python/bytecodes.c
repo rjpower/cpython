@@ -146,10 +146,6 @@ dummy_func(
         pure inst(NOP, (--)) {
         }
 
-        family(RESUME, 1) = {
-            RESUME_CHECK,
-        };
-
         macro(NOT_TAKEN) = NOP;
 
         op(_CHECK_PERIODIC, (--)) {
@@ -167,10 +163,6 @@ dummy_func(
                 int err = check_periodics(tstate);
                 ERROR_IF(err != 0);
             }
-        }
-
-        tier1 op(_QUICKEN_RESUME, (--)) {
-            _Py_Specialize_Resume(this_instr, tstate);
         }
 
         tier1 op(_MAYBE_INSTRUMENT, (--)) {
@@ -196,30 +188,14 @@ dummy_func(
             }
         }
 
+        // A frame that starts or resumes at a RESUME skips it when it has
+        // nothing to do (IR_SKIP_RESUME); it runs only after the words that
+        // make cells and copy free variables, at a generator's first start,
+        // and when the eval breaker or instrumentation needs it.
         macro(RESUME) =
             unused/1 +
             _MAYBE_INSTRUMENT +
-            _QUICKEN_RESUME +
             _CHECK_PERIODIC_IF_NOT_YIELD_FROM;
-
-        macro(RESUME_CHECK) =
-            unused/1 +
-            _RESUME_CHECK;
-
-        op(_RESUME_CHECK, (--)) {
-#if defined(__EMSCRIPTEN__)
-            DEOPT_IF(_Py_emscripten_signal_clock == 0);
-            _Py_emscripten_signal_clock -= Py_EMSCRIPTEN_SIGNAL_HANDLING;
-#endif
-            uintptr_t eval_breaker = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker);
-            uintptr_t version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-            assert((version & _PY_EVAL_EVENTS_MASK) == 0);
-            DEOPT_IF(eval_breaker != version);
-            #ifdef Py_GIL_DISABLED
-            DEOPT_IF(frame->tlbc_index !=
-                     ((_PyThreadStateImpl *)tstate)->tlbc_index);
-            #endif
-        }
 
         op(_MONITOR_RESUME, (--)) {
             int err = _Py_call_instrumentation(
@@ -4374,6 +4350,7 @@ dummy_func(
             tstate->py_recursion_remaining--;
             RELOAD_STACK();
             LOAD_IP(0);
+            IR_SKIP_RESUME();
             DTRACE_FUNCTION_ENTRY();
             LLTRACE_RESUME_FRAME();
         }
@@ -5881,6 +5858,7 @@ dummy_func(
             }
             DTRACE_FUNCTION_ENTRY();
             next_instr = frame->instr_ptr;
+            IR_SKIP_RESUME();
         #ifdef Py_DEBUG
             int lltrace = maybe_lltrace_resume_frame(frame, GLOBALS());
             if (lltrace < 0) {

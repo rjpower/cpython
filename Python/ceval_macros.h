@@ -689,6 +689,36 @@ static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
         DISPATCH_GOTO(); \
     } while (0)
 
+/* On entry to a frame at next_instr, its instr_ptr: if the word there is a
+ * RESUME that would do nothing, because the eval breaker has nothing pending
+ * and the code's instrumentation is current, start at the word after it, as
+ * if it had run.  An instrumented RESUME always runs. */
+#if defined(__EMSCRIPTEN__)
+#  define IR_SKIP_RESUME_EMSCRIPTEN() \
+    (_Py_emscripten_signal_clock != 0 && \
+     (_Py_emscripten_signal_clock -= Py_EMSCRIPTEN_SIGNAL_HANDLING, 1))
+#else
+#  define IR_SKIP_RESUME_EMSCRIPTEN() 1
+#endif
+#ifdef Py_GIL_DISABLED
+#  define IR_SKIP_RESUME_TLBC() \
+    (frame->tlbc_index == ((_PyThreadStateImpl *)tstate)->tlbc_index)
+#else
+#  define IR_SKIP_RESUME_TLBC() 1
+#endif
+#define IR_SKIP_RESUME() \
+    do { \
+        if (IR_HANDLER(*next_instr) == RESUME && \
+            _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) == \
+                FT_ATOMIC_LOAD_UINTPTR_ACQUIRE( \
+                    _PyFrame_GetCode(frame)->_co_instrumentation_version) && \
+            IR_SKIP_RESUME_TLBC() && IR_SKIP_RESUME_EMSCRIPTEN()) \
+        { \
+            frame->instr_ptr = next_instr; \
+            next_instr++; \
+        } \
+    } while (0)
+
 /* After a frame switch, V goes to the slot of the frame that control came
  * back to (frame->return_slot). */
 #define IR_STORE_RETURN(V) _PyFrame_SetReturnValue(frame, (V))

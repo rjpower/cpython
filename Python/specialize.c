@@ -3231,17 +3231,6 @@ _Py_Specialize_GetIter(_PyStackRef iterable, _PyInstr *instr)
     unspecialize(instr);
 }
 
-void
-_Py_Specialize_Resume(_PyInstr *instr, PyThreadState *tstate)
-{
-    if (tstate->tracing == 0 &&
-        instr_opcode(instr) == RESUME) {
-        specialize(instr, RESUME_CHECK);
-        return;
-    }
-    unspecialize(instr);
-    return;
-}
 
 #ifdef Py_STATS
 void

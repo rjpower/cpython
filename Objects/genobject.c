@@ -469,7 +469,6 @@ is_resume(_PyInstr *instr)
     int code = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
     return (
         code == RESUME ||
-        code == RESUME_CHECK ||
         code == INSTRUMENTED_RESUME
     );
 }

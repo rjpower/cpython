@@ -885,7 +885,7 @@ def load_test(x, y=0):
     return a, b
 
 dis_load_test_quickened_code = """\
-%3d           RESUME_CHECK             0
+%3d           RESUME                   0
 
 %3d           LOAD_FAST                0 (x)  r4 <-
               LOAD_FAST                1 (y)  r3 <-
@@ -913,7 +913,7 @@ def loop_test():
         load_test(i)
 
 dis_loop_test_quickened_code = """\
-%3d           RESUME_CHECK             0
+%3d           RESUME                   0
 
 %3d           BUILD_LIST               0  r1 <- r1
               LOAD_CONST               1 ((1, 2, 3))  r2 <-
@@ -1318,7 +1318,7 @@ class DisTests(DisTestBase):
     @requires_specialization
     def test_load_attr_specialize(self):
         load_attr_quicken = """\
-  0           RESUME_CHECK             0
+  0           RESUME                   0
 
   1           LOAD_CONST               0 ('a')  r0 <-
               LOAD_ATTR_SLOT           0 (__class__)  r0 <- r0
@@ -1333,7 +1333,7 @@ class DisTests(DisTestBase):
     @requires_specialization
     def test_call_specialize(self):
         call_quicken = """\
-  0           RESUME_CHECK             0
+  0           RESUME                   0
 
   1           LOAD_NAME                0 (str)  r0 <-
               PUSH_NULL             r1 <-

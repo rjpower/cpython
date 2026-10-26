@@ -218,7 +218,6 @@ PyAPI_FUNC(void) _Py_Specialize_ContainsOp(_PyStackRef item, _PyStackRef value,
                                            _PyInstr *instr);
 PyAPI_FUNC(void) _Py_GatherStats_GetIter(_PyStackRef iterable);
 PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(_PyStackRef func_st, _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_Resume(_PyInstr *instr, PyThreadState *tstate);
 PyAPI_FUNC(void) _Py_Specialize_GetIter(_PyStackRef iterable, _PyInstr *instr);
 
 /* See InternalDocs/exception_handling.md for details.

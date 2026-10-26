@@ -310,6 +310,7 @@ Known values:
     Python 3.16a1 3710 (the assembler folds stores into their producers)
     Python 3.16a1 3711 (conditional jumps test truth; COPY of a local is a load)
     Python 3.16a1 3712 (the exception table names the slot of the exception)
+    Python 3.16a1 3713 (remove RESUME_CHECK)
 
     Python 3.17 will start with 3750
 
@@ -319,7 +320,7 @@ Known values:
 
 */
 
-#define PYC_MAGIC_NUMBER 3712
+#define PYC_MAGIC_NUMBER 3713
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

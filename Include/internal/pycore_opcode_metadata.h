@@ -464,8 +464,6 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
             return 0;
         case RESUME:
             return 0;
-        case RESUME_CHECK:
-            return 0;
         case RETURN_GENERATOR:
             return 0;
         case RETURN_VALUE:
@@ -1001,8 +999,6 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
             return 0;
         case RESUME:
             return 0;
-        case RESUME_CHECK:
-            return 0;
         case RETURN_GENERATOR:
             return 1;
         case RETURN_VALUE:
@@ -1383,7 +1379,6 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [RERAISE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
     [RESERVED] = { true, INSTR_FMT_IX, 0 },
     [RESUME] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
-    [RESUME_CHECK] = { true, INSTR_FMT_IXC, HAS_DEOPT_FLAG },
     [RETURN_GENERATOR] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [RETURN_VALUE] = { true, INSTR_FMT_IX, HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [SEND] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
@@ -1623,7 +1618,6 @@ _PyOpcode_macro_expansion[256] = {
     [POP_TOP] = { .nuops = 1, .uops = { { _POP_TOP, OPARG_SIMPLE, 0 } } },
     [PUSH_EXC_INFO] = { .nuops = 1, .uops = { { _PUSH_EXC_INFO, OPARG_SIMPLE, 0 } } },
     [PUSH_NULL] = { .nuops = 1, .uops = { { _PUSH_NULL, OPARG_SIMPLE, 0 } } },
-    [RESUME_CHECK] = { .nuops = 1, .uops = { { _RESUME_CHECK, OPARG_SIMPLE, 1 } } },
     [RETURN_GENERATOR] = { .nuops = 1, .uops = { { _RETURN_GENERATOR, OPARG_SIMPLE, 0 } } },
     [RETURN_VALUE] = { .nuops = 2, .uops = { { _MAKE_HEAP_SAFE, OPARG_SIMPLE, 0 }, { _RETURN_VALUE, OPARG_SIMPLE, 0 } } },
     [SEND_ASYNC_GEN] = { .nuops = 2, .uops = { { _GUARD_3OS_ASYNC_GEN_ASEND, OPARG_SIMPLE, 1 }, { _SEND_ASYNC_GEN, OPARG_REPLACED, 1 } } },
@@ -1887,7 +1881,6 @@ const char *_PyOpcode_OpName[267] = {
     [RERAISE] = "RERAISE",
     [RESERVED] = "RESERVED",
     [RESUME] = "RESUME",
-    [RESUME_CHECK] = "RESUME_CHECK",
     [RETURN_GENERATOR] = "RETURN_GENERATOR",
     [RETURN_VALUE] = "RETURN_VALUE",
     [SEND] = "SEND",
@@ -2019,6 +2012,7 @@ const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
 PyAPI_DATA(const uint8_t) _PyOpcode_Deopt[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Deopt[256] = {
+    [123] = 123,
     [124] = 124,
     [125] = 125,
     [126] = 126,
@@ -2230,7 +2224,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [RERAISE] = RERAISE,
     [RESERVED] = RESERVED,
     [RESUME] = RESUME,
-    [RESUME_CHECK] = RESUME,
     [RETURN_GENERATOR] = RETURN_GENERATOR,
     [RETURN_VALUE] = RETURN_VALUE,
     [SEND] = SEND,
@@ -2280,6 +2273,7 @@ const uint8_t _PyOpcode_Deopt[256] = {
 #endif // NEED_OPCODE_METADATA
 
 #define EXTRA_CASES \
+    case 123: \
     case 124: \
     case 125: \
     case 126: \

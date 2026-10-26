@@ -1,0 +1,73 @@
+--- a/Cython/Utility/ModuleSetupCode.c	2026-10-26 08:40:24.510044690 -0700
++++ b/Cython/Utility/ModuleSetupCode.c	2026-10-26 08:40:24.528044808 -0700
+@@ -1793,6 +1793,12 @@
+     int count;
+     int max_count;
+     __Pyx_CodeObjectCacheEntry* entries;
++  #ifdef Py_GC
++    // A tracing collector does not see the references in entries, which
++    // PyMem_Malloc() holds: this dict of the cached code objects, by line,
++    // is a root (PyGC_AddRoot()).
++    PyObject *roots;
++  #endif
+   #if CYTHON_COMPILING_IN_CPYTHON_FREETHREADING
+     // 0 for none, +ve for readers, -ve for writers.
+     //
+@@ -1873,6 +1879,32 @@
+ }
+ 
+ 
++#ifdef Py_GC
++// Keep code_object alive for the collector; return -1 if it cannot be, and
++// then it is not cached.  The caller may have an exception set.
++static int __pyx__root_code_object(struct __Pyx_CodeObjectCache *code_cache, int code_line, __Pyx_CachedCodeObjectType* code_object) {
++    int result = -1;
++    PyObject *key;
++    PyObject *exc = PyErr_GetRaisedException();
++    if (!code_cache->roots) {
++        code_cache->roots = PyDict_New();
++        if (code_cache->roots && PyGC_AddRoot(&code_cache->roots) < 0) {
++            Py_CLEAR(code_cache->roots);
++        }
++    }
++    if (code_cache->roots) {
++        key = PyLong_FromLong(code_line);
++        if (key) {
++            result = PyDict_SetItem(code_cache->roots, key, (PyObject *)code_object);
++            Py_DECREF(key);
++        }
++    }
++    PyErr_Clear();
++    PyErr_SetRaisedException(exc);
++    return result;
++}
++#endif
++
+ static void __pyx__insert_code_object(struct __Pyx_CodeObjectCache *code_cache, int code_line, __Pyx_CachedCodeObjectType* code_object)
+ {
+     int pos, i;
+@@ -1880,6 +1912,11 @@
+     if (unlikely(!code_line)) {
+         return;
+     }
++#ifdef Py_GC
++    if (unlikely(__pyx__root_code_object(code_cache, code_line, code_object) < 0)) {
++        return;
++    }
++#endif
+     if (unlikely(!entries)) {
+         entries = (__Pyx_CodeObjectCacheEntry*)PyMem_Malloc(64*sizeof(__Pyx_CodeObjectCacheEntry));
+         if (likely(entries)) {
+@@ -1954,6 +1991,12 @@
+       }
+       PyMem_Free(entries);
+   }
++#ifdef Py_GC
++  if (code_cache->roots) {
++      PyGC_RemoveRoot(&code_cache->roots);
++      Py_CLEAR(code_cache->roots);
++  }
++#endif
+ }
+ 
+ /////////////// GetRuntimeVersion.proto ///////////////

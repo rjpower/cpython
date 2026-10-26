@@ -1,0 +1,26 @@
+{
+  "name": "cython",
+  "version": "3.3.0",
+  "kind": "sdist",
+  "source": {
+    "url": "https://files.pythonhosted.org/packages/a9/d8/4981ef716ad0e3ff0d3ef383aefc6b03c4a88dee33b272bf8e0d833001ca/cython-3.3.0.tar.gz",
+    "sha256": "eed0d93fbca7087f143b42c34b05a825849bdf17f101572c2105acfa49aa88b8"
+  },
+  "build_requires": [
+    "setuptools==84.2.1"
+  ],
+  "patches": [
+    {
+      "file": "code-cache-roots.patch",
+      "sha256": "ef5763ecbce8a128a2cfadf4994dd8286ae89826eeb82b2076f551e27dc32e7c",
+      "touches": {
+        "Cython/Utility/ModuleSetupCode.c": "a069bbb204c5ceff6729d5ffb0ca4e3daf11f514d5cb70a54c5bfe93fba5f5c1"
+      }
+    }
+  ],
+  "tests": [
+    {
+      "script": "tests/smoke.py"
+    }
+  ]
+}

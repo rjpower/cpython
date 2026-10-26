@@ -16,6 +16,7 @@
 
 #include "Python.h"
 #include "pycore_ast.h"           // PyAST_Check()
+#include "pycore_capsule.h"       // _PyCapsule_SetTraverse()
 #include "pycore_code.h"
 #include "pycore_compile.h"
 #include "pycore_flowgraph.h"     // _PyCfg_FromInstructionSequence()
@@ -206,6 +207,43 @@ compiler_unit_free(struct compiler_unit *u)
 }
 
 #define CAPSULE_NAME "compile.c compiler unit"
+
+/* The capsules on c_stack hold the units of the enclosing scopes, which are
+   PyMem blocks that no traverse function reaches.  The capsule visits the
+   unit's objects, so that a collection while a nested scope is compiled sees
+   them (note 06, section 14.5). */
+static int
+compiler_unit_capsule_traverse(PyObject *capsule, visitproc visit, void *arg)
+{
+    struct compiler_unit *u = (struct compiler_unit *)PyCapsule_GetPointer(
+        capsule, CAPSULE_NAME);
+    if (u == NULL) {
+        return 0;
+    }
+    Py_VISIT(u->u_instr_sequence);
+    Py_VISIT(u->u_stashed_instr_sequence);
+    Py_VISIT(u->u_ste);
+    Py_VISIT(u->u_metadata.u_name);
+    Py_VISIT(u->u_metadata.u_qualname);
+    Py_VISIT(u->u_metadata.u_consts);
+    Py_VISIT(u->u_metadata.u_names);
+    Py_VISIT(u->u_metadata.u_varnames);
+    Py_VISIT(u->u_metadata.u_freevars);
+    Py_VISIT(u->u_metadata.u_cellvars);
+    Py_VISIT(u->u_metadata.u_fasthidden);
+    Py_VISIT(u->u_private);
+    Py_VISIT(u->u_static_attributes);
+    Py_VISIT(u->u_deferred_annotations);
+    Py_VISIT(u->u_conditional_annotation_indices);
+    return 0;
+}
+
+/* The compiler frees the unit itself in _PyCompile_ExitScope(). */
+static int
+compiler_unit_capsule_clear(PyObject *capsule)
+{
+    return 0;
+}
 
 int
 _PyCompile_MaybeAddStaticAttributeToClass(compiler *c, expr_ty e)
@@ -795,7 +833,11 @@ _PyCompile_EnterScope(compiler *c, identifier name, int scope_type,
     /* Push the old compiler_unit on the stack. */
     if (c->u) {
         PyObject *capsule = PyCapsule_New(c->u, CAPSULE_NAME, NULL);
-        if (!capsule || PyList_Append(c->c_stack, capsule) < 0) {
+        if (!capsule
+            || _PyCapsule_SetTraverse(capsule, compiler_unit_capsule_traverse,
+                                      compiler_unit_capsule_clear) < 0
+            || PyList_Append(c->c_stack, capsule) < 0)
+        {
             Py_XDECREF(capsule);
             compiler_unit_free(u);
             return ERROR;

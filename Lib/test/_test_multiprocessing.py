@@ -7800,6 +7800,13 @@ class BaseMixin(object):
         processes = None
 
         threads = set(threading._dangling) - set(cls.dangling[1])
+        if threads and support.Py_GC and not any(t.is_alive() for t in threads):
+            # A queue's feeder thread that stopped after the collection
+            # above was still in threading._active then; under Py_GC only
+            # the next collection frees it.
+            threads = None
+            test.support.gc_collect()
+            threads = set(threading._dangling) - set(cls.dangling[1])
         if threads:
             test.support.environment_altered = True
             support.print_warning(f'Dangling threads: {threads}')

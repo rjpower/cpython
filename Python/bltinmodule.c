@@ -2917,7 +2917,6 @@ builtin_sum_impl(PyObject *module, PyObject *iterable, PyObject *start)
             }
             if (PyFloat_CheckExact(item)) {
                 re_sum = cs_add(re_sum, PyFloat_AS_DOUBLE(item));
-                _Py_DECREF_SPECIALIZED(item, _PyFloat_ExactDealloc);
                 continue;
             }
             if (PyLong_Check(item)) {
@@ -2988,7 +2987,6 @@ builtin_sum_impl(PyObject *module, PyObject *iterable, PyObject *start)
             if (PyFloat_Check(item)) {
                 double value = PyFloat_AS_DOUBLE(item);
                 re_sum = cs_add(re_sum, value);
-                _Py_DECREF_SPECIALIZED(item, _PyFloat_ExactDealloc);
                 continue;
             }
             result = PyComplex_FromDoubles(cs_to_double(re_sum),

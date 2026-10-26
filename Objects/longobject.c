@@ -41,13 +41,6 @@ static PyObject* long_long(PyObject *v);
 static PyObject* long_lshift_int64(PyLongObject *a, int64_t shiftby);
 
 
-static inline void
-_Py_DECREF_INT(PyLongObject *op)
-{
-    assert(PyLong_CheckExact(op));
-    _Py_DECREF_SPECIALIZED((PyObject *)op, _PyLong_ExactDealloc);
-}
-
 static inline int
 is_medium_int(stwodigits x)
 {
@@ -69,7 +62,6 @@ maybe_small_long(PyLongObject *v)
     if (v && _PyLong_IsCompact(v)) {
         stwodigits ival = medium_value(v);
         if (IS_SMALL_INT(ival)) {
-            _Py_DECREF_INT(v);
             return (PyLongObject *)get_small_int((sdigit)ival);
         }
     }
@@ -2272,7 +2264,6 @@ long_to_decimal_string_internal(PyObject *aa,
 #undef WRITE_DIGITS
 #undef WRITE_UNICODE_DIGITS
 
-    _Py_DECREF_INT(scratch);
     if (writer) {
         writer->pos += strlen;
     }
@@ -4137,15 +4128,11 @@ k_mul(PyLongObject *a, PyLongObject *b)
      */
     i = _PyLong_DigitCount(ret) - shift;  /* # digits after shift */
     (void)v_isub(ret->long_value.ob_digit + shift, i, t2->long_value.ob_digit, _PyLong_DigitCount(t2));
-    _Py_DECREF_INT(t2);
 
     (void)v_isub(ret->long_value.ob_digit + shift, i, t1->long_value.ob_digit, _PyLong_DigitCount(t1));
-    _Py_DECREF_INT(t1);
 
     /* 6. t3 <- (ah+al)(bh+bl), and add into result. */
     if ((t1 = x_add(ah, al)) == NULL) goto fail;
-    _Py_DECREF_INT(ah);
-    _Py_DECREF_INT(al);
     ah = al = NULL;
 
     if (a == b) {
@@ -4155,13 +4142,9 @@ k_mul(PyLongObject *a, PyLongObject *b)
         Py_DECREF(t1);
         goto fail;
     }
-    _Py_DECREF_INT(bh);
-    _Py_DECREF_INT(bl);
     bh = bl = NULL;
 
     t3 = k_mul(t1, t2);
-    _Py_DECREF_INT(t1);
-    _Py_DECREF_INT(t2);
     if (t3 == NULL) goto fail;
     assert(!_PyLong_IsNegative(t3));
 
@@ -4169,7 +4152,6 @@ k_mul(PyLongObject *a, PyLongObject *b)
      * See the (*) comment after this function.
      */
     (void)v_iadd(ret->long_value.ob_digit + shift, i, t3->long_value.ob_digit, _PyLong_DigitCount(t3));
-    _Py_DECREF_INT(t3);
 
     return long_normalize(ret);
 
@@ -4275,13 +4257,11 @@ k_lopsided_mul(PyLongObject *a, PyLongObject *b)
         /* Add into result. */
         (void)v_iadd(ret->long_value.ob_digit + nbdone, _PyLong_DigitCount(ret) - nbdone,
                      product->long_value.ob_digit, _PyLong_DigitCount(product));
-        _Py_DECREF_INT(product);
 
         bsize -= nbtouse;
         nbdone += nbtouse;
     }
 
-    _Py_DECREF_INT(bslice);
     return long_normalize(ret);
 
   fail:

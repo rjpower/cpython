@@ -499,13 +499,7 @@ clear_tp_bases(PyTypeObject *self, int final)
     if (self->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN) {
         if (final) {
             if (self->tp_bases != NULL) {
-                if (PyTuple_GET_SIZE(self->tp_bases) == 0) {
-                    Py_CLEAR(self->tp_bases);
-                }
-                else {
-                    assert(_Py_IsImmortal(self->tp_bases));
-                    _Py_ClearImmortal(self->tp_bases);
-                }
+                Py_CLEAR(self->tp_bases);
             }
         }
         return;
@@ -555,13 +549,7 @@ clear_tp_mro(PyTypeObject *self, int final)
     if (self->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN) {
         if (final) {
             if (self->tp_mro != NULL) {
-                if (PyTuple_GET_SIZE(self->tp_mro) == 0) {
-                    Py_CLEAR(self->tp_mro);
-                }
-                else {
-                    assert(_Py_IsImmortal(self->tp_mro));
-                    _Py_ClearImmortal(self->tp_mro);
-                }
+                Py_CLEAR(self->tp_mro);
             }
         }
         return;
@@ -3702,7 +3690,7 @@ _PyObject_SetDict(PyObject *obj, PyObject *value)
     Py_BEGIN_CRITICAL_SECTION(obj);
     // gh-133980: To prevent use-after-free from other threads that reference
     // the __dict__
-    _PyObject_XSetRefDelayed(dictptr, Py_NewRef(value));
+    *dictptr = Py_NewRef(value);
     Py_END_CRITICAL_SECTION();
     return 0;
 }
@@ -6366,8 +6354,6 @@ type_setattro(PyObject *self, PyObject *name, PyObject *value)
 done:
     Py_DECREF(name);
     Py_XDECREF(descr);
-    // delay decref of the old value as lock-free type cache readers may access it
-    _PyObject_XDecRefDelayed(old_value);
     return res;
 }
 

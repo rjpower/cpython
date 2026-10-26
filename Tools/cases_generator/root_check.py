@@ -75,7 +75,7 @@ ANCHORED_CALLS = {
 # Releases, which release nothing: an argument of one is not a use
 RELEASES = {
     "Py_DECREF", "Py_XDECREF", "Py_CLEAR", "PyStackRef_CLEAR",
-    "_Py_DECREF_SPECIALIZED", "DEAD",
+    "DEAD",
 }
 
 # Macros that leave the handler

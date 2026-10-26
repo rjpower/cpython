@@ -168,7 +168,7 @@ _PyGC_IsObjectHeader(const PyObject *op)
     uint32_t refcnt = (uint32_t)w;
     return ((w >> 32) & 0xffff) == _Py_GC_OBJECT_MAGIC
         && ((w >> 48) & _Py_GC_HEAP_FLAG) != 0
-        && (refcnt == _Py_GC_REFCNT || refcnt == _Py_IMMORTAL_INITIAL_REFCNT);
+        && refcnt == _Py_GC_REFCNT;
 }
 
 /* What the collection does with a dead object, from its type, so that its

@@ -558,7 +558,6 @@ NON_ESCAPING_FUNCTIONS = (
     "Py_CLEAR",
     "Py_SETREF",
     "Py_XSETREF",
-    "_Py_DECREF_SPECIALIZED",
     "_PyGC_CLEAR_ARRAY",
     # Frame bookkeeping, which runs no code
     "_PyFrame_Copy",

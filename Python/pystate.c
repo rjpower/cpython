@@ -13,7 +13,7 @@
 #include "pycore_gc_trace.h"      // _PyGC_TRACE_CAPTURE_THREAD()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interpframe.h"   // _PyThreadState_HasStackSpace()
-#include "pycore_object.h"        // _Py_ClearImmortal()
+#include "pycore_object.h"        // _PyObject_FiniState()
 #include "pycore_obmalloc.h"      // _PyMem_obmalloc_state_on_heap()
 #include "pycore_opcode_utils.h"  // NUM_COMMON_CONSTANTS
 #include "pycore_parking_lot.h"   // _PyParkingLot_AfterFork()
@@ -690,12 +690,7 @@ common_constants_clear(PyInterpreterState *interp)
         if (!common_const_is_initialized(ref)) {
             continue;
         }
-        PyObject *obj = PyStackRef_AsPyObjectBorrow(ref);
         interp->common_consts[i] = PyStackRef_NULL;
-        // Refcount reclamation skips heap immortals; release manually.
-        if (_Py_IsImmortal(obj) && !_Py_IsStaticImmortal(obj)) {
-            _Py_ClearImmortal(obj);
-        }
     }
 }
 

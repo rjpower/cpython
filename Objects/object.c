@@ -2325,7 +2325,6 @@ _Py_SetImmortalUntracked(PyObject *op)
     // Keep the collector's bits: the object stays an object in the heap walk,
     // which never sweeps it, and its references are roots.
     op->ob_flags |= _Py_IMMORTAL_FLAGS;
-    op->ob_refcnt = _Py_IMMORTAL_INITIAL_REFCNT;
     _PyGC_LiveAddImmortal(op);
 }
 

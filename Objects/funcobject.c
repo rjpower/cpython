@@ -525,18 +525,8 @@ func_set_annotations_and_annotate(PyFunctionObject *op, PyObject *annotations,
                                   PyObject *annotate)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(op);
-    // Care is needed, finalizers can run when references are dropped.  Store
-    // both new values before dropping references to the old.
-    PyObject *old_annotations = op->func_annotations;
-    PyObject *old_annotate = op->func_annotate;
     FT_ATOMIC_STORE_PTR_RELEASE(op->func_annotations, annotations);
     FT_ATOMIC_STORE_PTR_RELEASE(op->func_annotate, annotate);
-    if (old_annotations != NULL && !_Py_IsImmortal(old_annotations)) {
-        _PyObject_XDecRefDelayed(old_annotations);
-    }
-    if (old_annotate != NULL && !_Py_IsImmortal(old_annotate)) {
-        _PyObject_XDecRefDelayed(old_annotate);
-    }
 }
 
 static PyObject *
@@ -559,7 +549,7 @@ func_get_annotation_dict(PyFunctionObject *op)
             Py_DECREF(ann_dict);
             return NULL;
         }
-        _PyObject_XSetRefDelayed(&op->func_annotations, ann_dict);
+        op->func_annotations = ann_dict;
         return ann_dict;
     }
     if (PyTuple_CheckExact(op->func_annotations)) {
@@ -581,7 +571,7 @@ func_get_annotation_dict(PyFunctionObject *op)
                 return NULL;
             }
         }
-        _PyObject_XSetRefDelayed(&op->func_annotations, ann_dict);
+        op->func_annotations = ann_dict;
     }
     assert(PyDict_Check(op->func_annotations));
     return op->func_annotations;
@@ -728,7 +718,7 @@ func_set_name(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
         return -1;
     }
     Py_BEGIN_CRITICAL_SECTION(op);
-    _PyObject_XSetRefDelayed(&op->func_name, Py_NewRef(value));
+    op->func_name = Py_NewRef(value);
     Py_END_CRITICAL_SECTION();
     return 0;
 }
@@ -754,7 +744,7 @@ func_set_qualname(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     }
     handle_func_event(PyFunction_EVENT_MODIFY_QUALNAME, (PyFunctionObject *) op, value);
     Py_BEGIN_CRITICAL_SECTION(op);
-    _PyObject_XSetRefDelayed(&op->func_qualname, Py_NewRef(value));
+    op->func_qualname = Py_NewRef(value);
     Py_END_CRITICAL_SECTION();
     return 0;
 }
@@ -776,7 +766,7 @@ func_set_doc(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     /* Legal to del f.__doc__ or to set it to any object. */
     PyFunctionObject *op = _PyFunction_CAST(self);
     Py_BEGIN_CRITICAL_SECTION(op);
-    _PyObject_XSetRefDelayed(&op->func_doc, Py_XNewRef(value));
+    op->func_doc = Py_XNewRef(value);
     Py_END_CRITICAL_SECTION();
     return 0;
 }
@@ -798,7 +788,7 @@ func_set_module(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     /* Legal to del f.__module__ or to set it to any object. */
     PyFunctionObject *op = _PyFunction_CAST(self);
     Py_BEGIN_CRITICAL_SECTION(op);
-    _PyObject_XSetRefDelayed(&op->func_module, Py_XNewRef(value));
+    op->func_module = Py_XNewRef(value);
     Py_END_CRITICAL_SECTION();
     return 0;
 }
@@ -927,7 +917,7 @@ function___annotate___set_impl(PyFunctionObject *self, PyObject *value)
 /*[clinic end generated code: output=05b7dfc07ada66cd input=eb6225e358d97448]*/
 {
     if (Py_IsNone(value)) {
-        _PyObject_XSetRefDelayed(&self->func_annotate, Py_NewRef(value));
+        self->func_annotate = Py_NewRef(value);
         return 0;
     }
     else if (PyCallable_Check(value)) {

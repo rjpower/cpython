@@ -643,7 +643,6 @@ _PyTuple_Repeat(PyObject *self, Py_ssize_t n)
     PyObject **dest = np->ob_item;
     if (input_size == 1) {
         PyObject *elem = a->ob_item[0];
-        _Py_RefcntAdd(elem, n);
         PyObject **dest_end = dest + output_size;
         while (dest < dest_end) {
             *dest++ = elem;
@@ -653,7 +652,6 @@ _PyTuple_Repeat(PyObject *self, Py_ssize_t n)
         PyObject **src = a->ob_item;
         PyObject **src_end = src + input_size;
         while (src < src_end) {
-            _Py_RefcntAdd(*src, n);
             *dest++ = *src++;
         }
 

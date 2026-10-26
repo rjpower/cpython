@@ -77,7 +77,7 @@ whose size is determined when the object is allocated.
  */
 #define PyObject_HEAD_INIT(type)    \
     {                               \
-        { _Py_STATIC_IMMORTAL_INITIAL_REFCNT },    \
+        { _Py_STATIC_HEADER_INIT },    \
         (type)                      \
     },
 
@@ -555,7 +555,7 @@ given type object has a specified feature.
 #define _Py_IMMORTAL_FLAGS (1 << 0)
 #define _Py_LEGACY_ABI_CHECK_FLAG (1 << 1) /* see PyModuleDef_Init() */
 #define _Py_STATICALLY_ALLOCATED_FLAG (1 << 2)
-/* ob_refcnt holds the constant _Py_GC_REFCNT for every mortal
+/* ob_refcnt holds the constant _Py_GC_REFCNT in every
  * object and counts nothing.  _Py_NewReference() stores _Py_GC_OBJECT_MAGIC
  * in ob_overflow and sets _Py_GC_HEAP_FLAG, which together tell the
  * collector's heap walk that a block holds an initialized object; freeing an

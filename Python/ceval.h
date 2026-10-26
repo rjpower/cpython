@@ -62,18 +62,6 @@
 #define Py_IS_TYPE(ob, type) \
     (_PyObject_CAST(ob)->ob_type == (type))
 
-#undef Py_XDECREF
-#define Py_XDECREF(arg) \
-    do { \
-        PyObject *xop = _PyObject_CAST(arg); \
-        if (xop != NULL) { \
-            Py_DECREF(xop); \
-        } \
-    } while (0)
-
-
-// Py_DECREF and _Py_DECREF_SPECIALIZED are already no-ops.
-
 #endif
 
 static void

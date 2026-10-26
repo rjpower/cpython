@@ -694,7 +694,6 @@ list_repeat_impl(PyListObject *a, Py_ssize_t n)
     PyObject **dest = np->ob_item;
     if (input_size == 1) {
         PyObject *elem = a->ob_item[0];
-        _Py_RefcntAdd(elem, n);
         PyObject **dest_end = dest + output_size;
         while (dest < dest_end) {
             *dest++ = elem;
@@ -704,7 +703,6 @@ list_repeat_impl(PyListObject *a, Py_ssize_t n)
         PyObject **src = a->ob_item;
         PyObject **src_end = src + input_size;
         while (src < src_end) {
-            _Py_RefcntAdd(*src, n);
             *dest++ = *src++;
         }
         // This list is not yet visible to other threads, so atomic repeat
@@ -922,9 +920,6 @@ list_inplace_repeat_lock_held(PyListObject *self, Py_ssize_t n)
     }
 
     PyObject **items = self->ob_item;
-    for (Py_ssize_t j = 0; j < input_size; j++) {
-        _Py_RefcntAdd(items[j], n-1);
-    }
     _Py_memory_repeat((char *)items, sizeof(PyObject *)*output_size,
                       sizeof(PyObject *)*input_size);
     return 0;

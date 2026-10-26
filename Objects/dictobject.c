@@ -7133,10 +7133,7 @@ set_dict_inline_values(PyObject *obj, PyDictObject *new_dict)
 static void
 decref_maybe_delay(PyObject *obj, bool delay)
 {
-    if (delay) {
-        _PyObject_XDecRefDelayed(obj);
-    }
-    else {
+    if (!delay) {
         Py_XDECREF(obj);
     }
 }

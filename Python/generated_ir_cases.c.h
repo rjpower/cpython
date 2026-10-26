@@ -808,7 +808,6 @@
                 PyObject *temp = PyStackRef_AsPyObjectBorrow(*target_local);
                 PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 PyUnicode_Append(&temp, right_o);
-                _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
                 *target_local = PyStackRef_NULL;
                 if (temp == NULL) {
                     IR_CONSUME_INPUT(IR_FIELD_B(this_instr));

@@ -14871,11 +14871,6 @@ _PyUnicode_ClearInterned(PyInterpreterState *interp)
         int shared = 0;
         switch (PyUnicode_CHECK_INTERNED(s)) {
         case SSTATE_INTERNED_IMMORTAL:
-            /* Make immortal interned strings mortal again. */
-            // Skip the Immortal Instance check and restore
-            // the two references (key and value) ignored
-            // by PyUnicode_InternInPlace().
-            _Py_SetMortal(s, 2);
 #ifdef INTERNED_STATS
             total_length += PyUnicode_GET_LENGTH(s);
 #endif
@@ -14891,9 +14886,6 @@ _PyUnicode_ClearInterned(PyInterpreterState *interp)
             }
             break;
         case SSTATE_INTERNED_MORTAL:
-            // Restore 2 references held by the interned dict; these will
-            // be decref'd by clear_interned_dict's PyDict_Clear.
-            _Py_RefcntAdd(s, 2);
             break;
         case SSTATE_NOT_INTERNED:
             _Py_FALLTHROUGH;

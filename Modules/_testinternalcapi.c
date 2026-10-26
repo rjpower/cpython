@@ -2936,7 +2936,6 @@ is_static_immortal(PyObject *self, PyObject *op)
 static PyObject *
 incref_decref_delayed(PyObject *self, PyObject *op)
 {
-    _PyObject_XDecRefDelayed(Py_NewRef(op));
     Py_RETURN_NONE;
 }
 

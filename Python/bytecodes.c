@@ -990,7 +990,6 @@ dummy_func(
             PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
             DEAD(right);
             PyUnicode_Append(&temp, right_o);
-            _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
             *target_local = PyStackRef_NULL;
             ERROR_IF(temp == NULL);
             res = PyStackRef_FromPyObject(temp);

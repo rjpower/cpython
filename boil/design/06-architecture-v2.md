@@ -2280,3 +2280,468 @@ is not the fix. The sites, by file and function:
   - `PyUnstable_Object_IsUniquelyReferenced`,
     `PyUnstable_Object_IsUniqueReferencedTemporary`,
     `PyUnstable_SetImmortal`.
+
+## 16. Step 5b decisions
+
+Step 5b runs the tracing collector against the whole test suite on both
+gc builds and against the ports. The collector stays behind
+`--with-gc`, and the reference-counting build is unchanged.
+
+### 16.1 What runs before the sweep
+
+15.3's contract stands: a dealloc in the sweep may not allocate or run
+code. 5b moved every call that breaks it out of the sweep, into the queue
+phase, where the object and what it reaches are intact and resurrected
+for the call (`_PyGC_DEAD_HOOK`, `queue_destroy_hooks()` in gc_live.c):
+
+- the DESTROY events of the dict, type, function and code watchers
+  (ac9a9a0062c);
+- a module's `m_free` and a capsule's destructor (ac9a9a0062c);
+- the release of a memoryview's or managed buffer's buffer when the
+  exporter's `__release_buffer__` would run (844111c5bef);
+- a code object's `co_extra` free functions (f4fd749fa14).
+
+**Once per object.** `_Py_GC_NOTIFIED_FLAG` makes each call run once.
+The object is swept at a later collection, and if the call ran again
+then, a capsule destructor would free its pointer twice. The dealloc
+makes none of these calls under Py_GC.
+
+**The dict-watcher split.** CPython watches every module dict and the
+builtins dict with reserved watchers. Queueing their DEALLOCATED event
+resurrected every dead module dict and all it reaches for one more
+collection, 2M instructions of `-c pass`. Those watchers are C callbacks
+that neither allocate nor run code, so `dict_dealloc()` still notifies
+them in the sweep; the collector queues the event only for watchers
+that extensions add (e05e10575ef).
+
+**Extension types use `tp_finalize`.** A type outside the core makes the
+same move with a finalizer, which runs before the sweep:
+
+- `_lsprof.Profiler` removes its profile function (e49b3dd476b);
+- `_interpreters.CrossInterpreterBufferView` releases its buffer in the
+  exporting interpreter (e0f31a26f22);
+- a pyexpat subparser frees its `XML_Parser` (bd23645c3f2).
+
+**Traverse functions must accept a partly built object.** The finalizer
+order traverses dead objects with finalizers. That includes one whose
+constructor failed before it filled its fields, which the cycle collector
+never traverses because it was never tracked. pyexpat's traverse read a
+NULL handler array.
+
+### 16.2 Referrer first: the sweep-order hazard
+
+Reference counting frees a referrer before its referent. The sweep frees
+dead objects in heap order. A dealloc that only releases what it refers
+to does not care; one that reads a referent's C state does. Three were
+found:
+
+- a managed buffer's release updates its exporter's export count (5a
+  swept managed buffers first as a special case);
+- a pyexpat subparser's `XML_ParserFree()` walks to its parent's
+  `XML_Parser`;
+- numpy's `array_dealloc` clears object, structured and StringDType
+  data through its descriptor: the DType's clear loop, the descriptor's
+  fields, StringDType's allocator and its mutex. When the descriptor was
+  swept first, gc-debug segfaulted and StringDType deadlocked.
+
+**`Py_TPFLAGS_DEALLOC_READS_REFERENTS`** (bit 21, 9333cb51722). A type
+whose dealloc reads its referents sets it; subtypes inherit it. The heap
+walk tags a dead instance of a flagged type `_PyGC_DEAD_FIRST`, and the
+sweep deallocates those in its first pass, while everything they refer
+to is intact. Types still go last, even a flagged metatype's instances.
+The flag replaces 5a's managed-buffer case: `_PyManagedBuffer_Type` sets
+it. numpy's `ndarray`, `nditer` and fancy-indexing `mapiter` set it
+(16.9). `_testcapi.DeallocReader` aborts if its referent's dealloc ran
+first; test_gc's `test_dealloc_reads_referents` crashes without the
+flag. The flag is public outside the limited API and documented in
+`Doc/c-api/typeobj.rst`; outside Py_GC it has no effect.
+
+**What the flag does not order.** Flagged objects are swept in heap
+order among themselves. A flagged dealloc that reads another flagged
+object is still unsafe. The cases known now:
+
+- a pyexpat subparser reads its parent parser, an object of the same
+  type. pyexpat keeps the subparser's finalizer instead (bd23645c3f2);
+- numpy's `nditer` and `mapiter` flush their buffers into, and resolve
+  writebacks on, their operand arrays, which are flagged. This matters
+  only when a dead iterator still holds unflushed writes;
+- numpy's neighborhood iterator decrefs an object padding constant after
+  reading its array's dtype. Under Py_GC the decref does nothing, so the
+  patch skips it.
+
+Ordering these needs a referrer-first order among the flagged dead
+objects, which is the 5c item (16.11).
+
+### 16.3 Roots
+
+- **Cross-interpreter data.** `_PyXIData_t` holds its object in memory
+  the collector does not scan. It registers a root while it holds the
+  object (38e41caef2e). A shared memoryview's `Py_buffer` holds its
+  exporter the same way. The exporting interpreter roots `view.obj` until
+  the receiving view releases it, in the exporting interpreter
+  (e0f31a26f22).
+- **Unlinked thread states.** Finalization unlinks the states of daemon
+  threads still in C code. Reference counting never frees what their
+  frames hold. `_PyThreadState_DeleteList()` now hands them to the
+  collector. The collector holds a reference to each, and marks their
+  frames, data stacks and C stacks as it does a live thread's
+  (c8afde9d936). Before this, a daemon reader's file was freed under it.
+- **`_PyGC_CLEAR_LOCAL`.** A borrowed local that outlives its use is a
+  conservative root. `finalize_remove_modules()` left the last module in
+  a `PyDict_Next` out-parameter, which kept every module alive past the
+  collection that should free them. The macro clears such a local, with
+  a barrier that keeps the dead store (8cfb3a08aaf).
+- **The NOSCAN heap.** Some PyMem allocations hold only borrowed,
+  version-guarded pointers. In the scanned mem heap, their stale entries
+  kept dead objects alive. Two kinds moved to a fifth mimalloc heap,
+  `_Py_MIMALLOC_HEAP_NOSCAN`, whose blocks the mark neither scans nor
+  takes for objects, as Boehm's `GC_malloc_atomic` memory is never
+  scanned (6bfce02ef1e):
+  - the IR exec blocks, the executing copy of a code object (`ir.c`);
+  - the polymorphic feedback tables (`specialize.c`,
+    `pycore_feedback.h`).
+
+  `_PyMem_NoScanMalloc()`, `_PyMem_NoScanRealloc()` and
+  `_PyMem_NoScanFree()` allocate there. Later steps should use them for
+  any new cache that holds borrowed pointers. A cache that owns its
+  references visits them in a traverse instead.
+
+### 16.4 Shutdown marks five times
+
+Finalization collected at five sites, and the two that ran finalizers
+marked again: seven full marks, 35M of `-c pass`'s 84M instructions. Now:
+
+- an intermediate collection makes one pass, since a later one frees what
+  its finalizers left;
+- the collection after `_PyImport_ClearModules()` is dropped, because the
+  one in `interpreter_clear()` follows it and still makes its second
+  pass.
+
+That leaves five marks (8cfb3a08aaf). The three intermediate ones stay
+because each observes a state that Python code sees:
+
+- S1, after atexit, with `sys.modules` intact;
+- S2, after `sys.modules` is emptied, with module globals intact;
+- S3, after module dicts are wiped, while `sys.stdout` and the builtins
+  still work.
+
+A module-level finalizer that runs at S2 sees its globals; one deferred
+to S3 does not. Folding S2 into S3 would change what such finalizers
+see, so both marks stay. `-c pass` went from 83.9M to 69.4M instructions.
+
+### 16.5 The page map
+
+The live mark has to map each candidate word to its page and block. 5a
+built a sorted list of the object heaps' pages at every collection and
+searched it. 5b keeps a two-level map in mimalloc from each 32 MiB slot
+of the address space to the segment that covers it, so every slot of a
+huge segment leads to its start (bacb0d499ec):
+
+- A segment enters the map once its metadata is initialized and leaves
+  it before its memory is released, so a segment freed and mapped again
+  at the same address leaves no stale entry.
+- The leaves are reserved when the segment is allocated, and a segment
+  the map cannot hold is not used. The mark never allocates.
+- `live_page_of()` takes a word to its page in O(1). It rejects words
+  outside the map's bounds, another interpreter's segments, segment
+  metadata, the stale back offsets of free spans, slices that are not
+  page heads, and mem heap pages. `live_block_of()` rejects words before
+  the first block or past the page's capacity.
+- The mem heaps' pages are still listed, since threads without the GIL
+  change them.
+
+Per collection on the startup heap: 3.6M cycles instead of 4.3M (17%
+fewer); 7.8M instructions instead of 7.9M. test_gc probes each rejected
+address and a huge segment freed and reallocated.
+
+### 16.6 Collector and C fixes
+
+- **The finalizer queue drains on every collecting thread** (e5732b48d41).
+  When the one draining thread released the GIL in a finalizer, other
+  threads made garbage faster than it drained: test_trashcan_threads
+  left a 70-second backlog. Each thread that collects now runs queued
+  calls until the queue is empty, with a per-thread reentrancy guard.
+  The test went from 80 s to 4.4 s on gc-default.
+- **MemoryError** (39ab3d7ee57). The MemoryError free list stays empty under
+  Py_GC, so every `PyErr_NoMemory()` raised the last-resort instance, whose
+  traceback grew with each raise. It now allocates a fresh instance when
+  it can.
+- **The gc stats ring** (f2adc4eccae). Live collections append to the ring
+  that `_remote_debugging` reads, and set the `<GC>` frame.
+
+**The traverse-omission class.** The cycle collector needs a traverse to
+visit only what can form a cycle, so traverse functions leave out bytes,
+str and buffer exporters, and some types have none. The tracing collector
+needs every reference visited, and frees what is left out. Found in 5b:
+
+| type | missing | symptom |
+|---|---|---|
+| `zlib.Decompress` | `unused_data`, `unconsumed_tail` (bytes) | test_zipfile crash (2d65e179f85) |
+| `_pickle.Unpickler` | `buffer.obj` | test_pickle crash (ed8ea489915) |
+| `_remote_debugging.RemoteUnwinder` | its code and frame caches; non-GC, no traverse | test_profiling crash (e49b3dd476b) |
+| `_lsprof.Profiler` | each entry's code object or name | cProfile read a reused block (e49b3dd476b) |
+| numpy: ufunc, `_ArrayMethod`, `_BoundArrayMethod`, the array function dispatcher, DType slots | loop dicts, wrapped methods, the dispatcher's dict and names; DType fields in PyMem | numpy failed to import (16.9) |
+| numpy: `ndarray`, descriptors, iterators, flags, `_array_converter`, void scalar | non-GC, no traverse: a view's base, an array's descriptor and object items, a dtype's fields, an iterator's operands | gc-debug segfault reading a freed descriptor (16.9) |
+
+The dev-debug `PYTHON_GCVERIFY=1` full suite (50,816 tests) logged no hole
+outside test_gc_verify's deliberate ones once the zlib and pickle fixes
+were in. The stdlib therefore has no further omissions that the suite
+reaches.
+
+**The verifier only sees live objects.** numpy's smoke test passed the
+verifier while every `ndarray` lacked a traverse: by its final collection
+no array was alive, and the omission surfaced as a gc-debug crash. A port
+is verified only when its objects are alive at a collection. `ports
+check` now runs each test script a second time under `-X gcverify=auto` on
+an interpreter that counts references, through `runpy`, with a final
+collection while the script's globals are alive, and fails on any hole.
+A port keeps an instance of each of its types at module level;
+`python/numpy/tests/held.py` does this for 29 numpy objects. The ports
+README lists a type with references but no traverse, GC or not, as the
+first thing to look for.
+
+The new step found a bug at once. A buffered `nditer` that casts to the
+object dtype fills its buffer with new objects that only the buffer
+holds. With an iterator held mid-iteration, the verifier reported 8 holes
+on refcnt-v0, and on gc-default a loop that summed such a cast returned
+a wrong total: the collector had freed and reused the ints. numpy's
+iterator traverse now visits the objects in its buffers. The same step
+failed pyyaml on refcnt-v0 with 11 holes: Cython registered its
+code-cache root only under Py_GC. It now registers it wherever
+`PyGC_AddRoot()` exists, tested by the new `Py_HAVE_PYGC_ADDROOT`
+(c018c6cdf9c).
+
+**The destroy-hook test is one bit** (f5a7bfc4ba0). The heap walk asked
+each dead object whether it needs a call before the sweep through a chain
+of type checks. On nbody, with 2.1M dead objects per loop, that chain cost
+54.6M of 1854.7M instructions per loop (perf: `live_walk_block` +47.8M
+against 5a). `type_ready()` now sets an internal bit,
+`_Py_TPFLAGS_DESTROY_HOOK` (bit 16, reserved for Stackless, which Py_GC
+does not build), on dict and type subclasses, modules and the five exact
+types that have hooks; other objects test that bit and stop. A debug
+assertion checks that the chain agrees whenever the bit is clear. nbody
+returns to 1800.1M, 5a's figure.
+
+### 16.7 Prompt finalization is a language change
+
+Under Py_GC an object dies at a collection, not when its last reference
+goes. The branch accepts this as a language-level change, PyPy's
+semantics, as thread #15 settled. The rung 2 inventory of the gc-default
+suite counted two classes of test that assumed otherwise:
+
+- **RC**, 84 failures: a finalizer, weak reference callback or release
+  expected at `del` or at the end of a statement.
+- **RCAPI**, 48 failures: tests that use what Py_GC removes:
+  - `sys.getrefcount()` (33);
+  - tuple reuse that tests uniqueness (14; 5c's sites, 15.7);
+  - the MemoryError free list (1).
+
+**What users see.** The visible consequence is resources closed late:
+
+- file descriptors (test_os `test_fd_finalization`, tempfile's
+  `__del__`);
+- sockets (a server thread blocked reading a socket that the client
+  closes in its dealloc);
+- mmaps with live exports (shared memory);
+- POSIX semaphores, which the resource tracker reports as leaked;
+- executor worker threads that exit through a weak reference callback.
+
+Code that uses `with` and `close()` sees no difference.
+
+**Timeouts.** A test that waits for a finalizer, such as an executor's
+shutdown or a server's socket close, now collects (`support.gc_collect()`)
+or is skipped. It never waits for a collection that may not come.
+
+### 16.8 Tests
+
+**Adjustments** (62 files, one commit per file, each naming the
+reference-counting assumption):
+
+- `support.requires_refcounting` on 48 tests;
+- 53 explicit collections, `support.gc_collect()` or `gc.collect()`;
+- 36 `Py_GC` conditions, skips or guards.
+
+A forked agent drafted part of these edits. Each was reviewed line by
+line before commit, and each commit message states why reference
+counting was the assumption.
+
+**The precise-gc tests.** `requires_precise_gc` is gone. Seven of its
+eight tests pass on both gc builds. test_get_objects_during_gc keeps its
+crash check but not its assertions, since its finalizer sees itself
+alive (8ba1d431096). Three tests are skipped on Py_GC debug builds only:
+
+- `CycleChainFinalizationTest`;
+- `test_release_task_refs`;
+- `test_missing_exceptions_reset`.
+
+In each, the slot-tracing build found a stale word in an -Og frame that
+keeps the object alive: in the eval loop's frame, on a pool thread's
+stack, and in a C frame on the main thread. gc-default passes all three.
+
+**Late finalization in a test.** test_weakset's
+`test_weak_destroy_while_iterating` failed one run in three on
+gc-default: the iterator's generator held the destroyed item in a local,
+which reference counting freed when the generator moved on. It now
+collects after deleting the iterator (6ffa07821d9).
+
+**Orphaned children.** Three busy-loop children of test_profiling's
+sampling tests ran for hours after the rung 2 inventory runs of 06:53 and
+07:06. The remote unwinder crashed their regrtest workers inside
+`test_subprocess()`, whose cleanup then never ran. That crash was fixed in
+e49b3dd476b, and no later run left a child behind. A worker crash in any
+such test would still leave its `while True` child running; a
+parent-death signal for the child would end it, and is not added here.
+
+**Debug-build tests.** `-X showrefcount` and regrtest's `-R` need
+`sys.gettotalrefcount()`, which Py_GC excludes with `Py_REF_DEBUG`. Their
+tests now ask for it rather than for `Py_DEBUG`.
+
+### 16.9 Ports
+
+All eight ports pass `ports check` on cpython-3.16-gc-v0,
+cpython-3.16-gc-debug-v0 and cpython-3.16-refcnt-v0. On refcnt-v0 the
+check now includes the verifier pass of 16.6.
+
+| port | patch lines | what the patch does |
+|---|---|---|
+| six, attrs, markupsafe, pycparser | 0 | |
+| pyyaml | 0 | built with the Cython port |
+| cffi | 10 | replaces `Py_FileSystemDefaultEncoding`, which 3.16 removed; not a collector change |
+| cython | 44 | generated modules root their code-object cache, a PyMem array, wherever `PyGC_AddRoot()` exists (`Py_HAVE_PYGC_ADDROOT`) |
+| numpy | 535 | DType slot roots; traverses for ufunc loops, ArrayMethods, the dispatcher and every non-GC type that holds references; `DEALLOC_READS_REFERENTS` on `ndarray`, `nditer` and `mapiter`; PyMem for memory that holds references but no object traverses |
+
+**numpy's types.** Most of numpy's core objects are not GC types, and none
+of those had a traverse. A view's base, an array's descriptor and a
+structured dtype's fields were therefore freed while in use. gc-default
+read the stale memory and passed; gc-debug, which poisons freed blocks,
+segfaulted in `PyArray_GetClearFunction`. The patch gives a traverse to:
+
+- `ndarray`: its descriptor, base, memory handler and, when the dtype
+  holds objects, the objects in its items;
+- descriptors: scalar type, metadata, fields, names, subarray, and
+  StringDType's `na_object`. A non-GC type does not inherit
+  `tp_traverse`, so dtypemeta.c installs it on every DType class;
+- `flatiter`, `broadcast`, the neighborhood iterator, `nditer`,
+  `mapiter`, the flags object, `_array_converter` and the void scalar.
+
+The traverses, like the roots, are in every build, so the verifier checks
+them on refcnt-v0. `tests/collect.py` casts between 17 dtypes, sorts and
+uses StringDType with a 64 KiB collection threshold, then fills object
+arrays through ufuncs and a buffered `nditer` at 16 KiB. It passes on all
+three ABIs. Before the flag the same workload deadlocked on StringDType's
+freed allocator mutex; before the traverses it segfaulted on gc-debug.
+
+**Not ported.** f2py's `fortran` object holds a dict and arrays without a
+traverse. f2py builds user extensions and is not part of numpy's runtime,
+so it is left for a port that uses it.
+
+**References that only the C stack reaches.** A ufunc that casts to the
+object dtype, such as `np.add(ints, 1, dtype=object)`, holds two things
+only on its C stack:
+
+- an `NpyIter`, whose buffer holds the new input objects. The iterator is
+  a PyMem block, which the mark scans when the stack reaches it, but the
+  buffers came from `PyMem_RawMalloc` and were not scanned;
+- the new output array. An object with a traverse that only a
+  conservative root reaches is not traversed unless it is a tracked GC
+  object, since it may be half built; its block's words are scanned
+  instead. ndarray is not GC, and its items are in a separate malloc
+  block, so they were not seen either.
+
+Under collections the sum of the result read freed ints and both gc builds
+segfaulted. Now the iterator buffers of dtypes that hold references are
+PyMem blocks, and so is the data of such an array when numpy's default
+allocator is current (a `pymem_reference_allocator` handler). The scan of
+queued blocks follows a stack word through the iterator, or through the
+array's block, to them. The verifier cannot check this, since no object
+holds the iterator or the array; the port's `tests/collect.py` does.
+
+### 16.10 Measurements
+
+At f5a7bfc4ba0, gcc 15, user-mode instructions per loop of one
+pyperformance worker, measured as in 15.6:
+
+| per loop (M) | dev-default | gc-default | change | 5a gc-default |
+|---|---|---|---|---|
+| richards | 675.1 | 624.1 | -7.6% | 623.9 |
+| go | 1625.5 | 1549.3 | -4.7% | 1552.3 |
+| nbody | 1407.1 | 1800.1 | +27.9% | 1800.1 |
+| float | 948.4 | 1196.5 | +26.2% | 1234.3 |
+
+Startup, median of five, user-mode instructions:
+
+| | dev-default | gc-default | change |
+|---|---|---|---|
+| `-c pass` | 48.6M | 69.4M | +43% |
+| `-S -c pass` | 33.0M | 52.0M | +58% |
+
+5a's `-c pass` was 83.9M; the five shutdown marks (16.4) took off 14.5M.
+The remaining 20.8M is the marks themselves, five of them over the
+startup heap.
+
+Peak RSS in KiB, median of three:
+
+| workload | dev-default | gc-default |
+|---|---|---|
+| startup (`-c pass`) | 12,872 | 14,520 |
+| import 13 stdlib packages | 27,404 | 40,108 |
+| 200,000 small dicts kept | 87,480 | 111,916 |
+| 5M float additions | 12,860 | 98,808 |
+| 10M two-tuples | 12,748 | 58,892 |
+
+The float and tuple loops keep nothing, but under gc-default their garbage
+accumulates up to the 32 MiB allocation threshold before each collection.
+The import and dict workloads have not been broken down; a dead object
+waits for the next collection, and the mark's address set and mark stack
+are allocated during each one, but how much each contributes is not
+measured.
+
+Collections on gc-default, from `gc.get_stats()` at exit, median of three.
+Three cores were busy with orphaned test children (16.8) during these and
+the wall times below; instruction counts do not depend on load.
+
+| workload | collections | freed | live after | longest pause |
+|---|---|---|---|---|
+| nbody, 10 loops | 17 | 691 MB | 10.2 MB | 54.7 ms |
+| 10M two-tuples | 38 | 1,267 MB | 2.9 MB | 29.8 ms |
+| 200,000 small dicts kept | 3 | 14 MB | 46.1 MB | 36.3 ms |
+| import 13 stdlib packages | 2 | 21 MB | 11.1 MB | 13.6 ms |
+
+The pause grows with the live heap and with the dead objects swept:
+nbody's collections each sweep about 40 MB of floats.
+
+Full suite at 12619dbe138, -j8, 564 files, 50,819 tests:
+
+| build | wall time | result |
+|---|---|---|
+| dev-default | 2 min 53 s | test_sys's remote-exec timeout |
+| gc-default | 4 min 31 s | the same; test_multiprocessing_fork.test_processes env changed |
+| gc-debug | 12 min 50 s | the same as gc-default |
+
+The env change was a queue's feeder thread that stopped just after the
+class's teardown collection, and so survived until the next one; the
+teardown now collects again when every dangling thread has stopped
+(9deb1ea266c). 16 concurrent runs under load were then clean, against one
+warning in eight before.
+
+### 16.11 For 5c
+
+- **Referrer-first order among flagged objects.** The sweep deallocates
+  `Py_TPFLAGS_DEALLOC_READS_REFERENTS` objects first, but in heap order
+  among themselves. 5c orders them referrer first: traverse each flagged
+  dead object, record its edges to other flagged dead objects, and sweep
+  in topological order, breaking cycles arbitrarily. The cost is bounded
+  by the flagged objects and their edges, not the heap. The cases that
+  need it are a flagged dealloc reading another flagged object (16.2):
+  the pyexpat subparser and its parent, which pyexpat now handles with a
+  finalizer, and numpy's iterators and their operand arrays. With the
+  order in place, pyexpat can drop the finalizer and set the flag.
+- **Ports verification is part of the method.** A port is verified only
+  while its objects are alive at a collection. `ports check` runs every
+  test script under the verifier on reference-counting interpreters, and
+  each port keeps an instance of each of its types alive at module level
+  (16.6). 5c's ports inherit both.
+- **The sweep's per-object cost.** With the destroy-hook test one bit,
+  nbody's collection is 5a's again. A type with a trivial dealloc (float,
+  int, compact str, tuples of those) could be freed by block without
+  calling `tp_dealloc` (15.6).

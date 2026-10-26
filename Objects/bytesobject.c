@@ -3855,6 +3855,13 @@ byteswriter_resize(PyBytesWriter *writer, Py_ssize_t new_size, int resize)
     }
 
     if (writer->obj != NULL) {
+#if defined(Py_DEBUG) && defined(Py_GC)
+        // The resize copies under Py_GC (no object is known to be uniquely
+        // referenced) and leaves the old bytes object to the collector,
+        // whose bytes_dealloc() checks the trailing null byte that the
+        // canary byte may have replaced.
+        byteswriter_reset_trailing_byte(writer);
+#endif
         if (writer->use_bytearray) {
             if (PyByteArray_Resize(writer->obj, alloc)) {
 #ifdef Py_DEBUG
@@ -3869,6 +3876,9 @@ byteswriter_resize(PyBytesWriter *writer, Py_ssize_t new_size, int resize)
             // Can raise MemoryError or OverflowError
             if (_PyBytes_ResizeKeepOnError(&writer->obj, alloc)) {
                 assert(writer->obj != NULL);
+#if defined(Py_DEBUG) && defined(Py_GC)
+                byteswriter_write_canary_byte(writer);
+#endif
                 assert(byteswriter_check_consistency(writer));
                 return -1;
             }

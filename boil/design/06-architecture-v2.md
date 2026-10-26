@@ -1948,3 +1948,335 @@ leave the verifier off by default.
 - **Strings are visited, immortal ones skipped.** See 14.4. The
   alternative, a separate traverse function for the tracing mark, would
   mean a second function for every type.
+
+## 15. Step 5a decisions
+
+Step 5a makes the tracing collector live behind `configure --with-gc`,
+which defines `Py_GC`. Under it nothing is reference counted: `Py_INCREF`
+and `Py_DECREF` do nothing, `sys.getrefcount()` and
+`sys.gettotalrefcount()` are gone, and `Python/gc_live.c` owns the memory
+of every object. Step 4's mark finds the live objects; everything else is
+swept. The build without `--with-gc` is unchanged.
+
+### 15.1 What the build does
+
+- **Header.** The 16-byte header stays. The object's first word holds a
+  constant count (`_Py_GC_REFCNT`, 2^30, which `Py_REFCNT()` reports), the
+  magic `0x6C0B` and the flags: marked (bit 8, also "swept" on a dead object),
+  dead, finalized, tracked, shallow, `tp_del` called and heap. The 8-byte
+  header waits for step 6a.
+- **Trigger.** A collection starts when the bytes allocated since the last
+  one reach max(threshold0, the live bytes after the last one).
+  threshold0 is 32 MiB by default and is set with `gc.set_threshold()`;
+  `gc.get_count()[0]` is the bytes allocated since. See 15.2 for where the
+  collection runs.
+- **Collection.** Mark; queue the callbacks of live weak references to
+  dead objects; queue finalizers (PEP 442) and legacy `tp_del`, and
+  resurrect what they reach for one cycle; clear the other weak
+  references; sweep. A legacy `tp_del` in a dead cycle goes to
+  `gc.garbage` with what it reaches, as does everything under
+  `DEBUG_SAVEALL`. Finalizers run referrer first, as reference counting
+  runs them, so a TextIOWrapper flushes before its FileIO closes. An
+  explicit `gc.collect()` makes a second pass for what its finalizers did
+  not resurrect.
+- **Sweep.** Three passes: managed buffers, then other objects, then
+  types. A dealloc can read other dead objects, because their blocks are
+  freed only after the last dealloc. A dealloc must not allocate an object
+  or run Python code. Debug builds abort if it does (15.3).
+- **Roots.** These are step 4's roots, plus `PyGC_AddRoot()` and
+  `PyGC_RemoveRoot()` for C memory that holds references (gcsupport.rst).
+  The compiler's unit capsules are fixed. Static and immortal objects are
+  never swept.
+- **Rejected or removed.** `--with-gc` rejects `--disable-gil` and
+  `Py_STACKREF_DEBUG`. The free lists are compiled out.
+- **gc module.** There is one generation, and the counts are bytes.
+  `get_stats()[2]` gains `bytes_freed`, `live_bytes` and `max_pause`.
+  `freeze()` does nothing, and every object of a GC type is tracked.
+  gc.rst documents all of it.
+
+### 15.2 Revision of decision 3: the collection runs at the eval breaker
+
+Decision 3 had the allocation that passes the trigger collect at once.
+That ran finalizers and weak reference callbacks wherever the allocation
+was, which broke C code that was in the middle of something. A frame
+object being created saw its frame gain a frame object
+(`_PyFrame_MakeAndSetFrameObject`'s assertion).
+
+Now the allocation that passes the trigger only sets the eval breaker's GC
+bit (`_Py_ScheduleGC`). The collection runs at the next breaker check, as
+the cycle collector's does, with its finalizers, callbacks and
+`gc.callbacks`.
+
+**Inline fallback.** C code can allocate without reaching the eval loop:
+a long C loop, or a C extension. When the allocated bytes pass the
+trigger by a further threshold0, the allocation collects at once in a
+mode that runs no Python code: no `gc.callbacks`, debug output to the C
+stderr, and the queue left for the breaker. The memory bound is
+therefore about twice threshold0 above the live bytes.
+
+### 15.3 The sweep contract and the dealloc fixes
+
+Under reference counting a dealloc runs while everything it refers to is
+alive. In the sweep, what it refers to may already be swept, and nothing
+may become reachable from the dead. Debug builds check two rules:
+`_PyGC_CHECK_NOT_SWEEPING` aborts when a dealloc allocates an object
+(obmalloc) or enters the eval loop (`_PyEval_EvalFrameDefault`). These
+deallocs broke the contract or the sweep order, and are fixed:
+
+1. `_PyLong_Negate` assumed that a shared fresh int is a small one.
+2. `PySet_Add` on a new frozenset checked the count.
+3. `type_dealloc` allocated a key to remove itself from its bases'
+   subclass dicts.
+4. Legacy `tp_del` ran in `subtype_dealloc`; it is queued.
+5. `_PyIOBase_finalize` ran in the dealloc; it is queued.
+6. Buffer export checks in deallocs: BytesIO set a SystemError for live
+   exports.
+7. A managed buffer released through an exporter that was already swept.
+   The sweep now releases managed buffers first, and `PyBuffer_Release`
+   skips an exporter that is dead and swept.
+8. The bytes/bytearray overflow check read a writer's canary in a dead
+   object. It now skips dead objects.
+9. Version caches across subinterpreters: a legacy subinterpreter's sweep
+   freed code objects that the main interpreter's caches still named. The
+   mark now clears cache entries of dead objects (`live_clear_weak_caches`).
+10. `module_dealloc` printed `# destroy` (with `-v`) through
+    `sys.stderr`, which runs code. Compiled out under Py_GC.
+11. `memory_dealloc` asserted that a view has no exports. A dead consumer,
+    such as a struct iterator, can hold one and be swept after the view;
+    the view drops them.
+12. The sweep reports each destruction to `PyRefTracer`, as `_Py_Dealloc`
+    does.
+
+**For 5b (correctness, not tests): watchers fire in the sweep.** The
+code, function, dict and type watchers' DESTROY events run inside
+`tp_dealloc`. In a debug build an allocating watcher aborts; in a release
+build it runs in the sweep and may allocate or run Python code. Today the
+sweep guarantees only that every dead block stays allocated until the
+last dealloc returns. A watcher that allocates can make an object that
+refers to a dead one, which is freed when the sweep ends, and Python code
+can reach dead objects through their former referrers. Fix: notify the
+watchers in the queue phase, before the sweep, while the objects are
+still intact (resurrected for the callback, as finalizers are). The seven
+dealloc-watcher tests are skipped under Py_GC until then. The same holds
+for module `m_free` and capsule destructors, which are extension code
+that runs in the sweep.
+
+### 15.4 False retention: the running cost of conservative roots
+
+A conservative scan takes a stale word in a live C frame or struct for a
+root. The object then outlives its last reference by one or more
+collections, and tests that `del x; gc.collect()` and expect a finalizer
+fail. These are the sources found, each with its fix and its runtime
+cost. Together they are the evidence for step 10's move to precise roots.
+
+| source | fix | runtime cost |
+|---|---|---|
+| uninitialized C locals | `-ftrivial-auto-var-init=zero` for the whole build | +0.3%, +0.65%, -0.1%, +0.3% per loop (richards, go, nbody, float) |
+| frames below the collection's entry | do not scan below the entry; `clear_stack_below()` zeroes 16 KB before and after a collection | two 16 KB memsets per collection |
+| padding in the collector's entry frame | `gc.collect()` clears the stack before entering (23e00462135) | one 16 KB memset per `gc.collect()` |
+| padding and some spill slots in the eval loop's frame | `_PyEval_EvalFrame` zeroes 1 KB before each C entry to the eval loop (ad068fac315) | under 0.15% per loop on all four |
+| the eval loop's C argument arrays (`WITH_EXCEPT_START`, `LOAD_SUPER_ATTR`, the builtin-call scratch array) | `_PyGC_CLEAR_ARRAY` after the call; the scratch array is zero-initialized | a few stores per such call |
+| popped `_PyCStackRef`s (a method lookup's owner) | the pop clears the slot (ee13749e97a) | one store per pop |
+| registers saved in the tstate for the stack scan, after they are stale | cleared on attach and after the outer collection | one 64-byte memset per attach |
+| the heads of asyncio's C task lists (interp, tstate and `_PyRuntime`) | skipped as weak in the struct and data scans | none |
+| version caches (borrowed references) | skipped in the scans | none |
+
+Still open: the frames between the eval loop and the collector (vectorcall
+wrappers) keep their padding. In a debug build, the eight
+`requires_precise_gc` tests still fail when they run in a full-module
+order; they pass on gc-default and in isolation.
+
+### 15.5 Tests
+
+All test runs use `-j8`.
+
+**Results per build.**
+
+- gc-debug and gc-default: these pass, 6,390 tests in each build.
+  - The ten day-2 files: test_gc_verify, test_grammar, test_builtin,
+    test_dict, test_list, test_set, test_tuple, test_weakref,
+    test_finalization, test_gc.
+  - test_io (9 files), test_threading, test_generators, test_capi,
+    test_sys and test_embed.
+  - Ten asyncio files: tasks, futures, futures2, events, base_events,
+    locks, queues, taskgroups, streams, runners.
+  - The one failure is test_sys `test_remote_exec_deleted_static_executable`,
+    a timeout that dev-debug has too.
+- dev-debug and dev-default: the same files plus test_ir, test_dis,
+  test_opcache, test_generated_cases, test_monitoring, test_sys_settrace
+  and test_exceptions pass, 7,437 tests, with the same test_sys failure.
+- Ports: six and attrs pass `ports check` on gc-default and gc-debug with
+  no patches.
+
+**Test adjustments** (34 files). A reviewer can grep for them, since each
+one names its reason:
+
+- `support.requires_refcounting` (35 tests, and 11 C tests in test_capi's
+  `REFCOUNTING_C_TESTS`). These tests need `sys.getrefcount()`, a
+  uniqueness check (`PyTuple_SetItem`, `PyUnicode_Fill`, `_PyBytes_Resize`
+  and the like refusing a shared object), or a finalizer that runs as the
+  last reference goes, at a point no collection reaches: thread-state
+  clear, interpreter clear, `-X showrefcount`, reference-cycle checks.
+- `support.requires_precise_gc` (9 tests): need a given object freed by
+  one `gc.collect()` (15.4).
+- `skipIf(support.Py_GC, reason)` (20 tests): one generation, every tuple
+  tracked, `freeze()` a no-op, and the trigger floor at the live bytes.
+  Also the bytes overflow check, which skips dead objects.
+- `skip_if_watchers_run_in_sweep` (7 tests, 15.3).
+- `if not support.Py_GC` guards around single assertions (18).
+- `support.gc_collect()  # For other GCs.` before checking a finalizer's
+  effect (23). test_sys and test_threading also close subinterpreters
+  explicitly, since `Interpreter.__del__` waits for a collection.
+
+**Known failures and slow tests for 5b.**
+
+- test_trashcan_threads takes 2 minutes on gc-default: two threads make
+  objects whose `__del__` sleeps faster than the queue runs them.
+- After a fork from a non-main thread, the verifier of a dev debug build
+  reports as holes the objects that only the old main thread's stack
+  holds. This is a step-4 limitation; the fork child collects only under
+  Py_GC.
+- releasebuffer is skipped for an exporter that is already swept, which
+  can leak per-view memory, and memoryview exports outlive their last
+  reference until a collection.
+
+### 15.6 Measurements
+
+gc-default against dev-default at d4a0b883336, gcc 15, in user-mode
+instructions per loop of one pyperformance worker (2 and 10 loops,
+differenced, median of 4; `boil/tools/measure/perloop.py`, with a separate
+pyc prefix per build):
+
+| per loop (M) | dev-default | gc-default | change |
+|---|---|---|---|
+| richards | 675.8 | 623.9 | -7.7% |
+| go | 1623.8 | 1552.3 | -4.4% |
+| nbody | 1407.1 | 1800.1 | +27.9% |
+| float | 948.5 | 1234.3 | +30.1% |
+
+- **Where nbody's instructions go.** The eval loop runs 9.45G
+  instructions against 11.45G on dev-default: no reference counts.
+  - Allocation, without the float free list: about 10% of the total.
+  - The collection: about 23%. This is the heap walk, the passes over
+    dead objects, `tp_dealloc` and the free of every dead float.
+- **The pass optimization.** nbody started at +45%. e92f5ff7db6 records
+  each dead object's kinds in the mark, so most passes skip it without
+  reading it, and frees blocks without a second lookup. That brought
+  nbody to +28% and float to +30%.
+- **Where the rest goes, and what removes it.** On nbody, 21.0M of the
+  21.2M objects swept over 10 loops (99.2%) are floats. Two costs remain:
+  - Float and small-tuple allocation without free lists. Inline floats
+    remove it in step 6.
+  - Per-object sweep work: the walk, `tp_dealloc` and the free. A type
+    with a trivial dealloc has no finalizer, no weak references, no
+    buffer procs, no managed dict and no out-of-line memory. Float, int
+    and compact str are such types, and they are 99.4% of nbody's dead
+    objects; with tuples, whose items are inline, 99.7%. The sweep could free those by block without calling
+    `tp_dealloc`, or free a page whose blocks are all dead in one step.
+    This is a 5c item (15.7).
+  - The count comes from a one-off tally of the sweep by type. It was not
+    committed.
+
+| startup instructions | dev-default | gc-default |
+|---|---|---|
+| `-c pass` | 48.6M | 80.9M |
+| `-S -c pass` | 32.9M | 61.4M |
+
+Most of the startup difference is the seven full collections that
+finalization runs, at 0.6-1.1 ms each. The scans of data segments and
+structs make up 20% of the startup instructions.
+
+**Why seven.** Finalization collects at five sites:
+
+1. `Py_FinalizeEx`, after atexit;
+2. `finalize_modules`, after `sys` and `builtins` are restored;
+3. the Py_GC-only collection after the modules are cleared (15.1);
+4. after `_PyImport_ClearModules`;
+5. the last collection in `interpreter_clear`.
+
+Two of them run finalizers, so their explicit second pass (15.1) marks
+again. The cycle collector collects at the same sites, but each of its
+collections costs far less.
+
+**5b item.** The minimum is one full mark after atexit. Later sites need
+not mark again when nothing was queued and no module was cleared: they can
+sweep what the clearing made unreachable, or mark only from the cleared
+modules. This was not done in 5a.
+
+| peak RSS (KiB), `boil/tools/rss.py` | dev-default | gc-default |
+|---|---|---|
+| startup | 11,392 | 12,464 |
+| imports | 14,656 | 17,788 |
+| 200,000 dicts | 66,076 | 84,248 |
+| loops | 12,748 | 14,560 |
+| 10M `(i, i, [i])` tuples | 11,356 | 57,224 |
+
+The tuple loop runs 50 collections and frees 1.67 GB, with a 20.8 ms
+longest pause. Peak RSS is the 32 MiB threshold plus the live heap and
+the allocator's slack. For nbody (10 loops): 17 collections, 656 MB
+freed, 52 ms longest pause.
+
+**Pause.** A full collection of a heap of about a million objects
+(250,000 each of instances, lists, tuples and floats) takes 41 ms on
+gc-default. The dev-default cycle collector takes 24 ms on the same heap,
+but it frees only cycles.
+
+### 15.7 For 5c
+
+**Sweep by block for trivial deallocs.** This is the 15.6 item. A type
+qualifies when it has no finalizer, no weak references, no buffer procs,
+no managed dict and no out-of-line memory. Its dead objects need no
+`tp_dealloc`: the sweep frees their blocks, or the whole page when every
+block on it is dead. On nbody this covers 99.4% of the dead objects (99.7% with tuples). A
+type flag set by the type, rather than a list in the collector, keeps
+extension types out until they opt in.
+
+**Optimizations that test uniqueness.**
+
+`_PyObject_IsUniquelyReferenced()` is always false under Py_GC, so every
+optimization that reuses or mutates an object it alone holds is off. The
+fix belongs to 5c, which owns the ownership model: likely a per-object
+"shared" bit, or a test the tracing build can answer. Rewriting each site
+is not the fix. The sites, by file and function:
+
+- **Result-tuple reuse in iterators:**
+  - `Python/bltinmodule.c` `zip_next`;
+  - `Objects/enumobject.c` `enum_next`, `enum_next_long`;
+  - `Modules/itertoolsmodule.c` `pairwise_next`, `product_next_impl`,
+    `combinations_next_impl`, `cwr_next_impl`, `permutations_next_impl`,
+    `zip_longest_next_impl`;
+  - `Objects/dictobject.c` `acquire_iter_result`,
+    `dictreviter_iter_lock_held`;
+  - `Objects/odictobject.c` `odictiter_iternext_impl`;
+  - `Modules/_functoolsmodule.c` `_functools_reduce_impl`.
+- **In-place work on a fresh object:**
+  - `Objects/longobject.c` `_PyLong_Negate`, `_PyLong_GCD`;
+  - `Python/intrinsics.c` `list_to_tuple`, `make_frozenset`;
+  - `Objects/setobject.c` `_PySet_Freeze`, `set_init`;
+  - `Objects/tupleobject.c` `_PyTuple_Resize`;
+  - `Objects/bytesobject.c` `PyBytes_Concat`, `bytes_resize_inplace`,
+    `_PyBytes_ResizeKeepOnError`, `set_ob_shash_unsafe`;
+  - `Objects/bytearrayobject.c` `bytearray___init___impl`;
+  - `Objects/unicode_format.c` `_PyUnicode_FormatLong`;
+  - `Objects/unicode_writer.c` `_PyUnicodeWriter_InitWithBuffer`;
+  - `Modules/_io/bytesio.c` `SHARED_BUF` (BytesIO now tracks sharing
+    itself under Py_GC);
+  - `Modules/_ctypes/_ctypes.c` `CDataType_from_buffer_copy_impl`;
+  - `Modules/_elementtree.c` `deepcopy`;
+  - `Modules/_functoolsmodule.c` `partial_new`.
+- **Interpreter:**
+  - `Python/bytecodes.c` `_ITER_CHECK_RANGE`, `_ITER_NEXT_RANGE`;
+  - `Python/specialize.c` `_Py_Specialize_ForIter`;
+  - `Python/ceval_macros.h` `gen_try_set_executing`;
+  - `Python/frame.c` `_PyFrame_ClearExceptCode`;
+  - `Objects/typeobject.c` `object_set_class`;
+  - `Python/marshal.c` `w_ref`, `w_complete`.
+- **Safety checks that refuse a shared object** (correct as they are,
+  since false means "shared"):
+  - `PyTuple_SetItem`, `PySet_Add`, `_PyUnicode_IsModifiable`,
+    `_PyBytes_IsMutable`;
+  - `Objects/dictobject.c` `can_modify_dict`;
+  - `byteswriter_check_consistency`, `teedataobject_safe_decref`;
+  - `PyUnstable_Object_IsUniquelyReferenced`,
+    `PyUnstable_Object_IsUniqueReferencedTemporary`,
+    `PyUnstable_SetImmortal`.

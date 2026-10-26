@@ -683,6 +683,7 @@ class FoldTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(g(o), 5)
 
+    @support.requires_refcounting
     def test_return_local(self):
         # RETURN_VALUE takes a new reference to the local before the frame
         # releases its locals
@@ -1003,8 +1004,10 @@ class StoreFoldTest(unittest.TestCase):
             return None
         self.run_specialized(lambda: f(C()))
         n = _testinternalcapi.SPECIALIZATION_THRESHOLD + 2
+        support.gc_collect()  # For other GCs.
         self.assertEqual(C.freed, 3 * n)
 
+    @support.requires_refcounting
     def test_release_runs_with_the_frame_consistent(self):
         # __del__ of the old value runs as the store releases it, and sees
         # the new value in the local.
@@ -1174,6 +1177,7 @@ class RegCfgTest(unittest.TestCase):
         for _ in range(n):
             self.assertEqual(f(), (1, 2))
             self.assertEqual(keeps(5), 5)
+        support.gc_collect()  # For other GCs.
         self.assertEqual(Counted.freed, 2 * n)
 
     def test_pushed_frame_result_to_a_local(self):

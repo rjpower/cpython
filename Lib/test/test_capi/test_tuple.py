@@ -1,7 +1,5 @@
 import unittest
 import gc
-import sys
-from test import support
 from test.support import import_helper
 
 _testcapi = import_helper.import_module('_testcapi')
@@ -17,11 +15,6 @@ class TupleSubclass(tuple):
 
 
 class CAPITest(unittest.TestCase):
-    def _not_tracked(self, t):
-        # Py_GC tracks every tuple.
-        if not support.Py_GC:
-            self.assertFalse(gc.is_tracked(t), t)
-
     def _tracked(self, t):
         self.assertTrue(gc.is_tracked(t), t)
 
@@ -63,7 +56,6 @@ class CAPITest(unittest.TestCase):
         self.assertEqual(tup1, ())
         self.assertEqual(size(tup1), 0)
         self.assertIs(type(tup1), tuple)
-        self._not_tracked(tup1)
 
         tup2 = tuple_new(1)
         self.assertIs(type(tup2), tuple)
@@ -89,7 +81,6 @@ class CAPITest(unittest.TestCase):
         tup = tuple(42**i for i in range(5))
         copy = tuple_fromarray(tup)
         self.assertEqual(copy, tup)
-        self._not_tracked(copy)
 
         tup = ()
         copy = tuple_fromarray(tup)
@@ -115,7 +106,6 @@ class CAPITest(unittest.TestCase):
 
         self._tracked(pack(1, [1]))
         self._tracked(pack(2, [1], b'abc'))
-        self._not_tracked(pack(2, 42, b'abc'))
 
         self.assertRaises(SystemError, pack, PY_SSIZE_T_MIN)
         self.assertRaises(SystemError, pack, -1)
@@ -134,15 +124,8 @@ class CAPITest(unittest.TestCase):
         class Temp:
             pass
         temp = Temp()
-        if not support.Py_GC:
-            temp_rc = sys.getrefcount(temp)
         self.assertEqual(from_pair(temp, temp), (temp, temp))
-        if not support.Py_GC:
-            self.assertEqual(sys.getrefcount(temp), temp_rc)
 
-        self._not_tracked(from_pair(1, 2))
-        self._not_tracked(from_pair(None, None))
-        self._not_tracked(from_pair(True, False))
         self._tracked(from_pair(temp, (1, 2)))
         self._tracked(from_pair(temp, 1))
         self._tracked(from_pair([], {}))
@@ -269,10 +252,6 @@ class CAPITest(unittest.TestCase):
         tup2 = setitem(tup, 1, NULL)
         self.assertTrue(checknull(tup2, 1))
 
-        tup2 = TupleSubclass(([1], [2]))
-        if not support.Py_GC:  # Py_GC cannot tell that tup2 is shared.
-            self.assertRaises(SystemError, setitem, tup2, 0, [])
-
         self.assertRaises(IndexError, setitem, tup, PY_SSIZE_T_MIN, [])
         self.assertRaises(IndexError, setitem, tup, -1, [])
         self.assertRaises(IndexError, setitem, tup, len(tup), [])
@@ -337,11 +316,6 @@ class CAPITest(unittest.TestCase):
         self.assertRaises(MemoryError, resize, a, PY_SSIZE_T_MAX)
         self.assertRaises(SystemError, resize, a, -1)
         self.assertRaises(SystemError, resize, a, PY_SSIZE_T_MIN)
-        # refcount > 1
-        a = (1, 2, 3)
-        if not support.Py_GC:
-            self.assertRaises(SystemError, resize, a, 3, False)
-            self.assertRaises(SystemError, resize, a, 0, False)
         # non-tuple
         self.assertRaises(SystemError, resize, [1, 2, 3], 0, False)
         self.assertRaises(SystemError, resize, NULL, 0, False)

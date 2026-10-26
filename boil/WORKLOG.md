@@ -1418,3 +1418,23 @@ collector (M instructions): richards 577/675/625 -> 518, go
 1244/1624/1549 -> 1226, nbody 1030/1407/1800 -> 1455, float
 780/949/1197 -> 1051. The three commits were built and tested as one
 tree; bisect them as a unit.
+
+### 2026-10-26 16:45 — step 5c milestone 2: reference counting is gone; rung 2 gate passes
+
+Rung 2 of step 5c is complete and the full suite passes on dev-default
+and dev-debug, with only test_sys's pre-existing remote-exec timeout.
+Deleted: the ownership operations on `_PyStackRef` (plain copies, then
+the names themselves, 21 files), the refcount helpers and immortal
+refcount constants (immortality is one header bit), the object free
+lists and their statistics, the trashcan, Py_REF_DEBUG and
+Py_STACKREF_DEBUG, `sys.getrefcount` and `gettotalrefcount` with their
+docs, and every branch `_PyObject_IsUniquelyReferenced` guarded (the 52
+sites of §15.7 take their shared path). Measured consequences, recorded
+not fixed: iterators cost about 2.2x the refcount build (10-25% of it
+the lost tuple reuse), and `s += 'x'` is quadratic (1,204 to 230,353
+instructions per append at 200k), a 6a design item. Verification: dispatch
+counts match step 3b within 0.2%; hot handlers have no reference
+increments or decrements. Rung 3a: flagged dead objects are swept
+referrer first in reverse postorder (e638f8018da); pyexpat drops its
+finalizer. The alias-fold rule that existed for borrowing is gone
+(337416c0d6d), measured at zero on richards and go.

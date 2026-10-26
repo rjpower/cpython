@@ -1080,11 +1080,13 @@ bytesio_dealloc(PyObject *op)
     bytesio *self = bytesio_CAST(op);
     PyTypeObject *tp = Py_TYPE(self);
     _PyObject_GC_UNTRACK(self);
+#ifndef Py_GC  // the sweep can deallocate the exporter before its views
     if (FT_ATOMIC_LOAD_SSIZE_RELAXED(self->exports) > 0) {
         PyErr_SetString(PyExc_SystemError,
                         "deallocated BytesIO object has exported buffers");
         PyErr_Print();
     }
+#endif
     Py_CLEAR(self->buf);
     Py_CLEAR(self->dict);
     FT_CLEAR_WEAKREFS(op, self->weakreflist);

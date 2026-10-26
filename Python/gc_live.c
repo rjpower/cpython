@@ -574,6 +574,18 @@ undo_dead(_PyGCMarkResult *res)
     }
 }
 
+#ifdef Py_DEBUG
+void
+_PyGC_LiveSweepViolation(PyThreadState *tstate, const char *what)
+{
+    PyObject *op = tstate->interp->gc.sweep_op;
+    _Py_FatalErrorFormat(__func__,
+                         "the dealloc of a %s object at %p %s during the sweep",
+                         op != NULL ? Py_TYPE(op)->tp_name : "(unknown)",
+                         (void *)op, what);
+}
+#endif
+
 /* Call tp_dealloc on the dead objects, then free their blocks.  Instances
    go before types, so that a dealloc can read its type. */
 static Py_ssize_t
@@ -594,6 +606,9 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
             if (_PyObject_IS_GC(op)) {
                 ncollected++;
             }
+#ifdef Py_DEBUG
+            gc->sweep_op = op;
+#endif
             Py_TYPE(op)->tp_dealloc(op);
             if (_PyErr_Occurred(tstate)) {
                 _PyErr_Clear(tstate);
@@ -601,6 +616,9 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
         }
     }
     gc->sweeping = 0;
+#ifdef Py_DEBUG
+    gc->sweep_op = NULL;
+#endif
     _PyErr_SetRaisedException(tstate, exc);
     Py_ssize_t freed = 0;
     for (Py_ssize_t i = 0; i < res->ndead; i++) {

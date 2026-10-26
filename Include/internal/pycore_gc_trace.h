@@ -203,6 +203,22 @@ extern int _PyGC_LiveVisitRoots(PyInterpreterState *interp, visitproc visit,
  * unless a collection cannot run here; the allocation follows. */
 extern void _PyGC_LiveOnThreshold(PyThreadState *tstate);
 
+#ifdef Py_DEBUG
+/* A dealloc that the sweep called did what a dealloc must not do under
+   Py_GC: allocate an object, which may refer to the dead, or run Python
+   code, which may reach them.  what says which; this aborts. */
+extern void _Py_NO_RETURN _PyGC_LiveSweepViolation(PyThreadState *tstate,
+                                                  const char *what);
+#  define _PyGC_CHECK_NOT_SWEEPING(tstate, what) \
+    do { \
+        if ((tstate)->interp->gc.sweeping) { \
+            _PyGC_LiveSweepViolation((tstate), (what)); \
+        } \
+    } while (0)
+#else
+#  define _PyGC_CHECK_NOT_SWEEPING(tstate, what) ((void)0)
+#endif
+
 /* Remember an immortal heap object: what it refers to is a root. */
 extern void _PyGC_LiveAddImmortal(PyObject *op);
 

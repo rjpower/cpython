@@ -1350,6 +1350,9 @@ gc_count_alloc(size_t size, int collect)
         return;
     }
     struct _gc_runtime_state *gc = &tstate->interp->gc;
+    if (collect) {
+        _PyGC_CHECK_NOT_SWEEPING(tstate, "allocates an object");
+    }
     gc->alloc_bytes += (Py_ssize_t)size;
     if (collect && gc->alloc_bytes >= gc->alloc_limit) {
         _PyGC_LiveOnThreshold(tstate);

@@ -290,6 +290,11 @@ struct _gc_runtime_state {
     /* Set while the sweep calls tp_dealloc: PyObject_Free() leaves the
        blocks of dead objects for the sweep to free afterwards. */
     int sweeping;
+#ifdef Py_DEBUG
+    /* The object whose tp_dealloc the sweep is calling, for the check that
+       a dealloc neither allocates an object nor runs Python code. */
+    PyObject *sweep_op;
+#endif
     struct _gc_live_state *live;
 #endif
 };

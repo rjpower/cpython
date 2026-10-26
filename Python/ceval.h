@@ -14,6 +14,7 @@
 #include "pycore_frame.h"
 #include "pycore_function.h"
 #include "pycore_genobject.h"     // _PyCoro_GetAwaitableIter()
+#include "pycore_gc_trace.h"      // _PyGC_CHECK_NOT_SWEEPING()
 #include "pycore_import.h"        // _PyImport_IsDefaultImportFunc()
 #include "pycore_instruments.h"
 #include "pycore_interpframe.h"   // _PyFrame_Slots()

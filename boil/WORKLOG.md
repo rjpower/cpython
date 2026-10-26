@@ -1301,3 +1301,18 @@ instructions (dev-default 48.6M). Two retention bugs on the way: a
 and cross-interpreter data held objects the collector did not scan
 (38e41caef2e). The 5a lists pass on both gc builds. The full suite is
 running on gc-default and dev-default for the rung 2 inventory.
+
+### 2026-10-26 08:40 — step 5b milestone 2: the full suite passes on gc-default
+
+Full suite at 9c6de456c5a on build/gc-default, -j8: 556 files, 50,815
+tests, 4 min 59 s. One failure, test_sys's remote-exec timeout, which
+dev-default also has. The rung 2 inventory had 121 failures in 55 files;
+they split into two C bugs (the remote unwinder's untraversed caches, the
+gc stats ring), one retention cause (borrowed IR and feedback pointers in
+scanned memory, now in a no-scan heap, 6bfce02ef1e), three collector
+fixes (every collecting thread drains the finalizer queue, unlinked
+thread states stay roots, MemoryError no longer reuses the singleton),
+and tests that assumed reference-count timing or `sys.getrefcount`,
+adjusted one commit per file with the assumption named. The mark finds
+pages through a segment map (bacb0d499ec): 17% fewer cycles per
+collection. Rung 3, the gc-debug full suite, is next.

@@ -1324,16 +1324,17 @@ class CWarningsDisplayTests(WarningsDisplayTests, unittest.TestCase):
 class PyWarningsDisplayTests(WarningsDisplayTests, unittest.TestCase):
     module = py_warnings
 
-    @support.requires_refcounting
     def test_tracemalloc(self):
         self.addCleanup(os_helper.unlink, os_helper.TESTFN)
 
         with open(os_helper.TESTFN, 'w', encoding="utf-8") as fp:
             fp.write(textwrap.dedent("""
+                import gc
                 def func():
                     f = open(__file__, "rb")
-                    # Emit ResourceWarning
                     f = None
+                    # Emit ResourceWarning
+                    gc.collect()
 
                 func()
             """))
@@ -1351,8 +1352,8 @@ class PyWarningsDisplayTests(WarningsDisplayTests, unittest.TestCase):
         filename = os.path.abspath(os_helper.TESTFN)
         stderr = run('-Wd', os_helper.TESTFN)
         expected = textwrap.dedent(f'''
-            {filename}:5: ResourceWarning: unclosed file <...>
-              f = None
+            {filename}:7: ResourceWarning: unclosed file <...>
+              gc.collect()
             ResourceWarning: Enable tracemalloc to get the object allocation traceback
         ''').strip()
         self.assertEqual(stderr, expected)
@@ -1360,12 +1361,12 @@ class PyWarningsDisplayTests(WarningsDisplayTests, unittest.TestCase):
         # tracemalloc enabled
         stderr = run('-Wd', '-X', 'tracemalloc=2', os_helper.TESTFN)
         expected = textwrap.dedent(f'''
-            {filename}:5: ResourceWarning: unclosed file <...>
-              f = None
+            {filename}:7: ResourceWarning: unclosed file <...>
+              gc.collect()
             Object allocated at (most recent call last):
-              File "{filename}", lineno 7
+              File "{filename}", lineno 9
                 func()
-              File "{filename}", lineno 3
+              File "{filename}", lineno 4
                 f = open(__file__, "rb")
         ''').strip()
         self.assertEqual(stderr, expected)

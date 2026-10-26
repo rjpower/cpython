@@ -12,7 +12,7 @@
   "patches": [
     {
       "file": "code-cache-roots.patch",
-      "sha256": "ef5763ecbce8a128a2cfadf4994dd8286ae89826eeb82b2076f551e27dc32e7c",
+      "sha256": "b0e6cb2d4f08d2804fc8d261ae91706af9aaab5e60eac39faa72dcd43b0d6d51",
       "touches": {
         "Cython/Utility/ModuleSetupCode.c": "a069bbb204c5ceff6729d5ffb0ca4e3daf11f514d5cb70a54c5bfe93fba5f5c1"
       }

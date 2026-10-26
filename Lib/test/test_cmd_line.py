@@ -923,6 +923,7 @@ class CmdLineTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0)
 
     @support.cpython_only
+    @unittest.skipIf(support.Py_GC, "--with-gc forces the mimalloc allocator")
     def test_pythonmalloc(self):
         # Test the PYTHONMALLOC environment variable
         malloc = not support.Py_GIL_DISABLED

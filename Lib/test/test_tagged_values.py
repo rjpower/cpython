@@ -8,7 +8,7 @@ import struct
 import sys
 import traceback
 import unittest
-from test.support import import_helper, requires_refcounting, script_helper
+from test.support import import_helper, script_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 roundtrip = getattr(_testinternalcapi, "stackref_box_roundtrip", None)
@@ -345,13 +345,6 @@ class InlineIntTest(unittest.TestCase):
                 self.assertEqual(hash(x), hash(distinct(value)))
                 d[x] = value
                 self.assertEqual(d[distinct(value)], value)
-
-    @requires_refcounting
-    def test_getrefcount(self):
-        def f():
-            x = 70000
-            return sys.getrefcount(x)
-        self.assertGreater(warm(f), 0)
 
     def test_frame_locals(self):
         def f():

@@ -457,6 +457,7 @@ class EmbeddingTests(EmbeddingTestsMixin, unittest.TestCase):
         out, err = self.run_embedded_interpreter("test_repeated_init_exec", code)
         self.assertEqual(out, 'Tests passed\n' * INIT_LOOPS)
 
+    @support.requires_refcounting
     def test_asyncio_task_during_interpreter_clear(self):
         import_helper.import_module('_asyncio')
         code = textwrap.dedent("""

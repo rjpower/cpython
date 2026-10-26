@@ -946,6 +946,7 @@ class TestMktemp(BaseTestCase):
         self.do_create(suf="b")
         self.do_create(pre="a", suf="b")
         self.do_create(pre="aa", suf=".txt")
+        support.gc_collect()  # For other GCs.
 
     def test_many(self):
         # mktemp can choose many usable file names (stochastic)
@@ -1011,7 +1012,7 @@ class TestNamedTemporaryFile(BaseTestCase):
         del write
         write2(b'bar')
         del write2
-        if support.check_impl_detail(cpython=True):
+        if support.check_impl_detail(cpython=True) and not support.Py_GC:
             # No reference cycle was created.
             self.assertIsNone(wr())
 
@@ -1918,6 +1919,7 @@ class TestTemporaryDirectory(BaseTestCase):
             d = self.do_create(dir=dir)
             name = d.name
             del d # Rely on refcounting to invoke __del__
+            support.gc_collect()  # For other GCs.
             self.assertFalse(os.path.exists(name),
                         "TemporaryDirectory %s exists after __del__" % name)
         finally:
@@ -1935,6 +1937,7 @@ class TestTemporaryDirectory(BaseTestCase):
             with open(temp_path / "a_file.txt", "w+t") as open_file:
                 open_file.write("Hello world!\n")
                 del temp_dir
+                support.gc_collect()  # For other GCs.
             self.assertEqual(len(list(temp_path.glob("*"))),
                              int(sys.platform.startswith("win")),
                              "Unexpected number of files in "

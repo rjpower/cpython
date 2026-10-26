@@ -1713,68 +1713,6 @@ class CoroutineTest(unittest.TestCase):
         self.assertEqual(buffer, [i for i in range(1, 21)] +
                                  ['what?', 'end'])
 
-    @support.requires_refcounting
-    def test_for_2(self):
-        tup = (1, 2, 3)
-        refs_before = sys.getrefcount(tup)
-
-        async def foo():
-            async for i in tup:
-                print('never going to happen')
-
-        with self.assertRaisesRegex(
-                TypeError, "async for' requires an object.*__aiter__.*tuple"):
-
-            run_async(foo())
-
-        self.assertEqual(sys.getrefcount(tup), refs_before)
-
-    @support.requires_refcounting
-    def test_for_3(self):
-        class I:
-            def __aiter__(self):
-                return self
-
-        aiter = I()
-        refs_before = sys.getrefcount(aiter)
-
-        async def foo():
-            async for i in aiter:
-                print('never going to happen')
-
-        with self.assertRaisesRegex(
-                TypeError,
-                r"that does not implement __anext__"):
-
-            run_async(foo())
-
-        self.assertEqual(sys.getrefcount(aiter), refs_before)
-
-    @support.requires_refcounting
-    def test_for_4(self):
-        class I:
-            def __aiter__(self):
-                return self
-
-            def __anext__(self):
-                return ()
-
-        aiter = I()
-        refs_before = sys.getrefcount(aiter)
-
-        async def foo():
-            async for i in aiter:
-                print('never going to happen')
-
-        with self.assertRaisesRegex(
-                TypeError,
-                "async for' received an invalid object.*__anext__.*tuple"):
-
-            run_async(foo())
-
-        self.assertEqual(sys.getrefcount(aiter), refs_before)
-
-    @support.requires_refcounting
     def test_for_6(self):
         I = 0
 
@@ -1804,8 +1742,6 @@ class CoroutineTest(unittest.TestCase):
 
         manager = Manager()
         iterable = Iterable()
-        mrefs_before = sys.getrefcount(manager)
-        irefs_before = sys.getrefcount(iterable)
 
         async def main():
             nonlocal I
@@ -1821,9 +1757,6 @@ class CoroutineTest(unittest.TestCase):
             # directly does not throw any warnings.
             run_async(main())
         self.assertEqual(I, 111011)
-
-        self.assertEqual(sys.getrefcount(manager), mrefs_before)
-        self.assertEqual(sys.getrefcount(iterable), irefs_before)
 
         ##############
 

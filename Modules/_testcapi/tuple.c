@@ -119,7 +119,10 @@ tuple_fromarray(PyObject* Py_UNUSED(module), PyObject *args)
 
     PyObject **items;
     if (src != Py_None) {
-        items = &PyTuple_GET_ITEM(src, 0);
+        items = tuple_objects(src);
+        if (items == NULL) {
+            return NULL;
+        }
         if (size == UNINITIALIZED_SIZE) {
             size = PyTuple_GET_SIZE(src);
         }
@@ -127,7 +130,9 @@ tuple_fromarray(PyObject* Py_UNUSED(module), PyObject *args)
     else {
         items = NULL;
     }
-    return PyTuple_FromArray(items, size);
+    PyObject *res = PyTuple_FromArray(items, size);
+    PyMem_Free(items);
+    return res;
 }
 
 

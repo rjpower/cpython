@@ -384,7 +384,10 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
     PyObject *partial_args = Py_NewRef(pto->args);
     PyObject *partial_keywords = Py_NewRef(pto->kw);
 
-    PyObject **pto_args = _PyTuple_ITEMS(partial_args);
+    PyObject *const *pto_args = _PyTuple_Objects(partial_args);
+    if (pto_args == NULL) {
+        goto done;
+    }
     Py_ssize_t pto_nargs = PyTuple_GET_SIZE(partial_args);
     Py_ssize_t pto_nkwds = PyDict_GET_SIZE(partial_keywords);
     Py_ssize_t nkwds = kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames);

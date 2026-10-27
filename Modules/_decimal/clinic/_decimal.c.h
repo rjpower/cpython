@@ -8,6 +8,7 @@ preserve
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_Objects()
 
 PyDoc_STRVAR(_decimal_Context_Etiny__doc__,
 "Etiny($self, /)\n"
@@ -261,6 +262,7 @@ context_init(PyObject *self, PyObject *args, PyObject *kwargs)
     PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
+    PyObject *const *argitems;
     PyObject *prec = Py_None;
     PyObject *rounding = Py_None;
     PyObject *emin = Py_None;
@@ -270,7 +272,11 @@ context_init(PyObject *self, PyObject *args, PyObject *kwargs)
     PyObject *status = Py_None;
     PyObject *traps = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    argitems = _PyTuple_Objects(args);
+    if (argitems == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -901,10 +907,15 @@ dec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
+    PyObject *const *argitems;
     PyObject *value = NULL;
     PyObject *context = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    argitems = _PyTuple_Objects(args);
+    if (argitems == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -6289,4 +6300,4 @@ exit:
 #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
 #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
-/*[clinic end generated code: output=02f6a8f0e93bc9f8 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=dfa2fe9e68c96bfb input=a9049054013a1b77]*/

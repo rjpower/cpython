@@ -250,23 +250,96 @@ _PyValue_FloatOperandValues(PyValue a, PyValue b, double *da, double *db)
     return true;
 }
 
-/* For each inline value src[i], store a new box in dst[i]; leave the other
-   elements of dst alone. Return 0, or -1 with an exception set. For the
-   constructors of tuples and lists from values. */
+/* Container operations on values.  Containers hold canonical values, so
+   an int or float item is usually inline: these work on it without a box,
+   and box only to call the object's own method. */
+
+/* hash() of v: -1 with an exception set on failure. */
+static inline Py_hash_t
+_PyValue_Hash(PyValue v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        Py_hash_t h = PyValue_Int32(v);
+        return h == -1 ? -2 : h;
+    }
+    if (PyValue_IsInlineFloat(v)) {
+        return _Py_HashDouble(NULL, PyValue_Double(v));
+    }
+    return PyObject_Hash(PyValue_ObjectBorrow(v));
+}
+
+/* The order of two inline values, <0, 0 or >0.  An int32 converts to a
+   double exactly, and neither is NaN, so this is the order of the numbers. */
 static inline int
-_PyValue_BoxInto(const PyValue *src, PyObject **dst, Py_ssize_t n)
+_PyValue_CompareInline(PyValue a, PyValue b)
+{
+    assert(PyValue_IsInline(a) && PyValue_IsInline(b));
+    if (_PyValue_BothInlineInt(a, b)) {
+        int32_t x = PyValue_Int32(a), y = PyValue_Int32(b);
+        return (x > y) - (x < y);
+    }
+    double x = PyValue_IsInlineInt(a) ? (double)PyValue_Int32(a) : PyValue_Double(a);
+    double y = PyValue_IsInlineInt(b) ? (double)PyValue_Int32(b) : PyValue_Double(b);
+    return (x > y) - (x < y);
+}
+
+static inline int
+_PyValue_CompareResult(int c, int op)
+{
+    switch (op) {
+    case Py_LT: return c < 0;
+    case Py_LE: return c <= 0;
+    case Py_EQ: return c == 0;
+    case Py_NE: return c != 0;
+    case Py_GT: return c > 0;
+    default:    return c >= 0;
+    }
+}
+
+PyAPI_FUNC(int) _PyValue_RichCompareBoolSlow(PyValue a, PyValue b, int op);
+
+/* PyObject_RichCompareBool() of two values: 1, 0, or -1 with an exception
+   set.  As there, identity implies equality. */
+static inline int
+_PyValue_RichCompareBool(PyValue a, PyValue b, int op)
+{
+    if (PyValue_IsInline(a) && PyValue_IsInline(b)) {
+        return _PyValue_CompareResult(_PyValue_CompareInline(a, b), op);
+    }
+    return _PyValue_RichCompareBoolSlow(a, b, op);
+}
+
+/* PyObject_RichCompare() of two values: a new reference, or NULL with an
+   exception set. */
+PyAPI_FUNC(PyObject *) _PyValue_RichCompare(PyValue a, PyValue b, int op);
+
+/* Could the collector need to traverse a container holding v?  As
+   _PyObject_GC_MAY_BE_TRACKED(), and false for NULL and inline values. */
+static inline bool
+_PyValue_MayBeTracked(PyValue v)
+{
+    return PyValue_IsObject(v)
+           && _PyObject_GC_MAY_BE_TRACKED(PyValue_ObjectBorrow(v));
+}
+
+/* Store the canonical values of the n objects src in dst. */
+static inline void
+_PyValue_FromObjectArray(PyValue *dst, PyObject *const *src, Py_ssize_t n)
 {
     for (Py_ssize_t i = 0; i < n; i++) {
-        if (PyValue_IsInline(src[i])) {
-            dst[i] = PyValue_Object(src[i]);
-            if (dst[i] == NULL) {
-                return -1;
-            }
-            VALUE_BOX_STAT_INC(_PY_BOX_CONTAINER_STORE);
-        }
+        dst[i] = PyValue_FromObject(src[i]);
     }
-    return 0;
 }
+
+extern PyTypeObject _PyObjectArray_Type;
+
+/* The n values items as an array of PyObject *, for C code that takes one:
+   items itself if none is inline, since a value that refers to an object
+   is the object's pointer, and otherwise a new array of the objects, with
+   the inline values boxed, which the collector frees once the caller no
+   longer points into it.  NULL only with an exception set, if boxing
+   fails.  An item may be NULL, and items may be NULL if n is 0. */
+PyAPI_FUNC(PyObject **) _PyValue_ObjectArray(PyValue *items, Py_ssize_t n);
 
 /* A C local's value root (_PyValueRoot): pushed, it is visited by the
    collector until it is popped. */

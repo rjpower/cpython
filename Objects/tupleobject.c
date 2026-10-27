@@ -39,7 +39,7 @@ tuple_alloc(Py_ssize_t size)
     assert(size != 0);    // The empty tuple is statically allocated.
     /* Check for overflow */
     if ((size_t)size > ((size_t)PY_SSIZE_T_MAX - (sizeof(PyTupleObject) -
-                sizeof(PyObject *))) / sizeof(PyObject *)) {
+                sizeof(PyValue))) / sizeof(PyValue)) {
         return (PyTupleObject *)PyErr_NoMemory();
     }
     PyTupleObject *result = PyObject_GC_NewVar(PyTupleObject, &PyTuple_Type, size);
@@ -71,7 +71,7 @@ PyTuple_New(Py_ssize_t size)
         return NULL;
     }
     for (Py_ssize_t i = 0; i < size; i++) {
-        op->ob_item[i] = NULL;
+        op->ob_item[i] = PyValue_NULL;
     }
     _PyObject_GC_TRACK(op);
     return (PyObject *) op;
@@ -99,13 +99,12 @@ PyTuple_GetItem(PyObject *op, Py_ssize_t i)
         PyErr_SetString(PyExc_IndexError, "tuple index out of range");
         return NULL;
     }
-    return ((PyTupleObject *)op) -> ob_item[i];
+    return PyValue_Object(((PyTupleObject *)op)->ob_item[i]);
 }
 
 int
 PyTuple_SetItem(PyObject *op, Py_ssize_t i, PyObject *newitem)
 {
-    PyObject **p;
     // Uniqueness cannot be checked without counts; it is the caller's
     // contract, as for PyTuple_SET_ITEM().
     if (!PyTuple_Check(op)) {
@@ -119,8 +118,7 @@ PyTuple_SetItem(PyObject *op, Py_ssize_t i, PyObject *newitem)
                         "tuple assignment index out of range");
         return -1;
     }
-    p = ((PyTupleObject *)op) -> ob_item + i;
-    Py_XSETREF(*p, newitem);
+    PyTuple_SET_ITEM(op, i, newitem);
     return 0;
 }
 
@@ -135,12 +133,11 @@ _PyTuple_MaybeUntrack(PyObject *op)
     t = (PyTupleObject *) op;
     n = Py_SIZE(t);
     for (i = 0; i < n; i++) {
-        PyObject *elt = PyTuple_GET_ITEM(t, i);
+        PyValue elt = t->ob_item[i];
         /* Tuple with NULL elements aren't
            fully constructed, don't untrack
            them yet. */
-        if (!elt ||
-            _PyObject_GC_MAY_BE_TRACKED(elt))
+        if (PyValue_IsNull(elt) || _PyValue_MayBeTracked(elt))
             return;
     }
     _PyObject_GC_UNTRACK(op);
@@ -153,9 +150,9 @@ _PyTuple_MaybeUntrack(PyObject *op)
    becomes fast and safe to call on non-GC objects.
 */
 static bool
-maybe_tracked(PyObject *ob)
+maybe_tracked(PyValue v)
 {
-    return _PyType_IS_GC(Py_TYPE(ob));
+    return PyValue_IsObject(v) && _PyType_IS_GC(Py_TYPE(PyValue_ObjectBorrow(v)));
 }
 
 PyObject *
@@ -163,7 +160,7 @@ PyTuple_Pack(Py_ssize_t n, ...)
 {
     Py_ssize_t i;
     PyObject *o;
-    PyObject **items;
+    PyValue *items;
     va_list vargs;
     bool track = false;
 
@@ -180,10 +177,10 @@ PyTuple_Pack(Py_ssize_t n, ...)
     items = result->ob_item;
     for (i = 0; i < n; i++) {
         o = va_arg(vargs, PyObject *);
-        if (!track && maybe_tracked(o)) {
+        items[i] = PyValue_FromObject(o);
+        if (!track && maybe_tracked(items[i])) {
             track = true;
         }
-        items[i] = Py_NewRef(o);
     }
     va_end(vargs);
     if (track) {
@@ -213,10 +210,10 @@ _PyTuple_FromPairSteal(PyObject *first, PyObject *second)
         Py_DECREF(second);
         return NULL;
     }
-    PyObject **items = op->ob_item;
-    items[0] = first;
-    items[1] = second;
-    if (maybe_tracked(first) || maybe_tracked(second)) {
+    PyValue *items = op->ob_item;
+    items[0] = PyValue_FromObject(first);
+    items[1] = PyValue_FromObject(second);
+    if (maybe_tracked(items[0]) || maybe_tracked(items[1])) {
         _PyObject_GC_TRACK(op);
     }
     return (PyObject *)op;
@@ -259,10 +256,6 @@ tuple_dealloc(PyObject *self)
 
     PyObject_GC_UnTrack(op);
 
-    Py_ssize_t i = Py_SIZE(op);
-    while (--i >= 0) {
-        Py_XDECREF(op->ob_item[i]);
-    }
     Py_TYPE(op)->tp_free((PyObject *)op);
 }
 
@@ -313,7 +306,10 @@ tuple_repr(PyObject *self)
             }
         }
 
-        if (PyUnicodeWriter_WriteRepr(writer, v->ob_item[i]) < 0) {
+        // An uninitialized item is NULL, written as <NULL>.
+        PyObject *item = PyValue_Object(v->ob_item[i]);
+        if ((item == NULL && !PyValue_IsNull(v->ob_item[i]))
+            || PyUnicodeWriter_WriteRepr(writer, item) < 0) {
             goto error;
         }
     }
@@ -363,7 +359,7 @@ tuple_hash(PyObject *op)
     }
 
     Py_ssize_t len = Py_SIZE(v);
-    PyObject **item = v->ob_item;
+    PyValue *item = v->ob_item;
 
     /* Hashing an item recurses back into tuple_hash() when that item is
        itself a tuple, so guard the descent to raise RecursionError rather
@@ -374,7 +370,7 @@ tuple_hash(PyObject *op)
 
     acc = _PyTuple_HASH_XXPRIME_5;
     for (Py_ssize_t i = 0; i < len; i++) {
-        Py_uhash_t lane = PyObject_Hash(item[i]);
+        Py_uhash_t lane = _PyValue_Hash(item[i]);
         if (lane == (Py_uhash_t)-1) {
             _Py_LeaveRecursiveCall();
             return -1;
@@ -410,7 +406,8 @@ tuple_contains(PyObject *self, PyObject *el)
     PyTupleObject *a = _PyTuple_CAST(self);
     int cmp = 0;
     for (Py_ssize_t i = 0; cmp == 0 && i < Py_SIZE(a); ++i) {
-        cmp = PyObject_RichCompareBool(PyTuple_GET_ITEM(a, i), el, Py_EQ);
+        PyObject *item = PyValue_Object(a->ob_item[i]);
+        cmp = item == NULL ? -1 : PyObject_RichCompareBool(item, el, Py_EQ);
     }
     return cmp;
 }
@@ -423,7 +420,7 @@ tuple_item(PyObject *op, Py_ssize_t i)
         PyErr_SetString(PyExc_IndexError, "tuple index out of range");
         return NULL;
     }
-    return Py_NewRef(a->ob_item[i]);
+    return PyValue_Object(a->ob_item[i]);
 }
 
 PyObject *
@@ -437,19 +434,25 @@ PyTuple_FromArray(PyObject *const *src, Py_ssize_t n)
     if (tuple == NULL) {
         return NULL;
     }
-    PyObject **dst = tuple->ob_item;
+    PyValue *dst = tuple->ob_item;
     bool track = false;
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *item = src[i];
-        if (!track && maybe_tracked(item)) {
+        dst[i] = PyValue_FromObject(src[i]);
+        if (!track && maybe_tracked(dst[i])) {
             track = true;
         }
-        dst[i] = Py_NewRef(item);
     }
     if (track) {
         _PyObject_GC_TRACK(tuple);
     }
     return (PyObject *)tuple;
+}
+
+PyObject *const *
+_PyTuple_Objects(PyObject *op)
+{
+    PyTupleObject *t = _PyTuple_CAST(op);
+    return (PyObject *const *)_PyValue_ObjectArray(t->ob_item, Py_SIZE(t));
 }
 
 PyObject *
@@ -462,20 +465,13 @@ _PyTuple_FromValues(const PyValue *src, Py_ssize_t n)
     if (tuple == NULL) {
         return NULL;
     }
-    PyObject **dst = tuple->ob_item;
-    if (_PyValue_BoxInto(src, dst, n) < 0) {
-        memset(dst, 0, n * sizeof(PyObject *));
-        Py_DECREF(tuple);
-        return NULL;
-    }
+    PyValue *dst = tuple->ob_item;
     bool track = false;
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *item = PyValue_IsInline(src[i])
-                         ? dst[i] : PyValue_ObjectBorrow(src[i]);
-        if (!track && maybe_tracked(item)) {
+        dst[i] = src[i];
+        if (!track && maybe_tracked(src[i])) {
             track = true;
         }
-        dst[i] = item;
     }
     if (track) {
         _PyObject_GC_TRACK(tuple);
@@ -496,11 +492,7 @@ _PyTuple_FromArraySteal(PyObject *const *src, Py_ssize_t n)
         }
         return NULL;
     }
-    PyObject **dst = tuple->ob_item;
-    for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *item = src[i];
-        dst[i] = item;
-    }
+    _PyValue_FromObjectArray(tuple->ob_item, src, n);
     _PyObject_GC_TRACK(tuple);
     return (PyObject *)tuple;
 }
@@ -518,7 +510,7 @@ tuple_slice(PyTupleObject *a, Py_ssize_t ilow,
     if (ilow == 0 && ihigh == Py_SIZE(a) && PyTuple_CheckExact(a)) {
         return Py_NewRef(a);
     }
-    return PyTuple_FromArray(a->ob_item + ilow, ihigh - ilow);
+    return _PyTuple_FromValues(a->ob_item + ilow, ihigh - ilow);
 }
 
 PyObject *
@@ -536,8 +528,8 @@ _PyTuple_BinarySlice(PyObject *container, PyObject *start, PyObject *stop)
     if (istop < istart) {
         istop = istart;
     }
-    return PyTuple_FromArray(((PyTupleObject *)container)->ob_item + istart,
-                             istop - istart);
+    return _PyTuple_FromValues(((PyTupleObject *)container)->ob_item + istart,
+                               istop - istart);
 }
 
 PyObject *
@@ -579,19 +571,8 @@ _PyTuple_Concat(PyObject *aa, PyObject *bb)
         return NULL;
     }
 
-    PyObject **src = a->ob_item;
-    PyObject **dest = np->ob_item;
-    for (Py_ssize_t i = 0; i < Py_SIZE(a); i++) {
-        PyObject *v = src[i];
-        dest[i] = Py_NewRef(v);
-    }
-
-    src = b->ob_item;
-    dest = np->ob_item + Py_SIZE(a);
-    for (Py_ssize_t i = 0; i < Py_SIZE(b); i++) {
-        PyObject *v = src[i];
-        dest[i] = Py_NewRef(v);
-    }
+    memcpy(np->ob_item, a->ob_item, Py_SIZE(a) * sizeof(PyValue));
+    memcpy(np->ob_item + Py_SIZE(a), b->ob_item, Py_SIZE(b) * sizeof(PyValue));
 
     _PyObject_GC_TRACK(np);
     return (PyObject *)np;
@@ -622,23 +603,18 @@ _PyTuple_Repeat(PyObject *self, Py_ssize_t n)
     if (np == NULL)
         return NULL;
 
-    PyObject **dest = np->ob_item;
+    PyValue *dest = np->ob_item;
     if (input_size == 1) {
-        PyObject *elem = a->ob_item[0];
-        PyObject **dest_end = dest + output_size;
+        PyValue elem = a->ob_item[0];
+        PyValue *dest_end = dest + output_size;
         while (dest < dest_end) {
             *dest++ = elem;
         }
     }
     else {
-        PyObject **src = a->ob_item;
-        PyObject **src_end = src + input_size;
-        while (src < src_end) {
-            *dest++ = *src++;
-        }
-
-        _Py_memory_repeat((char *)np->ob_item, sizeof(PyObject *)*output_size,
-                          sizeof(PyObject *)*input_size);
+        memcpy(dest, a->ob_item, input_size * sizeof(PyValue));
+        _Py_memory_repeat((char *)np->ob_item, sizeof(PyValue)*output_size,
+                          sizeof(PyValue)*input_size);
     }
     _PyObject_GC_TRACK(np);
     return (PyObject *) np;
@@ -675,8 +651,9 @@ tuple_index_impl(PyTupleObject *self, PyObject *value, Py_ssize_t start,
     else if (stop > Py_SIZE(self)) {
         stop = Py_SIZE(self);
     }
+    PyValue v = PyValue_FromObject(value);
     for (i = start; i < stop; i++) {
-        int cmp = PyObject_RichCompareBool(self->ob_item[i], value, Py_EQ);
+        int cmp = _PyValue_RichCompareBool(self->ob_item[i], v, Py_EQ);
         if (cmp > 0)
             return PyLong_FromSsize_t(i);
         else if (cmp < 0)
@@ -702,8 +679,9 @@ tuple_count_impl(PyTupleObject *self, PyObject *value)
     Py_ssize_t count = 0;
     Py_ssize_t i;
 
+    PyValue v = PyValue_FromObject(value);
     for (i = 0; i < Py_SIZE(self); i++) {
-        int cmp = PyObject_RichCompareBool(self->ob_item[i], value, Py_EQ);
+        int cmp = _PyValue_RichCompareBool(self->ob_item[i], v, Py_EQ);
         if (cmp > 0)
             count++;
         else if (cmp < 0)
@@ -717,7 +695,7 @@ tuple_traverse(PyObject *self, visitproc visit, void *arg)
 {
     PyTupleObject *o = _PyTuple_CAST(self);
     for (Py_ssize_t i = Py_SIZE(o); --i >= 0; ) {
-        Py_VISIT(o->ob_item[i]);
+        _Py_VISIT_VALUE(o->ob_item[i]);
     }
     return 0;
 }
@@ -750,7 +728,7 @@ tuple_richcompare(PyObject *v, PyObject *w, int op)
      * vlen and wlen across the comparison calls.
      */
     for (i = 0; i < vlen && i < wlen; i++) {
-        int k = PyObject_RichCompareBool(vt->ob_item[i],
+        int k = _PyValue_RichCompareBool(vt->ob_item[i],
                                          wt->ob_item[i], Py_EQ);
         if (k < 0)
             return NULL;
@@ -772,7 +750,7 @@ tuple_richcompare(PyObject *v, PyObject *w, int op)
     }
 
     /* Compare the final item again using the proper operator */
-    return PyObject_RichCompare(vt->ob_item[i], wt->ob_item[i], op);
+    return _PyValue_RichCompare(vt->ob_item[i], wt->ob_item[i], op);
 }
 
 static PyObject *
@@ -811,7 +789,7 @@ tuple_new_impl(PyTypeObject *type, PyObject *iterable)
 static PyObject *
 tuple_subtype_new(PyTypeObject *type, PyObject *iterable)
 {
-    PyObject *tmp, *newobj, *item;
+    PyObject *tmp, *newobj;
     Py_ssize_t i, n;
 
     assert(PyType_IsSubtype(type, &PyTuple_Type));
@@ -829,8 +807,7 @@ tuple_subtype_new(PyTypeObject *type, PyObject *iterable)
         return NULL;
     }
     for (i = 0; i < n; i++) {
-        item = PyTuple_GET_ITEM(tmp, i);
-        PyTuple_SET_ITEM(newobj, i, Py_NewRef(item));
+        PyTuple_SET_VALUE(newobj, i, PyTuple_GET_VALUE(tmp, i));
     }
     Py_DECREF(tmp);
 
@@ -861,7 +838,9 @@ tuple_iteritem(PyObject *obj, Py_ssize_t index)
         return (_PyObjectIndexPair) { .object = NULL, .index = index };
     }
     PyObject *result = PyTuple_GET_ITEM(obj, index);
-    Py_INCREF(result);
+    if (result == NULL) {
+        return (_PyObjectIndexPair) { .object = NULL, .index = -1 };
+    }
     return (_PyObjectIndexPair) { .object = result, .index = index + 1 };
 }
 
@@ -880,8 +859,7 @@ tuple_subscript(PyObject *op, PyObject* item)
     else if (PySlice_Check(item)) {
         Py_ssize_t start, stop, step, slicelength, i;
         size_t cur;
-        PyObject* it;
-        PyObject **src, **dest;
+        PyValue *src, *dest;
 
         if (PySlice_Unpack(item, &start, &stop, &step) < 0) {
             return NULL;
@@ -905,8 +883,7 @@ tuple_subscript(PyObject *op, PyObject* item)
             dest = result->ob_item;
             for (cur = start, i = 0; i < slicelength;
                  cur += step, i++) {
-                it = Py_NewRef(src[cur]);
-                dest[i] = it;
+                dest[i] = src[cur];
             }
 
             _PyObject_GC_TRACK(result);
@@ -959,8 +936,8 @@ static PyObject *tuple_iter(PyObject *seq);
 PyTypeObject PyTuple_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "tuple",
-    sizeof(PyTupleObject) - sizeof(PyObject *),
-    sizeof(PyObject *),
+    sizeof(PyTupleObject) - sizeof(PyValue),
+    sizeof(PyValue),
     tuple_dealloc,                              /* tp_dealloc */
     0,                                          /* tp_vectorcall_offset */
     0,                                          /* tp_getattr */
@@ -1048,7 +1025,7 @@ _PyTuple_Resize(PyObject **pv, Py_ssize_t newsize)
     }
     /* Check for overflow */
     if ((size_t)newsize > ((size_t)PY_SSIZE_T_MAX - (sizeof(PyTupleObject) -
-                sizeof(PyObject *))) / sizeof(PyObject *)) {
+                sizeof(PyValue))) / sizeof(PyValue)) {
         *pv = NULL;
         Py_DECREF(v);
         PyErr_NoMemory();
@@ -1060,17 +1037,12 @@ _PyTuple_Resize(PyObject **pv, Py_ssize_t newsize)
     }
     /* DECREF items deleted by shrinkage */
     for (i = newsize; i < oldsize; i++) {
-        Py_CLEAR(v->ob_item[i]);
+        v->ob_item[i] = PyValue_NULL;
     }
     _PyReftracerTrack((PyObject *)v, PyRefTracer_DESTROY);
     sv = PyObject_GC_Resize(PyTupleObject, v, newsize);
     if (sv == NULL) {
         *pv = NULL;
-        /* The failed reallocation leaves the original items owned by v. */
-        i = oldsize;
-        while (--i >= 0) {
-            Py_XDECREF(v->ob_item[i]);
-        }
         PyObject_GC_Del(v);
         return -1;
     }
@@ -1111,7 +1083,6 @@ tupleiter_next(PyObject *self)
 {
     _PyTupleIterObject *it = _PyTupleIterObject_CAST(self);
     PyTupleObject *seq;
-    PyObject *item;
 
     assert(it != NULL);
     seq = it->it_seq;
@@ -1122,8 +1093,7 @@ tupleiter_next(PyObject *self)
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
     if (index < PyTuple_GET_SIZE(seq)) {
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index + 1);
-        item = PyTuple_GET_ITEM(seq, index);
-        return Py_NewRef(item);
+        return PyTuple_GET_ITEM(seq, index);
     }
 
     it->it_seq = NULL;

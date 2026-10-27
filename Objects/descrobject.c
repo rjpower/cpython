@@ -508,8 +508,11 @@ classmethoddescr_call(PyObject *_descr, PyObject *args,
     if (bound == NULL) {
         return NULL;
     }
-    PyObject *res = PyObject_VectorcallDict(bound, _PyTuple_ITEMS(args)+1,
-                                           argc-1, kwds);
+    PyObject *const *items = _PyTuple_Objects(args);
+    if (items == NULL) {
+        return NULL;
+    }
+    PyObject *res = PyObject_VectorcallDict(bound, items + 1, argc - 1, kwds);
     Py_DECREF(bound);
     return res;
 }

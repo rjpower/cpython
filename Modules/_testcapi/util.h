@@ -51,3 +51,25 @@ static const char uninitialized[] = "uninitialized";
  * crash the interpreter).
  */
  #define NULL_WOULD_RAISE(NAME)    NAME
+
+/* The items of a tuple as a new array of objects, for the C APIs that take
+ * one: a tuple holds values, and an inline value is boxed.  Free the array
+ * with PyMem_Free().  NULL with an exception set on failure. */
+static inline PyObject **
+tuple_objects(PyObject *tuple)
+{
+    Py_ssize_t n = PyTuple_GET_SIZE(tuple);
+    PyObject **items = PyMem_New(PyObject *, n > 0 ? n : 1);
+    if (items == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    for (Py_ssize_t i = 0; i < n; i++) {
+        items[i] = PyTuple_GET_ITEM(tuple, i);
+        if (items[i] == NULL) {
+            PyMem_Free(items);
+            return NULL;
+        }
+    }
+    return items;
+}

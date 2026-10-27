@@ -1091,11 +1091,17 @@ bytearray___init___impl(PyByteArrayObject *self, PyObject *arg,
         if (PyByteArray_Resize((PyObject *)self, size) < 0) {
             return -1;
         }
-        PyObject **items = PySequence_Fast_ITEMS(arg);
+        PyValue *items = PySequence_Fast_ITEMS(arg);
         char *s = PyByteArray_AS_STRING(self);
         for (Py_ssize_t i = 0; i < size; i++) {
             int value;
-            if (!PyLong_CheckExact(items[i])) {
+            if (PyValue_IsInlineInt(items[i])
+                && 0 <= PyValue_Int32(items[i]) && PyValue_Int32(items[i]) < 256)
+            {
+                s[i] = (char)PyValue_Int32(items[i]);
+                continue;
+            }
+            if (PyValue_Type(items[i]) != &PyLong_Type) {
                 /* Resize to 0 and go through slowpath */
                 if (Py_SIZE(self) != 0) {
                    if (PyByteArray_Resize((PyObject *)self, 0) < 0) {
@@ -1104,7 +1110,8 @@ bytearray___init___impl(PyByteArrayObject *self, PyObject *arg,
                 }
                 goto slowpath;
             }
-            int rc = _getbytevalue(items[i], &value);
+            PyObject *item = PyValue_Object(items[i]);
+            int rc = item != NULL && _getbytevalue(item, &value);
             if (!rc) {
                 /* Don't expose the uninitialized bytes: reset to empty */
                 (void)PyByteArray_Resize((PyObject *)self, 0);

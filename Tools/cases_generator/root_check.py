@@ -35,8 +35,8 @@ BORROWING = {
     "_PyObject_CAST",
     "_PyType_CAST",
     "_PyFunction_CAST",
-    "PyList_GET_ITEM",
-    "PyTuple_GET_ITEM",
+    "PyList_GET_VALUE",
+    "PyTuple_GET_VALUE",
     "_PyList_ITEMS",
     "_PyTuple_ITEMS",
     "PyCell_GET",
@@ -353,9 +353,10 @@ class Checker:
         # frame->field
         if tkns[0].text == "frame" and tkns[1].text == "->":
             return True
-        # The value that a value root holds
+        # The value, or the box, that a value root holds
         if (len(tkns) == 3 and tkns[0].text in self.held
-                and tkns[1].text in (".", "->") and tkns[2].text == "ref"):
+                and tkns[1].text in (".", "->")
+                and tkns[2].text in ("value", "object")):
             return True
         # cond ? a : b
         for k, t in enumerate(tkns):

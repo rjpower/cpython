@@ -2,6 +2,7 @@
 #define PYTESTCAPI_NEED_INTERNAL_API
 
 #include "parts.h"
+#include "pycore_tuple.h"         // _PyTuple_Objects()
 #include "clinic/vectorcall.c.h"
 
 
@@ -15,14 +16,17 @@ module _testcapi
 /* Test PEP 590 - Vectorcall */
 
 static int
-fastcall_args(PyObject *args, PyObject ***stack, Py_ssize_t *nargs)
+fastcall_args(PyObject *args, PyObject *const **stack, Py_ssize_t *nargs)
 {
     if (args == Py_None) {
         *stack = NULL;
         *nargs = 0;
     }
     else if (PyTuple_Check(args)) {
-        *stack = ((PyTupleObject *)args)->ob_item;
+        *stack = _PyTuple_Objects(args);
+        if (*stack == NULL) {
+            return -1;
+        }
         *nargs = PyTuple_GET_SIZE(args);
     }
     else {
@@ -45,7 +49,7 @@ _testcapi_pyobject_fastcalldict_impl(PyObject *module, PyObject *func,
                                      PyObject *func_args, PyObject *kwargs)
 /*[clinic end generated code: output=35902ece94de4418 input=b9c0196ca7d5f9e4]*/
 {
-    PyObject **stack;
+    PyObject *const *stack;
     Py_ssize_t nargs;
 
     if (fastcall_args(func_args, &stack, &nargs) < 0) {
@@ -76,7 +80,7 @@ _testcapi_pyobject_vectorcall_impl(PyObject *module, PyObject *func,
                                    PyObject *func_args, PyObject *kwnames)
 /*[clinic end generated code: output=ff77245bc6afe0d8 input=a0668dfef625764c]*/
 {
-    PyObject **stack;
+    PyObject *const *stack;
     Py_ssize_t nargs, nkw;
 
     if (fastcall_args(func_args, &stack, &nargs) < 0) {

@@ -256,19 +256,14 @@ do { \
         JUMP_TO_LABEL(start_frame);                              \
     } while (0)
 
-/* Tuple access macros */
+/* Tuple access macros.  GETITEM reads a tuple of objects that are never
+   inline, such as the names of a code object, without boxing; constants are
+   read as values (PyTuple_GET_VALUE). */
 
-#ifndef Py_DEBUG
-#define GETITEM(v, i) PyTuple_GET_ITEM((v), (i))
-#else
 static inline PyObject *
 GETITEM(PyObject *v, Py_ssize_t i) {
-    assert(PyTuple_Check(v));
-    assert(i >= 0);
-    assert(i < PyTuple_GET_SIZE(v));
-    return PyTuple_GET_ITEM(v, i);
+    return PyValue_ObjectBorrow(PyTuple_GET_VALUE(v, i));
 }
-#endif
 
 /* Code access macros */
 

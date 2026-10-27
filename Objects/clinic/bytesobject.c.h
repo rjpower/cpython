@@ -8,6 +8,7 @@ preserve
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_Objects()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 PyDoc_STRVAR(bytes___bytes____doc__,
@@ -1440,7 +1441,11 @@ exit:
 static PyObject *
 bytes_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    return bytes_new_helper(type, _PyTuple_CAST(args)->ob_item,
+    PyObject *const *argitems = _PyTuple_Objects(args);
+    if (argitems == NULL) {
+        return NULL;
+    }
+    return bytes_new_helper(type, argitems,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
         kwargs, NULL);
@@ -1497,4 +1502,4 @@ skip_optional:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=0d49a97b9e2eef5b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e0132bb54aef1b99 input=a9049054013a1b77]*/

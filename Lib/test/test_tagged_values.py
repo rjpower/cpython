@@ -849,6 +849,77 @@ class InlineCallTest(unittest.TestCase):
         self.assertTrue(f(make_inline(1), (int, 5)))
 
 
+class ContainerCanonicalTest(unittest.TestCase):
+    """A tuple or a list holds an int that fits in int32 or a float other
+    than NaN as its value: a box stored through the C API is not kept, and
+    every read gives a value identical to what was stored."""
+
+    def setUp(self):
+        self.capi = import_helper.import_module("_testcapi")
+        self.limited = import_helper.import_module("_testlimitedcapi")
+
+    VALUES = (70000, -2**31, 2**31 - 1, 1.5, -0.0, math.inf, 5e-324)
+
+    def check_read(self, value, read):
+        self.assertIs(read, value)
+        self.assertEqual(id(read), id(value))
+        self.assertIs(type(read), type(value))
+
+    def test_list_set_item(self):
+        for value in self.VALUES:
+            with self.subTest(value=value):
+                box = distinct(value)
+                lst = [None, None]
+                self.limited.list_setitem(lst, 0, box)
+                self.capi.list_set_item(lst, 1, distinct(value))
+                self.check_read(value, lst[0])
+                self.check_read(lst[0], lst[1])
+                self.check_read(value, self.limited.list_getitem(lst, 0))
+                self.check_read(value, self.capi.list_get_item(lst, 1))
+                self.assertEqual(lst.index(value), 0)
+                self.assertEqual(lst.count(box), 2)
+                self.assertIn(value, lst)
+
+    def test_tuple_set_item(self):
+        for value in self.VALUES:
+            with self.subTest(value=value):
+                t = self.limited.tuple_pack(2, distinct(value), distinct(value))
+                self.check_read(value, t[0])
+                self.check_read(t[0], t[1])
+                self.check_read(value, self.limited.tuple_getitem(t, 1))
+                self.check_read(value, self.capi.tuple_get_item(t, 0))
+                self.assertEqual(hash(t), hash((value, value)))
+                self.assertEqual(t, (value, value))
+
+    def test_containers_from_c(self):
+        for value in self.VALUES:
+            with self.subTest(value=value):
+                src = [distinct(value), distinct(value)]
+                for got in (tuple(src), list(src), self.limited.list_astuple(src),
+                            src[:], src * 2, sorted(src)):
+                    for item in got:
+                        self.check_read(value, item)
+
+    def test_outside_int32_is_an_object(self):
+        x = distinct(2**40)
+        lst = [None]
+        self.limited.list_setitem(lst, 0, x)
+        self.assertIs(lst[0], x)
+        self.assertIsNot(lst[0], distinct(2**40))
+        self.assertEqual(gc.get_referents(lst), [x])
+
+    def test_inline_items_are_not_referents(self):
+        self.assertEqual(gc.get_referents([1, 2.5, -3]), [])
+        self.assertEqual(gc.get_referents((70000, 1e10)), [])
+
+    def test_sort_mixed(self):
+        values = [3, 2.5, -1, 2**40, 0.0, -2**31, 1e300, 7]
+        self.assertEqual(sorted(values), sorted(values, key=float))
+        self.assertEqual(sorted(values, reverse=True),
+                         sorted(values, key=float, reverse=True))
+        pairs = [(v, i) for i, v in enumerate(values)]
+        self.assertEqual([v for v, _ in sorted(pairs)], sorted(values))
+
 
 if __name__ == "__main__":
     unittest.main()

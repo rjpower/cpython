@@ -1638,7 +1638,11 @@ methodcaller_vectorcall(PyObject *op, PyObject *const *args,
     PyObject *tmp_args[_METHODCALLER_MAX_ARGS];
     tmp_args[0] = args[0];
     assert(1 + PyTuple_GET_SIZE(mc->vectorcall_args) <= _METHODCALLER_MAX_ARGS);
-    memcpy(tmp_args + 1, _PyTuple_ITEMS(mc->vectorcall_args), sizeof(PyObject *) * PyTuple_GET_SIZE(mc->vectorcall_args));
+    PyObject *const *items = _PyTuple_Objects(mc->vectorcall_args);
+    if (items == NULL) {
+        return NULL;
+    }
+    memcpy(tmp_args + 1, items, sizeof(PyObject *) * PyTuple_GET_SIZE(mc->vectorcall_args));
 
     return PyObject_VectorcallMethod(mc->name, tmp_args,
             (1 + PyTuple_GET_SIZE(mc->args)) | PY_VECTORCALL_ARGUMENTS_OFFSET,

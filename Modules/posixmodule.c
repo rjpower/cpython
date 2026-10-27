@@ -30,6 +30,7 @@
 #include "pycore_signal.h"        // Py_NSIG
 #include "pycore_time.h"          // _PyLong_FromTime_t()
 #include "pycore_tuple.h"         // _PyTuple_FromPairSteal
+#include "pycore_value.h"         // _PyValue_IsNone()
 #include "pycore_typeobject.h"    // _PyType_AddMethod()
 #include "pycore_warnings.h"      // _PyWarnings_AfterFork()
 
@@ -2597,9 +2598,8 @@ statresult_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
        st_?time might be set to None. Initialize it
        from the int slots.  */
     for (i = 7; i <= 9; i++) {
-        if (result->ob_item[i+3] == Py_None) {
-            Py_DECREF(Py_None);
-            result->ob_item[i+3] = Py_NewRef(result->ob_item[i]);
+        if (_PyValue_IsNone(result->ob_item[i+3])) {
+            result->ob_item[i+3] = result->ob_item[i];
         }
     }
     return (PyObject*)result;

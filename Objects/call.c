@@ -267,18 +267,20 @@ _PyVectorcall_Call(PyThreadState *tstate, vectorcallfunc func,
     assert(func != NULL);
 
     Py_ssize_t nargs = PyTuple_GET_SIZE(tuple);
+    PyObject *const *items = _PyTuple_Objects(tuple);
+    if (items == NULL) {
+        return NULL;
+    }
 
     /* Fast path for no keywords */
     if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
-        return func(callable, _PyTuple_ITEMS(tuple), nargs, NULL);
+        return func(callable, items, nargs, NULL);
     }
 
     /* Convert arguments & call */
     PyObject *const *args;
     PyObject *kwnames;
-    args = _PyStack_UnpackDict(tstate,
-                               _PyTuple_ITEMS(tuple), nargs,
-                               kwargs, &kwnames);
+    args = _PyStack_UnpackDict(tstate, items, nargs, kwargs, &kwnames);
     if (args == NULL) {
         return NULL;
     }
@@ -495,11 +497,15 @@ _PyObject_Call_Prepend(PyThreadState *tstate, PyObject *callable,
         }
     }
 
-    /* use borrowed references */
+    PyObject *const *items = _PyTuple_Objects(args);
+    if (items == NULL) {
+        if (stack != small_stack) {
+            PyMem_Free(stack);
+        }
+        return NULL;
+    }
     stack[0] = obj;
-    memcpy(&stack[1],
-           _PyTuple_ITEMS(args),
-           argcount * sizeof(PyObject *));
+    memcpy(&stack[1], items, argcount * sizeof(PyObject *));
 
     PyObject *result = _PyObject_VectorcallDictTstate(tstate, callable,
                                                       stack, argcount + 1,
@@ -543,10 +549,10 @@ _PyObject_CallFunctionVa(PyThreadState *tstate, PyObject *callable,
            - PyObject_CallFunction(func, "(OOO)", arg1, arg2, arg3) calls
              func(*(arg1, arg2, arg3)): func(arg1, arg2, arg3) */
         PyObject *args = stack[0];
-        result = _PyObject_VectorcallTstate(tstate, callable,
-                                            _PyTuple_ITEMS(args),
-                                            PyTuple_GET_SIZE(args),
-                                            NULL);
+        PyObject *const *items = _PyTuple_Objects(args);
+        result = items == NULL ? NULL
+                 : _PyObject_VectorcallTstate(tstate, callable, items,
+                                              PyTuple_GET_SIZE(args), NULL);
     }
     else {
         result = _PyObject_VectorcallTstate(tstate, callable,
@@ -653,12 +659,17 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
     /* Backward compat: a single tuple from "O" is unpacked. */
     PyObject *const *args = built;
     Py_ssize_t n = nargs;
+    int boxed = 1;
     if (nargs == 1 && PyTuple_Check(built[0])) {
-        args = _PyTuple_ITEMS(built[0]);
+        args = _PyTuple_Objects(built[0]);
         n = PyTuple_GET_SIZE(built[0]);
+        boxed = args != NULL;
     }
 
-    if (self_obj != NULL) {
+    if (!boxed) {
+        result = NULL;
+    }
+    else if (self_obj != NULL) {
         result = _PyObject_VectorcallPrepend(tstate, callable, self_obj, args, n, NULL);
     }
     else {
@@ -1023,7 +1034,7 @@ _PyStack_AsDict(PyObject *const *values, PyObject *kwnames)
 
     assert(kwnames != NULL);
     nkwargs = PyTuple_GET_SIZE(kwnames);
-    return _PyDict_FromItems(&PyTuple_GET_ITEM(kwnames, 0), 1,
+    return _PyDict_FromItems(_PyTuple_HEAP_ITEMS(kwnames), 1,
                              values, 1, nkwargs);
 }
 

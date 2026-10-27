@@ -9,6 +9,7 @@ preserve
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_runtime.h"       // _Py_SINGLETON()
+#include "pycore_tuple.h"         // _PyTuple_Objects()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 static PyObject *
@@ -175,7 +176,11 @@ exit:
 static int
 bytearray___init__(PyObject *self, PyObject *args, PyObject *kwargs)
 {
-    return bytearray___init___helper(self, _PyTuple_CAST(args)->ob_item,
+    PyObject *const *argitems = _PyTuple_Objects(args);
+    if (argitems == NULL) {
+        return -1;
+    }
+    return bytearray___init___helper(self, argitems,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
         kwargs, NULL);
@@ -2037,4 +2042,4 @@ bytearray_sizeof(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return bytearray_sizeof_impl((PyByteArrayObject *)self);
 }
-/*[clinic end generated code: output=b8e659fe4b2f770e input=a9049054013a1b77]*/
+/*[clinic end generated code: output=cb633421db50bbdf input=a9049054013a1b77]*/

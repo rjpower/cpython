@@ -262,25 +262,19 @@ dummy_func(
         };
 
         pure inst(LOAD_CONST, (-- value)) {
-            PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
-            value = PyValue_FromObject(obj);
+            value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
         }
 
-        // The constant is an exact int with at most one digit.
+        // The constant is an exact int that fits in int32, held inline.
         inst(LOAD_CONST_INLINE_INT, (-- value)) {
-            PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
-            assert(_PyLong_CheckExactAndCompact(obj));
-            value = PyValue_FromInt32((int32_t)_PyLong_CompactValue((PyLongObject *)obj));
-            ERROR_IF(PyValue_IsNull(value));
+            value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
+            assert(PyValue_IsInlineInt(value));
         }
 
-        // The constant is an exact float other than NaN. Only builds with
-        // inline values quicken to this.
+        // The constant is an exact float other than NaN, held inline.
         inst(LOAD_CONST_INLINE_FLOAT, (-- value)) {
-            PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
-            assert(PyFloat_CheckExact(obj) && !isnan(PyFloat_AS_DOUBLE(obj)));
-            // Not NaN, so inline: the encoding, without FromDouble's test.
-            value = _PyValue_FromBits(_PyValue_DoubleBits(PyFloat_AS_DOUBLE(obj)));
+            value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
+            assert(PyValue_IsInlineFloat(value));
         }
 
         family(LOAD_SMALL_INT, 0) = {
@@ -1076,9 +1070,8 @@ dummy_func(
                 index += PyList_GET_SIZE(list);
             }
             EXIT_IF(index < 0 || index >= PyList_GET_SIZE(list));
-            PyObject *res_o = PyList_GET_ITEM(list, index);
-            assert(res_o != NULL);
-            res = PyValue_FromObject(res_o);
+            res = PyList_GET_VALUE(list, index);
+            assert(!PyValue_IsNull(res));
             STAT_INC(BINARY_OP, hit);
             ls = list_st;
             ss = sub_st;
@@ -1184,9 +1177,8 @@ dummy_func(
             STAT_INC(BINARY_OP, hit);
             Py_ssize_t index = _PyValue_CompactInt(sub_st);
             assert(0 <= index && index < PyTuple_GET_SIZE(tuple));
-            PyObject *res_o = PyTuple_GET_ITEM(tuple, index);
-            assert(res_o != NULL);
-            res = PyValue_FromObject(res_o);
+            res = PyTuple_GET_VALUE(tuple, index);
+            assert(!PyValue_IsNull(res));
             ts = tuple_st;
             ss = sub_st;
             INPUTS_DEAD();
@@ -1322,16 +1314,12 @@ dummy_func(
             }
             STAT_INC(STORE_SUBSCR, hit);
 
-            PyObject *old_value = PyList_GET_ITEM(list, index);
-            FT_ATOMIC_STORE_PTR_RELEASE(_PyList_ITEMS(list)[index],
-                                        PyValue_ObjectBorrow(value));
+            _PyList_ITEMS(list)[index] = value;
             DEAD(value);
-            assert(old_value != NULL);
-            UNLOCK_OBJECT(list);  // unlock before decrefs!
+            UNLOCK_OBJECT(list);
             INPUTS_DEAD();
             ls = list_st;
             ss = sub_st;
-            Py_DECREF(old_value);
         }
 
         macro(STORE_SUBSCR_DICT) =
@@ -1893,8 +1881,8 @@ dummy_func(
             assert(PyTuple_CheckExact(seq_o));
             EXIT_IF(PyTuple_GET_SIZE(seq_o) != 2);
             STAT_INC(UNPACK_SEQUENCE, hit);
-            val0 = PyValue_FromObject(PyTuple_GET_ITEM(seq_o, 0));
-            val1 = PyValue_FromObject(PyTuple_GET_ITEM(seq_o, 1));
+            val0 = PyTuple_GET_VALUE(seq_o, 0);
+            val1 = PyTuple_GET_VALUE(seq_o, 1);
             DEAD(seq);
         }
 
@@ -1906,9 +1894,9 @@ dummy_func(
             assert(PyTuple_CheckExact(seq_o));
             EXIT_IF(PyTuple_GET_SIZE(seq_o) != oparg);
             STAT_INC(UNPACK_SEQUENCE, hit);
-            PyObject **items = _PyTuple_ITEMS(seq_o);
+            PyValue *items = _PyTuple_ITEMS(seq_o);
             for (int i = oparg; --i >= 0; ) {
-                *values++ = PyValue_FromObject(items[i]);
+                *values++ = items[i];
             }
             INPUTS_DEAD();
         }
@@ -1925,9 +1913,9 @@ dummy_func(
                 DEOPT_IF(true);
             }
             STAT_INC(UNPACK_SEQUENCE, hit);
-            PyObject **items = _PyList_ITEMS(seq_o);
+            PyValue *items = _PyList_ITEMS(seq_o);
             for (int i = oparg; --i >= 0; ) {
-                *values++ = PyValue_FromObject(items[i]);
+                *values++ = items[i];
             }
             UNLOCK_OBJECT(seq_o);
             INPUTS_DEAD();
@@ -2170,7 +2158,7 @@ dummy_func(
 
             assert(class_dict);
             assert(oparg >= 0 && oparg < _PyFrame_GetCode(frame)->co_nlocalsplus);
-            name = PyTuple_GET_ITEM(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
+            name = GETITEM(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
             int err;
             PyObject* value_o = _PyMapping_GetOptionalItem2(class_dict, name, &err);
             if (err < 0) {
@@ -2220,8 +2208,7 @@ dummy_func(
             assert(oparg == co->co_nfreevars);
             int offset = co->co_nlocalsplus - oparg;
             for (int i = 0; i < oparg; ++i) {
-                PyObject *o = PyTuple_GET_ITEM(closure, i);
-                frame->base[offset + i] = PyValue_FromObject(o);
+                frame->base[offset + i] = PyTuple_GET_VALUE(closure, i);
             }
         }
 
@@ -3692,7 +3679,7 @@ dummy_func(
         replaced op(_ITER_NEXT_LIST, (iter, null_or_index -- iter, null_or_index, next)) {
             PyObject *list_o = PyValue_ObjectBorrow(iter);
             assert(PyList_CheckExact(list_o));
-            next = PyValue_FromObject(PyList_GET_ITEM(list_o, _PyValue_UntagIndex(null_or_index)));
+            next = PyList_GET_VALUE(list_o, _PyValue_UntagIndex(null_or_index));
             null_or_index = _PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
         }
 
@@ -3727,7 +3714,7 @@ dummy_func(
             assert(Py_TYPE(tuple_o) == &PyTuple_Type);
             uintptr_t i = _PyValue_UntagIndex(null_or_index);
             assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
-            next = PyValue_FromObject(PyTuple_GET_ITEM(tuple_o, i));
+            next = PyTuple_GET_VALUE(tuple_o, i);
             null_or_index = _PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
         }
 
@@ -5237,12 +5224,21 @@ dummy_func(
                 PyObject *kwargs = PyValue_ObjectBorrow(kwargs_st);
                 assert(kwargs == NULL || PyDict_CheckExact(kwargs));
                 assert(PyTuple_CheckExact(callargs));
-                PyObject *arg = PyTuple_GET_SIZE(callargs) > 0 ?
+                // The first argument, a box if it is inline, which a value
+                // root holds across the calls.
+                PyObject *arg0 = PyTuple_GET_SIZE(callargs) > 0 ?
                     PyTuple_GET_ITEM(callargs, 0) : &_PyInstrumentation_MISSING;
+                if (arg0 == NULL) {
+                    ERROR_NO_POP();
+                }
+                _PyValueRoot arg0_root;
+                _PyThreadState_PushValueRoot(tstate, &arg0_root);
+                arg0_root.object = arg0;
                 int err = _Py_call_instrumentation_2args(
                     tstate, PY_MONITORING_EVENT_CALL,
-                    frame, this_instr, func, arg);
+                    frame, this_instr, func, arg0_root.object);
                 if (err) {
+                    _PyThreadState_PopValueRoot(tstate, &arg0_root);
                     ERROR_NO_POP();
                 }
                 result_o = PyObject_Call(func, callargs, kwargs);
@@ -5251,17 +5247,18 @@ dummy_func(
                     if (result_o == NULL) {
                         _Py_call_instrumentation_exc2(
                             tstate, PY_MONITORING_EVENT_C_RAISE,
-                            frame, this_instr, func, arg);
+                            frame, this_instr, func, arg0_root.object);
                     }
                     else {
                         int err = _Py_call_instrumentation_2args(
                             tstate, PY_MONITORING_EVENT_C_RETURN,
-                            frame, this_instr, func, arg);
+                            frame, this_instr, func, arg0_root.object);
                         if (err < 0) {
                             Py_CLEAR(result_o);
                         }
                     }
                 }
+                _PyThreadState_PopValueRoot(tstate, &arg0_root);
             }
             else {
                 if (Py_TYPE(func) == &PyFunction_Type &&

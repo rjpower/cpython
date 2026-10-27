@@ -498,7 +498,10 @@ class GCTests(unittest.TestCase):
         self.assertEqual(len(gc.garbage), garbagelen)
 
     def test_get_referents(self):
-        alist = [1, 3, 5]
+        # Integers beyond int32 are objects; smaller ones and floats are
+        # inline values, which are not referents.
+        big = 2**40
+        alist = [big + 1, big + 3, big + 5]
         got = gc.get_referents(alist)
         got.sort()
         self.assertEqual(got, alist)
@@ -508,16 +511,18 @@ class GCTests(unittest.TestCase):
         got.sort()
         self.assertEqual(got, alist)
 
-        adict = {1: 3, 5: 7}
-        expected = [1, 3, 5, 7]
+        adict = {big + 1: big + 3, big + 5: big + 7}
+        expected = [big + 1, big + 3, big + 5, big + 7]
         got = gc.get_referents(adict)
         got.sort()
         self.assertEqual(got, expected)
 
-        got = gc.get_referents([1, 2], {3: 4}, (0, 0, 0))
+        got = gc.get_referents([big + 1, big + 2], {big + 3: big + 4},
+                               (big, big, big))
         got.sort()
-        self.assertEqual(got, [0, 0] + list(range(5)))
+        self.assertEqual(got, [big, big] + [big + i for i in range(5)])
 
+        self.assertEqual(gc.get_referents([1, 2.5], (3, 4.5)), [])
         self.assertEqual(gc.get_referents(1, 'a', 4j), [])
 
     def test_is_tracked(self):

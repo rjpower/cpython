@@ -10,7 +10,7 @@ preserve
 #include "pycore_long.h"          // _PyLong_UnsignedShort_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_tuple.h"         // _PyTuple_Objects()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 PyDoc_STRVAR(lone_kwds__doc__,
@@ -230,4 +230,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=27a7ba9440b9a884 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4ce073c37aab592c input=a9049054013a1b77]*/

@@ -96,9 +96,14 @@ PyAPI_FUNC(Py_ssize_t) PyObject_LengthHint(PyObject *o, Py_ssize_t);
 #define PySequence_Fast_GET_ITEM(o, i)\
      (PyList_Check(o) ? PyList_GET_ITEM((o), (i)) : PyTuple_GET_ITEM((o), (i)))
 
-/* Return a pointer to the underlying item array for
+/* Return a pointer to the underlying item array, of PyValue, for
    an object returned by PySequence_Fast */
 #define PySequence_Fast_ITEMS(sf) \
     (PyList_Check(sf) ? ((PyListObject *)(sf))->ob_item \
                       : ((PyTupleObject *)(sf))->ob_item)
+
+/* The value of the 'i'-th element, under the same conditions as
+   PySequence_Fast_GET_ITEM(), which boxes it. */
+#define PySequence_Fast_GET_VALUE(o, i)\
+     (PyList_Check(o) ? PyList_GET_VALUE((o), (i)) : PyTuple_GET_VALUE((o), (i)))
 

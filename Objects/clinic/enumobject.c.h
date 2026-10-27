@@ -7,6 +7,7 @@ preserve
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_Objects()
 
 PyDoc_STRVAR(enum_new__doc__,
 "enumerate(iterable, start=0)\n"
@@ -84,7 +85,11 @@ exit:
 static PyObject *
 enum_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    return enum_new_helper(type, _PyTuple_CAST(args)->ob_item,
+    PyObject *const *argitems = _PyTuple_Objects(args);
+    if (argitems == NULL) {
+        return NULL;
+    }
+    return enum_new_helper(type, argitems,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
         kwargs, NULL);
@@ -173,4 +178,4 @@ reversed_vectorcall(PyObject *type, PyObject *const *args,
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=b97e8b89ca97ba64 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=a35ec78b858f5d27 input=a9049054013a1b77]*/

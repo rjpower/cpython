@@ -58,6 +58,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "pycore_ucnhash.h"       // _PyUnicode_Name_CAPI
 #include "pycore_unicodectype.h"  // _PyUnicode_IsXidStart
 #include "pycore_unicodeobject.h" // struct _Py_unicode_state
+#include "pycore_value.h"         // _PyValue_ObjectArray()
 #include "pycore_unicodeobject_generated.h"  // _PyUnicode_InitStaticStrings()
 
 #include "stringlib/eq.h"         // unicode_eq()
@@ -10330,9 +10331,10 @@ PyUnicode_Join(PyObject *separator, PyObject *seq)
 
     Py_BEGIN_CRITICAL_SECTION_SEQUENCE_FAST(seq);
 
-    items = PySequence_Fast_ITEMS(fseq);
     seqlen = PySequence_Fast_GET_SIZE(fseq);
-    res = _PyUnicode_JoinArray(separator, items, seqlen);
+    // An int or float item is boxed, for the TypeError that it raises.
+    items = _PyValue_ObjectArray(PySequence_Fast_ITEMS(fseq), seqlen);
+    res = items == NULL ? NULL : _PyUnicode_JoinArray(separator, items, seqlen);
 
     Py_END_CRITICAL_SECTION_SEQUENCE_FAST();
 

@@ -5,6 +5,7 @@
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_object.h"
+#include "pycore_tuple.h"          // _PyTuple_Objects()
 #include "pycore_typevarobject.h" // _Py_typing_type_repr
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 #include "pycore_unionobject.h"   // _Py_union_type_or, _PyGenericAlias_Check
@@ -168,17 +169,15 @@ tuple_add(PyObject *self, Py_ssize_t len, PyObject *item)
 }
 
 static Py_ssize_t
-tuple_extend(PyObject **dst, Py_ssize_t dstindex,
-             PyObject **src, Py_ssize_t count)
+tuple_extend(PyObject **dst, Py_ssize_t dstindex, PyObject *src)
 {
-    assert(count >= 0);
+    Py_ssize_t count = PyTuple_GET_SIZE(src);
     if (_PyTuple_Resize(dst, PyTuple_GET_SIZE(*dst) + count - 1) != 0) {
         return -1;
     }
     assert(dstindex + count <= PyTuple_GET_SIZE(*dst));
     for (Py_ssize_t i = 0; i < count; ++i) {
-        PyObject *item = src[i];
-        PyTuple_SET_ITEM(*dst, dstindex + i, Py_NewRef(item));
+        PyTuple_SET_VALUE(*dst, dstindex + i, PyTuple_GET_VALUE(src, i));
     }
     return dstindex + count;
 }
@@ -276,7 +275,7 @@ cleanup:
    a non-empty tuple, return a new reference to obj. */
 static PyObject *
 subs_tvars(PyObject *obj, PyObject *params,
-           PyObject **argitems, Py_ssize_t nargs)
+           PyObject *const *argitems, Py_ssize_t nargs)
 {
     PyObject *subparams;
     if (PyObject_GetOptionalAttr(obj, &_Py_ID(__parameters__), &subparams) < 0) {
@@ -298,9 +297,7 @@ subs_tvars(PyObject *obj, PyObject *params,
                 PyObject *param = PyTuple_GET_ITEM(params, iparam);
                 arg = argitems[iparam];
                 if (Py_TYPE(param)->tp_iter && PyTuple_Check(arg)) {  // TypeVarTuple
-                    j = tuple_extend(&subargs, j,
-                                    &PyTuple_GET_ITEM(arg, 0),
-                                    PyTuple_GET_SIZE(arg));
+                    j = tuple_extend(&subargs, j, arg);
                     if (j < 0) {
                         Py_DECREF(subparams);
                         assert(subargs == NULL);
@@ -373,7 +370,11 @@ _unpack_args(PyObject *item)
     }
     int is_tuple = PyTuple_Check(item);
     Py_ssize_t nitems = is_tuple ? PyTuple_GET_SIZE(item) : 1;
-    PyObject **argitems = is_tuple ? &PyTuple_GET_ITEM(item, 0) : &item;
+    PyObject *const *argitems = is_tuple ? _PyTuple_Objects(item) : &item;
+    if (argitems == NULL) {
+        Py_DECREF(newargs);
+        return NULL;
+    }
     for (Py_ssize_t i = 0; i < nitems; i++) {
         item = argitems[i];
         if (!PyType_Check(item)) {
@@ -442,7 +443,11 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
     }
     int is_tuple = PyTuple_Check(item);
     Py_ssize_t nitems = is_tuple ? PyTuple_GET_SIZE(item) : 1;
-    PyObject **argitems = is_tuple ? &PyTuple_GET_ITEM(item, 0) : &item;
+    PyObject *const *argitems = is_tuple ? _PyTuple_Objects(item) : &item;
+    if (argitems == NULL) {
+        Py_DECREF(item);
+        return NULL;
+    }
     if (nitems != nparams) {
         Py_DECREF(item);
         return PyErr_Format(PyExc_TypeError,
@@ -560,8 +565,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
                 Py_DECREF(arg);
                 return NULL;
             }
-            jarg = tuple_extend(&newargs, jarg,
-                    &PyTuple_GET_ITEM(arg, 0), PyTuple_GET_SIZE(arg));
+            jarg = tuple_extend(&newargs, jarg, arg);
             Py_DECREF(arg);
             if (jarg < 0) {
                 Py_DECREF(item);

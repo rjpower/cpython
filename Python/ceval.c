@@ -1786,7 +1786,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func,
 
             /* Speed hack: do raw pointer compares. As names are
             normally interned this should almost always hit. */
-            co_varnames = ((PyTupleObject *)(co->co_localsplusnames))->ob_item;
+            co_varnames = _PyTuple_HEAP_ITEMS(co->co_localsplusnames);
             for (j = co->co_posonlyargcount; j < total_args; j++) {
                 PyObject *varname = co_varnames[j];
                 if (varname == keyword) {
@@ -1905,11 +1905,9 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func,
         else
             i = 0;
         if (defcount) {
-            PyObject **defs = &PyTuple_GET_ITEM(func->func_defaults, 0);
             for (; i < defcount; i++) {
                 if (PyValue_IsNull(localsplus[m+i])) {
-                    PyObject *def = defs[i];
-                    localsplus[m+i] = PyValue_FromObject(def);
+                    localsplus[m+i] = PyTuple_GET_VALUE(func->func_defaults, i);
                 }
             }
         }
@@ -2071,7 +2069,11 @@ _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
     PyObject *const *object_array = NULL;
     PyValue stack_array[8] = {0};
     if (has_dict) {
-        object_array = _PyStack_UnpackDict(tstate, _PyTuple_ITEMS(callargs), nargs, kwargs, &kwnames);
+        PyObject *const *items = _PyTuple_Objects(callargs);
+        if (items == NULL) {
+            goto error;
+        }
+        object_array = _PyStack_UnpackDict(tstate, items, nargs, kwargs, &kwnames);
         if (object_array == NULL) {
             goto error;
         }
@@ -2098,9 +2100,8 @@ _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
                 goto error;
             }
         }
-        /* We need to create a new reference for all our args since the new frame steals them. */
         for (Py_ssize_t i = 0; i < nargs; i++) {
-            newargs[i] = PyValue_FromObject(PyTuple_GET_ITEM(callargs, i));
+            newargs[i] = PyTuple_GET_VALUE(callargs, i);
         }
     }
     _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit(
@@ -2432,7 +2433,7 @@ _PyEval_UnpackIterableValues(PyThreadState *tstate, PyObject *v,
 
     /* Pop the "after-variable" args off the list. */
     for (j = argcntafter; j > 0; j--, i++) {
-        *--sp = PyValue_FromObject(PyList_GET_ITEM(l, ll - j));
+        *--sp = PyList_GET_VALUE(l, ll - j);
     }
     /* Resize the list. */
     Py_SET_SIZE(l, ll - argcntafter);

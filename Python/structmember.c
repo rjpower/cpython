@@ -105,6 +105,11 @@ PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
             v = Py_None;
         }
         break;
+    case _Py_T_VALUE: {
+        PyValue value = *(PyValue *)addr;
+        v = PyValue_IsNull(value) ? Py_None : PyValue_Object(value);
+        break;
+    }
     case Py_T_OBJECT_EX:
         v = member_get_object(addr, obj_addr, l);
         Py_XINCREF(v);
@@ -299,6 +304,9 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         FT_ATOMIC_STORE_DOUBLE_RELAXED(*(double *) addr, double_val);
         break;
     }
+    case _Py_T_VALUE:
+        *(PyValue *)addr = v == NULL ? PyValue_NULL : PyValue_FromObject(v);
+        break;
     case _Py_T_OBJECT:
     case Py_T_OBJECT_EX:
         Py_BEGIN_CRITICAL_SECTION(obj);

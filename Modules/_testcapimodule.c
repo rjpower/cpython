@@ -1691,6 +1691,8 @@ eval_eval_code_ex(PyObject *mod, PyObject *pos_args)
     PyObject *closure = NULL;
 
     PyObject **c_kwargs = NULL;
+    PyObject **c_args = NULL;
+    PyObject **c_defaults = NULL;
 
     if (!PyArg_ParseTuple(pos_args,
                           "OO|OO!O!O!OO:eval_code_ex",
@@ -1712,10 +1714,12 @@ eval_eval_code_ex(PyObject *mod, PyObject *pos_args)
     NULLABLE(kw_defaults);
     NULLABLE(closure);
 
-    PyObject **c_args = NULL;
     Py_ssize_t c_args_len = 0;
     if (args) {
-        c_args = &PyTuple_GET_ITEM(args, 0);
+        c_args = tuple_objects(args);
+        if (c_args == NULL) {
+            goto exit;
+        }
         c_args_len = PyTuple_Size(args);
     }
 
@@ -1739,10 +1743,12 @@ eval_eval_code_ex(PyObject *mod, PyObject *pos_args)
         }
     }
 
-    PyObject **c_defaults = NULL;
     Py_ssize_t c_defaults_len = 0;
     if (defaults) {
-        c_defaults = &PyTuple_GET_ITEM(defaults, 0);
+        c_defaults = tuple_objects(defaults);
+        if (c_defaults == NULL) {
+            goto exit;
+        }
         c_defaults_len = PyTuple_Size(defaults);
     }
 
@@ -1764,6 +1770,8 @@ exit:
     if (c_kwargs) {
         PyMem_DEL(c_kwargs);
     }
+    PyMem_Free(c_args);
+    PyMem_Free(c_defaults);
 
     return result;
 }

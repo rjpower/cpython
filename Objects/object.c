@@ -2169,6 +2169,7 @@ static PyTypeObject* static_types[_Py_NUM_MANAGED_PREINITIALIZED_TYPES] = {
     &_PyMemoryIter_Type,
     &_PyMethodWrapper_Type,
     &_PyNamespace_Type,
+    &_PyObjectArray_Type,
     &_PyNone_Type,
     &_PyNotImplemented_Type,
     &_PyPositionsIterator,

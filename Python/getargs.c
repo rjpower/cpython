@@ -400,7 +400,7 @@ vgetargs1_impl(PyObject *compat_args, PyObject *const *stack, Py_ssize_t nargs, 
 static int
 vgetargs1(PyObject *args, const char *format, va_list *p_va, int flags)
 {
-    PyObject **stack;
+    PyObject *const *stack;
     Py_ssize_t nargs;
 
     if (!(flags & FLAG_COMPAT)) {
@@ -412,7 +412,10 @@ vgetargs1(PyObject *args, const char *format, va_list *p_va, int flags)
             return 0;
         }
 
-        stack = _PyTuple_ITEMS(args);
+        stack = _PyTuple_Objects(args);
+        if (stack == NULL) {
+            return 0;
+        }
         nargs = PyTuple_GET_SIZE(args);
     }
     else {
@@ -2004,7 +2007,10 @@ vgetargskeywords(PyObject *argstuple, PyObject *kwargs,
                  const char *format, const char * const *kwlist,
                  va_list *p_va, int flags)
 {
-    PyObject *const *args = _PyTuple_ITEMS(argstuple);
+    PyObject *const *args = _PyTuple_Objects(argstuple);
+    if (args == NULL) {
+        return 0;
+    }
     Py_ssize_t nargs = PyTuple_GET_SIZE(argstuple);
     return vgetargskeywords_impl(args, nargs, kwargs, NULL,
                                  format, kwlist, p_va, flags);
@@ -2483,7 +2489,7 @@ static int
 vgetargskeywordsfast(PyObject *args, PyObject *keywords,
                      struct _PyArg_Parser *parser, va_list *p_va, int flags)
 {
-    PyObject **stack;
+    PyObject *const *stack;
     Py_ssize_t nargs;
 
     if (args == NULL
@@ -2494,7 +2500,10 @@ vgetargskeywordsfast(PyObject *args, PyObject *keywords,
         return 0;
     }
 
-    stack = _PyTuple_ITEMS(args);
+    stack = _PyTuple_Objects(args);
+    if (stack == NULL) {
+        return 0;
+    }
     nargs = PyTuple_GET_SIZE(args);
     return vgetargskeywordsfast_impl(stack, nargs, keywords, NULL,
                                      parser, p_va, flags);
@@ -2885,7 +2894,7 @@ unpack_stack(PyObject *const *args, Py_ssize_t nargs, const char *name,
 int
 PyArg_UnpackTuple(PyObject *args, const char *name, Py_ssize_t min, Py_ssize_t max, ...)
 {
-    PyObject **stack;
+    PyObject *const *stack;
     Py_ssize_t nargs;
     int retval;
     va_list vargs;
@@ -2895,7 +2904,10 @@ PyArg_UnpackTuple(PyObject *args, const char *name, Py_ssize_t min, Py_ssize_t m
             "PyArg_UnpackTuple() argument list is not a tuple");
         return 0;
     }
-    stack = _PyTuple_ITEMS(args);
+    stack = _PyTuple_Objects(args);
+    if (stack == NULL) {
+        return 0;
+    }
     nargs = PyTuple_GET_SIZE(args);
 
     va_start(vargs, max);

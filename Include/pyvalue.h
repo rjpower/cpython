@@ -170,6 +170,16 @@ PyValue_FromDouble(double d)
 // The canonical value of an exact int object that is not compact.
 PyAPI_FUNC(PyValue) _PyValue_FromLongObject(PyObject *op);
 
+/* Inlined with a static object such as Py_None, GCC follows it into the
+   branches for the types it is not and warns of reads beyond it
+   (-Warray-bounds).  Hiding where the pointer came from costs no
+   instruction. */
+#if defined(__GNUC__)
+#  define _PyValue_HIDE_ORIGIN(p) __asm__("" : "+r"(p))
+#else
+#  define _PyValue_HIDE_ORIGIN(p) ((void)0)
+#endif
+
 /* The canonical value of op, which must not be NULL (see "Every PyValue is
    canonical" above): an inline int or float for an exact int that fits in
    int32 or an exact float other than NaN, and otherwise a reference to op. */
@@ -180,12 +190,14 @@ _PyValue_FromObject(PyObject *op)
     assert(((uintptr_t)op & _PyValue_TAG_BITS) == 0);
     PyTypeObject *tp = Py_TYPE(op);
     if (tp == &PyFloat_Type) {
+        _PyValue_HIDE_ORIGIN(op);
         double d = PyFloat_AS_DOUBLE(op);
         if (!isnan(d)) {
             return _PyValue_FromBits(_PyValue_DoubleBits(d));
         }
     }
     else if (tp == &PyLong_Type) {
+        _PyValue_HIDE_ORIGIN(op);
         if (_PyLong_IsCompact((PyLongObject *)op)) {
             return _PyValue_FromBits(_PyValue_Int32Bits(
                 (int32_t)_PyLong_CompactValue((PyLongObject *)op)));

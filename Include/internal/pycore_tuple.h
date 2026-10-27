@@ -24,6 +24,16 @@ PyAPI_FUNC(void) _PyStolenTuple_Free(PyObject *self);
 
 #define _PyTuple_ITEMS(op) _Py_RVALUE(_PyTuple_CAST(op)->ob_item)
 
+/* The items of tuple op as PyObject *, for a tuple whose items are all
+   objects that are never inline, such as keyword names: a PyValue that
+   refers to an object is the object's pointer. */
+#define _PyTuple_HEAP_ITEMS(op) ((PyObject **)_PyTuple_ITEMS(op))
+
+/* The items of tuple op as an array of PyObject * (_PyValue_ObjectArray()),
+   for calls and argument parsing.  NULL with an exception set if boxing
+   fails. */
+PyAPI_FUNC(PyObject *const *) _PyTuple_Objects(PyObject *op);
+
 PyAPI_FUNC(PyObject *)_PyTuple_FromValues(const struct PyValue *, Py_ssize_t);
 PyAPI_FUNC(PyObject *)_PyTuple_FromArraySteal(PyObject *const *, Py_ssize_t);
 PyAPI_FUNC(PyObject *) _PyTuple_BinarySlice(PyObject *, PyObject *, PyObject *);

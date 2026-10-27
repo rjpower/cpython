@@ -4,8 +4,9 @@
 
 typedef struct {
     PyObject_VAR_HEAD
-    /* Vector of pointers to list elements.  list[0] is ob_item[0], etc. */
-    PyObject **ob_item;
+    /* Vector of list elements, each a canonical PyValue (Include/pyvalue.h).
+       list[0] is ob_item[0], etc. */
+    PyValue *ob_item;
 
     /* ob_item contains space for 'allocated' elements.  The number
      * currently in use is ob_size.
@@ -33,14 +34,44 @@ static inline Py_ssize_t PyList_GET_SIZE(PyObject *op) {
 }
 #define PyList_GET_SIZE(op) PyList_GET_SIZE(_PyObject_CAST(op))
 
-#define PyList_GET_ITEM(op, index) (_PyList_CAST(op)->ob_item[(index)])
+/* The value of item index, which must be in range. */
+static inline PyValue
+PyList_GET_VALUE(PyObject *op, Py_ssize_t index) {
+    PyListObject *list = _PyList_CAST(op);
+    assert(0 <= index);
+    assert(index < list->allocated);
+    return list->ob_item[index];
+}
+#define PyList_GET_VALUE(op, index) \
+    PyList_GET_VALUE(_PyObject_CAST(op), (index))
+
+/* The object of item index: a new box if the item is an inline int or
+   float (PyValue_Object()), so that two calls may return different
+   objects, or NULL with an exception set if boxing fails. */
+static inline PyObject *
+PyList_GET_ITEM(PyObject *op, Py_ssize_t index) {
+    return PyValue_Object(PyList_GET_VALUE(op, index));
+}
+#define PyList_GET_ITEM(op, index) \
+    PyList_GET_ITEM(_PyObject_CAST(op), (index))
 
 static inline void
-PyList_SET_ITEM(PyObject *op, Py_ssize_t index, PyObject *value) {
+PyList_SET_VALUE(PyObject *op, Py_ssize_t index, PyValue value) {
     PyListObject *list = _PyList_CAST(op);
     assert(0 <= index);
     assert(index < list->allocated);
     list->ob_item[index] = value;
+}
+#define PyList_SET_VALUE(op, index, value) \
+    PyList_SET_VALUE(_PyObject_CAST(op), (index), (value))
+
+/* The same for an object, which is stored canonically: an exact int that
+   fits in int32 or an exact float other than NaN is stored inline.  value
+   may be NULL. */
+static inline void
+PyList_SET_ITEM(PyObject *op, Py_ssize_t index, PyObject *value) {
+    PyList_SET_VALUE(op, index,
+                     value == NULL ? PyValue_NULL : PyValue_FromObject(value));
 }
 #define PyList_SET_ITEM(op, index, value) \
     PyList_SET_ITEM(_PyObject_CAST(op), (index), _PyObject_CAST(value))

@@ -1412,8 +1412,8 @@ class varpos_array_converter(VarPosCConverter):
                      fastcall: bool, limited_capi: bool) -> str:
         paramname = self.parser_name
         if not fastcall:
-            self.add_include('pycore_tuple.h', '_PyTuple_ITEMS()')
-        start = 'args' if fastcall else '_PyTuple_ITEMS(args)'
+            self.add_include('pycore_tuple.h', '_PyTuple_Objects()')
+        start = 'args' if fastcall else 'varitems'
         size = 'nargs' if fastcall else 'PyTuple_GET_SIZE(args)'
         if max_pos:
             if min(pos_only, min_pos) < max_pos:
@@ -1422,7 +1422,13 @@ class varpos_array_converter(VarPosCConverter):
             else:
                 start = f'{start} + {max_pos}'
                 size = f'{size} - {max_pos}'
-        return f"""
+        boxing = '' if fastcall else """
+            PyObject *const *varitems = _PyTuple_Objects(args);
+            if (varitems == NULL) {{
+                goto exit;
+            }}
+            """
+        return boxing + f"""
             {paramname} = {start};
             {self.length_name} = {size};
             """

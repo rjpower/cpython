@@ -3052,9 +3052,20 @@ _PyBytes_FromSequence_lock_held(PyObject *x, PyObject **result)
     }
     char *str = PyBytesWriter_GetData(writer);
 
-    PyObject *const *items = PySequence_Fast_ITEMS(x);
+    PyValue *items = PySequence_Fast_ITEMS(x);
     for (Py_ssize_t i = 0; i < size; i++) {
-        Py_ssize_t value = PyLong_AsSsize_t(items[i]);
+        Py_ssize_t value;
+        if (PyValue_IsInlineInt(items[i])) {
+            value = PyValue_Int32(items[i]);
+        }
+        else if (PyValue_IsInline(items[i])) {
+            // A float: PyLong_AsSsize_t() would raise TypeError.
+            PyBytesWriter_Discard(writer);
+            return 0;
+        }
+        else {
+            value = PyLong_AsSsize_t(PyValue_ObjectBorrow(items[i]));
+        }
         if (value == -1 && PyErr_Occurred()) {
             PyBytesWriter_Discard(writer);
             PyErr_Clear();

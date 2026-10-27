@@ -294,9 +294,9 @@ classify_stack_addresses(PyObject *self, PyObject *args)
         Py_DECREF(fast);
         return NULL;
     }
-    PyObject **items = PySequence_Fast_ITEMS(fast);
     for (Py_ssize_t i = 0; i < n; i++) {
-        unsigned long long value = PyLong_AsUnsignedLongLong(items[i]);
+        unsigned long long value = PyLong_AsUnsignedLongLong(
+            PySequence_Fast_GET_ITEM(fast, i));
         if (PyErr_Occurred()) {
             Py_DECREF(labels);
             Py_DECREF(fast);

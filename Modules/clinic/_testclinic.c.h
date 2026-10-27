@@ -10,7 +10,7 @@ preserve
 #include "pycore_long.h"          // _PyLong_UnsignedShort_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_tuple.h"         // _PyTuple_Objects()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 PyDoc_STRVAR(test_empty_function__doc__,
@@ -4719,11 +4719,16 @@ _testclinic_TestClass_posonly_poskw_varpos_no_fastcall(PyObject *type, PyObject 
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    PyObject *const *argitems;
     PyObject *a;
     PyObject *b;
     PyObject *__clinic_args = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    argitems = _PyTuple_Objects(args);
+    if (argitems == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 1, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -4763,10 +4768,16 @@ _testclinic_TestClass_varpos_array_no_fastcall(PyObject *type, PyObject *args)
     PyObject * const *__clinic_args;
     Py_ssize_t args_length;
 
-    __clinic_args = _PyTuple_ITEMS(args);
+    PyObject *const *varitems = _PyTuple_Objects(args);
+    if (varitems == NULL) {
+        goto exit;
+    }
+
+    __clinic_args = varitems;
     args_length = PyTuple_GET_SIZE(args);
     return_value = _testclinic_TestClass_varpos_array_no_fastcall_impl((PyTypeObject *)type, __clinic_args, args_length);
 
+exit:
     return return_value;
 }
 
@@ -4799,7 +4810,12 @@ _testclinic_TestClass_posonly_varpos_array_no_fastcall(PyObject *type, PyObject 
     }
     a = PyTuple_GET_ITEM(args, 0);
     b = PyTuple_GET_ITEM(args, 1);
-    __clinic_args = _PyTuple_ITEMS(args) + 2;
+    PyObject *const *varitems = _PyTuple_Objects(args);
+    if (varitems == NULL) {
+        goto exit;
+    }
+
+    __clinic_args = varitems + 2;
     args_length = PyTuple_GET_SIZE(args) - 2;
     return_value = _testclinic_TestClass_posonly_varpos_array_no_fastcall_impl((PyTypeObject *)type, a, b, __clinic_args, args_length);
 
@@ -4840,7 +4856,12 @@ _testclinic_TestClass_posonly_req_opt_varpos_array_no_fastcall(PyObject *type, P
     }
     b = PyTuple_GET_ITEM(args, 1);
 skip_optional:
-    __clinic_args = PyTuple_GET_SIZE(args) > 2 ? _PyTuple_ITEMS(args) + 2 : _PyTuple_ITEMS(args);
+    PyObject *const *varitems = _PyTuple_Objects(args);
+    if (varitems == NULL) {
+        goto exit;
+    }
+
+    __clinic_args = PyTuple_GET_SIZE(args) > 2 ? varitems + 2 : varitems;
     args_length = Py_MAX(0, PyTuple_GET_SIZE(args) - 2);
     return_value = _testclinic_TestClass_posonly_req_opt_varpos_array_no_fastcall_impl((PyTypeObject *)type, a, b, __clinic_args, args_length);
 
@@ -4897,19 +4918,29 @@ _testclinic_TestClass_posonly_poskw_varpos_array_no_fastcall(PyObject *type, PyO
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    PyObject *const *argitems;
     PyObject *a;
     PyObject *b;
     PyObject * const *__clinic_args;
     Py_ssize_t args_length;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    argitems = _PyTuple_Objects(args);
+    if (argitems == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 1, argsbuf);
     if (!fastargs) {
         goto exit;
     }
     a = fastargs[0];
     b = fastargs[1];
-    __clinic_args = PyTuple_GET_SIZE(args) > 2 ? _PyTuple_ITEMS(args) + 2 : _PyTuple_ITEMS(args);
+    PyObject *const *varitems = _PyTuple_Objects(args);
+    if (varitems == NULL) {
+        goto exit;
+    }
+
+    __clinic_args = PyTuple_GET_SIZE(args) > 2 ? varitems + 2 : varitems;
     args_length = Py_MAX(0, PyTuple_GET_SIZE(args) - 2);
     return_value = _testclinic_TestClass_posonly_poskw_varpos_array_no_fastcall_impl((PyTypeObject *)type, a, b, __clinic_args, args_length);
 
@@ -4976,7 +5007,11 @@ exit:
 static PyObject *
 vc_plain_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    return vc_plain_new_helper(type, _PyTuple_CAST(args)->ob_item,
+    PyObject *const *argitems = _PyTuple_Objects(args);
+    if (argitems == NULL) {
+        return NULL;
+    }
+    return vc_plain_new_helper(type, argitems,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
         kwargs, NULL);
@@ -5072,7 +5107,11 @@ exit:
 static int
 vc_posorkw_init(PyObject *self, PyObject *args, PyObject *kwargs)
 {
-    return vc_posorkw_init_helper(self, _PyTuple_CAST(args)->ob_item,
+    PyObject *const *argitems = _PyTuple_Objects(args);
+    if (argitems == NULL) {
+        return -1;
+    }
+    return vc_posorkw_init_helper(self, argitems,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
         kwargs, NULL);
@@ -5193,7 +5232,11 @@ exit:
 static PyObject *
 vc_base_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    return vc_base_new_helper(type, _PyTuple_CAST(args)->ob_item,
+    PyObject *const *argitems = _PyTuple_Objects(args);
+    if (argitems == NULL) {
+        return NULL;
+    }
+    return vc_base_new_helper(type, argitems,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
         kwargs, NULL);
@@ -5289,7 +5332,11 @@ exit:
 static PyObject *
 vc_kwonly_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    return vc_kwonly_new_helper(type, _PyTuple_CAST(args)->ob_item,
+    PyObject *const *argitems = _PyTuple_Objects(args);
+    if (argitems == NULL) {
+        return NULL;
+    }
+    return vc_kwonly_new_helper(type, argitems,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
         kwargs, NULL);
@@ -5309,4 +5356,4 @@ vc_kwonly_vectorcall(PyObject *type, PyObject *const *args,
         kwnames ? PyTuple_GET_SIZE(kwnames) : 0,
         NULL, kwnames);
 }
-/*[clinic end generated code: output=b54b37db716469cd input=a9049054013a1b77]*/
+/*[clinic end generated code: output=be3a3ddcabaff045 input=a9049054013a1b77]*/

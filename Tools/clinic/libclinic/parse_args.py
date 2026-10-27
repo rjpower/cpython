@@ -1287,8 +1287,18 @@ class ParseArgsCodeGen:
                 self.declarations += "\nPy_ssize_t nargs = PyTuple_GET_SIZE(args);"
                 if has_optional_kw:
                     self.declarations += "\nPy_ssize_t noptargs = %s + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - %d;" % (nargs, self.min_pos + self.min_kw_only)
-                unpack_args = '_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL'
-            parser_code = [libclinic.normalize_snippet(f"""
+                self.codegen.add_include('pycore_tuple.h', '_PyTuple_Objects()')
+                self.declarations += "\nPyObject *const *argitems;"
+                unpack_args = 'argitems, nargs, kwargs, NULL'
+            parser_code = []
+            if unpack_args.startswith('argitems'):
+                parser_code.append(libclinic.normalize_snippet("""
+                    argitems = _PyTuple_Objects(args);
+                    if (argitems == NULL) {{
+                        goto exit;
+                    }}
+                    """, indent=4))
+            parser_code += [libclinic.normalize_snippet(f"""
                 {argsname} = _PyArg_UnpackKeywords({unpack_args}, &_parser,
                         /*minpos*/ {self.min_pos}, /*maxpos*/ {self.max_pos}, /*minkw*/ {self.min_kw_only}, /*varpos*/ {1 if self.varpos else 0}, argsbuf);
                 if (!{argsname}) {{{{
@@ -1463,11 +1473,16 @@ class ParseArgsCodeGen:
         """
         self.parser_helper = self.parser_definition
         self.parser_prototype = PARSER_PROTOTYPE_KEYWORD
+        failure = '-1' if self.func.kind is METHOD_INIT else 'NULL'
+        self.codegen.add_include('pycore_tuple.h', '_PyTuple_Objects()')
         self.parser_definition = '\n'.join([
             self.parser_prototype,
             '{{',
-            '    return {c_basename}_helper({self_name}, '
-                '_PyTuple_CAST(args)->ob_item,',
+            '    PyObject *const *argitems = _PyTuple_Objects(args);',
+            '    if (argitems == NULL) {{',
+            f'        return {failure};',
+            '    }}',
+            '    return {c_basename}_helper({self_name}, argitems,',
             '        PyTuple_GET_SIZE(args),',
             '        kwargs ? PyDict_GET_SIZE(kwargs) : 0,',
             '        kwargs, NULL);',

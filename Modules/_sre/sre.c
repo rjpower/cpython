@@ -3239,7 +3239,9 @@ expand_template(TemplateObject *self, MatchObject *match)
         if (!list) {
             return NULL;
         }
-        out = &PyList_GET_ITEM(list, 0);
+        // The chunks are strings or bytes, never inline values, and a
+        // value that refers to an object is its pointer.
+        out = (PyObject **)((PyListObject *)list)->ob_item;
     }
 
     out[count++] = Py_NewRef(self->literal);

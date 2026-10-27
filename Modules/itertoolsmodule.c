@@ -217,13 +217,13 @@ batched_next(PyObject *op)
         return NULL;
     }
     iternextfunc iternext = *Py_TYPE(it)->tp_iternext;
-    PyObject **items = _PyTuple_ITEMS(result);
+    PyValue *items = _PyTuple_ITEMS(result);
     for (i=0 ; i < n ; i++) {
         item = iternext(it);
         if (item == NULL) {
             goto null_item;
         }
-        items[i] = item;
+        items[i] = PyValue_FromObject(item);
     }
     return result;
 
@@ -2140,7 +2140,7 @@ product_next_impl(productobject *self)
         /* The previous result may still be held by the caller, so update
            a copy. The copy has not escaped yet. */
         PyObject *old_result = result;
-        result = PyTuple_FromArray(_PyTuple_ITEMS(old_result), npools);
+        result = _PyTuple_FromValues(_PyTuple_ITEMS(old_result), npools);
         if (result == NULL)
             goto empty;
         lz->result = result;
@@ -2363,7 +2363,7 @@ combinations_next_impl(combinationsobject *self)
         /* The previous result may still be held by the caller, so update
            a copy. The copy has not escaped yet. */
         PyObject *old_result = result;
-        result = PyTuple_FromArray(_PyTuple_ITEMS(old_result), r);
+        result = _PyTuple_FromValues(_PyTuple_ITEMS(old_result), r);
         if (result == NULL)
             goto empty;
         co->result = result;
@@ -2602,7 +2602,7 @@ cwr_next_impl(cwrobject *self)
         /* The previous result may still be held by the caller, so update
            a copy. The copy has not escaped yet. */
         PyObject *old_result = result;
-        result = PyTuple_FromArray(_PyTuple_ITEMS(old_result), r);
+        result = _PyTuple_FromValues(_PyTuple_ITEMS(old_result), r);
         if (result == NULL)
             goto empty;
         co->result = result;
@@ -2860,7 +2860,7 @@ permutations_next_impl(permutationsobject *self)
         /* The previous result may still be held by the caller, so update
            a copy. The copy has not escaped yet. */
         PyObject *old_result = result;
-        result = PyTuple_FromArray(_PyTuple_ITEMS(old_result), r);
+        result = _PyTuple_FromValues(_PyTuple_ITEMS(old_result), r);
         if (result == NULL)
             goto empty;
         po->result = result;

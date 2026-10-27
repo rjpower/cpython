@@ -103,30 +103,76 @@ static inline Py_ALWAYS_INLINE void Py_INCREF(PyObject *op)
 #if !defined(Py_LIMITED_API)
 #endif  // Py_LIMITED_API
 
-// The tracing collector frees unreachable objects; there is nothing to count.
+/* The tracing collector frees unreachable objects; there is nothing to
+   count.  A release call (Py_DECREF(), Py_XDECREF(), Py_CLEAR(),
+   Py_SETREF(), Py_XSETREF()) marks where a reference ends instead: an
+   object stays alive until its last release call.  The released pointer is
+   kept, in a register or in the frame, up to that point, where the
+   conservative scan of C frames finds it.  Code that holds a reference
+   while it reads memory the object owns, such as the item array of
+   PySequence_Fast_ITEMS(), and releases it afterwards therefore keeps the
+   object and that memory alive, as reference counting did: code that is
+   correct under reference counting is correct under the collector.
+
+   With GCC and clang the barrier emits no instruction.  A collection
+   happens only in a call, which cannot move across it, so it needs no
+   memory clobber.  Other compilers call _Py_KeepAlive(), an out-of-line
+   function that the compiler cannot remove. */
+PyAPI_FUNC(void) _Py_KeepAlive(const void *op);
+
+#if defined(__GNUC__) || defined(__clang__)
+#  define _Py_KEEP_ALIVE(op) __asm__ volatile("" : : "r"(op))
+#else
+#  define _Py_KEEP_ALIVE(op) _Py_KeepAlive(op)
+#endif
+
 static inline Py_ALWAYS_INLINE void Py_DECREF(PyObject *op)
 {
-    (void)op;
+    _Py_KEEP_ALIVE(op);
 }
 #define Py_DECREF(op) Py_DECREF(_PyObject_CAST(op))
 
 
-
 /* Py_CLEAR(op) sets op to NULL, and Py_SETREF(dst, src) and
- * Py_XSETREF(dst, src) set dst to src.  They once released the old value
- * after the store, so that code it ran could not see it; nothing is
- * released now, so they are plain assignments.  Each evaluates its
- * arguments once.
+ * Py_XSETREF(dst, src) set dst to src.  Each then releases the old value,
+ * which keeps it alive up to that point (see Py_DECREF()), and evaluates
+ * its arguments once.
  */
+#ifdef _Py_TYPEOF
 #define Py_CLEAR(op) \
     do { \
-        (op) = _Py_NULL; \
+        _Py_TYPEOF(op)* _tmp_op_ptr = &(op); \
+        _Py_TYPEOF(op) _tmp_old_op = (*_tmp_op_ptr); \
+        *_tmp_op_ptr = _Py_NULL; \
+        _Py_KEEP_ALIVE(_tmp_old_op); \
     } while (0)
 
 #define Py_SETREF(dst, src) \
     do { \
-        (dst) = (src); \
+        _Py_TYPEOF(dst)* _tmp_dst_ptr = &(dst); \
+        _Py_TYPEOF(dst) _tmp_old_dst = (*_tmp_dst_ptr); \
+        *_tmp_dst_ptr = (src); \
+        _Py_KEEP_ALIVE(_tmp_old_dst); \
     } while (0)
+#else
+#define Py_CLEAR(op) \
+    do { \
+        PyObject **_tmp_op_ptr = _Py_CAST(PyObject**, &(op)); \
+        PyObject *_tmp_old_op = (*_tmp_op_ptr); \
+        PyObject *_null_ptr = _Py_NULL; \
+        memcpy(_tmp_op_ptr, &_null_ptr, sizeof(PyObject*)); \
+        _Py_KEEP_ALIVE(_tmp_old_op); \
+    } while (0)
+
+#define Py_SETREF(dst, src) \
+    do { \
+        PyObject **_tmp_dst_ptr = _Py_CAST(PyObject**, &(dst)); \
+        PyObject *_tmp_old_dst = (*_tmp_dst_ptr); \
+        PyObject *_tmp_src = _PyObject_CAST(src); \
+        memcpy(_tmp_dst_ptr, &_tmp_src, sizeof(PyObject*)); \
+        _Py_KEEP_ALIVE(_tmp_old_dst); \
+    } while (0)
+#endif
 
 #define Py_XSETREF(dst, src) Py_SETREF(dst, src)
 
@@ -144,9 +190,8 @@ static inline void Py_XINCREF(PyObject *op)
 
 static inline void Py_XDECREF(PyObject *op)
 {
-    if (op != _Py_NULL) {
-        Py_DECREF(op);
-    }
+    // NULL is kept alive as harmlessly as any pointer.
+    _Py_KEEP_ALIVE(op);
 }
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 < 0x030b0000
 #  define Py_XDECREF(op) Py_XDECREF(_PyObject_CAST(op))

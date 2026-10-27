@@ -88,6 +88,16 @@ Py_IncRef(PyObject *o)
     Py_XINCREF(o);
 }
 
+/* The release barrier for compilers without GNU inline assembly (see
+   Py_DECREF()).  The volatile store is observable, so the call is kept with
+   op as its argument. */
+Py_NO_INLINE void
+_Py_KeepAlive(const void *op)
+{
+    const void *volatile keep = op;
+    (void)keep;
+}
+
 void
 Py_DecRef(PyObject *o)
 {

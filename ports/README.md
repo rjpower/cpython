@@ -144,6 +144,11 @@ Under abi_id cpython-3.16-value-v1 calls pass values (note 08, section 4):
   with `PyObject_VectorcallValue()`; `PyObject_Vectorcall()` is the
   compatibility form and boxes.
 - `__class_getitem__` entries use `Py_GenericAliasValue`.
+- An object stays alive until its last release call (`Py_DECREF`,
+  `Py_XDECREF`, `Py_CLEAR`, `Py_SETREF`, `Py_XSETREF`): reference-correct
+  code is collector-correct. Hold a reference to an object for as long as
+  you read memory it owns (`PySequence_Fast_ITEMS()`, a buffer, an item
+  array) and release it afterwards, as reference counting required.
 - There is no limited C API and no stable ABI. `Python.h` stops with an
   error if `Py_LIMITED_API` or `Py_TARGET_ABI3T` is defined, and `.abi3.so`
   is not an extension suffix, so an abi3 wheel built for another CPython

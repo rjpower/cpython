@@ -841,6 +841,17 @@ subset, the functions whose frames held the only root of a live object;
    the hack register which mechanisms it actually retired.
    Recommendation: the coordinator does both at adoption, the rung reports
    the second.
+10. **The C mode's size.** Section 2.1 is a checker over a C subset with a
+    control-flow graph, liveness, pointer provenance and span scopes. It is
+    the largest single tool in rung 1 and the one most likely to overrun.
+    Ruling at adoption: it has one day inside rung 1, built before any
+    function is promoted. If its negative tests do not all fail at the end
+    of that day, rung 1 promotes the eval loop and the entry paths on the
+    kill-mode verifier, the retain gate and the inline audit alone, the
+    work doc lists every promoted function as "C mode pending", and the C
+    mode is the first item of rung 2 and runs over that list before rung 2
+    promotes anything else. No function is promoted without one of the two
+    proofs, and the 8.2 skips are not removed on the dynamic proof alone.
 
 ## 14. Sources
 

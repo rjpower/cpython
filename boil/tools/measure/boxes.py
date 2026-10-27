@@ -9,6 +9,8 @@ import argparse, collections, glob, os, re, shutil, subprocess
 R = "/home/power/code/cpython/.worktrees/python-boil-the-ocean"
 SP = glob.glob(f"{R}/build/pyperf-venvs/default/venv/*/lib/python3.16/site-packages")[0]
 STATS = "/tmp/py_stats"
+# The overlay shadows the venv's compiled psutil (overlay/psutil).
+OVERLAY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "overlay")
 LINE = re.compile(r"^Object (inline int boxes|inline float boxes|boxes \(([^)]*)\)|box site\[([^]]*)\]): (\d+)$")
 OPCODE = re.compile(r"^opcode\[(\w+)\]\.boxes : (\d+)$")
 
@@ -16,7 +18,7 @@ OPCODE = re.compile(r"^opcode\[(\w+)\]\.boxes : (\d+)$")
 def run(build, bench, loops, pyc):
     shutil.rmtree(STATS, ignore_errors=True)
     os.makedirs(STATS)
-    env = dict(os.environ, PYTHONPYCACHEPREFIX=pyc, PYTHONPATH=SP)
+    env = dict(os.environ, PYTHONPYCACHEPREFIX=pyc, PYTHONPATH=f"{OVERLAY}:{SP}")
     subprocess.run([f"{R}/build/{build}/python", "-X", "pystats",
                     f"{SP}/benchmarks/bm_{bench}/run_benchmark.py", "--worker",
                     "-l", str(loops), "-w", "0", "-n", "1", "-p", "1"],

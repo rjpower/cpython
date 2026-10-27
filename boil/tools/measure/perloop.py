@@ -16,7 +16,9 @@ def count(bench, loops, env):
     raise RuntimeError(out.stderr)
 pyc = f"/tmp/boil3b/pyc-perloop-{build}"
 shutil.rmtree(pyc, ignore_errors=True)
-env = dict(os.environ, PYTHONPYCACHEPREFIX=pyc, PYTHONPATH=SP)
+# The overlay shadows the venv's compiled psutil (overlay/psutil).
+OVERLAY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "overlay")
+env = dict(os.environ, PYTHONPYCACHEPREFIX=pyc, PYTHONPATH=f"{OVERLAY}:{SP}")
 for bench in sys.argv[2:]:
     count(bench, 2, env)  # warm the pyc cache
     vals = [(count(bench, 10, env) - count(bench, 2, env)) / 8 for _ in range(4)]

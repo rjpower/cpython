@@ -2936,17 +2936,31 @@ JUMP_IF_TRUE_OR_POP and SET_FUNCTION_ATTRIBUTE now fold their store. The
 LOAD_ATTR family already did: its `_PyIR_NO_FOLD` flag had no consumer.
 
 Before is the tree of 0c5f6ac3aa8 without the fold (richards per loop at
-41da9b3e399, which differs only in the sweep); after is 23c4d99af63.
+41da9b3e399, which differs only in the sweep); after is 23c4d99af63 for
+the per-loop figures, which compile into a fresh pyc cache, and
+ecdc7879253 for the dispatch counts, taken on the second run into a fresh
+cache.
 
 | | before | after |
 |---|---|---|
-| richards dispatches, `-l 2` | 12,727,326 | 12,727,420 |
-| go dispatches, `-l 2` | 37,083,635 | 37,083,412 |
+| richards dispatches, `-l 2` | 12,727,326 | 12,726,415 |
+| go dispatches, `-l 2` | 37,083,635 | 37,082,496 |
 | per loop (M), richards / go / nbody / float | 520.4 / 1175.8 / 1426.6 / 1022.1 | 520.0 / 1176.4 / 1427.2 / 1022.1 |
 
 Neither benchmark runs a newly folded form in its loop, so on these the
 fold measures nothing. An f-string assigned to a local saves one
 dispatch.
+
+**The fold changed the compiler's output without a new pyc magic
+number.** Cached pycs from before it stayed valid, so test runs that
+reused a pyc cache ran the old code, and test_dis, test_code and
+test_monitoring passed against their old expectations; the coordinator's
+gate, with a fresh cache, failed them. The magic is now 3717
+(b31d8b00b81), and the expectations follow the folds (ecdc7879253):
+nested functions lose a `STORE_FAST`, and in an `async for` the branch
+into the loop lands on the body's first line, as `for` already does,
+because END_SEND stores the loop variable itself. The dispatch counts
+first recorded here came from such a stale cache and are replaced above.
 
 ### 17.7 Ports
 
@@ -2966,13 +2980,17 @@ loses its free-threaded variant.
 
 ### 17.8 Tests
 
-Full suite, -j8, 564 files, at 0c5f6ac3aa8 (3a and the alias fold
-included):
+Full suite, -j8, 564 files, at ecdc7879253, each build into a fresh pyc
+cache:
 
 | build | wall time | result |
 |---|---|---|
-| dev-default | 4 min 49 s | test_sys's remote-exec timeout |
-| dev-debug | 12 min 56 s | the same |
+| dev-default | 4 min 36 s | test_sys's remote-exec timeout |
+| dev-debug | 12 min 49 s and 12 min 48 s, two runs | the same |
+
+An earlier run at 0c5f6ac3aa8 passed too, but it reused a pyc cache from
+before the alias fold, so it ran the unfolded code and did not test the
+fold (17.6).
 
 The rung 2 gate (be80af1d808, both builds) found two stale tests besides:
 test_sysconfig required the `Py_GIL_DISABLED` config var, which 834938a4ffa

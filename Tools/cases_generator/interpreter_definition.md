@@ -259,17 +259,16 @@ emits one of two checks for that input, marked unlikely:
 * In a guard, a uop that may deopt or exit but does not escape and only peeks
   at its inputs, it exits if the input is not a pointer. The guard then sees
   only objects, and the specialized family member never meets an inline value.
-* In any other uop, it boxes an inline value with `x = PyValue_Box(x)`.
+* In any other uop, it declares a local `x_object`, sets it to a new box
+  (`_PyValue_BoxInline`) if `x` is inline and to `PyValue_ObjectBorrow(x)`
+  otherwise, and replaces the uop's `PyValue_ObjectBorrow(x)` with `x_object`.
   If boxing fails, it jumps to `error` with all inputs still on the stack.
   In `Py_STATS` builds each box counts towards the instruction's `boxes`
-  statistic.
-  The box is written back to the input's stack slot when the uop peeks at the
-  input or when this or a later uop of the instruction may deopt, exit, escape
-  or fail, so that code which reads the stack sees the box. Otherwise the slot
-  is overwritten by the uop's outputs and is not written.
-
-While the input is still in its stack slot, the check reads the slot in memory,
-which is shorter than testing the loaded value.
+  statistic. The slot keeps the inline value: a box is never stored in it.
+  If the uop escapes, the generator also declares a `_PyValueRoot x_root`,
+  pushes it holding the box before each escaping statement and pops it after,
+  so that the collector keeps the box alive across the call. An escaping
+  statement that assigns to a boxed input is an error at build time.
 
 A uop that contains `assert(PyValue_IsObject(name));` declares that the
 input `name` is never an inline value, and the generator emits no check for it.

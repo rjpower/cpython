@@ -2173,7 +2173,11 @@ _PyDict_LoadBuiltinsFromGlobals(PyObject *globals)
     if (PyValue_IsNull(ref)) {
         return Py_NewRef(PyEval_GetBuiltins());
     }
-    PyObject *builtins = PyValue_ObjectBorrow(ref);
+    // A box of an inline value, which a later lookup rejects
+    PyObject *builtins = PyValue_Object(ref);
+    if (builtins == NULL) {
+        return NULL;
+    }
     if (PyModule_Check(builtins)) {
         builtins = _PyModule_GetDict(builtins);
         assert(builtins != NULL);

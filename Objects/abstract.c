@@ -2655,7 +2655,7 @@ call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
     if (found > 0) {
         *res = NULL;
         if (!_Py_EnterRecursiveCallTstate(tstate, where)) {
-            PyObject *method = PyValue_ObjectBorrow(cref.value);
+            PyObject *method = _PyValueRoot_Object(&cref);
             PyObject *args[2] = {PyValue_ObjectBorrow(self), arg};
             if (args[0] != NULL) {
                 /* Unbound method: prepend self. */

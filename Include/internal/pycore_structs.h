@@ -61,7 +61,12 @@ typedef struct {
 // the collector does not scan (_PyEvalActivation), holds a value across an
 // escaping call.  Used with _PyThreadState_PushValueRoot().
 typedef struct _PyValueRoot {
-    PyValue value;
+    union {
+        PyValue value;
+        // A box of an inline value (PyValue_Object()), which as a PyValue
+        // would be the inline value again.
+        PyObject *object;
+    };
     struct _PyValueRoot *next;
 } _PyValueRoot;
 

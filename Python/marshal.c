@@ -16,6 +16,7 @@
 #include "pycore_setobject.h"        // _PySet_NextEntryRef()
 #include "pycore_tuple.h"            // _PyTuple_FromPairSteal
 #include "pycore_unicodeobject.h"    // _PyUnicode_InternImmortal()
+#include "pycore_value.h"            // _PyObject_ValueIdentity()
 
 #include "marshal.h"                 // Py_MARSHAL_VERSION
 
@@ -103,7 +104,8 @@ module marshal
 /* State of an object which can be the target of a TYPE_REF (version 3+),
    see w_ref() and w_resolve_refs().
 
-   WFILE.hashtable maps the object to its index in WFILE.refs, shifted left
+   WFILE.hashtable maps the object's identity (w_key()), so that the boxes
+   of one inline value are one object, to its index in WFILE.refs, shifted left
    by W_ENTRY_SHIFT bits, plus the flags:
    - W_ENTRY_ACTIVE: the object is being written (used to detect recursion,
      see w_complete());
@@ -495,6 +497,14 @@ w_add_refpos(WFILE *p)
    Return 1 if the object has been dealt with (TYPE_REF written or error),
    0 if the caller has to write it.
  */
+/* The key of v in WFILE.hashtable: its identity, which the boxes of one
+   inline value share (see "Identity" in Include/pyvalue.h). */
+static inline void *
+w_key(PyObject *v)
+{
+    return (void *)_PyObject_ValueIdentity(v);
+}
+
 static int
 w_ref(PyObject *v, WFILE *p)
 {
@@ -503,7 +513,7 @@ w_ref(PyObject *v, WFILE *p)
     if (p->version < 3 || p->hashtable == NULL)
         return 0; /* not writing object references */
 
-    entry = _Py_hashtable_get_entry(p->hashtable, v);
+    entry = _Py_hashtable_get_entry(p->hashtable, w_key(v));
     if (entry != NULL) {
         /* write the reference index to the stream */
         uintptr_t w = (uintptr_t)entry->value;
@@ -552,9 +562,7 @@ w_ref(PyObject *v, WFILE *p)
         {
             value |= W_ENTRY_ACTIVE;
         }
-        if (_Py_hashtable_set(p->hashtable, Py_NewRef(v),
-                              (void *)value) < 0) {
-            Py_DECREF(v);
+        if (_Py_hashtable_set(p->hashtable, w_key(v), (void *)value) < 0) {
             PyErr_NoMemory();
             goto err;
         }
@@ -626,7 +634,7 @@ w_complete(PyObject *v, WFILE *p)
         return;
     }
 
-    _Py_hashtable_entry_t *entry = _Py_hashtable_get_entry(p->hashtable, v);
+    _Py_hashtable_entry_t *entry = _Py_hashtable_get_entry(p->hashtable, w_key(v));
     if (entry == NULL) {
         return;
     }
@@ -977,20 +985,13 @@ w_complex_object(PyObject *v, WFILE *p)
     }
 }
 
-static void
-w_decref_entry(void *key)
-{
-    PyObject *entry_key = (PyObject *)key;
-    Py_XDECREF(entry_key);
-}
-
 static int
 w_init_refs(WFILE *wf, int version)
 {
     if (version >= 3) {
         wf->hashtable = _Py_hashtable_new_full(_Py_hashtable_hash_ptr,
                                                _Py_hashtable_compare_direct,
-                                               w_decref_entry, NULL, NULL);
+                                               NULL, NULL, NULL);
         if (wf->hashtable == NULL) {
             PyErr_NoMemory();
             return -1;

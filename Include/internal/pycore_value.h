@@ -26,9 +26,12 @@ extern "C" {
   PyObject *.  _PyValue_ERROR is a handler's failed result.  A wrapped
   pointer (_PyValue_Wrap()) passes a C pointer from one uop to another.
 
-  An inline value must be boxed with PyValue_Box() before it is converted to
-  a PyObject *.  The cases generator does this for instruction inputs; see
-  "Inline values" in Tools/cases_generator/interpreter_definition.md.
+  PyValue_Object() boxes an inline value for code that needs a PyObject *.
+  The box lives in a C local, never in the slot the value came from, which
+  stays canonical; across an escaping call a value root holds it
+  (_PyValue_ObjectRooted()).  The cases generator does this for instruction
+  inputs; see "Inline values" in
+  Tools/cases_generator/interpreter_definition.md.
 */
 
 #if SIZEOF_VOID_P != 8
@@ -84,9 +87,13 @@ _PyValue_IncrementTaggedIndexNoOverflow(PyValue v)
     return v;
 }
 
-// The identity of op: its value encoding or its address (see "Identity" in
+// The identity of op: its canonical value's encoding (see "Identity" in
 // Include/pyvalue.h).
-PyAPI_FUNC(uintptr_t) _PyObject_ValueIdentity(PyObject *op);
+static inline uintptr_t
+_PyObject_ValueIdentity(PyObject *op)
+{
+    return PyValue_FromObject(op).bits;
+}
 
 static const PyValue _PyValue_ERROR = { .bits = _PyValue_ERROR_BITS };
 
@@ -261,27 +268,6 @@ _PyValue_BoxInto(const PyValue *src, PyObject **dst, Py_ssize_t n)
     return 0;
 }
 
-/* Box each inline value of values[0..n) in place, for C code that converts
-   the array to objects; kind (_PY_BOX_CALL and so on) says what for, for
-   the statistics. Return 0, or -1 with an exception set if boxing fails;
-   boxes made so far stay in the array. */
-static inline int
-_PyValue_BoxArray(PyValue *values, Py_ssize_t n, int kind)
-{
-    (void)kind;
-    for (Py_ssize_t i = 0; i < n; i++) {
-        if (_PyValue_IsInlineAt(&values[i])) {
-            values[i] = PyValue_Box(values[i]);
-            if (PyValue_IsInline(values[i])) {
-                return -1;
-            }
-            OBJECT_STAT_INC(inline_array_boxes);
-            VALUE_BOX_STAT_INC(kind);
-        }
-    }
-    return 0;
-}
-
 /* A C local's value root (_PyValueRoot): pushed, it is visited by the
    collector until it is popped. */
 static inline void
@@ -307,6 +293,50 @@ _PyThreadState_PopValueRoot(PyThreadState *tstate, _PyValueRoot *root)
     root->value = PyValue_NULL;
     __asm__ volatile("" : : "r"(root) : "memory");
     return res;
+}
+
+
+/* The object that root holds, for C code that needs a PyObject *: an
+   inline value is boxed in place, and root holds the box (its object field)
+   from then on, so root's value must not be used as a PyValue afterwards.
+   NULL if root holds NULL, or with an exception set if boxing fails. */
+static inline PyObject *
+_PyValueRoot_Object(_PyValueRoot *root)
+{
+    if (PyValue_IsInline(root->value)) {
+        root->object = _PyValue_BoxInline(root->value);
+    }
+    return root->object;
+}
+
+/* The object of v, for a handler to pass to an escaping call: if v holds an
+   inline value, a new box, which root holds until
+   _PyValue_UnrootObject(tstate, v, root).  kind (_PY_BOX_CALL and so on)
+   says what the box is for, for the statistics.  NULL with an exception set
+   if boxing fails, and then root is not pushed. */
+static inline PyObject *
+_PyValue_ObjectRooted(PyThreadState *tstate, PyValue v, _PyValueRoot *root,
+                      int kind)
+{
+    (void)kind;
+    if (PyValue_IsInline(v)) {
+        PyObject *box = _PyValue_BoxInline(v);
+        if (box != NULL) {
+            VALUE_BOX_STAT_INC(kind);
+            _PyThreadState_PushValueRoot(tstate, root);
+            root->object = box;
+        }
+        return box;
+    }
+    return PyValue_ObjectBorrow(v);
+}
+
+static inline void
+_PyValue_UnrootObject(PyThreadState *tstate, PyValue v, _PyValueRoot *root)
+{
+    if (PyValue_IsInline(v)) {
+        _PyThreadState_PopValueRoot(tstate, root);
+    }
 }
 
 

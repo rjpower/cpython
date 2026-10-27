@@ -2989,15 +2989,16 @@ value_box_roundtrip(PyObject *self, PyObject *arg)
         PyErr_SetString(PyExc_AssertionError, "inline value predicates disagree");
         return NULL;
     }
-    PyValue boxed = PyValue_Box(ref);
-    if (PyValue_IsInline(boxed)) {
+    PyObject *box = PyValue_Object(ref);
+    if (box == NULL) {
         return NULL;
     }
-    if (!_PyValue_IsPointerSpaceAt(&boxed) || _PyValue_IsInlineAt(&boxed)) {
-        PyErr_SetString(PyExc_AssertionError, "box is not a pointer");
+    // A box converts back to the canonical, inline value.
+    if (PyValue_FromObject(box).bits != ref.bits) {
+        PyErr_SetString(PyExc_AssertionError, "box is not canonicalised");
         return NULL;
     }
-    return PyValue_ObjectBorrow(boxed);
+    return box;
 }
 
 // The names of the frame's local variables that hold inline values.

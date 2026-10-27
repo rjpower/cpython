@@ -2769,8 +2769,8 @@ int
 _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
                               PyValue *self)
 {
-    PyObject *self_o = PyValue_ObjectBorrow(*self);
-    _PyType_LookupValueAndVersion(Py_TYPE(self_o), attr, method);
+    PyTypeObject *tp = PyValue_Type(*self);
+    _PyType_LookupValueAndVersion(tp, attr, method);
     PyObject *method_o = PyValue_ObjectBorrow(*method);
     if (method_o == NULL) {
         return 0;
@@ -2783,7 +2783,12 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
 
     descrgetfunc f = Py_TYPE(method_o)->tp_descr_get;
     if (f != NULL) {
-        PyObject *func = f(method_o, self_o, (PyObject *)(Py_TYPE(self_o)));
+        // The box of an inline self is an argument of f, which holds it.
+        PyObject *self_o = PyValue_Object(*self);
+        if (self_o == NULL) {
+            return -1;
+        }
+        PyObject *func = f(method_o, self_o, (PyObject *)tp);
         if (func == NULL) {
             return -1;
         }
@@ -2879,7 +2884,7 @@ call_method_noarg(PyObject *self, PyObject *attr)
     PyObject *res = NULL;
     int unbound = lookup_method(self, attr, &cref.value);
     if (unbound >= 0) {
-        PyObject *func = PyValue_ObjectBorrow(cref.value);
+        PyObject *func = _PyValueRoot_Object(&cref);
         res = call_unbound_noarg(unbound, func, self);
     }
     _PyThreadState_PopValueRoot(tstate, &cref);
@@ -2895,7 +2900,7 @@ call_method(PyObject *self, PyObject *attr, PyObject *args, PyObject *kwds)
     PyObject *res = NULL;
     int unbound = lookup_method(self, attr, &cref.value);
     if (unbound >= 0) {
-        PyObject *meth = PyValue_ObjectBorrow(cref.value);
+        PyObject *meth = _PyValueRoot_Object(&cref);
         if (unbound) {
             res = _PyObject_Call_Prepend(tstate, meth, self, args, kwds);
         }
@@ -2924,7 +2929,7 @@ vectorcall_method(PyObject *name, PyObject *const *args, Py_ssize_t nargs)
     _PyThreadState_PushValueRoot(tstate, &cref);
     int unbound = lookup_method(self, name, &cref.value);
     if (unbound >= 0) {
-        PyObject *func = PyValue_ObjectBorrow(cref.value);
+        PyObject *func = _PyValueRoot_Object(&cref);
         retval = vectorcall_unbound(tstate, unbound, func, args, nargs);
     }
     _PyThreadState_PopValueRoot(tstate, &cref);
@@ -2943,7 +2948,7 @@ vectorcall_maybe(PyThreadState *tstate, PyObject *name,
     _PyValueRoot cref;
     _PyThreadState_PushValueRoot(tstate, &cref);
     int unbound = lookup_maybe_method(self, name, &cref.value);
-    PyObject *func = PyValue_ObjectBorrow(cref.value);
+    PyObject *func = _PyValueRoot_Object(&cref);
     if (func == NULL) {
         _PyThreadState_PopValueRoot(tstate, &cref);
         if (!PyErr_Occurred()) {
@@ -2969,7 +2974,7 @@ maybe_call_special_no_args(PyObject *self, PyObject *attr, int *attr_is_none)
 
     PyObject *res = NULL;
     int unbound = lookup_maybe_method(self, attr, &cref.value);
-    PyObject *func = PyValue_ObjectBorrow(cref.value);
+    PyObject *func = _PyValueRoot_Object(&cref);
     if (attr_is_none != NULL) {
         *attr_is_none = (func == Py_None);
     }
@@ -2990,7 +2995,7 @@ maybe_call_special_one_arg(PyObject *self, PyObject *attr, PyObject *arg,
 
     PyObject *res = NULL;
     int unbound = lookup_maybe_method(self, attr, &cref.value);
-    PyObject *func = PyValue_ObjectBorrow(cref.value);
+    PyObject *func = _PyValueRoot_Object(&cref);
     if (attr_is_none != NULL) {
         *attr_is_none = (func == Py_None);
     }
@@ -5862,10 +5867,8 @@ _PyType_LookupRefAndVersion(PyTypeObject *type, PyObject *name, unsigned int *ve
     if (version) {
         *version = ver;
     }
-    if (PyValue_IsNull(out)) {
-        return NULL;
-    }
-    return PyValue_ObjectBorrow(out);
+    // A box of an inline value; NULL also if boxing fails.
+    return PyValue_Object(out);
 }
 
 static int
@@ -5912,7 +5915,7 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
         // find_name_in_mro can release the type lock and another thread can
         // modify the type, so we need to check version tag again before caching the result.
         if (res >= 0 && version_tag != 0 && version_tag == type->tp_version_tag) {
-            _PyTypeCache_Insert(type, name, PyValue_ObjectBorrow(*out));
+            _PyTypeCache_Insert(type, name, *out);
         }
         END_TYPE_LOCK();
     }
@@ -6082,10 +6085,7 @@ PyObject *
 _Py_type_getattro_impl(PyTypeObject *type, PyObject *name, int *suppress_missing_attribute)
 {
     PyValue ref = _Py_type_getattro_value(type, name, suppress_missing_attribute);
-    if (PyValue_IsNull(ref)) {
-        return NULL;
-    }
-    return PyValue_ObjectBorrow(ref);
+    return PyValue_Object(ref);
 }
 
 /* This is similar to PyObject_GenericGetAttr(),
@@ -6137,7 +6137,8 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
     /* Look for the attribute in the metatype */
     _PyType_LookupValueAndVersion(metatype, name, &meta_attribute_ref.value);
 
-    if (!PyValue_IsNull(meta_attribute_ref.value)) {
+    // An inline value is not a descriptor.
+    if (PyValue_IsObject(meta_attribute_ref.value)) {
         PyObject *meta_attr_obj = PyValue_ObjectBorrow(meta_attribute_ref.value);
         meta_get = Py_TYPE(meta_attr_obj)->tp_descr_get;
 
@@ -6160,8 +6161,12 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
     _PyType_LookupValueAndVersion(type, name, &attribute_ref.value);
     if (!PyValue_IsNull(attribute_ref.value)) {
         /* Implement descriptor functionality, if any */
-        PyObject *attr_obj = PyValue_ObjectBorrow(attribute_ref.value);
-        descrgetfunc local_get = Py_TYPE(attr_obj)->tp_descr_get;
+        descrgetfunc local_get = NULL;
+        PyObject *attr_obj = NULL;
+        if (PyValue_IsObject(attribute_ref.value)) {
+            attr_obj = PyValue_ObjectBorrow(attribute_ref.value);
+            local_get = Py_TYPE(attr_obj)->tp_descr_get;
+        }
 
         /* Release meta_attribute early since we found in local dict */
         meta_attribute_ref.value = PyValue_NULL;
@@ -10726,7 +10731,7 @@ slot_tp_descr_get(PyObject *self, PyObject *obj, PyObject *type)
         obj = Py_None;
     if (type == NULL)
         type = Py_None;
-    PyObject *get = PyValue_ObjectBorrow(cref.value);
+    PyObject *get = _PyValueRoot_Object(&cref);
     PyObject *stack[3] = {self, obj, type};
     PyObject *res = PyObject_Vectorcall(get, stack, 3, NULL);
     _PyThreadState_PopValueRoot(tstate, &cref);
@@ -10785,7 +10790,7 @@ slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    PyObject *func = PyValue_ObjectBorrow(func_ref.value);
+    PyObject *func = _PyValueRoot_Object(&func_ref);
     result = _PyObject_Call_Prepend(tstate, func, (PyObject *)type, args, kwds);
     _PyThreadState_PopValueRoot(tstate, &func_ref);
     return result;
@@ -10804,7 +10809,7 @@ slot_tp_finalize(PyObject *self)
     /* Execute __del__ method, if any. */
     int unbound = lookup_maybe_method(self, &_Py_ID(__del__), &cref.value);
     if (unbound >= 0) {
-        PyObject *del = PyValue_ObjectBorrow(cref.value);
+        PyObject *del = _PyValueRoot_Object(&cref);
         PyObject *res = call_unbound_noarg(unbound, del, self);
         if (res == NULL) {
             PyErr_FormatUnraisable("Exception ignored while "
@@ -11533,7 +11538,15 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
             }
             continue;
         }
-        descr = PyValue_ObjectBorrow(descr_ref);
+        // A box of an inline value, which this frame holds, takes the
+        // generic slot like any other attribute that is not a descriptor.
+        descr = PyValue_Object(descr_ref);
+        if (descr == NULL) {
+            PyErr_Clear();
+            use_generic = 1;
+            generic = p->function;
+            continue;
+        }
         if (Py_IS_TYPE(descr, &PyWrapperDescr_Type) &&
             ((PyWrapperDescrObject *)descr)->d_base->name_strobj == p->name_strobj) {
             void **tptr;

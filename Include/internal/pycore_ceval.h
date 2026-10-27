@@ -396,7 +396,6 @@ PyAPI_FUNC(PyObject *)
 _PyCallMethodDescriptorFast_Values(
     PyValue callable,
     PyCFunctionFast cfunc,
-    PyObject *self,
     PyValue *arguments,
     int total_args);
 
@@ -404,7 +403,6 @@ PyAPI_FUNC(PyObject *)
 _PyCallMethodDescriptorFastWithKeywords_Values(
     PyValue callable,
     PyCFunctionFastWithKeywords cfunc,
-    PyObject *self,
     PyValue *arguments,
     int total_args);
 

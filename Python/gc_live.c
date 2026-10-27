@@ -1257,7 +1257,7 @@ _PyGC_LiveClearStack(void)
 }
 
 void
-_PyGC_LiveClearEvalStack(void)
+_PyGC_LiveClearEvalStackBuffer(void)
 {
     // More than the eval loop's frame.
     char buf[1024];

@@ -1275,7 +1275,13 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
                             PyObject *name, PyValue *method)
 {
     int meth_found = 0;
-    PyObject *obj = PyValue_ObjectBorrow(*self);
+    // A box of an inline self: this frame, which the collector scans,
+    // holds it, and *self keeps the inline value.
+    PyObject *obj = PyValue_Object(*self);
+    if (obj == NULL) {
+        *self = PyValue_NULL;
+        return -1;
+    }
 
     assert(PyValue_IsNull(*method));
 
@@ -1298,7 +1304,12 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
     }
 
     _PyType_LookupValueAndVersion(tp, name, method);
-    PyObject *descr = PyValue_ObjectBorrow(*method);
+    // An inline value is neither a method nor a descriptor: like any
+    // other class attribute that is not, it is the result unless the
+    // instance has the name.
+    int in_type = !PyValue_IsNull(*method);
+    PyObject *descr = PyValue_IsInline(*method) ? NULL
+                                                : PyValue_ObjectBorrow(*method);
     descrgetfunc f = NULL;
     if (descr != NULL) {
         if (_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
@@ -1382,7 +1393,7 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
         return -1;
     }
 
-    if (descr != NULL) {
+    if (in_type) {
         assert(!PyValue_IsNull(*method));
         *self = PyValue_NULL;
         return 0;
@@ -1435,7 +1446,10 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     _PyThreadState_PushValueRoot(tstate, &cref);
 
     _PyType_LookupValueAndVersion(tp, name, &cref.value);
-    descr = PyValue_ObjectBorrow(cref.value);
+    descr = _PyValueRoot_Object(&cref);
+    if (descr == NULL && PyErr_Occurred()) {
+        goto done;
+    }
 
     f = NULL;
     if (descr != NULL) {
@@ -1515,7 +1529,7 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     }
 
     if (descr != NULL) {
-        res = PyValue_ObjectBorrow(cref.value);
+        res = _PyValueRoot_Object(&cref);
         cref.value = PyValue_NULL;
         goto done;
     }
@@ -1568,7 +1582,10 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
     _PyThreadState_PushValueRoot(tstate, &cref);
 
     _PyType_LookupValueAndVersion(tp, name, &cref.value);
-    descr = PyValue_ObjectBorrow(cref.value);
+    descr = _PyValueRoot_Object(&cref);
+    if (descr == NULL && PyErr_Occurred()) {
+        goto done;
+    }
 
     if (descr != NULL) {
         f = Py_TYPE(descr)->tp_descr_set;

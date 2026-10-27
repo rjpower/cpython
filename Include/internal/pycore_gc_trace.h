@@ -293,9 +293,31 @@ extern void _PyGC_LiveClearStack(void);
  * (PyObject_Free() without looking the block up). */
 extern void _PyGC_FreeDeadBlock(PyObject *op, void *block);
 
-/* The same for the eval loop's frame, which has padding too, and spill
- * slots that a call writes only on some paths. */
-extern void _PyGC_LiveClearEvalStack(void);
+/* The same for the eval loop's entry and frame, which have padding too, and
+ * spill slots that a call writes only on some paths.  On x86-64 the stores
+ * are inline assembly below the caller's stack pointer, so that they reach
+ * the top of the region: a clearing function's own frame would cover it,
+ * and its padding would keep the stale words for the entry's padding
+ * (test_asyncio.test_futures2).  The caller makes calls, so nothing of its
+ * own lives below its stack pointer. */
+extern void _PyGC_LiveClearEvalStackBuffer(void);
+
+static inline void
+_PyGC_LiveClearEvalStack(void)
+{
+#if defined(__x86_64__) && defined(__GNUC__)
+    void *dst;
+    unsigned long count;
+    __asm__ volatile("lea -1024(%%rsp), %0\n\t"
+                     "xor %%eax, %%eax\n\t"
+                     "rep stosq"
+                     : "=&D"(dst), "=&c"(count)
+                     : "1"(1024 / 8)
+                     : "rax", "memory");
+#else
+    _PyGC_LiveClearEvalStackBuffer();
+#endif
+}
 
 /* Totals for gc.get_stats(): the bytes the sweeps freed, the bytes the last
  * collection found live, and the longest pause in seconds. */

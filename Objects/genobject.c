@@ -262,9 +262,11 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
     _PyInterpreterFrame *frame = &gen->gi_iframe;
 
     /* arg goes to the slot of the yield that suspended the frame, or of
-       the value that RETURN_GENERATOR returned */
-    PyObject *arg_obj = arg ? arg : Py_None;
-    _PyFrame_SetReturnValue(frame, PyValue_FromObject(arg_obj));
+       the value that RETURN_GENERATOR returned.  Testing for None first
+       keeps GCC from reading the static None as an int or float where a
+       caller passes Py_None (-Warray-bounds). */
+    _PyFrame_SetReturnValue(frame, arg == NULL || arg == Py_None
+                                   ? _PyValue_None : PyValue_FromObject(arg));
 
     _PyErr_StackItem *prev_exc_info = tstate->exc_info;
     gen->gi_exc_state.previous_item = prev_exc_info;

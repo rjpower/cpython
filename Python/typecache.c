@@ -2,7 +2,7 @@
 
 // The cache is used for method and attribute lookups on type objects.
 // The stored names are always interned strings, and the
-// stored values are borrowed references to the corresponding method or attribute object.
+// stored values are the corresponding method or attribute values.
 // For static types, the cache is stored on the per-interpreter managed_static_type_state,
 // and for heap types the cache is stored in the `PyTypeObject._tp_cache` field.
 
@@ -108,7 +108,7 @@ _PyTypeCache_InitType(PyTypeObject *type)
 
 static inline void
 cache_insert(struct type_cache *cache, PyObject *name,
-             PyObject *value)
+             PyValue value)
 {
     Py_hash_t hash = PyUnstable_Unicode_GET_CACHED_HASH(name);
     assert(hash != -1);
@@ -168,7 +168,7 @@ cache_resize(PyTypeObject *type, struct type_cache *cache)
 // Insert a new entry to the type cache.
 // The TYPE_LOCK should be held while calling this function.
 void
-_PyTypeCache_Insert(PyTypeObject *type, PyObject *name, PyObject *value)
+_PyTypeCache_Insert(PyTypeObject *type, PyObject *name, PyValue value)
 {
     struct type_cache *cache = cache_get(type);
     // If the cache is full, resize it before inserting the new entry.
@@ -205,8 +205,7 @@ _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name)
     for (;;) {
         PyObject *entry_name = FT_ATOMIC_LOAD_PTR_ACQUIRE(cache->hashtable[index].name);
         if (entry_name == name) {
-            PyObject *v = cache->hashtable[index].value;
-            out_ref = v ? PyValue_FromObject(v) : PyValue_NULL;
+            out_ref = cache->hashtable[index].value;
             break;
         }
         else if (entry_name == NULL) {

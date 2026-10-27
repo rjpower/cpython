@@ -1397,14 +1397,24 @@ dummy_func(
 
         tier1 inst(RAISE_VARARGS, (args[oparg] -- )) {
             assert(oparg < 3);
-            // do_raise() rejects an int or float, which needs a box for that.
-            if (_PyValue_BoxArray(args, oparg, _PY_BOX_OTHER) < 0) {
-                ERROR_NO_POP();
+            // do_raise() rejects an int or float, which needs a box for
+            // that; value roots hold the boxes while it runs.
+            _PyValueRoot exc, cause;
+            _PyThreadState_PushValueRoot(tstate, &exc);
+            _PyThreadState_PushValueRoot(tstate, &cause);
+            int boxed = 1;
+            if (oparg == 2) {
+                cause.object = PyValue_Object(args[1]);
+                boxed = cause.object != NULL;
             }
-            PyObject *cause = oparg == 2 ? PyValue_ObjectBorrow(args[1]) : NULL;
-            PyObject *exc = oparg > 0 ? PyValue_ObjectBorrow(args[0]) : NULL;
+            if (oparg > 0 && boxed) {
+                exc.object = PyValue_Object(args[0]);
+                boxed = exc.object != NULL;
+            }
             DEAD(args);
-            int err = do_raise(tstate, exc, cause);
+            int err = boxed ? do_raise(tstate, exc.object, cause.object) : 0;
+            _PyThreadState_PopValueRoot(tstate, &cause);
+            _PyThreadState_PopValueRoot(tstate, &exc);
             if (err) {
                 assert(oparg == 0);
                 monitor_reraise(tstate, frame, this_instr);
@@ -2127,11 +2137,14 @@ dummy_func(
         inst(MAKE_CELL, (--)) {
             // "initial" is probably NULL but not if it's an arg (or set
             // via the f_locals proxy before MAKE_CELL has run). A cell holds
-            // an object, so an inline arg is boxed.
-            if (_PyValue_BoxArray(&GETLOCAL(oparg), 1, _PY_BOX_CONTAINER_STORE) < 0) {
+            // an object, so an inline arg is boxed.  PyCell_New() only
+            // allocates, and a collection that an allocation runs scans the
+            // eval loop's frame, so the box needs no root.
+            PyValue initial_value = GETLOCAL(oparg);
+            PyObject *initial = PyValue_Object(initial_value);
+            if (initial == NULL && !PyValue_IsNull(initial_value)) {
                 ERROR_NO_POP();
             }
-            PyObject *initial = PyValue_ObjectBorrow(GETLOCAL(oparg));
             PyObject *cell = PyCell_New(initial);
             if (cell == NULL) {
                 ERROR_NO_POP();
@@ -2310,18 +2323,21 @@ dummy_func(
             }
 
             // Until the handler pushes it, a value root holds the set
-            // across the hashing of the values, which may run code.
-            _PyValueRoot set_ref;
+            // across the hashing of the values, which may run code, and
+            // another holds the box of an inline value.
+            _PyValueRoot set_ref, item;
             _PyThreadState_PushValueRoot(tstate, &set_ref);
+            _PyThreadState_PushValueRoot(tstate, &item);
             set_ref.value = PyValue_FromObject(set_o);
             int err = 0;
             for (Py_ssize_t i = 0; i < oparg && err == 0; i++) {
-                PyValue value = PyValue_Box(values[i]);
-                err = PyValue_IsInline(value) ? -1 :
+                item.object = PyValue_Object(values[i]);
+                err = item.object == NULL ? -1 :
                     _PySet_AddTakeRef(
                         (PySetObject *)PyValue_ObjectBorrow(set_ref.value),
-                        PyValue_ObjectBorrow(value));
+                        item.object);
             }
+            _PyThreadState_PopValueRoot(tstate, &item);
             PyValue made = _PyThreadState_PopValueRoot(tstate, &set_ref);
             INPUTS_DEAD();
             ERROR_IF(err);
@@ -2787,10 +2803,10 @@ dummy_func(
             EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version);
         }
 
-        op(_LOAD_ATTR_CLASS, (descr/4, owner -- attr)) {
+        op(_LOAD_ATTR_CLASS, (attr_value/4, owner -- attr)) {
             STAT_INC(LOAD_ATTR, hit);
-            assert(descr != NULL);
-            attr = PyValue_FromObject(descr);
+            assert(!PyValue_IsNull(attr_value));
+            attr = attr_value;
             INPUTS_DEAD();
         }
 
@@ -3791,20 +3807,23 @@ dummy_func(
 
         op(_LOAD_SPECIAL, (method_and_self[2] -- method_and_self[2])) {
             PyObject *name = _Py_SpecialMethods[oparg].name;
-            if (_PyValue_BoxArray(method_and_self + 1, 1, _PY_BOX_OTHER) < 0) {
-                ERROR_NO_POP();
-            }
             int err = _PyObject_LookupSpecialMethod(name, &method_and_self[0],
                                                     &method_and_self[1]);
             if (err <= 0) {
                 if (err == 0) {
-                    PyObject *owner = PyValue_ObjectBorrow(method_and_self[1]);
-                    const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner, oparg)
-                        ? _Py_SpecialMethods[oparg].error_suggestion
-                        : _Py_SpecialMethods[oparg].error;
-                    assert(!_PyErr_Occurred(tstate));
-                    assert(errfmt != NULL);
-                    _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner);
+                    // A value root holds the box of an inline owner.
+                    _PyValueRoot owner;
+                    _PyThreadState_PushValueRoot(tstate, &owner);
+                    owner.object = PyValue_Object(method_and_self[1]);
+                    if (owner.object != NULL) {
+                        const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner.object, oparg)
+                            ? _Py_SpecialMethods[oparg].error_suggestion
+                            : _Py_SpecialMethods[oparg].error;
+                        assert(!_PyErr_Occurred(tstate));
+                        assert(errfmt != NULL);
+                        _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner.object);
+                    }
+                    _PyThreadState_PopValueRoot(tstate, &owner);
                 }
                 ERROR_NO_POP();
             }
@@ -3908,12 +3927,12 @@ dummy_func(
             unused/2 +
             _LOAD_ATTR_METHOD_NO_DICT;
 
-        op(_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES, (descr/4, owner -- attr)) {
+        op(_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES, (attr_value/4, owner -- attr)) {
             assert((oparg & 1) == 0);
             STAT_INC(LOAD_ATTR, hit);
-            assert(descr != NULL);
+            assert(!PyValue_IsNull(attr_value));
             DEAD(owner);
-            attr = PyValue_FromObject(descr);
+            attr = attr_value;
         }
 
         macro(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES) =
@@ -3923,13 +3942,13 @@ dummy_func(
             unused/2 +
             _LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
 
-        op(_LOAD_ATTR_NONDESCRIPTOR_NO_DICT, (descr/4, owner -- attr)) {
+        op(_LOAD_ATTR_NONDESCRIPTOR_NO_DICT, (attr_value/4, owner -- attr)) {
             assert((oparg & 1) == 0);
-            assert(Py_TYPE(PyValue_ObjectBorrow(owner))->tp_dictoffset == 0);
+            assert(PyValue_Type(owner)->tp_dictoffset == 0);
             STAT_INC(LOAD_ATTR, hit);
-            assert(descr != NULL);
+            assert(!PyValue_IsNull(attr_value));
             DEAD(owner);
-            attr = PyValue_FromObject(descr);
+            attr = attr_value;
         }
 
         macro(LOAD_ATTR_NONDESCRIPTOR_NO_DICT) =
@@ -4069,19 +4088,24 @@ dummy_func(
                 arg0 = PyValue_ObjectBorrow(maybe_self);
             }
             else if (oparg) {
-                if (_PyValue_BoxArray(args, 1, _PY_BOX_CALL) < 0) {
+                arg0 = PyValue_Object(args[0]);
+                if (arg0 == NULL) {
                     ERROR_NO_POP();
                 }
-                arg0 = PyValue_ObjectBorrow(args[0]);
             }
             else {
                 arg0 = &_PyInstrumentation_MISSING;
             }
+            // A value root holds the box of an inline argument.
+            _PyValueRoot arg0_root;
+            _PyThreadState_PushValueRoot(tstate, &arg0_root);
+            arg0_root.object = arg0;
             SYNC_SP();
             int err = _Py_call_instrumentation_2args(
                 tstate, PY_MONITORING_EVENT_CALL,
                 frame, this_instr, function, arg0
             );
+            _PyThreadState_PopValueRoot(tstate, &arg0_root);
             ERROR_IF(err);
         }
 
@@ -4518,11 +4542,14 @@ dummy_func(
             }
             STAT_INC(CALL, hit);
             PyCFunction cfunc = PyCFunction_GET_FUNCTION(callable_o);
-            if (_PyValue_BoxArray(args, 1, _PY_BOX_CALL) < 0) {
+            PyValue arg = args[0];
+            _PyValueRoot arg_root;
+            PyObject *arg_o = _PyValue_ObjectRooted(tstate, arg, &arg_root, _PY_BOX_CALL);
+            if (arg_o == NULL) {
                 ERROR_NO_POP();
             }
-            PyValue arg = args[0];
-            PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, PyCFunction_GET_SELF(callable_o), PyValue_ObjectBorrow(arg));
+            PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, PyCFunction_GET_SELF(callable_o), arg_o);
+            _PyValue_UnrootObject(tstate, arg, &arg_root);
             _Py_LeaveRecursiveCallTstate(tstate);
             assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
             if (res_o == NULL) {
@@ -4745,12 +4772,21 @@ dummy_func(
             }
             STAT_INC(CALL, hit);
             PyCFunction cfunc = method->d_method->ml_meth;
-            if (_PyValue_BoxArray(arguments, 2, _PY_BOX_CALL) < 0) {
+            PyValue self_value = arguments[0];
+            PyValue arg_value = arguments[1];
+            _PyValueRoot self_root, arg_root;
+            PyObject *self = _PyValue_ObjectRooted(tstate, self_value, &self_root, _PY_BOX_CALL);
+            if (self == NULL) {
                 ERROR_NO_POP();
             }
-            PyObject *self = PyValue_ObjectBorrow(arguments[0]);
-            PyObject *arg = PyValue_ObjectBorrow(arguments[1]);
+            PyObject *arg = _PyValue_ObjectRooted(tstate, arg_value, &arg_root, _PY_BOX_CALL);
+            if (arg == NULL) {
+                _PyValue_UnrootObject(tstate, self_value, &self_root);
+                ERROR_NO_POP();
+            }
             PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self, arg);
+            _PyValue_UnrootObject(tstate, arg_value, &arg_root);
+            _PyValue_UnrootObject(tstate, self_value, &self_root);
             _Py_LeaveRecursiveCallTstate(tstate);
             assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
             if (res_o == NULL) {
@@ -4804,17 +4840,12 @@ dummy_func(
                 arguments--;
                 total_args++;
             }
-            if (_PyValue_BoxArray(arguments, 1, _PY_BOX_CALL) < 0) {
-                ERROR_NO_POP();
-            }
-            PyObject *self = PyValue_ObjectBorrow(arguments[0]);
-            assert(self != NULL);
+            assert(!PyValue_IsNull(arguments[0]));
             STAT_INC(CALL, hit);
             PyCFunctionFastWithKeywords cfunc = _PyCFunctionFastWithKeywords_CAST(method->d_method->ml_meth);
             PyObject *res_o = _PyCallMethodDescriptorFastWithKeywords_Values(
                 callable,
                 cfunc,
-                self,
                 arguments,
                 total_args
             );
@@ -4856,14 +4887,16 @@ dummy_func(
             if (!PyValue_IsNull(self_or_null)) {
                 args--;
             }
-            if (_PyValue_BoxArray(args, 1, _PY_BOX_CALL) < 0) {
+            PyValue self_value = args[0];
+            _PyValueRoot self_root;
+            PyObject *self = _PyValue_ObjectRooted(tstate, self_value, &self_root, _PY_BOX_CALL);
+            if (self == NULL) {
                 ERROR_NO_POP();
             }
-            PyValue self_value = args[0];
-            PyObject *self = PyValue_ObjectBorrow(self_value);
             STAT_INC(CALL, hit);
             PyCFunction cfunc = method->d_method->ml_meth;
             PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self, NULL);
+            _PyValue_UnrootObject(tstate, self_value, &self_root);
             _Py_LeaveRecursiveCallTstate(tstate);
             assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
             if (res_o == NULL) {
@@ -4911,17 +4944,12 @@ dummy_func(
                 arguments--;
                 total_args++;
             }
-            if (_PyValue_BoxArray(arguments, 1, _PY_BOX_CALL) < 0) {
-                ERROR_NO_POP();
-            }
-            PyObject *self = PyValue_ObjectBorrow(arguments[0]);
-            assert(self != NULL);
+            assert(!PyValue_IsNull(arguments[0]));
             STAT_INC(CALL, hit);
             PyCFunctionFast cfunc = _PyCFunctionFast_CAST(method->d_method->ml_meth);
             PyObject *res_o = _PyCallMethodDescriptorFast_Values(
                 callable,
                 cfunc,
-                self,
                 arguments,
                 total_args
             );
@@ -4954,18 +4982,23 @@ dummy_func(
                 arg = PyValue_ObjectBorrow(self_or_null);
             }
             else if (args) {
-                if (_PyValue_BoxArray(args, 1, _PY_BOX_CALL) < 0) {
+                arg = PyValue_Object(args[0]);
+                if (arg == NULL) {
                     ERROR_NO_POP();
                 }
-                arg = PyValue_ObjectBorrow(args[0]);
             }
             else {
                 arg = &_PyInstrumentation_MISSING;
             }
             PyObject *function = PyValue_ObjectBorrow(callable);
+            // A value root holds the box of an inline argument.
+            _PyValueRoot arg_root;
+            _PyThreadState_PushValueRoot(tstate, &arg_root);
+            arg_root.object = arg;
             int err = _Py_call_instrumentation_2args(
                     tstate, PY_MONITORING_EVENT_CALL,
                     frame, this_instr, function, arg);
+            _PyThreadState_PopValueRoot(tstate, &arg_root);
             ERROR_IF(err);
         }
 
@@ -5423,13 +5456,17 @@ dummy_func(
         }
 
         inst(BUILD_SLICE, (args[oparg] -- slice)) {
-            if (_PyValue_BoxArray(args, oparg, _PY_BOX_CONTAINER_STORE) < 0) {
-                ERROR_NO_POP();
+            // PySlice_New() only allocates, and a collection that an
+            // allocation runs scans the eval loop's frame, so the boxes of
+            // inline values need no root.
+            PyObject *items[3] = {NULL, NULL, NULL};
+            for (int i = 0; i < oparg; i++) {
+                items[i] = PyValue_Object(args[i]);
+                if (items[i] == NULL) {
+                    ERROR_NO_POP();
+                }
             }
-            PyObject *start_o = PyValue_ObjectBorrow(args[0]);
-            PyObject *stop_o = PyValue_ObjectBorrow(args[1]);
-            PyObject *step_o = oparg == 3 ? PyValue_ObjectBorrow(args[2]) : NULL;
-            PyObject *slice_o = PySlice_New(start_o, stop_o, step_o);
+            PyObject *slice_o = PySlice_New(items[0], items[1], items[2]);
             INPUTS_DEAD();
             ERROR_IF(slice_o == NULL);
             slice = PyValue_FromObject(slice_o);

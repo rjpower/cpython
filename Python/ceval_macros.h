@@ -525,14 +525,6 @@ gen_try_set_executing(PyGenObject *gen)
     ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
 #define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
 
-/* REF, the box of an inline value read through field F, replaces the value
- * in its slot.  The handler holds REF in a C local across calls that may
- * collect, and the collector does not scan the eval loop's own C frame, so
- * the slot is what keeps the box alive.  A local may now hold the box rather
- * than the inline value; the two have one identity, so the program cannot
- * tell. */
-#define IR_KEEP_BOX(REF, F) (IR_SLOT(F) = (REF))
-
 /* The truth of a value, as TO_BOOL tests it, or -1 with an exception set */
 static inline int
 _PyValue_Truth(PyValue ref)

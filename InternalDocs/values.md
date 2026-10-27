@@ -47,16 +47,20 @@ A value can hold an exact int that fits in 32 bits or an exact float other than 
 `PyValue_Type` reports `int` or `float`. The
 GC skips them.
 
-Such a value has value identity: `is`, `id()` and `operator.is_` give the same answer whether it is
-held inline or boxed, and however many boxes exist. `PyValue_Is` and `_PyObject_ValueIdentity`
-implement this; see "Identity" in `Include/pyvalue.h`.
+Every value is canonical: `PyValue_FromObject` turns an exact int that fits in 32 bits and an
+exact float other than NaN into an inline value, so no slot holds a box of such a value, and
+`PyValue_Is` compares bits. Such a value has one identity, its inline encoding, whether it is held
+inline or boxed: `is`, `id()` and `operator.is_` give the same answer however many boxes exist
+(`_PyObject_ValueIdentity`); see "Identity" in `Include/pyvalue.h`.
 
-An inline value must be boxed with `PyValue_Box` before it is converted to a `PyObject*`.
-Boxing returns a reference to an int or float, or the inline value unchanged with an exception
-set if allocation fails. The cases generator does this for instruction inputs, and guards exit
-on them; see "Inline values" in `Tools/cases_generator/interpreter_definition.md`. C code that
-converts value arrays boxes their elements (`_PyValue_BoxArray`, `_PyValue_BoxInto`), and
-C code that needs an object for a value uses `PyValue_Object`.
+`PyValue_Object` converts a value to a `PyObject*`, boxing an inline value into a fresh int or
+float, or returning `NULL` with an exception set if allocation fails. A box lives in a C local
+and is never written back to the slot it came from. The cases generator boxes instruction inputs
+into a local and roots the box across escaping calls, and guards exit on inline inputs; see
+"Inline values" in `Tools/cases_generator/interpreter_definition.md`. C code that converts value
+arrays boxes their elements (`_PyObjectArray_FromValues`, `_PyValue_BoxInto`), and C code that
+holds a box across an escaping call keeps it in a `_PyValueRoot` (`_PyValue_ObjectRooted`,
+`_PyValueRoot_Object`).
 
 Inline ints are made by `LOAD_SMALL_INT_INLINE` and `LOAD_CONST_INLINE_INT`, to which
 `_PyCode_Quicken` rewrites loads of compact int constants, by the `BINARY_OP_*_INT`
@@ -72,7 +76,8 @@ float. The `BINARY_OP_*_FLOAT` instructions accept two floats, inline or boxed, 
 than NaN and a compact int, which they convert to a double. `PyValue_FromDouble` boxes a NaN
 result, so every NaN is an object with its own identity, as before. `COMPARE_OP_FLOAT`, `TO_BOOL`,
 `BINARY_SLICE`, `STORE_SLICE` and `CALL_ISINSTANCE` read inline values without boxing them.
-Instructions that store into the heap, such as `STORE_ATTR` and `LIST_APPEND`, box them.
+Instructions that store into containers that hold `PyObject*`, such as `STORE_ATTR` and
+`LIST_APPEND`, box them.
 
 ## Debugging support
 

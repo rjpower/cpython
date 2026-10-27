@@ -1432,7 +1432,9 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
             _Py_FALLTHROUGH;
         case METHOD:
         case NON_DESCRIPTOR:
-            fb->descr = descr;
+            // The value, not a box of it: the class holds the value, and a
+            // box of an inline value that only the entry held would die.
+            fb->attr_value = PyValue_FromObject(descr);
             fb->class_version = tp_version;
             if (metaclass_check) {
                 fb->type_version = meta_version;
@@ -1532,7 +1534,13 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
     *  working since Python 2.6 and it's battle-tested.
     */
     fb->type_version = tp_version;
-    fb->descr = descr;
+    if (is_method) {
+        fb->descr = descr;
+    }
+    else {
+        // As for LOAD_ATTR_CLASS, the value rather than a box of it
+        fb->attr_value = PyValue_FromObject(descr);
+    }
     specialize(instr, opcode);
     return 1;
 }
@@ -1885,7 +1893,7 @@ generic:
 }
 
 static int
-specialize_method_descriptor(PyMethodDescrObject *descr, PyObject *self_or_null,
+specialize_method_descriptor(PyMethodDescrObject *descr, PyValue self_or_null,
                              _PyInstr *instr, int nargs)
 {
     switch (descr->d_method->ml_flags & _Py_METH_CALL_FLAGS) {
@@ -1906,8 +1914,8 @@ specialize_method_descriptor(PyMethodDescrObject *descr, PyObject *self_or_null,
             PyObject *list_append = interp->callable_cache.list_append;
             int oparg = instr_oparg(instr);
             if ((PyObject *)descr == list_append && oparg == 1) {
-                assert(self_or_null != NULL);
-                if (PyList_CheckExact(self_or_null)) {
+                assert(!PyValue_IsNull(self_or_null));
+                if (PyValue_Type(self_or_null) == &PyList_Type) {
                     specialize(instr, CALL_LIST_APPEND);
                     return 0;
                 }
@@ -2069,9 +2077,8 @@ _Py_Specialize_Call(PyValue callable_st, PyValue self_or_null_st, _PyInstr *inst
         fail = specialize_class_call(callable, instr, nargs);
     }
     else if (Py_IS_TYPE(callable, &PyMethodDescr_Type)) {
-        PyObject *self_or_null = PyValue_ObjectBorrow(self_or_null_st);
         fail = specialize_method_descriptor((PyMethodDescrObject *)callable,
-                                            self_or_null, instr, nargs);
+                                            self_or_null_st, instr, nargs);
     }
     else if (PyMethod_Check(callable)) {
         PyObject *func = ((PyMethodObject *)callable)->im_func;

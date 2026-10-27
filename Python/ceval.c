@@ -461,7 +461,7 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
     if (res < 0) {
         goto fail;
     }
-    PyObject *get = PyValue_ObjectBorrow(method.value);
+    PyObject *get = _PyValueRoot_Object(&method);
     seen = PySet_New(NULL);
     if (seen == NULL) {
         goto fail;
@@ -485,7 +485,7 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
             }
             goto fail;
         }
-        PyObject *self_obj = PyValue_ObjectBorrow(self.value);
+        PyObject *self_obj = _PyValueRoot_Object(&self);
         PyObject *args[] = { self_obj, key, dummy };
         PyObject *value = NULL;
         if (!PyValue_IsNull(self.value)) {
@@ -765,12 +765,18 @@ _Py_VectorCall_Values(
     PyValue kwnames)
 {
     PyObject *res;
+    // A box of an inline callable, which this frame holds; calling it
+    // raises the TypeError.
+    PyObject *callable_o = PyValue_Object(callable);
+    if (callable_o == NULL) {
+        res = NULL;
+        goto cleanup;
+    }
     VALUES_TO_OBJECTS(arguments, total_args, args_o);
     if (CONVERSION_FAILED(args_o)) {
         res = NULL;
         goto cleanup;
     }
-    PyObject *callable_o = PyValue_ObjectBorrow(callable);
     PyObject *kwnames_o = PyValue_ObjectBorrow(kwnames);
     int positional_args = total_args;
     if (kwnames_o != NULL) {
@@ -803,12 +809,17 @@ _Py_VectorCallInstrumentation_Values(
     PyThreadState* tstate)
 {
     PyObject* res;
+    // As in _Py_VectorCall_Values()
+    PyObject *callable_o = PyValue_Object(callable);
+    if (callable_o == NULL) {
+        res = NULL;
+        goto cleanup;
+    }
     VALUES_TO_OBJECTS(arguments, total_args, args_o);
     if (CONVERSION_FAILED(args_o)) {
         res = NULL;
         goto cleanup;
     }
-    PyObject* callable_o = PyValue_ObjectBorrow(callable);
     PyObject* kwnames_o = PyValue_ObjectBorrow(kwnames);
     int positional_args = total_args;
     if (kwnames_o != NULL) {
@@ -818,10 +829,10 @@ _Py_VectorCallInstrumentation_Values(
         callable_o, args_o,
         positional_args | PY_VECTORCALL_ARGUMENTS_OFFSET,
         kwnames_o);
+    // The first argument, a box if it is inline, which this frame holds.
+    PyObject *arg = total_args == 0 ? &_PyInstrumentation_MISSING : args_o[0];
     VALUES_TO_OBJECTS_CLEANUP(args_o);
     if (call_instrumentation) {
-        PyObject* arg = total_args == 0 ?
-            &_PyInstrumentation_MISSING : PyValue_ObjectBorrow(arguments[0]);
         if (res == NULL) {
             _Py_call_instrumentation_exc2(
                 tstate, PY_MONITORING_EVENT_C_RAISE,
@@ -893,7 +904,6 @@ Py_NO_INLINE PyObject *
 _PyCallMethodDescriptorFast_Values(
     PyValue callable,
     PyCFunctionFast cfunc,
-    PyObject *self,
     PyValue *arguments,
     int total_args)
 {
@@ -902,9 +912,7 @@ _PyCallMethodDescriptorFast_Values(
     if (CONVERSION_FAILED(args_o)) {
         return NULL;
     }
-    assert(self == PyValue_ObjectBorrow(arguments[0]));
-
-    res = cfunc(self, (args_o + 1), total_args - 1);
+    res = cfunc(args_o[0], (args_o + 1), total_args - 1);
     VALUES_TO_OBJECTS_CLEANUP(args_o);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     return res;
@@ -914,7 +922,6 @@ Py_NO_INLINE PyObject *
 _PyCallMethodDescriptorFastWithKeywords_Values(
     PyValue callable,
     PyCFunctionFastWithKeywords cfunc,
-    PyObject *self,
     PyValue *arguments,
     int total_args)
 {
@@ -923,9 +930,7 @@ _PyCallMethodDescriptorFastWithKeywords_Values(
     if (CONVERSION_FAILED(args_o)) {
         return NULL;
     }
-    assert(self == PyValue_ObjectBorrow(arguments[0]));
-
-    res = cfunc(self, (args_o + 1), total_args-1, NULL);
+    res = cfunc(args_o[0], (args_o + 1), total_args-1, NULL);
     VALUES_TO_OBJECTS_CLEANUP(args_o);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     return res;
@@ -1067,12 +1072,14 @@ static const struct {
 const _PyInstr *_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR = (_PyInstr*)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
 
 
+/* The objects of input[0..nargs), in scratch or a new block, with a box of
+   each inline value.  The caller's frame (a Py_NO_INLINE helper, see
+   below), which the collector scans, holds the array, and the collector
+   scans a block that a scanned word points into: the boxes need no other
+   root.  Returns NULL with an exception set if boxing fails. */
 PyObject **
 _PyObjectArray_FromValues(PyValue *input, Py_ssize_t nargs, PyObject **scratch)
 {
-    if (_PyValue_BoxArray(input, nargs, _PY_BOX_CALL) < 0) {
-        return NULL;
-    }
     PyObject **result;
     if (nargs > MAX_VALUE_SCRATCH) {
         // +1 in case PY_VECTORCALL_ARGUMENTS_OFFSET is set.
@@ -1088,7 +1095,18 @@ _PyObjectArray_FromValues(PyValue *input, Py_ssize_t nargs, PyObject **scratch)
     result++;
     result[0] = NULL; /* Keep GCC happy */
     for (int i = 0; i < nargs; i++) {
-        result[i] = PyValue_ObjectBorrow(input[i]);
+        if (_PyValue_IsInlineAt(&input[i])) {
+            result[i] = _PyValue_BoxInline(input[i]);
+            if (result[i] == NULL) {
+                _PyObjectArray_Free(result - 1, scratch);
+                return NULL;
+            }
+            OBJECT_STAT_INC(inline_array_boxes);
+            VALUE_BOX_STAT_INC(_PY_BOX_CALL);
+        }
+        else {
+            result[i] = PyValue_ObjectBorrow(input[i]);
+        }
     }
     return result;
 }
@@ -1153,11 +1171,11 @@ _PyEval_GetIter(PyValue iterable, PyValue *index_or_null, int yield_from)
     }
     /* Pop iterable, and push iterator then NULL. An int or float is not
        iterable; PyObject_GetIter() raises the error. */
-    iterable = PyValue_Box(iterable);
-    if (PyValue_IsInline(iterable)) {
+    PyObject *iterable_o = PyValue_Object(iterable);
+    if (iterable_o == NULL) {
         return _PyValue_ERROR;
     }
-    PyObject *iter_o = PyObject_GetIter(PyValue_ObjectBorrow(iterable));
+    PyObject *iter_o = PyObject_GetIter(iterable_o);
     if (iter_o == NULL) {
         return _PyValue_ERROR;
     }
@@ -3803,8 +3821,8 @@ _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name, P
         *writeto = PyValue_FromObject(res);
     }
 
-    PyObject *res_o = PyValue_ObjectBorrow(*writeto);
-    if (res_o != NULL && PyLazyImport_CheckExact(res_o)) {
+    if (!PyValue_IsNull(*writeto) && PyValue_Type(*writeto) == &PyLazyImport_Type) {
+        PyObject *res_o = PyValue_ObjectBorrow(*writeto);
         PyObject *l_v = _PyLazyImport_Reify(
             PyThreadState_GET(), res_o, name, namespace);
         *writeto = l_v == NULL ? PyValue_NULL : PyValue_FromObject(l_v);

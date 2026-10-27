@@ -56,7 +56,10 @@ type_cache_lookup(PyObject *Py_UNUSED(self), PyObject *args)
         value = Py_NewRef(Py_None);
     }
     else {
-        value = PyValue_ObjectBorrow(r.value);
+        value = PyValue_Object(r.value);
+        if (value == NULL) {
+            return NULL;
+        }
     }
     return Py_BuildValue("(iNk)",
                          r.cache_hit, value,

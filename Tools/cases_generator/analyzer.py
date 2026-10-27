@@ -676,19 +676,20 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyValue_IsCompactInt",
     "_PyValue_CompactInt",
     "_PyValue_BoxInt64",
-    "_PyValue_BoxArray",
     "PyValue_Double",
     "_PyValue_FloatCheckExact",
     "_PyValue_FloatOperandsCheck",
     "_PyValue_NumberAsDouble",
     "_PyValue_FloatOperandValues",
-    # Allocate an int or float; see PyValue_Box below.
+    # Allocate an int or float; see PyValue_Object below.
     "PyValue_FromDouble",
     "_PyValue_LshiftInt32",
     # Boxing allocates an int or float, which runs no Python code and
     # cannot start a collection.
-    "PyValue_Box",
     "PyValue_Object",
+    "_PyValue_BoxInline",
+    "_PyValue_ObjectRooted",
+    "_PyValue_UnrootObject",
     "_PyValue_IsError",
     "_PyValue_IsValid",
     "_PyValue_Wrap",

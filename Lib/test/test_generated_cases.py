@@ -333,24 +333,30 @@ class TestIRCases(unittest.TestCase):
             PyValue res;
             right = IR_SLOT(IR_FIELD_C(this_instr));
             left = IR_SLOT(IR_FIELD_B(this_instr));
+            PyObject *left_object;
             if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                left = PyValue_Box(left);
-                if (PyValue_IsInline(left)) {
+                left_object = _PyValue_BoxInline(left);
+                if (left_object == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(OP, _PY_BOX_OTHER);
-                IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
             }
+            else {
+                left_object = PyValue_ObjectBorrow(left);
+            }
+            PyObject *right_object;
             if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                right = PyValue_Box(right);
-                if (PyValue_IsInline(right)) {
+                right_object = _PyValue_BoxInline(right);
+                if (right_object == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(OP, _PY_BOX_OTHER);
-                IR_KEEP_BOX(right, IR_FIELD_C(this_instr));
             }
-            PyObject *l = PyValue_ObjectBorrow(left);
-            PyObject *r = PyValue_ObjectBorrow(right);
+            else {
+                right_object = PyValue_ObjectBorrow(right);
+            }
+            PyObject *l = left_object;
+            PyObject *r = right_object;
             PyObject *o = SPAM(l, r);
             if (o == NULL) {
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -644,15 +650,18 @@ class TestIRCases(unittest.TestCase):
             // _OP
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
+                PyObject *owner_object;
                 if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                    owner = PyValue_Box(owner);
-                    if (PyValue_IsInline(owner)) {
+                    owner_object = _PyValue_BoxInline(owner);
+                    if (owner_object == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(OP, _PY_BOX_OTHER);
-                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
                 }
-                PyObject *o = PyValue_ObjectBorrow(owner);
+                else {
+                    owner_object = PyValue_ObjectBorrow(owner);
+                }
+                PyObject *o = owner_object;
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
             }
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -686,15 +695,18 @@ class TestIRCases(unittest.TestCase):
             // _OP
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
+                PyObject *owner_object;
                 if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                    owner = PyValue_Box(owner);
-                    if (PyValue_IsInline(owner)) {
+                    owner_object = _PyValue_BoxInline(owner);
+                    if (owner_object == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(OP, _PY_BOX_OTHER);
-                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
                 }
-                PyObject *o = PyValue_ObjectBorrow(owner);
+                else {
+                    owner_object = PyValue_ObjectBorrow(owner);
+                }
+                PyObject *o = owner_object;
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
             }
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));

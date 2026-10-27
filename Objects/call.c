@@ -628,8 +628,8 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
         goto exit;
     }
 
-    PyObject *callable = PyValue_ObjectBorrow(method.value);
-    PyObject *self_obj = PyValue_ObjectBorrow(self.value);
+    PyObject *callable = _PyValueRoot_Object(&method);
+    PyObject *self_obj = _PyValueRoot_Object(&self);
 
     if (!PyCallable_Check(callable)) {
         _PyErr_Format(tstate, PyExc_TypeError,
@@ -937,8 +937,8 @@ PyObject_VectorcallMethod(PyObject *name, PyObject *const *args,
         return NULL;
     }
 
-    PyObject *callable = PyValue_ObjectBorrow(method.value);
-    PyObject *self_obj = PyValue_ObjectBorrow(self.value);
+    PyObject *callable = _PyValueRoot_Object(&method);
+    PyObject *self_obj = _PyValueRoot_Object(&self);
     PyObject *result;
 
     EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_METHOD, callable);
@@ -985,8 +985,8 @@ PyObject_CallMethodObjArgs(PyObject *obj, PyObject *name, ...)
         _PyThreadState_PopValueRoot(tstate, &self);
         return NULL;
     }
-    PyObject *callable = PyValue_ObjectBorrow(method.value);
-    PyObject *self_obj = PyValue_ObjectBorrow(self.value);
+    PyObject *callable = _PyValueRoot_Object(&method);
+    PyObject *self_obj = _PyValueRoot_Object(&self);
 
     va_list vargs;
     va_start(vargs, name);

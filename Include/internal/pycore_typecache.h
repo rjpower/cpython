@@ -16,7 +16,7 @@ extern "C" {
 
 struct type_cache_entry {
     PyObject *name;     // name of the attribute or method, interned string, NULL if the entry is empty
-    PyObject *value;    // borrowed reference or NULL
+    PyValue value;      // the attribute, or NULL
 };
 
 // Per-type attribute lookup cache: speed up attribute and method lookups,
@@ -37,7 +37,7 @@ struct _PyTypeCacheLookupResult {
 
 
 extern void _PyTypeCache_InitType(PyTypeObject *type);
-extern void _PyTypeCache_Insert(PyTypeObject *type, PyObject *name, PyObject *value);
+extern void _PyTypeCache_Insert(PyTypeObject *type, PyObject *name, PyValue value);
 PyAPI_FUNC(struct _PyTypeCacheLookupResult) _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name);
 PyAPI_FUNC(void) _PyTypeCache_Invalidate(PyTypeObject *type);
 

@@ -254,19 +254,6 @@ def declare_variables(inst: Instruction, out: CWriter) -> None:
                 declare_variable(var, out)
 
 
-def stack_read_later(inst: Instruction, uop: Uop) -> bool:
-    """Whether the stack slots of uop's inputs may be read after its body
-    starts: a deopt or exit re-executes the instruction from the stack, an
-    error without pop leaves the stack to exception_unwind, and an escaping
-    call exposes the frame."""
-    parts = inst.parts[inst.parts.index(uop):]
-    return any(
-        p.properties.deopts or p.properties.side_exit
-        or p.properties.escapes or p.properties.error_without_pop
-        for p in parts if isinstance(p, Uop)
-    )
-
-
 def is_transparent(inst: Instruction) -> bool:
     """Whether inst runs another handler on the same fields: it has no stack
     effect, oparg or feedback, and ends in DISPATCH_GOTO()."""
@@ -1358,46 +1345,38 @@ class IREmitter(Emitter):
         return True
 
     def emit_object_inputs(
-        self, uop: Uop, storage: Storage, inst: Instruction | None, stack_read_later: bool
+        self, uop: Uop, storage: Storage, inst: Instruction | None
     ) -> None:
-        """Inputs read through a field: check, or box.  The box goes to the
-        input's slot, a local's too, so that the frame holds it while the
-        handler does (_PyEvalActivation)."""
+        """Inputs read through a field: check, or box (see
+        Emitter.emit_object_inputs())."""
         self.deopt_storage = storage
         try:
-            self.convert_object_inputs(uop, storage, inst, stack_read_later)
+            super().emit_object_inputs(uop, storage, inst)
         finally:
             self.deopt_storage = None
 
     def convert_object_inputs(
-        self, uop: Uop, storage: Storage, inst: Instruction | None, stack_read_later: bool
+        self, uop: Uop, storage: Storage, inst: Instruction | None
     ) -> None:
         for var in storage.inputs:
             if var.ir_field is None or var.known_object:
                 continue
-            f = FIELD_VARS[var.ir_field]
             converts = not uop.properties.inline_ok and (
                 var.name in uop.object_inputs or var.name in uop.asserted_objects)
             if not converts:
                 continue
-            if var.name not in uop.asserted_objects:
+            if var.name in uop.asserted_objects:
+                var.known_object = True
+            elif uop.is_guard():
                 self.out.start_line()
-                if uop.is_guard():
-                    self.emit(f"if (Py_UNLIKELY(!_PyValue_IsPointerSpace({var.name}))) {{\n")
-                    self.emit_jump_to_predicted(inst)
-                else:
-                    self.emit(f"if (Py_UNLIKELY(PyValue_IsInline({var.name}))) {{\n")
-                    self.emit(f"{var.name} = PyValue_Box({var.name});\n")
-                    self.emit(f"if (PyValue_IsInline({var.name})) {{\n")
-                    storage.stack.copy().flush(self.out)
-                    self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
-                    self.emit("}\n")
-                    if inst is not None:
-                        self.emit(f"BOX_STAT_INC({inst.name}, {box_kind(inst.name)});\n")
-                    self.emit(f"IR_KEEP_BOX({var.name}, {f});\n")
+                self.emit(f"if (Py_UNLIKELY(!_PyValue_IsPointerSpace({var.name}))) {{\n")
+                self.emit_jump_to_predicted(inst)
                 self.emit("}\n")
-            var.known_object = True
-        super().emit_object_inputs(uop, storage, inst, stack_read_later)
+                var.known_object = True
+            else:
+                self.out.start_line()
+                self.emit_box(var, uop, storage, inst)
+        super().convert_object_inputs(uop, storage, inst)
 
 
 def write_uop(
@@ -1420,14 +1399,16 @@ def write_uop(
     storage = Storage.for_uop(stack, uop, emitter.out)
     for cache in uop.caches:
         if cache.name != "unused":
-            if cache.size == 4:
+            if cache.size == 4 and cache.name.endswith("_value"):
+                value = f"PyValue {cache.name} = fb->{cache.name};"
+            elif cache.size == 4:
                 value = f"PyObject *{cache.name} = (PyObject *)fb->{cache.name};"
             else:
                 value = f"uint32_t {cache.name} = fb->{cache.name};"
             emitter.emit(value + "\n")
             if inst.family is None:
                 emitter.emit(f"(void){cache.name};\n")
-    emitter.emit_object_inputs(uop, storage, inst, stack_read_later(inst, uop))
+    emitter.emit_object_inputs(uop, storage, inst)
     reachable, storage = emitter.emit_tokens(uop, storage, inst, False)
     if braces:
         emitter.out.start_line()

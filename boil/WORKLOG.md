@@ -1463,3 +1463,34 @@ stackref operations and 13.5M with the header bit and the free lists.
 box placement, the per-object sweep cost (3b was dropped), retention
 through C callee frames (step 10), and the reference-counting text in
 InternalDocs/garbage_collector.md and the C API docs.
+
+### 2026-10-26 18:30 — step 5c landed; step 6a launched
+
+Step 5c handed back at 6cef60fb57e and the gate was run here. The first
+run failed test_dis, test_code and test_monitoring on both builds: the
+alias fold (337416c0d6d) changed what the compiler writes without a pyc
+magic bump, and the agent's runs had reused pycs compiled before it, so
+its passes of those files were invalid. The fold is correct; the
+expectations were stale. Fixed by b31d8b00b81 (magic 3717) and
+ecdc7879253 (expectations), recorded in §17.6 and §17.8 (255ad409e03).
+The dev-debug run also lost a worker to the agent relinking the binary
+under it; two clean reruns had no worker death. Final gate at
+255ad409e03 with fresh pyc caches: full suite on dev-default (556 files,
+50,675 tests, 6 min 14 s) and dev-debug (14 min 34 s), each failing only
+test_sys's pre-existing remote-exec timeout; all eight ports PASS on
+cpython-3.16-gc-v1 (numpy 539 patch lines, cython 44, cffi 10, others
+0); per loop against the step 1 snapshot (M): richards 577.7 -> 518.2
+(-10.3%), go 1245.3 -> 1176.0 (-5.6%), nbody 1030.3 -> 1427.2 (+38.5%),
+float 779.4 -> 1022.2 (+31.2%). nbody and float are float boxing at
+container and attribute stores plus the per-object sweep, which 6a
+addresses. Step 5c took about 5.5 hours of a four-day budget; the step 5
+series (5a, 5b, 5c) took about 19 hours.
+
+Lesson recorded for briefs: any commit that changes what the compiler
+emits bumps the pyc magic in the same commit, and every test run uses a
+fresh PYTHONPYCACHEPREFIX.
+
+Step 6a launched: PyValue replaces _PyStackRef; list, tuple, dict, set,
+cells, globals and instance slots hold PyValue with canonical inline
+storage; boxing only at the PyObject* conversion; 8-byte header;
+weakrefs in a side table. Budget 5 days.

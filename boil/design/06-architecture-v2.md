@@ -542,7 +542,7 @@ entry; nothing lives on a prototype branch.
 | 4 | Collector, verifier mode. `Python/gc_trace.c`: mark from precise roots (frames, thread and interpreter state, registered static types) and conservative roots (C stacks, data segments) via mimalloc's block lookup; `tp_traverse` audit tool that reports every type with pointer members and no traverse; at every `gc.collect` in a debug build, report any object with a nonzero count that the mark did not reach. Reference counting still owns memory. | nothing yet | zero unreached-but-counted objects across the full suite and the seven ports with the verifier on | 4 days |
 | 5 | Collector, live, in three sub-steps (5a flag build, 5b full suite and ports, 5c default on and refcount code deleted; the header shrink and the weakref side table move to 6a). `--with-gc` configure flag first, default later in the step. Eight-byte header; `Py_INCREF`/`Py_DECREF` to no-ops; sweep by heap visit; finaliser queue; weak reference side table; `tp_dealloc` audit and `OWNS_RESOURCES` flag; `sys.getrefcount` removed; stdlib audit for refcount timing; free-threaded build removed. Sub-gates: 5a flag build runs the smoke ladder; 5b full suite; 5c ports rebuild with patch counts recorded; 5d default on, refcount paths deleted. Done in three: 5a (section 15), 5b (16), 5c (17, which took 5d's default and deletions); sweep by block moved to 6a or later. | reference counting in `ob_refcnt` (the field goes with the header shrink in 6a), `Py_TAG_REFCNT`, `_PyStackRef` ownership, `IR_BORROW` remnants, the cycle collector (`gc.c`), free lists, the free-threaded build and `gc_free_threading.c`, `Py_STACKREF_DEBUG` | suite; ports; instructions per loop down on richards and go; RSS and pauses recorded (pyperformance dropped for 5c, 2026-10-26) | 10 days, in four sub-steps |
 | 6a | `PyValue` in the core: list, tuple, dict, set, instance slots, cells, globals hold `PyValue`; `_PyStackRef` renamed to `PyValue` and the duplicate helpers deleted; boxing only at the `PyObject*` conversion. Done (section 18), with the header shrink, the weak reference table and the removal of PyGC_Head that 5 handed on: the header is one word, a collected object has no header before it, and a 3-tuple is 48 bytes where it was 72. | `_PyStackRef`, `PyStackRef_*`, `Py_STACKREF_INLINE_VALUES`, the boxing at container stores, `ob_refcnt`, PyGC_Head, the per-object weaklist fields | suite; nbody, float, spectral_norm instructions per loop; RSS | 5 days; took about 9 hours |
-| 6b | The `PyValue` C API (note 08 section 4). The core's protocols take and return `PyValue`: number (`PyNumber_*Value`), object (`PyObject_RichCompareValue`, `PyObject_GetAttrValue`, `PyObject_SetAttrValue`, `PyObject_IsTrueValue`, `PyObject_HashValue`), sequence and mapping, call (`PyObject_VectorcallValue` over a `PyValue` argument array), iteration; the generic `BINARY_OP`, `COMPARE_OP`, `CALL`, subscript and attribute handlers call them, so an inline operand is never boxed to reach a C implementation of the same operation. The `PyObject*` API is the compatibility layer: canonicalise in, box out, abort rule of 18.3 for accessors without an error channel; nothing in the core calls it. The stable ABI is gone: `.abi3` leaves the extension suffixes and `Py_LIMITED_API` is a compile error, so an incompatible wheel fails to import instead of crashing. `BINARY_OP_POWER_FLOAT` is removed once `PyNumber_PowerValue` makes the generic path box-free (note 08 section 5). Ports: the Cython port patched once at the generated-code idioms, pyyaml and numpy regenerated, cffi by hand. | `PyList_GET_ITEM` and family as the core's API; `BINARY_OP_POWER_FLOAT`; `LOAD_NAME`/`STORE_NAME` boxing | suite on both builds; the internal set and boxes per loop recorded (ports deferred by the 2026-10-27 ruling: six, attrs, pycparser, markupsafe, cython, pyyaml and cffi pass on value-v1; numpy recorded as failing at the API surface) | 5 days |
+| 6b | The `PyValue` C API (note 08 section 4). The core's protocols take and return `PyValue`: number (`PyNumber_*Value`), object (`PyObject_RichCompareValue`, `PyObject_GetAttrValue`, `PyObject_SetAttrValue`, `PyObject_IsTrueValue`, `PyObject_HashValue`), sequence and mapping, call (`PyObject_VectorcallValue` over a `PyValue` argument array), iteration; the generic `BINARY_OP`, `COMPARE_OP`, `CALL`, subscript and attribute handlers call them, so an inline operand is never boxed to reach a C implementation of the same operation. The `PyObject*` API is the compatibility layer: canonicalise in, box out, abort rule of 18.3 for accessors without an error channel; nothing in the core calls it. The stable ABI is gone: `.abi3` leaves the extension suffixes and `Py_LIMITED_API` is a compile error, so an incompatible wheel fails to import instead of crashing. `BINARY_OP_POWER_FLOAT` is removed once `PyNumber_PowerValue` makes the generic path box-free (note 08 section 5). Ports: the Cython port patched once at the generated-code idioms, pyyaml and numpy regenerated, cffi by hand. Done (section 19): the value protocols, calls and `tp_iternext` on values, the `PyObject*` API as the layer, no stable ABI, a release call as a keep-alive barrier, the slot limit as a `SyntaxError`, and a debug check for objects outside the object heaps; ports stopped at the 2026-10-27 ruling with the cython and cffi patches kept as the record of the API's surface. | `PyList_GET_ITEM` and family as the core's API; `BINARY_OP_POWER_FLOAT`; `LOAD_NAME`/`STORE_NAME` boxing | suite on both builds; the internal set and boxes per loop recorded (ports deferred by the 2026-10-27 ruling: six, attrs, pycparser, markupsafe, cython, pyyaml and cffi pass on value-v1; numpy recorded as failing at the API surface) | 5 days; took about 8 hours |
 | 6c | The object protocol (note 09): shape in the header, `Py_TYPE` through the shape, root shape per type; instance layout `header, slots`, dictionary mode as a shape, `__slots__` as shapes, the managed-dict pre-header gone; the lookup and store plans with the specialiser rewritten over them and typecache as the (shape, name) plan cache; `LOAD_ATTR_SHAPE`, `_SHAPE_POLY`, `_METHOD_SHAPE`, `STORE_ATTR_SHAPE`, `_SHAPE_TRANSITION`; slot kinds as promises; plan inspection in `_testinternalcapi` and `dis`. | `--with-shapes`, shared keys for instances, the `PyDictValues` header, `LOAD_ATTR_INSTANCE_VALUE`, `_WITH_HINT`, `_SLOT`, `_METHOD_WITH_VALUES`, `_METHOD_LAZY_DICT`, `STORE_ATTR_INSTANCE_VALUE`, `_WITH_HINT` | suite on both builds; plan tests; per loop on richards, raytrace, deltablue, chaos, go, nbody and the `Py_TYPE` cost on json_loads recorded; RSS for 1M four-attribute instances recorded | 6 days |
 | 10a | Precise roots (note 08 section 6): stack maps for the eval loop and for every C entry point that holds values, so the conservative scan covers only extension C code; the first seven rows of note 08's hack register retired with their proofs. | `-ftrivial-auto-var-init=zero`, the stack clears, `_PyGC_CLEAR_ARRAY`, the activation-range exclusion, the inline-fallback full scan, the one-survivor test allowances | suite with the skips removed, 20/20 on both builds; stale-root probe 100/100; internal set recorded | 5 days |
 | 7 | Generational collection over the precise root set of 10a: sticky mark bits, remembered set, write barrier in the store macros, barrier verifier (full mark after each minor collection in debug builds). Kept only if pause and throughput both improve on the benchmark set. | nothing | verifier clean; the internal set's memory group (collector benchmark, RSS) and kernels recorded against step 6 | 5 days |
@@ -3462,3 +3462,410 @@ The same tuple loop inside a function goes from 68 MB to 73 MB.
     requires `Py_TPFLAGS_HAVE_GC`.
   - Modules/clinic/_remote_debugging_module.c.h is an upstream orphan
     that nothing compiles.
+
+## 19. Step 6b decisions
+
+Step 6b makes the C API speak `PyValue`. The core's protocols take and
+return values, calls pass value arrays and return values, and the
+`PyObject *` API is a layer that canonicalises its arguments and boxes its
+result. From the launch (a7ff5d45e28) to the object-heap check
+(29cbc5795a2), 25 commits changed 438 files outside `boil/` and `ports/`,
+with 52,564 insertions and 31,722 deletions. The rulings:
+
+- the limited C API and the stable ABI are gone (19.2);
+- no ABI flag: the SDK's abi_id marks the ABI until the ports tree
+  carries a packaging port (19.4);
+- `tp_iternext` returns a value, and `PyIter_Next()` is the compatibility
+  form (19.3);
+- a release call keeps its object alive up to that point (19.5);
+- more than 4,095 slots in a code object is a `SyntaxError` (19.6);
+- debug builds stop when an object is initialized outside the object
+  heaps (19.7);
+- the ports are frozen at value-v1 until the API settles (19.8, note 10);
+- the calls left on objects are residues, recorded and not converted
+  (19.11).
+
+### 19.1 The value protocols (rung 1)
+
+| commit | what |
+|---|---|
+| e64b29341d9 | `PyNumber_*Value`, `PyObject_RichCompareValue` and its Bool form, `IsTrueValue`, `HashValue`, `GetAttrValue`, `SetAttrValue`, `GetItemValue` and its set and delete forms, `PySequence_ContainsValue`, `PyObject_GetIterValue`, `PyIter_NextValue`; the generic `BINARY_OP`, `COMPARE_OP`, `CONTAINS_OP`, subscript, attribute, `UNARY_INVERT` and `CALL_INTRINSIC_1` handlers call them |
+| 602881feefd | `BINARY_OP_POWER_FLOAT` removed: `PyNumber_PowerValue` makes the generic `**` box-free (magic 3720) |
+| 7f2099c61f5 | `LOAD_NAME` and `STORE_NAME` through the value dict API; `_tp_iteritem` returns a value; `PyObject_StrValue`, `ReprValue`, `ASCIIValue`, `FormatValue` |
+| 0de3606e6de | slices hold values |
+| 1c0ddd0330e | dict subscripts and containment, the `BINARY_OP_EXTEND` descriptors |
+| b151d560c05 | dict, set and list iteration, `BUILD_MAP`, `UNPACK_EX`, range membership; `boil/tools/measure/box_audit.py` |
+| ae438b03a1e | `FOR_ITER_GEN` runs when the loop target is a local |
+| 3001688efe8 | the `BINARY_OP` specialiser reads values |
+| 8b66d5f1dc1 | `PyLong_AsLongValue` and family, `PyFloat_AsDoubleValue` |
+
+The `FOR_ITER_GEN` fix is a defect from the register IR, not a 6b
+feature. Since the IR folded the loop target's store into `FOR_ITER`, the
+specialised generator loop deoptimised on every execution whose target
+was a local, which is every loop over a generator in a function, because
+the yielded values and the return value shared one slot. The return
+value now goes to the slot `END_FOR` consumes.
+
+### 19.2 Calls on values (rung 2)
+
+`vectorcallfunc` is `PyValue (*)(PyValue callable, const PyValue *args,
+size_t nargsf, PyObject *kwnames)`, and `PyObject_VectorcallValue()` is the
+entry point (057a2b29eba). The eval loop and PEP 523's frame evaluation
+function return a value (ff137bee8b2). A `METH_O` function is
+`PyValue f(PyObject *self, PyValue arg)`, and a `METH_FASTCALL` function
+takes `const PyValue *args` and returns `PyValue` (3832173d942). Argument
+Clinic reads inline ints and floats directly and boxes only for
+object-typed parameters, and the `value` converter and return converter
+pass a `PyValue` through. `self`, `METH_NOARGS` and `METH_VARARGS` keep
+the object form, and so do keyword names.
+
+The stable ABI went with it (d1ec4c4f6db). An abi3 extension built for
+another CPython reads `PyObject *` where this one passes `PyValue`; a
+prebuilt abi3 psutil wheel crashed at import. `Py_LIMITED_API` and
+`Py_TARGET_ABI3T` are compile errors, and `.abi3.so` is no longer an
+extension suffix, so such a wheel fails to import instead. The modules
+that used the limited API became core modules.
+
+Two defects were found and fixed in rung 2:
+- a return converter with a custom conversion was bypassed by the value
+  path (`posix.makedev`);
+- dict subclasses lost `BINARY_OP_SUBSCR_DICT`, because an inherited slot
+  was recognised by pointer equality with a `METH_COEXIST` method that
+  now takes a value.
+
+The 16 KB stack clears around a collection now store below the caller's
+stack pointer (b0f459a359e), as note 08's row 2 records.
+
+### 19.3 The `PyObject *` API is a layer (rung 3)
+
+Every `PyObject *` protocol function with a value form canonicalises its
+arguments, calls the value form and boxes an inline result (b05e1556892).
+The former bodies are static object-level functions, so the two forms
+cannot recurse into each other. `PyNumber_Divmod`, which has no value
+form, is unchanged.
+
+The core and the hot modules call the value forms where an operand can be
+inline (4df049cdd1e). In Objects/ and Python/ these are the methods of
+list, tuple, set and dict; range items; slice indices; memoryview items;
+sort keys; the builtins; and getargs' numeric units. The hot modules are
+operator, itertools, functools, math, `_json` and `_pickle`.
+
+`tp_iternext` returns a value, `PyValue_NULL` at exhaustion or on error
+with the exception state as before (921352f5653). Each core iterator
+returns its items without a box. Every `Py_tp_iternext` slot entry in
+Modules/ goes through `void *`, so each was checked by hand: 37
+functions. A generator's send core produces a value. `PyIter_Next()`,
+`PyIter_Send()`, the `__next__` method-wrapper and a generator's `send()`,
+`throw()`, `close()` and `am_send` are the compatibility forms and box.
+
+The public headers build as C90, C++03 and with `-Wcast-qual`
+(5ab886ef2af). test_cext had been failing since step 5 unseen, because
+only `-u cpu` runs it.
+
+### 19.4 No ABI flag
+
+An ABI flag "v" (`cp316v`) was tried and reverted. packaging's
+`_cpython_abis()` builds the tags it accepts from the version and the
+known flags, not from `SOABI`, and pip and setuptools vendor that code, so
+every wheel build rejected the tag. The SDK's abi_id
+(`cpython-3.16-value-v1`) marks the ABI instead. The flag becomes possible
+when the ports tree carries a packaging, pip and setuptools port; note
+08's hack register has the row.
+
+Without the flag, `SOABI` is upstream's `cpython-316-x86_64-linux-gnu`.
+An abi3 extension no longer imports (19.2), but an extension built by an
+upstream 3.16 has a suffix this interpreter loads, and it reads every
+value argument as `PyObject *`. Upstream 3.16 is still in development; the
+flag closes this.
+
+### 19.5 A release call keeps its object alive
+
+`Py_DECREF`, `Py_XDECREF`, `Py_CLEAR`, `Py_SETREF` and `Py_XSETREF` end
+with a keep-alive barrier on the released pointer (28f6a199518). With GCC
+and clang it is an empty `asm` that uses the pointer and emits no
+instruction; other compilers call the out-of-line `_Py_KeepAlive()`.
+A collection happens only in a call, which cannot move across the
+barrier, so the barrier needs no memory clobber.
+
+The contract, which the ports README states: an object stays alive until
+its last release call, so reference-correct code is collector-correct.
+
+The defect was latent since 6a. `PyUnicode_Join()` takes
+`PySequence_Fast_ITEMS()` of a temporary list and releases the list after
+the join. With a no-op release, the compiler dropped the list's pointer
+once the item pointer was taken. The conservative scan then kept the item
+block but not the list, and a collection during the join swept the list
+and freed the block. test_str's `test_codecs` crashed this way on release
+builds after `test_adaptive_find` moved when collections run. Note 08's
+register holds the barrier until 10b's handle discipline.
+
+### 19.6 The slot limit
+
+An instruction names a frame slot in a 12-bit field, so a code object has
+at most 4,095 slots for its locals, cells, free variables and
+temporaries (section 2.3). A code object that needs more raised
+`SystemError` from the assembler. It now raises
+`SyntaxError("too many local variables and temporaries")` at its first
+line (8e7337f92d4), as upstream reports its other compiler limits.
+
+The known case is a namedtuple with more than about 4,000 fields, whose
+`__new__` takes a parameter per field. test_collections'
+`test_large_size`, which only `-u cpu` runs, is skipped for it, and
+test_compile checks the error.
+
+### 19.7 Objects outside the object heaps
+
+The collector traces and frees only objects in its object heaps. cffi's
+owning cdata were initialized by `PyObject_Init()` in `malloc()` memory,
+so the collector never traced them, and their ctypes were swept while
+the cdata used them.
+
+In debug builds, `_PyObject_Init()`, and with it `PyObject_Init()` and
+`PyObject_InitVar()`, checks the object's address (29cbc5795a2). It looks
+the address up in the collector's segment map, then reads the page's heap
+tag. Outside the object, GC and GC-pre-header heaps, the call is a fatal
+error naming the type. The check is skipped when mimalloc does not back
+the object domain (`PYTHONMALLOC=malloc`, custom allocator hooks), since
+there is then no collector heap to check against.
+
+Both full debug suites pass with the check, so no core caller initializes
+an object outside the heaps. test_capi.test_mem tests it under
+`PYTHONMALLOC` unset, `mimalloc` and `mimalloc_debug`, and the ports
+README's tracing-collector section states the rule.
+
+### 19.8 Ports
+
+Rung 4 was stopped by the 2026-10-27 ruling (note 10): ports are not a
+gate until the ports phase after 10b. Results on cpython-3.16-value-v1:
+
+| port | result | patch lines | note |
+|---|---|---|---|
+| six 1.17.0, attrs 26.1.0 | PASS | 0 | |
+| pycparser, markupsafe | PASS | 0 | |
+| cython 3.3.0 | PASS | 515 | 718461d9f7f |
+| pyyaml 6.0.3 | PASS | 0 | `_yaml` built by the patched Cython |
+| cffi 2.1.1 | PASS | 470 | 45fa71d1a68 |
+| numpy 2.5.4 | FAIL | | not converted |
+
+The cython and cffi patches are the record of the API's surface at
+value-v1:
+
+- **cython:** the generated `METH_O` and `METH_FASTCALL` wrappers,
+  `tp_iternext` of `__next__` and of Cython's generators and coroutines,
+  and CyFunction's vectorcall entry points take and return values. Tuple
+  and list items are values, and `PySequence_Fast_ITEMS()` is declared to
+  return `PyValue *`, so code that misuses it fails to compile.
+  CyFunction uses `Py_TPFLAGS_MANAGED_WEAKREF`. The limited API is a
+  compile error, and `CYTHON_VECTORCALL_TPNEW` is off.
+- **cffi:** its 16 `METH_O` functions and `tp_iternext` take and return
+  values, and the C it generates does too, without defining
+  `Py_LIMITED_API`. The tracing-collector patch adds a `tp_traverse` to
+  every type that holds references and allocates owning cdata from the
+  object heap (19.7). Upstream's own tests gave 1,573 passed.
+- **numpy:** a port was stopped at the ruling and not kept. Its surface
+  in the 2.5.4 sdist:
+  - signatures and slots: 34 `METH_O`, 83 `METH_FASTCALL`, 15 vectorcall
+    and 8 `tp_iternext`;
+  - container access: 182 `PyTuple`/`PyList_GET_ITEM`, 12 of them taking
+    the address of an item array;
+  - other: 4 `Py_GenericAlias`, 13 `Py_LIMITED_API`, and 51 `Py_REFCNT`
+    or `ob_refcnt` reads.
+
+  With all of numpy's own C converted, it compiled cleanly, and the
+  smoke, held and collect tests passed. Three `_core` test files
+  segfaulted, test_multiarray, test_numeric and test_stringdtype, and
+  were not investigated.
+
+The API gaps the ports met, none blocking:
+- no public constructor of a tuple from a `PyValue` array (all three
+  ports wrote one);
+- no feature macro for the PyValue API (Cython tests the include guard
+  `Py_PYVALUE_H`);
+- no value form of `PyObject_VectorcallDict`.
+
+### 19.9 Tests
+
+Full suites at 29cbc5795a2, -j16, each build with a fresh pyc cache:
+
+| build | tests | wall time | result |
+|---|---|---|---|
+| dev-default | 50,731 | 2 min 59 s | test_sys's remote-exec timeout |
+| dev-debug | 50,731 | 10 min 24 s | the same |
+
+`-u cpu test_cext` passes (16 run, 7 skipped), and `make regen-cases
+clinic` leaves the tree unchanged. Each rung's gate ran both suites on a
+fresh checkout with the same single failure.
+
+Test changes:
+- 26 test_capi tests for the value protocols;
+- test_capi.test_mem's object-heap test;
+- test_compile's slot-limit error, and test_collections' `test_large_size`
+  skipped;
+- the abi3 suffixes absent in test_importlib;
+- test_cext's limited and abi3t builds skipped;
+- test_clinic's expectations for value slots.
+
+Release-build retention skips joined note 08's row 7, each with probe
+evidence:
+- multiprocessing's `test_finalize`;
+- test_set's `test_container_iterator` and test_memoryview's `test_gc` on
+  debug builds;
+- two asyncgen tests, whose cause is a one-past-the-end argument pointer
+  in a callee-saved register aliasing the next block (a row of its own).
+
+### 19.10 Measurements
+
+User-mode instructions per loop of one pyperformance worker, as in 15.6,
+gcc 15. Each 6b column is a release build of that commit in its own
+worktree, with its own `Lib`:
+
+| per loop (M) | step 1 | 5c | 6a end (0db53649e9c) | rung 1 (8b66d5f1dc1) | rung 2 (d1ec4c4f6db) | now (921352f5653) |
+|---|---|---|---|---|---|---|
+| richards | 574.9 | 520.5 | 595.2 | 533.4 | 526.6 | 532.8 |
+| go | 1244.8 | 1179.7 | 1302.0 | 1126.1 | 1065.0 | 1069.4 |
+| nbody | 1030.3 | 1424.0 | 786.7 | 690.7 | 688.1 | 688.1 |
+| float | 779.9 | 1030.6 | 903.2 | 831.4 | 479.1 | 480.1 |
+| spectral_norm | 802.3 | 1083.4 | 1211.5 | 1103.5 | 1090.2 | 1092.5 |
+| generators | 364.9 | 447.7 | 579.5 | 436.8 | 435.1 | 439.3 |
+| comprehensions (K) | 203 | 265 | 301 | 278 | 271 | 258 |
+
+Comprehensions is measured at 2 and 50 loops, because one loop is about
+a quarter of a million instructions. Noise is about 5M on richards and 2M
+on the others.
+
+Attribution, from builds at the commits between:
+
+| per loop (M) | value protocols (to b151d560c05) | `FOR_ITER_GEN` (ae438b03a1e) | rest of rung 1 | vectorcall and value return (to ff137bee8b2) | `METH_O`/`FASTCALL` and no stable ABI | rung 3 |
+|---|---|---|---|---|---|---|
+| richards | -52.2 | -9.9 | +0.3 | +3.1 | -9.9 | +6.2 |
+| go | -141.3 | -34.6 | 0 | +6.9 | -68.0 | +4.4 |
+| nbody | -59.9 | -36.1 | 0 | +33.1 | -35.7 | 0 |
+| float | -58.2 | -13.6 | 0 | +9.4 | -361.7 | +1.0 |
+| spectral_norm | -76.9 | -31.1 | 0 | +20.2 | -33.5 | +2.3 |
+| generators | -62.1 | -80.0 | -0.6 | +6.7 | -8.4 | +4.2 |
+
+- **The value protocols** remove the boxing of inline operands that reach
+  the generic handlers.
+- **The `FOR_ITER_GEN` fix** is most of generators' gain. go, nbody and
+  spectral_norm also iterate generators in functions.
+- **The vectorcall commits** cost 3 to 33M while the `METH_O` and
+  `METH_FASTCALL` adapters boxed each argument and canonicalised each
+  result.
+- **The calling-convention commit** removed the adapters, and with them
+  float's 300,000 boxes per loop of arguments to `math.sin`, `math.cos`
+  and `math.sqrt`: float went from 841 to 479M.
+- **Rung 3** is within noise on each benchmark at each of its commits:
+
+| per loop (M) | rung 2 | protocol layer (b05e1556892) | core and modules (4df049cdd1e) | barrier (28f6a199518) | `tp_iternext` (921352f5653) |
+|---|---|---|---|---|---|
+| richards | 526.6 | 525.9 | 527.2 | 528.7 | 532.8 |
+| go | 1065.0 | 1069.8 | 1065.8 | 1071.0 | 1069.4 |
+| float | 479.1 | 479.1 | 478.6 | 480.1 | 480.1 |
+| spectral_norm | 1090.2 | 1090.6 | 1090.5 | 1091.2 | 1092.5 |
+| generators | 435.1 | 439.9 | 436.9 | 437.6 | 439.3 |
+
+None of this is tuned. Against step 1, float is 38% and nbody 33% below,
+go 14% and richards 7% below; generators is 20% and spectral_norm 36%
+above, against 59% and 51% at 6a's end.
+
+Boxes per loop (Py_STATS builds):
+
+| | 5c | 6a end | rung 2 | now | where now |
+|---|---|---|---|---|---|
+| richards | 83,171 | 14 | 8 | 9 | mixed-operand `BINARY_OP` |
+| go | 465,307 | 127,015 | 52,609 | 30,809 | 29,437 comparisons of an inline value with an object |
+| nbody | 1,900,089 | 0 | 0 | 1 | |
+| float | 800,000 | 299,998 | 2 | 3 | |
+| spectral_norm | 10,442 | 295 | 301 | 42 | range construction |
+| generators | 0 | 99,994 | 0 | 0 | |
+| comprehensions | 19 | 194 | 107 | 0 | |
+
+go's boxes moved in rung 3. At rung 2, 51,238 per loop were made by
+`descr_get_value` in generic getattr. Now the attribute value stays
+inline until it meets an object operand in a comparison, and
+`PyObject_RichCompareValue` boxes it there. Generators' 100,000 at 6a
+were the yielded ints boxed at `INTERPRETER_EXIT` while `FOR_ITER_GEN`
+missed.
+
+Module-level loops (`for i in range(1000000): t = (i, i)` and a float
+`+=` loop) made 4.0M int and 2.0M float boxes at 6a and make none now:
+`LOAD_NAME` and `STORE_NAME` take values (7f2099c61f5).
+
+Startup, median of five, user-mode instructions:
+
+| | step 1 | 5c | 6a end | rung 2 | now |
+|---|---|---|---|---|---|
+| `-c pass` | 54.1M | 68.4M | 73.5M | 72.3M | 73.0M |
+| `-S -c pass` | 36.3M | 51.5M | 55.1M | 54.4M | 54.8M |
+
+Peak RSS in KiB, median of three, each workload in its own `-E` process,
+loops at module level as in 18.9:
+
+| workload | 5c | 6a end | rung 1 | rung 2 | now |
+|---|---|---|---|---|---|
+| startup | 13,684 | 14,224 | 14,284 | 14,520 | 14,356 |
+| import 13 stdlib packages | 38,704 | 37,560 | 37,644 | 37,552 | 37,428 |
+| 200,000 small dicts kept | 85,040 | 75,556 | 71,360 | 71,712 | 67,980 |
+| 5M float additions to a global | 98,488 | 93,416 | 14,148 | 14,420 | 14,620 |
+| 10M two-tuples | 56,664 | 100,540 | 76,540 | 76,416 | 76,660 |
+
+The loops' drop is rung 1's: it appears before the `FOR_ITER_GEN` commit,
+at the `LOAD_NAME` and `STORE_NAME` conversion. The float loop no longer
+allocates at all. The tuple loop still allocates its tuples, and is
+76.7 MB against 5c's 56.7 MB. Note 08's row for the trigger counting
+requested bytes, step 7, owns that gap.
+
+### 19.11 Residues, and for 6c and later
+
+Calls left on objects, each boxing an inline operand where it occurs.
+These are recorded, not converted.
+
+**Argument parsing.**
+- getargs' object units, and its `B`, `H`, `I`, `k` and `K` units.
+- Clinic `object` parameters, the `slice_index` converter and
+  `@vectorcall` returns.
+- The method-descriptor call boxes an inline `self`, as in
+  `int.bit_length` on an inline int.
+
+**The value API lacks:**
+- `PyNumber_Divmod`;
+- `PyObject_GetOptionalAttr` (42 core callers);
+- `PyIter_SendValue`;
+- `PyMember_*`;
+- the dict's known-hash forms;
+- `PyLong_FromString` and `PyLong_AsLongAndOverflow`.
+
+`_PyDict_NextValue` is not exported.
+
+**Slot wrappers.** The `SLOT` macros in typeobject.c and the wrappers
+that re-box mixed operands, and `wrap_next`.
+
+**Formatting and printing.** `str.format`, `%s` and `%d`; `struct.pack`;
+re groups; `print`. `PyObject_Repr` and `PyObject_Str` on values skip
+`PyErr_CheckSignals()`.
+
+**Modules.**
+- `collections`: deque blocks hold `PyObject *`, so `deque.extend` boxes;
+  `defaultdict.__missing__`.
+- `itertools`: tee, `starmap`, and `StopIteration` identity.
+- `functools`: the lru cache.
+- `operator`: `itemgetter`/`tuplegetter` and `methodcaller`.
+- `_pickle`'s memo and `_json`'s int parse.
+- `_stat` modes above 255; Windows `DWORD` converters.
+- The array iterator goes through getitem.
+
+**For 10a.** The C-local PyMem arrays that hold their contents only
+through the transitive scan (note 08):
+- `list.sort`'s keys and temp arrays;
+- `_PyObjectArray_FromValues()`;
+- `PyEval_EvalCodeEx()`'s argument copy;
+- `partial`'s stack;
+- mro's `to_merge`.
+
+`map()` with more than five iterables was one, and now roots a tuple.
+
+**For the ports phase.**
+- The ABI flag (19.4).
+- `PyObject_Init()` on non-heap memory is checked only in debug builds.
+- The API gaps of 19.8.
+- `CYTHON_VECTORCALL_TPNEW`.

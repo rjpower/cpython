@@ -57,10 +57,12 @@ Nothing joins this table without those two columns.
 | allocator does not collect when an allocation fails | 5a design gap | 7 | a test that fails an allocation and succeeds after a collection |
 | managed-dict pre-header is 16 bytes for alignment | one-word pre-header leaves objects 8-aligned | 6c (instance is header, shape, slots) | small instance 16 bytes |
 | flags in the high 16 bits of the header word, 347 `movabs` masks in the eval loop | first layout | 6c decides the header word | per-loop on richards and go |
-| `LOAD_NAME` and `STORE_NAME` box through the `PyObject*` dict API | module-level code not converted | 6b (value-typed dict API) | module-level loop boxes 0 |
-| `PyList_GET_ITEM` and family box, abort on allocation failure | compatibility accessors used by C code | 6b makes them the compatibility layer, not the core's API | no core caller; ports count the uses |
-| `BINARY_OP_POWER_FLOAT` with a positive-base guard | nbody boxed `** -1.5` | 6b (value-typed number protocol) decides | see section 5 |
-| str `+=` quadratic | in-place growth needed a unique reference | a design decision in 6b or 6c (rope or builder) | append cost per character linear |
+| `LOAD_NAME` and `STORE_NAME` box through the `PyObject*` dict API | module-level code not converted | retired in 6b (7f2099c61f5) | module-level int and float loops: 6.0M boxes per 2M iterations at 6a, none now (note 06 section 19.10) |
+| `PyList_GET_ITEM` and family box, abort on allocation failure | compatibility accessors used by C code | 6b made them the compatibility layer and moved the hot callers to values; 194 uses in Objects/, 205 in Python/ and 273 in Modules/ remain (`PyTuple_GET_ITEM`, `PyList_GET_ITEM`, `PySequence_Fast_GET_ITEM`, `PyDict_Next`), recorded in note 06 section 19.11 | no core caller; ports count the uses |
+| `BINARY_OP_POWER_FLOAT` with a positive-base guard | nbody boxed `** -1.5` | retired in 6b (602881feefd): `PyNumber_PowerValue` makes the generic `**` box-free | nbody 0 boxes per loop without the handler |
+| str `+=` quadratic | in-place growth needed a unique reference | a design decision in 6c (rope or builder); 6b did not take it | append cost per character linear |
+| no ABI flag: `SOABI` is `cpython-316-x86_64-linux-gnu` as upstream's, and only the ports SDK's abi_id (`cpython-3.16-value-v1`) marks the value ABI | a `cp316v` tag is rejected by packaging's `_cpython_abis()`, which pip and setuptools vendor (note 06 section 19.4). The hazard: an extension built by upstream 3.16 has the suffix `.cpython-316-x86_64-linux-gnu.so`, which this interpreter loads, and it then reads values as `PyObject *` | the ports phase, with a packaging, pip and setuptools port | a wheel tagged `cp316v` builds and installs; an upstream 3.16 extension fails to import |
+| Cython's type vectorcall (`CYTHON_VECTORCALL_TPNEW`) is off in the cython port | its `tp_vectorcall` code keeps object signatures | the ports phase, after 10b | the port with it on passes |
 | `_uuid` keeps a weaklist field; `tp_weaklist` unused; typeobj.rst says MANAGED_WEAKREF needs GC; orphan clinic file | remnants | next cleanup pass | grep clean |
 
 The first seven rows are one thing: conservative roots. They are small

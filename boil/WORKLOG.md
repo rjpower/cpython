@@ -1723,3 +1723,63 @@ copies in pip and setuptools reject any CPython ABI tag they do not know,
 so wheel builds fail; the SDK's abi_id marks the ABI until the ports tree
 carries a packaging port. Rung 3 finished about 30 hours ahead of its
 deadline. Rung 4 (ports) is under way with three port agents.
+
+### 2026-10-27 13:40 — step 6b done: the PyValue C API
+
+Rung 4 (ports) was stopped by the ruling that defers ports until the API
+settles (note 10).
+- Cython (718461d9f7f, 515 patch lines) and cffi (45fa71d1a68, 470) had
+  finished and pass on value-v1, so they are kept as the record of the
+  API's surface. pyyaml passes, with its `_yaml` extension built by the
+  patched Cython.
+- numpy's port was stopped and not kept. It compiled cleanly, but three
+  `_core` test files segfaulted and were not investigated.
+- The ports README records the freeze (13d9ce81bf2).
+
+cffi's owning cdata were `PyObject_Init()`ed in `malloc()` memory, outside
+the collector's heap. Debug builds now stop at such an initialization with
+a fatal error naming the type (29cbc5795a2). The README states the rule.
+
+Rung 5 gate at 29cbc5795a2, fresh pyc caches, -j16:
+- dev-default: 50,731 tests, 2 min 59 s.
+- dev-debug: 10 min 24 s, with no core false positive from the check.
+- Both fail only test_sys's remote-exec timeout.
+- `-u cpu test_cext` passes; regen-cases and clinic are clean.
+
+Per loop (M), step 1 / 6a end / now:
+
+| | step 1 | 6a end | now |
+|---|---|---|---|
+| richards | 574.9 | 595.2 | 532.8 |
+| go | 1244.8 | 1302.0 | 1069.4 |
+| nbody | 1030.3 | 786.7 | 688.1 |
+| float | 779.9 | 903.2 | 480.1 |
+| spectral_norm | 802.3 | 1211.5 | 1092.5 |
+| generators | 364.9 | 579.5 | 439.3 |
+| comprehensions (K) | 203 | 301 | 258 |
+
+Attribution comes from release builds at each rung boundary, in their own
+worktrees:
+- **The value protocols:** 52 to 141M off each benchmark.
+- **The `FOR_ITER_GEN` fix:** 80M off generators. The specialised
+  generator loop had missed on every execution since the register IR's
+  store folding.
+- **`METH_O` and `METH_FASTCALL` on values:** float 841 to 479M, as
+  `math.sin`, `math.cos` and `math.sqrt` stopped boxing their arguments.
+- **Rung 3:** within noise at each commit.
+
+Boxes per loop are 0 to 42 on every benchmark but go (30,809: an inline
+value compared with an object). Module-level loops no longer box.
+`-c pass` is 73.0M (6a 73.5M). Peak RSS of the module-level 10M-tuple
+loop is 76.7 MB (6a 100.5 MB, 5c 56.7 MB); the rest is the trigger row,
+step 7's. The 5M float loop went from 93 MB to 14.6 MB.
+
+Note 06 section 19 has the record. Section 19.11 lists the residues: the
+calls left on objects and the value APIs they lack.
+
+Note 08's register:
+- retires the `LOAD_NAME`/`STORE_NAME` and `BINARY_OP_POWER_FLOAT` rows;
+- adds the ABI-flag row. Without a flag, an extension built by upstream
+  3.16 has a suffix this interpreter loads.
+
+Step 6b took about 8 hours of a five-day budget.

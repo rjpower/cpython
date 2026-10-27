@@ -6,6 +6,7 @@
 #include "pycore_ir.h"                // IR_WORD()
 #include "pycore_long.h"              // _PyLong_CheckExactAndCompact()
 #include "pycore_opcode_utils.h"    // IS_BACKWARDS_JUMP_OPCODE
+#include "pycore_pyerrors.h"        // _PyErr_RaiseSyntaxError()
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
 #include "pycore_symtable.h"        // _Py_SourceLocation
@@ -836,13 +837,7 @@ static int
 assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                int nlocalsplus, int stacksize)
 {
-    if (nlocalsplus + stacksize > IR_MAX_SLOTS) {
-        PyErr_Format(PyExc_SystemError,
-                     "the code needs %d slots for its locals, cells, free "
-                     "variables and stack, and the register IR has at most %d",
-                     nlocalsplus + stacksize, IR_MAX_SLOTS);
-        return ERROR;
-    }
+    assert(nlocalsplus + stacksize <= IR_MAX_SLOTS);
     RETURN_IF_ERROR(assign_handlers(a, cfg, consts));
     RETURN_IF_ERROR(layout(a, cfg));
 
@@ -906,6 +901,18 @@ _PyAssemble_MakeCodeObject(_PyCompile_CodeUnitMetadata *umd, PyObject *const_cac
     // co_stacksize keeps its meaning for tools: the slots for temporaries,
     // which compaction may make fewer than the deepest stack
     int stacksize = cfg->ntemps;
+    if (nlocalsplus + stacksize > IR_MAX_SLOTS) {
+        // An instruction names a slot in a 12-bit field (note 06, 2.3), so
+        // the locals, cells, free variables and temporaries of one code
+        // object are limited, as upstream limits the number of arguments.
+        PyObject *msg = PyUnicode_FromString(
+            "too many local variables and temporaries");
+        if (msg != NULL) {
+            _PyErr_RaiseSyntaxError(msg, filename, umd->u_firstlineno, 1,
+                                    umd->u_firstlineno, 1);
+        }
+        return NULL;
+    }
     struct assembler a;
     memset(&a, 0, sizeof(a));
     int res = assemble_words(&a, cfg, consts, nlocalsplus, stacksize);

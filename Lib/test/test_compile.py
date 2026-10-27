@@ -1605,6 +1605,19 @@ class TestSpecifics(unittest.TestCase):
                     any(entry.start <= instr.offset < entry.end
                         for entry in bytecode.exception_entries))
 
+    def test_too_many_locals(self):
+        # The register IR names a slot in a 12-bit field, so a code object
+        # has at most 4095 locals, cells, free variables and temporaries.
+        ok = 'def f():\n' + ''.join(f'    v{i} = {i}\n' for i in range(4000))
+        compile(ok, '<ok>', 'exec')
+        src = 'def f():\n' + ''.join(f'    v{i} = {i}\n' for i in range(5000))
+        with self.assertRaisesRegex(SyntaxError,
+                                    'too many local variables and temporaries'
+                                    ) as cm:
+            compile(src, '<big>', 'exec')
+        self.assertEqual(cm.exception.filename, '<big>')
+        self.assertEqual(cm.exception.lineno, 1)
+
     def test_big_dict_literal(self):
         # The compiler has a flushing point in "compiler_dict" that calls compiles
         # a portion of the dictionary literal when the loop that iterates over the items

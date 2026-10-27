@@ -238,6 +238,16 @@ temporary that held the only reference to a large value only where it can tell
 (end of a `with` body, loop exit of a `FOR_ITER` over a materialised
 sequence); otherwise we accept the retention.
 
+The limit. A slot field is 12 bits, so a code object has at most 4095 slots
+for its locals, cells, free variables and temporaries. A code object that
+needs more is a `SyntaxError`, "too many local variables and temporaries",
+at the code object's first line (step 6b; until then it was a
+`SystemError` from the assembler). The known case is a `namedtuple` with
+more than about 4,000 fields, whose generated `__new__` takes a parameter
+per field: `test_collections.TestNamedTuple.test_large_size` builds one
+with 150,000 fields under `-u cpu` and is skipped. `test_compile`'s
+`test_too_many_locals` checks the error.
+
 ### 2.4 Code object
 
 | Field | Contents |

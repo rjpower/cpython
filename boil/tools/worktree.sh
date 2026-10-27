@@ -12,7 +12,7 @@ MAIN=/home/power/code/cpython/.worktrees/python-boil-the-ocean
 INTEGRATION=weaver/python-boil-the-ocean
 WT=/home/power/code/cpython/.worktrees/boil-$step
 BR=boil/$step
-PUSH="git -c credential.helper= -c credential.helper=!gh auth git-credential push https://github.com/rjpower/cpython.git"
+push_branch() { git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push https://github.com/rjpower/cpython.git "$1"; }
 case $cmd in
 new)
     base=${3:-$INTEGRATION}
@@ -27,11 +27,11 @@ build)
     done
     echo "built $WT/build/default and $WT/build/debug" ;;
 push)
-    (cd "$WT" && $PUSH "$BR") ;;
+    (cd "$WT" && push_branch "$BR") ;;
 land)
     cd "$MAIN"
     git merge --no-ff "$BR" -m "boil: land $step" || { echo "merge conflict; resolve in $MAIN, commit, then push" >&2; exit 1; }
-    $PUSH "$INTEGRATION" ;;
+    push_branch "$INTEGRATION" ;;
 drop)
     git -C "$MAIN" worktree remove --force "$WT"
     git -C "$MAIN" branch -D "$BR"

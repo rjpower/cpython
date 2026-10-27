@@ -1,9 +1,11 @@
 """Run one benchmark module inside the interpreter under test.
 
-Usage: python -S -E -X pycache_prefix=DIR driver.py MODE PATH LOOPS [RUNS [PARAM]]
+Usage: python -S -E -X pycache_prefix=DIR driver.py MODE PATH LOOPS [RUNS [VARIANT]]
 
-The module at PATH exposes ``run(loops)`` and, optionally, ``setup(param)``,
-called once before anything else when the benchmark has a parameter.
+The module at PATH exposes ``run(loops)``, the work that is measured, and
+may expose ``setup(variant)``, the untimed preparation, called once first
+with VARIANT (None if not given); a module holding several benchmarks picks
+one by its variant.
 
 MODE ``run`` calls ``run(LOOPS)`` once; the runner counts the whole process
 (instructions, peak RSS) and differences or reports it.  MODE ``time`` makes
@@ -35,8 +37,10 @@ def main(argv):
     mode, path, loops = argv[1], argv[2], int(argv[3])
     runs = int(argv[4]) if len(argv) > 4 else 1
     module = load(path)
-    if len(argv) > 5:
-        module.setup(argv[5])
+    variant = argv[5] if len(argv) > 5 else None
+    setup = getattr(module, "setup", None)
+    if setup is not None:
+        setup(variant)
     if mode == "run":
         module.run(loops)
         return 0

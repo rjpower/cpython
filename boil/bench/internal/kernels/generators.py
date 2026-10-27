@@ -1,7 +1,8 @@
 # Copied from pyperformance 1.14.0, benchmarks/bm_generators/run_benchmark.py,
-# under the MIT licence (see LICENSE in this directory). pyperf removed:
-# run(loops) does the benchmark's inner work loops times; workload sizes
-# are pyperformance's.
+# under the MIT licence (see LICENSE in boil/bench/internal/kernels).
+# pyperf removed: run(loops) does the benchmark's timed work loops times
+# and setup() does the untimed preparation; workload sizes are
+# pyperformance's.
 """
 Benchmark recursive generators implemented in python
 by traversing a binary tree.
@@ -35,14 +36,18 @@ def tree(input: range) -> Tree | None:
     i = n // 2
     return Tree(tree(input[:i]), input[i], tree(input[i + 1:]))
 
-def bench_generators(loops: int) -> None:
-    assert list(tree(range(10))) == list(range(10))
+def bench_generators(loops: int, iterable) -> None:
     range_it = range(loops)
-    iterable = tree(range(100000))
     for _ in range_it:
         for _ in iterable:
             pass
 
 
+def setup(variant):
+    global ITERABLE
+    assert list(tree(range(10))) == list(range(10))
+    ITERABLE = tree(range(100000))
+
+
 def run(loops):
-    bench_generators(loops)
+    bench_generators(loops, ITERABLE)

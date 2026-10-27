@@ -21,6 +21,11 @@ instr
 time
     Nanoseconds per loop: one process makes a warm-up call of ``run(loops)``
     then ``--time-runs`` (default 5) timed calls; the value is the median.
+rss
+    Peak resident set size in KiB of a process calling ``run(loops)`` once,
+    from GNU ``/usr/bin/time -f %M`` (not getrusage of children, which
+    inherits the parent's high-water mark); median of ``--rss-runs``
+    (default 3) processes.
 
 This script needs only the standard library and any Python 3.10 or later; the
 interpreter under test is ``--build``.
@@ -46,7 +51,8 @@ INTERNAL = HERE / "internal"
 DRIVER = INTERNAL / "driver.py"
 REPO = HERE.parents[1]
 GROUPS = ("kernels", "micro", "memory")
-METRICS = ("instr", "time")
+METRICS = ("instr", "time", "rss")
+GNU_TIME = "/usr/bin/time"
 # The high repeat count of the instruction difference, as a multiple of the low.
 HIGH = 3
 
@@ -56,23 +62,59 @@ class Bench:
     """One benchmark: a module under internal/ exposing run(loops).
 
     ``loops`` is the fixed loop count of one timed call and the low count of
-    the instruction difference, chosen so one call takes about 0.1 to 0.5 s
-    on the baseline build.  Recorded with every value; never calibrated.
+    the instruction difference.  Recorded with every value; never calibrated.
     """
 
     name: str
     group: str
     loops: int
+    module: str | None = None  # file under the group's directory; default: name
+    variant: str | None = None  # passed to the module's setup()
 
     @property
     def path(self) -> Path:
-        return INTERNAL / self.group / f"{self.name}.py"
+        return INTERNAL / self.group / f"{self.module or self.name}.py"
 
 
+
+def kernel(name: str, loops: int, module: str | None = None) -> Bench:
+    """A pyperformance kernel; a module holding several takes the name as variant."""
+    return Bench(name, "kernels", loops, module, name if module else None)
+
+
+# Loop counts: the smallest giving one call of about 0.1 s or more on the
+# baseline build (measured 2026-10-27 under load, so 0.1 to 0.4 s idle).
+# Names are pyperformance's, so the 29 kernels match its results files.
 BENCHMARKS = [
-    Bench("richards", "kernels", 1),
-    Bench("nbody", "kernels", 1),
-    Bench("generators", "kernels", 1),
+    kernel("richards", 2),
+    kernel("go", 1),
+    kernel("nbody", 1),
+    kernel("float", 1),
+    kernel("spectral_norm", 1),
+    kernel("raytrace", 1),
+    kernel("deltablue", 30),
+    kernel("chaos", 2),
+    kernel("nqueens", 1),
+    kernel("fannkuch", 1),
+    kernel("generators", 2),
+    kernel("comprehensions", 6000),
+    kernel("coroutines", 4),
+    kernel("unpack_sequence", 4000),
+    kernel("deepcopy", 300, "deepcopy"),
+    kernel("deepcopy_reduce", 20000, "deepcopy"),
+    kernel("deepcopy_memo", 4000, "deepcopy"),
+    kernel("json_dumps", 10),
+    kernel("json_loads", 200),
+    kernel("pickle", 400, "pickle"),
+    kernel("unpickle", 300, "pickle"),
+    kernel("regex_compile", 1),
+    kernel("logging_format", 1000, "logging"),
+    kernel("logging_silent", 60000, "logging"),
+    kernel("logging_simple", 1000, "logging"),
+    kernel("xml_etree_generate", 1, "xml_etree"),
+    kernel("xml_etree_iterparse", 1, "xml_etree"),
+    kernel("xml_etree_parse", 1, "xml_etree"),
+    kernel("xml_etree_process", 1, "xml_etree"),
 ]
 
 
@@ -87,8 +129,9 @@ class Context:
     scratch: Path
 
     def command(self, bench: Bench, mode: str, loops: int, runs: int = 1) -> list[str]:
-        return [str(self.python), "-S", "-E", "-X", f"pycache_prefix={self.pycache}",
-                str(DRIVER), mode, str(bench.path), str(loops), str(runs)]
+        cmd = [str(self.python), "-S", "-E", "-X", f"pycache_prefix={self.pycache}",
+               str(DRIVER), mode, str(bench.path), str(loops), str(runs)]
+        return cmd + ([bench.variant] if bench.variant else [])
 
 
 def run_checked(cmd: list[str], what: str) -> subprocess.CompletedProcess:
@@ -139,6 +182,18 @@ def measure_time(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
     return {"group": bench.group, "unit": "ns per loop",
             "value": statistics.median(values), "values": values,
             "loops": loops, "runs": runs, "warmup_calls": 1}
+
+
+def measure_rss(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
+    out = ctx.scratch / "time.txt"
+    values = []
+    for _ in range(runs):
+        run_checked([GNU_TIME, "-f", "%M", "-o", str(out), *ctx.command(bench, "run", loops)],
+                    f"{bench.name} peak RSS")
+        values.append(int(out.read_text().split()[-1]))
+    return {"group": bench.group, "unit": "KiB peak RSS",
+            "value": statistics.median(values), "values": values,
+            "loops": loops, "runs": runs}
 
 
 def git(*args: str) -> str:
@@ -212,6 +267,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="override every benchmark's loop count (tests and smoke runs only)")
     ap.add_argument("--instr-runs", type=int, default=4)
     ap.add_argument("--time-runs", type=int, default=5)
+    ap.add_argument("--rss-runs", type=int, default=3)
     ap.add_argument("-o", "--output", type=Path, help="JSON file (default: stdout)")
     args = ap.parse_args(argv)
 
@@ -227,9 +283,13 @@ def main(argv: list[str] | None = None) -> int:
         try:
             if "instr" in metrics:
                 check_perf(ctx)
+            if "rss" in metrics and not os.access(GNU_TIME, os.X_OK):
+                raise MeasurementError(f"the rss metric needs GNU time at {GNU_TIME}")
             for metric in metrics:
-                measure = {"instr": measure_instr, "time": measure_time}[metric]
-                runs = {"instr": args.instr_runs, "time": args.time_runs}[metric]
+                measure = {"instr": measure_instr, "time": measure_time,
+                           "rss": measure_rss}[metric]
+                runs = {"instr": args.instr_runs, "time": args.time_runs,
+                        "rss": args.rss_runs}[metric]
                 table = results.setdefault(metric, {})
                 for bench in benches:
                     entry = measure(ctx, bench, runs, args.loops or bench.loops)

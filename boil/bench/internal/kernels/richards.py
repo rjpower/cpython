@@ -1,7 +1,8 @@
 # Copied from pyperformance 1.14.0, benchmarks/bm_richards/run_benchmark.py,
-# under the MIT licence (see LICENSE in this directory). pyperf removed:
-# run(loops) does the benchmark's inner work loops times; workload sizes
-# are pyperformance's.
+# under the MIT licence (see LICENSE in boil/bench/internal/kernels).
+# pyperf removed: run(loops) does the benchmark's timed work loops times
+# and setup() does the untimed preparation; workload sizes are
+# pyperformance's.
 """
 based on a Java version:
  Based on original version written in BCPL by Dr Martin Richards

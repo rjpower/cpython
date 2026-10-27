@@ -1783,3 +1783,21 @@ Note 08's register:
   3.16 has a suffix this interpreter loads.
 
 Step 6b took about 8 hours of a five-day budget.
+
+### 2026-10-27 14:00 — step 6b gate clean; 6c launched
+
+Gate run here on a detached checkout of 3f44aa5bf3a (6b's last commit),
+fresh builds and pyc caches, while 6c started in the main worktree:
+default 556/564 files, 50,731 tests, 2 min 58 s, only test_sys's
+pre-existing remote-exec timeout; debug 13 min 39 s under build load,
+only test_sys; test_cext under -u cpu 16 run, 7 skipped, success; ports
+on cpython-3.16-value-v1: six, attrs, pycparser, markupsafe and pyyaml
+PASS with 0 patch lines, cython PASS with 515, cffi PASS with 470; numpy
+not run (recorded failing in section 19.8). Step 6b took about 8 hours
+against a five-day budget. Its record is note 06 section 19; the
+measurements there are the record (float 903 to 480M per loop, go 1302
+to 1069M, boxes per loop near zero except go's 30,809; the 10M-tuple loop
+101 to 77 MB). 6c (note 09) launched at 13:40 with a hard stop of
+2026-10-31 12:00; its rung 0 makes the shared-object suffix distinct so an
+upstream-built extension fails to import, closing 19.4's finding. Step B
+(note 10) is in rung 5 in its own worktree.

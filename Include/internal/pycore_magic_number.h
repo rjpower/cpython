@@ -314,6 +314,7 @@ Known values:
     Python 3.16a1 3714 (register passes; JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP)
     Python 3.16a1 3715 (UNARY_NOT tests the truth of any value)
     Python 3.16a1 3716 (a call may store its result in a local)
+    Python 3.16a1 3717 (a result copied from an input may take a folded store)
 
     Python 3.17 will start with 3750
 
@@ -323,7 +324,7 @@ Known values:
 
 */
 
-#define PYC_MAGIC_NUMBER 3716
+#define PYC_MAGIC_NUMBER 3717
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

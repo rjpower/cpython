@@ -97,6 +97,9 @@ FRAME_OWNED_BY_INTERPRETER = 3
 
 MAX_OUTPUT_LEN=1024
 
+# Include/object.h: the type pointer is the header word's bits 0-47.
+HEADER_TYPE_MASK = (1 << 48) - 1
+
 hexdigits = "0123456789abcdef"
 
 USED_TAGS = 0b11
@@ -200,13 +203,16 @@ class PyObjectPtr(object):
            PyVarObject ob_base;
         so that the "ob_size" field is located insize the "ob_base" field, and
         the "ob_type" is most easily accessed by casting back to a (PyObject*).
+        The type is the low 48 bits of the header word, "ob_header".
         '''
         if self.is_null():
             raise NullPyObjectPtr(self)
 
         if name == 'ob_type':
             pyo_ptr = self._gdbval.cast(PyObjectPtr.get_gdb_type())
-            return pyo_ptr.dereference()[name]
+            header = int(pyo_ptr.dereference()['ob_header'])
+            return gdb.Value(header & HEADER_TYPE_MASK).cast(
+                PyTypeObjectPtr.get_gdb_type())
 
         if name == 'ob_size':
             pyo_ptr = self._gdbval.cast(PyVarObjectPtr.get_gdb_type())
@@ -1635,7 +1641,8 @@ class wrapperobject(PyObjectPtr):
 
     def safe_tp_name(self):
         try:
-            return self.field('self')['ob_type']['tp_name'].string()
+            return PyObjectPtr.from_pyobject_ptr(self.field('self')).type() \
+                .field('tp_name').string()
         except (NullPyObjectPtr, RuntimeError, UnicodeDecodeError):
             return '<unknown tp_name>'
 

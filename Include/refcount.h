@@ -7,14 +7,16 @@ extern "C" {
 
 #if !defined(_Py_OPAQUE_PYOBJECT)
 /*
-Nothing is reference counted: the tracing collector frees unreachable objects.
-ob_refcnt holds the constant _Py_GC_REFCNT in every object and counts nothing.
-An immortal object, one that the collector never frees, has
-_Py_IMMORTAL_FLAGS in ob_flags; a statically allocated one also has
-_Py_STATICALLY_ALLOCATED_FLAG.
+Nothing is reference counted: the tracing collector frees unreachable objects,
+and the header has no count.  An immortal object, one that the collector never
+frees, has _Py_IMMORTAL_FLAGS in ob_flags; a statically allocated one also has
+_Py_STATICALLY_ALLOCATED_FLAG.  The header word of a static object of type
+type is _Py_STATIC_HEADER_INIT(type); the flags are added, not or-ed, so that
+the word is an address constant.
 */
-#define _Py_STATIC_FLAG_BITS ((Py_ssize_t)(_Py_STATICALLY_ALLOCATED_FLAG | _Py_IMMORTAL_FLAGS))
-#define _Py_STATIC_HEADER_INIT (((Py_ssize_t)_Py_GC_REFCNT) | (_Py_STATIC_FLAG_BITS << 48))
+#define _Py_STATIC_FLAG_BITS ((uintptr_t)(_Py_STATICALLY_ALLOCATED_FLAG | _Py_IMMORTAL_FLAGS))
+#define _Py_STATIC_HEADER_INIT(type) \
+    ((uintptr_t)(type) + (_Py_STATIC_FLAG_BITS << 48))
 #endif  // _Py_OPAQUE_PYOBJECT
 
 // Py_REFCNT() implementation for the stable ABI

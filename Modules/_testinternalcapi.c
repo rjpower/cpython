@@ -2060,7 +2060,7 @@ check_pyobject_uninitialized_is_freed(PyObject *self,
     }
     /* Initialize reference count to avoid early crash in ceval or GC */
     Py_SET_REFCNT(op, 1);
-    /* object fields like ob_type are uninitialized! */
+    /* object fields like the header word are uninitialized! */
     return test_pyobject_is_freed("check_pyobject_uninitialized_is_freed", op);
 }
 
@@ -2069,15 +2069,13 @@ static PyObject *
 check_pyobject_forbidden_bytes_is_freed(PyObject *self,
                                         PyObject *Py_UNUSED(args))
 {
-    /* Allocate an incomplete PyObject structure: truncate 'ob_type' field */
-    PyObject *op = (PyObject *)PyObject_Malloc(offsetof(PyObject, ob_type));
+    /* Allocate an incomplete PyObject structure: the header word, which
+       holds the type, is after the memory block: part of "forbidden bytes"
+       when using debug hooks on memory allocators! */
+    PyObject *op = (PyObject *)PyObject_Malloc(0);
     if (op == NULL) {
         return NULL;
     }
-    /* Initialize reference count to avoid early crash in ceval or GC */
-    Py_SET_REFCNT(op, 1);
-    /* ob_type field is after the memory block: part of "forbidden bytes"
-       when using debug hooks on memory allocators! */
     return test_pyobject_is_freed("check_pyobject_forbidden_bytes_is_freed", op);
 }
 
@@ -3432,6 +3430,24 @@ gc_live_lookup(PyObject *self, PyObject *args)
         _PyThreadState_GET(), (uintptr_t)p, interior));
 }
 
+/* Does the live mark take a raw PyObject_Malloc() block that starts with a
+   copy of op's header word for an object?  The block is in an object heap's
+   page, but the object map has no bit for it. */
+static PyObject *
+gc_raw_block_is_object(PyObject *self, PyObject *op)
+{
+    PyObject *block = PyObject_Malloc(4 * sizeof(PyObject *));
+    if (block == NULL) {
+        return PyErr_NoMemory();
+    }
+    memset(block, 0, 4 * sizeof(PyObject *));
+    block->ob_header = op->ob_header;
+    uintptr_t found = _PyGC_TraceLiveLookup(_PyThreadState_GET(),
+                                            (uintptr_t)block, 0);
+    PyObject_Free(block);
+    return PyBool_FromLong(found != 0);
+}
+
 /* The mimalloc segment that the collector's segment map holds for an
    address, or 0. */
 static PyObject *
@@ -3564,6 +3580,7 @@ static PyMethodDef module_functions[] = {
     {"gc_verify_count", gc_verify_count, METH_NOARGS},
     {"gc_live_roots_of", gc_live_roots_of, METH_O},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
+    {"gc_raw_block_is_object", gc_raw_block_is_object, METH_O},
     {"gc_segment_of", gc_segment_of, METH_O},
     {"gc_segment_probes", gc_segment_probes, METH_O},
     {"gc_verify_with_c_local", gc_verify_with_c_local, METH_O},

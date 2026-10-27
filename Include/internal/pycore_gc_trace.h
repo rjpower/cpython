@@ -157,18 +157,81 @@ _PyGC_StackAddress(void)
  * the gc module's view.  The mark and the heap walks are here, in
  * Python/gc_trace.c, beside the verifier's, whose roots they share. */
 
-/* Does the block at op hold an initialized object?  _Py_NewReference()
- * writes the header word; freeing the block clears it.  The reference count
- * half is a constant, which makes a stray match in a block of
- * raw data unlikely. */
-static inline int
-_PyGC_IsObjectHeader(const PyObject *op)
+/* The object map: one bit for each 8-byte word of the address space below
+ * 2**48, set for the first word of every heap block's initialized object.
+ * _Py_NewReference() sets it and freeing the block clears it (see
+ * Objects/obmalloc.c), so whether a block holds an object is never guessed
+ * from its contents: a block of raw data in an object heap, a free block
+ * whose first word is an encoded free-list link and an object under
+ * construction all have a clear bit.  The header word is all type and flags.
+ *
+ * The map has two levels: _PyGC_object_map has one entry for each 32 MiB
+ * chunk of the address space, the size and alignment of a mimalloc segment,
+ * and points to the chunk's bits, 512 KiB, mapped when the first object in
+ * the chunk is made.  Both are anonymous mappings, which the conservative
+ * scan of the loaded objects' data segments never reads, and their pages
+ * are only resident where objects are: the bits cost 1/64 of the heap.
+ * A chunk is one segment and a segment has one owning thread, so the bits
+ * are written without atomics; the entries are installed with a
+ * compare-exchange. */
+#define _PyGC_MAP_CHUNK_SHIFT 25
+#define _PyGC_MAP_CHUNKS ((size_t)1 << (48 - _PyGC_MAP_CHUNK_SHIFT))
+#define _PyGC_MAP_CHUNK_WORDS \
+    (((size_t)1 << _PyGC_MAP_CHUNK_SHIFT) / sizeof(void *) / 64)
+
+extern uint64_t **_PyGC_object_map;
+extern uint64_t *_PyGC_ObjectMapChunk(uintptr_t addr);
+
+static inline uint64_t *
+_PyGC_ObjectMapWord(uintptr_t addr, uint64_t *chunk)
 {
-    uint64_t w = (uint64_t)op->ob_refcnt_full;
-    uint32_t refcnt = (uint32_t)w;
-    return ((w >> 32) & 0xffff) == _Py_GC_OBJECT_MAGIC
-        && ((w >> 48) & _Py_GC_HEAP_FLAG) != 0
-        && refcnt == _Py_GC_REFCNT;
+    return &chunk[(addr >> 9) & (_PyGC_MAP_CHUNK_WORDS - 1)];
+}
+
+static inline uint64_t
+_PyGC_ObjectMapBit(uintptr_t addr)
+{
+    return (uint64_t)1 << ((addr >> 3) & 63);
+}
+
+static inline uint64_t *
+_PyGC_ObjectMapChunkOf(uintptr_t addr)
+{
+    uint64_t **map = _Py_atomic_load_ptr_relaxed(&_PyGC_object_map);
+    return map != NULL
+        ? _Py_atomic_load_ptr_relaxed(&map[addr >> _PyGC_MAP_CHUNK_SHIFT])
+        : NULL;
+}
+
+/* Does the block at op hold an initialized object? */
+static inline int
+_PyGC_IsHeapObject(const PyObject *op)
+{
+    uintptr_t addr = (uintptr_t)op;
+    uint64_t *chunk = _PyGC_ObjectMapChunkOf(addr);
+    return chunk != NULL
+        && (*_PyGC_ObjectMapWord(addr, chunk) & _PyGC_ObjectMapBit(addr)) != 0;
+}
+
+static inline void
+_PyGC_ObjectMapSet(PyObject *op)
+{
+    uintptr_t addr = (uintptr_t)op;
+    uint64_t *chunk = _PyGC_ObjectMapChunkOf(addr);
+    if (chunk == NULL) {
+        chunk = _PyGC_ObjectMapChunk(addr);
+    }
+    *_PyGC_ObjectMapWord(addr, chunk) |= _PyGC_ObjectMapBit(addr);
+}
+
+static inline void
+_PyGC_ObjectMapClear(PyObject *op)
+{
+    uintptr_t addr = (uintptr_t)op;
+    uint64_t *chunk = _PyGC_ObjectMapChunkOf(addr);
+    if (chunk != NULL) {
+        *_PyGC_ObjectMapWord(addr, chunk) &= ~_PyGC_ObjectMapBit(addr);
+    }
 }
 
 /* What the collection does with a dead object, from its type, so that its

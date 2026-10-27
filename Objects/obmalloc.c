@@ -1143,6 +1143,55 @@ gc_count_alloc(size_t size, int collect)
     }
 }
 
+/* The object map (Include/internal/pycore_gc_trace.h). */
+#include <sys/mman.h>             // mmap()
+
+uint64_t **_PyGC_object_map = NULL;
+
+static void *
+object_map_reserve(size_t size)
+{
+    void *p = mmap(NULL, size, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (p == MAP_FAILED) {
+        Py_FatalError("cannot map the collector's object map");
+    }
+    return p;
+}
+
+/* The bits of the chunk that holds addr, mapped the first time an object is
+   made in it.  An object has been allocated, so there is nothing to fail
+   back to: a failed mapping is fatal. */
+uint64_t *
+_PyGC_ObjectMapChunk(uintptr_t addr)
+{
+    assert(addr >> 48 == 0);
+    uint64_t **map = _Py_atomic_load_ptr(&_PyGC_object_map);
+    if (map == NULL) {
+        uint64_t **fresh = object_map_reserve(
+            _PyGC_MAP_CHUNKS * sizeof(uint64_t *));
+        if (_Py_atomic_compare_exchange_ptr(&_PyGC_object_map, &map, fresh)) {
+            map = fresh;
+        }
+        else {
+            munmap(fresh, _PyGC_MAP_CHUNKS * sizeof(uint64_t *));
+        }
+    }
+    uint64_t **entry = &map[addr >> _PyGC_MAP_CHUNK_SHIFT];
+    uint64_t *chunk = _Py_atomic_load_ptr(entry);
+    if (chunk == NULL) {
+        uint64_t *fresh = object_map_reserve(
+            _PyGC_MAP_CHUNK_WORDS * sizeof(uint64_t));
+        if (_Py_atomic_compare_exchange_ptr(entry, &chunk, fresh)) {
+            chunk = fresh;
+        }
+        else {
+            munmap(fresh, _PyGC_MAP_CHUNK_WORDS * sizeof(uint64_t));
+        }
+    }
+    return chunk;
+}
+
 /* The object in the block at ptr, if it holds one. */
 static inline PyObject *
 gc_block_object(void *ptr)
@@ -1163,7 +1212,7 @@ gc_block_object(void *ptr)
         return NULL;
     }
     PyObject *op = (PyObject *)((char *)ptr + presize);
-    return _PyGC_IsObjectHeader(op) ? op : NULL;
+    return _PyGC_IsHeapObject(op) ? op : NULL;
 }
 
 void *
@@ -1509,21 +1558,19 @@ PyObject_Realloc(void *ptr, size_t new_size)
     if (new_size > (size_t)PY_SSIZE_T_MAX)
         return NULL;
     gc_count_alloc(new_size, 1);
-    /* An object block that moves is freed without PyObject_Free(): clear
-       its header first, so that the free block does not look like an
-       object, and copy the header to the new block. */
+    /* An object block that moves is freed without PyObject_Free(): move
+       its object map bit to the new block, so that the free block does not
+       look like an object. */
     PyObject *op = ptr != NULL ? gc_block_object(ptr) : NULL;
     if (op != NULL) {
         size_t offset = (char *)op - (char *)ptr;
-        int64_t header = op->ob_refcnt_full;
-        op->ob_refcnt_full = 0;
         char *p = _PyObject.realloc(_PyObject.ctx, ptr, new_size);
         if (p == NULL) {
-            op->ob_refcnt_full = header;
             return NULL;
         }
-        if (new_size >= offset + sizeof(int64_t)) {
-            ((PyObject *)(p + offset))->ob_refcnt_full = header;
+        _PyGC_ObjectMapClear(op);
+        if (new_size >= offset + sizeof(PyObject)) {
+            _PyGC_ObjectMapSet((PyObject *)(p + offset));
         }
         return p;
     }
@@ -1548,7 +1595,7 @@ PyObject_Free(void *ptr)
                 return;
             }
         }
-        op->ob_refcnt_full = 0;
+        _PyGC_ObjectMapClear(op);
     }
     _PyObject.free(_PyObject.ctx, ptr);
 }
@@ -1558,7 +1605,7 @@ void
 _PyGC_FreeDeadBlock(PyObject *op, void *block)
 {
     OBJECT_STAT_INC(frees);
-    op->ob_refcnt_full = 0;
+    _PyGC_ObjectMapClear(op);
     _PyObject.free(_PyObject.ctx, block);
 }
 

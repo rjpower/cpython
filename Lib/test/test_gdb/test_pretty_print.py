@@ -299,27 +299,30 @@ id(foo)''')
 
         self.assertEqual(gdb_repr, '0x0')
 
+    # The type is the header word's bits 0-47.
+    TYPE = '((PyTypeObject *)(v->ob_header & 0xffffffffffff))'
+
     def test_NULL_ob_type(self):
         'Ensure that a PyObject* with NULL ob_type is handled gracefully'
         self.assertSane('id(42)',
-                        'set v->ob_type=0')
+                        'set v->ob_header=0')
 
     def test_corrupt_ob_type(self):
         'Ensure that a PyObject* with a corrupt ob_type is handled gracefully'
         self.assertSane('id(42)',
-                        'set v->ob_type=0xDEADBEEF',
+                        'set v->ob_header=0xDEADBEEF',
                         exprepr='42')
 
     def test_corrupt_tp_flags(self):
         'Ensure that a PyObject* with a type with corrupt tp_flags is handled'
         self.assertSane('id(42)',
-                        'set v->ob_type->tp_flags=0x0',
+                        f'set {self.TYPE}->tp_flags=0x0',
                         exprepr='42')
 
     def test_corrupt_tp_name(self):
         'Ensure that a PyObject* with a type with corrupt tp_name is handled'
         self.assertSane('id(42)',
-                        'set v->ob_type->tp_name=0xDEADBEEF',
+                        f'set {self.TYPE}->tp_name=0xDEADBEEF',
                         exprepr='42')
 
     def test_builtins_help(self):

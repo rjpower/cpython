@@ -409,8 +409,8 @@ walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
     }
     if (a->objects != NULL) {
         uintptr_t op = (uintptr_t)block + a->offset;
-        // A block without the header magic is not an initialized object.
-        if (!_PyGC_IsObjectHeader((PyObject *)op)) {
+        // A block without its object map bit is not an initialized object.
+        if (!_PyGC_IsHeapObject((PyObject *)op)) {
             return true;
         }
         if (addrset_add(a->objects, op) < 0) {
@@ -1336,7 +1336,7 @@ mark_precise_roots(trace_t *t)
    _Py_GC_SHALLOW_FLAG for an object that a conservative root reached and
    that was not safe to traverse.  An address is an object if it lies in a
    page of the object heaps, at the object's offset in its block, and the
-   block has the header magic (_PyGC_IsObjectHeader()).  A precise reference
+   object map has its bit (_PyGC_IsHeapObject()).  A precise reference
    to anything else is not followed: it is a static object, whose memory the
    data segment scan covers, or an object of another interpreter's heaps.
    Immortal heap objects are never marked; the live collector keeps a list of
@@ -1512,7 +1512,7 @@ live_lookup(const trace_t *t, uintptr_t addr, int interior)
     if (op != addr && !interior) {
         return NULL;
     }
-    if (!_PyGC_IsObjectHeader((PyObject *)op)) {
+    if (!_PyGC_IsHeapObject((PyObject *)op)) {
         return NULL;
     }
     return (PyObject *)op;
@@ -1740,7 +1740,7 @@ live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
         return true;
     }
     PyObject *op = (PyObject *)((char *)block + w->offset);
-    if (!_PyGC_IsObjectHeader(op)) {
+    if (!_PyGC_IsHeapObject(op)) {
         return true;
     }
     if (w->objs != NULL || w->res == NULL) {

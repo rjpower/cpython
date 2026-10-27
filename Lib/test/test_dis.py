@@ -1308,15 +1308,18 @@ class DisTests(DisTestBase):
     @cpython_only
     @requires_specialization
     def test_load_attr_specialize(self):
+        # Not __class__: the type is in the header word with the collector's
+        # flags, so it is not a slot that LOAD_ATTR_SLOT can read.
+        import math
         load_attr_quicken = """\
   0           RESUME                   0
 
-  1           LOAD_CONST               0 ('a')  r0 <-
-              LOAD_ATTR_SLOT           0 (__class__)  r0 <- r0
+  1           LOAD_NAME                0 (math)  r0 <-
+              LOAD_ATTR_MODULE         2 (pi)  r0 <- r0
               RETURN_VALUE          <- r0
 """
-        co = compile("'a'.__class__", "", "eval")
-        self.code_quicken(lambda: exec(co, {}, {}))
+        co = compile("math.pi", "", "eval")
+        self.code_quicken(lambda: exec(co, {'math': math}, {}))
         got = self.get_disassembly(co, adaptive=True)
         self.do_disassembly_compare(got, load_attr_quicken)
 

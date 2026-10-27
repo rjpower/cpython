@@ -1417,7 +1417,7 @@ _PySet_Freeze(PyObject *set)
 {
     assert(set != NULL);
     assert(PySet_CheckExact(set));
-    set->ob_type = &PyFrozenSet_Type;
+    Py_SET_TYPE(set, &PyFrozenSet_Type);
     return Py_NewRef(set);
 }
 

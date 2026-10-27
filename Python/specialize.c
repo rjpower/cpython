@@ -1095,12 +1095,10 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
             return 0;
         }
         case DUNDER_CLASS:
-        {
-            fb->index = offsetof(PyObject, ob_type);
-            fb->type_version = tp_version;
-            specialize(instr, LOAD_ATTR_SLOT);
-            return 0;
-        }
+            // The type is in the header word with the collector's flags, so
+            // it is not a value slot that LOAD_ATTR_SLOT can read.
+            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NON_OBJECT_SLOT);
+            return -1;
         case OTHER_SLOT:
             SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NON_OBJECT_SLOT);
             return -1;

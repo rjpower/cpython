@@ -667,7 +667,7 @@ PyStructSequence_InitType2(PyTypeObject *type, PyStructSequence_Desc *desc)
 
     /* PyTypeObject has already been initialized */
     // Py_REFCNT() is a constant; the header of a fresh static type is zero.
-    if (((PyObject *)type)->ob_refcnt_full != 0) {
+    if (((PyObject *)type)->ob_header != 0) {
         PyErr_BadInternalCall();
         return -1;
     }

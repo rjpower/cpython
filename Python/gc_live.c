@@ -136,7 +136,7 @@ get_gc_state(void)
 void
 _PyGC_LiveAddImmortal(PyObject *op)
 {
-    if (!_PyGC_IsObjectHeader(op)) {
+    if (!_PyGC_IsHeapObject(op)) {
         return;  // a static object
     }
     PyTypeObject *tp = Py_TYPE(op);
@@ -347,7 +347,7 @@ objstack_push(objstack *s, PyObject *op)
 static inline int
 is_dead(PyObject *op)
 {
-    return _PyGC_IsObjectHeader(op) && (op->ob_flags & _Py_GC_DEAD_FLAG);
+    return _PyGC_IsHeapObject(op) && (op->ob_flags & _Py_GC_DEAD_FLAG);
 }
 
 static int

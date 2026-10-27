@@ -21,7 +21,7 @@ extern "C" {
 
 
 /* Check if an object is consistent. For example, ensure that the reference
-   counter is greater than or equal to 1, and ensure that ob_type is not NULL.
+   counter is greater than or equal to 1, and ensure that the type is not NULL.
 
    Call _PyObject_AssertFailed() if the object is inconsistent.
 
@@ -51,9 +51,7 @@ PyAPI_FUNC(int) _PyObject_IsFreed(PyObject *);
    backwards compatible solution */
 #define _PyObject_HEAD_INIT(type)         \
     {                                     \
-        .ob_refcnt = _Py_GC_REFCNT,       \
-        .ob_flags = _Py_STATIC_FLAG_BITS, \
-        .ob_type = (type)                 \
+        .ob_header = _Py_STATIC_HEADER_INIT(type), \
     }
 #define _PyVarObject_HEAD_INIT(type, size)    \
     {                                         \

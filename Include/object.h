@@ -77,8 +77,7 @@ whose size is determined when the object is allocated.
  */
 #define PyObject_HEAD_INIT(type)    \
     {                               \
-        { _Py_STATIC_HEADER_INIT },    \
-        (type)                      \
+        { _Py_STATIC_HEADER_INIT(type) }, \
     },
 
 #define PyVarObject_HEAD_INIT(type, size) \
@@ -112,30 +111,32 @@ whose size is determined when the object is allocated.
 #ifdef _Py_OPAQUE_PYOBJECT
   /* PyObject is opaque */
 #else
+#if SIZEOF_VOID_P != 8
+#  error "the object header needs 64-bit pointers"
+#endif
+/* The header is one word: the type pointer in bits 0-47 (no user-space
+ * pointer is wider) and sixteen flag bits in 48-63, ob_flags, which belong to
+ * the collector (see _Py_GC_MARKED_FLAG and the flags beside it).  Read the
+ * type with Py_TYPE(), which masks the flags off, and write it with
+ * Py_SET_TYPE(), which keeps them. */
 struct _object {
     _Py_ANONYMOUS union {
-#if SIZEOF_VOID_P > 4
-        int64_t ob_refcnt_full; /* This field is needed for efficient initialization with Clang on ARM */
+        uintptr_t ob_header;
         struct {
 #  if PY_BIG_ENDIAN
             uint16_t ob_flags;
-            uint16_t ob_overflow;
-            uint32_t ob_refcnt;
+            uint16_t _ob_type_bits[3];
 #  else
-            uint32_t ob_refcnt;
-            uint16_t ob_overflow;
+            uint16_t _ob_type_bits[3];
             uint16_t ob_flags;
 #  endif
         };
-#else
-        Py_ssize_t ob_refcnt;  // part of stable ABI; do not change
-#endif
         _Py_ALIGNED_DEF(_PyObject_MIN_ALIGNMENT, char) _aligner;
     };
-
-    PyTypeObject *ob_type;  // part of stable ABI; do not change
 };
 #endif
+
+#define _Py_HEADER_TYPE_MASK (((uintptr_t)1 << 48) - 1)
 
 /* Cast argument to PyObject* type. */
 #define _PyObject_CAST(op) _Py_CAST(PyObject*, (op))
@@ -174,7 +175,7 @@ PyAPI_FUNC(void) Py_SET_SIZE(PyVarObject *ob, Py_ssize_t size);
 static inline void
 Py_SET_TYPE(PyObject *ob, PyTypeObject *type)
 {
-    ob->ob_type = type;
+    ob->ob_header = (ob->ob_header & ~_Py_HEADER_TYPE_MASK) | (uintptr_t)type;
 }
 
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 < _Py_PACK_VERSION(3, 11)
@@ -201,7 +202,7 @@ Py_SET_TYPE(PyObject *ob, PyTypeObject *type)
 static inline
 PyTypeObject* _Py_TYPE_impl(PyObject *ob)
 {
-    return ob->ob_type;
+    return (PyTypeObject *)(ob->ob_header & _Py_HEADER_TYPE_MASK);
 }
 
 // bpo-39573: The Py_SET_SIZE() function must be used to set an object size.
@@ -552,18 +553,14 @@ given type object has a specified feature.
 #define Py_TPFLAGS_HAVE_FINALIZE (1UL << 0)
 #define Py_TPFLAGS_HAVE_VERSION_TAG   (1UL << 18)
 
-// Flag values for ob_flags (16 bits available, if SIZEOF_VOID_P > 4).
+/* Flag values for ob_flags, bits 48-63 of the header word.  Whether a heap
+ * block holds an initialized object is not in the header: the allocator's
+ * object map says (Include/internal/pycore_gc_trace.h).  Bits 3-6 and 15 are
+ * spare.  The bits from 7 up are the collector's (Python/gc_live.c and
+ * Python/gc_trace.c); it writes them while it holds the GIL. */
 #define _Py_IMMORTAL_FLAGS (1 << 0)
 #define _Py_LEGACY_ABI_CHECK_FLAG (1 << 1) /* see PyModuleDef_Init() */
 #define _Py_STATICALLY_ALLOCATED_FLAG (1 << 2)
-/* ob_refcnt holds the constant _Py_GC_REFCNT in every
- * object and counts nothing.  _Py_NewReference() stores _Py_GC_OBJECT_MAGIC
- * in ob_overflow and sets _Py_GC_HEAP_FLAG, which together tell the
- * collector's heap walk that a block holds an initialized object; freeing an
- * object block clears them.  No pointer has bit 63 set, so a mimalloc
- * free-list link in the first word never looks like an object.  The other
- * bits are the collector's (Python/gc_live.c and Python/gc_trace.c); it
- * writes them while it holds the GIL. */
 #  define _Py_GC_NOTIFIED_FLAG   (1 << 7)   /* the collector ran the
                                                destroy calls of the
                                                object's dealloc */
@@ -580,14 +577,8 @@ given type object has a specified feature.
                                                without being traversed */
 #  define _Py_GC_DEL_CALLED_FLAG (1 << 14)  /* tp_del called since the mark
                                                last reached the object */
-#  define _Py_GC_HEAP_FLAG       (1 << 15)  /* see above */
-#  define _Py_GC_OBJECT_MAGIC    0x6C0B
+/* What Py_REFCNT() returns: nothing is counted. */
 #  define _Py_GC_REFCNT          ((uint32_t)1 << 30)
-#  define _Py_GC_HEADER_INIT \
-    ((int64_t)_Py_GC_REFCNT | ((int64_t)_Py_GC_OBJECT_MAGIC << 32) \
-     | ((int64_t)_Py_GC_HEAP_FLAG << 48))
-#if !defined(Py_LIMITED_API)
-#endif
 
 #define Py_CONSTANT_NONE 0
 #define Py_CONSTANT_FALSE 1

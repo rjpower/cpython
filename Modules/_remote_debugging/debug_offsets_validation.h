@@ -421,7 +421,7 @@ _PyRemoteDebug_ValidateDebugOffsetsLayout(struct _Py_DebugOffsets *debug_offsets
     PY_REMOTE_DEBUG_VALIDATE_SECTION(pyobject);
     PY_REMOTE_DEBUG_VALIDATE_FIELD(
         pyobject,
-        ob_type,
+        ob_header,
         sizeof(uintptr_t),
         _Alignof(uintptr_t),
         SIZEOF_PYOBJECT);

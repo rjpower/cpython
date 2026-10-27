@@ -286,7 +286,9 @@ _Py_BreakPoint(void)
 int
 _PyObject_IsFreed(PyObject *op)
 {
-    if (_PyMem_IsPtrFreed(op) || _PyMem_IsPtrFreed(Py_TYPE(op))) {
+    // The whole header word: the debug allocator's fill covers the flags
+    // too, which Py_TYPE() would mask off.
+    if (_PyMem_IsPtrFreed(op) || _PyMem_IsPtrFreed((void *)op->ob_header)) {
         return 1;
     }
     return 0;
@@ -2286,9 +2288,11 @@ _PyTypes_FiniTypes(PyInterpreterState *interp)
 static inline void
 new_reference(PyObject *op)
 {
-    // Skip the immortal object check in Py_SET_REFCNT; always set refcnt to 1
-    // Mark the block as an initialized object for the collector's heap walk.
-    op->ob_refcnt_full = _Py_GC_HEADER_INIT;
+    // A new object has no collector flags, whatever its block held before,
+    // and its type, if the caller set it first, is kept.  The object map
+    // tells the collector's heap walk that the block holds an object.
+    op->ob_header &= _Py_HEADER_TYPE_MASK;
+    _PyGC_ObjectMapSet(op);
     _PyReftracerTrack(op, PyRefTracer_CREATE);
 }
 

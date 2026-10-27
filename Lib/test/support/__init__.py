@@ -1068,7 +1068,8 @@ Py_SHAPES = bool(sysconfig.get_config_var('Py_SHAPES'))
 if Py_GIL_DISABLED:
     _header = 'PHBBInP'
 else:
-    _header = 'nP'
+    # One word: the type pointer and the collector's flags
+    _header = 'P'
 _align = '0n'
 _vheader = _header + 'n'
 

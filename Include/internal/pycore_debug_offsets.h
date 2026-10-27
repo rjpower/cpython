@@ -148,10 +148,11 @@ typedef struct _Py_DebugOffsets {
         uint64_t co_tlbc;
     } code_object;
 
-    // PyObject offset;
+    // PyObject offset; the type is the header word's bits 0-47
+    // (_Py_HEADER_TYPE_MASK).
     struct _pyobject {
         uint64_t size;
-        uint64_t ob_type;
+        uint64_t ob_header;
     } pyobject;
 
     // PyTypeObject object offset;
@@ -335,7 +336,7 @@ typedef struct _Py_DebugOffsets {
     }, \
     .pyobject = { \
         .size = sizeof(PyObject), \
-        .ob_type = offsetof(PyObject, ob_type), \
+        .ob_header = offsetof(PyObject, ob_header), \
     }, \
     .type_object = { \
         .size = sizeof(PyTypeObject), \

@@ -1463,7 +1463,9 @@ class TracingCollectorTests(unittest.TestCase):
         # in a segment's metadata, in a free span or past the blocks a page
         # has handed out are not objects.
         lookup = _testinternalcapi.gc_live_lookup
-        objs = [object() for _ in range(100)]
+        # Lists, not object(): an object() is a single header word, so op + 8
+        # would be the next block.
+        objs = [[i] for i in range(100)]
         op = id(objs[-1])
         self.assertEqual(lookup(op, False), op)
         self.assertEqual(lookup(op + 8, True), op)
@@ -1472,6 +1474,16 @@ class TracingCollectorTests(unittest.TestCase):
         for addr in probes:
             if addr:
                 self.assertEqual(lookup(addr, True), 0, hex(addr))
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_object_map_rejects_raw_blocks(self):
+        # The header word is all type and flags, so a block of raw data
+        # that starts with a copy of a live object's header looks like that
+        # object; the allocator's object map says it is not one.
+        obj = [1, 2, 3]
+        self.assertEqual(_testinternalcapi.gc_live_lookup(id(obj), False),
+                         id(obj))
+        self.assertFalse(_testinternalcapi.gc_raw_block_is_object(obj))
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_segment_map_follows_huge_segments(self):

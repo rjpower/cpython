@@ -370,6 +370,11 @@ class TestWeakSet(unittest.TestCase):
         # The removal has been committed
         self.assertEqual(len(s), len(items))
 
+    # In a release build the eval loop can hold a dead object in a
+    # callee-saved register, which the C function it calls saves in its frame,
+    # and the conservative stack scan keeps that object alive.
+    @unittest.skipUnless(support.Py_DEBUG,
+                         "the eval loop's registers keep a dead object alive")
     def test_weak_destroy_and_mutate_while_iterating(self):
         # Issue #7105: iterators shouldn't crash when a key is implicitly removed
         items = [ustr(c) for c in string.ascii_letters]

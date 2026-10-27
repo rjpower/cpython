@@ -129,6 +129,11 @@ class GCTests(unittest.TestCase):
         del a
         self.assertNotEqual(gc.collect(), 0)
 
+    # In a release build the eval loop can hold a dead object in a
+    # callee-saved register, which the C function it calls saves in its frame,
+    # and the conservative stack scan keeps that object alive.
+    @unittest.skipUnless(support.Py_DEBUG,
+                         "the eval loop's registers keep a dead object alive")
     def test_newinstance(self):
         class A(object):
             pass

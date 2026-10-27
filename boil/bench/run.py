@@ -28,6 +28,18 @@ instr
 time
     Nanoseconds per loop: one process makes a warm-up call of ``run(loops)``
     then ``--time-runs`` (default 5) timed calls; the value is the median.
+boxes
+    Boxes of inline values per loop (per iteration for the micro set) on a
+    ``--enable-pystats`` build of the value model: the process runs with
+    ``-X pystats`` at ``loops`` and ``3 * loops`` after a warm-up, and the
+    value is the difference of the int, float and array boxes, divided as
+    for instr.  The entry also keeps the boxes by class, the boxes by
+    instruction and the dispatches (instructions executed).  One pair: the
+    counts are deterministic.  Py_STATS writes each process's stats to a new
+    randomly named file in /tmp/py_stats, shared with other users of the
+    machine, so the runner takes the one file that appears during its
+    child's run and fails if there is not exactly one; it never clears the
+    directory.  Boxing call sites: boil/tools/measure/box_audit.py -v.
 rss
     Peak resident set size in KiB of a process calling ``run(loops)`` once,
     from GNU ``/usr/bin/time -f %M`` (not getrusage of children, which
@@ -67,7 +79,8 @@ INTERNAL = HERE / "internal"
 DRIVER = INTERNAL / "driver.py"
 REPO = HERE.parents[1]
 GROUPS = ("kernels", "micro", "memory")
-METRICS = ("instr", "time", "rss")
+METRICS = ("instr", "time", "rss", "boxes")
+PYSTATS_DIR = Path("/tmp/py_stats")
 GNU_TIME = "/usr/bin/time"
 CHILD_ENV = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
 CHILD_ENV["PYTHONHASHSEED"] = "0"
@@ -199,7 +212,7 @@ BENCHMARKS += [
     Bench("dicts_200k", "memory", 1),
 ] + [Bench(f"collector_live{mb}", "memory", 1, "collector", str(mb),
            time_unit="s per allocated GB") for mb in (16, 128, 512)]
-GROUP_METRICS = {"kernels": ("instr", "time", "rss"), "micro": ("instr",),
+GROUP_METRICS = {"kernels": ("instr", "time", "rss", "boxes"), "micro": ("instr", "boxes"),
                  "memory": ("instr", "time", "rss")}
 
 
@@ -217,8 +230,9 @@ class Context:
     pycache: Path
     scratch: Path
 
-    def command(self, bench: Bench, mode: str, loops: int, runs: int = 1) -> list[str]:
-        cmd = [str(self.python), "-S", "-X", f"pycache_prefix={self.pycache}",
+    def command(self, bench: Bench, mode: str, loops: int, runs: int = 1,
+                options: tuple[str, ...] = ()) -> list[str]:
+        cmd = [str(self.python), "-S", *options, "-X", f"pycache_prefix={self.pycache}",
                str(DRIVER), mode, str(bench.path), str(loops), str(runs)]
         return cmd + ([bench.variant] if bench.variant else [])
 
@@ -300,6 +314,68 @@ def measure_rss(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
     return {"group": bench.group, "unit": "KiB peak RSS",
             "value": statistics.median(values), "values": values,
             "loops": loops, "runs": runs}
+
+
+BOX_TOTALS = ("Object inline int boxes", "Object inline float boxes",
+              "Object inline array boxes")
+
+
+def pystats_counts(ctx: Context, bench: Bench, loops: int) -> dict[str, int]:
+    """Run the benchmark under -X pystats and return its counters by name."""
+    PYSTATS_DIR.mkdir(exist_ok=True)
+    before = set(PYSTATS_DIR.iterdir())
+    run_checked(ctx.command(bench, "run", loops, options=("-X", "pystats")),
+                f"{bench.name} under pystats at {loops}")
+    new = set(PYSTATS_DIR.iterdir()) - before
+    if len(new) != 1:
+        raise MeasurementError(f"{len(new)} new files in {PYSTATS_DIR} during {bench.name}; "
+                               "another process is writing stats, so none is attributable")
+    path = new.pop()
+    counts = {}
+    for line in path.read_text().splitlines():
+        key, sep, value = line.strip().rpartition(":")
+        if sep and value.strip().isdigit():
+            counts[key.strip()] = int(value)
+    path.unlink()
+    return counts
+
+
+def check_pystats(ctx: Context) -> None:
+    """Exit before measuring anything if the build was not configured with --enable-pystats."""
+    proc = run_checked([str(ctx.python), "-S", "-c",
+                        "import sys; print(int('_stats_on' in dir(sys)))"], "pystats probe")
+    if proc.stdout.strip() != "1":
+        raise MeasurementError(f"{ctx.python} is not a --enable-pystats build; "
+                               "the boxes metric needs one")
+
+
+def measure_boxes(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
+    lo, hi = loops, HIGH * loops
+    pystats_counts(ctx, bench, lo)  # warm-up: fills the pyc cache
+    a, b = pystats_counts(ctx, bench, lo), pystats_counts(ctx, bench, hi)
+    missing = [k for k in BOX_TOTALS if k not in b]
+    if missing:
+        raise MeasurementError(f"{ctx.python} reports no {missing[0]}: not a Py_STATS "
+                               "build of the value model")
+    scale = (hi - lo) * bench.inner
+
+    def per(key: str) -> float:
+        return (b.get(key, 0) - a.get(key, 0)) / scale
+
+    by_class = {k[len("Object boxes ("):-1]: per(k) for k in b if k.startswith("Object boxes (")}
+    by_op = {k[len("opcode["):-len("].boxes")]: per(k) for k in b
+             if k.startswith("opcode[") and k.endswith("].boxes") and per(k)}
+    dispatches = sum(per(k) for k in b if k.endswith("].execution_count"))
+    unit = "boxes per iteration" if bench.inner > 1 else "boxes per loop"
+    entry = {"group": bench.group, "unit": unit, "value": sum(per(k) for k in BOX_TOTALS),
+             "int_boxes": per(BOX_TOTALS[0]), "float_boxes": per(BOX_TOTALS[1]),
+             "array_boxes": per(BOX_TOTALS[2]), "by_class": by_class,
+             "by_instruction": dict(sorted(by_op.items(), key=lambda kv: -kv[1])),
+             "dispatches": dispatches, "values": [sum(per(k) for k in BOX_TOTALS)],
+             "loops": [lo, hi], "runs": 1}
+    if bench.inner > 1:
+        entry["inner"] = bench.inner
+    return entry
 
 
 def git(*args: str) -> str:
@@ -407,13 +483,15 @@ def main(argv: list[str] | None = None) -> int:
             build = build_info(python, label)
             if "instr" in metrics:
                 check_perf(ctx)
+            if "boxes" in metrics:
+                check_pystats(ctx)
             if "rss" in metrics and not os.access(GNU_TIME, os.X_OK):
                 raise MeasurementError(f"the rss metric needs GNU time at {GNU_TIME}")
             for metric in metrics:
                 measure = {"instr": measure_instr, "time": measure_time,
-                           "rss": measure_rss}[metric]
+                           "rss": measure_rss, "boxes": measure_boxes}[metric]
                 runs = {"instr": args.instr_runs, "time": args.time_runs,
-                        "rss": args.rss_runs}[metric]
+                        "rss": args.rss_runs, "boxes": 1}[metric]
                 table = results.setdefault(metric, {})
                 chosen = [b for b in benches if metric in metrics_of(b)]
                 for bench in chosen:

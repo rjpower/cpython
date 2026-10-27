@@ -102,6 +102,16 @@ class RunTest(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             self.run_bench("time", "--max-load", "0", name="logging_silent")
 
+    def test_boxes_refuses_a_build_without_pystats(self):
+        if "_stats_on" in dir(sys):
+            self.skipTest("the interpreter under test is a pystats build")
+        proc = subprocess.run([sys.executable, str(BENCH / "run.py"), "--build", PYTHON,
+                               "--set", "micro", "--only", "int_add", "--metric", "boxes"],
+                              check=False, capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("not a --enable-pystats build", proc.stderr)
+        self.assertEqual(proc.stdout, "")
+
 
 if __name__ == "__main__":
     unittest.main()

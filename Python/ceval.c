@@ -338,9 +338,9 @@ _Py_CheckRecursiveCall(PyThreadState *tstate, const char *where)
 
 
 const conversion_func _PyEval_ConversionFuncs[4] = {
-    [FVC_STR] = PyObject_Str,
-    [FVC_REPR] = PyObject_Repr,
-    [FVC_ASCII] = PyObject_ASCII
+    [FVC_STR] = PyObject_StrValue,
+    [FVC_REPR] = PyObject_ReprValue,
+    [FVC_ASCII] = PyObject_ASCIIValue
 };
 
 const _Py_SpecialMethod _Py_SpecialMethods[] = {
@@ -1174,19 +1174,7 @@ int _PyEval_StoreName(PyThreadState *tstate, PyValue v, PyObject *name, PyObject
         return error;
     }
 
-    PyObject *v_o = PyValue_Object(v);
-    if (v_o == NULL) {
-        return -1;
-    }
-    int err;
-    if (PyDict_CheckExact(ns)) {
-        err = PyDict_SetItem(ns, name, v_o);
-    }
-    else {
-        err = PyObject_SetItem(ns, name, v_o);
-    }
-    Py_DECREF(v_o);
-    return err;
+    return PyObject_SetItemValue(PyValue_FromObject(ns), PyValue_FromObject(name), v);
 }
 
 #if (defined(__GNUC__) && __GNUC__ >= 10 && !defined(__clang__)) && defined(__x86_64__)
@@ -3824,42 +3812,51 @@ _PyEval_GetAwaitable(PyObject *iterable, int oparg)
     return iter;
 }
 
-Py_NO_INLINE PyObject *
+Py_NO_INLINE /* namespace[name] as a value: 1, 0 if it is missing, or -1 with an
+   exception set.  A dict gives the value with no box. */
+static int
+namespace_lookup(PyObject *namespace, PyObject *name, PyValue *value)
+{
+    if (PyDict_CheckExact(namespace)) {
+        return _PyDict_GetItemValue(namespace, PyValue_FromObject(name), value);
+    }
+    PyObject *value_o;
+    int found = PyMapping_GetOptionalItem(namespace, name, &value_o);
+    *value = found > 0 ? PyValue_FromObject(value_o) : PyValue_NULL;
+    return found;
+}
+
+PyValue
 _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name)
 {
-    PyObject *value;
+    PyValue value;
     PyObject *namespace = frame->f_locals;
     if (namespace == NULL) {
         _PyErr_SetString(tstate, PyExc_SystemError,
                             "no locals found");
-        return NULL;
+        return PyValue_NULL;
     }
-    if (PyMapping_GetOptionalItem(namespace, name, &value) < 0) {
-        return NULL;
+    int found = namespace_lookup(namespace, name, &value);
+    if (found == 0) {
+        namespace = frame->f_globals;
+        found = _PyDict_GetItemValue(namespace, PyValue_FromObject(name), &value);
     }
-    if (value != NULL) {
-        goto found;
+    if (found == 0) {
+        namespace = frame->f_builtins;
+        found = namespace_lookup(namespace, name, &value);
+        if (found == 0) {
+            _PyEval_FormatExcCheckArg(
+                        tstate, PyExc_NameError,
+                                NAME_ERROR_MSG, name);
+        }
     }
-    namespace = frame->f_globals;
-    if (PyDict_GetItemRef(namespace, name, &value) < 0) {
-        return NULL;
+    if (found <= 0) {
+        return PyValue_NULL;
     }
-    if (value != NULL) {
-        goto found;
-    }
-    namespace = frame->f_builtins;
-    if (PyMapping_GetOptionalItem(namespace, name, &value) < 0) {
-        return NULL;
-    }
-    if (value == NULL) {
-        _PyEval_FormatExcCheckArg(
-                    tstate, PyExc_NameError,
-                            NAME_ERROR_MSG, name);
-        return NULL;
-    }
-found:
-    if (PyLazyImport_CheckExact(value)) {
-        Py_SETREF(value, _PyLazyImport_Reify(tstate, value, name, namespace));
+    if (PyValue_IsObject(value) && PyLazyImport_CheckExact(PyValue_ObjectBorrow(value))) {
+        PyObject *res = _PyLazyImport_Reify(tstate, PyValue_ObjectBorrow(value),
+                                            name, namespace);
+        return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
     }
     return value;
 }
@@ -3871,14 +3868,13 @@ PyValue _PyForIter_VirtualIteratorNext(PyThreadState* tstate, _PyInterpreterFram
     if (_PyValue_IsTaggedIndex(index)) {
         intptr_t i = _PyValue_UntagIndex(index);
         assert(i >= 0);
-        _PyObjectIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, i);
+        _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, i);
         i = next_index.index;
-        PyObject *next = next_index.object;
-        if (next == NULL) {
+        if (PyValue_IsNull(next_index.value)) {
             return i < 0 ? _PyValue_ERROR : PyValue_NULL;
         }
         *index_ptr = _PyValue_TagIndex(i);
-        return PyValue_FromObject(next);
+        return next_index.value;
     }
     PyObject *next = (*Py_TYPE(iter_o)->tp_iternext)(iter_o);
     if (next == NULL) {

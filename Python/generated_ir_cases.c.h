@@ -8540,34 +8540,14 @@
             PyValue value;
             PyValue result;
             value = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *value_object;
-            _PyValueRoot value_root;
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                value_object = _PyValue_BoxInline(value);
-                if (value_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(CONVERT_VALUE, _PY_BOX_OTHER);
-            }
-            else {
-                value_object = PyValue_ObjectBorrow(value);
-            }
             conversion_func conv_fn;
             assert(oparg >= FVC_STR && oparg <= FVC_ASCII);
             conv_fn = _PyEval_ConversionFuncs[oparg];
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                _PyThreadState_PushValueRoot(tstate, &value_root);
-                value_root.object = value_object;
-            }
-            PyObject *result_o = conv_fn(value_object);
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                _PyThreadState_PopValueRoot(tstate, &value_root);
-            }
-            if (result_o == NULL) {
+            result = conv_fn(value);
+            if (PyValue_IsNull(result)) {
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 JUMP_TO_LABEL(error);
             }
-            result = PyValue_FromObject(result_o);
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), result);
             DISPATCH();
@@ -9161,36 +9141,15 @@
             PyValue value;
             PyValue res;
             value = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *value_object;
-            _PyValueRoot value_root;
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                value_object = _PyValue_BoxInline(value);
-                if (value_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(FORMAT_SIMPLE, _PY_BOX_OTHER);
+            if (PyValue_Type(value) == &PyUnicode_Type) {
+                res = value;
             }
             else {
-                value_object = PyValue_ObjectBorrow(value);
-            }
-            PyObject *value_o = value_object;
-            if (!PyUnicode_CheckExact(value_o)) {
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PushValueRoot(tstate, &value_root);
-                    value_root.object = value_object;
-                }
-                PyObject *res_o = PyObject_Format(value_o, NULL);
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PopValueRoot(tstate, &value_root);
-                }
-                if (res_o == NULL) {
+                res = PyObject_FormatValue(value, NULL);
+                if (PyValue_IsNull(res)) {
                     IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
-            }
-            else {
-                res = value;
             }
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
@@ -9213,51 +9172,13 @@
             PyValue res;
             fmt_spec = IR_SLOT(IR_FIELD_C(this_instr));
             value = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *value_object;
-            _PyValueRoot value_root;
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                value_object = _PyValue_BoxInline(value);
-                if (value_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(FORMAT_WITH_SPEC, _PY_BOX_OTHER);
-            }
-            else {
-                value_object = PyValue_ObjectBorrow(value);
-            }
-            PyObject *fmt_spec_object;
-            _PyValueRoot fmt_spec_root;
-            if (Py_UNLIKELY(PyValue_IsInline(fmt_spec))) {
-                fmt_spec_object = _PyValue_BoxInline(fmt_spec);
-                if (fmt_spec_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(FORMAT_WITH_SPEC, _PY_BOX_OTHER);
-            }
-            else {
-                fmt_spec_object = PyValue_ObjectBorrow(fmt_spec);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                _PyThreadState_PushValueRoot(tstate, &value_root);
-                value_root.object = value_object;
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(fmt_spec))) {
-                _PyThreadState_PushValueRoot(tstate, &fmt_spec_root);
-                fmt_spec_root.object = fmt_spec_object;
-            }
-            PyObject *res_o = PyObject_Format(value_object, fmt_spec_object);
-            if (Py_UNLIKELY(PyValue_IsInline(fmt_spec))) {
-                _PyThreadState_PopValueRoot(tstate, &fmt_spec_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                _PyThreadState_PopValueRoot(tstate, &value_root);
-            }
-            if (res_o == NULL) {
+            assert(PyValue_IsObject(fmt_spec));
+            res = PyObject_FormatValue(value, PyValue_ObjectBorrow(fmt_spec));
+            if (PyValue_IsNull(res)) {
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 JUMP_TO_LABEL(error);
             }
-            res = PyValue_FromObject(res_o);
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
@@ -9599,10 +9520,9 @@
                 assert(PyValue_IsObject(iter));
                 PyObject *iter_o = PyValue_ObjectBorrow(iter);
                 Py_ssize_t index = _PyValue_UntagIndex(null_or_index);
-                _PyObjectIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
-                PyObject *next_o = next_index.object;
+                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
                 index = next_index.index;
-                if (next_o == NULL) {
+                if (PyValue_IsNull(next_index.value)) {
                     if (index < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -9610,7 +9530,7 @@
                     DISPATCH();
                 }
                 null_or_index = _PyValue_TagIndex(index);
-                next = PyValue_FromObject(next_o);
+                next = next_index.value;
             }
             window[1] = null_or_index;
             window[2] = next;
@@ -14371,11 +14291,10 @@
             (void)oparg;
             PyValue v;
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyObject *v_o = _PyEval_LoadName(tstate, frame, name);
-            if (v_o == NULL) {
+            v = _PyEval_LoadName(tstate, frame, name);
+            if (PyValue_IsNull(v)) {
                 JUMP_TO_LABEL(error);
             }
-            v = PyValue_FromObject(v_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), v);
             DISPATCH();
         }
@@ -17216,13 +17135,12 @@
                     _PyThreadState_PushValueRoot(tstate, &iter_root);
                     iter_root.object = iter_object;
                 }
-                _PyObjectIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
                 if (Py_UNLIKELY(PyValue_IsInline(iter))) {
                     _PyThreadState_PopValueRoot(tstate, &iter_root);
                 }
-                PyObject *next_o = next_index.object;
                 index = next_index.index;
-                if (next_o == NULL) {
+                if (PyValue_IsNull(next_index.value)) {
                     if (index < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -17230,7 +17148,7 @@
                     JUMPBY(oparg);
                     DISPATCH();
                 }
-                next = PyValue_FromObject(next_o);
+                next = next_index.value;
                 null_or_index = _PyValue_TagIndex(index);
             }
             window[1] = null_or_index;

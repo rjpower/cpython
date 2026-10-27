@@ -1613,10 +1613,9 @@ dummy_func(
         replaced op(_SEND_VIRTUAL, (iter, null_or_index, none -- iter, null_or_index, next)) {
             PyObject *iter_o = PyValue_ObjectBorrow(iter);
             Py_ssize_t index = _PyValue_UntagIndex(null_or_index);
-            _PyObjectIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
-            PyObject *next_o = next_index.object;
+            _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
             index = next_index.index;
-            if (next_o == NULL) {
+            if (PyValue_IsNull(next_index.value)) {
                 if (index < 0) {
                     ERROR_NO_POP();
                 }
@@ -1626,7 +1625,7 @@ dummy_func(
                 DISPATCH();
             }
             DEAD(none);
-            next = PyValue_FromObject(next_o);
+            next = next_index.value;
             null_or_index = _PyValue_TagIndex(index);
         }
 
@@ -2009,9 +2008,8 @@ dummy_func(
 
         inst(LOAD_NAME, (-- v)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyObject *v_o = _PyEval_LoadName(tstate, frame, name);
-            ERROR_IF(v_o == NULL);
-            v = PyValue_FromObject(v_o);
+            v = _PyEval_LoadName(tstate, frame, name);
+            ERROR_IF(PyValue_IsNull(v));
         }
 
         family(LOAD_GLOBAL, INLINE_CACHE_ENTRIES_LOAD_GLOBAL) = {
@@ -3573,10 +3571,9 @@ dummy_func(
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_ObjectBorrow(iter);
             Py_ssize_t index = _PyValue_UntagIndex(null_or_index);
-            _PyObjectIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
-            PyObject *next_o = next_index.object;
+            _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
             index = next_index.index;
-            if (next_o == NULL) {
+            if (PyValue_IsNull(next_index.value)) {
                 if (index < 0) {
                     ERROR_NO_POP();
                 }
@@ -3585,7 +3582,7 @@ dummy_func(
                 DISPATCH();
             }
             null_or_index = _PyValue_TagIndex(index);
-            next = PyValue_FromObject(next_o);
+            next = next_index.value;
         }
 
         macro(FOR_ITER_VIRTUAL) =
@@ -5424,33 +5421,30 @@ dummy_func(
             conversion_func conv_fn;
             assert(oparg >= FVC_STR && oparg <= FVC_ASCII);
             conv_fn = _PyEval_ConversionFuncs[oparg];
-            PyObject *result_o = conv_fn(PyValue_ObjectBorrow(value));
+            result = conv_fn(value);
             DEAD(value);
-            ERROR_IF(result_o == NULL);
-            result = PyValue_FromObject(result_o);
+            ERROR_IF(PyValue_IsNull(result));
         }
 
         inst(FORMAT_SIMPLE, (value -- res)) {
-            PyObject *value_o = PyValue_ObjectBorrow(value);
             /* If value is a unicode object, then we know the result
              * of format(value) is value itself. */
-            if (!PyUnicode_CheckExact(value_o)) {
-                PyObject *res_o = PyObject_Format(value_o, NULL);
-                DEAD(value);
-                ERROR_IF(res_o == NULL);
-                res = PyValue_FromObject(res_o);
-            }
-            else {
+            if (PyValue_Type(value) == &PyUnicode_Type) {
                 res = value;
                 DEAD(value);
+            }
+            else {
+                res = PyObject_FormatValue(value, NULL);
+                DEAD(value);
+                ERROR_IF(PyValue_IsNull(res));
             }
         }
 
         inst(FORMAT_WITH_SPEC, (value, fmt_spec -- res)) {
-            PyObject *res_o = PyObject_Format(PyValue_ObjectBorrow(value), PyValue_ObjectBorrow(fmt_spec));
+            assert(PyValue_IsObject(fmt_spec));
+            res = PyObject_FormatValue(value, PyValue_ObjectBorrow(fmt_spec));
             INPUTS_DEAD();
-            ERROR_IF(res_o == NULL);
-            res = PyValue_FromObject(res_o);
+            ERROR_IF(PyValue_IsNull(res));
         }
 
         pure inst(COPY, (bottom, unused[oparg-1] -- bottom, unused[oparg-1], top)) {

@@ -836,14 +836,14 @@ static PySequenceMethods tuple_as_sequence = {
     tuple_contains,                             /* sq_contains */
 };
 
-static _PyObjectIndexPair
+static _PyValueIndexPair
 tuple_iteritem(PyObject *obj, Py_ssize_t index)
 {
     if (index >= PyTuple_GET_SIZE(obj)) {
-        return (_PyObjectIndexPair) { .object = NULL, .index = index };
+        return (_PyValueIndexPair) { .value = PyValue_NULL, .index = index };
     }
-    PyObject *result = PyTuple_GET_ITEM(obj, index);
-    return (_PyObjectIndexPair) { .object = result, .index = index + 1 };
+    return (_PyValueIndexPair) { .value = PyTuple_GET_VALUE(obj, index),
+                                 .index = index + 1 };
 }
 
 static PyObject*

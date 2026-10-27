@@ -273,11 +273,14 @@ typedef Py_hash_t (*hashfunc)(PyObject *);
 typedef PyObject *(*richcmpfunc) (PyObject *, PyObject *, int);
 typedef PyObject *(*getiterfunc) (PyObject *);
 typedef PyObject *(*iternextfunc) (PyObject *);
+/* The result of _tp_iteritem: the item at index as a value and the index of
+   the next, or PyValue_NULL and the index at the end, or PyValue_NULL and a
+   negative index with an exception set. */
 typedef struct {
-    PyObject *object;
+    PyValue value;
     Py_ssize_t index;
-} _PyObjectIndexPair;
-typedef _PyObjectIndexPair (*_Py_iteritemfunc) (PyObject *, Py_ssize_t index);
+} _PyValueIndexPair;
+typedef _PyValueIndexPair (*_Py_iteritemfunc) (PyObject *, Py_ssize_t index);
 typedef PyObject *(*descrgetfunc) (PyObject *, PyObject *, PyObject *);
 typedef int (*descrsetfunc) (PyObject *, PyObject *, PyObject *);
 typedef int (*initproc)(PyObject *, PyObject *, PyObject *);

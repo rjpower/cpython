@@ -29,6 +29,7 @@
 #include "pycore_template.h"      // _PyTemplate_Type _PyTemplateIter_Type
 #include "pycore_typeobject.h"    // _PyBufferWrapper_Type
 #include "pycore_typevarobject.h" // _PyTypeAlias_Type
+#include "pycore_floatobject.h"   // _PyFloat_ReprDouble()
 #include "pycore_unicodeobject.h" // _PyUnicode_CheckConsistency()
 #include "pycore_value.h"         // PyValue_FromObject
 #include "pycore_unionobject.h"   // _PyUnion_Type
@@ -417,6 +418,61 @@ PyObject_Str(PyObject *v)
     }
     assert(_PyUnicode_CheckConsistency(res, 1));
     return res;
+}
+
+/* str() and repr() of an inline value, which are ASCII. */
+static PyObject *
+inline_value_str(PyValue v)
+{
+    if (PyValue_IsInlineFloat(v)) {
+        return _PyFloat_ReprDouble(PyValue_Double(v));
+    }
+    int32_t i = PyValue_Int32(v);
+    char buf[12];
+    char *end = buf + sizeof(buf);
+    char *p = end;
+    uint32_t u = i < 0 ? 0u - (uint32_t)i : (uint32_t)i;
+    do {
+        *--p = (char)('0' + u % 10);
+        u /= 10;
+    } while (u);
+    if (i < 0) {
+        *--p = '-';
+    }
+    return _PyUnicode_FromASCII(p, end - p);
+}
+
+static inline PyValue
+str_value_result(PyObject *res)
+{
+    return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
+}
+
+PyValue
+PyObject_StrValue(PyValue v)
+{
+    if (PyValue_IsInline(v)) {
+        return str_value_result(inline_value_str(v));
+    }
+    return str_value_result(PyObject_Str(PyValue_ObjectBorrow(v)));
+}
+
+PyValue
+PyObject_ReprValue(PyValue v)
+{
+    if (PyValue_IsInline(v)) {
+        return str_value_result(inline_value_str(v));
+    }
+    return str_value_result(PyObject_Repr(PyValue_ObjectBorrow(v)));
+}
+
+PyValue
+PyObject_ASCIIValue(PyValue v)
+{
+    if (PyValue_IsInline(v)) {
+        return str_value_result(inline_value_str(v));
+    }
+    return str_value_result(PyObject_ASCII(PyValue_ObjectBorrow(v)));
 }
 
 PyObject *

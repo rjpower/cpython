@@ -335,11 +335,17 @@ _Py_convert_int_to_double(PyObject **v, double *dbl)
 static PyObject *
 float_repr(PyObject *op)
 {
-    PyFloatObject *v = _PyFloat_CAST(op);
+    return _PyFloat_ReprDouble(PyFloat_AS_DOUBLE(op));
+}
+
+/* repr() of the float value, which is also its str(). */
+PyObject *
+_PyFloat_ReprDouble(double value)
+{
     PyObject *result;
     char *buf;
 
-    buf = PyOS_double_to_string(PyFloat_AS_DOUBLE(v),
+    buf = PyOS_double_to_string(value,
                                 'r', 0,
                                 Py_DTSF_ADD_DOT_0,
                                 NULL);

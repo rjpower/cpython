@@ -61,10 +61,6 @@ extern "C" {
   not pointers.
 */
 
-typedef struct PyValue {
-    uintptr_t bits;
-} PyValue;
-
 #define _PyValue_PTR_LIMIT     ((uintptr_t)1 << 48)
 #define _PyValue_INDEX_BASE    ((uintptr_t)1 << 48)
 #define _PyValue_DOUBLE_OFFSET ((uintptr_t)1 << 49)

@@ -63,6 +63,16 @@ extern double _PyFloat_Rem(double vx, double wx);
 extern void _PyFloat_DivMod(double vx, double wx, double *floordiv, double *mod);
 extern int _PyFloat_Pow(double iv, double iw, double *res);
 
+/* repr() of a float, and its format() with format_spec[start:end], from
+   its double. */
+extern PyObject *_PyFloat_ReprDouble(double value);
+extern int _PyFloat_FormatDoubleWriter(
+    _PyUnicodeWriter *writer,
+    double value,
+    PyObject *format_spec,
+    Py_ssize_t start,
+    Py_ssize_t end);
+
 /* Should match endianness of the platform in most (all?) cases. */
 
 #ifdef DOUBLE_IS_BIG_ENDIAN_IEEE754

@@ -222,7 +222,7 @@ PyAPI_FUNC(int) _PyEval_RaiseAsyncExc(PyThreadState *tstate);
 
 extern PyObject * _PyEval_GetFrameLocals(void);
 
-typedef PyObject *(*conversion_func)(PyObject *);
+typedef PyValue (*conversion_func)(PyValue);
 
 PyAPI_DATA(const conversion_func) _PyEval_ConversionFuncs[];
 
@@ -272,7 +272,7 @@ PyAPI_FUNC(void) _PyObjectArray_Free(PyObject **array, PyObject **scratch);
 PyAPI_FUNC(PyObject *) _PyEval_GetANext(PyObject *aiter);
 PyAPI_FUNC(void) _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name, PyValue *writeto);
 PyAPI_FUNC(PyObject *) _PyEval_GetAwaitable(PyObject *iterable, int oparg);
-PyAPI_FUNC(PyObject *) _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name);
+PyAPI_FUNC(PyValue) _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name);
 PyAPI_FUNC(int)
 _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args);
 PyAPI_FUNC(PyValue) _PyEval_GetIter(PyValue iterable, PyValue *null_or_index, int yield_from);

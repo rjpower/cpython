@@ -14330,18 +14330,21 @@ onError:
     return NULL;
 }
 
-static _PyObjectIndexPair
+static _PyValueIndexPair
 unicode_iteritem(PyObject *obj, Py_ssize_t index)
 {
     if (index >= PyUnicode_GET_LENGTH(obj)) {
-        return (_PyObjectIndexPair) { .object = NULL, .index = index };
+        return (_PyValueIndexPair) { .value = PyValue_NULL, .index = index };
     }
     const void *data = PyUnicode_DATA(obj);
     int kind = PyUnicode_KIND(obj);
     Py_UCS4 ch = PyUnicode_READ(kind, data, index);
     PyObject *result = unicode_char(ch);
-    index = (result == NULL) ? -1 : index + 1;
-    return (_PyObjectIndexPair) { .object = result, .index = index };
+    if (result == NULL) {
+        return (_PyValueIndexPair) { .value = PyValue_NULL, .index = -1 };
+    }
+    return (_PyValueIndexPair) { .value = PyValue_FromObject(result),
+                                 .index = index + 1 };
 }
 
 void

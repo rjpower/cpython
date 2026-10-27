@@ -4,6 +4,7 @@
 
 #include "Python.h"
 #include "pycore_fileutils.h"     // _Py_GetLocaleconvNumeric()
+#include "pycore_floatobject.h"   // _PyFloat_ReprDouble()
 #include "pycore_long.h"          // _PyLong_FormatWriter()
 #include "pycore_unicodeobject.h" // PyUnicode_MAX_CHAR_VALUE()
 #include <locale.h>
@@ -383,7 +384,7 @@ typedef struct {
   if failure, sets the exception
 */
 static int
-parse_internal_render_format_spec(PyObject *obj,
+parse_internal_render_format_spec(PyTypeObject *obj_type,
                                   PyObject *format_spec,
                                   Py_ssize_t start, Py_ssize_t end,
                                   InternalFormatSpec *format,
@@ -548,7 +549,7 @@ parse_internal_render_format_spec(PyObject *obj,
         if (actual_format_spec != NULL) {
             PyErr_Format(PyExc_ValueError,
                 "Invalid format specifier '%U' for object of type '%.200s'",
-                actual_format_spec, Py_TYPE(obj)->tp_name);
+                actual_format_spec, obj_type->tp_name);
             Py_DECREF(actual_format_spec);
         }
         return 0;
@@ -1376,7 +1377,7 @@ done:
 
 /* much of this is taken from unicodeobject.c */
 static int
-format_float_internal(PyObject *value,
+format_float_internal(double val,
                       const InternalFormatSpec *format,
                       _PyUnicodeWriter *writer)
 {
@@ -1386,7 +1387,6 @@ format_float_internal(PyObject *value,
     Py_ssize_t n_frac;
     Py_ssize_t n_total;
     int has_decimal;
-    double val;
     int precision, default_precision = 6;
     Py_UCS4 type = format->type;
     int add_pct = 0;
@@ -1427,10 +1427,6 @@ format_float_internal(PyObject *value,
         /* 'n' is the same as 'g', except for the locale used to
            format the result. We take care of that later. */
         type = 'g';
-
-    val = PyFloat_AsDouble(value);
-    if (val == -1.0 && PyErr_Occurred())
-        goto done;
 
     if (type == '%') {
         type = 'f';
@@ -1813,7 +1809,7 @@ _PyUnicode_FormatAdvancedWriter(_PyUnicodeWriter *writer,
     }
 
     /* parse the format_spec */
-    if (!parse_internal_render_format_spec(obj, format_spec, start, end,
+    if (!parse_internal_render_format_spec(Py_TYPE(obj), format_spec, start, end,
                                            &format, 's', '<'))
         return -1;
 
@@ -1849,7 +1845,7 @@ _PyLong_FormatAdvancedWriter(_PyUnicodeWriter *writer,
     }
 
     /* parse the format_spec */
-    if (!parse_internal_render_format_spec(obj, format_spec, start, end,
+    if (!parse_internal_render_format_spec(Py_TYPE(obj), format_spec, start, end,
                                            &format, 'd', '>'))
         goto done;
 
@@ -1877,7 +1873,7 @@ _PyLong_FormatAdvancedWriter(_PyUnicodeWriter *writer,
         tmp = PyNumber_Float(obj);
         if (tmp == NULL)
             goto done;
-        result = format_float_internal(tmp, &format, writer);
+        result = format_float_internal(PyFloat_AS_DOUBLE(tmp), &format, writer);
         break;
 
     default:
@@ -1891,21 +1887,16 @@ done:
     return result;
 }
 
-int
-_PyFloat_FormatAdvancedWriter(_PyUnicodeWriter *writer,
-                              PyObject *obj,
-                              PyObject *format_spec,
-                              Py_ssize_t start, Py_ssize_t end)
+/* float's __format__ for a float of type tp (for the error messages) that
+   holds value, with a format spec that is not empty. */
+static int
+format_float_spec(_PyUnicodeWriter *writer, PyTypeObject *tp, double value,
+                  PyObject *format_spec, Py_ssize_t start, Py_ssize_t end)
 {
     InternalFormatSpec format;
 
-    /* check for the special case of zero length format spec, make
-       it equivalent to str(obj) */
-    if (start == end)
-        return format_obj(obj, writer);
-
     /* parse the format_spec */
-    if (!parse_internal_render_format_spec(obj, format_spec, start, end,
+    if (!parse_internal_render_format_spec(tp, format_spec, start, end,
                                            &format, '\0', '>'))
         return -1;
 
@@ -1921,13 +1912,44 @@ _PyFloat_FormatAdvancedWriter(_PyUnicodeWriter *writer,
     case 'n':
     case '%':
         /* no conversion, already a float.  do the formatting */
-        return format_float_internal(obj, &format, writer);
+        return format_float_internal(value, &format, writer);
 
     default:
         /* unknown */
-        unknown_presentation_type(format.type, Py_TYPE(obj)->tp_name);
+        unknown_presentation_type(format.type, tp->tp_name);
         return -1;
     }
+}
+
+int
+_PyFloat_FormatAdvancedWriter(_PyUnicodeWriter *writer,
+                              PyObject *obj,
+                              PyObject *format_spec,
+                              Py_ssize_t start, Py_ssize_t end)
+{
+    /* check for the special case of zero length format spec, make
+       it equivalent to str(obj) */
+    if (start == end)
+        return format_obj(obj, writer);
+
+    return format_float_spec(writer, Py_TYPE(obj), PyFloat_AS_DOUBLE(obj),
+                             format_spec, start, end);
+}
+
+int
+_PyFloat_FormatDoubleWriter(_PyUnicodeWriter *writer, double value,
+                            PyObject *format_spec,
+                            Py_ssize_t start, Py_ssize_t end)
+{
+    if (start == end) {
+        PyObject *str = _PyFloat_ReprDouble(value);
+        if (str == NULL) {
+            return -1;
+        }
+        return _PyUnicodeWriter_WriteStr(writer, str);
+    }
+    return format_float_spec(writer, &PyFloat_Type, value,
+                             format_spec, start, end);
 }
 
 int
@@ -1944,7 +1966,7 @@ _PyComplex_FormatAdvancedWriter(_PyUnicodeWriter *writer,
         return format_obj(obj, writer);
 
     /* parse the format_spec */
-    if (!parse_internal_render_format_spec(obj, format_spec, start, end,
+    if (!parse_internal_render_format_spec(Py_TYPE(obj), format_spec, start, end,
                                            &format, '\0', '>'))
         return -1;
 

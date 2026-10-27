@@ -172,3 +172,8 @@ PyAPI_FUNC(PyValue) PyObject_GetIterValue(PyValue o);
    exhausted, or -1 and PyValue_NULL with an exception set, as
    PyIter_NextItem(). */
 PyAPI_FUNC(int) PyIter_NextValue(PyValue iter, PyValue *item);
+
+PyAPI_FUNC(PyValue) PyObject_StrValue(PyValue o);
+PyAPI_FUNC(PyValue) PyObject_ReprValue(PyValue o);
+PyAPI_FUNC(PyValue) PyObject_ASCIIValue(PyValue o);
+PyAPI_FUNC(PyValue) PyObject_FormatValue(PyValue o, PyObject *format_spec);

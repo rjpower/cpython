@@ -3243,15 +3243,15 @@ Construct an immutable array of bytes from:\n\
 static PyObject *bytes_iter(PyObject *seq);
 
 
-static _PyObjectIndexPair
+static _PyValueIndexPair
 bytes_iteritem(PyObject *obj, Py_ssize_t index)
 {
     PyBytesObject *a = _PyBytes_CAST(obj);
     if (index >= Py_SIZE(a)) {
-        return (_PyObjectIndexPair) { .object = NULL, .index = index };
+        return (_PyValueIndexPair) { .value = PyValue_NULL, .index = index };
     }
-    PyObject *l = _PyLong_FromUnsignedChar((unsigned char)a->ob_sval[index]);
-    return (_PyObjectIndexPair) { .object = l, .index = index + 1 };
+    PyValue l = PyValue_FromInt32((unsigned char)a->ob_sval[index]);
+    return (_PyValueIndexPair) { .value = l, .index = index + 1 };
 }
 
 #ifdef Py_DEBUG

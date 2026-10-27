@@ -862,6 +862,48 @@ _PyBuffer_ReleaseInInterpreterAndRawFree(PyInterpreterState *interp,
     return _Py_CallInInterpreterAndRawFree(interp, _buffer_release_call, view);
 }
 
+PyValue
+PyObject_FormatValue(PyValue v, PyObject *format_spec)
+{
+    if (!PyValue_IsInline(v)) {
+        PyObject *res = PyObject_Format(PyValue_ObjectBorrow(v), format_spec);
+        return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
+    }
+    if (format_spec != NULL && !PyUnicode_Check(format_spec)) {
+        PyErr_Format(PyExc_SystemError,
+                     "Format specifier must be a string, not %.200s",
+                     Py_TYPE(format_spec)->tp_name);
+        return PyValue_NULL;
+    }
+    Py_ssize_t end = format_spec == NULL ? 0 : PyUnicode_GET_LENGTH(format_spec);
+    if (end == 0) {
+        // format() with an empty spec is str() for int and float.
+        return PyObject_StrValue(v);
+    }
+    PyObject *res = NULL;
+    if (PyValue_IsInlineFloat(v)) {
+        _PyUnicodeWriter writer;
+        _PyUnicodeWriter_Init(&writer);
+        if (_PyFloat_FormatDoubleWriter(&writer, PyValue_Double(v),
+                                        format_spec, 0, end) < 0) {
+            _PyUnicodeWriter_Dealloc(&writer);
+            return PyValue_NULL;
+        }
+        res = _PyUnicodeWriter_Finish(&writer);
+    }
+    else {
+        // int's formatter works on an int object.
+        PyThreadState *tstate = _PyThreadState_GET();
+        _PyValueRoot root;
+        PyObject *v_o = _PyValueRoot_PushObject(tstate, &root, v, _PY_BOX_OTHER);
+        if (v_o != NULL) {
+            res = PyObject_Format(v_o, format_spec);
+        }
+        _PyThreadState_PopValueRoot(tstate, &root);
+    }
+    return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
+}
+
 PyObject *
 PyObject_Format(PyObject *obj, PyObject *format_spec)
 {

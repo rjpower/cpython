@@ -128,11 +128,10 @@ typedef struct {
     };
     uint32_t _pad;
     union {                         // borrowed; valid while the versions match
-        PyObject *descr;
+        PyObject *descr;            // LOAD_ATTR_PROPERTY: the property
         // LOAD_ATTR_CLASS, LOAD_ATTR_NONDESCRIPTOR_*: the class attribute,
         // canonical, which may be an inline value
         PyValue attr_value;
-        PyObject *fget;
         PyObject *getattribute;
         _PyShape *shape_to;         // STORE_ATTR_SHAPE_ADD: the shape after the store
     };

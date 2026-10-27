@@ -2,6 +2,7 @@
 
 #include "Python.h"
 #include "pycore_shape.h"       // _PyShape_InitRoot()
+#include "pycore_lookup.h"      // _PyShape_LookupPlan()
 #include "pycore_abstract.h"      // _PySequence_IterSearch()
 #include "pycore_call.h"          // _PyObject_VectorcallTstate()
 #include "pycore_code.h"          // CO_FAST_FREE
@@ -5889,11 +5890,12 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
 {
     int cacheable = MCACHE_CACHEABLE_NAME(name);
     if (cacheable) {
-        struct _PyTypeCacheLookupResult r = _PyTypeCache_Lookup(type, name);
+        struct _PyTypeCacheLookupResult r =
+            _PyTypeCache_Lookup(type, _Py_TYPE_ROOT_SHAPE(type), name);
         if (r.cache_hit) {
             OBJECT_STAT_INC_COND(type_cache_hits, !is_dunder_name(name));
             OBJECT_STAT_INC_COND(type_cache_dunder_hits, is_dunder_name(name));
-            *out = r.value;
+            *out = r.plan.value;
             return r.version_tag;
         }
     }
@@ -5920,7 +5922,13 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
         // find_name_in_mro can release the type lock and another thread can
         // modify the type, so we need to check version tag again before caching the result.
         if (res >= 0 && version_tag != 0 && version_tag == type->tp_version_tag) {
-            _PyTypeCache_Insert(type, name, *out);
+            // The root entry, with the MRO result only.
+            _PyLookupPlan raw = {
+                .kind = _Py_LOOKUP_NONE,
+                .type_version = version_tag,
+                .value = *out,
+            };
+            _PyTypeCache_Insert(type, _Py_TYPE_ROOT_SHAPE(type), name, &raw);
         }
         END_TYPE_LOCK();
     }
@@ -5936,6 +5944,76 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
     }
 
     return version_tag;
+}
+
+/* Whether every class dict on TYPE's MRO has only exact str keys, so that
+   looking a name up in them runs no user code. */
+static int
+mro_dicts_unicode(PyTypeObject *type)
+{
+    PyObject *mro = lookup_tp_mro(type);
+    if (mro == NULL) {
+        return 0;
+    }
+    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(mro); i++) {
+        PyObject *dict = lookup_tp_dict((PyTypeObject *)PyTuple_GET_ITEM(mro, i));
+        if (dict == NULL || !PyDict_CheckExact(dict)
+            || !DK_IS_UNICODE(((PyDictObject *)dict)->ma_keys))
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* Phase 1 of the generic protocol for NAME on objects of SHAPE: the MRO
+   result, and whether a plan built on it may be cached. */
+static PyValue
+lookup_plan_facts(_PyShape *shape, PyObject *name, int *cacheable)
+{
+    PyTypeObject *type = shape->type;
+    PyValue descr;
+    unsigned int version = _PyType_LookupValueAndVersion(type, name, &descr);
+    *cacheable = (MCACHE_CACHEABLE_NAME(name) && version != 0
+                  && version == shape->type_version
+                  && mro_dicts_unicode(type));
+    return descr;
+}
+
+void
+_PyShape_LookupPlan(_PyShape *shape, PyObject *name, _PyLookupPlan *plan)
+{
+    PyTypeObject *type = shape->type;
+    assert(_PyType_IsReady(type));
+    if (MCACHE_CACHEABLE_NAME(name)) {
+        struct _PyTypeCacheLookupResult r = _PyTypeCache_Lookup(type, shape, name);
+        if (r.cache_hit && r.plan.kind != _Py_LOOKUP_NONE
+            && r.plan.type_version == shape->type_version)
+        {
+            *plan = r.plan;
+            return;
+        }
+    }
+    int cacheable;
+    PyValue descr = lookup_plan_facts(shape, name, &cacheable);
+    _PyShape_ResolveLoad(shape, name, descr, cacheable, plan);
+    if (plan->flags & _Py_LOOKUP_CACHEABLE) {
+        BEGIN_TYPE_LOCK();
+        if (type->tp_version_tag == plan->type_version) {
+            _PyTypeCache_Insert(type, shape, name, plan);
+        }
+        END_TYPE_LOCK();
+    }
+}
+
+void
+_PyShape_LookupStorePlan(_PyShape *shape, PyObject *name, _PyStoreOp op,
+                         _PyStorePlan *plan)
+{
+    assert(_PyType_IsReady(shape->type));
+    int cacheable;
+    PyValue descr = lookup_plan_facts(shape, name, &cacheable);
+    _PyShape_ResolveStore(shape, name, descr, cacheable, op, plan);
 }
 
 /* Internal API to look for a name through the MRO.

@@ -8,6 +8,7 @@
 #include "pycore_cell.h"          // PyCell_GetRef()
 #include "pycore_ceval.h"         // SPECIAL___ENTER__
 #include "pycore_code.h"
+#include "pycore_descrobject.h"   // _PyPropertyObject
 #include "pycore_dict.h"
 #include "pycore_emscripten_signal.h"  // _Py_CHECK_EMSCRIPTEN_SIGNALS
 #include "pycore_floatobject.h"   // _PyFloat_ExactDealloc()

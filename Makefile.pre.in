@@ -578,6 +578,7 @@ OBJECT_OBJS=	\
 		Objects/sentinelobject.o \
 		Objects/setobject.o \
 		Objects/shapeobject.o \
+		Objects/lookupplan.o \
 		Objects/sliceobject.o \
 		Objects/structseq.o \
 		Objects/templateobject.o \
@@ -1432,6 +1433,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_semaphore.h \
 		$(srcdir)/Include/internal/pycore_setobject.h \
 		$(srcdir)/Include/internal/pycore_shape.h \
+		$(srcdir)/Include/internal/pycore_lookup.h \
 		$(srcdir)/Include/internal/pycore_signal.h \
 		$(srcdir)/Include/internal/pycore_sliceobject.h \
 		$(srcdir)/Include/internal/pycore_slots.h \

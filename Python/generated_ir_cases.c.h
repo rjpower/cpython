@@ -13036,9 +13036,15 @@
             // _LOAD_ATTR_PROPERTY_FRAME
             {
                 uint32_t func_version = fb->func_version;
-                PyObject *fget = (PyObject *)fb->fget;
+                PyObject *descr = (PyObject *)fb->descr;
                 assert((oparg & 1) == 0);
-                assert(Py_IS_TYPE(fget, &PyFunction_Type));
+                assert(Py_IS_TYPE(descr, &PyProperty_Type));
+                PyObject *fget = ((_PyPropertyObject *)descr)->prop_get;
+                if (fget == NULL || !Py_IS_TYPE(fget, &PyFunction_Type)) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
                 PyFunctionObject *f = (PyFunctionObject *)fget;
                 if (f->func_version != func_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);

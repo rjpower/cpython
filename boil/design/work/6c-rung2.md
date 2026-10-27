@@ -1,6 +1,7 @@
 # 6c rung 2: the lookup plan
 
-Status: design, 2026-10-27. Revised after its review
+Status: implemented, 2026-10-27; "As built" records where the code
+differs from the design. Revised after its review
 (work/reviews/6c-rung2-review.md) and against note 09 as revised twice
 (70ca9ece1a5). Specification: note 09 section 4 and section 9 item 2.
 
@@ -326,6 +327,112 @@ slots_load, new_instance, attr_load_after_dict and attr_store_after_dict.
 Boxes per loop for class_attr_load and property_load. Plan-cache bytes
 per type for the richards classes. A cold measure (first call on a new
 class) beside the warm loop.
+
+### Results
+
+Measured on 2026-10-27 with `boil/bench/run.py --metric instr`. Before
+is b65f081239d (rung 1 and the gate fixes), built in a temporary
+worktree; after is this commit. Both are default builds (`CC=gcc`).
+
+| benchmark | before | after | change |
+|---|---:|---:|---:|
+| richards | 530.62M | 514.04M | -3.13% |
+| go | 1,086.92M | 1,086.90M | -0.00% |
+| raytrace | 2,740.55M | 2,748.80M | +0.30% |
+| deltablue | 41.57M | 41.80M | +0.55% |
+| chaos | 568.85M | 570.14M | +0.23% |
+| json_loads | 7.749M | 7.750M | +0.01% |
+| attr_load | 41.0 | 41.0 | -0.03% |
+| attr_load_poly | 206.6 | 186.0 | -10.00% |
+| attr_store | 44.0 | 44.0 | -0.00% |
+| method_call | 302.0 | 302.0 | -0.01% |
+| property_load | 276.0 | 281.0 | +1.81% |
+| class_attr_load | 35.0 | 35.0 | +0.00% |
+| slots_load | 41.0 | 41.0 | -0.09% |
+| new_instance | 1,755.7 | 1,755.6 | -0.00% |
+| attr_load_after_dict | 44.0 | 44.0 | -0.01% |
+| attr_store_after_dict | 88.0 | 88.0 | -0.03% |
+
+Kernels are instructions per loop and micro benchmarks instructions per
+iteration. The kernel geomean is 0.997 and the micro geomean 0.993.
+
+What causes the changes:
+
+- **attr_load_poly, -10%: the generic path.** The site's
+  `LOAD_ATTR_SHAPE` misses on the second shape and falls back to
+  `LOAD_ATTR`. `perf record -e instructions:u` shows how that load runs:
+  - before, a type lookup, a shared-keys probe
+    (`unicodekeys_lookup_unicode`, 7%) and
+    `_PyObject_TryGetInstanceAttributeValue` (6%);
+  - after, one plan-cache probe (`_PyShape_LookupPlan` with
+    `_PyTypeCache_Lookup`), then a direct read at the SLOT offset.
+
+  richards' -3.1% likely has the same cause, at its polymorphic sites.
+- **property_load, +5 instructions per load: the handler.** It now reads
+  `prop_get` from the property and checks that it is a function, which
+  is section 7's fix for the borrowed getter.
+- **The others** are within 0.6%.
+
+Other measurements:
+
+- **Boxes per iteration** (`--metric boxes`, pystats builds of both) are
+  unchanged, effectively zero (0.001), for class_attr_load,
+  property_load, attr_load and method_call.
+- **Plan-cache bytes after richards has run** total 15,888 over its 14
+  classes. The four Task subclasses have 2,576 bytes each, Packet and
+  TaskState 1,296, and the rest 656 or less. The before build has no
+  size helper; its entries were 16 bytes against 40 now.
+- **Cold beside warm** (/tmp script, median of 5, wall time, noisy).
+  - Cold, a new class with its first loads of an attribute, a class
+    value, a method and a miss: 7.8 to 8.1 us after, against 7.6 us
+    before, about 5% slower. Class creation dominates; the extra cost is
+    filling per-shape plans.
+  - Warm, the same four loads on a fresh instance: 174 to 218 ns after,
+    against 184 to 186 ns before, which is inconclusive.
+
+## As built
+
+Where the code differs from the sections above, and why.
+
+- **Names and signatures.**
+  - Phase 1 is `_PyShape_LookupPlan(shape, name, &plan)` and
+    `_PyShape_LookupStorePlan(shape, name, op, &splan)`, in
+    Objects/typeobject.c beside the MRO lookup. There is no
+    `_PyLookupFacts` struct. The MRO result travels in `plan.value`, and
+    the hook facts are computed by the specialiser alone
+    (`lookup_hook_facts` in Python/specialize.c), from the root entries of
+    `__getattribute__` and `__getattr__`.
+  - The classifier is `_PyLookup_ClassifyLoad(descr, &mutable)`. Store
+    classification needs one test (`tp_descr_set`), so it is inline in
+    `_PyShape_ResolveStore`.
+  - The executors stay in Objects/object.c, next to the generic paths
+    they replace; Objects/lookupplan.c holds phase 2 only.
+  - `lookup_store_plan(obj, name, delete=False)` returns `(outcome,
+    cacheable, member, offset, has_shape_to)`.
+- **Store preparation is not reordered in this rung.** `_PyShape_Add`
+  still returns NULL for both the limit and an allocation failure, and
+  either way the object goes to dictionary mode with its inline values
+  still valid, which is a correct state and raises nothing. The one
+  allocation that can raise is materialising the dict when the shared
+  keys are full, and today's overflow path stages that before
+  publishing. `test_store_out_of_memory` checks that the values, their
+  order and the header are unchanged on that path. The prepare and
+  commit split, with NOMEMORY and LIMIT as distinct results, comes in
+  rung 3, where a store can need a shape that no fallback can stand in
+  for.
+- **`instance_has_key` stays** as the storage adapter's precondition for
+  the `_WITH_VALUES` handlers (review issue 5). Rung 3 deletes it with
+  the adapter.
+- **Stores keep today's refusal** to specialise a name that has a
+  non-data class attribute.
+- **The set-only descriptor test uses a Python class.** Classification
+  reads only `tp_descr_get` and `tp_descr_set`, which a Python class
+  fills the same way as a C type. The Python class is uncacheable, so the
+  test covers precedence but not a specialised site.
+- **The specialiser still makes the transition** for
+  `STORE_ATTR_SHAPE_ADD` with `_PyShape_Add`, as in rung 1. This changes
+  type state (the shape tree), never the object, and if it fails the
+  site uses `STORE_ATTR_INSTANCE_VALUE`.
 
 ## Review
 

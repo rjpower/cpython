@@ -93,6 +93,7 @@ _BINARY_OP_FIRST = _ir_opmap["BINARY_OP_ADD"]
 _BINARY_OP_LAST = _BINARY_OP_FIRST + len(_nb_ops) - 1
 _FEEDBACK_KINDS = ("COUNTER", "BRANCH", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL")
 _FEEDBACK_STATES = ("COLD", "MONO", "POLY", "MEGA", "OFF")
+_FB_ATTR = _FEEDBACK_KINDS.index("ATTR")
 
 def _try_compile(source, name):
     """Attempts to compile the given source, first as an expression and
@@ -541,6 +542,9 @@ class Formatter:
                     value = _FEEDBACK_KINDS[value]
                 elif name == "state" and value < len(_FEEDBACK_STATES):
                     value = _FEEDBACK_STATES[value]
+                elif name == "shape":
+                    # An address, shown to tell shapes apart; never followed
+                    value = hex(value)
                 values.append(f"{name}: {value}")
             self.print_instruction_line(
                 Instruction("FEEDBACK", CACHE, instr.fb, None, ", ".join(values),
@@ -840,6 +844,12 @@ def _feedback_info(fb, fbinit, feedback):
         # two 32-bit fields of the entry
         layout = (("kind", 0, 1), ("state", 1, 1), ("counter", 2, 2),
                   ("arg", 8, 4), ("first", 16, 4), ("second", 20, 4))
+        if entry[0] == _FB_ATTR and stride >= 48:
+            # _PyFbAttr: the receiver's type version and shape, the pair a
+            # lookup plan is guarded by (boil/design/09-object-protocol.md)
+            layout = (("kind", 0, 1), ("state", 1, 1), ("counter", 2, 2),
+                      ("arg", 8, 4), ("type_version", 16, 4),
+                      ("second", 20, 4), ("shape", 40, 8))
         return [(name, size, entry[start:start + size])
                 for name, start, size in layout]
     init = fbinit[4 * fb:4 * fb + 4]

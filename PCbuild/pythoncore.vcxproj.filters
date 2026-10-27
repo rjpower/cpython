@@ -855,6 +855,9 @@
     <ClInclude Include="..\Include\internal\pycore_setobject.h">
       <Filter>Include\internal</Filter>
     </ClInclude>
+    <ClInclude Include="..\Include\internal\pycore_lookup.h">
+      <Filter>Include\internal</Filter>
+    </ClInclude>
     <ClInclude Include="..\Include\internal\pycore_shape.h">
       <Filter>Include\internal</Filter>
     </ClInclude>
@@ -1305,6 +1308,9 @@
       <Filter>Objects</Filter>
     </ClCompile>
     <ClCompile Include="..\Objects\setobject.c">
+      <Filter>Objects</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Objects\lookupplan.c">
       <Filter>Objects</Filter>
     </ClCompile>
     <ClCompile Include="..\Objects\shapeobject.c">

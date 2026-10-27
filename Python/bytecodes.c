@@ -2783,9 +2783,14 @@ dummy_func(
             _LOAD_ATTR_CLASS +
             _PUSH_NULL_CONDITIONAL;
 
-        op(_LOAD_ATTR_PROPERTY_FRAME, (func_version/2, fget/4, owner -- new_frame)) {
+        // descr is the property, which the class holds while the type
+        // version holds; its getter is read here, because replacing it
+        // (p.__init__(g)) changes no type (note 09 section 4.7).
+        op(_LOAD_ATTR_PROPERTY_FRAME, (func_version/2, descr/4, owner -- new_frame)) {
             assert((oparg & 1) == 0);
-            assert(Py_IS_TYPE(fget, &PyFunction_Type));
+            assert(Py_IS_TYPE(descr, &PyProperty_Type));
+            PyObject *fget = ((_PyPropertyObject *)descr)->prop_get;
+            EXIT_IF(fget == NULL || !Py_IS_TYPE(fget, &PyFunction_Type));
             PyFunctionObject *f = (PyFunctionObject *)fget;
             EXIT_IF(f->func_version != func_version);
             PyCodeObject *code = (PyCodeObject *)f->func_code;

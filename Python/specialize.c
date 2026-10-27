@@ -14,6 +14,7 @@
 #include "pycore_list.h"          // _PyListIterObject, _PyList_Concat
 #include "pycore_tuple.h"         // _PyTuple_Concat
 #include "pycore_long.h"          // _PyLong_IsNonNegativeCompact()
+#include "pycore_lookup.h"        // _PyShape_LookupPlan()
 #include "pycore_moduleobject.h"
 #include "pycore_object.h"
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
@@ -634,149 +635,50 @@ fail:
     unspecialize(instr);
 }
 
-typedef enum {
-    OVERRIDING, /* Is an overriding descriptor, and will remain so. */
-    METHOD, /* Attribute has Py_TPFLAGS_METHOD_DESCRIPTOR set */
-    PROPERTY, /* Is a property */
-    OBJECT_SLOT, /* Is an object slot descriptor */
-    OTHER_SLOT, /* Is a slot descriptor of another type */
-    NON_OVERRIDING, /* Is another non-overriding descriptor, and is an instance of an immutable class*/
-    BUILTIN_CLASSMETHOD, /* Builtin methods with METH_CLASS */
-    PYTHON_CLASSMETHOD, /* Python classmethod(func) object */
-    NON_DESCRIPTOR, /* Is not a descriptor, and is an instance of an immutable class */
-    MUTABLE,   /* Instance of a mutable class; might, or might not, be a descriptor */
-    ABSENT, /* Attribute is not present on the class */
-    DUNDER_CLASS, /* __class__ attribute */
-    GETSET_OVERRIDDEN, /* __getattribute__ or __setattr__ has been overridden */
-    GETATTRIBUTE_IS_PYTHON_FUNCTION  /* Descriptor requires calling a Python __getattribute__ */
-} DescriptorClassification;
+/* The hooks a type's tp_getattro may run around the generic protocol
+ * (boil/design/09-object-protocol.md section 4.1).  A specialised handler
+ * replaces the whole dispatch at a site, so the specialiser models the ones
+ * it can: none, a __getattr__ (which only plans that cannot raise
+ * AttributeError ignore), or a Python __getattribute__ without one. */
+typedef struct {
+    int overridden;             // a getattro the specialiser does not model
+    PyObject *getattribute;     // a Python __getattribute__ (strong), or NULL
+    unsigned int ga_version;    // the type version __getattribute__ was found under
+    int has_getattr;
+} hook_facts;
 
-
-static DescriptorClassification
-classify_descriptor(PyObject *descriptor, bool has_getattr)
+static void
+lookup_hook_facts(PyTypeObject *type, hook_facts *facts)
 {
-    if (descriptor == NULL) {
-        return ABSENT;
-    }
-    PyTypeObject *desc_cls = Py_TYPE(descriptor);
-    if (!(desc_cls->tp_flags & Py_TPFLAGS_IMMUTABLETYPE)) {
-        return MUTABLE;
-    }
-    if (desc_cls->tp_descr_set) {
-        if (desc_cls == &PyMemberDescr_Type) {
-            PyMemberDescrObject *member = (PyMemberDescrObject *)descriptor;
-            struct PyMemberDef *dmem = member->d_member;
-            // LOAD_ATTR_SLOT and STORE_ATTR_SLOT read and write a PyValue:
-            // a __slots__ slot.  A C struct's object member falls back to
-            // the descriptor.
-            if (dmem->type == _Py_T_VALUE_EX) {
-                return OBJECT_SLOT;
-            }
-            return OTHER_SLOT;
-        }
-        if (desc_cls == &PyProperty_Type) {
-            /* We can't detect at runtime whether an attribute exists
-               with property. So that means we may have to call
-               __getattr__. */
-            return has_getattr ? GETSET_OVERRIDDEN : PROPERTY;
-        }
-        return OVERRIDING;
-    }
-    if (desc_cls->tp_descr_get) {
-        if (desc_cls->tp_flags & Py_TPFLAGS_METHOD_DESCRIPTOR) {
-            return METHOD;
-        }
-        if (Py_IS_TYPE(descriptor, &PyClassMethodDescr_Type)) {
-            return BUILTIN_CLASSMETHOD;
-        }
-        if (Py_IS_TYPE(descriptor, &PyClassMethod_Type)) {
-            return PYTHON_CLASSMETHOD;
-        }
-        return NON_OVERRIDING;
-    }
-    return NON_DESCRIPTOR;
-}
-
-static bool
-descriptor_is_class(PyObject *descriptor, PyObject *name)
-{
-    return ((PyUnicode_CompareWithASCIIString(name, "__class__") == 0) &&
-            (descriptor == _PyType_Lookup(&PyBaseObject_Type, name)));
-}
-
-static DescriptorClassification
-analyze_descriptor_load(PyTypeObject *type, PyObject *name, PyObject **descr, unsigned int *tp_version) {
-    bool has_getattr = false;
-    bool have_ga_version = false;
-    unsigned int ga_version;
+    *facts = (hook_facts){0};
     getattrofunc getattro_slot = type->tp_getattro;
     if (getattro_slot == PyObject_GenericGetAttr) {
-        /* Normal attribute lookup; */
-        has_getattr = false;
+        return;
     }
-    else if (getattro_slot == _Py_slot_tp_getattr_hook ||
-        getattro_slot == _Py_slot_tp_getattro) {
-        /* One or both of __getattribute__ or __getattr__ may have been
-         overridden See typeobject.c for why these functions are special. */
-        PyObject *getattribute = _PyType_LookupRefAndVersion(type,
-                &_Py_ID(__getattribute__), &ga_version);
-        have_ga_version = true;
-        PyInterpreterState *interp = _PyInterpreterState_GET();
-        bool has_custom_getattribute = getattribute != NULL &&
-            getattribute != interp->callable_cache.object__getattribute__;
-        PyObject *getattr = _PyType_Lookup(type, &_Py_ID(__getattr__));
-        has_getattr = getattr != NULL;
-        if (has_custom_getattribute) {
-            if (!has_getattr &&
-                Py_IS_TYPE(getattribute, &PyFunction_Type)) {
-                *descr = getattribute;
-                *tp_version = ga_version;
-                return GETATTRIBUTE_IS_PYTHON_FUNCTION;
-            }
-            /* Potentially both __getattr__ and __getattribute__ are set.
-               Too complicated */
-            Py_DECREF(getattribute);
-            *descr = NULL;
-            *tp_version = ga_version;
-            return GETSET_OVERRIDDEN;
+    if (getattro_slot != _Py_slot_tp_getattr_hook &&
+        getattro_slot != _Py_slot_tp_getattro)
+    {
+        facts->overridden = 1;
+        return;
+    }
+    /* One or both of __getattribute__ or __getattr__ may have been
+       overridden.  See typeobject.c for why these functions are special. */
+    PyObject *getattribute = _PyType_LookupRefAndVersion(
+        type, &_Py_ID(__getattribute__), &facts->ga_version);
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    bool custom = getattribute != NULL &&
+        getattribute != interp->callable_cache.object__getattribute__;
+    facts->has_getattr = _PyType_Lookup(type, &_Py_ID(__getattr__)) != NULL;
+    if (custom) {
+        if (!facts->has_getattr && Py_IS_TYPE(getattribute, &PyFunction_Type)) {
+            facts->getattribute = getattribute;
+            return;
         }
-        /* Potentially has __getattr__ but no custom __getattribute__.
-           Fall through to usual descriptor analysis.
-           Usual attribute lookup should only be allowed at runtime
-           if we can guarantee that there is no way an exception can be
-           raised. This means some specializations, e.g. specializing
-           for property() isn't safe.
-        */
-        Py_XDECREF(getattribute);
+        /* Potentially both __getattr__ and __getattribute__ are set.
+           Too complicated */
+        facts->overridden = 1;
     }
-    else {
-        *descr = NULL;
-        *tp_version = FT_ATOMIC_LOAD_UINT_RELAXED(type->tp_version_tag);
-        return GETSET_OVERRIDDEN;
-    }
-    unsigned int descr_version;
-    PyObject *descriptor = _PyType_LookupRefAndVersion(type, name, &descr_version);
-    *descr = descriptor;
-    *tp_version = have_ga_version ? ga_version : descr_version;
-    if (descriptor_is_class(descriptor, name)) {
-        return DUNDER_CLASS;
-    }
-    return classify_descriptor(descriptor, has_getattr);
-}
-
-static DescriptorClassification
-analyze_descriptor_store(PyTypeObject *type, PyObject *name, PyObject **descr, unsigned int *tp_version)
-{
-    if (type->tp_setattro != PyObject_GenericSetAttr) {
-        *descr = NULL;
-        return GETSET_OVERRIDDEN;
-    }
-    PyObject *descriptor = _PyType_LookupRefAndVersion(type, name, tp_version);
-    *descr = descriptor;
-    if (descriptor_is_class(descriptor, name)) {
-        return DUNDER_CLASS;
-    }
-    return classify_descriptor(descriptor, false);
+    Py_XDECREF(getattribute);
 }
 
 /* Whether the site specialised for another shape of the same type before,
@@ -905,12 +807,9 @@ specialize_dict_access_hint(
 static int
 specialize_dict_access(
     PyObject *owner, _PyInstr *instr, PyTypeObject *type,
-    DescriptorClassification kind, PyObject *name, unsigned int tp_version,
+    PyObject *name, unsigned int tp_version,
     int base_op, int values_op, int hint_op)
 {
-    assert(kind == NON_OVERRIDING || kind == NON_DESCRIPTOR || kind == ABSENT ||
-        kind == BUILTIN_CLASSMETHOD || kind == PYTHON_CLASSMETHOD ||
-        kind == METHOD);
     // No descriptor, or non overriding.
     if ((type->tp_flags & Py_TPFLAGS_MANAGED_DICT) == 0) {
         SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_NOT_MANAGED_DICT);
@@ -955,9 +854,8 @@ specialize_dict_access(
 
 static int
 specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
-                              PyObject *name, PyObject *descr,
-                              unsigned int tp_version,
-                              DescriptorClassification kind, bool is_method,
+                              PyObject *name, PyValue value,
+                              unsigned int tp_version, bool is_method,
                               uint32_t shared_keys_version);
 static int specialize_class_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name);
 
@@ -996,42 +894,98 @@ instance_has_key(PyObject *obj, PyObject *name, uint32_t *shared_keys_version)
 }
 
 static int
-do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name,
-                                 bool shadow, uint32_t shared_keys_version,
-                                 DescriptorClassification kind, PyObject *descr, unsigned int tp_version)
+specialize_getattribute_overridden(_PyInstr *instr, PyObject *getattribute,
+                                   unsigned int tp_version)
 {
     _PyFbAttr *fb = instr_entry(instr);
-    PyTypeObject *type = Py_TYPE(owner);
+    assert(Py_IS_TYPE(getattribute, &PyFunction_Type));
     if (tp_version == 0) {
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
         return -1;
     }
+    if (!function_check_args(getattribute, 2, LOAD_ATTR)) {
+        return -1;
+    }
+    if (instr_oparg(instr) & 1) {
+        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_METHOD);
+        return -1;
+    }
+    uint32_t version = function_get_version(getattribute, LOAD_ATTR);
+    if (version == 0) {
+        return -1;
+    }
+    /* Don't specialize if PEP 523 is active */
+    if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
+        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OTHER);
+        return -1;
+    }
+    fb->func_version = version;
+    fb->getattribute = getattribute;  /* borrowed */
+    fb->type_version = tp_version;
+    specialize(instr, LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN);
+    return 0;
+}
+
+/* Take the plan, write the entry, pick the handler (note 09 section 4.8).
+ * The handlers are today's; which of them a plan may use is set out in
+ * boil/design/work/6c-rung2.md. */
+static int
+specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name)
+{
+    _PyFbAttr *fb = instr_entry(instr);
+    PyTypeObject *type = Py_TYPE(owner);
     uint8_t oparg = instr_oparg(instr);
-    switch(kind) {
-        case OVERRIDING:
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR);
-            return -1;
-        case METHOD:
-        {
-            if (shadow) {
-                goto try_instance;
+
+    hook_facts hooks;
+    lookup_hook_facts(type, &hooks);
+    if (hooks.overridden) {
+        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OVERRIDDEN);
+        return -1;
+    }
+    if (hooks.getattribute != NULL) {
+        int res = specialize_getattribute_overridden(instr, hooks.getattribute,
+                                                     hooks.ga_version);
+        Py_DECREF(hooks.getattribute);
+        return res;
+    }
+
+    _PyLookupPlan plan;
+    _PyShape_LookupPlan(_PyObject_SHAPE(owner), name, &plan);
+    unsigned int tp_version = plan.type_version;
+    if (tp_version == 0) {
+        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
+        return -1;
+    }
+    if (!(plan.flags & _Py_LOOKUP_CACHEABLE)) {
+        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_MUTABLE_CLASS);
+        return -1;
+    }
+    PyObject *descr = PyValue_IsObject(plan.value)
+                      ? PyValue_ObjectBorrow(plan.value) : NULL;
+
+    switch (plan.kind) {
+        case _Py_LOOKUP_DATA_DESCR:
+            if (plan.flags & _Py_LOOKUP_MEMBER) {
+                // An unbound member deopts, so a __getattr__ is still called.
+                fb->index = plan.offset;
+                fb->type_version = tp_version;
+                specialize(instr, LOAD_ATTR_SLOT);
+                return 0;
             }
-            if (oparg & 1) {
-                if (specialize_attr_loadclassattr(owner, instr, name, descr,
-                                                  tp_version, kind, true,
-                                                  shared_keys_version)) {
-                    return 0;
-                }
-                else {
-                    return -1;
-                }
-            }
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_METHOD);
+            SPECIALIZATION_FAIL(LOAD_ATTR,
+                Py_IS_TYPE(descr, &PyMemberDescr_Type)
+                    ? SPEC_FAIL_ATTR_NON_OBJECT_SLOT
+                    : SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR);
             return -1;
-        }
-        case PROPERTY:
+        case _Py_LOOKUP_PROPERTY:
         {
-            assert(Py_TYPE(descr) == &PyProperty_Type);
+            if (hooks.has_getattr) {
+                /* We can't detect at runtime whether an attribute exists
+                   with property. So that means we may have to call
+                   __getattr__. */
+                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OVERRIDDEN);
+                return -1;
+            }
             PyObject *fget = ((_PyPropertyObject *)descr)->prop_get;
             if (fget == NULL) {
                 SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_EXPECTED_ERROR);
@@ -1057,135 +1011,66 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
             if (func_version == 0) {
                 return -1;
             }
-            assert(tp_version != 0);
             fb->type_version = tp_version;
             fb->func_version = func_version;
-            fb->fget = fget;  /* borrowed */
+            // The property, whose getter the handler reads and guards.
+            fb->descr = descr;  /* borrowed */
             specialize(instr, LOAD_ATTR_PROPERTY);
             return 0;
         }
-        case OBJECT_SLOT:
-        {
-            PyMemberDescrObject *member = (PyMemberDescrObject *)descr;
-            struct PyMemberDef *dmem = member->d_member;
-            Py_ssize_t offset = dmem->offset;
-            if (!PyObject_TypeCheck(owner, member->d_common.d_type)) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_EXPECTED_ERROR);
-                return -1;
-            }
-            if (dmem->flags & _Py_AFTER_ITEMS) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_SLOT_AFTER_ITEMS);
-                return -1;
-            }
-            if (dmem->flags & Py_AUDIT_READ) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_AUDITED_SLOT);
-                return -1;
-            }
-            if (offset != (uint32_t)offset) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_RANGE);
-                return -1;
-            }
-            assert(dmem->type == _Py_T_VALUE_EX);
-            assert(offset > 0);
-            fb->index = (uint32_t)offset;
-            fb->type_version = tp_version;
-            specialize(instr, LOAD_ATTR_SLOT);
-            return 0;
-        }
-        case DUNDER_CLASS:
-            // The type is in the header word with the collector's flags, so
-            // it is not a value slot that LOAD_ATTR_SLOT can read.
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NON_OBJECT_SLOT);
-            return -1;
-        case OTHER_SLOT:
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NON_OBJECT_SLOT);
-            return -1;
-        case MUTABLE:
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_MUTABLE_CLASS);
-            return -1;
-        case GETSET_OVERRIDDEN:
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OVERRIDDEN);
-            return -1;
-        case GETATTRIBUTE_IS_PYTHON_FUNCTION:
-        {
-            assert(Py_IS_TYPE(descr, &PyFunction_Type));
-            if (!function_check_args(descr, 2, LOAD_ATTR)) {
-                return -1;
-            }
+        default:
+            break;
+    }
+
+    // Instance storage first, then the class (precedence steps 2 to 5).
+    // The rung-2 storage adapter: a name that any instance keeps in the
+    // shared keys, or that this one keeps in a combined dict, goes to the
+    // presence-checking instance handlers.
+    uint32_t shared_keys_version = 0;
+    bool shadow = instance_has_key(owner, name, &shared_keys_version);
+    if (plan.kind == _Py_LOOKUP_SLOT || shadow) {
+        goto try_instance;
+    }
+    switch (plan.fallback) {
+        case _Py_LOOKUP_METHOD:
             if (oparg & 1) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_METHOD);
-                return -1;
+                return specialize_attr_loadclassattr(owner, instr, name,
+                                                     plan.value, tp_version,
+                                                     true, shared_keys_version)
+                       ? 0 : -1;
             }
-            uint32_t version = function_get_version(descr, LOAD_ATTR);
-            if (version == 0) {
-                return -1;
-            }
-            /* Don't specialize if PEP 523 is active */
-            if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OTHER);
-                return -1;
-            }
-            fb->func_version = version;
-            fb->getattribute = descr;  /* borrowed */
-            fb->type_version = tp_version;
-            specialize(instr, LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN);
-            return 0;
-        }
-        case BUILTIN_CLASSMETHOD:
-        case PYTHON_CLASSMETHOD:
-        case NON_OVERRIDING:
-            if (shadow) {
-                goto try_instance;
-            }
+            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_METHOD);
             return -1;
-        case NON_DESCRIPTOR:
-            if (shadow) {
-                goto try_instance;
-            }
+        case _Py_LOOKUP_DESCR:
+            SPECIALIZATION_FAIL(LOAD_ATTR,
+                Py_IS_TYPE(descr, &PyClassMethod_Type)
+                    ? SPEC_FAIL_ATTR_CLASS_METHOD_OBJ
+                    : SPEC_FAIL_ATTR_NON_OVERRIDING_DESCRIPTOR);
+            return -1;
+        case _Py_LOOKUP_CLASS_VALUE:
             if ((oparg & 1) == 0) {
-                if (specialize_attr_loadclassattr(owner, instr, name, descr,
-                                                  tp_version, kind, false,
-                                                  shared_keys_version)) {
+                if (specialize_attr_loadclassattr(owner, instr, name,
+                                                  plan.value, tp_version,
+                                                  false, shared_keys_version)) {
                     return 0;
                 }
             }
             return -1;
-        case ABSENT:
-            if (shadow) {
-                goto try_instance;
-            }
+        default:
+            assert(plan.fallback == _Py_LOOKUP_ABSENT);
             // Retry after the cooldown.  A specialised opcode in memory
             // would read the entry that fb_begin() cleared.
             set_opcode(instr, LOAD_ATTR);
             set_counter(&fb->h, adaptive_counter_cooldown());
             return 0;
     }
-    Py_UNREACHABLE();
 try_instance:
-    if (specialize_dict_access(owner, instr, type, kind, name, tp_version,
+    if (specialize_dict_access(owner, instr, type, name, tp_version,
                                LOAD_ATTR, LOAD_ATTR_INSTANCE_VALUE, LOAD_ATTR_WITH_HINT))
     {
         return 0;
     }
     return -1;
-}
-
-static int
-specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name)
-{
-    // 0 is not a valid version
-    PyObject *descr = NULL;
-    unsigned int tp_version = 0;
-    PyTypeObject *type = Py_TYPE(owner);
-    // Read the type version before the keys version, we could have a concurrent
-    // modification of the split keys in which case we update the keys version and
-    // then the type version, this ensures we will still deopt if that happens.
-    DescriptorClassification kind = analyze_descriptor_load(type, name, &descr, &tp_version);
-    uint32_t shared_keys_version = 0;
-    bool shadow = instance_has_key(owner, name, &shared_keys_version);
-    int result = do_specialize_instance_load_attr(owner, instr, name, shadow, shared_keys_version, kind, descr, tp_version);
-    Py_XDECREF(descr);
-    return result;
 }
 
 Py_NO_INLINE void
@@ -1229,7 +1114,6 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[STORE_ATTR] == INLINE_CACHE_ENTRIES_STORE_ATTR);
-    PyObject *descr = NULL;
     _PyFbAttr *fb = (_PyFbAttr *)fb_begin(instr);
     if (PyValue_IsInline(owner_st)) {
         SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
@@ -1249,126 +1133,96 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
         SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OVERRIDDEN);
         goto fail;
     }
-    unsigned int tp_version = 0;
-    DescriptorClassification kind = analyze_descriptor_store(type, name, &descr, &tp_version);
+    if (type->tp_setattro != PyObject_GenericSetAttr) {
+        SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OVERRIDDEN);
+        goto fail;
+    }
+    _PyStorePlan plan;
+    _PyShape_LookupStorePlan(_PyObject_SHAPE(owner), name, _Py_STORE_SET, &plan);
+    unsigned int tp_version = plan.type_version;
     if (tp_version == 0) {
         goto fail;
     }
-    assert(descr != NULL || kind == ABSENT || kind == GETSET_OVERRIDDEN);
-    switch(kind) {
-        case OVERRIDING:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR);
-            goto fail;
-        case METHOD:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_METHOD);
-            goto fail;
-        case PROPERTY:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_PROPERTY);
-            goto fail;
-        case OBJECT_SLOT:
-        {
-            PyMemberDescrObject *member = (PyMemberDescrObject *)descr;
-            struct PyMemberDef *dmem = member->d_member;
-            Py_ssize_t offset = dmem->offset;
-            if (!PyObject_TypeCheck(owner, member->d_common.d_type)) {
-                SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_EXPECTED_ERROR);
-                goto fail;
-            }
-            if (dmem->flags & _Py_AFTER_ITEMS) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_SLOT_AFTER_ITEMS);
-                goto fail;
-            }
-            if (dmem->flags & Py_READONLY) {
-                SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_READ_ONLY);
-                goto fail;
-            }
-            if (offset != (uint32_t)offset) {
-                SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OUT_OF_RANGE);
-                goto fail;
-            }
-            assert(dmem->type == _Py_T_VALUE_EX);
-            assert(offset > 0);
-            fb->index = (uint32_t)offset;
+    if (!(plan.flags & _Py_LOOKUP_CACHEABLE)) {
+        SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_MUTABLE_CLASS);
+        goto fail;
+    }
+    PyObject *d = PyValue_IsObject(plan.value)
+                  ? PyValue_ObjectBorrow(plan.value) : NULL;
+    (void)d;  // read only by SPECIALIZATION_FAIL
+    if (plan.outcome == _Py_STORE_DATA_DESCR) {
+        if (plan.flags & _Py_LOOKUP_MEMBER) {
+            fb->index = plan.offset;
             fb->type_version = tp_version;
             specialize(instr, STORE_ATTR_SLOT);
             goto success;
         }
-        case DUNDER_CLASS:
-        case OTHER_SLOT:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_NON_OBJECT_SLOT);
-            goto fail;
-        case MUTABLE:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_MUTABLE_CLASS);
-            goto fail;
-        case GETATTRIBUTE_IS_PYTHON_FUNCTION:
-        case GETSET_OVERRIDDEN:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OVERRIDDEN);
-            goto fail;
-        case BUILTIN_CLASSMETHOD:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_BUILTIN_CLASS_METHOD_OBJ);
-            goto fail;
-        case PYTHON_CLASSMETHOD:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_CLASS_METHOD_OBJ);
-            goto fail;
-        case NON_OVERRIDING:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_CLASS_ATTR_DESCRIPTOR);
-            goto fail;
-        case NON_DESCRIPTOR:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_CLASS_ATTR_SIMPLE);
-            goto fail;
-        case ABSENT:
-            if (specialize_dict_access(owner, instr, type, kind, name, tp_version,
-                                       STORE_ATTR, STORE_ATTR_INSTANCE_VALUE,
-                                       STORE_ATTR_WITH_HINT)) {
-                goto success;
-            }
+        SPECIALIZATION_FAIL(STORE_ATTR,
+            Py_IS_TYPE(d, &PyProperty_Type) ? SPEC_FAIL_ATTR_PROPERTY
+            : Py_IS_TYPE(d, &PyMemberDescr_Type) ? SPEC_FAIL_ATTR_NON_OBJECT_SLOT
+            : SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR);
+        goto fail;
+    }
+    if (!PyValue_IsNull(plan.value)) {
+        // A store that shadows a class attribute is not specialised.
+        SPECIALIZATION_FAIL(STORE_ATTR,
+            d == NULL ? SPEC_FAIL_ATTR_CLASS_ATTR_SIMPLE
+            : Py_IS_TYPE(d, &PyClassMethod_Type) ? SPEC_FAIL_ATTR_CLASS_METHOD_OBJ
+            : _PyType_HasFeature(Py_TYPE(d), Py_TPFLAGS_METHOD_DESCRIPTOR) ? SPEC_FAIL_ATTR_METHOD
+            : Py_TYPE(d)->tp_descr_get ? SPEC_FAIL_ATTR_CLASS_ATTR_DESCRIPTOR
+            : SPEC_FAIL_ATTR_CLASS_ATTR_SIMPLE);
+        goto fail;
+    }
+    if (plan.outcome == _Py_STORE_REPLACE || plan.outcome == _Py_STORE_ADD ||
+        plan.outcome == _Py_STORE_DICT)
+    {
+        if (specialize_dict_access(owner, instr, type, name, tp_version,
+                                   STORE_ATTR, STORE_ATTR_INSTANCE_VALUE,
+                                   STORE_ATTR_WITH_HINT)) {
+            goto success;
+        }
     }
 fail:
-    Py_XDECREF(descr);
     unspecialize(instr);
     return;
 success:
-    Py_XDECREF(descr);
     return;
 }
 
 #ifdef Py_STATS
 static int
-load_attr_fail_kind(DescriptorClassification kind)
+load_attr_fail_kind(int kind, PyValue value)
 {
+    PyObject *d = PyValue_IsObject(value) ? PyValue_ObjectBorrow(value) : NULL;
     switch (kind) {
-        case OVERRIDING:
-            return SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR;
-        case METHOD:
-            return SPEC_FAIL_ATTR_METHOD;
-        case PROPERTY:
+        case _Py_LOOKUP_DATA_DESCR:
+            return Py_IS_TYPE(d, &PyMemberDescr_Type)
+                   ? SPEC_FAIL_ATTR_NON_OBJECT_SLOT
+                   : SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR;
+        case _Py_LOOKUP_PROPERTY:
             return SPEC_FAIL_ATTR_PROPERTY;
-        case OBJECT_SLOT:
-            return SPEC_FAIL_ATTR_OBJECT_SLOT;
-        case OTHER_SLOT:
-            return SPEC_FAIL_ATTR_NON_OBJECT_SLOT;
-        case DUNDER_CLASS:
-            return SPEC_FAIL_OTHER;
-        case MUTABLE:
-            return SPEC_FAIL_ATTR_MUTABLE_CLASS;
-        case GETSET_OVERRIDDEN:
-        case GETATTRIBUTE_IS_PYTHON_FUNCTION:
-            return SPEC_FAIL_OVERRIDDEN;
-        case BUILTIN_CLASSMETHOD:
-            return SPEC_FAIL_ATTR_BUILTIN_CLASS_METHOD;
-        case PYTHON_CLASSMETHOD:
-            return SPEC_FAIL_ATTR_CLASS_METHOD_OBJ;
-        case NON_OVERRIDING:
+        case _Py_LOOKUP_METHOD:
+            return SPEC_FAIL_ATTR_METHOD;
+        case _Py_LOOKUP_DESCR:
+            if (Py_IS_TYPE(d, &PyClassMethodDescr_Type)) {
+                return SPEC_FAIL_ATTR_BUILTIN_CLASS_METHOD;
+            }
+            if (Py_IS_TYPE(d, &PyClassMethod_Type)) {
+                return SPEC_FAIL_ATTR_CLASS_METHOD_OBJ;
+            }
             return SPEC_FAIL_ATTR_NON_OVERRIDING_DESCRIPTOR;
-        case NON_DESCRIPTOR:
+        case _Py_LOOKUP_CLASS_VALUE:
             return SPEC_FAIL_ATTR_NOT_DESCRIPTOR;
-        case ABSENT:
-            return SPEC_FAIL_ATTR_INSTANCE_ATTRIBUTE;
+        case _Py_LOOKUP_ABSENT:
+            return SPEC_FAIL_EXPECTED_ERROR;
     }
-    Py_UNREACHABLE();
+    return SPEC_FAIL_OTHER;
 }
 #endif   // Py_STATS
 
+/* A load from a class: type.__getattribute__ over the class's MRO, with
+ * the metaclass's attribute first.  Only class values and functions, which
+ * the class returns as they are, are specialised. */
 static int
 specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
                              PyObject *name)
@@ -1380,29 +1234,29 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_METACLASS_OVERRIDDEN);
         return -1;
     }
-    unsigned int meta_version = 0;
-    PyObject *metadescriptor = _PyType_LookupRefAndVersion(Py_TYPE(cls), name, &meta_version);
-    DescriptorClassification metakind = classify_descriptor(metadescriptor, false);
-    Py_XDECREF(metadescriptor);
-    switch (metakind) {
-        case METHOD:
-        case NON_DESCRIPTOR:
-        case NON_OVERRIDING:
-        case BUILTIN_CLASSMETHOD:
-        case PYTHON_CLASSMETHOD:
-        case ABSENT:
-            break;
-        default:
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_METACLASS_ATTRIBUTE);
-            return -1;
+    PyValue meta = PyValue_NULL;
+    unsigned int meta_version = _PyType_LookupValueAndVersion(Py_TYPE(cls), name, &meta);
+    int mutable;
+    int metakind = _PyLookup_ClassifyLoad(meta, &mutable);
+    if (mutable || !(metakind == _Py_LOOKUP_METHOD ||
+                     metakind == _Py_LOOKUP_CLASS_VALUE ||
+                     metakind == _Py_LOOKUP_DESCR ||
+                     metakind == _Py_LOOKUP_ABSENT))
+    {
+        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_METACLASS_ATTRIBUTE);
+        return -1;
     }
-    PyObject *descr = NULL;
-    DescriptorClassification kind = 0;
-    unsigned int tp_version = 0;
-    kind = analyze_descriptor_load(cls, name, &descr, &tp_version);
+    hook_facts hooks;
+    lookup_hook_facts(cls, &hooks);
+    if (hooks.overridden || hooks.getattribute != NULL) {
+        Py_XDECREF(hooks.getattribute);
+        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OVERRIDDEN);
+        return -1;
+    }
+    PyValue value = PyValue_NULL;
+    unsigned int tp_version = _PyType_LookupValueAndVersion(cls, name, &value);
     if (tp_version == 0) {
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
-        Py_XDECREF(descr);
         return -1;
     }
     bool metaclass_check = false;
@@ -1410,51 +1264,39 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
         metaclass_check = true;
         if (meta_version == 0) {
             SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
-            Py_XDECREF(descr);
             return -1;
         }
     }
-    switch (kind) {
-        case MUTABLE:
-            // special case for enums which has Py_TYPE(descr) == cls
-            // so guarding on type version is sufficient
-            if (Py_TYPE(descr) != cls) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_MUTABLE_CLASS);
-                Py_XDECREF(descr);
-                return -1;
-            }
-            if (Py_TYPE(descr)->tp_descr_get || Py_TYPE(descr)->tp_descr_set) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR);
-                Py_XDECREF(descr);
-                return -1;
-            }
-            _Py_FALLTHROUGH;
-        case METHOD:
-        case NON_DESCRIPTOR:
-            // The value, not a box of it: the class holds the value, and a
-            // box of an inline value that only the entry held would die.
-            fb->attr_value = PyValue_FromObject(descr);
-            fb->class_version = tp_version;
-            if (metaclass_check) {
-                fb->type_version = meta_version;
-                specialize(instr, LOAD_ATTR_CLASS_WITH_METACLASS_CHECK);
-            }
-            else {
-                specialize(instr, LOAD_ATTR_CLASS);
-            }
-            Py_XDECREF(descr);
-            return 0;
-#ifdef Py_STATS
-        case ABSENT:
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_EXPECTED_ERROR);
-            Py_XDECREF(descr);
+    int kind = _PyLookup_ClassifyLoad(value, &mutable);
+    if (mutable) {
+        // An enum member's type is the class, so the class's version
+        // guards it, provided the member is not a descriptor.
+        PyObject *d = PyValue_ObjectBorrow(value);
+        if (Py_TYPE(d) != cls) {
+            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_MUTABLE_CLASS);
             return -1;
-#endif
-        default:
-            SPECIALIZATION_FAIL(LOAD_ATTR, load_attr_fail_kind(kind));
-            Py_XDECREF(descr);
+        }
+        if (kind != _Py_LOOKUP_CLASS_VALUE) {
+            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR);
             return -1;
+        }
     }
+    if (kind != _Py_LOOKUP_METHOD && kind != _Py_LOOKUP_CLASS_VALUE) {
+        SPECIALIZATION_FAIL(LOAD_ATTR, load_attr_fail_kind(kind, value));
+        return -1;
+    }
+    // The value, not a box of it: the class holds the value, and a box of
+    // an inline value that only the entry held would die.
+    fb->attr_value = value;
+    fb->class_version = tp_version;
+    if (metaclass_check) {
+        fb->type_version = meta_version;
+        specialize(instr, LOAD_ATTR_CLASS_WITH_METACLASS_CHECK);
+    }
+    else {
+        specialize(instr, LOAD_ATTR_CLASS);
+    }
+    return 0;
 }
 
 // Please collect stats carefully before and after modifying. A subtle change
@@ -1462,16 +1304,14 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
 // python.exe -m test_typing test_re test_dis test_zlib.
 static int
 specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
-                              PyObject *name, PyObject *descr,
-                              unsigned int tp_version,
-                              DescriptorClassification kind, bool is_method,
+                              PyObject *name, PyValue value,
+                              unsigned int tp_version, bool is_method,
                               uint32_t shared_keys_version)
 {
     _PyFbAttr *fb = instr_entry(instr);
     PyTypeObject *owner_cls = Py_TYPE(owner);
 
-    assert(descr != NULL);
-    assert((is_method && kind == METHOD) || (!is_method && kind == NON_DESCRIPTOR));
+    assert(!PyValue_IsNull(value));
 
 
     int opcode;
@@ -1534,11 +1374,11 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
     */
     fb->type_version = tp_version;
     if (is_method) {
-        fb->descr = descr;
+        fb->descr = PyValue_ObjectBorrow(value);
     }
     else {
         // As for LOAD_ATTR_CLASS, the value rather than a box of it
-        fb->attr_value = PyValue_FromObject(descr);
+        fb->attr_value = value;
     }
     specialize(instr, opcode);
     return 1;

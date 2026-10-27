@@ -1649,3 +1649,21 @@ attribution; no tuning per the plan revision. generators and
 comprehensions join the recorded per-loop set. The 6b agent reported its
 rung 1 plan and was told to hold builds until the run ended; builds are
 released.
+
+### 2026-10-27 08:05 — 6b rung 1 gate (value protocols) clean
+
+Gate run here on a detached checkout of ac2dbf90677 (rung 1's last
+commit), fresh builds and pyc caches, while the agent went on with rung 2:
+default 556/564 files, 50,726 tests, 2 min 48 s, only test_sys's
+pre-existing remote-exec timeout; debug 9 min 15 s, only test_sys; ports
+. Rung 1 delivered the
+value-typed number, object, item and iteration protocols with every
+generic handler on them, slices holding PyValue, BINARY_OP_POWER_FLOAT
+removed (magic 3720), the specialiser reading values, a box audit tool,
+26 test_capi tests, and the FOR_ITER_GEN fix: the specialised generator
+loop had missed on every execution since the register IR's store folding,
+because yields and the return value shared one slot; the return value now
+goes to the slot END_FOR consumes. Two more release-build retention tests
+joined hack-register row 7. Rung 2 (vectorcall, METH_FASTCALL and METH_O
+over PyValue, clinic regenerated) is under way with the agent's three
+proposals accepted.

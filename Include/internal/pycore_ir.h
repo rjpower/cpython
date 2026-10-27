@@ -206,11 +206,6 @@ _PyCode_InstrHandler(PyCodeObject *co, int i)
  * JUMP_FORWARD. */
 PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
 
-/* The handler that the executing copy of co starts with at index i: the
- * generic handler, or its boxing form under PYTHON_TAGGED_VALUES=0.
- * Deoptimisation and de-instrumentation restore it. */
-PyAPI_FUNC(int) _PyCode_GenericHandler(PyCodeObject *co, int i);
-
 /* The oparg of word, whose format keeps it in a field or has none. */
 PyAPI_FUNC(int) _PyIR_FieldOparg(_PyIRWord word);
 

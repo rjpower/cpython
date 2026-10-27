@@ -17,10 +17,6 @@ if check_impl_detail(cpython=False):
 
 _testinternalcapi = import_module("_testinternalcapi")
 
-# PYTHON_TAGGED_VALUES=0 turns off the specializations that produce inline
-# ints, which builds without inline values do not have.
-int_producers = getattr(_testinternalcapi, "TAGGED_VALUES", True)
-
 # Instances with inline values and no __dict__ get the shape handlers
 # under --with-shapes.
 LOAD_ATTR_INSTANCE = "LOAD_ATTR_SHAPE" if Py_SHAPES else "LOAD_ATTR_INSTANCE_VALUE"
@@ -1403,9 +1399,8 @@ class TestSpecializer(TestBase):
                 self.assertEqual(c, 3)
 
         binary_op_add_int()
-        if int_producers:
-            self.assert_specialized(binary_op_add_int, "BINARY_OP_ADD_INT")
-            self.assert_no_opcode(binary_op_add_int, "BINARY_OP")
+        self.assert_specialized(binary_op_add_int, "BINARY_OP_ADD_INT")
+        self.assert_no_opcode(binary_op_add_int, "BINARY_OP")
 
         def binary_op_int_non_compact():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1478,11 +1473,10 @@ class TestSpecializer(TestBase):
 
         binary_op_add_extend()
         # Float arithmetic takes an int operand.
-        if int_producers:
-            for opname in ("BINARY_OP_ADD_FLOAT", "BINARY_OP_SUBTRACT_FLOAT",
-                           "BINARY_OP_MULTIPLY_FLOAT", "BINARY_OP_TRUEDIV_FLOAT"):
-                self.assert_specialized(binary_op_add_extend, opname)
-            self.assert_no_opcode(binary_op_add_extend, "BINARY_OP")
+        for opname in ("BINARY_OP_ADD_FLOAT", "BINARY_OP_SUBTRACT_FLOAT",
+                       "BINARY_OP_MULTIPLY_FLOAT", "BINARY_OP_TRUEDIV_FLOAT"):
+            self.assert_specialized(binary_op_add_extend, opname)
+        self.assert_no_opcode(binary_op_add_extend, "BINARY_OP")
         self.assert_no_opcode(binary_op_add_extend, "BINARY_OP_EXTEND")
 
         def binary_op_add_extend_sequences():
@@ -1570,10 +1564,9 @@ class TestSpecializer(TestBase):
                 self.assertEqual(a, 10)
 
         binary_op_bitwise_extend()
-        if int_producers:
-            for opname in ("BINARY_OP_AND_INT", "BINARY_OP_OR_INT", "BINARY_OP_XOR_INT"):
-                self.assert_specialized(binary_op_bitwise_extend, opname)
-            self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP")
+        for opname in ("BINARY_OP_AND_INT", "BINARY_OP_OR_INT", "BINARY_OP_XOR_INT"):
+            self.assert_specialized(binary_op_bitwise_extend, opname)
+        self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP")
         self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP_EXTEND")
 
         def binary_op_int_division_and_shifts():
@@ -1585,11 +1578,10 @@ class TestSpecializer(TestBase):
                 self.assertEqual(a >> b, -2)
 
         binary_op_int_division_and_shifts()
-        if int_producers:
-            for opname in ("BINARY_OP_FLOOR_DIVIDE_INT", "BINARY_OP_REMAINDER_INT",
-                           "BINARY_OP_LSHIFT_INT", "BINARY_OP_RSHIFT_INT"):
-                self.assert_specialized(binary_op_int_division_and_shifts, opname)
-            self.assert_no_opcode(binary_op_int_division_and_shifts, "BINARY_OP")
+        for opname in ("BINARY_OP_FLOOR_DIVIDE_INT", "BINARY_OP_REMAINDER_INT",
+                       "BINARY_OP_LSHIFT_INT", "BINARY_OP_RSHIFT_INT"):
+            self.assert_specialized(binary_op_int_division_and_shifts, opname)
+        self.assert_no_opcode(binary_op_int_division_and_shifts, "BINARY_OP")
 
     @cpython_only
     @requires_specialization
@@ -2221,9 +2213,8 @@ class TestSpecializer(TestBase):
                 self.assertIn(i, r)
 
         for_iter_range()
-        if int_producers:
-            self.assert_specialized(for_iter_range, "FOR_ITER_RANGE")
-            self.assert_no_opcode(for_iter_range, "FOR_ITER")
+        self.assert_specialized(for_iter_range, "FOR_ITER_RANGE")
+        self.assert_no_opcode(for_iter_range, "FOR_ITER")
 
         def for_iter_generator():
             for i in (i for i in range(10)):

@@ -74,10 +74,6 @@ result, so every NaN is an object with its own identity, as before. `COMPARE_OP_
 `BINARY_SLICE`, `STORE_SLICE` and `CALL_ISINSTANCE` read inline values without boxing them.
 Instructions that store into the heap, such as `STORE_ATTR` and `LIST_APPEND`, box them.
 
-`PYTHON_TAGGED_VALUES=0` turns the producers off: the constants stay boxed and the specializer
-does not choose the producing `BINARY_OP` and `FOR_ITER` specializations, and `CALL_LEN` and
-`UNARY_NEGATIVE` box their results.
-
 ## Debugging support
 
 Debug builds check values with `_PyValue_IsValid` and `_PyValue_IsMalformed`, and can wrap

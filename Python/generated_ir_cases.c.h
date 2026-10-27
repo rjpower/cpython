@@ -6261,7 +6261,7 @@
                 if (len_i < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                res = len_i <= INT32_MAX && tstate->interp->opt_config.tagged_values_enabled
+                res = len_i <= INT32_MAX
                 ? PyValue_FromInt32((int32_t)len_i)
             : _PyValue_BoxInt64(len_i);
                 if (PyValue_IsNull(res)) {
@@ -17123,9 +17123,7 @@
                 else if (PyValue_IsInlineFloat(value)) {
                     res = _PyValue_FromBits(_PyValue_DoubleBits(-PyValue_Double(value)));
                 }
-                else if (_PyValue_FloatCheckExact(value) &&
-                     tstate->interp->opt_config.tagged_values_enabled)
-                {
+                else if (_PyValue_FloatCheckExact(value)) {
                     res = PyValue_FromDouble(-_PyValue_NumberAsDouble(value));
                 }
                 else {

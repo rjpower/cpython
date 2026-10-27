@@ -640,9 +640,6 @@ choose_handler(_PyRegOp *op, PyObject *consts)
         }
         return _PyIR_BINARY_OP_FIRST + oparg;
     }
-    // The executing copy runs the boxing forms instead in a build without
-    // inline values or under PYTHON_TAGGED_VALUES=0 (Python/ir.c), so the
-    // words do not depend on the build.
     if (opcode == LOAD_SMALL_INT) {
         return LOAD_SMALL_INT_INLINE;
     }

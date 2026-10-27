@@ -8,13 +8,11 @@ import struct
 import sys
 import traceback
 import unittest
-from test.support import import_helper, script_helper
+from test.support import import_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 roundtrip = getattr(_testinternalcapi, "value_box_roundtrip", None)
 inline_locals = getattr(_testinternalcapi, "inline_locals", None)
-# Absent from builds without inline values, false under PYTHON_TAGGED_VALUES=0.
-TAGGED_VALUES = getattr(_testinternalcapi, "TAGGED_VALUES", None)
 THRESHOLD = _testinternalcapi.SPECIALIZATION_THRESHOLD
 
 
@@ -88,7 +86,6 @@ def distinct(value):
     return type(value)(str(value))
 
 
-@unittest.skipIf(TAGGED_VALUES is None, "build has no inline stack values")
 class IdentityTest(unittest.TestCase):
     """An int that fits in int32 and a float other than NaN have value
     identity, whether held inline or boxed, in any number of boxes."""
@@ -227,7 +224,6 @@ def bits_float(bits):
     return struct.unpack("<d", struct.pack("<Q", bits))[0]
 
 
-@unittest.skipUnless(TAGGED_VALUES, "inline values are off")
 class InlineIntTest(unittest.TestCase):
 
     @classmethod
@@ -443,7 +439,6 @@ def reference(op, a, b):
               int(str(b)) if type(b) is int else float(repr(b)))
 
 
-@unittest.skipUnless(TAGGED_VALUES, "inline values are off")
 class InlineFloatTest(unittest.TestCase):
 
     @classmethod
@@ -657,7 +652,6 @@ class InlineFloatTest(unittest.TestCase):
         self.assertEqual(warm(lambda: f"{x}"), "1.5")
 
 
-@unittest.skipUnless(TAGGED_VALUES, "inline values are off")
 class InlineIntOpsTest(unittest.TestCase):
 
     @classmethod
@@ -747,7 +741,6 @@ class Sliceable:
         self.stored = key, value
 
 
-@unittest.skipUnless(TAGGED_VALUES, "inline values are off")
 class InlineSliceTest(unittest.TestCase):
 
     @classmethod
@@ -819,7 +812,6 @@ class InlineSliceTest(unittest.TestCase):
             store((1, 2, 3), make_inline(1), make_inline(2), [5])
 
 
-@unittest.skipUnless(TAGGED_VALUES, "inline values are off")
 class InlineCallTest(unittest.TestCase):
 
     @classmethod
@@ -856,38 +848,6 @@ class InlineCallTest(unittest.TestCase):
             f(make_inline(1), (str, 5))
         self.assertTrue(f(make_inline(1), (int, 5)))
 
-
-
-@unittest.skipIf(TAGGED_VALUES is None, "build has no inline stack values")
-class SwitchTest(unittest.TestCase):
-
-    def test_tagged_values_off(self):
-        code = """if 1:
-            import dis, sys, _testinternalcapi
-            assert not _testinternalcapi.TAGGED_VALUES
-            def f(n):
-                total = 0
-                for i in range(n):
-                    total += i * 3
-                return total
-            for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
-                assert f(10) == 135
-            names = {i.opname for i in dis.get_instructions(f, adaptive=True)}
-            assert "LOAD_SMALL_INT" in names, names
-            assert "LOAD_SMALL_INT_INLINE" not in names, names
-            assert "FOR_ITER_RANGE" not in names, names
-            assert 70000 is int("70000")
-            def g(a, b):
-                return 1.5 * a + b, a // 2, a / b
-            for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
-                assert g(2.0, 1) == (4.0, 1.0, 2.0)
-            names = {i.opname for i in dis.get_instructions(g, adaptive=True)}
-            assert "LOAD_CONST" in names, names
-            assert "LOAD_CONST_INLINE_FLOAT" not in names, names
-            assert not any(n.startswith("BINARY_OP_") for n in names), names
-            assert _testinternalcapi.inline_locals(sys._getframe()) == set()
-        """
-        script_helper.assert_python_ok("-c", code, PYTHON_TAGGED_VALUES="0")
 
 
 if __name__ == "__main__":

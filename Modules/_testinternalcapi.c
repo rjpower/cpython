@@ -3766,13 +3766,6 @@ module_exec(PyObject *module)
         return 1;
     }
 
-    // Absent from builds without inline values; false under
-    // PYTHON_TAGGED_VALUES=0.
-    if (PyModule_Add(module, "TAGGED_VALUES", PyBool_FromLong(
-            _PyInterpreterState_GET()->opt_config.tagged_values_enabled)) < 0) {
-        return 1;
-    }
-
 #ifdef Py_SHAPES
     if (PyModule_AddIntMacro(module, _Py_SHAPE_MAX_PER_TYPE) < 0) {
         return 1;

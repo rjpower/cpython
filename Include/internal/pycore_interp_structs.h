@@ -424,8 +424,6 @@ typedef struct _rare_events {
 // Optimization configuration for the interpreter.
 typedef struct _PyOptimizationConfig {
     bool specialization_enabled;
-    // PYTHON_TAGGED_VALUES=0 keeps every int boxed (see pycore_value.h).
-    bool tagged_values_enabled;
 } _PyOptimizationConfig;
 
 struct

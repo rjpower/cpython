@@ -483,16 +483,6 @@ fb_begin_call(_PyInstr *instr, PyTypeObject *callable_type)
    an object's type. BINARY_OP inspects objects deeply, so it boxes inline
    operands for the duration. */
 
-/* May the specializer choose an instruction that makes inline ints or
-   floats? PYTHON_TAGGED_VALUES=0 says no, so that every value stays boxed.
-   Without inline values, those instructions make boxes and are always
-   allowed. */
-static bool
-inline_producers_allowed(void)
-{
-    return _PyInterpreterState_GET()->opt_config.tagged_values_enabled;
-}
-
 /* Record the new specialisation OPCODE of a site in its poly table. */
 static void
 fb_record(_PyInstr *instr, _PyFbHeader *h, int opcode)
@@ -548,8 +538,8 @@ unspecialize(_PyInstr *instr)
     STAT_INC(_PyOpcode_Deopt[instr_opcode(instr)], failure);
     // For BINARY_OP, the handler of the operation
     _PyInterpreterFrame *frame = current_frame();
-    int generic = _PyCode_GenericHandler(_PyFrame_GetCode(frame),
-                                         _PyFrame_InstrOffset(frame, instr));
+    int generic = _PyCode_InstrHandler(_PyFrame_GetCode(frame),
+                                       _PyFrame_InstrOffset(frame, instr));
     if (!set_opcode(instr, generic)) {
         SPECIALIZATION_FAIL(_PyOpcode_Deopt[instr_opcode(instr)], SPEC_FAIL_OTHER);
         return;
@@ -2414,11 +2404,10 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
 {
     _PyFbBinary *fb = fb_begin_binary(instr, Py_TYPE(lhs), Py_TYPE(rhs));
     fb->descr = NULL;
-    bool producers = inline_producers_allowed();
-    bool compact_ints = producers &&
+    bool compact_ints =
         _PyValue_IsCompactInt(lhs_st) && _PyValue_IsCompactInt(rhs_st);
     // Two floats, or a float and a compact int.
-    bool floats = producers && _PyValue_FloatOperandsCheck(lhs_st, rhs_st);
+    bool floats = _PyValue_FloatOperandsCheck(lhs_st, rhs_st);
 
     switch (oparg) {
         case NB_ADD:
@@ -2836,7 +2825,7 @@ _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int
     fb_begin_unary(instr, tp);
 
     if (PyValue_IsNull(null_or_index)) {
-        if (tp == &PyRangeIter_Type && inline_producers_allowed()) {
+        if (tp == &PyRangeIter_Type) {
             specialize(instr, FOR_ITER_RANGE);
             return;
         }

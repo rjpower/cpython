@@ -894,13 +894,10 @@ dis_load_test_quickened_code = """\
        load_test.__code__.co_firstlineno + 2)
 
 def quickened_ints(disassembly):
-    """Builds with tagged values quicken LOAD_SMALL_INT to the instruction
-    that loads the int inline."""
-    _testinternalcapi = import_helper.import_module("_testinternalcapi")
-    if getattr(_testinternalcapi, "TAGGED_VALUES", False):
-        return disassembly.replace("LOAD_SMALL_INT       ",
-                                   "LOAD_SMALL_INT_INLINE")
-    return disassembly
+    """LOAD_SMALL_INT quickens to the instruction that loads the int
+    inline."""
+    return disassembly.replace("LOAD_SMALL_INT       ",
+                               "LOAD_SMALL_INT_INLINE")
 
 def loop_test():
     for i in [1, 2, 3] * 3:
@@ -1352,17 +1349,14 @@ class DisTests(DisTestBase):
     @requires_specialization
     def test_loop_with_conditional_at_end_is_quickened(self):
         _testinternalcapi = import_helper.import_module("_testinternalcapi")
-        # PYTHON_TAGGED_VALUES=0 leaves range loops unspecialized.
-        range_loops = getattr(_testinternalcapi, "TAGGED_VALUES", True)
         def for_loop_true(x):
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
                 if x:
                     pass
 
         for_loop_true(True)
-        if range_loops:
-            self.assertIn('FOR_ITER_RANGE',
-                          self.get_disassembly(for_loop_true, adaptive=True))
+        self.assertIn('FOR_ITER_RANGE',
+                      self.get_disassembly(for_loop_true, adaptive=True))
 
         def for_loop_false(x):
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1370,9 +1364,8 @@ class DisTests(DisTestBase):
                     pass
 
         for_loop_false(False)
-        if range_loops:
-            self.assertIn('FOR_ITER_RANGE',
-                          self.get_disassembly(for_loop_false, adaptive=True))
+        self.assertIn('FOR_ITER_RANGE',
+                      self.get_disassembly(for_loop_false, adaptive=True))
 
         def while_loop():
             i = 0

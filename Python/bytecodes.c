@@ -409,8 +409,7 @@ dummy_func(
 
         // Inline values are negated without a box. Only -INT32_MIN
         // overflows; negating a float that is not NaN gives one that is not.
-        // The negation of a float object is inline too, unless it is NaN or
-        // PYTHON_TAGGED_VALUES=0.
+        // The negation of a float object is inline too, unless it is NaN.
         inline_ok op(_UNARY_NEGATIVE, (value -- res, v)) {
             if (PyValue_IsInlineInt(value)) {
                 int32_t i = PyValue_Int32(value);
@@ -425,9 +424,7 @@ dummy_func(
                 // An inline float is not NaN, nor is its negation.
                 res = _PyValue_FromBits(_PyValue_DoubleBits(-PyValue_Double(value)));
             }
-            else if (_PyValue_FloatCheckExact(value) &&
-                     tstate->interp->opt_config.tagged_values_enabled)
-            {
+            else if (_PyValue_FloatCheckExact(value)) {
                 res = PyValue_FromDouble(-_PyValue_NumberAsDouble(value));
             }
             else {
@@ -4638,8 +4635,7 @@ dummy_func(
             if (len_i < 0) {
                 ERROR_NO_POP();
             }
-            // The length is inline unless PYTHON_TAGGED_VALUES=0.
-            res = len_i <= INT32_MAX && tstate->interp->opt_config.tagged_values_enabled
+            res = len_i <= INT32_MAX
                 ? PyValue_FromInt32((int32_t)len_i)
                 : _PyValue_BoxInt64(len_i);
             if (PyValue_IsNull(res)) {

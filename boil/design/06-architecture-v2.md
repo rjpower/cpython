@@ -325,30 +325,33 @@ bits hold: mark, old (sticky mark for a later generational mode), finalizer
 queued, has weak references, static (not heap allocated), owns external
 resources, and spare. Only the collector writes them, with the world stopped.
 
-The hidden-class layout is already the instance layout of section 3.3:
-header, shape, slots. The open choice is whether the shape should move into
-the header word in place of the type, as V8's map does, with the type reached
-through the shape. That saves two loads on every `LOAD_ATTR` and `STORE_ATTR`
-and costs one on every `Py_TYPE` in the runtime's C code. The right time to
-decide is step 6c, when shapes are on by default and we can count both: if
-attribute guards outnumber `Py_TYPE` loads in the C runtime on the benchmark
-set, the header becomes the shape. Until then the type stays in the header,
-and every type has a root shape so that the two layouts are
-interchangeable.
+The hidden-class layout is the instance layout of section 3.3: header,
+shape, slots. Decided 2026-10-27 (note 09 section 2): the header word
+holds the shape, as V8's map does, and the type is reached through the
+shape. Every object has a shape; a type whose instances have no attribute
+slots has one root shape, so an exact type test on such a type is a header
+compare. The shape carries the type's flag bits that the `Check` macros
+test, and a `type_version` word that `type_modified` rewrites, so an
+attribute guard is the header compare plus one version compare. Step 6c
+makes the change and records the cost of the extra load at the remaining
+`Py_TYPE` sites.
 
 ### 3.3 Instances
 
-An instance is `header, shape, slots...`. The shape (note 04) is owned by the
-type and describes slot order and kinds. Attribute access guards the type
-version and the shape pointer, then loads the slot. Slot kinds BOXED, I32 and
-F64 exist from the first version; a F64 slot holds a raw double and
-`LOAD_ATTR_SHAPE` produces an inline float from it without a tag test. The
-shape's property table records the kind; a store of a non-float into an F64
-slot transitions the shape. Dictionary mode (a materialised `__dict__`) is a
-shape whose single slot points at the dict. `__slots__` classes are shapes
-that cannot transition. Weak references live in a side table keyed by
-address, with the header flag saying whether to consult it, so the
-pre-header goes away.
+An instance is `header, slots...`, the header being the shape (section
+3.2; note 09). The shape is owned by the type and describes slot order
+and kinds. Attribute access compares the header with the cached shape and
+the shape's `type_version` with the cached version, then loads the slot.
+Every slot holds a `PyValue`; the slot kinds BOXED, I32 and F64 are
+promises recorded in the shape, not layouts: a store of a value of
+another kind transitions the shape, so a load from an F64 slot needs no
+tag test. Dictionary mode (a materialised `__dict__` mutated through the
+dict API) is a shape whose slot 0 holds the dict. `__slots__` classes are
+shapes that cannot transition. Weak references live in a side table keyed
+by address, with the header flag saying whether to consult it, so there is
+no pre-header at all. Lookup is a pure function from (shape, name) to a
+plan that the generic getattr, the specialiser, tier 0 and tier 1 all
+consume (note 09 section 4).
 
 ### 3.4 Memory management
 
@@ -529,19 +532,33 @@ entry; nothing lives on a prototype branch.
 | 4 | Collector, verifier mode. `Python/gc_trace.c`: mark from precise roots (frames, thread and interpreter state, registered static types) and conservative roots (C stacks, data segments) via mimalloc's block lookup; `tp_traverse` audit tool that reports every type with pointer members and no traverse; at every `gc.collect` in a debug build, report any object with a nonzero count that the mark did not reach. Reference counting still owns memory. | nothing yet | zero unreached-but-counted objects across the full suite and the seven ports with the verifier on | 4 days |
 | 5 | Collector, live, in three sub-steps (5a flag build, 5b full suite and ports, 5c default on and refcount code deleted; the header shrink and the weakref side table move to 6a). `--with-gc` configure flag first, default later in the step. Eight-byte header; `Py_INCREF`/`Py_DECREF` to no-ops; sweep by heap visit; finaliser queue; weak reference side table; `tp_dealloc` audit and `OWNS_RESOURCES` flag; `sys.getrefcount` removed; stdlib audit for refcount timing; free-threaded build removed. Sub-gates: 5a flag build runs the smoke ladder; 5b full suite; 5c ports rebuild with patch counts recorded; 5d default on, refcount paths deleted. Done in three: 5a (section 15), 5b (16), 5c (17, which took 5d's default and deletions); sweep by block moved to 6a or later. | reference counting in `ob_refcnt` (the field goes with the header shrink in 6a), `Py_TAG_REFCNT`, `_PyStackRef` ownership, `IR_BORROW` remnants, the cycle collector (`gc.c`), free lists, the free-threaded build and `gc_free_threading.c`, `Py_STACKREF_DEBUG` | suite; ports; instructions per loop down on richards and go; RSS and pauses recorded (pyperformance dropped for 5c, 2026-10-26) | 10 days, in four sub-steps |
 | 6a | `PyValue` in the core: list, tuple, dict, set, instance slots, cells, globals hold `PyValue`; `_PyStackRef` renamed to `PyValue` and the duplicate helpers deleted; boxing only at the `PyObject*` conversion. Done (section 18), with the header shrink, the weak reference table and the removal of PyGC_Head that 5 handed on: the header is one word, a collected object has no header before it, and a 3-tuple is 48 bytes where it was 72. | `_PyStackRef`, `PyStackRef_*`, `Py_STACKREF_INLINE_VALUES`, the boxing at container stores, `ob_refcnt`, PyGC_Head, the per-object weaklist fields | suite; nbody, float, spectral_norm instructions per loop; RSS | 5 days; took about 9 hours |
-| 6b | `PyValue` at the C API boundary and in the ports: item accessors become boxing functions; Cython port patched and the Cython-generated ports regenerated; numpy; patch counts recorded. | `PyList_GET_ITEM` and family as macros | all seven ports green; hand-written patch lines per port recorded | 5 days |
-| 6c | Shapes default on, with I32 and F64 slot kinds live, `LOAD_ATTR_SHAPE_POLY`, method loads through shapes. | `--with-shapes`, shared keys for instances, the `PyDictValues` header | suite; ports; richards, raytrace, deltablue, nbody per loop | 4 days |
-| 7 | Generational collection: sticky mark bits, remembered set, write barrier in the store macros, barrier verifier (full mark after each minor collection in debug builds). Kept only if pause and throughput both improve on the benchmark set. | nothing | verifier clean; pyperformance and RSS compared with step 6 | 5 days |
+| 6b | The `PyValue` C API (note 08 section 4). The core's protocols take and return `PyValue`: number (`PyNumber_*Value`), object (`PyObject_RichCompareValue`, `PyObject_GetAttrValue`, `PyObject_SetAttrValue`, `PyObject_IsTrueValue`, `PyObject_HashValue`), sequence and mapping, call (`PyObject_VectorcallValue` over a `PyValue` argument array), iteration; the generic `BINARY_OP`, `COMPARE_OP`, `CALL`, subscript and attribute handlers call them, so an inline operand is never boxed to reach a C implementation of the same operation. The `PyObject*` API is the compatibility layer: canonicalise in, box out, abort rule of 18.3 for accessors without an error channel; nothing in the core calls it. The stable ABI is gone: `.abi3` leaves the extension suffixes and `Py_LIMITED_API` is a compile error, so an incompatible wheel fails to import instead of crashing. `BINARY_OP_POWER_FLOAT` is removed once `PyNumber_PowerValue` makes the generic path box-free (note 08 section 5). Ports: the Cython port patched once at the generated-code idioms, pyyaml and numpy regenerated, cffi by hand. | `PyList_GET_ITEM` and family as the core's API; `BINARY_OP_POWER_FLOAT`; `LOAD_NAME`/`STORE_NAME` boxing | all eight ports green with patch lines per port recorded; boxes per loop on float and go recorded (expected: C-extension residue only); suite | 5 days |
+| 6c | The object protocol (note 09): shape in the header, `Py_TYPE` through the shape, root shape per type; instance layout `header, slots`, dictionary mode as a shape, `__slots__` as shapes, the managed-dict pre-header gone; the lookup and store plans with the specialiser rewritten over them and typecache as the (shape, name) plan cache; `LOAD_ATTR_SHAPE`, `_SHAPE_POLY`, `_METHOD_SHAPE`, `STORE_ATTR_SHAPE`, `_SHAPE_TRANSITION`; slot kinds as promises; plan inspection in `_testinternalcapi` and `dis`. | `--with-shapes`, shared keys for instances, the `PyDictValues` header, `LOAD_ATTR_INSTANCE_VALUE`, `_WITH_HINT`, `_SLOT`, `_METHOD_WITH_VALUES`, `_METHOD_LAZY_DICT`, `STORE_ATTR_INSTANCE_VALUE`, `_WITH_HINT` | suite; ports; plan tests; per loop on richards, raytrace, deltablue, chaos, go, nbody and the `Py_TYPE` cost on json_loads recorded; RSS for 1M four-attribute instances recorded | 6 days |
+| 10a | Precise roots (note 08 section 6): stack maps for the eval loop and for every C entry point that holds values, so the conservative scan covers only extension C code; the first seven rows of note 08's hack register retired with their proofs. | `-ftrivial-auto-var-init=zero`, the stack clears, `_PyGC_CLEAR_ARRAY`, the activation-range exclusion, the inline-fallback full scan, the one-survivor test allowances | suite with the skips removed, 20/20 on both builds; stale-root probe 100/100; ports | 5 days |
+| 7 | Generational collection over the precise root set of 10a: sticky mark bits, remembered set, write barrier in the store macros, barrier verifier (full mark after each minor collection in debug builds). Kept only if pause and throughput both improve on the benchmark set. | nothing | verifier clean; pyperformance and RSS compared with step 6 | 5 days |
 | 8 | Tier 0 over the v2 IR (section 5), x86-64. | the Phase 1 `tier0.c` and `ceval_tier0.c.h` | geomean below the deleted upstream JIT's 0.834 against the Phase 0 baseline; suite with tier 0 on | 8 days |
 | 9 | Tier 1. | | 2x geomean over Phase 0 on pyperformance, 3x on the numeric subset; ports green | open |
-| 10 | Precise moving collector: nursery with bump allocation and evacuation, compaction of the old space, handle discipline in the C API for references held across allocations, ports migrated with the inventory from step 5. | the conservative scanner | ports green; allocation-heavy benchmarks and RSS compared with step 7 | open |
+| 10b | Moving collector: nursery with bump allocation and evacuation, compaction of the old space, handle discipline in the C API for references held across allocations, ports migrated with the inventory from step 5. | the conservative scanner | ports green; allocation-heavy benchmarks and RSS compared with step 7 | open |
 
 Dependencies: 1 before 2a before 2b. Step 3 and step 4 are independent of
 each other and of 2b, and run in parallel once 2a has landed. Step 5 needs 4
 and benefits from 3. Step 6a needs 5 (no ownership means `PyValue` is a
-rename plus container changes); 6b needs 6a; 6c needs 6a. Steps 7, 8 and 9
-follow 6. A Sonnet agent keeps the ports tree rebuilding after every step
-that changes the ABI (3, 5, 6a, 6b, 6c).
+rename plus container changes); 6b needs 6a; 6c needs 6b's signatures; 10a
+follows 6c; 7, 8 and 9 follow 10a; 10b follows 7. A Sonnet agent keeps the
+ports tree rebuilding after every step that changes the ABI (3, 5, 6a, 6b,
+6c).
+
+Plan revision, 2026-10-27 (after the 6a review, notes 08 and 09). Three
+rulings from the user. First, no step tunes for its own benchmark numbers:
+each step is done rigorously and correctly, performance is recorded with
+its attribution, and work whose only purpose is the number after that step
+is left on the table, because it is thrown away by a later step; the goal
+is one fast system, not the fastest system after each step. Second, 6b is
+the `PyValue` C API, not a patch of the ports against boxing accessors.
+Third, step 10 splits: precise roots (10a) move ahead of the generational
+collector and the JITs, so that tier 0 and tier 1 are designed with stack
+maps from the start and the conservative-root mitigations retire two steps
+earlier; moving (10b) stays last.
 
 Why this order. The IR work comes first because it is independent of the
 object model, is where the current design is weakest, and because every

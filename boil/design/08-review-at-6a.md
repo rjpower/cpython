@@ -1,7 +1,10 @@
 # 08: Review at the 6a boundary
 
-Status: draft for review, 2026-10-27. Pauses the plan of note 06 between
-steps 6a and 6b. The question is whether the work so far is a design or an
+Status: decided 2026-10-27. Sections 4, 5 and 6 are adopted: 6b is the
+`PyValue` C API, `BINARY_OP_POWER_FLOAT` goes in 6b, step 10 is split
+with 10a before 7; note 09 answers the object-protocol question and
+redefines 6c; note 06 section 6 carries the revised plan. Written to pause
+the plan between steps 6a and 6b. The question is whether the work so far is a design or an
 accumulation of patches, and what 6b should be.
 
 ## 1. Where the system stands

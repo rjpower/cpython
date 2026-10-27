@@ -1083,7 +1083,7 @@ set_eval_frame_default(PyObject *self, PyObject *Py_UNUSED(args))
     Py_RETURN_NONE;
 }
 
-static PyObject *
+static PyValue
 record_eval(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
 {
     if (PyValue_Type(f->f_funcobj) == &PyFunction_Type) {
@@ -1095,7 +1095,7 @@ record_eval(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
         int res = PyList_Append(state->record_list,
                                 FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_name));
         if (res < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
     return _PyEval_EvalFrameDefault(tstate, f, exc);
@@ -1116,7 +1116,7 @@ set_eval_frame_record(PyObject *self, PyObject *list)
 }
 
 // Defined in interpreter.c
-extern PyObject*
+extern PyValue
 Test_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag);
 extern int Test_EvalFrame_Resumes, Test_EvalFrame_Loads;
 
@@ -1145,7 +1145,7 @@ get_eval_frame_stats(PyObject *self, PyObject *Py_UNUSED(args))
     return res;
 }
 
-static PyObject *
+static PyValue
 record_eval_interp(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
 {
     if (PyValue_Type(f->f_funcobj) == &PyFunction_Type) {
@@ -1157,7 +1157,7 @@ record_eval_interp(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc
         int res = PyList_Append(state->record_list,
                                 FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_name));
         if (res < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
 

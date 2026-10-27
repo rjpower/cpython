@@ -14,7 +14,7 @@
 
 int Test_EvalFrame_Resumes, Test_EvalFrame_Loads;
 
-PyObject *
+PyValue
 Test_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     return _PyEval_EvalFrameDefault(tstate, frame, throwflag);

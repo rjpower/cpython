@@ -335,8 +335,8 @@ static void elf_init_ehframe_perf(ELFObjectContext* ctx) {
     * 1. Create a trampoline source file (e.g., `trampoline.c`):
     *
     *      #include <Python.h>
-    *      typedef PyObject* (*py_evaluator)(void*, void*, int);
-    *      PyObject* trampoline(void *ts, void *f, int throwflag, py_evaluator evaluator) {
+    *      typedef PyValue (*py_evaluator)(void*, void*, int);
+    *      PyValue trampoline(void *ts, void *f, int throwflag, py_evaluator evaluator) {
     *          return evaluator(ts, f, throwflag);
     *      }
     *

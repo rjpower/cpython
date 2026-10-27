@@ -117,11 +117,11 @@ extern void _PyPerfJit_WriteNamedCode(const void *code_addr,
 
 /* _PyEval_EvalFrameDefault(), with its activation recorded for the
  * collector (_PyEvalActivation). */
-extern PyObject *_PyEval_EvalFrameEntry(PyThreadState *tstate,
-                                        _PyInterpreterFrame *frame,
-                                        int throwflag);
+extern PyValue _PyEval_EvalFrameEntry(PyThreadState *tstate,
+                                      _PyInterpreterFrame *frame,
+                                      int throwflag);
 
-static inline PyObject*
+static inline PyValue
 _PyEval_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     EVAL_CALL_STAT_INC(EVAL_CALL_TOTAL);

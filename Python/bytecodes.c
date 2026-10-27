@@ -1404,7 +1404,7 @@ dummy_func(
             /* Restore previous frame and return. */
             tstate->current_frame = frame->previous;
             assert(!_PyErr_Occurred(tstate));
-            PyObject *result = PyValue_ObjectBorrow(retval);
+            PyValue result = retval;
             DEAD(retval);
 #if !_Py_TAIL_CALL_INTERP
             assert(frame == &entry.frame);
@@ -5758,7 +5758,7 @@ dummy_func(
 #if !_Py_TAIL_CALL_INTERP
                 assert(frame == &entry.frame);
 #endif
-                return NULL;
+                return PyValue_NULL;
             }
             // The caller's instr_ptr is the word that pushed the frame, and
             // error takes the word that raised as the one before next_instr.

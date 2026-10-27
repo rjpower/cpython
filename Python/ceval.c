@@ -683,14 +683,14 @@ PyEval_EvalFrame(PyFrameObject *f)
 {
     /* Function kept for backward compatibility */
     PyThreadState *tstate = _PyThreadState_GET();
-    return _PyEval_EvalFrame(tstate, f->f_frame, 0);
+    return PyValue_Object(_PyEval_EvalFrame(tstate, f->f_frame, 0));
 }
 
 PyObject *
 PyEval_EvalFrameEx(PyFrameObject *f, int throwflag)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    return _PyEval_EvalFrame(tstate, f->f_frame, throwflag);
+    return PyValue_Object(_PyEval_EvalFrame(tstate, f->f_frame, throwflag));
 }
 
 #include "ceval_macros.h"
@@ -1218,7 +1218,7 @@ dtrace_function_return(_PyInterpreterFrame *frame)
  * frame begins.  _PyEval_EvalFrameDefault() records where its frame ends;
  * entered otherwise, through a PEP 523 hook, it records nothing and its
  * frame is scanned. */
-Py_NO_INLINE PyObject *
+Py_NO_INLINE PyValue
 _PyEval_EvalFrameEntry(PyThreadState *tstate, _PyInterpreterFrame *frame,
                        int throwflag)
 {
@@ -1229,12 +1229,12 @@ _PyEval_EvalFrameEntry(PyThreadState *tstate, _PyInterpreterFrame *frame,
     act.hi = _PyGC_StackAddress();
     act.prev = ts->gc_trace.activation;
     ts->gc_trace.activation = &act;
-    PyObject *res = _PyEval_EvalFrameDefault(tstate, frame, throwflag);
+    PyValue res = _PyEval_EvalFrameDefault(tstate, frame, throwflag);
     ts->gc_trace.activation = act.prev;
     return res;
 }
 
-Py_NO_INLINE PyObject* _Py_HOT_FUNCTION DONT_SLP_VECTORIZE
+Py_NO_INLINE PyValue _Py_HOT_FUNCTION DONT_SLP_VECTORIZE
 _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     _Py_EnsureTstateNotNULL(tstate);
@@ -1267,7 +1267,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     if (_Py_EnterRecursiveCallTstate(tstate, "")) {
         assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
         _PyEval_FrameClearAndPop(tstate, frame);
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Local "register" variables.
@@ -1346,7 +1346,7 @@ early_exit:
     assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
     /* Restore previous frame and exit */
     tstate->current_frame = frame->previous;
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -2043,8 +2043,7 @@ _PyEval_Vector(PyThreadState *tstate, PyFunctionObject *func,
         return PyValue_NULL;
     }
     EVAL_CALL_STAT_INC(EVAL_CALL_VECTOR);
-    PyObject *res = _PyEval_EvalFrame(tstate, frame, 0);
-    return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
+    return _PyEval_EvalFrame(tstate, frame, 0);
 }
 
 /* Legacy API */

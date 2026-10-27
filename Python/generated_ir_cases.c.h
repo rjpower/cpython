@@ -11955,22 +11955,11 @@
             INSTRUCTION_STATS(INTERPRETER_EXIT);
             PyValue retval;
             retval = IR_SLOT(IR_FIELD_A(this_instr));
-            PyObject *retval_object;
-            if (Py_UNLIKELY(PyValue_IsInline(retval))) {
-                retval_object = _PyValue_BoxInline(retval);
-                if (retval_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(INTERPRETER_EXIT, _PY_BOX_RETURN);
-            }
-            else {
-                retval_object = PyValue_ObjectBorrow(retval);
-            }
             assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
             assert(_PyFrame_IsIncomplete(frame));
             tstate->current_frame = frame->previous;
             assert(!_PyErr_Occurred(tstate));
-            PyObject *result = retval_object;
+            PyValue result = retval;
             #if !_Py_TAIL_CALL_INTERP
             assert(frame == &entry.frame);
             #endif
@@ -18837,7 +18826,7 @@ JUMP_TO_LABEL(error);
                     #if !_Py_TAIL_CALL_INTERP
                     assert(frame == &entry.frame);
                     #endif
-                    return NULL;
+                    return PyValue_NULL;
                 }
                 next_instr = frame->instr_ptr + 1;slots = _PyFrame_Slots(frame);
                 JUMP_TO_LABEL(error);

@@ -111,9 +111,9 @@
 #       define Py_MUSTTAIL __attribute__((musttail))
 #       define Py_PRESERVE_NONE_CC __attribute__((preserve_none))
 #   endif
-    typedef PyObject *(Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
+    typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
 
-#   define TARGET(op) Py_NO_INLINE PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
+#   define TARGET(op) Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
 /* A handler finds the frame in the thread state, which is not one of the
  * registers that the handlers pass on. */
 #   define TAIL_CALL_LOAD_FRAME() \

@@ -1604,7 +1604,7 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
 
 
 def function_proto(name: str, prefix: str = "_TAIL_CALL_") -> str:
-    return f"static PyObject *Py_PRESERVE_NONE_CC {prefix}{name}(TAIL_CALL_PARAMS)"
+    return f"static PyValue Py_PRESERVE_NONE_CC {prefix}{name}(TAIL_CALL_PARAMS)"
 
 
 def num_handlers(analysis: Analysis) -> int:

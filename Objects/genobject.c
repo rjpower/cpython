@@ -280,7 +280,11 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
     }
 
     EVAL_CALL_STAT_INC(EVAL_CALL_GENERATOR);
-    PyObject *result = _PyEval_EvalFrame(tstate, frame, exc);
+    PyValue result_v = _PyEval_EvalFrame(tstate, frame, exc);
+    // The send protocol speaks objects: a yielded or returned inline value
+    // is boxed here.
+    PyObject *result = PyValue_IsNull(result_v) ? NULL
+                                                : PyValue_Object(result_v);
     assert(tstate->exc_info == prev_exc_info);
     assert(gen->gi_exc_state.previous_item == NULL);
     assert(frame->previous == NULL);
@@ -293,7 +297,12 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
     int return_kind = ((_PyThreadStateImpl *)tstate)->generator_return_kind;
 
     if (return_kind == GENERATOR_YIELD) {
-        assert(result != NULL && !_PyErr_Occurred(tstate));
+        if (result == NULL) {
+            // The box of a yielded inline value failed.
+            *presult = NULL;
+            return PYGEN_ERROR;
+        }
+        assert(!_PyErr_Occurred(tstate));
         assert(FRAME_STATE_SUSPENDED(gen->gi_frame_state));
         *presult = result;
         return PYGEN_NEXT;

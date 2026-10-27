@@ -1438,3 +1438,28 @@ increments or decrements. Rung 3a: flagged dead objects are swept
 referrer first in reverse postorder (e638f8018da); pyexpat drops its
 finalizer. The alias-fold rule that existed for borrowing is gone
 (337416c0d6d), measured at zero on richards and go.
+
+### 2026-10-26 17:40 — step 5c done: one build, no reference counts, ports on cpython-3.16-gc-v1
+
+Rungs 3a, 4 and 5 are complete; note 06 section 17 has the record. The
+sweep deallocates flagged objects referrer first, in reverse postorder of
+their direct references (e638f8018da), and builds a graph only when one
+flagged dead object refers to another (23c4d99af63). pyexpat's finalizer
+is gone. 300,000 dead memoryviews pause 85 ms against 67 ms before, and
+20,000 expat parser pairs 25 ms against 32 ms. The sweep's loop body is
+inlined again: out of line it cost nbody 1.9% (0c5f6ac3aa8). The alias
+fold (337416c0d6d) deletes the borrow-era no-fold rule and measures zero
+on richards and go. All eight ports pass on cpython-3.16-gc-v1 and
+cpython-3.16-gc-debug-v1 with the verifier pass (ff6750d3e3a); numpy's
+patch drops its one Py_GC condition. Full suite on both builds: only
+test_sys's remote-exec timeout.
+
+Per loop against 5b's reference-counting build (M instructions):
+richards 675.1 -> 520.0, go 1623.8 -> 1176.4, nbody 1407.1 -> 1427.2,
+float 948.5 -> 1022.1. Of rung 2's gain on go, 36.6M came with the plain
+stackref operations and 13.5M with the header bit and the free lists.
+`-c pass` 68.4M (5b collector 69.5M). RSS and pauses are within 4% of
+5b's collector build. Open for 6a and later: `s += t` is quadratic, the
+box placement, the per-object sweep cost (3b was dropped), retention
+through C callee frames (step 10), and the reference-counting text in
+InternalDocs/garbage_collector.md and the C API docs.

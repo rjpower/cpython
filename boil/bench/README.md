@@ -48,6 +48,19 @@ float chains; compare and branch. It also holds the 16 loops of the former
 every other row subtracts one, as note 02 does; the polymorphic rows loop
 over a list of instances and subtract the list skeleton.
 
+The former `micro_loops.py` rows, as notes 02, 04 and 05 name them, are:
+empty loop skeleton `empty_loop`; empty loop, i >= 1025 `empty_loop_large_i`;
+int add, result not cached `int_add`; int add, cached small result
+`int_add_small`; float add `float_add`; int compare `int_compare`; float
+compare `float_compare`; list-of-floats subscript `float_list_subscript`;
+two STORE_FAST `store_fast_two`; attribute load `attr_load`; attribute
+store, existing `attr_store`; attribute load, `__slots__` `slots_load`;
+attribute load and store after `__dict__` `attr_load_after_dict` and
+`attr_store_after_dict`; new instance, four attributes `new_instance`; new
+instance, empty `__init__` `new_instance_empty`. On baseline they reproduce
+note 02's values (skeleton 80.7 against 80, int add 164.1 against 164,
+float add 130.1 against 130).
+
 **Memory and the collector** (`internal/memory/`). Fixed workloads, one
 loop each: `tuples_10m` (10M `(i, i)` alive), `instances_1m` (1M instances
 with `a = i, b = 1.5, c = None, d = "x"`), `dicts_200k` (200k `{'a': i,

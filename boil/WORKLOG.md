@@ -1694,3 +1694,32 @@ new kind: a one-past-the-end argument pointer in a callee-saved register
 aliasing the next block, which has its own hack-register row (retired by
 10a for core frames, 10b or allocator slack for extensions). Rung 2
 finished about 20 hours ahead of its deadline; rung 3 is under way.
+
+### 2026-10-27 12:45 — 6b rung 3 gate (compatibility layer) clean
+
+Gate run here on a detached checkout of 921352f5653, fresh builds and pyc
+caches: default 556/564 files, 50,730 tests, 2 min 49 s, only test_sys's
+pre-existing remote-exec timeout; debug 9 min 26 s, only test_sys;
+test_cext under -u cpu 16 run, 7 skipped, success; ports six 1.17.0 PASS
+and attrs 26.1.0 PASS on cpython-3.16-value-v1, 0 patch lines each. Rung 3
+landed as: no limited C API or stable ABI (d1ec4c4f6db; .abi3 out of the
+extension suffixes, Py_LIMITED_API an error, the limited modules became
+core modules); the PyObject* protocol as a layer over the value forms
+(b05e1556892); public headers C90, C++03 and -Wcast-qual clean, which
+fixed a test_cext failure unseen since step 5 because only -u cpu runs it
+(5ab886ef2af); the core and hot modules calling the value protocol
+(4df049cdd1e, with an itertools.batched segfault on an exhausted iterator
+fixed); a release call keeps its object alive up to that point
+(28f6a199518: reference-correct C that reads owned memory and then
+releases the owner was collector-incorrect since 6a, shown by a
+million-item str.join; the barrier is a hack-register row retired by
+10b's handle discipline); the 4,095-slot limit of the register IR is a
+SyntaxError and is recorded (8e7337f92d4, 0d8458a0e35); tp_iternext
+returns a value across the core and all 37 Modules iterators
+(921352f5653, with map() rooting its overflow items and a hack-register
+row for the C-local PyMem arrays that only the transitive scan keeps
+alive). An ABI flag "v" was tried and handed off: packaging's vendored
+copies in pip and setuptools reject any CPython ABI tag they do not know,
+so wheel builds fail; the SDK's abi_id marks the ABI until the ports tree
+carries a packaging port. Rung 3 finished about 30 hours ahead of its
+deadline. Rung 4 (ports) is under way with three port agents.

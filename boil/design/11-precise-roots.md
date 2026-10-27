@@ -852,6 +852,31 @@ subset, the functions whose frames held the only root of a live object;
     mode is the first item of rung 2 and runs over that list before rung 2
     promotes anything else. No function is promoted without one of the two
     proofs, and the 8.2 skips are not removed on the dynamic proof alone.
+11. **Arguments of a collecting call.** Decision 3 says every argument of
+    a collecting call is anchored; 2.1 says an object parameter is the
+    callee's to anchor. Ruling at rung 0 (coordinator, 2026-10-27):
+    arguments to a `Py_GC_ARGS_ANCHORED` callee are anchored by the
+    caller. For every other call, a parameter is the callee's to anchor
+    across the callee's own safepoints (2.1), and the caller owes nothing
+    for it after the call begins. A temporary that is live across a
+    collecting call, including a sibling argument's call evaluated before
+    it (`f(PyLong_FromLong(5), g())`), is an unanchored object local and
+    an error in the caller; the C mode treats temporaries as object locals
+    for liveness.
+12. **Item and cell readers collect.** In this tree the object-returning
+    item and cell readers (`PyTuple_GET_ITEM`, `PyList_GET_ITEM`,
+    `PyCell_GET`, the dict value getters) box an inline value, so they
+    allocate and are collecting calls; 2.1's example of `PyTuple_GET_ITEM`
+    as non-collecting is wrong for this tree. Ruling at rung 0: the
+    non-collecting list contains only the value-returning readers and the
+    field accessors that do not box; a precise function reads items
+    through the value accessors (`PyTuple_GET_VALUE` and the like); an
+    object-returning reader in a precise function is a collecting call and
+    its result an object local. The same correction moved c_roots's count
+    (section 12) from 4,938 to 6,644 of 16,251 functions at the baseline:
+    the committed probe treats these readers as collecting, and it counts
+    a value from the end of the statement that assigns it, which the
+    uncommitted probe's description does not settle (rung 0's work doc).
 
 ## 14. Sources
 

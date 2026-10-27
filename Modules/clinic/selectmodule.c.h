@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
@@ -570,7 +569,6 @@ select_epoll(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -750,7 +748,6 @@ select_epoll_register(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -843,7 +840,6 @@ select_epoll_modify(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyO
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -928,7 +924,6 @@ select_epoll_unregister(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1003,7 +998,6 @@ select_epoll_poll(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObj
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1406,4 +1400,4 @@ exit:
 #ifndef SELECT_KQUEUE_CONTROL_METHODDEF
     #define SELECT_KQUEUE_CONTROL_METHODDEF
 #endif /* !defined(SELECT_KQUEUE_CONTROL_METHODDEF) */
-/*[clinic end generated code: output=3f0ca99c4c16aaf8 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=39fbd62f89038181 input=a9049054013a1b77]*/

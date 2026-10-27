@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
@@ -34,7 +33,6 @@ _interpqueues_create(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -126,7 +124,6 @@ _interpqueues_destroy(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -207,7 +204,6 @@ _interpqueues_put(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
 
     #define NUM_KEYWORDS 4
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -291,7 +287,6 @@ _interpqueues_get(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -353,7 +348,6 @@ _interpqueues_bind(PyObject *module, PyObject *const *args, Py_ssize_t nargs, Py
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -415,7 +409,6 @@ _interpqueues_release(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -475,7 +468,6 @@ _interpqueues_get_maxsize(PyObject *module, PyObject *const *args, Py_ssize_t na
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -535,7 +527,6 @@ _interpqueues_get_queue_defaults(PyObject *module, PyObject *const *args, Py_ssi
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -595,7 +586,6 @@ _interpqueues_is_full(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -655,7 +645,6 @@ _interpqueues_get_count(PyObject *module, PyObject *const *args, Py_ssize_t narg
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -718,7 +707,6 @@ _interpqueues__register_heap_types(PyObject *module, PyObject *const *args, Py_s
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -763,4 +751,4 @@ _interpqueues__register_heap_types(PyObject *module, PyObject *const *args, Py_s
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=7e56e5b0c684d294 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=be6694b298475446 input=a9049054013a1b77]*/

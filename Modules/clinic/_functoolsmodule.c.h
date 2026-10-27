@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
@@ -32,7 +31,6 @@ _functools_cmp_to_key(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -99,7 +97,6 @@ _functools_reduce(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -220,4 +217,4 @@ PyDoc_STRVAR(_functools__lru_cache_wrapper___deepcopy____doc__,
 
 #define _FUNCTOOLS__LRU_CACHE_WRAPPER___DEEPCOPY___METHODDEF    \
     {"__deepcopy__", (PyCFunction)_functools__lru_cache_wrapper___deepcopy__, METH_O, _functools__lru_cache_wrapper___deepcopy____doc__},
-/*[clinic end generated code: output=9af090694f03b4f2 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6d02dc86022c146d input=a9049054013a1b77]*/

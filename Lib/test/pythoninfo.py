@@ -785,7 +785,6 @@ def collect_testinternalcapi(info_add):
     call_func(info_add, 'pymem.allocator', _testinternalcapi, 'pymem_getallocatorsname')
 
     for name in (
-        'SIZEOF_PYGC_HEAD',
         'SIZEOF_PYOBJECT',
     ):
         copy_attr(info_add, f'_testinternalcapi.{name}', _testinternalcapi, name)

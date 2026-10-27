@@ -22,7 +22,7 @@
 #include "pycore_flowgraph.h"     // _PyCompile_OptimizeCfg()
 #include "pycore_frame.h"         // _PyInterpreterFrame
 #include "pycore_function.h"      // _PyFunction_GET_BUILTINS
-#include "pycore_gc.h"            // PyGC_Head
+#include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
 #include "pycore_gc_trace.h"      // _PyGC_TraceVerify()
 #include "pycore_hashtable.h"     // _Py_hashtable_new()
 #include "pycore_import.h"        // _PyImport_ClearExtension()
@@ -3736,14 +3736,6 @@ module_exec(PyObject *module)
         return 1;
     }
     if (_PyTestInternalCapi_Init_TypeCache(module) < 0) {
-        return 1;
-    }
-
-    Py_ssize_t sizeof_gc_head = 0;
-    sizeof_gc_head = sizeof(PyGC_Head);
-
-    if (PyModule_Add(module, "SIZEOF_PYGC_HEAD",
-                        PyLong_FromSsize_t(sizeof_gc_head)) < 0) {
         return 1;
     }
 

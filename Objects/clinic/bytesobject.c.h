@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
@@ -57,7 +56,6 @@ bytes_split(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *k
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -228,7 +226,6 @@ bytes_rsplit(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -701,7 +698,6 @@ bytes_translate(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObjec
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -822,7 +818,6 @@ bytes_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject 
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1097,7 +1092,6 @@ bytes_decode(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1184,7 +1178,6 @@ bytes_splitlines(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObje
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1292,7 +1285,6 @@ bytes_hex(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwn
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1366,7 +1358,6 @@ bytes_new_helper(PyTypeObject *type, PyObject *const *args,
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1502,4 +1493,4 @@ skip_optional:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=e0132bb54aef1b99 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b1e08abaf608a517 input=a9049054013a1b77]*/

@@ -65,7 +65,6 @@ def declare_parser(
 
             #define NUM_KEYWORDS %d
             static struct {{
-                PyGC_Head _this_is_not_used;
                 PyObject_VAR_HEAD
                 Py_hash_t ob_hash;
                 PyObject *ob_item[NUM_KEYWORDS];
@@ -82,8 +81,6 @@ def declare_parser(
             #endif  // !Py_BUILD_CORE
         """ % num_keywords
 
-        codegen.add_include('pycore_gc.h', 'PyGC_Head',
-                            condition=condition)
         codegen.add_include('pycore_runtime.h', '_Py_ID()',
                             condition=condition)
 

@@ -237,14 +237,10 @@ _PyObject_HashDictKey(PyObject *op)
 static inline size_t
 _PyType_PreHeaderSize(PyTypeObject *tp)
 {
-    return (
-        (size_t)_PyType_IS_GC(tp) * sizeof(PyGC_Head) +
-        (size_t)_PyType_HasFeature(tp, Py_TPFLAGS_PREHEADER) *
-            _PyObject_MANAGED_PRE_HEADER_SIZE
-    );
+    return ((size_t)_PyType_HasFeature(tp, Py_TPFLAGS_PREHEADER) *
+            _PyObject_MANAGED_PRE_HEADER_SIZE);
 }
 
-void _PyObject_GC_Link(PyObject *op);
 
 // Usage: assert(_Py_CheckSlotResult(obj, "__getitem__", result != NULL));
 extern int _Py_CheckSlotResult(
@@ -308,7 +304,7 @@ PyAPI_FUNC(int) _PyType_CacheInitForSpecialization(PyHeapTypeObject *type,
                                               PyObject *init,
                                               unsigned int tp_version);
 
-#  define MANAGED_DICT_OFFSET    (((Py_ssize_t)sizeof(PyObject *))*-3)
+#  define MANAGED_DICT_OFFSET    (((Py_ssize_t)sizeof(PyObject *))*-1)
 /* The tp_weaklistoffset of a Py_TPFLAGS_MANAGED_WEAKREF type: a marker
  * that names no storage, since weak references live in the weak reference
  * table (Objects/weakrefobject.c). */

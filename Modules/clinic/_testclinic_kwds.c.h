@@ -2,9 +2,6 @@
 preserve
 [clinic start generated code]*/
 
-#if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
-#endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long.h"          // _PyLong_UnsignedShort_Converter()
@@ -230,4 +227,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=4ce073c37aab592c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=22fb79a23d0f8130 input=a9049054013a1b77]*/

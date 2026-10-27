@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
@@ -170,7 +169,6 @@ _zstd_get_param_bounds(PyObject *module, PyObject *const *args, Py_ssize_t nargs
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -240,7 +238,6 @@ _zstd_get_frame_size(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -308,7 +305,6 @@ _zstd_get_frame_info(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -379,7 +375,6 @@ _zstd_set_parameter_types(PyObject *module, PyObject *const *args, Py_ssize_t na
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -426,4 +421,4 @@ _zstd_set_parameter_types(PyObject *module, PyObject *const *args, Py_ssize_t na
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=437b084f149e68e5 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=1384f5a9b394f628 input=a9049054013a1b77]*/

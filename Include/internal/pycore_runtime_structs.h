@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-#include "pycore_interp_structs.h" // _PyGC_Head_UNUSED
+#include "pycore_interp_structs.h" // struct _Py_interp_static_objects
 #include "pycore_obmalloc.h"      // struct _obmalloc_global_state
 
 /************ Runtime state ************/
@@ -116,10 +116,8 @@ struct _Py_static_objects {
 
         struct _Py_global_strings strings;
 
-        _PyGC_Head_UNUSED _tuple_empty_gc_not_used;
         PyTupleObject tuple_empty;
 
-        _PyGC_Head_UNUSED _hamt_bitmap_node_empty_gc_not_used;
         PyHamtNode_Bitmap hamt_bitmap_node_empty;
         _PyContextTokenMissing context_token_missing;
     } singletons;

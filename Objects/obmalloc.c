@@ -1204,10 +1204,10 @@ gc_block_object(void *ptr)
         presize = 0;
         break;
     case _Py_MIMALLOC_HEAP_GC:
-        presize = sizeof(PyGC_Head);
+        presize = 0;
         break;
     case _Py_MIMALLOC_HEAP_GC_PRE:
-        presize = sizeof(PyGC_Head) + _PyObject_MANAGED_PRE_HEADER_SIZE;
+        presize = _PyObject_MANAGED_PRE_HEADER_SIZE;
         break;
     default:
         return NULL;

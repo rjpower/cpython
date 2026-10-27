@@ -63,8 +63,6 @@
 
 typedef struct _gc_runtime_state GCState;
 
-#define AS_GC(op) _Py_AS_GC(op)
-#define FROM_GC(gc) _Py_FROM_GC(gc)
 
 /* While a collection cannot run, try again after this many more bytes. */
 #define RETRY_BYTES (1024 * 1024)
@@ -1375,23 +1373,6 @@ _PyGC_LiveKeptThreads(PyInterpreterState *interp)
 
 /* --- the interface of Python/gc.c --------------------------------------- */
 
-void
-_PyGC_InitState(GCState *gcstate)
-{
-#define INIT_HEAD(GEN) \
-    do { \
-        GEN.head._gc_next = (uintptr_t)&GEN.head; \
-        GEN.head._gc_prev = (uintptr_t)&GEN.head; \
-    } while (0)
-
-    for (int i = 0; i < NUM_GENERATIONS; i++) {
-        INIT_HEAD(gcstate->generations[i]);
-    };
-    gcstate->generation0 = &gcstate->generations[0].head;
-    INIT_HEAD(gcstate->permanent_generation);
-#undef INIT_HEAD
-}
-
 PyStatus
 _PyGC_Init(PyInterpreterState *interp)
 {
@@ -1667,12 +1648,6 @@ _PyGC_DumpShutdownStats(PyInterpreterState *interp)
     }
 }
 
-void
-_PyGC_Dump(PyGC_Head *g)
-{
-    PyObject_Dump(FROM_GC(g));
-}
-
 #ifdef Py_DEBUG
 static int
 visit_validate(PyObject *op, void *parent_raw)
@@ -1727,15 +1702,6 @@ _Py_ScheduleGC(PyThreadState *tstate)
     }
 }
 
-void
-_PyObject_GC_Link(PyObject *op)
-{
-    PyGC_Head *gc = AS_GC(op);
-    _PyObject_ASSERT(op, ((uintptr_t)gc & (sizeof(uintptr_t)-1)) == 0);
-    gc->_gc_next = 0;
-    gc->_gc_prev = 0;
-}
-
 /* The eval breaker's call, scheduled by _PyGC_LiveOnThreshold(). */
 void
 _Py_RunGC(PyThreadState *tstate)
@@ -1763,11 +1729,12 @@ gc_alloc(PyTypeObject *tp, size_t basicsize, size_t presize)
     if (mem == NULL) {
         return _PyErr_NoMemory(tstate);
     }
-    ((PyObject **)mem)[0] = NULL;
-    ((PyObject **)mem)[1] = NULL;
-    PyObject *op = (PyObject *)(mem + presize);
-    _PyObject_GC_Link(op);
-    return op;
+    if (presize) {
+        // The managed-dict pre-header: the dict and the padding word
+        ((PyObject **)mem)[0] = NULL;
+        ((PyObject **)mem)[1] = NULL;
+    }
+    return (PyObject *)(mem + presize);
 }
 
 PyObject *

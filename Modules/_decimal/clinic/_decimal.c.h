@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
@@ -235,7 +234,6 @@ context_init(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 8
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -440,7 +438,6 @@ _decimal_Context___replace__(PyObject *self, PyTypeObject *cls, PyObject *const 
 
     #define NUM_KEYWORDS 8
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -608,7 +605,6 @@ _decimal_localcontext(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
 
     #define NUM_KEYWORDS 9
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -880,7 +876,6 @@ dec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1065,7 +1060,6 @@ _decimal_Decimal_to_integral_value(PyObject *self, PyTypeObject *cls, PyObject *
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1139,7 +1133,6 @@ _decimal_Decimal_to_integral(PyObject *self, PyTypeObject *cls, PyObject *const 
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1216,7 +1209,6 @@ _decimal_Decimal_to_integral_exact(PyObject *self, PyTypeObject *cls, PyObject *
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1348,7 +1340,6 @@ _decimal_Decimal_exp(PyObject *self, PyTypeObject *cls, PyObject *const *args, P
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1415,7 +1406,6 @@ _decimal_Decimal_ln(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1482,7 +1472,6 @@ _decimal_Decimal_log10(PyObject *self, PyTypeObject *cls, PyObject *const *args,
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1546,7 +1535,6 @@ _decimal_Decimal_next_minus(PyObject *self, PyTypeObject *cls, PyObject *const *
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1610,7 +1598,6 @@ _decimal_Decimal_next_plus(PyObject *self, PyTypeObject *cls, PyObject *const *a
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1679,7 +1666,6 @@ _decimal_Decimal_normalize(PyObject *self, PyTypeObject *cls, PyObject *const *a
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1746,7 +1732,6 @@ _decimal_Decimal_sqrt(PyObject *self, PyTypeObject *cls, PyObject *const *args, 
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1817,7 +1802,6 @@ _decimal_Decimal_compare(PyObject *self, PyTypeObject *cls, PyObject *const *arg
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1883,7 +1867,6 @@ _decimal_Decimal_compare_signal(PyObject *self, PyTypeObject *cls, PyObject *con
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1952,7 +1935,6 @@ _decimal_Decimal_max(PyObject *self, PyTypeObject *cls, PyObject *const *args, P
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2018,7 +2000,6 @@ _decimal_Decimal_max_mag(PyObject *self, PyTypeObject *cls, PyObject *const *arg
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2087,7 +2068,6 @@ _decimal_Decimal_min(PyObject *self, PyTypeObject *cls, PyObject *const *args, P
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2153,7 +2133,6 @@ _decimal_Decimal_min_mag(PyObject *self, PyTypeObject *cls, PyObject *const *arg
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2224,7 +2203,6 @@ _decimal_Decimal_next_toward(PyObject *self, PyTypeObject *cls, PyObject *const 
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2298,7 +2276,6 @@ _decimal_Decimal_remainder_near(PyObject *self, PyTypeObject *cls, PyObject *con
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2370,7 +2347,6 @@ _decimal_Decimal_fma(PyObject *self, PyTypeObject *cls, PyObject *const *args, P
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2589,7 +2565,6 @@ _decimal_Decimal_is_normal(PyObject *self, PyTypeObject *cls, PyObject *const *a
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2656,7 +2631,6 @@ _decimal_Decimal_is_subnormal(PyObject *self, PyTypeObject *cls, PyObject *const
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2854,7 +2828,6 @@ _decimal_Decimal_logical_invert(PyObject *self, PyTypeObject *cls, PyObject *con
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2922,7 +2895,6 @@ _decimal_Decimal_logb(PyObject *self, PyTypeObject *cls, PyObject *const *args, 
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3004,7 +2976,6 @@ _decimal_Decimal_number_class(PyObject *self, PyTypeObject *cls, PyObject *const
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3076,7 +3047,6 @@ _decimal_Decimal_to_eng_string(PyObject *self, PyTypeObject *cls, PyObject *cons
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3160,7 +3130,6 @@ _decimal_Decimal_compare_total(PyObject *self, PyTypeObject *cls, PyObject *cons
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3234,7 +3203,6 @@ _decimal_Decimal_compare_total_mag(PyObject *self, PyTypeObject *cls, PyObject *
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3310,7 +3278,6 @@ _decimal_Decimal_copy_sign(PyObject *self, PyTypeObject *cls, PyObject *const *a
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3381,7 +3348,6 @@ _decimal_Decimal_same_quantum(PyObject *self, PyTypeObject *cls, PyObject *const
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3449,7 +3415,6 @@ _decimal_Decimal_logical_and(PyObject *self, PyTypeObject *cls, PyObject *const 
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3517,7 +3482,6 @@ _decimal_Decimal_logical_or(PyObject *self, PyTypeObject *cls, PyObject *const *
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3585,7 +3549,6 @@ _decimal_Decimal_logical_xor(PyObject *self, PyTypeObject *cls, PyObject *const 
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3659,7 +3622,6 @@ _decimal_Decimal_rotate(PyObject *self, PyTypeObject *cls, PyObject *const *args
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3728,7 +3690,6 @@ _decimal_Decimal_scaleb(PyObject *self, PyTypeObject *cls, PyObject *const *args
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3801,7 +3762,6 @@ _decimal_Decimal_shift(PyObject *self, PyTypeObject *cls, PyObject *const *args,
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3889,7 +3849,6 @@ _decimal_Decimal_quantize(PyObject *self, PyTypeObject *cls, PyObject *const *ar
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -5083,7 +5042,6 @@ _decimal_Context_power(PyObject *context, PyTypeObject *cls, PyObject *const *ar
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -6300,4 +6258,4 @@ exit:
 #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
 #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
-/*[clinic end generated code: output=dfa2fe9e68c96bfb input=a9049054013a1b77]*/
+/*[clinic end generated code: output=962ee4e46c92d958 input=a9049054013a1b77]*/

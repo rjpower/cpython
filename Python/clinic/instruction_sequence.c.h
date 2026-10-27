@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
@@ -58,7 +57,6 @@ InstructionSequenceType_use_label(PyObject *self, PyObject *const *args, Py_ssiz
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -122,7 +120,6 @@ InstructionSequenceType_addop(PyObject *self, PyObject *const *args, Py_ssize_t 
 
     #define NUM_KEYWORDS 6
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -237,7 +234,6 @@ InstructionSequenceType_add_nested(PyObject *self, PyObject *const *args, Py_ssi
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -310,4 +306,4 @@ InstructionSequenceType_get_instructions(PyObject *self, PyObject *Py_UNUSED(ign
 {
     return InstructionSequenceType_get_instructions_impl((_PyInstructionSequence *)self);
 }
-/*[clinic end generated code: output=c80501a59a1a1103 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=a53b67fc368a2a69 input=a9049054013a1b77]*/

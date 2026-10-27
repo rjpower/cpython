@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
@@ -73,7 +72,6 @@ _remote_debugging_RemoteUnwinder___init__(PyObject *self, PyObject *args, PyObje
 
     #define NUM_KEYWORDS 11
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -578,7 +576,6 @@ _remote_debugging_GCMonitor___init__(PyObject *self, PyObject *args, PyObject *k
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -680,7 +677,6 @@ _remote_debugging_GCMonitor_get_gc_stats(PyObject *self, PyObject *const *args, 
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -763,7 +759,6 @@ _remote_debugging_BinaryWriter___init__(PyObject *self, PyObject *args, PyObject
 
     #define NUM_KEYWORDS 6
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -873,7 +868,6 @@ _remote_debugging_BinaryWriter_write_sample(PyObject *self, PyObject *const *arg
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -940,7 +934,6 @@ _remote_debugging_BinaryWriter_set_stats(PyObject *self, PyObject *const *args, 
 
     #define NUM_KEYWORDS 4
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1091,7 +1084,6 @@ _remote_debugging_BinaryWriter___exit__(PyObject *self, PyObject *const *args, P
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1193,7 +1185,6 @@ _remote_debugging_BinaryReader___init__(PyObject *self, PyObject *args, PyObject
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1267,7 +1258,6 @@ _remote_debugging_BinaryReader_replay(PyObject *self, PyObject *const *args, Py_
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1413,7 +1403,6 @@ _remote_debugging_BinaryReader___exit__(PyObject *self, PyObject *const *args, P
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1529,7 +1518,6 @@ _remote_debugging_get_child_pids(PyObject *module, PyObject *const *args, Py_ssi
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1600,7 +1588,6 @@ _remote_debugging_is_python_process(PyObject *module, PyObject *const *args, Py_
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1682,7 +1669,6 @@ _remote_debugging_get_gc_stats(PyObject *module, PyObject *const *args, Py_ssize
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1732,4 +1718,4 @@ skip_optional_kwonly:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=546adb867a968b08 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=36dac277d62a1aa5 input=a9049054013a1b77]*/

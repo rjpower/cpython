@@ -78,7 +78,7 @@ def _managed_dict_offset():
     if any(field.name == "ob_ref_local" for field in pyobj.fields()):
         return -1 * _sizeof_void_p()
     else:
-        return -3 * _sizeof_void_p()
+        return -1 * _sizeof_void_p()
 
 Py_TPFLAGS_INLINE_VALUES     = (1 << 2)
 Py_TPFLAGS_MANAGED_DICT      = (1 << 4)

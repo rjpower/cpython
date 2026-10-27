@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
@@ -506,7 +505,6 @@ _socket_socket_recv_into(PyObject *s, PyObject *const *args, Py_ssize_t nargs, P
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -662,7 +660,6 @@ _socket_socket_recvfrom_into(PyObject *s, PyObject *const *args, Py_ssize_t narg
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1112,7 +1109,6 @@ _socket_socket_sendmsg_afalg(PyObject *self, PyObject *const *args, Py_ssize_t n
 
     #define NUM_KEYWORDS 5
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1297,7 +1293,6 @@ sock_initobj(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 4
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1984,7 +1979,6 @@ _socket_getaddrinfo(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
 
     #define NUM_KEYWORDS 6
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2455,4 +2449,4 @@ exit:
 #ifndef _SOCKET_CMSG_SPACE_METHODDEF
     #define _SOCKET_CMSG_SPACE_METHODDEF
 #endif /* !defined(_SOCKET_CMSG_SPACE_METHODDEF) */
-/*[clinic end generated code: output=815ce3814eeca638 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2a765e34700f7bac input=a9049054013a1b77]*/

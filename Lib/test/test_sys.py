@@ -1641,19 +1641,15 @@ class SizeofTest(unittest.TestCase):
         self.P = struct.calcsize('P')
         self.longdigit = sys.int_info.sizeof_digit
         _testinternalcapi = import_helper.import_module("_testinternalcapi")
-        self.gc_headsize = _testinternalcapi.SIZEOF_PYGC_HEAD
         self.managed_pre_header_size = _testinternalcapi.SIZEOF_MANAGED_PRE_HEADER
 
     check_sizeof = test.support.check_sizeof
 
     def test_gc_head_size(self):
-        # Check that the gc header size is added to objects tracked by the gc.
+        # Objects the collector tracks have no header before the object
         vsize = test.support.calcvobjsize
-        gc_header_size = self.gc_headsize
-        # bool objects are not gc tracked
         self.assertEqual(sys.getsizeof(True), vsize('') + self.longdigit)
-        # but lists are
-        self.assertEqual(sys.getsizeof([]), vsize('Pn') + gc_header_size)
+        self.assertEqual(sys.getsizeof([]), vsize('Pn'))
 
     def test_errors(self):
         class BadSizeof:
@@ -1678,7 +1674,7 @@ class SizeofTest(unittest.TestCase):
             def __sizeof__(self):
                 return int(self)
         self.assertEqual(sys.getsizeof(OverflowSizeof(sys.maxsize)),
-                         sys.maxsize + self.gc_headsize + self.managed_pre_header_size)
+                         sys.maxsize + self.managed_pre_header_size)
         with self.assertRaises(OverflowError):
             sys.getsizeof(OverflowSizeof(sys.maxsize + 1))
         with self.assertRaises(ValueError):
@@ -1985,8 +1981,6 @@ class SizeofTest(unittest.TestCase):
 
     def check_slots(self, obj, base, extra):
         expected = sys.getsizeof(base) + struct.calcsize(extra)
-        if gc.is_tracked(obj) and not gc.is_tracked(base):
-            expected += self.gc_headsize
         self.assertEqual(sys.getsizeof(obj), expected)
 
     def test_slots(self):

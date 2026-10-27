@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
@@ -724,7 +723,6 @@ _io_BytesIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -801,4 +799,4 @@ _io_BytesIO___sizeof__(PyObject *self, PyObject *Py_UNUSED(ignored))
 }
 #define _IO_BYTESIO_CLOSED_GETSETDEF {"closed", (getter)_io_BytesIO_closed_get, (setter)NULL, _io_BytesIO_closed__doc__},
 
-/*[clinic end generated code: output=f1759d74f86e0829 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=64acb202ab514b35 input=a9049054013a1b77]*/

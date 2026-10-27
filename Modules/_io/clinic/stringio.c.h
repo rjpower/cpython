@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
@@ -323,7 +322,6 @@ _io_StringIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -560,4 +558,4 @@ _io_StringIO_newlines_get(PyObject *self, void *Py_UNUSED(context))
 
 #define _IO_STRINGIO_NEWLINES_GETSETDEF {"newlines", (getter)_io_StringIO_newlines_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=f3e3077cf07c17b6 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=48eafa26eddc4cf1 input=a9049054013a1b77]*/

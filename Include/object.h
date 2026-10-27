@@ -99,7 +99,7 @@ whose size is determined when the object is allocated.
 
 /* PyObjects are given a minimum alignment so that the least significant bits
  * of an object pointer become available for other purposes.
- * This must be an integer literal with the value (1 << _PyGC_PREV_SHIFT), number of bytes.
+ * This must be an integer literal, a number of bytes.
  */
 #define _PyObject_MIN_ALIGNMENT 4
 
@@ -450,7 +450,8 @@ given type object has a specified feature.
 #define Py_TPFLAGS_MANAGED_DICT (1 << 4)
 
 /* Type has a dictionary pointer that is managed by the VM, which allocates
- * a word for it before the object.
+ * two words before the object: the pointer, and a word of padding that keeps
+ * the object 16-byte aligned.
  */
 #define Py_TPFLAGS_PREHEADER Py_TPFLAGS_MANAGED_DICT
 

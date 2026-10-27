@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
@@ -27,7 +26,6 @@ _ssl_Certificate_public_bytes(PyObject *self, PyObject *const *args, Py_ssize_t 
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -89,4 +87,4 @@ _ssl_Certificate_get_info(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return _ssl_Certificate_get_info_impl((PySSLCertificate *)self);
 }
-/*[clinic end generated code: output=bab2dba7dbc1523c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4ac9465c3020f8bd input=a9049054013a1b77]*/

@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
@@ -23,7 +22,6 @@ tokenizeriter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -101,4 +99,4 @@ tokenizeriter_next(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=46da41aeab4c85d6 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=fab3a2f9cff18d3e input=a9049054013a1b77]*/

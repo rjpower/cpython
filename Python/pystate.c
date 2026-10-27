@@ -538,7 +538,6 @@ init_interpreter(PyInterpreterState *interp,
     // if interp->feature_flags were alredy set.
 
     _PyEval_InitState(interp);
-    _PyGC_InitState(&interp->gc);
     PyConfig_InitPythonConfig(&interp->config);
 #ifdef WITH_MIMALLOC
     interp->mimalloc.subproc = mi_subproc_new();

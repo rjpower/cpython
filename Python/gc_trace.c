@@ -427,10 +427,9 @@ heap_offset(trace_t *t, int tag)
 {
     switch (tag) {
     case _Py_MIMALLOC_HEAP_GC:
-        return t->debug_offset + sizeof(PyGC_Head);
+        return t->debug_offset;
     case _Py_MIMALLOC_HEAP_GC_PRE:
-        return (t->debug_offset + sizeof(PyGC_Head)
-                + _PyObject_MANAGED_PRE_HEADER_SIZE);
+        return t->debug_offset + _PyObject_MANAGED_PRE_HEADER_SIZE;
     default:
         return t->debug_offset;
     }

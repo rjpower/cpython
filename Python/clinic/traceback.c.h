@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
@@ -28,7 +27,6 @@ tb_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 4
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -128,4 +126,4 @@ traceback_tb_next_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
 }
 #define TRACEBACK_TB_NEXT_GETSETDEF {"tb_next", (getter)traceback_tb_next_get, (setter)traceback_tb_next_set, NULL},
 
-/*[clinic end generated code: output=5e7edea0c7dbdf1a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=66512bf8e2251c56 input=a9049054013a1b77]*/

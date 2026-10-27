@@ -1,6 +1,5 @@
 #include "Python.h"
 #include "pycore_fileutils.h"     // _Py_write_noraise()
-#include "pycore_gc.h"            // PyGC_Head
 #include "pycore_hashtable.h"     // _Py_hashtable_t
 #include "pycore_initconfig.h"    // _PyStatus_NO_MEMORY()
 #include "pycore_interpframe.h"   // _PyInterpreterFrame

@@ -1094,15 +1094,8 @@ _TPFLAGS_BASE_EXC_SUBCLASS = 1<<30
 _TPFLAGS_TYPE_SUBCLASS = 1<<31
 
 def check_sizeof(test, o, size):
-    try:
-        import _testinternalcapi
-    except ImportError:
-        raise unittest.SkipTest("_testinternalcapi required")
+    # Objects the collector tracks carry no header before the object
     result = sys.getsizeof(o)
-    # add GC header size
-    if ((type(o) == type) and (o.__flags__ & _TPFLAGS_HEAPTYPE) or\
-        ((type(o) != type) and (type(o).__flags__ & _TPFLAGS_HAVE_GC))):
-        size += _testinternalcapi.SIZEOF_PYGC_HEAD
     msg = 'wrong size for %s: got %d, expected %d' \
             % (type(o), result, size)
     test.assertEqual(result, size, msg)

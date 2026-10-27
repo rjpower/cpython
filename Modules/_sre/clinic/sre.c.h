@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
@@ -186,7 +185,6 @@ _sre_SRE_Pattern_prefixmatch(PyObject *self, PyTypeObject *cls, PyObject *const 
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -282,7 +280,6 @@ _sre_SRE_Pattern_fullmatch(PyObject *self, PyTypeObject *cls, PyObject *const *a
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -380,7 +377,6 @@ _sre_SRE_Pattern_search(PyObject *self, PyTypeObject *cls, PyObject *const *args
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -475,7 +471,6 @@ _sre_SRE_Pattern_findall(PyObject *self, PyObject *const *args, Py_ssize_t nargs
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -573,7 +568,6 @@ _sre_SRE_Pattern_finditer(PyObject *self, PyTypeObject *cls, PyObject *const *ar
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -668,7 +662,6 @@ _sre_SRE_Pattern_scanner(PyObject *self, PyTypeObject *cls, PyObject *const *arg
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -763,7 +756,6 @@ _sre_SRE_Pattern_split(PyObject *self, PyObject *const *args, Py_ssize_t nargs, 
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -840,7 +832,6 @@ _sre_SRE_Pattern_sub(PyObject *self, PyTypeObject *cls, PyObject *const *args, P
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -920,7 +911,6 @@ _sre_SRE_Pattern_subn(PyObject *self, PyTypeObject *cls, PyObject *const *args, 
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1076,7 +1066,6 @@ _sre_compile(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
 
     #define NUM_KEYWORDS 6
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1209,7 +1198,6 @@ _sre_SRE_Match_expand(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1299,7 +1287,6 @@ _sre_SRE_Match_groups(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1365,7 +1352,6 @@ _sre_SRE_Match_groupdict(PyObject *self, PyObject *const *args, Py_ssize_t nargs
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1597,4 +1583,4 @@ _sre_SRE_Scanner_search(PyObject *self, PyTypeObject *cls, PyObject *const *args
 #ifndef _SRE_SRE_PATTERN__FAIL_AFTER_METHODDEF
     #define _SRE_SRE_PATTERN__FAIL_AFTER_METHODDEF
 #endif /* !defined(_SRE_SRE_PATTERN__FAIL_AFTER_METHODDEF) */
-/*[clinic end generated code: output=2e6c222a2eb0875e input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c1ba209d3ba6f9aa input=a9049054013a1b77]*/

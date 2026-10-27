@@ -8,22 +8,9 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#include "pycore_interp_structs.h" // PyGC_Head
+#include "pycore_interp_structs.h" // struct _gc_runtime_state
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_typedefs.h"      // _PyInterpreterFrame
-
-
-/* Get an object's GC head */
-static inline PyGC_Head* _Py_AS_GC(PyObject *op) {
-    char *gc = ((char*)op) - sizeof(PyGC_Head);
-    return (PyGC_Head*)gc;
-}
-
-/* Get the object given the GC head */
-static inline PyObject* _Py_FROM_GC(PyGC_Head *gc) {
-    char *op = ((char *)gc) + sizeof(PyGC_Head);
-    return (PyObject *)op;
-}
 
 
 /* Bit flags for ob_gc_bits (in Py_GIL_DISABLED builds)
@@ -59,15 +46,6 @@ static inline int _PyObject_GC_MAY_BE_TRACKED(PyObject *obj) {
 }
 
 
-/* Bit flags for _gc_prev */
-/* Bit 0 is set when tp_finalize is called */
-#define _PyGC_PREV_MASK_FINALIZED  ((uintptr_t)1)
-/* Bit 1 is set when the object is in generation which is GCed currently. */
-#define _PyGC_PREV_MASK_COLLECTING ((uintptr_t)2)
-
-#define _PyGC_PREV_SHIFT           2
-#define _PyGC_PREV_MASK            (((uintptr_t) -1) << _PyGC_PREV_SHIFT)
-
 /* set for debugging information */
 #define _PyGC_DEBUG_STATS             (1<<0) /* print collection statistics */
 #define _PyGC_DEBUG_COLLECTABLE       (1<<1) /* print collectable objects */
@@ -87,28 +65,6 @@ typedef enum {
     // GC was called by gc.collect() or PyGC_Collect()
     _Py_GC_REASON_MANUAL
 } _PyGC_Reason;
-
-// Lowest bit of _gc_next is used for flags only in GC.
-// But it is always 0 for normal code.
-static inline PyGC_Head* _PyGCHead_NEXT(PyGC_Head *gc) {
-    uintptr_t next = gc->_gc_next;
-    return (PyGC_Head*)next;
-}
-static inline void _PyGCHead_SET_NEXT(PyGC_Head *gc, PyGC_Head *next) {
-    gc->_gc_next = (uintptr_t)next;
-}
-
-// Lowest two bits of _gc_prev is used for _PyGC_PREV_MASK_* flags.
-static inline PyGC_Head* _PyGCHead_PREV(PyGC_Head *gc) {
-    uintptr_t prev = (gc->_gc_prev & _PyGC_PREV_MASK);
-    return (PyGC_Head*)prev;
-}
-
-static inline void _PyGCHead_SET_PREV(PyGC_Head *gc, PyGC_Head *prev) {
-    uintptr_t uprev = (uintptr_t)prev;
-    assert((uprev & ~_PyGC_PREV_MASK) == 0);
-    gc->_gc_prev = ((gc->_gc_prev & ~_PyGC_PREV_MASK) | uprev);
-}
 
 static inline int _PyGC_FINALIZED(PyObject *op) {
     return (op->ob_flags & _Py_GC_FINALIZED_FLAG) != 0;
@@ -130,10 +86,6 @@ extern void _Py_ScheduleGC(PyThreadState *tstate);
  * NB: While the object is tracked by the collector, it must be safe to call the
  * ob_traverse method.
  *
- * Internal note: interp->gc.generation0->_gc_prev doesn't have any bit flags
- * because it's not an object header. So we don't use _PyGCHead_PREV() and
- * _PyGCHead_SET_PREV() for it to avoid unnecessary bitwise operations.
- *
  * See also the public PyObject_GC_Track() function.
  */
 static inline void _PyObject_GC_TRACK(
@@ -150,9 +102,6 @@ static inline void _PyObject_GC_TRACK(
 }
 
 /* Tell the GC to stop tracking this object.
- *
- * Internal note: This may be called while GC. So _PyGC_PREV_MASK_COLLECTING
- * must be cleared. But _PyGC_PREV_MASK_FINALIZED bit is kept.
  *
  * The object must be tracked by the GC.
  *
@@ -216,7 +165,6 @@ static inline void _PyObject_GC_UNTRACK(
    the algorithm was refined in response to issue #14775.
 */
 
-extern void _PyGC_InitState(struct _gc_runtime_state *);
 
 extern Py_ssize_t _PyGC_Collect(PyThreadState *tstate, int generation, _PyGC_Reason reason);
 extern void _PyGC_CollectNoFail(PyThreadState *tstate);

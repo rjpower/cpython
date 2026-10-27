@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
@@ -79,7 +78,6 @@ warnings_warn(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObjec
 
     #define NUM_KEYWORDS 5
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -189,7 +187,6 @@ warnings_warn_explicit(PyObject *module, PyObject *const *args, Py_ssize_t nargs
 
     #define NUM_KEYWORDS 8
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -284,4 +281,4 @@ warnings_filters_mutated_lock_held(PyObject *module, PyObject *Py_UNUSED(ignored
 {
     return warnings_filters_mutated_lock_held_impl(module);
 }
-/*[clinic end generated code: output=fc026d6a21e12170 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0d0e8a041c3419a2 input=a9049054013a1b77]*/

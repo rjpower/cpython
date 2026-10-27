@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
@@ -316,7 +315,6 @@ _elementtree_Element_find(PyObject *self, PyTypeObject *cls, PyObject *const *ar
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -392,7 +390,6 @@ _elementtree_Element_findtext(PyObject *self, PyTypeObject *cls, PyObject *const
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -471,7 +468,6 @@ _elementtree_Element_findall(PyObject *self, PyTypeObject *cls, PyObject *const 
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -543,7 +539,6 @@ _elementtree_Element_iterfind(PyObject *self, PyTypeObject *cls, PyObject *const
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -616,7 +611,6 @@ _elementtree_Element_get(PyObject *self, PyObject *const *args, Py_ssize_t nargs
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -693,7 +687,6 @@ _elementtree_Element_iter(PyObject *self, PyTypeObject *cls, PyObject *const *ar
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1002,7 +995,6 @@ _elementtree_TreeBuilder___init__(PyObject *self, PyObject *args, PyObject *kwar
 
     #define NUM_KEYWORDS 5
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1311,7 +1303,6 @@ _elementtree_XMLParser___init__(PyObject *self, PyObject *args, PyObject *kwargs
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1493,4 +1484,4 @@ skip_optional:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=88cd4a3f16a09256 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2bde86729f8bbfaa input=a9049054013a1b77]*/

@@ -147,22 +147,7 @@ struct atexit_state {
 
 /****** Garbage collector **********/
 
-/* GC information is stored BEFORE the object structure. */
-typedef struct {
-    // Tagged pointer to next object in the list.
-    // 0 means the object is not tracked
-    _Py_ALIGNED_DEF(_PyObject_MIN_ALIGNMENT, uintptr_t) _gc_next;
-
-    // Tagged pointer to previous object in the list.
-    // Lowest two bits are used for flags documented later.
-    // Those bits are made available by the struct's minimum alignment.
-    uintptr_t _gc_prev;
-} PyGC_Head;
-
-#define _PyGC_Head_UNUSED PyGC_Head
-
 struct gc_generation {
-    PyGC_Head head;
     int threshold; /* collection threshold */
     int count; /* count of allocations or collections of younger
                   generations */
@@ -241,8 +226,6 @@ struct _gc_runtime_state {
        collections, and are awaiting to undergo a full collection for
        the first time. */
     Py_ssize_t long_lived_pending;
-
-    PyGC_Head *generation0;
 
     /* The tracing verifier (Python/gc_trace.c): when to run it, and its
        registered static types and last results. */
@@ -717,7 +700,6 @@ struct _Py_interp_static_objects {
     struct {
         int _not_used;
         // hamt_empty is here instead of global because of its weak references.
-        _PyGC_Head_UNUSED _hamt_empty_gc_not_used;
         PyHamtObject hamt_empty;
         PyBaseExceptionObject last_resort_memory_error;
     } singletons;

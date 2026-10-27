@@ -85,6 +85,13 @@ class RunTest(unittest.TestCase):
         self.assertEqual(entry["skeleton"], "empty_list_loop")
         self.assertEqual(entry["value"], entry["raw"] - table["empty_list_loop"]["value"])
 
+    def test_collector_reports_seconds_per_gb(self):
+        report = self.run_bench("time", "--time-runs", "1", name="collector_live16",
+                                group="memory")
+        entry = self.check_entry(report, "time", 1, name="collector_live16")
+        self.assertEqual(entry["unit"], "s per allocated GB")
+        self.assertLess(entry["value"], 60)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,7 +19,6 @@ only what every build under test has: no third-party module, no fork API.
 """
 
 import importlib.util
-import json
 import sys
 import time
 
@@ -52,6 +51,9 @@ def main(argv):
         t0 = time.perf_counter_ns()
         module.run(loops)
         durations.append(time.perf_counter_ns() - t0)
+    # Imported here, not at the top, so the run mode's peak RSS (the startup
+    # and imports rows) does not include json and re.
+    import json
     print(json.dumps(durations))
     return 0
 

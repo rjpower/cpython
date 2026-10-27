@@ -81,6 +81,8 @@ class Bench:
     variant: str | None = None  # passed to the module's setup()
     inner: int = 1  # iterations per loop; instr is reported per iteration
     skeleton: str | None = None  # benchmark whose instr is subtracted
+    metrics: tuple[str, ...] | None = None  # default: the group's
+    time_unit: str | None = None  # time in seconds per loop, under this name
 
     @property
     def path(self) -> Path:
@@ -177,8 +179,23 @@ BENCHMARKS = [
     micro("try_noraise", "empty_loop"),
     micro("try_raise", "empty_loop"),
 ]
+
+# The memory and collector group: fixed workloads, one loop each; each
+# file's docstring documents its objects.
+BENCHMARKS += [
+    Bench("startup", "memory", 1, metrics=("rss",)),
+    Bench("imports", "memory", 1, metrics=("rss",)),
+    Bench("tuples_10m", "memory", 1),
+    Bench("instances_1m", "memory", 1),
+    Bench("dicts_200k", "memory", 1),
+] + [Bench(f"collector_live{mb}", "memory", 1, "collector", str(mb),
+           time_unit="s per allocated GB") for mb in (16, 128, 512)]
 GROUP_METRICS = {"kernels": ("instr", "time", "rss"), "micro": ("instr",),
                  "memory": ("instr", "time", "rss")}
+
+
+def metrics_of(bench: Bench) -> tuple[str, ...]:
+    return bench.metrics or GROUP_METRICS[bench.group]
 
 
 class MeasurementError(RuntimeError):
@@ -255,8 +272,11 @@ def subtract_skeletons(table: dict, benches: list[Bench]) -> None:
 def measure_time(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
     proc = run_checked(ctx.command(bench, "time", loops, runs), f"{bench.name} timing")
     durations = json.loads(proc.stdout.strip().splitlines()[-1])
-    values = [d / loops for d in durations]
-    return {"group": bench.group, "unit": "ns per loop",
+    if bench.time_unit:
+        values, unit = [d / loops / 1e9 for d in durations], bench.time_unit
+    else:
+        values, unit = [d / loops for d in durations], "ns per loop"
+    return {"group": bench.group, "unit": unit,
             "value": statistics.median(values), "values": values,
             "loops": loops, "runs": runs, "warmup_calls": 1}
 
@@ -373,7 +393,7 @@ def main(argv: list[str] | None = None) -> int:
                 runs = {"instr": args.instr_runs, "time": args.time_runs,
                         "rss": args.rss_runs}[metric]
                 table = results.setdefault(metric, {})
-                chosen = [b for b in benches if metric in GROUP_METRICS[b.group]]
+                chosen = [b for b in benches if metric in metrics_of(b)]
                 for bench in chosen:
                     entry = measure(ctx, bench, runs, args.loops or bench.loops)
                     table[bench.name] = entry

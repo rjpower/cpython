@@ -33,7 +33,7 @@ def fmt(value: float) -> str:
         return f"{value / 1e6:,.1f}M"
     if abs(value) >= 100:
         return f"{value:,.0f}"
-    return f"{value:.2f}"
+    return f"{value:.3g}"
 
 
 def tables(reports: list[dict]) -> list[str]:
@@ -46,15 +46,16 @@ def tables(reports: list[dict]) -> list[str]:
             names = [n for n, e in ref_table.items() if e["group"] == group]
             if not names:
                 continue
-            unit = ref_table[names[0]]["unit"]
-            out.append(f"### {metric}, {group} ({unit})\n")
+            units = {ref_table[n]["unit"] for n in names}
+            unit = units.pop() if len(units) == 1 else None
+            out.append(f"### {metric}, {group}" + (f" ({unit})" if unit else "") + "\n")
             head = ["benchmark", label(ref)] + [f"{label(o)} / {label(ref)}" for o in others]
             out.append("| " + " | ".join(head) + " |")
             out.append("|---" + "|---:" * (len(head) - 1) + "|")
             logs: list[list[float]] = [[] for _ in others]
             for name in names:
                 base = ref_table[name]["value"]
-                row = [name, fmt(base)]
+                row = [name if unit else f"{name} ({ref_table[name]['unit']})", fmt(base)]
                 for i, other in enumerate(others):
                     entry = other["results"].get(metric, {}).get(name)
                     if entry is None or base <= 0 or entry["value"] <= 0:

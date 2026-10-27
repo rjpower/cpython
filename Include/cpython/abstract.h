@@ -155,6 +155,15 @@ PyAPI_FUNC(PyValue) PyNumber_IndexValue(PyValue o);
 PyAPI_FUNC(PyValue) PyNumber_LongValue(PyValue o);
 PyAPI_FUNC(PyValue) PyNumber_FloatValue(PyValue o);
 
+/* The C number that a value holds, as the PyObject * function of the same
+   name without "Value": an inline int or float converts without a box. */
+PyAPI_FUNC(long) PyLong_AsLongValue(PyValue o);
+PyAPI_FUNC(int) PyLong_AsIntValue(PyValue o);
+PyAPI_FUNC(long long) PyLong_AsLongLongValue(PyValue o);
+PyAPI_FUNC(Py_ssize_t) PyLong_AsSsize_tValue(PyValue o);
+PyAPI_FUNC(Py_ssize_t) PyNumber_AsSsize_tValue(PyValue o, PyObject *exc);
+PyAPI_FUNC(double) PyFloat_AsDoubleValue(PyValue o);
+
 PyAPI_FUNC(PyValue) PyObject_GetAttrValue(PyValue o, PyObject *attr_name);
 /* Deletes the attribute if v is PyValue_NULL. */
 PyAPI_FUNC(int) PyObject_SetAttrValue(PyValue o, PyObject *attr_name, PyValue v);

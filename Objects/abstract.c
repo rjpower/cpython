@@ -2180,6 +2180,54 @@ PyNumber_FloatValue(PyValue v)
     return unary_op_boxed(v, PyNumber_Float);
 }
 
+/* The C conversions: an inline int converts directly.  Any other value is
+   given to the PyObject * function, which raises the TypeError for an
+   inline float; a box is made only for that. */
+#define AS_C_VALUE(TYPE, NAME, FUNC) \
+    TYPE \
+    NAME(PyValue v) \
+    { \
+        if (PyValue_IsInlineInt(v)) { \
+            return (TYPE)PyValue_Int32(v); \
+        } \
+        PyObject *o = PyValue_Object(v); \
+        if (o == NULL) { \
+            return (TYPE)-1; \
+        } \
+        return FUNC(o); \
+    }
+
+AS_C_VALUE(long, PyLong_AsLongValue, PyLong_AsLong)
+AS_C_VALUE(int, PyLong_AsIntValue, PyLong_AsInt)
+AS_C_VALUE(long long, PyLong_AsLongLongValue, PyLong_AsLongLong)
+AS_C_VALUE(Py_ssize_t, PyLong_AsSsize_tValue, PyLong_AsSsize_t)
+#undef AS_C_VALUE
+
+Py_ssize_t
+PyNumber_AsSsize_tValue(PyValue v, PyObject *exc)
+{
+    if (PyValue_IsInlineInt(v)) {
+        return PyValue_Int32(v);
+    }
+    PyObject *o = PyValue_Object(v);
+    if (o == NULL) {
+        return -1;
+    }
+    return PyNumber_AsSsize_t(o, exc);
+}
+
+double
+PyFloat_AsDoubleValue(PyValue v)
+{
+    if (PyValue_IsInlineFloat(v)) {
+        return PyValue_Double(v);
+    }
+    if (PyValue_IsInlineInt(v)) {
+        return (double)PyValue_Int32(v);
+    }
+    return PyFloat_AsDouble(PyValue_ObjectBorrow(v));
+}
+
 
 /* Operations on sequences */
 

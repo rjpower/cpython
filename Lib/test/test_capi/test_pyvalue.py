@@ -11,6 +11,7 @@ import collections
 import fractions
 import math
 import operator
+import sys
 import unittest
 
 from test.support import import_helper
@@ -472,6 +473,58 @@ class StringTests(ValueTestCase):
                     x, spec)
         with self.assertRaises(Boom):
             pv.FormatValue(Raising(), 'x')
+
+
+
+class Index:
+    def __init__(self, i):
+        self.i = i
+
+    def __index__(self):
+        return self.i
+
+
+class ConversionTests(unittest.TestCase):
+    """The C conversions read an inline int or float without a box and
+    otherwise behave as the PyObject * functions."""
+
+    def test_integer(self):
+        for name in ('AsLongValue', 'AsIntValue', 'AsLongLongValue',
+                     'AsSsize_tValue'):
+            func = getattr(pv, name)
+            with self.subTest(name=name):
+                for x in (0, 7, -7, INT32_MAX, INT32_MIN, True):
+                    self.assertEqual(func(x), x)
+                self.assertRaises(TypeError, func, 2.5)
+                self.assertRaises(TypeError, func, math.nan)
+                self.assertRaises(TypeError, func, 'a')
+                if name != 'AsSsize_tValue':
+                    # PyLong_AsSsize_t() does not call __index__.
+                    self.assertEqual(func(Index(5)), 5)
+        self.assertEqual(pv.AsLongLongValue(BIG), BIG)
+        self.assertRaises(OverflowError, pv.AsIntValue, INT32_MAX + 1)
+        self.assertRaises(OverflowError, pv.AsLongValue, 2**100)
+
+    def test_number_as_ssize_t(self):
+        f = pv.NumberAsSsize_tValue
+        self.assertEqual(f(7, OverflowError), 7)
+        self.assertEqual(f(INT32_MIN, None), INT32_MIN)
+        self.assertEqual(f(Index(BIG), None), BIG)
+        self.assertEqual(f(2**100, None), sys.maxsize)
+        self.assertEqual(f(-2**100, None), -sys.maxsize - 1)
+        self.assertRaises(IndexError, f, 2**100, IndexError)
+        self.assertRaises(TypeError, f, 2.5, None)
+
+    def test_double(self):
+        f = pv.AsDoubleValue
+        for x in (2.5, -0.0, math.inf, 0, 7, INT32_MIN, BIG, 2**100,
+                  fractions.Fraction(1, 4)):
+            with self.subTest(x=x):
+                self.assertEqual(f(x), float(x))
+        self.assertTrue(math.isnan(f(math.nan)))
+        self.assertTrue(math.copysign(1, f(-0.0)) < 0)
+        self.assertRaises(TypeError, f, 'a')
+        self.assertRaises(OverflowError, f, 10**400)
 
 
 if __name__ == '__main__':

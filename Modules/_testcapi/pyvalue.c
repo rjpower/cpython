@@ -263,7 +263,46 @@ object_format(PyObject *Py_UNUSED(module), PyObject *args)
 
 #define BINARY_ENTRY(NAME) {#NAME "Value", number_##NAME, METH_VARARGS}
 
+#define AS_C(NAME, TYPE, BUILD) \
+    static PyObject * \
+    as_c_##NAME(PyObject *Py_UNUSED(module), PyObject *o) \
+    { \
+        TYPE r = NAME##Value(PyValue_FromObject(o)); \
+        if (r == (TYPE)-1 && PyErr_Occurred()) { \
+            return NULL; \
+        } \
+        return BUILD(r); \
+    }
+AS_C(PyLong_AsLong, long, PyLong_FromLong)
+AS_C(PyLong_AsInt, int, PyLong_FromLong)
+AS_C(PyLong_AsLongLong, long long, PyLong_FromLongLong)
+AS_C(PyLong_AsSsize_t, Py_ssize_t, PyLong_FromSsize_t)
+AS_C(PyFloat_AsDouble, double, PyFloat_FromDouble)
+#undef AS_C
+
+// AsSsize_tValue(o, exc): exc is None for NULL, clipping on overflow.
+static PyObject *
+number_as_ssize_t(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *o, *exc;
+    if (!PyArg_ParseTuple(args, "OO", &o, &exc)) {
+        return NULL;
+    }
+    Py_ssize_t r = PyNumber_AsSsize_tValue(PyValue_FromObject(o),
+                                           Py_IsNone(exc) ? NULL : exc);
+    if (r == -1 && PyErr_Occurred()) {
+        return NULL;
+    }
+    return PyLong_FromSsize_t(r);
+}
+
 static PyMethodDef test_methods[] = {
+    {"AsLongValue", as_c_PyLong_AsLong, METH_O},
+    {"AsIntValue", as_c_PyLong_AsInt, METH_O},
+    {"AsLongLongValue", as_c_PyLong_AsLongLong, METH_O},
+    {"AsSsize_tValue", as_c_PyLong_AsSsize_t, METH_O},
+    {"NumberAsSsize_tValue", number_as_ssize_t, METH_VARARGS},
+    {"AsDoubleValue", as_c_PyFloat_AsDouble, METH_O},
     {"value_kind", value_kind, METH_O},
     BINARY_ENTRY(Add),
     BINARY_ENTRY(Subtract),

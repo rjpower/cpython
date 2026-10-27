@@ -306,8 +306,7 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
             }
         }
         if (cell != NULL) {
-            Py_XINCREF(value);
-            PyCell_SetTakeRef((PyCellObject *)cell, value);
+            PyCell_SET(cell, value);
         } else if (PyValue_IsInline(oldvalue)) {
             // An inline value holds no reference to keep alive.
             fast[i] = PyValue_FromObject(value);

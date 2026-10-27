@@ -13,46 +13,32 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-// Sets the cell contents to `value` and return previous contents. Steals a
-// reference to `value`.
-static inline PyObject *
-PyCell_SwapTakeRef(PyCellObject *cell, PyObject *value)
+// Sets the cell contents to the canonical value v and returns the previous
+// contents.
+static inline PyValue
+_PyCell_SwapValue(PyCellObject *cell, PyValue v)
 {
-    PyObject *old_value;
+    PyValue old_value;
     Py_BEGIN_CRITICAL_SECTION(cell);
     old_value = cell->ob_ref;
-    FT_ATOMIC_STORE_PTR_RELEASE(cell->ob_ref, value);
+    cell->ob_ref = v;
     Py_END_CRITICAL_SECTION();
     return old_value;
 }
 
-static inline void
-PyCell_SetTakeRef(PyCellObject *cell, PyObject *value)
-{
-    PyObject *old_value = PyCell_SwapTakeRef(cell, value);
-    Py_XDECREF(old_value);
-}
-
-// Gets the cell contents. Returns a new reference.
-static inline PyObject *
-PyCell_GetRef(PyCellObject *cell)
-{
-    PyObject *res;
-    Py_BEGIN_CRITICAL_SECTION(cell);
-    res = Py_XNewRef(cell->ob_ref);
-    Py_END_CRITICAL_SECTION();
-    return res;
-}
-
+// The cell contents, PyValue_NULL when empty.
 static inline PyValue
 _PyCell_GetValue(PyCellObject *cell)
 {
-    PyObject *value;
-    value = PyCell_GetRef(cell);
-    if (value == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromObject(value);
+    return PyCell_GET_VALUE((PyObject *)cell);
+}
+
+// The cell contents as an object: a new box if inline, NULL when empty, or
+// NULL with an exception set if boxing fails.
+static inline PyObject *
+PyCell_GetRef(PyCellObject *cell)
+{
+    return PyValue_Object(_PyCell_GetValue(cell));
 }
 
 #ifdef __cplusplus

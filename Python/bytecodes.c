@@ -2124,19 +2124,13 @@ dummy_func(
 
         inst(MAKE_CELL, (--)) {
             // "initial" is probably NULL but not if it's an arg (or set
-            // via the f_locals proxy before MAKE_CELL has run). A cell holds
-            // an object, so an inline arg is boxed.  PyCell_New() only
-            // allocates, and a collection that an allocation runs scans the
-            // eval loop's frame, so the box needs no root.
-            PyValue initial_value = GETLOCAL(oparg);
-            PyObject *initial = PyValue_Object(initial_value);
-            if (initial == NULL && !PyValue_IsNull(initial_value)) {
-                ERROR_NO_POP();
-            }
-            PyObject *cell = PyCell_New(initial);
+            // via the f_locals proxy before MAKE_CELL has run).
+            PyValue initial = GETLOCAL(oparg);
+            PyObject *cell = PyCell_New(NULL);
             if (cell == NULL) {
                 ERROR_NO_POP();
             }
+            PyCell_SET_VALUE(cell, initial);
             GETLOCAL(oparg) = PyValue_FromObject(cell);
         }
 
@@ -2144,12 +2138,11 @@ dummy_func(
             PyObject *cell = PyValue_ObjectBorrow(GETLOCAL(oparg));
             // Can't use ERROR_IF here.
             // Fortunately we don't need its superpower.
-            PyObject *oldobj = PyCell_SwapTakeRef((PyCellObject *)cell, NULL);
-            if (oldobj == NULL) {
+            PyValue old = _PyCell_SwapValue((PyCellObject *)cell, PyValue_NULL);
+            if (PyValue_IsNull(old)) {
                 _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
                 ERROR_NO_POP();
             }
-            Py_DECREF(oldobj);
         }
 
         inst(LOAD_FROM_DICT_OR_DEREF, (class_dict_st -- value)) {
@@ -2164,23 +2157,27 @@ dummy_func(
             if (err < 0) {
                 ERROR_NO_POP();
             }
+            PyValue result;
             if (!value_o) {
                 PyCellObject *cell = (PyCellObject *)PyValue_ObjectBorrow(GETLOCAL(oparg));
-                value_o = PyCell_GetRef(cell);
-                if (value_o == NULL) {
+                result = _PyCell_GetValue(cell);
+                if (PyValue_IsNull(result)) {
                     _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
                     ERROR_NO_POP();
                 }
             }
-            else if (PyLazyImport_CheckExact(value_o)) {
-                Py_SETREF(value_o, _PyLazyImport_Reify(
-                    tstate, value_o, name, class_dict));
-                if (value_o == NULL) {
-                    ERROR_NO_POP();
+            else {
+                if (PyLazyImport_CheckExact(value_o)) {
+                    Py_SETREF(value_o, _PyLazyImport_Reify(
+                        tstate, value_o, name, class_dict));
+                    if (value_o == NULL) {
+                        ERROR_NO_POP();
+                    }
                 }
+                result = PyValue_FromObject(value_o);
             }
             DEAD(class_dict_st);
-            value = PyValue_FromObject(value_o);
+            value = result;
         }
 
         inst(LOAD_DEREF, ( -- value)) {
@@ -2194,8 +2191,8 @@ dummy_func(
         }
 
         inst(STORE_DEREF, (v --)) {
-            PyCellObject *cell = (PyCellObject *)PyValue_ObjectBorrow(GETLOCAL(oparg));
-            PyCell_SetTakeRef(cell, PyValue_ObjectBorrow(v));
+            PyObject *cell = PyValue_ObjectBorrow(GETLOCAL(oparg));
+            PyCell_SET_VALUE(cell, v);
             DEAD(v);
         }
 

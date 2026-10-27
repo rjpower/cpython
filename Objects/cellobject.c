@@ -15,7 +15,7 @@ PyCell_New(PyObject *obj)
     op = (PyCellObject *)PyObject_GC_New(PyCellObject, &PyCell_Type);
     if (op == NULL)
         return NULL;
-    op->ob_ref = Py_XNewRef(obj);
+    op->ob_ref = obj == NULL ? PyValue_NULL : PyValue_FromObject(obj);
 
     _PyObject_GC_TRACK(op);
     return (PyObject *)op;
@@ -69,7 +69,7 @@ PyCell_Set(PyObject *op, PyObject *value)
         PyErr_BadInternalCall();
         return -1;
     }
-    PyCell_SetTakeRef((PyCellObject *)op, Py_XNewRef(value));
+    PyCell_SET(op, value);
     return 0;
 }
 
@@ -78,19 +78,7 @@ cell_dealloc(PyObject *self)
 {
     PyCellObject *op = _PyCell_CAST(self);
     _PyObject_GC_UNTRACK(op);
-    Py_XDECREF(op->ob_ref);
     PyObject_GC_Del(op);
-}
-
-static PyObject *
-cell_compare_impl(PyObject *a, PyObject *b, int op)
-{
-    if (a != NULL && b != NULL) {
-        return PyObject_RichCompare(a, b, op);
-    }
-    else {
-        Py_RETURN_RICHCOMPARE(b == NULL, a == NULL, op);
-    }
 }
 
 static PyObject *
@@ -103,23 +91,26 @@ cell_richcompare(PyObject *a, PyObject *b, int op)
     if (!PyCell_Check(a) || !PyCell_Check(b)) {
         Py_RETURN_NOTIMPLEMENTED;
     }
-    PyObject *a_ref = PyCell_GetRef((PyCellObject *)a);
-    PyObject *b_ref = PyCell_GetRef((PyCellObject *)b);
+    PyValue a_value = _PyCell_GetValue((PyCellObject *)a);
+    PyValue b_value = _PyCell_GetValue((PyCellObject *)b);
 
     /* compare cells by contents; empty cells come before anything else */
-    PyObject *res = cell_compare_impl(a_ref, b_ref, op);
-
-    Py_XDECREF(a_ref);
-    Py_XDECREF(b_ref);
-    return res;
+    if (!PyValue_IsNull(a_value) && !PyValue_IsNull(b_value)) {
+        return _PyValue_RichCompare(a_value, b_value, op);
+    }
+    Py_RETURN_RICHCOMPARE(PyValue_IsNull(b_value), PyValue_IsNull(a_value), op);
 }
 
 static PyObject *
 cell_repr(PyObject *self)
 {
-    PyObject *ref = PyCell_GetRef((PyCellObject *)self);
-    if (ref == NULL) {
+    PyValue value = _PyCell_GetValue((PyCellObject *)self);
+    if (PyValue_IsNull(value)) {
         return PyUnicode_FromFormat("<cell at %p: empty>", self);
+    }
+    PyObject *ref = PyValue_Object(value);
+    if (ref == NULL) {
+        return NULL;
     }
     PyObject *res = PyUnicode_FromFormat("<cell at %p: %.80s object at %p>",
                                          self, Py_TYPE(ref)->tp_name, ref);
@@ -131,7 +122,7 @@ static int
 cell_traverse(PyObject *self, visitproc visit, void *arg)
 {
     PyCellObject *op = _PyCell_CAST(self);
-    Py_VISIT(op->ob_ref);
+    _Py_VISIT_VALUE(op->ob_ref);
     return 0;
 }
 
@@ -139,28 +130,25 @@ static int
 cell_clear(PyObject *self)
 {
     PyCellObject *op = _PyCell_CAST(self);
-    Py_CLEAR(op->ob_ref);
+    op->ob_ref = PyValue_NULL;
     return 0;
 }
 
 static PyObject *
 cell_get_contents(PyObject *self, void *closure)
 {
-    PyCellObject *op = _PyCell_CAST(self);
-    PyObject *res = PyCell_GetRef(op);
-    if (res == NULL) {
+    PyValue value = _PyCell_GetValue(_PyCell_CAST(self));
+    if (PyValue_IsNull(value)) {
         PyErr_SetString(PyExc_ValueError, "Cell is empty");
         return NULL;
     }
-    return res;
+    return PyValue_Object(value);
 }
 
 static int
 cell_set_contents(PyObject *self, PyObject *obj, void *Py_UNUSED(ignored))
 {
-    PyCellObject *cell = _PyCell_CAST(self);
-    Py_XINCREF(obj);
-    PyCell_SetTakeRef((PyCellObject *)cell, obj);
+    PyCell_SET(self, obj);
     return 0;
 }
 

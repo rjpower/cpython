@@ -9852,12 +9852,11 @@
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
             PyObject *cell = PyValue_ObjectBorrow(GETLOCAL(oparg));
-            PyObject *oldobj = PyCell_SwapTakeRef((PyCellObject *)cell, NULL);
-            if (oldobj == NULL) {
+            PyValue old = _PyCell_SwapValue((PyCellObject *)cell, PyValue_NULL);
+            if (PyValue_IsNull(old)) {
                 _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
                 JUMP_TO_LABEL(error);
             }
-            Py_DECREF(oldobj);
             DISPATCH();
         }
 
@@ -15322,10 +15321,11 @@
             if (err < 0) {
                 JUMP_TO_LABEL(error);
             }
+            PyValue result;
             if (!value_o) {
                 PyCellObject *cell = (PyCellObject *)PyValue_ObjectBorrow(GETLOCAL(oparg));
-                value_o = PyCell_GetRef(cell);
-                if (value_o == NULL) {
+                result = _PyCell_GetValue(cell);
+                if (PyValue_IsNull(result)) {
                     if (Py_UNLIKELY(PyValue_IsInline(class_dict_st))) {
                         _PyThreadState_PushValueRoot(tstate, &class_dict_st_root);
                         class_dict_st_root.object = class_dict_st_object;
@@ -15337,21 +15337,24 @@
                     JUMP_TO_LABEL(error);
                 }
             }
-            else if (PyLazyImport_CheckExact(value_o)) {
-                if (Py_UNLIKELY(PyValue_IsInline(class_dict_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &class_dict_st_root);
-                    class_dict_st_root.object = class_dict_st_object;
+            else {
+                if (PyLazyImport_CheckExact(value_o)) {
+                    if (Py_UNLIKELY(PyValue_IsInline(class_dict_st))) {
+                        _PyThreadState_PushValueRoot(tstate, &class_dict_st_root);
+                        class_dict_st_root.object = class_dict_st_object;
+                    }
+                    Py_SETREF(value_o, _PyLazyImport_Reify(
+                                  tstate, value_o, name, class_dict));
+                    if (Py_UNLIKELY(PyValue_IsInline(class_dict_st))) {
+                        _PyThreadState_PopValueRoot(tstate, &class_dict_st_root);
+                    }
+                    if (value_o == NULL) {
+                        JUMP_TO_LABEL(error);
+                    }
                 }
-                Py_SETREF(value_o, _PyLazyImport_Reify(
-                              tstate, value_o, name, class_dict));
-                if (Py_UNLIKELY(PyValue_IsInline(class_dict_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &class_dict_st_root);
-                }
-                if (value_o == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
+                result = PyValue_FromObject(value_o);
             }
-            value = PyValue_FromObject(value_o);
+            value = result;
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
@@ -16536,15 +16539,12 @@
             INSTRUCTION_STATS(MAKE_CELL);
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
-            PyValue initial_value = GETLOCAL(oparg);
-            PyObject *initial = PyValue_Object(initial_value);
-            if (initial == NULL && !PyValue_IsNull(initial_value)) {
-                JUMP_TO_LABEL(error);
-            }
-            PyObject *cell = PyCell_New(initial);
+            PyValue initial = GETLOCAL(oparg);
+            PyObject *cell = PyCell_New(NULL);
             if (cell == NULL) {
                 JUMP_TO_LABEL(error);
             }
+            PyCell_SET_VALUE(cell, initial);
             GETLOCAL(oparg) = PyValue_FromObject(cell);
             DISPATCH();
         }
@@ -19483,27 +19483,8 @@
             (void)oparg;
             PyValue v;
             v = IR_SLOT(IR_FIELD_A(this_instr));
-            PyObject *v_object;
-            _PyValueRoot v_root;
-            if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                v_object = _PyValue_BoxInline(v);
-                if (v_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(STORE_DEREF, _PY_BOX_CONTAINER_STORE);
-            }
-            else {
-                v_object = PyValue_ObjectBorrow(v);
-            }
-            PyCellObject *cell = (PyCellObject *)PyValue_ObjectBorrow(GETLOCAL(oparg));
-            if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                _PyThreadState_PushValueRoot(tstate, &v_root);
-                v_root.object = v_object;
-            }
-            PyCell_SetTakeRef(cell, v_object);
-            if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                _PyThreadState_PopValueRoot(tstate, &v_root);
-            }
+            PyObject *cell = PyValue_ObjectBorrow(GETLOCAL(oparg));
+            PyCell_SET_VALUE(cell, v);
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }

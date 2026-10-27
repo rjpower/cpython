@@ -900,6 +900,27 @@ class ContainerCanonicalTest(unittest.TestCase):
                     for item in got:
                         self.check_read(value, item)
 
+    def test_cell(self):
+        import types
+        for value in self.VALUES:
+            with self.subTest(value=value):
+                cell = types.CellType(distinct(value))
+                self.check_read(value, cell.cell_contents)
+                cell.cell_contents = distinct(value)
+                self.check_read(value, cell.cell_contents)
+                self.assertEqual(cell, types.CellType(value))
+                self.assertEqual(gc.get_referents(cell), [])
+
+                def outer(x):
+                    def inner():
+                        return x
+                    return inner
+                f = outer(distinct(value))
+                self.check_read(value, f())
+                self.check_read(value, f.__closure__[0].cell_contents)
+        self.assertLess(types.CellType(), types.CellType(0))
+        self.assertEqual(types.CellType(), types.CellType())
+
     def test_outside_int32_is_an_object(self):
         x = distinct(2**40)
         lst = [None]

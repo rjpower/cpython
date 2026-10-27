@@ -528,7 +528,10 @@ NON_ESCAPING_FUNCTIONS = (
     "PyCFunction_GET_SELF",
     "PyCell_GetRef",
     "PyCell_New",
-    "PyCell_SwapTakeRef",
+    "PyCell_GET_VALUE",
+    "PyCell_SET_VALUE",
+    "_PyCell_GetValue",
+    "_PyCell_SwapValue",
     "PyExceptionInstance_Class",
     "PyException_GetCause",
     "PyException_GetContext",
@@ -915,8 +918,8 @@ def compute_properties(op: parser.CodeDef) -> Properties:
     has_free = (
         variable_used(op, "PyCell_New")
         or variable_used(op, "PyCell_GetRef")
-        or variable_used(op, "PyCell_SetTakeRef")
-        or variable_used(op, "PyCell_SwapTakeRef")
+        or variable_used(op, "PyCell_SET_VALUE")
+        or variable_used(op, "_PyCell_SwapValue")
         or variable_used(op, "_PyCell_GetValue")
     )
     deopts_if = variable_used(op, "DEOPT_IF")

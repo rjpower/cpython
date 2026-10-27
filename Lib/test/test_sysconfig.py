@@ -589,10 +589,38 @@ class TestSysConfig(unittest.TestCase, VirtualEnvironmentMixin):
             self.assertTrue('linux' in suffix, suffix)
         if re.match('(i[3-6]86|x86_64)$', machine):
             if ctypes.sizeof(ctypes.c_char_p()) == 4:
-                expected_suffixes = 'i386-linux-gnu.so', 'x86_64-linux-gnux32.so', 'i386-linux-musl.so'
+                expected_suffixes = ('i386-boil-linux-gnu.so',
+                                     'x86_64-boil-linux-gnux32.so',
+                                     'i386-boil-linux-musl.so')
             else: # 8 byte pointer size
-                expected_suffixes = 'x86_64-linux-gnu.so', 'x86_64-linux-musl.so'
+                expected_suffixes = ('x86_64-boil-linux-gnu.so',
+                                     'x86_64-boil-linux-musl.so')
             self.assertEndsWith(suffix, expected_suffixes)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux-specific test')
+    @unittest.skipIf(not _imp.extension_suffixes(), "stub loader has no suffixes")
+    def test_upstream_extension_not_loaded(self):
+        # The value ABI is not upstream's: an extension built by upstream
+        # CPython, whose suffix lacks "-boil", must not import.
+        import importlib.machinery
+        import _testcapi
+        soabi = sysconfig.get_config_var('SOABI')
+        self.assertIn('-boil-', soabi)
+        upstream = '.' + soabi.replace('-boil-', '-') + '.so'
+        self.assertNotIn(upstream, importlib.machinery.EXTENSION_SUFFIXES)
+        code = 'import sys; sys.path.insert(0, sys.argv[1]); import _upstream_ext'
+        for suffix, error in ((upstream, 'ModuleNotFoundError'),
+                              (sysconfig.get_config_var('EXT_SUFFIX'),
+                               'does not define module export function')):
+            with self.subTest(suffix=suffix), temp_dir() as tmp:
+                # Any shared object will do: with the upstream suffix it is
+                # not found, with ours it is loaded and has no PyInit.
+                shutil.copy(_testcapi.__file__,
+                            os.path.join(tmp, '_upstream_ext' + suffix))
+                res = subprocess.run([sys.executable, '-I', '-c', code, tmp],
+                                     capture_output=True, text=True)
+                self.assertNotEqual(res.returncode, 0)
+                self.assertIn(error, res.stderr)
 
     @unittest.skipIf(sysconfig.get_config_var('PY_BUILTIN_HASHLIB_HASHES') is None,
                      'PY_BUILTIN_HASHLIB_HASHES required for this test')

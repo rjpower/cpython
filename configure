@@ -7616,6 +7616,7 @@ case $ac_sys_system in #(
     SOABI_PLATFORM=$PLATFORM_TRIPLET
  ;;
 esac
+SOABI_PLATFORM=`echo "$SOABI_PLATFORM" | sed 's/-/-boil-/'`
 
 if test x$SOABI_PLATFORM != x; then
 
@@ -8783,7 +8784,7 @@ printf "%s\n" "$ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero" >&6; }
 if test "x$ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero" = xyes
 then :
 
-    CFLAGS_NODIST="$CFLAGS_NODIST -ftrivial-auto-var-init=zero"
+  CFLAGS_NODIST="$CFLAGS_NODIST -ftrivial-auto-var-init=zero"
 
 else case e in #(
   e) : ;;

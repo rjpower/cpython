@@ -1417,10 +1417,19 @@ dnl platforms don't need the CPU architecture in the SOABI tag. These platforms
 dnl will have multiple sysconfig modules (one for each CPU architecture), but
 dnl use a single "fat" binary at runtime. SOABI_PLATFORM is the component of
 dnl the PLATFORM_TRIPLET that will be used in binary module extensions.
+dnl
+dnl This interpreter's ABI is not upstream's: values are PyValue, not
+dnl PyObject * (boil/design/06-architecture-v2.md, section 19.4).  An ABI flag
+dnl would change the wheel tag, which packaging rejects, so the platform part
+dnl of SOABI carries the mark instead: x86_64-linux-gnu becomes
+dnl x86_64-boil-linux-gnu.  An extension built by upstream CPython then has a
+dnl suffix this interpreter does not load, while the wheel ABI tag (cp316),
+dnl PLATFORM_TRIPLET, MULTIARCH and sysconfig.get_platform() are unchanged.
 AS_CASE([$ac_sys_system],
   [iOS|tvOS|visionOS|watchOS], [SOABI_PLATFORM=`echo "$PLATFORM_TRIPLET" | cut -d '-' -f2`],
   [SOABI_PLATFORM=$PLATFORM_TRIPLET]
 )
+SOABI_PLATFORM=`echo "$SOABI_PLATFORM" | sed 's/-/-boil-/'`
 
 if test x$SOABI_PLATFORM != x; then
     AC_DEFINE_UNQUOTED([SOABI_PLATFORM], ["${SOABI_PLATFORM}"], [Platform tag, used in binary module extension filenames.])

@@ -983,6 +983,28 @@ class ContainerCanonicalTest(unittest.TestCase):
                 del c.a
                 self.assertEqual(d, {'b': value})
 
+    def test_slots(self):
+        class C:
+            __slots__ = ('a', 'b')
+        for value in self.VALUES:
+            with self.subTest(value=value):
+                c = C()
+                c.a = distinct(value)
+                setattr(c, 'b', distinct(value))
+                for _ in range(3):  # specialised and unspecialised reads
+                    self.check_read(value, c.a)
+                    self.check_read(value, getattr(c, 'b'))
+                    self.check_read(value, C.a.__get__(c))
+                self.assertEqual(gc.get_referents(c), [C])
+                del c.a
+                with self.assertRaises(AttributeError):
+                    c.a
+                with self.assertRaises(AttributeError):
+                    del c.a
+                self.assertFalse(hasattr(c, 'a'))
+                C.b.__set__(c, distinct(value))
+                self.check_read(value, c.b)
+
     def test_globals(self):
         for value in self.VALUES:
             with self.subTest(value=value):

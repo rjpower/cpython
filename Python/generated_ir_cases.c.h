@@ -14873,14 +14873,12 @@
             {
                 uint32_t index = fb->index;
                 PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                PyObject **addr = (PyObject **)((char *)owner_o + index);
-                PyObject *attr_o = FT_ATOMIC_LOAD_PTR(*addr);
-                if (attr_o == NULL) {
+                attr = *(PyValue *)((char *)owner_o + index);
+                if (PyValue_IsNull(attr)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                attr = PyValue_FromObject(attr_o);
                 STAT_INC(LOAD_ATTR, hit);
                 o = owner;
             }
@@ -19228,30 +19226,16 @@
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t index = fb->index;
-                PyObject *value_object;
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    value_object = _PyValue_BoxInline(value);
-                    if (value_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_ATTR_SLOT, _PY_BOX_ATTRIBUTE_STORE);
-                }
-                else {
-                    value_object = PyValue_ObjectBorrow(value);
-                }
                 PyObject *owner_o = PyValue_ObjectBorrow(owner);
                 if (!LOCK_OBJECT(owner_o)) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                char *addr = (char *)owner_o + index;
                 STAT_INC(STORE_ATTR, hit);
-                PyObject *old_value = *(PyObject **)addr;
-                FT_ATOMIC_STORE_PTR_RELEASE(*(PyObject **)addr, value_object);
+                *(PyValue *)((char *)owner_o + index) = value;
                 UNLOCK_OBJECT(owner_o);
                 o = owner;
-                Py_XDECREF(old_value);
             }
             // _POP_TOP
             {

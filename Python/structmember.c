@@ -110,6 +110,17 @@ PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
         v = PyValue_IsNull(value) ? Py_None : PyValue_Object(value);
         break;
     }
+    case _Py_T_VALUE_EX: {
+        PyValue value = *(PyValue *)addr;
+        if (PyValue_IsNull(value)) {
+            PyErr_Format(PyExc_AttributeError,
+                         "'%T' object has no attribute '%s'",
+                         (PyObject *)obj_addr, l->name);
+            return NULL;
+        }
+        v = PyValue_Object(value);
+        break;
+    }
     case Py_T_OBJECT_EX:
         v = member_get_object(addr, obj_addr, l);
         Py_XINCREF(v);
@@ -156,7 +167,9 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         PyErr_SetString(PyExc_AttributeError, "readonly attribute");
         return -1;
     }
-    if (v == NULL && l->type != Py_T_OBJECT_EX && l->type != _Py_T_OBJECT) {
+    if (v == NULL && l->type != Py_T_OBJECT_EX && l->type != _Py_T_OBJECT
+        && l->type != _Py_T_VALUE_EX)
+    {
         PyErr_SetString(PyExc_TypeError,
                         "can't delete numeric/char attribute");
         return -1;
@@ -307,6 +320,19 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
     case _Py_T_VALUE:
         *(PyValue *)addr = v == NULL ? PyValue_NULL : PyValue_FromObject(v);
         break;
+    case _Py_T_VALUE_EX: {
+        PyValue old;
+        Py_BEGIN_CRITICAL_SECTION(obj);
+        old = *(PyValue *)addr;
+        *(PyValue *)addr = v == NULL ? PyValue_NULL : PyValue_FromObject(v);
+        Py_END_CRITICAL_SECTION();
+        if (v == NULL && PyValue_IsNull(old)) {
+            // Deleting an attribute that is already deleted
+            PyErr_SetString(PyExc_AttributeError, l->name);
+            return -1;
+        }
+        break;
+    }
     case _Py_T_OBJECT:
     case Py_T_OBJECT_EX:
         Py_BEGIN_CRITICAL_SECTION(obj);

@@ -2402,14 +2402,9 @@ traverse_slots(PyTypeObject *type, PyObject *self, visitproc visit, void *arg)
     n = Py_SIZE(type);
     mp = _PyHeapType_GET_MEMBERS((PyHeapTypeObject *)type);
     for (i = 0; i < n; i++, mp++) {
-        if (mp->type == Py_T_OBJECT_EX) {
-            void *addr = _PyMember_GetOffset(self, mp);
-            PyObject *obj = *(PyObject **)addr;
-            if (obj != NULL) {
-                int err = visit(obj, arg);
-                if (err)
-                    return err;
-            }
+        if (mp->type == _Py_T_VALUE_EX) {
+            PyValue *addr = (PyValue *)_PyMember_GetOffset(self, mp);
+            _Py_VISIT_VALUE(*addr);
         }
     }
     return 0;
@@ -2477,13 +2472,8 @@ clear_slots(PyTypeObject *type, PyObject *self)
     n = Py_SIZE(type);
     mp = _PyHeapType_GET_MEMBERS((PyHeapTypeObject *)type);
     for (i = 0; i < n; i++, mp++) {
-        if (mp->type == Py_T_OBJECT_EX && !(mp->flags & Py_READONLY)) {
-            void *addr = _PyMember_GetOffset(self, mp);
-            PyObject *obj = *(PyObject **)addr;
-            if (obj != NULL) {
-                *(PyObject **)addr = NULL;
-                Py_DECREF(obj);
-            }
+        if (mp->type == _Py_T_VALUE_EX && !(mp->flags & Py_READONLY)) {
+            *(PyValue *)_PyMember_GetOffset(self, mp) = PyValue_NULL;
         }
     }
 }
@@ -4339,7 +4329,7 @@ type_new_descriptors(const type_new_ctx *ctx, PyTypeObject *type, PyObject *dict
             if (mp->name == NULL) {
                 return -1;
             }
-            mp->type = Py_T_OBJECT_EX;
+            mp->type = _Py_T_VALUE_EX;
             mp->offset = slotoffset;
             if (after_items) {
                 mp->flags |= _Py_AFTER_ITEMS;

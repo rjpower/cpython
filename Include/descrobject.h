@@ -79,6 +79,7 @@ struct PyMemberDef {
 #define Py_T_PYSSIZET  19      /* Py_ssize_t */
 #define _Py_T_NONE     20 // Deprecated. Value is always None.
 #define _Py_T_VALUE    21 // A PyValue, read as its object or None if NULL
+#define _Py_T_VALUE_EX 22 // A PyValue, AttributeError if NULL: a __slots__ slot
 
 /* Flags */
 #define Py_READONLY            (1 << 0)

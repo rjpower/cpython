@@ -2747,10 +2747,8 @@ dummy_func(
         op(_LOAD_ATTR_SLOT, (index/1, owner -- attr, o)) {
             PyObject *owner_o = PyValue_ObjectBorrow(owner);
 
-            PyObject **addr = (PyObject **)((char *)owner_o + index);
-            PyObject *attr_o = FT_ATOMIC_LOAD_PTR(*addr);
-            EXIT_IF(attr_o == NULL);
-            attr = PyValue_FromObject(attr_o);
+            attr = *(PyValue *)((char *)owner_o + index);
+            EXIT_IF(PyValue_IsNull(attr));
             STAT_INC(LOAD_ATTR, hit);
             o = owner;
             DEAD(owner);
@@ -2974,15 +2972,12 @@ dummy_func(
             PyObject *owner_o = PyValue_ObjectBorrow(owner);
 
             DEOPT_IF(!LOCK_OBJECT(owner_o));
-            char *addr = (char *)owner_o + index;
             STAT_INC(STORE_ATTR, hit);
-            PyObject *old_value = *(PyObject **)addr;
-            FT_ATOMIC_STORE_PTR_RELEASE(*(PyObject **)addr, PyValue_ObjectBorrow(value));
+            *(PyValue *)((char *)owner_o + index) = value;
             DEAD(value);
             UNLOCK_OBJECT(owner_o);
             INPUTS_DEAD();
             o = owner;
-            Py_XDECREF(old_value);
         }
 
         macro(STORE_ATTR_SLOT) =

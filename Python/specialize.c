@@ -662,7 +662,10 @@ classify_descriptor(PyObject *descriptor, bool has_getattr)
         if (desc_cls == &PyMemberDescr_Type) {
             PyMemberDescrObject *member = (PyMemberDescrObject *)descriptor;
             struct PyMemberDef *dmem = member->d_member;
-            if (dmem->type == Py_T_OBJECT_EX || dmem->type == _Py_T_OBJECT) {
+            // LOAD_ATTR_SLOT and STORE_ATTR_SLOT read and write a PyValue:
+            // a __slots__ slot.  A C struct's object member falls back to
+            // the descriptor.
+            if (dmem->type == _Py_T_VALUE_EX) {
                 return OBJECT_SLOT;
             }
             return OTHER_SLOT;
@@ -1084,7 +1087,7 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
                 SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_RANGE);
                 return -1;
             }
-            assert(dmem->type == Py_T_OBJECT_EX || dmem->type == _Py_T_OBJECT);
+            assert(dmem->type == _Py_T_VALUE_EX);
             assert(offset > 0);
             fb->index = (uint32_t)offset;
             fb->type_version = tp_version;
@@ -1287,7 +1290,7 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
                 SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OUT_OF_RANGE);
                 goto fail;
             }
-            assert(dmem->type == Py_T_OBJECT_EX || dmem->type == _Py_T_OBJECT);
+            assert(dmem->type == _Py_T_VALUE_EX);
             assert(offset > 0);
             fb->index = (uint32_t)offset;
             fb->type_version = tp_version;

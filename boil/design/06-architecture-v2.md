@@ -528,7 +528,7 @@ entry; nothing lives on a prototype branch.
 | 3b | The register CFG (note 07): stack-to-register conversion at the end of the CFG optimiser, a pass driver, general load and store folding, `SWAP`, `COPY` and `POP_TOP` by renaming, liveness, register compaction. | `regalloc.c`'s depth pass and peepholes, `COPY`, `SWAP`, `POP_TOP` as instructions where renaming covers them | suite; ports; the loads 2b could not fold gone from the Py_STATS mix; frame slots per code object recorded | 4 days |
 | 4 | Collector, verifier mode. `Python/gc_trace.c`: mark from precise roots (frames, thread and interpreter state, registered static types) and conservative roots (C stacks, data segments) via mimalloc's block lookup; `tp_traverse` audit tool that reports every type with pointer members and no traverse; at every `gc.collect` in a debug build, report any object with a nonzero count that the mark did not reach. Reference counting still owns memory. | nothing yet | zero unreached-but-counted objects across the full suite and the seven ports with the verifier on | 4 days |
 | 5 | Collector, live, in three sub-steps (5a flag build, 5b full suite and ports, 5c default on and refcount code deleted; the header shrink and the weakref side table move to 6a). `--with-gc` configure flag first, default later in the step. Eight-byte header; `Py_INCREF`/`Py_DECREF` to no-ops; sweep by heap visit; finaliser queue; weak reference side table; `tp_dealloc` audit and `OWNS_RESOURCES` flag; `sys.getrefcount` removed; stdlib audit for refcount timing; free-threaded build removed. Sub-gates: 5a flag build runs the smoke ladder; 5b full suite; 5c ports rebuild with patch counts recorded; 5d default on, refcount paths deleted. Done in three: 5a (section 15), 5b (16), 5c (17, which took 5d's default and deletions); sweep by block moved to 6a or later. | reference counting in `ob_refcnt` (the field goes with the header shrink in 6a), `Py_TAG_REFCNT`, `_PyStackRef` ownership, `IR_BORROW` remnants, the cycle collector (`gc.c`), free lists, the free-threaded build and `gc_free_threading.c`, `Py_STACKREF_DEBUG` | suite; ports; instructions per loop down on richards and go; RSS and pauses recorded (pyperformance dropped for 5c, 2026-10-26) | 10 days, in four sub-steps |
-| 6a | `PyValue` in the core: list, tuple, dict, set, instance slots, cells, globals hold `PyValue`; `_PyStackRef` renamed to `PyValue` and the duplicate helpers deleted; boxing only at the `PyObject*` conversion. | `_PyStackRef`, `PyStackRef_*`, `Py_STACKREF_INLINE_VALUES`, the boxing at container stores | suite; nbody, float, spectral_norm instructions per loop; RSS | 5 days |
+| 6a | `PyValue` in the core: list, tuple, dict, set, instance slots, cells, globals hold `PyValue`; `_PyStackRef` renamed to `PyValue` and the duplicate helpers deleted; boxing only at the `PyObject*` conversion. Done (section 18), with the header shrink, the weak reference table and the removal of PyGC_Head that 5 handed on: the header is one word, a collected object has no header before it, and a 3-tuple is 48 bytes where it was 72. | `_PyStackRef`, `PyStackRef_*`, `Py_STACKREF_INLINE_VALUES`, the boxing at container stores, `ob_refcnt`, PyGC_Head, the per-object weaklist fields | suite; nbody, float, spectral_norm instructions per loop; RSS | 5 days; took about 9 hours |
 | 6b | `PyValue` at the C API boundary and in the ports: item accessors become boxing functions; Cython port patched and the Cython-generated ports regenerated; numpy; patch counts recorded. | `PyList_GET_ITEM` and family as macros | all seven ports green; hand-written patch lines per port recorded | 5 days |
 | 6c | Shapes default on, with I32 and F64 slot kinds live, `LOAD_ATTR_SHAPE_POLY`, method loads through shapes. | `--with-shapes`, shared keys for instances, the `PyDictValues` header | suite; ports; richards, raytrace, deltablue, nbody per loop | 4 days |
 | 7 | Generational collection: sticky mark bits, remembered set, write barrier in the store macros, barrier verifier (full mark after each minor collection in debug builds). Kept only if pause and throughput both improve on the benchmark set. | nothing | verifier clean; pyperformance and RSS compared with step 6 | 5 days |
@@ -3078,3 +3078,350 @@ for each sum because it stores to a global.
   and the cases generator's interpreter_definition.md are rewritten.
 - **A remnant.** gc_trace.c keeps its `!WITH_MIMALLOC` stubs, though
   configure now rejects `--without-mimalloc`.
+
+## 18. Step 6a decisions
+
+Step 6a makes `PyValue` the core's value type. Containers, cells, globals
+and instance slots hold it. A box is made only when a value is converted to
+`PyObject*`, and the object header is one word. From the launch
+(596fd5ba185) to the PyGC_Head commit (f08adc371f1), 21 commits changed
+323 files, with 14,222 insertions and 10,412 deletions. The rulings:
+
+- an accessor with no error channel aborts when it cannot box (18.3);
+- the object map is the object-start bitmap (18.4);
+- PyGC_Head goes in 6a, after the weak reference table (18.6);
+- the trigger's byte count and the boxing in `LOAD_NAME` and `STORE_NAME`
+  are recorded, not changed (18.10).
+
+### 18.1 One value type
+
+`_PyStackRef` became `PyValue`, declared in the public Include/pyvalue.h
+(98f38e1da76). The helper set was cut to the minimum, with no aliases, and
+`PYTHON_TAGGED_VALUES` went (3e9b1cb8c65).
+
+Every `PyValue` is canonical (a495d4cbdc2). Construction from a `PyObject*`
+stores inline any int that fits int32 and any float that is not a NaN, in
+the encoding of 3.1, which is unchanged. Two values are therefore
+identical exactly when their bits are equal. A box exists only in a C
+local, rooted by a push and a pop around the escaping call that needs it.
+
+While containers still held pointers, every load from one had to be made
+canonical. That cost 18% per loop on richards and 26% on go, until the
+conversions of 18.2 removed it.
+
+### 18.2 Containers hold PyValue
+
+Each of these commits ran both full suites with a fresh pyc cache:
+
+| commit | holds PyValue | per loop |
+|---|---|---|
+| 20693f43a82 | tuples and lists | nbody 1427M to 999M; the 1.5M list-store boxes per loop gone |
+| e94834f371d | cells | |
+| 0389837b3fc | dicts, globals, instance values | richards 590M, go 1353M; attribute-store boxes on go 447k to 0 |
+| ab31d98bf69 | `__slots__` (`_Py_T_VALUE_EX`) | float 1266M to 859M |
+| 0b8cbe360c5 | sets | |
+
+The hot callers take values. d408626d7af converted:
+
+- list append;
+- the core dict watchers, which have reserved ids 0 to 2 and take
+  `PyValue`. Public watchers still receive boxes;
+- generic getattr;
+- `_PyObject_TryGetInstanceAttributeValue`;
+- enumerate over list and tuple iterators.
+
+8b9e4756fd4 converted `STORE_GLOBAL`. Core callers of `PyDict_Next` on dicts
+of ints use `_PyDict_NextValue`. float ** float with a positive base has
+its own inline handler (85449792f97, magic 3719), so nbody's powers make no
+box.
+
+### 18.3 Accessors without an error channel abort
+
+Some accessors box and cannot report an error:
+
+- `PyTuple_GET_ITEM`, `PyList_GET_ITEM`, `PySequence_Fast_GET_ITEM`
+  and `PyCell_GET`;
+- `PyDict_Next`;
+- `PyDict_GetItem` and `PyDict_GetItemString`;
+- `_PyType_Lookup`.
+
+When a box cannot be allocated, such an accessor collects, retries once,
+and then aborts, naming itself (b164b4ad838). Each of these contracts gives
+NULL or 0 a meaning (missing, empty, the end), and their callers do not
+check `PyErr_Occurred()`. Returning NULL on failure would therefore end an
+iteration early or report a missing key without any error, a latent bug in
+every port.
+
+Accessors that do have an error channel return NULL with `MemoryError`:
+`PyList_GetItem`, `PyTuple_GetItem`, `PyCell_Get`, `PyDict_GetItemRef`,
+and the list and tuple iterators.
+
+The retry exposed a gap: the allocator never collected when an allocation
+failed, only when the threshold was passed. General allocations still do
+not collect on failure. That is an item for steps 7 and 10.
+
+### 18.4 The header is one word
+
+`ob_header` holds the type in bits 0 to 47 and `ob_flags` in bits 48 to 63,
+with the flag bits where they were (76232f16b53). The heap-object flag
+went, and bit 3 became `_Py_HAS_WEAKREFS_FLAG` (18.5). `Py_TYPE` masks the
+word. `_PyObject_HEAD_INIT` produces an address constant, the type plus the
+flags shifted left by 48.
+
+`sys.getsizeof` of an int dropped from 32 to 24, a float from 24 to 16, and
+`object()` from 16 to 8.
+
+The header no longer carries a magic number, so the collector needs another
+way to tell whether a block holds an object. It uses an object map, the
+standard object-start bitmap, which is needed while raw `PyObject_Malloc`
+blocks share pages with objects.
+
+The map has one bit per 8-byte word below 2^48, in two levels:
+
+- a top table of 2^23 chunk entries, mmap'd `MAP_NORESERVE` (64 MiB
+  virtual, resident only where touched);
+- 512 KiB of bits for each 32 MiB chunk that has been touched, which is
+  1/64 of the chunk's pages.
+
+The bit is set in `new_reference`, tested in `live_walk_block`, and cleared
+in `PyObject_Free`, `_PyGC_FreeDeadBlock` and `PyObject_Realloc`. A
+moving collector (step 10) inherits the map as its object-start map.
+
+**The flags in the high bits.** The eval loop has 347
+`movabs $0xffffffffffff` masks, each one instruction more than the old
+plain load. Samples at those instructions estimate their executions per
+loop at about 0.4M for nbody, 1 to 2M for spectral_norm, 6.5M for richards,
+7M for float and 13M for go.
+
+6c decides the header word in any case, as a shape or a type. The
+alternatives, with this measurement as the evidence:
+
+- flags in the low bits of a 16-aligned pointer, which leaves only 4 bits;
+- a shift pair in place of the 48-bit immediate;
+- a type index in place of a pointer.
+
+### 18.5 Weak references in a table
+
+An object's weak-reference list lives in a process-global
+`_Py_hashtable` keyed by address, under a `PyMutex` (628da0d299a). Because
+entries are stable, `&entry->value` serves as the list pointer.
+`_Py_HAS_WEAKREFS_FLAG` says that an entry exists, so an object without
+weak references pays one flag test when it is freed.
+
+When a block is freed, its entry is dropped and the references in it are
+cleared. An object moved by `PyObject_Realloc` loses its weak references,
+as it did when they could not follow it. Static builtin types keep their
+per-interpreter list.
+
+43 types in the core and the stdlib extension modules lost their weaklist
+field and set `Py_TPFLAGS_MANAGED_WEAKREF`. The flag no longer requires
+`Py_TPFLAGS_HAVE_GC`, and static builtin types may set it.
+`tp_weaklistoffset` stays as the "supports weak references" marker, and
+`FT_CLEAR_WEAKREFS` takes only the object. Each such object shrinks by 8
+bytes: set, frozenset, function, builtin function, method, code, module,
+frame, generator, coroutine, memoryview, array, deque, BytesIO, Struct,
+SimpleQueue, Element and OrderedDict among them.
+
+Three things kept their old storage:
+
+- `PyTypeObject.tp_weaklist`, which is part of the public positional
+  layout and is now unused;
+- `_uuid`'s field, which its free list reuses; that free list has been dead
+  since 5c;
+- third-party types with their own field, which keep working; the field
+  is never written.
+
+### 18.6 No header before a collected object
+
+The collector keeps no object lists, so PyGC_Head held nothing. It went,
+together with:
+
+- `_Py_AS_GC` and `_Py_FROM_GC`;
+- the `_PyGCHead_*` accessors and the `_PyGC_PREV_*` bits;
+- the generation list heads, `generation0` and `_PyGC_InitState`;
+- `_PyObject_GC_Link` and `_PyGC_Dump`;
+- `SIZEOF_PYGC_HEAD` (f08adc371f1).
+
+Argument Clinic's static keyword tuples and the runtime's static singletons
+lost their dummy heads, and the clinic output was regenerated.
+
+**The managed-dict pre-header stays 16 bytes.** It holds the dict pointer
+at `MANAGED_DICT_OFFSET`, one word before the object, and one word of
+padding. With a one-word pre-header, objects would start at 8 mod 16. C
+types assume malloc's 16-byte alignment, and ctypes' `CDataObject`, which
+has a long double member, is compiled with aligned `movaps` stores, so it
+crashed. 6c's instance layout removes the dict word and the padding
+together.
+
+`sys.getsizeof`, in bytes:
+
+| | int 2**40 | float | 3-tuple | 10-list | small instance | object() | set() | function | `len` |
+|---|---|---|---|---|---|---|---|---|---|
+| before 6a | 32 | 24 | 72 | 136 | 48 | 16 | 216 | 168 | 72 |
+| one-word header | 24 | 16 | 64 | 128 | 40 | 8 | 208 | 160 | 64 |
+| weak reference table | 24 | 16 | 64 | 128 | 40 | 8 | 200 | 152 | 56 |
+| no PyGC_Head | 24 | 16 | 48 | 112 | 24 | 8 | 184 | 136 | 40 |
+
+### 18.7 Ports
+
+The ports are built under abi_id cpython-3.16-value-v0 (2d5746d8987), after
+f08adc371f1.
+
+PASS: six, attrs, pycparser, markupsafe, and cython (a pure wheel).
+
+The C ports fail to compile:
+
+**cffi 2.1.1:**
+- header: 6 direct `ob_type` reads;
+- container: 1 `&PyTuple_GET_ITEM` used as an array base, and 2
+  `PySequence_Fast_ITEMS` results used as `PyObject **`.
+
+**pyyaml 6.0.3**, all in Cython's utility code:
+- weaklist: 3 `PyCFunctionObject.m_weakreflist` (CyFunction);
+- container: 3 `&PyTuple_GET_ITEM` and 1 `ob_item` passed as `PyObject **`.
+
+**numpy 2.5.4:** meson's Cython sanity check transpiles
+`def func(): print(...)` and fails to compile it, on 3 `m_weakreflist` and
+1 `&PyTuple_GET_ITEM`. Configuration never reaches numpy's own C. The raw
+sdist has 9 `ob_type`, 6 `&Py{Tuple,List}_GET_ITEM`, 7
+`PySequence_Fast_ITEMS` and 5 `weakreflist`.
+
+Cython is the common cause for pyyaml and numpy. Patching CyFunction to use
+the managed weakref flag, and the utility code's tuple-item address idiom,
+unblocks both. That is 6b's.
+
+### 18.8 Tests
+
+Full suite at f08adc371f1, -j8, 564 files, 50,692 tests, each build with a
+fresh pyc cache:
+
+| build | wall time | result |
+|---|---|---|
+| dev-default | 5 min 24 s | test_sys's remote-exec timeout |
+| dev-debug | 13 min 12 s | the same |
+
+Each commit above passed both suites with the same single failure. Most
+test changes are size tables, now that `check_sizeof` adds no GC header.
+Other test changes:
+
+- test_capi's no-GC managed-weakref type now works rather than raising;
+- test_dis uses a module attribute, since the `__class__` specialisation
+  of `LOAD_ATTR` went with the header word;
+- test_gc's interior-pointer probe uses lists, since `object()` is 8 bytes;
+- test_descr's slots lookup-leak count allows one object kept by
+  conservative retention.
+
+### 18.9 Measurements
+
+User-mode instructions per loop of one pyperformance worker on dev-default,
+as in 15.6, gcc 15:
+
+| per loop (M) | step 1 | 5c | before the header (2d5746d8987) | now |
+|---|---|---|---|---|
+| richards | 574.9 | 517.9 | 579.9 | 594.3 |
+| go | 1244.0 | 1179.7 | 1270.6 | 1302.9 |
+| nbody | 1030.3 | 1424.0 | 777.9 | 786.7 |
+| float | 780.7 | 1030.6 | 851.5 | 903.0 |
+| spectral_norm | 802.2 | 1083.4 | 1181.4 | 1211.5 |
+
+The three header commits, in M per loop:
+
+| | one-word header | weak reference table | no PyGC_Head | total |
+|---|---|---|---|---|
+| richards | +15.8 | -1.0 | -0.4 | +2.5% |
+| go | +29.2 | +2.4 | +0.7 | +2.5% |
+| nbody | +8.7 | +0.1 | 0 | +1.1% |
+| float | +45.7 | +6.5 | -0.7 | +6.0% |
+| spectral_norm | +37.6 | +4.3 | -11.8 | +2.5% |
+
+Attribution comes from per-symbol perf deltas between before the header and
+now, sampled every 2M instructions and differenced between 12 and 2 loops;
+noise is about 2M.
+
+**The object map** costs about 45M on float, 30M on spectral_norm and 15M on
+go, and nothing measurable on richards and nbody:
+
+| | set (`_Py_NewReference`) | test (`live_walk_block`) | free path (map clear and the weak-reference flag) |
+|---|---|---|---|
+| float | +17.2 | +9.0 | +26.2 |
+| spectral_norm | +12.8 | +6.8 | +15.0 |
+| go | +5.2 | +5.2 | +7.4 |
+
+**The type mask** is the rest, at the execution counts given in 18.4. The
+eval loop's own symbol grew by more than that on richards (+17.2) and
+spectral_norm (+39.8), partly from layout and inlining. In richards, an
+offsetting -8.6 elsewhere is GetMethod and dict lookup moving between
+symbols.
+
+**Smaller objects save allocator work.** There are fewer page refills and
+fewer collections: -22.6M on float and -39.2M on spectral_norm.
+
+**The weak reference table** costs the flag test at each free, 6.5M on
+float. **Removing PyGC_Head** saves a little, 11.8M on spectral_norm.
+
+About 21M on float is not attributed. It is spread over frame push,
+`_PyValue_FromObject` and an unresolved libc symbol. None of this is tuned.
+
+Boxes per loop (dev-pystats):
+
+| | 5c int | 5c float | now int | now float | where now |
+|---|---|---|---|---|---|
+| richards | 83,171 | 0 | 18 | 0 | attribute stores without an inline-values path, generic `BINARY_OP` |
+| go | 406,368 | 58,939 | 65,167 | 61,847 | 87,780 arguments to C calls, 39,236 other |
+| nbody | 0 | 1,900,089 | 0 | 0 | |
+| float | 200,000 | 600,000 | 199,997 | 100,000 | arguments to `math.sin`, `math.cos` and `math.sqrt`, inherent until 6b |
+| spectral_norm | 5,242 | 5,200 | 36 | 260 | |
+
+Startup, median of five, user-mode instructions:
+
+| | step 1 | 5c | before the header | now |
+|---|---|---|---|---|
+| `-c pass` | 54.0M | 68.3M | 70.2M | 73.4M |
+| `-S -c pass` | 35.7M | 50.8M | 52.2M | 54.3M |
+
+Peak RSS in KiB, median of three, each workload in its own `-E` process.
+The imports are json, re, collections, asyncio, email.message,
+http.client, decimal, argparse, logging, unittest, xml.etree.ElementTree,
+pickle and csv. Each loop runs at module level.
+
+| workload | 5c | before the header | one-word header | now |
+|---|---|---|---|---|
+| startup | 13,360 | 14,552 | 14,296 | 14,280 |
+| import 13 stdlib packages | 38,420 | 40,028 | 38,828 | 37,732 |
+| 200,000 small dicts kept | 84,880 | 76,752 | 74,880 | 75,412 |
+| 5M float additions to a global | 98,408 | 84,080 | 93,480 | 93,432 |
+| 10M two-tuples | 56,636 | 59,972 | 98,556 | 100,836 |
+
+The two loops regress at the header commit, for two reasons, both measured:
+
+- At module level, each iteration boxes three ints, through `LOAD_NAME`
+  (`PyDict_GetItemRef`, twice) and `STORE_NAME`.
+- With a one-word header, a 24-byte int box takes a 32-byte block, but
+  the trigger counts requested bytes: 120 bytes counted against 144
+  allocated per iteration. Each collection therefore sees 41 MB of garbage
+  instead of 32 MB, and a third more objects, which enlarges the dead array
+  and the address set.
+
+The same tuple loop inside a function goes from 68 MB to 73 MB.
+
+### 18.10 For 6b and later
+
+- **Arguments to C calls** box until the C API takes `PyValue` (6b).
+- **Cython** (18.7): CyFunction's `m_weakreflist` and the tuple-item
+  address idiom (6b).
+- **`LOAD_NAME` and `STORE_NAME`** box through the `PyObject*` dict API.
+  This is recorded, not converted.
+- **The trigger counts requested bytes, not block bytes** (18.9). Step 7.
+- **The allocator does not collect when an allocation fails** (18.3).
+  Steps 7 and 10.
+- **The header word and the managed-dict pre-header** (18.4, 18.6). 6c.
+- **Retention.** An eval-loop callee-saved register spilled into the first
+  C callee's frame (`PyObject_Vectorcall`) keeps a dead object; test_ctypes
+  allows one such object, and three test_weakref tests are skipped on
+  release builds. Step 10's precise roots remove these.
+- **Remnants:**
+  - `PyTypeObject.tp_weaklist` is unused, and `_uuid` keeps its field.
+  - Doc/c-api/typeobj.rst still says that `Py_TPFLAGS_MANAGED_WEAKREF`
+    requires `Py_TPFLAGS_HAVE_GC`.
+  - Modules/clinic/_remote_debugging_module.c.h is an upstream orphan
+    that nothing compiles.

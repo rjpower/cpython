@@ -103,6 +103,27 @@ port's C code:
   at an arbitrary reference.
 - Anything that reads `ob_refcnt` or `Py_REFCNT()` to decide behaviour.
 
+## Porting to PyValue and the one-word header
+
+Containers hold `PyValue`, and the object header is one word (note 06,
+section 18). Under abi_id cpython-3.16-value-v0, look for these in a port's
+C code:
+
+- `op->ob_type`. The header word also holds flags; use `Py_TYPE()` and
+  `Py_SET_TYPE()`.
+- `&PyTuple_GET_ITEM(t, 0)`, `&PyList_GET_ITEM(l, 0)`, `ob_item` or
+  `PySequence_Fast_ITEMS()` used as a `PyObject **` array. The items are
+  `PyValue`, and an inline int or float has no object until it is boxed.
+  Read each item with an accessor, or build a `PyObject *` array.
+- A weak-reference list field such as `PyCFunctionObject.m_weakreflist`,
+  which the core types no longer have. Weak references live in a table
+  keyed by address: set `Py_TPFLAGS_MANAGED_WEAKREF`, which no longer
+  requires GC support, and drop the field.
+
+The C ports fail on exactly these: cffi on 6 `ob_type` reads and 3 item
+arrays; pyyaml and numpy on Cython's utility code, which has 3
+`m_weakreflist` uses and the item-array idiom.
+
 ## Adding a port
 
 1. Pin the latest release's url and sha256 from PyPI's JSON API.

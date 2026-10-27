@@ -285,8 +285,10 @@ void* _PyObject_Realloc(void *ctx, void *ptr, size_t size);
 #  define PYMALLOC_ALLOC {NULL, _PyObject_Malloc, _PyObject_Calloc, _PyObject_Realloc, _PyObject_Free}
 #endif  // WITH_PYMALLOC
 
-#if defined(_Py_ADDRESS_SANITIZER) || defined(_Py_MEMORY_SANITIZER)
+#if defined(_Py_MEMORY_SANITIZER) \
+    || (defined(_Py_ADDRESS_SANITIZER) && !defined(WITH_MIMALLOC))
 // ASan and MSan do not track pymalloc blocks, so use malloc by default.
+// ASan tracks mimalloc's (MI_TRACK_ASAN), which the collector needs.
 // pymalloc can still be selected at runtime.
 #  define PYRAW_ALLOC MALLOC_ALLOC
 #  define PYMEM_ALLOC MALLOC_ALLOC

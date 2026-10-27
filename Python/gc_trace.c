@@ -517,7 +517,10 @@ queue_range(trace_t *t, uintptr_t start, uintptr_t end, int cls)
     t->mem_stack[t->mem_sp++] = (uintptr_t)cls;
 }
 
-static int
+/* The functions that read words conservatively, and the free-list check
+   that reads freed blocks, are not instrumented under ASan: their reads of
+   redzones and of freed, poisoned blocks are by design. */
+static int _Py_NO_SANITIZE_ADDRESS
 block_in_list(const mi_page_t *page, mi_block_t *list, uintptr_t block)
 {
     for (mi_block_t *b = list; b != NULL; b = mi_block_next(page, b)) {
@@ -533,7 +536,7 @@ block_in_list(const mi_page_t *page, mi_block_t *list, uintptr_t block)
    scanning them would keep that garbage alive.  The lists are short next to
    the work of a collection, and only blocks the conservative scan reaches
    are checked. */
-static int
+static int _Py_NO_SANITIZE_ADDRESS
 mem_block_is_free(uintptr_t block)
 {
     mi_page_t *page = _mi_ptr_page((void *)block);
@@ -876,7 +879,7 @@ mark_root(trace_t *t, PyObject *op)
 }
 
 /* Scan a range of words conservatively. */
-static void
+static void _Py_NO_SANITIZE_ADDRESS
 scan_range(trace_t *t, uintptr_t start, uintptr_t end)
 {
     start = _Py_SIZE_ROUND_UP(start, sizeof(uintptr_t));
@@ -1651,7 +1654,7 @@ live_traverse_root(PyObject *op, void *arg)
     return 0;
 }
 
-static void
+static void _Py_NO_SANITIZE_ADDRESS
 live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop)
 {
     _PyGCRootStats *stats = t->stats;

@@ -31,19 +31,20 @@ class RunTest(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="boil-bench-test-"))
         self.addCleanup(shutil.rmtree, self.tmp)
 
-    def run_bench(self, metric: str, *extra: str) -> dict:
+    def run_bench(self, metric: str, *extra: str, name: str = "richards") -> dict:
         out = self.tmp / f"{metric}.json"
         subprocess.run([sys.executable, str(BENCH / "run.py"), "--build", PYTHON,
-                        "--label", "test", "--set", "kernels", "--only", "richards",
+                        "--label", "test", "--set", "kernels", "--only", name,
                         "--metric", metric, "--loops", "1", *extra, "-o", str(out)],
                        check=True, capture_output=True, text=True)
         return json.loads(out.read_text())
 
-    def check_entry(self, report: dict, metric: str, runs: int) -> dict:
+    def check_entry(self, report: dict, metric: str, runs: int,
+                    name: str = "richards") -> dict:
         self.assertEqual(report["schema"], "boil-bench/1")
         self.assertEqual(report["build"]["label"], "test")
         self.assertIn("sha", report["commit"])
-        entry = report["results"][metric]["richards"]
+        entry = report["results"][metric][name]
         self.assertEqual(entry["group"], "kernels")
         self.assertEqual(entry["runs"], runs)
         self.assertEqual(len(entry["values"]), runs)
@@ -54,6 +55,12 @@ class RunTest(unittest.TestCase):
         report = self.run_bench("time", "--time-runs", "2")
         entry = self.check_entry(report, "time", 2)
         self.assertEqual(entry["loops"], 1)
+
+    @unittest.skipUnless(os.access("/usr/bin/time", os.X_OK), "no GNU time")
+    def test_rss_of_a_variant(self):
+        # logging_silent is one of three benchmarks in logging.py, chosen by setup().
+        report = self.run_bench("rss", "--rss-runs", "1", name="logging_silent")
+        self.check_entry(report, "rss", 1, name="logging_silent")
 
     @unittest.skipUnless(perf_counts(), "perf cannot count instructions:u here")
     def test_instr_and_compare(self):

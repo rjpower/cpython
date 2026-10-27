@@ -354,39 +354,51 @@ extern void _PyGC_LiveAddImmortal(PyObject *op);
 extern void _PyGC_LiveKeepThreads(PyThreadState *list);
 extern PyThreadState *_PyGC_LiveKeptThreads(PyInterpreterState *interp);
 
-/* Zero the C stack below the caller's frame, where the collector's entry
- * frames go next.  Their padding would otherwise keep the stale words that
- * earlier calls left there, which the scan takes for roots. */
-extern void _PyGC_LiveClearStack(void);
-
 /* Free the block of a dead object that the sweep has deallocated
  * (PyObject_Free() without looking the block up). */
 extern void _PyGC_FreeDeadBlock(PyObject *op, void *block);
 
-/* The same for the eval loop's entry and frame, which have padding too, and
- * spill slots that a call writes only on some paths.  On x86-64 the stores
- * are inline assembly below the caller's stack pointer, so that they reach
- * the top of the region: a clearing function's own frame would cover it,
- * and its padding would keep the stale words for the entry's padding
- * (test_asyncio.test_futures2).  The caller makes calls, so nothing of its
- * own lives below its stack pointer. */
-extern void _PyGC_LiveClearEvalStackBuffer(void);
+/* Zero nbytes of the C stack below the caller's frame, where the frames
+ * of its next callees go.  Their padding, and spill slots that a call
+ * writes only on some paths, would otherwise keep the stale words that
+ * earlier calls left there, which the scan takes for roots.  On x86-64 the
+ * stores are inline assembly below the caller's stack pointer, so that they
+ * reach the top of the region: a clearing function's own frame would cover
+ * it, and the next callee's padding would land on the words that frame
+ * left (test_asyncio.test_futures2, test_gc).  The caller makes calls, so
+ * nothing of its own lives below its stack pointer. */
+extern void _PyGC_ClearStackBuffer(size_t nbytes);
 
 static inline void
-_PyGC_LiveClearEvalStack(void)
+_PyGC_ClearStackBelow(size_t nbytes)
 {
 #if defined(__x86_64__) && defined(__GNUC__)
     void *dst;
     unsigned long count;
-    __asm__ volatile("lea -1024(%%rsp), %0\n\t"
+    __asm__ volatile("mov %%rsp, %0\n\t"
+                     "sub %2, %0\n\t"
                      "xor %%eax, %%eax\n\t"
                      "rep stosq"
                      : "=&D"(dst), "=&c"(count)
-                     : "1"(1024 / 8)
+                     : "r"(nbytes), "1"(nbytes / 8)
                      : "rax", "memory");
 #else
-    _PyGC_LiveClearEvalStackBuffer();
+    _PyGC_ClearStackBuffer(nbytes);
 #endif
+}
+
+/* Before a collection: the collector's entry frames go below the caller. */
+static inline void
+_PyGC_LiveClearStack(void)
+{
+    _PyGC_ClearStackBelow(16 * 1024);
+}
+
+/* At the eval loop's entry, for its frame and the entry's. */
+static inline void
+_PyGC_LiveClearEvalStack(void)
+{
+    _PyGC_ClearStackBelow(1024);
 }
 
 /* Totals for gc.get_stats(): the bytes the sweeps freed, the bytes the last

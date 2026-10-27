@@ -43,12 +43,12 @@ Nothing joins this table without those two columns.
 | Mechanism | Why it exists | Retired by | Proof |
 |---|---|---|---|
 | `-ftrivial-auto-var-init=zero` for the whole build | stale C locals read as roots | 10 (precise roots) | flag removed; stale-root probe 100/100 |
-| 16 KB stack clear before and after a collection; 16 KB clear in `gc.collect()` | padding in collector entry frames | 10 | clears removed; same probe |
+| 16 KB stack clear before and after a collection; 16 KB clear in `gc.collect()` (6b: stores below the caller's stack pointer, as the 1 KB clear does, so that no clearing frame covers the top of the region) | padding in collector entry frames | 10 | clears removed; same probe |
 | 1 KB clear at each C entry to the eval loop | padding and spills in the eval frame | 10 | removed; same probe |
 | `_PyGC_CLEAR_ARRAY` after handler calls; scratch arrays zeroed | argument arrays read as roots | 10 | removed |
 | popped `_PyValueRoot` slots cleared; saved registers cleared after use | stale words | 10 | removed |
 | eval-loop activation ranges skipped by the scan; `Py_NO_INLINE` on about 25 helpers | partial stack map by exclusion | 10 replaces exclusion with a map | attribute dropped; stack map covers the eval loop |
-| about 12 tests that skip on release builds or allow one survivor (test_weakref x3, test_finalization, test_enum, test_ctypes, test_descr, test_context, `test_release_task_refs`; 6b adds test_gc `test_newinstance` and test_weakset `test_weak_destroy_and_mutate_while_iterating`) | callee-saved register spills in `PyObject_Vectorcall`'s frame | 10 | skips removed, tests pass 20/20 on both builds |
+| about 12 tests that skip on release builds or allow one survivor (test_weakref x3, test_finalization, test_enum, test_ctypes, test_descr, test_context, `test_release_task_refs`) | callee-saved register spills in `PyObject_Vectorcall`'s frame | 10 | skips removed, tests pass 20/20 on both builds |
 | inline-fallback collection scans everything | allocation past a second threshold without reaching the eval loop | 10 | one scan path |
 | trigger counts requested bytes, not block bytes | 5a trigger written before the header shrink | 7 | RSS on the 10M-tuple loop back to the 5c figure |
 | allocator does not collect when an allocation fails | 5a design gap | 7 | a test that fails an allocation and succeeds after a collection |

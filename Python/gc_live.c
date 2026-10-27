@@ -1237,32 +1237,17 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
     return n;
 }
 
-#define CLEAR_STACK_BYTES (16 * 1024)
+#define CLEAR_STACK_MAX (16 * 1024)
 
-/* Zero the stack below the caller's frame.  No store reaches the padding
-   and some spill slots of the frames made there next; without this they
-   would hold stale words, which the scan takes for roots. */
-static Py_NO_INLINE void
-clear_stack_below(void)
+/* The fallback of _PyGC_ClearStackBelow(): the top of the buffer is
+   nearest the caller's frame. */
+Py_NO_INLINE void
+_PyGC_ClearStackBuffer(size_t nbytes)
 {
-    char buf[CLEAR_STACK_BYTES];
-    memset(buf, 0, sizeof(buf));
+    char buf[CLEAR_STACK_MAX];
+    assert(nbytes <= sizeof(buf));
+    memset(buf + sizeof(buf) - nbytes, 0, nbytes);
     // Keep the stores, which are dead to the compiler.
-    __asm__ volatile("" : : "r"(buf) : "memory");
-}
-
-void
-_PyGC_LiveClearStack(void)
-{
-    clear_stack_below();
-}
-
-void
-_PyGC_LiveClearEvalStackBuffer(void)
-{
-    // More than the eval loop's frame.
-    char buf[1024];
-    memset(buf, 0, sizeof(buf));
     __asm__ volatile("" : : "r"(buf) : "memory");
 }
 
@@ -1271,10 +1256,10 @@ _PyGC_LiveClearEvalStackBuffer(void)
 static inline Py_ssize_t
 collect_and_run_queue(PyThreadState *tstate, _PyGC_Reason reason)
 {
-    clear_stack_below();
+    _PyGC_LiveClearStack();
     Py_ssize_t n = collect_from_entry(tstate, reason);
     // The collector's frames held what it marked, some of it soon garbage.
-    clear_stack_below();
+    _PyGC_LiveClearStack();
     return n;
 }
 

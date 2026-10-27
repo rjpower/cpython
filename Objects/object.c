@@ -44,6 +44,12 @@
 /* Defined in tracemalloc.c */
 extern void _PyMem_DumpTraceback(int fd, const void *ptr);
 
+/* The PyObject * forms of these protocols, which the value forms call for
+   an object (see "The PyObject * protocol" at the end of this file). */
+static PyObject *object_ascii(PyObject *v);
+static int object_setattr(PyObject *v, PyObject *name, PyObject *value);
+static int object_is_true(PyObject *v);
+
 
 int
 _PyObject_CheckConsistency(PyObject *op, int check_content)
@@ -336,8 +342,8 @@ PyObject_Dump(PyObject* op)
     fflush(stderr);
 }
 
-PyObject *
-PyObject_Repr(PyObject *v)
+static PyObject *
+object_repr(PyObject *v)
 {
     PyObject *res;
     if (PyErr_CheckSignals())
@@ -377,8 +383,8 @@ PyObject_Repr(PyObject *v)
     return res;
 }
 
-PyObject *
-PyObject_Str(PyObject *v)
+static PyObject *
+object_str(PyObject *v)
 {
     PyObject *res;
     if (PyErr_CheckSignals())
@@ -389,7 +395,7 @@ PyObject_Str(PyObject *v)
         return Py_NewRef(v);
     }
     if (Py_TYPE(v)->tp_str == NULL)
-        return PyObject_Repr(v);
+        return object_repr(v);
 
     PyThreadState *tstate = _PyThreadState_GET();
 #ifdef Py_DEBUG
@@ -454,7 +460,7 @@ PyObject_StrValue(PyValue v)
     if (PyValue_IsInline(v)) {
         return str_value_result(inline_value_str(v));
     }
-    return str_value_result(PyObject_Str(PyValue_ObjectBorrow(v)));
+    return str_value_result(object_str(PyValue_ObjectBorrow(v)));
 }
 
 PyValue
@@ -463,7 +469,7 @@ PyObject_ReprValue(PyValue v)
     if (PyValue_IsInline(v)) {
         return str_value_result(inline_value_str(v));
     }
-    return str_value_result(PyObject_Repr(PyValue_ObjectBorrow(v)));
+    return str_value_result(object_repr(PyValue_ObjectBorrow(v)));
 }
 
 PyValue
@@ -472,15 +478,15 @@ PyObject_ASCIIValue(PyValue v)
     if (PyValue_IsInline(v)) {
         return str_value_result(inline_value_str(v));
     }
-    return str_value_result(PyObject_ASCII(PyValue_ObjectBorrow(v)));
+    return str_value_result(object_ascii(PyValue_ObjectBorrow(v)));
 }
 
-PyObject *
-PyObject_ASCII(PyObject *v)
+static PyObject *
+object_ascii(PyObject *v)
 {
     PyObject *repr, *ascii, *res;
 
-    repr = PyObject_Repr(v);
+    repr = object_repr(v);
     if (repr == NULL)
         return NULL;
 
@@ -672,8 +678,8 @@ do_richcompare(PyThreadState *tstate, PyObject *v, PyObject *w, int op)
 /* Perform a rich comparison with object result.  This wraps do_richcompare()
    with a check for NULL arguments and a recursion check. */
 
-PyObject *
-PyObject_RichCompare(PyObject *v, PyObject *w, int op)
+static PyObject *
+object_richcompare(PyObject *v, PyObject *w, int op)
 {
     PyThreadState *tstate = _PyThreadState_GET();
 
@@ -694,8 +700,8 @@ PyObject_RichCompare(PyObject *v, PyObject *w, int op)
 
 /* Perform a rich comparison with integer result.  This wraps
    PyObject_RichCompare(), returning -1 for error, 0 for false, 1 for true. */
-int
-PyObject_RichCompareBool(PyObject *v, PyObject *w, int op)
+static int
+object_richcompare_bool(PyObject *v, PyObject *w, int op)
 {
     PyObject *res;
     int ok;
@@ -709,7 +715,7 @@ PyObject_RichCompareBool(PyObject *v, PyObject *w, int op)
             return 0;
     }
 
-    res = PyObject_RichCompare(v, w, op);
+    res = object_richcompare(v, w, op);
     if (res == NULL)
         return -1;
     if (PyBool_Check(res)) {
@@ -731,8 +737,8 @@ PyObject_HashNotImplemented(PyObject *v)
     return -1;
 }
 
-Py_hash_t
-PyObject_Hash(PyObject *v)
+static Py_hash_t
+object_hash(PyObject *v)
 {
     PyTypeObject *tp = Py_TYPE(v);
     if (tp->tp_hash != NULL)
@@ -883,40 +889,6 @@ restore:
     return 0;
 }
 
-PyObject *
-PyObject_GetAttr(PyObject *v, PyObject *name)
-{
-    PyTypeObject *tp = Py_TYPE(v);
-    if (!PyUnicode_Check(name)) {
-        PyErr_Format(PyExc_TypeError,
-                     "attribute name must be string, not '%.200s'",
-                     Py_TYPE(name)->tp_name);
-        return NULL;
-    }
-
-    PyObject* result = NULL;
-    if (tp->tp_getattro != NULL) {
-        result = (*tp->tp_getattro)(v, name);
-    }
-    else if (tp->tp_getattr != NULL) {
-        const char *name_str = PyUnicode_AsUTF8(name);
-        if (name_str == NULL) {
-            return NULL;
-        }
-        result = (*tp->tp_getattr)(v, (char *)name_str);
-    }
-    else {
-        PyErr_Format(PyExc_AttributeError,
-                    "'%.100s' object has no attribute '%U'",
-                    tp->tp_name, name);
-    }
-
-    if (result == NULL) {
-        _PyObject_SetAttributeErrorContext(v, name);
-    }
-    return result;
-}
-
 /* Like PyObject_GetAttr but returns a PyValue.
    For types (tp_getattro == _Py_type_getattro), this can return
    a deferred reference to reduce reference count contention. */
@@ -1019,7 +991,7 @@ PyObject_SetAttrValue(PyValue v, PyObject *name, PyValue value)
     PyObject *value_o = _PyValueRoot_PushObject(tstate, &value_root, value,
                                                 _PY_BOX_ATTRIBUTE_STORE);
     if (v_o != NULL && (value_o != NULL || PyValue_IsNull(value))) {
-        res = PyObject_SetAttr(v_o, name, value_o);
+        res = object_setattr(v_o, name, value_o);
     }
     _PyThreadState_PopValueRoot(tstate, &value_root);
     _PyThreadState_PopValueRoot(tstate, &v_root);
@@ -1036,15 +1008,15 @@ PyObject_RichCompareValue(PyValue v, PyValue w, int op)
     }
     PyObject *res;
     if (!PyValue_IsInline(v) && !PyValue_IsInline(w)) {
-        res = PyObject_RichCompare(PyValue_ObjectBorrow(v),
-                                   PyValue_ObjectBorrow(w), op);
+        res = object_richcompare(PyValue_ObjectBorrow(v),
+                                 PyValue_ObjectBorrow(w), op);
     }
     else {
         PyThreadState *tstate = _PyThreadState_GET();
         _PyValueRoot v_root, w_root;
         PyObject *v_o = _PyValueRoot_PushObject(tstate, &v_root, v, _PY_BOX_OTHER);
         PyObject *w_o = _PyValueRoot_PushObject(tstate, &w_root, w, _PY_BOX_OTHER);
-        res = v_o && w_o ? PyObject_RichCompare(v_o, w_o, op) : NULL;
+        res = v_o && w_o ? object_richcompare(v_o, w_o, op) : NULL;
         _PyThreadState_PopValueRoot(tstate, &w_root);
         _PyThreadState_PopValueRoot(tstate, &v_root);
     }
@@ -1068,14 +1040,14 @@ PyObject_RichCompareBoolValue(PyValue v, PyValue w, int op)
         }
     }
     if (!PyValue_IsInline(v) && !PyValue_IsInline(w)) {
-        return PyObject_RichCompareBool(PyValue_ObjectBorrow(v),
-                                        PyValue_ObjectBorrow(w), op);
+        return object_richcompare_bool(PyValue_ObjectBorrow(v),
+                                       PyValue_ObjectBorrow(w), op);
     }
     PyThreadState *tstate = _PyThreadState_GET();
     _PyValueRoot v_root, w_root;
     PyObject *v_o = _PyValueRoot_PushObject(tstate, &v_root, v, _PY_BOX_OTHER);
     PyObject *w_o = _PyValueRoot_PushObject(tstate, &w_root, w, _PY_BOX_OTHER);
-    int res = v_o && w_o ? PyObject_RichCompareBool(v_o, w_o, op) : -1;
+    int res = v_o && w_o ? object_richcompare_bool(v_o, w_o, op) : -1;
     _PyThreadState_PopValueRoot(tstate, &w_root);
     _PyThreadState_PopValueRoot(tstate, &v_root);
     return res;
@@ -1090,7 +1062,7 @@ PyObject_IsTrueValue(PyValue v)
     if (PyValue_IsInlineFloat(v)) {
         return PyValue_Double(v) != 0.0;
     }
-    return PyObject_IsTrue(PyValue_ObjectBorrow(v));
+    return object_is_true(PyValue_ObjectBorrow(v));
 }
 
 Py_hash_t
@@ -1104,7 +1076,7 @@ PyObject_HashValue(PyValue v)
     if (PyValue_IsInlineFloat(v)) {
         return _Py_HashDouble(NULL, PyValue_Double(v));
     }
-    return PyObject_Hash(PyValue_ObjectBorrow(v));
+    return object_hash(PyValue_ObjectBorrow(v));
 }
 
 int
@@ -1223,8 +1195,8 @@ PyObject_HasAttr(PyObject *obj, PyObject *name)
     return rc;
 }
 
-int
-PyObject_SetAttr(PyObject *v, PyObject *name, PyObject *value)
+static int
+object_setattr(PyObject *v, PyObject *name, PyObject *value)
 {
     PyThreadState *tstate = _PyThreadState_GET();
     if (value == NULL && _PyErr_Occurred(tstate)) {
@@ -1914,8 +1886,8 @@ PyObject_GenericSetDict(PyObject *obj, PyObject *value, void *context)
 /* Test a value used as condition, e.g., in a while or if statement.
    Return -1 if an error occurred */
 
-int
-PyObject_IsTrue(PyObject *v)
+static int
+object_is_true(PyObject *v)
 {
     Py_ssize_t res;
     if (v == Py_True)
@@ -2901,3 +2873,87 @@ Py_ssize_t Py_REFCNT(PyObject *ob) { return _Py_REFCNT(ob); }
 Py_ssize_t Py_SIZE(PyObject *o) { return _Py_SIZE_impl(o); }
 int Py_IS_TYPE(PyObject *o, PyTypeObject *t) { return _Py_IS_TYPE_impl(o, t); }
 void Py_SET_SIZE(PyVarObject *o, Py_ssize_t s) { _Py_SET_SIZE_impl(o, s); }
+
+
+/* The PyObject * protocol
+
+   These functions are the compatibility layer over the value forms: each
+   canonicalises its arguments (an exact int that fits in int32, or an exact
+   float other than NaN, becomes inline), calls the value form, and boxes an
+   inline result.  The core calls the value forms. */
+
+PyObject *
+PyObject_Repr(PyObject *v)
+{
+    if (v == NULL) {
+        return object_repr(v);
+    }
+    return PyValue_Object(PyObject_ReprValue(PyValue_FromObject(v)));
+}
+
+PyObject *
+PyObject_Str(PyObject *v)
+{
+    if (v == NULL) {
+        return object_str(v);
+    }
+    return PyValue_Object(PyObject_StrValue(PyValue_FromObject(v)));
+}
+
+PyObject *
+PyObject_ASCII(PyObject *v)
+{
+    if (v == NULL) {
+        return object_ascii(v);
+    }
+    return PyValue_Object(PyObject_ASCIIValue(PyValue_FromObject(v)));
+}
+
+PyObject *
+PyObject_RichCompare(PyObject *v, PyObject *w, int op)
+{
+    if (v == NULL || w == NULL) {
+        return object_richcompare(v, w, op);
+    }
+    return PyValue_Object(PyObject_RichCompareValue(PyValue_FromObject(v),
+                                                    PyValue_FromObject(w), op));
+}
+
+int
+PyObject_RichCompareBool(PyObject *v, PyObject *w, int op)
+{
+    if (v == NULL || w == NULL) {
+        return object_richcompare_bool(v, w, op);
+    }
+    return PyObject_RichCompareBoolValue(PyValue_FromObject(v),
+                                         PyValue_FromObject(w), op);
+}
+
+Py_hash_t
+PyObject_Hash(PyObject *v)
+{
+    return PyObject_HashValue(PyValue_FromObject(v));
+}
+
+int
+PyObject_IsTrue(PyObject *v)
+{
+    return PyObject_IsTrueValue(PyValue_FromObject(v));
+}
+
+PyObject *
+PyObject_GetAttr(PyObject *v, PyObject *name)
+{
+    return PyValue_Object(PyObject_GetAttrValue(PyValue_FromObject(v), name));
+}
+
+int
+PyObject_SetAttr(PyObject *v, PyObject *name, PyObject *value)
+{
+    if (value == NULL) {
+        // Deletion, which also reports a NULL value with an exception set.
+        return object_setattr(v, name, NULL);
+    }
+    return PyObject_SetAttrValue(PyValue_FromObject(v), name,
+                                 PyValue_FromObject(value));
+}

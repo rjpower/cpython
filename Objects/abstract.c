@@ -157,8 +157,8 @@ PyObject_LengthHint(PyObject *o, Py_ssize_t defaultvalue)
     return res;
 }
 
-PyObject *
-PyObject_GetItem(PyObject *o, PyObject *key)
+static PyObject *
+object_getitem(PyObject *o, PyObject *key)
 {
     if (o == NULL || key == NULL) {
         return null_error();
@@ -238,8 +238,8 @@ _PyMapping_GetOptionalItem2(PyObject *obj, PyObject *key, int *err)
     return result;
 }
 
-int
-PyObject_SetItem(PyObject *o, PyObject *key, PyObject *value)
+static int
+object_setitem(PyObject *o, PyObject *key, PyObject *value)
 {
     if (o == NULL || key == NULL || value == NULL) {
         null_error();
@@ -272,8 +272,8 @@ PyObject_SetItem(PyObject *o, PyObject *key, PyObject *value)
     return -1;
 }
 
-int
-PyObject_DelItem(PyObject *o, PyObject *key)
+static int
+object_delitem(PyObject *o, PyObject *key)
 {
     if (o == NULL || key == NULL) {
         null_error();
@@ -863,11 +863,13 @@ _PyBuffer_ReleaseInInterpreterAndRawFree(PyInterpreterState *interp,
     return _Py_CallInInterpreterAndRawFree(interp, _buffer_release_call, view);
 }
 
+static PyObject *object_format(PyObject *obj, PyObject *format_spec);
+
 PyValue
 PyObject_FormatValue(PyValue v, PyObject *format_spec)
 {
     if (!PyValue_IsInline(v)) {
-        PyObject *res = PyObject_Format(PyValue_ObjectBorrow(v), format_spec);
+        PyObject *res = object_format(PyValue_ObjectBorrow(v), format_spec);
         return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
     }
     if (format_spec != NULL && !PyUnicode_Check(format_spec)) {
@@ -898,15 +900,15 @@ PyObject_FormatValue(PyValue v, PyObject *format_spec)
         _PyValueRoot root;
         PyObject *v_o = _PyValueRoot_PushObject(tstate, &root, v, _PY_BOX_OTHER);
         if (v_o != NULL) {
-            res = PyObject_Format(v_o, format_spec);
+            res = object_format(v_o, format_spec);
         }
         _PyThreadState_PopValueRoot(tstate, &root);
     }
     return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
 }
 
-PyObject *
-PyObject_Format(PyObject *obj, PyObject *format_spec)
+static PyObject *
+object_format(PyObject *obj, PyObject *format_spec)
 {
     PyObject *meth;
     PyObject *empty = NULL;
@@ -1177,21 +1179,25 @@ ternary_op(PyObject *v,
 }
 
 #define BINARY_FUNC(func, op, op_name) \
-    PyObject * \
+    static PyObject * \
     func(PyObject *v, PyObject *w) { \
         return binary_op(v, w, NB_SLOT(op), op_name); \
     }
 
-BINARY_FUNC(PyNumber_Or, nb_or, "|")
-BINARY_FUNC(PyNumber_Xor, nb_xor, "^")
-BINARY_FUNC(PyNumber_And, nb_and, "&")
-BINARY_FUNC(PyNumber_Lshift, nb_lshift, "<<")
-BINARY_FUNC(PyNumber_Rshift, nb_rshift, ">>")
-BINARY_FUNC(PyNumber_Subtract, nb_subtract, "-")
-BINARY_FUNC(PyNumber_Divmod, nb_divmod, "divmod()")
-
+BINARY_FUNC(number_or, nb_or, "|")
+BINARY_FUNC(number_xor, nb_xor, "^")
+BINARY_FUNC(number_and, nb_and, "&")
+BINARY_FUNC(number_lshift, nb_lshift, "<<")
+BINARY_FUNC(number_rshift, nb_rshift, ">>")
+BINARY_FUNC(number_subtract, nb_subtract, "-")
 PyObject *
-PyNumber_Add(PyObject *v, PyObject *w)
+PyNumber_Divmod(PyObject *v, PyObject *w)
+{
+    return binary_op(v, w, NB_SLOT(nb_divmod), "divmod()");
+}
+
+static PyObject *
+number_add(PyObject *v, PyObject *w)
 {
     PyObject *result = BINARY_OP1(v, w, NB_SLOT(nb_add), "+");
     if (result != Py_NotImplemented) {
@@ -1228,8 +1234,8 @@ sequence_repeat(ssizeargfunc repeatfunc, PyObject *seq, PyObject *n)
     return res;
 }
 
-PyObject *
-PyNumber_Multiply(PyObject *v, PyObject *w)
+static PyObject *
+number_multiply(PyObject *v, PyObject *w)
 {
     PyObject *result = BINARY_OP1(v, w, NB_SLOT(nb_multiply), "*");
     if (result == Py_NotImplemented) {
@@ -1247,13 +1253,13 @@ PyNumber_Multiply(PyObject *v, PyObject *w)
     return result;
 }
 
-BINARY_FUNC(PyNumber_MatrixMultiply, nb_matrix_multiply, "@")
-BINARY_FUNC(PyNumber_FloorDivide, nb_floor_divide, "//")
-BINARY_FUNC(PyNumber_TrueDivide, nb_true_divide, "/")
-BINARY_FUNC(PyNumber_Remainder, nb_remainder, "%")
+BINARY_FUNC(number_matrix_multiply, nb_matrix_multiply, "@")
+BINARY_FUNC(number_floor_divide, nb_floor_divide, "//")
+BINARY_FUNC(number_true_divide, nb_true_divide, "/")
+BINARY_FUNC(number_remainder, nb_remainder, "%")
 
-PyObject *
-PyNumber_Power(PyObject *v, PyObject *w, PyObject *z)
+static PyObject *
+number_power(PyObject *v, PyObject *w, PyObject *z)
 {
     return ternary_op(v, w, z, NB_SLOT(nb_power), "** or pow()");
 }
@@ -1261,7 +1267,7 @@ PyNumber_Power(PyObject *v, PyObject *w, PyObject *z)
 PyObject *
 _PyNumber_PowerNoMod(PyObject *lhs, PyObject *rhs)
 {
-    return PyNumber_Power(lhs, rhs, Py_None);
+    return number_power(lhs, rhs, Py_None);
 }
 
 /* Binary in-place operators */
@@ -1343,24 +1349,24 @@ ternary_iop(PyObject *v, PyObject *w, PyObject *z, const int iop_slot, const int
 }
 
 #define INPLACE_BINOP(func, iop, op, op_name) \
-    PyObject * \
+    static PyObject * \
     func(PyObject *v, PyObject *w) { \
         return binary_iop(v, w, NB_SLOT(iop), NB_SLOT(op), op_name); \
     }
 
-INPLACE_BINOP(PyNumber_InPlaceOr, nb_inplace_or, nb_or, "|=")
-INPLACE_BINOP(PyNumber_InPlaceXor, nb_inplace_xor, nb_xor, "^=")
-INPLACE_BINOP(PyNumber_InPlaceAnd, nb_inplace_and, nb_and, "&=")
-INPLACE_BINOP(PyNumber_InPlaceLshift, nb_inplace_lshift, nb_lshift, "<<=")
-INPLACE_BINOP(PyNumber_InPlaceRshift, nb_inplace_rshift, nb_rshift, ">>=")
-INPLACE_BINOP(PyNumber_InPlaceSubtract, nb_inplace_subtract, nb_subtract, "-=")
-INPLACE_BINOP(PyNumber_InPlaceMatrixMultiply, nb_inplace_matrix_multiply, nb_matrix_multiply, "@=")
-INPLACE_BINOP(PyNumber_InPlaceFloorDivide, nb_inplace_floor_divide, nb_floor_divide, "//=")
-INPLACE_BINOP(PyNumber_InPlaceTrueDivide, nb_inplace_true_divide, nb_true_divide,  "/=")
-INPLACE_BINOP(PyNumber_InPlaceRemainder, nb_inplace_remainder, nb_remainder, "%=")
+INPLACE_BINOP(number_inplace_or, nb_inplace_or, nb_or, "|=")
+INPLACE_BINOP(number_inplace_xor, nb_inplace_xor, nb_xor, "^=")
+INPLACE_BINOP(number_inplace_and, nb_inplace_and, nb_and, "&=")
+INPLACE_BINOP(number_inplace_lshift, nb_inplace_lshift, nb_lshift, "<<=")
+INPLACE_BINOP(number_inplace_rshift, nb_inplace_rshift, nb_rshift, ">>=")
+INPLACE_BINOP(number_inplace_subtract, nb_inplace_subtract, nb_subtract, "-=")
+INPLACE_BINOP(number_inplace_matrix_multiply, nb_inplace_matrix_multiply, nb_matrix_multiply, "@=")
+INPLACE_BINOP(number_inplace_floor_divide, nb_inplace_floor_divide, nb_floor_divide, "//=")
+INPLACE_BINOP(number_inplace_true_divide, nb_inplace_true_divide, nb_true_divide,  "/=")
+INPLACE_BINOP(number_inplace_remainder, nb_inplace_remainder, nb_remainder, "%=")
 
-PyObject *
-PyNumber_InPlaceAdd(PyObject *v, PyObject *w)
+static PyObject *
+number_inplace_add(PyObject *v, PyObject *w)
 {
     PyObject *result = BINARY_IOP1(v, w, NB_SLOT(nb_inplace_add),
                                    NB_SLOT(nb_add), "+=");
@@ -1382,8 +1388,8 @@ PyNumber_InPlaceAdd(PyObject *v, PyObject *w)
     return result;
 }
 
-PyObject *
-PyNumber_InPlaceMultiply(PyObject *v, PyObject *w)
+static PyObject *
+number_inplace_multiply(PyObject *v, PyObject *w)
 {
     PyObject *result = BINARY_IOP1(v, w, NB_SLOT(nb_inplace_multiply),
                                    NB_SLOT(nb_multiply), "*=");
@@ -1411,8 +1417,8 @@ PyNumber_InPlaceMultiply(PyObject *v, PyObject *w)
     return result;
 }
 
-PyObject *
-PyNumber_InPlacePower(PyObject *v, PyObject *w, PyObject *z)
+static PyObject *
+number_inplace_power(PyObject *v, PyObject *w, PyObject *z)
 {
     return ternary_iop(v, w, z, NB_SLOT(nb_inplace_power),
                                 NB_SLOT(nb_power), "**=");
@@ -1421,14 +1427,14 @@ PyNumber_InPlacePower(PyObject *v, PyObject *w, PyObject *z)
 PyObject *
 _PyNumber_InPlacePowerNoMod(PyObject *lhs, PyObject *rhs)
 {
-    return PyNumber_InPlacePower(lhs, rhs, Py_None);
+    return number_inplace_power(lhs, rhs, Py_None);
 }
 
 
 /* Unary operators and functions */
 
 #define UNARY_FUNC(func, op, meth_name, descr)                           \
-    PyObject *                                                           \
+    static PyObject *                                                    \
     func(PyObject *o) {                                                  \
         if (o == NULL) {                                                 \
             return null_error();                                         \
@@ -1444,10 +1450,10 @@ _PyNumber_InPlacePowerNoMod(PyObject *lhs, PyObject *rhs)
         return type_error("bad operand type for "descr": '%.200s'", o);  \
     }
 
-UNARY_FUNC(PyNumber_Negative, nb_negative, __neg__, "unary -")
-UNARY_FUNC(PyNumber_Positive, nb_positive, __pos__, "unary +")
-UNARY_FUNC(PyNumber_Invert, nb_invert, __invert__, "unary ~")
-UNARY_FUNC(PyNumber_Absolute, nb_absolute, __abs__, "abs()")
+UNARY_FUNC(number_negative, nb_negative, __neg__, "unary -")
+UNARY_FUNC(number_positive, nb_positive, __pos__, "unary +")
+UNARY_FUNC(number_invert, nb_invert, __invert__, "unary ~")
+UNARY_FUNC(number_absolute, nb_absolute, __abs__, "abs()")
 
 
 int
@@ -1508,8 +1514,8 @@ _PyNumber_Index(PyObject *item)
    Raise TypeError if the result is not an int
    or if the object cannot be interpreted as an index.
 */
-PyObject *
-PyNumber_Index(PyObject *item)
+static PyObject *
+number_index(PyObject *item)
 {
     PyObject *result = _PyNumber_Index(item);
     if (result != NULL && !PyLong_CheckExact(result)) {
@@ -1520,8 +1526,8 @@ PyNumber_Index(PyObject *item)
 
 /* Return an error on Overflow only if err is not NULL*/
 
-Py_ssize_t
-PyNumber_AsSsize_t(PyObject *item, PyObject *err)
+static Py_ssize_t
+number_as_ssize_t(PyObject *item, PyObject *err)
 {
     Py_ssize_t result;
     PyObject *runerr;
@@ -1571,8 +1577,8 @@ PyNumber_AsSsize_t(PyObject *item, PyObject *err)
 }
 
 
-PyObject *
-PyNumber_Long(PyObject *o)
+static PyObject *
+number_long(PyObject *o)
 {
     PyObject *result;
     PyNumberMethods *m;
@@ -1654,8 +1660,8 @@ PyNumber_Long(PyObject *o)
                       "or a real number, not '%.200s'", o);
 }
 
-PyObject *
-PyNumber_Float(PyObject *o)
+static PyObject *
+number_float(PyObject *o)
 {
     if (o == NULL) {
         return null_error();
@@ -1930,32 +1936,32 @@ negative_shift:
 
 /* The PyObject * function of each binary operation, for the boxed path. */
 static const binaryfunc number_binary_funcs[] = {
-    [NB_ADD] = PyNumber_Add,
-    [NB_AND] = PyNumber_And,
-    [NB_FLOOR_DIVIDE] = PyNumber_FloorDivide,
-    [NB_LSHIFT] = PyNumber_Lshift,
-    [NB_MATRIX_MULTIPLY] = PyNumber_MatrixMultiply,
-    [NB_MULTIPLY] = PyNumber_Multiply,
-    [NB_REMAINDER] = PyNumber_Remainder,
-    [NB_OR] = PyNumber_Or,
+    [NB_ADD] = number_add,
+    [NB_AND] = number_and,
+    [NB_FLOOR_DIVIDE] = number_floor_divide,
+    [NB_LSHIFT] = number_lshift,
+    [NB_MATRIX_MULTIPLY] = number_matrix_multiply,
+    [NB_MULTIPLY] = number_multiply,
+    [NB_REMAINDER] = number_remainder,
+    [NB_OR] = number_or,
     [NB_POWER] = _PyNumber_PowerNoMod,
-    [NB_RSHIFT] = PyNumber_Rshift,
-    [NB_SUBTRACT] = PyNumber_Subtract,
-    [NB_TRUE_DIVIDE] = PyNumber_TrueDivide,
-    [NB_XOR] = PyNumber_Xor,
-    [NB_INPLACE_ADD] = PyNumber_InPlaceAdd,
-    [NB_INPLACE_AND] = PyNumber_InPlaceAnd,
-    [NB_INPLACE_FLOOR_DIVIDE] = PyNumber_InPlaceFloorDivide,
-    [NB_INPLACE_LSHIFT] = PyNumber_InPlaceLshift,
-    [NB_INPLACE_MATRIX_MULTIPLY] = PyNumber_InPlaceMatrixMultiply,
-    [NB_INPLACE_MULTIPLY] = PyNumber_InPlaceMultiply,
-    [NB_INPLACE_REMAINDER] = PyNumber_InPlaceRemainder,
-    [NB_INPLACE_OR] = PyNumber_InPlaceOr,
+    [NB_RSHIFT] = number_rshift,
+    [NB_SUBTRACT] = number_subtract,
+    [NB_TRUE_DIVIDE] = number_true_divide,
+    [NB_XOR] = number_xor,
+    [NB_INPLACE_ADD] = number_inplace_add,
+    [NB_INPLACE_AND] = number_inplace_and,
+    [NB_INPLACE_FLOOR_DIVIDE] = number_inplace_floor_divide,
+    [NB_INPLACE_LSHIFT] = number_inplace_lshift,
+    [NB_INPLACE_MATRIX_MULTIPLY] = number_inplace_matrix_multiply,
+    [NB_INPLACE_MULTIPLY] = number_inplace_multiply,
+    [NB_INPLACE_REMAINDER] = number_inplace_remainder,
+    [NB_INPLACE_OR] = number_inplace_or,
     [NB_INPLACE_POWER] = _PyNumber_InPlacePowerNoMod,
-    [NB_INPLACE_RSHIFT] = PyNumber_InPlaceRshift,
-    [NB_INPLACE_SUBTRACT] = PyNumber_InPlaceSubtract,
-    [NB_INPLACE_TRUE_DIVIDE] = PyNumber_InPlaceTrueDivide,
-    [NB_INPLACE_XOR] = PyNumber_InPlaceXor,
+    [NB_INPLACE_RSHIFT] = number_inplace_rshift,
+    [NB_INPLACE_SUBTRACT] = number_inplace_subtract,
+    [NB_INPLACE_TRUE_DIVIDE] = number_inplace_true_divide,
+    [NB_INPLACE_XOR] = number_inplace_xor,
 };
 
 /* The canonical value of res, the result of a PyObject * function, or
@@ -2062,8 +2068,8 @@ power_value(PyValue v, PyValue w, PyValue mod, int op)
     PyObject *w_o = _PyValueRoot_PushObject(tstate, &w_root, w, _PY_BOX_OTHER);
     PyObject *mod_o = _PyValueRoot_PushObject(tstate, &mod_root, mod, _PY_BOX_OTHER);
     if (v_o != NULL && w_o != NULL && mod_o != NULL) {
-        res = op == NB_POWER ? PyNumber_Power(v_o, w_o, mod_o)
-                             : PyNumber_InPlacePower(v_o, w_o, mod_o);
+        res = op == NB_POWER ? number_power(v_o, w_o, mod_o)
+                             : number_inplace_power(v_o, w_o, mod_o);
     }
     _PyThreadState_PopValueRoot(tstate, &mod_root);
     _PyThreadState_PopValueRoot(tstate, &w_root);
@@ -2108,7 +2114,7 @@ PyNumber_NegativeValue(PyValue v)
     if (PyValue_IsInlineFloat(v)) {
         return PyValue_FromDouble(-PyValue_Double(v));
     }
-    return unary_op_boxed(v, PyNumber_Negative);
+    return unary_op_boxed(v, number_negative);
 }
 
 PyValue
@@ -2117,7 +2123,7 @@ PyNumber_PositiveValue(PyValue v)
     if (PyValue_IsInline(v)) {
         return v;
     }
-    return unary_op_boxed(v, PyNumber_Positive);
+    return unary_op_boxed(v, number_positive);
 }
 
 PyValue
@@ -2126,7 +2132,7 @@ PyNumber_InvertValue(PyValue v)
     if (PyValue_IsInlineInt(v)) {
         return PyValue_FromInt32(~PyValue_Int32(v));
     }
-    return unary_op_boxed(v, PyNumber_Invert);
+    return unary_op_boxed(v, number_invert);
 }
 
 PyValue
@@ -2139,7 +2145,7 @@ PyNumber_AbsoluteValue(PyValue v)
     if (PyValue_IsInlineFloat(v)) {
         return PyValue_FromDouble(fabs(PyValue_Double(v)));
     }
-    return unary_op_boxed(v, PyNumber_Absolute);
+    return unary_op_boxed(v, number_absolute);
 }
 
 PyValue
@@ -2148,7 +2154,7 @@ PyNumber_IndexValue(PyValue v)
     if (PyValue_IsInlineInt(v)) {
         return v;
     }
-    return unary_op_boxed(v, PyNumber_Index);
+    return unary_op_boxed(v, number_index);
 }
 
 PyValue
@@ -2165,7 +2171,7 @@ PyNumber_LongValue(PyValue v)
         }
         return value_result(PyLong_FromDouble(d));
     }
-    return unary_op_boxed(v, PyNumber_Long);
+    return unary_op_boxed(v, number_long);
 }
 
 PyValue
@@ -2177,7 +2183,7 @@ PyNumber_FloatValue(PyValue v)
     if (PyValue_IsInlineInt(v)) {
         return PyValue_FromDouble((double)PyValue_Int32(v));
     }
-    return unary_op_boxed(v, PyNumber_Float);
+    return unary_op_boxed(v, number_float);
 }
 
 /* The C conversions: an inline int converts directly.  Any other value is
@@ -2213,7 +2219,7 @@ PyNumber_AsSsize_tValue(PyValue v, PyObject *exc)
     if (o == NULL) {
         return -1;
     }
-    return PyNumber_AsSsize_t(o, exc);
+    return number_as_ssize_t(o, exc);
 }
 
 double
@@ -2226,6 +2232,97 @@ PyFloat_AsDoubleValue(PyValue v)
         return (double)PyValue_Int32(v);
     }
     return PyFloat_AsDouble(PyValue_ObjectBorrow(v));
+}
+
+
+/* The PyObject * number protocol
+
+   These functions are the compatibility layer over the value forms: each
+   canonicalises its arguments (an exact int that fits in int32, or an exact
+   float other than NaN, becomes inline), calls the value form, and boxes an
+   inline result.  The core calls the value forms. */
+
+#define BINARY_WRAPPER(func, op) \
+    PyObject * \
+    func(PyObject *v, PyObject *w) \
+    { \
+        return PyValue_Object(binary_op_value(PyValue_FromObject(v), \
+                                              PyValue_FromObject(w), op)); \
+    }
+
+BINARY_WRAPPER(PyNumber_Add, NB_ADD)
+BINARY_WRAPPER(PyNumber_Subtract, NB_SUBTRACT)
+BINARY_WRAPPER(PyNumber_Multiply, NB_MULTIPLY)
+BINARY_WRAPPER(PyNumber_MatrixMultiply, NB_MATRIX_MULTIPLY)
+BINARY_WRAPPER(PyNumber_FloorDivide, NB_FLOOR_DIVIDE)
+BINARY_WRAPPER(PyNumber_TrueDivide, NB_TRUE_DIVIDE)
+BINARY_WRAPPER(PyNumber_Remainder, NB_REMAINDER)
+BINARY_WRAPPER(PyNumber_Lshift, NB_LSHIFT)
+BINARY_WRAPPER(PyNumber_Rshift, NB_RSHIFT)
+BINARY_WRAPPER(PyNumber_And, NB_AND)
+BINARY_WRAPPER(PyNumber_Or, NB_OR)
+BINARY_WRAPPER(PyNumber_Xor, NB_XOR)
+BINARY_WRAPPER(PyNumber_InPlaceAdd, NB_INPLACE_ADD)
+BINARY_WRAPPER(PyNumber_InPlaceSubtract, NB_INPLACE_SUBTRACT)
+BINARY_WRAPPER(PyNumber_InPlaceMultiply, NB_INPLACE_MULTIPLY)
+BINARY_WRAPPER(PyNumber_InPlaceMatrixMultiply, NB_INPLACE_MATRIX_MULTIPLY)
+BINARY_WRAPPER(PyNumber_InPlaceFloorDivide, NB_INPLACE_FLOOR_DIVIDE)
+BINARY_WRAPPER(PyNumber_InPlaceTrueDivide, NB_INPLACE_TRUE_DIVIDE)
+BINARY_WRAPPER(PyNumber_InPlaceRemainder, NB_INPLACE_REMAINDER)
+BINARY_WRAPPER(PyNumber_InPlaceLshift, NB_INPLACE_LSHIFT)
+BINARY_WRAPPER(PyNumber_InPlaceRshift, NB_INPLACE_RSHIFT)
+BINARY_WRAPPER(PyNumber_InPlaceAnd, NB_INPLACE_AND)
+BINARY_WRAPPER(PyNumber_InPlaceOr, NB_INPLACE_OR)
+BINARY_WRAPPER(PyNumber_InPlaceXor, NB_INPLACE_XOR)
+#undef BINARY_WRAPPER
+
+PyObject *
+PyNumber_Power(PyObject *v, PyObject *w, PyObject *z)
+{
+    return PyValue_Object(PyNumber_PowerValue(
+        PyValue_FromObject(v), PyValue_FromObject(w), PyValue_FromObject(z)));
+}
+
+PyObject *
+PyNumber_InPlacePower(PyObject *v, PyObject *w, PyObject *z)
+{
+    return PyValue_Object(PyNumber_InPlacePowerValue(
+        PyValue_FromObject(v), PyValue_FromObject(w), PyValue_FromObject(z)));
+}
+
+#define UNARY_WRAPPER(func, object_func, value_func) \
+    PyObject * \
+    func(PyObject *o) \
+    { \
+        if (o == NULL) { \
+            return object_func(o); \
+        } \
+        return PyValue_Object(value_func(PyValue_FromObject(o))); \
+    }
+
+UNARY_WRAPPER(PyNumber_Negative, number_negative, PyNumber_NegativeValue)
+UNARY_WRAPPER(PyNumber_Positive, number_positive, PyNumber_PositiveValue)
+UNARY_WRAPPER(PyNumber_Invert, number_invert, PyNumber_InvertValue)
+UNARY_WRAPPER(PyNumber_Absolute, number_absolute, PyNumber_AbsoluteValue)
+UNARY_WRAPPER(PyNumber_Index, number_index, PyNumber_IndexValue)
+UNARY_WRAPPER(PyNumber_Long, number_long, PyNumber_LongValue)
+UNARY_WRAPPER(PyNumber_Float, number_float, PyNumber_FloatValue)
+#undef UNARY_WRAPPER
+
+Py_ssize_t
+PyNumber_AsSsize_t(PyObject *item, PyObject *err)
+{
+    if (item == NULL) {
+        return number_as_ssize_t(item, err);
+    }
+    return PyNumber_AsSsize_tValue(PyValue_FromObject(item), err);
+}
+
+PyObject *
+PyObject_Format(PyObject *obj, PyObject *format_spec)
+{
+    return PyValue_Object(PyObject_FormatValue(PyValue_FromObject(obj),
+                                               format_spec));
 }
 
 
@@ -2790,8 +2887,8 @@ PySequence_Count(PyObject *s, PyObject *o)
 /* Return -1 if error; 1 if ob in seq; 0 if ob not in seq.
  * Use sq_contains if possible, else defer to _PySequence_IterSearch().
  */
-int
-PySequence_Contains(PyObject *seq, PyObject *ob)
+static int
+sequence_contains(PyObject *seq, PyObject *ob)
 {
     PySequenceMethods *sqm = Py_TYPE(seq)->tp_as_sequence;
     if (sqm != NULL && sqm->sq_contains != NULL) {
@@ -3373,8 +3470,8 @@ _PyObject_RealIsSubclass(PyObject *derived, PyObject *cls)
 }
 
 
-PyObject *
-PyObject_GetIter(PyObject *o)
+static PyObject *
+object_getiter(PyObject *o)
 {
     PyTypeObject *t = Py_TYPE(o);
     getiterfunc f;
@@ -3466,13 +3563,10 @@ PyIter_NextItem(PyObject *iter, PyObject **item)
     assert(iter != NULL);
     assert(item != NULL);
 
-    if (Py_TYPE(iter)->tp_iternext == NULL) {
-        *item = NULL;
-        PyErr_Format(PyExc_TypeError, "expected an iterator, got '%T'", iter);
-        return -1;
-    }
-
-    return iternext(iter, item);
+    PyValue value;
+    int res = PyIter_NextValue(PyValue_FromObject(iter), &value);
+    *item = res > 0 ? PyValue_Object(value) : NULL;
+    return res > 0 && *item == NULL ? -1 : res;
 }
 
 /* Return next item.
@@ -3486,9 +3580,11 @@ PyIter_NextItem(PyObject *iter, PyObject **item)
 PyObject *
 PyIter_Next(PyObject *iter)
 {
-    PyObject *item;
-    (void)iternext(iter, &item);
-    return item;
+    PyValue item;
+    if (PyIter_NextValue(PyValue_FromObject(iter), &item) <= 0) {
+        return NULL;
+    }
+    return PyValue_Object(item);
 }
 
 /* The item, containment and iteration protocols on values.  A list or
@@ -3555,7 +3651,7 @@ PyObject_GetItemValue(PyValue o, PyValue key)
             return found > 0 ? res : PyValue_NULL;
         }
         if (!PyValue_IsInline(key)) {
-            return value_result(PyObject_GetItem(op, PyValue_ObjectBorrow(key)));
+            return value_result(object_getitem(op, PyValue_ObjectBorrow(key)));
         }
     }
     PyThreadState *tstate = _PyThreadState_GET();
@@ -3564,7 +3660,7 @@ PyObject_GetItemValue(PyValue o, PyValue key)
     PyObject *o_o = _PyValueRoot_PushObject(tstate, &o_root, o, _PY_BOX_OTHER);
     PyObject *key_o = _PyValueRoot_PushObject(tstate, &key_root, key, _PY_BOX_OTHER);
     if (o_o != NULL && key_o != NULL) {
-        res = PyObject_GetItem(o_o, key_o);
+        res = object_getitem(o_o, key_o);
     }
     _PyThreadState_PopValueRoot(tstate, &key_root);
     _PyThreadState_PopValueRoot(tstate, &o_root);
@@ -3594,8 +3690,8 @@ PyObject_SetItemValue(PyValue o, PyValue key, PyValue value)
             return _PyDict_SetItemValue((PyDictObject *)op, key, value);
         }
         if (!PyValue_IsInline(key) && !PyValue_IsInline(value)) {
-            return PyObject_SetItem(op, PyValue_ObjectBorrow(key),
-                                    PyValue_ObjectBorrow(value));
+            return object_setitem(op, PyValue_ObjectBorrow(key),
+                                  PyValue_ObjectBorrow(value));
         }
     }
     PyThreadState *tstate = _PyThreadState_GET();
@@ -3606,7 +3702,7 @@ PyObject_SetItemValue(PyValue o, PyValue key, PyValue value)
     PyObject *value_o = _PyValueRoot_PushObject(tstate, &value_root, value,
                                                 _PY_BOX_CONTAINER_STORE);
     if (o_o != NULL && key_o != NULL && value_o != NULL) {
-        res = PyObject_SetItem(o_o, key_o, value_o);
+        res = object_setitem(o_o, key_o, value_o);
     }
     _PyThreadState_PopValueRoot(tstate, &value_root);
     _PyThreadState_PopValueRoot(tstate, &key_root);
@@ -3632,7 +3728,7 @@ PyObject_DelItemValue(PyValue o, PyValue key)
             return _PyDict_DelItemValue(op, key);
         }
         if (!PyValue_IsInline(key)) {
-            return PyObject_DelItem(op, PyValue_ObjectBorrow(key));
+            return object_delitem(op, PyValue_ObjectBorrow(key));
         }
     }
     PyThreadState *tstate = _PyThreadState_GET();
@@ -3641,7 +3737,7 @@ PyObject_DelItemValue(PyValue o, PyValue key)
     PyObject *o_o = _PyValueRoot_PushObject(tstate, &o_root, o, _PY_BOX_OTHER);
     PyObject *key_o = _PyValueRoot_PushObject(tstate, &key_root, key, _PY_BOX_OTHER);
     if (o_o != NULL && key_o != NULL) {
-        res = PyObject_DelItem(o_o, key_o);
+        res = object_delitem(o_o, key_o);
     }
     _PyThreadState_PopValueRoot(tstate, &key_root);
     _PyThreadState_PopValueRoot(tstate, &o_root);
@@ -3673,7 +3769,7 @@ PySequence_ContainsValue(PyValue seq, PyValue v)
             }
         }
         if (!PyValue_IsInline(v)) {
-            return PySequence_Contains(op, PyValue_ObjectBorrow(v));
+            return sequence_contains(op, PyValue_ObjectBorrow(v));
         }
     }
     PyThreadState *tstate = _PyThreadState_GET();
@@ -3682,7 +3778,7 @@ PySequence_ContainsValue(PyValue seq, PyValue v)
     PyObject *seq_o = _PyValueRoot_PushObject(tstate, &seq_root, seq, _PY_BOX_OTHER);
     PyObject *v_o = _PyValueRoot_PushObject(tstate, &v_root, v, _PY_BOX_OTHER);
     if (seq_o != NULL && v_o != NULL) {
-        res = PySequence_Contains(seq_o, v_o);
+        res = sequence_contains(seq_o, v_o);
     }
     _PyThreadState_PopValueRoot(tstate, &v_root);
     _PyThreadState_PopValueRoot(tstate, &seq_root);
@@ -3692,7 +3788,7 @@ PySequence_ContainsValue(PyValue seq, PyValue v)
 PyValue
 PyObject_GetIterValue(PyValue o)
 {
-    return unary_op_boxed(o, PyObject_GetIter);
+    return unary_op_boxed(o, object_getiter);
 }
 
 /* As PyIter_NextItem(): 1 and the next item, 0 and PyValue_NULL when the
@@ -3731,6 +3827,55 @@ PyIter_NextValue(PyValue iter, PyValue *item)
         *item = PyValue_FromObject(res);
     }
     return status;
+}
+
+
+/* The PyObject * item, containment and iteration protocols: canonicalise,
+   call the value form, box the result. */
+
+PyObject *
+PyObject_GetItem(PyObject *o, PyObject *key)
+{
+    if (o == NULL || key == NULL) {
+        return object_getitem(o, key);
+    }
+    return PyValue_Object(PyObject_GetItemValue(PyValue_FromObject(o),
+                                                PyValue_FromObject(key)));
+}
+
+int
+PyObject_SetItem(PyObject *o, PyObject *key, PyObject *value)
+{
+    if (o == NULL || key == NULL || value == NULL) {
+        return object_setitem(o, key, value);
+    }
+    return PyObject_SetItemValue(PyValue_FromObject(o), PyValue_FromObject(key),
+                                 PyValue_FromObject(value));
+}
+
+int
+PyObject_DelItem(PyObject *o, PyObject *key)
+{
+    if (o == NULL || key == NULL) {
+        return object_delitem(o, key);
+    }
+    return PyObject_DelItemValue(PyValue_FromObject(o), PyValue_FromObject(key));
+}
+
+int
+PySequence_Contains(PyObject *seq, PyObject *ob)
+{
+    if (seq == NULL || ob == NULL) {
+        return sequence_contains(seq, ob);
+    }
+    return PySequence_ContainsValue(PyValue_FromObject(seq),
+                                    PyValue_FromObject(ob));
+}
+
+PyObject *
+PyObject_GetIter(PyObject *o)
+{
+    return PyValue_Object(PyObject_GetIterValue(PyValue_FromObject(o)));
 }
 
 PySendResult

@@ -952,20 +952,17 @@ _Py_BuildMap_Values(
     PyValue *arguments,
     int half_args)
 {
-    PyObject *res;
-    VALUES_TO_OBJECTS(arguments, half_args*2, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        res = NULL;
-        goto cleanup;
+    // The dict is in this frame, which the collector scans, while the
+    // keys are hashed.
+    PyObject *res = _PyDict_NewPresized(half_args);
+    for (int i = 0; res != NULL && i < half_args; i++) {
+        if (_PyDict_SetItemValue((PyDictObject *)res, arguments[2 * i],
+                                 arguments[2 * i + 1]) < 0)
+        {
+            res = NULL;
+        }
     }
-    res = _PyDict_FromItems(
-        args_o, 2,
-        args_o+1, 2,
-        half_args
-    );
-    VALUES_TO_OBJECTS_CLEANUP(args_o);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-cleanup:
     // arguments is a pointer into the GC visible stack,
     // so we must NULL out values as we clear them.
     for (int i = half_args*2-1; i >= 0; i--) {
@@ -2326,8 +2323,8 @@ _PyEval_UnpackIterableValues(PyThreadState *tstate, PyObject *v,
     }
 
     for (; i < argcnt; i++) {
-        w = PyIter_Next(it);
-        if (w == NULL) {
+        PyValue item;
+        if (PyIter_NextValue(PyValue_FromObject(it), &item) <= 0) {
             /* Iterator done, via error or exhaustion. */
             if (!_PyErr_Occurred(tstate)) {
                 if (argcntafter == -1) {
@@ -2345,7 +2342,7 @@ _PyEval_UnpackIterableValues(PyThreadState *tstate, PyObject *v,
             }
             goto Error;
         }
-        *--sp = PyValue_FromObject(w);
+        *--sp = item;
     }
 
     if (argcntafter == -1) {
@@ -3876,7 +3873,18 @@ PyValue _PyForIter_VirtualIteratorNext(PyThreadState* tstate, _PyInterpreterFram
         *index_ptr = _PyValue_TagIndex(i);
         return next_index.value;
     }
-    PyObject *next = (*Py_TYPE(iter_o)->tp_iternext)(iter_o);
+    // Iterators that have a value form; none raises StopIteration.
+    PyTypeObject *tp = Py_TYPE(iter_o);
+    if (tp == &PyDictIterKey_Type || tp == &PyDictIterValue_Type
+        || tp == &PySetIter_Type)
+    {
+        PyValue item;
+        int status = tp == &PySetIter_Type
+            ? _PySetIter_NextValue(iter_o, &item)
+            : _PyDictIter_NextValue(iter_o, &item);
+        return status < 0 ? _PyValue_ERROR : item;
+    }
+    PyObject *next = (*tp->tp_iternext)(iter_o);
     if (next == NULL) {
         if (_PyErr_Occurred(tstate)) {
             if (_PyErr_ExceptionMatches(tstate, PyExc_StopIteration)) {

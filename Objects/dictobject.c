@@ -5128,7 +5128,8 @@ static PyMethodDef dictiter_methods[] = {
 };
 
 
-static PyObject*
+// The next key, or PyValue_NULL at the end or with an exception set.
+static PyValue
 dictiter_iternextkey_lock_held(PyDictObject *d, PyObject *self)
 {
     dictiterobject *di = (dictiterobject *)self;
@@ -5143,7 +5144,7 @@ dictiter_iternextkey_lock_held(PyDictObject *d, PyObject *self)
         PyErr_SetString(PyExc_RuntimeError,
                         "dictionary changed size during iteration");
         di->di_used = -1; /* Make this state sticky */
-        return NULL;
+        return PyValue_NULL;
     }
 
     i = di->di_pos;
@@ -5187,12 +5188,12 @@ dictiter_iternextkey_lock_held(PyDictObject *d, PyObject *self)
     }
     di->di_pos = i+1;
     di->len--;
-    return PyValue_Object(key);
+    return key;
 
 fail:
     di->di_dict = NULL;
     Py_DECREF(d);
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -5205,10 +5206,7 @@ dictiter_iternextkey(PyObject *self)
     if (d == NULL)
         return NULL;
 
-    PyObject *value;
-    value = dictiter_iternextkey_lock_held(d, self);
-
-    return value;
+    return PyValue_Object(dictiter_iternextkey_lock_held(d, self));
 }
 
 PyTypeObject PyDictIterKey_Type = {
@@ -5245,7 +5243,8 @@ PyTypeObject PyDictIterKey_Type = {
 };
 
 
-static PyObject *
+// The next value, or PyValue_NULL at the end or with an exception set.
+static PyValue
 dictiter_iternextvalue_lock_held(PyDictObject *d, PyObject *self)
 {
     dictiterobject *di = (dictiterobject *)self;
@@ -5259,7 +5258,7 @@ dictiter_iternextvalue_lock_held(PyDictObject *d, PyObject *self)
         PyErr_SetString(PyExc_RuntimeError,
                         "dictionary changed size during iteration");
         di->di_used = -1; /* Make this state sticky */
-        return NULL;
+        return PyValue_NULL;
     }
 
     i = di->di_pos;
@@ -5302,12 +5301,12 @@ dictiter_iternextvalue_lock_held(PyDictObject *d, PyObject *self)
     }
     di->di_pos = i+1;
     di->len--;
-    return PyValue_Object(value);
+    return value;
 
 fail:
     di->di_dict = NULL;
     Py_DECREF(d);
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -5320,10 +5319,28 @@ dictiter_iternextvalue(PyObject *self)
     if (d == NULL)
         return NULL;
 
-    PyObject *value;
-    value = dictiter_iternextvalue_lock_held(d, self);
+    return PyValue_Object(dictiter_iternextvalue_lock_held(d, self));
+}
 
-    return value;
+/* PyIter_NextValue() of a dict key or value iterator. */
+int
+_PyDictIter_NextValue(PyObject *self, PyValue *item)
+{
+    assert(Py_IS_TYPE(self, &PyDictIterKey_Type)
+           || Py_IS_TYPE(self, &PyDictIterValue_Type));
+    dictiterobject *di = (dictiterobject *)self;
+    PyDictObject *d = di->di_dict;
+    if (d == NULL) {
+        *item = PyValue_NULL;
+        return 0;
+    }
+    *item = Py_IS_TYPE(self, &PyDictIterKey_Type)
+            ? dictiter_iternextkey_lock_held(d, self)
+            : dictiter_iternextvalue_lock_held(d, self);
+    if (PyValue_IsNull(*item)) {
+        return PyErr_Occurred() ? -1 : 0;
+    }
+    return 1;
 }
 
 PyTypeObject PyDictIterValue_Type = {

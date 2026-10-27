@@ -16,6 +16,7 @@
 #include "pycore_pybuffer.h"      // _PyBuffer_ReleaseInInterpreterAndRawFree()
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_range.h"         // _PyRange_ContainsInt32()
 #include "pycore_setobject.h"     // _PySet_ContainsValue()
 #include "pycore_tuple.h"         // _PyTuple_FromArraySteal()
 #include "pycore_unionobject.h"   // _PyUnion_Check()
@@ -3617,6 +3618,12 @@ PySequence_ContainsValue(PyValue seq, PyValue v)
         if (PyAnyDict_CheckExact(op)) {
             return _PyDict_ContainsValue(op, v);
         }
+        if (tp == &PyRange_Type && PyValue_IsInlineInt(v)) {
+            int res = _PyRange_ContainsInt32(op, PyValue_Int32(v));
+            if (res >= 0) {
+                return res;
+            }
+        }
         if (!PyValue_IsInline(v)) {
             return PySequence_Contains(op, PyValue_ObjectBorrow(v));
         }
@@ -3659,6 +3666,12 @@ PyIter_NextValue(PyValue iter, PyValue *item)
     }
     if (tp == &PyTupleIter_Type) {
         return _PyTupleIter_NextValue(it, item);
+    }
+    if (tp == &PyDictIterKey_Type || tp == &PyDictIterValue_Type) {
+        return _PyDictIter_NextValue(it, item);
+    }
+    if (tp == &PySetIter_Type) {
+        return _PySetIter_NextValue(it, item);
     }
     if (tp->tp_iternext == NULL) {
         PyErr_Format(PyExc_TypeError, "expected an iterator, got '%T'", it);

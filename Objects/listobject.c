@@ -1014,7 +1014,6 @@ list_extend_iter_lock_held(PyListObject *self, PyObject *iterable)
     if (it == NULL) {
         return -1;
     }
-    PyObject *(*iternext)(PyObject *) = *Py_TYPE(it)->tp_iternext;
 
     /* Guess a result list size. */
     Py_ssize_t n = PyObject_LengthHint(iterable, 8);
@@ -1046,24 +1045,22 @@ list_extend_iter_lock_held(PyListObject *self, PyObject *iterable)
 
     /* Run iterator to exhaustion. */
     for (;;) {
-        PyObject *item = iternext(it);
-        if (item == NULL) {
-            if (PyErr_Occurred()) {
-                if (PyErr_ExceptionMatches(PyExc_StopIteration))
-                    PyErr_Clear();
-                else
-                    goto error;
-            }
+        PyValue item;
+        int status = PyIter_NextValue(PyValue_FromObject(it), &item);
+        if (status < 0) {
+            goto error;
+        }
+        if (status == 0) {
             break;
         }
 
         if (Py_SIZE(self) < self->allocated) {
             Py_ssize_t len = Py_SIZE(self);
-            self->ob_item[len] = PyValue_FromObject(item);
+            self->ob_item[len] = item;
             Py_SET_SIZE(self, len + 1);
         }
         else {
-            if (_PyList_AppendTakeRef(self, item) < 0)
+            if (_PyList_AppendValue(self, item) < 0)
                 goto error;
         }
     }

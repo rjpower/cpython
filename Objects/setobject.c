@@ -948,7 +948,9 @@ static PyMethodDef setiter_methods[] = {
     {NULL,              NULL}           /* sentinel */
 };
 
-static PyObject *setiter_iternext(PyObject *self)
+/* PyIter_NextValue() of a set iterator. */
+int
+_PySetIter_NextValue(PyObject *self, PyValue *item)
 {
     setiterobject *si = (setiterobject*)self;
     PyValue value = PyValue_NULL;
@@ -956,8 +958,9 @@ static PyObject *setiter_iternext(PyObject *self)
     setentry *entry;
     PySetObject *so = si->si_set;
 
+    *item = PyValue_NULL;
     if (so == NULL)
-        return NULL;
+        return 0;
     assert (PyAnySet_Check(so));
 
     Py_ssize_t so_used = FT_ATOMIC_LOAD_SSIZE_RELAXED(so->used);
@@ -966,7 +969,7 @@ static PyObject *setiter_iternext(PyObject *self)
         PyErr_SetString(PyExc_RuntimeError,
                         "Set changed size during iteration");
         si->si_used = -1; /* Make this state sticky */
-        return NULL;
+        return -1;
     }
 
     Py_BEGIN_CRITICAL_SECTION(so);
@@ -984,15 +987,27 @@ static PyObject *setiter_iternext(PyObject *self)
     if (PyValue_IsNull(value)) {
         si->si_pos = i+1;
         si->si_set = NULL;
-        return NULL;
-    }
-    // If boxing fails, the next call gives this element again.
-    PyObject *key = PyValue_Object(value);
-    if (key == NULL) {
-        return NULL;
+        return 0;
     }
     si->si_pos = i+1;
     si->len--;
+    *item = value;
+    return 1;
+}
+
+static PyObject *setiter_iternext(PyObject *self)
+{
+    PyValue item;
+    if (_PySetIter_NextValue(self, &item) <= 0) {
+        return NULL;
+    }
+    PyObject *key = PyValue_Object(item);
+    if (key == NULL) {
+        // The next call gives this element again.
+        setiterobject *si = (setiterobject*)self;
+        si->si_pos--;
+        si->len++;
+    }
     return key;
 }
 

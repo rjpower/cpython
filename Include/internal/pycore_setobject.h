@@ -25,6 +25,8 @@ PyAPI_FUNC(int) _PySet_Update(PyObject *set, PyObject *iterable);
 PyAPI_DATA(PyObject *) _PySet_Dummy;
 
 PyAPI_FUNC(int) _PySet_ContainsValue(PySetObject *so, PyValue key);
+// PyIter_NextValue() of a set iterator.
+extern int _PySetIter_NextValue(PyObject *it, PyValue *item);
 
 // Clears the set without acquiring locks. Used by _PyCode_Fini.
 extern void _PySet_ClearInternal(PySetObject *so);

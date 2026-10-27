@@ -500,6 +500,26 @@ range_contains_long(rangeobject *r, PyObject *ob)
     return result;
 }
 
+int
+_PyRange_ContainsInt32(PyObject *self, int32_t v)
+{
+    rangeobject *r = (rangeobject*)self;
+    if (!_PyLong_IsCompact((PyLongObject *)r->start)
+        || !_PyLong_IsCompact((PyLongObject *)r->stop)
+        || !_PyLong_IsCompact((PyLongObject *)r->step))
+    {
+        return -1;
+    }
+    // Compact values are less than 2**30 in magnitude: nothing overflows.
+    int64_t start = _PyLong_CompactValue((PyLongObject *)r->start);
+    int64_t stop = _PyLong_CompactValue((PyLongObject *)r->stop);
+    int64_t step = _PyLong_CompactValue((PyLongObject *)r->step);
+    if (step > 0 ? !(start <= v && v < stop) : !(stop < v && v <= start)) {
+        return 0;
+    }
+    return (v - start) % step == 0;
+}
+
 static int
 range_contains(PyObject *self, PyObject *ob)
 {

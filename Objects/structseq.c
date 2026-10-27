@@ -605,7 +605,7 @@ _PyStructSequence_InitBuiltinWithFlags(PyInterpreterState *interp,
                                        PyStructSequence_Desc *desc,
                                        unsigned long tp_flags)
 {
-    if (Py_TYPE(type) == NULL) {
+    if (_PyObject_SHAPE(type) == NULL) {
         Py_SET_TYPE(type, &PyType_Type);
     }
     Py_ssize_t n_unnamed_members;

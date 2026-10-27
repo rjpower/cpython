@@ -149,3 +149,50 @@ memory. See boil/bench/README.md.
 | collector_live512 | 585,916 | 1.172 | 2.133 |
 | geomean |  | 1.143 (8/8) | 1.774 (8/8) |
 
+### time, kernels (ns per loop)
+
+| benchmark | baseline | step1 / baseline | step5c / baseline |
+|---|---:|---:|---:|
+| richards | 61.5M | 1.039 | 0.884 |
+| go | 111.0M | 1.198 | 0.999 |
+| nbody | 102.4M | 1.169 | 1.616 |
+| float | 81.9M | 1.085 | 1.430 |
+| spectral_norm | 115.8M | 0.649 | 0.904 |
+| raytrace | 310.7M | 1.010 | 1.216 |
+| deltablue | 3.7M | 1.147 | 1.166 |
+| chaos | 64.7M | 1.113 | 1.299 |
+| nqueens | 88.2M | 1.248 | 1.464 |
+| fannkuch | 415.1M | 1.027 | 1.165 |
+| generators | 34.0M | 0.967 | 1.749 |
+| comprehensions | 18,532 | 1.031 | 2.135 |
+| coroutines | 26.9M | 0.985 | 2.458 |
+| unpack_sequence | 14,102 | 1.029 | 1.312 |
+| deepcopy | 317,937 | 1.000 | 1.338 |
+| deepcopy_reduce | 3,834 | 1.019 | 1.451 |
+| deepcopy_memo | 30,561 | 1.075 | 1.038 |
+| json_dumps | 11.8M | 1.070 | 1.345 |
+| json_loads | 601,754 | 0.947 | 1.240 |
+| pickle | 257,146 | 1.005 | 1.417 |
+| unpickle | 368,022 | 0.935 | 1.387 |
+| regex_compile | 180.4M | 1.119 | 1.267 |
+| logging_format | 74,453 | 1.205 | 1.299 |
+| logging_silent | 1,097 | 1.099 | 1.237 |
+| logging_simple | 72,521 | 1.170 | 1.220 |
+| xml_etree_generate | 133.8M | 1.087 | 1.290 |
+| xml_etree_iterparse | 112.3M | 1.009 | 1.339 |
+| xml_etree_parse | 161.5M | 0.935 | 1.117 |
+| xml_etree_process | 90.0M | 0.961 | 1.124 |
+| geomean |  | 1.039 (29/29) | 1.309 (29/29) |
+
+### time, memory
+
+| benchmark | baseline | step1 / baseline | step5c / baseline |
+|---|---:|---:|---:|
+| tuples_10m (ns per loop) | 1,099.5M | 1.399 | 2.505 |
+| instances_1m (ns per loop) | 437.4M | 1.367 | 0.929 |
+| dicts_200k (ns per loop) | 94.9M | 0.941 | 0.973 |
+| collector_live16 (s per allocated GB) | 0.533 | 1.190 | 2.859 |
+| collector_live128 (s per allocated GB) | 0.58 | 1.086 | 3.237 |
+| collector_live512 (s per allocated GB) | 0.547 | 1.169 | 4.248 |
+| geomean |  | 1.181 (6/6) | 2.113 (6/6) |
+

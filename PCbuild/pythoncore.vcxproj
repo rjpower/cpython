@@ -308,6 +308,8 @@
     <ClInclude Include="..\Include\internal\pycore_runtime_structs.h" />
     <ClInclude Include="..\Include\internal\pycore_semaphore.h" />
     <ClInclude Include="..\Include\internal\pycore_setobject.h" />
+    <ClInclude Include="..\Include\internal\pycore_lookup.h" />
+    <ClInclude Include="..\Include\internal\pycore_shape.h" />
     <ClInclude Include="..\Include\internal\pycore_signal.h" />
     <ClInclude Include="..\Include\internal\pycore_sliceobject.h" />
     <ClInclude Include="..\Include\internal\pycore_slots.h" />
@@ -567,6 +569,8 @@
     <ClCompile Include="..\Objects\rangeobject.c" />
     <ClCompile Include="..\Objects\sentinelobject.c" />
     <ClCompile Include="..\Objects\setobject.c" />
+    <ClCompile Include="..\Objects\lookupplan.c" />
+    <ClCompile Include="..\Objects\shapeobject.c" />
     <ClCompile Include="..\Objects\sliceobject.c" />
     <ClCompile Include="..\Objects\structseq.c" />
     <ClCompile Include="..\Objects\templateobject.c" />

@@ -32,7 +32,7 @@ extern PyTypeObject _PyHamtItems_Type;
 
 /* other API */
 
-#define PyHamt_Check(o) Py_IS_TYPE((o), &_PyHamt_Type)
+#define PyHamt_Check(o) _Py_IS_ROOT_SHAPE((o), &_PyHamt_Type)
 
 
 /* A struct to hold the state of depth-first traverse of the tree.

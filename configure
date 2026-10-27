@@ -1152,7 +1152,6 @@ with_readline
 with_curses
 with_computed_gotos
 with_tail_call_interp
-with_shapes
 with_remote_debug
 with_ensurepip
 with_openssl
@@ -1988,8 +1987,6 @@ Optional Packages:
                           default on supported compilers)
   --with-tail-call-interp enable tail-calling interpreter in evaluation loop
                           and rest of CPython
-  --with-shapes           guard instance attribute access on per-type shapes
-                          (default is no)
   --with-remote-debug     enable remote debugging support (default is yes)
   --with-ensurepip[=install|upgrade|no]
                           "install" or "upgrade" using bundled pip (default is
@@ -34787,30 +34784,6 @@ fi
 
 printf "%s\n" "#define Py_IR_INTERP 1" >>confdefs.h
 
-
-# Check for --with-shapes
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-shapes" >&5
-printf %s "checking for --with-shapes... " >&6; }
-
-# Check whether --with-shapes was given.
-if test ${with_shapes+y}
-then :
-  withval=$with_shapes;
-else case e in #(
-  e) with_shapes=no ;;
-esac
-fi
-
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $with_shapes" >&5
-printf "%s\n" "$with_shapes" >&6; }
-if test "x$with_shapes" = xyes
-then :
-
-
-printf "%s\n" "#define Py_SHAPES 1" >>confdefs.h
-
-
-fi
 
 # Check for --with-remote-debug
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-remote-debug" >&5

@@ -35,7 +35,7 @@ typedef struct {
 // frozendict
 PyAPI_DATA(PyTypeObject) PyFrozenDict_Type;
 #define PyFrozenDict_Check(op) PyObject_TypeCheck((op), &PyFrozenDict_Type)
-#define PyFrozenDict_CheckExact(op) Py_IS_TYPE((op), &PyFrozenDict_Type)
+#define PyFrozenDict_CheckExact(op) _Py_IS_ROOT_SHAPE((op), &PyFrozenDict_Type)
 
 #define PyAnyDict_CheckExact(ob) \
     (PyDict_CheckExact(ob) || PyFrozenDict_CheckExact(ob))

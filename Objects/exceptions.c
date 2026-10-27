@@ -6,6 +6,7 @@
 
 #include <Python.h>
 #include <stdbool.h>
+#include "pycore_shape.h"       // _PyShape_InitRoot()
 #include "pycore_abstract.h"      // _PyObject_RealIsSubclass()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCall
 #include "pycore_exceptions.h"    // struct _Py_exc_state
@@ -4196,7 +4197,7 @@ MemoryError_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 PyObject *
 _PyErr_NoMemory(PyThreadState *tstate)
 {
-    if (Py_IS_TYPE(PyExc_MemoryError, NULL)) {
+    if (_PyObject_SHAPE(PyExc_MemoryError) == NULL) {
         /* PyErr_NoMemory() has been called before PyExc_MemoryError has been
            initialized by _PyExc_Init() */
         Py_FatalError("Out of memory and PyExc_MemoryError is not "
@@ -4543,6 +4544,15 @@ _PyExc_InitTypes(PyInterpreterState *interp)
         }
     }
     return 0;
+}
+
+
+void
+_PyExc_InitRootShapes(void)
+{
+    for (size_t i=0; i < Py_ARRAY_LENGTH(static_exceptions); i++) {
+        _PyShape_InitRoot(static_exceptions[i].exc);
+    }
 }
 
 

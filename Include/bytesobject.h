@@ -25,8 +25,8 @@ PyAPI_DATA(PyTypeObject) PyBytes_Type;
 PyAPI_DATA(PyTypeObject) PyBytesIter_Type;
 
 #define PyBytes_Check(op) \
-                 PyType_FastSubclass(Py_TYPE(op), Py_TPFLAGS_BYTES_SUBCLASS)
-#define PyBytes_CheckExact(op) Py_IS_TYPE((op), &PyBytes_Type)
+                 _PyObject_FastSubclass(op, Py_TPFLAGS_BYTES_SUBCLASS)
+#define PyBytes_CheckExact(op) _Py_IS_ROOT_SHAPE((op), &PyBytes_Type)
 
 PyAPI_FUNC(PyObject *) PyBytes_FromStringAndSize(const char *, Py_ssize_t);
 PyAPI_FUNC(PyObject *) PyBytes_FromString(const char *);

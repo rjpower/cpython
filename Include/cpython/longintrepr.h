@@ -121,7 +121,7 @@ Py_DEPRECATED(3.14) PyAPI_FUNC(PyLongObject*) _PyLong_FromDigits(
 /* The type of op, read without Py_TYPE(), which does not take a const
    pointer. */
 #define _PyLong_CONST_TYPE(op) \
-    ((PyTypeObject *)((op)->ob_base.ob_header & _Py_HEADER_TYPE_MASK))
+    (((const _PyShape *)((op)->ob_base.ob_header & _Py_HEADER_SHAPE_MASK))->type)
 
 static inline int
 _PyLong_IsCompact(const PyLongObject* op) {

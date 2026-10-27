@@ -8,6 +8,7 @@
 #include "pycore_cell.h"          // PyCell_GetRef()
 #include "pycore_ceval.h"         // SPECIAL___ENTER__
 #include "pycore_code.h"
+#include "pycore_descrobject.h"   // _PyPropertyObject
 #include "pycore_dict.h"
 #include "pycore_emscripten_signal.h"  // _Py_CHECK_EMSCRIPTEN_SIGNALS
 #include "pycore_floatobject.h"   // _PyFloat_ExactDealloc()
@@ -59,9 +60,7 @@
 // preprocessor.
 
 #undef Py_IS_TYPE
-#define Py_IS_TYPE(ob, type) \
-    ((PyTypeObject *)(_PyObject_CAST(ob)->ob_header & _Py_HEADER_TYPE_MASK) \
-     == (type))
+#define Py_IS_TYPE(ob, tp) (_PyObject_SHAPE(ob)->type == (tp))
 
 #endif
 

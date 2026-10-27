@@ -2,6 +2,8 @@
 /* Generic object operations; and implementation of None */
 
 #include "Python.h"
+#include "pycore_shape.h"       // _PyTypes_InitRootShapes()
+#include "pycore_lookup.h"      // _PyShape_LookupPlan()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
 #include "pycore_context.h"       // _PyContextTokenMissing_Type
@@ -1343,6 +1345,142 @@ _PyObject_NextNotImplemented(PyObject *self)
 }
 
 
+/* The result of a descriptor's __get__ for obj as a value, or PyValue_NULL
+   with an exception set, or with none if suppress is 1 and the exception
+   was an AttributeError. */
+static PyValue
+descr_get_value(descrgetfunc f, PyObject *descr, PyObject *obj, int suppress)
+{
+    PyObject *res = f(descr, obj, (PyObject *)Py_TYPE(obj));
+    if (res == NULL) {
+        if (suppress && PyErr_ExceptionMatches(PyExc_AttributeError)) {
+            PyErr_Clear();
+        }
+        return PyValue_NULL;
+    }
+    return PyValue_FromObject(res);
+}
+
+/* The generic attribute protocol (boil/design/09-object-protocol.md
+   section 4): a lookup plan for the name on the object's shape
+   (Objects/lookupplan.c, the cache in Python/typecache.c), executed here.
+   Nothing here dispatches through tp_getattro or tp_setattro: the callers
+   that are slots, or that call slots, do that first. */
+
+/* Precedence step 2 for a plan that is not a data descriptor: the
+   attribute from the instance's storage, or from DICT if the caller gives
+   one.  1 with *res set if found, 0 if not, -1 with an exception set. */
+static int
+load_from_storage(PyObject *obj, PyObject *name, const _PyLookupPlan *plan,
+                  PyObject *dict, PyValue *res)
+{
+    PyTypeObject *tp = Py_TYPE(obj);
+    *res = PyValue_NULL;
+    if (dict == NULL) {
+        if (plan->kind == _Py_LOOKUP_SLOT) {
+            *res = *(PyValue *)((char *)obj + plan->offset);
+            assert(!PyValue_IsNull(*res));
+            return 1;
+        }
+        if (plan->kind != _Py_LOOKUP_DICT) {
+            return 0;
+        }
+        /* The storage adapter of 6c rung 2 (boil/design/work/6c-rung2.md):
+           in dictionary mode the inline values may still be valid without a
+           dict, or a dict may alias them.  Rung 3 deletes it. */
+        if (tp->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
+            if (PyUnicode_CheckExact(name) &&
+                _PyObject_TryGetInstanceAttributeValue(obj, name, res)) {
+                return !PyValue_IsNull(*res);
+            }
+            dict = (PyObject *)_PyObject_MaterializeManagedDict(obj);
+            if (dict == NULL) {
+                return -1;
+            }
+        }
+        else if (tp->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
+            dict = (PyObject *)_PyObject_GetManagedDict(obj);
+        }
+        else {
+            PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
+            dict = dictptr != NULL ? FT_ATOMIC_LOAD_PTR_ACQUIRE(*dictptr) : NULL;
+        }
+        if (dict == NULL) {
+            return 0;
+        }
+    }
+    int rc = _PyDict_GetItemValue(dict, PyValue_FromObject(name), res);
+    if (!PyValue_IsNull(*res)) {
+        return 1;
+    }
+    return rc < 0 ? -1 : 0;
+}
+
+static void
+set_no_attribute_error(PyObject *obj, PyObject *name)
+{
+    PyErr_Format(PyExc_AttributeError,
+                 "'%.100s' object has no attribute '%U'",
+                 Py_TYPE(obj)->tp_name, name);
+    _PyObject_SetAttributeErrorContext(obj, name);
+}
+
+/* The call-pair form of the generic protocol (note 09 section 4.4).  1: a
+   method, *method unbound, to be called with obj; 2 (only if SPLIT): a
+   classmethod's function, to be called with obj's type; 0: *method is the
+   attribute; -1: an exception is set.  *method must be a location the
+   collector sees: it holds the MRO result while descriptors run. */
+static int
+get_method_value(PyObject *obj, PyObject *name, PyValue *method, int split)
+{
+    assert(PyUnicode_CheckExact(name));
+    _PyLookupPlan plan;
+    _PyShape_LookupPlan(_PyObject_SHAPE(obj), name, &plan);
+    *method = plan.value;
+    PyObject *descr = PyValue_IsObject(plan.value)
+                      ? PyValue_ObjectBorrow(plan.value) : NULL;
+    if (plan.kind == _Py_LOOKUP_DATA_DESCR || plan.kind == _Py_LOOKUP_PROPERTY) {
+        if (plan.flags & _Py_LOOKUP_MEMBER) {
+            PyValue v = *(PyValue *)((char *)obj + plan.offset);
+            if (!PyValue_IsNull(v)) {
+                *method = v;
+                return 0;
+            }
+            // Unbound: the descriptor raises the error.
+        }
+        *method = descr_get_value(Py_TYPE(descr)->tp_descr_get, descr, obj, 0);
+        return PyValue_IsNull(*method) ? -1 : 0;
+    }
+    PyValue attr;
+    int found = load_from_storage(obj, name, &plan, NULL, &attr);
+    if (found != 0) {
+        *method = attr;
+        return found > 0 ? 0 : -1;
+    }
+    switch (plan.fallback) {
+        case _Py_LOOKUP_METHOD:
+            return 1;
+        case _Py_LOOKUP_DESCR:
+            if (split && Py_IS_TYPE(descr, &PyClassMethod_Type)) {
+                *method = PyValue_FromObject(_PyClassMethod_GetFunc(descr));
+                return 2;
+            }
+            if (split && Py_IS_TYPE(descr, &PyStaticMethod_Type)) {
+                *method = PyValue_FromObject(_PyStaticMethod_GetFunc(descr));
+                return 0;
+            }
+            *method = descr_get_value(Py_TYPE(descr)->tp_descr_get, descr, obj, 0);
+            return PyValue_IsNull(*method) ? -1 : 0;
+        case _Py_LOOKUP_CLASS_VALUE:
+            return 0;
+        default:
+            assert(plan.fallback == _Py_LOOKUP_ABSENT);
+            *method = PyValue_NULL;
+            set_no_attribute_error(obj, name);
+            return -1;
+    }
+}
+
 /* Specialized version of _PyObject_GenericGetAttrWithDict
    specifically for the LOAD_METHOD opcode.
 
@@ -1356,8 +1494,6 @@ _PyObject_NextNotImplemented(PyObject *self)
 int
 _PyObject_GetMethod(PyObject *obj, PyObject *name, PyObject **method)
 {
-    int meth_found = 0;
-
     assert(*method == NULL);
 
     PyTypeObject *tp = Py_TYPE(obj);
@@ -1372,77 +1508,17 @@ _PyObject_GetMethod(PyObject *obj, PyObject *name, PyObject **method)
         return 0;
     }
 
-    PyObject *descr = _PyType_LookupRef(tp, name);
-    descrgetfunc f = NULL;
-    if (descr != NULL) {
-        if (_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
-            meth_found = 1;
-        }
-        else {
-            f = Py_TYPE(descr)->tp_descr_get;
-            if (f != NULL && PyDescr_IsData(descr)) {
-                *method = f(descr, obj, (PyObject *)Py_TYPE(obj));
-                Py_DECREF(descr);
-                return 0;
-            }
-        }
-    }
-    PyObject *dict, *attr;
-    if ((tp->tp_flags & Py_TPFLAGS_INLINE_VALUES) &&
-         _PyObject_TryGetInstanceAttribute(obj, name, &attr)) {
-        if (attr != NULL) {
-            *method = attr;
-            Py_XDECREF(descr);
-            return 0;
-        }
-        dict = NULL;
-    }
-    else if ((tp->tp_flags & Py_TPFLAGS_MANAGED_DICT)) {
-        dict = (PyObject *)_PyObject_GetManagedDict(obj);
-    }
-    else {
-        PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
-        if (dictptr != NULL) {
-            dict = FT_ATOMIC_LOAD_PTR_ACQUIRE(*dictptr);
-        }
-        else {
-            dict = NULL;
-        }
-    }
-    if (dict != NULL) {
-        Py_INCREF(dict);
-        if (PyDict_GetItemRef(dict, name, method) != 0) {
-            // found or error
-            Py_DECREF(dict);
-            Py_XDECREF(descr);
-            return 0;
-        }
-        // not found
-        Py_DECREF(dict);
-    }
-
-    if (meth_found) {
-        *method = descr;
-        return 1;
-    }
-
-    if (f != NULL) {
-        *method = f(descr, obj, (PyObject *)Py_TYPE(obj));
-        Py_DECREF(descr);
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot root;
+    _PyThreadState_PushValueRoot(tstate, &root);
+    int res = get_method_value(obj, name, &root.value, 0);
+    PyValue value = _PyThreadState_PopValueRoot(tstate, &root);
+    if (res < 0) {
         return 0;
     }
-
-    if (descr != NULL) {
-        *method = descr;
-        return 0;
-    }
-
-    PyErr_Format(PyExc_AttributeError,
-                 "'%.100s' object has no attribute '%U'",
-                 tp->tp_name, name);
-
-    _PyObject_SetAttributeErrorContext(obj, name);
-    return 0;
+    // NULL means an error, so a box that cannot be made aborts.
+    *method = _PyValue_ObjectOrAbort(value, "_PyObject_GetMethod");
+    return res;
 }
 
 // Look up a method on `self` by `name`.
@@ -1457,7 +1533,6 @@ int
 _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
                             PyObject *name, PyValue *method)
 {
-    int meth_found = 0;
     // A box of an inline self: this frame, which the collector scans,
     // holds it, and *self keeps the inline value.
     PyObject *obj = PyValue_Object(*self);
@@ -1486,131 +1561,19 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
         return -1;
     }
 
-    _PyType_LookupValueAndVersion(tp, name, method);
-    // An inline value is neither a method nor a descriptor: like any
-    // other class attribute that is not, it is the result unless the
-    // instance has the name.
-    int in_type = !PyValue_IsNull(*method);
-    PyObject *descr = PyValue_IsInline(*method) ? NULL
-                                                : PyValue_ObjectBorrow(*method);
-    descrgetfunc f = NULL;
-    if (descr != NULL) {
-        if (_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
-            meth_found = 1;
-        }
-        else {
-            f = Py_TYPE(descr)->tp_descr_get;
-            if (f != NULL && PyDescr_IsData(descr)) {
-                PyObject *value = f(descr, obj, (PyObject *)Py_TYPE(obj));
-                *method = PyValue_NULL;
-                *self = PyValue_NULL;
-                if (value != NULL) {
-                    *method = PyValue_FromObject(value);
-                    return 0;
-                }
-                return -1;
-            }
-        }
-    }
-    PyObject *dict;
-    PyValue attr;
-    if ((tp->tp_flags & Py_TPFLAGS_INLINE_VALUES) &&
-         _PyObject_TryGetInstanceAttributeValue(obj, name, &attr)) {
-        if (!PyValue_IsNull(attr)) {
-            *method = attr;
-            *self = PyValue_NULL;
-            return 0;
-        }
-        dict = NULL;
-    }
-    else if ((tp->tp_flags & Py_TPFLAGS_MANAGED_DICT)) {
-        dict = (PyObject *)_PyObject_GetManagedDict(obj);
-    }
-    else {
-        PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
-        if (dictptr != NULL) {
-            dict = FT_ATOMIC_LOAD_PTR_ACQUIRE(*dictptr);
-        }
-        else {
-            dict = NULL;
-        }
-    }
-    if (dict != NULL) {
-        assert(PyUnicode_CheckExact(name));
-        int found = _PyDict_GetMethodValue((PyDictObject *)dict, name, method);
-        if (found < 0) {
-            assert(PyValue_IsNull(*method));
-            *self = PyValue_NULL;
-            return -1;
-        }
-        else if (found) {
-            *self = PyValue_NULL;
-            return 0;
-        }
-    }
-
-    if (meth_found) {
-        assert(!PyValue_IsNull(*method));
+    int res = get_method_value(obj, name, method, 1);
+    if (res == 2) {
+        *self = PyValue_FromObject((PyObject *)tp);
         return 1;
     }
-
-    if (f != NULL) {
-        if (Py_IS_TYPE(descr, &PyClassMethod_Type)) {
-            PyObject *callable = _PyClassMethod_GetFunc(descr);
-            *method = PyValue_FromObject(callable);
-            *self = PyValue_FromObject((PyObject *)tp);
-            return 1;
-        }
-        else if (Py_IS_TYPE(descr, &PyStaticMethod_Type)) {
-            PyObject *callable = _PyStaticMethod_GetFunc(descr);
-            *method = PyValue_FromObject(callable);
-            *self = PyValue_NULL;
-            return 0;
-        }
-        PyObject *value = f(descr, obj, (PyObject *)tp);
-        *method = PyValue_NULL;
+    if (res != 1) {
         *self = PyValue_NULL;
-        if (value) {
-            *method = PyValue_FromObject(value);
-            return 0;
-        }
-        return -1;
     }
-
-    if (in_type) {
-        assert(!PyValue_IsNull(*method));
-        *self = PyValue_NULL;
-        return 0;
-    }
-
-    PyErr_Format(PyExc_AttributeError,
-                 "'%.100s' object has no attribute '%U'",
-                 tp->tp_name, name);
-
-    _PyObject_SetAttributeErrorContext(obj, name);
-    assert(PyValue_IsNull(*method));
-    *self = PyValue_NULL;
-    return -1;
+    return res;
 }
 
 
 /* Generic GetAttr functions - put these in your tp_[gs]etattro slot. */
-
-/* The result of a descriptor's __get__ for obj as a value, or PyValue_NULL
-   with an exception set, or with none if suppress is 1 and the exception
-   was an AttributeError. */
-static PyValue
-descr_get_value(descrgetfunc f, PyObject *descr, PyObject *obj, int suppress)
-{
-    PyObject *res = f(descr, obj, (PyObject *)Py_TYPE(obj));
-    if (res == NULL) {
-        if (suppress && PyErr_ExceptionMatches(PyExc_AttributeError)) {
-            PyErr_Clear();
-        }
-        return PyValue_NULL;
-    }
-    return PyValue_FromObject(res);
-}
 
 /* _PyObject_GenericGetAttrWithDict() with the attribute as its value: an
    attribute held as an inline value in the instance, its dict or the class
@@ -1627,9 +1590,7 @@ generic_getattr_value(PyObject *obj, PyObject *name, PyObject *dict,
     */
 
     PyTypeObject *tp = Py_TYPE(obj);
-    PyObject *descr = NULL;
     PyValue res = PyValue_NULL;
-    descrgetfunc f;
 
     if (!PyUnicode_Check(name)){
         PyErr_Format(PyExc_TypeError,
@@ -1649,93 +1610,71 @@ generic_getattr_value(PyObject *obj, PyObject *name, PyObject *dict,
     _PyValueRoot cref;
     _PyThreadState_PushValueRoot(tstate, &cref);
 
-    _PyType_LookupValueAndVersion(tp, name, &cref.value);
+    _PyLookupPlan plan;
+    _PyShape_LookupPlan(_PyObject_SHAPE(obj), name, &plan);
+    cref.value = plan.value;
     // An inline value in the class is not a descriptor: like any other
     // class attribute that is not, it is the result unless the instance
     // has the name.
-    descr = PyValue_IsObject(cref.value) ? PyValue_ObjectBorrow(cref.value)
-                                         : NULL;
+    PyObject *descr = PyValue_IsObject(cref.value)
+                      ? PyValue_ObjectBorrow(cref.value) : NULL;
 
-    f = NULL;
-    if (descr != NULL) {
-        f = Py_TYPE(descr)->tp_descr_get;
-        if (f != NULL && PyDescr_IsData(descr)) {
-            // gh-157840: We special-case member descriptors here to avoid
-            // allocating an extra AttributeError
-            if (suppress && Py_IS_TYPE(descr, &PyMemberDescr_Type)) {
-                PyMemberDef *member = ((PyMemberDescrObject *)descr)->d_member;
-                if ((member->type == Py_T_OBJECT_EX
-                     || member->type == _Py_T_VALUE_EX)
-                    && !(member->flags & Py_AUDIT_READ)
-                    && PyObject_TypeCheck(obj, PyDescr_TYPE(descr))) {
-                    // Zero bits are NULL as a PyObject * and as a PyValue.
-                    PyObject **addr = _PyMember_GetOffset(obj, member);
-                    if (FT_ATOMIC_LOAD_PTR(*addr) == NULL) {
-                        goto done;
-                    }
-                }
-            }
-            res = descr_get_value(f, descr, obj, suppress);
-            goto done;
-        }
-    }
-    if (dict == NULL) {
-        if ((tp->tp_flags & Py_TPFLAGS_INLINE_VALUES)) {
-            if (PyUnicode_CheckExact(name) &&
-                _PyObject_TryGetInstanceAttributeValue(obj, name, &res)) {
-                if (!PyValue_IsNull(res)) {
-                    goto done;
-                }
-            }
-            else {
-                dict = (PyObject *)_PyObject_MaterializeManagedDict(obj);
-                if (dict == NULL) {
-                    res = PyValue_NULL;
-                    goto done;
-                }
-            }
-        }
-        else if ((tp->tp_flags & Py_TPFLAGS_MANAGED_DICT)) {
-            dict = (PyObject *)_PyObject_GetManagedDict(obj);
-        }
-        else {
-            PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
-            if (dictptr) {
-                dict = *dictptr;
-            }
-        }
-    }
-    if (dict != NULL) {
-        int rc = _PyDict_GetItemValue(dict, PyValue_FromObject(name), &res);
-        if (!PyValue_IsNull(res)) {
-            goto done;
-        }
-        else if (rc < 0) {
-            if (suppress && PyErr_ExceptionMatches(PyExc_AttributeError)) {
-                PyErr_Clear();
-            }
-            else {
+    if (plan.kind == _Py_LOOKUP_DATA_DESCR || plan.kind == _Py_LOOKUP_PROPERTY) {
+        if (plan.flags & _Py_LOOKUP_MEMBER) {
+            res = *(PyValue *)((char *)obj + plan.offset);
+            if (!PyValue_IsNull(res) || suppress) {
+                // gh-157840: an unbound member under suppress allocates no
+                // AttributeError.
                 goto done;
             }
+            // Unbound: the descriptor raises the error.
+        }
+        else if (suppress && Py_IS_TYPE(descr, &PyMemberDescr_Type)) {
+            // gh-157840, for the members a plan does not load directly.
+            PyMemberDef *member = ((PyMemberDescrObject *)descr)->d_member;
+            if ((member->type == Py_T_OBJECT_EX
+                 || member->type == _Py_T_VALUE_EX)
+                && !(member->flags & Py_AUDIT_READ)
+                && PyObject_TypeCheck(obj, PyDescr_TYPE(descr))) {
+                // Zero bits are NULL as a PyObject * and as a PyValue.
+                PyObject **addr = _PyMember_GetOffset(obj, member);
+                if (FT_ATOMIC_LOAD_PTR(*addr) == NULL) {
+                    goto done;
+                }
+            }
+        }
+        res = descr_get_value(Py_TYPE(descr)->tp_descr_get, descr, obj, suppress);
+        goto done;
+    }
+
+    int found = load_from_storage(obj, name, &plan, dict, &res);
+    if (found > 0) {
+        goto done;
+    }
+    if (found < 0) {
+        if (suppress && PyErr_ExceptionMatches(PyExc_AttributeError)) {
+            PyErr_Clear();
+        }
+        else {
+            goto done;
         }
     }
+    res = PyValue_NULL;
 
-    if (f != NULL) {
-        res = descr_get_value(f, descr, obj, suppress);
-        goto done;
-    }
-
-    if (!PyValue_IsNull(cref.value)) {
-        res = cref.value;
-        goto done;
-    }
-
-    if (!suppress) {
-        PyErr_Format(PyExc_AttributeError,
-                     "'%.100s' object has no attribute '%U'",
-                     tp->tp_name, name);
-
-        _PyObject_SetAttributeErrorContext(obj, name);
+    switch (plan.fallback) {
+        case _Py_LOOKUP_METHOD:
+        case _Py_LOOKUP_DESCR:
+            res = descr_get_value(Py_TYPE(descr)->tp_descr_get, descr, obj, suppress);
+            break;
+        case _Py_LOOKUP_CLASS_VALUE:
+            res = cref.value;
+            break;
+        default:
+            assert(plan.fallback == _Py_LOOKUP_ABSENT);
+            if (!suppress) {
+                set_no_attribute_error(obj, name);
+            }
+            break;
     }
   done:
     _PyThreadState_PopValueRoot(tstate, &cref);
@@ -1787,78 +1726,106 @@ generic_setattr_value(PyObject *obj, PyObject *name, PyValue value,
     _PyValueRoot cref;
     _PyThreadState_PushValueRoot(tstate, &cref);
 
+    // Phase 1, then the store plan.  Nothing is cached here, so whether
+    // the plan could be is not asked.
     _PyType_LookupValueAndVersion(tp, name, &cref.value);
     descr = _PyValueRoot_Object(&cref);
     if (descr == NULL && PyErr_Occurred()) {
         goto done;
     }
+    _PyStorePlan plan;
+    _PyShape_ResolveStore(_PyObject_SHAPE(obj), name, cref.value, 0,
+                          PyValue_IsNull(value) ? _Py_STORE_DELETE : _Py_STORE_SET,
+                          &plan);
 
-    if (descr != NULL) {
+    if (plan.outcome == _Py_STORE_DATA_DESCR) {
+        if (plan.flags & _Py_LOOKUP_MEMBER) {
+            PyValue *addr = (PyValue *)((char *)obj + plan.offset);
+            if (!PyValue_IsNull(value) || !PyValue_IsNull(*addr)) {
+                *addr = value;
+                res = 0;
+                goto done;
+            }
+            // Deleting an unbound member: the descriptor raises the error.
+        }
         f = Py_TYPE(descr)->tp_descr_set;
-        if (f != NULL) {
-            _PyValueRoot vref;
-            PyObject *value_o = _PyValueRoot_PushObject(tstate, &vref, value,
-                                                        _PY_BOX_ATTRIBUTE_STORE);
-            if (value_o != NULL || PyValue_IsNull(value)) {
-                res = f(descr, obj, value_o);
-            }
-            _PyThreadState_PopValueRoot(tstate, &vref);
-            goto done;
+        _PyValueRoot vref;
+        PyObject *value_o = _PyValueRoot_PushObject(tstate, &vref, value,
+                                                    _PY_BOX_ATTRIBUTE_STORE);
+        if (value_o != NULL || PyValue_IsNull(value)) {
+            res = f(descr, obj, value_o);
         }
+        _PyThreadState_PopValueRoot(tstate, &vref);
+        goto done;
     }
 
-    if (dict == NULL) {
-        PyObject **dictptr;
-
-        if ((tp->tp_flags & Py_TPFLAGS_INLINE_VALUES)) {
-            res = _PyObject_StoreInstanceAttribute(obj, name, value);
-            goto error_check;
-        }
-
-        if ((tp->tp_flags & Py_TPFLAGS_MANAGED_DICT)) {
-            PyManagedDictPointer *managed_dict = _PyObject_ManagedDictPointer(obj);
-            dictptr = (PyObject **)&managed_dict->dict;
-        }
-        else {
-            dictptr = _PyObject_ComputedDictPointer(obj);
-        }
-        if (dictptr == NULL) {
-            if (descr == NULL) {
-                if (tp->tp_setattro == PyObject_GenericSetAttr) {
-                    PyErr_Format(PyExc_AttributeError,
-                                "'%.100s' object has no attribute '%U' and no "
-                                "__dict__ for setting new attributes",
-                                tp->tp_name, name);
-                }
-                else {
-                    PyErr_Format(PyExc_AttributeError,
-                                "'%.100s' object has no attribute '%U'",
-                                tp->tp_name, name);
-                }
-                _PyObject_SetAttributeErrorContext(obj, name);
-            }
-            else {
-                PyErr_Format(PyExc_AttributeError,
-                            "'%.100s' object attribute '%U' is read-only",
-                            tp->tp_name, name);
-            }
-            goto done;
-        }
-        else {
-            res = _PyObjectDict_SetItem(tp, obj, dictptr, name, value);
-        }
-    }
-    else {
+    if (dict != NULL) {
         Py_BEGIN_CRITICAL_SECTION(dict);
         res = _PyDict_SetItem_LockHeld((PyDictObject *)dict, name, value);
         Py_END_CRITICAL_SECTION();
+        goto error_check;
     }
-  error_check:
-    if (res < 0 && PyErr_ExceptionMatches(PyExc_KeyError)) {
-        PyErr_Format(PyExc_AttributeError,
+
+    PyObject **dictptr;
+    switch (plan.outcome) {
+        case _Py_STORE_REPLACE:
+            // A shape-mode object: valid inline values and no dict.
+            *(PyValue *)((char *)obj + plan.offset) = value;
+            res = 0;
+            goto done;
+        case _Py_STORE_MISSING:
+            set_no_attribute_error(obj, name);
+            goto done;
+        case _Py_STORE_ADD:
+        case _Py_STORE_REMOVE:
+            res = _PyObject_StoreInstanceAttribute(obj, name, value);
+            goto error_check;
+        case _Py_STORE_DICT:
+            if (tp->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
+                res = _PyObject_StoreInstanceAttribute(obj, name, value);
+                goto error_check;
+            }
+            if (tp->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
+                PyManagedDictPointer *managed_dict = _PyObject_ManagedDictPointer(obj);
+                dictptr = (PyObject **)&managed_dict->dict;
+            }
+            else {
+                dictptr = _PyObject_ComputedDictPointer(obj);
+            }
+            if (dictptr != NULL) {
+                res = _PyObjectDict_SetItem(tp, obj, dictptr, name, value);
+                goto error_check;
+            }
+            break;
+        default:
+            assert(plan.outcome == _Py_STORE_NO_STORAGE);
+            break;
+    }
+    // No instance storage.
+    if (descr == NULL) {
+        if (tp->tp_setattro == PyObject_GenericSetAttr) {
+            PyErr_Format(PyExc_AttributeError,
+                        "'%.100s' object has no attribute '%U' and no "
+                        "__dict__ for setting new attributes",
+                        tp->tp_name, name);
+        }
+        else {
+            PyErr_Format(PyExc_AttributeError,
                         "'%.100s' object has no attribute '%U'",
                         tp->tp_name, name);
+        }
         _PyObject_SetAttributeErrorContext(obj, name);
+    }
+    else {
+        PyErr_Format(PyExc_AttributeError,
+                    "'%.100s' object attribute '%U' is read-only",
+                    tp->tp_name, name);
+    }
+    goto done;
+
+  error_check:
+    if (res < 0 && PyErr_ExceptionMatches(PyExc_KeyError)) {
+        set_no_attribute_error(obj, name);
     }
   done:
     _PyThreadState_PopValueRoot(tstate, &cref);
@@ -2412,6 +2379,22 @@ static PyTypeObject* static_types[_Py_NUM_MANAGED_PREINITIALIZED_TYPES] = {
 };
 
 
+/* The root shapes of the static builtin types, filled before any static
+   object is used: a static object's header points to its type's root shape,
+   whose type field the positional initializers of PyTypeObject leave NULL.
+   PyType_Ready() fills them again. */
+void
+_PyTypes_InitRootShapes(void)
+{
+    for (size_t i=0; i < Py_ARRAY_LENGTH(static_types); i++) {
+        if (static_types[i] != NULL) {
+            _PyShape_InitRoot(static_types[i]);
+        }
+    }
+    _PyExc_InitRootShapes();
+}
+
+
 PyStatus
 _PyTypes_InitTypes(PyInterpreterState *interp)
 {
@@ -2473,9 +2456,9 @@ static inline void
 new_reference(PyObject *op)
 {
     // A new object has no collector flags, whatever its block held before,
-    // and its type, if the caller set it first, is kept.  The object map
+    // and its shape, if the caller set it first, is kept.  The object map
     // tells the collector's heap walk that the block holds an object.
-    op->ob_header &= _Py_HEADER_TYPE_MASK;
+    op->ob_header &= _Py_HEADER_SHAPE_MASK;
     _PyGC_ObjectMapSet(op);
     _PyReftracerTrack(op, PyRefTracer_CREATE);
 }

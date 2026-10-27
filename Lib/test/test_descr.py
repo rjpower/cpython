@@ -5576,6 +5576,42 @@ class MiscTests(unittest.TestCase):
         self.assertRegex(out, "after=Base2")
         self.assertRegex(out, "mykey2=from Base2")
 
+    def test_instance_lookup_reentrant_mro(self):
+        # As above, for an instance: the plan's MRO lookup runs __eq__ on a
+        # non-string class-dict key, which changes the class's bases.
+        code = textwrap.dedent("""
+        class MyKey(object):
+            def __hash__(self):
+                return hash('mykey')
+
+            def __eq__(self, other):
+                X.__bases__ = (Base2,)
+
+        class Base(object):
+            mykey = 'from Base'
+            mykey2 = 'from Base'
+
+        class Base2(object):
+            mykey = 'from Base2'
+            mykey2 = 'from Base2'
+
+        X = type('X', (Base,), {MyKey(): 5})
+        x = X()
+        print(f"mykey={x.mykey}")
+        print(f"after={','.join(c.__name__ for c in X.__bases__)}")
+        print(f"mykey2={x.mykey2}")
+        for i in range(100):
+            assert x.mykey2 == 'from Base2'
+        x.mykey2 = 'own'
+        print(f"own={x.mykey2}")
+        """)
+        _, out, err = assert_python_ok("-c", code)
+        out = out.decode()
+        self.assertRegex(out, "mykey=from Base")
+        self.assertRegex(out, "after=Base2")
+        self.assertRegex(out, "mykey2=from Base2")
+        self.assertRegex(out, "own=own")
+
 
 class PicklingTests(unittest.TestCase):
 

@@ -1759,6 +1759,84 @@ is not yet of record: it is taken only from a run whose 1-minute load
 stays below 4 throughout, and the 6b gate and the 6c builds have kept the
 machine busy; a watcher takes it in the first quiet window.
 
+### 2026-10-27 14:45 — B: time of record
+
+The time metric of record ran in quiet windows with --max-load 4 (highest
+1-minute load sampled 2.08, 2.15 and 2.4; one step5c attempt refused at
+5.52 and repeated). Geomean against baseline, step1 then step5c: kernels
+1.039 and 1.309, memory 1.181 and 2.113. step5c's time exceeds its
+instructions most where allocation is heaviest (coroutines 2.458 against
+1.354, comprehensions 2.135 against 1.361, generators 1.749). The
+collector benchmark of record: baseline 0.533, 0.580 and 0.547 s per
+allocated GB at 16, 128 and 512 MB live; step5c 2.859, 3.237 and 4.248
+times that, growing with the live heap. boil/bench/results/ now holds
+instr, time and rss for all three labels of record.
+
+### 2026-10-27 15:10 — 6c rung 1 gate (the shape in the header) clean
+
+Gate run here on a detached checkout of eb4249ad318 with fresh builds:
+gate 2 on default 556/564 files, 50,754 tests, 2 min 49 s, only test_sys's
+machine-local remote-exec timeout; gate 3 on debug 9 min 52 s, only
+test_sys; -u cpu test_cext success on both builds after the fix below;
+regen-cases and clinic leave the tree unchanged. Rung 1 puts the shape in
+the header word: every type embeds its root shape, Py_TYPE reads
+shape->type, the Check macros read the shape's flag copy, exact checks of
+builtin types compare the header with the root shape, shapes are
+unconditional with --with-shapes gone, and the feedback entry carries the
+shape pointer (magic 3721). Recorded: richards +0.78%, go +1.40%,
+json_loads +0.58% per loop, 1,836 Py_TYPE sites, 278 header masks in the
+eval loop. Note 09 went through two review rounds (verdicts revise, revise)
+and its sections 2, 4, 5, 6 and 9 were rewritten with the decisions in
+section 11; the rung 2 work doc was reviewed and revised before code.
+
+Two coordinator fixes: test_cext's C++ virtual object was allocated with
+new and tripped 6b's debug heap check (29cbc5795a2); it now gets its
+storage from the object allocator, which is the rule for any C++ object
+that is a PyObject. gate.sh ignores the test_sys remote-exec test so the
+later checks of a level run.
+
+## 2026-10-27 15:30 PDT: 10a design adopted (note 11)
+
+Note 11, precise roots, landed on the integration branch (22a38cc021a)
+after two codex review rounds (revise, then accept with the kill-mode
+landing rule). Decisions: an attributed DWARF unwind walk; frames are
+precise or opaque by a section marker; the precise set is the eval loop
+and handlers, the entry paths, the call layer (about 80 functions) and
+about 25 ceval helpers; the rest of core C and all extensions stay opaque
+and conservatively scanned, with PyMem blocks followed only from extension
+frames; allocator slack rejected on its measured RSS cost (+8.5% geomean);
+a frame is a root from push to pop; tier 1 gets safepoint tables; step 7
+inherits the root set and the barrier rule. The coordinator added open
+question 10 at adoption: the C-mode checker (a CFG, liveness and
+provenance analysis over a declared C subset) is the largest tool in rung
+1, so it has a one-day box, with the kill-mode verifier, the retain gate
+and the inline audit as the proof if it overruns, and no 8.2 skip removed
+on the dynamic proof alone. Note 06 rows 10a and 7 updated. The 10a
+implementation starts in its own worktree after 6c lands, so that the two
+do not contend for the eval loop.
+
+## 2026-10-27 16:05 PDT: 6c rung 2 gate (the lookup plan)
+
+Rung 2 landed as 80ba2edf94c (magic 3722). Gate run here on a detached
+checkout of that commit with fresh builds: gate 2 on default 556/564
+files, 50,789 tests, 2 min 38 s, SUCCESS; gate 3 on debug 9 min 28 s,
+SUCCESS, -u cpu test_cext 16 tests, regen-cases and clinic leave the tree
+unchanged. The rung adds the lookup plan of note 09 section 4
+(`Include/internal/pycore_lookup.h`, `Objects/lookupplan.c`): the (shape,
+name) cache yields a plan, the specialiser reads plans instead of walking
+the MRO, and LOAD_ATTR_PROPERTY guards the getter. The debug gate found a
+specialiser bug before the commit: a Python `__getattribute__` found under
+type version 0 was being specialised and could never deopt; the specialiser
+now declines it, covered by test_shapes. Recorded by the agent against
+b65f081239d: kernels geomean 0.997 instructions per loop (richards -3.13%,
+the others within 0.6%); micro geomean 0.993 (attr_load_poly -10.0%,
+property_load +1.8%); boxes per iteration unchanged; plan cache 15,888
+bytes over richards' 14 classes. Five departures from the rung 2 doc are
+recorded under "As built" in boil/design/work/6c-rung2.md and move to rung
+3: the prepare/commit split of stores, the storage adapter's precondition,
+stores over non-data class attributes, the set-only descriptor test's
+type, and names. Rung 3, the instance layout, starts with its work doc.
+
 ### 2026-10-27 16:25 — 10a rung 0 gate (baseline counters, c_roots, ASan) clean
 
 Rung 0 of 10a (note 11 section 12) landed on boil/10a as: the work doc and
@@ -1784,3 +1862,4 @@ test_cext under -u cpu fails 5 of 16 on VirtualPyObject (a C++ `new`
 object) since 29cbc5795a2's object-heap check, which is in 10a's base;
 10a does not change it. The rung 1 work doc and its review are
 887f403e01a; the C mode started 16:04 and has until 2026-10-28 16:04.
+||||||| c2ab4382dea

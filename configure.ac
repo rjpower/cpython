@@ -7932,22 +7932,6 @@ fi
 AC_DEFINE([Py_IR_INTERP], [1],
   [Defined because code objects run as the register IR.])
 
-# Check for --with-shapes
-AC_MSG_CHECKING([for --with-shapes])
-AC_ARG_WITH(
-  [shapes],
-  [AS_HELP_STRING(
-    [--with-shapes],
-    [guard instance attribute access on per-type shapes (default is no)]
-  )],
-  [],
-  [with_shapes=no])
-AC_MSG_RESULT([$with_shapes])
-AS_VAR_IF([with_shapes], [yes], [
-  AC_DEFINE([Py_SHAPES], [1],
-    [Define to guard instance attribute access on per-type shapes.])
-])
-
 # Check for --with-remote-debug
 AC_MSG_CHECKING([for --with-remote-debug])
 AC_ARG_WITH(

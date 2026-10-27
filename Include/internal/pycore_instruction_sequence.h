@@ -76,7 +76,7 @@ void PyInstructionSequence_Fini(_PyInstructionSequence *seq);
 _PyInstruction _PyInstructionSequence_GetInstruction(_PyInstructionSequence *seq, int pos);
 
 extern PyTypeObject _PyInstructionSequence_Type;
-#define _PyInstructionSequence_Check(v) Py_IS_TYPE((v), &_PyInstructionSequence_Type)
+#define _PyInstructionSequence_Check(v) _Py_IS_ROOT_SHAPE((v), &_PyInstructionSequence_Type)
 
 #ifdef __cplusplus
 }

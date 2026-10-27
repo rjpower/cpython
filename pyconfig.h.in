@@ -1899,9 +1899,6 @@
 /* Define if rl_startup_hook takes arguments */
 #undef Py_RL_STARTUP_HOOK_TAKES_ARGS
 
-/* Define to guard instance attribute access on per-type shapes. */
-#undef Py_SHAPES
-
 /* Define if you want to enable internal statistics gathering. */
 #undef Py_STATS
 

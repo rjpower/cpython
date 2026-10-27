@@ -31,7 +31,7 @@
 #define FIELD_SIZE(type, member) sizeof(((type *)0)->member)
 
 enum {
-    PY_REMOTE_DEBUG_OFFSETS_TOTAL_SIZE = 896,
+    PY_REMOTE_DEBUG_OFFSETS_TOTAL_SIZE = 912,
     PY_REMOTE_ASYNC_DEBUG_OFFSETS_TOTAL_SIZE = 104,
 };
 
@@ -425,6 +425,14 @@ _PyRemoteDebug_ValidateDebugOffsetsLayout(struct _Py_DebugOffsets *debug_offsets
         sizeof(uintptr_t),
         _Alignof(uintptr_t),
         SIZEOF_PYOBJECT);
+
+    PY_REMOTE_DEBUG_VALIDATE_SECTION(shape);
+    PY_REMOTE_DEBUG_VALIDATE_FIELD(
+        shape,
+        type,
+        sizeof(uintptr_t),
+        _Alignof(uintptr_t),
+        SIZEOF_SHAPE);
 
     PY_REMOTE_DEBUG_VALIDATE_SECTION(type_object);
     PY_REMOTE_DEBUG_VALIDATE_FIELD(

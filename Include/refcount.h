@@ -11,12 +11,15 @@ Nothing is reference counted: the tracing collector frees unreachable objects,
 and the header has no count.  An immortal object, one that the collector never
 frees, has _Py_IMMORTAL_FLAGS in ob_flags; a statically allocated one also has
 _Py_STATICALLY_ALLOCATED_FLAG.  The header word of a static object of type
-type is _Py_STATIC_HEADER_INIT(type); the flags are added, not or-ed, so that
-the word is an address constant.
+type is _Py_STATIC_HEADER_INIT(type), the type's root shape (embedded in the
+type, so that it is an address constant) and the flags; the flags are added,
+not or-ed, so that the word is an address constant.  A NULL type gives a NULL
+shape, which PyType_Ready() replaces.
 */
 #define _Py_STATIC_FLAG_BITS ((uintptr_t)(_Py_STATICALLY_ALLOCATED_FLAG | _Py_IMMORTAL_FLAGS))
 #define _Py_STATIC_HEADER_INIT(type) \
-    ((uintptr_t)(type) + (_Py_STATIC_FLAG_BITS << 48))
+    (((uintptr_t)(type) ? (uintptr_t)_Py_TYPE_ROOT_SHAPE(type) : (uintptr_t)0) \
+     + (_Py_STATIC_FLAG_BITS << 48))
 #endif  // _Py_OPAQUE_PYOBJECT
 
 // Py_REFCNT() implementation for the stable ABI

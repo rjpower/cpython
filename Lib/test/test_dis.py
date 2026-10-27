@@ -1408,6 +1408,8 @@ class DisTests(DisTestBase):
         fields = {
             ("kind", "arg"),
             ("kind", "state", "counter", "arg", "first", "second"),
+            ("kind", "state", "counter", "arg", "type_version", "second",
+             "shape"),
         }
         for quickened in (False, True):
             for adaptive in (False, True):
@@ -1430,6 +1432,33 @@ class DisTests(DisTestBase):
                                        in instr.cache_info)["state"]
                                   for instr in with_fb]
                         self.assertIn(b"\x01", states)  # MONO
+
+    @cpython_only
+    @requires_specialization
+    def test_show_caches_attr_guard(self):
+        # An attribute entry shows the pair its plan is guarded by: the
+        # receiver's type version and shape
+        _testcapi = import_helper.import_module("_testcapi")
+        _testinternalcapi = import_helper.import_module("_testinternalcapi")
+        class C:
+            def __init__(self):
+                self.x = 1
+        def f(o):
+            return o.x
+        reset_code(f)
+        o = C()
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+            f(o)
+        [load] = [instr for instr in dis.get_instructions(
+                      f, show_caches=True, adaptive=True)
+                  if instr.opname.startswith("LOAD_ATTR")]
+        info = {name: int.from_bytes(data, sys.byteorder)
+                for name, _, data in load.cache_info}
+        self.assertEqual(info["type_version"], _testcapi.type_get_version(C))
+        self.assertNotEqual(info["shape"], 0)
+        text = self.get_disassembly(f, show_caches=True, adaptive=True)
+        self.assertIn(f"type_version: {info['type_version']}", text)
+        self.assertIn(f"shape: {hex(info['shape'])}", text)
 
     @cpython_only
     def test_show_currinstr_with_cache(self):

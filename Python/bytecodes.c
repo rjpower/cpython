@@ -2644,14 +2644,16 @@ dummy_func(
             unused/5 +
             _PUSH_NULL_CONDITIONAL;
 
-        /* The shape handlers (Py_SHAPES, see pycore_dict.h).  They follow a
-         * type version guard, which proves that the owner has inline values
-         * to read the shape from and lets descriptors added to the class
-         * win.  The shape fields take no inline cache units.  Shapes exist
-         * only in builds with the GIL, so the stores take no object lock and
-         * need not check for a dict: an instance with a dict has no shape. */
+        /* The shape handlers (see pycore_shape.h).  The shape is the
+         * owner's header; the type version guard before it lets descriptors
+         * added to the class win.  The shape fields take no inline cache
+         * units.  The stores take no object lock and need not check for a
+         * dict: an instance with a dict is in dictionary mode. */
         op(_GUARD_SHAPE, (shape/0, owner -- owner)) {
-            EXIT_IF(_PyObject_Shape(PyValue_ObjectBorrow(owner)) != shape);
+            // The one form of a shape guard: the masked header compared with
+            // the shape, a constant to the JIT.
+            EXIT_IF((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
+                    != (uintptr_t)shape);
         }
 
         op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr, o)) {
@@ -2781,9 +2783,14 @@ dummy_func(
             _LOAD_ATTR_CLASS +
             _PUSH_NULL_CONDITIONAL;
 
-        op(_LOAD_ATTR_PROPERTY_FRAME, (func_version/2, fget/4, owner -- new_frame)) {
+        // descr is the property, which the class holds while the type
+        // version holds; its getter is read here, because replacing it
+        // (p.__init__(g)) changes no type (note 09 section 4.7).
+        op(_LOAD_ATTR_PROPERTY_FRAME, (func_version/2, descr/4, owner -- new_frame)) {
             assert((oparg & 1) == 0);
-            assert(Py_IS_TYPE(fget, &PyFunction_Type));
+            assert(Py_IS_TYPE(descr, &PyProperty_Type));
+            PyObject *fget = ((_PyPropertyObject *)descr)->prop_get;
+            EXIT_IF(fget == NULL || !Py_IS_TYPE(fget, &PyFunction_Type));
             PyFunctionObject *f = (PyFunctionObject *)fget;
             EXIT_IF(f->func_version != func_version);
             PyCodeObject *code = (PyCodeObject *)f->func_code;
@@ -2855,7 +2862,7 @@ dummy_func(
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 Py_ssize_t index = value_ptr - values->values;
                 _PyDictValues_AddToInsertionOrder(values, index);
-                _PyDictValues_ShapeAfterAdd(Py_TYPE(owner_o), values, index);
+                _PyObject_ShapeAfterAdd(owner_o, index);
             }
             UNLOCK_OBJECT(owner_o);
             o = owner;
@@ -2900,7 +2907,7 @@ dummy_func(
             DEAD(value);
             PyDictValues *values = _PyObject_InlineValues(owner_o);
             _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
-            _PyDictValues_SetShape(values, (uint8_t)shape_to);
+            _PyObject_SetShape(owner_o, shape_to);
             STAT_INC(STORE_ATTR, hit);
             o = owner;
             DEAD(owner);

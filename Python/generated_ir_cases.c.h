@@ -13036,9 +13036,15 @@
             // _LOAD_ATTR_PROPERTY_FRAME
             {
                 uint32_t func_version = fb->func_version;
-                PyObject *fget = (PyObject *)fb->fget;
+                PyObject *descr = (PyObject *)fb->descr;
                 assert((oparg & 1) == 0);
-                assert(Py_IS_TYPE(fget, &PyFunction_Type));
+                assert(Py_IS_TYPE(descr, &PyProperty_Type));
+                PyObject *fget = ((_PyPropertyObject *)descr)->prop_get;
+                if (fget == NULL || !Py_IS_TYPE(fget, &PyFunction_Type)) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
                 PyFunctionObject *f = (PyFunctionObject *)fget;
                 if (f->func_version != func_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -13116,8 +13122,9 @@
             }
             // _GUARD_SHAPE
             {
-                uint32_t shape = fb->shape;
-                if (_PyObject_Shape(PyValue_ObjectBorrow(owner)) != shape) {
+                _PyShape *shape = fb->shape;
+                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
+                    != (uintptr_t)shape) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -17058,7 +17065,7 @@
                     PyDictValues *values = _PyObject_InlineValues(owner_o);
                     Py_ssize_t index = value_ptr - values->values;
                     _PyDictValues_AddToInsertionOrder(values, index);
-                    _PyDictValues_ShapeAfterAdd(Py_TYPE(owner_o), values, index);
+                    _PyObject_ShapeAfterAdd(owner_o, index);
                 }
                 UNLOCK_OBJECT(owner_o);
                 o = owner;
@@ -17156,8 +17163,9 @@
             }
             // _GUARD_SHAPE
             {
-                uint32_t shape = fb->shape;
-                if (_PyObject_Shape(PyValue_ObjectBorrow(owner)) != shape) {
+                _PyShape *shape = fb->shape;
+                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
+                    != (uintptr_t)shape) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
@@ -17218,8 +17226,9 @@
             }
             // _GUARD_SHAPE
             {
-                uint32_t shape = fb->shape;
-                if (_PyObject_Shape(PyValue_ObjectBorrow(owner)) != shape) {
+                _PyShape *shape = fb->shape;
+                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
+                    != (uintptr_t)shape) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
@@ -17228,7 +17237,7 @@
             // _STORE_ATTR_SHAPE_ADD
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
-                uint32_t shape_to = fb->shape_to;
+                _PyShape *shape_to = fb->shape_to;
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = PyValue_ObjectBorrow(owner);
                 PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
@@ -17236,7 +17245,7 @@
                 *value_ptr = value;
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
-                _PyDictValues_SetShape(values, (uint8_t)shape_to);
+                _PyObject_SetShape(owner_o, shape_to);
                 STAT_INC(STORE_ATTR, hit);
                 o = owner;
             }

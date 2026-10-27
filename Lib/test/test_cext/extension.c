@@ -296,6 +296,15 @@ public:
     static void dealloc(PyObject* o) {
         delete static_cast<VirtualPyObject*>(o);
     }
+    // The collector traces only objects in its heaps, and debug builds stop
+    // when PyObject_Init sees another address, so a C++ object that is a
+    // PyObject gets its storage from the object allocator.
+    static void* operator new(size_t size) {
+        return PyObject_Malloc(size);
+    }
+    static void operator delete(void* p) {
+        PyObject_Free(p);
+    }
 
     // Number of "living" instances
     static int instance_count;

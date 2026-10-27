@@ -193,7 +193,7 @@ struct _PyTypeCacheLookupResult
 _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name)
 {
     assert(PyUnicode_CheckExact(name) && PyUnicode_CHECK_INTERNED(name));
-    struct _PyTypeCacheLookupResult miss = {PyStackRef_NULL, 0, 0};
+    struct _PyTypeCacheLookupResult miss = {PyValue_NULL, 0, 0};
     struct type_cache *cache = cache_get(type);
     if (cache == NULL) {
         return miss;
@@ -201,12 +201,12 @@ _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name)
     Py_hash_t hash = PyUnstable_Unicode_GET_CACHED_HASH(name);
     assert(hash != -1);
     uint32_t index = hash & cache->mask;
-    _PyStackRef out_ref;
+    PyValue out_ref;
     for (;;) {
         PyObject *entry_name = FT_ATOMIC_LOAD_PTR_ACQUIRE(cache->hashtable[index].name);
         if (entry_name == name) {
             PyObject *v = cache->hashtable[index].value;
-            out_ref = v ? PyStackRef_FromPyObject(v) : PyStackRef_NULL;
+            out_ref = v ? PyValue_FromObject(v) : PyValue_NULL;
             break;
         }
         else if (entry_name == NULL) {

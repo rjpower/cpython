@@ -10,7 +10,7 @@ extern "C" {
 
 #include "pycore_object.h"               // PyManagedDictPointer
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_SSIZE_ACQUIRE
-#include "pycore_stackref.h"             // _PyStackRef
+#include "pycore_value.h"                // PyValue
 #include "pycore_stats.h"
 
 // Unsafe flavor of PyDict_GetItemWithError(): no error checking
@@ -131,9 +131,9 @@ extern void _PyDictKeys_DecRef(PyDictKeysObject *keys);
  */
 PyAPI_FUNC(Py_ssize_t) _Py_dict_lookup(PyDictObject *mp, PyObject *key, Py_hash_t hash, PyObject **value_addr);
 extern Py_ssize_t _Py_dict_lookup_threadsafe(PyDictObject *mp, PyObject *key, Py_hash_t hash, PyObject **value_addr);
-extern Py_ssize_t _Py_dict_lookup_threadsafe_stackref(PyDictObject *mp, PyObject *key, Py_hash_t hash, _PyStackRef *value_addr);
+extern Py_ssize_t _Py_dict_lookup_value(PyDictObject *mp, PyObject *key, Py_hash_t hash, PyValue *value_addr);
 
-extern int _PyDict_GetMethodStackRef(PyDictObject *dict, PyObject *name, _PyStackRef *method);
+extern int _PyDict_GetMethodValue(PyDictObject *dict, PyObject *name, PyValue *method);
 
 // Exported for external JIT support
 PyAPI_FUNC(Py_ssize_t) _PyDict_LookupIndexAndValue(PyDictObject *, PyObject *, PyObject **);
@@ -153,7 +153,7 @@ PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookup(PyDictKeysObject* dictkeys, PyOb
 PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookupAndVersion(PyDictKeysObject* dictkeys, PyObject *key, uint32_t *version);
 PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookupSplit(PyDictKeysObject* dictkeys, PyObject *key);
 // Return the borrowed source dictionary, or NULL if absent or on error.
-PyAPI_FUNC(PyObject *) _PyDict_LoadGlobalStackRef(PyDictObject *, PyDictObject *, PyObject *, _PyStackRef *);
+PyAPI_FUNC(PyObject *) _PyDict_LoadGlobalValue(PyDictObject *, PyDictObject *, PyObject *, PyValue *);
 
 // Loads the __builtins__ object from the globals dict. Returns a new reference.
 extern PyObject *_PyDict_LoadBuiltinsFromGlobals(PyObject *globals);

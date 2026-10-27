@@ -1259,24 +1259,24 @@ _Py_dict_lookup_threadsafe(PyDictObject *mp, PyObject *key, Py_hash_t hash, PyOb
 }
 
 Py_ssize_t
-_Py_dict_lookup_threadsafe_stackref(PyDictObject *mp, PyObject *key, Py_hash_t hash, _PyStackRef *value_addr)
+_Py_dict_lookup_value(PyDictObject *mp, PyObject *key, Py_hash_t hash, PyValue *value_addr)
 {
     PyObject *val;
     Py_ssize_t ix = _Py_dict_lookup(mp, key, hash, &val);
     if (val == NULL) {
-        *value_addr = PyStackRef_NULL;
+        *value_addr = PyValue_NULL;
     }
     else {
-        *value_addr = PyStackRef_FromPyObject(val);
+        *value_addr = PyValue_FromObject(val);
     }
     return ix;
 }
 
 
 // Looks up the unicode key `key` in the dictionary. Note that `*method` may
-// already contain a valid value! See _PyObject_GetMethodStackRef().
+// already contain a valid value! See _PyObject_GetMethodValue().
 int
-_PyDict_GetMethodStackRef(PyDictObject *mp, PyObject *key, _PyStackRef *method)
+_PyDict_GetMethodValue(PyDictObject *mp, PyObject *key, PyValue *method)
 {
     assert(PyUnicode_CheckExact(key));
     Py_hash_t hash = hash_unicode_key(key);
@@ -1287,11 +1287,11 @@ _PyDict_GetMethodStackRef(PyDictObject *mp, PyObject *key, _PyStackRef *method)
     Py_ssize_t ix = _Py_dict_lookup_threadsafe(mp, key, hash, &obj);
     Py_DECREF(mp);
     if (ix == DKIX_ERROR) {
-        PyStackRef_CLEAR(*method);
+        *method = PyValue_NULL;
         return -1;
     }
     else if (ix >= 0 && obj != NULL) {
-        *method = PyStackRef_FromPyObject(obj);
+        *method = PyValue_FromObject(obj);
         return 1;
     }
     return 0;  // not found
@@ -2126,30 +2126,30 @@ _PyDict_GetItemStringWithError(PyObject *v, const char *key)
 }
 
 PyObject *
-_PyDict_LoadGlobalStackRef(PyDictObject *globals, PyDictObject *builtins, PyObject *key, _PyStackRef *res)
+_PyDict_LoadGlobalValue(PyDictObject *globals, PyDictObject *builtins, PyObject *key, PyValue *res)
 {
     Py_ssize_t ix;
     Py_hash_t hash;
 
     hash = _PyObject_HashDictKey(key);
     if (hash == -1) {
-        *res = PyStackRef_NULL;
+        *res = PyValue_NULL;
         return NULL;
     }
 
     /* namespace 1: globals */
-    ix = _Py_dict_lookup_threadsafe_stackref(globals, key, hash, res);
+    ix = _Py_dict_lookup_value(globals, key, hash, res);
     if (ix == DKIX_ERROR) {
         return NULL;
     }
-    if (ix != DKIX_EMPTY && !PyStackRef_IsNull(*res)) {
+    if (ix != DKIX_EMPTY && !PyValue_IsNull(*res)) {
         return (PyObject *)globals;
     }
 
     /* namespace 2: builtins */
-    ix = _Py_dict_lookup_threadsafe_stackref(builtins, key, hash, res);
-    assert(ix >= 0 || PyStackRef_IsNull(*res));
-    return PyStackRef_IsNull(*res) ? NULL : (PyObject *)builtins;
+    ix = _Py_dict_lookup_value(builtins, key, hash, res);
+    assert(ix >= 0 || PyValue_IsNull(*res));
+    return PyValue_IsNull(*res) ? NULL : (PyObject *)builtins;
 }
 
 PyObject *
@@ -2165,15 +2165,15 @@ _PyDict_LoadBuiltinsFromGlobals(PyObject *globals)
     Py_hash_t hash = unicode_get_hash(key);
 
     // The lookup makes no escaping call, so `ref` needs no root.
-    _PyStackRef ref;
-    Py_ssize_t ix = _Py_dict_lookup_threadsafe_stackref(mp, key, hash, &ref);
+    PyValue ref;
+    Py_ssize_t ix = _Py_dict_lookup_value(mp, key, hash, &ref);
     if (ix == DKIX_ERROR) {
         return NULL;
     }
-    if (PyStackRef_IsNull(ref)) {
+    if (PyValue_IsNull(ref)) {
         return Py_NewRef(PyEval_GetBuiltins());
     }
-    PyObject *builtins = PyStackRef_AsPyObjectBorrow(ref);
+    PyObject *builtins = PyValue_ObjectBorrow(ref);
     if (PyModule_Check(builtins)) {
         builtins = _PyModule_GetDict(builtins);
         assert(builtins != NULL);

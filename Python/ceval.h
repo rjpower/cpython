@@ -43,7 +43,7 @@
 #include "opcode.h"
 #include "pydtrace.h"
 #include "setobject.h"
-#include "pycore_stackref.h"
+#include "pycore_value.h"
 
 #include <stdbool.h>              // bool
 
@@ -72,25 +72,25 @@ check_invalid_reentrancy(void)
 
 #ifdef Py_DEBUG
 static void
-dump_item(_PyStackRef item)
+dump_item(PyValue item)
 {
-    if (PyStackRef_IsNull(item)) {
+    if (PyValue_IsNull(item)) {
         printf("<NULL>");
         return;
     }
-    if (PyStackRef_IsMalformed(item)) {
+    if (_PyValue_IsMalformed(item)) {
         printf("<INVALID>");
         return;
     }
-    if (PyStackRef_IsTaggedIndex(item)) {
-        printf("%" PRId64, (int64_t)PyStackRef_UntagIndex(item));
+    if (_PyValue_IsTaggedIndex(item)) {
+        printf("%" PRId64, (int64_t)_PyValue_UntagIndex(item));
         return;
     }
-    if (PyStackRef_IsInline(item)) {
-        printf("<inline %s>", PyStackRef_TYPE(item)->tp_name);
+    if (PyValue_IsInline(item)) {
+        printf("<inline %s>", PyValue_Type(item)->tp_name);
         return;
     }
-    PyObject *obj = PyStackRef_AsPyObjectBorrow(item);
+    PyObject *obj = PyValue_ObjectBorrow(item);
     if (obj == NULL) {
         printf("<nil>");
         return;
@@ -103,7 +103,7 @@ dump_item(_PyStackRef item)
 static void
 dump_stack(_PyInterpreterFrame *frame)
 {
-    _PyStackRef *slots = _PyFrame_Slots(frame);
+    PyValue *slots = _PyFrame_Slots(frame);
     int nlocalsplus = _PyFrame_GetCode(frame)->co_nlocalsplus;
     int nslots = _PyFrame_NumSlots(frame);
     PyObject *exc = PyErr_GetRaisedException();
@@ -144,7 +144,7 @@ lltrace_instruction(_PyInterpreterFrame *frame,
         return;
     }
     dump_stack(frame);
-    _PyStackRef_CheckFrame(frame);
+    _PyFrame_CheckValues(frame);
     /* First the word index and the instruction that the handler stands
      * for, with its oparg; then the handler and its fields, on a line
      * without a colon. */
@@ -164,8 +164,8 @@ lltrace_instruction(_PyInterpreterFrame *frame,
 static void
 lltrace_resume_frame(_PyInterpreterFrame *frame)
 {
-    PyObject *fobj = PyStackRef_AsPyObjectBorrow(frame->f_funcobj);
-    if (!PyStackRef_CodeCheck(frame->f_executable) ||
+    PyObject *fobj = PyValue_ObjectBorrow(frame->f_funcobj);
+    if (!(PyValue_Type(frame->f_executable) == &PyCode_Type) ||
         fobj == NULL ||
         !PyFunction_Check(fobj)
     ) {
@@ -254,7 +254,7 @@ static int get_exception_handler(PyCodeObject *, int, int*, int*, int*);
 
 typedef struct {
     _PyInterpreterFrame frame;
-    _PyStackRef stack[1];
+    PyValue stack[1];
 } _PyEntryFrame;
 
 static int

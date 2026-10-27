@@ -1429,10 +1429,10 @@ _PyGC_Fini(PyInterpreterState *interp)
 }
 
 int
-_PyGC_VisitStackRef(_PyStackRef *ref, visitproc visit, void *arg)
+_PyGC_VisitValue(PyValue *ref, visitproc visit, void *arg)
 {
-    assert(PyStackRef_IsObject(*ref));
-    Py_VISIT(PyStackRef_AsPyObjectBorrow(*ref));
+    assert(PyValue_IsObject(*ref));
+    Py_VISIT(PyValue_ObjectBorrow(*ref));
     return 0;
 }
 
@@ -1440,10 +1440,10 @@ _PyGC_VisitStackRef(_PyStackRef *ref, visitproc visit, void *arg)
 int
 _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
-    _PyStackRef *ref = _PyFrame_GetLocalsArray(frame);
-    _PyStackRef *end = ref + _PyFrame_NumSlots(frame);
+    PyValue *ref = _PyFrame_GetLocalsArray(frame);
+    PyValue *end = ref + _PyFrame_NumSlots(frame);
     for (; ref < end; ref++) {
-        _Py_VISIT_STACKREF(*ref);
+        _Py_VISIT_VALUE(*ref);
     }
     return 0;
 }

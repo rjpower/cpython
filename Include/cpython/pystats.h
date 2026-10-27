@@ -98,14 +98,22 @@ typedef struct _object_stats {
     uint64_t type_cache_too_big;
     uint64_t type_cache_invalidations;
     uint64_t type_cache_resizes;
-    /* Inline stack values (boil/design/02-tagged-values.md): ints and
-       floats created, and boxes made of each kind of value; array boxes are
-       those made for C code that takes a stackref array (calls and BUILD_*) */
+    /* Inline values (Include/pyvalue.h): ints and floats created, and
+       boxes made of each kind of value; array boxes are those made for C
+       code that takes a PyValue array (calls and BUILD_*) */
     uint64_t inline_ints_created;
     uint64_t inline_floats_created;
     uint64_t inline_int_boxes;
     uint64_t inline_float_boxes;
     uint64_t inline_array_boxes;
+    /* Boxes by what they were made for (_PY_BOX_CONTAINER_STORE and the
+       rest in pycore_stats.h).  A site that names no class counts only in
+       the totals, which the report lists as "other". */
+    uint64_t value_boxes[5];
+    /* The boxes made at each call site of _PyValue_BoxInline(), by return
+       address; a full table counts the rest in the last entry's count */
+    uintptr_t box_site_pc[64];
+    uint64_t box_site_count[64];
     /* Temporary value used during GC */
     uint64_t object_visits;
 } ObjectStats;

@@ -12,6 +12,7 @@
 #include "pycore_modsupport.h"    // _PyModule_CreateInitialized()
 #include "pycore_moduleobject.h"  // _PyModule_GetDefOrNull()
 #include "pycore_object.h"        // _PyType_AllocNoTrack
+#include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
 #include "pycore_pyerrors.h"      // _PyErr_FormatFromCause()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_slots.h"         // _PySlotIterator_Init

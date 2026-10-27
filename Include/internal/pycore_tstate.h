@@ -96,8 +96,8 @@ typedef struct _PyThreadStateImpl {
         int running_queue;
         // The innermost eval loop activation, NULL outside the eval loop.
         _PyEvalActivation *activation;
-        // The C stack refs, innermost first (_PyThreadState_PushCStackRef())
-        struct _PyCStackRef *c_stack_refs;
+        // The value roots, innermost first (_PyThreadState_PushValueRoot())
+        struct _PyValueRoot *value_roots;
         // The live collector runs at once in an allocation, where a
         // handler may hold a value only in a C local: the scan of this
         // thread covers its eval loop activations too.

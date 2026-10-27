@@ -233,7 +233,7 @@ extern PyObject *_PyGC_GetReferrers(PyInterpreterState *interp, PyObject *objs);
 
 extern void _Py_RunGC(PyThreadState *tstate);
 
-union _PyStackRef;
+struct PyValue;
 
 // GC visit callback for tracked interpreter frames
 // GH-150766: exported for greenlet
@@ -253,7 +253,7 @@ PyAPI_FUNC(int) _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visi
             }                                                       \
         }                                                           \
     } while (0)
-PyAPI_FUNC(int) _PyGC_VisitStackRef(union _PyStackRef *ref, visitproc visit, void *arg);
+PyAPI_FUNC(int) _PyGC_VisitValue(struct PyValue *ref, visitproc visit, void *arg);
 
 
 #ifdef __cplusplus

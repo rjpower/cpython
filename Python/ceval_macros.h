@@ -89,10 +89,10 @@
 #   define TAIL_CALL_NO_OPERANDS 0
 
 #ifdef Py_STATS
-#   define TAIL_CALL_PARAMS _PyStackRef *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
+#   define TAIL_CALL_PARAMS PyValue *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
 #   define TAIL_CALL_ARGS slots, tstate, next_instr, TAIL_CALL_OPERAND_ARGS, lastopcode
 #else
-#   define TAIL_CALL_PARAMS _PyStackRef *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS
+#   define TAIL_CALL_PARAMS PyValue *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS
 #   define TAIL_CALL_ARGS slots, tstate, next_instr, TAIL_CALL_OPERAND_ARGS
 #endif
 
@@ -433,10 +433,10 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 /* There's no STORE_IP(), it's inlined by the code generator. */
 
 
-/* Stackref macros */
+/* PyValue macros */
 
-/* How much scratch space to give stackref to PyObject* conversion. */
-#define MAX_STACKREF_SCRATCH 10
+/* How much scratch space to give PyValue to PyObject* conversion. */
+#define MAX_VALUE_SCRATCH 10
 
 /* The collector scans the C stack conservatively, which includes the eval
    loop's frame: a C array of object pointers there keeps its last objects
@@ -451,12 +451,12 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 
 /* The unused slots of the scratch array are cleared too, or the words that
    earlier calls left in that stack memory would keep their objects alive. */
-#define STACKREFS_TO_PYOBJECTS(ARGS, ARG_COUNT, NAME) \
+#define VALUES_TO_OBJECTS(ARGS, ARG_COUNT, NAME) \
     /* +1 because vectorcall might use -1 to write self */ \
-    PyObject *NAME##_temp[MAX_STACKREF_SCRATCH+1] = {0}; \
-    PyObject **NAME = _PyObjectArray_FromStackRefArray(ARGS, ARG_COUNT, NAME##_temp);
+    PyObject *NAME##_temp[MAX_VALUE_SCRATCH+1] = {0}; \
+    PyObject **NAME = _PyObjectArray_FromValues(ARGS, ARG_COUNT, NAME##_temp);
 
-#define STACKREFS_TO_PYOBJECTS_CLEANUP(NAME) \
+#define VALUES_TO_OBJECTS_CLEANUP(NAME) \
     /* +1 because we +1 previously */ \
     _PyObjectArray_Free(NAME - 1, NAME##_temp); \
     _PyGC_CLEAR_ARRAY(NAME##_temp);
@@ -535,21 +535,21 @@ gen_try_set_executing(PyGenObject *gen)
 
 /* The truth of a value, as TO_BOOL tests it, or -1 with an exception set */
 static inline int
-_PyStackRef_Truth(_PyStackRef ref)
+_PyValue_Truth(PyValue ref)
 {
-    if (PyStackRef_IsTrue(ref)) {
+    if (_PyValue_IsTrue(ref)) {
         return 1;
     }
-    if (PyStackRef_IsFalse(ref) || PyStackRef_IsNone(ref)) {
+    if (_PyValue_IsFalse(ref) || _PyValue_IsNone(ref)) {
         return 0;
     }
-    if (PyStackRef_IsInlineInt(ref)) {
-        return PyStackRef_InlineInt(ref) != 0;
+    if (PyValue_IsInlineInt(ref)) {
+        return PyValue_Int32(ref) != 0;
     }
-    if (PyStackRef_IsInlineFloat(ref)) {
-        return PyStackRef_InlineFloat(ref) != 0.0;
+    if (PyValue_IsInlineFloat(ref)) {
+        return PyValue_Double(ref) != 0.0;
     }
-    return PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(ref));
+    return PyObject_IsTrue(PyValue_ObjectBorrow(ref));
 }
 
 /* The handler takes the input that it read through field F: a temporary's
@@ -557,7 +557,7 @@ _PyStackRef_Truth(_PyStackRef ref)
 #define IR_CONSUME_INPUT(F) \
     do { \
         if (!IR_IS_LOCAL(F)) { \
-            IR_SLOT(F) = PyStackRef_NULL; \
+            IR_SLOT(F) = PyValue_NULL; \
         } \
     } while (0)
 
@@ -573,7 +573,7 @@ _PyStackRef_Truth(_PyStackRef ref)
 /* A handler writes a temporary into a slot that holds NULL. */
 #define IR_STORE_TEMP(SLOT, V) \
     do { \
-        assert(PyStackRef_IsNull(SLOT)); \
+        assert(PyValue_IsNull(SLOT)); \
         (SLOT) = (V); \
     } while (0)
 
@@ -582,8 +582,8 @@ _PyStackRef_Truth(_PyStackRef ref)
  * the handler wrote it there before. */
 #define IR_STORE_DST(F, V) \
     do { \
-        assert(IR_IS_LOCAL(F) || PyStackRef_IsNull(IR_SLOT(F)) \
-               || _PyStackRef_BITS(IR_SLOT(F)) == _PyStackRef_BITS(V)); \
+        assert(IR_IS_LOCAL(F) || PyValue_IsNull(IR_SLOT(F)) \
+               || (IR_SLOT(F)).bits == (V).bits); \
         IR_SLOT(F) = (V); \
     } while (0)
 
@@ -592,8 +592,8 @@ _PyStackRef_Truth(_PyStackRef ref)
 #define IR_STORE_TEMP_DST(F, V) \
     do { \
         if (!IR_IS_LOCAL(F)) { \
-            assert(PyStackRef_IsNull(IR_SLOT(F)) \
-                   || _PyStackRef_BITS(IR_SLOT(F)) == _PyStackRef_BITS(V)); \
+            assert(PyValue_IsNull(IR_SLOT(F)) \
+                   || (IR_SLOT(F)).bits == (V).bits); \
             IR_SLOT(F) = (V); \
         } \
     } while (0)
@@ -604,16 +604,16 @@ _PyStackRef_Truth(_PyStackRef ref)
     do { \
         if (IR_IS_LOCAL(F)) { \
             IR_SLOT(F) = (SLOT); \
-            (SLOT) = PyStackRef_NULL; \
+            (SLOT) = PyValue_NULL; \
         } \
     } while (0)
 
 /* Clear N slots from PTR on; N may be zero or less. */
 #define IR_CLEAR_SLOTS(PTR, N) \
     do { \
-        _PyStackRef *ir_p = (PTR); \
+        PyValue *ir_p = (PTR); \
         for (int ir_i = 0; ir_i < (int)(N); ir_i++) { \
-            ir_p[ir_i] = PyStackRef_NULL; \
+            ir_p[ir_i] = PyValue_NULL; \
         } \
     } while (0)
 

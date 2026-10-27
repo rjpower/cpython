@@ -9,7 +9,7 @@
 #include "pycore_interpframe_structs.h" // _PyInterpreterFrame
 #include "pycore_ir.h"            // _PyCodeExec
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_PTR_ACQUIRE()
-#include "pycore_stackref.h"      // PyStackRef_AsPyObjectBorrow()
+#include "pycore_value.h"         // PyValue_ObjectBorrow()
 #include "pycore_stats.h"         // CALL_STAT_INC()
 
 #ifdef __cplusplus
@@ -20,8 +20,8 @@ extern "C" {
     _PyFrame_InstrOffset((IF), (IF)->instr_ptr)
 
 static inline PyCodeObject *_PyFrame_GetCode(_PyInterpreterFrame *f) {
-    assert(!PyStackRef_IsNull(f->f_executable));
-    PyObject *executable = PyStackRef_AsPyObjectBorrow(f->f_executable);
+    assert(!PyValue_IsNull(f->f_executable));
+    PyObject *executable = PyValue_ObjectBorrow(f->f_executable);
     assert(PyCode_Check(executable));
     return (PyCodeObject *)executable;
 }
@@ -83,7 +83,7 @@ _PyFrame_SafeGetCode(_PyInterpreterFrame *f)
         return NULL;
     }
 
-    if (PyStackRef_IsNull(f->f_executable)) {
+    if (PyValue_IsNull(f->f_executable)) {
         return NULL;
     }
     void *ptr;
@@ -91,7 +91,7 @@ _PyFrame_SafeGetCode(_PyInterpreterFrame *f)
     if (_PyMem_IsPtrFreed(ptr)) {
         return NULL;
     }
-    PyObject *executable = PyStackRef_AsPyObjectBorrow(f->f_executable);
+    PyObject *executable = PyValue_ObjectBorrow(f->f_executable);
     if (_PyObject_IsFreed(executable)) {
         return NULL;
     }
@@ -124,12 +124,12 @@ _PyFrame_SafeGetLasti(struct _PyInterpreterFrame *f)
 }
 
 static inline PyFunctionObject *_PyFrame_GetFunction(_PyInterpreterFrame *f) {
-    PyObject *func = PyStackRef_AsPyObjectBorrow(f->f_funcobj);
+    PyObject *func = PyValue_ObjectBorrow(f->f_funcobj);
     assert(PyFunction_Check(func));
     return (PyFunctionObject *)func;
 }
 
-static inline _PyStackRef *_PyFrame_Stackbase(_PyInterpreterFrame *f) {
+static inline PyValue *_PyFrame_Stackbase(_PyInterpreterFrame *f) {
     return (f->base + _PyFrame_GetCode(f)->co_nlocalsplus);
 }
 
@@ -145,7 +145,7 @@ _PyFrame_NumSlotsForCodeObject(PyCodeObject *code)
 }
 
 /* The slots of f, which the IR's fields index */
-static inline _PyStackRef *
+static inline PyValue *
 _PyFrame_Slots(_PyInterpreterFrame *f)
 {
     return f->base;
@@ -162,13 +162,13 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
  * slot that f named.  A temporary's slot holds NULL; a local's old value,
  * where a call stores its result in a local, is overwritten. */
 static inline void
-_PyFrame_SetReturnValue(_PyInterpreterFrame *f, _PyStackRef v)
+_PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
 {
 #ifdef Py_DEBUG
     if (f->owner != FRAME_OWNED_BY_INTERPRETER) {
         assert(f->return_slot < _PyFrame_NumSlots(f));
         assert(f->return_slot < _PyFrame_GetCode(f)->co_nlocalsplus
-               || PyStackRef_IsNull(f->base[f->return_slot]));
+               || PyValue_IsNull(f->base[f->return_slot]));
     }
 #endif
     f->base[f->return_slot] = v;
@@ -180,7 +180,7 @@ _PyFrame_ClearTemporaries(_PyInterpreterFrame *f, int first)
 {
     int nslots = _PyFrame_NumSlots(f);
     for (int i = first; i < nslots; i++) {
-        f->base[i] = PyStackRef_NULL;
+        f->base[i] = PyValue_NULL;
     }
 }
 
@@ -191,7 +191,7 @@ _PyFrame_AssertTemporariesClear(_PyInterpreterFrame *f)
 #ifdef Py_DEBUG
     int nslots = _PyFrame_NumSlots(f);
     for (int i = _PyFrame_GetCode(f)->co_nlocalsplus; i < nslots; i++) {
-        assert(PyStackRef_IsNull(f->base[i]));
+        assert(PyValue_IsNull(f->base[i]));
     }
 #else
     (void)f;
@@ -223,7 +223,7 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
     // A move: the slots that src leaves behind may be the caller's
     for (int i = 0; i < nslots; i++) {
         dest->base[i] = src->base[i];
-        src->base[i] = PyStackRef_NULL;
+        src->base[i] = PyValue_NULL;
     }
 }
 
@@ -234,15 +234,15 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
  */
 static inline void
 _PyFrame_Initialize(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyStackRef func,
-    PyObject *locals, PyCodeObject *code, _PyStackRef *base,
+    PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue func,
+    PyObject *locals, PyCodeObject *code, PyValue *base,
     int null_locals_from, _PyInterpreterFrame *previous)
 {
     frame->previous = previous;
     frame->base = base;
     frame->f_funcobj = func;
-    frame->f_executable = PyStackRef_FromPyObject(code);
-    PyFunctionObject *func_obj = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(func);
+    frame->f_executable = PyValue_FromObject(code);
+    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_ObjectBorrow(func);
     frame->f_builtins = func_obj->func_builtins;
     frame->f_globals = func_obj->func_globals;
     frame->f_locals = locals;
@@ -258,14 +258,14 @@ _PyFrame_Initialize(
 
     int nslots = _PyFrame_NumSlotsForCodeObject(code);
     for (int i = null_locals_from; i < nslots; i++) {
-        frame->base[i] = PyStackRef_NULL;
+        frame->base[i] = PyValue_NULL;
     }
 }
 
 /* Gets the pointer to the locals array
  * that precedes this frame.
  */
-static inline _PyStackRef*
+static inline PyValue*
 _PyFrame_GetLocalsArray(_PyInterpreterFrame *frame)
 {
     return frame->base;
@@ -350,9 +350,9 @@ PyAPI_FUNC(void)
 _PyFrame_ClearLocals(_PyInterpreterFrame *frame);
 
 #ifdef Py_DEBUG
-// Abort if a live slot of the frame holds a malformed stackref.
+// Abort if a live slot of the frame holds a malformed value.
 // Exported for lltrace in _testinternalcapi, which includes ceval.h.
-PyAPI_FUNC(void) _PyStackRef_CheckFrame(_PyInterpreterFrame *frame);
+PyAPI_FUNC(void) _PyFrame_CheckValues(_PyInterpreterFrame *frame);
 #endif
 
 /* Clears all references in the frame.
@@ -398,7 +398,7 @@ _PyThreadState_PushFrameUnchecked(PyThreadState *tstate, int nslots)
 {
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(tstate->datastack_limit - FRAME_SPECIALS_SIZE);
-    frame->base = (_PyStackRef *)tstate->datastack_top;
+    frame->base = (PyValue *)tstate->datastack_top;
     frame->saved_top = frame->base;
     tstate->datastack_limit = (PyObject **)frame;
     tstate->datastack_top += nslots;
@@ -425,7 +425,7 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
     assert((PyObject **)frame == tstate->datastack_limit);
     // Only the frame that a chunk was allocated for has its first slot.  The
     // root chunk stays, for the next frame.
-    if (frame->base == (_PyStackRef *)&chunk->data[0] && chunk->previous != NULL) {
+    if (frame->base == (PyValue *)&chunk->data[0] && chunk->previous != NULL) {
         _PyThreadState_PopChunk(tstate, frame);
         return;
     }
@@ -438,10 +438,10 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
  * Must be guarded by _PyThreadState_HasStackSpace()
  * Consumes reference to func. */
 static inline _PyInterpreterFrame *
-_PyFrame_PushUnchecked(PyThreadState *tstate, _PyStackRef func, int null_locals_from, _PyInterpreterFrame * previous)
+_PyFrame_PushUnchecked(PyThreadState *tstate, PyValue func, int null_locals_from, _PyInterpreterFrame * previous)
 {
     CALL_STAT_INC(frames_pushed);
-    PyFunctionObject *func_obj = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(func);
+    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_ObjectBorrow(func);
     PyCodeObject *code = (PyCodeObject *)func_obj->func_code;
     _PyInterpreterFrame *new_frame = _PyThreadState_PushFrameUnchecked(
         tstate, _PyFrame_NumSlotsForCodeObject(code));
@@ -457,21 +457,21 @@ _PyFrame_PushUnchecked(PyThreadState *tstate, _PyStackRef func, int null_locals_
  * leaves NULL.  Must be guarded by _PyThreadState_HasStackSpace(), for
  * co_framesize.  Consumes the reference to func. */
 static inline _PyInterpreterFrame *
-_PyFrame_PushOverlapping(PyThreadState *tstate, _PyStackRef func,
-                         _PyStackRef *base, int nargs,
+_PyFrame_PushOverlapping(PyThreadState *tstate, PyValue func,
+                         PyValue *base, int nargs,
                          _PyInterpreterFrame *previous)
 {
     CALL_STAT_INC(frames_pushed);
-    PyFunctionObject *func_obj = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(func);
+    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_ObjectBorrow(func);
     PyCodeObject *code = (PyCodeObject *)func_obj->func_code;
     assert(previous->owner == FRAME_OWNED_BY_THREAD);
     assert(base > previous->base &&
-           base <= (_PyStackRef *)tstate->datastack_top);
+           base <= (PyValue *)tstate->datastack_top);
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(tstate->datastack_limit - FRAME_SPECIALS_SIZE);
-    frame->saved_top = (_PyStackRef *)tstate->datastack_top;
+    frame->saved_top = (PyValue *)tstate->datastack_top;
     tstate->datastack_limit = (PyObject **)frame;
-    _PyStackRef *end = base + _PyFrame_NumSlotsForCodeObject(code);
+    PyValue *end = base + _PyFrame_NumSlotsForCodeObject(code);
     if (end > frame->saved_top) {
         tstate->datastack_top = (PyObject **)end;
     }
@@ -489,8 +489,8 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     int nslots = _PyFrame_NumSlotsForCodeObject(code);
     _PyInterpreterFrame *frame = _PyThreadState_PushFrameUnchecked(tstate, nslots);
     frame->previous = previous;
-    frame->f_funcobj = PyStackRef_None;
-    frame->f_executable = PyStackRef_FromPyObject(code);
+    frame->f_funcobj = _PyValue_None;
+    frame->f_executable = PyValue_FromObject(code);
 #ifdef Py_DEBUG
     frame->f_builtins = NULL;
     frame->f_globals = NULL;
@@ -506,19 +506,19 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     assert(return_slot < nslots);
     frame->return_slot = (uint16_t)return_slot;
     for (int i = 0; i < nslots; i++) {
-        frame->base[i] = PyStackRef_NULL;
+        frame->base[i] = PyValue_NULL;
     }
     return frame;
 }
 
 PyAPI_FUNC(_PyInterpreterFrame *)
-_PyEvalFramePushAndInit(PyThreadState *tstate, _PyStackRef func,
-                        PyObject *locals, _PyStackRef const *args,
+_PyEvalFramePushAndInit(PyThreadState *tstate, PyValue func,
+                        PyObject *locals, PyValue const *args,
                         size_t argcount, PyObject *kwnames,
                         _PyInterpreterFrame *previous);
 
 PyAPI_FUNC(_PyInterpreterFrame *)
-_PyEvalFramePushAndInit_Ex(PyThreadState *tstate, _PyStackRef func,
+_PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
     PyObject *locals, Py_ssize_t nargs, PyObject *callargs, PyObject *kwargs, _PyInterpreterFrame *previous);
 
 #ifdef __cplusplus

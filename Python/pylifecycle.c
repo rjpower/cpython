@@ -27,7 +27,7 @@
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_runtime_init.h"  // _PyRuntimeState_INIT
 #include "pycore_setobject.h"     // _PySet_NextEntry()
-#include "pycore_stackref.h"      // PyStackRef_FromPyObject()
+#include "pycore_value.h"         // PyValue_FromObject()
 #include "pycore_stats.h"         // _PyStats_InterpInit()
 #include "pycore_sysmodule.h"     // _PySys_ClearAttrString()
 #include "pycore_traceback.h"     // PyUnstable_TracebackThreads()
@@ -885,7 +885,7 @@ pycore_init_builtins(PyThreadState *tstate)
     for (int i = 0; i < NUM_COMMON_CONSTANTS; i++) {
         assert(common_objs[i] != NULL);
         _Py_SetImmortal(common_objs[i]);
-        interp->common_consts[i] = PyStackRef_FromPyObject(common_objs[i]);
+        interp->common_consts[i] = PyValue_FromObject(common_objs[i]);
     }
 
     PyObject *list_append = _PyType_Lookup(&PyList_Type, &_Py_ID(append));

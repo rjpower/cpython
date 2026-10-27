@@ -45,13 +45,13 @@ class frame "PyFrameObject *" "&PyFrame_Type"
 static PyObject *
 framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 {
-    _PyStackRef *fast = _PyFrame_GetLocalsArray(frame);
+    PyValue *fast = _PyFrame_GetLocalsArray(frame);
     _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
 
-    if (PyStackRef_IsInline(fast[i])) {
-        return PyStackRef_AsPyObjectBoxed(fast[i]);
+    if (PyValue_IsInline(fast[i])) {
+        return PyValue_Object(fast[i]);
     }
-    PyObject *value = PyStackRef_AsPyObjectBorrow(fast[i]);
+    PyObject *value = PyValue_ObjectBorrow(fast[i]);
     PyObject *cell = NULL;
 
     if (value == NULL) {
@@ -89,7 +89,7 @@ framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 static bool
 framelocalsproxy_hasval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 {
-    if (PyStackRef_IsInline(_PyFrame_GetLocalsArray(frame)[i])) {
+    if (PyValue_IsInline(_PyFrame_GetLocalsArray(frame)[i])) {
         return true;
     }
     PyObject *value = framelocalsproxy_getval(frame, co, i);
@@ -278,7 +278,7 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
 {
     /* Merge locals into fast locals */
     PyFrameObject *frame = PyFrameLocalsProxyObject_CAST(self)->frame;
-    _PyStackRef *fast = _PyFrame_GetLocalsArray(frame->f_frame);
+    PyValue *fast = _PyFrame_GetLocalsArray(frame->f_frame);
     PyCodeObject *co = _PyFrame_GetCode(frame->f_frame);
 
     int i = framelocalsproxy_getkeyindex(frame, key, false, NULL);
@@ -292,15 +292,15 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
         }
 
         _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
-        _PyStackRef oldvalue = fast[i];
+        PyValue oldvalue = fast[i];
         PyObject *cell = NULL;
         if (kind == CO_FAST_FREE) {
             // The cell was set when the frame was created from
             // the function's closure.
-            assert(!PyStackRef_IsNull(oldvalue) && PyCell_Check(PyStackRef_AsPyObjectBorrow(oldvalue)));
-            cell = PyStackRef_AsPyObjectBorrow(oldvalue);
-        } else if (kind & CO_FAST_CELL && PyStackRef_IsObject(oldvalue)) {
-            PyObject *as_obj = PyStackRef_AsPyObjectBorrow(oldvalue);
+            assert(!PyValue_IsNull(oldvalue) && PyCell_Check(PyValue_ObjectBorrow(oldvalue)));
+            cell = PyValue_ObjectBorrow(oldvalue);
+        } else if (kind & CO_FAST_CELL && PyValue_IsObject(oldvalue)) {
+            PyObject *as_obj = PyValue_ObjectBorrow(oldvalue);
             if (PyCell_Check(as_obj)) {
                 cell = as_obj;
             }
@@ -308,11 +308,11 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
         if (cell != NULL) {
             Py_XINCREF(value);
             PyCell_SetTakeRef((PyCellObject *)cell, value);
-        } else if (PyStackRef_IsInline(oldvalue)) {
+        } else if (PyValue_IsInline(oldvalue)) {
             // An inline value holds no reference to keep alive.
-            fast[i] = PyStackRef_FromPyObject(value);
-        } else if (value != PyStackRef_AsPyObjectBorrow(oldvalue)) {
-            PyObject *old_obj = PyStackRef_AsPyObjectBorrow(fast[i]);
+            fast[i] = PyValue_FromObject(value);
+        } else if (value != PyValue_ObjectBorrow(oldvalue)) {
+            PyObject *old_obj = PyValue_ObjectBorrow(fast[i]);
             if (old_obj != NULL && !_Py_IsImmortal(old_obj)) {
                 if (add_overwritten_fast_local(frame, old_obj) < 0) {
                     return -1;
@@ -321,7 +321,7 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
                 // frame dies, so LOAD_FAST_BORROW references to it elsewhere
                 // on the stack stay valid after the slot's own reference goes.
             }
-            fast[i] = PyStackRef_FromPyObject(value);
+            fast[i] = PyValue_FromObject(value);
         }
         return 0;
     }
@@ -1911,7 +1911,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     for (int i = 0; i < code->co_nlocalsplus; i++) {
         // Counting every unbound local is overly-cautious, but a full flow
         // analysis (like we do in the compiler) is probably too expensive:
-        unbound += PyStackRef_IsNull(self->f_frame->base[i]);
+        unbound += PyValue_IsNull(self->f_frame->base[i]);
     }
     if (unbound) {
         const char *e = "assigning None to %d unbound local%s";
@@ -1922,8 +1922,8 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         // Do this in a second pass to avoid writing a bunch of Nones when
         // warnings are being treated as errors and the previous bit raises:
         for (int i = 0; i < code->co_nlocalsplus; i++) {
-            if (PyStackRef_IsNull(self->f_frame->base[i])) {
-                self->f_frame->base[i] = PyStackRef_None;
+            if (PyValue_IsNull(self->f_frame->base[i])) {
+                self->f_frame->base[i] = _PyValue_None;
                 unbound--;
             }
         }
@@ -1934,15 +1934,15 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         start_stack = pop_value(start_stack);
     }
     /* The temporary at depth d is in slot co_nlocalsplus + d */
-    _PyStackRef *stack_base = _PyFrame_Stackbase(self->f_frame);
+    PyValue *stack_base = _PyFrame_Stackbase(self->f_frame);
     int depth = stack_depth(start_stack);
     while (start_stack > best_stack) {
         depth--;
-        _PyStackRef popped = stack_base[depth];
-        stack_base[depth] = PyStackRef_NULL;
+        PyValue popped = stack_base[depth];
+        stack_base[depth] = PyValue_NULL;
         if (top_of_stack(start_stack) == Except) {
             /* Pop exception stack as well as the evaluation stack */
-            PyObject *exc = PyStackRef_AsPyObjectBorrow(popped);
+            PyObject *exc = PyValue_ObjectBorrow(popped);
             assert(PyExceptionInstance_Check(exc) || exc == Py_None);
             PyThreadState *tstate = _PyThreadState_GET();
             Py_XSETREF(tstate->exc_info->exc_value, exc == Py_None ? NULL : exc);
@@ -2058,14 +2058,14 @@ frame_dealloc(PyObject *op)
     /* Kill all local variables including specials, if we own them */
     if (f->f_frame == frame && frame->owner == FRAME_OWNED_BY_FRAME_OBJECT) {
         int nslots = _PyFrame_NumSlots(frame);
-        PyStackRef_CLEAR(frame->f_executable);
-        PyStackRef_CLEAR(frame->f_funcobj);
+        frame->f_executable = PyValue_NULL;
+        frame->f_funcobj = PyValue_NULL;
         Py_CLEAR(frame->f_locals);
-        _PyStackRef *locals = _PyFrame_GetLocalsArray(frame);
-        _PyStackRef *sp = locals + nslots;
+        PyValue *locals = _PyFrame_GetLocalsArray(frame);
+        PyValue *sp = locals + nslots;
         while (sp > locals) {
             sp--;
-            PyStackRef_CLEAR(*sp);
+            *sp = PyValue_NULL;
         }
     }
     Py_CLEAR(f->f_back);
@@ -2102,11 +2102,11 @@ frame_tp_clear(PyObject *op)
     Py_CLEAR(f->f_overwritten_fast_locals);
 
     /* all slots */
-    _PyStackRef *locals = _PyFrame_GetLocalsArray(f->f_frame);
-    _PyStackRef *sp = locals + _PyFrame_NumSlots(f->f_frame);
+    PyValue *locals = _PyFrame_GetLocalsArray(f->f_frame);
+    PyValue *sp = locals + _PyFrame_NumSlots(f->f_frame);
     while (sp > locals) {
         sp--;
-        PyStackRef_CLEAR(*sp);
+        *sp = PyValue_NULL;
     }
     Py_CLEAR(f->f_frame->f_locals);
     return 0;
@@ -2222,7 +2222,7 @@ init_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
            PyFunctionObject *func, PyObject *locals)
 {
     PyCodeObject *code = (PyCodeObject *)func->func_code;
-    _PyFrame_Initialize(tstate, frame, PyStackRef_FromPyObject(func),
+    _PyFrame_Initialize(tstate, frame, PyValue_FromObject(func),
                         Py_XNewRef(locals), code, frame->owned_slots, 0, NULL);
 }
 
@@ -2301,7 +2301,7 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
     int lasti = _PyInterpreterFrame_LASTI(frame);
     if (!(lasti < 0
           && _PyCode_InstrHandler(co, 0) == COPY_FREE_VARS
-          && PyStackRef_FunctionCheck(frame->f_funcobj)))
+          && (PyValue_Type(frame->f_funcobj) == &PyFunction_Type)))
     {
         /* Free vars are initialized */
         return;
@@ -2313,7 +2313,7 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
     int offset = PyUnstable_Code_GetFirstFree(co);
     for (int i = 0; i < co->co_nfreevars; ++i) {
         PyObject *o = PyTuple_GET_ITEM(closure, i);
-        frame->base[offset + i] = PyStackRef_FromPyObject(o);
+        frame->base[offset + i] = PyValue_FromObject(o);
     }
     // COPY_FREE_VARS doesn't have inline CACHEs, either:
     frame->instr_ptr = _PyFrame_InstrAt(frame, 0);
@@ -2342,15 +2342,15 @@ frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
 
     PyObject *value = NULL;
     {
-        if (PyStackRef_IsInline(frame->base[i])) {
-            value = PyStackRef_AsPyObjectBoxed(frame->base[i]);
+        if (PyValue_IsInline(frame->base[i])) {
+            value = PyValue_Object(frame->base[i]);
             if (value == NULL) {
                 return -1;
             }
             *pvalue = value;
             return 1;
         }
-        value = PyStackRef_AsPyObjectBorrow(frame->base[i]);
+        value = PyValue_ObjectBorrow(frame->base[i]);
         if (kind & CO_FAST_FREE) {
             // The cell was set by COPY_FREE_VARS.
             assert(value != NULL && PyCell_Check(value));

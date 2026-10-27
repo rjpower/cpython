@@ -1,0 +1,335 @@
+#ifndef Py_INTERNAL_VALUE_H
+#define Py_INTERNAL_VALUE_H
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifndef Py_BUILD_CORE
+#  error "this header requires Py_BUILD_CORE define"
+#endif
+
+#include "pycore_long.h"          // _PyLong_CheckExactAndCompact()
+#include "pycore_object.h"
+#include "pycore_stats.h"         // OBJECT_STAT_INC()
+#include "pycore_tstate.h"        // _PyThreadStateImpl
+
+#include <stdbool.h>              // bool
+
+
+/*
+  The core's view of PyValue (Include/pyvalue.h): the values that never
+  reach Python code, and the helpers of specialized instructions.
+
+  An index (_PyValue_TagIndex()) is the position of a virtual iterator in the
+  FOR_ITER family (null_or_index) or the saved lasti during exception
+  unwinding.  It never reaches Python code and must not be converted to a
+  PyObject *.  _PyValue_ERROR is a handler's failed result.  A wrapped
+  pointer (_PyValue_Wrap()) passes a C pointer from one uop to another.
+
+  An inline value must be boxed with PyValue_Box() before it is converted to
+  a PyObject *.  The cases generator does this for instruction inputs; see
+  "Inline values" in Tools/cases_generator/interpreter_definition.md.
+*/
+
+#if SIZEOF_VOID_P != 8
+#  error "PyValue needs 64-bit words"
+#endif
+
+static inline bool _PyValue_IsPointerSpace(PyValue v) { return v.bits < _PyValue_PTR_LIMIT; }
+static inline bool _PyValue_IsTaggedIndex(PyValue v) { return v.bits - _PyValue_INDEX_BASE < _PyValue_DOUBLE_OFFSET - _PyValue_INDEX_BASE; }
+// Relies on 0xFFFF being unused: only two inline ints have all of these bits set.
+static inline bool _PyValue_BothInlineInt(PyValue a, PyValue b) { return (a.bits & b.bits) >= _PyValue_INT_BASE; }
+
+/* The top 16 bits of *v, which select the region. Reading them from memory
+   rather than shifting a loaded value lets the compiler fold the load into a
+   compare with an immediate ("cmpw $0, 6(v)" on x86-64), so testing a slot
+   costs a compare and a branch. */
+static inline uint16_t
+_PyValue_TopBitsAt(const PyValue *v)
+{
+#if PY_LITTLE_ENDIAN
+    uint16_t top;
+    memcpy(&top, (const char *)v + 6, sizeof(top));
+    return top;
+#else
+    return (uint16_t)(v->bits >> 48);
+#endif
+}
+
+static inline bool _PyValue_IsPointerSpaceAt(const PyValue *v) { return _PyValue_TopBitsAt(v) == 0; }
+static inline bool _PyValue_IsInlineAt(const PyValue *v) { return _PyValue_TopBitsAt(v) >= (_PyValue_DOUBLE_OFFSET >> 48); }
+
+// i is in -1 .. 2**47 - 1.
+static inline PyValue
+_PyValue_TagIndex(intptr_t i)
+{
+    assert(i >= -1 && i < ((intptr_t)1 << 47));
+    return (PyValue){ _PyValue_INDEX_BASE | ((uintptr_t)i & (_PyValue_PTR_LIMIT - 1)) };
+}
+
+static inline intptr_t
+_PyValue_UntagIndex(PyValue v)
+{
+    assert(_PyValue_IsTaggedIndex(v));
+    return Py_ARITHMETIC_RIGHT_SHIFT(intptr_t, (intptr_t)(v.bits << 16), 16);
+}
+
+/* Increments a tagged index, but does not check for overflow */
+static inline PyValue
+_PyValue_IncrementTaggedIndexNoOverflow(PyValue v)
+{
+    assert(_PyValue_UntagIndex(v) >= 0);
+    assert(_PyValue_UntagIndex(v) < ((intptr_t)1 << 47) - 1);
+    v.bits++;
+    return v;
+}
+
+// The identity of op: its value encoding or its address (see "Identity" in
+// Include/pyvalue.h).
+PyAPI_FUNC(uintptr_t) _PyObject_ValueIdentity(PyObject *op);
+
+static const PyValue _PyValue_ERROR = { .bits = _PyValue_ERROR_BITS };
+
+/* Wrap a pointer in a value.
+ * The result is not safe and should only be used in the interpreter to pass
+ * values from one uop to another.  The GC should never see one. */
+static inline PyValue
+_PyValue_Wrap(void *ptr)
+{
+    assert(ptr != NULL);
+#ifdef Py_DEBUG
+    assert(((uintptr_t)ptr & _PyValue_TAG_BITS) == 0);
+    return (PyValue){ .bits = ((uintptr_t)ptr) | _PyValue_ERROR_BITS };
+#else
+    return (PyValue){ .bits = (uintptr_t)ptr };
+#endif
+}
+
+static inline void *
+_PyValue_Unwrap(PyValue v)
+{
+#ifdef Py_DEBUG
+    assert((v.bits & _PyValue_TAG_BITS) == _PyValue_ERROR_BITS);
+    return (void *)(v.bits & ~(uintptr_t)_PyValue_TAG_BITS);
+#else
+    return (void *)(v.bits);
+#endif
+}
+
+static inline bool
+_PyValue_IsError(PyValue v)
+{
+    return v.bits == _PyValue_ERROR_BITS;
+}
+
+static inline bool
+_PyValue_IsValid(PyValue v)
+{
+    /* Invalid values are ERROR and NULL */
+    return v.bits > _PyValue_ERROR_BITS;
+}
+
+#define _PyValue_True ((PyValue){.bits = (uintptr_t)&_Py_TrueStruct })
+#define _PyValue_False ((PyValue){.bits = (uintptr_t)&_Py_FalseStruct })
+#define _PyValue_None ((PyValue){.bits = (uintptr_t)&_Py_NoneStruct })
+
+#define _PyValue_IsTrue(V) ((V).bits == (uintptr_t)&_Py_TrueStruct)
+#define _PyValue_IsFalse(V) ((V).bits == (uintptr_t)&_Py_FalseStruct)
+#define _PyValue_IsNone(V) ((V).bits == (uintptr_t)&_Py_NoneStruct)
+
+static inline bool
+_PyValue_IsMalformed(PyValue v)
+{
+    return _PyValue_IsPointerSpace(v) && (v.bits & _PyValue_TAG_BITS) == _PyValue_ERROR_BITS;
+}
+
+/* Ints in specialized instructions. The int guards accept an inline int or
+   a reference to an exact int with at most one digit; either way the value
+   fits in int32. These accessors read both forms without converting the
+   value to a PyObject *, so the cases generator does not box their
+   argument (see "Inline values" in
+   Tools/cases_generator/interpreter_definition.md). */
+static inline bool
+_PyValue_IsCompactInt(PyValue v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        return true;
+    }
+    return _PyValue_IsPointerSpace(v)
+           && _PyLong_CheckExactAndCompact(PyValue_ObjectBorrow(v));
+}
+
+static inline int32_t
+_PyValue_CompactInt(PyValue v)
+{
+    assert(_PyValue_IsCompactInt(v));
+    if (PyValue_IsInlineInt(v)) {
+        return PyValue_Int32(v);
+    }
+    return (int32_t)_PyLong_CompactValue((PyLongObject *)PyValue_ObjectBorrow(v));
+}
+
+// A new int for a result outside int32 (the slow path of int arithmetic),
+// or PyValue_NULL with an exception set.
+PyAPI_FUNC(PyValue) _PyValue_BoxInt64(int64_t value);
+
+// value << shift for a shift of 32 or more places, which makes a long int,
+// or PyValue_NULL with an exception set.
+PyAPI_FUNC(PyValue) _PyValue_LshiftInt32(int32_t value, int32_t shift);
+
+/* Is v an exact float, inline or boxed?  The same as
+   PyValue_Type(v) == &PyFloat_Type, in the order that the float paths of
+   specialized instructions test it: inline first. */
+static inline bool
+_PyValue_FloatCheckExact(PyValue v)
+{
+    return PyValue_IsInlineFloat(v) ||
+           (_PyValue_IsPointerSpace(v) && PyFloat_CheckExact(PyValue_ObjectBorrow(v)));
+}
+
+// A float or a compact int, inline or boxed, as a double.
+static inline double
+_PyValue_NumberAsDouble(PyValue v)
+{
+    if (PyValue_IsInlineFloat(v)) {
+        return PyValue_Double(v);
+    }
+    if (PyValue_IsInlineInt(v)) {
+        return (double)PyValue_Int32(v);
+    }
+    PyObject *op = PyValue_ObjectBorrow(v);
+    if (PyFloat_CheckExact(op)) {
+        return PyFloat_AS_DOUBLE(op);
+    }
+    assert(_PyLong_CheckExactAndCompact(op));
+    return (double)_PyLong_CompactValue((PyLongObject *)op);
+}
+
+/* Are a and b operands of specialized float arithmetic: two floats, or a
+   float and a compact int, which converts to double exactly (see
+   _PyValue_IsCompactInt())? A NaN next to an int is refused, as the
+   int-float forms of BINARY_OP_EXTEND that this replaces refused it; an
+   inline float is never NaN, so that costs a test only for a box. */
+static inline bool
+_PyValue_FloatOperandsCheck(PyValue a, PyValue b)
+{
+    if (PyValue_IsInlineFloat(a) && PyValue_IsInlineFloat(b)) {
+        return true;
+    }
+    if (_PyValue_FloatCheckExact(a)) {
+        return _PyValue_FloatCheckExact(b) ||
+               (_PyValue_IsCompactInt(b) && !isnan(_PyValue_NumberAsDouble(a)));
+    }
+    return _PyValue_IsCompactInt(a) && _PyValue_FloatCheckExact(b) &&
+           !isnan(_PyValue_NumberAsDouble(b));
+}
+
+/* If _PyValue_FloatOperandsCheck(a, b), store a and b as doubles in *da
+   and *db and return true. Two inline floats are tested first, which lets
+   the compiler give them a path of their own. */
+static inline bool
+_PyValue_FloatOperandValues(PyValue a, PyValue b, double *da, double *db)
+{
+    if (PyValue_IsInlineFloat(a) && PyValue_IsInlineFloat(b)) {
+        *da = PyValue_Double(a);
+        *db = PyValue_Double(b);
+        return true;
+    }
+    if (!_PyValue_FloatOperandsCheck(a, b)) {
+        return false;
+    }
+    *da = _PyValue_NumberAsDouble(a);
+    *db = _PyValue_NumberAsDouble(b);
+    return true;
+}
+
+/* For each inline value src[i], store a new box in dst[i]; leave the other
+   elements of dst alone. Return 0, or -1 with an exception set. For the
+   constructors of tuples and lists from values. */
+static inline int
+_PyValue_BoxInto(const PyValue *src, PyObject **dst, Py_ssize_t n)
+{
+    for (Py_ssize_t i = 0; i < n; i++) {
+        if (PyValue_IsInline(src[i])) {
+            dst[i] = PyValue_Object(src[i]);
+            if (dst[i] == NULL) {
+                return -1;
+            }
+            VALUE_BOX_STAT_INC(_PY_BOX_CONTAINER_STORE);
+        }
+    }
+    return 0;
+}
+
+/* Box each inline value of values[0..n) in place, for C code that converts
+   the array to objects; kind (_PY_BOX_CALL and so on) says what for, for
+   the statistics. Return 0, or -1 with an exception set if boxing fails;
+   boxes made so far stay in the array. */
+static inline int
+_PyValue_BoxArray(PyValue *values, Py_ssize_t n, int kind)
+{
+    (void)kind;
+    for (Py_ssize_t i = 0; i < n; i++) {
+        if (_PyValue_IsInlineAt(&values[i])) {
+            values[i] = PyValue_Box(values[i]);
+            if (PyValue_IsInline(values[i])) {
+                return -1;
+            }
+            OBJECT_STAT_INC(inline_array_boxes);
+            VALUE_BOX_STAT_INC(kind);
+        }
+    }
+    return 0;
+}
+
+/* A C local's value root (_PyValueRoot): pushed, it is visited by the
+   collector until it is popped. */
+static inline void
+_PyThreadState_PushValueRoot(PyThreadState *tstate, _PyValueRoot *root)
+{
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    root->value = PyValue_NULL;
+    root->next = ts->gc_trace.value_roots;
+    ts->gc_trace.value_roots = root;
+}
+
+/* The collector scans most C frames conservatively, so a popped value left
+   in its root would keep the object alive until the stack memory is reused.
+   The barrier keeps the store, which is dead to the compiler.  Returns the
+   value the root held. */
+static inline PyValue
+_PyThreadState_PopValueRoot(PyThreadState *tstate, _PyValueRoot *root)
+{
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    assert(ts->gc_trace.value_roots == root);
+    PyValue res = root->value;
+    ts->gc_trace.value_roots = root->next;
+    root->value = PyValue_NULL;
+    __asm__ volatile("" : : "r"(root) : "memory");
+    return res;
+}
+
+
+// Like Py_VISIT but for PyValue fields
+#define _Py_VISIT_VALUE(v)                                              \
+    do {                                                                \
+        if (PyValue_IsObject(v)) {                                      \
+            int vret = _PyGC_VisitValue(&(v), visit, arg);              \
+            if (vret)                                                   \
+                return vret;                                            \
+        }                                                               \
+    } while (0)
+
+/* Leave the values NULL, so that the slots keep nothing alive */
+static inline void
+_PyValue_ClearArray(PyValue *values, int n)
+{
+    for (int i = 0; i < n; i++) {
+        values[i] = PyValue_NULL;
+    }
+}
+
+#ifdef __cplusplus
+}
+#endif
+#endif /* !Py_INTERNAL_VALUE_H */

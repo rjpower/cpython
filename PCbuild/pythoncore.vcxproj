@@ -207,6 +207,7 @@
     <ClInclude Include="..\Include\fileobject.h" />
     <ClInclude Include="..\Include\fileutils.h" />
     <ClInclude Include="..\Include\floatobject.h" />
+    <ClInclude Include="..\Include\pyvalue.h" />
     <ClInclude Include="..\Include\frameobject.h" />
     <ClInclude Include="..\Include\import.h" />
     <ClInclude Include="..\Include\internal\pycore_abstract.h" />
@@ -311,7 +312,7 @@
     <ClInclude Include="..\Include\internal\pycore_sliceobject.h" />
     <ClInclude Include="..\Include\internal\pycore_slots.h" />
     <ClInclude Include="..\Include\internal\pycore_slots_generated.h" />
-    <ClInclude Include="..\Include\internal\pycore_stackref.h" />
+    <ClInclude Include="..\Include\internal\pycore_value.h" />
     <ClInclude Include="..\Include\internal\pycore_stats.h" />
     <ClInclude Include="..\Include\internal\pycore_strhex.h" />
     <ClInclude Include="..\Include\internal\pycore_structs.h" />

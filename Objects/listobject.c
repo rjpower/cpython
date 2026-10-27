@@ -12,7 +12,7 @@
 #include "pycore_object.h"        // _PyObject_GC_TRACK(), _PyDebugAllocatorStats()
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_setobject.h"     // _PySet_NextEntry()
-#include "pycore_stackref.h"      // _Py_TryIncrefCompareStackRef()
+#include "pycore_value.h"
 #include "pycore_tuple.h"         // _PyTuple_FromArraySteal()
 #include "pycore_typeobject.h"    // _Py_TYPE_VERSION_LIST
 #include <stddef.h>
@@ -3094,7 +3094,7 @@ _PyList_AsTupleAndClear(PyListObject *self)
 }
 
 PyObject *
-_PyList_FromStackRefStealOnSuccess(const _PyStackRef *src, Py_ssize_t n)
+_PyList_FromValues(const PyValue *src, Py_ssize_t n)
 {
     if (n == 0) {
         return PyList_New(0);
@@ -3106,14 +3106,14 @@ _PyList_FromStackRefStealOnSuccess(const _PyStackRef *src, Py_ssize_t n)
     }
 
     PyObject **dst = list->ob_item;
-    if (_PyStackRef_BoxInto(src, dst, n) < 0) {
+    if (_PyValue_BoxInto(src, dst, n) < 0) {
         memset(dst, 0, n * sizeof(PyObject *));
         Py_DECREF(list);
         return NULL;
     }
     for (Py_ssize_t i = 0; i < n; i++) {
-        if (!PyStackRef_IsInline(src[i])) {
-            dst[i] = PyStackRef_AsPyObjectBorrow(src[i]);
+        if (!PyValue_IsInline(src[i])) {
+            dst[i] = PyValue_ObjectBorrow(src[i]);
         }
     }
 

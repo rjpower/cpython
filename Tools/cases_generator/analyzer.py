@@ -544,8 +544,7 @@ NON_ESCAPING_FUNCTIONS = (
     "PyLong_FromLong",
     "PyLong_FromSsize_t",
     "PySlice_New",
-    "PyStackRef_AsPyObjectBorrow",
-    "PyStackRef_CLEAR",
+    "PyValue_ObjectBorrow",
     # Nothing is reference counted: a decref or a clear releases nothing
     # and runs no code.
     "Py_DECREF",
@@ -558,19 +557,18 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyFrame_Copy",
     "_PyThreadState_PopFrame",
     "_PyThreadState_UpdateLastProfiledFrame",
-    "_PyThreadState_PushCStackRef",
-    "_PyThreadState_PopCStackRef",
-    "PyStackRef_FromPyObject",
-    "PyStackRef_False",
-    "PyStackRef_IsExactly",
-    "PyStackRef_IsNone",
-    "PyStackRef_Is",
-    "PyStackRef_IsTrue",
-    "PyStackRef_IsFalse",
-    "PyStackRef_IsNull",
-    "PyStackRef_None",
-    "PyStackRef_TYPE",
-    "PyStackRef_True",
+    "_PyThreadState_PushValueRoot",
+    "_PyThreadState_PopValueRoot",
+    "PyValue_FromObject",
+    "_PyValue_False",
+    "_PyValue_IsNone",
+    "PyValue_Is",
+    "_PyValue_IsTrue",
+    "_PyValue_IsFalse",
+    "PyValue_IsNull",
+    "_PyValue_None",
+    "PyValue_Type",
+    "_PyValue_True",
     "PyBytes_GET_SIZE",
     "PyDict_GET_SIZE",
     "PySet_GET_SIZE",
@@ -633,7 +631,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyObject_Shape",
     "_PyObject_ManagedDictPointer",
     "_PyThreadState_HasStackSpace",
-    "_PyTuple_FromStackRefStealOnSuccess",
+    "_PyTuple_FromValues",
     "_PyTuple_ITEMS",
     "_PyType_HasFeature",
     "_PyType_NewManagedObject",
@@ -649,7 +647,6 @@ NON_ESCAPING_FUNCTIONS = (
     "_Py_SINGLETON",
     "_Py_STR",
     "_Py_TryIncrefCompare",
-    "_Py_TryIncrefCompareStackRef",
     "_Py_atomic_compare_exchange_uint8",
     "_Py_atomic_load_ptr_acquire",
     "_Py_atomic_load_uintptr_relaxed",
@@ -660,46 +657,45 @@ NON_ESCAPING_FUNCTIONS = (
     "JUMP_TO_LABEL",
     "restart_backoff_counter",
     "_Py_ReachedRecursionLimit",
-    "PyStackRef_IsTaggedIndex",
-    "PyStackRef_TagIndex",
-    "PyStackRef_UntagIndex",
-    "PyStackRef_IncrementTaggedIndexNoOverflow",
-    "PyStackRef_IsObject",
-    "PyStackRef_IsPointerSpace",
-    "PyStackRef_IsPointerSpaceAt",
-    "PyStackRef_IsInlineAt",
-    "PyStackRef_IsInline",
-    "PyStackRef_IsInlineInt",
-    "PyStackRef_IsInlineFloat",
-    "PyStackRef_BothInlineInt",
-    "PyStackRef_FromInt32",
-    "PyStackRef_InlineInt",
-    "PyStackRef_IsCompactInt",
-    "PyStackRef_CompactIntValue",
-    "PyStackRef_LongCheckExact",
-    "_PyStackRef_BoxInt64",
-    "_PyStackRef_BoxArray",
-    "PyStackRef_FromDoubleNotNaN",
-    "PyStackRef_InlineFloat",
-    "PyStackRef_FloatCheckExact",
-    "PyStackRef_FloatValue",
-    "PyStackRef_FloatOperandsCheck",
-    "PyStackRef_NumberAsDouble",
-    "PyStackRef_FloatOperandValues",
-    # Allocate an int or float; see PyStackRef_Box below.
-    "PyStackRef_FromDouble",
-    "_PyStackRef_LshiftInt32",
+    "_PyValue_IsTaggedIndex",
+    "_PyValue_TagIndex",
+    "_PyValue_UntagIndex",
+    "_PyValue_IncrementTaggedIndexNoOverflow",
+    "PyValue_IsObject",
+    "_PyValue_IsPointerSpace",
+    "_PyValue_IsPointerSpaceAt",
+    "_PyValue_IsInlineAt",
+    "PyValue_IsInline",
+    "PyValue_IsInlineInt",
+    "PyValue_IsInlineFloat",
+    "_PyValue_BothInlineInt",
+    "PyValue_FromInt32",
+    "_PyValue_FromBits",
+    "_PyValue_DoubleBits",
+    "PyValue_Int32",
+    "_PyValue_IsCompactInt",
+    "_PyValue_CompactInt",
+    "_PyValue_BoxInt64",
+    "_PyValue_BoxArray",
+    "PyValue_Double",
+    "_PyValue_FloatCheckExact",
+    "_PyValue_FloatOperandsCheck",
+    "_PyValue_NumberAsDouble",
+    "_PyValue_FloatOperandValues",
+    # Allocate an int or float; see PyValue_Box below.
+    "PyValue_FromDouble",
+    "_PyValue_LshiftInt32",
     # Boxing allocates an int or float, which runs no Python code and
     # cannot start a collection.
-    "PyStackRef_Box",
-    "PyStackRef_IsError",
-    "PyStackRef_IsValid",
-    "PyStackRef_Wrap",
-    "PyStackRef_Unwrap",
+    "PyValue_Box",
+    "PyValue_Object",
+    "_PyValue_IsError",
+    "_PyValue_IsValid",
+    "_PyValue_Wrap",
+    "_PyValue_Unwrap",
     "_PyLong_CheckExactAndCompact",
     "_Py_unset_eval_breaker_bit",
     "_Py_set_eval_breaker_bit",
-    "_PyThreadState_PopCStackRefSteal",
     "doesnt_escape",
     "_Py_GatherStats_GetIter",
     "_PyStolenTuple_Free",
@@ -918,7 +914,7 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         or variable_used(op, "PyCell_GetRef")
         or variable_used(op, "PyCell_SetTakeRef")
         or variable_used(op, "PyCell_SwapTakeRef")
-        or variable_used(op, "_PyCell_GetStackRef")
+        or variable_used(op, "_PyCell_GetValue")
     )
     deopts_if = variable_used(op, "DEOPT_IF")
     exits_if = variable_used(op, "EXIT_IF")
@@ -969,8 +965,8 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         returns=returns,
     )
 
-STACKREF_TO_OBJECT = (
-    "PyStackRef_AsPyObjectBorrow",
+VALUE_TO_OBJECT = (
+    "PyValue_ObjectBorrow",
 )
 
 
@@ -985,7 +981,7 @@ def find_object_inputs(
     builds. Arrays are left to the C helpers that convert their elements.
 
     An input that op asserts to be an object, with
-    `assert(PyStackRef_IsObject(name))`, can never hold an inline value by
+    `assert(PyValue_IsObject(name))`, can never hold an inline value by
     construction of the bytecode, so it needs no test.
     """
     scalars = {item.name for item in stack.inputs if not item.is_array()}
@@ -1008,10 +1004,10 @@ def find_object_inputs(
                         break
                 i += 1
             texts = [t.text for t in tokens[start:i + 1]]
-            if (len(texts) == 7 and texts[2] == "PyStackRef_IsObject"
+            if (len(texts) == 7 and texts[2] == "PyValue_IsObject"
                     and texts[4] in scalars):
                 asserted.append(texts[4])
-        elif tkn.text in STACKREF_TO_OBJECT and i + 3 < len(tokens):
+        elif tkn.text in VALUE_TO_OBJECT and i + 3 < len(tokens):
             arg, close = tokens[i + 2], tokens[i + 3]
             if arg.text in scalars and close.kind == lexer.RPAREN and arg.text not in found:
                 found.append(arg.text)

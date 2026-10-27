@@ -145,23 +145,23 @@ class TruncatedStringIO(object):
         return self._val
 
 
-def _PyStackRef_AsPyObjectBorrow(gdbval):
+def _PyValue_ObjectBorrow(gdbval):
     return gdb.Value(int(gdbval['bits']) & ~USED_TAGS)
 
-# Inline ints and floats (Include/internal/pycore_stackref.h). Pointers and
-# indices lie below STACKREF_DOUBLE_OFFSET in every build.
-STACKREF_DOUBLE_OFFSET = 1 << 49
-STACKREF_INT_BASE = 0xFFFE << 48
+# Inline ints and floats (Include/pyvalue.h). Pointers and
+# indices lie below VALUE_DOUBLE_OFFSET in every build.
+VALUE_DOUBLE_OFFSET = 1 << 49
+VALUE_INT_BASE = 0xFFFE << 48
 
-def _PyStackRef_InlineValue(gdbval):
-    '''Return the int or float that a _PyStackRef holds inline, or None'''
+def _PyValue_InlineValue(gdbval):
+    '''Return the int or float that a PyValue holds inline, or None'''
     bits = int(gdbval['bits'])
-    if bits < STACKREF_DOUBLE_OFFSET:
+    if bits < VALUE_DOUBLE_OFFSET:
         return None
-    if bits >= STACKREF_INT_BASE:
+    if bits >= VALUE_INT_BASE:
         value = bits & 0xFFFFFFFF
         return value - (1 << 32) if value >= (1 << 31) else value
-    raw = struct.pack('<Q', bits - STACKREF_DOUBLE_OFFSET)
+    raw = struct.pack('<Q', bits - VALUE_DOUBLE_OFFSET)
     return struct.unpack('<d', raw)[0]
 
 
@@ -180,10 +180,10 @@ class PyObjectPtr(object):
 
     def __init__(self, gdbval, cast_to=None):
         # Clear the tagged pointer
-        if gdbval.type.name == '_PyStackRef':
+        if gdbval.type.name == 'PyValue':
             if cast_to is None:
                 cast_to = gdb.lookup_type('PyObject').pointer()
-            self._gdbval = _PyStackRef_AsPyObjectBorrow(gdbval).cast(cast_to)
+            self._gdbval = _PyValue_ObjectBorrow(gdbval).cast(cast_to)
         elif cast_to:
             self._gdbval = gdbval.cast(cast_to)
         else:
@@ -396,8 +396,8 @@ class PyObjectPtr(object):
         Try to locate the appropriate derived class dynamically, and cast
         the pointer accordingly.
         '''
-        if gdbval.type.name == '_PyStackRef':
-            value = _PyStackRef_InlineValue(gdbval)
+        if gdbval.type.name == 'PyValue':
+            value = _PyValue_InlineValue(gdbval)
             if value is not None:
                 return InlineStackValue(value)
         try:
@@ -421,7 +421,7 @@ class PyVarObjectPtr(PyObjectPtr):
     _typename = 'PyVarObject'
 
 class InlineStackValue(PyObjectPtr):
-    '''An int or float held in a _PyStackRef without a heap object'''
+    '''An int or float held in a PyValue without a heap object'''
 
     def __init__(self, value):
         self._value = value
@@ -1689,7 +1689,7 @@ class PyObjectPtrPrinter:
 
 def pretty_printer_lookup(gdbval):
     type = gdbval.type.strip_typedefs().unqualified()
-    if type.code == gdb.TYPE_CODE_UNION and type.tag == '_PyStackRef':
+    if type.code == gdb.TYPE_CODE_STRUCT and type.tag == 'PyValue':
         return PyObjectPtrPrinter(gdbval)
 
     if type.code != gdb.TYPE_CODE_PTR:

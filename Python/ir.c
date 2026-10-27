@@ -22,7 +22,7 @@
 #include "pycore_opcode_metadata.h" // _PyOpcode_Deopt
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
-#include "pycore_stackref.h"        // Py_STACKREF_INLINE_VALUES
+#include "pycore_value.h"
 
 static_assert(sizeof(_PyCodeExec) % sizeof(_PyIRWord) == 0,
               "words must follow the header aligned");
@@ -212,11 +212,7 @@ _PyIR_InstrFeedback(PyCodeObject *co, const _PyCodeExec *exec,
 static inline int
 inline_values_off(void)
 {
-#ifdef Py_STACKREF_INLINE_VALUES
     return !_PyInterpreterState_GET()->opt_config.tagged_values_enabled;
-#else
-    return 1;
-#endif
 }
 
 /* The boxing form of an inline constant handler if values stay boxed, or

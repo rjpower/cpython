@@ -127,7 +127,7 @@ _PyObject_Init(PyObject *op, PyTypeObject *typeobj)
 {
     assert(op != NULL);
 #if SIZEOF_VOID_P == 8
-    // A stackref holds an object address only below 2**48 (pycore_stackref.h).
+    // A PyValue holds an object address only below 2**48 (Include/pyvalue.h).
     assert(((uintptr_t)op >> 48) == 0);
 #endif
     Py_SET_TYPE(op, typeobj);
@@ -321,14 +321,14 @@ PyAPI_FUNC(PyObject *) _PyType_LookupRefAndVersion(PyTypeObject *, PyObject *,
 // This stores a stack reference in out and returns the value of
 // type->tp_version or zero if name is missing. It doesn't set an exception!
 extern unsigned int
-_PyType_LookupStackRefAndVersion(PyTypeObject *type, PyObject *name, _PyStackRef *out);
+_PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out);
 
-extern int _PyObject_GetMethodStackRef(PyThreadState *ts, _PyStackRef *self,
-                                       PyObject *name, _PyStackRef *method);
+extern int _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
+                                       PyObject *name, PyValue *method);
 
-// Like PyObject_GetAttr but returns a _PyStackRef. For types, this can
+// Like PyObject_GetAttr but returns a PyValue. For types, this can
 // return a deferred reference to reduce reference count contention.
-PyAPI_FUNC(_PyStackRef) _PyObject_GetAttrStackRef(PyObject *obj, PyObject *name);
+PyAPI_FUNC(PyValue) _PyObject_GetAttrValue(PyObject *obj, PyObject *name);
 
 // Cache the provided init method in the specialization cache of type if the
 // provided type version matches the current version of the type.
@@ -380,8 +380,8 @@ extern int _PyObject_IsInstanceDictEmpty(PyObject *);
 
 // Export for 'math' shared extension
 PyAPI_FUNC(PyObject*) _PyObject_LookupSpecial(PyObject *, PyObject *);
-PyAPI_FUNC(int) _PyObject_LookupSpecialMethod(PyObject *attr, _PyStackRef *method,
-                                              _PyStackRef *self);
+PyAPI_FUNC(int) _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
+                                              PyValue *self);
 
 // Calls the method named `attr` on `self`, but does not set an exception if
 // the attribute does not exist.

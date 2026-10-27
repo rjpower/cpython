@@ -204,17 +204,17 @@ class TestAnalysisErrors(unittest.TestCase):
         # must not hold a value only in a C local across an escaping call.
         self.check_error("""
         inst(OP, (a -- c)) {
-            PyObject *o = PyObject_Repr(PyStackRef_AsPyObjectBorrow(a));
+            PyObject *o = PyObject_Repr(PyValue_ObjectBorrow(a));
             escaping_call();
-            c = PyStackRef_FromPyObject(o);
+            c = PyValue_FromObject(o);
             INPUTS_DEAD();
         }
         """, "'o' is held only in a C local across the escaping call "
              "to 'escaping_call'")
         self.check_error("""
         inst(OP, (a -- c)) {
-            _PyStackRef r = PyStackRef_FromPyObject(
-                PyObject_Repr(PyStackRef_AsPyObjectBorrow(a)));
+            PyValue r = PyValue_FromObject(
+                PyObject_Repr(PyValue_ObjectBorrow(a)));
             escaping_call();
             c = r;
             INPUTS_DEAD();
@@ -222,23 +222,23 @@ class TestAnalysisErrors(unittest.TestCase):
         """, "'r' is held only in a C local")
 
     def test_root_held_in_c_stack_ref(self):
-        # A _PyCStackRef is a precise root, and a value that is dead before
+        # A _PyValueRoot is a precise root, and a value that is dead before
         # the escaping call needs no root.
         self.generate("""
         inst(OP, (a -- c)) {
-            _PyCStackRef held;
-            _PyThreadState_PushCStackRef(tstate, &held);
-            held.ref = PyStackRef_FromPyObject(
-                PyObject_Repr(PyStackRef_AsPyObjectBorrow(a)));
+            _PyValueRoot held;
+            _PyThreadState_PushValueRoot(tstate, &held);
+            held.ref = PyValue_FromObject(
+                PyObject_Repr(PyValue_ObjectBorrow(a)));
             escaping_call();
-            c = _PyThreadState_PopCStackRefSteal(tstate, &held);
+            c = _PyThreadState_PopValueRoot(tstate, &held);
             INPUTS_DEAD();
         }
         inst(OP2, (a -- c)) {
-            PyObject *o = PyObject_Repr(PyStackRef_AsPyObjectBorrow(a));
+            PyObject *o = PyObject_Repr(PyValue_ObjectBorrow(a));
             INPUTS_DEAD();
             ERROR_IF(o == NULL);
-            c = PyStackRef_FromPyObject(o);
+            c = PyValue_FromObject(o);
         }
         """)
 
@@ -308,12 +308,12 @@ class TestIRCases(unittest.TestCase):
         # slots keep them alive across calls that may collect.
         input = """
         inst(OP, (left, right -- res)) {
-            PyObject *l = PyStackRef_AsPyObjectBorrow(left);
-            PyObject *r = PyStackRef_AsPyObjectBorrow(right);
+            PyObject *l = PyValue_ObjectBorrow(left);
+            PyObject *r = PyValue_ObjectBorrow(right);
             PyObject *o = SPAM(l, r);
             INPUTS_DEAD();
             ERROR_IF(o == NULL);
-            res = PyStackRef_FromPyObject(o);
+            res = PyValue_FromObject(o);
         }
     """
         output = """
@@ -328,36 +328,36 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            _PyStackRef left;
-            _PyStackRef right;
-            _PyStackRef res;
+            PyValue left;
+            PyValue right;
+            PyValue res;
             right = IR_SLOT(IR_FIELD_C(this_instr));
             left = IR_SLOT(IR_FIELD_B(this_instr));
-            if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
-                left = PyStackRef_Box(left);
-                if (PyStackRef_IsInline(left)) {
+            if (Py_UNLIKELY(PyValue_IsInline(left))) {
+                left = PyValue_Box(left);
+                if (PyValue_IsInline(left)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(OP);
+                BOX_STAT_INC(OP, _PY_BOX_OTHER);
                 IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
             }
-            if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
-                right = PyStackRef_Box(right);
-                if (PyStackRef_IsInline(right)) {
+            if (Py_UNLIKELY(PyValue_IsInline(right))) {
+                right = PyValue_Box(right);
+                if (PyValue_IsInline(right)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(OP);
+                BOX_STAT_INC(OP, _PY_BOX_OTHER);
                 IR_KEEP_BOX(right, IR_FIELD_C(this_instr));
             }
-            PyObject *l = PyStackRef_AsPyObjectBorrow(left);
-            PyObject *r = PyStackRef_AsPyObjectBorrow(right);
+            PyObject *l = PyValue_ObjectBorrow(left);
+            PyObject *r = PyValue_ObjectBorrow(right);
             PyObject *o = SPAM(l, r);
             if (o == NULL) {
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 JUMP_TO_LABEL(error);
             }
-            res = PyStackRef_FromPyObject(o);
+            res = PyValue_FromObject(o);
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
@@ -377,14 +377,14 @@ class TestIRCases(unittest.TestCase):
     def test_borrow_mask(self):
         input = """
         inst(OP_PASS, (value -- value, res)) {
-            res = SPAM(PyStackRef_AsPyObjectBorrow(value));
+            res = SPAM(PyValue_ObjectBorrow(value));
         }
         inst(OP_OBJ, (value -- res)) {
-            res = SPAM(PyStackRef_AsPyObjectBorrow(value));
+            res = SPAM(PyValue_ObjectBorrow(value));
             DEAD(value);
         }
         inst(OP_FAMILY, (value -- res)) {
-            res = SPAM(PyStackRef_AsPyObjectBorrow(value));
+            res = SPAM(PyValue_ObjectBorrow(value));
             DEAD(value);
         }
         inst(OP_FAMILY_RAW, (value -- res)) {
@@ -415,7 +415,7 @@ class TestIRCases(unittest.TestCase):
         }
         inst(BRANCH, (counter/1, cond --)) {
             _PyFbHeader *feedback = FB_COUNTER();
-            int flag = PyStackRef_IsFalse(cond);
+            int flag = _PyValue_IsFalse(cond);
             DEAD(cond);
             if (flag) {
                 JUMPTO(oparg);
@@ -444,15 +444,15 @@ class TestIRCases(unittest.TestCase):
         # from the top slot in a free field, or by counting.
         input = """
         inst(OP, (left, right -- res)) {
-            res = SPAM(PyStackRef_AsPyObjectBorrow(left),
-                       PyStackRef_AsPyObjectBorrow(right));
+            res = SPAM(PyValue_ObjectBorrow(left),
+                       PyValue_ObjectBorrow(right));
             INPUTS_DEAD();
         }
         inst(ATTR, (owner -- attr, null[oparg & 1])) {
-            attr = SPAM(PyStackRef_AsPyObjectBorrow(owner));
+            attr = SPAM(PyValue_ObjectBorrow(owner));
             INPUTS_DEAD();
             if (oparg & 1) {
-                null[0] = PyStackRef_NULL;
+                null[0] = PyValue_NULL;
             }
         }
         inst(ALIAS, (value -- res)) {
@@ -485,10 +485,10 @@ class TestIRCases(unittest.TestCase):
     def test_unused_outputs_pass_through(self):
         input = """
         op(_GUARD, (nos, unused -- nos, unused)) {
-            EXIT_IF(!PyStackRef_IsObject(nos));
+            EXIT_IF(!PyValue_IsObject(nos));
         }
         op(_USE, (left, right -- left, res)) {
-            res = SPAM(PyStackRef_AsPyObjectBorrow(right));
+            res = SPAM(PyValue_ObjectBorrow(right));
             DEAD(right);
         }
         macro(OP) = _GUARD + _USE;
@@ -522,11 +522,11 @@ class TestIRCases(unittest.TestCase):
             INSTRUCTION_STATS(OP);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            _PyStackRef callable;
-            _PyStackRef *args;
-            _PyStackRef res;
+            PyValue callable;
+            PyValue *args;
+            PyValue res;
             args = &window[1];
             callable = window[0];
             res = SPAM(callable, args, oparg);
@@ -566,7 +566,7 @@ class TestIRCases(unittest.TestCase):
         }
         window inst(OP_SWITCH, (value -- res)) {
             frame = SPAM(value);
-            res = PyStackRef_NULL;
+            res = PyValue_NULL;
             INPUTS_DEAD();
         }
     """
@@ -586,7 +586,7 @@ class TestIRCases(unittest.TestCase):
         input = """
         inst(OP, (value -- res)) {
             frame = SPAM(value);
-            res = PyStackRef_NULL;
+            res = PyValue_NULL;
             INPUTS_DEAD();
         }
     """
@@ -605,13 +605,13 @@ class TestIRCases(unittest.TestCase):
             ADVANCE_ADAPTIVE_COUNTER(feedback);
         }
         op(_OP, (owner -- res)) {
-            PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
+            PyObject *o = PyValue_ObjectBorrow(owner);
             res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
             INPUTS_DEAD();
         }
         macro(OP) = _SPECIALIZE_OP + _OP;
         op(_GUARD, (type_version/2, owner -- owner)) {
-            EXIT_IF(Py_TYPE(PyStackRef_AsPyObjectBorrow(owner))->tp_version_tag != type_version);
+            EXIT_IF(Py_TYPE(PyValue_ObjectBorrow(owner))->tp_version_tag != type_version);
         }
         macro(OP_SPECIALIZED) = unused/1 + _GUARD + _OP;
         family(OP, INLINE_CACHE_ENTRIES_OP) = { OP_SPECIALIZED };
@@ -632,8 +632,8 @@ class TestIRCases(unittest.TestCase):
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            _PyStackRef owner;
-            _PyStackRef res;
+            PyValue owner;
+            PyValue res;
             // _SPECIALIZE_OP
             {
                 uint32_t counter = fb->counter;
@@ -644,15 +644,15 @@ class TestIRCases(unittest.TestCase):
             // _OP
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
-                    owner = PyStackRef_Box(owner);
-                    if (PyStackRef_IsInline(owner)) {
+                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
+                    owner = PyValue_Box(owner);
+                    if (PyValue_IsInline(owner)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(OP);
+                    BOX_STAT_INC(OP, _PY_BOX_OTHER);
                     IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
                 }
-                PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
+                PyObject *o = PyValue_ObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
             }
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -674,8 +674,8 @@ class TestIRCases(unittest.TestCase):
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            _PyStackRef owner;
-            _PyStackRef res;
+            PyValue owner;
+            PyValue res;
             // _SPECIALIZE_OP
             {
                 uint32_t counter = fb->counter;
@@ -686,15 +686,15 @@ class TestIRCases(unittest.TestCase):
             // _OP
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
-                    owner = PyStackRef_Box(owner);
-                    if (PyStackRef_IsInline(owner)) {
+                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
+                    owner = PyValue_Box(owner);
+                    if (PyValue_IsInline(owner)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(OP);
+                    BOX_STAT_INC(OP, _PY_BOX_OTHER);
                     IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
                 }
-                PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
+                PyObject *o = PyValue_ObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
             }
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -716,18 +716,18 @@ class TestIRCases(unittest.TestCase):
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            _PyStackRef owner;
-            _PyStackRef res;
+            PyValue owner;
+            PyValue res;
             // _GUARD
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(OP);
                     assert(_PyOpcode_Deopt[opcode] == (OP));
                     JUMP_TO_PREDICTED(OP);
                 }
-                if (Py_TYPE(PyStackRef_AsPyObjectBorrow(owner))->tp_version_tag != type_version) {
+                if (Py_TYPE(PyValue_ObjectBorrow(owner))->tp_version_tag != type_version) {
                     UPDATE_MISS_STATS(OP);
                     assert(_PyOpcode_Deopt[opcode] == (OP));
                     JUMP_TO_PREDICTED(OP);
@@ -735,7 +735,7 @@ class TestIRCases(unittest.TestCase):
             }
             // _OP
             {
-                PyObject *o = PyStackRef_AsPyObjectBorrow(owner);
+                PyObject *o = PyValue_ObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
             }
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -775,9 +775,9 @@ class TestIRCases(unittest.TestCase):
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
-            _PyStackRef left;
-            _PyStackRef right;
-            _PyStackRef res;
+            PyValue left;
+            PyValue right;
+            PyValue res;
             right = IR_SLOT(IR_FIELD_C(this_instr));
             left = IR_SLOT(IR_FIELD_B(this_instr));
             uint32_t counter = fb->counter;
@@ -805,9 +805,9 @@ class TestIRCases(unittest.TestCase):
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            _PyStackRef left;
-            _PyStackRef right;
-            _PyStackRef res;
+            PyValue left;
+            PyValue right;
+            PyValue res;
             right = IR_SLOT(IR_FIELD_C(this_instr));
             left = IR_SLOT(IR_FIELD_B(this_instr));
             uint32_t counter = fb->counter;
@@ -832,7 +832,7 @@ class TestIRCases(unittest.TestCase):
         # FOR_ITER the distance to its exit in D.
         input = """
         inst(OP, (cond --)) {
-            int flag = PyStackRef_IsFalse(cond);
+            int flag = _PyValue_IsFalse(cond);
             DEAD(cond);
             if (flag) {
                 JUMPTO(oparg);
@@ -840,7 +840,7 @@ class TestIRCases(unittest.TestCase):
         }
         inst(FOR_ITER, (iter -- iter, next)) {
             next = SPAM(iter);
-            if (PyStackRef_IsNull(next)) {
+            if (PyValue_IsNull(next)) {
                 JUMPBY(oparg + 1);
                 DISPATCH();
             }

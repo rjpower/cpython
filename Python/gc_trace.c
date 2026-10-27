@@ -1216,9 +1216,9 @@ _PyGC_TraceVisitThreadState(PyThreadState *p, visitproc visit, void *arg)
     Py_VISIT(ts->asyncio_running_loop);
     Py_VISIT(ts->asyncio_running_task);
     Py_VISIT(ts->lazy_imports);
-    for (_PyCStackRef *r = ts->gc_trace.c_stack_refs; r != NULL; r = r->next) {
-        if (PyStackRef_IsObject(r->ref)) {
-            Py_VISIT(PyStackRef_AsPyObjectBorrow(r->ref));
+    for (_PyValueRoot *r = ts->gc_trace.value_roots; r != NULL; r = r->next) {
+        if (PyValue_IsObject(r->value)) {
+            Py_VISIT(PyValue_ObjectBorrow(r->value));
         }
     }
     return 0;
@@ -2673,7 +2673,7 @@ report(trace_t *t, PyThreadState *tstate, Py_ssize_t nholes)
          f = f->previous)
     {
         if (f->owner >= FRAME_OWNED_BY_INTERPRETER
-            || !PyCode_Check(PyStackRef_AsPyObjectBorrow(f->f_executable)))
+            || !PyCode_Check(PyValue_ObjectBorrow(f->f_executable)))
         {
             continue;
         }

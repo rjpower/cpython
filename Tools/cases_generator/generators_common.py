@@ -58,9 +58,9 @@ def root_relative_path(filename: str) -> str:
 
 def type_and_null(var: StackItem) -> tuple[str, str]:
     if var.is_array():
-        return "_PyStackRef *", "NULL"
+        return "PyValue *", "NULL"
     else:
-        return "_PyStackRef", "PyStackRef_NULL"
+        return "PyValue", "PyValue_NULL"
 
 
 def write_header(
@@ -99,7 +99,7 @@ def always_true(tkn: Token | None) -> bool:
 
 # Calls that always return a reference in pointer space.
 POINTER_CONSTRUCTORS = {
-    "PyStackRef_FromPyObject",
+    "PyValue_FromObject",
 }
 
 
@@ -174,6 +174,29 @@ def forget_stored_pointers(uop: CodeSection, storage: Storage) -> None:
     for var in storage.inputs + storage.outputs:
         if var.name in stored:
             var.known_object = False
+
+
+# Instructions whose boxes of inline inputs are counted as container stores
+# (Py_STATS object_stats.value_boxes, pycore_stats.h)
+CONTAINER_STORES = (
+    "STORE_SUBSCR", "STORE_SLICE", "LIST_APPEND", "LIST_EXTEND", "SET_ADD",
+    "SET_UPDATE", "MAP_ADD", "DICT_UPDATE", "DICT_MERGE", "BUILD_",
+    "STORE_GLOBAL", "STORE_NAME", "STORE_DEREF",
+)
+
+
+def box_kind(inst_name: str) -> str:
+    """What a box made by inst_name is for, as a _PY_BOX_* class."""
+    name = inst_name.removeprefix("INSTRUMENTED_")
+    if name.startswith(CONTAINER_STORES):
+        return "_PY_BOX_CONTAINER_STORE"
+    if name.startswith("STORE_ATTR"):
+        return "_PY_BOX_ATTRIBUTE_STORE"
+    if name.startswith("CALL"):
+        return "_PY_BOX_CALL"
+    if name == "INTERPRETER_EXIT":
+        return "_PY_BOX_RETURN"
+    return "_PY_BOX_OTHER"
 
 
 class Emitter:
@@ -294,28 +317,29 @@ class Emitter:
                 continue
             self.out.start_line()
             # Test the stack slot rather than the local where the slot holds
-            # the value, which is cheaper (see _PyStackRef_TopBitsAt()).
+            # the value, which is cheaper (see _PyValue_TopBitsAt()).
             ref = var.name
             at = ""
             if var.memory_offset is not None:
                 ref = f"&{storage.stack.address(var.memory_offset)}"
                 at = "At"
             if guard:
-                self.emit(f"if (Py_UNLIKELY(!PyStackRef_IsPointerSpace{at}({ref}))) {{\n")
+                self.emit(f"if (Py_UNLIKELY(!_PyValue_IsPointerSpace{at}({ref}))) {{\n")
                 self.emit_jump_to_predicted(inst)
             else:
-                self.emit(f"if (Py_UNLIKELY(PyStackRef_IsInline{at}({ref}))) {{\n")
-                self.emit(f"{var.name} = PyStackRef_Box({var.name});\n")
+                test = "_PyValue_IsInlineAt" if at else "PyValue_IsInline"
+                self.emit(f"if (Py_UNLIKELY({test}({ref}))) {{\n")
+                self.emit(f"{var.name} = PyValue_Box({var.name});\n")
                 # A failed box leaves the value inline. Every input is still
                 # live, so leave them all to exception_unwind, boxes included.
-                self.emit(f"if (PyStackRef_IsInline({var.name})) {{\n")
+                self.emit(f"if (PyValue_IsInline({var.name})) {{\n")
                 for other in unsynced:
                     self.emit_store_input(other, storage)
                 storage.stack.copy().flush(self.out)
                 self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
                 self.emit("}\n")
                 if inst is not None:
-                    self.emit(f"BOX_STAT_INC({inst.name});\n")
+                    self.emit(f"BOX_STAT_INC({inst.name}, {box_kind(inst.name)});\n")
                 if var.memory_offset is not None:
                     if var.name in peeks or stack_read_later:
                         self.emit_store_input(var, storage)

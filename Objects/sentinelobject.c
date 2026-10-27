@@ -5,7 +5,7 @@
 #include "pycore_ceval.h"         // _PyThreadState_GET()
 #include "pycore_interpframe.h"   // _PyFrame_IsIncomplete()
 #include "pycore_object.h"        // _PyObject_GC_TRACK/UNTRACK()
-#include "pycore_stackref.h"      // PyStackRef_AsPyObjectBorrow()
+#include "pycore_value.h"         // PyValue_ObjectBorrow()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_typeobject.h"    // _Py_BaseObject_RichCompare()
 #include "pycore_unionobject.h"   // _Py_union_type_or()
@@ -32,7 +32,7 @@ static PyObject *
 caller(void)
 {
     _PyInterpreterFrame *f = _PyThreadState_GET()->current_frame;
-    if (f == NULL || PyStackRef_IsNull(f->f_funcobj)) {
+    if (f == NULL || PyValue_IsNull(f->f_funcobj)) {
         assert(!PyErr_Occurred());
         Py_RETURN_NONE;
     }

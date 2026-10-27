@@ -89,6 +89,7 @@ from generators_common import (
     DEFAULT_INPUT,
     ROOT,
     Emitter,
+    box_kind,
     ReplacementFunctionType,
     TokenIterator,
     type_and_null,
@@ -944,7 +945,7 @@ class IRStack(Stack):
         if p in self.layout.borrowable:
             out.emit(f"IR_CONSUME_INPUT({f});\n")
         else:
-            out.emit(f"IR_SLOT({f}) = PyStackRef_NULL;\n")
+            out.emit(f"IR_SLOT({f}) = PyValue_NULL;\n")
 
     def store(self, out: CWriter, var: Local, memory_offset: PointerOffset) -> bool:
         """Write var, which the stack holds at memory_offset; whether the
@@ -1042,7 +1043,7 @@ class IRStack(Stack):
                 out.emit(f"IR_CLEAR_SLOTS(&{self.window_slot(low)}, {count.to_c()});\n")
                 return
             for i in range(n):
-                out.emit(f"{self.window_slot(low + PointerOffset(i, (), ()))} = PyStackRef_NULL;\n")
+                out.emit(f"{self.window_slot(low + PointerOffset(i, (), ()))} = PyValue_NULL;\n")
             return
         lo = low.as_int()
         if lo is not None and n is not None:
@@ -1051,7 +1052,7 @@ class IRStack(Stack):
                 if owner == "in":
                     self.consume(out, p)
                 elif owner == "out":
-                    out.emit(f"{self.out_slot(PointerOffset(p, (), ()))} = PyStackRef_NULL;\n")
+                    out.emit(f"{self.out_slot(PointerOffset(p, (), ()))} = PyValue_NULL;\n")
             return
         # Outputs whose count is not constant, above the inputs
         if any(p >= (lo if lo is not None else low.numeric) for p in self.owner
@@ -1382,17 +1383,17 @@ class IREmitter(Emitter):
             if var.name not in uop.asserted_objects:
                 self.out.start_line()
                 if uop.is_guard():
-                    self.emit(f"if (Py_UNLIKELY(!PyStackRef_IsPointerSpace({var.name}))) {{\n")
+                    self.emit(f"if (Py_UNLIKELY(!_PyValue_IsPointerSpace({var.name}))) {{\n")
                     self.emit_jump_to_predicted(inst)
                 else:
-                    self.emit(f"if (Py_UNLIKELY(PyStackRef_IsInline({var.name}))) {{\n")
-                    self.emit(f"{var.name} = PyStackRef_Box({var.name});\n")
-                    self.emit(f"if (PyStackRef_IsInline({var.name})) {{\n")
+                    self.emit(f"if (Py_UNLIKELY(PyValue_IsInline({var.name}))) {{\n")
+                    self.emit(f"{var.name} = PyValue_Box({var.name});\n")
+                    self.emit(f"if (PyValue_IsInline({var.name})) {{\n")
                     storage.stack.copy().flush(self.out)
                     self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
                     self.emit("}\n")
                     if inst is not None:
-                        self.emit(f"BOX_STAT_INC({inst.name});\n")
+                        self.emit(f"BOX_STAT_INC({inst.name}, {box_kind(inst.name)});\n")
                     self.emit(f"IR_KEEP_BOX({var.name}, {f});\n")
                 self.emit("}\n")
             var.known_object = True
@@ -1510,7 +1511,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("(void)oparg;\n")
     if fmt.window:
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
-        out.emit(f"_PyStackRef *window = &IR_SLOT({base});\n")
+        out.emit(f"PyValue *window = &IR_SLOT({base});\n")
         out.emit("(void)window;\n")
     if inst.properties.uses_opcode:
         out.emit(f"opcode = {name};\n")

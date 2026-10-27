@@ -17,7 +17,7 @@
 #include "pycore_pyerrors.h"      // _PyErr_NoMemory()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_pythonrun.h"     // _Py_SourceAsString()
-#include "pycore_stackref.h"      // _PyObject_ValueIdentity()
+#include "pycore_value.h"         // _PyObject_ValueIdentity()
 #include "pycore_tuple.h"         // _PyTuple_FromPair()
 
 #include "clinic/bltinmodule.c.h"

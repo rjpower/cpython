@@ -63,9 +63,9 @@ typedef struct {
     PyListObject *it_seq; /* Set to NULL when iterator is exhausted */
 } _PyListIterObject;
 
-union _PyStackRef;
+struct PyValue;
 
-PyAPI_FUNC(PyObject *)_PyList_FromStackRefStealOnSuccess(const union _PyStackRef *src, Py_ssize_t n);
+PyAPI_FUNC(PyObject *)_PyList_FromValues(const struct PyValue *src, Py_ssize_t n);
 PyAPI_FUNC(PyObject *)_PyList_AsTupleAndClear(PyListObject *v);
 
 #ifdef __cplusplus

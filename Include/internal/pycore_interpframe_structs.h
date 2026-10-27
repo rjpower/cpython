@@ -12,7 +12,7 @@
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#include "pycore_structs.h"       // _PyStackRef
+#include "pycore_structs.h"       // PyValue
 #include "pycore_typedefs.h"      // _PyInterpreterFrame
 
 #ifdef __cplusplus
@@ -27,7 +27,7 @@ enum _frameowner {
 };
 
 struct _PyInterpreterFrame {
-    _PyStackRef f_executable; /* Deferred or strong reference (code object or None) */
+    PyValue f_executable; /* Deferred or strong reference (code object or None) */
     struct _PyInterpreterFrame *previous;
     /* Slot 0: co_nlocalsplus locals, cells and free variables, then
      * co_stacksize temporaries.  Every slot holds a value or NULL; a
@@ -35,11 +35,11 @@ struct _PyInterpreterFrame {
      * consumed is NULL.  The slots of a frame on the frame stack are on the
      * thread's value stack; a generator and a frame object keep them in
      * owned_slots. */
-    _PyStackRef *base;
+    PyValue *base;
     /* For a frame on the frame stack, the top of the value stack before it
      * was pushed, which popping it restores */
-    _PyStackRef *saved_top;
-    _PyStackRef f_funcobj; /* Deferred or strong reference. Only valid if not on C stack */
+    PyValue *saved_top;
+    PyValue f_funcobj; /* Deferred or strong reference. Only valid if not on C stack */
     PyObject *f_globals; /* Borrowed reference. Only valid if not on C stack */
     PyObject *f_builtins; /* Borrowed reference. Only valid if not on C stack */
     PyObject *f_locals; /* Strong reference, may be NULL. Only valid if not on C stack */
@@ -61,7 +61,7 @@ struct _PyInterpreterFrame {
     uint8_t lltrace:5;
 #endif
     /* The slots of a frame that owns them, which base then points to */
-    _PyStackRef owned_slots[1];
+    PyValue owned_slots[1];
 };
 
 

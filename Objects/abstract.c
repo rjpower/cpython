@@ -9,7 +9,7 @@
 #include "pycore_list.h"          // _PyList_AppendTakeRef()
 #include "pycore_long.h"          // _PyLong_IsNegative()
 #include "pycore_object.h"        // _Py_CheckSlotResult()
-#include "pycore_stackref.h"      // _PyStackRef
+#include "pycore_value.h"         // PyValue
 #include "pycore_pybuffer.h"      // _PyBuffer_ReleaseInInterpreterAndRawFree()
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -2648,15 +2648,15 @@ static int
 call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
                     const char *where, PyObject *arg, PyObject **res)
 {
-    _PyCStackRef cref;
-    _PyThreadState_PushCStackRef(tstate, &cref);
-    _PyStackRef self = PyStackRef_FromPyObject(cls);
-    int found = _PyObject_LookupSpecialMethod(name, &cref.ref, &self);
+    _PyValueRoot cref;
+    _PyThreadState_PushValueRoot(tstate, &cref);
+    PyValue self = PyValue_FromObject(cls);
+    int found = _PyObject_LookupSpecialMethod(name, &cref.value, &self);
     if (found > 0) {
         *res = NULL;
         if (!_Py_EnterRecursiveCallTstate(tstate, where)) {
-            PyObject *method = PyStackRef_AsPyObjectBorrow(cref.ref);
-            PyObject *args[2] = {PyStackRef_AsPyObjectBorrow(self), arg};
+            PyObject *method = PyValue_ObjectBorrow(cref.value);
+            PyObject *args[2] = {PyValue_ObjectBorrow(self), arg};
             if (args[0] != NULL) {
                 /* Unbound method: prepend self. */
                 *res = PyObject_Vectorcall(method, args, 2, NULL);
@@ -2670,7 +2670,7 @@ call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
             found = -1;
         }
     }
-    _PyThreadState_PopCStackRef(tstate, &cref);
+    _PyThreadState_PopValueRoot(tstate, &cref);
     return found;
 }
 

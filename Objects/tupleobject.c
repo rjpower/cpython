@@ -7,7 +7,7 @@
 #include "pycore_list.h"          // _Py_memory_repeat()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
-#include "pycore_stackref.h"      // PyStackRef_AsPyObjectBorrow()
+#include "pycore_value.h"         // PyValue_ObjectBorrow()
 #include "pycore_tuple.h"         // _PyTupleIterObject
 
 
@@ -453,7 +453,7 @@ PyTuple_FromArray(PyObject *const *src, Py_ssize_t n)
 }
 
 PyObject *
-_PyTuple_FromStackRefStealOnSuccess(const _PyStackRef *src, Py_ssize_t n)
+_PyTuple_FromValues(const PyValue *src, Py_ssize_t n)
 {
     if (n == 0) {
         return tuple_get_empty();
@@ -463,15 +463,15 @@ _PyTuple_FromStackRefStealOnSuccess(const _PyStackRef *src, Py_ssize_t n)
         return NULL;
     }
     PyObject **dst = tuple->ob_item;
-    if (_PyStackRef_BoxInto(src, dst, n) < 0) {
+    if (_PyValue_BoxInto(src, dst, n) < 0) {
         memset(dst, 0, n * sizeof(PyObject *));
         Py_DECREF(tuple);
         return NULL;
     }
     bool track = false;
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *item = PyStackRef_IsInline(src[i])
-                         ? dst[i] : PyStackRef_AsPyObjectBorrow(src[i]);
+        PyObject *item = PyValue_IsInline(src[i])
+                         ? dst[i] : PyValue_ObjectBorrow(src[i]);
         if (!track && maybe_tracked(item)) {
             track = true;
         }

@@ -22,16 +22,16 @@ from parser import Stmt, SimpleStmt, BlockStmt, IfStmt, WhileStmt, ForStmt, Macr
 
 
 # Types whose pointers, or values, hold objects
-OBJECT_TYPE = re.compile(r"^(PyObject|Py\w*Object|_PyStackRef)$")
+OBJECT_TYPE = re.compile(r"^(PyObject|Py\w*Object|PyValue)$")
 NOT_OBJECT_TYPES = {"PyDictKeysObject"}
 
 # Calls whose result is anchored when their first argument is: a borrowed
 # reference to the argument, part of it, or a view of it
 BORROWING = {
-    "PyStackRef_AsPyObjectBorrow",
-    "PyStackRef_FromPyObject",
+    "PyValue_ObjectBorrow",
+    "PyValue_FromObject",
     "Py_TYPE",
-    "PyStackRef_TYPE",
+    "PyValue_Type",
     "_PyObject_CAST",
     "_PyType_CAST",
     "_PyFunction_CAST",
@@ -74,7 +74,7 @@ ANCHORED_CALLS = {
 
 # Releases, which release nothing: an argument of one is not a use
 RELEASES = {
-    "Py_DECREF", "Py_XDECREF", "Py_CLEAR", "PyStackRef_CLEAR",
+    "Py_DECREF", "Py_XDECREF", "Py_CLEAR",
     "DEAD",
 }
 
@@ -90,8 +90,8 @@ ASSIGNING = {"Py_SETREF", "Py_XSETREF"}
 ANCHORED_NAMES = {
     "NULL", "frame", "tstate", "Py_None", "Py_True", "Py_False",
     "Py_NotImplemented", "Py_Ellipsis",
-    "PyStackRef_NULL", "PyStackRef_None", "PyStackRef_True",
-    "PyStackRef_False", "PyStackRef_ERROR",
+    "PyValue_NULL", "_PyValue_None", "_PyValue_True",
+    "_PyValue_False", "_PyValue_ERROR",
     "FRAME_CO_CONSTS", "FRAME_CO_NAMES",
 }
 
@@ -149,7 +149,7 @@ def null_tests(cond: list[lexer.Token]) -> tuple[frozenset[str], frozenset[str]]
         return frozenset(), frozenset({texts[0]})
     if len(texts) == 1:
         return frozenset(), frozenset({texts[0]})
-    if len(texts) == 4 and texts[0] == "PyStackRef_IsNull" and texts[1] == "(":
+    if len(texts) == 4 and texts[0] == "PyValue_IsNull" and texts[1] == "(":
         return frozenset({texts[2]}), frozenset()
     return frozenset(), frozenset()
 
@@ -207,12 +207,12 @@ def linearize(body: Stmt) -> list[Event]:
 def find_declarations(events: list[Event], stack_names: set[str],
                       held: set[str]) -> dict[str, Var]:
     """The C locals that hold objects.  held gets the pointers into the
-    slots and the C stack refs (_PyCStackRef), which the collector visits."""
+    slots and the value roots (_PyValueRoot), which the collector visits."""
     found: dict[str, Var] = {}
     for i, ev in enumerate(events):
         tkns = [t for t in ev.tokens if t.kind != "COMMENT"]
         for j, t in enumerate(tkns):
-            if (t.kind == "IDENTIFIER" and t.text == "_PyCStackRef"
+            if (t.kind == "IDENTIFIER" and t.text == "_PyValueRoot"
                     and j + 1 < len(tkns) and tkns[j + 1].kind == "IDENTIFIER"):
                 held.add(tkns[j + 1].text)
                 continue
@@ -235,8 +235,8 @@ def find_declarations(events: list[Event], stack_names: set[str],
             nxt = tkns[k + 1].text if k + 1 < len(tkns) else ""
             if nxt not in ("=", ";", "[", ","):
                 continue
-            is_ref = t.text == "_PyStackRef"
-            # A pointer to stack refs points into slots; a pointer to object
+            is_ref = t.text == "PyValue"
+            # A pointer to values points into slots; a pointer to object
             # pointers points into an object or an argument array
             if is_ref and stars > 0:
                 held.add(name)
@@ -353,7 +353,7 @@ class Checker:
         # frame->field
         if tkns[0].text == "frame" and tkns[1].text == "->":
             return True
-        # The reference that a C stack ref holds
+        # The value that a value root holds
         if (len(tkns) == 3 and tkns[0].text in self.held
                 and tkns[1].text in (".", "->") and tkns[2].text == "ref"):
             return True
@@ -389,7 +389,7 @@ class Checker:
             close = self.matching(tkns, 1)
             if close == len(tkns) - 1:
                 return self.anchored_expr(tkns[:1], before, seen)
-        # *p, a stack ref pointer into the slots
+        # *p, a value pointer into the slots
         if tkns[0].text == "*" and len(tkns) == 2:
             return True
         return False

@@ -21,7 +21,7 @@
 #include "pycore_pymem.h"         // _PyMem_DebugEnabled()
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_runtime_init.h"  // _PyRuntimeState_INIT
-#include "pycore_stackref.h"      // PyStackRef_AsPyObjectBorrow()
+#include "pycore_value.h"         // PyValue_ObjectBorrow()
 #include "pycore_stats.h"         // FT_STAT_WORLD_STOP_INC()
 #include "pycore_time.h"          // _PyTime_Init()
 
@@ -675,9 +675,9 @@ PyInterpreterState_New(void)
 
 
 static int
-common_const_is_initialized(_PyStackRef ref)
+common_const_is_initialized(PyValue ref)
 {
-    return ref.bits != 0 && !PyStackRef_IsNull(ref);
+    return ref.bits != 0 && !PyValue_IsNull(ref);
 }
 
 
@@ -685,11 +685,11 @@ static void
 common_constants_clear(PyInterpreterState *interp)
 {
     for (int i = 0; i < NUM_COMMON_CONSTANTS; i++) {
-        _PyStackRef ref = interp->common_consts[i];
+        PyValue ref = interp->common_consts[i];
         if (!common_const_is_initialized(ref)) {
             continue;
         }
-        interp->common_consts[i] = PyStackRef_NULL;
+        interp->common_consts[i] = PyValue_NULL;
     }
 }
 
@@ -1436,8 +1436,8 @@ init_threadstate(_PyThreadStateImpl *_tstate,
 
     // Initialize the embedded base frame - sentinel at the bottom of the frame stack
     _tstate->base_frame.previous = NULL;
-    _tstate->base_frame.f_executable = PyStackRef_None;
-    _tstate->base_frame.f_funcobj = PyStackRef_NULL;
+    _tstate->base_frame.f_executable = _PyValue_None;
+    _tstate->base_frame.f_funcobj = PyValue_NULL;
     _tstate->base_frame.f_globals = NULL;
     _tstate->base_frame.f_builtins = NULL;
     _tstate->base_frame.f_locals = NULL;
@@ -1450,7 +1450,7 @@ init_threadstate(_PyThreadStateImpl *_tstate,
     _tstate->base_frame.lltrace = 0;
 #endif
     _tstate->base_frame.base = _tstate->base_frame.owned_slots;
-    _tstate->base_frame.owned_slots[0] = PyStackRef_NULL;
+    _tstate->base_frame.owned_slots[0] = PyValue_NULL;
 
     // current_frame starts pointing to the base frame
     tstate->current_frame = &_tstate->base_frame;
@@ -2791,8 +2791,8 @@ push_chunk(PyThreadState *tstate, int nslots)
         }
     }
     // The root chunk's value stack starts empty
-    _PyStackRef *saved_top = new->previous == NULL ?
-        (_PyStackRef *)&new->data[0] : (_PyStackRef *)tstate->datastack_top;
+    PyValue *saved_top = new->previous == NULL ?
+        (PyValue *)&new->data[0] : (PyValue *)tstate->datastack_top;
     if (tstate->datastack_chunk) {
         // What popping the frame restores, with saved_top
         tstate->datastack_chunk->top = tstate->datastack_limit -
@@ -2801,7 +2801,7 @@ push_chunk(PyThreadState *tstate, int nslots)
     tstate->datastack_chunk = new;
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(chunk_frames_end(new) - FRAME_SPECIALS_SIZE);
-    frame->base = (_PyStackRef *)&new->data[0];
+    frame->base = (PyValue *)&new->data[0];
     frame->saved_top = saved_top;
     tstate->datastack_limit = (PyObject **)frame;
     tstate->datastack_top = (PyObject **)(frame->base + nslots);

@@ -86,6 +86,7 @@ __pragma(warning(disable: 4201))
 #include "cpython/longintrepr.h"
 #include "boolobject.h"
 #include "floatobject.h"
+#include "pyvalue.h"
 #include "complexobject.h"
 #include "rangeobject.h"
 #include "memoryobject.h"

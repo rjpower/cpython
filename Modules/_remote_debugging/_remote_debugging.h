@@ -32,7 +32,7 @@ extern "C" {
 #include "internal/pycore_long.h"           // _PyLong_GetZero
 #include "internal/pycore_pyerrors.h"       // _PyErr_FormatFromCause
 #include "internal/pycore_pyhash.h"        // _Py_HashPointerRaw
-#include "internal/pycore_stackref.h"       // Py_TAG_BITS
+#include "internal/pycore_value.h"       // _PyValue_TAG_BITS
 #include "../../Python/remote_debug.h"
 
 #include <assert.h>
@@ -125,7 +125,7 @@ typedef enum _WIN32_THREADSTATE {
 
 #define GET_MEMBER(type, obj, offset) \
     (*(const type *)memcpy(&(type){0}, (const char *)(obj) + (offset), sizeof(type)))
-#define CLEAR_PTR_TAG(ptr) (((uintptr_t)(ptr) & ~Py_TAG_BITS))
+#define CLEAR_PTR_TAG(ptr) (((uintptr_t)(ptr) & ~_PyValue_TAG_BITS))
 #define GET_MEMBER_NO_TAG(type, obj, offset) (type)(CLEAR_PTR_TAG(GET_MEMBER(type, obj, offset)))
 
 /* Size macros for opaque buffers */

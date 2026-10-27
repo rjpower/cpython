@@ -37,7 +37,7 @@ class PointerOffset:
     """The offset of a pointer from the reference pointer
         The 'reference pointer' is the address of the physical stack pointer
         at the start of the code section, as if each code section started with
-        `const PyStackRef *reference = stack_pointer`
+        `const PyValue *reference = stack_pointer`
     """
     numeric: int
     positive: tuple[str, ...]

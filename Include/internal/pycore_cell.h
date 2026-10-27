@@ -3,7 +3,7 @@
 
 #include "pycore_critical_section.h"
 #include "pycore_object.h"
-#include "pycore_stackref.h"
+#include "pycore_value.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,15 +44,15 @@ PyCell_GetRef(PyCellObject *cell)
     return res;
 }
 
-static inline _PyStackRef
-_PyCell_GetStackRef(PyCellObject *cell)
+static inline PyValue
+_PyCell_GetValue(PyCellObject *cell)
 {
     PyObject *value;
     value = PyCell_GetRef(cell);
     if (value == NULL) {
-        return PyStackRef_NULL;
+        return PyValue_NULL;
     }
-    return PyStackRef_FromPyObject(value);
+    return PyValue_FromObject(value);
 }
 
 #ifdef __cplusplus

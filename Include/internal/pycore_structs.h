@@ -56,18 +56,14 @@ typedef struct {
 
 #include "pycore_context.h"       // _PyContextTokenMissing
 
-typedef union _PyStackRef {
-    uintptr_t bits;
-} _PyStackRef;
-
-// A stackref that a C local holds, linked into the thread state so that the
+// A value that a C local holds, linked into the thread state so that the
 // collector visits it: the way a handler of the eval loop, whose own C frame
 // the collector does not scan (_PyEvalActivation), holds a value across an
-// escaping call.  Used with _PyThreadState_PushCStackRef().
-typedef struct _PyCStackRef {
-    _PyStackRef ref;
-    struct _PyCStackRef *next;
-} _PyCStackRef;
+// escaping call.  Used with _PyThreadState_PushValueRoot().
+typedef struct _PyValueRoot {
+    PyValue value;
+    struct _PyValueRoot *next;
+} _PyValueRoot;
 
 
 #ifdef __cplusplus

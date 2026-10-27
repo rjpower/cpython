@@ -7,7 +7,9 @@
 #include "pycore_initconfig.h"      // _PyStatus_OK()
 #include "pycore_pystate.h"         // _PyThreadState_GET()
 #include "pycore_runtime.h"         // NUM_GENERATIONS
+#include "pycore_stats.h"           // _PY_BOX_SITES
 
+#include <dlfcn.h>                 // dladdr()
 #include <stdlib.h> // rand()
 
 #ifdef Py_STATS
@@ -228,6 +230,33 @@ print_object_stats(FILE *out, ObjectStats *stats)
     fprintf(out, "Object inline int boxes: %" PRIu64 "\n", stats->inline_int_boxes);
     fprintf(out, "Object inline float boxes: %" PRIu64 "\n", stats->inline_float_boxes);
     fprintf(out, "Object inline array boxes: %" PRIu64 "\n", stats->inline_array_boxes);
+    static const char *const box_kinds[] = {
+        "container store", "attribute store", "call into C", "return to C",
+    };
+    uint64_t classified = 0;
+    for (int i = 0; i < (int)Py_ARRAY_LENGTH(box_kinds); i++) {
+        fprintf(out, "Object boxes (%s): %" PRIu64 "\n", box_kinds[i], stats->value_boxes[i]);
+        classified += stats->value_boxes[i];
+    }
+    fprintf(out, "Object boxes (other): %" PRIu64 "\n",
+            stats->inline_int_boxes + stats->inline_float_boxes - classified);
+    for (int i = 0; i < _PY_BOX_SITES; i++) {
+        if (stats->box_site_count[i] == 0) {
+            continue;
+        }
+        // An offset into the file that addr2line resolves.
+        Dl_info info;
+        uintptr_t pc = stats->box_site_pc[i];
+        if (dladdr((void *)pc, &info) && info.dli_fname != NULL) {
+            fprintf(out, "Object box site[%s+0x%" PRIxPTR "]: %" PRIu64 "\n",
+                    info.dli_fname, pc - (uintptr_t)info.dli_fbase,
+                    stats->box_site_count[i]);
+        }
+        else {
+            fprintf(out, "Object box site[0x%" PRIxPTR "]: %" PRIu64 "\n",
+                    pc, stats->box_site_count[i]);
+        }
+    }
 }
 
 static void

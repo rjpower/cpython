@@ -195,35 +195,35 @@ extern int _PyCode_SafeAddr2Line(PyCodeObject *co, int addr);
 /* Specialization functions, these are exported only for other re-generated
  * interpreters to call */
 
-PyAPI_FUNC(void) _Py_Specialize_LoadSuperAttr(_PyStackRef global_super, _PyStackRef cls,
+PyAPI_FUNC(void) _Py_Specialize_LoadSuperAttr(PyValue global_super, PyValue cls,
                                          _PyInstr *instr, int load_method);
-PyAPI_FUNC(void) _Py_Specialize_LoadAttr(_PyStackRef owner, _PyInstr *instr,
+PyAPI_FUNC(void) _Py_Specialize_LoadAttr(PyValue owner, _PyInstr *instr,
                                     PyObject *name);
-PyAPI_FUNC(void) _Py_Specialize_StoreAttr(_PyStackRef owner, _PyInstr *instr,
+PyAPI_FUNC(void) _Py_Specialize_StoreAttr(PyValue owner, _PyInstr *instr,
                                      PyObject *name);
 PyAPI_FUNC(void) _Py_Specialize_LoadGlobal(PyObject *globals, PyObject *builtins,
                                       _PyInstr *instr, PyObject *name);
-PyAPI_FUNC(void) _Py_Specialize_StoreSubscr(_PyStackRef container, _PyStackRef sub,
+PyAPI_FUNC(void) _Py_Specialize_StoreSubscr(PyValue container, PyValue sub,
                                        _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_Call(_PyStackRef callable, _PyStackRef self_or_null,
+PyAPI_FUNC(void) _Py_Specialize_Call(PyValue callable, PyValue self_or_null,
                                 _PyInstr *instr, int nargs);
-PyAPI_FUNC(void) _Py_Specialize_CallKw(_PyStackRef callable, _PyInstr *instr,
+PyAPI_FUNC(void) _Py_Specialize_CallKw(PyValue callable, _PyInstr *instr,
                                   int nargs);
-PyAPI_FUNC(void) _Py_Specialize_BinaryOp(_PyStackRef lhs, _PyStackRef rhs, _PyInstr *instr,
-                                    int oparg, _PyStackRef *locals);
-PyAPI_FUNC(void) _Py_Specialize_CompareOp(_PyStackRef lhs, _PyStackRef rhs,
+PyAPI_FUNC(void) _Py_Specialize_BinaryOp(PyValue lhs, PyValue rhs, _PyInstr *instr,
+                                    int oparg, PyValue *locals);
+PyAPI_FUNC(void) _Py_Specialize_CompareOp(PyValue lhs, PyValue rhs,
                                      _PyInstr *instr, int oparg);
-PyAPI_FUNC(void) _Py_Specialize_UnpackSequence(_PyStackRef seq, _PyInstr *instr,
+PyAPI_FUNC(void) _Py_Specialize_UnpackSequence(PyValue seq, _PyInstr *instr,
                                           int oparg);
-PyAPI_FUNC(void) _Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _PyInstr *instr, int oparg);
-PyAPI_FUNC(void) _Py_Specialize_Send(_PyStackRef receiver, _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_ToBool(_PyStackRef value, _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_PopJumpIf(_PyStackRef value, _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_ContainsOp(_PyStackRef item, _PyStackRef value,
+PyAPI_FUNC(void) _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int oparg);
+PyAPI_FUNC(void) _Py_Specialize_Send(PyValue receiver, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_Specialize_ToBool(PyValue value, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_Specialize_PopJumpIf(PyValue value, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_Specialize_ContainsOp(PyValue item, PyValue value,
                                            _PyInstr *instr);
-PyAPI_FUNC(void) _Py_GatherStats_GetIter(_PyStackRef iterable);
-PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(_PyStackRef func_st, _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_GetIter(_PyStackRef iterable, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_GatherStats_GetIter(PyValue iterable);
+PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(PyValue func_st, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_Specialize_GetIter(PyValue iterable, _PyInstr *instr);
 
 /* See InternalDocs/exception_handling.md for details.
  */

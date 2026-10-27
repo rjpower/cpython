@@ -2508,10 +2508,10 @@ sys__getframemodulename_impl(PyObject *module, int depth)
     while (f && (_PyFrame_IsIncomplete(f) || depth-- > 0)) {
         f = f->previous;
     }
-    if (f == NULL || PyStackRef_IsNull(f->f_funcobj)) {
+    if (f == NULL || PyValue_IsNull(f->f_funcobj)) {
         Py_RETURN_NONE;
     }
-    PyObject *func = PyStackRef_AsPyObjectBorrow(f->f_funcobj);
+    PyObject *func = PyValue_ObjectBorrow(f->f_funcobj);
     PyObject *r = PyFunction_GetModule(func);
     if (!r) {
         PyErr_Clear();

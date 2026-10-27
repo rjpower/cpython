@@ -12,7 +12,7 @@
 #include "pycore_opcode_metadata.h" // OPCODE_HAS_ARG, etc
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
 #include "pycore_regcfg.h"          // _PyRegCfg_Build()
-#include "pycore_stackref.h"        // PyStackRef_AsPyObjectBorrow()
+#include "pycore_value.h"           // PyValue_ObjectBorrow()
 
 #include <stdbool.h>
 
@@ -1343,7 +1343,7 @@ get_const_value(int opcode, int oparg, PyObject *co_consts)
     }
     if (opcode == LOAD_COMMON_CONSTANT) {
         assert(oparg < NUM_COMMON_CONSTANTS);
-        return PyStackRef_AsPyObjectBorrow(
+        return PyValue_ObjectBorrow(
             _PyInterpreterState_GET()->common_consts[oparg]);
     }
 

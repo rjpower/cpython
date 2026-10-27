@@ -8054,7 +8054,7 @@ AC_MSG_CHECKING([if we need to manually block large inlining in ceval.c])
 AC_RUN_IFELSE([AC_LANG_SOURCE([[
 int main(void) {
 // See gh-148284: Clang 22 seems to have interactions with inlining
-// and the stackref buffer which cause 40 kB of stack usage on x86-64
+// and the PyValue buffer which cause 40 kB of stack usage on x86-64
 // in buggy versions of _PyEval_EvalFrameDefault() in computed goto
 // interpreter. The normal usage seen is normally 1-2 kB.
 #if defined(__clang__) && (__clang_major__ == 22)

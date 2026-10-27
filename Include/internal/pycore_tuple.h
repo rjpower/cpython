@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 #include "pycore_object.h"        // _PyObject_GC_IS_TRACKED
-#include "pycore_structs.h"       // _PyStackRef
+#include "pycore_structs.h"       // PyValue
 
 extern void _PyTuple_MaybeUntrack(PyObject *);
 
@@ -24,7 +24,7 @@ PyAPI_FUNC(void) _PyStolenTuple_Free(PyObject *self);
 
 #define _PyTuple_ITEMS(op) _Py_RVALUE(_PyTuple_CAST(op)->ob_item)
 
-PyAPI_FUNC(PyObject *)_PyTuple_FromStackRefStealOnSuccess(const union _PyStackRef *, Py_ssize_t);
+PyAPI_FUNC(PyObject *)_PyTuple_FromValues(const struct PyValue *, Py_ssize_t);
 PyAPI_FUNC(PyObject *)_PyTuple_FromArraySteal(PyObject *const *, Py_ssize_t);
 PyAPI_FUNC(PyObject *) _PyTuple_BinarySlice(PyObject *, PyObject *, PyObject *);
 PyAPI_FUNC(PyObject *) _PyTuple_Concat(PyObject *, PyObject *);

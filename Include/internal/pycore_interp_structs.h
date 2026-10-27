@@ -424,7 +424,7 @@ typedef struct _rare_events {
 // Optimization configuration for the interpreter.
 typedef struct _PyOptimizationConfig {
     bool specialization_enabled;
-    // PYTHON_TAGGED_VALUES=0 keeps every int boxed (see pycore_stackref.h).
+    // PYTHON_TAGGED_VALUES=0 keeps every int boxed (see pycore_value.h).
     bool tagged_values_enabled;
 } _PyOptimizationConfig;
 
@@ -902,7 +902,7 @@ struct _is {
     struct ast_state ast;
     struct types_state types;
     struct callable_cache callable_cache;
-    _PyStackRef common_consts[NUM_COMMON_CONSTANTS];
+    PyValue common_consts[NUM_COMMON_CONSTANTS];
 
     _PyOptimizationConfig opt_config;
     _rare_events rare_events;

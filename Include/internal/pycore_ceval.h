@@ -261,28 +261,28 @@ PyAPI_FUNC(PyObject *)_PyEval_MatchClass(PyThreadState *tstate, PyObject *subjec
 PyAPI_FUNC(PyObject *)_PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys);
 PyAPI_FUNC(void) _PyEval_MonitorRaise(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *instr);
 PyAPI_FUNC(bool) _PyEval_NoToolsForUnwind(PyThreadState *tstate, _PyInterpreterFrame *frame);
-PyAPI_FUNC(int) _PyEval_UnpackIterableStackRef(PyThreadState *tstate, PyObject *v, int argcnt, int argcntafter, _PyStackRef *sp);
+PyAPI_FUNC(int) _PyEval_UnpackIterableValues(PyThreadState *tstate, PyObject *v, int argcnt, int argcntafter, PyValue *sp);
 PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame);
 /* Where frame resumes when a generator that it resumed returns: past the
  * exit of its SEND or FOR_ITER, or for the entry frame, the next word. */
 PyAPI_FUNC(_PyInstr *) _PyEval_GeneratorReturnTarget(_PyInterpreterFrame *frame);
-PyAPI_FUNC(PyObject **) _PyObjectArray_FromStackRefArray(_PyStackRef *input, Py_ssize_t nargs, PyObject **scratch);
+PyAPI_FUNC(PyObject **) _PyObjectArray_FromValues(PyValue *input, Py_ssize_t nargs, PyObject **scratch);
 
 PyAPI_FUNC(void) _PyObjectArray_Free(PyObject **array, PyObject **scratch);
 
 PyAPI_FUNC(PyObject *) _PyEval_GetANext(PyObject *aiter);
-PyAPI_FUNC(void) _PyEval_LoadGlobalStackRef(PyObject *globals, PyObject *builtins, PyObject *name, _PyStackRef *writeto);
+PyAPI_FUNC(void) _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name, PyValue *writeto);
 PyAPI_FUNC(PyObject *) _PyEval_GetAwaitable(PyObject *iterable, int oparg);
 PyAPI_FUNC(PyObject *) _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name);
 PyAPI_FUNC(int)
 _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args);
-PyAPI_FUNC(_PyStackRef) _PyEval_GetIter(_PyStackRef iterable, _PyStackRef *null_or_index, int yield_from);
-PyAPI_FUNC(int) _PyEval_StoreName(PyThreadState *tstate, _PyStackRef v, PyObject *name, PyObject* ns);
+PyAPI_FUNC(PyValue) _PyEval_GetIter(PyValue iterable, PyValue *null_or_index, int yield_from);
+PyAPI_FUNC(int) _PyEval_StoreName(PyThreadState *tstate, PyValue v, PyObject *name, PyObject* ns);
 PyAPI_FUNC(PyObject *) _PyEval_CallExitWithException(
     PyObject *exit_func, PyObject *exit_self, PyObject *val);
-PyAPI_FUNC(PyObject *) _PyEval_BinarySlice(_PyStackRef container, _PyStackRef start, _PyStackRef stop);
-PyAPI_FUNC(int) _PyEval_StoreSlice(_PyStackRef v, _PyStackRef container, _PyStackRef start, _PyStackRef stop);
-PyAPI_FUNC(int) _PyEval_IsInstanceStackRef(_PyStackRef inst, _PyStackRef cls);
+PyAPI_FUNC(PyObject *) _PyEval_BinarySlice(PyValue container, PyValue start, PyValue stop);
+PyAPI_FUNC(int) _PyEval_StoreSlice(PyValue v, PyValue container, PyValue start, PyValue stop);
+PyAPI_FUNC(int) _PyEval_IsInstanceValue(PyValue inst, PyValue cls);
 
 /*
  * Indicate whether a special method of given 'oparg' can use the (improved)
@@ -348,8 +348,8 @@ void _Py_unset_eval_breaker_bit_all(PyInterpreterState *interp, uintptr_t bit);
 extern int _PyRunRemoteDebugger(PyThreadState *tstate);
 #endif
 
-PyAPI_FUNC(_PyStackRef)
-_PyForIter_VirtualIteratorNext(PyThreadState* tstate, struct _PyInterpreterFrame* frame, _PyStackRef iter, _PyStackRef *index_ptr);
+PyAPI_FUNC(PyValue)
+_PyForIter_VirtualIteratorNext(PyThreadState* tstate, struct _PyInterpreterFrame* frame, PyValue iter, PyValue *index_ptr);
 
 /* Special methods used by LOAD_SPECIAL */
 #define SPECIAL___ENTER__   0
@@ -363,71 +363,71 @@ PyAPI_DATA(const _PyInstr *) _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR;
 /* Helper functions for large uops */
 
 PyAPI_FUNC(PyObject *)
-_Py_VectorCall_StackRefSteal(
-    _PyStackRef callable,
-    _PyStackRef *arguments,
+_Py_VectorCall_Values(
+    PyValue callable,
+    PyValue *arguments,
     int total_args,
-    _PyStackRef kwnames);
+    PyValue kwnames);
 
 PyAPI_FUNC(PyObject*)
-_Py_VectorCallInstrumentation_StackRefSteal(
-    _PyStackRef callable,
-    _PyStackRef* arguments,
+_Py_VectorCallInstrumentation_Values(
+    PyValue callable,
+    PyValue* arguments,
     int total_args,
-    _PyStackRef kwnames,
+    PyValue kwnames,
     bool call_instrumentation,
     _PyInterpreterFrame* frame,
     _PyInstr* this_instr,
     PyThreadState* tstate);
 
 PyAPI_FUNC(PyObject *)
-_Py_BuiltinCallFast_StackRef(
-    _PyStackRef callable,
-    _PyStackRef *arguments,
+_Py_BuiltinCallFast_Values(
+    PyValue callable,
+    PyValue *arguments,
     int total_args);
 
 PyAPI_FUNC(PyObject *)
-_Py_BuiltinCallFastWithKeywords_StackRef(
-    _PyStackRef callable,
-    _PyStackRef *arguments,
+_Py_BuiltinCallFastWithKeywords_Values(
+    PyValue callable,
+    PyValue *arguments,
     int total_args);
 
 PyAPI_FUNC(PyObject *)
-_PyCallMethodDescriptorFast_StackRef(
-    _PyStackRef callable,
+_PyCallMethodDescriptorFast_Values(
+    PyValue callable,
     PyCFunctionFast cfunc,
     PyObject *self,
-    _PyStackRef *arguments,
+    PyValue *arguments,
     int total_args);
 
 PyAPI_FUNC(PyObject *)
-_PyCallMethodDescriptorFastWithKeywords_StackRef(
-    _PyStackRef callable,
+_PyCallMethodDescriptorFastWithKeywords_Values(
+    PyValue callable,
     PyCFunctionFastWithKeywords cfunc,
     PyObject *self,
-    _PyStackRef *arguments,
+    PyValue *arguments,
     int total_args);
 
 PyAPI_FUNC(PyObject *)
-_Py_CallBuiltinClass_StackRef(
-    _PyStackRef callable,
-    _PyStackRef *arguments,
+_Py_CallBuiltinClass_Values(
+    PyValue callable,
+    PyValue *arguments,
     int total_args);
 
 PyAPI_FUNC(PyObject *)
-_Py_BuildString_StackRefSteal(
-    _PyStackRef *arguments,
+_Py_BuildString_Values(
+    PyValue *arguments,
     int total_args);
 
 PyAPI_FUNC(PyObject *)
-_Py_BuildMap_StackRefSteal(
-    _PyStackRef *arguments,
+_Py_BuildMap_Values(
+    PyValue *arguments,
     int half_args);
 
-PyAPI_FUNC(_PyStackRef)
-_Py_LoadAttr_StackRefSteal(
-    PyThreadState *tstate, _PyStackRef owner,
-    PyObject *name, _PyStackRef *self_or_null);
+PyAPI_FUNC(PyValue)
+_Py_LoadAttr_Values(
+    PyThreadState *tstate, PyValue owner,
+    PyObject *name, PyValue *self_or_null);
 
 // Like PyMapping_GetOptionalItem, but returns the PyObject* instead of taking
 // it as an out parameter. This helps MSVC's escape analysis when used with

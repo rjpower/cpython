@@ -78,7 +78,7 @@ gen_traverse(PyObject *self, visitproc visit, void *arg)
     else {
         // We still need to visit the code object when the frame is cleared to
         // ensure that it's kept alive if the reference is deferred.
-        _Py_VISIT_STACKREF(gen->gi_iframe.f_executable);
+        _Py_VISIT_VALUE(gen->gi_iframe.f_executable);
     }
     /* cr_origin holds only tuples, strings and ints, which cannot form a
        cycle, but the tracing mark must reach them. */
@@ -218,7 +218,7 @@ gen_dealloc(PyObject *self)
         gen_clear_frame(gen);
     }
     assert(gen->gi_exc_state.exc_value == NULL);
-    PyStackRef_CLEAR(gen->gi_iframe.f_executable);
+    gen->gi_iframe.f_executable = PyValue_NULL;
     Py_CLEAR(gen->gi_name);
     Py_CLEAR(gen->gi_qualname);
 
@@ -245,11 +245,11 @@ gen_raise_already_executing_error(PyGenObject *gen)
 // is called.
 /* The receiver of the SEND whose YIELD_VALUE suspended frame: two slots
    below that of the yielded value, which the value sent in takes */
-static inline _PyStackRef
+static inline PyValue
 _PyGen_YieldFromRef(_PyInterpreterFrame *frame)
 {
-    _PyStackRef ref = frame->base[frame->return_slot - 2];
-    assert(!PyStackRef_IsNull(ref));
+    PyValue ref = frame->base[frame->return_slot - 2];
+    assert(!PyValue_IsNull(ref));
     return ref;
 }
 
@@ -264,7 +264,7 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
     /* arg goes to the slot of the yield that suspended the frame, or of
        the value that RETURN_GENERATOR returned */
     PyObject *arg_obj = arg ? arg : Py_None;
-    _PyFrame_SetReturnValue(frame, PyStackRef_FromPyObject(arg_obj));
+    _PyFrame_SetReturnValue(frame, PyValue_FromObject(arg_obj));
 
     _PyErr_StackItem *prev_exc_info = tstate->exc_info;
     gen->gi_exc_state.previous_item = prev_exc_info;
@@ -485,7 +485,7 @@ gen_close(PyObject *self, PyObject *args)
     int err = 0;
     _PyInterpreterFrame *frame = &gen->gi_iframe;
     if (frame_state == FRAME_SUSPENDED_YIELD_FROM) {
-        PyObject *yf = PyStackRef_AsPyObjectBorrow(_PyGen_YieldFromRef(frame));
+        PyObject *yf = PyValue_ObjectBorrow(_PyGen_YieldFromRef(frame));
         err = gen_close_iter(yf);
         Py_DECREF(yf);
     }
@@ -645,7 +645,7 @@ _gen_throw(PyGenObject *gen, int close_on_genexit,
 
     if (frame_state == FRAME_SUSPENDED_YIELD_FROM) {
         _PyInterpreterFrame *frame = &gen->gi_iframe;
-        PyObject *yf = PyStackRef_AsPyObjectBorrow(_PyGen_YieldFromRef(frame));
+        PyObject *yf = PyValue_ObjectBorrow(_PyGen_YieldFromRef(frame));
         PyObject *ret;
         int err;
         if (PyErr_GivenExceptionMatches(typ, PyExc_GeneratorExit) &&
@@ -890,7 +890,7 @@ gen_getyieldfrom(PyObject *self, void *Py_UNUSED(ignored))
     if (frame_state != FRAME_SUSPENDED_YIELD_FROM) {
         Py_RETURN_NONE;
     }
-    return PyStackRef_AsPyObjectBorrow(_PyGen_YieldFromRef(&gen->gi_iframe));
+    return PyValue_ObjectBorrow(_PyGen_YieldFromRef(&gen->gi_iframe));
 }
 
 
@@ -1094,7 +1094,7 @@ make_gen(PyTypeObject *type, PyFunctionObject *func)
     gen->gi_weakreflist = NULL;
     gen->gi_exc_state.exc_value = NULL;
     gen->gi_exc_state.previous_item = NULL;
-    gen->gi_iframe.f_executable = PyStackRef_None;
+    gen->gi_iframe.f_executable = _PyValue_None;
     PyObject *name = FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_name);
     assert(name != NULL);
     gen->gi_name = Py_NewRef(name);

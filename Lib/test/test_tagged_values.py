@@ -11,7 +11,7 @@ import unittest
 from test.support import import_helper, script_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
-roundtrip = getattr(_testinternalcapi, "stackref_box_roundtrip", None)
+roundtrip = getattr(_testinternalcapi, "value_box_roundtrip", None)
 inline_locals = getattr(_testinternalcapi, "inline_locals", None)
 # Absent from builds without inline values, false under PYTHON_TAGGED_VALUES=0.
 TAGGED_VALUES = getattr(_testinternalcapi, "TAGGED_VALUES", None)

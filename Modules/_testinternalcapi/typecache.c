@@ -7,7 +7,7 @@
 
 #include "pycore_critical_section.h"
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
-#include "pycore_stackref.h"      // PyStackRef_AsPyObjectBorrow()
+#include "pycore_value.h"         // PyValue_ObjectBorrow()
 #include "pycore_typecache.h"     // _PyTypeCache_Lookup()
 
 
@@ -52,11 +52,11 @@ type_cache_lookup(PyObject *Py_UNUSED(self), PyObject *args)
         _PyTypeCache_Lookup((PyTypeObject *)type_obj, name);
     Py_DECREF(name);
     PyObject *value;
-    if (PyStackRef_IsNull(r.value)) {
+    if (PyValue_IsNull(r.value)) {
         value = Py_NewRef(Py_None);
     }
     else {
-        value = PyStackRef_AsPyObjectBorrow(r.value);
+        value = PyValue_ObjectBorrow(r.value);
     }
     return Py_BuildValue("(iNk)",
                          r.cache_hit, value,

@@ -31,6 +31,7 @@
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_object.h"        // _PyObject_IsFreed()
+#include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
 #include "pycore_opcode_metadata.h" // _PyOpcode_OpName
 #include "pycore_pathconfig.h"    // _PyPathConfig_ClearGlobal()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
@@ -1085,7 +1086,7 @@ set_eval_frame_default(PyObject *self, PyObject *Py_UNUSED(args))
 static PyObject *
 record_eval(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
 {
-    if (PyStackRef_FunctionCheck(f->f_funcobj)) {
+    if (PyValue_Type(f->f_funcobj) == &PyFunction_Type) {
         PyFunctionObject *func = _PyFrame_GetFunction(f);
         PyObject *module = _get_current_module();
         assert(module != NULL);
@@ -1147,7 +1148,7 @@ get_eval_frame_stats(PyObject *self, PyObject *Py_UNUSED(args))
 static PyObject *
 record_eval_interp(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
 {
-    if (PyStackRef_FunctionCheck(f->f_funcobj)) {
+    if (PyValue_Type(f->f_funcobj) == &PyFunction_Type) {
         PyFunctionObject *func = _PyFrame_GetFunction(f);
         PyObject *module = _get_current_module();
         assert(module != NULL);
@@ -2939,21 +2940,20 @@ incref_decref_delayed(PyObject *self, PyObject *op)
     Py_RETURN_NONE;
 }
 
-#ifdef Py_STACKREF_INLINE_VALUES
 // Encode an exact int32 or non-NaN float as an inline stack value, check that
-// the operations valid on any stackref treat it as a value, then box it.
+// the operations valid on any PyValue treat it as a value, then box it.
 static PyObject *
-stackref_box_roundtrip(PyObject *self, PyObject *arg)
+value_box_roundtrip(PyObject *self, PyObject *arg)
 {
-    _PyStackRef ref;
+    PyValue ref;
     if (PyLong_CheckExact(arg)) {
         int32_t i;
         if (PyLong_AsInt32(arg, &i) < 0) {
             return NULL;
         }
-        ref = PyStackRef_FromInt32(i);
-        if (!PyStackRef_IsInlineInt(ref) || PyStackRef_InlineInt(ref) != i
-            || !PyStackRef_BothInlineInt(ref, ref) || !PyStackRef_LongCheck(ref))
+        ref = PyValue_FromInt32(i);
+        if (!PyValue_IsInlineInt(ref) || PyValue_Int32(ref) != i
+            || !_PyValue_BothInlineInt(ref, ref) || PyValue_Type(ref) != &PyLong_Type)
         {
             PyErr_SetString(PyExc_AssertionError, "bad inline int");
             return NULL;
@@ -2965,10 +2965,10 @@ stackref_box_roundtrip(PyObject *self, PyObject *arg)
             PyErr_SetString(PyExc_ValueError, "NaN has no inline encoding");
             return NULL;
         }
-        ref = PyStackRef_FromDoubleNotNaN(d);
-        double back = PyStackRef_InlineFloat(ref);
-        if (!PyStackRef_IsInlineFloat(ref) || memcmp(&back, &d, sizeof(d)) != 0
-            || PyStackRef_IsInlineInt(ref) || !PyStackRef_FloatCheck(ref))
+        ref = PyValue_FromDouble(d);
+        double back = PyValue_Double(ref);
+        if (!PyValue_IsInlineFloat(ref) || memcmp(&back, &d, sizeof(d)) != 0
+            || PyValue_IsInlineInt(ref) || PyValue_Type(ref) != &PyFloat_Type)
         {
             PyErr_SetString(PyExc_AssertionError, "bad inline float");
             return NULL;
@@ -2978,26 +2978,26 @@ stackref_box_roundtrip(PyObject *self, PyObject *arg)
         PyErr_SetString(PyExc_TypeError, "expected an exact int or float");
         return NULL;
     }
-    if (!PyStackRef_IsInline(ref) || PyStackRef_IsPointerSpace(ref)
-        || PyStackRef_IsTaggedIndex(ref) || PyStackRef_IsNull(ref)
-        || PyStackRef_IsError(ref) || !PyStackRef_IsValid(ref)
-        || PyStackRef_TYPE(ref) != Py_TYPE(arg)
-        || !PyStackRef_Is(ref, ref)
-        || !PyStackRef_IsInlineAt(&ref) || PyStackRef_IsPointerSpaceAt(&ref)
-        || PyStackRef_Is(ref, PyStackRef_None))
+    if (!PyValue_IsInline(ref) || _PyValue_IsPointerSpace(ref)
+        || _PyValue_IsTaggedIndex(ref) || PyValue_IsNull(ref)
+        || _PyValue_IsError(ref) || !_PyValue_IsValid(ref)
+        || PyValue_Type(ref) != Py_TYPE(arg)
+        || !PyValue_Is(ref, ref)
+        || !_PyValue_IsInlineAt(&ref) || _PyValue_IsPointerSpaceAt(&ref)
+        || PyValue_Is(ref, _PyValue_None))
     {
         PyErr_SetString(PyExc_AssertionError, "inline value predicates disagree");
         return NULL;
     }
-    _PyStackRef boxed = PyStackRef_Box(ref);
-    if (PyStackRef_IsInline(boxed)) {
+    PyValue boxed = PyValue_Box(ref);
+    if (PyValue_IsInline(boxed)) {
         return NULL;
     }
-    if (!PyStackRef_IsPointerSpaceAt(&boxed) || PyStackRef_IsInlineAt(&boxed)) {
+    if (!_PyValue_IsPointerSpaceAt(&boxed) || _PyValue_IsInlineAt(&boxed)) {
         PyErr_SetString(PyExc_AssertionError, "box is not a pointer");
         return NULL;
     }
-    return PyStackRef_AsPyObjectBorrow(boxed);
+    return PyValue_ObjectBorrow(boxed);
 }
 
 // The names of the frame's local variables that hold inline values.
@@ -3015,7 +3015,7 @@ inline_locals(PyObject *self, PyObject *frame)
         return NULL;
     }
     for (int i = 0; i < co->co_nlocalsplus; i++) {
-        if (PyStackRef_IsInline(f->base[i]) &&
+        if (PyValue_IsInline(f->base[i]) &&
             PySet_Add(names, PyTuple_GET_ITEM(co->co_localsplusnames, i)) < 0)
         {
             Py_DECREF(names);
@@ -3024,7 +3024,6 @@ inline_locals(PyObject *self, PyObject *frame)
     }
     return names;
 }
-#endif
 
 #ifdef __EMSCRIPTEN__
 #include "emscripten.h"
@@ -3675,10 +3674,8 @@ static PyMethodDef module_functions[] = {
     {"get_tracked_heap_size", get_tracked_heap_size, METH_NOARGS},
     {"is_static_immortal", is_static_immortal, METH_O},
     {"incref_decref_delayed", incref_decref_delayed, METH_O},
-#ifdef Py_STACKREF_INLINE_VALUES
-    {"stackref_box_roundtrip", stackref_box_roundtrip, METH_O},
+    {"value_box_roundtrip", value_box_roundtrip, METH_O},
     {"inline_locals", inline_locals, METH_O},
-#endif
     GET_NEXT_DICT_KEYS_VERSION_METHODDEF
 #ifdef __EMSCRIPTEN__
     {"emscripten_set_up_async_input_device", emscripten_set_up_async_input_device, METH_NOARGS},
@@ -3769,14 +3766,12 @@ module_exec(PyObject *module)
         return 1;
     }
 
-#ifdef Py_STACKREF_INLINE_VALUES
     // Absent from builds without inline values; false under
     // PYTHON_TAGGED_VALUES=0.
     if (PyModule_Add(module, "TAGGED_VALUES", PyBool_FromLong(
             _PyInterpreterState_GET()->opt_config.tagged_values_enabled)) < 0) {
         return 1;
     }
-#endif
 
 #ifdef Py_SHAPES
     if (PyModule_AddIntMacro(module, _Py_SHAPE_MAX_PER_TYPE) < 0) {

@@ -463,10 +463,16 @@ class InlineFloatTest(unittest.TestCase):
         self.assertEqual(f(3), (1.125, True))
 
     def test_power(self):
+        # ** has no specialisation: the generic handler's value protocol
+        # computes float ** float without a box.
+        def g(x, y):
+            p = x ** y
+            frame = sys._getframe()
+            return inline_locals(frame)
+        self.assertIn("p", warm(g, 2.0, -1.5))
         def f(x, y):
             return x ** y
         warm(f, 2.0, -1.5)
-        self.assertIn("BINARY_OP_POWER_FLOAT", opnames(f))
         for x, y in [(2.0, -1.5), (2.0, 3), (3, 0.5), (1.0, 1e308),
                      (0.5, 2000.0), (1e-300, 0.5), (2.5, 0.0)]:
             with self.subTest(x=x, y=y):

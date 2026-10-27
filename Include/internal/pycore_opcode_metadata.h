@@ -62,8 +62,6 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
             return 2;
         case BINARY_OP_OR_INT:
             return 2;
-        case BINARY_OP_POWER_FLOAT:
-            return 2;
         case BINARY_OP_REMAINDER_INT:
             return 2;
         case BINARY_OP_RSHIFT_INT:
@@ -606,8 +604,6 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
         case BINARY_OP_MULTIPLY_INT:
             return 1;
         case BINARY_OP_OR_INT:
-            return 1;
-        case BINARY_OP_POWER_FLOAT:
             return 1;
         case BINARY_OP_REMAINDER_INT:
             return 1;
@@ -1204,7 +1200,6 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [BINARY_OP_MULTIPLY_FLOAT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_PURE_FLAG },
     [BINARY_OP_MULTIPLY_INT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
     [BINARY_OP_OR_INT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_POWER_FLOAT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_PURE_FLAG },
     [BINARY_OP_REMAINDER_INT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
     [BINARY_OP_RSHIFT_INT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
     [BINARY_OP_SUBSCR_DICT] = { true, INSTR_FMT_IXC0000, HAS_DEOPT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
@@ -1484,7 +1479,6 @@ _PyOpcode_macro_expansion[256] = {
     [BINARY_OP_MULTIPLY_FLOAT] = { .nuops = 3, .uops = { { _BINARY_OP_MULTIPLY_FLOAT, OPARG_SIMPLE, 5 }, { _POP_TOP, OPARG_SIMPLE, 5 }, { _POP_TOP, OPARG_SIMPLE, 5 } } },
     [BINARY_OP_MULTIPLY_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_INT, OPARG_SIMPLE, 0 }, { _BINARY_OP_MULTIPLY_INT, OPARG_SIMPLE, 5 }, { _POP_TOP, OPARG_SIMPLE, 5 }, { _POP_TOP, OPARG_SIMPLE, 5 } } },
     [BINARY_OP_OR_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_INT, OPARG_SIMPLE, 0 }, { _BINARY_OP_OR_INT, OPARG_SIMPLE, 5 }, { _POP_TOP, OPARG_SIMPLE, 5 }, { _POP_TOP, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_POWER_FLOAT] = { .nuops = 3, .uops = { { _BINARY_OP_POWER_FLOAT, OPARG_SIMPLE, 5 }, { _POP_TOP, OPARG_SIMPLE, 5 }, { _POP_TOP, OPARG_SIMPLE, 5 } } },
     [BINARY_OP_REMAINDER_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_INT, OPARG_SIMPLE, 0 }, { _BINARY_OP_REMAINDER_INT, OPARG_SIMPLE, 5 }, { _POP_TOP, OPARG_SIMPLE, 5 }, { _POP_TOP, OPARG_SIMPLE, 5 } } },
     [BINARY_OP_RSHIFT_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_INT, OPARG_SIMPLE, 0 }, { _BINARY_OP_RSHIFT_INT, OPARG_SIMPLE, 5 }, { _POP_TOP, OPARG_SIMPLE, 5 }, { _POP_TOP, OPARG_SIMPLE, 5 } } },
     [BINARY_OP_SUBSCR_DICT] = { .nuops = 4, .uops = { { _GUARD_NOS_DICT_SUBSCRIPT, OPARG_SIMPLE, 0 }, { _BINARY_OP_SUBSCR_DICT, OPARG_SIMPLE, 5 }, { _POP_TOP, OPARG_SIMPLE, 5 }, { _POP_TOP, OPARG_SIMPLE, 5 } } },
@@ -1708,7 +1702,6 @@ const char *_PyOpcode_OpName[267] = {
     [BINARY_OP_MULTIPLY_FLOAT] = "BINARY_OP_MULTIPLY_FLOAT",
     [BINARY_OP_MULTIPLY_INT] = "BINARY_OP_MULTIPLY_INT",
     [BINARY_OP_OR_INT] = "BINARY_OP_OR_INT",
-    [BINARY_OP_POWER_FLOAT] = "BINARY_OP_POWER_FLOAT",
     [BINARY_OP_REMAINDER_INT] = "BINARY_OP_REMAINDER_INT",
     [BINARY_OP_RSHIFT_INT] = "BINARY_OP_RSHIFT_INT",
     [BINARY_OP_SUBSCR_DICT] = "BINARY_OP_SUBSCR_DICT",
@@ -2045,6 +2038,7 @@ const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
 PyAPI_DATA(const uint8_t) _PyOpcode_Deopt[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Deopt[256] = {
+    [127] = 127,
     [BINARY_OP] = BINARY_OP,
     [BINARY_OP_ADD_FLOAT] = BINARY_OP,
     [BINARY_OP_ADD_INT] = BINARY_OP,
@@ -2057,7 +2051,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [BINARY_OP_MULTIPLY_FLOAT] = BINARY_OP,
     [BINARY_OP_MULTIPLY_INT] = BINARY_OP,
     [BINARY_OP_OR_INT] = BINARY_OP,
-    [BINARY_OP_POWER_FLOAT] = BINARY_OP,
     [BINARY_OP_REMAINDER_INT] = BINARY_OP,
     [BINARY_OP_RSHIFT_INT] = BINARY_OP,
     [BINARY_OP_SUBSCR_DICT] = BINARY_OP,
@@ -2306,6 +2299,7 @@ const uint8_t _PyOpcode_Deopt[256] = {
 #endif // NEED_OPCODE_METADATA
 
 #define EXTRA_CASES \
+    case 127: \
         ;
 struct pseudo_targets {
     uint8_t as_sequence;

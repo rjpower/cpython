@@ -36,6 +36,7 @@ with test_tools.imports_under_tool("cases_generator"):
     import ir_generator
     import ir_metadata_generator
     import parser
+    import root_check_c
     from stack import Local, Stack
 
 
@@ -1027,6 +1028,379 @@ class TestIRCases(unittest.TestCase):
                       + "BINARY_OP_ADD", lines)
         self.assertIn('static_assert(BINARY_OP_ADD == _PyIR_BINARY_OP_FIRST + '
                       'NB_ADD, "BINARY_OP_ADD");', lines)
+
+
+class TestRootCheckC(unittest.TestCase):
+    """root_check's C mode (Tools/cases_generator/root_check_c.py, note 11
+    section 2.1).  Each negative case is a precise function that must
+    produce the named error; each positive case must check clean.
+    collect() is an unknown function, so a reentrant call; use(), use_v()
+    and use_p() are non-collecting."""
+
+    PRELUDE = """static inline void use(PyObject *o) { (void)o; }
+static inline void use_v(PyValue v) { (void)v; }
+static inline void use_p(const char *p) { (void)p; }
+"""
+
+    NEGATIVE = {
+        "no_span": ("""
+Py_GC_PRECISE static void f(void) {
+    PyObject *x = PyLong_FromLong(1);
+    collect();
+    use(x);
+}
+""", "'x' is held only in a C local across the collecting call to 'collect'"),
+        "store_after_pop": ("""
+Py_GC_PRECISE static void f(PyThreadState *tstate) {
+    _PyValueRoot r;
+    _PyThreadState_PushValueRoot(tstate, &r);
+    _PyThreadState_PopValueRoot(tstate, &r);
+    PyObject *x = PyLong_FromLong(1);
+    r.object = x;
+    collect();
+    use(x);
+}
+""", "a store into span 'r', which is not pushed"),
+        "pop_on_one_path": ("""
+Py_GC_PRECISE static int f(PyThreadState *tstate) {
+    _PyValueRoot r;
+    _PyThreadState_PushValueRoot(tstate, &r);
+    if (collect() < 0) {
+        goto error;
+    }
+    _PyThreadState_PopValueRoot(tstate, &r);
+    return 0;
+error:
+    return -1;
+}
+""", 'a span is pushed on one path and not on another'),
+        "pymem_as_slots": ("""
+Py_GC_PRECISE static void f(void) {
+    PyValue *buf = PyMem_Malloc(4 * sizeof(PyValue));
+    PyValue v = buf[0];
+    collect();
+    use_v(v);
+}
+""", "'v' is held only in a C local across the collecting call to 'collect' ('buf', which is not a frame slot pointer)"),
+        "anchor_overwritten": ("""
+Py_GC_PRECISE static void f(PyThreadState *tstate) {
+    _PyValueRoot r;
+    _PyThreadState_PushValueRoot(tstate, &r);
+    PyObject *x = PyLong_FromLong(1);
+    r.object = x;
+    PyObject *y = PyLong_FromLong(2);
+    r.object = y;
+    collect();
+    use(x);
+    use(y);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""", "'x' is held only in a C local across the collecting call to 'collect'"),
+        "list_item_reentrant": ("""
+Py_GC_PRECISE static void f(PyListObject *list) {
+    PyValue v = PyList_GET_VALUE(list, 0);
+    collect();
+    use_v(v);
+}
+""", "'v' is held only in a C local across the collecting call to 'collect' (a borrow of mutable field 'ob_item' across a reentrant call)"),
+        "weakref_across_alloc": ("""
+Py_GC_PRECISE static void f(PyWeakReference *wr) {
+    PyObject *o = wr->wr_object;
+    PyObject *n = PyLong_FromLong(1);
+    use(o);
+    use(n);
+}
+""", "'o' is held only in a C local across the collecting call to 'PyLong_FromLong' (a borrow of untraced or weak field 'wr_object')"),
+        "param_after_call": ("""
+Py_GC_PRECISE static void f(PyObject *p) {
+    collect();
+    use(p);
+}
+""", "'p' is held only in a C local across the collecting call to 'collect' (parameter 'p', which no span covers)"),
+        "sibling_temporary": ("""
+Py_GC_PRECISE static void f(void) {
+    g(PyLong_FromLong(5), collect());
+}
+""", "is a temporary held across the collecting call to 'collect'"),
+        "alias_store": ("""
+Py_GC_PRECISE static void f(Py_GC_SLOTS PyValue *slots) {
+    PyValue *q = slots;
+    PyValue x = slots[0];
+    q[0] = PyValue_NULL;
+    collect();
+    use_v(x);
+}
+""", "'x' is held only in a C local across the collecting call to 'collect' (a slot of 'slots', overwritten)"),
+        "field_other_base": ("""
+Py_GC_PRECISE static void f(PyFunctionObject *a, PyFunctionObject *b, PyObject *g) {
+    PyObject *globals = a->func_globals;
+    b->func_globals = g;
+    PyObject *n = PyLong_FromLong(1);
+    use(globals);
+    use(n);
+}
+""", "'globals' is held only in a C local across the collecting call to 'PyLong_FromLong' ('a->func_globals', overwritten)"),
+        "memset_slots": ("""
+Py_GC_PRECISE static void f(Py_GC_SLOTS PyValue *slots) {
+    PyValue x = slots[0];
+    memset(slots, 0, 4 * sizeof(PyValue));
+    collect();
+    use_v(x);
+}
+""", "'x' is held only in a C local across the collecting call to 'collect' (a slot of 'slots', overwritten)"),
+        "span_index_store": ("""
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyValue *buf) {
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    PyValue x = PyLong_FromLong(1);
+    r.base[0] = x;
+    collect();
+    use_v(x);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""", "'x' is held only in a C local across the collecting call to 'collect'"),
+        "buffer_owner_dead": ("""
+Py_GC_PRECISE static void f(void) {
+    PyObject *s = PyUnicode_FromString("abc");
+    const char *p = PyUnicode_AsUTF8(s);
+    collect();
+    use_p(p);
+}
+""", "'s' is held only in a C local across the collecting call to 'collect'"),
+        "dict_next": ("""
+Py_GC_PRECISE static void f(PyObject *d) {
+    Py_ssize_t pos = 0;
+    PyObject *k, *v;
+    while (PyDict_Next(d, &pos, &k, &v)) {
+        use(k);
+    }
+}
+""", "the address of object local 'k' escapes to 'PyDict_Next'"),
+        "cast_uintptr": ("""
+Py_GC_PRECISE static void f(PyObject *o) {
+    uintptr_t h = (uintptr_t)o;
+    collect();
+    use((PyObject *)h);
+}
+""", 'an object is cast to a type that is not an object, which hides it'),
+        "args_anchored_address": ("""
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static void callee(PyObject *o) {
+    use(o);
+}
+Py_GC_PRECISE static void *f(void) {
+    return (void *)callee;
+}
+""", "'callee' is Py_GC_ARGS_ANCHORED; its address may not be taken"),
+        "detach_helper_precise": ("""
+Py_GC_PRECISE void PyEval_SaveThread(void) {
+}
+""", "'PyEval_SaveThread' may return while its thread is detached and may not be marked precise"),
+        "args_anchored_unanchored": ("""
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static void callee(PyValue v) {
+    collect();
+    use_v(v);
+}
+Py_GC_PRECISE static void f(void) {
+    PyValue x = PyLong_FromLong(1);
+    callee(x);
+}
+""", "an argument of 'callee', which is Py_GC_ARGS_ANCHORED, is not anchored"),
+        "args_anchored_from_imprecise": ("""
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static void callee(PyValue v) {
+    use_v(v);
+}
+static void g(Py_GC_SLOTS PyValue *slots) {
+    callee(slots[0]);
+}
+""", "'callee' is Py_GC_ARGS_ANCHORED but called from 'g', which is not precise"),
+        "args_anchored_not_static": ("""
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED void callee(PyValue v) {
+    use_v(v);
+}
+""", "'callee' is Py_GC_ARGS_ANCHORED but not static"),
+        "unsupported_setjmp": ("""
+Py_GC_PRECISE static void f(void) {
+    jmp_buf b;
+    if (setjmp(b)) {
+        return;
+    }
+}
+""", "setjmp is outside the C mode's subset"),
+    }
+
+    POSITIVE = {
+        "value_in_span": """
+Py_GC_PRECISE static void f(PyThreadState *tstate) {
+    _PyValueRoot r;
+    _PyThreadState_PushValueRoot(tstate, &r);
+    PyObject *x = PyLong_FromLong(1);
+    r.object = x;
+    collect();
+    use(x);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""",
+        "slot_load": """
+Py_GC_PRECISE static void f(Py_GC_SLOTS PyValue *slots) {
+    PyValue x = slots[0];
+    collect();
+    use_v(x);
+}
+""",
+        "tuple_item": """
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyTupleObject *t) {
+    _PyValueRoot r;
+    _PyThreadState_PushValueRoot(tstate, &r);
+    r.object = (PyObject *)t;
+    PyValue v = PyTuple_GET_VALUE(t, 0);
+    collect();
+    use_v(v);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""",
+        "strong_field_alloc": """
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyFunctionObject *func) {
+    _PyValueRoot r;
+    _PyThreadState_PushValueRoot(tstate, &r);
+    r.object = (PyObject *)func;
+    PyObject *globals = func->func_globals;
+    PyObject *n = PyLong_FromLong(1);
+    use(globals);
+    use(n);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""",
+        "args_anchored": """
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static void callee(PyValue v) {
+    collect();
+    use_v(v);
+}
+Py_GC_PRECISE static void f(Py_GC_SLOTS PyValue *slots) {
+    callee(slots[0]);
+}
+""",
+        "param_in_span": """
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *p) {
+    _PyValueRoot r;
+    _PyThreadState_PushValueRoot(tstate, &r);
+    r.object = p;
+    collect();
+    use(p);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""",
+        "goto_cleanup": """
+Py_GC_PRECISE static int f(PyThreadState *tstate) {
+    int res = -1;
+    _PyValueRoot r;
+    _PyThreadState_PushValueRoot(tstate, &r);
+    PyObject *x = PyLong_FromLong(1);
+    if (x == NULL) {
+        goto done;
+    }
+    r.object = x;
+    if (collect() < 0) {
+        goto done;
+    }
+    use(x);
+    res = 0;
+done:
+    _PyThreadState_PopValueRoot(tstate, &r);
+    return res;
+}
+""",
+        "buffer_owner_in_span": """
+Py_GC_PRECISE static void f(PyThreadState *tstate) {
+    _PyValueRoot r;
+    _PyThreadState_PushValueRoot(tstate, &r);
+    PyObject *s = PyUnicode_FromString("abc");
+    r.object = s;
+    const char *p = PyUnicode_AsUTF8(s);
+    collect();
+    use_p(p);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""",
+        "span_append": """
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyValue *buf) {
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    PyValue x = PyLong_FromLong(1);
+    _PyValueSpan_Append(&r, x);
+    collect();
+    use_v(x);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""",
+        "dict_next_value": """
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *d) {
+    _PyValueRoot r;
+    _PyThreadState_PushValueRoot(tstate, &r);
+    r.object = d;
+    Py_ssize_t pos = 0;
+    PyValue k, v;
+    while (_PyDict_NextValue(d, &pos, &k, &v)) {
+        PyObject *n = PyLong_FromLong(1);
+        use_v(k);
+        use_v(v);
+        use(n);
+    }
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""",
+        "slot_offset": """
+Py_GC_PRECISE static void f(Py_GC_SLOTS PyValue *slots) {
+    PyValue *args = slots + 1;
+    PyValue x = args[0];
+    collect();
+    use_v(x);
+}
+""",
+    }
+
+    def check(self, src):
+        return [str(e) for e in root_check_c.check_source(
+            self.PRELUDE + src,
+            include_dirs=root_check_c.default_include_dirs())]
+
+    def test_negative(self):
+        for name, (src, want) in self.NEGATIVE.items():
+            with self.subTest(name):
+                errors = self.check(src)
+                self.assertTrue(any(want in e for e in errors),
+                                f"{want!r} not in {errors}")
+
+    def test_positive(self):
+        for name, src in self.POSITIVE.items():
+            with self.subTest(name):
+                self.assertEqual(self.check(src), [])
+
+    def test_unmarked_not_checked(self):
+        src = self.NEGATIVE["no_span"][0].replace("Py_GC_PRECISE ", "")
+        self.assertEqual(self.check(src), [])
+
+    def test_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "unchecked.c")
+            with open(path, "w") as f:
+                f.write(self.PRELUDE + self.NEGATIVE["no_span"][0])
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                status = root_check_c.main([path])
+            self.assertEqual(status, 1)
+            self.assertIn(f"{path}:", out.getvalue())
+            self.assertIn("is held only in a C local", out.getvalue())
+            with open(path, "w") as f:
+                f.write(self.PRELUDE + self.POSITIVE["value_in_span"])
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(root_check_c.main([path]), 0)
+
+    def test_char_literals_and_splices(self):
+        src = root_check_c.prepare('x = \'"\'; s = "it\'s \\\nfine";')
+        self.assertEqual(src.count("\n"), 1)
+        self.assertIn('"it\'s fine"', src)
+        self.assertTrue(src.startswith("x = 0"))
+
 
 if __name__ == "__main__":
     unittest.main()

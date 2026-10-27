@@ -979,8 +979,19 @@ clinic-tests: check-clean-src $(srcdir)/Lib/test/clinic.test.c
 # Objects linked into the interpreter only, not into libpython.
 PLATFORM_MAIN_OBJS=	@PLATFORM_MAIN_OBJS@
 
+# root_check's C mode (Include/internal/pycore_gc_walk.h) over every core
+# source file that marks a function Py_GC_PRECISE: the interpreter does not
+# link while a marked function fails the check.
+GC_PRECISE_CHECK=Tools/cases_generator/root_check_c.py
+Python/gc_precise.stamp: $(LIBRARY_OBJS) $(srcdir)/$(GC_PRECISE_CHECK)
+	@files=`cd $(srcdir) && grep -l -r -w --include='*.c' Py_GC_PRECISE Objects Python Modules Parser || true`; \
+	if test -n "$$files"; then \
+		(cd $(srcdir) && $(PYTHON_FOR_REGEN) $(GC_PRECISE_CHECK) $$files) || exit 1; \
+	fi
+	@touch $@
+
 # Build the interpreter
-$(BUILDPYTHON):	Programs/python.o $(PLATFORM_MAIN_OBJS) $(LINK_PYTHON_DEPS)
+$(BUILDPYTHON):	Programs/python.o $(PLATFORM_MAIN_OBJS) $(LINK_PYTHON_DEPS) Python/gc_precise.stamp
 	$(LINKCC) $(PY_CORE_EXE_LDFLAGS) $(LINKFORSHARED) -o $@ Programs/python.o $(PLATFORM_MAIN_OBJS) $(LINK_PYTHON_OBJS) $(LIBS) $(MODLIBS) $(SYSLIBS)
 
 platform: $(PYTHON_FOR_BUILD_DEPS) pybuilddir.txt
@@ -1364,6 +1375,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_function.h \
 		$(srcdir)/Include/internal/pycore_gc.h \
 		$(srcdir)/Include/internal/pycore_gc_trace.h \
+		$(srcdir)/Include/internal/pycore_gc_walk.h \
 		$(srcdir)/Include/internal/pycore_genobject.h \
 		$(srcdir)/Include/internal/pycore_getopt.h \
 		$(srcdir)/Include/internal/pycore_gil.h \
@@ -3222,6 +3234,7 @@ docclean:
 .PHONY: clean-retain-profile
 clean-retain-profile: pycremoval
 	find . -name '*.[oa]' -exec rm -f {} ';'
+	rm -f Python/gc_precise.stamp
 	find . -name '*.s[ol]' -exec rm -f {} ';'
 	find . -name '*.so.[0-9]*.[0-9]*' -exec rm -f {} ';'
 	find . -name '*.lto' -exec rm -f {} ';'

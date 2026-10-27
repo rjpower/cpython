@@ -40,6 +40,7 @@ int _PyTestCapi_Init_Mem(PyObject *module);
 int _PyTestCapi_Init_Watchers(PyObject *module);
 int _PyTestCapi_Init_Long(PyObject *module);
 int _PyTestCapi_Init_Float(PyObject *module);
+int _PyTestCapi_Init_PyValue(PyObject *module);
 int _PyTestCapi_Init_Complex(PyObject *module);
 int _PyTestCapi_Init_Numbers(PyObject *module);
 int _PyTestCapi_Init_Dict(PyObject *module);

@@ -3614,6 +3614,9 @@ _testcapi_exec(PyObject *m)
     if (_PyTestCapi_Init_Float(m) < 0) {
         return -1;
     }
+    if (_PyTestCapi_Init_PyValue(m) < 0) {
+        return -1;
+    }
     if (_PyTestCapi_Init_Complex(m) < 0) {
         return -1;
     }

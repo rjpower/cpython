@@ -1641,7 +1641,7 @@ class ParseArgsCodeGen:
                              finale: str) -> None:
         """Wrap parser code in the vectorcall prototype."""
         prototype = PARSER_PROTOTYPE_VECTORCALL.replace(
-            "{vc_basename}", self.func.c_basename_vectorcall)
+            "{vc_basename}", self.func.c_basename_vectorcall + "_objects")
         lines = [prototype, preamble, *fields, finale]
 
         if self.func.kind is METHOD_INIT:
@@ -1650,7 +1650,26 @@ class ParseArgsCodeGen:
         else:
             markers = VECTORCALL_FINALE_MARKERS_NEW
         code = libclinic.linear_format("\n".join(lines), **markers)
-        self.vectorcall_definition = code
+        # The vectorcall convention takes values; the parser above takes
+        # objects until the converters read values.
+        self.codegen.add_include('pycore_value.h', '_PyValue_ObjectArray()')
+        wrapper = libclinic.normalize_snippet("""
+            static PyValue
+            {vc_basename}(PyValue type, const PyValue *args,
+                size_t nargsf, PyObject *kwnames)
+            {{
+                Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+                Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
+                PyObject *const *args_o =
+                    (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
+                if (args_o == NULL) {{
+                    return PyValue_NULL;
+                }}
+                return PyValue_FromResult({vc_basename}_objects(
+                    PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
+            }}
+            """).replace("{vc_basename}", self.func.c_basename_vectorcall)
+        self.vectorcall_definition = code + "\n\n" + wrapper
 
     def vectorcall_body(self, *fields: str) -> None:
         """Assemble a vectorcall function that parses inline and calls the impl.

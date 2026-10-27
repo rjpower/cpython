@@ -9,6 +9,7 @@ preserve
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_tuple.h"         // _PyTuple_Objects()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_ObjectArray()
 
 PyDoc_STRVAR(lone_kwds__doc__,
 "lone_kwds($module, /, **kwds)\n"
@@ -227,4 +228,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=22fb79a23d0f8130 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6a279152ca082cd2 input=a9049054013a1b77]*/

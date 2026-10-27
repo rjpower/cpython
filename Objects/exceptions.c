@@ -90,19 +90,19 @@ BaseException_init(PyObject *op, PyObject *args, PyObject *kwds)
 }
 
 
-static PyObject *
-BaseException_vectorcall(PyObject *type_obj, PyObject * const*args,
+static PyValue
+BaseException_vectorcall(PyValue type_obj, const PyValue *args,
                          size_t nargsf, PyObject *kwnames)
 {
-    PyTypeObject *type = _PyType_CAST(type_obj);
+    PyTypeObject *type = _PyType_CAST(PyValue_ObjectBorrow(type_obj));
     if (!_PyArg_NoKwnames(type->tp_name, kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyBaseExceptionObject *self;
     self = (PyBaseExceptionObject *)type->tp_alloc(type, 0);
     if (!self) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     // The dict is created on the fly in PyObject_GenericSetAttr()
@@ -113,13 +113,12 @@ BaseException_vectorcall(PyObject *type_obj, PyObject * const*args,
     self->context = NULL;
     self->suppress_context = 0;
 
-    self->args = PyTuple_FromArray(args, PyVectorcall_NARGS(nargsf));
+    self->args = _PyTuple_FromValues(args, PyVectorcall_NARGS(nargsf));
     if (!self->args) {
-        Py_DECREF(self);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return (PyObject *)self;
+    return PyValue_FromObject((PyObject *)self);
 }
 
 

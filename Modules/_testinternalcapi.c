@@ -3062,11 +3062,11 @@ simple_pending_call(PyObject *self, PyObject *callable)
     Py_RETURN_NONE;
 }
 
-static PyObject *
-vectorcall_nop(PyObject *callable, PyObject *const *args,
+static PyValue
+vectorcall_nop(PyValue callable, const PyValue *args,
                size_t nargsf, PyObject *kwnames)
 {
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 static PyObject *

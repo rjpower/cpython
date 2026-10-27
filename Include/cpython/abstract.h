@@ -21,7 +21,7 @@ Py_DEPRECATED(3.15) PyAPI_FUNC(PyObject*) _PyObject_CallMethodId(
    Duplicate keys are merged using the last value. If duplicate keys must raise
    an exception, the caller is responsible to implement an explicit keys on
    kwnames. */
-PyAPI_FUNC(PyObject*) _PyStack_AsDict(PyObject *const *values, PyObject *kwnames);
+PyAPI_FUNC(PyObject*) _PyStack_AsDict(const PyValue *values, PyObject *kwnames);
 
 
 /* === Vectorcall protocol (PEP 590) ============================= */
@@ -37,6 +37,16 @@ _PyVectorcall_NARGS(size_t n)
 #define PyVectorcall_NARGS(n) _PyVectorcall_NARGS(n)
 
 PyAPI_FUNC(vectorcallfunc) PyVectorcall_Function(PyObject *callable);
+
+/* Call callable with the vectorcall convention on values: args holds
+   PyVectorcall_NARGS(nargsf) positional arguments and then the values of the
+   keywords named in kwnames (a tuple of str, or NULL).  Return the result,
+   or PyValue_NULL with an exception set. */
+PyAPI_FUNC(PyValue) PyObject_VectorcallValue(
+    PyValue callable,
+    const PyValue *args,
+    size_t nargsf,
+    PyObject *kwnames);
 
 // Backwards compatibility aliases (PEP 590) for API that was provisional
 // in Python 3.8

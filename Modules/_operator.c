@@ -1024,8 +1024,8 @@ typedef struct {
 #define itemgetterobject_CAST(op)   ((itemgetterobject *)(op))
 
 // Forward declarations
-static PyObject *
-itemgetter_vectorcall(PyObject *, PyObject *const *, size_t, PyObject *);
+static PyValue
+itemgetter_vectorcall(PyValue, const PyValue *, size_t, PyObject *);
 static PyObject *
 itemgetter_call_impl(itemgetterobject *, PyObject *);
 
@@ -1117,19 +1117,24 @@ itemgetter_call(PyObject *op, PyObject *args, PyObject *kw)
     return itemgetter_call_impl(ig, PyTuple_GET_ITEM(args, 0));
 }
 
-static PyObject *
-itemgetter_vectorcall(PyObject *op, PyObject *const *args,
+static PyValue
+itemgetter_vectorcall(PyValue op, const PyValue *args,
                       size_t nargsf, PyObject *kwnames)
 {
     if (!_PyArg_NoKwnames("itemgetter", kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_CheckPositional("itemgetter", nargs, 1, 1)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    itemgetterobject *ig = itemgetterobject_CAST(op);
-    return itemgetter_call_impl(ig, args[0]);
+    itemgetterobject *ig = itemgetterobject_CAST(PyValue_ObjectBorrow(op));
+    // A box of an inline argument, for the object protocol.
+    PyObject *obj = PyValue_Object(args[0]);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(itemgetter_call_impl(ig, obj));
 }
 
 static PyObject *
@@ -1252,8 +1257,8 @@ typedef struct {
 #define attrgetterobject_CAST(op)   ((attrgetterobject *)(op))
 
 // Forward declarations
-static PyObject *
-attrgetter_vectorcall(PyObject *, PyObject *const *, size_t, PyObject *);
+static PyValue
+attrgetter_vectorcall(PyValue, const PyValue *, size_t, PyObject *);
 static PyObject *
 attrgetter_call_impl(attrgetterobject *, PyObject *);
 
@@ -1437,19 +1442,24 @@ attrgetter_call(PyObject *op, PyObject *args, PyObject *kw)
     return attrgetter_call_impl(ag, PyTuple_GET_ITEM(args, 0));
 }
 
-static PyObject *
-attrgetter_vectorcall(PyObject *op, PyObject *const *args,
+static PyValue
+attrgetter_vectorcall(PyValue op, const PyValue *args,
                       size_t nargsf, PyObject *kwnames)
 {
     if (!_PyArg_NoKwnames("attrgetter", kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_CheckPositional("attrgetter", nargs, 1, 1)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    attrgetterobject *ag = attrgetterobject_CAST(op);
-    return attrgetter_call_impl(ag, args[0]);
+    attrgetterobject *ag = attrgetterobject_CAST(PyValue_ObjectBorrow(op));
+    // A box of an inline argument, for the object protocol.
+    PyObject *obj = PyValue_Object(args[0]);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(attrgetter_call_impl(ag, obj));
 }
 
 static PyObject *
@@ -1624,29 +1634,33 @@ typedef struct {
 
 #define _METHODCALLER_MAX_ARGS 8
 
-static PyObject *
-methodcaller_vectorcall(PyObject *op, PyObject *const *args,
+static PyValue
+methodcaller_vectorcall(PyValue op, const PyValue *args,
                         size_t nargsf, PyObject* kwnames)
 {
-    methodcallerobject *mc = methodcallerobject_CAST(op);
+    methodcallerobject *mc = methodcallerobject_CAST(PyValue_ObjectBorrow(op));
     if (!_PyArg_CheckPositional("methodcaller", PyVectorcall_NARGS(nargsf), 1, 1)
         || !_PyArg_NoKwnames("methodcaller", kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
     assert(mc->vectorcall_args != NULL);
 
+    // PyObject_VectorcallMethod() takes objects: inline values are boxed.
     PyObject *tmp_args[_METHODCALLER_MAX_ARGS];
-    tmp_args[0] = args[0];
+    tmp_args[0] = PyValue_Object(args[0]);
+    if (tmp_args[0] == NULL) {
+        return PyValue_NULL;
+    }
     assert(1 + PyTuple_GET_SIZE(mc->vectorcall_args) <= _METHODCALLER_MAX_ARGS);
     PyObject *const *items = _PyTuple_Objects(mc->vectorcall_args);
     if (items == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     memcpy(tmp_args + 1, items, sizeof(PyObject *) * PyTuple_GET_SIZE(mc->vectorcall_args));
 
-    return PyObject_VectorcallMethod(mc->name, tmp_args,
+    return PyValue_FromResult(PyObject_VectorcallMethod(mc->name, tmp_args,
             (1 + PyTuple_GET_SIZE(mc->args)) | PY_VECTORCALL_ARGUMENTS_OFFSET,
-            mc->vectorcall_kwnames);
+            mc->vectorcall_kwnames));
 }
 
 static int

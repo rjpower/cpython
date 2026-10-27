@@ -670,13 +670,17 @@ ga_call(PyObject *self, PyObject *args, PyObject *kwds)
     return set_orig_class(obj, self);
 }
 
-static PyObject *
-ga_vectorcall(PyObject *self, PyObject *const *args,
+static PyValue
+ga_vectorcall(PyValue self, const PyValue *args,
               size_t nargsf, PyObject *kwnames)
 {
-    gaobject *alias = (gaobject *) self;
-    PyObject *obj = PyObject_Vectorcall(alias->origin, args, nargsf, kwnames);
-    return set_orig_class(obj, self);
+    gaobject *alias = (gaobject *)PyValue_ObjectBorrow(self);
+    PyValue res = PyObject_VectorcallValue(PyValue_FromObject(alias->origin),
+                                           args, nargsf, kwnames);
+    // set_orig_class() takes an object: the result of an alias of int or
+    // float can be inline.
+    return PyValue_FromResult(set_orig_class(PyValue_Object(res),
+                                             (PyObject *)alias));
 }
 
 static const char* const attr_exceptions[] = {

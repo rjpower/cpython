@@ -9,6 +9,7 @@ preserve
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_tuple.h"         // _PyTuple_Objects()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_ObjectArray()
 
 PyDoc_STRVAR(bytes___bytes____doc__,
 "__bytes__($self, /)\n"
@@ -1443,7 +1444,7 @@ bytes_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 }
 
 static PyObject *
-bytes_vectorcall(PyObject *type, PyObject *const *args,
+bytes_vectorcall_objects(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
@@ -1493,4 +1494,19 @@ skip_optional:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=b1e08abaf608a517 input=a9049054013a1b77]*/
+
+static PyValue
+bytes_vectorcall(PyValue type, const PyValue *args,
+    size_t nargsf, PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
+    PyObject *const *args_o =
+        (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
+    if (args_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(bytes_vectorcall_objects(
+        PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
+}
+/*[clinic end generated code: output=9cb06039cad3ee74 input=a9049054013a1b77]*/

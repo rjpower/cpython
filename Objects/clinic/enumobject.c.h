@@ -7,6 +7,7 @@ preserve
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_tuple.h"         // _PyTuple_Objects()
+#include "pycore_value.h"         // _PyValue_ObjectArray()
 
 PyDoc_STRVAR(enum_new__doc__,
 "enumerate(iterable, start=0)\n"
@@ -94,7 +95,7 @@ enum_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 }
 
 static PyObject *
-enum_vectorcall(PyObject *type, PyObject *const *args,
+enum_vectorcall_objects(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
@@ -120,6 +121,21 @@ skip_optional:
     return_value = enum_new_impl(_PyType_CAST(type), iterable, start);
 
     return return_value;
+}
+
+static PyValue
+enum_vectorcall(PyValue type, const PyValue *args,
+    size_t nargsf, PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
+    PyObject *const *args_o =
+        (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
+    if (args_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(enum_vectorcall_objects(
+        PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
 }
 
 PyDoc_STRVAR(reversed_new__doc__,
@@ -153,7 +169,7 @@ exit:
 }
 
 static PyObject *
-reversed_vectorcall(PyObject *type, PyObject *const *args,
+reversed_vectorcall_objects(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
@@ -176,4 +192,19 @@ reversed_vectorcall(PyObject *type, PyObject *const *args,
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=56e97b6fb695cb04 input=a9049054013a1b77]*/
+
+static PyValue
+reversed_vectorcall(PyValue type, const PyValue *args,
+    size_t nargsf, PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
+    PyObject *const *args_o =
+        (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
+    if (args_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(reversed_vectorcall_objects(
+        PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
+}
+/*[clinic end generated code: output=d870f779aa6d12b0 input=a9049054013a1b77]*/

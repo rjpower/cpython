@@ -4001,7 +4001,7 @@ dummy_func(
                 frame->return_slot = (uint16_t)IR_DST_SLOT;
                 DISPATCH_INLINED(new_frame);
             }
-            PyObject* res_o = _Py_VectorCallInstrumentation_Values(
+            PyValue res_v = _Py_VectorCallInstrumentation_Values(
                 callable,
                 arguments,
                 total_args,
@@ -4013,8 +4013,8 @@ dummy_func(
             DEAD(args);
             DEAD(self_or_null);
             DEAD(callable);
-            ERROR_IF(res_o == NULL);
-            res = PyValue_FromObject(res_o);
+            ERROR_IF(PyValue_IsNull(res_v));
+            res = res_v;
         }
 
         op(_MONITOR_CALL, (func, maybe_self, args[oparg] -- func, maybe_self, args[oparg])) {
@@ -4134,7 +4134,7 @@ dummy_func(
                 arguments--;
                 total_args++;
             }
-            PyObject *res_o = _Py_VectorCall_Values(
+            PyValue res_v = _Py_VectorCall_Values(
                 callable,
                 arguments,
                 total_args,
@@ -4142,8 +4142,8 @@ dummy_func(
             DEAD(args);
             DEAD(self_or_null);
             DEAD(callable);
-            ERROR_IF(res_o == NULL);
-            res = PyValue_FromObject(res_o);
+            ERROR_IF(PyValue_IsNull(res_v));
+            res = res_v;
         }
 
         macro(CALL_NON_PY_GENERAL) =
@@ -4439,14 +4439,14 @@ dummy_func(
                 total_args++;
             }
             STAT_INC(CALL, hit);
-            PyObject *res_o = _Py_CallBuiltinClass_Values(
+            PyValue res_v = _Py_CallBuiltinClass_Values(
                 callable,
                 arguments,
                 total_args);
-            if (res_o == NULL) {
+            if (PyValue_IsNull(res_v)) {
                 ERROR_NO_POP();
             }
-            callable = PyValue_FromObject(res_o);
+            callable = res_v;
         }
 
         macro(CALL_BUILTIN_CLASS) =
@@ -4987,7 +4987,7 @@ dummy_func(
                 frame->return_slot = (uint16_t)IR_DST_SLOT;
                 DISPATCH_INLINED(new_frame);
             }
-            PyObject* res_o = _Py_VectorCallInstrumentation_Values(
+            PyValue res_v = _Py_VectorCallInstrumentation_Values(
                 callable,
                 arguments,
                 total_args,
@@ -5000,8 +5000,8 @@ dummy_func(
             DEAD(args);
             DEAD(self_or_null);
             DEAD(callable);
-            ERROR_IF(res_o == NULL);
-            res = PyValue_FromObject(res_o);
+            ERROR_IF(PyValue_IsNull(res_v));
+            res = res_v;
         }
 
         op(_PY_FRAME_KW, (callable, self_or_null, args[oparg], kwnames -- new_frame)) {
@@ -5120,7 +5120,7 @@ dummy_func(
                 arguments--;
                 total_args++;
             }
-            PyObject *res_o = _Py_VectorCall_Values(
+            PyValue res_v = _Py_VectorCall_Values(
                 callable,
                 arguments,
                 total_args,
@@ -5129,8 +5129,8 @@ dummy_func(
             DEAD(args);
             DEAD(self_or_null);
             DEAD(callable);
-            ERROR_IF(res_o == NULL);
-            res = PyValue_FromObject(res_o);
+            ERROR_IF(PyValue_IsNull(res_v));
+            res = res_v;
         }
 
         macro(CALL_KW_NON_PY) =

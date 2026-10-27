@@ -132,10 +132,10 @@ _PyEval_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfl
     return tstate->interp->eval_frame(tstate, frame, throwflag);
 }
 
-extern PyObject*
+extern PyValue
 _PyEval_Vector(PyThreadState *tstate,
             PyFunctionObject *func, PyObject *locals,
-            PyObject* const* args, size_t argcount,
+            const PyValue *args, size_t argcount,
             PyObject *kwnames);
 
 extern int _PyEval_ThreadsInitialized(void);
@@ -364,14 +364,14 @@ PyAPI_DATA(const _PyInstr *) _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR;
 
 /* Helper functions for large uops */
 
-PyAPI_FUNC(PyObject *)
+PyAPI_FUNC(PyValue)
 _Py_VectorCall_Values(
     PyValue callable,
     PyValue *arguments,
     int total_args,
     PyValue kwnames);
 
-PyAPI_FUNC(PyObject*)
+PyAPI_FUNC(PyValue)
 _Py_VectorCallInstrumentation_Values(
     PyValue callable,
     PyValue* arguments,
@@ -408,7 +408,7 @@ _PyCallMethodDescriptorFastWithKeywords_Values(
     PyValue *arguments,
     int total_args);
 
-PyAPI_FUNC(PyObject *)
+PyAPI_FUNC(PyValue)
 _Py_CallBuiltinClass_Values(
     PyValue callable,
     PyValue *arguments,

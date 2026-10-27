@@ -3,6 +3,7 @@ preserve
 [clinic start generated code]*/
 
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_value.h"         // _PyValue_ObjectArray()
 
 PyDoc_STRVAR(tuple_index__doc__,
 "index($self, value, start=0, stop=sys.maxsize, /)\n"
@@ -112,7 +113,7 @@ exit:
 }
 
 static PyObject *
-tuple_vectorcall(PyObject *type, PyObject *const *args,
+tuple_vectorcall_objects(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
@@ -140,6 +141,21 @@ exit:
     return return_value;
 }
 
+static PyValue
+tuple_vectorcall(PyValue type, const PyValue *args,
+    size_t nargsf, PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
+    PyObject *const *args_o =
+        (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
+    if (args_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(tuple_vectorcall_objects(
+        PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
+}
+
 PyDoc_STRVAR(tuple___getnewargs____doc__,
 "__getnewargs__($self, /)\n"
 "--\n"
@@ -156,4 +172,4 @@ tuple___getnewargs__(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return tuple___getnewargs___impl((PyTupleObject *)self);
 }
-/*[clinic end generated code: output=1bc2bfc233992933 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2f7c4290b4bc5dda input=a9049054013a1b77]*/

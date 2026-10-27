@@ -2991,31 +2991,34 @@ static PyTypeObject _PyLegacyBranchEventHandler_Type = {
 };
 
 
-static PyObject *
+static PyValue
 branch_handler_vectorcall(
-    PyObject *op, PyObject *const *args,
+    PyValue op, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
-    _PyLegacyBranchEventHandler *self = _PyLegacyBranchEventHandler_CAST(op);
+    _PyLegacyBranchEventHandler *self =
+        _PyLegacyBranchEventHandler_CAST(PyValue_ObjectBorrow(op));
+    PyValue disable = PyValue_FromObject(&_PyInstrumentation_DISABLE);
     // Find the other instrumented instruction and remove tool
     // The spec (PEP 669) allows spurious events after a DISABLE,
     // so a best effort is good enough.
     assert(PyVectorcall_NARGS(nargsf) >= 3);
-    PyCodeObject *code = (PyCodeObject *)args[0];
-    int src_offset = PyLong_AsLong(args[1]);
+    PyCodeObject *code = (PyCodeObject *)PyValue_ObjectBorrow(args[0]);
+    int src_offset = PyLong_AsLongValue(args[1]);
     if (PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (src_offset < 0 || src_offset >= Py_SIZE(code) || code->_co_exec == NULL) {
-        return &_PyInstrumentation_DISABLE;
+        return disable;
     }
     int opcode = word_opcode(exec_words(code), src_offset);
     if (!is_instrumented(opcode)) {
         /* Already disabled */
-        return &_PyInstrumentation_DISABLE;
+        return disable;
     }
-    PyObject *res = PyObject_Vectorcall(self->handler, args, nargsf, kwnames);
-    if (res == &_PyInstrumentation_DISABLE) {
+    PyValue res = PyObject_VectorcallValue(PyValue_FromObject(self->handler),
+                                           args, nargsf, kwnames);
+    if (PyValue_Is(res, disable)) {
         int offset;
         int other_event;
         if (opcode == FOR_ITER) {

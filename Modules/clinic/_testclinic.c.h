@@ -9,6 +9,7 @@ preserve
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_tuple.h"         // _PyTuple_Objects()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_ObjectArray()
 
 PyDoc_STRVAR(test_empty_function__doc__,
 "test_empty_function($module, /)\n"
@@ -4979,7 +4980,7 @@ vc_plain_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 }
 
 static PyObject *
-vc_plain_vectorcall(PyObject *type, PyObject *const *args,
+vc_plain_vectorcall_objects(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
@@ -5003,6 +5004,21 @@ skip_optional:
     return_value = vc_plain_new_impl(_PyType_CAST(type), a);
 
     return return_value;
+}
+
+static PyValue
+vc_plain_vectorcall(PyValue type, const PyValue *args,
+    size_t nargsf, PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
+    PyObject *const *args_o =
+        (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
+    if (args_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(vc_plain_vectorcall_objects(
+        PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
 }
 
 static int
@@ -5078,7 +5094,7 @@ vc_posorkw_init(PyObject *self, PyObject *args, PyObject *kwargs)
 }
 
 static PyObject *
-vc_posorkw_vectorcall(PyObject *type, PyObject *const *args,
+vc_posorkw_vectorcall_objects(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
@@ -5129,6 +5145,21 @@ skip_optional:
 
 exit:
     return return_value;
+}
+
+static PyValue
+vc_posorkw_vectorcall(PyValue type, const PyValue *args,
+    size_t nargsf, PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
+    PyObject *const *args_o =
+        (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
+    if (args_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(vc_posorkw_vectorcall_objects(
+        PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
 }
 
 static PyObject *
@@ -5202,7 +5233,7 @@ vc_base_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 }
 
 static PyObject *
-vc_base_vectorcall(PyObject *type, PyObject *const *args,
+vc_base_vectorcall_objects(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
@@ -5228,6 +5259,21 @@ skip_optional:
     return_value = vc_base_new_impl(_PyType_CAST(type), a, b);
 
     return return_value;
+}
+
+static PyValue
+vc_base_vectorcall(PyValue type, const PyValue *args,
+    size_t nargsf, PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
+    PyObject *const *args_o =
+        (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
+    if (args_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(vc_base_vectorcall_objects(
+        PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
 }
 
 static PyObject *
@@ -5301,7 +5347,7 @@ vc_kwonly_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 }
 
 static PyObject *
-vc_kwonly_vectorcall(PyObject *type, PyObject *const *args,
+vc_kwonly_vectorcall_objects(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
@@ -5314,4 +5360,19 @@ vc_kwonly_vectorcall(PyObject *type, PyObject *const *args,
         kwnames ? PyTuple_GET_SIZE(kwnames) : 0,
         NULL, kwnames);
 }
-/*[clinic end generated code: output=6551e93f1f8ad558 input=a9049054013a1b77]*/
+
+static PyValue
+vc_kwonly_vectorcall(PyValue type, const PyValue *args,
+    size_t nargsf, PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
+    PyObject *const *args_o =
+        (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
+    if (args_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(vc_kwonly_vectorcall_objects(
+        PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
+}
+/*[clinic end generated code: output=6ab9c850695ce16d input=a9049054013a1b77]*/

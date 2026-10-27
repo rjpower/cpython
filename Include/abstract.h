@@ -286,7 +286,9 @@ PyAPI_FUNC(PyObject *) PyVectorcall_Call(PyObject *callable, PyObject *tuple, Py
 #define PY_VECTORCALL_ARGUMENTS_OFFSET \
     (_Py_STATIC_CAST(size_t, 1) << (8 * sizeof(size_t) - 1))
 
-/* Perform a PEP 590-style vector call on 'callable' */
+/* Perform a PEP 590-style vector call on 'callable'.  The arguments are
+   canonicalised and the result boxed: PyObject_VectorcallValue() is the
+   call on values. */
 PyAPI_FUNC(PyObject *) PyObject_Vectorcall(
     PyObject *callable,
     PyObject *const *args,

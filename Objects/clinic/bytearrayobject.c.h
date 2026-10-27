@@ -8,6 +8,7 @@ preserve
 #include "pycore_runtime.h"       // _Py_SINGLETON()
 #include "pycore_tuple.h"         // _PyTuple_Objects()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_ObjectArray()
 
 static PyObject *
 bytearray_iconcat_impl(PyByteArrayObject *self, PyObject *other);
@@ -183,7 +184,7 @@ bytearray___init__(PyObject *self, PyObject *args, PyObject *kwargs)
 }
 
 static PyObject *
-bytearray_vectorcall(PyObject *type, PyObject *const *args,
+bytearray_vectorcall_objects(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
@@ -254,6 +255,21 @@ skip_optional:
 
 exit:
     return return_value;
+}
+
+static PyValue
+bytearray_vectorcall(PyValue type, const PyValue *args,
+    size_t nargsf, PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
+    PyObject *const *args_o =
+        (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
+    if (args_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(bytearray_vectorcall_objects(
+        PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
 }
 
 static PyObject *
@@ -2031,4 +2047,4 @@ bytearray_sizeof(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return bytearray_sizeof_impl((PyByteArrayObject *)self);
 }
-/*[clinic end generated code: output=1ea4a1815a837a00 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=339d7e1b0c324e82 input=a9049054013a1b77]*/

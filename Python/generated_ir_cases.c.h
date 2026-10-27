@@ -3997,7 +3997,7 @@
                     _PyThreadState_PushValueRoot(tstate, &callable_root);
                     callable_root.object = callable_object;
                 }
-                PyObject* res_o = _Py_VectorCallInstrumentation_Values(
+                PyValue res_v = _Py_VectorCallInstrumentation_Values(
                     callable,
                     arguments,
                     total_args,
@@ -4009,11 +4009,11 @@
                 if (Py_UNLIKELY(PyValue_IsInline(callable))) {
                     _PyThreadState_PopValueRoot(tstate, &callable_root);
                 }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res_v)) {
                     IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
+                res = res_v;
             }
             // _CHECK_PERIODIC_AT_END
             {
@@ -4518,14 +4518,14 @@
                     total_args++;
                 }
                 STAT_INC(CALL, hit);
-                PyObject *res_o = _Py_CallBuiltinClass_Values(
+                PyValue res_v = _Py_CallBuiltinClass_Values(
                     callable,
                     arguments,
                     total_args);
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res_v)) {
                     JUMP_TO_LABEL(error);
                 }
-                callable = PyValue_FromObject(res_o);
+                callable = res_v;
             }
             // _POP_TOP_OPARG
             {
@@ -5911,7 +5911,7 @@
                     _PyThreadState_PushValueRoot(tstate, &kwnames_root);
                     kwnames_root.object = kwnames_object;
                 }
-                PyObject* res_o = _Py_VectorCallInstrumentation_Values(
+                PyValue res_v = _Py_VectorCallInstrumentation_Values(
                     callable,
                     arguments,
                     total_args,
@@ -5926,11 +5926,11 @@
                 if (Py_UNLIKELY(PyValue_IsInline(callable))) {
                     _PyThreadState_PopValueRoot(tstate, &callable_root);
                 }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res_v)) {
                     IR_CLEAR_SLOTS(&window[0], 3 + oparg);
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
+                res = res_v;
             }
             IR_CLEAR_SLOTS(&window[1], 2 + oparg);
             window[0] = res;
@@ -6152,16 +6152,16 @@
                     arguments--;
                     total_args++;
                 }
-                PyObject *res_o = _Py_VectorCall_Values(
+                PyValue res_v = _Py_VectorCall_Values(
                     callable,
                     arguments,
                     total_args,
                     kwnames);
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res_v)) {
                     IR_CLEAR_SLOTS(&window[0], 3 + oparg);
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
+                res = res_v;
             }
             // _CHECK_PERIODIC_AT_END
             {
@@ -7021,16 +7021,16 @@
                     arguments--;
                     total_args++;
                 }
-                PyObject *res_o = _Py_VectorCall_Values(
+                PyValue res_v = _Py_VectorCall_Values(
                     callable,
                     arguments,
                     total_args,
                     PyValue_NULL);
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res_v)) {
                     IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
+                res = res_v;
             }
             // _CHECK_PERIODIC_AT_END
             {
@@ -10022,7 +10022,7 @@
                     _PyThreadState_PushValueRoot(tstate, &callable_root);
                     callable_root.object = callable_object;
                 }
-                PyObject* res_o = _Py_VectorCallInstrumentation_Values(
+                PyValue res_v = _Py_VectorCallInstrumentation_Values(
                     callable,
                     arguments,
                     total_args,
@@ -10034,11 +10034,11 @@
                 if (Py_UNLIKELY(PyValue_IsInline(callable))) {
                     _PyThreadState_PopValueRoot(tstate, &callable_root);
                 }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res_v)) {
                     IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
+                res = res_v;
             }
             // _CHECK_PERIODIC_AT_END
             {
@@ -10615,7 +10615,7 @@
                     _PyThreadState_PushValueRoot(tstate, &kwnames_root);
                     kwnames_root.object = kwnames_object;
                 }
-                PyObject* res_o = _Py_VectorCallInstrumentation_Values(
+                PyValue res_v = _Py_VectorCallInstrumentation_Values(
                     callable,
                     arguments,
                     total_args,
@@ -10630,11 +10630,11 @@
                 if (Py_UNLIKELY(PyValue_IsInline(callable))) {
                     _PyThreadState_PopValueRoot(tstate, &callable_root);
                 }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res_v)) {
                     IR_CLEAR_SLOTS(&window[0], 3 + oparg);
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
+                res = res_v;
             }
             IR_CLEAR_SLOTS(&window[1], 2 + oparg);
             window[0] = res;

@@ -376,7 +376,7 @@ extern PyDictObject *_PyObject_MaterializeManagedDict(PyObject *obj);
 
 PyAPI_FUNC(PyObject *)_PyDict_FromItems(
         PyObject *const *keys, Py_ssize_t keys_offset,
-        PyObject *const *values, Py_ssize_t values_offset,
+        const PyValue *values, Py_ssize_t values_offset,
         Py_ssize_t length);
 
 static inline uint8_t *

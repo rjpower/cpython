@@ -3257,29 +3257,33 @@ list___init___impl(PyListObject *self, PyObject *iterable)
     return 0;
 }
 
-static PyObject *
-list_vectorcall(PyObject *type, PyObject * const*args,
+static PyValue
+list_vectorcall(PyValue type, const PyValue *args,
                 size_t nargsf, PyObject *kwnames)
 {
     if (!_PyArg_NoKwnames("list", kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_CheckPositional("list", nargs, 0, 1)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *list = PyType_GenericAlloc(_PyType_CAST(type), 0);
+    PyObject *list = PyType_GenericAlloc(
+        _PyType_CAST(PyValue_ObjectBorrow(type)), 0);
     if (list == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (nargs) {
-        if (list___init___impl((PyListObject *)list, args[0])) {
-            Py_DECREF(list);
-            return NULL;
+        // A box of an inline argument, to raise the TypeError.
+        PyObject *iterable = PyValue_Object(args[0]);
+        if (iterable == NULL ||
+            list___init___impl((PyListObject *)list, iterable))
+        {
+            return PyValue_NULL;
         }
     }
-    return list;
+    return PyValue_FromObject(list);
 }
 
 

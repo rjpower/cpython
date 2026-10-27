@@ -4734,16 +4734,18 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
 }
 
 
-static PyObject *
-type_vectorcall(PyObject *metatype, PyObject *const *args,
+static PyValue
+type_vectorcall(PyValue metatype, const PyValue *args,
                  size_t nargsf, PyObject *kwnames)
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    if (nargs == 1 && metatype == (PyObject *)&PyType_Type){
+    if (nargs == 1 &&
+        PyValue_ObjectBorrow(metatype) == (PyObject *)&PyType_Type)
+    {
         if (!_PyArg_NoKwnames("type", kwnames)) {
-            return NULL;
+            return PyValue_NULL;
         }
-        return Py_NewRef(Py_TYPE(args[0]));
+        return PyValue_FromObject((PyObject *)PyValue_Type(args[0]));
     }
     /* In other (much less common) cases, fall back to
        more flexible calling conventions. */
@@ -10024,10 +10026,16 @@ tp_new_wrapper(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject
     }
     PyObject *kwds = NULL;
     if (kwnames != NULL) {
-        kwds = _PyStack_AsDict(args + nargs, kwnames);
+        // The keyword arguments are objects until METH_FASTCALL takes values.
+        kwds = PyDict_New();
         if (kwds == NULL) {
-            Py_DECREF(args_tuple);
             return NULL;
+        }
+        for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(kwnames); i++) {
+            if (PyDict_SetItem(kwds, PyTuple_GET_ITEM(kwnames, i),
+                               args[nargs + i]) < 0) {
+                return NULL;
+            }
         }
     }
     res = type->tp_new(subtype, args_tuple, kwds);
@@ -12512,45 +12520,46 @@ super_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-super_vectorcall(PyObject *self, PyObject *const *args,
+static PyValue
+super_vectorcall(PyValue self, const PyValue *args,
     size_t nargsf, PyObject *kwnames)
 {
-    assert(PyType_Check(self));
+    assert(PyType_Check(PyValue_ObjectBorrow(self)));
     if (!_PyArg_NoKwnames("super", kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_CheckPositional("super()", nargs, 0, 2)) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyTypeObject *type = NULL;
     PyObject *obj = NULL;
-    PyTypeObject *self_type = (PyTypeObject *)self;
+    PyTypeObject *self_type = (PyTypeObject *)PyValue_ObjectBorrow(self);
     PyObject *su = self_type->tp_alloc(self_type, 0);
     if (su == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     // 1 or 2 argument form super().
     if (nargs != 0) {
-        PyObject *arg0 = args[0];
-        if (!PyType_Check(arg0)) {
+        if (!PyType_IsSubtype(PyValue_Type(args[0]), &PyType_Type)) {
             PyErr_Format(PyExc_TypeError,
-                "super() argument 1 must be a type, not %.200s", Py_TYPE(arg0)->tp_name);
-            goto fail;
+                "super() argument 1 must be a type, not %.200s",
+                PyValue_Type(args[0])->tp_name);
+            return PyValue_NULL;
         }
-        type = (PyTypeObject *)arg0;
+        type = (PyTypeObject *)PyValue_ObjectBorrow(args[0]);
     }
     if (nargs == 2) {
-        obj = args[1];
+        // A box of an inline instance, for super(int, 5).
+        obj = PyValue_Object(args[1]);
+        if (obj == NULL) {
+            return PyValue_NULL;
+        }
     }
     if (super_init_impl(su, type, obj) < 0) {
-        goto fail;
+        return PyValue_NULL;
     }
-    return su;
-fail:
-    Py_DECREF(su);
-    return NULL;
+    return PyValue_FromObject(su);
 }
 
 PyTypeObject PySuper_Type = {

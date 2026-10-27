@@ -9,6 +9,7 @@ preserve
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_tuple.h"         // _PyTuple_Objects()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_ObjectArray()
 
 PyDoc_STRVAR(depr_star_new__doc__,
 "DeprStarNew(a=None)\n"
@@ -2669,4 +2670,4 @@ depr_multi(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=e6919e3a38abb266 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5b721323c18d515d input=a9049054013a1b77]*/

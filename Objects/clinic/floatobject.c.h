@@ -4,6 +4,7 @@ preserve
 
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_ObjectArray()
 
 PyDoc_STRVAR(float_is_integer__doc__,
 "is_integer($self, /)\n"
@@ -242,7 +243,7 @@ exit:
 }
 
 static PyObject *
-float_vectorcall(PyObject *type, PyObject *const *args,
+float_vectorcall_objects(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
@@ -268,6 +269,21 @@ skip_optional:
 
 exit:
     return return_value;
+}
+
+static PyValue
+float_vectorcall(PyValue type, const PyValue *args,
+    size_t nargsf, PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
+    PyObject *const *args_o =
+        (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
+    if (args_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(float_vectorcall_objects(
+        PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
 }
 
 PyDoc_STRVAR(float_from_number__doc__,
@@ -378,4 +394,4 @@ float___format__(PyObject *self, PyObject *arg)
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=d1198594a76a4638 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=46bf744b1c3f3518 input=a9049054013a1b77]*/

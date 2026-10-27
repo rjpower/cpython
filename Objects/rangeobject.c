@@ -88,23 +88,34 @@ make_range_object(PyTypeObject *type, PyObject *start,
    range(0, -5)
    range(0, 5, -1)
 */
+/* The int object that is v.__index__(): a range holds int objects, so an
+   inline int is boxed. */
 static PyObject *
-range_from_array(PyTypeObject *type, PyObject *const *args, Py_ssize_t num_args)
+index_object(PyValue v)
+{
+    return PyValue_Object(PyNumber_IndexValue(v));
+}
+
+static PyObject *
+range_from_array(PyTypeObject *type, const PyValue *args, Py_ssize_t num_args)
 {
     rangeobject *obj;
     PyObject *start = NULL, *stop = NULL, *step = NULL;
 
     switch (num_args) {
         case 3:
-            step = args[2];
+            // A range holds int objects: an inline step is boxed.
+            step = PyValue_Object(args[2]);
+            if (!step) {
+                return NULL;
+            }
             _Py_FALLTHROUGH;
         case 2:
-            /* Convert borrowed refs to owned refs */
-            start = PyNumber_Index(args[0]);
+            start = index_object(args[0]);
             if (!start) {
                 return NULL;
             }
-            stop = PyNumber_Index(args[1]);
+            stop = index_object(args[1]);
             if (!stop) {
                 Py_DECREF(start);
                 return NULL;
@@ -117,7 +128,7 @@ range_from_array(PyTypeObject *type, PyObject *const *args, Py_ssize_t num_args)
             }
             break;
         case 1:
-            stop = PyNumber_Index(args[0]);
+            stop = index_object(args[0]);
             if (!stop) {
                 return NULL;
             }
@@ -152,23 +163,20 @@ range_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     if (!_PyArg_NoKeywords("range", kw))
         return NULL;
 
-    PyObject *const *items = _PyTuple_Objects(args);
-    if (items == NULL) {
-        return NULL;
-    }
-    return range_from_array(type, items, PyTuple_GET_SIZE(args));
+    return range_from_array(type, _PyTuple_ITEMS(args), PyTuple_GET_SIZE(args));
 }
 
 
-static PyObject *
-range_vectorcall(PyObject *rangetype, PyObject *const *args,
+static PyValue
+range_vectorcall(PyValue rangetype, const PyValue *args,
                  size_t nargsf, PyObject *kwnames)
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_NoKwnames("range", kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return range_from_array((PyTypeObject *)rangetype, args, nargs);
+    return PyValue_FromResult(range_from_array(
+        (PyTypeObject *)PyValue_ObjectBorrow(rangetype), args, nargs));
 }
 
 PyDoc_STRVAR(range_doc,

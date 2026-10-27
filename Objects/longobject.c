@@ -6425,8 +6425,8 @@ int_is_integer_impl(PyObject *self)
     Py_RETURN_TRUE;
 }
 
-static PyObject *
-long_vectorcall(PyObject *type, PyObject * const*args,
+static PyValue
+long_vectorcall(PyValue type, const PyValue *args,
                  size_t nargsf, PyObject *kwnames)
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
@@ -6436,15 +6436,24 @@ long_vectorcall(PyObject *type, PyObject * const*args,
     }
     switch (nargs) {
         case 0:
-            return _PyLong_GetZero();
+            return PyValue_FromInt32(0);
         case 1:
-            return PyNumber_Long(args[0]);
-        case 2:
-            return long_new_impl(_PyType_CAST(type), args[0], args[1]);
+            return PyNumber_LongValue(args[0]);
+        case 2: {
+            // int(x, base) takes a str, bytes or bytearray x.
+            PyObject *x = PyValue_Object(args[0]);
+            PyObject *base = PyValue_Object(args[1]);
+            if (x == NULL || base == NULL) {
+                return PyValue_NULL;
+            }
+            return PyValue_FromResult(long_new_impl(
+                _PyType_CAST(PyValue_ObjectBorrow(type)), x, base));
+        }
         default:
-            return PyErr_Format(PyExc_TypeError,
-                                "int expected at most 2 arguments, got %zd",
-                                nargs);
+            PyErr_Format(PyExc_TypeError,
+                         "int expected at most 2 arguments, got %zd",
+                         nargs);
+            return PyValue_NULL;
     }
 }
 

@@ -42,16 +42,18 @@ PyMethod_Self(PyObject *im)
 }
 
 
-static PyObject *
-method_vectorcall(PyObject *method, PyObject *const *args,
+static PyValue
+method_vectorcall(PyValue method_v, const PyValue *args,
                   size_t nargsf, PyObject *kwnames)
 {
+    PyObject *method = PyValue_ObjectBorrow(method_v);
     assert(Py_IS_TYPE(method, &PyMethod_Type));
 
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *self = PyMethod_GET_SELF(method);
-    PyObject *func = PyMethod_GET_FUNCTION(method);
-    return _PyObject_VectorcallPrepend(tstate, func, self, args, nargsf, kwnames);
+    PyValue self = PyValue_FromObject(PyMethod_GET_SELF(method));
+    PyValue func = PyValue_FromObject(PyMethod_GET_FUNCTION(method));
+    return _PyObject_VectorcallPrependValue(tstate, func, self, args,
+                                            nargsf, kwnames);
 }
 
 

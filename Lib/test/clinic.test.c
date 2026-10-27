@@ -4956,7 +4956,7 @@ exit:
 }
 
 static PyObject *
-Test_vectorcall(PyObject *type, PyObject *const *args,
+Test_vectorcall_objects(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
@@ -4988,9 +4988,24 @@ exit:
     return return_value;
 }
 
+static PyValue
+Test_vectorcall(PyValue type, const PyValue *args,
+    size_t nargsf, PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
+    PyObject *const *args_o =
+        (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
+    if (args_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(Test_vectorcall_objects(
+        PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
+}
+
 static int
 Test___init___impl(TestObj *self)
-/*[clinic end generated code: output=ce04b9d7beacd894 input=645fe693f6c6b9b6]*/
+/*[clinic end generated code: output=bf5b76177b481abc input=645fe693f6c6b9b6]*/
 
 
 /*[clinic input]

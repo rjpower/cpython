@@ -669,7 +669,8 @@ PyEval_EvalCode(PyObject *co, PyObject *globals, PyObject *locals)
         return NULL;
     }
     EVAL_CALL_STAT_INC(EVAL_CALL_LEGACY);
-    PyObject *res = _PyEval_Vector(tstate, func, locals, NULL, 0, NULL);
+    PyObject *res = PyValue_Object(
+        _PyEval_Vector(tstate, func, locals, NULL, 0, NULL));
     Py_DECREF(func);
     return res;
 }
@@ -727,38 +728,23 @@ _PyEval_CallExitWithException(PyObject *exit_func, PyObject *exit_self,
  * reference to what it made, as an argument array (VALUES_TO_OBJECTS)
  * holds the boxes of inline values, would be in that frame. */
 
-Py_NO_INLINE PyObject *
+Py_NO_INLINE PyValue
 _Py_VectorCall_Values(
     PyValue callable,
     PyValue *arguments,
     int total_args,
     PyValue kwnames)
 {
-    PyObject *res;
-    // A box of an inline callable, which this frame holds; calling it
-    // raises the TypeError.
-    PyObject *callable_o = PyValue_Object(callable);
-    if (callable_o == NULL) {
-        res = NULL;
-        goto cleanup;
-    }
-    VALUES_TO_OBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        res = NULL;
-        goto cleanup;
-    }
     PyObject *kwnames_o = PyValue_ObjectBorrow(kwnames);
     int positional_args = total_args;
     if (kwnames_o != NULL) {
         positional_args -= (int)PyTuple_GET_SIZE(kwnames_o);
     }
-    res = PyObject_Vectorcall(
-        callable_o, args_o,
+    PyValue res = PyObject_VectorcallValue(
+        callable, arguments,
         positional_args | PY_VECTORCALL_ARGUMENTS_OFFSET,
         kwnames_o);
-    VALUES_TO_OBJECTS_CLEANUP(args_o);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-cleanup:
+    assert(PyValue_IsNull(res) ^ (PyErr_Occurred() == NULL));
     // arguments is a pointer into the GC visible stack,
     // so we must NULL out values as we clear them.
     for (int i = total_args-1; i >= 0; i--) {
@@ -767,7 +753,7 @@ cleanup:
     return res;
 }
 
-Py_NO_INLINE PyObject *
+Py_NO_INLINE PyValue
 _Py_VectorCallInstrumentation_Values(
     PyValue callable,
     PyValue* arguments,
@@ -778,32 +764,25 @@ _Py_VectorCallInstrumentation_Values(
     _PyInstr* this_instr,
     PyThreadState* tstate)
 {
-    PyObject* res;
-    // As in _Py_VectorCall_Values()
-    PyObject *callable_o = PyValue_Object(callable);
-    if (callable_o == NULL) {
-        res = NULL;
-        goto cleanup;
-    }
-    VALUES_TO_OBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        res = NULL;
-        goto cleanup;
-    }
     PyObject* kwnames_o = PyValue_ObjectBorrow(kwnames);
     int positional_args = total_args;
     if (kwnames_o != NULL) {
         positional_args -= (int)PyTuple_GET_SIZE(kwnames_o);
     }
-    res = PyObject_Vectorcall(
-        callable_o, args_o,
+    PyValue res = PyObject_VectorcallValue(
+        callable, arguments,
         positional_args | PY_VECTORCALL_ARGUMENTS_OFFSET,
         kwnames_o);
-    // The first argument, a box if it is inline, which this frame holds.
-    PyObject *arg = total_args == 0 ? &_PyInstrumentation_MISSING : args_o[0];
-    VALUES_TO_OBJECTS_CLEANUP(args_o);
     if (call_instrumentation) {
-        if (res == NULL) {
+        // Boxes of an inline callable or first argument, for the monitoring
+        // callbacks, which this frame holds.
+        PyObject *callable_o = PyValue_Object(callable);
+        PyObject *arg = total_args == 0 ? &_PyInstrumentation_MISSING
+                                        : PyValue_Object(arguments[0]);
+        if (callable_o == NULL || arg == NULL) {
+            res = PyValue_NULL;
+        }
+        else if (PyValue_IsNull(res)) {
             _Py_call_instrumentation_exc2(
                 tstate, PY_MONITORING_EVENT_C_RAISE,
                 frame, this_instr, callable_o, arg);
@@ -813,12 +792,11 @@ _Py_VectorCallInstrumentation_Values(
                 tstate, PY_MONITORING_EVENT_C_RETURN,
                 frame, this_instr, callable_o, arg);
             if (err < 0) {
-                Py_CLEAR(res);
+                res = PyValue_NULL;
             }
         }
     }
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-cleanup:
+    assert(PyValue_IsNull(res) ^ (PyErr_Occurred() == NULL));
     // arguments is a pointer into the GC visible stack,
     // so we must NULL out values as we clear them.
     for (int i = total_args - 1; i >= 0; i--) {
@@ -906,21 +884,17 @@ _PyCallMethodDescriptorFastWithKeywords_Values(
     return res;
 }
 
-Py_NO_INLINE PyObject *
+Py_NO_INLINE PyValue
 _Py_CallBuiltinClass_Values(
     PyValue callable,
     PyValue *arguments,
     int total_args)
 {
-    PyObject *res;
-    VALUES_TO_OBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        return NULL;
-    }
     PyTypeObject *tp = (PyTypeObject *)PyValue_ObjectBorrow(callable);
-    res = tp->tp_vectorcall((PyObject *)tp, args_o, total_args | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
-    VALUES_TO_OBJECTS_CLEANUP(args_o);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
+    PyValue res = tp->tp_vectorcall(callable, arguments,
+                                    total_args | PY_VECTORCALL_ARGUMENTS_OFFSET,
+                                    NULL);
+    assert(PyValue_IsNull(res) ^ (PyErr_Occurred() == NULL));
     return res;
 }
 
@@ -2028,43 +2002,11 @@ _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
 {
     bool has_dict = (kwargs != NULL && PyDict_GET_SIZE(kwargs) > 0);
     PyObject *kwnames = NULL;
-    PyValue *newargs;
-    PyObject *const *object_array = NULL;
-    PyValue stack_array[8] = {0};
+    const PyValue *newargs = _PyTuple_ITEMS(callargs);
     if (has_dict) {
-        PyObject *const *items = _PyTuple_Objects(callargs);
-        if (items == NULL) {
+        newargs = _PyStack_UnpackDict(tstate, newargs, nargs, kwargs, &kwnames);
+        if (newargs == NULL) {
             goto error;
-        }
-        object_array = _PyStack_UnpackDict(tstate, items, nargs, kwargs, &kwnames);
-        if (object_array == NULL) {
-            goto error;
-        }
-        size_t nkwargs = PyDict_GET_SIZE(kwargs);
-        assert(sizeof(PyObject *) == sizeof(PyValue));
-        newargs = (PyValue *)object_array;
-        /* Positional args are borrowed from callargs tuple, need new reference */
-        for (Py_ssize_t i = 0; i < nargs; i++) {
-            newargs[i] = PyValue_FromObject(object_array[i]);
-        }
-        /* Keyword args are owned by _PyStack_UnpackDict, steal them */
-        for (size_t i = 0; i < nkwargs; i++) {
-            newargs[nargs + i] = PyValue_FromObject(object_array[nargs + i]);
-        }
-    }
-    else {
-        if (nargs <= 8) {
-            newargs = stack_array;
-        }
-        else {
-            newargs = PyMem_Malloc(sizeof(PyValue) *nargs);
-            if (newargs == NULL) {
-                PyErr_NoMemory();
-                goto error;
-            }
-        }
-        for (Py_ssize_t i = 0; i < nargs; i++) {
-            newargs[i] = PyTuple_GET_VALUE(callargs, i);
         }
     }
     _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit(
@@ -2072,10 +2014,7 @@ _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
         newargs, nargs, kwnames, previous
     );
     if (has_dict) {
-        _PyStack_UnpackDict_FreeNoDecRef(object_array, kwnames);
-    }
-    else if (nargs > 8) {
-       PyMem_Free((void *)newargs);
+        _PyStack_UnpackDict_Free(newargs, nargs, kwnames);
     }
     /* No need to decref func here because the reference has been stolen by
        _PyEvalFramePushAndInit.
@@ -2089,50 +2028,23 @@ error:
     return NULL;
 }
 
-PyObject *
+PyValue
 _PyEval_Vector(PyThreadState *tstate, PyFunctionObject *func,
                PyObject *locals,
-               PyObject* const* args, size_t argcount,
+               const PyValue *args, size_t argcount,
                PyObject *kwnames)
 {
-    size_t total_args = argcount;
-    if (kwnames) {
-        total_args += PyTuple_GET_SIZE(kwnames);
-    }
-    PyValue stack_array[8] = {0};
-    PyValue *arguments;
-    if (total_args <= 8) {
-        arguments = stack_array;
-    }
-    else {
-        arguments = PyMem_Malloc(sizeof(PyValue) * total_args);
-        if (arguments == NULL) {
-            return PyErr_NoMemory();
-        }
-    }
-    /* _PyEvalFramePushAndInit consumes the references
-     * to func, locals and all its arguments */
+    /* _PyEvalFramePushAndInit copies the arguments */
     Py_XINCREF(locals);
-    for (size_t i = 0; i < argcount; i++) {
-        arguments[i] = PyValue_FromObject(args[i]);
-    }
-    if (kwnames) {
-        Py_ssize_t kwcount = PyTuple_GET_SIZE(kwnames);
-        for (Py_ssize_t i = 0; i < kwcount; i++) {
-            arguments[i+argcount] = PyValue_FromObject(args[i+argcount]);
-        }
-    }
     _PyInterpreterFrame *frame = _PyEvalFramePushAndInit(
         tstate, PyValue_FromObject(func), locals,
-        arguments, argcount, kwnames, NULL);
-    if (total_args > 8) {
-        PyMem_Free(arguments);
-    }
+        args, argcount, kwnames, NULL);
     if (frame == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     EVAL_CALL_STAT_INC(EVAL_CALL_VECTOR);
-    return _PyEval_EvalFrame(tstate, frame, 0);
+    PyObject *res = _PyEval_EvalFrame(tstate, frame, 0);
+    return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
 }
 
 /* Legacy API */
@@ -2158,29 +2070,25 @@ PyEval_EvalCodeEx(PyObject *_co, PyObject *globals, PyObject *locals,
         locals = globals;
     }
     PyObject *kwnames = NULL;
-    PyObject *const *allargs;
-    PyObject **newargs = NULL;
     PyFunctionObject *func = NULL;
-    if (kwcount == 0) {
-        allargs = args;
+    // The canonical values of the arguments; args and kws keep them alive.
+    PyValue *newargs = PyMem_Malloc(sizeof(PyValue) * (kwcount + argcount + 1));
+    if (newargs == NULL) {
+        PyErr_NoMemory();
+        goto fail;
     }
-    else {
+    for (int i = 0; i < argcount; i++) {
+        newargs[i] = PyValue_FromObject(args[i]);
+    }
+    if (kwcount != 0) {
         kwnames = PyTuple_New(kwcount);
         if (kwnames == NULL) {
             goto fail;
         }
-        newargs = PyMem_Malloc(sizeof(PyObject *)*(kwcount+argcount));
-        if (newargs == NULL) {
-            goto fail;
-        }
-        for (int i = 0; i < argcount; i++) {
-            newargs[i] = args[i];
-        }
         for (int i = 0; i < kwcount; i++) {
             PyTuple_SET_ITEM(kwnames, i, Py_NewRef(kws[2*i]));
-            newargs[argcount+i] = kws[2*i+1];
+            newargs[argcount+i] = PyValue_FromObject(kws[2*i+1]);
         }
-        allargs = newargs;
     }
     PyFrameConstructor constr = {
         .fc_globals = globals,
@@ -2197,9 +2105,8 @@ PyEval_EvalCodeEx(PyObject *_co, PyObject *globals, PyObject *locals,
         goto fail;
     }
     EVAL_CALL_STAT_INC(EVAL_CALL_LEGACY);
-    res = _PyEval_Vector(tstate, func, locals,
-                         allargs, argcount,
-                         kwnames);
+    res = PyValue_Object(_PyEval_Vector(tstate, func, locals,
+                                        newargs, argcount, kwnames));
 fail:
     Py_XDECREF(func);
     Py_XDECREF(kwnames);

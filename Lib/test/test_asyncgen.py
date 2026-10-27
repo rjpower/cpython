@@ -6,6 +6,7 @@ import contextlib
 import warnings
 
 from test.support.import_helper import import_module
+from test import support
 from test.support import gc_collect, requires_working_socket
 asyncio = import_module("asyncio")
 
@@ -1520,6 +1521,12 @@ class AsyncGenAsyncioTest(unittest.TestCase):
         fut.cancel()
         self.loop.run_until_complete(asyncio.sleep(0.01))
 
+    # In a release build a C frame can save a pointer one past the end of a
+    # live argument tuple's items in a callee-saved register.  It is the
+    # address of the next block, which the conservative stack scan takes for
+    # the dead object there (note 08, the hack register).
+    @unittest.skipUnless(support.Py_DEBUG,
+                         "a one-past-the-end pointer keeps a dead object alive")
     def test_async_gen_asyncio_gc_aclose_09(self):
         DONE = 0
 
@@ -2008,6 +2015,12 @@ class AsyncGenAsyncioTest(unittest.TestCase):
         self.assertIn('an error occurred during closing of asynchronous generator',
                       message['message'])
 
+    # In a release build a C frame can save a pointer one past the end of a
+    # live argument tuple's items in a callee-saved register.  It is the
+    # address of the next block, which the conservative stack scan takes for
+    # the dead object there (note 08, the hack register).
+    @unittest.skipUnless(support.Py_DEBUG,
+                         "a one-past-the-end pointer keeps a dead object alive")
     def test_async_gen_asyncio_shutdown_exception_02(self):
         messages = []
 

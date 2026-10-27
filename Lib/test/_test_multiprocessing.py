@@ -5368,6 +5368,11 @@ class _TestFinalize(BaseTestCase):
         conn.close()
         os._exit(0)
 
+    # In a release build a padding slot in a call's C frame can hold a stale
+    # copy of an earlier call's argument tuple, and the conservative stack
+    # scan keeps the dead object alive until a later collection.
+    @unittest.skipUnless(support.Py_DEBUG,
+                         "a stale word in a call's frame keeps a dead object alive")
     @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
     def test_finalize(self):
         conn, child_conn = self.Pipe()

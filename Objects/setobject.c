@@ -1337,21 +1337,26 @@ frozenset_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     return make_new_frozenset(type, iterable);
 }
 
-static PyObject *
-frozenset_vectorcall(PyObject *type, PyObject * const*args,
+static PyValue
+frozenset_vectorcall(PyValue type, const PyValue *args,
                      size_t nargsf, PyObject *kwnames)
 {
     if (!_PyArg_NoKwnames("frozenset", kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_CheckPositional("frozenset", nargs, 0, 1)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *iterable = (nargs ? args[0] : NULL);
-    return make_new_frozenset(_PyType_CAST(type), iterable);
+    // A box of an inline argument, to raise the TypeError.
+    PyObject *iterable = NULL;
+    if (nargs && (iterable = PyValue_Object(args[0])) == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(make_new_frozenset(
+        _PyType_CAST(PyValue_ObjectBorrow(type)), iterable));
 }
 
 static PyObject *
@@ -2616,26 +2621,28 @@ set_init(PyObject *so, PyObject *args, PyObject *kwds)
     return set_update_internal(self, iterable);
 }
 
-static PyObject*
-set_vectorcall(PyObject *type, PyObject * const*args,
+static PyValue
+set_vectorcall(PyValue type, const PyValue *args,
                size_t nargsf, PyObject *kwnames)
 {
-    assert(PyType_Check(type));
+    assert(PyType_Check(PyValue_ObjectBorrow(type)));
 
     if (!_PyArg_NoKwnames("set", kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_CheckPositional("set", nargs, 0, 1)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (nargs) {
-        return make_new_set(_PyType_CAST(type), args[0]);
+    // A box of an inline argument, to raise the TypeError.
+    PyObject *iterable = NULL;
+    if (nargs && (iterable = PyValue_Object(args[0])) == NULL) {
+        return PyValue_NULL;
     }
-
-    return make_new_set(_PyType_CAST(type), NULL);
+    return PyValue_FromResult(make_new_set(
+        _PyType_CAST(PyValue_ObjectBorrow(type)), iterable));
 }
 
 static PySequenceMethods set_as_sequence = {

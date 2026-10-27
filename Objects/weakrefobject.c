@@ -140,7 +140,7 @@ _PyWeakref_GetWeakrefCount(PyObject *obj)
     return count;
 }
 
-static PyObject *weakref_vectorcall(PyObject *self, PyObject *const *args, size_t nargsf, PyObject *kwnames);
+static PyValue weakref_vectorcall(PyValue self, const PyValue *args, size_t nargsf, PyObject *kwnames);
 
 static void
 init_weakref(PyWeakReference *self, PyObject *ob, PyObject *callback)
@@ -248,22 +248,22 @@ gc_clear(PyObject *op)
 }
 
 
-static PyObject *
-weakref_vectorcall(PyObject *self, PyObject *const *args,
+static PyValue
+weakref_vectorcall(PyValue self, const PyValue *args,
                    size_t nargsf, PyObject *kwnames)
 {
     if (!_PyArg_NoKwnames("weakref", kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_CheckPositional("weakref", nargs, 0, 0)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    PyObject *obj = _PyWeakref_GET_REF(self);
+    PyObject *obj = _PyWeakref_GET_REF(PyValue_ObjectBorrow(self));
     if (obj == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return obj;
+    return PyValue_FromObject(obj);
 }
 
 /*[clinic input]

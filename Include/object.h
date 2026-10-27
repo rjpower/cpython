@@ -288,8 +288,12 @@ typedef PyObject *(*newfunc)(PyTypeObject *, PyObject *, PyObject *);
 typedef PyObject *(*allocfunc)(PyTypeObject *, Py_ssize_t);
 
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x030c0000 // 3.12
-typedef PyObject *(*vectorcallfunc)(PyObject *callable, PyObject *const *args,
-                                    size_t nargsf, PyObject *kwnames);
+/* The vectorcall convention (PEP 590) on values: callable is the object
+   whose vectorcall this is, args holds the positional arguments and then
+   the values of the keywords named in kwnames, and the result is a value,
+   or PyValue_NULL with an exception set. */
+typedef PyValue (*vectorcallfunc)(PyValue callable, const PyValue *args,
+                                  size_t nargsf, PyObject *kwnames);
 #endif
 
 typedef struct{

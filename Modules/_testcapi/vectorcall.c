@@ -105,11 +105,11 @@ _testcapi_pyobject_vectorcall_impl(PyObject *module, PyObject *func,
     return PyObject_Vectorcall(func, stack, nargs, kwnames);
 }
 
-static PyObject *
-override_vectorcall(PyObject *callable, PyObject *const *args, size_t nargsf,
+static PyValue
+override_vectorcall(PyValue callable, const PyValue *args, size_t nargsf,
                     PyObject *kwnames)
 {
-    return PyUnicode_FromString("overridden");
+    return PyValue_FromResult(PyUnicode_FromString("overridden"));
 }
 
 static PyObject *
@@ -119,7 +119,7 @@ function_setvectorcall(PyObject *self, PyObject *func)
         PyErr_SetString(PyExc_TypeError, "'func' must be a function");
         return NULL;
     }
-    PyFunction_SetVectorcall((PyFunctionObject *)func, (vectorcallfunc)override_vectorcall);
+    PyFunction_SetVectorcall((PyFunctionObject *)func, override_vectorcall);
     Py_RETURN_NONE;
 }
 
@@ -153,12 +153,12 @@ VectorCallClass_tpcall(PyObject *self, PyObject *args, PyObject *kwargs) {
     return PyUnicode_FromString("tp_call");
 }
 
-PyObject *
-VectorCallClass_vectorcall(PyObject *callable,
-                            PyObject *const *args,
-                            size_t nargsf,
-                            PyObject *kwnames) {
-    return PyUnicode_FromString("vectorcall");
+PyValue
+VectorCallClass_vectorcall(PyValue callable,
+                           const PyValue *args,
+                           size_t nargsf,
+                           PyObject *kwnames) {
+    return PyValue_FromResult(PyUnicode_FromString("vectorcall"));
 }
 
 /*[clinic input]
@@ -279,14 +279,15 @@ typedef struct {
     vectorcallfunc vectorcall;
 } MethodDescriptorObject;
 
-static PyObject *
-MethodDescriptor_vectorcall(PyObject *callable, PyObject *const *args,
+static PyValue
+MethodDescriptor_vectorcall(PyValue callable, const PyValue *args,
                             size_t nargsf, PyObject *kwnames)
 {
     /* True if using the vectorcall function in MethodDescriptorObject
      * but False for MethodDescriptor2Object */
-    MethodDescriptorObject *md = (MethodDescriptorObject *)callable;
-    return PyBool_FromLong(md->vectorcall != NULL);
+    MethodDescriptorObject *md =
+        (MethodDescriptorObject *)PyValue_ObjectBorrow(callable);
+    return PyValue_FromObject(md->vectorcall != NULL ? Py_True : Py_False);
 }
 
 static PyObject *

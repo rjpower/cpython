@@ -37,6 +37,13 @@ PyAPI_FUNC(PyObject*) _Py_CheckFunctionResult(
     PyObject *result,
     const char *where);
 
+// _Py_CheckFunctionResult() for a value result.
+PyAPI_FUNC(PyValue) _Py_CheckFunctionResultValue(
+    PyThreadState *tstate,
+    PyObject *callable,
+    PyValue result,
+    const char *where);
+
 extern PyObject* _PyObject_Call_Prepend(
     PyThreadState *tstate,
     PyObject *callable,
@@ -64,6 +71,15 @@ PyAPI_FUNC(PyObject*) _PyObject_CallMethod(
     const char *format, ...);
 
 
+// Call callable(arg, *args); arg is placed in args[-1] if nargsf allows.
+extern PyValue _PyObject_VectorcallPrependValue(
+    PyThreadState *tstate,
+    PyValue callable,
+    PyValue arg,
+    const PyValue *args,
+    size_t nargsf,
+    PyObject *kwnames);
+
 extern PyObject *_PyObject_VectorcallPrepend(
     PyThreadState *tstate,
     PyObject *callable,
@@ -77,12 +93,12 @@ extern PyObject *_PyObject_VectorcallPrepend(
 // Call callable using tp_call. Arguments are like PyObject_Vectorcall(),
 // except that nargs is plainly the number of arguments without flags.
 //
-// Export for 'math' shared extension, used via _PyObject_VectorcallTstate()
-// static inline function.
-PyAPI_FUNC(PyObject*) _PyObject_MakeTpCall(
+// Call callable through its type's tp_call.  Exported for the static inline
+// _PyObject_VectorcallValueTstate().
+PyAPI_FUNC(PyValue) _PyObject_MakeTpCall(
     PyThreadState *tstate,
-    PyObject *callable,
-    PyObject *const *args, Py_ssize_t nargs,
+    PyValue callable,
+    const PyValue *args, Py_ssize_t nargs,
     PyObject *keywords);
 
 // Static inline variant of public PyVectorcall_Function().
@@ -122,32 +138,46 @@ _PyVectorcall_FunctionInline(PyObject *callable)
 
    keywords must only contain strings and all keys must be unique.
 
-   Return the result on success. Raise an exception and return NULL on
-   error. */
-static inline PyObject *
-_PyObject_VectorcallTstate(PyThreadState *tstate, PyObject *callable,
-                           PyObject *const *args, size_t nargsf,
-                           PyObject *kwnames)
+   Return the result on success. Raise an exception and return PyValue_NULL
+   on error. */
+static inline PyValue
+_PyObject_VectorcallValueTstate(PyThreadState *tstate, PyValue callable,
+                                const PyValue *args, size_t nargsf,
+                                PyObject *kwnames)
 {
-    vectorcallfunc func;
-    PyObject *res;
-
     assert(kwnames == NULL || PyTuple_Check(kwnames));
     assert(args != NULL || PyVectorcall_NARGS(nargsf) == 0);
 
-    func = _PyVectorcall_FunctionInline(callable);
-    if (func == NULL) {
-        Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-        return _PyObject_MakeTpCall(tstate, callable, args, nargs, kwnames);
+    if (!PyValue_IsInline(callable)) {
+        PyObject *callable_o = PyValue_ObjectBorrow(callable);
+        vectorcallfunc func = _PyVectorcall_FunctionInline(callable_o);
+        if (func != NULL) {
+            PyValue res = func(callable, args, nargsf, kwnames);
+            return _Py_CheckFunctionResultValue(tstate, callable_o, res, NULL);
+        }
     }
-    res = func(callable, args, nargsf, kwnames);
-    return _Py_CheckFunctionResult(tstate, callable, res, NULL);
+    return _PyObject_MakeTpCall(tstate, callable, args,
+                                PyVectorcall_NARGS(nargsf), kwnames);
 }
+
+/* The call on objects (PyObject_Vectorcall()): the canonical values of the
+   arguments are passed to _PyObject_VectorcallValueTstate(), and the result
+   is boxed. */
+PyAPI_FUNC(PyObject *) _PyObject_VectorcallTstate(
+    PyThreadState *tstate, PyObject *callable,
+    PyObject *const *args, size_t nargsf,
+    PyObject *kwnames);
+
+extern PyValue _PyObject_VectorcallDictValueTstate(
+    PyThreadState *tstate, PyValue callable,
+    const PyValue *args, size_t nargsf,
+    PyObject *kwargs);
 
 
 static inline PyObject *
 _PyObject_CallNoArgsTstate(PyThreadState *tstate, PyObject *func) {
-    return _PyObject_VectorcallTstate(tstate, func, NULL, 0, NULL);
+    return PyValue_Object(_PyObject_VectorcallValueTstate(
+        tstate, PyValue_FromObject(func), NULL, 0, NULL));
 }
 
 
@@ -156,23 +186,24 @@ static inline PyObject *
 _PyObject_CallNoArgs(PyObject *func) {
     EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API, func);
     PyThreadState *tstate = _PyThreadState_GET();
-    return _PyObject_VectorcallTstate(tstate, func, NULL, 0, NULL);
+    return _PyObject_CallNoArgsTstate(tstate, func);
 }
 
 
-PyAPI_FUNC(PyObject *const *)
+/* Convert (args, nargs, kwargs: dict) into (stack, nargs, kwnames: tuple):
+   a new argument array, with a free slot before it for
+   PY_VECTORCALL_ARGUMENTS_OFFSET, holding the positional arguments and then
+   the keyword values.  NULL with an exception set on error, such as a key
+   that is not a str.  Free the array with _PyStack_UnpackDict_Free(). */
+PyAPI_FUNC(const PyValue *)
 _PyStack_UnpackDict(PyThreadState *tstate,
-    PyObject *const *args, Py_ssize_t nargs,
+    const PyValue *args, Py_ssize_t nargs,
     PyObject *kwargs, PyObject **p_kwnames);
 
 // Exported for external JIT support
 PyAPI_FUNC(void) _PyStack_UnpackDict_Free(
-    PyObject *const *stack,
+    const PyValue *stack,
     Py_ssize_t nargs,
-    PyObject *kwnames);
-
-PyAPI_FUNC(void) _PyStack_UnpackDict_FreeNoDecRef(
-    PyObject *const *stack,
     PyObject *kwnames);
 
 #ifdef __cplusplus

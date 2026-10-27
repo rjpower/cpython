@@ -141,9 +141,16 @@ builtin___build_class__(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
         mkw = NULL;
     }
     else {
-        mkw = _PyStack_AsDict(args + nargs, kwnames);
+        // The keyword arguments are objects until METH_FASTCALL takes values.
+        mkw = PyDict_New();
         if (mkw == NULL) {
             goto error;
+        }
+        for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(kwnames); i++) {
+            if (PyDict_SetItem(mkw, PyTuple_GET_ITEM(kwnames, i),
+                               args[nargs + i]) < 0) {
+                goto error;
+            }
         }
 
         if (PyDict_Pop(mkw, &_Py_ID(metaclass), &meta) < 0) {
@@ -205,7 +212,8 @@ builtin___build_class__(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
     }
     PyThreadState *tstate = _PyThreadState_GET();
     EVAL_CALL_STAT_INC(EVAL_CALL_BUILD_CLASS);
-    cell = _PyEval_Vector(tstate, (PyFunctionObject *)func, ns, NULL, 0, NULL);
+    cell = PyValue_Object(
+        _PyEval_Vector(tstate, (PyFunctionObject *)func, ns, NULL, 0, NULL));
     if (cell != NULL) {
         if (bases != orig_bases) {
             if (PyMapping_SetItemString(ns, "__orig_bases__", orig_bases) < 0) {
@@ -599,36 +607,40 @@ filter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     return (PyObject *)lz;
 }
 
-static PyObject *
-filter_vectorcall(PyObject *type, PyObject * const*args,
+static PyValue
+filter_vectorcall(PyValue type, const PyValue *args,
                 size_t nargsf, PyObject *kwnames)
 {
-    PyTypeObject *tp = _PyType_CAST(type);
+    PyTypeObject *tp = _PyType_CAST(PyValue_ObjectBorrow(type));
     if (tp == &PyFilter_Type && !_PyArg_NoKwnames("filter", kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_CheckPositional("filter", nargs, 2, 2)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *it = PyObject_GetIter(args[1]);
+    // An iterator is never inline.
+    PyObject *it = PyValue_ObjectBorrow(PyObject_GetIterValue(args[1]));
     if (it == NULL) {
-        return NULL;
+        return PyValue_NULL;
+    }
+    // A box of an inline function, which raises when called.
+    PyObject *func = PyValue_Object(args[0]);
+    if (func == NULL) {
+        return PyValue_NULL;
     }
 
     filterobject *lz = (filterobject *)tp->tp_alloc(tp, 0);
-
     if (lz == NULL) {
-        Py_DECREF(it);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    lz->func = Py_NewRef(args[0]);
+    lz->func = func;
     lz->it = it;
 
-    return (PyObject *)lz;
+    return PyValue_FromObject((PyObject *)lz);
 }
 
 static void
@@ -1490,11 +1502,11 @@ map_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     return (PyObject *)lz;
 }
 
-static PyObject *
-map_vectorcall(PyObject *type, PyObject * const*args,
+static PyValue
+map_vectorcall(PyValue type, const PyValue *args,
                 size_t nargsf, PyObject *kwnames)
 {
-    PyTypeObject *tp = _PyType_CAST(type);
+    PyTypeObject *tp = _PyType_CAST(PyValue_ObjectBorrow(type));
 
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (kwnames != NULL && PyTuple_GET_SIZE(kwnames) != 0) {
@@ -1506,33 +1518,36 @@ map_vectorcall(PyObject *type, PyObject * const*args,
     if (nargs < 2) {
         PyErr_SetString(PyExc_TypeError,
            "map() must have at least two arguments.");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *iters = PyTuple_New(nargs-1);
     if (iters == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     for (int i=1; i<nargs; i++) {
-        PyObject *it = PyObject_GetIter(args[i]);
-        if (it == NULL) {
-            Py_DECREF(iters);
-            return NULL;
+        PyValue it = PyObject_GetIterValue(args[i]);
+        if (PyValue_IsNull(it)) {
+            return PyValue_NULL;
         }
-        PyTuple_SET_ITEM(iters, i-1, it);
+        PyTuple_SET_VALUE(iters, i-1, it);
     }
 
+    // A box of an inline function, which raises when called.
+    PyObject *func = PyValue_Object(args[0]);
+    if (func == NULL) {
+        return PyValue_NULL;
+    }
     mapobject *lz = (mapobject *)tp->tp_alloc(tp, 0);
     if (lz == NULL) {
-        Py_DECREF(iters);
-        return NULL;
+        return PyValue_NULL;
     }
     lz->iters = iters;
-    lz->func = Py_NewRef(args[0]);
+    lz->func = func;
     lz->strict = 0;
 
-    return (PyObject *)lz;
+    return PyValue_FromObject((PyObject *)lz);
 }
 
 static void

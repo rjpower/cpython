@@ -204,6 +204,14 @@ _PyValue_FromObject(PyObject *op)
 }
 #define PyValue_FromObject(op) _PyValue_FromObject(_PyObject_CAST(op))
 
+/* The canonical value of a result that is NULL on error: PyValue_NULL for
+   NULL, otherwise PyValue_FromObject(op). */
+static inline PyValue
+PyValue_FromResult(PyObject *op)
+{
+    return op == NULL ? PyValue_NULL : _PyValue_FromObject(op);
+}
+
 static inline int32_t
 PyValue_Int32(PyValue v)
 {

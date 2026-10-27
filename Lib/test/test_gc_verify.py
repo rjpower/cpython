@@ -103,6 +103,35 @@ class VerifierTests(unittest.TestCase):
         self.verify_held(addr, ref)
         self.assertIs(wr.__callback__, ref())
 
+    def test_value_slots(self):
+        # Each object is held only in a PyValue slot of a container whose
+        # other slots hold inline ints and floats, which are not references.
+        class Slotted:
+            __slots__ = ('a', 'b')
+
+        held = []
+        def obj():
+            x = Obj()
+            held.append((id(x), weakref.ref(x)))
+            return x
+
+        slotted = Slotted()
+        slotted.a = 1.5
+        slotted.b = obj()
+        instance = Obj()
+        instance.x = 7
+        instance.y = obj()
+        cell = (lambda x: lambda: x)(obj())
+        containers = [
+            [1, obj(), 2.5], (3, obj(), -0.0), {1: obj(), obj(): 2.5},
+            {4, obj(), 5.5}, frozenset([6, obj()]), slotted, instance, cell,
+        ]
+        holes = _testinternalcapi.gc_verify()
+        for addr, ref in held:
+            self.check_no_holes(holes, addr)
+            self.assertIsNotNone(ref())
+        self.assertEqual(len(containers), 8)
+
     def test_closure_cell(self):
         def outer():
             x = Obj()

@@ -631,6 +631,21 @@ pymem_malloc_without_gil(PyObject *self, PyObject *args)
 }
 
 
+static PyObject *
+pyobject_init_outside_heap(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    /* Deliberate bug: initialize an object in memory from the C library's
+       malloc(), outside the collector's object heaps.  Debug builds stop with
+       a fatal error in PyObject_Init(). */
+    PyObject *op = malloc(sizeof(PyObject));
+    if (op == NULL) {
+        return PyErr_NoMemory();
+    }
+    PyObject_Init(op, &PyBaseObject_Type);
+    free(op);
+    Py_RETURN_NONE;
+}
+
 // Tracemalloc tests
 static PyObject *
 tracemalloc_track(PyObject *self, PyObject *args)
@@ -872,6 +887,7 @@ static PyMethodDef test_methods[] = {
     {"pymem_buffer_overflow",         pymem_buffer_overflow,         METH_NOARGS},
     {"pymem_malloc_without_gil",      pymem_malloc_without_gil,      METH_NOARGS},
     {"pyobject_malloc_without_gil",   pyobject_malloc_without_gil,   METH_NOARGS},
+    {"pyobject_init_outside_heap",    pyobject_init_outside_heap,    METH_NOARGS},
     {"remove_mem_hooks",              remove_mem_hooks,              METH_NOARGS,
         PyDoc_STR("Remove memory hooks.")},
     {"set_nomemory",                  set_nomemory,                  METH_VARARGS,

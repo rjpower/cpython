@@ -912,6 +912,42 @@ _PyMem_MimallocEnabled(void)
 
 #endif  // WITH_PYMALLOC
 
+#ifdef Py_DEBUG
+/* The collector traces and frees only objects in the object heaps (Include/
+   internal/pycore_mimalloc.h).  An object initialized in memory from malloc()
+   or PyMem_Malloc() is outside them: the collector never traces it, so the
+   objects only it refers to are swept while it still uses them.  Debug builds
+   stop at the initialization instead. */
+void
+_PyObject_CheckObjectHeap(PyObject *op, PyTypeObject *tp)
+{
+#ifdef WITH_MIMALLOC
+    if (!_PyMem_MimallocEnabled()) {
+        return;  // no collector: every object comes from the C library
+    }
+    mi_segment_t *seg = _mi_gc_segment_of((uintptr_t)op);
+    if (seg != NULL) {
+        mi_page_t *page = seg->kind == MI_SEGMENT_HUGE
+            ? mi_slice_to_page(&seg->slices[seg->segment_info_slices])
+            : _mi_segment_page_of(seg, op);
+        switch (page->heap_tag) {
+        case _Py_MIMALLOC_HEAP_OBJECT:
+        case _Py_MIMALLOC_HEAP_GC:
+        case _Py_MIMALLOC_HEAP_GC_PRE:
+            return;
+        }
+    }
+    _Py_FatalErrorFormat(__func__,
+        "%s object at %p is not in an object heap: allocate objects with "
+        "PyObject_Malloc(), PyObject_New() or the type's tp_alloc, not "
+        "malloc() or PyMem_Malloc()", tp->tp_name, (void *)op);
+#else
+    (void)op;
+    (void)tp;
+#endif
+}
+#endif
+
 
 static void
 set_up_debug_hooks_domain_unlocked(PyMemAllocatorDomain domain)

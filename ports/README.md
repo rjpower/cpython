@@ -111,6 +111,13 @@ port's C code:
   before its parent parser). Only a cycle of flagged objects is broken
   at an arbitrary reference.
 - Anything that reads `ob_refcnt` or `Py_REFCNT()` to decide behaviour.
+- An object in memory from `malloc()` or `PyMem_Malloc()`, made with
+  `PyObject_Init()` or `PyObject_InitVar()`. The collector traces and frees
+  only objects in its object heaps, so it never traces such an object, and
+  the objects only it refers to are swept while it uses them; cffi's owning
+  cdata were made this way. Allocate objects with `PyObject_Malloc()`,
+  `PyObject_New()` or the type's `tp_alloc`. Debug builds stop with a fatal
+  error in `PyObject_Init()` when the object is outside the object heaps.
 
 ## Porting to PyValue and the one-word header
 

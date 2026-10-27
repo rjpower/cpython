@@ -183,6 +183,26 @@ class PyMemDefaultTests(PyMemDebugTests):
     PYTHONMALLOC = ''
 
 
+
+@requires_subprocess()
+@unittest.skipUnless(support.Py_DEBUG, 'need Py_DEBUG')
+@unittest.skipUnless(support.with_mimalloc(), 'need mimalloc')
+class ObjectHeapTests(unittest.TestCase):
+    # The collector traces only objects in its object heaps, so an object
+    # initialized in malloc() memory is never traced and its referents are
+    # swept under it.  Debug builds stop in PyObject_Init().
+    def test_pyobject_init_outside_heap(self):
+        code = 'import _testcapi; _testcapi.pyobject_init_outside_heap()'
+        for pythonmalloc in ('', 'mimalloc', 'mimalloc_debug'):
+            with self.subTest(PYTHONMALLOC=pythonmalloc):
+                with support.SuppressCrashReport():
+                    out = assert_python_failure(
+                        '-c', code, PYTHONMALLOC=pythonmalloc)
+                self.assertRegex(
+                    out.err.decode('ascii', 'replace'),
+                    r"Fatal Python error: _PyObject_CheckObjectHeap: object "
+                    r"object at (?:0x)?[0-9a-fA-F]+ is not in an object heap")
+
 @requires_subprocess()
 @support.requires_gil_enabled("PYTHONMALLOC='malloc' needs GIL build")
 @unittest.skipUnless(support.check_sanitizer(address=True),

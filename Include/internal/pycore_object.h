@@ -120,6 +120,11 @@ extern void _PyObject_FiniState(PyInterpreterState *interp);
    _PyObject_InitVar() is the fast version of PyObject_InitVar().
 
    These inline functions must not be called with op=NULL. */
+#ifdef Py_DEBUG
+// Fatal error unless op is in an object heap (Objects/obmalloc.c).
+PyAPI_FUNC(void) _PyObject_CheckObjectHeap(PyObject *op, PyTypeObject *tp);
+#endif
+
 static inline void
 _PyObject_Init(PyObject *op, PyTypeObject *typeobj)
 {
@@ -127,6 +132,9 @@ _PyObject_Init(PyObject *op, PyTypeObject *typeobj)
 #if SIZEOF_VOID_P == 8
     // A PyValue holds an object address only below 2**48 (Include/pyvalue.h).
     assert(((uintptr_t)op >> 48) == 0);
+#endif
+#ifdef Py_DEBUG
+    _PyObject_CheckObjectHeap(op, typeobj);
 #endif
     Py_SET_TYPE(op, typeobj);
     assert(_PyType_HasFeature(typeobj, Py_TPFLAGS_HEAPTYPE) || _Py_IsImmortal(typeobj));

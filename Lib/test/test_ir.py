@@ -384,7 +384,8 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(f.__code__.co_nlocals + f.__code__.co_stacksize,
                          IR_MAX_SLOTS)
         self.assertEqual(f(), [0])
-        with self.assertRaisesRegex(SystemError, "slots"):
+        with self.assertRaisesRegex(
+                SyntaxError, "too many local variables and temporaries"):
             make(IR_MAX_SLOTS - stacksize + 1)
 
     def test_shared_feedback_entry(self):

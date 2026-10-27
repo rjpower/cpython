@@ -16,8 +16,12 @@ instr
     process runs at ``loops`` and at ``3 * loops``, and the difference is
     divided by ``2 * loops``, so start-up, import and compilation cancel.  One
     warm-up run fills the pyc cache first; the value is the median of
-    ``--instr-runs`` (default 4) differenced pairs.  If perf cannot count,
-    this script exits with an error and writes nothing.
+    ``--instr-runs`` (default 4) differenced pairs.  A micro kernel's loop
+    is 1000 iterations of its statement, so its value is per iteration,
+    less the median of its skeleton (the empty loop of the same form)
+    measured in the same invocation; ``raw`` keeps the value before the
+    subtraction.  If perf cannot count, this script exits with an error and
+    writes nothing.
 time
     Nanoseconds per loop: one process makes a warm-up call of ``run(loops)``
     then ``--time-runs`` (default 5) timed calls; the value is the median.
@@ -70,6 +74,8 @@ class Bench:
     loops: int
     module: str | None = None  # file under the group's directory; default: name
     variant: str | None = None  # passed to the module's setup()
+    inner: int = 1  # iterations per loop; instr is reported per iteration
+    skeleton: str | None = None  # benchmark whose instr is subtracted
 
     @property
     def path(self) -> Path:
@@ -80,6 +86,11 @@ class Bench:
 def kernel(name: str, loops: int, module: str | None = None) -> Bench:
     """A pyperformance kernel; a module holding several takes the name as variant."""
     return Bench(name, "kernels", loops, module, name if module else None)
+
+
+def micro(name: str, skeleton: str | None = None) -> Bench:
+    """A micro kernel: 1000 iterations per loop, differenced at 200 and 600 loops."""
+    return Bench(name, "micro", 200, inner=1000, skeleton=skeleton)
 
 
 # Loop counts: the smallest giving one call of about 0.1 s or more on the
@@ -115,7 +126,54 @@ BENCHMARKS = [
     kernel("xml_etree_iterparse", 1, "xml_etree"),
     kernel("xml_etree_parse", 1, "xml_etree"),
     kernel("xml_etree_process", 1, "xml_etree"),
+    # The object-protocol and calls set; each file's docstring says what an
+    # iteration does.  Skeletons first: the others subtract them.
+    micro("empty_loop"),
+    micro("empty_loop_large_i"),
+    micro("empty_list_loop"),
+    micro("int_add", "empty_loop"),
+    micro("int_add_small", "empty_loop"),
+    micro("float_add", "empty_loop"),
+    micro("int_compare", "empty_loop"),
+    micro("float_compare", "empty_loop"),
+    micro("int_chain", "empty_loop"),
+    micro("float_chain", "empty_loop"),
+    micro("compare_branch", "empty_loop"),
+    micro("store_fast_two", "empty_loop"),
+    micro("attr_load", "empty_loop"),
+    micro("attr_load_poly", "empty_list_loop"),
+    micro("attr_store", "empty_loop"),
+    micro("attr_store_poly", "empty_list_loop"),
+    micro("attr_load_after_dict", "empty_loop"),
+    micro("attr_store_after_dict", "empty_loop"),
+    micro("slots_load", "empty_loop"),
+    micro("property_load", "empty_loop"),
+    micro("class_attr_load", "empty_loop"),
+    micro("method_call", "empty_loop"),
+    micro("new_instance", "empty_loop"),
+    micro("new_instance_empty", "empty_loop"),
+    micro("isinstance", "empty_loop"),
+    micro("global_load", "empty_loop"),
+    micro("builtin_load", "empty_loop"),
+    micro("call_len", "empty_loop"),
+    micro("call_abs", "empty_loop"),
+    micro("call_math_sin", "empty_loop"),
+    micro("call_py_1", "empty_loop"),
+    micro("call_py_3", "empty_loop"),
+    micro("call_py_kw", "empty_loop"),
+    micro("call_closure", "empty_loop"),
+    micro("generator_resume", "empty_loop"),
+    micro("list_subscript", "empty_loop"),
+    micro("tuple_subscript", "empty_loop"),
+    micro("dict_subscript", "empty_loop"),
+    micro("float_list_subscript", "empty_loop"),
+    micro("str_join", "empty_loop"),
+    micro("str_concat", "empty_loop"),
+    micro("try_noraise", "empty_loop"),
+    micro("try_raise", "empty_loop"),
 ]
+GROUP_METRICS = {"kernels": ("instr", "time", "rss"), "micro": ("instr",),
+                 "memory": ("instr", "time", "rss")}
 
 
 class MeasurementError(RuntimeError):
@@ -169,10 +227,24 @@ def measure_instr(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
     for _ in range(runs):
         a = perf_instructions(ctx, ctx.command(bench, "run", lo), f"{bench.name} at {lo}")
         b = perf_instructions(ctx, ctx.command(bench, "run", hi), f"{bench.name} at {hi}")
-        values.append((b - a) / (hi - lo))
-    return {"group": bench.group, "unit": "instructions:u per loop",
-            "value": statistics.median(values), "values": values,
-            "loops": [lo, hi], "runs": runs}
+        values.append((b - a) / ((hi - lo) * bench.inner))
+    unit = "instructions:u per iteration" if bench.inner > 1 else "instructions:u per loop"
+    entry = {"group": bench.group, "unit": unit,
+             "value": statistics.median(values), "values": values,
+             "loops": [lo, hi], "runs": runs}
+    if bench.inner > 1:
+        entry["inner"] = bench.inner
+    return entry
+
+
+def subtract_skeletons(table: dict, benches: list[Bench]) -> None:
+    """Subtract each micro kernel's skeleton, keeping the value before as raw."""
+    for bench in benches:
+        if bench.skeleton:
+            entry = table[bench.name]
+            entry["raw"] = entry["value"]
+            entry["skeleton"] = bench.skeleton
+            entry["value"] = entry["raw"] - table[bench.skeleton]["value"]
 
 
 def measure_time(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
@@ -251,7 +323,8 @@ def select(sets: list[str], only: str | None) -> list[Bench]:
         missing = set(names) - {b.name for b in chosen}
         if missing:
             raise SystemExit(f"run.py: no benchmark {', '.join(sorted(missing))} in {sets}")
-        chosen = [b for b in chosen if b.name in names]
+        needed = set(names) | {b.skeleton for b in chosen if b.name in names and b.skeleton}
+        chosen = [b for b in chosen if b.name in needed]
     return chosen
 
 
@@ -291,11 +364,14 @@ def main(argv: list[str] | None = None) -> int:
                 runs = {"instr": args.instr_runs, "time": args.time_runs,
                         "rss": args.rss_runs}[metric]
                 table = results.setdefault(metric, {})
-                for bench in benches:
+                chosen = [b for b in benches if metric in GROUP_METRICS[b.group]]
+                for bench in chosen:
                     entry = measure(ctx, bench, runs, args.loops or bench.loops)
                     table[bench.name] = entry
                     print(f"{label} {metric} {bench.group}/{bench.name} "
                           f"{entry['value']:,.1f} {entry['unit']}", file=sys.stderr, flush=True)
+                if metric == "instr":
+                    subtract_skeletons(table, chosen)
         except MeasurementError as exc:
             print(f"run.py: {exc}", file=sys.stderr)
             return 1

@@ -31,10 +31,11 @@ class RunTest(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="boil-bench-test-"))
         self.addCleanup(shutil.rmtree, self.tmp)
 
-    def run_bench(self, metric: str, *extra: str, name: str = "richards") -> dict:
+    def run_bench(self, metric: str, *extra: str, name: str = "richards",
+                  group: str = "kernels") -> dict:
         out = self.tmp / f"{metric}.json"
         subprocess.run([sys.executable, str(BENCH / "run.py"), "--build", PYTHON,
-                        "--label", "test", "--set", "kernels", "--only", name,
+                        "--label", "test", "--set", group, "--only", name,
                         "--metric", metric, "--loops", "1", *extra, "-o", str(out)],
                        check=True, capture_output=True, text=True)
         return json.loads(out.read_text())
@@ -45,7 +46,7 @@ class RunTest(unittest.TestCase):
         self.assertEqual(report["build"]["label"], "test")
         self.assertIn("sha", report["commit"])
         entry = report["results"][metric][name]
-        self.assertEqual(entry["group"], "kernels")
+        self.assertEqual(entry["group"], report["results"][metric][name]["group"])
         self.assertEqual(entry["runs"], runs)
         self.assertEqual(len(entry["values"]), runs)
         self.assertGreater(entry["value"], 0)
@@ -72,6 +73,17 @@ class RunTest(unittest.TestCase):
                                check=True, capture_output=True, text=True).stdout
         self.assertIn("| richards |", table)
         self.assertIn("| geomean |  | 1.000 (1/1) |", table)
+
+    @unittest.skipUnless(perf_counts(), "perf cannot count instructions:u here")
+    def test_micro_subtracts_its_skeleton(self):
+        report = self.run_bench("instr", "--instr-runs", "1", name="attr_load_poly",
+                                group="micro")
+        table = report["results"]["instr"]
+        self.assertEqual(set(table), {"attr_load_poly", "empty_list_loop"})
+        entry = self.check_entry(report, "instr", 1, name="attr_load_poly")
+        self.assertEqual(entry["inner"], 1000)
+        self.assertEqual(entry["skeleton"], "empty_list_loop")
+        self.assertEqual(entry["value"], entry["raw"] - table["empty_list_loop"]["value"])
 
 
 if __name__ == "__main__":

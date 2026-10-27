@@ -1954,8 +1954,16 @@ _PyEval_GeneratorReturnTarget(_PyInterpreterFrame *frame)
     }
     PyCodeObject *co = _PyFrame_GetCode(frame);
     int i = (int)_PyFrame_InstrOffset(frame, frame->instr_ptr);
-    assert(_PyIR_BaseOpcode(_PyCode_InstrHandler(co, i)) == SEND ||
-           _PyIR_BaseOpcode(_PyCode_InstrHandler(co, i)) == FOR_ITER);
+    int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(co, i));
+    assert(opcode == SEND || opcode == FOR_ITER);
+    if (opcode == FOR_ITER) {
+        // dst, the frame's return slot, may be the loop target, a local,
+        // which takes only the values the generator yields.  The return
+        // value goes to the slot after the window of the iterator and its
+        // NULL, where the value of an exhausted iterator would be pushed:
+        // the END_FOR at the exit consumes that slot.
+        frame->return_slot = (uint16_t)(IR_B(*frame->instr_ptr) + 2);
+    }
     return next + _PyCode_InstrOparg(co, i);
 }
 

@@ -264,6 +264,9 @@ PyAPI_FUNC(int) _PyEval_UnpackIterableValues(PyThreadState *tstate, PyObject *v,
 PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame);
 /* Where frame resumes when a generator that it resumed returns: past the
  * exit of its SEND or FOR_ITER, or for the entry frame, the next word. */
+/* The word that frame resumes at when the generator it resumed with a SEND or
+   FOR_ITER returns, the exit of that instruction; for a FOR_ITER, also
+   points frame's return slot at the slot that END_FOR consumes. */
 PyAPI_FUNC(_PyInstr *) _PyEval_GeneratorReturnTarget(_PyInterpreterFrame *frame);
 PyAPI_FUNC(PyObject **) _PyObjectArray_FromValues(PyValue *input, Py_ssize_t nargs, PyObject **scratch);
 

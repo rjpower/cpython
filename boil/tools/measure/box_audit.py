@@ -39,6 +39,9 @@ class S:
 obj, sobj = C(), S()
 obj.v = 1
 sobj.v = 1
+def gen():
+    yield from tup
+    return 2.5
 """
 
 CASES = {
@@ -78,10 +81,8 @@ CASES = {
     "unpack": ("", "p, q = a, y; p, q, *rest = lst; p, q = [a, y]", None),
     "comprehensions": ("", "r = ([v * 2 for v in tup], {v for v in tup},"
                            " {v: v for v in tup})", None),
-    "generator": ("", "for v in (w * 2 for w in tup): pass",
-                  "FOR_ITER_GEN leaves to FOR_ITER when the loop target is a "
-                  "local, so the generator resumes from C and its yields are "
-                  "boxed at INTERPRETER_EXIT (being fixed in 6b)"),
+    "generator": ("", "for v in (w for w in tup): pass\n"
+                      "for v in gen(): pass", None),
     "format": ("", "r = (f'{a}', f'{x}', f'{a!r}', f'{x:.2f}', f'{y:>8}',"
                    " f'{y!s}')", None),
     "format int spec": ("", "r = f'{a:5d}'",

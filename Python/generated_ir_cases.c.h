@@ -9070,11 +9070,6 @@
             INSTRUCTION_STATS(FOR_ITER_GEN);
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            if (IR_IS_LOCAL(IR_FIELD_A(this_instr))) {
-                UPDATE_MISS_STATS(FOR_ITER);
-                assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
-                JUMP_TO_PREDICTED(FOR_ITER);
-            }
             PyValue iter;
             PyValue gen_frame;
             PyValue new_frame;

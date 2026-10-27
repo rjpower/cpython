@@ -707,11 +707,19 @@ def uop_tokens(inst: Instruction) -> list[str]:
 
 
 def names_return_slot(inst: Instruction) -> bool:
-    """Whether the frames that inst pushes return only their result, to the
-    slot dst names.  A generator's frame also hands each value it yields to
-    that slot, and its return value at the end of a FOR_ITER."""
+    """Whether the frames that inst pushes hand dst only what a store of the
+    result into a local should see.  A generator's frame that a SEND resumes
+    also hands dst each value the generator yields, on its way out of the
+    SEND's own frame, which a local must not see.  One that a FOR_ITER
+    resumes hands dst only the values it yields, each the loop target's
+    next value, and returns its return value to the slot after the
+    iterator's window, which END_FOR consumes
+    (_PyEval_GeneratorReturnTarget())."""
     tokens = uop_tokens(inst)
-    return "IR_DST_SLOT" in tokens and "gi_iframe" not in tokens
+    if "IR_DST_SLOT" not in tokens:
+        return False
+    return ("gi_iframe" not in tokens
+            or (inst.family is not None and inst.family.name == "FOR_ITER"))
 
 
 def pushes_always(inst: Instruction) -> bool:

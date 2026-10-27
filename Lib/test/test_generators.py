@@ -970,6 +970,163 @@ class GeneratorStackTraceTest(unittest.TestCase):
         gen.throw(RuntimeError)
 
 
+class ForIterGeneratorTest(unittest.TestCase):
+    """A for loop over a generator in a function, which FOR_ITER_GEN runs
+    once specialised: the loop target, a local, takes each yielded value,
+    and the generator's return value goes elsewhere."""
+
+    # Enough runs of each loop for it to specialise.
+    RUNS = 100
+
+    @staticmethod
+    def gen(*values, result="result"):
+        yield from values
+        return result
+
+    def test_target_keeps_last_value(self):
+        def loop(values, result):
+            v = "unset"
+            for v in self.gen(*values, result=result):
+                pass
+            return v
+        for _ in range(self.RUNS):
+            self.assertEqual(loop((1, 2.5, "last"), "result"), "last")
+            self.assertEqual(loop((1, 2), 3.5), 2)
+            self.assertEqual(loop((), "result"), "unset")
+
+    def test_target_values(self):
+        def loop():
+            seen = []
+            for v in self.gen(1, 2.5, None, 2**40, result=99):
+                seen.append(v)
+            return seen, v
+        for _ in range(self.RUNS):
+            self.assertEqual(loop(), ([1, 2.5, None, 2**40], 2**40))
+
+    def test_unpacked_target(self):
+        def loop():
+            for a, b in self.gen((1, 2), (3, 4.5), result=(5, 6)):
+                pass
+            return a, b
+        for _ in range(self.RUNS):
+            self.assertEqual(loop(), (3, 4.5))
+
+    def test_nested_loops(self):
+        def loop():
+            out = []
+            for v in self.gen(1, 2, result="outer"):
+                for w in self.gen(v, v * 10, result="inner"):
+                    out.append(w)
+            return out, v, w
+        for _ in range(self.RUNS):
+            self.assertEqual(loop(), ([1, 10, 2, 20], 2, 20))
+
+    def test_loop_in_generator(self):
+        def outer():
+            for v in self.gen(1, 2, result="ignored"):
+                yield v
+            yield v
+        for _ in range(self.RUNS):
+            self.assertEqual(list(outer()), [1, 2, 2])
+
+    def test_yield_from_result(self):
+        def delegate():
+            r = yield from self.gen(1, 2, result="result")
+            return r
+        def loop():
+            g = delegate()
+            items = []
+            for v in g:
+                items.append(v)
+            return items, v
+        for _ in range(self.RUNS):
+            self.assertEqual(loop(), ([1, 2], 2))
+            g = delegate()
+            self.assertEqual(next(g), 1)
+            self.assertEqual(next(g), 2)
+            with self.assertRaises(StopIteration) as cm:
+                next(g)
+            self.assertEqual(cm.exception.value, "result")
+
+    def test_await_result(self):
+        class Awaitable:
+            def __await__(self):
+                yield "suspend"
+                return 2.5
+        async def inner():
+            return await Awaitable() * 2
+        async def outer():
+            x = await inner()
+            return x, await inner()
+        for _ in range(self.RUNS):
+            coro = outer()
+            self.assertEqual(coro.send(None), "suspend")
+            self.assertEqual(coro.send(None), "suspend")
+            with self.assertRaises(StopIteration) as cm:
+                coro.send(None)
+            self.assertEqual(cm.exception.value, (5.0, 5.0))
+
+    def test_close_in_loop(self):
+        def endless():
+            i = 0
+            while True:
+                yield i
+                i += 1
+        def loop():
+            g = endless()
+            for v in g:
+                if v == 3:
+                    g.close()
+            return v
+        for _ in range(self.RUNS):
+            self.assertEqual(loop(), 3)
+
+    def test_throw_in_loop(self):
+        def catching():
+            try:
+                yield 1
+            except ValueError:
+                yield "caught"
+            yield 2
+            return "result"
+        def loop():
+            g = catching()
+            seen = []
+            for v in g:
+                seen.append(v)
+                if v == 1:
+                    seen.append(g.throw(ValueError))
+            return seen, v
+        for _ in range(self.RUNS):
+            self.assertEqual(loop(), ([1, "caught", 2], 2))
+
+    def test_throw_propagates(self):
+        def loop():
+            g = self.gen(1, 2)
+            v = None
+            try:
+                for v in g:
+                    g.throw(KeyError("k"))
+            except KeyError:
+                return v
+        for _ in range(self.RUNS):
+            self.assertEqual(loop(), 1)
+
+    def test_generator_raises(self):
+        def failing():
+            yield 1
+            raise ZeroDivisionError
+        def loop():
+            v = None
+            try:
+                for v in failing():
+                    pass
+            except ZeroDivisionError:
+                return v
+        for _ in range(self.RUNS):
+            self.assertEqual(loop(), 1)
+
+
 class YieldFromTests(unittest.TestCase):
     def test_generator_gi_yieldfrom(self):
         def a():

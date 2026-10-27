@@ -96,7 +96,7 @@ cell_richcompare(PyObject *a, PyObject *b, int op)
 
     /* compare cells by contents; empty cells come before anything else */
     if (!PyValue_IsNull(a_value) && !PyValue_IsNull(b_value)) {
-        return _PyValue_RichCompare(a_value, b_value, op);
+        return PyValue_Object(PyObject_RichCompareValue(a_value, b_value, op));
     }
     Py_RETURN_RICHCOMPARE(PyValue_IsNull(b_value), PyValue_IsNull(a_value), op);
 }

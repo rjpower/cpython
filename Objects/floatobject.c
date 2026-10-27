@@ -580,19 +580,13 @@ float_div(PyObject *v, PyObject *w)
     return PyFloat_FromDouble(a);
 }
 
-static PyObject *
-float_rem(PyObject *v, PyObject *w)
+/* Python's float % for doubles: the remainder has the sign of the divisor.
+   wx is not zero. */
+double
+_PyFloat_Rem(double vx, double wx)
 {
-    double vx, wx;
-    double mod;
-    CONVERT_TO_DOUBLE(v, vx);
-    CONVERT_TO_DOUBLE(w, wx);
-    if (wx == 0.0) {
-        PyErr_SetString(PyExc_ZeroDivisionError,
-                        "division by zero");
-        return NULL;
-    }
-    mod = fmod(vx, wx);
+    assert(wx != 0.0);
+    double mod = fmod(vx, wx);
     if (mod) {
         /* ensure the remainder has the same sign as the denominator */
         if ((wx < 0) != (mod < 0)) {
@@ -605,12 +599,28 @@ float_rem(PyObject *v, PyObject *w)
            it has the same sign as the denominator. */
         mod = copysign(0.0, wx);
     }
-    return PyFloat_FromDouble(mod);
+    return mod;
 }
 
-static void
-_float_div_mod(double vx, double wx, double *floordiv, double *mod)
+static PyObject *
+float_rem(PyObject *v, PyObject *w)
 {
+    double vx, wx;
+    CONVERT_TO_DOUBLE(v, vx);
+    CONVERT_TO_DOUBLE(w, wx);
+    if (wx == 0.0) {
+        PyErr_SetString(PyExc_ZeroDivisionError,
+                        "division by zero");
+        return NULL;
+    }
+    return PyFloat_FromDouble(_PyFloat_Rem(vx, wx));
+}
+
+/* Python's divmod() for doubles.  wx is not zero. */
+void
+_PyFloat_DivMod(double vx, double wx, double *floordiv, double *mod)
+{
+    assert(wx != 0.0);
     double div;
     *mod = fmod(vx, wx);
     /* fmod is typically exact, so vx-mod is *mathematically* an
@@ -657,7 +667,7 @@ float_divmod(PyObject *v, PyObject *w)
         PyErr_SetString(PyExc_ZeroDivisionError, "division by zero");
         return NULL;
     }
-    _float_div_mod(vx, wx, &floordiv, &mod);
+    _PyFloat_DivMod(vx, wx, &floordiv, &mod);
     return Py_BuildValue("(dd)", floordiv, mod);
 }
 
@@ -672,7 +682,7 @@ float_floor_div(PyObject *v, PyObject *w)
         PyErr_SetString(PyExc_ZeroDivisionError, "division by zero");
         return NULL;
     }
-    _float_div_mod(vx, wx, &floordiv, &mod);
+    _PyFloat_DivMod(vx, wx, &floordiv, &mod);
     return PyFloat_FromDouble(floordiv);
 }
 
@@ -680,30 +690,27 @@ float_floor_div(PyObject *v, PyObject *w)
    x is not an infinity or nan. */
 #define DOUBLE_IS_ODD_INTEGER(x) (fmod(fabs(x), 2.0) == 1.0)
 
-static PyObject *
-float_pow(PyObject *v, PyObject *w, PyObject *z)
+/* Python's float ** float for doubles: 0 with the result in *res, -1 with
+   an exception set, or 1 if the result is complex (a negative base and an
+   exponent that is not an integer), which *res does not hold. */
+int
+_PyFloat_Pow(double iv, double iw, double *res)
 {
-    double iv, iw, ix;
+    double ix;
     int negate_result = 0;
-
-    if ((PyObject *)z != Py_None) {
-        PyErr_SetString(PyExc_TypeError, "pow() 3rd argument not "
-            "allowed unless all arguments are integers");
-        return NULL;
-    }
-
-    CONVERT_TO_DOUBLE(v, iv);
-    CONVERT_TO_DOUBLE(w, iw);
 
     /* Sort out special cases here instead of relying on pow() */
     if (iw == 0) {              /* v**0 is 1, even 0**0 */
-        return PyFloat_FromDouble(1.0);
+        *res = 1.0;
+        return 0;
     }
     if (isnan(iv)) {        /* nan**w = nan, unless w == 0 */
-        return PyFloat_FromDouble(iv);
+        *res = iv;
+        return 0;
     }
     if (isnan(iw)) {        /* v**nan = nan, unless v == 1; 1**nan = 1 */
-        return PyFloat_FromDouble(iv == 1.0 ? 1.0 : iw);
+        *res = iv == 1.0 ? 1.0 : iw;
+        return 0;
     }
     if (isinf(iw)) {
         /* v**inf is: 0.0 if abs(v) < 1; 1.0 if abs(v) == 1; inf if
@@ -714,11 +721,12 @@ float_pow(PyObject *v, PyObject *w, PyObject *z)
          */
         iv = fabs(iv);
         if (iv == 1.0)
-            return PyFloat_FromDouble(1.0);
+            *res = 1.0;
         else if ((iw > 0.0) == (iv > 1.0))
-            return PyFloat_FromDouble(fabs(iw)); /* return inf */
+            *res = fabs(iw); /* inf */
         else
-            return PyFloat_FromDouble(0.0);
+            *res = 0.0;
+        return 0;
     }
     if (isinf(iv)) {
         /* (+-inf)**w is: inf for w positive, 0 for w negative; in
@@ -727,10 +735,10 @@ float_pow(PyObject *v, PyObject *w, PyObject *z)
          */
         int iw_is_odd = DOUBLE_IS_ODD_INTEGER(iw);
         if (iw > 0.0)
-            return PyFloat_FromDouble(iw_is_odd ? iv : fabs(iv));
+            *res = iw_is_odd ? iv : fabs(iv);
         else
-            return PyFloat_FromDouble(iw_is_odd ?
-                                      copysign(0.0, iv) : 0.0);
+            *res = iw_is_odd ? copysign(0.0, iv) : 0.0;
+        return 0;
     }
     if (iv == 0.0) {  /* 0**w is: 0 for w positive, 1 for w zero
                          (already dealt with above), and an error
@@ -739,10 +747,11 @@ float_pow(PyObject *v, PyObject *w, PyObject *z)
         if (iw < 0.0) {
             PyErr_SetString(PyExc_ZeroDivisionError,
                             "zero to a negative power");
-            return NULL;
+            return -1;
         }
         /* use correct sign if iw is odd */
-        return PyFloat_FromDouble(iw_is_odd ? iv : 0.0);
+        *res = iw_is_odd ? iv : 0.0;
+        return 0;
     }
 
     if (iv < 0.0) {
@@ -753,7 +762,7 @@ float_pow(PyObject *v, PyObject *w, PyObject *z)
             /* Negative numbers raised to fractional powers
              * become complex.
              */
-            return PyComplex_Type.tp_as_number->nb_power(v, w, z);
+            return 1;
         }
         /* iw is an exact integer, albeit perhaps a very large
          * one.  Replace iv by its absolute value and remember
@@ -775,7 +784,8 @@ float_pow(PyObject *v, PyObject *w, PyObject *z)
          * happen to be representable in a *C* integer.  That's a
          * bug.
          */
-        return PyFloat_FromDouble(negate_result ? -1.0 : 1.0);
+        *res = negate_result ? -1.0 : 1.0;
+        return 0;
     }
 
     /* Now iv and iw are finite, iw is nonzero, and iv is
@@ -794,7 +804,31 @@ float_pow(PyObject *v, PyObject *w, PyObject *z)
          */
         PyErr_SetFromErrno(errno == ERANGE ? PyExc_OverflowError :
                              PyExc_ValueError);
+        return -1;
+    }
+    *res = ix;
+    return 0;
+}
+
+static PyObject *
+float_pow(PyObject *v, PyObject *w, PyObject *z)
+{
+    double iv, iw, ix;
+
+    if ((PyObject *)z != Py_None) {
+        PyErr_SetString(PyExc_TypeError, "pow() 3rd argument not "
+            "allowed unless all arguments are integers");
         return NULL;
+    }
+
+    CONVERT_TO_DOUBLE(v, iv);
+    CONVERT_TO_DOUBLE(w, iw);
+    int err = _PyFloat_Pow(iv, iw, &ix);
+    if (err < 0) {
+        return NULL;
+    }
+    if (err > 0) {
+        return PyComplex_Type.tp_as_number->nb_power(v, w, z);
     }
     return PyFloat_FromDouble(ix);
 }

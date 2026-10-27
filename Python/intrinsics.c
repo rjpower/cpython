@@ -14,6 +14,7 @@
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_typevarobject.h" // _Py_make_typevar()
 #include "pycore_unicodeobject.h" // _PyUnicode_FromASCII()
+#include "pycore_value.h"         // _PyValueRoot_PushObject()
 
 
 /******** Unary functions ********/
@@ -234,6 +235,24 @@ _PyIntrinsics_UnaryFunctions[] = {
     INTRINSIC_FUNC_ENTRY(INTRINSIC_TYPEALIAS, _Py_make_typealias)
     INTRINSIC_FUNC_ENTRY(INTRINSIC_BUILD_FROZENSET, make_frozenset)
 };
+
+/* The unary intrinsic oparg of value, for CALL_INTRINSIC_1: unary + takes
+   the value, and the others its object, boxed if it is inline. */
+PyValue
+_PyIntrinsics_CallUnaryValue(PyThreadState *tstate, int oparg, PyValue value)
+{
+    if (oparg == INTRINSIC_UNARY_POSITIVE) {
+        return PyNumber_PositiveValue(value);
+    }
+    _PyValueRoot root;
+    PyObject *value_o = _PyValueRoot_PushObject(tstate, &root, value, _PY_BOX_OTHER);
+    PyObject *res = NULL;
+    if (value_o != NULL) {
+        res = _PyIntrinsics_UnaryFunctions[oparg].func(tstate, value_o);
+    }
+    _PyThreadState_PopValueRoot(tstate, &root);
+    return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
+}
 
 
 /******** Binary functions ********/

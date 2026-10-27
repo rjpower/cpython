@@ -1,7 +1,6 @@
 /* enumerate object */
 
 #include "Python.h"
-#include "pycore_abstract.h"      // _PyIter_NextValue()
 #include "pycore_value.h"         // _PyValue_BoxInt64()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_long.h"          // _PyLong_GetOne()
@@ -150,7 +149,7 @@ enum_next(PyObject *op)
     PyObject *it = en->en_sit;
 
     // The pair holds values: an inline index or item has no box.
-    if (!_PyIter_NextValue(it, &next_item))
+    if (PyIter_NextValue(PyValue_FromObject(it), &next_item) <= 0)
         return NULL;
 
     Py_ssize_t en_index = FT_ATOMIC_LOAD_SSIZE_RELAXED(en->en_index);

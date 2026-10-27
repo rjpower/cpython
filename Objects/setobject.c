@@ -113,7 +113,7 @@ set_compare_entry_lock_held(PySetObject *so, setentry *table, setentry *entry,
         if (set_unicode_eq(startkey, key))
             return SET_LOOKKEY_FOUND;
         table = so->table;
-        int cmp = _PyValue_RichCompareBool(startkey, key, Py_EQ);
+        int cmp = PyObject_RichCompareBoolValue(startkey, key, Py_EQ);
         if (cmp < 0)
             return SET_LOOKKEY_ERROR;
         if (table != so->table || !PyValue_Is(entry->key, startkey))
@@ -142,7 +142,7 @@ set_compare_frozenset(PySetObject *so, setentry *table, setentry *ep,
     }
     Py_ssize_t ep_hash = ep->hash;
     if (ep_hash == hash) {
-        int cmp = _PyValue_RichCompareBool(startkey, key, Py_EQ);
+        int cmp = PyObject_RichCompareBoolValue(startkey, key, Py_EQ);
         if (cmp < 0) {
             return SET_LOOKKEY_ERROR;
         }
@@ -234,7 +234,7 @@ set_add_entry(PySetObject *so, PyValue key, Py_hash_t hash)
                 if (set_unicode_eq(startkey, key))
                     return 0;
                 table = so->table;
-                cmp = _PyValue_RichCompareBool(startkey, key, Py_EQ);
+                cmp = PyObject_RichCompareBoolValue(startkey, key, Py_EQ);
                 if (cmp > 0)
                     return 0;
                 if (cmp < 0)
@@ -295,7 +295,7 @@ set_unhashable_type(PyObject *key)
 static Py_hash_t
 set_value_hash(PyValue key)
 {
-    Py_hash_t hash = _PyValue_Hash(key);
+    Py_hash_t hash = PyObject_HashValue(key);
     if (hash == -1) {
         set_unhashable_type(PyValue_ObjectBorrow(key));
     }
@@ -1611,7 +1611,7 @@ set_intersection(PySetObject *so, PyObject *other)
 
     while ((key = PyIter_Next(it)) != NULL) {
         key_value = PyValue_FromObject(key);
-        hash = _PyValue_Hash(key_value);
+        hash = PyObject_HashValue(key_value);
         if (hash == -1)
             goto error;
         rv = set_contains_entry(so, key_value, hash);
@@ -2373,7 +2373,7 @@ _PySet_ContainsValue(PySetObject *so, PyValue key)
 {
     assert(so);
 
-    Py_hash_t hash = _PyValue_Hash(key);
+    Py_hash_t hash = PyObject_HashValue(key);
     if (hash == -1) {
         // An inline value is always hashable.
         PyObject *key_o = PyValue_ObjectBorrow(key);
@@ -2436,7 +2436,7 @@ frozenset___contains___impl(PySetObject *so, PyObject *key)
 /*[clinic end generated code: output=2301ed91bc3a6dd5 input=2f04922a98d8bab7]*/
 {
     PyValue key_value = PyValue_FromObject(key);
-    Py_hash_t hash = _PyValue_Hash(key_value);
+    Py_hash_t hash = PyObject_HashValue(key_value);
     if (hash == -1) {
         if (!PySet_Check(key) || !PyErr_ExceptionMatches(PyExc_TypeError)) {
             set_unhashable_type(key);

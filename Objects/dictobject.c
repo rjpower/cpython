@@ -351,6 +351,8 @@ static int
 setitem_lock_held(PyDictObject *mp, PyObject *key, PyObject *value);
 static int
 setitem_value_lock_held(PyDictObject *mp, PyValue key, PyValue value);
+static Py_hash_t
+value_hash_dict_key(PyDictObject *mp, PyValue key);
 static int
 dict_setdefault_ref_lock_held(PyObject *d, PyObject *key, PyObject *default_value,
                     PyObject **result, int incref_result);
@@ -974,7 +976,7 @@ compare_unicode_generic(PyDictObject *mp, PyDictKeysObject *dk,
 
     if (unicode_get_hash(ep->me_key) == hash) {
         PyObject *startkey = ep->me_key;
-        int cmp = _PyValue_RichCompareBool(PyValue_FromObject(startkey), key, Py_EQ);
+        int cmp = PyObject_RichCompareBoolValue(PyValue_FromObject(startkey), key, Py_EQ);
         if (cmp < 0) {
             return DKIX_ERROR;
         }
@@ -1029,7 +1031,7 @@ compare_generic(PyDictObject *mp, PyDictKeysObject *dk,
     }
     if (ep->me_hash == hash) {
         PyValue startkey = ep->me_key;
-        int cmp = _PyValue_RichCompareBool(startkey, key, Py_EQ);
+        int cmp = PyObject_RichCompareBoolValue(startkey, key, Py_EQ);
         if (cmp < 0) {
             return DKIX_ERROR;
         }
@@ -1962,23 +1964,22 @@ _PyDict_GetItemRef_KnownHash(PyDictObject *op, PyObject *key, Py_hash_t hash, Py
     return dict_getitem_result(op, key, hash, result);
 }
 
-/* PyDict_GetItemRef() with the item as its value, so that no box is made:
-   1 and the value, 0 and PyValue_NULL if the key is missing, or -1 and
-   PyValue_NULL with an exception set. */
+/* PyDict_GetItemRef() on values, so that no box is made: 1 and the item,
+   0 and PyValue_NULL if the key is missing, or -1 and PyValue_NULL with an
+   exception set. */
 int
-_PyDict_GetItemValue(PyObject *op, PyObject *key, PyValue *result)
+_PyDict_GetItemValue(PyObject *op, PyValue key, PyValue *result)
 {
     *result = PyValue_NULL;
     if (!PyAnyDict_Check(op)) {
         PyErr_BadInternalCall();
         return -1;
     }
-    Py_hash_t hash = _PyObject_HashDictKey(key);
+    Py_hash_t hash = value_hash_dict_key((PyDictObject *)op, key);
     if (hash == -1) {
-        dict_unhashable_type(op, key);
         return -1;
     }
-    Py_ssize_t ix = dict_lookup_object((PyDictObject *)op, key, hash, result);
+    Py_ssize_t ix = _Py_dict_lookup((PyDictObject *)op, key, hash, result);
     if (ix == DKIX_ERROR) {
         *result = PyValue_NULL;
         return -1;
@@ -2158,7 +2159,7 @@ static Py_hash_t
 value_hash_dict_key(PyDictObject *mp, PyValue key)
 {
     if (PyValue_IsInline(key)) {
-        return _PyValue_Hash(key);
+        return PyObject_HashValue(key);
     }
     PyObject *key_o = PyValue_ObjectBorrow(key);
     Py_hash_t hash = _PyObject_HashDictKey(key_o);
@@ -2367,6 +2368,46 @@ _PyDict_DelItem_KnownHash_LockHeld(PyObject *op, PyObject *key, Py_hash_t hash)
     _PyDict_NotifyEvent(PyDict_EVENT_DELETED, mp, PyValue_FromObject(key), PyValue_NULL);
     delitem_common(mp, hash, ix, old_value);
     return 0;
+}
+
+/* PyDict_DelItem() of a key that is a value. */
+int
+_PyDict_DelItemValue(PyObject *op, PyValue key)
+{
+    if (!PyDict_Check(op)) {
+        if (PyFrozenDict_Check(op)) {
+            frozendict_does_not_support("deletion");
+        }
+        else {
+            PyErr_BadInternalCall();
+        }
+        return -1;
+    }
+    PyDictObject *mp = (PyDictObject *)op;
+    Py_hash_t hash = value_hash_dict_key(mp, key);
+    if (hash == -1) {
+        return -1;
+    }
+    int res = 0;
+    Py_BEGIN_CRITICAL_SECTION(op);
+    PyValue old_value;
+    Py_ssize_t ix = _Py_dict_lookup(mp, key, hash, &old_value);
+    if (ix == DKIX_ERROR) {
+        res = -1;
+    }
+    else if (ix == DKIX_EMPTY || PyValue_IsNull(old_value)) {
+        PyObject *key_o = PyValue_Object(key);
+        if (key_o != NULL) {
+            _PyErr_SetKeyError(key_o);
+        }
+        res = -1;
+    }
+    else {
+        _PyDict_NotifyEvent(PyDict_EVENT_DELETED, mp, key, PyValue_NULL);
+        delitem_common(mp, hash, ix, old_value);
+    }
+    Py_END_CRITICAL_SECTION();
+    return res;
 }
 
 int
@@ -4070,7 +4111,7 @@ dict_equal_lock_held(PyDictObject *a, PyDictObject *b)
                     return -1;
                 return 0;
             }
-            int cmp = _PyValue_RichCompareBool(aval, bval, Py_EQ);
+            int cmp = PyObject_RichCompareBoolValue(aval, bval, Py_EQ);
             if (cmp <= 0)  /* error or not equal */
                 return cmp;
         }
@@ -4671,6 +4712,17 @@ PyDict_ContainsString(PyObject *op, const char *key)
     int res = PyDict_Contains(op, key_obj);
     Py_DECREF(key_obj);
     return res;
+}
+
+/* PyDict_Contains() of a key that is a value. */
+int
+_PyDict_ContainsValue(PyObject *op, PyValue key)
+{
+    Py_hash_t hash = value_hash_dict_key(_PyAnyDict_CAST(op), key);
+    if (hash == -1) {
+        return -1;
+    }
+    return _PyDict_Contains_KnownHash(op, key, hash);
 }
 
 /* Internal version of PyDict_Contains used when the hash value is already known */
@@ -6669,11 +6721,11 @@ _PyObject_MaterializeManagedDict(PyObject *obj)
 }
 
 int
-_PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyObject *value)
+_PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyValue value)
 {
     if (!PyDict_Check(dict)) {
         if (PyFrozenDict_Check(dict)) {
-            if (value == NULL) {
+            if (PyValue_IsNull(value)) {
                 frozendict_does_not_support("deletion");
             }
             else {
@@ -6686,7 +6738,7 @@ _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyObject *value)
         return -1;
     }
 
-    if (value == NULL) {
+    if (PyValue_IsNull(value)) {
         Py_hash_t hash = _PyObject_HashDictKey(name);
         if (hash == -1) {
             dict_unhashable_type((PyObject*)dict, name);
@@ -6694,7 +6746,7 @@ _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyObject *value)
         }
         return _PyDict_DelItem_KnownHash_LockHeld((PyObject *)dict, name, hash);
     } else {
-        return setitem_lock_held(dict, name, value);
+        return setitem_value_lock_held(dict, PyValue_FromObject(name), value);
     }
 }
 
@@ -6703,7 +6755,7 @@ _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyObject *value)
 // the object.
 static int
 store_instance_attr_lock_held(PyObject *obj, PyDictValues *values,
-                              PyObject *name, PyObject *value)
+                              PyObject *name, PyValue value)
 {
     PyDictKeysObject *keys = CACHED_KEYS(Py_TYPE(obj));
     assert(keys != NULL);
@@ -6763,7 +6815,7 @@ store_instance_attr_lock_held(PyObject *obj, PyDictValues *values,
     }
 
     PyValue old_value = values->values[ix];
-    if (PyValue_IsNull(old_value) && value == NULL) {
+    if (PyValue_IsNull(old_value) && PyValue_IsNull(value)) {
         PyErr_Format(PyExc_AttributeError,
                         "'%.100s' object has no attribute '%U'",
                         Py_TYPE(obj)->tp_name, name);
@@ -6773,13 +6825,13 @@ store_instance_attr_lock_held(PyObject *obj, PyDictValues *values,
 
     if (dict) {
         PyDict_WatchEvent event = (PyValue_IsNull(old_value) ? PyDict_EVENT_ADDED :
-                                   value == NULL ? PyDict_EVENT_DELETED :
+                                   PyValue_IsNull(value) ? PyDict_EVENT_DELETED :
                                    PyDict_EVENT_MODIFIED);
         _PyDict_NotifyEvent(event, dict, PyValue_FromObject(name),
-                            value == NULL ? PyValue_NULL : PyValue_FromObject(value));
+                            value);
     }
 
-    values->values[ix] = value == NULL ? PyValue_NULL : PyValue_FromObject(value);
+    values->values[ix] = value;
 
     if (PyValue_IsNull(old_value)) {
         _PyDictValues_AddToInsertionOrder(values, ix);
@@ -6793,7 +6845,7 @@ store_instance_attr_lock_held(PyObject *obj, PyDictValues *values,
         }
     }
     else {
-        if (value == NULL) {
+        if (PyValue_IsNull(value)) {
             delete_index_from_values(values, ix);
             shape_after_delete(Py_TYPE(obj), values);
             if (dict) {
@@ -6806,7 +6858,7 @@ store_instance_attr_lock_held(PyObject *obj, PyDictValues *values,
 }
 
 static inline int
-store_instance_attr_dict(PyObject *obj, PyDictObject *dict, PyObject *name, PyObject *value)
+store_instance_attr_dict(PyObject *obj, PyDictObject *dict, PyObject *name, PyValue value)
 {
     PyDictValues *values = _PyObject_InlineValues(obj);
     int res;
@@ -6822,7 +6874,7 @@ store_instance_attr_dict(PyObject *obj, PyDictObject *dict, PyObject *name, PyOb
 }
 
 int
-_PyObject_StoreInstanceAttribute(PyObject *obj, PyObject *name, PyObject *value)
+_PyObject_StoreInstanceAttribute(PyObject *obj, PyObject *name, PyValue value)
 {
     PyDictValues *values = _PyObject_InlineValues(obj);
     if (!FT_ATOMIC_LOAD_UINT8(values->valid)) {
@@ -7185,7 +7237,7 @@ PyObject_GenericGetDict(PyObject *obj, void *context)
 
 int
 _PyObjectDict_SetItem(PyTypeObject *tp, PyObject *obj, PyObject **dictptr,
-                      PyObject *key, PyObject *value)
+                      PyObject *key, PyValue value)
 {
     PyObject *dict;
     int res;

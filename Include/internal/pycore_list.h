@@ -24,6 +24,9 @@ PyAPI_FUNC(PyObject *) _PyList_GetItemRef(PyListObject *, Py_ssize_t i);
 
 #define _PyList_ITEMS(op) _Py_RVALUE(_PyList_CAST(op)->ob_item)
 
+// v in the list op: 1, 0, or -1 with an exception set.
+PyAPI_FUNC(int) _PyList_ContainsValue(PyObject *op, PyValue v);
+
 PyAPI_FUNC(int)
 _PyList_AppendValueListResize(PyListObject *self, PyValue newitem);
 

@@ -867,8 +867,12 @@ PyObject_GetAttr(PyObject *v, PyObject *name)
 static PyValue generic_getattr_value(PyObject *obj, PyObject *name,
                                      PyObject *dict, int suppress);
 
-PyValue
-_PyObject_GetAttrValue(PyObject *v, PyObject *name)
+static int generic_setattr_value(PyObject *obj, PyObject *name, PyValue value,
+                                 PyObject *dict);
+
+// PyObject_GetAttrValue() of an object.
+static PyValue
+getattr_object_value(PyObject *v, PyObject *name)
 {
     PyTypeObject *tp = Py_TYPE(v);
     if (!PyUnicode_Check(name)) {
@@ -919,6 +923,132 @@ _PyObject_GetAttrValue(PyObject *v, PyObject *name)
         return PyValue_NULL;
     }
     return PyValue_FromObject(result);
+}
+
+/* The object protocol on values (Include/cpython/abstract.h, "The PyValue
+   protocols").  An inline int or float is boxed for a type slot, held by a
+   value root while the slot runs, unless the operation is done here. */
+
+PyValue
+PyObject_GetAttrValue(PyValue v, PyObject *name)
+{
+    if (!PyValue_IsInline(v)) {
+        return getattr_object_value(PyValue_ObjectBorrow(v), name);
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot root;
+    PyObject *v_o = _PyValueRoot_PushObject(tstate, &root, v, _PY_BOX_OTHER);
+    PyValue res = v_o == NULL ? PyValue_NULL : getattr_object_value(v_o, name);
+    _PyThreadState_PopValueRoot(tstate, &root);
+    return res;
+}
+
+int
+PyObject_SetAttrValue(PyValue v, PyObject *name, PyValue value)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (PyValue_IsObject(v) && PyUnicode_Check(name)
+        && Py_TYPE(PyValue_ObjectBorrow(v))->tp_setattro == PyObject_GenericSetAttr)
+    {
+        // As PyObject_SetAttr() does, intern the name.
+        Py_INCREF(name);
+        _PyUnicode_InternMortal(tstate->interp, &name);
+        int res = generic_setattr_value(PyValue_ObjectBorrow(v), name, value, NULL);
+        Py_DECREF(name);
+        return res;
+    }
+    _PyValueRoot v_root, value_root;
+    int res = -1;
+    PyObject *v_o = _PyValueRoot_PushObject(tstate, &v_root, v, _PY_BOX_OTHER);
+    PyObject *value_o = _PyValueRoot_PushObject(tstate, &value_root, value,
+                                                _PY_BOX_ATTRIBUTE_STORE);
+    if (v_o != NULL && (value_o != NULL || PyValue_IsNull(value))) {
+        res = PyObject_SetAttr(v_o, name, value_o);
+    }
+    _PyThreadState_PopValueRoot(tstate, &value_root);
+    _PyThreadState_PopValueRoot(tstate, &v_root);
+    return res;
+}
+
+PyValue
+PyObject_RichCompareValue(PyValue v, PyValue w, int op)
+{
+    assert(Py_LT <= op && op <= Py_GE);
+    if (PyValue_IsInline(v) && PyValue_IsInline(w)) {
+        int c = _PyValue_CompareInline(v, w);
+        return _PyValue_CompareResult(c, op) ? _PyValue_True : _PyValue_False;
+    }
+    PyObject *res;
+    if (!PyValue_IsInline(v) && !PyValue_IsInline(w)) {
+        res = PyObject_RichCompare(PyValue_ObjectBorrow(v),
+                                   PyValue_ObjectBorrow(w), op);
+    }
+    else {
+        PyThreadState *tstate = _PyThreadState_GET();
+        _PyValueRoot v_root, w_root;
+        PyObject *v_o = _PyValueRoot_PushObject(tstate, &v_root, v, _PY_BOX_OTHER);
+        PyObject *w_o = _PyValueRoot_PushObject(tstate, &w_root, w, _PY_BOX_OTHER);
+        res = v_o && w_o ? PyObject_RichCompare(v_o, w_o, op) : NULL;
+        _PyThreadState_PopValueRoot(tstate, &w_root);
+        _PyThreadState_PopValueRoot(tstate, &v_root);
+    }
+    return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
+}
+
+int
+PyObject_RichCompareBoolValue(PyValue v, PyValue w, int op)
+{
+    assert(Py_LT <= op && op <= Py_GE);
+    if (PyValue_IsInline(v) && PyValue_IsInline(w)) {
+        return _PyValue_CompareResult(_PyValue_CompareInline(v, w), op);
+    }
+    // Identity implies equality, as in PyObject_RichCompareBool().
+    if (PyValue_Is(v, w)) {
+        if (op == Py_EQ) {
+            return 1;
+        }
+        if (op == Py_NE) {
+            return 0;
+        }
+    }
+    if (!PyValue_IsInline(v) && !PyValue_IsInline(w)) {
+        return PyObject_RichCompareBool(PyValue_ObjectBorrow(v),
+                                        PyValue_ObjectBorrow(w), op);
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot v_root, w_root;
+    PyObject *v_o = _PyValueRoot_PushObject(tstate, &v_root, v, _PY_BOX_OTHER);
+    PyObject *w_o = _PyValueRoot_PushObject(tstate, &w_root, w, _PY_BOX_OTHER);
+    int res = v_o && w_o ? PyObject_RichCompareBool(v_o, w_o, op) : -1;
+    _PyThreadState_PopValueRoot(tstate, &w_root);
+    _PyThreadState_PopValueRoot(tstate, &v_root);
+    return res;
+}
+
+int
+PyObject_IsTrueValue(PyValue v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        return PyValue_Int32(v) != 0;
+    }
+    if (PyValue_IsInlineFloat(v)) {
+        return PyValue_Double(v) != 0.0;
+    }
+    return PyObject_IsTrue(PyValue_ObjectBorrow(v));
+}
+
+Py_hash_t
+PyObject_HashValue(PyValue v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        // As long_hash(): hash(-1) is -2, since -1 means an error.
+        Py_hash_t h = PyValue_Int32(v);
+        return h == -1 ? -2 : h;
+    }
+    if (PyValue_IsInlineFloat(v)) {
+        return _Py_HashDouble(NULL, PyValue_Double(v));
+    }
+    return PyObject_Hash(PyValue_ObjectBorrow(v));
 }
 
 int
@@ -1538,7 +1668,7 @@ generic_getattr_value(PyObject *obj, PyObject *name, PyObject *dict,
         }
     }
     if (dict != NULL) {
-        int rc = _PyDict_GetItemValue(dict, name, &res);
+        int rc = _PyDict_GetItemValue(dict, PyValue_FromObject(name), &res);
         if (!PyValue_IsNull(res)) {
             goto done;
         }
@@ -1588,9 +1718,12 @@ PyObject_GenericGetAttr(PyObject *obj, PyObject *name)
     return _PyObject_GenericGetAttrWithDict(obj, name, NULL, 0);
 }
 
-int
-_PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
-                                 PyObject *value, PyObject *dict)
+/* The generic setattr of value, or its deletion if value is PyValue_NULL,
+   on obj.  An inline value is stored without a box unless a descriptor
+   takes it. */
+static int
+generic_setattr_value(PyObject *obj, PyObject *name, PyValue value,
+                      PyObject *dict)
 {
     PyTypeObject *tp = Py_TYPE(obj);
     PyObject *descr;
@@ -1625,7 +1758,13 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
     if (descr != NULL) {
         f = Py_TYPE(descr)->tp_descr_set;
         if (f != NULL) {
-            res = f(descr, obj, value);
+            _PyValueRoot vref;
+            PyObject *value_o = _PyValueRoot_PushObject(tstate, &vref, value,
+                                                        _PY_BOX_ATTRIBUTE_STORE);
+            if (value_o != NULL || PyValue_IsNull(value)) {
+                res = f(descr, obj, value_o);
+            }
+            _PyThreadState_PopValueRoot(tstate, &vref);
             goto done;
         }
     }
@@ -1672,12 +1811,9 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
         }
     }
     else {
-        Py_INCREF(dict);
-        if (value == NULL)
-            res = PyDict_DelItem(dict, name);
-        else
-            res = PyDict_SetItem(dict, name, value);
-        Py_DECREF(dict);
+        Py_BEGIN_CRITICAL_SECTION(dict);
+        res = _PyDict_SetItem_LockHeld((PyDictObject *)dict, name, value);
+        Py_END_CRITICAL_SECTION();
     }
   error_check:
     if (res < 0 && PyErr_ExceptionMatches(PyExc_KeyError)) {
@@ -1691,6 +1827,15 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
     _Py_DECREF_TYPE(tp);
     Py_DECREF(name);
     return res;
+}
+
+int
+_PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
+                                 PyObject *value, PyObject *dict)
+{
+    return generic_setattr_value(
+        obj, name, value == NULL ? PyValue_NULL : PyValue_FromObject(value),
+        dict);
 }
 
 int

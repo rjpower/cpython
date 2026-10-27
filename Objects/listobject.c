@@ -495,9 +495,15 @@ list_contains(PyObject *aa, PyObject *el)
         PyErr_BadInternalCall();
         return -1;
     }
-    PyValue v = PyValue_FromObject(el);
+    return _PyList_ContainsValue(aa, PyValue_FromObject(el));
+}
+
+int
+_PyList_ContainsValue(PyObject *op, PyValue v)
+{
+    PyListObject *a = (PyListObject *)op;
     for (Py_ssize_t i = 0; i < Py_SIZE(a); i++) {
-        int cmp = _PyValue_RichCompareBool(a->ob_item[i], v, Py_EQ);
+        int cmp = PyObject_RichCompareBoolValue(a->ob_item[i], v, Py_EQ);
         if (cmp != 0) {
             return cmp;
         }
@@ -2492,7 +2498,7 @@ static int
 safe_object_compare(PyValue v, PyValue w, MergeState *ms)
 {
     /* No assumptions necessary! */
-    return _PyValue_RichCompareBool(v, w, Py_LT);
+    return PyObject_RichCompareBoolValue(v, w, Py_LT);
 }
 
 /* Homogeneous compare: safe for any two comparable objects of the same type.
@@ -2549,7 +2555,7 @@ unsafe_object_compare(PyValue vv, PyValue wv, MergeState *ms)
 static void
 assert_compare_consistent(PyValue v, PyValue w, int res)
 {
-    int cmp = _PyValue_RichCompareBool(v, w, Py_LT);
+    int cmp = PyObject_RichCompareBoolValue(v, w, Py_LT);
     if (cmp < 0) {
         /* This debug-only cross-check can hit the C stack guard even when
          * the specialized comparison itself is safe. Keep the optimized path
@@ -2654,7 +2660,7 @@ unsafe_tuple_compare(PyValue v, PyValue w, MergeState *ms)
     wlen = Py_SIZE(wt);
 
     for (i = 0; i < vlen && i < wlen; i++) {
-        k = _PyValue_RichCompareBool(vt->ob_item[i], wt->ob_item[i], Py_EQ);
+        k = PyObject_RichCompareBoolValue(vt->ob_item[i], wt->ob_item[i], Py_EQ);
         if (k < 0)
             return -1;
         if (!k)
@@ -2667,7 +2673,7 @@ unsafe_tuple_compare(PyValue v, PyValue w, MergeState *ms)
     if (i == 0)
         return ms->tuple_elem_compare(vt->ob_item[i], wt->ob_item[i], ms);
     else
-        return _PyValue_RichCompareBool(vt->ob_item[i], wt->ob_item[i], Py_LT);
+        return PyObject_RichCompareBoolValue(vt->ob_item[i], wt->ob_item[i], Py_LT);
 }
 
 /* An adaptive, stable, natural mergesort.  See listsort.txt.
@@ -3077,7 +3083,7 @@ list_index_impl(PyListObject *self, PyObject *value, Py_ssize_t start,
     PyValue v = PyValue_FromObject(value);
     // The comparison may shrink the list.
     for (Py_ssize_t i = start; i < stop && i < Py_SIZE(self); i++) {
-        int cmp = _PyValue_RichCompareBool(self->ob_item[i], v, Py_EQ);
+        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i], v, Py_EQ);
         if (cmp > 0)
             return PyLong_FromSsize_t(i);
         else if (cmp < 0)
@@ -3103,7 +3109,7 @@ list_count_impl(PyListObject *self, PyObject *value)
     Py_ssize_t count = 0;
     PyValue v = PyValue_FromObject(value);
     for (Py_ssize_t i = 0; i < Py_SIZE(self); i++) {
-        int cmp = _PyValue_RichCompareBool(self->ob_item[i], v, Py_EQ);
+        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i], v, Py_EQ);
         if (cmp > 0)
             count++;
         else if (cmp < 0)
@@ -3131,7 +3137,7 @@ list_remove_impl(PyListObject *self, PyObject *value)
     Py_ssize_t i;
 
     for (i = 0; i < Py_SIZE(self); i++) {
-        int cmp = _PyValue_RichCompareBool(self->ob_item[i],
+        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i],
                                            PyValue_FromObject(value), Py_EQ);
         if (cmp > 0) {
             if (list_ass_slice_lock_held(self, i, i+1, NULL) == 0)
@@ -3187,7 +3193,7 @@ list_richcompare_impl(PyObject *v, PyObject *w, int op)
             continue;
         }
 
-        int k = _PyValue_RichCompareBool(vitem, witem, Py_EQ);
+        int k = PyObject_RichCompareBoolValue(vitem, witem, Py_EQ);
         if (k < 0) {
             return NULL;
         }
@@ -3200,7 +3206,7 @@ list_richcompare_impl(PyObject *v, PyObject *w, int op)
                 Py_RETURN_TRUE;
             }
             /* Compare the differing items using the proper operator */
-            return _PyValue_RichCompare(vitem, witem, op);
+            return PyValue_Object(PyObject_RichCompareValue(vitem, witem, op));
         }
     }
 

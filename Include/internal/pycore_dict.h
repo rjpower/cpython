@@ -164,9 +164,12 @@ extern PyObject *_PyDict_LoadBuiltinsFromGlobals(PyObject *globals);
 
 /* Set the item of the canonical key to the canonical value */
 PyAPI_FUNC(int) _PyDict_SetItemValue(PyDictObject *op, PyValue key, PyValue value);
-extern int _PyDict_GetItemValue(PyObject *op, PyObject *key, PyValue *result);
+PyAPI_FUNC(int) _PyDict_GetItemValue(PyObject *op, PyValue key, PyValue *result);
+PyAPI_FUNC(int) _PyDict_DelItemValue(PyObject *op, PyValue key);
+PyAPI_FUNC(int) _PyDict_ContainsValue(PyObject *op, PyValue key);
 // Exported for external JIT support
-PyAPI_FUNC(int) _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyObject *value);
+// Sets dict[name] to value, or deletes it if value is PyValue_NULL.
+PyAPI_FUNC(int) _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyValue value);
 // Export for '_asyncio' shared extension
 PyAPI_FUNC(int) _PyDict_SetItem_KnownHash_LockHeld(PyDictObject *mp, PyObject *key,
                                                    PyObject *value, Py_hash_t hash);
@@ -174,7 +177,7 @@ PyAPI_FUNC(int) _PyDict_SetItem_KnownHash_LockHeld(PyDictObject *mp, PyObject *k
 PyAPI_FUNC(int) _PyDict_GetItemRef_KnownHash_LockHeld(PyDictObject *op, PyObject *key, Py_hash_t hash, PyObject **result);
 PyAPI_FUNC(int) _PyDict_GetItemRef_KnownHash(PyDictObject *op, PyObject *key, Py_hash_t hash, PyObject **result);
 extern int _PyDict_GetItemRef_Unicode_LockHeld(PyDictObject *op, PyObject *key, PyObject **result);
-PyAPI_FUNC(int) _PyObjectDict_SetItem(PyTypeObject *tp, PyObject *obj, PyObject **dictptr, PyObject *name, PyObject *value);
+PyAPI_FUNC(int) _PyObjectDict_SetItem(PyTypeObject *tp, PyObject *obj, PyObject **dictptr, PyObject *name, PyValue value);
 
 extern int _PyDict_Pop_KnownHash(
     PyDictObject *dict,

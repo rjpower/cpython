@@ -264,8 +264,9 @@ extern PyObject* _PyType_GetTextSignatureFromInternalDoc(const char *, const cha
 PyAPI_FUNC(int) _PyObject_SetAttributeErrorContext(PyObject *v, PyObject* name);
 
 void _PyObject_InitInlineValues(PyObject *obj, PyTypeObject *tp);
+// Stores value, or deletes the attribute if value is PyValue_NULL.
 extern int _PyObject_StoreInstanceAttribute(PyObject *obj,
-                                            PyObject *name, PyObject *value);
+                                            PyObject *name, PyValue value);
 extern bool _PyObject_TryGetInstanceAttribute(PyObject *obj, PyObject *name,
                                               PyObject **attr);
 // As _PyObject_TryGetInstanceAttribute(), with the attribute as its value
@@ -285,10 +286,6 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out);
 
 extern int _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
                                        PyObject *name, PyValue *method);
-
-// Like PyObject_GetAttr but returns a PyValue. For types, this can
-// return a deferred reference to reduce reference count contention.
-PyAPI_FUNC(PyValue) _PyObject_GetAttrValue(PyObject *obj, PyObject *name);
 
 // Cache the provided init method in the specialization cache of type if the
 // provided type version matches the current version of the type.

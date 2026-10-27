@@ -362,7 +362,6 @@ Parser/parser.c	-	reserved_keywords	-
 Parser/parser.c	-	soft_keywords	-
 Parser/lexer/lexer.c	-	type_comment_prefix	-
 Python/Python-ast.c	add_ast_annotations	builtin_types	const array of pointers to static builtin types
-Python/ceval.c	-	_PyEval_BinaryOps	-
 Python/ceval.c	-	_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS	-
 Python/ceval.c	-	_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR	-
 Python/codecs.c	-	Py_hexdigits	-

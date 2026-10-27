@@ -22,10 +22,9 @@ PyAPI_FUNC(PyObject *) _PyNumber_InPlacePowerNoMod(PyObject *lhs, PyObject *rhs)
 
 PyAPI_FUNC(int) _PyObject_HasLen(PyObject *o);
 
-// The next item of the iterator it as its value: 1, or 0 where tp_iternext
-// returns NULL, with an exception set or not.  A list or tuple iterator's
-// item is not boxed.
-extern int _PyIter_NextValue(PyObject *it, PyValue *item);
+/* The binary operation op, NB_ADD to NB_INPLACE_XOR, on values: the
+   BINARY_OP handlers' entry to the value number protocol. */
+PyAPI_FUNC(PyValue) _PyNumber_BinaryOpValue(PyValue v, PyValue w, int op);
 
 /* === Sequence protocol ================================================ */
 

@@ -422,8 +422,7 @@ dummy_func(
                 res = PyValue_FromDouble(-_PyValue_NumberAsDouble(value));
             }
             else {
-                PyObject *res_o = PyNumber_Negative(PyValue_ObjectBorrow(value));
-                res = res_o == NULL ? PyValue_NULL : PyValue_FromObject(res_o);
+                res = PyNumber_NegativeValue(value);
             }
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
@@ -474,7 +473,7 @@ dummy_func(
                 err = PyValue_Double(value) != 0.0;
             }
             else {
-                err = PyObject_IsTrue(PyValue_ObjectBorrow(value));
+                err = PyObject_IsTrueValue(value);
             }
             DEAD(value);
             ERROR_IF(err < 0);
@@ -585,11 +584,10 @@ dummy_func(
         macro(UNARY_INVERT) = _UNARY_INVERT + POP_TOP;
 
         op(_UNARY_INVERT, (value -- res, v)) {
-            PyObject *res_o = PyNumber_Invert(PyValue_ObjectBorrow(value));
-            if (res_o == NULL) {
+            res = PyNumber_InvertValue(value);
+            if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
             }
-            res = PyValue_FromObject(res_o);
             v = value;
             DEAD(value);
         }
@@ -1305,7 +1303,7 @@ dummy_func(
 
         op(_STORE_SUBSCR, (v, container, sub -- )) {
             /* container[sub] = v */
-            int err = PyObject_SetItem(PyValue_ObjectBorrow(container), PyValue_ObjectBorrow(sub), PyValue_ObjectBorrow(v));
+            int err = PyObject_SetItemValue(container, sub, v);
             INPUTS_DEAD();
             ERROR_IF(err);
         }
@@ -1362,21 +1360,19 @@ dummy_func(
 
         inst(DELETE_SUBSCR, (container, sub --)) {
             /* del container[sub] */
-            int err = PyObject_DelItem(PyValue_ObjectBorrow(container),
-                                       PyValue_ObjectBorrow(sub));
+            int err = PyObject_DelItemValue(container, sub);
             INPUTS_DEAD();
             ERROR_IF(err);
         }
 
         op(_CALL_INTRINSIC_1, (value -- res, v)) {
             assert(oparg <= MAX_INTRINSIC_1);
-            PyObject *res_o = _PyIntrinsics_UnaryFunctions[oparg].func(tstate, PyValue_ObjectBorrow(value));
-            if (res_o == NULL) {
+            res = _PyIntrinsics_CallUnaryValue(tstate, oparg, value);
+            if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
             }
             v = value;
             DEAD(value);
-            res = PyValue_FromObject(res_o);
         }
 
         macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + POP_TOP;
@@ -1973,8 +1969,7 @@ dummy_func(
 
         op(_STORE_ATTR, (v, owner --)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            int err = PyObject_SetAttr(PyValue_ObjectBorrow(owner),
-                                       name, PyValue_ObjectBorrow(v));
+            int err = PyObject_SetAttrValue(owner, name, v);
             DEAD(owner);
             DEAD(v);
             ERROR_IF(err);
@@ -2619,7 +2614,7 @@ dummy_func(
             }
             else {
                 /* Classic, pushes one value. */
-                attr = _PyObject_GetAttrValue(PyValue_ObjectBorrow(owner), name);
+                attr = PyObject_GetAttrValue(owner, name);
                 DEAD(owner);
                 ERROR_IF(PyValue_IsNull(attr));
             }
@@ -3022,21 +3017,17 @@ dummy_func(
         }
 
         op(_COMPARE_OP, (left, right -- res)) {
-            PyObject *left_o = PyValue_ObjectBorrow(left);
-            PyObject *right_o = PyValue_ObjectBorrow(right);
-
             assert((oparg >> 5) <= Py_GE);
-            PyObject *res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
+            PyValue cmp = PyObject_RichCompareValue(left, right, oparg >> 5);
             INPUTS_DEAD();
-            ERROR_IF(res_o == NULL);
+            ERROR_IF(PyValue_IsNull(cmp));
             if (oparg & 16) {
-                int res_bool = PyObject_IsTrue(res_o);
-                Py_DECREF(res_o);
+                int res_bool = PyObject_IsTrueValue(cmp);
                 ERROR_IF(res_bool < 0);
                 res = res_bool ? _PyValue_True : _PyValue_False;
             }
             else {
-                res = PyValue_FromObject(res_o);
+                res = cmp;
             }
         }
 
@@ -3117,10 +3108,7 @@ dummy_func(
         };
 
         op(_CONTAINS_OP, (left, right -- b, l, r)) {
-            PyObject *left_o = PyValue_ObjectBorrow(left);
-            PyObject *right_o = PyValue_ObjectBorrow(right);
-
-            int res = PySequence_Contains(right_o, left_o);
+            int res = PySequence_ContainsValue(right, left);
             if (res < 0) {
                 ERROR_NO_POP();
             }
@@ -5506,16 +5494,19 @@ dummy_func(
             assert(oparg <= NB_OPARG_LAST);
         }
 
+        // Each operation has a handler of its own (BINARY_OP_ADD, ...), in
+        // which oparg is a constant.
         op(_BINARY_OP, (lhs, rhs -- res, l, r)) {
-            PyObject *lhs_o = PyValue_ObjectBorrow(lhs);
-            PyObject *rhs_o = PyValue_ObjectBorrow(rhs);
-
-            assert(_PyEval_BinaryOps[oparg]);
-            PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-            if (res_o == NULL) {
+            assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+            if (oparg == NB_SUBSCR) {
+                res = PyObject_GetItemValue(lhs, rhs);
+            }
+            else {
+                res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+            }
+            if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
             }
-            res = PyValue_FromObject(res_o);
             l = lhs;
             r = rhs;
             DEAD(lhs);

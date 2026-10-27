@@ -4098,7 +4098,7 @@ ensure_lazy_pending_submodules(PyDictObject *lazy_modules, PyObject *parent)
         lazy_submodules = PyDict_New();
         if (lazy_submodules != NULL &&
             _PyDict_SetItem_LockHeld(lazy_modules, parent,
-                                     lazy_submodules) < 0) {
+                                     PyValue_FromObject(lazy_submodules)) < 0) {
             Py_CLEAR(lazy_submodules);
         }
     }

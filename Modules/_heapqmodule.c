@@ -13,7 +13,7 @@ annotated by François Pinard, and converted to C by Raymond Hettinger.
 #include "Python.h"
 #include "pycore_list.h"          // _PyList_ITEMS(), _PyList_AppendTakeRef()
 #include "pycore_pyatomic_ft_wrappers.h"
-#include "pycore_value.h"         // _PyValue_RichCompareBool()
+#include "pycore_value.h"         // PyObject_RichCompareBoolValue()
 
 #include "clinic/_heapqmodule.c.h"
 
@@ -44,7 +44,7 @@ siftdown(PyListObject *heap, Py_ssize_t startpos, Py_ssize_t pos)
     while (pos > startpos) {
         parentpos = (pos - 1) >> 1;
         parent = arr[parentpos];
-        cmp = _PyValue_RichCompareBool(newitem, parent, Py_LT);
+        cmp = PyObject_RichCompareBoolValue(newitem, parent, Py_LT);
         if (cmp < 0)
             return -1;
         if (size != PyList_GET_SIZE(heap)) {
@@ -88,7 +88,7 @@ siftup(PyListObject *heap, Py_ssize_t pos)
         if (childpos + 1 < endpos) {
             PyValue a = arr[childpos];
             PyValue b = arr[childpos + 1];
-            cmp = _PyValue_RichCompareBool(a, b, Py_LT);
+            cmp = PyObject_RichCompareBoolValue(a, b, Py_LT);
             if (cmp < 0)
                 return -1;
             childpos += ((unsigned)cmp ^ 1);   /* increment when cmp==0 */
@@ -418,7 +418,7 @@ siftdown_max(PyListObject *heap, Py_ssize_t startpos, Py_ssize_t pos)
     while (pos > startpos) {
         parentpos = (pos - 1) >> 1;
         parent = arr[parentpos];
-        cmp = _PyValue_RichCompareBool(parent, newitem, Py_LT);
+        cmp = PyObject_RichCompareBoolValue(parent, newitem, Py_LT);
         if (cmp < 0)
             return -1;
         if (size != PyList_GET_SIZE(heap)) {
@@ -462,7 +462,7 @@ siftup_max(PyListObject *heap, Py_ssize_t pos)
         if (childpos + 1 < endpos) {
             PyValue a = arr[childpos + 1];
             PyValue b = arr[childpos];
-            cmp = _PyValue_RichCompareBool(a, b, Py_LT);
+            cmp = PyObject_RichCompareBoolValue(a, b, Py_LT);
             if (cmp < 0)
                 return -1;
             childpos += ((unsigned)cmp ^ 1);   /* increment when cmp==0 */

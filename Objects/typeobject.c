@@ -6224,7 +6224,7 @@ type_update_dict(PyTypeObject *type, PyDictObject *dict, PyObject *name,
         recursing into subclasses. */
     _PyType_Modified_Unlocked(type);
 
-    if (_PyDict_SetItem_LockHeld(dict, name, value) < 0) {
+    if (_PyDict_SetItem_LockHeld(dict, name, value == NULL ? PyValue_NULL : PyValue_FromObject(value)) < 0) {
         PyErr_Format(PyExc_AttributeError,
                      "type object '%.50s' has no attribute '%U'",
                      ((PyTypeObject*)type)->tp_name, name);
@@ -10745,7 +10745,7 @@ slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     _PyValueRoot func_ref;
     _PyThreadState_PushValueRoot(tstate, &func_ref);
-    func_ref.value = _PyObject_GetAttrValue((PyObject *)type, &_Py_ID(__new__));
+    func_ref.value = PyObject_GetAttrValue(PyValue_FromObject(type), &_Py_ID(__new__));
     if (PyValue_IsNull(func_ref.value)) {
         _PyThreadState_PopValueRoot(tstate, &func_ref);
         return NULL;

@@ -52,52 +52,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -351,52 +315,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -628,52 +556,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -807,52 +699,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -985,52 +841,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -1089,52 +909,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -1193,52 +977,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -1297,52 +1045,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -1401,52 +1113,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -1505,52 +1181,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -1609,52 +1249,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -1713,52 +1317,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -1817,52 +1385,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -1921,52 +1453,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -2025,52 +1521,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -2129,52 +1589,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -2233,52 +1657,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -2414,52 +1802,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -2518,52 +1870,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -2740,52 +2056,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -2904,52 +2184,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -3067,52 +2311,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -3244,52 +2452,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -3414,52 +2586,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -4093,52 +3229,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -4369,52 +3469,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -4473,52 +3537,16 @@
             }
             // _BINARY_OP
             {
-                PyObject *lhs_object;
-                _PyValueRoot lhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    lhs_object = _PyValue_BoxInline(lhs);
-                    if (lhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
+                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
+                if (oparg == NB_SUBSCR) {
+                    res = PyObject_GetItemValue(lhs, rhs);
                 }
                 else {
-                    lhs_object = PyValue_ObjectBorrow(lhs);
+                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
                 }
-                PyObject *rhs_object;
-                _PyValueRoot rhs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    rhs_object = _PyValue_BoxInline(rhs);
-                    if (rhs_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    rhs_object = PyValue_ObjectBorrow(rhs);
-                }
-                PyObject *lhs_o = lhs_object;
-                PyObject *rhs_o = rhs_object;
-                assert(_PyEval_BinaryOps[oparg]);
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &lhs_root);
-                    lhs_root.object = lhs_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PushValueRoot(tstate, &rhs_root);
-                    rhs_root.object = rhs_object;
-                }
-                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
-                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &rhs_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
-                    _PyThreadState_PopValueRoot(tstate, &lhs_root);
-                }
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 l = lhs;
                 r = rhs;
             }
@@ -6714,32 +5742,12 @@
             // _CALL_INTRINSIC_1
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
-                PyObject *value_object;
-                _PyValueRoot value_root;
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    value_object = _PyValue_BoxInline(value);
-                    if (value_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_INTRINSIC_1, _PY_BOX_CALL);
-                }
-                else {
-                    value_object = PyValue_ObjectBorrow(value);
-                }
                 assert(oparg <= MAX_INTRINSIC_1);
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PushValueRoot(tstate, &value_root);
-                    value_root.object = value_object;
-                }
-                PyObject *res_o = _PyIntrinsics_UnaryFunctions[oparg].func(tstate, value_object);
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PopValueRoot(tstate, &value_root);
-                }
-                if (res_o == NULL) {
+                res = _PyIntrinsics_CallUnaryValue(tstate, oparg, value);
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
                 v = value;
-                res = PyValue_FromObject(res_o);
             }
             // _POP_TOP
             {
@@ -8999,70 +8007,15 @@
             }
             // _COMPARE_OP
             {
-                PyObject *left_object;
-                _PyValueRoot left_root;
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left_object = _PyValue_BoxInline(left);
-                    if (left_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(COMPARE_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    left_object = PyValue_ObjectBorrow(left);
-                }
-                PyObject *right_object;
-                _PyValueRoot right_root;
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    right_object = _PyValue_BoxInline(right);
-                    if (right_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(COMPARE_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    right_object = PyValue_ObjectBorrow(right);
-                }
-                PyObject *left_o = left_object;
-                PyObject *right_o = right_object;
                 assert((oparg >> 5) <= Py_GE);
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PushValueRoot(tstate, &left_root);
-                    left_root.object = left_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    _PyThreadState_PushValueRoot(tstate, &right_root);
-                    right_root.object = right_object;
-                }
-                PyObject *res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    _PyThreadState_PopValueRoot(tstate, &right_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PopValueRoot(tstate, &left_root);
-                }
-                if (res_o == NULL) {
+                PyValue cmp = PyObject_RichCompareValue(left, right, oparg >> 5);
+                if (PyValue_IsNull(cmp)) {
                     IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                     IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 if (oparg & 16) {
-                    if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                        _PyThreadState_PushValueRoot(tstate, &left_root);
-                        left_root.object = left_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                        _PyThreadState_PushValueRoot(tstate, &right_root);
-                        right_root.object = right_object;
-                    }
-                    int res_bool = PyObject_IsTrue(res_o);
-                    if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                        _PyThreadState_PopValueRoot(tstate, &right_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                        _PyThreadState_PopValueRoot(tstate, &left_root);
-                    }
-                    Py_DECREF(res_o);
+                    int res_bool = PyObject_IsTrueValue(cmp);
                     if (res_bool < 0) {
                         IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                         IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
@@ -9071,7 +8024,7 @@
                     res = res_bool ? _PyValue_True : _PyValue_False;
                 }
                 else {
-                    res = PyValue_FromObject(res_o);
+                    res = cmp;
                 }
             }
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
@@ -9244,70 +8197,15 @@
             }
             // _COMPARE_OP
             {
-                PyObject *left_object;
-                _PyValueRoot left_root;
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left_object = _PyValue_BoxInline(left);
-                    if (left_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(COMPARE_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    left_object = PyValue_ObjectBorrow(left);
-                }
-                PyObject *right_object;
-                _PyValueRoot right_root;
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    right_object = _PyValue_BoxInline(right);
-                    if (right_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(COMPARE_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    right_object = PyValue_ObjectBorrow(right);
-                }
-                PyObject *left_o = left_object;
-                PyObject *right_o = right_object;
                 assert((oparg >> 5) <= Py_GE);
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PushValueRoot(tstate, &left_root);
-                    left_root.object = left_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    _PyThreadState_PushValueRoot(tstate, &right_root);
-                    right_root.object = right_object;
-                }
-                PyObject *res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    _PyThreadState_PopValueRoot(tstate, &right_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PopValueRoot(tstate, &left_root);
-                }
-                if (res_o == NULL) {
+                PyValue cmp = PyObject_RichCompareValue(left, right, oparg >> 5);
+                if (PyValue_IsNull(cmp)) {
                     IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                     IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 if (oparg & 16) {
-                    if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                        _PyThreadState_PushValueRoot(tstate, &left_root);
-                        left_root.object = left_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                        _PyThreadState_PushValueRoot(tstate, &right_root);
-                        right_root.object = right_object;
-                    }
-                    int res_bool = PyObject_IsTrue(res_o);
-                    if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                        _PyThreadState_PopValueRoot(tstate, &right_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                        _PyThreadState_PopValueRoot(tstate, &left_root);
-                    }
-                    Py_DECREF(res_o);
+                    int res_bool = PyObject_IsTrueValue(cmp);
                     if (res_bool < 0) {
                         IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                         IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
@@ -9316,7 +8214,7 @@
                     res = res_bool ? _PyValue_True : _PyValue_False;
                 }
                 else {
-                    res = PyValue_FromObject(res_o);
+                    res = cmp;
                 }
             }
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
@@ -9446,47 +8344,7 @@
             }
             // _CONTAINS_OP
             {
-                PyObject *left_object;
-                _PyValueRoot left_root;
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left_object = _PyValue_BoxInline(left);
-                    if (left_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CONTAINS_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    left_object = PyValue_ObjectBorrow(left);
-                }
-                PyObject *right_object;
-                _PyValueRoot right_root;
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    right_object = _PyValue_BoxInline(right);
-                    if (right_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CONTAINS_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    right_object = PyValue_ObjectBorrow(right);
-                }
-                PyObject *left_o = left_object;
-                PyObject *right_o = right_object;
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PushValueRoot(tstate, &left_root);
-                    left_root.object = left_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    _PyThreadState_PushValueRoot(tstate, &right_root);
-                    right_root.object = right_object;
-                }
-                int res = PySequence_Contains(right_o, left_o);
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    _PyThreadState_PopValueRoot(tstate, &right_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PopValueRoot(tstate, &left_root);
-                }
+                int res = PySequence_ContainsValue(right, left);
                 if (res < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -9634,47 +8492,7 @@
             }
             // _CONTAINS_OP
             {
-                PyObject *left_object;
-                _PyValueRoot left_root;
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left_object = _PyValue_BoxInline(left);
-                    if (left_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CONTAINS_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    left_object = PyValue_ObjectBorrow(left);
-                }
-                PyObject *right_object;
-                _PyValueRoot right_root;
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    right_object = _PyValue_BoxInline(right);
-                    if (right_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CONTAINS_OP, _PY_BOX_OTHER);
-                }
-                else {
-                    right_object = PyValue_ObjectBorrow(right);
-                }
-                PyObject *left_o = left_object;
-                PyObject *right_o = right_object;
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PushValueRoot(tstate, &left_root);
-                    left_root.object = left_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    _PyThreadState_PushValueRoot(tstate, &right_root);
-                    right_root.object = right_object;
-                }
-                int res = PySequence_Contains(right_o, left_o);
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    _PyThreadState_PopValueRoot(tstate, &right_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PopValueRoot(tstate, &left_root);
-                }
+                int res = PySequence_ContainsValue(right, left);
                 if (res < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -9924,46 +8742,7 @@
             PyValue sub;
             sub = IR_SLOT(IR_FIELD_B(this_instr));
             container = IR_SLOT(IR_FIELD_A(this_instr));
-            PyObject *container_object;
-            _PyValueRoot container_root;
-            if (Py_UNLIKELY(PyValue_IsInline(container))) {
-                container_object = _PyValue_BoxInline(container);
-                if (container_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(DELETE_SUBSCR, _PY_BOX_OTHER);
-            }
-            else {
-                container_object = PyValue_ObjectBorrow(container);
-            }
-            PyObject *sub_object;
-            _PyValueRoot sub_root;
-            if (Py_UNLIKELY(PyValue_IsInline(sub))) {
-                sub_object = _PyValue_BoxInline(sub);
-                if (sub_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(DELETE_SUBSCR, _PY_BOX_OTHER);
-            }
-            else {
-                sub_object = PyValue_ObjectBorrow(sub);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(container))) {
-                _PyThreadState_PushValueRoot(tstate, &container_root);
-                container_root.object = container_object;
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(sub))) {
-                _PyThreadState_PushValueRoot(tstate, &sub_root);
-                sub_root.object = sub_object;
-            }
-            int err = PyObject_DelItem(container_object,
-                                       sub_object);
-            if (Py_UNLIKELY(PyValue_IsInline(sub))) {
-                _PyThreadState_PopValueRoot(tstate, &sub_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(container))) {
-                _PyThreadState_PopValueRoot(tstate, &container_root);
-            }
+            int err = PyObject_DelItemValue(container, sub);
             if (err) {
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -13145,7 +11924,7 @@
                     err = PyValue_Double(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrue(PyValue_ObjectBorrow(value));
+                    err = PyObject_IsTrueValue(value);
                 }
                 if (err < 0) {
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
@@ -13249,7 +12028,7 @@
                     err = PyValue_Double(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrue(PyValue_ObjectBorrow(value));
+                    err = PyObject_IsTrueValue(value);
                 }
                 if (err < 0) {
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
@@ -13906,42 +12685,16 @@
             // _LOAD_ATTR
             {
                 self_or_null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
-                PyObject *owner_object;
-                _PyValueRoot owner_root;
-                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                    owner_object = _PyValue_BoxInline(owner);
-                    if (owner_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(LOAD_ATTR, _PY_BOX_OTHER);
-                }
-                else {
-                    owner_object = PyValue_ObjectBorrow(owner);
-                }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 if (oparg & 1) {
-                    if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                        _PyThreadState_PushValueRoot(tstate, &owner_root);
-                        owner_root.object = owner_object;
-                    }
                     attr = _Py_LoadAttr_Values(tstate, owner, name, self_or_null);
-                    if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                        _PyThreadState_PopValueRoot(tstate, &owner_root);
-                    }
                     if (PyValue_IsNull(attr)) {
                         IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
                 }
                 else {
-                    if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                        _PyThreadState_PushValueRoot(tstate, &owner_root);
-                        owner_root.object = owner_object;
-                    }
-                    attr = _PyObject_GetAttrValue(owner_object, name);
-                    if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                        _PyThreadState_PopValueRoot(tstate, &owner_root);
-                    }
+                    attr = PyObject_GetAttrValue(owner, name);
                     if (PyValue_IsNull(attr)) {
                         IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
@@ -14537,42 +13290,16 @@
             // _LOAD_ATTR
             {
                 self_or_null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
-                PyObject *owner_object;
-                _PyValueRoot owner_root;
-                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                    owner_object = _PyValue_BoxInline(owner);
-                    if (owner_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(LOAD_ATTR, _PY_BOX_OTHER);
-                }
-                else {
-                    owner_object = PyValue_ObjectBorrow(owner);
-                }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 if (oparg & 1) {
-                    if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                        _PyThreadState_PushValueRoot(tstate, &owner_root);
-                        owner_root.object = owner_object;
-                    }
                     attr = _Py_LoadAttr_Values(tstate, owner, name, self_or_null);
-                    if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                        _PyThreadState_PopValueRoot(tstate, &owner_root);
-                    }
                     if (PyValue_IsNull(attr)) {
                         IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
                 }
                 else {
-                    if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                        _PyThreadState_PushValueRoot(tstate, &owner_root);
-                        owner_root.object = owner_object;
-                    }
-                    attr = _PyObject_GetAttrValue(owner_object, name);
-                    if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                        _PyThreadState_PopValueRoot(tstate, &owner_root);
-                    }
+                    attr = PyObject_GetAttrValue(owner, name);
                     if (PyValue_IsNull(attr)) {
                         IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
@@ -17016,7 +15743,7 @@
                     err = PyValue_Double(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrue(PyValue_ObjectBorrow(value));
+                    err = PyObject_IsTrueValue(value);
                 }
                 if (err < 0) {
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
@@ -17512,7 +16239,7 @@
                     err = PyValue_Double(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrue(PyValue_ObjectBorrow(value));
+                    err = PyObject_IsTrueValue(value);
                 }
                 if (err < 0) {
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
@@ -18825,47 +17552,8 @@
             }
             // _STORE_ATTR
             {
-                PyObject *v_object;
-                _PyValueRoot v_root;
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    v_object = _PyValue_BoxInline(v);
-                    if (v_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_ATTR, _PY_BOX_ATTRIBUTE_STORE);
-                }
-                else {
-                    v_object = PyValue_ObjectBorrow(v);
-                }
-                PyObject *owner_object;
-                _PyValueRoot owner_root;
-                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                    owner_object = _PyValue_BoxInline(owner);
-                    if (owner_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_ATTR, _PY_BOX_ATTRIBUTE_STORE);
-                }
-                else {
-                    owner_object = PyValue_ObjectBorrow(owner);
-                }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    _PyThreadState_PushValueRoot(tstate, &v_root);
-                    v_root.object = v_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                    _PyThreadState_PushValueRoot(tstate, &owner_root);
-                    owner_root.object = owner_object;
-                }
-                int err = PyObject_SetAttr(owner_object,
-                                       name, v_object);
-                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                    _PyThreadState_PopValueRoot(tstate, &owner_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    _PyThreadState_PopValueRoot(tstate, &v_root);
-                }
+                int err = PyObject_SetAttrValue(owner, name, v);
                 if (err) {
                     IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
@@ -19002,47 +17690,8 @@
             }
             // _STORE_ATTR
             {
-                PyObject *v_object;
-                _PyValueRoot v_root;
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    v_object = _PyValue_BoxInline(v);
-                    if (v_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_ATTR, _PY_BOX_ATTRIBUTE_STORE);
-                }
-                else {
-                    v_object = PyValue_ObjectBorrow(v);
-                }
-                PyObject *owner_object;
-                _PyValueRoot owner_root;
-                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                    owner_object = _PyValue_BoxInline(owner);
-                    if (owner_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_ATTR, _PY_BOX_ATTRIBUTE_STORE);
-                }
-                else {
-                    owner_object = PyValue_ObjectBorrow(owner);
-                }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    _PyThreadState_PushValueRoot(tstate, &v_root);
-                    v_root.object = v_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                    _PyThreadState_PushValueRoot(tstate, &owner_root);
-                    owner_root.object = owner_object;
-                }
-                int err = PyObject_SetAttr(owner_object,
-                                       name, v_object);
-                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                    _PyThreadState_PopValueRoot(tstate, &owner_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    _PyThreadState_PopValueRoot(tstate, &v_root);
-                }
+                int err = PyObject_SetAttrValue(owner, name, v);
                 if (err) {
                     IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
@@ -19585,64 +18234,7 @@
             // _STORE_SUBSCR
             {
                 v = IR_SLOT(IR_FIELD_C(this_instr));
-                PyObject *v_object;
-                _PyValueRoot v_root;
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    v_object = _PyValue_BoxInline(v);
-                    if (v_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_SUBSCR, _PY_BOX_CONTAINER_STORE);
-                }
-                else {
-                    v_object = PyValue_ObjectBorrow(v);
-                }
-                PyObject *container_object;
-                _PyValueRoot container_root;
-                if (Py_UNLIKELY(PyValue_IsInline(container))) {
-                    container_object = _PyValue_BoxInline(container);
-                    if (container_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_SUBSCR, _PY_BOX_CONTAINER_STORE);
-                }
-                else {
-                    container_object = PyValue_ObjectBorrow(container);
-                }
-                PyObject *sub_object;
-                _PyValueRoot sub_root;
-                if (Py_UNLIKELY(PyValue_IsInline(sub))) {
-                    sub_object = _PyValue_BoxInline(sub);
-                    if (sub_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_SUBSCR, _PY_BOX_CONTAINER_STORE);
-                }
-                else {
-                    sub_object = PyValue_ObjectBorrow(sub);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    _PyThreadState_PushValueRoot(tstate, &v_root);
-                    v_root.object = v_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(container))) {
-                    _PyThreadState_PushValueRoot(tstate, &container_root);
-                    container_root.object = container_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(sub))) {
-                    _PyThreadState_PushValueRoot(tstate, &sub_root);
-                    sub_root.object = sub_object;
-                }
-                int err = PyObject_SetItem(container_object, sub_object, v_object);
-                if (Py_UNLIKELY(PyValue_IsInline(sub))) {
-                    _PyThreadState_PopValueRoot(tstate, &sub_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(container))) {
-                    _PyThreadState_PopValueRoot(tstate, &container_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    _PyThreadState_PopValueRoot(tstate, &v_root);
-                }
+                int err = PyObject_SetItemValue(container, sub, v);
                 if (err) {
                     IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
@@ -19874,7 +18466,7 @@
                     err = PyValue_Double(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrue(PyValue_ObjectBorrow(value));
+                    err = PyObject_IsTrueValue(value);
                 }
                 if (err < 0) {
                     IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
@@ -20142,30 +18734,10 @@
             // _UNARY_INVERT
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
-                PyObject *value_object;
-                _PyValueRoot value_root;
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    value_object = _PyValue_BoxInline(value);
-                    if (value_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(UNARY_INVERT, _PY_BOX_OTHER);
-                }
-                else {
-                    value_object = PyValue_ObjectBorrow(value);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PushValueRoot(tstate, &value_root);
-                    value_root.object = value_object;
-                }
-                PyObject *res_o = PyNumber_Invert(value_object);
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PopValueRoot(tstate, &value_root);
-                }
-                if (res_o == NULL) {
+                res = PyNumber_InvertValue(value);
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 v = value;
             }
             // _POP_TOP
@@ -20211,8 +18783,7 @@
                     res = PyValue_FromDouble(-_PyValue_NumberAsDouble(value));
                 }
                 else {
-                    PyObject *res_o = PyNumber_Negative(PyValue_ObjectBorrow(value));
-                    res = res_o == NULL ? PyValue_NULL : PyValue_FromObject(res_o);
+                    res = PyNumber_NegativeValue(value);
                 }
                 if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);

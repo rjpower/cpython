@@ -54,6 +54,15 @@ extern double _Py_parse_inf_or_nan(const char *p, char **endptr);
 
 extern int _Py_convert_int_to_double(PyObject **v, double *dbl);
 
+/* float's %, divmod() and ** on doubles, shared by the float type's slots
+   and the value number protocol (Objects/abstract.c).  The divisor of
+   _PyFloat_Rem() and _PyFloat_DivMod() is not zero.  _PyFloat_Pow()
+   returns 0 with the result in *res, -1 with an exception set, or 1 if the
+   result is complex. */
+extern double _PyFloat_Rem(double vx, double wx);
+extern void _PyFloat_DivMod(double vx, double wx, double *floordiv, double *mod);
+extern int _PyFloat_Pow(double iv, double iw, double *res);
+
 /* Should match endianness of the platform in most (all?) cases. */
 
 #ifdef DOUBLE_IS_BIG_ENDIAN_IEEE754

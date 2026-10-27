@@ -51,4 +51,7 @@ typedef struct {
 PyAPI_DATA(const intrinsic_func1_info) _PyIntrinsics_UnaryFunctions[];
 PyAPI_DATA(const intrinsic_func2_info) _PyIntrinsics_BinaryFunctions[];
 
+PyAPI_FUNC(PyValue) _PyIntrinsics_CallUnaryValue(PyThreadState *tstate,
+                                                 int oparg, PyValue value);
+
 #endif  // !Py_INTERNAL_INTRINSIC_H

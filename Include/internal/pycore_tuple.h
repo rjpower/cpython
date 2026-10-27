@@ -12,6 +12,8 @@ extern "C" {
 #include "pycore_structs.h"       // PyValue
 
 extern void _PyTuple_MaybeUntrack(PyObject *);
+// v in the tuple op: 1, 0, or -1 with an exception set.
+PyAPI_FUNC(int) _PyTuple_ContainsValue(PyObject *op, PyValue v);
 
 /* runtime lifecycle */
 

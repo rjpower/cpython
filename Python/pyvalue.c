@@ -155,49 +155,6 @@ _PyValue_BoxDouble(double value)
     return PyValue_FromObject(op);
 }
 
-int
-_PyValue_RichCompareBoolSlow(PyValue a, PyValue b, int op)
-{
-    // Quick result when objects are the same, as PyObject_RichCompareBool().
-    if (PyValue_Is(a, b)) {
-        if (op == Py_EQ) {
-            return 1;
-        }
-        if (op == Py_NE) {
-            return 0;
-        }
-    }
-    // The boxes are in this frame, which the collector scans.
-    PyObject *x = PyValue_Object(a);
-    if (x == NULL) {
-        return -1;
-    }
-    PyObject *y = PyValue_Object(b);
-    if (y == NULL) {
-        return -1;
-    }
-    return PyObject_RichCompareBool(x, y, op);
-}
-
-PyObject *
-_PyValue_RichCompare(PyValue a, PyValue b, int op)
-{
-    if (PyValue_IsInline(a) && PyValue_IsInline(b)) {
-        return PyBool_FromLong(
-            _PyValue_CompareResult(_PyValue_CompareInline(a, b), op));
-    }
-    PyObject *x = PyValue_Object(a);
-    if (x == NULL) {
-        return NULL;
-    }
-    PyObject *y = PyValue_Object(b);
-    if (y == NULL) {
-        return NULL;
-    }
-    return PyObject_RichCompare(x, y, op);
-}
-
-
 /* An array of objects made for C code that takes PyObject *const *, from
    values some of which are inline (_PyValue_ObjectArray()).  It is a heap
    object so that nothing needs to free it: the caller holds a pointer into

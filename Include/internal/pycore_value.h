@@ -254,20 +254,6 @@ _PyValue_FloatOperandValues(PyValue a, PyValue b, double *da, double *db)
    an int or float item is usually inline: these work on it without a box,
    and box only to call the object's own method. */
 
-/* hash() of v: -1 with an exception set on failure. */
-static inline Py_hash_t
-_PyValue_Hash(PyValue v)
-{
-    if (PyValue_IsInlineInt(v)) {
-        Py_hash_t h = PyValue_Int32(v);
-        return h == -1 ? -2 : h;
-    }
-    if (PyValue_IsInlineFloat(v)) {
-        return _Py_HashDouble(NULL, PyValue_Double(v));
-    }
-    return PyObject_Hash(PyValue_ObjectBorrow(v));
-}
-
 /* The order of two inline values, <0, 0 or >0.  An int32 converts to a
    double exactly, and neither is NaN, so this is the order of the numbers. */
 static inline int
@@ -295,23 +281,6 @@ _PyValue_CompareResult(int c, int op)
     default:    return c >= 0;
     }
 }
-
-PyAPI_FUNC(int) _PyValue_RichCompareBoolSlow(PyValue a, PyValue b, int op);
-
-/* PyObject_RichCompareBool() of two values: 1, 0, or -1 with an exception
-   set.  As there, identity implies equality. */
-static inline int
-_PyValue_RichCompareBool(PyValue a, PyValue b, int op)
-{
-    if (PyValue_IsInline(a) && PyValue_IsInline(b)) {
-        return _PyValue_CompareResult(_PyValue_CompareInline(a, b), op);
-    }
-    return _PyValue_RichCompareBoolSlow(a, b, op);
-}
-
-/* PyObject_RichCompare() of two values: a new reference, or NULL with an
-   exception set. */
-PyAPI_FUNC(PyObject *) _PyValue_RichCompare(PyValue a, PyValue b, int op);
 
 /* Could the collector need to traverse a container holding v?  As
    _PyObject_GC_MAY_BE_TRACKED(), and false for NULL and inline values. */
@@ -400,6 +369,28 @@ _PyValue_ObjectRooted(PyThreadState *tstate, PyValue v, _PyValueRoot *root,
             root->object = box;
         }
         return box;
+    }
+    return PyValue_ObjectBorrow(v);
+}
+
+/* Push root holding v, and return v's object for C code that calls a
+   PyObject * function: an inline value is boxed in root, which keeps the
+   box alive until it is popped.  NULL if v is PyValue_NULL, or with an
+   exception set if boxing fails.  The root is pushed in either case, so
+   that the caller pops it on every path. */
+static inline PyObject *
+_PyValueRoot_PushObject(PyThreadState *tstate, _PyValueRoot *root,
+                        PyValue v, int kind)
+{
+    (void)kind;
+    _PyThreadState_PushValueRoot(tstate, root);
+    root->value = v;
+    if (PyValue_IsInline(v)) {
+        root->object = _PyValue_BoxInline(v);
+        if (root->object != NULL) {
+            VALUE_BOX_STAT_INC(kind);
+        }
+        return root->object;
     }
     return PyValue_ObjectBorrow(v);
 }

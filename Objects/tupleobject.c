@@ -370,7 +370,7 @@ tuple_hash(PyObject *op)
 
     acc = _PyTuple_HASH_XXPRIME_5;
     for (Py_ssize_t i = 0; i < len; i++) {
-        Py_uhash_t lane = _PyValue_Hash(item[i]);
+        Py_uhash_t lane = PyObject_HashValue(item[i]);
         if (lane == (Py_uhash_t)-1) {
             _Py_LeaveRecursiveCall();
             return -1;
@@ -403,11 +403,16 @@ tuple_length(PyObject *self)
 static int
 tuple_contains(PyObject *self, PyObject *el)
 {
+    return _PyTuple_ContainsValue(self, PyValue_FromObject(el));
+}
+
+int
+_PyTuple_ContainsValue(PyObject *self, PyValue v)
+{
     PyTupleObject *a = _PyTuple_CAST(self);
     int cmp = 0;
     for (Py_ssize_t i = 0; cmp == 0 && i < Py_SIZE(a); ++i) {
-        PyObject *item = PyValue_Object(a->ob_item[i]);
-        cmp = item == NULL ? -1 : PyObject_RichCompareBool(item, el, Py_EQ);
+        cmp = PyObject_RichCompareBoolValue(a->ob_item[i], v, Py_EQ);
     }
     return cmp;
 }
@@ -653,7 +658,7 @@ tuple_index_impl(PyTupleObject *self, PyObject *value, Py_ssize_t start,
     }
     PyValue v = PyValue_FromObject(value);
     for (i = start; i < stop; i++) {
-        int cmp = _PyValue_RichCompareBool(self->ob_item[i], v, Py_EQ);
+        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i], v, Py_EQ);
         if (cmp > 0)
             return PyLong_FromSsize_t(i);
         else if (cmp < 0)
@@ -681,7 +686,7 @@ tuple_count_impl(PyTupleObject *self, PyObject *value)
 
     PyValue v = PyValue_FromObject(value);
     for (i = 0; i < Py_SIZE(self); i++) {
-        int cmp = _PyValue_RichCompareBool(self->ob_item[i], v, Py_EQ);
+        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i], v, Py_EQ);
         if (cmp > 0)
             count++;
         else if (cmp < 0)
@@ -728,7 +733,7 @@ tuple_richcompare(PyObject *v, PyObject *w, int op)
      * vlen and wlen across the comparison calls.
      */
     for (i = 0; i < vlen && i < wlen; i++) {
-        int k = _PyValue_RichCompareBool(vt->ob_item[i],
+        int k = PyObject_RichCompareBoolValue(vt->ob_item[i],
                                          wt->ob_item[i], Py_EQ);
         if (k < 0)
             return NULL;
@@ -750,7 +755,7 @@ tuple_richcompare(PyObject *v, PyObject *w, int op)
     }
 
     /* Compare the final item again using the proper operator */
-    return _PyValue_RichCompare(vt->ob_item[i], wt->ob_item[i], op);
+    return PyValue_Object(PyObject_RichCompareValue(vt->ob_item[i], wt->ob_item[i], op));
 }
 
 static PyObject *

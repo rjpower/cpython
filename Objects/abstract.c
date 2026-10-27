@@ -1,10 +1,13 @@
 /* Abstract Object Interface (many thanks to Jim Fulton) */
 
 #include "Python.h"
+#include "opcode.h"                // NB_ADD
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
 #include "pycore_crossinterp.h"   // _Py_CallInInterpreter()
+#include "pycore_dict.h"          // _PyDict_GetItemValue()
+#include "pycore_floatobject.h"   // _PyFloat_Pow()
 #include "pycore_genobject.h"     // _PyGen_FetchStopIterationValue()
 #include "pycore_list.h"          // _PyList_AppendTakeRef()
 #include "pycore_long.h"          // _PyLong_IsNegative()
@@ -13,6 +16,7 @@
 #include "pycore_pybuffer.h"      // _PyBuffer_ReleaseInInterpreterAndRawFree()
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_setobject.h"     // _PySet_ContainsValue()
 #include "pycore_tuple.h"         // _PyTuple_FromArraySteal()
 #include "pycore_unionobject.h"   // _PyUnion_Check()
 
@@ -1684,6 +1688,456 @@ PyNumber_ToBase(PyObject *n, int base)
 }
 
 
+/* The number protocol on values (boil/design/08-review-at-6a.md, section 4).
+
+   An operation on two inline values, ints or floats, is done here without a
+   box, with the semantics of the int and float types' own slots.  Any other
+   operation boxes its inline operands, each held by a value root while the
+   PyObject * function runs (which may run Python code), and makes the
+   result canonical. */
+
+/* What the tag paths return for an operation that they leave to the boxed
+   path: an int ** int that overflows int64, a complex power, an operation
+   that int or float does not have.  It is neither NULL nor a valid value. */
+#define NUMBER_UNHANDLED ((PyValue){ .bits = 1 })
+
+static inline int
+number_unhandled(PyValue v)
+{
+    return v.bits == NUMBER_UNHANDLED.bits;
+}
+
+/* The value of an int64: inline if it fits in int32, else a new int. */
+static inline PyValue
+int64_value(int64_t i)
+{
+    if ((int32_t)i == i) {
+        return PyValue_FromInt32((int32_t)i);
+    }
+    return _PyValue_BoxInt64(i);
+}
+
+static PyValue
+zero_division(void)
+{
+    PyErr_SetString(PyExc_ZeroDivisionError, "division by zero");
+    return PyValue_NULL;
+}
+
+/* a ** b for b >= 0, or NUMBER_UNHANDLED if the result does not fit in
+   int64; long_pow() then makes the big int. */
+static PyValue
+int32_power(int32_t a, int32_t b)
+{
+    assert(b >= 0);
+    int64_t result = 1;
+    int64_t base = a;
+    uint32_t e = (uint32_t)b;
+    while (e) {
+        if ((e & 1) && __builtin_mul_overflow(result, base, &result)) {
+            return NUMBER_UNHANDLED;
+        }
+        e >>= 1;
+        if (e && __builtin_mul_overflow(base, base, &base)) {
+            return NUMBER_UNHANDLED;
+        }
+    }
+    return int64_value(result);
+}
+
+/* Python's float operation op (NB_ADD to NB_XOR) on a and b, either of
+   which may come from an int: an int32 converts to a double exactly, as
+   float's slots convert it. */
+static PyValue
+double_binary_op(double a, double b, int op)
+{
+    switch (op) {
+    case NB_ADD:
+        return PyValue_FromDouble(a + b);
+    case NB_SUBTRACT:
+        return PyValue_FromDouble(a - b);
+    case NB_MULTIPLY:
+        return PyValue_FromDouble(a * b);
+    case NB_TRUE_DIVIDE:
+        if (b == 0.0) {
+            return zero_division();
+        }
+        return PyValue_FromDouble(a / b);
+    case NB_FLOOR_DIVIDE: {
+        if (b == 0.0) {
+            return zero_division();
+        }
+        double floordiv, mod;
+        _PyFloat_DivMod(a, b, &floordiv, &mod);
+        return PyValue_FromDouble(floordiv);
+    }
+    case NB_REMAINDER:
+        if (b == 0.0) {
+            return zero_division();
+        }
+        return PyValue_FromDouble(_PyFloat_Rem(a, b));
+    case NB_POWER: {
+        double res;
+        int err = _PyFloat_Pow(a, b, &res);
+        if (err < 0) {
+            return PyValue_NULL;
+        }
+        if (err > 0) {
+            return NUMBER_UNHANDLED;
+        }
+        return PyValue_FromDouble(res);
+    }
+    default:
+        // The bit operations and @ raise TypeError for a float.
+        return NUMBER_UNHANDLED;
+    }
+}
+
+/* Python's int operation op on int32 operands.  A result outside int32 is
+   exact in int64 and is boxed; the floor division, remainder and shifts
+   follow long_divrem() and long_lshift(). */
+static PyValue
+int32_binary_op(int32_t a, int32_t b, int op)
+{
+    int32_t r;
+    switch (op) {
+    case NB_ADD:
+        if (__builtin_add_overflow(a, b, &r)) {
+            return _PyValue_BoxInt64((int64_t)a + b);
+        }
+        return PyValue_FromInt32(r);
+    case NB_SUBTRACT:
+        if (__builtin_sub_overflow(a, b, &r)) {
+            return _PyValue_BoxInt64((int64_t)a - b);
+        }
+        return PyValue_FromInt32(r);
+    case NB_MULTIPLY:
+        if (__builtin_mul_overflow(a, b, &r)) {
+            return _PyValue_BoxInt64((int64_t)a * b);
+        }
+        return PyValue_FromInt32(r);
+    case NB_FLOOR_DIVIDE:
+        if (b == 0) {
+            return zero_division();
+        }
+        // Dividing by -1 is done apart because INT32_MIN / -1 traps in C.
+        if (b == -1) {
+            return int64_value(-(int64_t)a);
+        }
+        r = a / b;
+        if (a % b != 0 && (a ^ b) < 0) {
+            r--;
+        }
+        return PyValue_FromInt32(r);
+    case NB_REMAINDER:
+        if (b == 0) {
+            return zero_division();
+        }
+        if (b == -1) {
+            return PyValue_FromInt32(0);
+        }
+        r = a % b;
+        if (r != 0 && (r ^ b) < 0) {
+            r += b;
+        }
+        return PyValue_FromInt32(r);
+    case NB_TRUE_DIVIDE:
+        if (b == 0) {
+            return zero_division();
+        }
+        // Both convert exactly, so the quotient is correctly rounded, as
+        // long_true_divide() makes it.
+        return PyValue_FromDouble((double)a / (double)b);
+    case NB_POWER:
+        if (b < 0) {
+            // A negative exponent makes a float (long_pow()).
+            return double_binary_op((double)a, (double)b, NB_POWER);
+        }
+        return int32_power(a, b);
+    case NB_AND:
+        return PyValue_FromInt32(a & b);
+    case NB_OR:
+        return PyValue_FromInt32(a | b);
+    case NB_XOR:
+        return PyValue_FromInt32(a ^ b);
+    case NB_LSHIFT:
+        if (b < 0) {
+            goto negative_shift;
+        }
+        if (b < 32) {
+            return int64_value((int64_t)((uint64_t)(int64_t)a << b));
+        }
+        if (a == 0) {
+            return PyValue_FromInt32(0);
+        }
+        return _PyValue_LshiftInt32(a, b);
+    case NB_RSHIFT:
+        if (b < 0) {
+            goto negative_shift;
+        }
+        return PyValue_FromInt32(Py_ARITHMETIC_RIGHT_SHIFT(int32_t, a, b < 31 ? b : 31));
+    default:
+        // @ raises TypeError for an int.
+        return NUMBER_UNHANDLED;
+    }
+negative_shift:
+    PyErr_SetString(PyExc_ValueError, "negative shift count");
+    return PyValue_NULL;
+}
+
+/* The PyObject * function of each binary operation, for the boxed path. */
+static const binaryfunc number_binary_funcs[] = {
+    [NB_ADD] = PyNumber_Add,
+    [NB_AND] = PyNumber_And,
+    [NB_FLOOR_DIVIDE] = PyNumber_FloorDivide,
+    [NB_LSHIFT] = PyNumber_Lshift,
+    [NB_MATRIX_MULTIPLY] = PyNumber_MatrixMultiply,
+    [NB_MULTIPLY] = PyNumber_Multiply,
+    [NB_REMAINDER] = PyNumber_Remainder,
+    [NB_OR] = PyNumber_Or,
+    [NB_POWER] = _PyNumber_PowerNoMod,
+    [NB_RSHIFT] = PyNumber_Rshift,
+    [NB_SUBTRACT] = PyNumber_Subtract,
+    [NB_TRUE_DIVIDE] = PyNumber_TrueDivide,
+    [NB_XOR] = PyNumber_Xor,
+    [NB_INPLACE_ADD] = PyNumber_InPlaceAdd,
+    [NB_INPLACE_AND] = PyNumber_InPlaceAnd,
+    [NB_INPLACE_FLOOR_DIVIDE] = PyNumber_InPlaceFloorDivide,
+    [NB_INPLACE_LSHIFT] = PyNumber_InPlaceLshift,
+    [NB_INPLACE_MATRIX_MULTIPLY] = PyNumber_InPlaceMatrixMultiply,
+    [NB_INPLACE_MULTIPLY] = PyNumber_InPlaceMultiply,
+    [NB_INPLACE_REMAINDER] = PyNumber_InPlaceRemainder,
+    [NB_INPLACE_OR] = PyNumber_InPlaceOr,
+    [NB_INPLACE_POWER] = _PyNumber_InPlacePowerNoMod,
+    [NB_INPLACE_RSHIFT] = PyNumber_InPlaceRshift,
+    [NB_INPLACE_SUBTRACT] = PyNumber_InPlaceSubtract,
+    [NB_INPLACE_TRUE_DIVIDE] = PyNumber_InPlaceTrueDivide,
+    [NB_INPLACE_XOR] = PyNumber_InPlaceXor,
+};
+
+/* The canonical value of res, the result of a PyObject * function, or
+   PyValue_NULL if it failed. */
+static inline PyValue
+value_result(PyObject *res)
+{
+    return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
+}
+
+static PyValue
+binary_op_boxed(PyValue v, PyValue w, int op)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot v_root, w_root;
+    PyObject *res = NULL;
+    PyObject *v_o = _PyValueRoot_PushObject(tstate, &v_root, v, _PY_BOX_OTHER);
+    PyObject *w_o = _PyValueRoot_PushObject(tstate, &w_root, w, _PY_BOX_OTHER);
+    if (v_o != NULL && w_o != NULL) {
+        res = number_binary_funcs[op](v_o, w_o);
+    }
+    _PyThreadState_PopValueRoot(tstate, &w_root);
+    _PyThreadState_PopValueRoot(tstate, &v_root);
+    return value_result(res);
+}
+
+/* The binary operation op (NB_ADD to NB_INPLACE_XOR) on v and w. */
+static inline PyValue
+binary_op_value(PyValue v, PyValue w, int op)
+{
+    assert(NB_ADD <= op && op <= NB_INPLACE_XOR);
+    if (PyValue_IsInline(v) && PyValue_IsInline(w)) {
+        // int and float have no in-place slots.
+        int base_op = op >= NB_INPLACE_ADD ? op - (NB_INPLACE_ADD - NB_ADD) : op;
+        PyValue res;
+        if (_PyValue_BothInlineInt(v, w)) {
+            res = int32_binary_op(PyValue_Int32(v), PyValue_Int32(w), base_op);
+        }
+        else {
+            double a = PyValue_IsInlineInt(v) ? (double)PyValue_Int32(v) : PyValue_Double(v);
+            double b = PyValue_IsInlineInt(w) ? (double)PyValue_Int32(w) : PyValue_Double(w);
+            res = double_binary_op(a, b, base_op);
+        }
+        if (!number_unhandled(res)) {
+            return res;
+        }
+    }
+    else if (!PyValue_IsInline(v) && !PyValue_IsInline(w)) {
+        return value_result(number_binary_funcs[op](PyValue_ObjectBorrow(v),
+                                                    PyValue_ObjectBorrow(w)));
+    }
+    return binary_op_boxed(v, w, op);
+}
+
+PyValue
+_PyNumber_BinaryOpValue(PyValue v, PyValue w, int op)
+{
+    return binary_op_value(v, w, op);
+}
+
+#define BINARY_VALUE_FUNC(func, op) \
+    PyValue \
+    func(PyValue v, PyValue w) { \
+        return binary_op_value(v, w, op); \
+    }
+
+BINARY_VALUE_FUNC(PyNumber_AddValue, NB_ADD)
+BINARY_VALUE_FUNC(PyNumber_SubtractValue, NB_SUBTRACT)
+BINARY_VALUE_FUNC(PyNumber_MultiplyValue, NB_MULTIPLY)
+BINARY_VALUE_FUNC(PyNumber_MatrixMultiplyValue, NB_MATRIX_MULTIPLY)
+BINARY_VALUE_FUNC(PyNumber_FloorDivideValue, NB_FLOOR_DIVIDE)
+BINARY_VALUE_FUNC(PyNumber_TrueDivideValue, NB_TRUE_DIVIDE)
+BINARY_VALUE_FUNC(PyNumber_RemainderValue, NB_REMAINDER)
+BINARY_VALUE_FUNC(PyNumber_LshiftValue, NB_LSHIFT)
+BINARY_VALUE_FUNC(PyNumber_RshiftValue, NB_RSHIFT)
+BINARY_VALUE_FUNC(PyNumber_AndValue, NB_AND)
+BINARY_VALUE_FUNC(PyNumber_OrValue, NB_OR)
+BINARY_VALUE_FUNC(PyNumber_XorValue, NB_XOR)
+BINARY_VALUE_FUNC(PyNumber_InPlaceAddValue, NB_INPLACE_ADD)
+BINARY_VALUE_FUNC(PyNumber_InPlaceSubtractValue, NB_INPLACE_SUBTRACT)
+BINARY_VALUE_FUNC(PyNumber_InPlaceMultiplyValue, NB_INPLACE_MULTIPLY)
+BINARY_VALUE_FUNC(PyNumber_InPlaceMatrixMultiplyValue, NB_INPLACE_MATRIX_MULTIPLY)
+BINARY_VALUE_FUNC(PyNumber_InPlaceFloorDivideValue, NB_INPLACE_FLOOR_DIVIDE)
+BINARY_VALUE_FUNC(PyNumber_InPlaceTrueDivideValue, NB_INPLACE_TRUE_DIVIDE)
+BINARY_VALUE_FUNC(PyNumber_InPlaceRemainderValue, NB_INPLACE_REMAINDER)
+BINARY_VALUE_FUNC(PyNumber_InPlaceLshiftValue, NB_INPLACE_LSHIFT)
+BINARY_VALUE_FUNC(PyNumber_InPlaceRshiftValue, NB_INPLACE_RSHIFT)
+BINARY_VALUE_FUNC(PyNumber_InPlaceAndValue, NB_INPLACE_AND)
+BINARY_VALUE_FUNC(PyNumber_InPlaceOrValue, NB_INPLACE_OR)
+BINARY_VALUE_FUNC(PyNumber_InPlaceXorValue, NB_INPLACE_XOR)
+
+/* ** with a modulus, or ** and **= without one if mod is None.  A modulus
+   other than None goes to the PyObject * functions. */
+static PyValue
+power_value(PyValue v, PyValue w, PyValue mod, int op)
+{
+    if (_PyValue_IsNone(mod)) {
+        return binary_op_value(v, w, op);
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot v_root, w_root, mod_root;
+    PyObject *res = NULL;
+    PyObject *v_o = _PyValueRoot_PushObject(tstate, &v_root, v, _PY_BOX_OTHER);
+    PyObject *w_o = _PyValueRoot_PushObject(tstate, &w_root, w, _PY_BOX_OTHER);
+    PyObject *mod_o = _PyValueRoot_PushObject(tstate, &mod_root, mod, _PY_BOX_OTHER);
+    if (v_o != NULL && w_o != NULL && mod_o != NULL) {
+        res = op == NB_POWER ? PyNumber_Power(v_o, w_o, mod_o)
+                             : PyNumber_InPlacePower(v_o, w_o, mod_o);
+    }
+    _PyThreadState_PopValueRoot(tstate, &mod_root);
+    _PyThreadState_PopValueRoot(tstate, &w_root);
+    _PyThreadState_PopValueRoot(tstate, &v_root);
+    return value_result(res);
+}
+
+PyValue
+PyNumber_PowerValue(PyValue v, PyValue w, PyValue mod)
+{
+    return power_value(v, w, mod, NB_POWER);
+}
+
+PyValue
+PyNumber_InPlacePowerValue(PyValue v, PyValue w, PyValue mod)
+{
+    return power_value(v, w, mod, NB_INPLACE_POWER);
+}
+
+/* The unary operation f on v, which is inline or not, through the
+   PyObject * function. */
+static PyValue
+unary_op_boxed(PyValue v, unaryfunc f)
+{
+    if (!PyValue_IsInline(v)) {
+        return value_result(f(PyValue_ObjectBorrow(v)));
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot root;
+    PyObject *v_o = _PyValueRoot_PushObject(tstate, &root, v, _PY_BOX_OTHER);
+    PyObject *res = v_o == NULL ? NULL : f(v_o);
+    _PyThreadState_PopValueRoot(tstate, &root);
+    return value_result(res);
+}
+
+PyValue
+PyNumber_NegativeValue(PyValue v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        return int64_value(-(int64_t)PyValue_Int32(v));
+    }
+    if (PyValue_IsInlineFloat(v)) {
+        return PyValue_FromDouble(-PyValue_Double(v));
+    }
+    return unary_op_boxed(v, PyNumber_Negative);
+}
+
+PyValue
+PyNumber_PositiveValue(PyValue v)
+{
+    if (PyValue_IsInline(v)) {
+        return v;
+    }
+    return unary_op_boxed(v, PyNumber_Positive);
+}
+
+PyValue
+PyNumber_InvertValue(PyValue v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        return PyValue_FromInt32(~PyValue_Int32(v));
+    }
+    return unary_op_boxed(v, PyNumber_Invert);
+}
+
+PyValue
+PyNumber_AbsoluteValue(PyValue v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        int64_t i = PyValue_Int32(v);
+        return int64_value(i < 0 ? -i : i);
+    }
+    if (PyValue_IsInlineFloat(v)) {
+        return PyValue_FromDouble(fabs(PyValue_Double(v)));
+    }
+    return unary_op_boxed(v, PyNumber_Absolute);
+}
+
+PyValue
+PyNumber_IndexValue(PyValue v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        return v;
+    }
+    return unary_op_boxed(v, PyNumber_Index);
+}
+
+PyValue
+PyNumber_LongValue(PyValue v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        return v;
+    }
+    if (PyValue_IsInlineFloat(v)) {
+        // float.__int__ truncates (float___trunc___impl()).
+        double d = PyValue_Double(v);
+        if (-2147483649.0 < d && d < 2147483648.0) {
+            return PyValue_FromInt32((int32_t)d);
+        }
+        return value_result(PyLong_FromDouble(d));
+    }
+    return unary_op_boxed(v, PyNumber_Long);
+}
+
+PyValue
+PyNumber_FloatValue(PyValue v)
+{
+    if (PyValue_IsInlineFloat(v)) {
+        return v;
+    }
+    if (PyValue_IsInlineInt(v)) {
+        return PyValue_FromDouble((double)PyValue_Int32(v));
+    }
+    return unary_op_boxed(v, PyNumber_Float);
+}
+
+
 /* Operations on sequences */
 
 int
@@ -2946,9 +3400,217 @@ PyIter_Next(PyObject *iter)
     return item;
 }
 
-int
-_PyIter_NextValue(PyObject *it, PyValue *item)
+/* The item, containment and iteration protocols on values.  A list or
+   tuple indexed by an inline int, an exact dict, set or frozenset, and the
+   iterators of lists and tuples are worked on without a box; anything else
+   boxes its inline operands for the type's slots (see "The number protocol
+   on values" above). */
+
+/* index normalised for a sequence of n items: -1 if it is out of range. */
+static inline Py_ssize_t
+sequence_index(int32_t index, Py_ssize_t n)
 {
+    Py_ssize_t i = index;
+    if (i < 0) {
+        i += n;
+    }
+    return (size_t)i < (size_t)n ? i : -1;
+}
+
+/* The key error of a missing key, which needs the key's object. */
+static void
+set_key_error(PyValue key)
+{
+    PyObject *key_o = PyValue_Object(key);
+    if (key_o != NULL) {
+        _PyErr_SetKeyError(key_o);
+    }
+}
+
+PyValue
+PyObject_GetItemValue(PyValue o, PyValue key)
+{
+    if (PyValue_IsObject(o)) {
+        PyObject *op = PyValue_ObjectBorrow(o);
+        PyTypeObject *tp = Py_TYPE(op);
+        if (PyValue_IsInlineInt(key)) {
+            if (tp == &PyList_Type) {
+                Py_ssize_t i = sequence_index(PyValue_Int32(key), PyList_GET_SIZE(op));
+                if (i < 0) {
+                    PyErr_SetString(PyExc_IndexError, "list index out of range");
+                    return PyValue_NULL;
+                }
+                return PyList_GET_VALUE(op, i);
+            }
+            if (tp == &PyTuple_Type) {
+                Py_ssize_t i = sequence_index(PyValue_Int32(key), PyTuple_GET_SIZE(op));
+                if (i < 0) {
+                    PyErr_SetString(PyExc_IndexError, "tuple index out of range");
+                    return PyValue_NULL;
+                }
+                return PyTuple_GET_VALUE(op, i);
+            }
+            if (tp == &PyUnicode_Type) {
+                // str's subscript of an int is its sq_item.
+                return value_result(PySequence_GetItem(op, PyValue_Int32(key)));
+            }
+        }
+        if (PyAnyDict_CheckExact(op)) {
+            PyValue res;
+            int found = _PyDict_GetItemValue(op, key, &res);
+            if (found == 0) {
+                set_key_error(key);
+            }
+            return found > 0 ? res : PyValue_NULL;
+        }
+        if (!PyValue_IsInline(key)) {
+            return value_result(PyObject_GetItem(op, PyValue_ObjectBorrow(key)));
+        }
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot o_root, key_root;
+    PyObject *res = NULL;
+    PyObject *o_o = _PyValueRoot_PushObject(tstate, &o_root, o, _PY_BOX_OTHER);
+    PyObject *key_o = _PyValueRoot_PushObject(tstate, &key_root, key, _PY_BOX_OTHER);
+    if (o_o != NULL && key_o != NULL) {
+        res = PyObject_GetItem(o_o, key_o);
+    }
+    _PyThreadState_PopValueRoot(tstate, &key_root);
+    _PyThreadState_PopValueRoot(tstate, &o_root);
+    return value_result(res);
+}
+
+int
+PyObject_SetItemValue(PyValue o, PyValue key, PyValue value)
+{
+    if (PyValue_IsNull(value)) {
+        null_error();
+        return -1;
+    }
+    if (PyValue_IsObject(o)) {
+        PyObject *op = PyValue_ObjectBorrow(o);
+        if (PyList_CheckExact(op) && PyValue_IsInlineInt(key)) {
+            Py_ssize_t i = sequence_index(PyValue_Int32(key), PyList_GET_SIZE(op));
+            if (i < 0) {
+                PyErr_SetString(PyExc_IndexError,
+                                "list assignment index out of range");
+                return -1;
+            }
+            _PyList_ITEMS(op)[i] = value;
+            return 0;
+        }
+        if (PyDict_CheckExact(op)) {
+            return _PyDict_SetItemValue((PyDictObject *)op, key, value);
+        }
+        if (!PyValue_IsInline(key) && !PyValue_IsInline(value)) {
+            return PyObject_SetItem(op, PyValue_ObjectBorrow(key),
+                                    PyValue_ObjectBorrow(value));
+        }
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot o_root, key_root, value_root;
+    int res = -1;
+    PyObject *o_o = _PyValueRoot_PushObject(tstate, &o_root, o, _PY_BOX_OTHER);
+    PyObject *key_o = _PyValueRoot_PushObject(tstate, &key_root, key, _PY_BOX_OTHER);
+    PyObject *value_o = _PyValueRoot_PushObject(tstate, &value_root, value,
+                                                _PY_BOX_CONTAINER_STORE);
+    if (o_o != NULL && key_o != NULL && value_o != NULL) {
+        res = PyObject_SetItem(o_o, key_o, value_o);
+    }
+    _PyThreadState_PopValueRoot(tstate, &value_root);
+    _PyThreadState_PopValueRoot(tstate, &key_root);
+    _PyThreadState_PopValueRoot(tstate, &o_root);
+    return res;
+}
+
+int
+PyObject_DelItemValue(PyValue o, PyValue key)
+{
+    if (PyValue_IsObject(o)) {
+        PyObject *op = PyValue_ObjectBorrow(o);
+        if (PyList_CheckExact(op) && PyValue_IsInlineInt(key)) {
+            Py_ssize_t i = sequence_index(PyValue_Int32(key), PyList_GET_SIZE(op));
+            if (i < 0) {
+                PyErr_SetString(PyExc_IndexError,
+                                "list assignment index out of range");
+                return -1;
+            }
+            return PyList_SetSlice(op, i, i + 1, NULL);
+        }
+        if (PyDict_CheckExact(op)) {
+            return _PyDict_DelItemValue(op, key);
+        }
+        if (!PyValue_IsInline(key)) {
+            return PyObject_DelItem(op, PyValue_ObjectBorrow(key));
+        }
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot o_root, key_root;
+    int res = -1;
+    PyObject *o_o = _PyValueRoot_PushObject(tstate, &o_root, o, _PY_BOX_OTHER);
+    PyObject *key_o = _PyValueRoot_PushObject(tstate, &key_root, key, _PY_BOX_OTHER);
+    if (o_o != NULL && key_o != NULL) {
+        res = PyObject_DelItem(o_o, key_o);
+    }
+    _PyThreadState_PopValueRoot(tstate, &key_root);
+    _PyThreadState_PopValueRoot(tstate, &o_root);
+    return res;
+}
+
+int
+PySequence_ContainsValue(PyValue seq, PyValue v)
+{
+    if (PyValue_IsObject(seq)) {
+        PyObject *op = PyValue_ObjectBorrow(seq);
+        PyTypeObject *tp = Py_TYPE(op);
+        if (tp == &PyList_Type) {
+            return _PyList_ContainsValue(op, v);
+        }
+        if (tp == &PyTuple_Type) {
+            return _PyTuple_ContainsValue(op, v);
+        }
+        if (PyAnySet_CheckExact(op)) {
+            return _PySet_ContainsValue((PySetObject *)op, v);
+        }
+        if (PyAnyDict_CheckExact(op)) {
+            return _PyDict_ContainsValue(op, v);
+        }
+        if (!PyValue_IsInline(v)) {
+            return PySequence_Contains(op, PyValue_ObjectBorrow(v));
+        }
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot seq_root, v_root;
+    int res = -1;
+    PyObject *seq_o = _PyValueRoot_PushObject(tstate, &seq_root, seq, _PY_BOX_OTHER);
+    PyObject *v_o = _PyValueRoot_PushObject(tstate, &v_root, v, _PY_BOX_OTHER);
+    if (seq_o != NULL && v_o != NULL) {
+        res = PySequence_Contains(seq_o, v_o);
+    }
+    _PyThreadState_PopValueRoot(tstate, &v_root);
+    _PyThreadState_PopValueRoot(tstate, &seq_root);
+    return res;
+}
+
+PyValue
+PyObject_GetIterValue(PyValue o)
+{
+    return unary_op_boxed(o, PyObject_GetIter);
+}
+
+/* As PyIter_NextItem(): 1 and the next item, 0 and PyValue_NULL when the
+   iterator is exhausted, or -1 and PyValue_NULL with an exception set.  A
+   list or tuple iterator's item is not boxed. */
+int
+PyIter_NextValue(PyValue iter, PyValue *item)
+{
+    *item = PyValue_NULL;
+    if (PyValue_IsInline(iter)) {
+        PyErr_Format(PyExc_TypeError, "expected an iterator, got '%s'",
+                     PyValue_Type(iter)->tp_name);
+        return -1;
+    }
+    PyObject *it = PyValue_ObjectBorrow(iter);
     PyTypeObject *tp = Py_TYPE(it);
     if (tp == &PyListIter_Type) {
         return _PyListIter_NextValue(it, item);
@@ -2956,12 +3618,16 @@ _PyIter_NextValue(PyObject *it, PyValue *item)
     if (tp == &PyTupleIter_Type) {
         return _PyTupleIter_NextValue(it, item);
     }
-    PyObject *res = tp->tp_iternext(it);
-    if (res == NULL) {
-        return 0;
+    if (tp->tp_iternext == NULL) {
+        PyErr_Format(PyExc_TypeError, "expected an iterator, got '%T'", it);
+        return -1;
     }
-    *item = PyValue_FromObject(res);
-    return 1;
+    PyObject *res;
+    int status = iternext(it, &res);
+    if (status > 0) {
+        *item = PyValue_FromObject(res);
+    }
+    return status;
 }
 
 PySendResult

@@ -5,9 +5,12 @@ Usage: run.py --build BUILD [--set SET[,SET]] [--metric METRIC[,METRIC]]
 
 The set is defined in boil/design/10-internal-benchmarks.md and documented in
 boil/bench/README.md.  Every measurement runs in a fresh
-``python -S -E -X pycache_prefix=DIR`` process (``-E`` ignores
-``PYTHONPYCACHEPREFIX``, so the prefix goes through ``-X``), with one fresh
-prefix directory per invocation of this script, removed at the end.
+``python -S -X pycache_prefix=DIR`` process, with one fresh prefix directory
+per invocation of this script, removed at the end.  The child's environment
+is this script's with every ``PYTHON*`` variable removed, as ``-E`` would,
+and ``PYTHONHASHSEED=0`` set (``-E`` would ignore it), so str hashing, and
+with it dict probing, is the same in every run and instruction counts
+measure the build, not the seed.
 
 Metrics:
 
@@ -57,6 +60,8 @@ REPO = HERE.parents[1]
 GROUPS = ("kernels", "micro", "memory")
 METRICS = ("instr", "time", "rss")
 GNU_TIME = "/usr/bin/time"
+CHILD_ENV = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+CHILD_ENV["PYTHONHASHSEED"] = "0"
 # The high repeat count of the instruction difference, as a multiple of the low.
 HIGH = 3
 
@@ -187,13 +192,13 @@ class Context:
     scratch: Path
 
     def command(self, bench: Bench, mode: str, loops: int, runs: int = 1) -> list[str]:
-        cmd = [str(self.python), "-S", "-E", "-X", f"pycache_prefix={self.pycache}",
+        cmd = [str(self.python), "-S", "-X", f"pycache_prefix={self.pycache}",
                str(DRIVER), mode, str(bench.path), str(loops), str(runs)]
         return cmd + ([bench.variant] if bench.variant else [])
 
 
 def run_checked(cmd: list[str], what: str) -> subprocess.CompletedProcess:
-    proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    proc = subprocess.run(cmd, check=False, capture_output=True, text=True, env=CHILD_ENV)
     if proc.returncode != 0:
         raise MeasurementError(f"{what} failed with exit status {proc.returncode}:\n"
                                f"$ {' '.join(cmd)}\n{proc.stdout[-2000:]}{proc.stderr[-4000:]}")
@@ -217,7 +222,7 @@ def check_perf(ctx: Context) -> None:
     """Exit before measuring anything if perf cannot count user-mode instructions."""
     if shutil.which("perf") is None:
         raise MeasurementError("perf is not on PATH; the instr metric needs it")
-    perf_instructions(ctx, [str(ctx.python), "-S", "-E", "-c", "pass"], "perf probe")
+    perf_instructions(ctx, [str(ctx.python), "-S", "-c", "pass"], "perf probe")
 
 
 def measure_instr(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
@@ -289,11 +294,14 @@ def machine() -> dict:
 
 
 def build_info(python: Path, label: str) -> dict:
-    proc = run_checked([str(python), "-S", "-E", "-c",
-                        "import json, sys; print(json.dumps([sys.version, list(sys._git)]))"],
-                       "build version probe")
-    version, git_info = json.loads(proc.stdout)
-    return {"label": label, "path": str(python), "version": version, "git": git_info}
+    probe = ("import json, sys; "
+             "print(json.dumps([sys.version, list(sys._git), sys.flags.hash_randomization]))")
+    proc = run_checked([str(python), "-S", "-c", probe], "build version probe")
+    version, git_info, randomized = json.loads(proc.stdout)
+    if randomized:
+        raise MeasurementError("PYTHONHASHSEED=0 did not reach the child interpreter")
+    return {"label": label, "path": str(python), "version": version, "git": git_info,
+            "hash_seed": 0}
 
 
 def resolve_build(build: str) -> Path:
@@ -354,6 +362,7 @@ def main(argv: list[str] | None = None) -> int:
         ctx = Context(python, Path(tmp) / "pycache", Path(tmp))
         results: dict[str, dict] = {}
         try:
+            build = build_info(python, label)
             if "instr" in metrics:
                 check_perf(ctx)
             if "rss" in metrics and not os.access(GNU_TIME, os.X_OK):
@@ -382,7 +391,7 @@ def main(argv: list[str] | None = None) -> int:
         "commit": {"sha": git("rev-parse", "HEAD"),
                    "dirty": bool(git("status", "--porcelain", "--", "boil/bench"))},
         "machine": machine_info,
-        "build": build_info(python, label),
+        "build": build,
         "results": results,
     }
     text = json.dumps(report, indent=1) + "\n"

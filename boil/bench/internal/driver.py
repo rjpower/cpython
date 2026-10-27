@@ -1,6 +1,6 @@
 """Run one benchmark module inside the interpreter under test.
 
-Usage: python -S -E -X pycache_prefix=DIR driver.py MODE PATH LOOPS [RUNS [VARIANT]]
+Usage: PYTHONHASHSEED=0 python -S -X pycache_prefix=DIR driver.py MODE PATH LOOPS [RUNS [VARIANT]]
 
 The module at PATH exposes ``run(loops)``, the work that is measured, and
 may expose ``setup(variant)``, the untimed preparation, called once first

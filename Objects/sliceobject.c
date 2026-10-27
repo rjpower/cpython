@@ -18,10 +18,24 @@ this type and there is exactly one in existence.
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
-#include "pycore_sliceobject.h"   // _PyBuildSlice_ConsumeRefs
+#include "pycore_sliceobject.h"   // _PySlice_FromValues()
+#include "pycore_tuple.h"         // _PyTuple_FromValues()
+#include "pycore_value.h"         // _PyValue_IsNone()
 
 
 #define _PySlice_CAST(op) _Py_CAST(PySliceObject*, (op))
+
+// The tuple (start, stop, step) is made from &start (slice_values()).
+static_assert(offsetof(PySliceObject, stop) == offsetof(PySliceObject, start) + sizeof(PyValue)
+              && offsetof(PySliceObject, step) == offsetof(PySliceObject, stop) + sizeof(PyValue),
+              "PySliceObject's start, stop and step must be adjacent");
+
+// A new tuple (start, stop, step) of the slice op.
+static PyObject *
+slice_values(PyObject *op)
+{
+    return _PyTuple_FromValues(&_PySlice_CAST(op)->start, 3);
+}
 
 
 static PyObject *
@@ -112,63 +126,77 @@ PyObject _Py_EllipsisObject = _PyObject_HEAD_INIT(&PyEllipsis_Type);
 
 /* Slice object implementation */
 
-/* start, stop, and step are python objects with None indicating no
-   index is present.
+/* start, stop, and step are values with None indicating no index is
+   present.
 */
 
 PyObject *
-_PyBuildSlice_ConsumeRefs(PyObject *start, PyObject *stop, PyObject *step)
+_PySlice_FromValues(PyValue start, PyValue stop, PyValue step)
 {
-    assert(start != NULL && stop != NULL && step != NULL);
     PySliceObject *obj = PyObject_GC_New(PySliceObject, &PySlice_Type);
     if (obj == NULL) {
-        goto error;
+        return NULL;
     }
-
-    obj->start = start;
-    obj->stop = stop;
-    obj->step = step;
-
+    obj->start = PyValue_IsNull(start) ? _PyValue_None : start;
+    obj->stop = PyValue_IsNull(stop) ? _PyValue_None : stop;
+    obj->step = PyValue_IsNull(step) ? _PyValue_None : step;
     _PyObject_GC_TRACK(obj);
     return (PyObject *)obj;
-error:
-    Py_DECREF(start);
-    Py_DECREF(stop);
-    Py_DECREF(step);
-    return NULL;
+}
+
+static PyValue
+value_or_null(PyObject *op)
+{
+    return op == NULL ? PyValue_NULL : PyValue_FromObject(op);
 }
 
 PyObject *
 PySlice_New(PyObject *start, PyObject *stop, PyObject *step)
 {
-    if (step == NULL) {
-        step = Py_None;
+    return _PySlice_FromValues(value_or_null(start), value_or_null(stop),
+                               value_or_null(step));
+}
+
+/* The value of an index, inline when it fits in int32. */
+static PyValue
+ssize_value(Py_ssize_t i)
+{
+    if (INT32_MIN <= i && i <= INT32_MAX) {
+        return PyValue_FromInt32((int32_t)i);
     }
-    if (start == NULL) {
-        start = Py_None;
-    }
-    if (stop == NULL) {
-        stop = Py_None;
-    }
-    return _PyBuildSlice_ConsumeRefs(Py_NewRef(start),
-                                              Py_NewRef(stop), Py_NewRef(step));
+    PyObject *op = PyLong_FromSsize_t(i);
+    return op == NULL ? PyValue_NULL : PyValue_FromObject(op);
 }
 
 PyObject *
 _PySlice_FromIndices(Py_ssize_t istart, Py_ssize_t istop)
 {
-    PyObject *start, *end, *slice;
-    start = PyLong_FromSsize_t(istart);
-    if (!start)
-        return NULL;
-    end = PyLong_FromSsize_t(istop);
-    if (!end) {
-        Py_DECREF(start);
+    PyValue start = ssize_value(istart);
+    if (PyValue_IsNull(start)) {
         return NULL;
     }
+    PyValue stop = ssize_value(istop);
+    if (PyValue_IsNull(stop)) {
+        return NULL;
+    }
+    return _PySlice_FromValues(start, stop, PyValue_NULL);
+}
 
-    slice = _PyBuildSlice_ConsumeRefs(start, end, Py_None);
-    return slice;
+/* The int bound v as a Py_ssize_t for PySlice_GetIndices(): 0 if v is an
+   int, with *pi possibly -1 and an exception set on overflow, or -1 if it
+   is not an int. */
+static int
+long_bound(PyValue v, Py_ssize_t *pi)
+{
+    if (PyValue_IsInlineInt(v)) {
+        *pi = PyValue_Int32(v);
+        return 0;
+    }
+    if (PyValue_IsInline(v) || !PyLong_Check(PyValue_ObjectBorrow(v))) {
+        return -1;
+    }
+    *pi = PyLong_AsSsize_t(PyValue_ObjectBorrow(v));
+    return 0;
 }
 
 int
@@ -177,30 +205,44 @@ PySlice_GetIndices(PyObject *_r, Py_ssize_t length,
 {
     PySliceObject *r = (PySliceObject*)_r;
     /* XXX support long ints */
-    if (r->step == Py_None) {
+    if (_PyValue_IsNone(r->step)) {
         *step = 1;
     } else {
-        if (!PyLong_Check(r->step)) return -1;
-        *step = PyLong_AsSsize_t(r->step);
+        if (long_bound(r->step, step) < 0) return -1;
     }
-    if (r->start == Py_None) {
+    if (_PyValue_IsNone(r->start)) {
         *start = *step < 0 ? length-1 : 0;
     } else {
-        if (!PyLong_Check(r->start)) return -1;
-        *start = PyLong_AsSsize_t(r->start);
+        if (long_bound(r->start, start) < 0) return -1;
         if (*start < 0) *start += length;
     }
-    if (r->stop == Py_None) {
+    if (_PyValue_IsNone(r->stop)) {
         *stop = *step < 0 ? -1 : length;
     } else {
-        if (!PyLong_Check(r->stop)) return -1;
-        *stop = PyLong_AsSsize_t(r->stop);
+        if (long_bound(r->stop, stop) < 0) return -1;
         if (*stop < 0) *stop += length;
     }
     if (*stop > length) return -1;
     if (*start >= length) return -1;
     if (*step == 0) return -1;
     return 0;
+}
+
+/* _PyEval_SliceIndexNotNone() of the value v. */
+static int
+slice_index(PyValue v, Py_ssize_t *pi)
+{
+    if (PyValue_IsInlineInt(v)) {
+        *pi = PyValue_Int32(v);
+        return 1;
+    }
+    if (PyValue_IsInlineFloat(v)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "slice indices must be integers or "
+                        "have an __index__ method");
+        return 0;
+    }
+    return _PyEval_SliceIndexNotNone(PyValue_ObjectBorrow(v), pi);
 }
 
 int
@@ -213,11 +255,11 @@ PySlice_Unpack(PyObject *_r,
     static_assert(PY_SSIZE_T_MIN + 1 <= -PY_SSIZE_T_MAX,
                   "-PY_SSIZE_T_MAX < PY_SSIZE_T_MIN + 1");
 
-    if (r->step == Py_None) {
+    if (_PyValue_IsNone(r->step)) {
         *step = 1;
     }
     else {
-        if (!_PyEval_SliceIndex(r->step, step)) return -1;
+        if (!slice_index(r->step, step)) return -1;
         if (*step == 0) {
             PyErr_SetString(PyExc_ValueError,
                             "slice step cannot be zero");
@@ -232,18 +274,18 @@ PySlice_Unpack(PyObject *_r,
             *step = -PY_SSIZE_T_MAX;
     }
 
-    if (r->start == Py_None) {
+    if (_PyValue_IsNone(r->start)) {
         *start = *step < 0 ? PY_SSIZE_T_MAX : 0;
     }
     else {
-        if (!_PyEval_SliceIndex(r->start, start)) return -1;
+        if (!slice_index(r->start, start)) return -1;
     }
 
-    if (r->stop == Py_None) {
+    if (_PyValue_IsNone(r->stop)) {
         *stop = *step < 0 ? PY_SSIZE_T_MIN : PY_SSIZE_T_MAX;
     }
     else {
-        if (!_PyEval_SliceIndex(r->stop, stop)) return -1;
+        if (!slice_index(r->stop, stop)) return -1;
     }
 
     return 0;
@@ -339,9 +381,6 @@ slice_dealloc(PyObject *op)
 {
     PySliceObject *r = _PySlice_CAST(op);
     PyObject_GC_UnTrack(r);
-    Py_DECREF(r->step);
-    Py_DECREF(r->start);
-    Py_DECREF(r->stop);
     PyObject_GC_Del(r);
 }
 
@@ -349,14 +388,28 @@ static PyObject *
 slice_repr(PyObject *op)
 {
     PySliceObject *r = _PySlice_CAST(op);
-    return PyUnicode_FromFormat("slice(%R, %R, %R)",
-                                r->start, r->stop, r->step);
+    PyValue start = PyObject_ReprValue(r->start);
+    if (PyValue_IsNull(start)) {
+        return NULL;
+    }
+    PyValue stop = PyObject_ReprValue(r->stop);
+    if (PyValue_IsNull(stop)) {
+        return NULL;
+    }
+    PyValue step = PyObject_ReprValue(r->step);
+    if (PyValue_IsNull(step)) {
+        return NULL;
+    }
+    return PyUnicode_FromFormat("slice(%U, %U, %U)",
+                                PyValue_ObjectBorrow(start),
+                                PyValue_ObjectBorrow(stop),
+                                PyValue_ObjectBorrow(step));
 }
 
 static PyMemberDef slice_members[] = {
-    {"start", _Py_T_OBJECT, offsetof(PySliceObject, start), Py_READONLY},
-    {"stop", _Py_T_OBJECT, offsetof(PySliceObject, stop), Py_READONLY},
-    {"step", _Py_T_OBJECT, offsetof(PySliceObject, step), Py_READONLY},
+    {"start", _Py_T_VALUE, offsetof(PySliceObject, start), Py_READONLY},
+    {"stop", _Py_T_VALUE, offsetof(PySliceObject, stop), Py_READONLY},
+    {"step", _Py_T_VALUE, offsetof(PySliceObject, step), Py_READONLY},
     {0}
 };
 
@@ -364,10 +417,13 @@ static PyMemberDef slice_members[] = {
    with a suitable message on failure. */
 
 static PyObject*
-evaluate_slice_index(PyObject *v)
+evaluate_slice_index(PyValue value)
 {
-    if (_PyIndex_Check(v)) {
-        return PyNumber_Index(v);
+    if (PyValue_IsInlineInt(value)) {
+        return PyValue_Object(value);
+    }
+    if (PyValue_IsObject(value) && _PyIndex_Check(PyValue_ObjectBorrow(value))) {
+        return PyNumber_Index(PyValue_ObjectBorrow(value));
     }
     else {
         PyErr_SetString(PyExc_TypeError,
@@ -391,7 +447,7 @@ _PySlice_GetLongIndices(PySliceObject *self, PyObject *length,
     int step_is_negative, cmp_result;
 
     /* Convert step to an integer; raise for zero step. */
-    if (self->step == Py_None) {
+    if (_PyValue_IsNone(self->step)) {
         step = _PyLong_GetOne();
         step_is_negative = 0;
     }
@@ -428,7 +484,7 @@ _PySlice_GetLongIndices(PySliceObject *self, PyObject *length,
     }
 
     /* Compute start. */
-    if (self->start == Py_None) {
+    if (_PyValue_IsNone(self->start)) {
         start = Py_NewRef(step_is_negative ? upper : lower);
     }
     else {
@@ -461,7 +517,7 @@ _PySlice_GetLongIndices(PySliceObject *self, PyObject *length,
     }
 
     /* Compute stop. */
-    if (self->stop == Py_None) {
+    if (_PyValue_IsNone(self->stop)) {
         stop = Py_NewRef(step_is_negative ? lower : upper);
     }
     else {
@@ -551,8 +607,11 @@ handling of normal slices.");
 static PyObject *
 slice_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 {
-    PySliceObject *self = _PySlice_CAST(op);
-    return Py_BuildValue("O(OOO)", Py_TYPE(self), self->start, self->stop, self->step);
+    PyObject *args = slice_values(op);
+    if (args == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("ON", Py_TYPE(op), args);
 }
 
 PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
@@ -589,18 +648,12 @@ slice_richcompare(PyObject *v, PyObject *w, int op)
     }
 
 
-    PyObject *t1 = PyTuple_Pack(3,
-                                ((PySliceObject *)v)->start,
-                                ((PySliceObject *)v)->stop,
-                                ((PySliceObject *)v)->step);
+    PyObject *t1 = slice_values(v);
     if (t1 == NULL) {
         return NULL;
     }
 
-    PyObject *t2 = PyTuple_Pack(3,
-                                ((PySliceObject *)w)->start,
-                                ((PySliceObject *)w)->stop,
-                                ((PySliceObject *)w)->step);
+    PyObject *t2 = slice_values(w);
     if (t2 == NULL) {
         Py_DECREF(t1);
         return NULL;
@@ -616,9 +669,9 @@ static int
 slice_traverse(PyObject *op, visitproc visit, void *arg)
 {
     PySliceObject *v = _PySlice_CAST(op);
-    Py_VISIT(v->start);
-    Py_VISIT(v->stop);
-    Py_VISIT(v->step);
+    _Py_VISIT_VALUE(v->start);
+    _Py_VISIT_VALUE(v->stop);
+    _Py_VISIT_VALUE(v->step);
     return 0;
 }
 
@@ -641,7 +694,7 @@ slice_hash(PyObject *op)
     PySliceObject *v = _PySlice_CAST(op);
     Py_uhash_t acc = _PyHASH_XXPRIME_5;
 #define _PyHASH_SLICE_PART(com) { \
-    Py_uhash_t lane = PyObject_Hash(v->com); \
+    Py_uhash_t lane = PyObject_HashValue(v->com); \
     if(lane == (Py_uhash_t)-1) { \
         return -1; \
     } \

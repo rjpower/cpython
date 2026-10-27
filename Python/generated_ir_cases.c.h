@@ -3812,14 +3812,8 @@
             PyValue *args;
             PyValue slice;
             args = &window[0];
-            PyObject *items[3] = {NULL, NULL, NULL};
-            for (int i = 0; i < oparg; i++) {
-                items[i] = PyValue_Object(args[i]);
-                if (items[i] == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-            }
-            PyObject *slice_o = PySlice_New(items[0], items[1], items[2]);
+            PyObject *slice_o = _PySlice_FromValues(
+                args[0], args[1], oparg == 3 ? args[2] : PyValue_NULL);
             if (slice_o == NULL) {
                 IR_CLEAR_SLOTS(&window[0], oparg);
                 JUMP_TO_LABEL(error);

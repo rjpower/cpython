@@ -5810,6 +5810,20 @@ copy_pointer_to_list_lock_held(PyObject *myself, PyObject *np, Py_ssize_t len,
     return 0;
 }
 
+/* PyNumber_AsSsize_t(bound, PyExc_ValueError) of a slice bound. */
+static Py_ssize_t
+slice_bound(PyValue bound)
+{
+    if (PyValue_IsInlineInt(bound)) {
+        return PyValue_Int32(bound);
+    }
+    PyObject *op = PyValue_Object(bound);
+    if (op == NULL) {
+        return -1;
+    }
+    return PyNumber_AsSsize_t(op, PyExc_ValueError);
+}
+
 static PyObject *
 Pointer_subscript(PyObject *myself, PyObject *item)
 {
@@ -5831,12 +5845,11 @@ Pointer_subscript(PyObject *myself, PyObject *item)
         /* Since pointers have no length, and we want to apply
            different semantics to negative indices than normal
            slicing, we have to dissect the slice object ourselves.*/
-        if (slice->step == Py_None) {
+        if (PyValue_Is(slice->step, PyValue_FromObject(Py_None))) {
             step = 1;
         }
         else {
-            step = PyNumber_AsSsize_t(slice->step,
-                                      PyExc_ValueError);
+            step = slice_bound(slice->step);
             if (step == -1 && PyErr_Occurred())
                 return NULL;
             if (step == 0) {
@@ -5845,7 +5858,7 @@ Pointer_subscript(PyObject *myself, PyObject *item)
                 return NULL;
             }
         }
-        if (slice->start == Py_None) {
+        if (PyValue_Is(slice->start, PyValue_FromObject(Py_None))) {
             if (step < 0) {
                 PyErr_SetString(PyExc_ValueError,
                                 "slice start is required "
@@ -5855,18 +5868,16 @@ Pointer_subscript(PyObject *myself, PyObject *item)
             start = 0;
         }
         else {
-            start = PyNumber_AsSsize_t(slice->start,
-                                       PyExc_ValueError);
+            start = slice_bound(slice->start);
             if (start == -1 && PyErr_Occurred())
                 return NULL;
         }
-        if (slice->stop == Py_None) {
+        if (PyValue_Is(slice->stop, PyValue_FromObject(Py_None))) {
             PyErr_SetString(PyExc_ValueError,
                             "slice stop is required");
             return NULL;
         }
-        stop = PyNumber_AsSsize_t(slice->stop,
-                                  PyExc_ValueError);
+        stop = slice_bound(slice->stop);
         if (stop == -1 && PyErr_Occurred())
             return NULL;
         if ((step > 0 && start > stop) ||

@@ -26,7 +26,7 @@
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_setobject.h"     // _PySet_NextValue()
 #include "pycore_stats.h"
-#include "pycore_tuple.h"         // _PyTuple_FromPair
+#include "pycore_tuple.h"         // _PyTuple_FromPair(), _PyTuple_FromValues()
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 
 #include "cpython/code.h"
@@ -1552,7 +1552,7 @@ intern_constant(PyObject *const_cache, PyObject *o)
     }
     else {
         PySliceObject *slice = (PySliceObject *)o;
-        items = PyTuple_Pack(3, slice->start, slice->stop, slice->step);
+        items = _PyTuple_FromValues(&slice->start, 3);
     }
     if (items == NULL) {
         Py_DECREF(key);

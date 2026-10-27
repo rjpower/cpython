@@ -2921,6 +2921,17 @@ PyTypeObject PyCode_Type = {
  * other API
  ******************/
 
+// _PyCode_ConstantKey() of a value, such as a bound of a slice.
+static PyObject *
+constant_key_value(PyValue v)
+{
+    PyObject *op = PyValue_Object(v);
+    if (op == NULL) {
+        return NULL;
+    }
+    return _PyCode_ConstantKey(op);
+}
+
 PyObject*
 _PyCode_ConstantKey(PyObject *op)
 {
@@ -3046,17 +3057,17 @@ _PyCode_ConstantKey(PyObject *op)
         PyObject *step_key = NULL;
         key = NULL;
 
-        start_key = _PyCode_ConstantKey(slice->start);
+        start_key = constant_key_value(slice->start);
         if (start_key == NULL) {
             goto slice_exit;
         }
 
-        stop_key = _PyCode_ConstantKey(slice->stop);
+        stop_key = constant_key_value(slice->stop);
         if (stop_key == NULL) {
             goto slice_exit;
         }
 
-        step_key = _PyCode_ConstantKey(slice->step);
+        step_key = constant_key_value(slice->step);
         if (step_key == NULL) {
             goto slice_exit;
         }

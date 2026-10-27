@@ -686,6 +686,18 @@ w_object(PyObject *v, WFILE *p)
     p->depth--;
 }
 
+/* w_object() of a value: an inline int or float is written from a box. */
+static void
+w_value(PyValue v, WFILE *p)
+{
+    PyObject *op = PyValue_Object(v);
+    if (op == NULL) {
+        p->error = true;
+        return;
+    }
+    w_object(op, p);
+}
+
 static void
 w_complex_object(PyObject *v, WFILE *p)
 {
@@ -978,9 +990,9 @@ w_complex_object(PyObject *v, WFILE *p)
         }
         PySliceObject *slice = (PySliceObject *)v;
         W_TYPE(TYPE_SLICE, p);
-        w_object(slice->start, p);
-        w_object(slice->stop, p);
-        w_object(slice->step, p);
+        w_value(slice->start, p);
+        w_value(slice->stop, p);
+        w_value(slice->step, p);
         w_complete(v, p);
     }
     else {

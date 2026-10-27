@@ -31,7 +31,7 @@
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_range.h"         // _PyRangeIterObject
 #include "pycore_setobject.h"     // _PySet_NextValue()
-#include "pycore_sliceobject.h"   // _PyBuildSlice_ConsumeRefs
+#include "pycore_sliceobject.h"   // _PySlice_FromValues()
 #include "pycore_value.h"
 #include "pycore_template.h"      // _PyTemplate_Build()
 #include "pycore_tuple.h"         // _PyStolenTuple_Free(), _PyTuple_ITEMS()
@@ -5401,17 +5401,8 @@ dummy_func(
         }
 
         inst(BUILD_SLICE, (args[oparg] -- slice)) {
-            // PySlice_New() only allocates, and a collection that an
-            // allocation runs scans the eval loop's frame, so the boxes of
-            // inline values need no root.
-            PyObject *items[3] = {NULL, NULL, NULL};
-            for (int i = 0; i < oparg; i++) {
-                items[i] = PyValue_Object(args[i]);
-                if (items[i] == NULL) {
-                    ERROR_NO_POP();
-                }
-            }
-            PyObject *slice_o = PySlice_New(items[0], items[1], items[2]);
+            PyObject *slice_o = _PySlice_FromValues(
+                args[0], args[1], oparg == 3 ? args[2] : PyValue_NULL);
             INPUTS_DEAD();
             ERROR_IF(slice_o == NULL);
             slice = PyValue_FromObject(slice_o);

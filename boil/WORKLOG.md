@@ -1771,3 +1771,26 @@ collector benchmark of record: baseline 0.533, 0.580 and 0.547 s per
 allocated GB at 16, 128 and 512 MB live; step5c 2.859, 3.237 and 4.248
 times that, growing with the live heap. boil/bench/results/ now holds
 instr, time and rss for all three labels of record.
+
+### 2026-10-27 15:10 — 6c rung 1 gate (the shape in the header) clean
+
+Gate run here on a detached checkout of eb4249ad318 with fresh builds:
+gate 2 on default 556/564 files, 50,754 tests, 2 min 49 s, only test_sys's
+machine-local remote-exec timeout; gate 3 on debug 9 min 52 s, only
+test_sys; -u cpu test_cext success on both builds after the fix below;
+regen-cases and clinic leave the tree unchanged. Rung 1 puts the shape in
+the header word: every type embeds its root shape, Py_TYPE reads
+shape->type, the Check macros read the shape's flag copy, exact checks of
+builtin types compare the header with the root shape, shapes are
+unconditional with --with-shapes gone, and the feedback entry carries the
+shape pointer (magic 3721). Recorded: richards +0.78%, go +1.40%,
+json_loads +0.58% per loop, 1,836 Py_TYPE sites, 278 header masks in the
+eval loop. Note 09 went through two review rounds (verdicts revise, revise)
+and its sections 2, 4, 5, 6 and 9 were rewritten with the decisions in
+section 11; the rung 2 work doc was reviewed and revised before code.
+
+Two coordinator fixes: test_cext's C++ virtual object was allocated with
+new and tripped 6b's debug heap check (29cbc5795a2); it now gets its
+storage from the object allocator, which is the rule for any C++ object
+that is a PyObject. gate.sh ignores the test_sys remote-exec test so the
+later checks of a level run.

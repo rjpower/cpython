@@ -1814,3 +1814,25 @@ and the inline audit as the proof if it overruns, and no 8.2 skip removed
 on the dynamic proof alone. Note 06 rows 10a and 7 updated. The 10a
 implementation starts in its own worktree after 6c lands, so that the two
 do not contend for the eval loop.
+
+## 2026-10-27 16:05 PDT: 6c rung 2 gate (the lookup plan)
+
+Rung 2 landed as 80ba2edf94c (magic 3722). Gate run here on a detached
+checkout of that commit with fresh builds: gate 2 on default 556/564
+files, 50,789 tests, 2 min 38 s, SUCCESS; gate 3 on debug 9 min 28 s,
+SUCCESS, -u cpu test_cext 16 tests, regen-cases and clinic leave the tree
+unchanged. The rung adds the lookup plan of note 09 section 4
+(`Include/internal/pycore_lookup.h`, `Objects/lookupplan.c`): the (shape,
+name) cache yields a plan, the specialiser reads plans instead of walking
+the MRO, and LOAD_ATTR_PROPERTY guards the getter. The debug gate found a
+specialiser bug before the commit: a Python `__getattribute__` found under
+type version 0 was being specialised and could never deopt; the specialiser
+now declines it, covered by test_shapes. Recorded by the agent against
+b65f081239d: kernels geomean 0.997 instructions per loop (richards -3.13%,
+the others within 0.6%); micro geomean 0.993 (attr_load_poly -10.0%,
+property_load +1.8%); boxes per iteration unchanged; plan cache 15,888
+bytes over richards' 14 classes. Five departures from the rung 2 doc are
+recorded under "As built" in boil/design/work/6c-rung2.md and move to rung
+3: the prepare/commit split of stores, the storage adapter's precondition,
+stores over non-data class attributes, the set-only descriptor test's
+type, and names. Rung 3, the instance layout, starts with its work doc.

@@ -21,7 +21,7 @@ uv run --no-project --python python3 python -m ports bench [ref ...]
   `build/ports/bench.tsv`.
 
 With no refs, a verb covers every port under `python/`. `cpython:<variant>`
-(`default`, `ft`; flags in `cpython/recipe.json`) builds this checkout
+(`default`; flags in `cpython/recipe.json`) builds this checkout
 in `build/ports/cpython-<variant>/`. Logs go to stderr; stdout is one JSON
 summary.
 
@@ -72,8 +72,8 @@ in the port's `README.md`.
 
 ## Porting to the tracing collector
 
-Under `--with-gc` reference counts no longer free anything; a collection
-traces from roots and sweeps what it did not reach. Look for these in a
+Nothing is reference counted: a collection traces from roots and sweeps
+what it did not reach. Look for these in a
 port's C code:
 
 - A `PyObject*` in `malloc`ed or `PyMem` memory, or in a `Py_buffer`'s
@@ -111,12 +111,13 @@ port's C code:
 3. Run `build` and `check` for the port. Patch only what the interpreter
    breaks.
 
-On an interpreter that counts references, `check` runs each test script a
-second time under the tracing verifier (`-X gcverify=auto`) and fails if any
-collection, or a final one while the script's globals are alive, finds a
-hole: an object that a reference keeps alive but that the collector could
-not reach. Objects are only verified while alive, so keep an instance of
-each type the port defines at module level; `python/numpy/tests/held.py`
-does this for NumPy.
+`check` runs each test script a second time under the tracing verifier
+(`-X gcverify=auto`), which after every collection, and after a final one
+while the script's globals are alive, marks the heap again and fails if an
+object the collection left is unreachable. A missing traverse or root makes
+the collector free an object in use, which shows up as a crash or a wrong
+result, most reliably on a debug build. Objects are only exercised while
+alive, so keep an instance of each type the port defines at module level;
+`python/numpy/tests/held.py` does this for NumPy.
 
 `uvx pytest ports/_support/tests` tests the driver.

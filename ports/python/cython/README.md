@@ -7,5 +7,4 @@ Python (`NO_CYTHON_COMPILE`), since only code generation runs it.
 `code-cache-roots.patch`: wherever `PyGC_AddRoot` exists
 (`Py_HAVE_PYGC_ADDROOT`), the code object cache keeps its code objects in a
 dict that is a collector root, since the cache's entries live in
-`PyMem_Malloc` memory that no `tp_traverse` visits. In a reference-counting
-build the root informs the tracing verifier that `ports check` runs.
+`PyMem_Malloc` memory that no `tp_traverse` visits.

@@ -88,7 +88,7 @@ _VERBS = {"build": _build, "check": _check, "bench": _bench}
 def _parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("refs", nargs="*",
-                        help="ports such as python/six or cpython:ft")
+                        help="ports such as python/six or cpython:default")
     common.add_argument("--interpreter",
                         help="target interpreter (default: from sdk.json)")
     common.add_argument("--abi-id", help="ABI key (default: from sdk.json)")

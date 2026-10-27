@@ -114,7 +114,7 @@
  }
  
  
-+/* Not GC types, but the tracing collector (Py_GC) traverses them. */
++/* Not GC types, but the tracing collector traverses them. */
 +static int
 +arraymethod_traverse(PyObject *self, visitproc visit, void *arg)
 +{
@@ -169,7 +169,7 @@
  }
  
  
-+/* Not a GC type, but the tracing collector (Py_GC) traverses it. */
++/* Not a GC type, but the tracing collector traverses it. */
 +static int
 +dispatcher_traverse(PyArray_ArrayFunctionDispatcherObject *self,
 +                    visitproc visit, void *arg)
@@ -571,7 +571,7 @@
      .tp_as_mapping = &arrayflags_as_mapping,
      .tp_str = (reprfunc)arrayflags_print,
 --- a/numpy/_core/src/multiarray/iterators.c	2026-10-10 10:53:37.000000000 -0700
-+++ b/numpy/_core/src/multiarray/iterators.c	2026-10-26 11:11:12.774960915 -0700
++++ b/numpy/_core/src/multiarray/iterators.c	2026-10-26 16:52:37.343888307 -0700
 @@ -1093,11 +1093,21 @@
      {NULL, NULL, NULL, NULL, NULL},
  };
@@ -619,39 +619,38 @@
      .tp_free = PyObject_Free,
      .tp_flags = Py_TPFLAGS_DEFAULT,
      .tp_iternext = (iternextfunc)arraymultiter_next,
-@@ -1786,13 +1807,31 @@
+@@ -1786,13 +1807,25 @@
      return NULL;
  }
  
+-static void neighiter_dealloc(PyArrayNeighborhoodIterObject* iter)
 +static int
 +neighiter_traverse(PyArrayNeighborhoodIterObject *iter, visitproc visit,
 +                   void *arg)
-+{
+ {
+-    if (iter->mode == NPY_NEIGHBORHOOD_ITER_CONSTANT_PADDING) {
+-        if (PyArray_ISOBJECT(iter->_internal_iter->ao)) {
+-            Py_DECREF(*(PyObject**)iter->constant);
+-        }
 +    Py_VISIT(iter->ao);
 +    Py_VISIT(iter->_internal_iter);
 +    if (iter->mode == NPY_NEIGHBORHOOD_ITER_CONSTANT_PADDING
 +            && iter->_internal_iter != NULL
 +            && PyArray_ISOBJECT(iter->_internal_iter->ao)) {
 +        Py_VISIT(*(PyObject **)iter->constant);
-+    }
+     }
 +    return 0;
 +}
 +
- static void neighiter_dealloc(PyArrayNeighborhoodIterObject* iter)
- {
-+#ifndef Py_GC
-+    /* Under the tracing collector the array may already be swept, and the
-+       decref would do nothing. */
-     if (iter->mode == NPY_NEIGHBORHOOD_ITER_CONSTANT_PADDING) {
-         if (PyArray_ISOBJECT(iter->_internal_iter->ao)) {
-             Py_DECREF(*(PyObject**)iter->constant);
-         }
-     }
-+#endif
++static void neighiter_dealloc(PyArrayNeighborhoodIterObject* iter)
++{
++    /* The object padding constant is not decref'd: nothing is reference
++       counted, and the array whose dtype says it is an object may already
++       be swept. */
      PyDataMem_FREE(iter->constant);
      Py_DECREF(iter->_internal_iter);
  
-@@ -1805,6 +1844,7 @@
+@@ -1805,6 +1838,7 @@
      .tp_name = "numpy.neigh_internal_iter",
      .tp_basicsize = sizeof(PyArrayNeighborhoodIterObject),
      .tp_dealloc = (destructor)neighiter_dealloc,

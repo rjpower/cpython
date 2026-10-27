@@ -32,10 +32,9 @@ ufunc that casts to the object dtype holds both only on its stack.
 
 `ndarray`, `nditer` and `mapiter` set `Py_TPFLAGS_DEALLOC_READS_REFERENTS`,
 because their deallocs read the descriptor, the memory handler or the
-operands. The neighborhood iterator's dealloc skips, under `Py_GC`, a decref
-that reads its array.
+operands. The neighborhood iterator's dealloc no longer decrefs its object
+padding constant, which read its array's dtype.
 
-The roots, traverses and flags are in every build: outside `Py_GC` they
-inform the tracing verifier, and `tests/held.py` holds an instance of each
-type so that `ports check` verifies them. `tests/collect.py` collects often
+`tests/held.py` holds an instance of each type, so that the collections of
+`ports check` traverse them. `tests/collect.py` collects often
 while numpy casts, sorts and fills object arrays.

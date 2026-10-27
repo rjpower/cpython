@@ -6,13 +6,15 @@ current for this abi_id (see build.verified_result), with pip --no-index
 Scripts run with -I from the venv directory, so neither the recipe directory
 nor the caller's environment is importable.
 
-check also runs each test script under the tracing verifier when the
-interpreter counts references (-X gcverify=auto): every collection, and a
-final one while the script's module globals are still alive, must find no
-holes, that is no reference that a missing tp_traverse visit or root hides
-from the tracing collector.  A port's objects are only verified if they are
-alive at a collection, so a test script should hold an instance of each type
-the port defines at module level.
+check also runs each test script under the tracing verifier
+(-X gcverify=auto): after every collection, and after a final one while the
+script's module globals are still alive, the verifier marks the heap again
+from the roots and must reach every object the collection left.  The
+collector frees what it does not reach, so a missing tp_traverse visit or
+root shows up as a crash or a wrong result, which a debug build, poisoning
+freed memory, makes likely.  A port's objects are only checked if they are
+alive at a collection, so a test script should hold an instance of each
+type the port defines at module level.
 """
 
 from __future__ import annotations
@@ -41,11 +43,9 @@ BENCH_RUNS = 5
 def check_node(node: Node, sdk: SDK) -> Summary:
     output = log_path(sdk, node.recipe, "check")
     python = _prepare(node, sdk, output)
-    verify = not interpreter_facts(sdk).tracing_gc
     for script in node.recipe.tests:
         _run_script(python, node.recipe, script, output)
-        if verify:
-            _verify_script(python, node.recipe, script, output)
+        _verify_script(python, node.recipe, script, output)
     return {"ref": node.ref, "status": "PASS", "log": relative(output)}
 
 

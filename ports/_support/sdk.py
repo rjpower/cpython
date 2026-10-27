@@ -4,7 +4,7 @@ ports/sdk.json is the only build configuration. Results, wheels and venvs are
 stored under the abi_id, so a wheel built for one abi_id is never installed
 under another. Bump abi_id whenever the C ABI changes. Results also record the
 interpreter's SOABI, so pointing --interpreter at an incompatible build (such
-as free-threaded) without a new abi_id fails instead of reusing wheels.
+as a debug build) without a new abi_id fails instead of reusing wheels.
 """
 
 from __future__ import annotations
@@ -22,8 +22,7 @@ _FIELDS = {"interpreter", "abi_id", "compiler", "cflags"}
 _PROBE = (
     "import sysconfig as s;"
     " print(s.get_config_var('SOABI'), s.get_config_var('srcdir'),"
-    " s.get_path('include'), s.get_path('platinclude'),"
-    " int(bool(s.get_config_var('Py_GC'))), sep='\\n')"
+    " s.get_path('include'), s.get_path('platinclude'), sep='\\n')"
 )
 
 
@@ -42,10 +41,6 @@ class InterpreterFacts:
     # Python.h and pyconfig.h; an uninstalled interpreter's venv reports
     # an installed prefix that does not exist, so ask the interpreter itself.
     include: tuple[Path, Path]
-    # Built --with-gc: nothing is reference counted, so the tracing
-    # verifier, which compares reference counts with reachability, has
-    # nothing to check.
-    tracing_gc: bool
 
 
 def load_sdk(interpreter: str | None, abi_id: str | None) -> SDK:
@@ -75,10 +70,9 @@ def interpreter_facts(sdk: SDK) -> InterpreterFacts:
             " --interpreter build/ports/cpython-default/python"
         )
     output = capture([sdk.interpreter, "-I", "-c", _PROBE])
-    soabi, srcdir, include, platinclude, tracing_gc = output.splitlines()
+    soabi, srcdir, include, platinclude = output.splitlines()
     return InterpreterFacts(
         soabi, Path(srcdir), (Path(include), Path(platinclude)),
-        tracing_gc == "1",
     )
 
 

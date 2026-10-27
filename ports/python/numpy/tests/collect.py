@@ -1,6 +1,6 @@
 """Collect often while NumPy works: casts between many dtypes, sorts,
 reductions, StringDType, and casts to the object dtype whose new objects
-only an iterator's buffer holds.  Under --with-gc a missing traverse or a
+only an iterator's buffer holds.  A missing traverse or a
 dealloc that reads a freed referent shows up here as a crash or a wrong
 result."""
 

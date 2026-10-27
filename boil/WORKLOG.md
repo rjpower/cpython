@@ -1655,8 +1655,9 @@ released.
 Gate run here on a detached checkout of ac2dbf90677 (rung 1's last
 commit), fresh builds and pyc caches, while the agent went on with rung 2:
 default 556/564 files, 50,726 tests, 2 min 48 s, only test_sys's
-pre-existing remote-exec timeout; debug 9 min 15 s, only test_sys; ports
-. Rung 1 delivered the
+pre-existing remote-exec timeout; debug 9 min 15 s, only test_sys. The six and attrs check ran against
+the gate build but its result lines were not captured (only the tail of
+its JSON was kept); it is re-run at the rung 2 gate. Rung 1 delivered the
 value-typed number, object, item and iteration protocols with every
 generic handler on them, slices holding PyValue, BINARY_OP_POWER_FLOAT
 removed (magic 3720), the specialiser reading values, a box audit tool,

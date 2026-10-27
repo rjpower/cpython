@@ -140,3 +140,41 @@ baseline (`build/baseline-default`, `boil/bench/default.json`), on an idle
 machine, recorded with instruction counts. Not a gate and not a target: the
 plan has had no wall-clock number for two days of work, and the review
 should know whether the instruction counts track time.
+
+### 7.1 Result (2026-10-27, `boil/bench/step6a.json`, `compare-default-vs-step6a.txt`)
+
+Geometric mean 1.46x slower than the Phase 1 baseline over 22 benchmarks
+(1.47x against Phase 1's final build). The compute-bound reference set is
+close to flat: nbody 1.47x faster, richards 1.03x slower, go 1.16x slower,
+float 1.23x slower (its math.* argument boxes are rung 2 of 6b). The
+regression is in allocation-heavy benchmarks: coroutines 2.75x,
+generators 2.55x, unpack_sequence 2.07x, comprehensions 1.98x, pickle
+1.81x, deepcopy 1.70x, unpickle 1.69x, nqueens 1.66x.
+
+Attribution. On generators the whole process executes 3.26G instructions
+against 1.00G on the baseline, so this is instruction count, not cache or
+branch behaviour. `perf record` on generators and coroutines puts 25 to 30
+percent of samples in the collector (`live_visit`, `collect`,
+`live_walk_block`, `_mi_heap_area_visit_blocks`, `_PyGC_FreeDeadBlock`,
+`_PyWeakref_ListPtr` at 1.5 to 3.5 percent on its own) and the rest in the
+eval loop and allocation. A non-generational mark-sweep marks the whole
+live heap at every collection, and the collection rate is proportional to
+allocation, so an allocation-heavy loop pays the live heap's size per
+allocated byte; the 5a trigger counting requested rather than block bytes
+makes the rate higher still. This is the cost that step 7 (generational
+nursery and sticky marks, over 10a's precise roots) is meant to remove, and
+the rows "trigger counts requested bytes" and "allocator does not collect
+on failure" of section 3 belong to the same account. The eval-loop share
+carries the 1 KB clear at each C entry and the 16 KB clears around a
+collection (section 3, rows 2 and 3; retired by 10a), which generator and
+coroutine resumption pay at every switch.
+
+Two lessons, neither of them a tuning. First, the per-loop instruction
+set (richards, go, nbody, float) does not see this: the reference set must
+include an allocation-heavy benchmark, so generators and comprehensions
+join the recorded set from 6b on. Second, the first run died because a
+prebuilt abi3 wheel loaded against the new header; 6b removes the stable
+ABI so that such a wheel fails to import.
+
+Not acted on: per the plan revision, the number is recorded and
+attributed; no tuning is done before steps 7 and 10a, which own it.

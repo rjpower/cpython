@@ -27,3 +27,12 @@ value.
 
 Sanity: `test_int test_float test_dict test_list test_class test_functools`
 pass on the default build (`sanity-test.txt`).
+
+## Step 6a (2026-10-27)
+
+`step6a.json`, `compare-default-vs-step6a.txt`: the 22-benchmark subset on
+`build/dev-default` at a7ff5d45e28 against the Phase 1 baseline. Geomean
+1.46x slower; nbody 1.47x faster; coroutines 2.75x and generators 2.55x
+slower, attributed to whole-heap marking at an allocation-proportional
+rate (boil/design/08-review-at-6a.md section 7.1). pyperf's psutil is built
+from source in the venv; the prebuilt abi3 wheel segfaults at import.

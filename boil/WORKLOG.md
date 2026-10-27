@@ -1635,3 +1635,17 @@ run is in progress. 6b's agent is launched with a hard stop of 2026-10-31
 12:00, rungs: value-typed protocols with tag dispatch (POWER_FLOAT
 removed), vectorcall and METH_FASTCALL over PyValue arrays, the
 compatibility layer and abi3 removal, the eight ports on value-v1, record.
+
+### 2026-10-27 06:05 — first wall-clock measurement since Phase 1
+
+pyperformance subset at 6a against the Phase 1 baseline: geomean 1.46x
+slower. nbody 1.47x faster, richards 1.03x and go 1.16x slower; the
+allocation-heavy benchmarks carry it (coroutines 2.75x, generators 2.55x,
+comprehensions 1.98x, pickle 1.81x). perf puts 25 to 30 percent of the
+generator and coroutine samples in the collector; a non-generational mark
+of the whole live heap at an allocation-proportional rate is the cost, and
+step 7 over 10a's roots owns it. Recorded in note 08 section 7.1 with the
+attribution; no tuning per the plan revision. generators and
+comprehensions join the recorded per-loop set. The 6b agent reported its
+rung 1 plan and was told to hold builds until the run ended; builds are
+released.

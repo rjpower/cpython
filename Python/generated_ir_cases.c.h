@@ -19397,51 +19397,19 @@
             (void)oparg;
             PyValue v;
             v = IR_SLOT(IR_FIELD_A(this_instr));
-            PyObject *v_object;
-            _PyValueRoot v_root;
-            if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                v_object = _PyValue_BoxInline(v);
-                if (v_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(STORE_GLOBAL, _PY_BOX_CONTAINER_STORE);
-            }
-            else {
-                v_object = PyValue_ObjectBorrow(v);
-            }
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             int err;
             if (PyValue_IsNull(v)) {
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    _PyThreadState_PushValueRoot(tstate, &v_root);
-                    v_root.object = v_object;
-                }
                 err = PyDict_Pop(GLOBALS(), name, NULL);
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    _PyThreadState_PopValueRoot(tstate, &v_root);
-                }
                 if (err == 0) {
                     err = -1;
-                    if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                        _PyThreadState_PushValueRoot(tstate, &v_root);
-                        v_root.object = v_object;
-                    }
                     _PyEval_FormatExcCheckArg(tstate, PyExc_NameError,
                         NAME_ERROR_MSG, name);
-                    if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                        _PyThreadState_PopValueRoot(tstate, &v_root);
-                    }
                 }
             }
             else {
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    _PyThreadState_PushValueRoot(tstate, &v_root);
-                    v_root.object = v_object;
-                }
-                err = PyDict_SetItem(GLOBALS(), name, v_object);
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    _PyThreadState_PopValueRoot(tstate, &v_root);
-                }
+                err = _PyDict_SetItemValue((PyDictObject *)GLOBALS(),
+                    PyValue_FromObject(name), v);
             }
             if (err < 0) {
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));

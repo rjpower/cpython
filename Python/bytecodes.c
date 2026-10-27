@@ -1973,7 +1973,8 @@ dummy_func(
                 }
             }
             else {
-                err = PyDict_SetItem(GLOBALS(), name, PyValue_ObjectBorrow(v));
+                err = _PyDict_SetItemValue((PyDictObject *)GLOBALS(),
+                                           PyValue_FromObject(name), v);
                 DEAD(v);
             }
             ERROR_IF(err < 0);

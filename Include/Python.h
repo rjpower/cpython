@@ -5,6 +5,10 @@
 #ifndef Py_PYTHON_H
 #define Py_PYTHON_H
 
+#if defined(Py_LIMITED_API) || defined(Py_TARGET_ABI3T)
+#  error "This CPython has no limited C API or stable ABI (abi3): build without Py_LIMITED_API."
+#endif
+
 // Since this is a "meta-include" file, "#ifdef __cplusplus / extern "C" {"
 // is not needed.
 

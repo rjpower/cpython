@@ -124,6 +124,32 @@ The C ports fail on exactly these: cffi on 6 `ob_type` reads and 3 item
 arrays; pyyaml and numpy on Cython's utility code, which has 3
 `m_weakreflist` uses and the item-array idiom.
 
+## Porting to the PyValue C API
+
+Under abi_id cpython-3.16-value-v1 calls pass values (note 08, section 4):
+
+- A `METH_O` function is `PyValue f(PyObject *self, PyValue arg)`, and a
+  `METH_FASTCALL` (with or without `METH_KEYWORDS`) function takes
+  `const PyValue *args` and returns `PyValue`, `PyValue_NULL` with an
+  exception set. Cast it with `_PyCFunction_CAST()` in the method table.
+  `self` stays a `PyObject *`. `METH_NOARGS` and `METH_VARARGS` keep the
+  object form. Read an argument with `PyValue_Object()` (which boxes an
+  inline int or float and may fail) or a value API such as
+  `PyLong_AsLongValue()`; return an object with `PyValue_FromResult()`.
+  The compiler does not catch an unconverted function on x86-64: it
+  receives an inline value as a pointer and returns a value it never
+  built.
+- A vectorcall function (`tp_vectorcall`, `vectorcallfunc`) takes
+  `PyValue callable, const PyValue *args` and returns `PyValue`. Call one
+  with `PyObject_VectorcallValue()`; `PyObject_Vectorcall()` is the
+  compatibility form and boxes.
+- `__class_getitem__` entries use `Py_GenericAliasValue`.
+- There is no limited C API and no stable ABI. `Python.h` stops with an
+  error if `Py_LIMITED_API` or `Py_TARGET_ABI3T` is defined, and `.abi3.so`
+  is not an extension suffix, so an abi3 wheel built for another CPython
+  fails to import instead of crashing. Build without `Py_LIMITED_API`
+  (setuptools `py_limited_api`, cffi's and Cython's limited-API options).
+
 ## Adding a port
 
 1. Pin the latest release's url and sha256 from PyPI's JSON API.

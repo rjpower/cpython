@@ -86,8 +86,9 @@ deleted so there is one way to measure.
   test_cext`, regen clean, and the internal set recorded with
   attribution. Ports are not a gate for any step until the ports phase.
 - The ports tree is frozen at `cpython-3.16-value-v1` with the port
-  states recorded in note 06 section 19. six, attrs, pycparser and
-  markupsafe pass there; cffi, pyyaml and numpy fail at the API surface.
+  states recorded in note 06 section 19. six, attrs, pycparser,
+  markupsafe, cython and pyyaml (through the Cython port, 718461d9f7f)
+  pass there; cffi and numpy fail at the API surface.
 - The ports phase follows 10b, when the C API has its final shape
   (values, shapes in the header, handle discipline for references held
   across allocations). Cython is ported first, as the generator for two

@@ -1318,8 +1318,14 @@ _PyGC_LiveOnThreshold(PyThreadState *tstate)
         _Py_ScheduleGC(tstate);
         return;
     }
+    (void)_PyGC_LiveCollectHere(tstate);
+}
+
+int
+_PyGC_LiveCollectHere(PyThreadState *tstate)
+{
     if (!can_collect(tstate)) {
-        return;
+        return 0;
     }
     struct _gc_live_state *ls = get_live(tstate->interp);
     ls->no_python = 1;
@@ -1333,6 +1339,7 @@ _PyGC_LiveOnThreshold(PyThreadState *tstate)
     if (ls->qhead < ls->qtail) {
         _Py_ScheduleGC(tstate);
     }
+    return 1;
 }
 
 

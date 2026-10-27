@@ -8,7 +8,7 @@ import struct
 import sys
 import traceback
 import unittest
-from test.support import import_helper
+from test.support import import_helper, script_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 roundtrip = getattr(_testinternalcapi, "value_box_roundtrip", None)
@@ -1012,6 +1012,42 @@ class ContainerCanonicalTest(unittest.TestCase):
                          sorted(values, key=float, reverse=True))
         pairs = [(v, i) for i, v in enumerate(values)]
         self.assertEqual([v for v, _ in sorted(pairs)], sorted(values))
+
+
+class BoxFailureTest(unittest.TestCase):
+    """A box that cannot be made at first is made again after a collection;
+    an accessor that cannot report an error aborts if that fails too."""
+
+    CODE = (
+        "import _testcapi\n"
+        "t = (int('70000'),)\n"
+        "_testcapi.set_nomemory({start}, {stop})\n"
+        "x = _testcapi.tuple_get_item(t, 0)\n"
+        "_testcapi.remove_mem_hooks()\n"
+        "print(x)\n")
+
+    def setUp(self):
+        import_helper.import_module("_testcapi")
+
+    def run_failing(self, start, stop):
+        code = self.CODE.format(start=start, stop=stop)
+        return script_helper.run_python_until_end("-c", code)[0]
+
+    def test_accessor_aborts_and_one_failure_is_recovered(self):
+        # Find the allocation that is PyTuple_GET_ITEM()'s box: from it on,
+        # every allocation fails, and the accessor aborts naming itself.
+        for start in range(30):
+            res = self.run_failing(start, 0)
+            if b"PyTuple_GET_ITEM: out of memory" in res.err:
+                break
+        else:
+            self.fail("PyTuple_GET_ITEM() never aborted")
+        self.assertNotEqual(res.rc, 0)
+        # When that allocation alone fails, the box made after the
+        # collection succeeds.
+        res = self.run_failing(start, start + 1)
+        self.assertEqual(res.rc, 0, res.err)
+        self.assertEqual(res.out.strip(), b"70000")
 
 
 if __name__ == "__main__":

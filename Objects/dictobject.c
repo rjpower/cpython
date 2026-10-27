@@ -1805,7 +1805,8 @@ _PyDict_FromItems(PyObject *const *keys, Py_ssize_t keys_offset,
  * even if the key is present.
  */
 static PyObject *
-dict_getitem(PyObject *op, PyObject *key, const char *warnmsg)
+dict_getitem(PyObject *op, PyObject *key, const char *accessor,
+             const char *warnmsg)
 {
     if (!PyAnyDict_Check(op)) {
         return NULL;
@@ -1831,9 +1832,10 @@ dict_getitem(PyObject *op, PyObject *key, const char *warnmsg)
 
     PyObject *exc = _PyErr_GetRaisedException(tstate);
     ix = dict_lookup_object(mp, key, hash, &value);
-    PyObject *res = PyValue_Object(value);
+    // NULL means missing, so a box that cannot be made aborts.
+    PyObject *res = _PyValue_ObjectOrAbort(value, accessor);
 
-    /* Ignore any exception raised by the lookup or the boxing */
+    /* Ignore any exception raised by the lookup */
     PyObject *exc2 = _PyErr_Occurred(tstate);
     if (exc2 && !PyErr_GivenExceptionMatches(exc2, PyExc_KeyError)) {
         PyErr_FormatUnraisable(warnmsg);
@@ -1847,7 +1849,7 @@ dict_getitem(PyObject *op, PyObject *key, const char *warnmsg)
 PyObject *
 PyDict_GetItem(PyObject *op, PyObject *key)
 {
-    return dict_getitem(op, key,
+    return dict_getitem(op, key, "PyDict_GetItem",
             "Exception ignored in PyDict_GetItem(); consider using "
             "PyDict_GetItemRef() or PyDict_GetItemWithError()");
 }
@@ -2579,7 +2581,7 @@ _PyDict_NextValue(PyObject *op, Py_ssize_t *ppos, PyValue *pkey,
 }
 
 /* _PyDict_NextValue() with the key and the value as objects: an inline one
- * is boxed.  Return 0, as at the end, with an exception set if boxing fails.
+ * is boxed.  0 means the end, so a box that cannot be made aborts.
  */
 int
 _PyDict_Next(PyObject *op, Py_ssize_t *ppos, PyObject **pkey,
@@ -2590,16 +2592,10 @@ _PyDict_Next(PyObject *op, Py_ssize_t *ppos, PyObject **pkey,
         return 0;
     }
     if (pkey) {
-        *pkey = PyValue_Object(key);
-        if (*pkey == NULL) {
-            return 0;
-        }
+        *pkey = _PyValue_ObjectOrAbort(key, "PyDict_Next");
     }
     if (pvalue) {
-        *pvalue = PyValue_Object(value);
-        if (*pvalue == NULL) {
-            return 0;
-        }
+        *pvalue = _PyValue_ObjectOrAbort(value, "PyDict_Next");
     }
     return 1;
 }
@@ -3511,8 +3507,7 @@ merge_from_seq2_lock_held(PyObject *d, PyObject *seq2, int override)
         else {
             key = PySequence_Fast_GET_ITEM(fast, 0);
             value = PySequence_Fast_GET_ITEM(fast, 1);
-            if (key == NULL || value == NULL ||
-                dict_setdefault_ref_lock_held(d, key, value, NULL, 0) < 0) {
+            if (dict_setdefault_ref_lock_held(d, key, value, NULL, 0) < 0) {
                 goto Fail;
             }
         }
@@ -4893,7 +4888,7 @@ PyDict_GetItemString(PyObject *v, const char *key)
             "PyDict_GetItemStringRef()");
         return NULL;
     }
-    rv = dict_getitem(v, kv,
+    rv = dict_getitem(v, kv, "PyDict_GetItemString",
             "Exception ignored in PyDict_GetItemString(); consider using "
             "PyDict_GetItemStringRef()");
     Py_DECREF(kv);
@@ -6875,10 +6870,9 @@ _PyObject_TryGetInstanceAttribute(PyObject *obj, PyObject *name, PyObject **attr
         return true;
     }
 
-    PyValue value = values->values[ix];
-    // A box can fail only for want of memory, which leaves *attr NULL with
-    // the error set.
-    *attr = PyValue_IsNull(value) ? NULL : PyValue_Object(value);
+    // NULL means missing, so a box that cannot be made aborts.
+    *attr = _PyValue_ObjectOrAbort(values->values[ix],
+                                   "_PyObject_TryGetInstanceAttribute");
     return true;
 }
 

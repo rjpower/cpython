@@ -5867,8 +5867,9 @@ _PyType_LookupRefAndVersion(PyTypeObject *type, PyObject *name, unsigned int *ve
     if (version) {
         *version = ver;
     }
-    // A box of an inline value; NULL also if boxing fails.
-    return PyValue_Object(out);
+    // A box of an inline value.  NULL means missing, without an exception,
+    // so a box that cannot be made aborts.
+    return _PyValue_ObjectOrAbort(out, "_PyType_Lookup");
 }
 
 static int

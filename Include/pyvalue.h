@@ -236,8 +236,14 @@ PyValue_ObjectBorrow(PyValue v)
     return (PyObject *)v.bits;
 }
 
-// A new box of the inline value v, or NULL with an exception set.
+/* A new box of the inline value v, or NULL with an exception set.  If
+   memory runs out, the collector runs and the box is tried again first. */
 PyAPI_FUNC(PyObject *) _PyValue_BoxInline(PyValue v);
+
+/* _PyValue_BoxInline() for accessor, a function that cannot report an
+   error: if the box cannot be made, the process aborts with a message
+   naming accessor. */
+PyAPI_FUNC(PyObject *) _PyValue_BoxOrAbort(PyValue v, const char *accessor);
 
 /* The object that v holds: a new box if v holds an inline value, or NULL
    with an exception set if boxing fails.  PyValue_Object(PyValue_NULL) is
@@ -247,6 +253,17 @@ PyValue_Object(PyValue v)
 {
     if (PyValue_IsInline(v)) {
         return _PyValue_BoxInline(v);
+    }
+    return PyValue_ObjectBorrow(v);
+}
+
+/* PyValue_Object() for accessor, which has no error channel: it never
+   returns NULL for a value that is not PyValue_NULL, and aborts instead. */
+static inline PyObject *
+_PyValue_ObjectOrAbort(PyValue v, const char *accessor)
+{
+    if (PyValue_IsInline(v)) {
+        return _PyValue_BoxOrAbort(v, accessor);
     }
     return PyValue_ObjectBorrow(v);
 }

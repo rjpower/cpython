@@ -165,9 +165,6 @@ heappop_internal(PyObject *heap, int siftup_func(PyListObject *, Py_ssize_t))
     if (!n)
         return PyValue_Object(lastelt);
     returnitem = PyList_GET_ITEM(heap, 0);
-    if (returnitem == NULL) {
-        return NULL;
-    }
     PyListObject *list = _PyList_CAST(heap);
     FT_ATOMIC_STORE_PTR_RELAXED(list->ob_item[0], lastelt);
     if (siftup_func(list, 0)) {
@@ -205,9 +202,6 @@ heapreplace_internal(PyObject *heap, PyObject *item, int siftup_func(PyListObjec
     }
 
     returnitem = PyList_GET_ITEM(heap, 0);
-    if (returnitem == NULL) {
-        return NULL;
-    }
     PyListObject *list = _PyList_CAST(heap);
     FT_ATOMIC_STORE_PTR_RELAXED(list->ob_item[0], PyValue_FromObject(item));
     if (siftup_func(list, 0)) {
@@ -271,9 +265,6 @@ _heapq_heappushpop_impl(PyObject *module, PyObject *heap, PyObject *item)
     }
 
     PyObject* top = PyList_GET_ITEM(heap, 0);
-    if (top == NULL) {
-        return NULL;
-    }
     Py_INCREF(top);
     cmp = PyObject_RichCompareBool(top, item, Py_LT);
     Py_DECREF(top);
@@ -289,9 +280,6 @@ _heapq_heappushpop_impl(PyObject *module, PyObject *heap, PyObject *item)
     }
 
     returnitem = PyList_GET_ITEM(heap, 0);
-    if (returnitem == NULL) {
-        return NULL;
-    }
     PyListObject *list = _PyList_CAST(heap);
     FT_ATOMIC_STORE_PTR_RELAXED(list->ob_item[0], PyValue_FromObject(item));
     if (siftup(list, 0)) {
@@ -607,9 +595,6 @@ _heapq_heappushpop_max_impl(PyObject *module, PyObject *heap, PyObject *item)
     }
 
     PyObject *top = PyList_GET_ITEM(heap, 0);
-    if (top == NULL) {
-        return NULL;
-    }
     Py_INCREF(top);
     cmp = PyObject_RichCompareBool(item, top, Py_LT);
     Py_DECREF(top);
@@ -626,9 +611,6 @@ _heapq_heappushpop_max_impl(PyObject *module, PyObject *heap, PyObject *item)
     }
 
     returnitem = PyList_GET_ITEM(heap, 0);
-    if (returnitem == NULL) {
-        return NULL;
-    }
     PyListObject *list = _PyList_CAST(heap);
     FT_ATOMIC_STORE_PTR_RELAXED(list->ob_item[0], PyValue_FromObject(item));
     if (siftup_max(list, 0) < 0) {

@@ -66,10 +66,6 @@ tuple_objects(PyObject *tuple)
     }
     for (Py_ssize_t i = 0; i < n; i++) {
         items[i] = PyTuple_GET_ITEM(tuple, i);
-        if (items[i] == NULL) {
-            PyMem_Free(items);
-            return NULL;
-        }
     }
     return items;
 }

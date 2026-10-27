@@ -967,14 +967,22 @@ _PyModule_ClearDict(PyObject *d)
        avoid rehashing the dictionary (to some extent). */
 
     Py_ssize_t pos;
-    PyObject *key, *value;
+    PyValue key_value, value;
+    PyObject *key;
+    // The values are read as they are: shutdown may be short of memory, and
+    // a box would be wasted on a value about to be replaced.
+    PyValue none = PyValue_FromObject(Py_None);
 
     int verbose = _Py_GetConfig()->verbose;
 
     /* First, clear only names starting with a single underscore */
     pos = 0;
-    while (PyDict_Next(d, &pos, &key, &value)) {
-        if (value != Py_None && PyUnicode_Check(key)) {
+    while (_PyDict_NextValue(d, &pos, &key_value, &value, NULL)) {
+        if (PyValue_Is(value, none) || PyValue_IsInline(key_value)) {
+            continue;
+        }
+        key = PyValue_ObjectBorrow(key_value);
+        if (PyUnicode_Check(key)) {
             if (PyUnicode_READ_CHAR(key, 0) == '_' &&
                 PyUnicode_READ_CHAR(key, 1) != '_') {
                 if (verbose > 1) {
@@ -994,8 +1002,12 @@ _PyModule_ClearDict(PyObject *d)
 
     /* Next, clear all names except for __builtins__ */
     pos = 0;
-    while (PyDict_Next(d, &pos, &key, &value)) {
-        if (value != Py_None && PyUnicode_Check(key)) {
+    while (_PyDict_NextValue(d, &pos, &key_value, &value, NULL)) {
+        if (PyValue_Is(value, none) || PyValue_IsInline(key_value)) {
+            continue;
+        }
+        key = PyValue_ObjectBorrow(key_value);
+        if (PyUnicode_Check(key)) {
             if (PyUnicode_READ_CHAR(key, 0) != '_' ||
                 !_PyUnicode_EqualToASCIIString(key, "__builtins__"))
             {

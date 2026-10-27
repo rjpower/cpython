@@ -838,9 +838,6 @@ tuple_iteritem(PyObject *obj, Py_ssize_t index)
         return (_PyObjectIndexPair) { .object = NULL, .index = index };
     }
     PyObject *result = PyTuple_GET_ITEM(obj, index);
-    if (result == NULL) {
-        return (_PyObjectIndexPair) { .object = NULL, .index = -1 };
-    }
     return (_PyObjectIndexPair) { .object = result, .index = index + 1 };
 }
 

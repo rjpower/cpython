@@ -1,7 +1,9 @@
 #include "Python.h"
 
+#include "pycore_gc_trace.h"      // _PyGC_LiveCollectHere()
 #include "pycore_long.h"          // _PyLong_IsCompact()
 #include "pycore_object.h"
+#include "pycore_pyerrors.h"      // _Py_FatalErrorFormat()
 #include "pycore_value.h"
 
 
@@ -32,6 +34,46 @@ count_box_site(uintptr_t pc)
 }
 #endif
 
+static PyObject *
+box(PyValue v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        OBJECT_STAT_INC(inline_int_boxes);
+        return PyLong_FromLong(PyValue_Int32(v));
+    }
+    OBJECT_STAT_INC(inline_float_boxes);
+    return PyFloat_FromDouble(PyValue_Double(v));
+}
+
+/* The box again after a collection, when the first attempt ran out of
+   memory: a box is garbage soon, and so is much else, so the collector gets
+   its chance before the caller sees the MemoryError.  Out of line, so that
+   the first attempt stays a plain call. */
+static Py_NO_INLINE PyObject *
+box_after_failure(PyValue v)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (!_PyErr_ExceptionMatches(tstate, PyExc_MemoryError)) {
+        return NULL;
+    }
+    PyObject *exc = _PyErr_GetRaisedException(tstate);
+    if (!_PyGC_LiveCollectHere(tstate)) {
+        _PyErr_SetRaisedException(tstate, exc);
+        return NULL;
+    }
+    return box(v);
+}
+
+static inline PyObject *
+box_collecting(PyValue v)
+{
+    PyObject *op = box(v);
+    if (op == NULL) {
+        return box_after_failure(v);
+    }
+    return op;
+}
+
 // Out of line, so that the test before each call is all that hot paths carry.
 Py_NO_INLINE PyObject *
 _PyValue_BoxInline(PyValue v)
@@ -40,12 +82,27 @@ _PyValue_BoxInline(PyValue v)
 #ifdef Py_STATS
     count_box_site((uintptr_t)__builtin_return_address(0));
 #endif
-    if (PyValue_IsInlineInt(v)) {
-        OBJECT_STAT_INC(inline_int_boxes);
-        return PyLong_FromLong(PyValue_Int32(v));
+    return box_collecting(v);
+}
+
+/* For an accessor that returns an object and has no way to report an
+   error, such as PyTuple_GET_ITEM(): its callers take NULL for a missing
+   item or never check, so a box that cannot be made aborts rather than
+   pass for one. */
+Py_NO_INLINE PyObject *
+_PyValue_BoxOrAbort(PyValue v, const char *accessor)
+{
+    assert(PyValue_IsInline(v));
+#ifdef Py_STATS
+    count_box_site((uintptr_t)__builtin_return_address(0));
+#endif
+    PyObject *op = box_collecting(v);
+    if (op == NULL) {
+        _Py_FatalErrorFormat(accessor,
+                             "out of memory for the object of an inline %s",
+                             PyValue_IsInlineInt(v) ? "int" : "float");
     }
-    OBJECT_STAT_INC(inline_float_boxes);
-    return PyFloat_FromDouble(PyValue_Double(v));
+    return op;
 }
 
 PyValue

@@ -45,9 +45,9 @@ static inline void PyCell_SET_VALUE(PyObject *op, PyValue value) {
 #define PyCell_SET_VALUE(op, value) PyCell_SET_VALUE(_PyObject_CAST(op), (value))
 
 /* The content of the cell as an object: a new box if it is inline, and
-   NULL when empty, or with an exception set if boxing fails. */
+   NULL when empty.  NULL means empty only, so it aborts if boxing fails. */
 static inline PyObject* PyCell_GET(PyObject *op) {
-    return PyValue_Object(PyCell_GET_VALUE(op));
+    return _PyValue_ObjectOrAbort(PyCell_GET_VALUE(op), "PyCell_GET");
 }
 #define PyCell_GET(op) PyCell_GET(_PyObject_CAST(op))
 

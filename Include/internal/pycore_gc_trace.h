@@ -248,6 +248,12 @@ extern int _PyGC_LiveVisitRoots(PyInterpreterState *interp, visitproc visit,
  * unless a collection cannot run here; the allocation follows. */
 extern void _PyGC_LiveOnThreshold(PyThreadState *tstate);
 
+/* Collect now, from C code that may hold objects only in C locals, leaving
+ * the finalizers and weak reference callbacks to the eval breaker: 1 if a
+ * collection ran, 0 if one cannot run here.  An allocation that failed
+ * calls this before it gives up. */
+extern int _PyGC_LiveCollectHere(PyThreadState *tstate);
+
 #ifdef Py_DEBUG
 /* A dealloc that the sweep called did what a dealloc must not do in
    the sweep: allocate an object, which may refer to the dead, or run Python
@@ -266,11 +272,12 @@ extern void _Py_NO_RETURN _PyGC_LiveSweepViolation(PyThreadState *tstate,
 
 /* Clear a local whose address was taken, such as PyDict_Next()'s
  * out-parameters: it stays in its frame after its last use, where the
- * conservative scan of the stack would keep its object alive.  The barrier
+ * conservative scan of the stack would keep its object alive.  The local is
+ * a PyObject * or a PyValue, and zero bits are NULL for both.  The barrier
  * keeps the store, which is dead to the compiler. */
 #  define _PyGC_CLEAR_LOCAL(var) \
     do { \
-        (var) = NULL; \
+        memset(&(var), 0, sizeof(var)); \
         __asm__ volatile("" : : "r"(&(var)) : "memory"); \
     } while (0)
 

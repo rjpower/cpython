@@ -1747,13 +1747,26 @@ finalize_remove_modules(PyObject *modules, int verbose)
 
     if (PyDict_CheckExact(modules)) {
         Py_ssize_t pos = 0;
-        PyObject *key, *value;
-        while (PyDict_Next(modules, &pos, &key, &value)) {
+        PyValue key_value, value_value;
+        PyObject *key = NULL, *value = NULL;
+        // An inline value is not a module, and needs no box to say so.
+        while (_PyDict_NextValue(modules, &pos, &key_value, &value_value, NULL)) {
+            if (PyValue_IsInline(value_value)) {
+                continue;
+            }
+            key = PyValue_Object(key_value);
+            if (key == NULL) {
+                PyErr_FormatUnraisable("Exception ignored while removing modules");
+                continue;
+            }
+            value = PyValue_ObjectBorrow(value_value);
             CLEAR_MODULE(key, value);
         }
         // The last module must not outlive its removal in this frame.
         _PyGC_CLEAR_LOCAL(key);
         _PyGC_CLEAR_LOCAL(value);
+        _PyGC_CLEAR_LOCAL(key_value);
+        _PyGC_CLEAR_LOCAL(value_value);
     }
     else {
         PyObject *iterator = PyObject_GetIter(modules);

@@ -1040,7 +1040,7 @@ class CSimpleQueueTest(BaseSimpleQueueTest, unittest.TestCase):
 
     def test_simplequeue_sizeof(self):
         q = self.type2test()
-        basesize = support.calcobjsize('?nnPnnP')
+        basesize = support.calcobjsize('?nnPnn')
         support.check_sizeof(self, q, basesize + struct.calcsize(8 * 'P'))
         for _ in range(1000):
             q.put(object())

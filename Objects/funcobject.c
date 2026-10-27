@@ -131,7 +131,6 @@ _PyFunction_FromConstructor(PyFrameConstructor *constr)
     op->func_closure = Py_XNewRef(constr->fc_closure);
     op->func_doc = Py_NewRef(Py_None);
     op->func_dict = NULL;
-    op->func_weakreflist = NULL;
     op->func_module = module;
     op->func_annotations = NULL;
     op->func_annotate = NULL;
@@ -209,7 +208,6 @@ PyFunction_NewWithQualName(PyObject *code, PyObject *globals, PyObject *qualname
     op->func_closure = NULL;
     op->func_doc = doc;
     op->func_dict = NULL;
-    op->func_weakreflist = NULL;
     op->func_module = module;
     op->func_annotations = NULL;
     op->func_annotate = NULL;
@@ -1188,7 +1186,7 @@ func_dealloc(PyObject *self)
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
     _PyObject_GC_UNTRACK(op);
-    FT_CLEAR_WEAKREFS(self, op->func_weakreflist);
+    FT_CLEAR_WEAKREFS(self);
     (void)func_clear((PyObject*)op);
     // These aren't cleared by func_clear().
     _Py_DECREF_CODE((PyCodeObject *)op->func_code);
@@ -1264,12 +1262,12 @@ PyTypeObject PyFunction_Type = {
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
     Py_TPFLAGS_HAVE_VECTORCALL |
-    Py_TPFLAGS_METHOD_DESCRIPTOR,               /* tp_flags */
+    Py_TPFLAGS_METHOD_DESCRIPTOR | Py_TPFLAGS_MANAGED_WEAKREF, /* tp_flags */
     func_new__doc__,                            /* tp_doc */
     func_traverse,                              /* tp_traverse */
     func_clear,                                 /* tp_clear */
     0,                                          /* tp_richcompare */
-    offsetof(PyFunctionObject, func_weakreflist), /* tp_weaklistoffset */
+    0,                                          /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
     0,                                          /* tp_methods */

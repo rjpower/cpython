@@ -425,7 +425,10 @@ clear_callback_weakrefs(struct _gc_live_state *ls, _PyGCMarkResult *res)
             continue;
         }
         PyObject *op = res->dead[i].op;
-        PyWeakReference **list = _PyObject_GET_WEAKREFS_LISTPTR_FROM_OFFSET(op);
+        PyWeakReference **list = _PyWeakref_ListPtr(op, 0);
+        if (list == NULL) {
+            continue;  // it has none
+        }
         PyWeakReference *next;
         for (PyWeakReference *wr = *list; wr != NULL; wr = next) {
             next = wr->wr_next;

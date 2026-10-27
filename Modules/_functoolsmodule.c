@@ -132,7 +132,6 @@ typedef struct {
     PyObject *args;
     PyObject *kw;
     PyObject *dict;        /* __dict__ */
-    PyObject *weakreflist; /* List of weak references */
     PyObject *placeholder; /* Placeholder for positional arguments */
     Py_ssize_t phcount;    /* Number of placeholders */
     vectorcallfunc vectorcall;
@@ -347,7 +346,7 @@ partial_dealloc(PyObject *self)
     PyTypeObject *tp = Py_TYPE(self);
     /* bpo-31095: UnTrack is needed before calling any callbacks */
     PyObject_GC_UnTrack(self);
-    FT_CLEAR_WEAKREFS(self, partialobject_CAST(self)->weakreflist);
+    FT_CLEAR_WEAKREFS(self);
     (void)partial_clear(self);
     tp->tp_free(self);
     Py_DECREF(tp);
@@ -687,8 +686,6 @@ static PyMemberDef partial_memberlist[] = {
      "tuple of arguments to future partial calls"},
     {"keywords",        _Py_T_OBJECT,       OFF(kw),        Py_READONLY,
      "dictionary of keyword arguments to future partial calls"},
-    {"__weaklistoffset__", Py_T_PYSSIZET,
-     offsetof(partialobject, weakreflist), Py_READONLY},
     {"__dictoffset__", Py_T_PYSSIZET,
      offsetof(partialobject, dict), Py_READONLY},
     {"__vectorcalloffset__", Py_T_PYSSIZET,
@@ -894,7 +891,7 @@ static PyType_Spec partial_type_spec = {
     .basicsize = sizeof(partialobject),
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
              Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_VECTORCALL |
-             Py_TPFLAGS_IMMUTABLETYPE,
+             Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF,
     .slots = partial_type_slots
 };
 
@@ -1221,7 +1218,6 @@ typedef struct lru_cache_object {
     PyTypeObject *lru_list_elem_type;
     PyObject *cache_info_type;
     PyObject *dict;
-    PyObject *weakreflist;
 } lru_cache_object;
 
 #define lru_cache_object_CAST(op)   ((lru_cache_object *)(op))
@@ -1680,7 +1676,6 @@ lru_cache_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     obj->lru_list_elem_type = (PyTypeObject*)Py_NewRef(state->lru_list_elem_type);
     obj->cache_info_type = Py_NewRef(cache_info_type);
     obj->dict = NULL;
-    obj->weakreflist = NULL;
     return (PyObject *)obj;
 }
 
@@ -1727,7 +1722,7 @@ lru_cache_dealloc(PyObject *op)
     PyTypeObject *tp = Py_TYPE(obj);
     /* bpo-31095: UnTrack is needed before calling any callbacks */
     PyObject_GC_UnTrack(obj);
-    FT_CLEAR_WEAKREFS(op, obj->weakreflist);
+    FT_CLEAR_WEAKREFS(op);
 
     (void)lru_cache_tp_clear(op);
     tp->tp_free(obj);
@@ -1899,8 +1894,6 @@ static PyGetSetDef lru_cache_getsetlist[] = {
 static PyMemberDef lru_cache_memberlist[] = {
     {"__dictoffset__", Py_T_PYSSIZET,
      offsetof(lru_cache_object, dict), Py_READONLY},
-    {"__weaklistoffset__", Py_T_PYSSIZET,
-     offsetof(lru_cache_object, weakreflist), Py_READONLY},
     {NULL}  /* Sentinel */
 };
 
@@ -1922,7 +1915,8 @@ static PyType_Spec lru_cache_type_spec = {
     .name = "functools._lru_cache_wrapper",
     .basicsize = sizeof(lru_cache_object),
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-             Py_TPFLAGS_METHOD_DESCRIPTOR | Py_TPFLAGS_IMMUTABLETYPE,
+             Py_TPFLAGS_METHOD_DESCRIPTOR | Py_TPFLAGS_IMMUTABLETYPE |
+             Py_TPFLAGS_MANAGED_WEAKREF,
     .slots = lru_cache_type_slots
 };
 

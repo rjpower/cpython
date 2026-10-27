@@ -23,12 +23,14 @@ extern "C" {
 #define LOCK_WEAKREFS_FOR_WR(wr)
 #define UNLOCK_WEAKREFS_FOR_WR(wr)
 
-#define FT_CLEAR_WEAKREFS(obj, weakref_list)        \
-    do {                                            \
-        _PyWeakref_ASSERT_DEAD(obj);                \
-        if (weakref_list != NULL) {                 \
-            PyObject_ClearWeakRefs(obj);            \
-        }                                           \
+// A deallocator clears the weak references to the object it destroys.  The
+// header flag says whether the weak reference table holds a list for it.
+#define FT_CLEAR_WEAKREFS(obj)                                      \
+    do {                                                            \
+        _PyWeakref_ASSERT_DEAD(obj);                                \
+        if (_PyObject_CAST(obj)->ob_flags & _Py_HAS_WEAKREFS_FLAG) { \
+            PyObject_ClearWeakRefs(obj);                            \
+        }                                                           \
     } while (0)
 
 
@@ -62,6 +64,18 @@ static inline int _PyWeakref_IS_DEAD(PyObject *ref_obj)
 }
 
 extern Py_ssize_t _PyWeakref_GetWeakrefCount(PyObject *obj);
+
+// The address of the head of obj's list of weak references, which stays
+// valid while obj lives: an entry in the weak reference table
+// (Objects/weakrefobject.c), or a static builtin type's per-interpreter
+// list.  If obj has no entry, NULL, or with create set a new entry, or NULL
+// with MemoryError.
+extern PyWeakReference **_PyWeakref_ListPtr(PyObject *obj, int create);
+
+// Remove the entry of obj, which has _Py_HAS_WEAKREFS_FLAG, from the weak
+// reference table: its block is being freed.  Any reference still in its
+// list is cleared without its callback.
+extern void _PyWeakref_DropList(PyObject *obj);
 
 // Clear all the weak references to obj but leave their callbacks uncalled and
 // intact.

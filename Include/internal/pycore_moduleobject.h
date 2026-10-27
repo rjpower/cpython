@@ -27,7 +27,6 @@ typedef struct {
     PyObject_HEAD
     PyObject *md_dict;
     void *md_state;
-    PyObject *md_weaklist;
     // for logging purposes after md_dict is cleared
     PyObject *md_name;
     bool md_token_is_def;  /* if true, `md_token` is the PyModuleDef */

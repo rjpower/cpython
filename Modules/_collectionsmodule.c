@@ -142,7 +142,6 @@ struct dequeobject {
     Py_ssize_t maxlen;          /* maxlen is -1 for unbounded deques */
     Py_ssize_t numfreeblocks;
     block *freeblocks[MAXFREEBLOCKS];
-    PyObject *weakreflist;
 };
 
 #define dequeobject_CAST(op)    ((dequeobject *)(op))
@@ -227,7 +226,6 @@ deque_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     deque->state = 0;
     deque->maxlen = -1;
     deque->numfreeblocks = 0;
-    deque->weakreflist = NULL;
 
     return (PyObject *)deque;
 }
@@ -1544,7 +1542,7 @@ deque_dealloc(PyObject *self)
     Py_ssize_t i;
 
     PyObject_GC_UnTrack(deque);
-    FT_CLEAR_WEAKREFS(self, deque->weakreflist);
+    FT_CLEAR_WEAKREFS(self);
     if (deque->leftblock != NULL) {
         (void)deque_clear(self);
         assert(deque->leftblock != NULL);
@@ -1853,11 +1851,6 @@ static PyMethodDef deque_methods[] = {
     {NULL,              NULL}   /* sentinel */
 };
 
-static PyMemberDef deque_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(dequeobject, weakreflist), Py_READONLY},
-    {NULL},
-};
-
 static PyType_Slot deque_slots[] = {
     {Py_tp_dealloc, deque_dealloc},
     {Py_tp_repr, deque_repr},
@@ -1874,7 +1867,6 @@ static PyType_Slot deque_slots[] = {
     {Py_tp_new, deque_new},
     {Py_tp_free, PyObject_GC_Del},
     {Py_tp_methods, deque_methods},
-    {Py_tp_members, deque_members},
 
     // Sequence protocol
     {Py_sq_length, deque_len},
@@ -1893,7 +1885,7 @@ static PyType_Spec deque_spec = {
     .basicsize = sizeof(dequeobject),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
               Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_SEQUENCE |
-              Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = deque_slots,
 };
 

@@ -459,7 +459,6 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
     co->_co_monitoring = NULL;
     co->_co_instrumentation_version = 0;
     /* not set */
-    co->co_weakreflist = NULL;
     co->co_extra = NULL;
     co->_co_cached = NULL;
 
@@ -2405,7 +2404,7 @@ code_dealloc(PyObject *self)
         Py_XDECREF(co->_co_cached->_co_varnames);
         PyMem_Free(co->_co_cached);
     }
-    FT_CLEAR_WEAKREFS(self, co->co_weakreflist);
+    FT_CLEAR_WEAKREFS(self);
     free_monitoring_data(co->_co_monitoring);
     _PyCode_ClearExec(co);
     PyObject_Free(co);
@@ -2896,12 +2895,12 @@ PyTypeObject PyCode_Type = {
     PyObject_GenericGetAttr,            /* tp_getattro */
     0,                                  /* tp_setattro */
     0,                                  /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,                 /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_MANAGED_WEAKREF, /* tp_flags */
     code_new__doc__,                    /* tp_doc */
     code_traverse,                      /* tp_traverse */
     0,                                  /* tp_clear */
     code_richcompare,                   /* tp_richcompare */
-    offsetof(PyCodeObject, co_weakreflist),     /* tp_weaklistoffset */
+    0,                                  /* tp_weaklistoffset */
     0,                                  /* tp_iter */
     0,                                  /* tp_iternext */
     code_methods,                       /* tp_methods */

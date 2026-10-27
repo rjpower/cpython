@@ -1,10 +1,8 @@
 #include "Python.h"
 #include "pycore_dict.h"              // _PyDict_DelItemIf()
-#include "pycore_object.h"            // _PyObject_GET_WEAKREFS_LISTPTR()
+#include "pycore_object.h"            // _PyType_SUPPORTS_WEAKREFS()
 #include "pycore_weakref.h"           // _PyWeakref_IS_DEAD()
 
-#define GET_WEAKREFS_LISTPTR(o) \
-        ((PyWeakReference **) _PyObject_GET_WEAKREFS_LISTPTR(o))
 
 /*[clinic input]
 module _weakref
@@ -84,8 +82,12 @@ _weakref_getweakrefs(PyObject *module, PyObject *object)
         return NULL;
     }
 
+    PyWeakReference **list = _PyWeakref_ListPtr(object, 0);
+    if (list == NULL) {
+        return result;
+    }
     LOCK_WEAKREFS(object);
-    PyWeakReference *current = *GET_WEAKREFS_LISTPTR(object);
+    PyWeakReference *current = *list;
     while (current != NULL) {
         PyObject *curobj = (PyObject *) current;
         if (_Py_TryIncref(curobj)) {

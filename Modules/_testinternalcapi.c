@@ -3748,7 +3748,7 @@ module_exec(PyObject *module)
     }
 
     if (PyModule_Add(module, "SIZEOF_MANAGED_PRE_HEADER",
-                        PyLong_FromSsize_t(2 * sizeof(PyObject*))) < 0) {
+                        PyLong_FromSsize_t(_PyObject_MANAGED_PRE_HEADER_SIZE)) < 0) {
         return 1;
     }
 

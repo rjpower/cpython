@@ -19,7 +19,6 @@ typedef struct {
     PyObject *origin;
     PyObject *args;
     PyObject *parameters;
-    PyObject *weakreflist;
     // Whether we're a starred type, e.g. *tuple[int].
     bool starred;
     vectorcallfunc vectorcall;
@@ -36,7 +35,7 @@ ga_dealloc(PyObject *self)
     gaobject *alias = (gaobject *)self;
 
     _PyObject_GC_UNTRACK(self);
-    FT_CLEAR_WEAKREFS(self, alias->weakreflist);
+    FT_CLEAR_WEAKREFS(self);
     Py_XDECREF(alias->origin);
     Py_XDECREF(alias->args);
     Py_XDECREF(alias->parameters);
@@ -921,7 +920,6 @@ setup_ga(gaobject *alias, PyObject *origin, PyObject *args) {
     alias->origin = Py_NewRef(origin);
     alias->args = args;
     alias->parameters = NULL;
-    alias->weakreflist = NULL;
 
     if (PyVectorcall_Function(origin) != NULL) {
         alias->vectorcall = ga_vectorcall;
@@ -1078,10 +1076,10 @@ PyTypeObject Py_GenericAliasType = {
     .tp_hash = ga_hash,
     .tp_call = ga_call,
     .tp_getattro = ga_getattro,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_VECTORCALL,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_VECTORCALL |
+                Py_TPFLAGS_MANAGED_WEAKREF,
     .tp_traverse = ga_traverse,
     .tp_richcompare = ga_richcompare,
-    .tp_weaklistoffset = offsetof(gaobject, weakreflist),
     .tp_methods = ga_methods,
     .tp_members = ga_members,
     .tp_alloc = PyType_GenericAlloc,

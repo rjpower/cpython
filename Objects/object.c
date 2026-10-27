@@ -32,6 +32,7 @@
 #include "pycore_unicodeobject.h" // _PyUnicode_CheckConsistency()
 #include "pycore_value.h"         // PyValue_FromObject
 #include "pycore_unionobject.h"   // _PyUnion_Type
+#include "pycore_weakref.h"       // _PyWeakref_ListPtr()
 
 
 #ifdef Py_LIMITED_API
@@ -2528,7 +2529,7 @@ _Py_Dealloc(PyObject *op)
 PyObject **
 PyObject_GET_WEAKREFS_LISTPTR(PyObject *op)
 {
-    return _PyObject_GET_WEAKREFS_LISTPTR(op);
+    return (PyObject **)_PyWeakref_ListPtr(op, 1);
 }
 
 

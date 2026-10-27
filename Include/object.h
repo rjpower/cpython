@@ -438,8 +438,9 @@ given type object has a specified feature.
  */
 #define Py_TPFLAGS_INLINE_VALUES (1 << 2)
 
-/* Placement of weakref pointers are managed by the VM, not by the type.
- * The VM will automatically set tp_weaklistoffset. Implies Py_TPFLAGS_HAVE_GC.
+/* The type supports weak references, which the VM keeps in its weak
+ * reference table (no per-object storage).  The VM sets tp_weaklistoffset
+ * to a marker.
  */
 #define Py_TPFLAGS_MANAGED_WEAKREF (1 << 3)
 
@@ -448,10 +449,10 @@ given type object has a specified feature.
  */
 #define Py_TPFLAGS_MANAGED_DICT (1 << 4)
 
-/* Type has dictionary or weakref pointers that are managed by VM and has
- * to allocate space to store these.
+/* Type has a dictionary pointer that is managed by the VM, which allocates
+ * a word for it before the object.
  */
-#define Py_TPFLAGS_PREHEADER (Py_TPFLAGS_MANAGED_WEAKREF | Py_TPFLAGS_MANAGED_DICT)
+#define Py_TPFLAGS_PREHEADER Py_TPFLAGS_MANAGED_DICT
 
 /* Set if instances of the type object are treated as sequences for pattern matching */
 #define Py_TPFLAGS_SEQUENCE (1 << 5)
@@ -555,12 +556,15 @@ given type object has a specified feature.
 
 /* Flag values for ob_flags, bits 48-63 of the header word.  Whether a heap
  * block holds an initialized object is not in the header: the allocator's
- * object map says (Include/internal/pycore_gc_trace.h).  Bits 3-6 and 15 are
+ * object map says (Include/internal/pycore_gc_trace.h).  Bits 4-6 and 15 are
  * spare.  The bits from 7 up are the collector's (Python/gc_live.c and
  * Python/gc_trace.c); it writes them while it holds the GIL. */
 #define _Py_IMMORTAL_FLAGS (1 << 0)
 #define _Py_LEGACY_ABI_CHECK_FLAG (1 << 1) /* see PyModuleDef_Init() */
 #define _Py_STATICALLY_ALLOCATED_FLAG (1 << 2)
+#define _Py_HAS_WEAKREFS_FLAG (1 << 3)  /* the object has an entry in the
+                                           weak reference table
+                                           (Objects/weakrefobject.c) */
 #  define _Py_GC_NOTIFIED_FLAG   (1 << 7)   /* the collector ran the
                                                destroy calls of the
                                                object's dealloc */

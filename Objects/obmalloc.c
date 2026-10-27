@@ -11,6 +11,7 @@
 #include "pycore_pystate.h"       // _PyInterpreterState_GET
 #include "pycore_stats.h"         // OBJECT_STAT_INC_COND()
 #include "pycore_gc_trace.h"      // _PyGC_LiveOnThreshold()
+#include "pycore_weakref.h"       // _PyWeakref_DropList()
 
 #include <stdlib.h>               // malloc()
 #include <stdbool.h>
@@ -1206,7 +1207,7 @@ gc_block_object(void *ptr)
         presize = sizeof(PyGC_Head);
         break;
     case _Py_MIMALLOC_HEAP_GC_PRE:
-        presize = sizeof(PyGC_Head) + 2 * sizeof(PyObject *);
+        presize = sizeof(PyGC_Head) + _PyObject_MANAGED_PRE_HEADER_SIZE;
         break;
     default:
         return NULL;
@@ -1564,6 +1565,12 @@ PyObject_Realloc(void *ptr, size_t new_size)
     PyObject *op = ptr != NULL ? gc_block_object(ptr) : NULL;
     if (op != NULL) {
         size_t offset = (char *)op - (char *)ptr;
+        // The weak reference table is keyed by address, and weak
+        // references name their object's address: an object resized here
+        // loses them, as it did when they could not follow it either.
+        if (op->ob_flags & _Py_HAS_WEAKREFS_FLAG) {
+            _PyWeakref_DropList(op);
+        }
         char *p = _PyObject.realloc(_PyObject.ctx, ptr, new_size);
         if (p == NULL) {
             return NULL;
@@ -1595,6 +1602,9 @@ PyObject_Free(void *ptr)
                 return;
             }
         }
+        if (op->ob_flags & _Py_HAS_WEAKREFS_FLAG) {
+            _PyWeakref_DropList(op);
+        }
         _PyGC_ObjectMapClear(op);
     }
     _PyObject.free(_PyObject.ctx, ptr);
@@ -1605,6 +1615,9 @@ void
 _PyGC_FreeDeadBlock(PyObject *op, void *block)
 {
     OBJECT_STAT_INC(frees);
+    if (op->ob_flags & _Py_HAS_WEAKREFS_FLAG) {
+        _PyWeakref_DropList(op);
+    }
     _PyGC_ObjectMapClear(op);
     _PyObject.free(_PyObject.ctx, block);
 }

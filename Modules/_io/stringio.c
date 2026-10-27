@@ -42,7 +42,6 @@ typedef struct {
     PyObject *writenl;
 
     PyObject *dict;
-    PyObject *weakreflist;
     _PyIO_State *module_state;
 } stringio;
 
@@ -668,7 +667,7 @@ stringio_dealloc(PyObject *op)
     }
     PyUnicodeWriter_Discard(self->writer);
     (void)stringio_clear(op);
-    FT_CLEAR_WEAKREFS(op, self->weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     tp->tp_free(self);
     Py_DECREF(tp);
 }
@@ -1104,7 +1103,6 @@ static PyGetSetDef stringio_getset[] = {
 };
 
 static struct PyMemberDef stringio_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(stringio, weakreflist), Py_READONLY},
     {"__dictoffset__", Py_T_PYSSIZET, offsetof(stringio, dict), Py_READONLY},
     {NULL},
 };
@@ -1127,6 +1125,6 @@ PyType_Spec _Py_stringio_spec = {
     .name = "_io.StringIO",
     .basicsize = sizeof(stringio),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = stringio_slots,
 };

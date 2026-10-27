@@ -69,7 +69,6 @@ typedef struct {
     Py_ssize_t s_len;
     formatcode *s_codes;
     PyObject *s_format;
-    PyObject *weakreflist; /* List of weak references */
     bool init_called;
 } PyStructObject;
 
@@ -2055,7 +2054,7 @@ s_dealloc(PyObject *op)
     PyStructObject *s = PyStructObject_CAST(op);
     PyTypeObject *tp = Py_TYPE(s);
     PyObject_GC_UnTrack(s);
-    FT_CLEAR_WEAKREFS(op, s->weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     if (s->s_codes != NULL) {
         PyMem_Free(s->s_codes);
     }
@@ -2619,7 +2618,6 @@ static struct PyMethodDef s_methods[] = {
 };
 
 static PyMemberDef s_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(PyStructObject, weakreflist), Py_READONLY},
     {"format", Py_T_OBJECT_EX, offsetof(PyStructObject, s_format),
         Py_READONLY, PyDoc_STR("struct format string")},
     {"size", Py_T_PYSSIZET, offsetof(PyStructObject, s_size), Py_READONLY,
@@ -2647,7 +2645,8 @@ static PyType_Spec PyStructType_spec = {
     sizeof(PyStructObject),
     0,
     (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-     Py_TPFLAGS_BASETYPE | Py_TPFLAGS_IMMUTABLETYPE),
+     Py_TPFLAGS_BASETYPE | Py_TPFLAGS_IMMUTABLETYPE |
+     Py_TPFLAGS_MANAGED_WEAKREF),
     PyStructType_slots
 };
 

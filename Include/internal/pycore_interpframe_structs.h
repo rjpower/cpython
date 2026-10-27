@@ -69,8 +69,6 @@ struct _PyInterpreterFrame {
    and coroutine objects. */
 #define _PyGenObject_HEAD(prefix)                                           \
     PyObject_HEAD                                                           \
-    /* List of weak reference. */                                           \
-    PyObject *prefix##_weakreflist;                                         \
     /* Name of the generator. */                                            \
     PyObject *prefix##_name;                                                \
     /* Qualified name of the generator. */                                  \

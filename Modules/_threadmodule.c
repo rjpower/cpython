@@ -1436,7 +1436,6 @@ static PyType_Spec rlock_type_spec = {
 
 typedef struct {
     PyObject_HEAD
-    PyObject *weakreflist;      /* List of weak references to self */
 } localdummyobject;
 
 #define localdummyobject_CAST(op)   ((localdummyobject *)(op))
@@ -1445,21 +1444,15 @@ static void
 localdummy_dealloc(PyObject *op)
 {
     localdummyobject *self = localdummyobject_CAST(op);
-    FT_CLEAR_WEAKREFS(op, self->weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     PyTypeObject *tp = Py_TYPE(self);
     tp->tp_free(self);
     Py_DECREF(tp);
 }
 
-static PyMemberDef local_dummy_type_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(localdummyobject, weakreflist), Py_READONLY},
-    {NULL},
-};
-
 static PyType_Slot local_dummy_type_slots[] = {
     {Py_tp_dealloc, localdummy_dealloc},
     {Py_tp_doc, "Thread-local dummy"},
-    {Py_tp_members, local_dummy_type_members},
     {0, 0}
 };
 
@@ -1467,7 +1460,7 @@ static PyType_Spec local_dummy_type_spec = {
     .name = "_thread._localdummy",
     .basicsize = sizeof(localdummyobject),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION |
-              Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = local_dummy_type_slots,
 };
 
@@ -1476,7 +1469,6 @@ typedef struct {
     PyObject_HEAD
     PyObject *args;
     PyObject *kw;
-    PyObject *weakreflist;      /* List of weak references to self */
     /* A {localdummy -> localdict} dict */
     PyObject *localdicts;
     /* A set of weakrefs to thread sentinels localdummies*/
@@ -1618,9 +1610,7 @@ local_dealloc(PyObject *op)
     localobject *self = localobject_CAST(op);
     /* Weakrefs must be invalidated right now, otherwise they can be used
        from code called below, which is very dangerous since Py_REFCNT(self) == 0 */
-    if (self->weakreflist != NULL) {
-        PyObject_ClearWeakRefs(op);
-    }
+    PyObject_ClearWeakRefs(op);
     PyObject_GC_UnTrack(self);
     (void)local_clear(op);
     PyTypeObject *tp = Py_TYPE(self);
@@ -1805,11 +1795,6 @@ err:
 
 static PyObject *local_getattro(PyObject *, PyObject *);
 
-static PyMemberDef local_type_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(localobject, weakreflist), Py_READONLY},
-    {NULL},
-};
-
 static PyType_Slot local_type_slots[] = {
     {Py_tp_dealloc, local_dealloc},
     {Py_tp_getattro, local_getattro},
@@ -1818,7 +1803,6 @@ static PyType_Slot local_type_slots[] = {
     {Py_tp_traverse, local_traverse},
     {Py_tp_clear, local_clear},
     {Py_tp_new, local_new},
-    {Py_tp_members, local_type_members},
     {0, 0}
 };
 
@@ -1826,7 +1810,7 @@ static PyType_Spec local_type_spec = {
     .name = "_thread._local",
     .basicsize = sizeof(localobject),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = local_type_slots,
 };
 

@@ -48,7 +48,6 @@ typedef struct arrayobject {
     char *ob_item;
     Py_ssize_t allocated;
     const struct arraydescr *ob_descr;
-    PyObject *weakreflist; /* List of weak references */
     Py_ssize_t ob_exports;  /* Number of exported buffers */
 } arrayobject;
 
@@ -784,7 +783,6 @@ newarrayobject_untracked(PyTypeObject *type, Py_ssize_t size,
     }
     op->ob_descr = descr;
     op->allocated = size;
-    op->weakreflist = NULL;
     Py_SET_SIZE(op, size);
     if (size <= 0) {
         op->ob_item = NULL;
@@ -861,7 +859,7 @@ array_dealloc(PyObject *op)
     PyObject_GC_UnTrack(op);
 
     arrayobject *self = arrayobject_CAST(op);
-    FT_CLEAR_WEAKREFS(op, self->weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     if (self->ob_item != NULL) {
         PyMem_Free(self->ob_item);
     }
@@ -3155,11 +3153,6 @@ itemsize -- the length in bytes of one array item\n\
 
 static PyObject *array_iter(PyObject *op);
 
-static struct PyMemberDef array_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(arrayobject, weakreflist), Py_READONLY},
-    {NULL},
-};
-
 static PyType_Slot array_slots[] = {
     {Py_tp_dealloc, array_dealloc},
     {Py_tp_repr, array_repr},
@@ -3168,7 +3161,6 @@ static PyType_Slot array_slots[] = {
     {Py_tp_richcompare, array_richcompare},
     {Py_tp_iter, array_iter},
     {Py_tp_methods, array_methods},
-    {Py_tp_members, array_members},
     {Py_tp_getset, array_getsets},
     {Py_tp_alloc, _PyType_AllocNoTrack},
     {Py_tp_new, array_new},
@@ -3201,7 +3193,7 @@ static PyType_Spec array_spec = {
     .basicsize = sizeof(arrayobject),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
               Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_SEQUENCE),
+              Py_TPFLAGS_SEQUENCE | Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = array_slots,
 };
 

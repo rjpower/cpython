@@ -3715,8 +3715,6 @@ subtype_setdict(PyObject *obj, PyObject *value, void *context)
 static PyObject *
 subtype_getweakref(PyObject *obj, void *context)
 {
-    PyObject **weaklistptr;
-    PyObject *result;
     PyTypeObject *type = Py_TYPE(obj);
 
     if (type->tp_weaklistoffset == 0) {
@@ -3724,30 +3722,12 @@ subtype_getweakref(PyObject *obj, void *context)
                         "This object has no __weakref__");
         return NULL;
     }
-    _PyObject_ASSERT((PyObject *)type,
-                     type->tp_weaklistoffset > 0 ||
-                     type->tp_weaklistoffset == MANAGED_WEAKREF_OFFSET);
-    _PyObject_ASSERT((PyObject *)type,
-                     ((type->tp_weaklistoffset + (Py_ssize_t)sizeof(PyObject *))
-                      <= type->tp_basicsize));
-
-    /* Synchronize with weakref creation/destruction so the list head cannot
-     * be removed and freed between loading it and taking a reference. */
-    LOCK_WEAKREFS(obj);
-    weaklistptr = (PyObject **)((char *)obj + type->tp_weaklistoffset);
-    if (*weaklistptr == NULL) {
-        result = Py_NewRef(Py_None);
+    // The head of the object's list in the weak reference table
+    PyWeakReference **list = _PyWeakref_ListPtr(obj, 0);
+    if (list == NULL || *list == NULL) {
+        return Py_None;
     }
-    else if (_Py_TryIncref(*weaklistptr)) {
-        result = *weaklistptr;
-    }
-    else {
-        result = Py_NewRef(Py_None);
-    }
-
-    UNLOCK_WEAKREFS(obj);
-
-    return result;
+    return (PyObject *)*list;
 }
 
 /* getset definitions for common descriptors */
@@ -8277,6 +8257,7 @@ inherit_special(PyTypeObject *type, PyTypeObject *base)
             type->tp_clear = base->tp_clear;
     }
     type_add_flags(type, base->tp_flags & (Py_TPFLAGS_PREHEADER
+                                           | Py_TPFLAGS_MANAGED_WEAKREF
                                            | Py_TPFLAGS_DEALLOC_READS_REFERENTS));
 
     if (type->tp_basicsize == 0)
@@ -8756,13 +8737,6 @@ type_ready_preheader(PyTypeObject *type)
                         type->tp_name);
             return -1;
         }
-        if (!(type->tp_flags & Py_TPFLAGS_HAVE_GC)) {
-            PyErr_Format(PyExc_SystemError,
-                        "type %s has the Py_TPFLAGS_MANAGED_WEAKREF flag "
-                        "but not Py_TPFLAGS_HAVE_GC flag",
-                        type->tp_name);
-            return -1;
-        }
         type->tp_weaklistoffset = MANAGED_WEAKREF_OFFSET;
     }
     return 0;
@@ -9221,7 +9195,6 @@ init_static_type(PyInterpreterState *interp, PyTypeObject *self,
     assert(_Py_IsImmortal((PyObject *)self));
     assert(!(self->tp_flags & Py_TPFLAGS_HEAPTYPE));
     assert(!(self->tp_flags & Py_TPFLAGS_MANAGED_DICT));
-    assert(!(self->tp_flags & Py_TPFLAGS_MANAGED_WEAKREF));
 
     if (initial) {
         assert((self->tp_flags & Py_TPFLAGS_READY) == 0);

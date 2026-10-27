@@ -13,7 +13,6 @@ typedef struct {
     PyObject *hashable_args;  // frozenset or NULL
     PyObject *unhashable_args;  // tuple or NULL
     PyObject *parameters;
-    PyObject *weakreflist;
 } unionobject;
 
 static void
@@ -22,7 +21,7 @@ unionobject_dealloc(PyObject *self)
     unionobject *alias = (unionobject *)self;
 
     _PyObject_GC_UNTRACK(self);
-    FT_CLEAR_WEAKREFS(self, alias->weakreflist);
+    FT_CLEAR_WEAKREFS(self);
 
     Py_XDECREF(alias->args);
     Py_XDECREF(alias->hashable_args);
@@ -533,7 +532,8 @@ PyTypeObject _PyUnion_Type = {
     .tp_dealloc = unionobject_dealloc,
     .tp_alloc = PyType_GenericAlloc,
     .tp_free = PyObject_GC_Del,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+                Py_TPFLAGS_MANAGED_WEAKREF,
     .tp_traverse = union_traverse,
     .tp_hash = union_hash,
     .tp_getattro = union_getattro,
@@ -544,7 +544,6 @@ PyTypeObject _PyUnion_Type = {
     .tp_as_number = &union_as_number,
     .tp_repr = union_repr,
     .tp_getset = union_properties,
-    .tp_weaklistoffset = offsetof(unionobject, weakreflist),
 };
 
 static PyObject *
@@ -589,7 +588,6 @@ make_union(unionbuilder *ub)
     result->args = args;
     result->hashable_args = hashable_args;
     result->unhashable_args = unhashable_args;
-    result->weakreflist = NULL;
     _PyObject_GC_TRACK(result);
     return (PyObject*)result;
 error:

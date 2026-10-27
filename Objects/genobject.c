@@ -196,7 +196,7 @@ gen_dealloc(PyObject *self)
 
     _PyObject_GC_UNTRACK(gen);
 
-    FT_CLEAR_WEAKREFS(self, gen->gi_weakreflist);
+    FT_CLEAR_WEAKREFS(self);
 
     _PyObject_GC_TRACK(self);
 
@@ -1051,12 +1051,13 @@ PyTypeObject PyGen_Type = {
     PyObject_GenericGetAttr,                    /* tp_getattro */
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,    /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+        Py_TPFLAGS_MANAGED_WEAKREF,             /* tp_flags */
     0,                                          /* tp_doc */
     gen_traverse,                               /* tp_traverse */
     0,                                          /* tp_clear */
     0,                                          /* tp_richcompare */
-    offsetof(PyGenObject, gi_weakreflist),      /* tp_weaklistoffset */
+    0,                                          /* tp_weaklistoffset */
     PyObject_SelfIter,                          /* tp_iter */
     gen_iternext,                               /* tp_iternext */
     gen_methods,                                /* tp_methods */
@@ -1093,7 +1094,6 @@ make_gen(PyTypeObject *type, PyFunctionObject *func)
         return NULL;
     }
     gen->gi_frame_state = FRAME_CLEARED;
-    gen->gi_weakreflist = NULL;
     gen->gi_exc_state.exc_value = NULL;
     gen->gi_exc_state.previous_item = NULL;
     gen->gi_iframe.f_executable = _PyValue_None;
@@ -1176,7 +1176,6 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
     frame->owner = FRAME_OWNED_BY_GENERATOR;
     assert(PyObject_GC_IsTracked((PyObject *)f));
     Py_DECREF(f);
-    gen->gi_weakreflist = NULL;
     gen->gi_exc_state.exc_value = NULL;
     gen->gi_exc_state.previous_item = NULL;
     if (name != NULL)
@@ -1404,12 +1403,13 @@ PyTypeObject PyCoro_Type = {
     PyObject_GenericGetAttr,                    /* tp_getattro */
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,    /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+        Py_TPFLAGS_MANAGED_WEAKREF,             /* tp_flags */
     0,                                          /* tp_doc */
     gen_traverse,                               /* tp_traverse */
     0,                                          /* tp_clear */
     0,                                          /* tp_richcompare */
-    offsetof(PyCoroObject, cr_weakreflist),     /* tp_weaklistoffset */
+    0,                                          /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
     coro_methods,                               /* tp_methods */
@@ -1873,12 +1873,13 @@ PyTypeObject PyAsyncGen_Type = {
     PyObject_GenericGetAttr,                    /* tp_getattro */
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,    /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+        Py_TPFLAGS_MANAGED_WEAKREF,             /* tp_flags */
     0,                                          /* tp_doc */
     async_gen_traverse,                         /* tp_traverse */
     0,                                          /* tp_clear */
     0,                                          /* tp_richcompare */
-    offsetof(PyAsyncGenObject, ag_weakreflist), /* tp_weaklistoffset */
+    0,                                          /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
     async_gen_methods,                          /* tp_methods */

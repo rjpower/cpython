@@ -2,7 +2,9 @@
 #include "pycore_critical_section.h"
 #include "pycore_lock.h"
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
-#include "pycore_object.h"        // _PyObject_GET_WEAKREFS_LISTPTR()
+#include "pycore_hashtable.h"     // _Py_hashtable_t
+#include "pycore_object.h"        // _PyType_SUPPORTS_WEAKREFS()
+#include "pycore_typeobject.h"    // _PyStaticType_GetState()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_pystate.h"
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
@@ -15,8 +17,105 @@ class weakref "PyWeakReference *" "&_PyWeakref_RefType"
 #include "clinic/weakrefobject.c.h"
 
 
-#define GET_WEAKREFS_LISTPTR(o) \
-        ((PyWeakReference **) _PyObject_GET_WEAKREFS_LISTPTR(o))
+/* The weak reference table.
+
+   An object's weak references are a doubly linked list whose head is kept
+   in a table keyed by the object's address, not in the object: a type that
+   supports weak references (tp_weaklistoffset != 0) spends no space on
+   them, and an object's header has _Py_HAS_WEAKREFS_FLAG while it has an
+   entry.  The entries are _Py_hashtable entries, which are allocated one
+   by one and never move, so &entry->value is the list head for as long as
+   the object lives, across insertions into the table: callers keep it
+   while they allocate.  An entry is made with the object's first weak
+   reference and removed when the object's block is freed
+   (_PyWeakref_DropList(), called by Objects/obmalloc.c); by then the
+   collector has cleared the object's references (Python/gc_live.c).  A
+   static builtin type keeps its list in its per-interpreter state, as
+   before, because the interpreters share the type.
+
+   The table is the process's: interpreters with their own GIL share it
+   under weakref_table_mutex.  A list itself belongs to its object, whose
+   interpreter's GIL protects it. */
+
+static _Py_hashtable_t *weakref_table = NULL;
+static PyMutex weakref_table_mutex = {0};
+
+static void *
+weakref_table_malloc(size_t size)
+{
+    return PyMem_RawMalloc(size);
+}
+
+static void
+weakref_table_free(void *ptr)
+{
+    PyMem_RawFree(ptr);
+}
+
+PyWeakReference **
+_PyWeakref_ListPtr(PyObject *obj, int create)
+{
+    if (PyType_Check(obj)
+        && ((PyTypeObject *)obj)->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN)
+    {
+        PyInterpreterState *interp = _PyInterpreterState_GET();
+        managed_static_type_state *state = _PyStaticType_GetState(
+                                                interp, (PyTypeObject *)obj);
+        return (PyWeakReference **)_PyStaticType_GET_WEAKREFS_LISTPTR(state);
+    }
+    if (!(obj->ob_flags & _Py_HAS_WEAKREFS_FLAG) && !create) {
+        return NULL;
+    }
+    PyWeakReference **list = NULL;
+    PyMutex_Lock(&weakref_table_mutex);
+    if (weakref_table == NULL) {
+        _Py_hashtable_allocator_t alloc = {
+            weakref_table_malloc, weakref_table_free};
+        weakref_table = _Py_hashtable_new_full(
+            _Py_hashtable_hash_ptr, _Py_hashtable_compare_direct,
+            NULL, NULL, &alloc);
+        if (weakref_table == NULL) {
+            goto done;
+        }
+    }
+    _Py_hashtable_entry_t *entry = _Py_hashtable_get_entry(weakref_table, obj);
+    if (entry == NULL) {
+        assert(!(obj->ob_flags & _Py_HAS_WEAKREFS_FLAG));
+        if (_Py_hashtable_set(weakref_table, obj, NULL) < 0) {
+            goto done;
+        }
+        entry = _Py_hashtable_get_entry(weakref_table, obj);
+        obj->ob_flags |= _Py_HAS_WEAKREFS_FLAG;
+    }
+    list = (PyWeakReference **)&entry->value;
+done:
+    PyMutex_Unlock(&weakref_table_mutex);
+    if (list == NULL) {
+        PyErr_NoMemory();
+    }
+    return list;
+}
+
+void
+_PyWeakref_DropList(PyObject *obj)
+{
+    assert(obj->ob_flags & _Py_HAS_WEAKREFS_FLAG);
+    PyMutex_Lock(&weakref_table_mutex);
+    PyWeakReference *head = _Py_hashtable_steal(weakref_table, obj);
+    PyMutex_Unlock(&weakref_table_mutex);
+    obj->ob_flags &= ~_Py_HAS_WEAKREFS_FLAG;
+    // The collector clears the references to a dead object before its
+    // block is freed; a block freed otherwise takes its references with it.
+    while (head != NULL) {
+        PyWeakReference *next = head->wr_next;
+        head->wr_object = Py_None;
+        head->wr_prev = NULL;
+        head->wr_next = NULL;
+        head = next;
+    }
+}
+
+#define GET_WEAKREFS_LISTPTR(o) _PyWeakref_ListPtr((o), 0)
 
 
 Py_ssize_t
@@ -26,9 +125,13 @@ _PyWeakref_GetWeakrefCount(PyObject *obj)
         return 0;
     }
 
+    PyWeakReference **list = GET_WEAKREFS_LISTPTR(obj);
+    if (list == NULL) {
+        return 0;
+    }
     LOCK_WEAKREFS(obj);
     Py_ssize_t count = 0;
-    PyWeakReference *head = *GET_WEAKREFS_LISTPTR(obj);
+    PyWeakReference *head = *list;
     while (head != NULL) {
         ++count;
         head = head->wr_next;
@@ -56,6 +159,7 @@ clear_weakref_lock_held(PyWeakReference *self, PyObject **callback)
 {
     if (self->wr_object != Py_None) {
         PyWeakReference **list = GET_WEAKREFS_LISTPTR(self->wr_object);
+        assert(list != NULL);
         if (*list == self) {
             /* If 'self' is the end of the list (and thus self->wr_next ==
                NULL) then the weakref list itself (and thus the value of *list)
@@ -401,7 +505,10 @@ get_or_create_weakref(PyTypeObject *type, PyObject *obj, PyObject *callback)
         return NULL;
     }
 
-    PyWeakReference **list = GET_WEAKREFS_LISTPTR(obj);
+    PyWeakReference **list = _PyWeakref_ListPtr(obj, 1);
+    if (list == NULL) {
+        return NULL;
+    }
     if ((type == &_PyWeakref_RefType) ||
         (type == &_PyWeakref_ProxyType) ||
         (type == &_PyWeakref_CallableProxyType))
@@ -1024,7 +1131,7 @@ PyObject_ClearWeakRefs(PyObject *object)
     }
 
     list = GET_WEAKREFS_LISTPTR(object);
-    if (FT_ATOMIC_LOAD_PTR(*list) == NULL) {
+    if (list == NULL || FT_ATOMIC_LOAD_PTR(*list) == NULL) {
         // Fast path for the common case
         return;
     }
@@ -1123,11 +1230,10 @@ _PyStaticType_ClearWeakRefs(PyInterpreterState *interp, PyTypeObject *type)
 void
 _PyWeakref_ClearWeakRefsNoCallbacks(PyObject *obj)
 {
-    /* Modeled after GET_WEAKREFS_LISTPTR().
-
-       This is never triggered for static types so we can avoid the
-       (slightly) more costly _PyObject_GET_WEAKREFS_LISTPTR(). */
-    PyWeakReference **list = _PyObject_GET_WEAKREFS_LISTPTR_FROM_OFFSET(obj);
+    PyWeakReference **list = GET_WEAKREFS_LISTPTR(obj);
+    if (list == NULL) {
+        return;
+    }
     LOCK_WEAKREFS(obj);
     while (*list) {
         _PyWeakref_ClearRef(*list);

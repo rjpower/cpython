@@ -8,7 +8,6 @@ typedef struct {
     PyObject_HEAD
     /* The view exported by the original object */
     Py_buffer view;
-    PyObject *weakreflist;
 } PyPickleBufferObject;
 
 /* C API */
@@ -24,7 +23,6 @@ PyPickleBuffer_FromObject(PyObject *base)
         return NULL;
     }
     self->view.obj = NULL;
-    self->weakreflist = NULL;
     if (PyObject_GetBuffer(base, &self->view, PyBUF_FULL_RO) < 0) {
         Py_DECREF(self);
         return NULL;
@@ -83,7 +81,6 @@ picklebuf_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     }
     self->view.obj = NULL;
-    self->weakreflist = NULL;
     if (PyObject_GetBuffer(base, &self->view, PyBUF_FULL_RO) < 0) {
         Py_DECREF(self);
         return NULL;
@@ -112,7 +109,7 @@ picklebuf_dealloc(PyObject *op)
 {
     PyPickleBufferObject *self = (PyPickleBufferObject*)op;
     PyObject_GC_UnTrack(self);
-    FT_CLEAR_WEAKREFS(op, self->weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     PyBuffer_Release(&self->view);
     Py_TYPE(self)->tp_free((PyObject *) self);
 }
@@ -213,12 +210,12 @@ PyTypeObject PyPickleBuffer_Type = {
     .tp_name = "pickle.PickleBuffer",
     .tp_doc = PyDoc_STR("Wrapper for potentially out-of-band buffers"),
     .tp_basicsize = sizeof(PyPickleBufferObject),
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+                Py_TPFLAGS_MANAGED_WEAKREF,
     .tp_new = picklebuf_new,
     .tp_dealloc = picklebuf_dealloc,
     .tp_traverse = picklebuf_traverse,
     .tp_clear = picklebuf_clear,
-    .tp_weaklistoffset = offsetof(PyPickleBufferObject, weakreflist),
     .tp_as_buffer = &picklebuf_as_buffer,
     .tp_methods = picklebuf_methods,
 };

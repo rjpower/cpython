@@ -2539,7 +2539,7 @@ class TestBufferProtocol(unittest.TestCase):
     def test_memoryview_sizeof(self):
         check = self.check_sizeof
         vsize = support.calcvobjsize
-        base_struct = 'Pnin 2P2n2i5P P'
+        base_struct = 'Pnin 2P2n2i5P'
         per_dim = '3n'
 
         items = list(range(8))

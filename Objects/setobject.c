@@ -602,7 +602,7 @@ set_dealloc(PyObject *self)
 
     /* bpo-31095: UnTrack is needed before calling any callbacks */
     PyObject_GC_UnTrack(so);
-    FT_CLEAR_WEAKREFS(self, so->weakreflist);
+    FT_CLEAR_WEAKREFS(self);
 
     if (so->table != so->smalltable)
         free_entries(so->table, oldsize, SET_IS_SHARED(so));
@@ -1223,7 +1223,6 @@ make_new_set_untracked(PyTypeObject *type, PyObject *iterable)
     so->table = so->smalltable;
     so->hash = -1;
     so->finger = 0;
-    so->weakreflist = NULL;
 
     if (iterable != NULL) {
         if (set_update_local(so, iterable)) {
@@ -2724,12 +2723,12 @@ PyTypeObject PySet_Type = {
     0,                                  /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
         Py_TPFLAGS_BASETYPE |
-        _Py_TPFLAGS_MATCH_SELF,         /* tp_flags */
+        _Py_TPFLAGS_MATCH_SELF | Py_TPFLAGS_MANAGED_WEAKREF, /* tp_flags */
     set_doc,                            /* tp_doc */
     set_traverse,                       /* tp_traverse */
     set_clear_internal,                 /* tp_clear */
     set_richcompare,                    /* tp_richcompare */
-    offsetof(PySetObject, weakreflist), /* tp_weaklistoffset */
+    0,                                  /* tp_weaklistoffset */
     set_iter,                           /* tp_iter */
     0,                                  /* tp_iternext */
     set_methods,                        /* tp_methods */
@@ -2816,12 +2815,12 @@ PyTypeObject PyFrozenSet_Type = {
     0,                                  /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
         Py_TPFLAGS_BASETYPE |
-        _Py_TPFLAGS_MATCH_SELF,         /* tp_flags */
+        _Py_TPFLAGS_MATCH_SELF | Py_TPFLAGS_MANAGED_WEAKREF, /* tp_flags */
     frozenset_doc,                      /* tp_doc */
     set_traverse,                       /* tp_traverse */
     set_clear_internal,                 /* tp_clear */
     set_richcompare,                    /* tp_richcompare */
-    offsetof(PySetObject, weakreflist), /* tp_weaklistoffset */
+    0,                                  /* tp_weaklistoffset */
     set_iter,                           /* tp_iter */
     0,                                  /* tp_iternext */
     frozenset_methods,                  /* tp_methods */

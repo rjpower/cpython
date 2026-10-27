@@ -2407,7 +2407,6 @@ hamt_alloc(void)
     }
     o->h_count = 0;
     o->h_root = NULL;
-    o->h_weakreflist = NULL;
     PyObject_GC_Track(o);
     return o;
 }
@@ -2666,9 +2665,7 @@ hamt_tp_dealloc(PyObject *self)
     }
 
     PyObject_GC_UnTrack(self);
-    if (obj->h_weakreflist != NULL) {
-        PyObject_ClearWeakRefs(self);
-    }
+    PyObject_ClearWeakRefs(self);
     (void)hamt_tp_clear(self);
     Py_TYPE(self)->tp_free(self);
 }
@@ -2854,12 +2851,12 @@ PyTypeObject _PyHamt_Type = {
     .tp_iter = hamt_tp_iter,
     .tp_dealloc = hamt_tp_dealloc,
     .tp_getattro = PyObject_GenericGetAttr,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+                Py_TPFLAGS_MANAGED_WEAKREF,
     .tp_richcompare = hamt_tp_richcompare,
     .tp_traverse = hamt_tp_traverse,
     .tp_clear = hamt_tp_clear,
     .tp_new = hamt_tp_new,
-    .tp_weaklistoffset = offsetof(PyHamtObject, h_weakreflist),
     .tp_hash = PyObject_HashNotImplemented,
 };
 

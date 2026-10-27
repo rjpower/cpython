@@ -57,7 +57,7 @@ blob_dealloc(PyObject *op)
 
     close_blob(self);
 
-    FT_CLEAR_WEAKREFS(op, self->in_weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     (void)tp->tp_clear(op);
     tp->tp_free(self);
     Py_DECREF(tp);
@@ -633,17 +633,11 @@ static PyMethodDef blob_methods[] = {
     {NULL, NULL}
 };
 
-static struct PyMemberDef blob_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(pysqlite_Blob, in_weakreflist), Py_READONLY},
-    {NULL},
-};
-
 static PyType_Slot blob_slots[] = {
     {Py_tp_dealloc, blob_dealloc},
     {Py_tp_traverse, blob_traverse},
     {Py_tp_clear, blob_clear},
     {Py_tp_methods, blob_methods},
-    {Py_tp_members, blob_members},
 
     // Mapping protocol
     {Py_mp_length, blob_length},
@@ -656,7 +650,8 @@ static PyType_Spec blob_spec = {
     .name = MODULE_NAME ".Blob",
     .basicsize = sizeof(pysqlite_Blob),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_DISALLOW_INSTANTIATION),
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_DISALLOW_INSTANTIATION |
+              Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = blob_slots,
 };
 

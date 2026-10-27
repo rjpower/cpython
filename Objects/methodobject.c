@@ -104,7 +104,6 @@ PyCMethod_New(PyMethodDef *ml, PyObject *self, PyObject *module, PyTypeObject *c
         }
     }
 
-    op->m_weakreflist = NULL;
     op->m_ml = ml;
     op->m_self = Py_XNewRef(self);
     op->m_module = Py_XNewRef(module);
@@ -160,7 +159,7 @@ meth_dealloc(PyObject *self)
 {
     PyCFunctionObject *m = _PyCFunctionObject_CAST(self);
     PyObject_GC_UnTrack(m);
-    FT_CLEAR_WEAKREFS(self, m->m_weakreflist);
+    FT_CLEAR_WEAKREFS(self);
     // We need to access ml_flags here rather than later.
     // `m->m_ml` might have the same lifetime
     // as `m_self` when it's dynamically allocated.
@@ -366,12 +365,12 @@ PyTypeObject PyCFunction_Type = {
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-    Py_TPFLAGS_HAVE_VECTORCALL,                 /* tp_flags */
+    Py_TPFLAGS_HAVE_VECTORCALL | Py_TPFLAGS_MANAGED_WEAKREF, /* tp_flags */
     0,                                          /* tp_doc */
     meth_traverse,                /* tp_traverse */
     0,                                          /* tp_clear */
     meth_richcompare,                           /* tp_richcompare */
-    offsetof(PyCFunctionObject, m_weakreflist), /* tp_weaklistoffset */
+    0,                                          /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
     meth_methods,                               /* tp_methods */

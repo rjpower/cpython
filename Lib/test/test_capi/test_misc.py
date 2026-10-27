@@ -631,7 +631,10 @@ class CAPITest(unittest.TestCase):
                 inst = cls()
                 ref = weakref.ref(inst)
                 self.assertEqual(ref(), inst)
-                self.assertEqual(inst.weakreflist, ref)
+                # The type's weaklist field names no storage: the weak
+                # references are in the interpreter's weak reference table.
+                self.assertIsNone(inst.weakreflist)
+                self.assertEqual(weakref.getweakrefs(inst), [ref])
 
     def test_heaptype_with_managed_weakref(self):
         inst = _testcapi.HeapCTypeWithManagedWeakref()

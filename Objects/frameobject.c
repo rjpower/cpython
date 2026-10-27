@@ -2047,7 +2047,7 @@ frame_dealloc(PyObject *op)
         _PyObject_GC_UNTRACK(f);
     }
 
-    FT_CLEAR_WEAKREFS(op, f->f_weakreflist);
+    FT_CLEAR_WEAKREFS(op);
 
     /* GH-106092: f->f_frame may point to a frame that no longer exists.
      * Avoid dereferencing it unless we know it still points to valid
@@ -2201,12 +2201,13 @@ PyTypeObject PyFrame_Type = {
     PyObject_GenericGetAttr,                    /* tp_getattro */
     PyObject_GenericSetAttr,                    /* tp_setattro */
     0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,/* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+        Py_TPFLAGS_MANAGED_WEAKREF,             /* tp_flags */
     0,                                          /* tp_doc */
     frame_traverse,                             /* tp_traverse */
     frame_tp_clear,                             /* tp_clear */
     0,                                          /* tp_richcompare */
-    OFF(f_weakreflist),                         /* tp_weaklistoffset */
+    0,                                          /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
     frame_methods,                              /* tp_methods */
@@ -2242,7 +2243,6 @@ _PyFrame_New_NoTrack(PyCodeObject *code)
     f->f_extra_locals = NULL;
     f->f_locals_cache = NULL;
     f->f_overwritten_fast_locals = NULL;
-    f->f_weakreflist = NULL;
     return f;
 }
 

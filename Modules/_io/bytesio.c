@@ -22,7 +22,6 @@ typedef struct {
     Py_ssize_t pos;
     Py_ssize_t string_size;
     PyObject *dict;
-    PyObject *weakreflist;
     Py_ssize_t exports;
     /* buf may be referenced from outside: set when buf escapes and when it
        comes from outside, since references are not counted. */
@@ -1066,7 +1065,7 @@ bytesio_dealloc(PyObject *op)
     _PyObject_GC_UNTRACK(self);
     Py_CLEAR(self->buf);
     Py_CLEAR(self->dict);
-    FT_CLEAR_WEAKREFS(op, self->weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     tp->tp_free(self);
     Py_DECREF(tp);
 }
@@ -1216,7 +1215,6 @@ static struct PyMethodDef bytesio_methods[] = {
 };
 
 static PyMemberDef bytesio_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(bytesio, weakreflist), Py_READONLY},
     {"__dictoffset__", Py_T_PYSSIZET, offsetof(bytesio, dict), Py_READONLY},
     {NULL}
 };
@@ -1240,7 +1238,7 @@ PyType_Spec _Py_bytesio_spec = {
     .name = "_io.BytesIO",
     .basicsize = sizeof(bytesio),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = bytesio_slots,
 };
 

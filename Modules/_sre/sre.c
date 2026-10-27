@@ -890,7 +890,7 @@ pattern_dealloc(PyObject *self)
 {
     PyTypeObject *tp = Py_TYPE(self);
     PyObject_GC_UnTrack(self);
-    FT_CLEAR_WEAKREFS(self, _PatternObject_CAST(self)->weakreflist);
+    FT_CLEAR_WEAKREFS(self);
     (void)pattern_clear(self);
     tp->tp_free(self);
     Py_DECREF(tp);
@@ -1777,7 +1777,6 @@ _sre_compile_impl(PyObject *module, PyObject *pattern, int flags,
     self = PyObject_GC_NewVar(PatternObject, module_state->Pattern_Type, n);
     if (!self)
         return NULL;
-    self->weakreflist = NULL;
     self->pattern = NULL;
     self->groupindex = NULL;
     self->indexgroup = NULL;
@@ -3400,7 +3399,6 @@ static PyMemberDef pattern_members[] = {
      "The regex matching flags."},
     {"groups",     Py_T_PYSSIZET,  PAT_OFF(groups),        Py_READONLY,
      "The number of capturing groups in the pattern."},
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(PatternObject, weakreflist), Py_READONLY},
     {NULL}  /* Sentinel */
 };
 
@@ -3423,7 +3421,8 @@ static PyType_Spec pattern_spec = {
     .basicsize = sizeof(PatternObject),
     .itemsize = sizeof(SRE_CODE),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_IMMUTABLETYPE |
-              Py_TPFLAGS_DISALLOW_INSTANTIATION | Py_TPFLAGS_HAVE_GC),
+              Py_TPFLAGS_DISALLOW_INSTANTIATION | Py_TPFLAGS_HAVE_GC |
+              Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = pattern_slots,
 };
 

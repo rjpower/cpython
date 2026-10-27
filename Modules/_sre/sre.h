@@ -32,7 +32,6 @@ typedef struct {
     /* compatibility */
     PyObject* pattern; /* pattern source (or None) */
     int flags; /* flags used when compiling pattern source */
-    PyObject *weakreflist; /* List of weak references */
     int isbytes; /* pattern type (1 - bytes, 0 - string, -1 - None) */
 #ifdef Py_DEBUG
     /* for simulation of user interruption */

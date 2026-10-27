@@ -659,7 +659,6 @@ memory_alloc(int ndim)
     mv->view.shape = mv->ob_array;
     mv->view.strides = mv->ob_array + ndim;
     mv->view.suboffsets = mv->ob_array + 2 * ndim;
-    mv->weakreflist = NULL;
 
     _PyObject_GC_TRACK(mv);
     return mv;
@@ -1188,8 +1187,7 @@ memory_dealloc(PyObject *_self)
     _PyObject_GC_UNTRACK(self);
     _memory_release(self);
     Py_CLEAR(self->mbuf);
-    if (self->weakreflist != NULL)
-        PyObject_ClearWeakRefs((PyObject *) self);
+    PyObject_ClearWeakRefs((PyObject *) self);
     PyObject_GC_Del(self);
 }
 
@@ -3776,12 +3774,12 @@ PyTypeObject PyMemoryView_Type = {
     0,                                        /* tp_setattro */
     &memory_as_buffer,                        /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-       Py_TPFLAGS_SEQUENCE,                   /* tp_flags */
+       Py_TPFLAGS_SEQUENCE | Py_TPFLAGS_MANAGED_WEAKREF, /* tp_flags */
     memoryview__doc__,                        /* tp_doc */
     memory_traverse,                          /* tp_traverse */
     memory_clear,                             /* tp_clear */
     memory_richcompare,                       /* tp_richcompare */
-    offsetof(PyMemoryViewObject, weakreflist),/* tp_weaklistoffset */
+    0,                                        /* tp_weaklistoffset */
     memory_iter,                              /* tp_iter */
     0,                                        /* tp_iternext */
     memory_methods,                           /* tp_methods */

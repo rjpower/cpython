@@ -1703,7 +1703,7 @@ class SizeofTest(unittest.TestCase):
         # buffer
         # XXX
         # builtin_function_or_method
-        check(len, size('5P'))
+        check(len, size('4P'))
         # bytearray
         samples = [b'', b'u'*100000]
         for sample in samples:
@@ -1804,10 +1804,10 @@ class SizeofTest(unittest.TestCase):
             INTERPRETER_FRAME = '12PihccP'
         else:
             INTERPRETER_FRAME = '12PhccP'
-        check(x, size('3PiccPPPP' + INTERPRETER_FRAME + 'P'))
+        check(x, size('3PiccPPP' + INTERPRETER_FRAME + 'P'))
         # function
         def func(): pass
-        check(func, size('16Pi'))
+        check(func, size('15Pi'))
         class c():
             @staticmethod
             def foo():
@@ -1821,7 +1821,7 @@ class SizeofTest(unittest.TestCase):
             check(bar, size('PP'))
         # generator
         def get_gen(): yield 1
-        check(get_gen(), size('6P4c' + INTERPRETER_FRAME + 'P'))
+        check(get_gen(), size('5P4c' + INTERPRETER_FRAME + 'P'))
         # iterator
         check(iter('abc'), size('lP'))
         # callable-iterator
@@ -1853,7 +1853,7 @@ class SizeofTest(unittest.TestCase):
             md_gil = '?'
         else:
             md_gil = ''
-        check(unittest, size('PPPP?' + md_gil + 'NPPPPP'))
+        check(unittest, size('PPP?' + md_gil + 'NPPPPP'))
         # None
         check(None, size(''))
         # NotImplementedType
@@ -1886,7 +1886,7 @@ class SizeofTest(unittest.TestCase):
         # frozenset
         PySet_MINSIZE = 8
         samples = [[], range(10), range(50)]
-        s = size('3nP' + PySet_MINSIZE*'nP' + '2nP')
+        s = size('3nP' + PySet_MINSIZE*'nP' + '2n')
         for sample in samples:
             minused = len(sample)
             if minused == 0: tmp = 1
@@ -2023,7 +2023,8 @@ class SizeofTest(unittest.TestCase):
         check = self.check_sizeof
         # _ast.AST
         import _ast
-        check(_ast.Module(), size('3P'))
+        # The dict; a managed weak reference takes no space
+        check(_ast.Module(), size('P'))
         try:
             raise TypeError
         except TypeError as e:

@@ -199,7 +199,7 @@ cursor_dealloc(PyObject *op)
     pysqlite_Cursor *self = _pysqlite_Cursor_CAST(op);
     PyTypeObject *tp = Py_TYPE(self);
     PyObject_GC_UnTrack(self);
-    FT_CLEAR_WEAKREFS(op, self->in_weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     (void)tp->tp_clear(op);
     tp->tp_free(self);
     Py_DECREF(tp);
@@ -1403,7 +1403,6 @@ static struct PyMemberDef cursor_members[] =
     {"description", _Py_T_OBJECT, offsetof(pysqlite_Cursor, description), Py_READONLY},
     {"lastrowid", _Py_T_OBJECT, offsetof(pysqlite_Cursor, lastrowid), Py_READONLY},
     {"rowcount", Py_T_LONG, offsetof(pysqlite_Cursor, rowcount), Py_READONLY},
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(pysqlite_Cursor, in_weakreflist), Py_READONLY},
     {NULL}
 };
 
@@ -1454,7 +1453,8 @@ static PyType_Spec cursor_spec = {
     .name = MODULE_NAME ".Cursor",
     .basicsize = sizeof(pysqlite_Cursor),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
-              Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE |
+              Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = cursor_slots,
 };
 

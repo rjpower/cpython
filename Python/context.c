@@ -467,7 +467,6 @@ _context_alloc(void)
     ctx->ctx_vars = NULL;
     ctx->ctx_prev = NULL;
     ctx->ctx_entered = 0;
-    ctx->ctx_weakreflist = NULL;
 
     return ctx;
 }
@@ -568,10 +567,7 @@ static void
 context_tp_dealloc(PyObject *self)
 {
     _PyObject_GC_UNTRACK(self);
-    PyContext *ctx = _PyContext_CAST(self);
-    if (ctx->ctx_weakreflist != NULL) {
-        PyObject_ClearWeakRefs(self);
-    }
+    PyObject_ClearWeakRefs(self);
     (void)context_tp_clear(self);
 
     Py_TYPE(self)->tp_free(self);
@@ -828,12 +824,12 @@ PyTypeObject PyContext_Type = {
     .tp_iter = context_tp_iter,
     .tp_dealloc = context_tp_dealloc,
     .tp_getattro = PyObject_GenericGetAttr,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+                Py_TPFLAGS_MANAGED_WEAKREF,
     .tp_richcompare = context_tp_richcompare,
     .tp_traverse = context_tp_traverse,
     .tp_clear = context_tp_clear,
     .tp_new = context_tp_new,
-    .tp_weaklistoffset = offsetof(PyContext, ctx_weakreflist),
     .tp_hash = PyObject_HashNotImplemented,
 };
 

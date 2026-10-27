@@ -71,7 +71,6 @@ PyMethod_New(PyObject *func, PyObject *self)
     if (im == NULL) {
         return NULL;
     }
-    im->im_weakreflist = NULL;
     im->im_func = Py_NewRef(func);
     im->im_self = Py_NewRef(self);
     im->vectorcall = method_vectorcall;
@@ -210,7 +209,7 @@ method_dealloc(PyObject *self)
 {
     PyMethodObject *im = _PyMethodObject_CAST(self);
     _PyObject_GC_UNTRACK(im);
-    FT_CLEAR_WEAKREFS(self, im->im_weakreflist);
+    FT_CLEAR_WEAKREFS(self);
     Py_DECREF(im->im_func);
     Py_XDECREF(im->im_self);
     assert(Py_IS_TYPE(self, &PyMethod_Type));
@@ -318,11 +317,10 @@ PyTypeObject PyMethod_Type = {
     .tp_getattro = method_getattro,
     .tp_setattro = PyObject_GenericSetAttr,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-                Py_TPFLAGS_HAVE_VECTORCALL,
+                Py_TPFLAGS_HAVE_VECTORCALL | Py_TPFLAGS_MANAGED_WEAKREF,
     .tp_doc = method_new__doc__,
     .tp_traverse = method_traverse,
     .tp_richcompare = method_richcompare,
-    .tp_weaklistoffset = offsetof(PyMethodObject, im_weakreflist),
     .tp_methods = method_methods,
     .tp_members = method_memberlist,
     .tp_getset = method_getset,

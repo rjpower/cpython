@@ -255,8 +255,6 @@ typedef struct {
 
     ElementObjectExtra* extra;
 
-    PyObject *weakreflist; /* For tp_weaklistoffset */
-
 } ElementObject;
 
 
@@ -337,7 +335,6 @@ create_new_element(elementtreestate *st, PyObject *tag, PyObject *attrib)
     self->tag = Py_NewRef(tag);
     self->text = Py_NewRef(Py_None);
     self->tail = Py_NewRef(Py_None);
-    self->weakreflist = NULL;
 
     PyObject_GC_Track(self);
 
@@ -360,7 +357,6 @@ element_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         e->text = Py_NewRef(Py_None);
         e->tail = Py_NewRef(Py_None);
         e->extra = NULL;
-        e->weakreflist = NULL;
     }
     return (PyObject *)e;
 }
@@ -709,7 +705,7 @@ element_dealloc(PyObject *op)
     /* bpo-31095: UnTrack is needed before calling any callbacks */
     PyObject_GC_UnTrack(self);
 
-    FT_CLEAR_WEAKREFS(op, self->weakreflist);
+    FT_CLEAR_WEAKREFS(op);
 
     /* element_gc_clear clears all references and deallocates extra
     */
@@ -4399,11 +4395,6 @@ static PyMethodDef element_methods[] = {
     {NULL, NULL}
 };
 
-static struct PyMemberDef element_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(ElementObject, weakreflist), Py_READONLY},
-    {NULL},
-};
-
 static PyGetSetDef element_getsetlist[] = {
     {"tag",
         element_tag_getter,
@@ -4451,7 +4442,6 @@ static PyType_Slot element_slots[] = {
     {Py_tp_traverse, element_gc_traverse},
     {Py_tp_clear, element_gc_clear},
     {Py_tp_methods, element_methods},
-    {Py_tp_members, element_members},
     {Py_tp_getset, element_getsetlist},
     {Py_tp_init, element_init},
     {Py_tp_alloc, PyType_GenericAlloc},
@@ -4470,7 +4460,7 @@ static PyType_Spec element_spec = {
     .name = "xml.etree.ElementTree.Element",
     .basicsize = sizeof(ElementObject),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = element_slots,
 };
 

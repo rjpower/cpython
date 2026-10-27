@@ -725,7 +725,6 @@ typedef struct {
     PyObject_HEAD
     teedataobject *dataobj;
     int index;                  /* 0 <= index <= LINKCELLS */
-    PyObject *weakreflist;
     itertools_state *state;
 } teeobject;
 
@@ -954,7 +953,6 @@ tee_copy_impl(teeobject *to)
     newto->dataobj = (teedataobject *)Py_NewRef(to->dataobj);
     newto->index = to->index;
     Py_END_CRITICAL_SECTION();
-    newto->weakreflist = NULL;
     newto->state = to->state;
     PyObject_GC_Track(newto);
     return newto;
@@ -995,7 +993,6 @@ tee_fromiterable(itertools_state *state, PyObject *iterable)
     }
     to->dataobj = (teedataobject *)dataobj;
     to->index = 0;
-    to->weakreflist = NULL;
     to->state = state;
     PyObject_GC_Track(to);
 done:
@@ -1023,8 +1020,7 @@ static int
 tee_clear(PyObject *op)
 {
     teeobject *to = teeobject_CAST(op);
-    if (to->weakreflist != NULL)
-        PyObject_ClearWeakRefs(op);
+    PyObject_ClearWeakRefs(op);
     Py_CLEAR(to->dataobj);
     return 0;
 }
@@ -1044,11 +1040,6 @@ static PyMethodDef tee_methods[] = {
     {NULL,              NULL}           /* sentinel */
 };
 
-static PyMemberDef tee_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(teeobject, weakreflist), Py_READONLY},
-    {NULL},
-};
-
 static PyType_Slot tee_slots[] = {
     {Py_tp_dealloc, tee_dealloc},
     {Py_tp_doc, (void *)itertools__tee__doc__},
@@ -1057,7 +1048,6 @@ static PyType_Slot tee_slots[] = {
     {Py_tp_iter, PyObject_SelfIter},
     {Py_tp_iternext, tee_next},
     {Py_tp_methods, tee_methods},
-    {Py_tp_members, tee_members},
     {Py_tp_new, itertools__tee},
     {Py_tp_free, PyObject_GC_Del},
     {0, NULL},
@@ -1067,7 +1057,7 @@ static PyType_Spec tee_spec = {
     .name = "itertools._tee",
     .basicsize = sizeof(teeobject),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = tee_slots,
 };
 

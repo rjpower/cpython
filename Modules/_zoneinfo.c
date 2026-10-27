@@ -46,7 +46,6 @@ typedef struct {
     PyDateTime_TZInfo base;
     PyObject *key;
     PyObject *file_repr;
-    PyObject *weakreflist;
     size_t num_transitions;
     size_t num_ttinfos;
     int64_t *trans_list_utc;
@@ -414,7 +413,7 @@ zoneinfo_dealloc(PyObject *obj_self)
     PyTypeObject *tp = Py_TYPE(self);
     PyObject_GC_UnTrack(self);
 
-    FT_CLEAR_WEAKREFS(obj_self, self->weakreflist);
+    FT_CLEAR_WEAKREFS(obj_self);
 
     if (self->trans_list_utc != NULL) {
         PyMem_Free(self->trans_list_utc);
@@ -2701,10 +2700,6 @@ static PyMemberDef zoneinfo_members[] = {
      .type = Py_T_OBJECT_EX,
      .flags = Py_READONLY,
      .doc = NULL},
-    {.name = "__weaklistoffset__",
-     .offset = offsetof(PyZoneInfo_ZoneInfo, weakreflist),
-     .type = Py_T_PYSSIZET,
-     .flags = Py_READONLY},
     {NULL}, /* Sentinel */
 };
 
@@ -2725,7 +2720,8 @@ static PyType_Spec zoneinfo_spec = {
     .name = "zoneinfo.ZoneInfo",
     .basicsize = sizeof(PyZoneInfo_ZoneInfo),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
-              Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE |
+              Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = zoneinfo_slots,
 };
 

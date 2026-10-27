@@ -124,7 +124,6 @@ new_module_notrack(PyTypeObject *mt)
     if (m == NULL)
         return NULL;
     m->md_state = NULL;
-    m->md_weaklist = NULL;
     m->md_name = NULL;
     m->md_token_is_def = false;
     m->md_state_size = 0;
@@ -1065,7 +1064,7 @@ module_dealloc(PyObject *self)
 
     PyObject_GC_UnTrack(m);
 
-    FT_CLEAR_WEAKREFS(self, m->md_weaklist);
+    FT_CLEAR_WEAKREFS(self);
 
     assert_def_missing_or_redundant(m);
 
@@ -1738,12 +1737,12 @@ PyTypeObject PyModule_Type = {
     PyObject_GenericSetAttr,                    /* tp_setattro */
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-        Py_TPFLAGS_BASETYPE,                    /* tp_flags */
+        Py_TPFLAGS_BASETYPE | Py_TPFLAGS_MANAGED_WEAKREF, /* tp_flags */
     module___init____doc__,                     /* tp_doc */
     module_traverse,                            /* tp_traverse */
     module_clear,                               /* tp_clear */
     0,                                          /* tp_richcompare */
-    offsetof(PyModuleObject, md_weaklist),      /* tp_weaklistoffset */
+    0,                                          /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
     module_methods,                             /* tp_methods */

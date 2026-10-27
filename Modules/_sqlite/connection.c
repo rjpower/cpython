@@ -655,7 +655,6 @@ blobopen_impl(pysqlite_Connection *self, const char *table, const char *col,
     obj->connection = (pysqlite_Connection *)Py_NewRef(self);
     obj->blob = blob;
     obj->offset = 0;
-    obj->in_weakreflist = NULL;
 
     PyObject_GC_Track(obj);
 

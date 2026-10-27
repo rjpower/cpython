@@ -499,7 +499,6 @@ struct _odictobject {
 
     size_t od_state;             /* incremented whenever the LL changes */
     PyObject *od_inst_dict;      /* OrderedDict().__dict__ */
-    PyObject *od_weakreflist;    /* holds weakrefs to the odict */
 };
 
 #define _PyODictObject_CAST(op) _Py_CAST(PyODictObject*, (op))
@@ -1424,7 +1423,7 @@ odict_dealloc(PyObject *op)
     PyObject_GC_UnTrack(self);
 
     Py_XDECREF(self->od_inst_dict);
-    FT_CLEAR_WEAKREFS(op, self->od_weakreflist);
+    FT_CLEAR_WEAKREFS(op);
 
     _odict_clear_nodes(self);
     PyDict_Type.tp_dealloc((PyObject *)self);
@@ -1597,12 +1596,13 @@ PyTypeObject PyODict_Type = {
     0,                                          /* tp_getattro */
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,/* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
+        Py_TPFLAGS_MANAGED_WEAKREF,             /* tp_flags */
     odict_doc,                                  /* tp_doc */
     odict_traverse,                             /* tp_traverse */
     odict_tp_clear,                             /* tp_clear */
     odict_richcompare,                          /* tp_richcompare */
-    offsetof(PyODictObject, od_weakreflist),    /* tp_weaklistoffset */
+    0,                                          /* tp_weaklistoffset */
     odict_iter,                                 /* tp_iter */
     0,                                          /* tp_iternext */
     odict_methods,                              /* tp_methods */

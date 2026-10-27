@@ -58,7 +58,6 @@ typedef struct {
     Py_ssize_t finger;          /* Search finger for pop() */
 
     setentry smalltable[PySet_MINSIZE];
-    PyObject *weakreflist;      /* List of weak references */
 } PySetObject;
 
 #define _PySet_CAST(so) \

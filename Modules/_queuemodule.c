@@ -193,8 +193,6 @@ typedef struct {
 
     // Items in the queue
     RingBuf buf;
-
-    PyObject *weakreflist;
 } simplequeueobject;
 
 #define simplequeueobject_CAST(op)  ((simplequeueobject *)(op))
@@ -221,7 +219,7 @@ simplequeue_dealloc(PyObject *op)
 
     PyObject_GC_UnTrack(self);
     (void)simplequeue_clear(op);
-    FT_CLEAR_WEAKREFS(op, self->weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     tp->tp_free(self);
     Py_DECREF(tp);
 }
@@ -253,7 +251,6 @@ simplequeue_new_impl(PyTypeObject *type)
 
     self = (simplequeueobject *) type->tp_alloc(type, 0);
     if (self != NULL) {
-        self->weakreflist = NULL;
         if (RingBuf_Init(&self->buf) < 0) {
             Py_DECREF(self);
             return NULL;
@@ -555,17 +552,11 @@ static PyMethodDef simplequeue_methods[] = {
     {NULL,           NULL}              /* sentinel */
 };
 
-static struct PyMemberDef simplequeue_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(simplequeueobject, weakreflist), Py_READONLY},
-    {NULL},
-};
-
 static PyType_Slot simplequeue_slots[] = {
     {Py_tp_dealloc, simplequeue_dealloc},
     {Py_tp_doc, (void *)simplequeue_new__doc__},
     {Py_tp_traverse, simplequeue_traverse},
     {Py_tp_clear, simplequeue_clear},
-    {Py_tp_members, simplequeue_members},
     {Py_tp_methods, simplequeue_methods},
     {Py_tp_new, simplequeue_new},
     {0, NULL},
@@ -575,7 +566,7 @@ static PyType_Spec simplequeue_spec = {
     .name = "_queue.SimpleQueue",
     .basicsize = sizeof(simplequeueobject),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = simplequeue_slots,
 };
 

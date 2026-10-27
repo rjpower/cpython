@@ -25,23 +25,32 @@ PyAPI_FUNC(PyObject *) _PyList_GetItemRef(PyListObject *, Py_ssize_t i);
 #define _PyList_ITEMS(op) _Py_RVALUE(_PyList_CAST(op)->ob_item)
 
 PyAPI_FUNC(int)
-_PyList_AppendTakeRefListResize(PyListObject *self, PyObject *newitem);
+_PyList_AppendValueListResize(PyListObject *self, PyValue newitem);
 
+// Append a canonical value, which the list keeps as it is.
 // In free-threaded build: self should be locked by the caller, if it should be thread-safe.
 static inline int
-_PyList_AppendTakeRef(PyListObject *self, PyObject *newitem)
+_PyList_AppendValue(PyListObject *self, PyValue newitem)
 {
-    assert(self != NULL && newitem != NULL);
+    assert(self != NULL && !PyValue_IsNull(newitem));
     assert(PyList_Check(self));
     Py_ssize_t len = Py_SIZE(self);
     Py_ssize_t allocated = self->allocated;
     assert((size_t)len + 1 < PY_SSIZE_T_MAX);
     if (allocated > len) {
-        PyList_SET_ITEM(self, len, newitem);
+        PyList_SET_VALUE(self, len, newitem);
         Py_SET_SIZE(self, len + 1);
         return 0;
     }
-    return _PyList_AppendTakeRefListResize(self, newitem);
+    return _PyList_AppendValueListResize(self, newitem);
+}
+
+// Append the value of an object: a box of an inline value is not kept.
+static inline int
+_PyList_AppendTakeRef(PyListObject *self, PyObject *newitem)
+{
+    assert(newitem != NULL);
+    return _PyList_AppendValue(self, PyValue_FromObject(newitem));
 }
 
 // Repeat the bytes of a buffer in place
@@ -62,6 +71,10 @@ typedef struct {
     Py_ssize_t it_index;
     PyListObject *it_seq; /* Set to NULL when iterator is exhausted */
 } _PyListIterObject;
+
+// The next item of a list iterator as its value, so that no box is made:
+// 1, or 0 at the end.
+extern int _PyListIter_NextValue(PyObject *it, PyValue *item);
 
 struct PyValue;
 

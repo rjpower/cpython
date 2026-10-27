@@ -1079,23 +1079,39 @@ static PyObject *
 tupleiter_next(PyObject *self)
 {
     _PyTupleIterObject *it = _PyTupleIterObject_CAST(self);
-    PyTupleObject *seq;
-
-    assert(it != NULL);
-    seq = it->it_seq;
-    if (seq == NULL)
+    Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
+    PyValue item;
+    if (!_PyTupleIter_NextValue(self, &item)) {
         return NULL;
+    }
+    PyObject *res = PyValue_Object(item);
+    if (res == NULL) {
+        // The next call gives this item again.
+        FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index);
+    }
+    return res;
+}
+
+int
+_PyTupleIter_NextValue(PyObject *self, PyValue *item)
+{
+    assert(Py_IS_TYPE(self, &PyTupleIter_Type));
+    _PyTupleIterObject *it = _PyTupleIterObject_CAST(self);
+    PyTupleObject *seq = it->it_seq;
+    if (seq == NULL) {
+        return 0;
+    }
     assert(PyTuple_Check(seq));
 
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
     if (index < PyTuple_GET_SIZE(seq)) {
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index + 1);
-        return PyTuple_GET_ITEM(seq, index);
+        *item = PyTuple_GET_VALUE(seq, index);
+        return 1;
     }
 
     it->it_seq = NULL;
-    Py_DECREF(seq);
-    return NULL;
+    return 0;
 }
 
 static PyObject *

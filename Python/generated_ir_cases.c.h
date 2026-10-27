@@ -7552,17 +7552,6 @@
             {
                 arg = window[2];
                 self = nos;
-                PyObject *arg_object;
-                if (Py_UNLIKELY(PyValue_IsInline(arg))) {
-                    arg_object = _PyValue_BoxInline(arg);
-                    if (arg_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_LIST_APPEND, _PY_BOX_CALL);
-                }
-                else {
-                    arg_object = PyValue_ObjectBorrow(arg);
-                }
                 assert(oparg == 1);
                 PyObject *self_o = PyValue_ObjectBorrow(self);
                 if (!LOCK_OBJECT(self_o)) {
@@ -7571,7 +7560,7 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
                 STAT_INC(CALL, hit);
-                int err = _PyList_AppendTakeRef((PyListObject *)self_o, arg_object);
+                int err = _PyList_AppendValue((PyListObject *)self_o, arg);
                 UNLOCK_OBJECT(self_o);
                 if (err) {
                     window[0] = PyValue_NULL;
@@ -13697,19 +13686,7 @@
             else {
                 list_object = PyValue_ObjectBorrow(list);
             }
-            PyObject *v_object;
-            if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                v_object = _PyValue_BoxInline(v);
-                if (v_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(LIST_APPEND, _PY_BOX_CONTAINER_STORE);
-            }
-            else {
-                v_object = PyValue_ObjectBorrow(v);
-            }
-            int err = _PyList_AppendTakeRef((PyListObject *)list_object,
-                v_object);
+            int err = _PyList_AppendValue((PyListObject *)list_object, v);
             if (err < 0) {
                 window[1 + (oparg-1)] = PyValue_NULL;
                 JUMP_TO_LABEL(error);

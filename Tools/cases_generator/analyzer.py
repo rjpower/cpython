@@ -616,7 +616,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyGen_GetGeneratorFromFrame",
     "gen_try_set_executing",
     "_PyInterpreterState_GET",
-    "_PyList_AppendTakeRef",
+    "_PyList_AppendValue",
     "_PyList_ITEMS",
     "_PyLong_CompactValue",
     "_PyLong_DigitCount",

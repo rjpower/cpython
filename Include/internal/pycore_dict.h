@@ -11,6 +11,7 @@ extern "C" {
 #include "pycore_object.h"               // PyManagedDictPointer
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_SSIZE_ACQUIRE
 #include "pycore_value.h"                // PyValue
+#include "pycore_dict_state.h"           // BUILTINS_WATCHER_ID
 #include "pycore_stats.h"
 
 // Unsafe flavor of PyDict_GetItemWithError(): no error checking
@@ -163,6 +164,7 @@ extern PyObject *_PyDict_LoadBuiltinsFromGlobals(PyObject *globals);
 
 /* Set the item of the canonical key to the canonical value */
 PyAPI_FUNC(int) _PyDict_SetItemValue(PyDictObject *op, PyValue key, PyValue value);
+extern int _PyDict_GetItemValue(PyObject *op, PyObject *key, PyValue *result);
 // Exported for external JIT support
 PyAPI_FUNC(int) _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyObject *value);
 // Export for '_asyncio' shared extension
@@ -340,17 +342,9 @@ static inline PyDictUnicodeEntry* DK_UNICODE_ENTRIES(PyDictKeysObject *dk) {
 #define DICT_UNIQUE_ID_SHIFT (32)
 #define DICT_UNIQUE_ID_MAX ((UINT64_C(1) << (64 - DICT_UNIQUE_ID_SHIFT)) - 1)
 
-/* The first three dict watcher IDs are reserved for CPython,
- * so we don't need to check that they haven't been used */
-#define BUILTINS_WATCHER_ID     0
-#define GLOBALS_WATCHER_ID      1
-#define MODULE_WATCHER_ID       2
-#define FIRST_AVAILABLE_WATCHER 3
-#define DICT_RESERVED_WATCHERS_MASK ((1 << FIRST_AVAILABLE_WATCHER) - 1)
-
-
-/* The watchers get the key and the value as objects: an inline one is
-   boxed for them.  Either may be PyValue_NULL. */
+/* CPython's own watchers (pycore_dict_state.h) get the key and the value as
+   they are.  The others get them as objects: an inline one is boxed for
+   them.  Either may be PyValue_NULL. */
 PyAPI_FUNC(void)
 _PyDict_SendEvent(int watcher_bits,
                   PyDict_WatchEvent event,

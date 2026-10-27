@@ -22,6 +22,11 @@ PyAPI_FUNC(PyObject *) _PyNumber_InPlacePowerNoMod(PyObject *lhs, PyObject *rhs)
 
 PyAPI_FUNC(int) _PyObject_HasLen(PyObject *o);
 
+// The next item of the iterator it as its value: 1, or 0 where tp_iternext
+// returns NULL, with an exception set or not.  A list or tuple iterator's
+// item is not boxed.
+extern int _PyIter_NextValue(PyObject *it, PyValue *item);
+
 /* === Sequence protocol ================================================ */
 
 #define PY_ITERSEARCH_COUNT    1

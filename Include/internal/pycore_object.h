@@ -313,6 +313,11 @@ extern int _PyObject_StoreInstanceAttribute(PyObject *obj,
                                             PyObject *name, PyObject *value);
 extern bool _PyObject_TryGetInstanceAttribute(PyObject *obj, PyObject *name,
                                               PyObject **attr);
+// As _PyObject_TryGetInstanceAttribute(), with the attribute as its value
+// (PyValue_NULL if missing), so that no box is made.
+extern bool _PyObject_TryGetInstanceAttributeValue(PyObject *obj,
+                                                   PyObject *name,
+                                                   PyValue *attr);
 // Exported for external JIT support
 PyAPI_FUNC(PyObject *) _PyType_LookupRefAndVersion(PyTypeObject *, PyObject *,
                                              unsigned int *);

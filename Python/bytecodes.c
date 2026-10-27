@@ -1252,8 +1252,7 @@ dummy_func(
             _PUSH_FRAME;
 
         inst(LIST_APPEND, (list, unused[oparg-1], v -- list, unused[oparg-1])) {
-            int err = _PyList_AppendTakeRef((PyListObject *)PyValue_ObjectBorrow(list),
-                                           PyValue_ObjectBorrow(v));
+            int err = _PyList_AppendValue((PyListObject *)PyValue_ObjectBorrow(list), v);
             DEAD(v);
             ERROR_IF(err < 0);
         }
@@ -4681,7 +4680,7 @@ dummy_func(
 
             DEOPT_IF(!LOCK_OBJECT(self_o));
             STAT_INC(CALL, hit);
-            int err = _PyList_AppendTakeRef((PyListObject *)self_o, PyValue_ObjectBorrow(arg));
+            int err = _PyList_AppendValue((PyListObject *)self_o, arg);
             DEAD(arg);
             UNLOCK_OBJECT(self_o);
             if (err) {

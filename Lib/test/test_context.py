@@ -1262,6 +1262,11 @@ class HamtTest(unittest.TestCase):
 
         self.assertIsNone(ref())
 
+    # The collector scans C stacks conservatively: on a release build, a
+    # stale stack slot can keep the dead HAMT alive (found with
+    # _testinternalcapi.gc_live_roots_of).
+    @unittest.skipUnless(support.Py_DEBUG,
+                         "a stale C stack slot can keep a dead object alive")
     def test_hamt_gc_2(self):
         A = HashKey(100, 'A')
         B = HashKey(101, 'B')

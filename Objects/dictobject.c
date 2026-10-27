@@ -1962,6 +1962,30 @@ _PyDict_GetItemRef_KnownHash(PyDictObject *op, PyObject *key, Py_hash_t hash, Py
     return dict_getitem_result(op, key, hash, result);
 }
 
+/* PyDict_GetItemRef() with the item as its value, so that no box is made:
+   1 and the value, 0 and PyValue_NULL if the key is missing, or -1 and
+   PyValue_NULL with an exception set. */
+int
+_PyDict_GetItemValue(PyObject *op, PyObject *key, PyValue *result)
+{
+    *result = PyValue_NULL;
+    if (!PyAnyDict_Check(op)) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
+    Py_hash_t hash = _PyObject_HashDictKey(key);
+    if (hash == -1) {
+        dict_unhashable_type(op, key);
+        return -1;
+    }
+    Py_ssize_t ix = dict_lookup_object((PyDictObject *)op, key, hash, result);
+    if (ix == DKIX_ERROR) {
+        *result = PyValue_NULL;
+        return -1;
+    }
+    return !PyValue_IsNull(*result);
+}
+
 int
 PyDict_GetItemRef(PyObject *op, PyObject *key, PyObject **result)
 {
@@ -6854,7 +6878,8 @@ _PyObject_ManagedDictValidityCheck(PyObject *obj)
 // Attempts to get an instance attribute from the inline values. Returns true
 // if successful, or false if the caller needs to lookup in the dictionary.
 bool
-_PyObject_TryGetInstanceAttribute(PyObject *obj, PyObject *name, PyObject **attr)
+_PyObject_TryGetInstanceAttributeValue(PyObject *obj, PyObject *name,
+                                       PyValue *attr)
 {
     assert(PyUnicode_CheckExact(name));
     PyDictValues *values = _PyObject_InlineValues(obj);
@@ -6865,14 +6890,19 @@ _PyObject_TryGetInstanceAttribute(PyObject *obj, PyObject *name, PyObject **attr
     PyDictKeysObject *keys = CACHED_KEYS(Py_TYPE(obj));
     assert(keys != NULL);
     Py_ssize_t ix = _PyDictKeys_StringLookupSplit(keys, name);
-    if (ix == DKIX_EMPTY) {
-        *attr = NULL;
-        return true;
-    }
+    *attr = ix == DKIX_EMPTY ? PyValue_NULL : values->values[ix];
+    return true;
+}
 
+bool
+_PyObject_TryGetInstanceAttribute(PyObject *obj, PyObject *name, PyObject **attr)
+{
+    PyValue value;
+    if (!_PyObject_TryGetInstanceAttributeValue(obj, name, &value)) {
+        return false;
+    }
     // NULL means missing, so a box that cannot be made aborts.
-    *attr = _PyValue_ObjectOrAbort(values->values[ix],
-                                   "_PyObject_TryGetInstanceAttribute");
+    *attr = _PyValue_ObjectOrAbort(value, "_PyObject_TryGetInstanceAttribute");
     return true;
 }
 
@@ -7222,9 +7252,10 @@ validate_watcher_id(PyInterpreterState *interp, int watcher_id)
         PyErr_Format(PyExc_ValueError, "Invalid dict watcher ID %d", watcher_id);
         return -1;
     }
-    PyDict_WatchCallback cb = FT_ATOMIC_LOAD_PTR_RELAXED(
-        interp->dict_state.watchers[watcher_id]);
-    if (cb == NULL) {
+    int set = watcher_id < FIRST_AVAILABLE_WATCHER
+        ? interp->dict_state.core_watchers[watcher_id] != NULL
+        : FT_ATOMIC_LOAD_PTR_RELAXED(interp->dict_state.watchers[watcher_id]) != NULL;
+    if (!set) {
         PyErr_Format(PyExc_ValueError, "No dict watcher set for ID %d", watcher_id);
         return -1;
     }
@@ -7300,7 +7331,12 @@ PyDict_ClearWatcher(int watcher_id)
         res = -1;
         goto done;
     }
-    FT_ATOMIC_STORE_PTR_RELEASE(interp->dict_state.watchers[watcher_id], NULL);
+    if (watcher_id < FIRST_AVAILABLE_WATCHER) {
+        interp->dict_state.core_watchers[watcher_id] = NULL;
+    }
+    else {
+        FT_ATOMIC_STORE_PTR_RELEASE(interp->dict_state.watchers[watcher_id], NULL);
+    }
 done:
     FT_MUTEX_UNLOCK(&interp->dict_state.watcher_mutex);
     return res;
@@ -7318,6 +7354,18 @@ dict_event_name(PyDict_WatchEvent event) {
     Py_UNREACHABLE();
 }
 
+static void
+report_watcher_error(PyDict_WatchEvent event, PyDictObject *mp)
+{
+    // We don't want to resurrect the dict by potentially having an
+    // unraisablehook keep a reference to it, so we don't pass the
+    // dict as context, just an informative string message.  Dict
+    // repr can call arbitrary code, so we invent a simpler version.
+    PyErr_FormatUnraisable(
+        "Exception ignored in %s watcher callback for <dict at %p>",
+        dict_event_name(event), mp);
+}
+
 void
 _PyDict_SendEvent(int watcher_bits,
                   PyDict_WatchEvent event,
@@ -7325,7 +7373,22 @@ _PyDict_SendEvent(int watcher_bits,
                   PyValue key_value,
                   PyValue value_value)
 {
-    // Watchers take objects; NULL stands for no key or no value.
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    int core_bits = watcher_bits & DICT_RESERVED_WATCHERS_MASK;
+    for (int i = 0; core_bits; i++, core_bits >>= 1) {
+        if (core_bits & 1) {
+            _PyDict_CoreWatchCallback cb = interp->dict_state.core_watchers[i];
+            if (cb && cb(event, (PyObject *)mp, key_value, value_value) < 0) {
+                report_watcher_error(event, mp);
+            }
+        }
+    }
+    watcher_bits &= ~DICT_RESERVED_WATCHERS_MASK;
+    if (!watcher_bits) {
+        return;
+    }
+
+    // The other watchers take objects; NULL stands for no key or no value.
     PyObject *key = NULL, *value = NULL;
     if ((!PyValue_IsNull(key_value) &&
          (key = PyValue_Object(key_value)) == NULL) ||
@@ -7337,19 +7400,13 @@ _PyDict_SendEvent(int watcher_bits,
             dict_event_name(event), mp);
         return;
     }
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    for (int i = 0; i < DICT_MAX_WATCHERS; i++) {
+    watcher_bits >>= FIRST_AVAILABLE_WATCHER;
+    for (int i = FIRST_AVAILABLE_WATCHER; i < DICT_MAX_WATCHERS; i++) {
         if (watcher_bits & 1) {
             PyDict_WatchCallback cb = FT_ATOMIC_LOAD_PTR_ACQUIRE(
                 interp->dict_state.watchers[i]);
             if (cb && (cb(event, (PyObject*)mp, key, value) < 0)) {
-                // We don't want to resurrect the dict by potentially having an
-                // unraisablehook keep a reference to it, so we don't pass the
-                // dict as context, just an informative string message.  Dict
-                // repr can call arbitrary code, so we invent a simpler version.
-                PyErr_FormatUnraisable(
-                    "Exception ignored in %s watcher callback for <dict at %p>",
-                    dict_event_name(event), mp);
+                report_watcher_error(event, mp);
             }
         }
         watcher_bits >>= 1;

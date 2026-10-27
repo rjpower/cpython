@@ -1,6 +1,8 @@
 /* enumerate object */
 
 #include "Python.h"
+#include "pycore_abstract.h"      // _PyIter_NextValue()
+#include "pycore_value.h"         // _PyValue_BoxInt64()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_long.h"          // _PyLong_GetOne()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
@@ -125,7 +127,7 @@ increment_longindex_lock_held(enumobject *en)
 }
 
 static PyObject *
-enum_next_long(enumobject *en, PyObject* next_item)
+enum_next_long(enumobject *en, PyValue next_item)
 {
     PyObject *next_index;
 
@@ -133,37 +135,38 @@ enum_next_long(enumobject *en, PyObject* next_item)
     next_index = increment_longindex_lock_held(en);
     Py_END_CRITICAL_SECTION();
     if (next_index == NULL) {
-        Py_DECREF(next_item);
         return NULL;
     }
 
-    return _PyTuple_FromPairSteal(next_index, next_item);
+    PyValue pair[2] = {PyValue_FromObject(next_index), next_item};
+    return _PyTuple_FromValues(pair, 2);
 }
 
 static PyObject *
 enum_next(PyObject *op)
 {
     enumobject *en = _enumobject_CAST(op);
-    PyObject *next_index;
-    PyObject *next_item;
+    PyValue next_item;
     PyObject *it = en->en_sit;
 
-    next_item = (*Py_TYPE(it)->tp_iternext)(it);
-    if (next_item == NULL)
+    // The pair holds values: an inline index or item has no box.
+    if (!_PyIter_NextValue(it, &next_item))
         return NULL;
 
     Py_ssize_t en_index = FT_ATOMIC_LOAD_SSIZE_RELAXED(en->en_index);
     if (en_index == PY_SSIZE_T_MAX)
         return enum_next_long(en, next_item);
 
-    next_index = PyLong_FromSsize_t(en_index);
-    if (next_index == NULL) {
-        Py_DECREF(next_item);
+    PyValue next_index = en_index <= INT32_MAX
+        ? PyValue_FromInt32((int32_t)en_index)
+        : _PyValue_BoxInt64(en_index);
+    if (PyValue_IsNull(next_index)) {
         return NULL;
     }
     FT_ATOMIC_STORE_SSIZE_RELAXED(en->en_index, en_index + 1);
 
-    return _PyTuple_FromPairSteal(next_index, next_item);
+    PyValue pair[2] = {next_index, next_item};
+    return _PyTuple_FromValues(pair, 2);
 }
 
 static PyObject *

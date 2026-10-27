@@ -364,17 +364,16 @@ PyList_Insert(PyObject *op, Py_ssize_t where, PyObject *newitem)
     return err;
 }
 
-/* internal, used by _PyList_AppendTakeRef */
+/* internal, used by _PyList_AppendValue */
 int
-_PyList_AppendTakeRefListResize(PyListObject *self, PyObject *newitem)
+_PyList_AppendValueListResize(PyListObject *self, PyValue newitem)
 {
     Py_ssize_t len = Py_SIZE(self);
     assert(self->allocated == -1 || self->allocated == len);
     if (list_resize(self, len + 1) < 0) {
-        Py_DECREF(newitem);
         return -1;
     }
-    self->ob_item[len] = PyValue_FromObject(newitem);
+    self->ob_item[len] = newitem;
     return 0;
 }
 
@@ -3764,21 +3763,37 @@ listiter_next(PyObject *self)
 {
     _PyListIterObject *it = (_PyListIterObject *)self;
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
-    if (index < 0) {
+    PyValue item;
+    if (!_PyListIter_NextValue(self, &item)) {
         return NULL;
     }
+    PyObject *res = PyValue_Object(item);
+    if (res == NULL) {
+        // The next call gives this item again.
+        FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index);
+    }
+    return res;
+}
 
-    PyObject *item = list_get_item_ref(it->it_seq, index);
-    if (item == NULL) {
+int
+_PyListIter_NextValue(PyObject *self, PyValue *item)
+{
+    assert(Py_IS_TYPE(self, &PyListIter_Type));
+    _PyListIterObject *it = (_PyListIterObject *)self;
+    Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
+    if (index < 0) {
+        return 0;
+    }
+    PyListObject *seq = it->it_seq;
+    if (!valid_index(index, Py_SIZE(seq))) {
         // out-of-bounds
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, -1);
-        PyListObject *seq = it->it_seq;
         it->it_seq = NULL;
-        Py_DECREF(seq);
-        return NULL;
+        return 0;
     }
+    *item = seq->ob_item[index];
     FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index + 1);
-    return item;
+    return 1;
 }
 
 static PyObject *

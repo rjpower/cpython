@@ -2946,6 +2946,24 @@ PyIter_Next(PyObject *iter)
     return item;
 }
 
+int
+_PyIter_NextValue(PyObject *it, PyValue *item)
+{
+    PyTypeObject *tp = Py_TYPE(it);
+    if (tp == &PyListIter_Type) {
+        return _PyListIter_NextValue(it, item);
+    }
+    if (tp == &PyTupleIter_Type) {
+        return _PyTupleIter_NextValue(it, item);
+    }
+    PyObject *res = tp->tp_iternext(it);
+    if (res == NULL) {
+        return 0;
+    }
+    *item = PyValue_FromObject(res);
+    return 1;
+}
+
 PySendResult
 PyIter_Send(PyObject *iter, PyObject *arg, PyObject **result)
 {

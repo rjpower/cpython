@@ -1294,7 +1294,11 @@ class ClassPropertiesAndMethods(unittest.TestCase):
             for i in range(10):
                 g==g
             new_objects = len(gc.get_objects())
-            self.assertEqual(orig_objects, new_objects)
+            # The collector scans C stacks conservatively: a dead object
+            # that only a stale stack slot holds can be counted once and
+            # not the other time.  A leak would add one object for each
+            # comparison.
+            self.assertLessEqual(abs(new_objects - orig_objects), 1)
 
         class H(object):
             __slots__ = ['a', 'b']

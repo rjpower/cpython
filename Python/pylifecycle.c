@@ -643,7 +643,7 @@ init_interp_create_gil(PyThreadState *tstate, int gil)
 }
 
 static int
-builtins_dict_watcher(PyDict_WatchEvent event, PyObject *dict, PyObject *key, PyObject *new_value)
+builtins_dict_watcher(PyDict_WatchEvent event, PyObject *dict, PyValue key, PyValue new_value)
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     RARE_EVENT_INTERP_INC(interp, builtin_dict);
@@ -1530,8 +1530,8 @@ init_interp_main(PyThreadState *tstate)
     }
 
 
-    interp->dict_state.watchers[0] = &builtins_dict_watcher;
-    if (PyDict_Watch(0, interp->builtins) != 0) {
+    interp->dict_state.core_watchers[BUILTINS_WATCHER_ID] = &builtins_dict_watcher;
+    if (PyDict_Watch(BUILTINS_WATCHER_ID, interp->builtins) != 0) {
         return _PyStatus_ERR("failed to set builtin dict watcher");
     }
 

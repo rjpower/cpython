@@ -1,13 +1,16 @@
 """Boxes of inline values per loop of one pyperformance worker under Py_STATS:
 runs at 2 and 10 loops, differenced.  Prints the int and float boxes, the
 boxes by class and, with --sites N, the top N boxing call sites resolved with
-addr2line.  Usage: boxes.py [--sites N] BUILD BENCH..."""
+addr2line and the top N instructions by the boxes their handlers make (the
+eval loop's call sites can share code, so addr2line may name the wrong
+handler).  Usage: boxes.py [--sites N] BUILD BENCH..."""
 import argparse, collections, glob, os, re, shutil, subprocess
 
 R = "/home/power/code/cpython/.worktrees/python-boil-the-ocean"
 SP = glob.glob(f"{R}/build/pyperf-venvs/default/venv/*/lib/python3.16/site-packages")[0]
 STATS = "/tmp/py_stats"
 LINE = re.compile(r"^Object (inline int boxes|inline float boxes|boxes \(([^)]*)\)|box site\[([^]]*)\]): (\d+)$")
+OPCODE = re.compile(r"^opcode\[(\w+)\]\.boxes : (\d+)$")
 
 
 def run(build, bench, loops, pyc):
@@ -21,6 +24,10 @@ def run(build, bench, loops, pyc):
     counts = collections.Counter()
     for path in glob.glob(f"{STATS}/*.txt"):
         for line in open(path):
+            m = OPCODE.match(line.strip())
+            if m:
+                counts[f"op {m.group(1)}"] += int(m.group(2))
+                continue
             m = LINE.match(line.strip())
             if not m:
                 continue
@@ -80,6 +87,11 @@ def main():
         for v, site in sites[:a.sites]:
             if v > 0:
                 print(f"    {v:12,.0f}  {resolve(site)}", flush=True)
+        ops = sorted(((v, k[3:]) for k, v in per.items() if k.startswith("op ")),
+                     reverse=True)
+        for v, op in ops[:a.sites]:
+            if v > 0:
+                print(f"    {v:12,.0f}  handler {op}", flush=True)
 
 
 main()

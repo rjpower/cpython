@@ -742,7 +742,7 @@ reviewed work doc (`boil/design/work/10a-<n>.md`) and ends at gate level 3
 | 4 | 0.5 | Gate level 4: `step10a` recorded, note 06 section 20 with measurements and attribution, the hack register updated | `boil/bench/run.py --set all --metric instr,rss` and the memory group's time on an idle machine |
 
 **What blocks a rung from landing**, at any time and at the hard stop: a
-missed root in either verifier mode, a walk fallback in the suite, a C-mode
+trap in kill mode, a walk fallback in the suite, a C-mode
 or inline-audit failure, or the probe below 100/100. Retention counts and
 measurements do not.
 

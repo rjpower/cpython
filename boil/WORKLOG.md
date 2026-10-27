@@ -1801,3 +1801,39 @@ to 1069M, boxes per loop near zero except go's 30,809; the 10M-tuple loop
 2026-10-31 12:00; its rung 0 makes the shared-object suffix distinct so an
 upstream-built extension fails to import, closing 19.4's finding. Step B
 (note 10) is in rung 5 in its own worktree.
+||||||| parent of 94103ccc4f3 (boil: bench worklog entry for the internal set and its instr and rss of record)
+
+### 2026-10-27 14:10 — B: the internal benchmark set, instr and rss of record
+
+boil/bench/run.py runs note 10's set against one build and writes one JSON;
+compare.py prints the ratios and geomeans; boil/bench/README.md documents
+both. The kernels are pyperformance's 29 benchmarks from the 22 files of
+the Phase 1 subset, copied in-tree under MIT with pyperf removed (go is
+seeded; untimed preparation moved to setup()). The micro set is 43 files:
+note 10's object-protocol and calls list, and micro_loops.py's 16 loops
+unchanged, which reproduce note 02's values on baseline (skeleton 80.7,
+int add 164.0, float add 130.1). The memory group is 10M tuples, 1M
+instances, 200k dicts, start-up, imports, and the collector benchmark:
+L MB of (k, [k]) live and 1 GB of short-lived batches per loop, at L of
+16, 128 and 512, sized in object counts fixed from the baseline's
+allocation, so every build runs the same objects. Metrics: instr
+(differenced at loops and 3*loops, median of 4), time, rss and boxes (on a
+Py_STATS build; tested on build/step5c-pystats-snapshot). Children run
+with PYTHONHASHSEED=0 and no PYTHON* variables, since -E ignores the seed:
+dict_subscript's spread across pairs fell from 30 instructions to 0.3.
+micro_loops.py, rss.py, perloop.py and boxes.py are folded in and deleted.
+
+Results of record (boil/bench/results/), geomean against baseline, step1
+then step5c: instr on the kernels 1.012 and 1.151, micro 0.894 and 0.781,
+memory 1.159 and 1.998; peak RSS on the kernels 1.080 and 4.123, memory
+1.143 and 1.774. step5c's collector costs 2.92x, 3.24x and 4.18x the
+baseline's seconds per allocated GB at 16, 128 and 512 MB live (a smoke run
+at load 1.5, not of record), against the baseline's flat 0.52 to 0.58 s:
+that is the number step 7 must move. The boxes metric accounts for three
+step5c micro regressions: math.sin 2.724 (a float and an argument array
+boxed per call), generator resume 2.349 (the yielded int) and attribute
+store 1.352 (the stored int). Kernel peak RSS grows most where allocation
+is heaviest (nbody 8.19, fannkuch 7.63, coroutines 7.52). The time metric
+is not yet of record: it is taken only from a run whose 1-minute load
+stays below 4 throughout, and the 6b gate and the 6c builds have kept the
+machine busy; a watcher takes it in the first quiet window.

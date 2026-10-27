@@ -1541,3 +1541,48 @@ Ports on cpython-3.16-value-v0: six, attrs, pycparser, markupsafe and
 cython (pure) pass; cffi and pyyaml fail on `&PyTuple_GET_ITEM` as an
 lvalue and `ob_item` as `PyObject**`; numpy is blocked on the same
 Cython utility code. That is 6b's input.
+
+### 2026-10-27 03:20 — step 6a done: PyValue in the core, a one-word header, no PyGC_Head
+
+Since milestone 2:
+
+- Weak references live in a table keyed by address. 43 core and stdlib
+  types lost their weaklist field and set `Py_TPFLAGS_MANAGED_WEAKREF`,
+  which no longer requires GC support (628da0d299a).
+- PyGC_Head went, with the generation list heads and everything that
+  served them. A collected object starts at its block (f08adc371f1).
+- The managed-dict pre-header stays 16 bytes, a dict word and a pad. A
+  one-word pre-header leaves objects 8-aligned, and ctypes' aligned stores
+  then crash.
+
+getsizeof of int, float, 3-tuple, 10-list and a small instance went from
+32/24/72/136/48 before 6a to 24/16/48/112/24.
+
+Per loop against step 1:
+
+| | step 1 | now |
+|---|---|---|
+| richards | 575M | 594M |
+| go | 1244M | 1303M |
+| nbody | 1030M | 787M |
+| float | 781M | 903M |
+| spectral_norm | 802M | 1212M |
+
+The three header commits cost +1.1% to +6.0%, almost all of it the header
+commit's: the object map's set, test and clear, and Py_TYPE as a 48-bit
+mask (347 masks in the eval loop). Smaller objects partly offset it.
+
+Ruled: the trigger's requested-byte count goes to step 7, and the boxing in
+LOAD_NAME and STORE_NAME is recorded, not converted. Those two explain why
+peak RSS on the module-level tuple loop rose from 60 MB to 101 MB.
+
+Both full suites are green at every commit; the only failure is test_sys's
+remote-exec timeout. Ports on cpython-3.16-value-v0:
+
+- six, attrs, pycparser, markupsafe and cython (pure) pass;
+- cffi fails on 6 `ob_type` reads and 3 item arrays;
+- pyyaml and numpy fail in Cython's utility code: `m_weakreflist` and
+  `&PyTuple_GET_ITEM`. That is 6b's input.
+
+Note 06 section 18 has the record. Step 6a took about 9 hours of a
+five-day budget.

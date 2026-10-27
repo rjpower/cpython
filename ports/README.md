@@ -1,7 +1,16 @@
 # Ports
 
 Pinned PyPI packages, rebuilt from source against this interpreter and
-smoke-tested after every interpreter change. Run from the repository root:
+smoke-tested after every interpreter change.
+
+Ports frozen at value-v1 until the API settles, 2026-10-27 (note 10): no
+step is gated on them until the ports phase after step 10b. On
+cpython-3.16-value-v1, six, attrs, pycparser, markupsafe, cython and pyyaml
+pass; cffi and numpy fail at the API surface, since neither is converted
+to the value calling conventions. The cython patches are the record of the
+C API's Cython surface at value-v1.
+
+Run from the repository root:
 
 ```sh
 uv run --no-project --python python3 python -m ports build [ref ...] [--force]

@@ -1758,3 +1758,29 @@ is heaviest (nbody 8.19, fannkuch 7.63, coroutines 7.52). The time metric
 is not yet of record: it is taken only from a run whose 1-minute load
 stays below 4 throughout, and the 6b gate and the 6c builds have kept the
 machine busy; a watcher takes it in the first quiet window.
+
+### 2026-10-27 16:25 — 10a rung 0 gate (baseline counters, c_roots, ASan) clean
+
+Rung 0 of 10a (note 11 section 12) landed on boil/10a as: the work doc and
+its review (54e5548a7d0); root-phase counters, words and hits per scan
+class plus phase times, read by `_testinternalcapi.gc_root_stats()` and
+dumped per process and interpreter to `$PYTHON_GCROOTSTATS` (b7aa17bfc76);
+an ASan build with the collector, mimalloc kept as the allocator with
+`MI_TRACK_ASAN` and the conservative scan unsanitized (34db6e245ec);
+`boil/tools/measure/c_roots.py`, the token-level probe (56ffe6f6d79); note
+11 questions 11 and 12, as ruled, and the measurements (e20e241f5c9).
+c_roots counts 6,644 of 16,251 functions holding an object across a
+collecting call, more than note 11's estimate because the item and cell
+readers box in this tree (question 12). Over gate 2's suite, 51,301 marks
+spend 13.6 ms each in the root phase, 13.0 of it in the precise structs
+pass; per mark the conservative scan reads 905 stack words, 154,360 data
+words and 9,805 struct words; the counters cost at most 0.02% instructions
+on the collector benchmark. Under ASan test_gc runs 68 tests with two
+retention failures (the conservative scan's), and poisoning reports
+use-after-poison. Gates: gate 0 1,898 tests; gate 1 1,456 on both builds;
+gate 2 556/564 files, 50,734 tests, only test_sys's pre-existing
+remote-exec timeout; gate 3 the same on build/debug, regen unchanged.
+test_cext under -u cpu fails 5 of 16 on VirtualPyObject (a C++ `new`
+object) since 29cbc5795a2's object-heap check, which is in 10a's base;
+10a does not change it. The rung 1 work doc and its review are
+887f403e01a; the C mode started 16:04 and has until 2026-10-28 16:04.

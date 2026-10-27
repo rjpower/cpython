@@ -1586,3 +1586,27 @@ remote-exec timeout. Ports on cpython-3.16-value-v0:
 
 Note 06 section 18 has the record. Step 6a took about 9 hours of a
 five-day budget.
+
+### 2026-10-27 05:50 — step 6a landed; review pause before 6b
+
+Step 6a handed back at 0db53649e9c and the gate was run here on an idle
+tree with fresh pyc caches: full suite on dev-default (556 files, 50,692
+tests, 5 min 4 s) and dev-debug (12 min 16 s), each failing only
+test_sys's pre-existing remote-exec timeout; six and attrs rebuilt and
+checked on cpython-3.16-value-v0 (PASS, 0 patch lines); per loop (M)
+step 1 / 5c / now: richards 576.5 / 519.5 / 593.1, go 1244.3 / 1179.7 /
+1302.5, nbody 1030.3 / 1424.0 / 786.6, float 780.5 / 1030.6 / 903.0.
+Step 6a took about 11 hours of a five-day budget.
+
+6b is not launched. Note 08 (boil/design/08-review-at-6a.md, loom
+artifact review-6a) pauses the plan at this boundary: it lists the
+interim mechanisms with the step that retires each (the hack register),
+proposes 6b as "the PyValue C API" (value-typed protocols as the core's
+interface, the PyObject* API as the boxing compatibility layer, then the
+Cython and C ports) rather than patching ports against boxing accessors,
+states the rule that a specialised handler exists for a feedback kind the
+JIT guards on and not for a benchmark (BINARY_OP_POWER_FLOAT's
+positive-base guard is the case in point), and proposes splitting step 10
+so that precise roots (10a) run after 6c and before the generational
+collector and the JITs. A pyperformance timing run against the Phase 1
+baseline starts now as the first wall-clock measurement since Phase 1.

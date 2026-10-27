@@ -127,7 +127,7 @@ As a consequence of this, split keys have a maximum size of 16.
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_SSIZE_RELAXED
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextValue()
 #include "pycore_tuple.h"         // _PyTuple_FromPair()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
 
@@ -2792,7 +2792,7 @@ dict_set_fromkeys(PyDictObject *mp, PyObject *iterable, PyObject *value)
     assert(can_modify_dict(mp));
 
     Py_ssize_t pos = 0;
-    PyObject *key;
+    PyValue key;
     Py_hash_t hash;
     uint8_t log2_keysize = estimate_log2_keysize(PySet_GET_SIZE(iterable));
     uint8_t new_size = Py_MAX(log2_keysize, DK_LOG_SIZE(mp->ma_keys));
@@ -2802,8 +2802,8 @@ dict_set_fromkeys(PyDictObject *mp, PyObject *iterable, PyObject *value)
     }
 
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(iterable);
-    while (_PySet_NextEntryRef(iterable, &pos, &key, &hash)) {
-        if (insertdict(mp, PyValue_FromObject(key), hash, PyValue_FromObject(value))) {
+    while (_PySet_NextValue(iterable, &pos, &key, &hash)) {
+        if (insertdict(mp, key, hash, PyValue_FromObject(value))) {
             Py_DECREF(mp);
             return NULL;
         }
@@ -4622,7 +4622,7 @@ dict_contains(PyObject *op, PyObject *key)
         return -1;
     }
 
-    return _PyDict_Contains_KnownHash(op, key, hash);
+    return _PyDict_Contains_KnownHash(op, PyValue_FromObject(key), hash);
 }
 
 /* Return 1 if `key` is in dict `op`, 0 if not, and -1 on error. */
@@ -4651,13 +4651,13 @@ PyDict_ContainsString(PyObject *op, const char *key)
 
 /* Internal version of PyDict_Contains used when the hash value is already known */
 int
-_PyDict_Contains_KnownHash(PyObject *op, PyObject *key, Py_hash_t hash)
+_PyDict_Contains_KnownHash(PyObject *op, PyValue key, Py_hash_t hash)
 {
     PyDictObject *mp = _PyAnyDict_CAST(op);
     PyValue value;
     Py_ssize_t ix;
 
-    ix = dict_lookup_object(mp, key, hash, &value);
+    ix = _Py_dict_lookup(mp, key, hash, &value);
     if (ix == DKIX_ERROR)
         return -1;
     if (ix != DKIX_EMPTY && !PyValue_IsNull(value)) {

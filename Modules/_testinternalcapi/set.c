@@ -18,25 +18,28 @@ set_update(PyObject *self, PyObject *args)
 }
 
 static PyObject *
-set_next_entry(PyObject *self, PyObject *args)
+set_next_value(PyObject *self, PyObject *args)
 {
     int rc;
     Py_ssize_t pos;
     Py_hash_t hash = (Py_hash_t)UNINITIALIZED_SIZE;
-    PyObject *set, *item = UNINITIALIZED_PTR;
+    PyObject *set;
+    PyValue item = PyValue_NULL;
     if (!PyArg_ParseTuple(args, "On", &set, &pos)) {
         return NULL;
     }
     NULLABLE(set);
     Py_BEGIN_CRITICAL_SECTION(set);
-    rc = _PySet_NextEntryRef(set, &pos, &item, &hash);
+    rc = _PySet_NextValue(set, &pos, &item, &hash);
     Py_END_CRITICAL_SECTION();
     if (rc == 1) {
-        PyObject *ret = Py_BuildValue("innO", rc, pos, hash, item);
-        Py_DECREF(item);
-        return ret;
+        PyObject *item_o = PyValue_Object(item);
+        if (item_o == NULL) {
+            return NULL;
+        }
+        return Py_BuildValue("innO", rc, pos, hash, item_o);
     }
-    assert(item == UNINITIALIZED_PTR);
+    assert(PyValue_IsNull(item));
     assert(hash == (Py_hash_t)UNINITIALIZED_SIZE);
     if (rc == -1) {
         return NULL;
@@ -48,7 +51,7 @@ set_next_entry(PyObject *self, PyObject *args)
 
 static PyMethodDef TestMethods[] = {
     {"set_update", set_update, METH_VARARGS},
-    {"set_next_entry", set_next_entry, METH_VARARGS},
+    {"set_next_value", set_next_value, METH_VARARGS},
 
     {NULL},
 };

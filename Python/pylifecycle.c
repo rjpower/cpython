@@ -26,7 +26,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_runtime_init.h"  // _PyRuntimeState_INIT
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextValue()
 #include "pycore_value.h"         // PyValue_FromObject()
 #include "pycore_stats.h"         // _PyStats_InterpInit()
 #include "pycore_sysmodule.h"     // _PySys_ClearAttrString()
@@ -3526,10 +3526,15 @@ _Py_DumpExtensionModules(int fd, PyInterpreterState *interp)
             int is_stdlib_ext = 0;
 
             Py_ssize_t i = 0;
-            PyObject *item;
+            PyValue item_value;
             Py_hash_t hash;
             // if stdlib_module_names is not NULL, it is always a frozenset.
-            while (_PySet_NextEntry(stdlib_module_names, &i, &item, &hash)) {
+            // This runs in a fatal error handler: no element is boxed.
+            while (_PySet_NextValue(stdlib_module_names, &i, &item_value, &hash)) {
+                if (PyValue_IsInline(item_value)) {
+                    continue;
+                }
+                PyObject *item = PyValue_ObjectBorrow(item_value);
                 if (!PyUnicode_Check(item)) {
                     continue;
                 }

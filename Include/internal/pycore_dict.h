@@ -40,7 +40,7 @@ PyAPI_FUNC(int) _PyDict_DelItem_KnownHash(PyObject *mp, PyObject *key,
 PyAPI_FUNC(int) _PyDict_DelItem_KnownHash_LockHeld(PyObject *mp, PyObject *key,
                                               Py_hash_t hash);
 
-extern int _PyDict_Contains_KnownHash(PyObject *, PyObject *, Py_hash_t);
+extern int _PyDict_Contains_KnownHash(PyObject *, PyValue, Py_hash_t);
 
 extern void _PyDict_ClearKeysVersionLockHeld(PyObject *mp);
 

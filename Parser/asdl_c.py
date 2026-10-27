@@ -2327,7 +2327,7 @@ def generate_module_def(mod, metadata, f, internal_h):
         #include "pycore_modsupport.h"    // _PyArg_NoPositional()
         #include "pycore_pystate.h"       // _PyInterpreterState_GET()
         #include "pycore_runtime.h"       // _Py_ID()
-        #include "pycore_setobject.h"     // _PySet_NextEntry()
+        #include "pycore_setobject.h"     // _PySet_NextValue()
         #include "pycore_unionobject.h"   // _Py_union_type_or
 
         #include <stddef.h>               // offsetof()

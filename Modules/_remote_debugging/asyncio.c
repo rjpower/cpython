@@ -153,8 +153,10 @@ iterate_set_entries(
             return -1;
         }
 
-        uintptr_t key_addr = (uintptr_t)entry.key;
-        if (key_addr != 0 && entry.hash != -1) {
+        // A task is an object: its value is its address.
+        uintptr_t key_addr = entry.key.bits;
+        if (key_addr != 0 && key_addr < _PyValue_PTR_LIMIT
+            && entry.hash != -1) {
             if (parse_task(unwinder, key_addr, awaited_by) < 0) {
                 return -1;
             }

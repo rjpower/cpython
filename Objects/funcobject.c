@@ -9,7 +9,7 @@
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
 #include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextValue()
 #include "pycore_stats.h"
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 

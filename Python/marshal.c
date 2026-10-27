@@ -13,7 +13,7 @@
 #include "pycore_long.h"             // _PyLong_IsZero()
 #include "pycore_object.h"
 #include "pycore_pystate.h"          // _PyInterpreterState_GET()
-#include "pycore_setobject.h"        // _PySet_NextEntryRef()
+#include "pycore_setobject.h"        // _PySet_NextValue()
 #include "pycore_tuple.h"            // _PyTuple_FromPairSteal
 #include "pycore_unicodeobject.h"    // _PyUnicode_InternImmortal()
 #include "pycore_value.h"            // _PyObject_ValueIdentity()
@@ -828,6 +828,7 @@ w_complex_object(PyObject *v, WFILE *p)
     }
     else if (PyAnySet_CheckExact(v)) {
         PyObject *value;
+        PyValue element;
         Py_ssize_t pos = 0;
         Py_hash_t hash;
 
@@ -857,10 +858,14 @@ w_complex_object(PyObject *v, WFILE *p)
         Py_ssize_t i = 0;
         bool changed = false;
         Py_BEGIN_CRITICAL_SECTION(v);
-        while (_PySet_NextEntryRef(v, &pos, &value, &hash)) {
+        while (_PySet_NextValue(v, &pos, &element, &hash)) {
             if (i == n) {
                 changed = true;
-                Py_DECREF(value);
+                break;
+            }
+            value = PyValue_Object(element);
+            if (value == NULL) {
+                p->error = true;
                 break;
             }
             PyObject *dump = _PyMarshal_WriteObjectToString(value,

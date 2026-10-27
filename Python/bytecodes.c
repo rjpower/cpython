@@ -30,7 +30,7 @@
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_range.h"         // _PyRangeIterObject
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextValue()
 #include "pycore_sliceobject.h"   // _PyBuildSlice_ConsumeRefs
 #include "pycore_value.h"
 #include "pycore_template.h"      // _PyTemplate_Build()
@@ -1259,8 +1259,7 @@ dummy_func(
         }
 
         inst(SET_ADD, (set, unused[oparg-1], v -- set, unused[oparg-1])) {
-            int err = _PySet_AddTakeRef((PySetObject *)PyValue_ObjectBorrow(set),
-                                        PyValue_ObjectBorrow(v));
+            int err = _PySet_AddValue((PySetObject *)PyValue_ObjectBorrow(set), v);
             DEAD(v);
             ERROR_IF(err);
         }
@@ -2303,21 +2302,16 @@ dummy_func(
             }
 
             // Until the handler pushes it, a value root holds the set
-            // across the hashing of the values, which may run code, and
-            // another holds the box of an inline value.
-            _PyValueRoot set_ref, item;
+            // across the hashing of the values, which may run code.
+            _PyValueRoot set_ref;
             _PyThreadState_PushValueRoot(tstate, &set_ref);
-            _PyThreadState_PushValueRoot(tstate, &item);
             set_ref.value = PyValue_FromObject(set_o);
             int err = 0;
             for (Py_ssize_t i = 0; i < oparg && err == 0; i++) {
-                item.object = PyValue_Object(values[i]);
-                err = item.object == NULL ? -1 :
-                    _PySet_AddTakeRef(
-                        (PySetObject *)PyValue_ObjectBorrow(set_ref.value),
-                        item.object);
+                err = _PySet_AddValue(
+                    (PySetObject *)PyValue_ObjectBorrow(set_ref.value),
+                    values[i]);
             }
-            _PyThreadState_PopValueRoot(tstate, &item);
             PyValue made = _PyThreadState_PopValueRoot(tstate, &set_ref);
             INPUTS_DEAD();
             ERROR_IF(err);
@@ -3137,13 +3131,12 @@ dummy_func(
         macro(CONTAINS_OP_SET) = _GUARD_TOS_ANY_SET + unused/1 + _CONTAINS_OP_SET + POP_TOP + POP_TOP;
 
         op(_CONTAINS_OP_SET, (left, right -- b, l, r)) {
-            PyObject *left_o = PyValue_ObjectBorrow(left);
             PyObject *right_o = PyValue_ObjectBorrow(right);
 
             assert(PyAnySet_CheckExact(right_o));
             STAT_INC(CONTAINS_OP, hit);
             // Note: both set and frozenset use the same seq_contains method!
-            int res = _PySet_Contains((PySetObject *)right_o, left_o);
+            int res = _PySet_ContainsValue((PySetObject *)right_o, left);
             if (res < 0) {
                 ERROR_NO_POP();
             }

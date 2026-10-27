@@ -1005,6 +1005,34 @@ class ContainerCanonicalTest(unittest.TestCase):
                 C.b.__set__(c, distinct(value))
                 self.check_read(value, c.b)
 
+    def test_set(self):
+        for value in self.VALUES:
+            with self.subTest(value=value):
+                for s in ({distinct(value), 'a'},
+                          frozenset([distinct(value), 'a']),
+                          set([distinct(value), 'a'])):
+                    (item,) = [x for x in s if x != 'a']
+                    self.check_read(value, item)
+                    self.assertIn(distinct(value), s)
+                    self.assertEqual(gc.get_referents(s), ['a'])
+                s = {distinct(value)}
+                s.add(distinct(value))
+                self.assertEqual(len(s), 1)
+                self.check_read(value, s.pop())
+                s = set()
+                self.limited.set_add(s, distinct(value))
+                self.check_read(value, next(iter(s)))
+                self.assertEqual(self.limited.set_contains(s, distinct(value)), 1)
+                self.check_read(value, next(iter(s | {'b'} - {'b'})))
+
+    def test_set_mixed_int_float(self):
+        s = {1, 2.0, -0.0}
+        self.assertIn(1.0, s)
+        self.assertIn(2, s)
+        self.assertIn(0, s)
+        self.assertEqual(len(s | {1.0, 2, 0}), 3)
+        self.assertEqual(dict.fromkeys(s).keys(), s)
+
     def test_globals(self):
         for value in self.VALUES:
             with self.subTest(value=value):

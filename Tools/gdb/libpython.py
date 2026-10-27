@@ -1339,12 +1339,13 @@ class PySetObjectPtr(PyObjectPtr):
         return gdb.lookup_global_symbol('_PySet_Dummy').value()
 
     def __iter__(self):
-        dummy_ptr = self._dummy_key()
+        dummy_bits = int(self._dummy_key())
         table = self.field('table')
         for i in safe_range(self.field('mask') + 1):
             setentry = table[i]
             key = setentry['key']
-            if key != 0 and key != dummy_ptr:
+            bits = int(key['bits'])
+            if bits != 0 and bits != dummy_bits:
                 yield PyObjectPtr.from_pyobject_ptr(key)
 
     def proxyval(self, visited):

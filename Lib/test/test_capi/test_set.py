@@ -244,8 +244,8 @@ class TestInternalCAPI(BaseSetTests, unittest.TestCase):
         # CRASHES: update(instance, NULL)
         # CRASHES: update(NULL, NULL)
 
-    def test_set_next_entry(self):
-        set_next = _testinternalcapi.set_next_entry
+    def test_set_next_value(self):
+        set_next = _testinternalcapi.set_next_value
         for cls in (set, set_subclass, frozenset, frozenset_subclass):
             with self.subTest(cls=cls):
                 instance = cls('abc')

@@ -19,7 +19,7 @@
 #include "pycore_pyerrors.h"      // _PyErr_FormatNote
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextValue()
 #include "pycore_symtable.h"      // _Py_Mangle()
 #include "pycore_sysmodule.h"     // _PySys_GetSizeOf()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
@@ -3732,6 +3732,7 @@ static int
 save_set(PickleState *state, PicklerObject *self, PyObject *obj)
 {
     PyObject *item;
+    PyValue element;
     int i;
     Py_ssize_t set_size, ppos = 0;
     Py_hash_t hash;
@@ -3779,8 +3780,9 @@ save_set(PickleState *state, PicklerObject *self, PyObject *obj)
 
         int err = 0;
         Py_BEGIN_CRITICAL_SECTION(obj);
-        while (_PySet_NextEntryRef(obj, &ppos, &item, &hash)) {
-            err = save(state, self, item, 0);
+        while (_PySet_NextValue(obj, &ppos, &element, &hash)) {
+            item = PyValue_Object(element);
+            err = item == NULL ? -1 : save(state, self, item, 0);
             Py_CLEAR(item);
             if (err < 0) {
                 _PyErr_FormatNote("when serializing %T element", obj);

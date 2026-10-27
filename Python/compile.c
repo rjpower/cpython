@@ -24,7 +24,7 @@
 #include "pycore_regcfg.h"        // _PyRegCfg_Free()
 #include "pycore_pystate.h"       // _Py_GetConfig()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextValue()
 #include "pycore_stats.h"
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
@@ -463,10 +463,12 @@ const_cache_insert(PyObject *const_cache, PyObject *o, bool recursive)
             return NULL;
         }
         Py_ssize_t i = 0, pos = 0;
-        PyObject *item;
+        PyValue item;
         Py_hash_t hash;
-        while (_PySet_NextEntry(o, &pos, &item, &hash)) {
-            PyObject *k = const_cache_insert(const_cache, item, recursive);
+        while (_PySet_NextValue(o, &pos, &item, &hash)) {
+            PyObject *item_o = PyValue_Object(item);
+            PyObject *k = item_o == NULL ? NULL :
+                const_cache_insert(const_cache, item_o, recursive);
             if (k == NULL) {
                 Py_DECREF(tuple);
                 Py_DECREF(key);

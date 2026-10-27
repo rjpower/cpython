@@ -4745,19 +4745,15 @@
                 IR_CLEAR_SLOTS(&window[0], oparg);
                 JUMP_TO_LABEL(error);
             }
-            _PyValueRoot set_ref, item;
+            _PyValueRoot set_ref;
             _PyThreadState_PushValueRoot(tstate, &set_ref);
-            _PyThreadState_PushValueRoot(tstate, &item);
             set_ref.value = PyValue_FromObject(set_o);
             int err = 0;
             for (Py_ssize_t i = 0; i < oparg && err == 0; i++) {
-                item.object = PyValue_Object(values[i]);
-                err = item.object == NULL ? -1 :
-                _PySet_AddTakeRef(
+                err = _PySet_AddValue(
                                       (PySetObject *)PyValue_ObjectBorrow(set_ref.value),
-                                      item.object);
+                                      values[i]);
             }
-            _PyThreadState_PopValueRoot(tstate, &item);
             PyValue made = _PyThreadState_PopValueRoot(tstate, &set_ref);
             if (err) {
                 IR_CLEAR_SLOTS(&window[0], oparg);
@@ -9694,30 +9690,10 @@
             {
                 right = tos;
                 left = IR_SLOT(IR_FIELD_B(this_instr));
-                PyObject *left_object;
-                _PyValueRoot left_root;
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left_object = _PyValue_BoxInline(left);
-                    if (left_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CONTAINS_OP_SET, _PY_BOX_OTHER);
-                }
-                else {
-                    left_object = PyValue_ObjectBorrow(left);
-                }
-                PyObject *left_o = left_object;
                 PyObject *right_o = PyValue_ObjectBorrow(right);
                 assert(PyAnySet_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PushValueRoot(tstate, &left_root);
-                    left_root.object = left_object;
-                }
-                int res = _PySet_Contains((PySetObject *)right_o, left_o);
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PopValueRoot(tstate, &left_root);
-                }
+                int res = _PySet_ContainsValue((PySetObject *)right_o, left);
                 if (res < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -18628,31 +18604,11 @@
             else {
                 set_object = PyValue_ObjectBorrow(set);
             }
-            PyObject *v_object;
-            _PyValueRoot v_root;
-            if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                v_object = _PyValue_BoxInline(v);
-                if (v_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(SET_ADD, _PY_BOX_CONTAINER_STORE);
-            }
-            else {
-                v_object = PyValue_ObjectBorrow(v);
-            }
             if (Py_UNLIKELY(PyValue_IsInline(set))) {
                 _PyThreadState_PushValueRoot(tstate, &set_root);
                 set_root.object = set_object;
             }
-            if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                _PyThreadState_PushValueRoot(tstate, &v_root);
-                v_root.object = v_object;
-            }
-            int err = _PySet_AddTakeRef((PySetObject *)set_object,
-                                        v_object);
-            if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                _PyThreadState_PopValueRoot(tstate, &v_root);
-            }
+            int err = _PySet_AddValue((PySetObject *)set_object, v);
             if (Py_UNLIKELY(PyValue_IsInline(set))) {
                 _PyThreadState_PopValueRoot(tstate, &set_root);
             }

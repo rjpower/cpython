@@ -11,7 +11,7 @@
 #include "pycore_opcode_utils.h"  // RESUME_AT_FUNC_START
 #include "pycore_pymem.h"         // _PyMem_FreeDelayed()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextValue()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
@@ -3005,7 +3005,7 @@ _PyCode_ConstantKey(PyObject *op)
     }
     else if (PyFrozenSet_CheckExact(op)) {
         Py_ssize_t pos = 0;
-        PyObject *item;
+        PyValue item;
         Py_hash_t hash;
         Py_ssize_t i, len;
         PyObject *tuple, *set;
@@ -3016,10 +3016,12 @@ _PyCode_ConstantKey(PyObject *op)
             return NULL;
 
         i = 0;
-        while (_PySet_NextEntry(op, &pos, &item, &hash)) {
-            PyObject *item_key;
-
-            item_key = _PyCode_ConstantKey(item);
+        while (_PySet_NextValue(op, &pos, &item, &hash)) {
+            PyObject *item_key = NULL;
+            PyObject *item_o = PyValue_Object(item);
+            if (item_o != NULL) {
+                item_key = _PyCode_ConstantKey(item_o);
+            }
             if (item_key == NULL) {
                 Py_DECREF(tuple);
                 return NULL;

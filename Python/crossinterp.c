@@ -13,7 +13,7 @@
 #include "pycore_namespace.h"     // _PyNamespace_New()
 #include "pycore_pythonrun.h"     // _Py_SourceAsString()
 #include "pycore_runtime.h"       // _PyRuntime
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextValue()
 #include "pycore_typeobject.h"    // _PyStaticType_InitBuiltin()
 
 

@@ -11,7 +11,7 @@
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _PyObject_GC_TRACK(), _PyDebugAllocatorStats()
 #include "pycore_pyatomic_ft_wrappers.h"
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextValue()
 #include "pycore_value.h"
 #include "pycore_tuple.h"         // _PyTuple_FromArraySteal()
 #include "pycore_typeobject.h"    // _Py_TYPE_VERSION_LIST
@@ -1107,10 +1107,8 @@ list_extend_set(PyListObject *self, PySetObject *other)
     /* populate the end of self with iterable's items */
     Py_ssize_t setpos = 0;
     Py_hash_t hash;
-    PyObject *key;
     PyValue *dest = self->ob_item + m;
-    while (_PySet_NextEntryRef((PyObject *)other, &setpos, &key, &hash)) {
-        *dest = PyValue_FromObject(key);
+    while (_PySet_NextValue((PyObject *)other, &setpos, dest, &hash)) {
         dest++;
     }
     Py_SET_SIZE(self, r);

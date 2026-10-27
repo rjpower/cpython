@@ -244,24 +244,20 @@ PyDoc_STRVAR(builtin_abs__doc__,
 #define BUILTIN_ABS_METHODDEF    \
     {"abs", _PyCFunction_CAST(builtin_abs), METH_O, builtin_abs__doc__},
 
-static PyObject *
-builtin_abs_impl(PyObject *module, PyObject *number);
+static PyValue
+builtin_abs_impl(PyObject *module, PyValue number);
 
 static PyValue
 builtin_abs(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *number;
-    PyObject *_return_value;
+    PyValue number;
+    PyValue _return_value;
 
-    number = PyValue_Object(arg);
-    if (number == NULL) {
-        goto exit;
-    }
+    number = arg;
     _return_value = builtin_abs_impl(module, number);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
-exit:
     return return_value;
 }
 
@@ -277,23 +273,19 @@ PyDoc_STRVAR(builtin_all__doc__,
     {"all", _PyCFunction_CAST(builtin_all), METH_O, builtin_all__doc__},
 
 static PyObject *
-builtin_all_impl(PyObject *module, PyObject *iterable);
+builtin_all_impl(PyObject *module, PyValue iterable);
 
 static PyValue
 builtin_all(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *iterable;
+    PyValue iterable;
     PyObject *_return_value;
 
-    iterable = PyValue_Object(arg);
-    if (iterable == NULL) {
-        goto exit;
-    }
+    iterable = arg;
     _return_value = builtin_all_impl(module, iterable);
     return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -309,23 +301,19 @@ PyDoc_STRVAR(builtin_any__doc__,
     {"any", _PyCFunction_CAST(builtin_any), METH_O, builtin_any__doc__},
 
 static PyObject *
-builtin_any_impl(PyObject *module, PyObject *iterable);
+builtin_any_impl(PyObject *module, PyValue iterable);
 
 static PyValue
 builtin_any(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *iterable;
+    PyValue iterable;
     PyObject *_return_value;
 
-    iterable = PyValue_Object(arg);
-    if (iterable == NULL) {
-        goto exit;
-    }
+    iterable = arg;
     _return_value = builtin_any_impl(module, iterable);
     return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -343,24 +331,20 @@ PyDoc_STRVAR(builtin_ascii__doc__,
 #define BUILTIN_ASCII_METHODDEF    \
     {"ascii", _PyCFunction_CAST(builtin_ascii), METH_O, builtin_ascii__doc__},
 
-static PyObject *
-builtin_ascii_impl(PyObject *module, PyObject *obj);
+static PyValue
+builtin_ascii_impl(PyObject *module, PyValue obj);
 
 static PyValue
 builtin_ascii(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *obj;
-    PyObject *_return_value;
+    PyValue obj;
+    PyValue _return_value;
 
-    obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        goto exit;
-    }
+    obj = arg;
     _return_value = builtin_ascii_impl(module, obj);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
-exit:
     return return_value;
 }
 
@@ -446,24 +430,21 @@ PyDoc_STRVAR(builtin_format__doc__,
 #define BUILTIN_FORMAT_METHODDEF    \
     {"format", _PyCFunction_CAST(builtin_format), METH_FASTCALL, builtin_format__doc__},
 
-static PyObject *
-builtin_format_impl(PyObject *module, PyObject *value, PyObject *format_spec);
+static PyValue
+builtin_format_impl(PyObject *module, PyValue value, PyObject *format_spec);
 
 static PyValue
 builtin_format(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *value;
+    PyValue value;
     PyObject *format_spec = NULL;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("format", nargs, 1, 2)) {
         goto exit;
     }
-    value = PyValue_Object(args[0]);
-    if (value == NULL) {
-        goto exit;
-    }
+    value = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
@@ -480,7 +461,7 @@ builtin_format(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     }
 skip_optional:
     _return_value = builtin_format_impl(module, value, format_spec);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -496,23 +477,19 @@ PyDoc_STRVAR(builtin_chr__doc__,
     {"chr", _PyCFunction_CAST(builtin_chr), METH_O, builtin_chr__doc__},
 
 static PyObject *
-builtin_chr_impl(PyObject *module, PyObject *i);
+builtin_chr_impl(PyObject *module, PyValue i);
 
 static PyValue
 builtin_chr(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *i;
+    PyValue i;
     PyObject *_return_value;
 
-    i = PyValue_Object(arg);
-    if (i == NULL) {
-        goto exit;
-    }
+    i = arg;
     _return_value = builtin_chr_impl(module, i);
     return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -1063,33 +1040,27 @@ PyDoc_STRVAR(builtin_setattr__doc__,
     {"setattr", _PyCFunction_CAST(builtin_setattr), METH_FASTCALL, builtin_setattr__doc__},
 
 static PyObject *
-builtin_setattr_impl(PyObject *module, PyObject *obj, PyObject *name,
-                     PyObject *value);
+builtin_setattr_impl(PyObject *module, PyValue obj, PyObject *name,
+                     PyValue value);
 
 static PyValue
 builtin_setattr(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *obj;
+    PyValue obj;
     PyObject *name;
-    PyObject *value;
+    PyValue value;
     PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("setattr", nargs, 3, 3)) {
         goto exit;
     }
-    obj = PyValue_Object(args[0]);
-    if (obj == NULL) {
-        goto exit;
-    }
+    obj = args[0];
     name = PyValue_Object(args[1]);
     if (name == NULL) {
         goto exit;
     }
-    value = PyValue_Object(args[2]);
-    if (value == NULL) {
-        goto exit;
-    }
+    value = args[2];
     _return_value = builtin_setattr_impl(module, obj, name, value);
     return_value = PyValue_FromResult(_return_value);
 
@@ -1151,24 +1122,20 @@ PyDoc_STRVAR(builtin_hash__doc__,
 #define BUILTIN_HASH_METHODDEF    \
     {"hash", _PyCFunction_CAST(builtin_hash), METH_O, builtin_hash__doc__},
 
-static PyObject *
-builtin_hash_impl(PyObject *module, PyObject *obj);
+static PyValue
+builtin_hash_impl(PyObject *module, PyValue obj);
 
 static PyValue
 builtin_hash(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *obj;
-    PyObject *_return_value;
+    PyValue obj;
+    PyValue _return_value;
 
-    obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        goto exit;
-    }
+    obj = arg;
     _return_value = builtin_hash_impl(module, obj);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
-exit:
     return return_value;
 }
 
@@ -1305,7 +1272,7 @@ PyDoc_STRVAR(builtin_len__doc__,
 #define BUILTIN_LEN_METHODDEF    \
     {"len", _PyCFunction_CAST(builtin_len), METH_O, builtin_len__doc__},
 
-static PyObject *
+static PyValue
 builtin_len_impl(PyObject *module, PyObject *obj);
 
 static PyValue
@@ -1313,14 +1280,14 @@ builtin_len(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
     PyObject *obj;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     obj = PyValue_Object(arg);
     if (obj == NULL) {
         goto exit;
     }
     _return_value = builtin_len_impl(module, obj);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -1397,7 +1364,7 @@ PyDoc_STRVAR(builtin_ord__doc__,
 #define BUILTIN_ORD_METHODDEF    \
     {"ord", _PyCFunction_CAST(builtin_ord), METH_O, builtin_ord__doc__},
 
-static PyObject *
+static PyValue
 builtin_ord_impl(PyObject *module, PyObject *c);
 
 static PyValue
@@ -1405,14 +1372,14 @@ builtin_ord(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
     PyObject *c;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     c = PyValue_Object(arg);
     if (c == NULL) {
         goto exit;
     }
     _return_value = builtin_ord_impl(module, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -1430,9 +1397,8 @@ PyDoc_STRVAR(builtin_pow__doc__,
 #define BUILTIN_POW_METHODDEF    \
     {"pow", _PyCFunction_CAST(builtin_pow), METH_FASTCALL|METH_KEYWORDS, builtin_pow__doc__},
 
-static PyObject *
-builtin_pow_impl(PyObject *module, PyObject *base, PyObject *exp,
-                 PyObject *mod);
+static PyValue
+builtin_pow_impl(PyObject *module, PyValue base, PyValue exp, PyValue mod);
 
 static PyValue
 builtin_pow(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
@@ -1466,34 +1432,25 @@ builtin_pow(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *k
     #undef KWTUPLE
     PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
-    PyObject *base;
-    PyObject *exp;
-    PyObject *mod = Py_None;
-    PyObject *_return_value;
+    PyValue base;
+    PyValue exp;
+    PyValue mod = PyValue_FromObject(Py_None);
+    PyValue _return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    base = PyValue_Object(args[0]);
-    if (base == NULL) {
-        goto exit;
-    }
-    exp = PyValue_Object(args[1]);
-    if (exp == NULL) {
-        goto exit;
-    }
+    base = args[0];
+    exp = args[1];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    mod = PyValue_Object(args[2]);
-    if (mod == NULL) {
-        goto exit;
-    }
+    mod = args[2];
 skip_optional_pos:
     _return_value = builtin_pow_impl(module, base, exp, mod);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -1667,24 +1624,20 @@ PyDoc_STRVAR(builtin_repr__doc__,
 #define BUILTIN_REPR_METHODDEF    \
     {"repr", _PyCFunction_CAST(builtin_repr), METH_O, builtin_repr__doc__},
 
-static PyObject *
-builtin_repr_impl(PyObject *module, PyObject *obj);
+static PyValue
+builtin_repr_impl(PyObject *module, PyValue obj);
 
 static PyValue
 builtin_repr(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *obj;
-    PyObject *_return_value;
+    PyValue obj;
+    PyValue _return_value;
 
-    obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        goto exit;
-    }
+    obj = arg;
     _return_value = builtin_repr_impl(module, obj);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
-exit:
     return return_value;
 }
 
@@ -1701,8 +1654,8 @@ PyDoc_STRVAR(builtin_round__doc__,
 #define BUILTIN_ROUND_METHODDEF    \
     {"round", _PyCFunction_CAST(builtin_round), METH_FASTCALL|METH_KEYWORDS, builtin_round__doc__},
 
-static PyObject *
-builtin_round_impl(PyObject *module, PyObject *number, PyObject *ndigits);
+static PyValue
+builtin_round_impl(PyObject *module, PyValue number, PyValue ndigits);
 
 static PyValue
 builtin_round(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
@@ -1736,29 +1689,23 @@ builtin_round(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject 
     #undef KWTUPLE
     PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *number;
-    PyObject *ndigits = Py_None;
-    PyObject *_return_value;
+    PyValue number;
+    PyValue ndigits = PyValue_FromObject(Py_None);
+    PyValue _return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    number = PyValue_Object(args[0]);
-    if (number == NULL) {
-        goto exit;
-    }
+    number = args[0];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    ndigits = PyValue_Object(args[1]);
-    if (ndigits == NULL) {
-        goto exit;
-    }
+    ndigits = args[1];
 skip_optional_pos:
     _return_value = builtin_round_impl(module, number, ndigits);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -1817,8 +1764,8 @@ PyDoc_STRVAR(builtin_sum__doc__,
 #define BUILTIN_SUM_METHODDEF    \
     {"sum", _PyCFunction_CAST(builtin_sum), METH_FASTCALL|METH_KEYWORDS, builtin_sum__doc__},
 
-static PyObject *
-builtin_sum_impl(PyObject *module, PyObject *iterable, PyObject *start);
+static PyValue
+builtin_sum_impl(PyObject *module, PyValue iterable, PyValue start);
 
 static PyValue
 builtin_sum(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
@@ -1852,29 +1799,23 @@ builtin_sum(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *k
     #undef KWTUPLE
     PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *iterable;
-    PyObject *start = NULL;
-    PyObject *_return_value;
+    PyValue iterable;
+    PyValue start = PyValue_NULL;
+    PyValue _return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    iterable = PyValue_Object(args[0]);
-    if (iterable == NULL) {
-        goto exit;
-    }
+    iterable = args[0];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    start = PyValue_Object(args[1]);
-    if (start == NULL) {
-        goto exit;
-    }
+    start = args[1];
 skip_optional_pos:
     _return_value = builtin_sum_impl(module, iterable, start);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -1894,28 +1835,22 @@ PyDoc_STRVAR(builtin_isinstance__doc__,
     {"isinstance", _PyCFunction_CAST(builtin_isinstance), METH_FASTCALL, builtin_isinstance__doc__},
 
 static PyObject *
-builtin_isinstance_impl(PyObject *module, PyObject *obj,
-                        PyObject *class_or_tuple);
+builtin_isinstance_impl(PyObject *module, PyValue obj,
+                        PyValue class_or_tuple);
 
 static PyValue
 builtin_isinstance(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *obj;
-    PyObject *class_or_tuple;
+    PyValue obj;
+    PyValue class_or_tuple;
     PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("isinstance", nargs, 2, 2)) {
         goto exit;
     }
-    obj = PyValue_Object(args[0]);
-    if (obj == NULL) {
-        goto exit;
-    }
-    class_or_tuple = PyValue_Object(args[1]);
-    if (class_or_tuple == NULL) {
-        goto exit;
-    }
+    obj = args[0];
+    class_or_tuple = args[1];
     _return_value = builtin_isinstance_impl(module, obj, class_or_tuple);
     return_value = PyValue_FromResult(_return_value);
 
@@ -1965,4 +1900,4 @@ builtin_issubclass(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=74bd3571d23f1c89 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=16fc7e021344fcab input=a9049054013a1b77]*/

@@ -14931,12 +14931,8 @@ PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
 static PyValue
 unicodeiter_setstate(PyObject *op, PyValue state_value)
 {
-    PyObject *state = PyValue_Object(state_value);
-    if (state == NULL) {
-        return PyValue_NULL;
-    }
     unicodeiterobject *it = (unicodeiterobject *)op;
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = PyLong_AsSsize_tValue(state_value);
     if (index == -1 && PyErr_Occurred())
         return PyValue_NULL;
     if (it->it_seq != NULL) {

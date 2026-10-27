@@ -1597,14 +1597,8 @@ bytearray_insert(PyObject *self, const PyValue *args, Py_ssize_t nargs)
         }
         index = ival;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_getbytevalue(_arg, &item)) {
-            goto exit;
-        }
+    if (!getbytevalue_value(args[1], &item)) {
+        goto exit;
     }
     Py_BEGIN_CRITICAL_SECTION(self);
     _return_value = bytearray_insert_impl((PyByteArrayObject *)self, index, item);
@@ -1637,14 +1631,8 @@ bytearray_append(PyObject *self, PyValue arg)
     int item;
     PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_getbytevalue(_arg, &item)) {
-            goto exit;
-        }
+    if (!getbytevalue_value(arg, &item)) {
+        goto exit;
     }
     Py_BEGIN_CRITICAL_SECTION(self);
     _return_value = bytearray_append_impl((PyByteArrayObject *)self, item);
@@ -1764,14 +1752,8 @@ bytearray_remove(PyObject *self, PyValue arg)
     int value;
     PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_getbytevalue(_arg, &value)) {
-            goto exit;
-        }
+    if (!getbytevalue_value(arg, &value)) {
+        goto exit;
     }
     Py_BEGIN_CRITICAL_SECTION(self);
     _return_value = bytearray_remove_impl((PyByteArrayObject *)self, value);
@@ -2342,4 +2324,4 @@ bytearray_sizeof(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return bytearray_sizeof_impl((PyByteArrayObject *)self);
 }
-/*[clinic end generated code: output=f46ce6892b8d2fd1 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=ad3c4f0a69e76790 input=a9049054013a1b77]*/

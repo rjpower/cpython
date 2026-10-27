@@ -48,11 +48,13 @@ static int vgetargs1_impl(PyObject *args, const PyValue *stack, Py_ssize_t nargs
                           const char *format, va_list *p_va, int flags);
 static int vgetargs1(PyObject *, const char *, va_list *, int);
 static void seterror(Py_ssize_t, const char *, int *, const char *, const char *);
-static const char *convertitem(PyObject *, const char **, va_list *, int, int *,
+static const char *convertitem(PyValue, const char **, va_list *, int, int *,
                                char *, size_t, freelist_t *);
 static const char *converttuple(PyObject *, const char **, va_list *, int,
                                 int *, char *, size_t, freelist_t *);
-static const char *convertsimple(PyObject *, const char **, va_list *, int,
+static const char *convertsimple(PyValue, const char **, va_list *, int,
+                                 char *, size_t, freelist_t *);
+static const char *convertobject(PyObject *, const char **, va_list *, int,
                                  char *, size_t, freelist_t *);
 static Py_ssize_t convertbuffer(PyObject *, const void **p, const char **);
 static int getbuffer(PyObject *, Py_buffer *, const char**);
@@ -357,8 +359,9 @@ vgetargs1_impl(PyObject *compat_args, const PyValue *stack, Py_ssize_t nargs, co
                              fname==NULL ? "" : "()");
                 return cleanreturn(0, &freelist);
             }
-            msg = convertitem(compat_args, &format, p_va, flags, levels,
-                              msgbuf, sizeof(msgbuf), &freelist);
+            msg = convertitem(PyValue_FromObject(compat_args), &format, p_va,
+                              flags, levels, msgbuf, sizeof(msgbuf),
+                              &freelist);
             if (msg == NULL)
                 return cleanreturn(1, &freelist);
             seterror(levels[0], msg, levels+1, fname, message);
@@ -390,11 +393,7 @@ vgetargs1_impl(PyObject *compat_args, const PyValue *stack, Py_ssize_t nargs, co
     for (i = 0; i < nargs; i++) {
         if (*format == '|')
             format++;
-        PyObject *item;
-        if (box_arg(stack[i], &item) < 0) {
-            return cleanreturn(0, &freelist);
-        }
-        msg = convertitem(item, &format, p_va,
+        msg = convertitem(stack[i], &format, p_va,
                           flags, levels, msgbuf,
                           sizeof(msgbuf), &freelist);
         if (msg) {
@@ -611,9 +610,8 @@ converttuple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
     format = *p_format;
     for (i = 0; i < n; i++) {
         const char *msg;
-        PyObject *item = PyTuple_GET_ITEM(arg, i);
-        msg = convertitem(item, &format, p_va, flags, levels+1,
-                          msgbuf, bufsize, freelist);
+        msg = convertitem(PyTuple_GET_VALUE(arg, i), &format, p_va, flags,
+                          levels+1, msgbuf, bufsize, freelist);
         if (msg != NULL) {
             levels[0] = i+1;
             if (!istuple) {
@@ -634,7 +632,7 @@ converttuple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
 /* Convert a single item. */
 
 static const char *
-convertitem(PyObject *arg, const char **p_format, va_list *p_va, int flags,
+convertitem(PyValue arg, const char **p_format, va_list *p_va, int flags,
             int *levels, char *msgbuf, size_t bufsize, freelist_t *freelist)
 {
     const char *msg;
@@ -642,7 +640,11 @@ convertitem(PyObject *arg, const char **p_format, va_list *p_va, int flags,
 
     if (*format == '(' /* ')' */) {
         format++;
-        msg = converttuple(arg, &format, p_va, flags, levels, msgbuf,
+        PyObject *obj = PyValue_Object(arg);
+        if (obj == NULL) {
+            return msgbuf;
+        }
+        msg = converttuple(obj, &format, p_va, flags, levels, msgbuf,
                            bufsize, freelist);
         if (msg == NULL)
             format++;
@@ -710,24 +712,27 @@ convertcharerr(const char *expected, const char *what, Py_ssize_t size,
    When failing, an exception may or may not have been raised.
    Don't call if a tuple is expected.
 
+   The units that convert to a C integer, floating-point number or truth
+   value read the argument as a value, so that an inline int or float is not
+   boxed; convertobject() converts the others from the argument's object.
+
    When you add new format codes, please don't forget poor skipitem() below.
 */
 
 static const char *
-convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
+convertsimple(PyValue arg, const char **p_format, va_list *p_va, int flags,
               char *msgbuf, size_t bufsize, freelist_t *freelist)
 {
 #define RETURN_ERR_OCCURRED return msgbuf
 
     const char *format = *p_format;
     char c = *format++;
-    const char *sarg;
 
     switch (c) {
 
     case 'b': { /* unsigned byte -- very short int */
         unsigned char *p = va_arg(*p_va, unsigned char *);
-        long ival = PyLong_AsLong(arg);
+        long ival = PyLong_AsLongValue(arg);
         if (ival == -1 && PyErr_Occurred())
             RETURN_ERR_OCCURRED;
         else if (ival < 0) {
@@ -744,6 +749,142 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
             *p = (unsigned char) ival;
         break;
     }
+
+    case 'h': {/* signed short int */
+        short *p = va_arg(*p_va, short *);
+        long ival = PyLong_AsLongValue(arg);
+        if (ival == -1 && PyErr_Occurred())
+            RETURN_ERR_OCCURRED;
+        else if (ival < SHRT_MIN) {
+            PyErr_SetString(PyExc_OverflowError,
+                            "signed short integer is less than minimum");
+            RETURN_ERR_OCCURRED;
+        }
+        else if (ival > SHRT_MAX) {
+            PyErr_SetString(PyExc_OverflowError,
+                            "signed short integer is greater than maximum");
+            RETURN_ERR_OCCURRED;
+        }
+        else
+            *p = (short) ival;
+        break;
+    }
+
+    case 'i': {/* signed int */
+        int *p = va_arg(*p_va, int *);
+        long ival = PyLong_AsLongValue(arg);
+        if (ival == -1 && PyErr_Occurred())
+            RETURN_ERR_OCCURRED;
+        else if (ival > INT_MAX) {
+            PyErr_SetString(PyExc_OverflowError,
+                            "signed integer is greater than maximum");
+            RETURN_ERR_OCCURRED;
+        }
+        else if (ival < INT_MIN) {
+            PyErr_SetString(PyExc_OverflowError,
+                            "signed integer is less than minimum");
+            RETURN_ERR_OCCURRED;
+        }
+        else
+            *p = ival;
+        break;
+    }
+
+    case 'n': /* Py_ssize_t */
+    {
+        Py_ssize_t *p = va_arg(*p_va, Py_ssize_t *);
+        Py_ssize_t ival = -1;
+        PyValue index = PyNumber_IndexValue(arg);
+        if (!PyValue_IsNull(index)) {
+            ival = PyLong_AsSsize_tValue(index);
+        }
+        if (ival == -1 && PyErr_Occurred())
+            RETURN_ERR_OCCURRED;
+        *p = ival;
+        break;
+    }
+
+    case 'l': {/* long int */
+        long *p = va_arg(*p_va, long *);
+        long ival = PyLong_AsLongValue(arg);
+        if (ival == -1 && PyErr_Occurred())
+            RETURN_ERR_OCCURRED;
+        else
+            *p = ival;
+        break;
+    }
+
+    case 'L': {/* long long */
+        long long *p = va_arg( *p_va, long long * );
+        long long ival = PyLong_AsLongLongValue(arg);
+        if (ival == (long long)-1 && PyErr_Occurred())
+            RETURN_ERR_OCCURRED;
+        else
+            *p = ival;
+        break;
+    }
+
+    case 'f': {/* float */
+        float *p = va_arg(*p_va, float *);
+        double dval = PyFloat_AsDoubleValue(arg);
+        if (dval == -1.0 && PyErr_Occurred())
+            RETURN_ERR_OCCURRED;
+        else
+            *p = (float) dval;
+        break;
+    }
+
+    case 'd': {/* double */
+        double *p = va_arg(*p_va, double *);
+        double dval = PyFloat_AsDoubleValue(arg);
+        if (dval == -1.0 && PyErr_Occurred())
+            RETURN_ERR_OCCURRED;
+        else
+            *p = dval;
+        break;
+    }
+
+    case 'p': {/* boolean *p*redicate */
+        int *p = va_arg(*p_va, int *);
+        int val = PyObject_IsTrueValue(arg);
+        if (val > 0)
+            *p = 1;
+        else if (val == 0)
+            *p = 0;
+        else
+            RETURN_ERR_OCCURRED;
+        break;
+    }
+
+    default: {
+        PyObject *obj = PyValue_Object(arg);
+        if (obj == NULL) {
+            RETURN_ERR_OCCURRED;
+        }
+        return convertobject(obj, p_format, p_va, flags, msgbuf, bufsize,
+                             freelist);
+    }
+
+    }
+
+    *p_format = format;
+    return NULL;
+
+#undef RETURN_ERR_OCCURRED
+}
+
+/* convertsimple() for the units that take an object. */
+static const char *
+convertobject(PyObject *arg, const char **p_format, va_list *p_va, int flags,
+              char *msgbuf, size_t bufsize, freelist_t *freelist)
+{
+#define RETURN_ERR_OCCURRED return msgbuf
+
+    const char *format = *p_format;
+    char c = *format++;
+    const char *sarg;
+
+    switch (c) {
 
     case 'B': {/* byte sized bitfield - both signed and unsigned
                   values allowed */
@@ -762,26 +903,6 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
                 RETURN_ERR_OCCURRED;
             }
         }
-        break;
-    }
-
-    case 'h': {/* signed short int */
-        short *p = va_arg(*p_va, short *);
-        long ival = PyLong_AsLong(arg);
-        if (ival == -1 && PyErr_Occurred())
-            RETURN_ERR_OCCURRED;
-        else if (ival < SHRT_MIN) {
-            PyErr_SetString(PyExc_OverflowError,
-                            "signed short integer is less than minimum");
-            RETURN_ERR_OCCURRED;
-        }
-        else if (ival > SHRT_MAX) {
-            PyErr_SetString(PyExc_OverflowError,
-                            "signed short integer is greater than maximum");
-            RETURN_ERR_OCCURRED;
-        }
-        else
-            *p = (short) ival;
         break;
     }
 
@@ -805,26 +926,6 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
         break;
     }
 
-    case 'i': {/* signed int */
-        int *p = va_arg(*p_va, int *);
-        long ival = PyLong_AsLong(arg);
-        if (ival == -1 && PyErr_Occurred())
-            RETURN_ERR_OCCURRED;
-        else if (ival > INT_MAX) {
-            PyErr_SetString(PyExc_OverflowError,
-                            "signed integer is greater than maximum");
-            RETURN_ERR_OCCURRED;
-        }
-        else if (ival < INT_MIN) {
-            PyErr_SetString(PyExc_OverflowError,
-                            "signed integer is less than minimum");
-            RETURN_ERR_OCCURRED;
-        }
-        else
-            *p = ival;
-        break;
-    }
-
     case 'I': { /* int sized bitfield, both signed and
                    unsigned allowed */
         unsigned int *p = va_arg(*p_va, unsigned int *);
@@ -842,31 +943,6 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
                 RETURN_ERR_OCCURRED;
             }
         }
-        break;
-    }
-
-    case 'n': /* Py_ssize_t */
-    {
-        PyObject *iobj;
-        Py_ssize_t *p = va_arg(*p_va, Py_ssize_t *);
-        Py_ssize_t ival = -1;
-        iobj = _PyNumber_Index(arg);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
-        }
-        if (ival == -1 && PyErr_Occurred())
-            RETURN_ERR_OCCURRED;
-        *p = ival;
-        break;
-    }
-    case 'l': {/* long int */
-        long *p = va_arg(*p_va, long *);
-        long ival = PyLong_AsLong(arg);
-        if (ival == -1 && PyErr_Occurred())
-            RETURN_ERR_OCCURRED;
-        else
-            *p = ival;
         break;
     }
 
@@ -892,16 +968,6 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
         break;
     }
 
-    case 'L': {/* long long */
-        long long *p = va_arg( *p_va, long long * );
-        long long ival = PyLong_AsLongLong(arg);
-        if (ival == (long long)-1 && PyErr_Occurred())
-            RETURN_ERR_OCCURRED;
-        else
-            *p = ival;
-        break;
-    }
-
     case 'K': { /* long long sized bitfield */
         unsigned long long *p = va_arg(*p_va, unsigned long long *);
         if (!PyIndex_Check(arg)) {
@@ -921,26 +987,6 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
                 RETURN_ERR_OCCURRED;
             }
         }
-        break;
-    }
-
-    case 'f': {/* float */
-        float *p = va_arg(*p_va, float *);
-        double dval = PyFloat_AsDouble(arg);
-        if (dval == -1.0 && PyErr_Occurred())
-            RETURN_ERR_OCCURRED;
-        else
-            *p = (float) dval;
-        break;
-    }
-
-    case 'd': {/* double */
-        double *p = va_arg(*p_va, double *);
-        double dval = PyFloat_AsDouble(arg);
-        if (dval == -1.0 && PyErr_Occurred())
-            RETURN_ERR_OCCURRED;
-        else
-            *p = dval;
         break;
     }
 
@@ -995,18 +1041,6 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
         kind = PyUnicode_KIND(arg);
         data = PyUnicode_DATA(arg);
         *p = PyUnicode_READ(kind, data, 0);
-        break;
-    }
-
-    case 'p': {/* boolean *p*redicate */
-        int *p = va_arg(*p_va, int *);
-        int val = PyObject_IsTrue(arg);
-        if (val > 0)
-            *p = 1;
-        else if (val == 0)
-            *p = 0;
-        else
-            RETURN_ERR_OCCURRED;
         break;
     }
 
@@ -1658,6 +1692,21 @@ PyArg_ValidateKeywordArguments(PyObject *kwargs)
 static PyObject *
 new_kwtuple(const char * const *keywords, int total, int pos);
 
+/* PyDict_GetItemStringRef() with the item as a value, PyValue_NULL if
+   absent, so that an inline int or float is not boxed.  0, or -1 with an
+   exception set. */
+static int
+dict_get_item_string_value(PyObject *kwargs, const char *key, PyValue *result)
+{
+    PyObject *key_obj = PyUnicode_FromString(key);
+    if (key_obj == NULL) {
+        *result = PyValue_NULL;
+        return -1;
+    }
+    return _PyDict_GetItemValue(kwargs, PyValue_FromObject(key_obj),
+                                result) < 0 ? -1 : 0;
+}
+
 /* The value of the keyword argument key, or PyValue_NULL if absent. */
 static PyValue
 find_keyword_str(PyObject *kwnames, const PyValue *kwstack, const char *key)
@@ -1828,34 +1877,31 @@ vgetargskeywords_impl(const PyValue *args, Py_ssize_t nargs,
             return cleanreturn(0, &freelist);
         }
         if (!skip) {
-            PyObject *current_arg;
+            PyValue current_arg;
             if (i < nargs) {
-                if (box_arg(args[i], &current_arg) < 0) {
-                    return cleanreturn(0, &freelist);
-                }
+                current_arg = args[i];
             }
             else if (nkwargs && i >= pos) {
                 if (kwargs != NULL) {
-                    if (PyDict_GetItemStringRef(kwargs, kwlist[i], &current_arg) < 0) {
+                    if (dict_get_item_string_value(kwargs, kwlist[i],
+                                                   &current_arg) < 0) {
                         return cleanreturn(0, &freelist);
                     }
                 }
-                else if (box_arg(find_keyword_str(kwnames, kwstack, kwlist[i]),
-                                 &current_arg) < 0) {
-                    return cleanreturn(0, &freelist);
+                else {
+                    current_arg = find_keyword_str(kwnames, kwstack, kwlist[i]);
                 }
-                if (current_arg) {
+                if (!PyValue_IsNull(current_arg)) {
                     --nkwargs;
                 }
             }
             else {
-                current_arg = NULL;
+                current_arg = PyValue_NULL;
             }
 
-            if (current_arg) {
+            if (!PyValue_IsNull(current_arg)) {
                 msg = convertitem(current_arg, &format, p_va, flags,
                     levels, msgbuf, sizeof(msgbuf), &freelist);
-                Py_DECREF(current_arg);
                 if (msg) {
                     seterror(i+1, msg, levels, fname, custom_msg);
                     return cleanreturn(0, &freelist);
@@ -1926,18 +1972,17 @@ vgetargskeywords_impl(const PyValue *args, Py_ssize_t nargs,
         Py_ssize_t j;
         /* make sure there are no arguments given by name and position */
         for (i = pos; i < nargs; i++) {
-            PyObject *current_arg;
+            PyValue current_arg;
             if (kwargs != NULL) {
-                if (PyDict_GetItemStringRef(kwargs, kwlist[i], &current_arg) < 0) {
+                if (dict_get_item_string_value(kwargs, kwlist[i],
+                                               &current_arg) < 0) {
                     return cleanreturn(0, &freelist);
                 }
             }
-            else if (box_arg(find_keyword_str(kwnames, kwstack, kwlist[i]),
-                             &current_arg) < 0) {
-                return cleanreturn(0, &freelist);
+            else {
+                current_arg = find_keyword_str(kwnames, kwstack, kwlist[i]);
             }
-            if (current_arg) {
-                Py_DECREF(current_arg);
+            if (!PyValue_IsNull(current_arg)) {
                 /* arg present in tuple and in dict */
                 PyErr_Format(PyExc_TypeError,
                              "argument for %.200s%s given by name ('%s') "
@@ -2396,35 +2441,32 @@ vgetargskeywordsfast_impl(const PyValue *args, Py_ssize_t nargs,
         }
         assert(!IS_END_OF_FORMAT(*format));
 
-        PyObject *current_arg;
+        PyValue current_arg;
         if (i < nargs) {
-            if (box_arg(args[i], &current_arg) < 0) {
-                return cleanreturn(0, &freelist);
-            }
+            current_arg = args[i];
         }
         else if (nkwargs && i >= pos) {
             keyword = PyTuple_GET_ITEM(kwtuple, i - pos);
             if (kwargs != NULL) {
-                if (PyDict_GetItemRef(kwargs, keyword, &current_arg) < 0) {
+                if (_PyDict_GetItemValue(kwargs, PyValue_FromObject(keyword),
+                                         &current_arg) < 0) {
                     return cleanreturn(0, &freelist);
                 }
             }
-            else if (box_arg(find_keyword(kwnames, kwstack, keyword),
-                             &current_arg) < 0) {
-                return cleanreturn(0, &freelist);
+            else {
+                current_arg = find_keyword(kwnames, kwstack, keyword);
             }
-            if (current_arg) {
+            if (!PyValue_IsNull(current_arg)) {
                 --nkwargs;
             }
         }
         else {
-            current_arg = NULL;
+            current_arg = PyValue_NULL;
         }
 
-        if (current_arg) {
+        if (!PyValue_IsNull(current_arg)) {
             msg = convertitem(current_arg, &format, p_va, flags,
                 levels, msgbuf, sizeof(msgbuf), &freelist);
-            Py_DECREF(current_arg);
             if (msg) {
                 seterror(i+1, msg, levels, parser->fname, parser->custom_msg);
                 return cleanreturn(0, &freelist);
@@ -2475,19 +2517,18 @@ vgetargskeywordsfast_impl(const PyValue *args, Py_ssize_t nargs,
     if (nkwargs > 0) {
         /* make sure there are no arguments given by name and position */
         for (i = pos; i < nargs; i++) {
-            PyObject *current_arg;
+            PyValue current_arg;
             keyword = PyTuple_GET_ITEM(kwtuple, i - pos);
             if (kwargs != NULL) {
-                if (PyDict_GetItemRef(kwargs, keyword, &current_arg) < 0) {
+                if (_PyDict_GetItemValue(kwargs, PyValue_FromObject(keyword),
+                                         &current_arg) < 0) {
                     return cleanreturn(0, &freelist);
                 }
             }
-            else if (box_arg(find_keyword(kwnames, kwstack, keyword),
-                             &current_arg) < 0) {
-                return cleanreturn(0, &freelist);
+            else {
+                current_arg = find_keyword(kwnames, kwstack, keyword);
             }
-            if (current_arg) {
-                Py_DECREF(current_arg);
+            if (!PyValue_IsNull(current_arg)) {
                 /* arg present in tuple and in dict */
                 PyErr_Format(PyExc_TypeError,
                              "argument for %.200s%s given by name ('%U') "

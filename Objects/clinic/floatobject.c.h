@@ -88,15 +88,15 @@ PyDoc_STRVAR(float___round____doc__,
 #define FLOAT___ROUND___METHODDEF    \
     {"__round__", _PyCFunction_CAST(float___round__), METH_FASTCALL, float___round____doc__},
 
-static PyObject *
-float___round___impl(PyObject *self, PyObject *o_ndigits);
+static PyValue
+float___round___impl(PyObject *self, PyValue o_ndigits);
 
 static PyValue
 float___round__(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *o_ndigits = Py_None;
-    PyObject *_return_value;
+    PyValue o_ndigits = PyValue_FromObject(Py_None);
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("__round__", nargs, 0, 1)) {
         goto exit;
@@ -104,13 +104,10 @@ float___round__(PyObject *self, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    o_ndigits = PyValue_Object(args[0]);
-    if (o_ndigits == NULL) {
-        goto exit;
-    }
+    o_ndigits = args[0];
 skip_optional:
     _return_value = float___round___impl(self, o_ndigits);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -226,15 +223,16 @@ PyDoc_STRVAR(float_new__doc__,
 "\n"
 "Convert a string or number to a floating-point number, if possible.");
 
-static PyObject *
-float_new_impl(PyTypeObject *type, PyObject *x);
+static PyValue
+float_new_impl(PyTypeObject *type, PyValue x);
 
 static PyObject *
 float_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = &PyFloat_Type;
-    PyObject *x = NULL;
+    PyValue x = PyValue_NULL;
+    PyValue _return_value;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("float", kwargs)) {
@@ -246,12 +244,10 @@ float_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (PyTuple_GET_SIZE(args) < 1) {
         goto skip_optional;
     }
-    x = PyValue_Object(PyTuple_GET_VALUE(args, 0));
-    if (x == NULL) {
-        goto exit;
-    }
+    x = PyTuple_GET_VALUE(args, 0);
 skip_optional:
-    return_value = float_new_impl(type, x);
+    _return_value = float_new_impl(type, x);
+    return_value = PyValue_Object(_return_value);
 
 exit:
     return return_value;
@@ -264,7 +260,8 @@ float_vectorcall(PyValue type_value, const PyValue *args,
     PyObject *type = PyValue_ObjectBorrow(type_value);
     PyObject *return_value = NULL;
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    PyObject *x = NULL;
+    PyValue x = PyValue_NULL;
+    PyValue _return_value;
 
     assert(_PyType_CAST(type)->tp_new == float_new);
     /* Make sure the type object is immutable: the generated
@@ -279,12 +276,10 @@ float_vectorcall(PyValue type_value, const PyValue *args,
     if (nargs < 1) {
         goto skip_optional;
     }
-    x = PyValue_Object(args[0]);
-    if (x == NULL) {
-        goto exit;
-    }
+    x = args[0];
 skip_optional:
-    return_value = float_new_impl(_PyType_CAST(type), x);
+    _return_value = float_new_impl(_PyType_CAST(type), x);
+    return_value = PyValue_Object(_return_value);
 
 exit:
     return PyValue_FromResult(return_value);
@@ -422,4 +417,4 @@ float___format__(PyObject *self, PyValue arg)
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=9c105d2963a36a8c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f4b421f992da63ff input=a9049054013a1b77]*/

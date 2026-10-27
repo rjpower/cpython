@@ -626,9 +626,9 @@ _PyTuple_Repeat(PyObject *self, Py_ssize_t n)
 }
 
 /*[clinic input]
-tuple.index
+tuple.index -> value
 
-    value: object
+    value: value
     start: slice_index(accept={int}) = 0
     stop: slice_index(accept={int}, c_default="PY_SSIZE_T_MAX") = sys.maxsize
     /
@@ -638,10 +638,10 @@ Return first index of value.
 Raises ValueError if the value is not present.
 [clinic start generated code]*/
 
-static PyObject *
-tuple_index_impl(PyTupleObject *self, PyObject *value, Py_ssize_t start,
+static PyValue
+tuple_index_impl(PyTupleObject *self, PyValue value, Py_ssize_t start,
                  Py_ssize_t stop)
-/*[clinic end generated code: output=07b6f9f3cb5c33eb input=fb39e9874a21fe3f]*/
+/*[clinic end generated code: output=648bb8dd6c38dda2 input=a8f75f15daf94751]*/
 {
     Py_ssize_t i;
 
@@ -656,43 +656,41 @@ tuple_index_impl(PyTupleObject *self, PyObject *value, Py_ssize_t start,
     else if (stop > Py_SIZE(self)) {
         stop = Py_SIZE(self);
     }
-    PyValue v = PyValue_FromObject(value);
     for (i = start; i < stop; i++) {
-        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i], v, Py_EQ);
+        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i], value, Py_EQ);
         if (cmp > 0)
-            return PyLong_FromSsize_t(i);
+            return PyValue_FromLongLong(i);
         else if (cmp < 0)
-            return NULL;
+            return PyValue_NULL;
     }
     PyErr_SetString(PyExc_ValueError, "tuple.index(x): x not in tuple");
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
-tuple.count
+tuple.count -> value
 
-     value: object
+     value: value
      /
 
 Return number of occurrences of value.
 [clinic start generated code]*/
 
-static PyObject *
-tuple_count_impl(PyTupleObject *self, PyObject *value)
-/*[clinic end generated code: output=cf02888d4bc15d7a input=531721aff65bd772]*/
+static PyValue
+tuple_count_impl(PyTupleObject *self, PyValue value)
+/*[clinic end generated code: output=c95da72a6cf07e00 input=961d6feec0a6264b]*/
 {
     Py_ssize_t count = 0;
     Py_ssize_t i;
 
-    PyValue v = PyValue_FromObject(value);
     for (i = 0; i < Py_SIZE(self); i++) {
-        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i], v, Py_EQ);
+        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i], value, Py_EQ);
         if (cmp > 0)
             count++;
         else if (cmp < 0)
-            return NULL;
+            return PyValue_NULL;
     }
-    return PyLong_FromSsize_t(count);
+    return PyValue_FromLongLong(count);
 }
 
 static int
@@ -1149,12 +1147,8 @@ tupleiter_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
 static PyValue
 tupleiter_setstate(PyObject *self, PyValue state_value)
 {
-    PyObject *state = PyValue_Object(state_value);
-    if (state == NULL) {
-        return PyValue_NULL;
-    }
     _PyTupleIterObject *it = _PyTupleIterObject_CAST(self);
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = PyLong_AsSsize_tValue(state_value);
     if (index == -1 && PyErr_Occurred())
         return PyValue_NULL;
     if (it->it_seq != NULL) {

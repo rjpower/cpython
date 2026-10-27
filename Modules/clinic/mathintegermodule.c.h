@@ -13,7 +13,7 @@ PyDoc_STRVAR(math_integer_gcd__doc__,
 #define MATH_INTEGER_GCD_METHODDEF    \
     {"gcd", _PyCFunction_CAST(math_integer_gcd), METH_FASTCALL, math_integer_gcd__doc__},
 
-static PyObject *
+static PyValue
 math_integer_gcd_impl(PyObject *module, const PyValue *args,
                       Py_ssize_t args_length);
 
@@ -23,12 +23,12 @@ math_integer_gcd(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     PyValue return_value = PyValue_NULL;
     const PyValue *__clinic_args;
     Py_ssize_t args_length;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     __clinic_args = args;
     args_length = nargs;
     _return_value = math_integer_gcd_impl(module, __clinic_args, args_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
     return return_value;
 }
@@ -42,7 +42,7 @@ PyDoc_STRVAR(math_integer_lcm__doc__,
 #define MATH_INTEGER_LCM_METHODDEF    \
     {"lcm", _PyCFunction_CAST(math_integer_lcm), METH_FASTCALL, math_integer_lcm__doc__},
 
-static PyObject *
+static PyValue
 math_integer_lcm_impl(PyObject *module, const PyValue *args,
                       Py_ssize_t args_length);
 
@@ -52,12 +52,12 @@ math_integer_lcm(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     PyValue return_value = PyValue_NULL;
     const PyValue *__clinic_args;
     Py_ssize_t args_length;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     __clinic_args = args;
     args_length = nargs;
     _return_value = math_integer_lcm_impl(module, __clinic_args, args_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
     return return_value;
 }
@@ -218,4 +218,4 @@ math_integer_comb(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=6306f9efc4dbb473 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=983be0cf0d3a8dd6 input=a9049054013a1b77]*/

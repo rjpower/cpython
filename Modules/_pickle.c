@@ -13,6 +13,7 @@
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCall()
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_dict.h"          // _PyDict_SetItem_Take2()
+#include "pycore_list.h"          // _PyList_FromValues()
 #include "pycore_long.h"          // _PyLong_AsByteArray()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_object.h"        // _PyNone_Type
@@ -406,12 +407,22 @@ _Pickle_FastCall(PyObject *func, PyObject *obj)
     return result;
 }
 
+/* PyObject_CallOneArg() with a value argument, which is not boxed. */
+static PyObject *
+call_one_value(PyObject *func, PyValue arg)
+{
+    PyValue args[2] = {PyValue_NULL, arg};
+    return PyValue_Object(PyObject_VectorcallValue(
+        PyValue_FromObject(func), args + 1,
+        1 | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL));
+}
+
 /*************************************************************************/
 
 /* Internal data type used as the unpickling stack. */
 typedef struct {
     PyObject_VAR_HEAD
-    PyObject **data;
+    PyValue *data;         /* the stack, each a canonical PyValue */
     int mark_set;          /* is MARK set? */
     Py_ssize_t fence;      /* position of top MARK or 0 */
     Py_ssize_t allocated;  /* number of slots in data allocated */
@@ -425,10 +436,6 @@ Pdata_dealloc(PyObject *op)
     Pdata *self = Pdata_CAST(op);
     PyTypeObject *tp = Py_TYPE(self);
     PyObject_GC_UnTrack(self);
-    Py_ssize_t i = Py_SIZE(self);
-    while (--i >= 0) {
-        Py_DECREF(self->data[i]);
-    }
     PyMem_Free(self->data);
     tp->tp_free(self);
     Py_DECREF(tp);
@@ -440,7 +447,7 @@ Pdata_traverse(PyObject *op, visitproc visit, void *arg)
     Pdata *self = Pdata_CAST(op);
     Py_VISIT(Py_TYPE(self));
     for (Py_ssize_t i = 0; i < Py_SIZE(self); i++) {
-        Py_VISIT(self->data[i]);
+        _Py_VISIT_VALUE(self->data[i]);
     }
     return 0;
 }
@@ -471,7 +478,7 @@ Pdata_New(PickleState *state)
     self->mark_set = 0;
     self->fence = 0;
     self->allocated = 8;
-    self->data = PyMem_Malloc(self->allocated * sizeof(PyObject *));
+    self->data = PyMem_Malloc(self->allocated * sizeof(PyValue));
     if (self->data) {
         PyObject_GC_Track(self);
         return (PyObject *)self;
@@ -494,7 +501,7 @@ Pdata_clear(Pdata *self, Py_ssize_t clearto)
         return 0;
 
     while (--i >= clearto) {
-        Py_CLEAR(self->data[i]);
+        self->data[i] = PyValue_NULL;
     }
     Py_SET_SIZE(self, clearto);
     return 0;
@@ -503,7 +510,7 @@ Pdata_clear(Pdata *self, Py_ssize_t clearto)
 static int
 Pdata_grow(Pdata *self)
 {
-    PyObject **data = self->data;
+    PyValue *data = self->data;
     size_t allocated = (size_t)self->allocated;
     size_t new_allocated;
 
@@ -512,7 +519,7 @@ Pdata_grow(Pdata *self)
     if (new_allocated > (size_t)PY_SSIZE_T_MAX - allocated)
         goto nomemory;
     new_allocated += allocated;
-    PyMem_RESIZE(data, PyObject *, new_allocated);
+    PyMem_RESIZE(data, PyValue, new_allocated);
     if (data == NULL)
         goto nomemory;
 
@@ -535,9 +542,17 @@ Pdata_stack_underflow(PickleState *st, Pdata *self)
     return -1;
 }
 
-/* D is a Pdata*.  Pop the topmost element and store it into V, which
- * must be an lvalue holding PyObject*.  On stack underflow, UnpicklingError
- * is raised and V is set to NULL.
+/* The object of the element at index i: a new box if it is an inline
+   value, or NULL with an exception set if boxing fails. */
+static PyObject *
+Pdata_object_at(Pdata *self, Py_ssize_t i)
+{
+    return PyValue_Object(self->data[i]);
+}
+
+/* D is a Pdata*.  Pop the topmost element and store its object into V,
+ * which must be an lvalue holding PyObject*.  On stack underflow,
+ * UnpicklingError is raised and V is set to NULL.
  */
 static PyObject *
 Pdata_pop(PickleState *state, Pdata *self)
@@ -547,24 +562,34 @@ Pdata_pop(PickleState *state, Pdata *self)
         return NULL;
     }
     Py_SET_SIZE(self, Py_SIZE(self) - 1);
-    return self->data[Py_SIZE(self)];
+    return Pdata_object_at(self, Py_SIZE(self));
 }
 #define PDATA_POP(S, D, V) do { (V) = Pdata_pop(S, (D)); } while (0)
 
 static int
-Pdata_push(Pdata *self, PyObject *obj)
+Pdata_push_value(Pdata *self, PyValue v)
 {
     if (Py_SIZE(self) == self->allocated && Pdata_grow(self) < 0) {
         return -1;
     }
-    self->data[Py_SIZE(self)] = obj;
+    self->data[Py_SIZE(self)] = v;
     Py_SET_SIZE(self, Py_SIZE(self) + 1);
     return 0;
+}
+
+static int
+Pdata_push(Pdata *self, PyObject *obj)
+{
+    return Pdata_push_value(self, PyValue_FromResult(obj));
 }
 
 /* Push an object on stack, transferring its ownership to the stack. */
 #define PDATA_PUSH(D, O, ER) do {                               \
         if (Pdata_push((D), (O)) < 0) return (ER); } while(0)
+
+/* Push a value on stack. */
+#define PDATA_PUSH_VALUE(D, V, ER) do {                         \
+        if (Pdata_push_value((D), (V)) < 0) return (ER); } while(0)
 
 /* Push an object on stack, adding a new reference to the object. */
 #define PDATA_APPEND(D, O, ER) do {                             \
@@ -575,18 +600,16 @@ static PyObject *
 Pdata_poptuple(PickleState *state, Pdata *self, Py_ssize_t start)
 {
     PyObject *tuple;
-    Py_ssize_t len, i, j;
+    Py_ssize_t len;
 
     if (start < self->fence) {
         Pdata_stack_underflow(state, self);
         return NULL;
     }
     len = Py_SIZE(self) - start;
-    tuple = PyTuple_New(len);
+    tuple = _PyTuple_FromValues(self->data + start, len);
     if (tuple == NULL)
         return NULL;
-    for (i = start, j = 0; j < len; i++, j++)
-        PyTuple_SET_ITEM(tuple, j, self->data[i]);
 
     Py_SET_SIZE(self, start);
     return tuple;
@@ -596,14 +619,12 @@ static PyObject *
 Pdata_poplist(Pdata *self, Py_ssize_t start)
 {
     PyObject *list;
-    Py_ssize_t len, i, j;
+    Py_ssize_t len;
 
     len = Py_SIZE(self) - start;
-    list = PyList_New(len);
+    list = _PyList_FromValues(self->data + start, len);
     if (list == NULL)
         return NULL;
-    for (i = start, j = 0; j < len; i++, j++)
-        PyList_SET_ITEM(list, j, self->data[i]);
 
     Py_SET_SIZE(self, start);
     return list;
@@ -762,6 +783,7 @@ typedef struct {
 
 /* Forward declarations */
 static int save(PickleState *state, PicklerObject *, PyObject *, int);
+static int save_value(PickleState *state, PicklerObject *, PyValue, int);
 static int save_object(PickleState *state, PicklerObject *, PyObject *,
                        int pers_save, int weak);
 static int save_reduce(PickleState *, PicklerObject *, PyObject *, PyObject *);
@@ -2361,6 +2383,42 @@ save_bool(PicklerObject *self, PyObject *obj)
     return 0;
 }
 
+/* Write val, which fits in a signed 4-byte integer. */
+static int
+save_small_long(PicklerObject *self, long val)
+{
+    char pdata[32];
+    Py_ssize_t len = 0;
+
+    if (self->bin) {
+        pdata[1] = (unsigned char)(val & 0xff);
+        pdata[2] = (unsigned char)((val >> 8) & 0xff);
+        pdata[3] = (unsigned char)((val >> 16) & 0xff);
+        pdata[4] = (unsigned char)((val >> 24) & 0xff);
+
+        if ((pdata[4] != 0) || (pdata[3] != 0)) {
+            pdata[0] = BININT;
+            len = 5;
+        }
+        else if (pdata[2] != 0) {
+            pdata[0] = BININT2;
+            len = 3;
+        }
+        else {
+            pdata[0] = BININT1;
+            len = 2;
+        }
+    }
+    else {
+        sprintf(pdata, "%c%ld\n", INT,  val);
+        len = strlen(pdata);
+    }
+    if (_Pickler_Write(self, pdata, len) < 0)
+        return -1;
+
+    return 0;
+}
+
 static int
 save_long(PicklerObject *self, PyObject *obj)
 {
@@ -2383,36 +2441,7 @@ save_long(PicklerObject *self, PyObject *obj)
            so MSVC happily warns us about it.  However, that result would have
            been fine because we guard for sizeof(long) <= 4 which turns the
            condition true in that particular case. */
-        char pdata[32];
-        Py_ssize_t len = 0;
-
-        if (self->bin) {
-            pdata[1] = (unsigned char)(val & 0xff);
-            pdata[2] = (unsigned char)((val >> 8) & 0xff);
-            pdata[3] = (unsigned char)((val >> 16) & 0xff);
-            pdata[4] = (unsigned char)((val >> 24) & 0xff);
-
-            if ((pdata[4] != 0) || (pdata[3] != 0)) {
-                pdata[0] = BININT;
-                len = 5;
-            }
-            else if (pdata[2] != 0) {
-                pdata[0] = BININT2;
-                len = 3;
-            }
-            else {
-                pdata[0] = BININT1;
-                len = 2;
-            }
-        }
-        else {
-            sprintf(pdata, "%c%ld\n", INT,  val);
-            len = strlen(pdata);
-        }
-        if (_Pickler_Write(self, pdata, len) < 0)
-            return -1;
-
-        return 0;
+        return save_small_long(self, val);
     }
     assert(!PyErr_Occurred());
 
@@ -2528,10 +2557,8 @@ save_long(PicklerObject *self, PyObject *obj)
 }
 
 static int
-save_float(PicklerObject *self, PyObject *obj)
+save_double(PicklerObject *self, double x)
 {
-    double x = PyFloat_AS_DOUBLE((PyFloatObject *)obj);
-
     if (self->bin) {
         char pdata[9];
         pdata[0] = BINFLOAT;
@@ -2567,6 +2594,12 @@ done:
     }
 
     return 0;
+}
+
+static int
+save_float(PicklerObject *self, PyObject *obj)
+{
+    return save_double(self, PyFloat_AS_DOUBLE((PyFloatObject *)obj));
 }
 
 /* Perform direct write of the header and payload of the binary object.
@@ -3039,11 +3072,11 @@ store_tuple_elements(PickleState *state, PicklerObject *self, PyObject *t,
     assert(PyTuple_Size(t) == len);
 
     for (i = 0; i < len; i++) {
-        PyObject *element = PyTuple_GET_ITEM(t, i);
+        PyValue element = PyTuple_GET_VALUE(t, i);
 
-        if (element == NULL)
+        if (PyValue_IsNull(element))
             return -1;
-        if (save(state, self, element, 0) < 0) {
+        if (save_value(state, self, element, 0) < 0) {
             _PyErr_FormatNote("when serializing %T item %zd", t, i);
             return -1;
         }
@@ -3167,9 +3200,9 @@ save_tuple(PickleState *state, PicklerObject *self, PyObject *obj)
 static int
 batch_list(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *origobj)
 {
-    PyObject *obj = NULL;
-    PyObject *firstitem = NULL;
-    int i, n;
+    PyValue obj = PyValue_NULL;
+    PyValue firstitem = PyValue_NULL;
+    int i, n, status;
     Py_ssize_t total = 0;
 
     const char mark_op = MARK;
@@ -3181,14 +3214,13 @@ batch_list(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
     if (self->proto == 0) {
         /* APPENDS isn't available; do one at a time. */
         for (;; total++) {
-            obj = PyIter_Next(iter);
-            if (obj == NULL) {
-                if (PyErr_Occurred())
+            status = PyIter_NextValue(PyValue_FromObject(iter), &obj);
+            if (status <= 0) {
+                if (status < 0)
                     return -1;
                 break;
             }
-            i = save(state, self, obj, 0);
-            Py_DECREF(obj);
+            i = save_value(state, self, obj, 0);
             if (i < 0) {
                 _PyErr_FormatNote("when serializing %T item %zd", origobj, total);
                 return -1;
@@ -3202,9 +3234,9 @@ batch_list(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
     /* proto > 0:  write in batches of BATCHSIZE. */
     do {
         /* Get first item */
-        firstitem = PyIter_Next(iter);
-        if (firstitem == NULL) {
-            if (PyErr_Occurred())
+        status = PyIter_NextValue(PyValue_FromObject(iter), &firstitem);
+        if (status <= 0) {
+            if (status < 0)
                 goto error;
 
             /* nothing more to add */
@@ -3212,19 +3244,18 @@ batch_list(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
         }
 
         /* Try to get a second item */
-        obj = PyIter_Next(iter);
-        if (obj == NULL) {
-            if (PyErr_Occurred())
+        status = PyIter_NextValue(PyValue_FromObject(iter), &obj);
+        if (status <= 0) {
+            if (status < 0)
                 goto error;
 
             /* Only one item to write */
-            if (save(state, self, firstitem, 0) < 0) {
+            if (save_value(state, self, firstitem, 0) < 0) {
                 _PyErr_FormatNote("when serializing %T item %zd", origobj, total);
                 goto error;
             }
             if (_Pickler_Write(self, &append_op, 1) < 0)
                 goto error;
-            Py_CLEAR(firstitem);
             break;
         }
 
@@ -3234,30 +3265,29 @@ batch_list(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
         if (_Pickler_Write(self, &mark_op, 1) < 0)
             goto error;
 
-        if (save(state, self, firstitem, 0) < 0) {
+        if (save_value(state, self, firstitem, 0) < 0) {
             _PyErr_FormatNote("when serializing %T item %zd", origobj, total);
             goto error;
         }
-        Py_CLEAR(firstitem);
         total++;
         n = 1;
 
         /* Fetch and save up to BATCHSIZE items */
-        while (obj) {
-            if (save(state, self, obj, 0) < 0) {
+        while (!PyValue_IsNull(obj)) {
+            if (save_value(state, self, obj, 0) < 0) {
                 _PyErr_FormatNote("when serializing %T item %zd", origobj, total);
                 goto error;
             }
-            Py_CLEAR(obj);
+            obj = PyValue_NULL;
             total++;
             n += 1;
 
             if (n == BATCHSIZE)
                 break;
 
-            obj = PyIter_Next(iter);
-            if (obj == NULL) {
-                if (PyErr_Occurred())
+            status = PyIter_NextValue(PyValue_FromObject(iter), &obj);
+            if (status <= 0) {
+                if (status < 0)
                     goto error;
                 break;
             }
@@ -3270,8 +3300,6 @@ batch_list(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
     return 0;
 
   error:
-    Py_XDECREF(firstitem);
-    Py_XDECREF(obj);
     return -1;
 }
 
@@ -3286,10 +3314,22 @@ batch_list(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
  *
  * Note that this only works for protocols > 0.
  */
+/* PyList_GetItemRef() for a value: an inline int or float in the list is
+   not boxed. */
+static PyValue
+list_get_value(PyObject *list, Py_ssize_t i)
+{
+    if ((size_t)i >= (size_t)PyList_GET_SIZE(list)) {
+        PyErr_SetString(PyExc_IndexError, "list index out of range");
+        return PyValue_NULL;
+    }
+    return PyList_GET_VALUE(list, i);
+}
+
 static int
 batch_list_exact(PickleState *state, PicklerObject *self, PyObject *obj)
 {
-    PyObject *item = NULL;
+    PyValue item = PyValue_NULL;
     Py_ssize_t this_batch, total, list_size;
 
     const char append_op = APPEND;
@@ -3306,13 +3346,12 @@ batch_list_exact(PickleState *state, PicklerObject *self, PyObject *obj)
     total = 0;
     do {
         if (list_size - total == 1) {
-            item = PyList_GetItemRef(obj, total);
-            if (item == NULL) {
+            item = list_get_value(obj, total);
+            if (PyValue_IsNull(item)) {
                 _PyErr_FormatNote("when serializing %T item %zd", obj, total);
                 return -1;
             }
-            int err = save(state, self, item, 0);
-            Py_DECREF(item);
+            int err = save_value(state, self, item, 0);
             if (err < 0) {
                 _PyErr_FormatNote("when serializing %T item %zd", obj, total);
                 return -1;
@@ -3325,13 +3364,12 @@ batch_list_exact(PickleState *state, PicklerObject *self, PyObject *obj)
         if (_Pickler_Write(self, &mark_op, 1) < 0)
             return -1;
         while (total < PyList_GET_SIZE(obj)) {
-            item = PyList_GetItemRef(obj, total);
-            if (item == NULL) {
+            item = list_get_value(obj, total);
+            if (PyValue_IsNull(item)) {
                 _PyErr_FormatNote("when serializing %T item %zd", obj, total);
                 return -1;
             }
-            int err = save(state, self, item, 0);
-            Py_DECREF(item);
+            int err = save_value(state, self, item, 0);
             if (err < 0) {
                 _PyErr_FormatNote("when serializing %T item %zd", obj, total);
                 return -1;
@@ -3456,9 +3494,9 @@ batch_dict(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
                 Py_DECREF(obj);
                 return -1;
             }
-            i = save(state, self, PyTuple_GET_ITEM(obj, 0), 0);
+            i = save_value(state, self, PyTuple_GET_VALUE(obj, 0), 0);
             if (i >= 0) {
-                i = save(state, self, PyTuple_GET_ITEM(obj, 1), 0);
+                i = save_value(state, self, PyTuple_GET_VALUE(obj, 1), 0);
                 if (i < 0) {
                     _PyErr_FormatNote("when serializing %T item %R",
                                       origobj, PyTuple_GET_ITEM(obj, 0));
@@ -3497,9 +3535,9 @@ batch_dict(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
                 goto error;
 
             /* Only one item to write */
-            if (save(state, self, PyTuple_GET_ITEM(firstitem, 0), 0) < 0)
+            if (save_value(state, self, PyTuple_GET_VALUE(firstitem, 0), 0) < 0)
                 goto error;
-            if (save(state, self, PyTuple_GET_ITEM(firstitem, 1), 0) < 0) {
+            if (save_value(state, self, PyTuple_GET_VALUE(firstitem, 1), 0) < 0) {
                 _PyErr_FormatNote("when serializing %T item %R",
                                   origobj, PyTuple_GET_ITEM(firstitem, 0));
                 goto error;
@@ -3516,9 +3554,9 @@ batch_dict(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
         if (_Pickler_Write(self, &mark_op, 1) < 0)
             goto error;
 
-        if (save(state, self, PyTuple_GET_ITEM(firstitem, 0), 0) < 0)
+        if (save_value(state, self, PyTuple_GET_VALUE(firstitem, 0), 0) < 0)
             goto error;
-        if (save(state, self, PyTuple_GET_ITEM(firstitem, 1), 0) < 0) {
+        if (save_value(state, self, PyTuple_GET_VALUE(firstitem, 1), 0) < 0) {
             _PyErr_FormatNote("when serializing %T item %R",
                               origobj, PyTuple_GET_ITEM(firstitem, 0));
             goto error;
@@ -3533,9 +3571,9 @@ batch_dict(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
                     "iterator must return 2-tuples");
                 goto error;
             }
-            if (save(state, self, PyTuple_GET_ITEM(obj, 0), 0) < 0)
+            if (save_value(state, self, PyTuple_GET_VALUE(obj, 0), 0) < 0)
                 goto error;
-            if (save(state, self, PyTuple_GET_ITEM(obj, 1), 0) < 0) {
+            if (save_value(state, self, PyTuple_GET_VALUE(obj, 1), 0) < 0) {
                 _PyErr_FormatNote("when serializing %T item %R",
                                   origobj, PyTuple_GET_ITEM(obj, 0));
                 goto error;
@@ -3731,7 +3769,6 @@ save_dict(PickleState *state, PicklerObject *self, PyObject *obj)
 static int
 save_set(PickleState *state, PicklerObject *self, PyObject *obj)
 {
-    PyObject *item;
     PyValue element;
     int i;
     Py_ssize_t set_size, ppos = 0;
@@ -3781,9 +3818,7 @@ save_set(PickleState *state, PicklerObject *self, PyObject *obj)
         int err = 0;
         Py_BEGIN_CRITICAL_SECTION(obj);
         while (_PySet_NextValue(obj, &ppos, &element, &hash)) {
-            item = PyValue_Object(element);
-            err = item == NULL ? -1 : save(state, self, item, 0);
-            Py_CLEAR(item);
+            err = save_value(state, self, element, 0);
             if (err < 0) {
                 _PyErr_FormatNote("when serializing %T element", obj);
                 break;
@@ -3846,23 +3881,20 @@ save_frozenset_impl(PickleState *state, PicklerObject *self, PyObject *obj)
         return -1;
     }
     for (;;) {
-        PyObject *item;
-
-        item = PyIter_Next(iter);
-        if (item == NULL) {
-            if (PyErr_Occurred()) {
+        PyValue item;
+        int status = PyIter_NextValue(PyValue_FromObject(iter), &item);
+        if (status <= 0) {
+            if (status < 0) {
                 Py_DECREF(iter);
                 return -1;
             }
             break;
         }
-        if (save(state, self, item, 0) < 0) {
+        if (save_value(state, self, item, 0) < 0) {
             _PyErr_FormatNote("when serializing %T element", obj);
-            Py_DECREF(item);
             Py_DECREF(iter);
             return -1;
         }
-        Py_DECREF(item);
     }
     Py_DECREF(iter);
 
@@ -5030,6 +5062,32 @@ save(PickleState *st, PicklerObject *self, PyObject *obj, int pers_save)
     return save_object(st, self, obj, pers_save, 0);
 }
 
+/* save() for a value.  An inline int or float is written without a box,
+   unless a persistent_id() method has to be called with it. */
+static int
+save_value(PickleState *st, PicklerObject *self, PyValue v, int pers_save)
+{
+    if (!PyValue_IsInline(v)) {
+        return save(st, self, PyValue_ObjectBorrow(v), pers_save);
+    }
+    if (!pers_save && self->persistent_id) {
+        PyObject *obj = PyValue_Object(v);
+        if (obj == NULL) {
+            return -1;
+        }
+        int status = save(st, self, obj, pers_save);
+        Py_DECREF(obj);
+        return status;
+    }
+    if (_Pickler_OpcodeBoundary(self) < 0) {
+        return -1;
+    }
+    if (PyValue_IsInlineInt(v)) {
+        return save_small_long(self, PyValue_Int32(v));
+    }
+    return save_double(self, PyValue_Double(v));
+}
+
 static PyValue
 persistent_id(PyObject *self, PyValue obj)
 {
@@ -5757,8 +5815,11 @@ load_int(PickleState *state, UnpicklerObject *self)
                 return -1;
         }
         else {
-            if ((value = PyLong_FromLong(x)) == NULL)
+            PyValue v = PyValue_FromLongLong(x);
+            if (PyValue_IsNull(v))
                 return -1;
+            PDATA_PUSH_VALUE(self->stack, v, -1);
+            return 0;
         }
     }
 
@@ -5834,15 +5895,16 @@ calc_binint(char *bytes, int nbytes)
 static int
 load_binintx(UnpicklerObject *self, char *s, int size)
 {
-    PyObject *value;
+    PyValue value;
     long x;
 
     x = calc_binint(s, size);
 
-    if ((value = PyLong_FromLong(x)) == NULL)
+    value = PyValue_FromLongLong(x);
+    if (PyValue_IsNull(value))
         return -1;
 
-    PDATA_PUSH(self->stack, value, -1);
+    PDATA_PUSH_VALUE(self->stack, value, -1);
     return 0;
 }
 
@@ -5942,7 +6004,7 @@ load_counted_long(PickleState *st, UnpicklerObject *self, int size)
 static int
 load_float(PickleState *state, UnpicklerObject *self)
 {
-    PyObject *value;
+    PyValue value;
     char *endptr, *s;
     Py_ssize_t len;
     double d;
@@ -5960,18 +6022,18 @@ load_float(PickleState *state, UnpicklerObject *self)
         PyErr_SetString(PyExc_ValueError, "could not convert string to float");
         return -1;
     }
-    value = PyFloat_FromDouble(d);
-    if (value == NULL)
+    value = PyValue_FromDouble(d);
+    if (PyValue_IsNull(value))
         return -1;
 
-    PDATA_PUSH(self->stack, value, -1);
+    PDATA_PUSH_VALUE(self->stack, value, -1);
     return 0;
 }
 
 static int
 load_binfloat(PickleState *state, UnpicklerObject *self)
 {
-    PyObject *value;
+    PyValue value;
     double x;
     char *s;
 
@@ -5982,10 +6044,11 @@ load_binfloat(PickleState *state, UnpicklerObject *self)
     if (x == -1.0 && PyErr_Occurred())
         return -1;
 
-    if ((value = PyFloat_FromDouble(x)) == NULL)
+    value = PyValue_FromDouble(x);
+    if (PyValue_IsNull(value))
         return -1;
 
-    PDATA_PUSH(self->stack, value, -1);
+    PDATA_PUSH_VALUE(self->stack, value, -1);
     return 0;
 }
 
@@ -6193,7 +6256,10 @@ load_readonly_buffer(PickleState *state, UnpicklerObject *self)
         return Pdata_stack_underflow(state, self->stack);
     }
 
-    PyObject *obj = self->stack->data[len - 1];
+    PyObject *obj = Pdata_object_at(self->stack, len - 1);
+    if (obj == NULL) {
+        return -1;
+    }
     PyObject *view = PyMemoryView_FromObject(obj);
     if (view == NULL) {
         return -1;
@@ -6201,7 +6267,7 @@ load_readonly_buffer(PickleState *state, UnpicklerObject *self)
     if (!PyMemoryView_GET_BUFFER(view)->readonly) {
         /* Original object is writable */
         PyMemoryView_GET_BUFFER(view)->readonly = 1;
-        self->stack->data[len - 1] = view;
+        self->stack->data[len - 1] = PyValue_FromObject(view);
         Py_DECREF(obj);
     }
     else {
@@ -6338,7 +6404,7 @@ load_list(PickleState *state, UnpicklerObject *self)
 static int
 load_dict(PickleState *st, UnpicklerObject *self)
 {
-    PyObject *dict, *key, *value;
+    PyObject *dict;
     Py_ssize_t i, j, k;
 
     if ((i = marker(st, self)) < 0)
@@ -6355,9 +6421,9 @@ load_dict(PickleState *st, UnpicklerObject *self)
     }
 
     for (k = i + 1; k < j; k += 2) {
-        key = self->stack->data[k - 1];
-        value = self->stack->data[k];
-        if (PyDict_SetItem(dict, key, value) < 0) {
+        if (_PyDict_SetItemValue((PyDictObject *)dict,
+                                 self->stack->data[k - 1],
+                                 self->stack->data[k]) < 0) {
             Py_DECREF(dict);
             return -1;
         }
@@ -6710,7 +6776,6 @@ load_pop(PickleState *state, UnpicklerObject *self)
         return Pdata_stack_underflow(state, self->stack);
     else {
         len--;
-        Py_DECREF(self->stack->data[len]);
         Py_SET_SIZE(self->stack, len);
     }
     return 0;
@@ -6731,13 +6796,13 @@ load_pop_mark(PickleState *state, UnpicklerObject *self)
 static int
 load_dup(PickleState *state, UnpicklerObject *self)
 {
-    PyObject *last;
+    PyValue last;
     Py_ssize_t len = Py_SIZE(self->stack);
 
     if (len <= self->stack->fence)
         return Pdata_stack_underflow(state, self->stack);
     last = self->stack->data[len - 1];
-    PDATA_APPEND(self->stack, last, -1);
+    PDATA_PUSH_VALUE(self->stack, last, -1);
     return 0;
 }
 
@@ -6917,7 +6982,9 @@ load_put(PickleState *state, UnpicklerObject *self)
         return bad_readline(state);
     if (Py_SIZE(self->stack) <= self->stack->fence)
         return Pdata_stack_underflow(state, self->stack);
-    value = self->stack->data[Py_SIZE(self->stack) - 1];
+    value = Pdata_object_at(self->stack, Py_SIZE(self->stack) - 1);
+    if (value == NULL)
+        return -1;
 
     key = PyLong_FromString(s, NULL, 10);
     if (key == NULL)
@@ -6946,7 +7013,9 @@ load_binput(PickleState *state, UnpicklerObject *self)
 
     if (Py_SIZE(self->stack) <= self->stack->fence)
         return Pdata_stack_underflow(state, self->stack);
-    value = self->stack->data[Py_SIZE(self->stack) - 1];
+    value = Pdata_object_at(self->stack, Py_SIZE(self->stack) - 1);
+    if (value == NULL)
+        return -1;
 
     idx = Py_CHARMASK(s[0]);
 
@@ -6965,7 +7034,9 @@ load_long_binput(PickleState *state, UnpicklerObject *self)
 
     if (Py_SIZE(self->stack) <= self->stack->fence)
         return Pdata_stack_underflow(state, self->stack);
-    value = self->stack->data[Py_SIZE(self->stack) - 1];
+    value = Pdata_object_at(self->stack, Py_SIZE(self->stack) - 1);
+    if (value == NULL)
+        return -1;
 
     idx = calc_binsize(s, 4);
     if (idx < 0) {
@@ -6984,7 +7055,9 @@ load_memoize(PickleState *state, UnpicklerObject *self)
 
     if (Py_SIZE(self->stack) <= self->stack->fence)
         return Pdata_stack_underflow(state, self->stack);
-    value = self->stack->data[Py_SIZE(self->stack) - 1];
+    value = Pdata_object_at(self->stack, Py_SIZE(self->stack) - 1);
+    if (value == NULL)
+        return -1;
 
     return _Unpickler_MemoPut(self, self->memo_len, value);
 }
@@ -6992,7 +7065,6 @@ load_memoize(PickleState *state, UnpicklerObject *self)
 static int
 do_append(PickleState *state, UnpicklerObject *self, Py_ssize_t x)
 {
-    PyObject *value;
     PyObject *slice;
     PyObject *list;
     PyObject *result;
@@ -7002,7 +7074,9 @@ do_append(PickleState *state, UnpicklerObject *self, Py_ssize_t x)
     if (x > len || x <= self->stack->fence)
         return Pdata_stack_underflow(state, self->stack);
 
-    list = self->stack->data[x - 1];
+    list = Pdata_object_at(self->stack, x - 1);
+    if (list == NULL)
+        return -1;
 
     if (PyList_CheckExact(list)) {
         Py_ssize_t list_len;
@@ -7044,8 +7118,7 @@ do_append(PickleState *state, UnpicklerObject *self, Py_ssize_t x)
             if (append_func == NULL)
                 return -1;
             for (i = x; i < len; i++) {
-                value = self->stack->data[i];
-                result = _Pickle_FastCall(append_func, value);
+                result = call_one_value(append_func, self->stack->data[i]);
                 if (result == NULL) {
                     Pdata_clear(self->stack, i + 1);
                     Py_SET_SIZE(self->stack, x);
@@ -7082,7 +7155,6 @@ load_appends(PickleState *state, UnpicklerObject *self)
 static int
 do_setitems(PickleState *st, UnpicklerObject *self, Py_ssize_t x)
 {
-    PyObject *value, *key;
     PyObject *dict;
     Py_ssize_t len, i;
     int status = 0;
@@ -7099,12 +7171,14 @@ do_setitems(PickleState *st, UnpicklerObject *self, Py_ssize_t x)
 
     /* Here, dict does not actually need to be a PyDict; it could be anything
        that supports the __setitem__ attribute. */
-    dict = self->stack->data[x - 1];
+    dict = Pdata_object_at(self->stack, x - 1);
+    if (dict == NULL)
+        return -1;
 
     for (i = x + 1; i < len; i += 2) {
-        key = self->stack->data[i - 1];
-        value = self->stack->data[i];
-        if (PyObject_SetItem(dict, key, value) < 0) {
+        if (PyObject_SetItemValue(PyValue_FromObject(dict),
+                                  self->stack->data[i - 1],
+                                  self->stack->data[i]) < 0) {
             status = -1;
             break;
         }
@@ -7142,7 +7216,9 @@ load_additems(PickleState *state, UnpicklerObject *self)
     if (mark > len || mark <= self->stack->fence)
         return Pdata_stack_underflow(state, self->stack);
 
-    set = self->stack->data[mark - 1];
+    set = Pdata_object_at(self->stack, mark - 1);
+    if (set == NULL)
+        return -1;
 
     if (PySet_Check(set)) {
         PyObject *items;
@@ -7164,10 +7240,8 @@ load_additems(PickleState *state, UnpicklerObject *self)
             return -1;
         for (i = mark; i < len; i++) {
             PyObject *result;
-            PyObject *item;
 
-            item = self->stack->data[i];
-            result = _Pickle_FastCall(add_func, item);
+            result = call_one_value(add_func, self->stack->data[i]);
             if (result == NULL) {
                 Pdata_clear(self->stack, i + 1);
                 Py_SET_SIZE(self->stack, mark);
@@ -7201,7 +7275,11 @@ load_build(PickleState *st, UnpicklerObject *self)
     if (state == NULL)
         return -1;
 
-    inst = self->stack->data[Py_SIZE(self->stack) - 1];
+    inst = Pdata_object_at(self->stack, Py_SIZE(self->stack) - 1);
+    if (inst == NULL) {
+        Py_DECREF(state);
+        return -1;
+    }
 
     if (PyObject_GetOptionalAttr(inst, &_Py_ID(__setstate__), &setstate) < 0) {
         Py_DECREF(state);

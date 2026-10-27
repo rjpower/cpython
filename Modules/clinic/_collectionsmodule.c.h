@@ -367,25 +367,21 @@ PyDoc_STRVAR(deque_count__doc__,
     {"count", _PyCFunction_CAST(deque_count), METH_O, deque_count__doc__},
 
 static PyObject *
-deque_count_impl(dequeobject *deque, PyObject *v);
+deque_count_impl(dequeobject *deque, PyValue v);
 
 static PyValue
 deque_count(PyObject *deque, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *v;
+    PyValue v;
     PyObject *_return_value;
 
-    v = PyValue_Object(arg);
-    if (v == NULL) {
-        goto exit;
-    }
+    v = arg;
     Py_BEGIN_CRITICAL_SECTION(deque);
     _return_value = deque_count_impl((dequeobject *)deque, v);
     Py_END_CRITICAL_SECTION();
     return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -416,14 +412,14 @@ PyDoc_STRVAR(deque_index__doc__,
     {"index", _PyCFunction_CAST(deque_index), METH_FASTCALL, deque_index__doc__},
 
 static PyObject *
-deque_index_impl(dequeobject *deque, PyObject *v, Py_ssize_t start,
+deque_index_impl(dequeobject *deque, PyValue v, Py_ssize_t start,
                  Py_ssize_t stop);
 
 static PyValue
 deque_index(PyObject *deque, const PyValue *args, Py_ssize_t nargs)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *v;
+    PyValue v;
     Py_ssize_t start = 0;
     Py_ssize_t stop = PY_SSIZE_T_MAX;
     PyObject *_return_value;
@@ -431,10 +427,7 @@ deque_index(PyObject *deque, const PyValue *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
-    v = PyValue_Object(args[0]);
-    if (v == NULL) {
-        goto exit;
-    }
+    v = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
@@ -541,25 +534,21 @@ PyDoc_STRVAR(deque_remove__doc__,
     {"remove", _PyCFunction_CAST(deque_remove), METH_O, deque_remove__doc__},
 
 static PyObject *
-deque_remove_impl(dequeobject *deque, PyObject *value);
+deque_remove_impl(dequeobject *deque, PyValue value);
 
 static PyValue
 deque_remove(PyObject *deque, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *value;
+    PyValue value;
     PyObject *_return_value;
 
-    value = PyValue_Object(arg);
-    if (value == NULL) {
-        goto exit;
-    }
+    value = arg;
     Py_BEGIN_CRITICAL_SECTION(deque);
     _return_value = deque_remove_impl((dequeobject *)deque, value);
     Py_END_CRITICAL_SECTION();
     return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -791,4 +780,4 @@ tuplegetter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=1838ee18b3754c41 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=395022204106241d input=a9049054013a1b77]*/

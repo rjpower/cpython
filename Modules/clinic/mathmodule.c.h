@@ -18,24 +18,20 @@ PyDoc_STRVAR(math_ceil__doc__,
 #define MATH_CEIL_METHODDEF    \
     {"ceil", _PyCFunction_CAST(math_ceil), METH_O, math_ceil__doc__},
 
-static PyObject *
-math_ceil_impl(PyObject *module, PyObject *number);
+static PyValue
+math_ceil_impl(PyObject *module, PyValue number);
 
 static PyValue
 math_ceil(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *number;
-    PyObject *_return_value;
+    PyValue number;
+    PyValue _return_value;
 
-    number = PyValue_Object(arg);
-    if (number == NULL) {
-        goto exit;
-    }
+    number = arg;
     _return_value = math_ceil_impl(module, number);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
-exit:
     return return_value;
 }
 
@@ -50,24 +46,20 @@ PyDoc_STRVAR(math_floor__doc__,
 #define MATH_FLOOR_METHODDEF    \
     {"floor", _PyCFunction_CAST(math_floor), METH_O, math_floor__doc__},
 
-static PyObject *
-math_floor_impl(PyObject *module, PyObject *number);
+static PyValue
+math_floor_impl(PyObject *module, PyValue number);
 
 static PyValue
 math_floor(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *number;
-    PyObject *_return_value;
+    PyValue number;
+    PyValue _return_value;
 
-    number = PyValue_Object(arg);
-    if (number == NULL) {
-        goto exit;
-    }
+    number = arg;
     _return_value = math_floor_impl(module, number);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
-exit:
     return return_value;
 }
 
@@ -194,7 +186,7 @@ PyDoc_STRVAR(math_fsum__doc__,
 #define MATH_FSUM_METHODDEF    \
     {"fsum", _PyCFunction_CAST(math_fsum), METH_O, math_fsum__doc__},
 
-static PyObject *
+static PyValue
 math_fsum_impl(PyObject *module, PyObject *seq);
 
 static PyValue
@@ -202,14 +194,14 @@ math_fsum(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
     PyObject *seq;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     seq = PyValue_Object(arg);
     if (seq == NULL) {
         goto exit;
     }
     _return_value = math_fsum_impl(module, seq);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -226,24 +218,20 @@ PyDoc_STRVAR(math_trunc__doc__,
 #define MATH_TRUNC_METHODDEF    \
     {"trunc", _PyCFunction_CAST(math_trunc), METH_O, math_trunc__doc__},
 
-static PyObject *
-math_trunc_impl(PyObject *module, PyObject *x);
+static PyValue
+math_trunc_impl(PyObject *module, PyValue x);
 
 static PyValue
 math_trunc(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *x;
-    PyObject *_return_value;
+    PyValue x;
+    PyValue _return_value;
 
-    x = PyValue_Object(arg);
-    if (x == NULL) {
-        goto exit;
-    }
+    x = arg;
     _return_value = math_trunc_impl(module, x);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
-exit:
     return return_value;
 }
 
@@ -292,16 +280,16 @@ PyDoc_STRVAR(math_ldexp__doc__,
 #define MATH_LDEXP_METHODDEF    \
     {"ldexp", _PyCFunction_CAST(math_ldexp), METH_FASTCALL, math_ldexp__doc__},
 
-static PyObject *
-math_ldexp_impl(PyObject *module, double x, PyObject *i);
+static PyValue
+math_ldexp_impl(PyObject *module, double x, PyValue i);
 
 static PyValue
 math_ldexp(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
     PyValue return_value = PyValue_NULL;
     double x;
-    PyObject *i;
-    PyObject *_return_value;
+    PyValue i;
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("ldexp", nargs, 2, 2)) {
         goto exit;
@@ -310,12 +298,9 @@ math_ldexp(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (x == -1.0 && PyErr_Occurred()) {
         goto exit;
     }
-    i = PyValue_Object(args[1]);
-    if (i == NULL) {
-        goto exit;
-    }
+    i = args[1];
     _return_value = math_ldexp_impl(module, x, i);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -416,7 +401,7 @@ PyDoc_STRVAR(math_fma__doc__,
 #define MATH_FMA_METHODDEF    \
     {"fma", _PyCFunction_CAST(math_fma), METH_FASTCALL, math_fma__doc__},
 
-static PyObject *
+static PyValue
 math_fma_impl(PyObject *module, double x, double y, double z);
 
 static PyValue
@@ -426,7 +411,7 @@ math_fma(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     double x;
     double y;
     double z;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("fma", nargs, 3, 3)) {
         goto exit;
@@ -444,7 +429,7 @@ math_fma(PyObject *module, const PyValue *args, Py_ssize_t nargs)
         goto exit;
     }
     _return_value = math_fma_impl(module, x, y, z);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -461,7 +446,7 @@ PyDoc_STRVAR(math_fmod__doc__,
 #define MATH_FMOD_METHODDEF    \
     {"fmod", _PyCFunction_CAST(math_fmod), METH_FASTCALL, math_fmod__doc__},
 
-static PyObject *
+static PyValue
 math_fmod_impl(PyObject *module, double x, double y);
 
 static PyValue
@@ -470,7 +455,7 @@ math_fmod(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     PyValue return_value = PyValue_NULL;
     double x;
     double y;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("fmod", nargs, 2, 2)) {
         goto exit;
@@ -484,7 +469,7 @@ math_fmod(PyObject *module, const PyValue *args, Py_ssize_t nargs)
         goto exit;
     }
     _return_value = math_fmod_impl(module, x, y);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -505,7 +490,7 @@ PyDoc_STRVAR(math_dist__doc__,
 #define MATH_DIST_METHODDEF    \
     {"dist", _PyCFunction_CAST(math_dist), METH_FASTCALL, math_dist__doc__},
 
-static PyObject *
+static PyValue
 math_dist_impl(PyObject *module, PyObject *p, PyObject *q);
 
 static PyValue
@@ -514,7 +499,7 @@ math_dist(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     PyValue return_value = PyValue_NULL;
     PyObject *p;
     PyObject *q;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("dist", nargs, 2, 2)) {
         goto exit;
@@ -528,7 +513,7 @@ math_dist(PyObject *module, const PyValue *args, Py_ssize_t nargs)
         goto exit;
     }
     _return_value = math_dist_impl(module, p, q);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -554,7 +539,7 @@ PyDoc_STRVAR(math_hypot__doc__,
 #define MATH_HYPOT_METHODDEF    \
     {"hypot", _PyCFunction_CAST(math_hypot), METH_FASTCALL, math_hypot__doc__},
 
-static PyObject *
+static PyValue
 math_hypot_impl(PyObject *module, const PyValue *args,
                 Py_ssize_t args_length);
 
@@ -564,12 +549,12 @@ math_hypot(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     PyValue return_value = PyValue_NULL;
     const PyValue *__clinic_args;
     Py_ssize_t args_length;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     __clinic_args = args;
     args_length = nargs;
     _return_value = math_hypot_impl(module, __clinic_args, args_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
     return return_value;
 }
@@ -590,7 +575,7 @@ PyDoc_STRVAR(math_sumprod__doc__,
 #define MATH_SUMPROD_METHODDEF    \
     {"sumprod", _PyCFunction_CAST(math_sumprod), METH_FASTCALL, math_sumprod__doc__},
 
-static PyObject *
+static PyValue
 math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q);
 
 static PyValue
@@ -599,7 +584,7 @@ math_sumprod(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     PyValue return_value = PyValue_NULL;
     PyObject *p;
     PyObject *q;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("sumprod", nargs, 2, 2)) {
         goto exit;
@@ -613,7 +598,7 @@ math_sumprod(PyObject *module, const PyValue *args, Py_ssize_t nargs)
         goto exit;
     }
     _return_value = math_sumprod_impl(module, p, q);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -628,7 +613,7 @@ PyDoc_STRVAR(math_pow__doc__,
 #define MATH_POW_METHODDEF    \
     {"pow", _PyCFunction_CAST(math_pow), METH_FASTCALL, math_pow__doc__},
 
-static PyObject *
+static PyValue
 math_pow_impl(PyObject *module, double x, double y);
 
 static PyValue
@@ -637,7 +622,7 @@ math_pow(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     PyValue return_value = PyValue_NULL;
     double x;
     double y;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("pow", nargs, 2, 2)) {
         goto exit;
@@ -651,7 +636,7 @@ math_pow(PyObject *module, const PyValue *args, Py_ssize_t nargs)
         goto exit;
     }
     _return_value = math_pow_impl(module, x, y);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -666,7 +651,7 @@ PyDoc_STRVAR(math_degrees__doc__,
 #define MATH_DEGREES_METHODDEF    \
     {"degrees", _PyCFunction_CAST(math_degrees), METH_O, math_degrees__doc__},
 
-static PyObject *
+static PyValue
 math_degrees_impl(PyObject *module, double x);
 
 static PyValue
@@ -674,14 +659,14 @@ math_degrees(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
     double x;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     x = PyFloat_AsDoubleValue(arg);
     if (x == -1.0 && PyErr_Occurred()) {
         goto exit;
     }
     _return_value = math_degrees_impl(module, x);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -696,7 +681,7 @@ PyDoc_STRVAR(math_radians__doc__,
 #define MATH_RADIANS_METHODDEF    \
     {"radians", _PyCFunction_CAST(math_radians), METH_O, math_radians__doc__},
 
-static PyObject *
+static PyValue
 math_radians_impl(PyObject *module, double x);
 
 static PyValue
@@ -704,14 +689,14 @@ math_radians(PyObject *module, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
     double x;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     x = PyFloat_AsDoubleValue(arg);
     if (x == -1.0 && PyErr_Occurred()) {
         goto exit;
     }
     _return_value = math_radians_impl(module, x);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -989,8 +974,8 @@ PyDoc_STRVAR(math_prod__doc__,
 #define MATH_PROD_METHODDEF    \
     {"prod", _PyCFunction_CAST(math_prod), METH_FASTCALL|METH_KEYWORDS, math_prod__doc__},
 
-static PyObject *
-math_prod_impl(PyObject *module, PyObject *iterable, PyObject *start);
+static PyValue
+math_prod_impl(PyObject *module, PyObject *iterable, PyValue start);
 
 static PyValue
 math_prod(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
@@ -1025,8 +1010,8 @@ math_prod(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwn
     PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *iterable;
-    PyObject *start = NULL;
-    PyObject *_return_value;
+    PyValue start = PyValue_NULL;
+    PyValue _return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1040,13 +1025,10 @@ math_prod(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwn
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    start = PyValue_Object(args[1]);
-    if (start == NULL) {
-        goto exit;
-    }
+    start = args[1];
 skip_optional_kwonly:
     _return_value = math_prod_impl(module, iterable, start);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -1066,7 +1048,7 @@ PyDoc_STRVAR(math_nextafter__doc__,
 #define MATH_NEXTAFTER_METHODDEF    \
     {"nextafter", _PyCFunction_CAST(math_nextafter), METH_FASTCALL|METH_KEYWORDS, math_nextafter__doc__},
 
-static PyObject *
+static PyValue
 math_nextafter_impl(PyObject *module, double x, double y, PyObject *steps);
 
 static PyValue
@@ -1104,7 +1086,7 @@ math_nextafter(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject
     double x;
     double y;
     PyObject *steps = Py_None;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1128,7 +1110,7 @@ math_nextafter(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject
     }
 skip_optional_kwonly:
     _return_value = math_nextafter_impl(module, x, y, steps);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -1166,4 +1148,4 @@ math_ulp(PyObject *module, PyValue arg)
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=dd453cb9a21fd5f3 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=7a507e4e0cf90164 input=a9049054013a1b77]*/

@@ -1196,8 +1196,8 @@ PyDoc_STRVAR(sys_getsizeof__doc__,
 #define SYS_GETSIZEOF_METHODDEF    \
     {"getsizeof", _PyCFunction_CAST(sys_getsizeof), METH_FASTCALL|METH_KEYWORDS, sys_getsizeof__doc__},
 
-static PyObject *
-sys_getsizeof_impl(PyObject *module, PyObject *o, PyObject *dflt);
+static PyValue
+sys_getsizeof_impl(PyObject *module, PyObject *o, PyValue dflt);
 
 static PyValue
 sys_getsizeof(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
@@ -1232,8 +1232,8 @@ sys_getsizeof(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject 
     PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *o;
-    PyObject *dflt = NULL;
-    PyObject *_return_value;
+    PyValue dflt = PyValue_NULL;
+    PyValue _return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1247,13 +1247,10 @@ sys_getsizeof(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject 
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    dflt = PyValue_Object(args[1]);
-    if (dflt == NULL) {
-        goto exit;
-    }
+    dflt = args[1];
 skip_optional_pos:
     _return_value = sys_getsizeof_impl(module, o, dflt);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -2316,4 +2313,4 @@ exit:
 #ifndef SYS_GETANDROIDAPILEVEL_METHODDEF
     #define SYS_GETANDROIDAPILEVEL_METHODDEF
 #endif /* !defined(SYS_GETANDROIDAPILEVEL_METHODDEF) */
-/*[clinic end generated code: output=8112f43c1e8329a2 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f3c6bf5d69fc9166 input=a9049054013a1b77]*/

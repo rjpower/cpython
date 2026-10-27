@@ -183,7 +183,8 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     phold = state->placeholder;
 
     /* Placeholder restrictions */
-    if (new_nargs && PyTuple_GET_ITEM(args, new_nargs) == phold) {
+    if (new_nargs && PyValue_Is(PyTuple_GET_VALUE(args, new_nargs),
+                                PyValue_FromObject(phold))) {
         PyErr_SetString(PyExc_TypeError,
                         "trailing Placeholders are not allowed");
         return NULL;
@@ -191,10 +192,10 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
 
     /* keyword Placeholder prohibition */
     if (kw != NULL) {
-        PyObject *key, *val;
+        PyValue key, val;
         Py_ssize_t pos = 0;
-        while (PyDict_Next(kw, &pos, &key, &val)) {
-            if (val == phold) {
+        while (_PyDict_NextValue(kw, &pos, &key, &val, NULL)) {
+            if (PyValue_Is(val, PyValue_FromObject(phold))) {
                 PyErr_SetString(PyExc_TypeError,
                                 "Placeholder cannot be passed as a keyword argument");
                 return NULL;
@@ -238,7 +239,7 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     /* Count placeholders */
     Py_ssize_t phcount = 0;
     for (Py_ssize_t i = 0; i < new_nargs - 1; i++) {
-        if (PyTuple_GET_ITEM(new_args, i) == phold) {
+        if (PyValue_Is(PyTuple_GET_VALUE(new_args, i), PyValue_FromObject(phold))) {
             phcount++;
         }
     }
@@ -249,7 +250,7 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
         if (new_nargs > pto_phcount) {
             tot_nargs += new_nargs - pto_phcount;
         }
-        PyObject *item;
+        PyValue item;
         PyObject *tot_args = PyTuple_New(tot_nargs);
         if (tot_args == NULL) {
             Py_DECREF(new_args);
@@ -258,19 +259,18 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
         }
         for (Py_ssize_t i = 0, j = 0; i < tot_nargs; i++) {
             if (i < npargs) {
-                item = PyTuple_GET_ITEM(pto_args, i);
-                if (j < new_nargs && item == phold) {
-                    item = PyTuple_GET_ITEM(new_args, j);
+                item = PyTuple_GET_VALUE(pto_args, i);
+                if (j < new_nargs && PyValue_Is(item, PyValue_FromObject(phold))) {
+                    item = PyTuple_GET_VALUE(new_args, j);
                     j++;
                     pto_phcount--;
                 }
             }
             else {
-                item = PyTuple_GET_ITEM(new_args, j);
+                item = PyTuple_GET_VALUE(new_args, j);
                 j++;
             }
-            Py_INCREF(item);
-            PyTuple_SET_ITEM(tot_args, i, item);
+            PyTuple_SET_VALUE(tot_args, i, item);
         }
         pto->args = tot_args;
         pto->phcount = pto_phcount + phcount;
@@ -638,22 +638,19 @@ partial_call(PyObject *self, PyObject *args, PyObject *kwargs)
             return NULL;
         }
         PyObject *pto_args = pto->args;
-        PyObject *item;
+        PyValue item;
         Py_ssize_t j = 0;   // New args index
         for (Py_ssize_t i = 0; i < pto_nargs; i++) {
-            item = PyTuple_GET_ITEM(pto_args, i);
-            if (item == pto->placeholder) {
-                item = PyTuple_GET_ITEM(args, j);
+            item = PyTuple_GET_VALUE(pto_args, i);
+            if (PyValue_Is(item, PyValue_FromObject(pto->placeholder))) {
+                item = PyTuple_GET_VALUE(args, j);
                 j += 1;
             }
-            Py_INCREF(item);
-            PyTuple_SET_ITEM(tot_args, i, item);
+            PyTuple_SET_VALUE(tot_args, i, item);
         }
         assert(j == pto_phcount);
         for (Py_ssize_t i = pto_nargs; i < tot_nargs; i++) {
-            item = PyTuple_GET_ITEM(args, j);
-            Py_INCREF(item);
-            PyTuple_SET_ITEM(tot_args, i, item);
+            PyTuple_SET_VALUE(tot_args, i, PyTuple_GET_VALUE(args, j));
             j += 1;
         }
     }
@@ -818,7 +815,8 @@ partial_setstate(PyObject *self, PyValue arg)
     }
 
     Py_ssize_t nargs = PyTuple_GET_SIZE(fnargs);
-    if (nargs && PyTuple_GET_ITEM(fnargs, nargs - 1) == pto->placeholder) {
+    if (nargs && PyValue_Is(PyTuple_GET_VALUE(fnargs, nargs - 1),
+                            PyValue_FromObject(pto->placeholder))) {
         PyErr_SetString(PyExc_TypeError,
                         "trailing Placeholders are not allowed");
         return PyValue_NULL;
@@ -826,7 +824,8 @@ partial_setstate(PyObject *self, PyValue arg)
     /* Count placeholders */
     Py_ssize_t phcount = 0;
     for (Py_ssize_t i = 0; i < nargs - 1; i++) {
-        if (PyTuple_GET_ITEM(fnargs, i) == pto->placeholder) {
+        if (PyValue_Is(PyTuple_GET_VALUE(fnargs, i),
+                       PyValue_FromObject(pto->placeholder))) {
             phcount++;
         }
     }
@@ -1026,15 +1025,15 @@ keyobject_richcompare(PyObject *self, PyObject *other, int op)
     /* Call the user's comparison function and translate the 3-way
      * result into true or false (or error).
      */
-    PyObject* args[2] = {x, y};
-    PyObject *res = PyObject_Vectorcall(compare, args, 2, NULL);
-    if (res == NULL) {
+    PyValue args[2] = {PyValue_FromObject(x), PyValue_FromObject(y)};
+    PyValue res = PyObject_VectorcallValue(PyValue_FromObject(compare),
+                                           args, 2, NULL);
+    if (PyValue_IsNull(res)) {
         return NULL;
     }
 
-    PyObject *answer = PyObject_RichCompare(res, _PyLong_GetZero(), op);
-    Py_DECREF(res);
-    return answer;
+    return PyValue_Object(
+        PyObject_RichCompareValue(res, PyValue_FromInt32(0), op));
 }
 
 /*[clinic input]
@@ -1067,12 +1066,12 @@ _functools_cmp_to_key_impl(PyObject *module, PyObject *mycmp)
 
 /*[clinic input]
 @permit_long_summary
-_functools.reduce
+_functools.reduce -> value
 
     function as func: object
     iterable as seq: object
     /
-    initial as result: object(c_default="NULL") = functools._initial_missing
+    initial as result: value(c_default="PyValue_NULL") = functools._initial_missing
 
 Apply a function of two arguments cumulatively to the items of an iterable, from left to right.
 
@@ -1084,45 +1083,42 @@ For example, reduce(lambda x, y: x+y, [1, 2, 3, 4, 5])
 calculates ((((1 + 2) + 3) + 4) + 5).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _functools_reduce_impl(PyObject *module, PyObject *func, PyObject *seq,
-                       PyObject *result)
-/*[clinic end generated code: output=30d898fe1267c79d input=ff4d5c73100e72e8]*/
+                       PyValue result)
+/*[clinic end generated code: output=ca5ab02a171a04b7 input=d55e1846d70a6eda]*/
 {
     PyObject *it;
-
-    if (result != NULL)
-        Py_INCREF(result);
 
     it = PyObject_GetIter(seq);
     if (it == NULL) {
         if (PyErr_ExceptionMatches(PyExc_TypeError))
             PyErr_SetString(PyExc_TypeError,
                             "reduce() arg 2 must support iteration");
-        Py_XDECREF(result);
-        return NULL;
+        return PyValue_NULL;
     }
 
     for (;;) {
-        PyObject *op2 = PyIter_Next(it);
-        if (op2 == NULL) {
-            if (PyErr_Occurred())
-                goto Fail;
+        PyValue op2;
+        int status = PyIter_NextValue(PyValue_FromObject(it), &op2);
+        if (status < 0)
+            goto Fail;
+        if (status == 0)
             break;
-        }
 
-        if (result == NULL)
+        if (PyValue_IsNull(result))
             result = op2;
         else {
-            PyObject *args[2] = {result, op2};
-            result = PyObject_Vectorcall(func, args, 2, NULL);
-            if (result == NULL) {
+            PyValue args[2] = {result, op2};
+            result = PyObject_VectorcallValue(PyValue_FromObject(func),
+                                              args, 2, NULL);
+            if (PyValue_IsNull(result)) {
                 goto Fail;
             }
         }
     }
 
-    if (result == NULL)
+    if (PyValue_IsNull(result))
         PyErr_SetString(PyExc_TypeError,
                         "reduce() of empty iterable with no initial value");
 
@@ -1130,9 +1126,8 @@ _functools_reduce_impl(PyObject *module, PyObject *func, PyObject *seq,
     return result;
 
 Fail:
-    Py_XDECREF(result);
     Py_DECREF(it);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /* lru_cache object **********************************************************/
@@ -1229,7 +1224,8 @@ static PyObject *
 lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
                    PyObject *kwds, int typed)
 {
-    PyObject *key, *keyword, *value;
+    PyObject *key;
+    PyValue keyword, value;
     Py_ssize_t key_size, pos, key_pos, kwds_size;
 
     kwds_size = kwds ? PyDict_GET_SIZE(kwds) : 0;
@@ -1259,25 +1255,24 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
 
     key_pos = 0;
     for (pos = 0; pos < PyTuple_GET_SIZE(args); ++pos) {
-        PyObject *item = PyTuple_GET_ITEM(args, pos);
-        PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(item));
+        PyTuple_SET_VALUE(key, key_pos++, PyTuple_GET_VALUE(args, pos));
     }
     if (kwds_size) {
         PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(kwd_mark));
-        for (pos = 0; PyDict_Next(kwds, &pos, &keyword, &value);) {
-            PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(keyword));
-            PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(value));
+        for (pos = 0; _PyDict_NextValue(kwds, &pos, &keyword, &value, NULL);) {
+            PyTuple_SET_VALUE(key, key_pos++, keyword);
+            PyTuple_SET_VALUE(key, key_pos++, value);
         }
         assert(key_pos == PyTuple_GET_SIZE(args) + kwds_size * 2 + 1);
     }
     if (typed) {
         for (pos = 0; pos < PyTuple_GET_SIZE(args); ++pos) {
-            PyObject *item = (PyObject *)Py_TYPE(PyTuple_GET_ITEM(args, pos));
+            PyObject *item = (PyObject *)PyValue_Type(PyTuple_GET_VALUE(args, pos));
             PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(item));
         }
         if (kwds_size) {
-            for (pos = 0; PyDict_Next(kwds, &pos, &keyword, &value);) {
-                PyObject *item = (PyObject *)Py_TYPE(value);
+            for (pos = 0; _PyDict_NextValue(kwds, &pos, &keyword, &value, NULL);) {
+                PyObject *item = (PyObject *)PyValue_Type(value);
                 PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(item));
             }
         }

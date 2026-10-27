@@ -1145,15 +1145,15 @@ deque_reverse_impl(dequeobject *deque)
 _collections.deque.count as deque_count
 
     deque: dequeobject
-    value as v: object
+    value as v: value
     /
 
 Return number of occurrences of value.
 [clinic start generated code]*/
 
 static PyObject *
-deque_count_impl(dequeobject *deque, PyObject *v)
-/*[clinic end generated code: output=2ca26c49b6ab0400 input=4ef67ef2b34dc1fc]*/
+deque_count_impl(dequeobject *deque, PyValue v)
+/*[clinic end generated code: output=46b7ed2f035ba162 input=80fb48a9eb9ecaaf]*/
 {
     block *b = deque->leftblock;
     Py_ssize_t index = deque->leftindex;
@@ -1165,9 +1165,8 @@ deque_count_impl(dequeobject *deque, PyObject *v)
 
     while (--n >= 0) {
         CHECK_NOT_END(b);
-        item = Py_NewRef(b->data[index]);
-        cmp = PyObject_RichCompareBool(item, v, Py_EQ);
-        Py_DECREF(item);
+        item = b->data[index];
+        cmp = PyObject_RichCompareBoolValue(PyValue_FromObject(item), v, Py_EQ);
         if (cmp < 0)
             return NULL;
         count += cmp;
@@ -1242,7 +1241,7 @@ deque_len(PyObject *self)
 _collections.deque.index as deque_index
 
     deque: dequeobject
-    value as v: object
+    value as v: value
     start: object(converter='_PyEval_SliceIndexNotNone', type='Py_ssize_t', c_default='0') = NULL
     stop: object(converter='_PyEval_SliceIndexNotNone', type='Py_ssize_t', c_default='PY_SSIZE_T_MAX') = NULL
     /
@@ -1253,9 +1252,9 @@ Raises ValueError if the value is not present.
 [clinic start generated code]*/
 
 static PyObject *
-deque_index_impl(dequeobject *deque, PyObject *v, Py_ssize_t start,
+deque_index_impl(dequeobject *deque, PyValue v, Py_ssize_t start,
                  Py_ssize_t stop)
-/*[clinic end generated code: output=df45132753175ef9 input=1c3b19632cf3484f]*/
+/*[clinic end generated code: output=39915a6a089c182d input=16ea03f5e8ef3c2c]*/
 {
     Py_ssize_t i, n;
     PyObject *item;
@@ -1295,9 +1294,8 @@ deque_index_impl(dequeobject *deque, PyObject *v, Py_ssize_t start,
     n = stop - i;
     while (--n >= 0) {
         CHECK_NOT_END(b);
-        item = Py_NewRef(b->data[index]);
-        cmp = PyObject_RichCompareBool(item, v, Py_EQ);
-        Py_DECREF(item);
+        item = b->data[index];
+        cmp = PyObject_RichCompareBoolValue(PyValue_FromObject(item), v, Py_EQ);
         if (cmp > 0)
             return PyLong_FromSsize_t(stop - n - 1);
         if (cmp < 0)
@@ -1443,15 +1441,15 @@ deque_del_item(dequeobject *deque, Py_ssize_t i)
 _collections.deque.remove as deque_remove
 
     deque: dequeobject
-    value: object
+    value: value
     /
 
 Remove first occurrence of value.
 [clinic start generated code]*/
 
 static PyObject *
-deque_remove_impl(dequeobject *deque, PyObject *value)
-/*[clinic end generated code: output=54cff28b8ef78c5b input=60eb3f8aa4de532a]*/
+deque_remove_impl(dequeobject *deque, PyValue value)
+/*[clinic end generated code: output=b30f6a69968e7699 input=ab2b23550cf7e4d1]*/
 {
     PyObject *item;
     block *b = deque->leftblock;
@@ -1460,9 +1458,8 @@ deque_remove_impl(dequeobject *deque, PyObject *value)
     int cmp, rv;
 
     for (i = 0 ; i < n; i++) {
-        item = Py_NewRef(b->data[index]);
-        cmp = PyObject_RichCompareBool(item, value, Py_EQ);
-        Py_DECREF(item);
+        item = b->data[index];
+        cmp = PyObject_RichCompareBoolValue(PyValue_FromObject(item), value, Py_EQ);
         if (cmp < 0) {
             return NULL;
         }
@@ -2536,15 +2533,14 @@ _collections__count_elements_impl(PyObject *module, PyObject *mapping,
                                   PyObject *iterable)
 /*[clinic end generated code: output=7e0c1789636b3d8f input=e79fad04534a0b45]*/
 {
-    PyObject *it, *oldval;
-    PyObject *newval = NULL;
-    PyObject *key = NULL;
+    PyObject *it;
+    PyValue oldval, newval;
     PyObject *bound_get = NULL;
     PyObject *mapping_get;
     PyObject *dict_get;
     PyObject *mapping_setitem;
     PyObject *dict_setitem;
-    PyObject *one = _PyLong_GetOne();  // borrowed reference
+    PyValue one = PyValue_FromInt32(1);
 
     it = PyObject_GetIter(iterable);
     if (it == NULL)
@@ -2575,7 +2571,9 @@ _collections__count_elements_impl(PyObject *module, PyObject *mapping,
             */
             Py_hash_t hash;
 
-            key = PyIter_Next(it);
+            // The key and the count are stored as objects
+            // (_PyDict_SetItem_KnownHash()): an inline one is boxed.
+            PyObject *key = PyIter_Next(it);
             if (key == NULL)
                 break;
 
@@ -2584,26 +2582,26 @@ _collections__count_elements_impl(PyObject *module, PyObject *mapping,
                 goto done;
             }
 
-            oldval = _PyDict_GetItem_KnownHash(mapping, key, hash);
-            if (oldval == NULL) {
-                if (PyErr_Occurred())
-                    goto done;
-                if (_PyDict_SetItem_KnownHash(mapping, key, one, hash) < 0)
+            if (_Py_dict_lookup((PyDictObject *)mapping, PyValue_FromObject(key),
+                                hash, &oldval) == DKIX_ERROR) {
+                goto done;
+            }
+            if (PyValue_IsNull(oldval)) {
+                if (_PyDict_SetItem_KnownHash(mapping, key, _PyLong_GetOne(),
+                                              hash) < 0)
                     goto done;
             } else {
-                /* oldval is a borrowed reference.  Keep it alive across
-                   PyNumber_Add(), which can execute arbitrary user code and
-                   mutate (or even clear) the underlying dict. */
-                Py_INCREF(oldval);
-                newval = PyNumber_Add(oldval, one);
-                Py_DECREF(oldval);
-                if (newval == NULL)
+                /* oldval is held by this frame across PyNumber_AddValue(),
+                   which can execute arbitrary user code and mutate (or even
+                   clear) the underlying dict. */
+                newval = PyNumber_AddValue(oldval, one);
+                if (PyValue_IsNull(newval))
                     goto done;
-                if (_PyDict_SetItem_KnownHash(mapping, key, newval, hash) < 0)
+                PyObject *newval_o = PyValue_Object(newval);
+                if (newval_o == NULL ||
+                    _PyDict_SetItem_KnownHash(mapping, key, newval_o, hash) < 0)
                     goto done;
-                Py_CLEAR(newval);
             }
-            Py_DECREF(key);
         }
     }
     else {
@@ -2611,26 +2609,26 @@ _collections__count_elements_impl(PyObject *module, PyObject *mapping,
         if (bound_get == NULL)
             goto done;
 
-        PyObject *zero = _PyLong_GetZero();  // borrowed reference
+        PyValue zero = PyValue_FromInt32(0);
+        PyValue itv = PyValue_FromObject(it);
         while (1) {
-            key = PyIter_Next(it);
-            if (key == NULL)
+            PyValue key;
+            if (PyIter_NextValue(itv, &key) <= 0)
                 break;
-            oldval = PyObject_CallFunctionObjArgs(bound_get, key, zero, NULL);
-            if (oldval == NULL)
+            PyValue args[2] = {key, zero};
+            oldval = PyObject_VectorcallValue(PyValue_FromObject(bound_get),
+                                              args, 2, NULL);
+            if (PyValue_IsNull(oldval))
                 break;
-            if (oldval == zero) {
-                newval = Py_NewRef(one);
+            if (PyValue_Is(oldval, zero)) {
+                newval = one;
             } else {
-                newval = PyNumber_Add(oldval, one);
+                newval = PyNumber_AddValue(oldval, one);
             }
-            Py_DECREF(oldval);
-            if (newval == NULL)
+            if (PyValue_IsNull(newval))
                 break;
-            if (PyObject_SetItem(mapping, key, newval) < 0)
+            if (PyObject_SetItemValue(PyValue_FromObject(mapping), key, newval) < 0)
                 break;
-            Py_CLEAR(newval);
-            Py_DECREF(key);
         }
     }
 
@@ -2638,8 +2636,6 @@ done:
     Py_XDECREF(mapping_get);
     Py_XDECREF(mapping_setitem);
     Py_DECREF(it);
-    Py_XDECREF(key);
-    Py_XDECREF(newval);
     Py_XDECREF(bound_get);
     if (PyErr_Occurred())
         return NULL;

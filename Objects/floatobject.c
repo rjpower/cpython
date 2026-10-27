@@ -1052,9 +1052,9 @@ double_round(double x, int ndigits) {
 /* round a Python float v to the closest multiple of 10**-ndigits */
 
 /*[clinic input]
-float.__round__
+float.__round__ -> value
 
-    ndigits as o_ndigits: object = None
+    ndigits as o_ndigits: value = None
     /
 
 Return the Integral closest to x, rounding half toward even.
@@ -1062,32 +1062,36 @@ Return the Integral closest to x, rounding half toward even.
 When an argument is passed, work like built-in round(x, ndigits).
 [clinic start generated code]*/
 
-static PyObject *
-float___round___impl(PyObject *self, PyObject *o_ndigits)
-/*[clinic end generated code: output=374c36aaa0f13980 input=fc0fe25924fbc9ed]*/
+static PyValue
+float___round___impl(PyObject *self, PyValue o_ndigits)
+/*[clinic end generated code: output=25910ee38c602410 input=a2fe7f8b8108c0ff]*/
 {
     double x, rounded;
     Py_ssize_t ndigits;
 
     x = PyFloat_AsDouble(self);
-    if (o_ndigits == Py_None) {
+    if (PyValue_Is(o_ndigits, PyValue_FromObject(Py_None))) {
         /* single-argument round or with None ndigits:
          * round to nearest integer */
         rounded = round(x);
         if (fabs(x-rounded) == 0.5)
             /* halfway case: round to even */
             rounded = 2.0*round(x/2.0);
-        return PyLong_FromDouble(rounded);
+        if (fabs(rounded) <= INT32_MAX) {
+            // An inline int: no int object is made.
+            return PyValue_FromInt32((int32_t)rounded);
+        }
+        return PyValue_FromResult(PyLong_FromDouble(rounded));
     }
 
     /* interpret second argument as a Py_ssize_t; clips on overflow */
-    ndigits = PyNumber_AsSsize_t(o_ndigits, NULL);
+    ndigits = PyNumber_AsSsize_tValue(o_ndigits, NULL);
     if (ndigits == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
 
     /* nans and infinities round to themselves */
     if (!isfinite(x))
-        return PyFloat_FromDouble(x);
+        return PyValue_FromDouble(x);
 
     /* Deal with extreme values for ndigits. For ndigits > NDIGITS_MAX, x
        always rounds to itself.  For ndigits < NDIGITS_MIN, x always
@@ -1096,13 +1100,13 @@ float___round___impl(PyObject *self, PyObject *o_ndigits)
 #define NDIGITS_MIN (-(int)((DBL_MAX_EXP + 1) * 0.30103))
     if (ndigits > NDIGITS_MAX)
         /* return x */
-        return PyFloat_FromDouble(x);
+        return PyValue_FromDouble(x);
     else if (ndigits < NDIGITS_MIN)
         /* return 0.0, but with sign of x */
-        return PyFloat_FromDouble(0.0*x);
+        return PyValue_FromDouble(0.0*x);
     else
         /* finite x, and ndigits is not unreasonably large */
-        return double_round(x, (int)ndigits);
+        return PyValue_FromResult(double_round(x, (int)ndigits));
 #undef NDIGITS_MAX
 #undef NDIGITS_MIN
 }
@@ -1594,37 +1598,38 @@ error:
 }
 
 static PyObject *
-float_subtype_new(PyTypeObject *type, PyObject *x);
+float_subtype_new(PyTypeObject *type, PyValue x);
 
 /*[clinic input]
 @vectorcall
 @classmethod
-float.__new__ as float_new
-    x: object(c_default="NULL") = 0
+float.__new__ as float_new -> value
+    x: value(c_default="PyValue_NULL") = 0
     /
 
 Convert a string or number to a floating-point number, if possible.
 [clinic start generated code]*/
 
-static PyObject *
-float_new_impl(PyTypeObject *type, PyObject *x)
-/*[clinic end generated code: output=ccf1e8dc460ba6ba input=39b40d663c372a91]*/
+static PyValue
+float_new_impl(PyTypeObject *type, PyValue x)
+/*[clinic end generated code: output=507dba7a65edcdba input=ae39ee3ccf3bf3e8]*/
 {
     if (type != &PyFloat_Type) {
-        if (x == NULL) {
-            x = _PyLong_GetZero();
+        if (PyValue_IsNull(x)) {
+            x = PyValue_FromInt32(0);
         }
-        return float_subtype_new(type, x); /* Wimp out */
+        /* Wimp out */
+        return PyValue_FromResult(float_subtype_new(type, x));
     }
 
-    if (x == NULL) {
-        return PyFloat_FromDouble(0.0);
+    if (PyValue_IsNull(x)) {
+        return PyValue_FromDouble(0.0);
     }
     /* If it's a string, but not a string subclass, use
        PyFloat_FromString. */
-    if (PyUnicode_CheckExact(x))
-        return PyFloat_FromString(x);
-    return PyNumber_Float(x);
+    if (PyValue_Type(x) == &PyUnicode_Type)
+        return PyValue_FromResult(PyFloat_FromString(PyValue_ObjectBorrow(x)));
+    return PyNumber_FloatValue(x);
 }
 
 /* Wimpy, slow approach to tp_new calls for subtypes of float:
@@ -1633,22 +1638,23 @@ float_new_impl(PyTypeObject *type, PyObject *x)
    from the regular float.  The regular float is then thrown away.
 */
 static PyObject *
-float_subtype_new(PyTypeObject *type, PyObject *x)
+float_subtype_new(PyTypeObject *type, PyValue x)
 {
-    PyObject *tmp, *newobj;
+    PyObject *newobj;
 
     assert(PyType_IsSubtype(type, &PyFloat_Type));
-    tmp = float_new_impl(&PyFloat_Type, x);
-    if (tmp == NULL)
+    PyValue tmp = float_new_impl(&PyFloat_Type, x);
+    if (PyValue_IsNull(tmp))
         return NULL;
-    assert(PyFloat_Check(tmp));
+    assert(PyValue_Type(tmp) == &PyFloat_Type);
+    double fval = PyValue_IsInlineFloat(tmp)
+                  ? PyValue_Double(tmp)
+                  : PyFloat_AS_DOUBLE(PyValue_ObjectBorrow(tmp));
     newobj = type->tp_alloc(type, 0);
     if (newobj == NULL) {
-        Py_DECREF(tmp);
         return NULL;
     }
-    ((PyFloatObject *)newobj)->ob_fval = ((PyFloatObject *)tmp)->ob_fval;
-    Py_DECREF(tmp);
+    ((PyFloatObject *)newobj)->ob_fval = fval;
     return newobj;
 }
 

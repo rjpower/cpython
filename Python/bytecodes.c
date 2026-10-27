@@ -4297,17 +4297,16 @@ dummy_func(
         }
 
         op(_CALL_STR_1, (callable, null, arg -- res, a)) {
-            PyObject *arg_o = PyValue_ObjectBorrow(arg);
-
             assert(oparg == 1);
             STAT_INC(CALL, hit);
-            PyObject *res_o = PyObject_Str(arg_o);
-            if (res_o == NULL) {
+            // str() of an inline int or float makes no box.
+            PyValue res_v = PyObject_StrValue(arg);
+            if (PyValue_IsNull(res_v)) {
                 ERROR_NO_POP();
             }
             a = arg;
             INPUTS_DEAD();
-            res = PyValue_FromObject(res_o);
+            res = res_v;
         }
 
         macro(CALL_STR_1) =

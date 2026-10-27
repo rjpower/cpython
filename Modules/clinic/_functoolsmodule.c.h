@@ -90,9 +90,9 @@ PyDoc_STRVAR(_functools_reduce__doc__,
 #define _FUNCTOOLS_REDUCE_METHODDEF    \
     {"reduce", _PyCFunction_CAST(_functools_reduce), METH_FASTCALL|METH_KEYWORDS, _functools_reduce__doc__},
 
-static PyObject *
+static PyValue
 _functools_reduce_impl(PyObject *module, PyObject *func, PyObject *seq,
-                       PyObject *result);
+                       PyValue result);
 
 static PyValue
 _functools_reduce(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
@@ -128,8 +128,8 @@ _functools_reduce(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObj
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *func;
     PyObject *seq;
-    PyObject *result = NULL;
-    PyObject *_return_value;
+    PyValue result = PyValue_NULL;
+    PyValue _return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -147,13 +147,10 @@ _functools_reduce(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObj
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    result = PyValue_Object(args[2]);
-    if (result == NULL) {
-        goto exit;
-    }
+    result = args[2];
 skip_optional_pos:
     _return_value = _functools_reduce_impl(module, func, seq, result);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -255,4 +252,4 @@ _functools__lru_cache_wrapper___deepcopy__(PyObject *self, PyValue arg)
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=1205981c7a607f87 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2dbbcad10215ec06 input=a9049054013a1b77]*/

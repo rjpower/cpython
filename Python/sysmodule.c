@@ -1906,7 +1906,7 @@ sys_set_int_max_str_digits_impl(PyObject *module, int maxdigits)
 size_t
 _PySys_GetSizeOf(PyObject *o)
 {
-    PyObject *res = NULL;
+    PyValue res = PyValue_NULL;
     PyObject *method;
     Py_ssize_t size;
     PyThreadState *tstate = _PyThreadState_GET();
@@ -1925,15 +1925,16 @@ _PySys_GetSizeOf(PyObject *o)
         }
     }
     else {
-        res = _PyObject_CallNoArgs(method);
+        // The size is an int, which is inline: reading it makes no box.
+        res = _PyObject_VectorcallValueTstate(
+            tstate, PyValue_FromObject(method), NULL, 0, NULL);
         Py_DECREF(method);
     }
 
-    if (res == NULL)
+    if (PyValue_IsNull(res))
         return (size_t)-1;
 
-    size = PyLong_AsSsize_t(res);
-    Py_DECREF(res);
+    size = PyLong_AsSsize_tValue(res);
     if (size == -1 && _PyErr_Occurred(tstate))
         return (size_t)-1;
 
@@ -1955,17 +1956,17 @@ _PySys_GetSizeOf(PyObject *o)
 }
 
 /*[clinic input]
-sys.getsizeof
+sys.getsizeof -> value
 
     object as o: object
-    default as dflt: object = NULL
+    default as dflt: value = NULL
 
 Return the size of object in bytes.
 [clinic start generated code]*/
 
-static PyObject *
-sys_getsizeof_impl(PyObject *module, PyObject *o, PyObject *dflt)
-/*[clinic end generated code: output=c9dee8179ae2a973 input=fd71e98f0e3ae131]*/
+static PyValue
+sys_getsizeof_impl(PyObject *module, PyObject *o, PyValue dflt)
+/*[clinic end generated code: output=881d912327af3994 input=0207b0cda72c5f2c]*/
 {
     size_t size;
     PyThreadState *tstate = _PyThreadState_GET();
@@ -1974,15 +1975,17 @@ sys_getsizeof_impl(PyObject *module, PyObject *o, PyObject *dflt)
 
     if (size == (size_t)-1 && _PyErr_Occurred(tstate)) {
         /* Has a default value been given */
-        if (dflt != NULL && _PyErr_ExceptionMatches(tstate, PyExc_TypeError)) {
+        if (!PyValue_IsNull(dflt) &&
+            _PyErr_ExceptionMatches(tstate, PyExc_TypeError))
+        {
             _PyErr_Clear(tstate);
-            return Py_NewRef(dflt);
+            return dflt;
         }
         else
-            return NULL;
+            return PyValue_NULL;
     }
 
-    return PyLong_FromSize_t(size);
+    return PyValue_FromUnsignedLongLong(size);
 }
 
 

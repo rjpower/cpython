@@ -3,6 +3,7 @@
 
 #include "Python.h"
 #include "pycore_compile.h"       // _PyCompile_GetUnaryIntrinsicName
+#include "pycore_dict.h"          // _PyDict_SetItemValue()
 #include "pycore_function.h"      // _Py_set_function_type_params()
 #include "pycore_genobject.h"     // _PyAsyncGenValueWrapperNew
 #include "pycore_interpframe.h"   // _PyFrame_GetLocals()
@@ -41,7 +42,7 @@ print_expr(PyThreadState* Py_UNUSED(ignored), PyObject *value)
 static int
 import_all_from(PyThreadState *tstate, PyObject *locals, PyObject *v)
 {
-    PyObject *all, *dict, *name, *value;
+    PyObject *all, *dict, *name;
     int skip_leading_underscores = 0;
     int pos, err;
 
@@ -106,15 +107,16 @@ import_all_from(PyThreadState *tstate, PyObject *locals, PyObject *v)
                 continue;
             }
         }
-        value = PyObject_GetAttr(v, name);
-        if (value == NULL)
+        PyValue value = PyObject_GetAttrValue(PyValue_FromObject(v), name);
+        if (PyValue_IsNull(value))
             err = -1;
         else if (PyDict_CheckExact(locals))
-            err = PyDict_SetItem(locals, name, value);
+            err = _PyDict_SetItemValue((PyDictObject *)locals,
+                                       PyValue_FromObject(name), value);
         else
-            err = PyObject_SetItem(locals, name, value);
+            err = PyObject_SetItemValue(PyValue_FromObject(locals),
+                                        PyValue_FromObject(name), value);
         Py_DECREF(name);
-        Py_XDECREF(value);
         if (err < 0)
             break;
     }

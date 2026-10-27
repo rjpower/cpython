@@ -15,26 +15,23 @@ PyDoc_STRVAR(tuple_index__doc__,
 #define TUPLE_INDEX_METHODDEF    \
     {"index", _PyCFunction_CAST(tuple_index), METH_FASTCALL, tuple_index__doc__},
 
-static PyObject *
-tuple_index_impl(PyTupleObject *self, PyObject *value, Py_ssize_t start,
+static PyValue
+tuple_index_impl(PyTupleObject *self, PyValue value, Py_ssize_t start,
                  Py_ssize_t stop);
 
 static PyValue
 tuple_index(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *value;
+    PyValue value;
     Py_ssize_t start = 0;
     Py_ssize_t stop = PY_SSIZE_T_MAX;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
-    value = PyValue_Object(args[0]);
-    if (value == NULL) {
-        goto exit;
-    }
+    value = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
@@ -61,7 +58,7 @@ tuple_index(PyObject *self, const PyValue *args, Py_ssize_t nargs)
     }
 skip_optional:
     _return_value = tuple_index_impl((PyTupleObject *)self, value, start, stop);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -76,24 +73,20 @@ PyDoc_STRVAR(tuple_count__doc__,
 #define TUPLE_COUNT_METHODDEF    \
     {"count", _PyCFunction_CAST(tuple_count), METH_O, tuple_count__doc__},
 
-static PyObject *
-tuple_count_impl(PyTupleObject *self, PyObject *value);
+static PyValue
+tuple_count_impl(PyTupleObject *self, PyValue value);
 
 static PyValue
 tuple_count(PyObject *self, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *value;
-    PyObject *_return_value;
+    PyValue value;
+    PyValue _return_value;
 
-    value = PyValue_Object(arg);
-    if (value == NULL) {
-        goto exit;
-    }
+    value = arg;
     _return_value = tuple_count_impl((PyTupleObject *)self, value);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
-exit:
     return return_value;
 }
 
@@ -188,4 +181,4 @@ tuple___getnewargs__(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return tuple___getnewargs___impl((PyTupleObject *)self);
 }
-/*[clinic end generated code: output=6fee3d891e4c4c81 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c95792e2e51ca14b input=a9049054013a1b77]*/

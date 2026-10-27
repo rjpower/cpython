@@ -7311,34 +7311,14 @@
             // _CALL_STR_1
             {
                 arg = window[2];
-                PyObject *arg_object;
-                _PyValueRoot arg_root;
-                if (Py_UNLIKELY(PyValue_IsInline(arg))) {
-                    arg_object = _PyValue_BoxInline(arg);
-                    if (arg_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_STR_1, _PY_BOX_CALL);
-                }
-                else {
-                    arg_object = PyValue_ObjectBorrow(arg);
-                }
-                PyObject *arg_o = arg_object;
                 assert(oparg == 1);
                 STAT_INC(CALL, hit);
-                if (Py_UNLIKELY(PyValue_IsInline(arg))) {
-                    _PyThreadState_PushValueRoot(tstate, &arg_root);
-                    arg_root.object = arg_object;
-                }
-                PyObject *res_o = PyObject_Str(arg_o);
-                if (Py_UNLIKELY(PyValue_IsInline(arg))) {
-                    _PyThreadState_PopValueRoot(tstate, &arg_root);
-                }
-                if (res_o == NULL) {
+                PyValue res_v = PyObject_StrValue(arg);
+                if (PyValue_IsNull(res_v)) {
                     JUMP_TO_LABEL(error);
                 }
                 a = arg;
-                res = PyValue_FromObject(res_o);
+                res = res_v;
             }
             // _POP_TOP
             {

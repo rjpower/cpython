@@ -321,11 +321,11 @@ list_shift_items_left_lock_held(PyListObject *self, Py_ssize_t first,
 }
 
 static int
-ins1(PyListObject *self, Py_ssize_t where, PyObject *v)
+ins1(PyListObject *self, Py_ssize_t where, PyValue v)
 {
     Py_ssize_t n = Py_SIZE(self);
     PyValue *items;
-    if (v == NULL) {
+    if (PyValue_IsNull(v)) {
         PyErr_BadInternalCall();
         return -1;
     }
@@ -345,7 +345,7 @@ ins1(PyListObject *self, Py_ssize_t where, PyObject *v)
     if (where < n) {
         list_shift_items_right_lock_held(self, where, n);
     }
-    items[where] = PyValue_FromObject(v);
+    items[where] = v;
     return 0;
 }
 
@@ -359,7 +359,7 @@ PyList_Insert(PyObject *op, Py_ssize_t where, PyObject *newitem)
     PyListObject *self = (PyListObject *)op;
     int err;
     Py_BEGIN_CRITICAL_SECTION(self);
-    err = ins1(self, where, newitem);
+    err = ins1(self, where, PyValue_FromResult(newitem));
     Py_END_CRITICAL_SECTION();
     return err;
 }
@@ -511,15 +511,20 @@ _PyList_ContainsValue(PyObject *op, PyValue v)
     return 0;
 }
 
+static PyValue
+list_item_value(PyListObject *a, Py_ssize_t i)
+{
+    if (!valid_index(i, PyList_GET_SIZE(a))) {
+        PyErr_SetObject(PyExc_IndexError, &_Py_STR(list_err));
+        return PyValue_NULL;
+    }
+    return a->ob_item[i];
+}
+
 static PyObject *
 list_item(PyObject *aa, Py_ssize_t i)
 {
-    PyListObject *a = (PyListObject *)aa;
-    if (!valid_index(i, PyList_GET_SIZE(a))) {
-        PyErr_SetObject(PyExc_IndexError, &_Py_STR(list_err));
-        return NULL;
-    }
-    return PyValue_Object(a->ob_item[i]);
+    return PyValue_Object(list_item_value((PyListObject *)aa, i));
 }
 
 static PyObject *
@@ -908,15 +913,15 @@ list_ass_item_impl(PyListObject *a, Py_ssize_t i, PyObject *v)
 list.insert
 
     index: Py_ssize_t
-    object: object
+    object: value
     /
 
 Insert object before index.
 [clinic start generated code]*/
 
 static PyObject *
-list_insert_impl(PyListObject *self, Py_ssize_t index, PyObject *object)
-/*[clinic end generated code: output=7f35e32f60c8cb78 input=b1987ca998a4ae2d]*/
+list_insert_impl(PyListObject *self, Py_ssize_t index, PyValue object)
+/*[clinic end generated code: output=2f72798dfcd070d3 input=152c5deaaa356d08]*/
 {
     if (ins1(self, index, object) == 0) {
         Py_RETURN_NONE;
@@ -957,17 +962,17 @@ list_copy_impl(PyListObject *self)
 @critical_section
 list.append
 
-     object: object
+     object: value
      /
 
 Append object to the end of the list.
 [clinic start generated code]*/
 
 static PyObject *
-list_append_impl(PyListObject *self, PyObject *object)
-/*[clinic end generated code: output=78423561d92ed405 input=122b0853de54004f]*/
+list_append_impl(PyListObject *self, PyValue object)
+/*[clinic end generated code: output=76e0445e0e32e8cb input=1d67d8baa42d31c2]*/
 {
-    if (_PyList_AppendTakeRef(self, Py_NewRef(object)) < 0) {
+    if (_PyList_AppendValue(self, object) < 0) {
         return NULL;
     }
     Py_RETURN_NONE;
@@ -1296,7 +1301,7 @@ list_inplace_concat(PyObject *_self, PyObject *other)
 
 /*[clinic input]
 @critical_section
-list.pop
+list.pop -> value
 
     index: Py_ssize_t = -1
     /
@@ -1306,34 +1311,29 @@ Remove and return item at index (default last).
 Raises IndexError if list is empty or index is out of range.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 list_pop_impl(PyListObject *self, Py_ssize_t index)
-/*[clinic end generated code: output=6bd69dcb3f17eca8 input=c269141068ae4b8f]*/
+/*[clinic end generated code: output=90235cdbb2c53f2c input=d0815b89da706ca1]*/
 {
     PyValue v;
 
     if (Py_SIZE(self) == 0) {
         /* Special-case most common failure cause */
         PyErr_SetString(PyExc_IndexError, "pop from empty list");
-        return NULL;
+        return PyValue_NULL;
     }
     if (index < 0)
         index += Py_SIZE(self);
     if (!valid_index(index, Py_SIZE(self))) {
         PyErr_SetString(PyExc_IndexError, "pop index out of range");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyValue *items = self->ob_item;
     v = items[index];
-    // Box before the list changes: a failure leaves it as it was.
-    PyObject *res = PyValue_Object(v);
-    if (res == NULL) {
-        return NULL;
-    }
     if (Py_SIZE(self) == 1) {
         list_clear(self);
-        return res;
+        return v;
     }
     Py_ssize_t size_after_pop = Py_SIZE(self) - 1;
     if (index < size_after_pop) {
@@ -1341,7 +1341,7 @@ list_pop_impl(PyListObject *self, Py_ssize_t index)
                                 size_after_pop - index);
     }
     list_resize(self, size_after_pop);  // NB: shrinking a list can't fail
-    return res;
+    return v;
 }
 
 /* Reverse a slice of a list in place, from lo up to (exclusive) hi. */
@@ -2507,26 +2507,25 @@ unsafe_object_compare(PyValue vv, PyValue wv, MergeState *ms)
 {
     PyObject *res_obj; int res;
 
-    // An int type's compare of an inline int boxes it.
-    PyObject *v = PyValue_Object(vv);
-    if (v == NULL) {
-        return -1;
+    /* An inline operand is an exact int or float, and the keys all have one
+       type, so both are: the generic compare is the type's compare, and it
+       needs no box. */
+    if (PyValue_IsInline(vv) || PyValue_IsInline(wv)) {
+        return PyObject_RichCompareBoolValue(vv, wv, Py_LT);
     }
-    PyObject *w = PyValue_Object(wv);
-    if (w == NULL) {
-        return -1;
-    }
+    PyObject *v = PyValue_ObjectBorrow(vv);
+    PyObject *w = PyValue_ObjectBorrow(wv);
 
     /* No assumptions, because we check first: */
     if (Py_TYPE(v)->tp_richcompare != ms->key_richcompare)
-        return PyObject_RichCompareBool(v, w, Py_LT);
+        return PyObject_RichCompareBoolValue(vv, wv, Py_LT);
 
     assert(ms->key_richcompare != NULL);
     res_obj = (*(ms->key_richcompare))(v, w, Py_LT);
 
     if (res_obj == Py_NotImplemented) {
         Py_DECREF(res_obj);
-        return PyObject_RichCompareBool(v, w, Py_LT);
+        return PyObject_RichCompareBoolValue(vv, wv, Py_LT);
     }
     if (res_obj == NULL)
         return -1;
@@ -2746,16 +2745,19 @@ list_sort_impl(PyListObject *self, PyObject *keyfunc, int reverse)
             }
         }
 
+        PyValue keyfunc_value = PyValue_FromObject(keyfunc);
         for (i = 0; i < saved_ob_size ; i++) {
-            PyObject *item = PyValue_Object(saved_ob_item[i]);
-            PyObject *key = item == NULL ? NULL
-                            : PyObject_CallOneArg(keyfunc, item);
-            if (key == NULL) {
+            // As PyObject_CallOneArg() does, with the item as a value.
+            PyValue args[2] = {PyValue_NULL, saved_ob_item[i]};
+            PyValue key = PyObject_VectorcallValue(
+                keyfunc_value, args + 1, 1 | PY_VECTORCALL_ARGUMENTS_OFFSET,
+                NULL);
+            if (PyValue_IsNull(key)) {
                 if (saved_ob_size >= MERGESTATE_TEMP_SIZE/2)
                     PyMem_Free(keys);
                 goto keyfunc_fail;
             }
-            keys[i] = PyValue_FromObject(key);
+            keys[i] = key;
         }
 
         lo.keys = keys;
@@ -3050,9 +3052,9 @@ _PyList_FromValues(const PyValue *src, Py_ssize_t n)
 }
 
 /*[clinic input]
-list.index
+list.index -> value
 
-    value: object
+    value: value
     start: slice_index(accept={int}) = 0
     stop: slice_index(accept={int}, c_default="PY_SSIZE_T_MAX") = sys.maxsize
     /
@@ -3062,10 +3064,10 @@ Return first index of value.
 Raises ValueError if the value is not present.
 [clinic start generated code]*/
 
-static PyObject *
-list_index_impl(PyListObject *self, PyObject *value, Py_ssize_t start,
+static PyValue
+list_index_impl(PyListObject *self, PyValue value, Py_ssize_t start,
                 Py_ssize_t stop)
-/*[clinic end generated code: output=ec51b88787e4e481 input=40ec5826303a0eb1]*/
+/*[clinic end generated code: output=b2b10cff574180b9 input=0e48fa78d8dac3a7]*/
 {
     if (start < 0) {
         start += Py_SIZE(self);
@@ -3077,49 +3079,47 @@ list_index_impl(PyListObject *self, PyObject *value, Py_ssize_t start,
         if (stop < 0)
             stop = 0;
     }
-    PyValue v = PyValue_FromObject(value);
     // The comparison may shrink the list.
     for (Py_ssize_t i = start; i < stop && i < Py_SIZE(self); i++) {
-        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i], v, Py_EQ);
+        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i], value, Py_EQ);
         if (cmp > 0)
-            return PyLong_FromSsize_t(i);
+            return PyValue_FromLongLong(i);
         else if (cmp < 0)
-            return NULL;
+            return PyValue_NULL;
     }
     PyErr_SetString(PyExc_ValueError, "list.index(x): x not in list");
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
-list.count
+list.count -> value
 
-     value: object
+     value: value
      /
 
 Return number of occurrences of value.
 [clinic start generated code]*/
 
-static PyObject *
-list_count_impl(PyListObject *self, PyObject *value)
-/*[clinic end generated code: output=eff66f14aef2df86 input=3bdc3a5e6f749565]*/
+static PyValue
+list_count_impl(PyListObject *self, PyValue value)
+/*[clinic end generated code: output=39512f8d4dc4e20c input=382206691b7e88ad]*/
 {
     Py_ssize_t count = 0;
-    PyValue v = PyValue_FromObject(value);
     for (Py_ssize_t i = 0; i < Py_SIZE(self); i++) {
-        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i], v, Py_EQ);
+        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i], value, Py_EQ);
         if (cmp > 0)
             count++;
         else if (cmp < 0)
-            return NULL;
+            return PyValue_NULL;
     }
-    return PyLong_FromSsize_t(count);
+    return PyValue_FromLongLong(count);
 }
 
 /*[clinic input]
 @critical_section
 list.remove
 
-     value: object
+     value: value
      /
 
 Remove first occurrence of value.
@@ -3128,14 +3128,14 @@ Raises ValueError if the value is not present.
 [clinic start generated code]*/
 
 static PyObject *
-list_remove_impl(PyListObject *self, PyObject *value)
-/*[clinic end generated code: output=b9b76a6633b18778 input=26c813dbb95aa93b]*/
+list_remove_impl(PyListObject *self, PyValue value)
+/*[clinic end generated code: output=422f365e1dc04a79 input=ff462a29f111a4b5]*/
 {
     Py_ssize_t i;
 
     for (i = 0; i < Py_SIZE(self); i++) {
-        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i],
-                                           PyValue_FromObject(value), Py_EQ);
+        int cmp = PyObject_RichCompareBoolValue(self->ob_item[i], value,
+                                                Py_EQ);
         if (cmp > 0) {
             if (list_ass_slice_lock_held(self, i, i+1, NULL) == 0)
                 Py_RETURN_NONE;
@@ -3422,6 +3422,15 @@ list_subscript(PyObject* _self, PyObject* item)
 static PyValue
 list___getitem__(PyObject *self, PyValue item)
 {
+    if (PyValue_IsInlineInt(item)) {
+        // Neither the index nor the item is boxed.
+        Py_ssize_t i = PyValue_Int32(item);
+        if (i < 0) {
+            i += PyList_GET_SIZE(self);
+        }
+        return list_item_value((PyListObject *)self, i);
+    }
+    // A box of an inline float, to raise the TypeError.
     PyObject *item_o = PyValue_Object(item);
     if (item_o == NULL) {
         return PyValue_NULL;
@@ -3839,12 +3848,8 @@ listiter_reduce(PyObject *it, PyObject *Py_UNUSED(ignored))
 static PyValue
 listiter_setstate(PyObject *self, PyValue state_value)
 {
-    PyObject *state = PyValue_Object(state_value);
-    if (state == NULL) {
-        return PyValue_NULL;
-    }
     _PyListIterObject *it = (_PyListIterObject *)self;
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = PyLong_AsSsize_tValue(state_value);
     if (index == -1 && PyErr_Occurred())
         return PyValue_NULL;
     if (it->it_seq != NULL) {
@@ -3993,12 +3998,8 @@ listreviter_reduce(PyObject *it, PyObject *Py_UNUSED(ignored))
 static PyValue
 listreviter_setstate(PyObject *self, PyValue state_value)
 {
-    PyObject *state = PyValue_Object(state_value);
-    if (state == NULL) {
-        return PyValue_NULL;
-    }
     listreviterobject *it = (listreviterobject *)self;
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = PyLong_AsSsize_tValue(state_value);
     if (index == -1 && PyErr_Occurred())
         return PyValue_NULL;
     if (it->it_seq != NULL) {

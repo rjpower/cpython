@@ -93,7 +93,8 @@ struct unicode_format_arg_t {
 } while (0)
 
 
-static PyObject *
+/* The next argument, as a value: an inline int or float is not boxed. */
+static PyValue
 unicode_format_getnextarg(struct unicode_formatter_t *ctx, int allowone)
 {
     Py_ssize_t argidx = ctx->argidx;
@@ -101,16 +102,16 @@ unicode_format_getnextarg(struct unicode_formatter_t *ctx, int allowone)
     if (argidx < ctx->arglen && (allowone || ctx->arglen >= 0)) {
         ctx->argidx++;
         if (ctx->arglen >= 0) {
-            return PyTuple_GetItem(ctx->args, argidx);
+            return PyTuple_GET_VALUE(ctx->args, argidx);
         }
         else if (allowone) {
-            return ctx->args;
+            return PyValue_FromObject(ctx->args);
         }
     }
     PyErr_Format(PyExc_TypeError,
                  "not enough arguments for format string (got %zd)",
                  ctx->arglen < 0 ? 1 : ctx->arglen);
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -121,7 +122,7 @@ unicode_format_getnextarg(struct unicode_formatter_t *ctx, int allowone)
 
    Return 0 on success, raise an exception and return -1 on error. */
 static int
-formatfloat(PyObject *v,
+formatfloat(PyValue v,
             struct unicode_formatter_t *ctx,
             struct unicode_format_arg_t *arg,
             PyObject **p_output,
@@ -133,12 +134,13 @@ formatfloat(PyObject *v,
     int prec;
     int dtoa_flags = 0;
 
-    x = PyFloat_AsDouble(v);
+    x = PyFloat_AsDoubleValue(v);
     if (x == -1.0 && PyErr_Occurred()) {
         if (PyErr_ExceptionMatches(PyExc_TypeError)) {
+            // An inline value converts: v is an object.
             FORMAT_ERROR(PyExc_TypeError,
                          "%%%c requires a real number, not %T",
-                         arg->ch, v);
+                         arg->ch, PyValue_ObjectBorrow(v));
         }
         return -1;
     }
@@ -467,7 +469,7 @@ unicode_format_arg_parse(struct unicode_formatter_t *ctx,
 #define FORMAT_READ(ctx) \
         PyUnicode_READ((ctx)->fmtkind, (ctx)->fmtdata, (ctx)->fmtpos)
 
-    PyObject *v;
+    PyValue v;
 
     if (arg->ch == '(') {
         /* Get argument value from a dictionary. Example: "%(name)s". */
@@ -549,13 +551,17 @@ unicode_format_arg_parse(struct unicode_formatter_t *ctx,
             return -1;
         }
         v = unicode_format_getnextarg(ctx, 0);
-        if (v == NULL)
+        if (PyValue_IsNull(v))
             return -1;
-        if (!PyLong_Check(v)) {
-            FORMAT_ERROR(PyExc_TypeError, "* requires int, not %T", v);
+        if (!PyType_IsSubtype(PyValue_Type(v), &PyLong_Type)) {
+            // A box of an inline float, for the message.
+            PyObject *v_o = PyValue_Object(v);
+            if (v_o != NULL) {
+                FORMAT_ERROR(PyExc_TypeError, "* requires int, not %T", v_o);
+            }
             return -1;
         }
-        arg->width = PyLong_AsSsize_t(v);
+        arg->width = PyLong_AsSsize_tValue(v);
         if (arg->width == -1 && PyErr_Occurred()) {
             if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
                 FORMAT_ERROR(PyExc_OverflowError,
@@ -614,13 +620,18 @@ unicode_format_arg_parse(struct unicode_formatter_t *ctx,
                 return -1;
             }
             v = unicode_format_getnextarg(ctx, 0);
-            if (v == NULL)
+            if (PyValue_IsNull(v))
                 return -1;
-            if (!PyLong_Check(v)) {
-                FORMAT_ERROR(PyExc_TypeError, "* requires int, not %T", v);
+            if (!PyType_IsSubtype(PyValue_Type(v), &PyLong_Type)) {
+                // A box of an inline float, for the message.
+                PyObject *v_o = PyValue_Object(v);
+                if (v_o != NULL) {
+                    FORMAT_ERROR(PyExc_TypeError, "* requires int, not %T",
+                                 v_o);
+                }
                 return -1;
             }
-            arg->prec = PyLong_AsInt(v);
+            arg->prec = PyLong_AsIntValue(v);
             if (arg->prec == -1 && PyErr_Occurred()) {
                 if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
                     FORMAT_ERROR(PyExc_OverflowError,
@@ -699,9 +710,18 @@ unicode_format_arg_format(struct unicode_formatter_t *ctx,
     if (ctx->fmtcnt == 0)
         ctx->writer.overallocate = 0;
 
-    v = unicode_format_getnextarg(ctx, 1);
-    if (v == NULL)
+    PyValue value = unicode_format_getnextarg(ctx, 1);
+    if (PyValue_IsNull(value))
         return -1;
+    // The float conversions read the value; the others take an object.
+    int is_float = (arg->ch == 'e' || arg->ch == 'E' || arg->ch == 'f'
+                    || arg->ch == 'F' || arg->ch == 'g' || arg->ch == 'G');
+    v = NULL;
+    if (!is_float) {
+        v = PyValue_Object(value);
+        if (v == NULL)
+            return -1;
+    }
 
 
     switch (arg->ch) {
@@ -755,13 +775,13 @@ unicode_format_arg_format(struct unicode_formatter_t *ctx,
             && !(arg->flags & (F_SIGN | F_BLANK)))
         {
             /* Fast path */
-            if (formatfloat(v, ctx, arg, NULL, writer) == -1)
+            if (formatfloat(value, ctx, arg, NULL, writer) == -1)
                 return -1;
             return 1;
         }
 
         arg->sign = 1;
-        if (formatfloat(v, ctx, arg, p_str, NULL) == -1)
+        if (formatfloat(value, ctx, arg, p_str, NULL) == -1)
             return -1;
         break;
 

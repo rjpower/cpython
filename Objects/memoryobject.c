@@ -189,6 +189,13 @@ PyTypeObject _PyManagedBuffer_Type = {
         return NULL;                                              \
     }
 
+#define CHECK_RELEASED_VALUE(mv) \
+    if (BASE_INACCESSIBLE(mv)) {                                  \
+        PyErr_SetString(PyExc_ValueError,                         \
+            "operation forbidden on released memoryview object"); \
+        return PyValue_NULL;                                      \
+    }
+
 #define CHECK_RELEASED_INT(mv) \
     if (BASE_INACCESSIBLE(mv)) {                                  \
         PyErr_SetString(PyExc_ValueError,                         \
@@ -214,6 +221,7 @@ PyTypeObject _PyManagedBuffer_Type = {
    again due to possible read after frees. */
 #define CHECK_RELEASED_AGAIN(mv) CHECK_RELEASED(mv)
 #define CHECK_RELEASED_INT_AGAIN(mv) CHECK_RELEASED_INT(mv)
+#define CHECK_RELEASED_VALUE_AGAIN(mv) CHECK_RELEASED_VALUE(mv)
 
 #define CHECK_LIST_OR_TUPLE(v) \
     if (!PyList_Check(v) && !PyTuple_Check(v)) { \
@@ -1859,8 +1867,8 @@ pylong_as_zu(PyObject *item)
 /* Unpack a single item. 'fmt' can be any native format in struct
    module syntax. This function is very sensitive to small changes. With this
    layout gcc automatically generates a fast jump table. */
-static inline PyObject *
-unpack_single(PyMemoryViewObject *self, const char *ptr, const char *fmt)
+static inline PyValue
+unpack_single_value(PyMemoryViewObject *self, const char *ptr, const char *fmt)
 {
     unsigned long long llu;
     unsigned long lu;
@@ -1872,7 +1880,7 @@ unpack_single(PyMemoryViewObject *self, const char *ptr, const char *fmt)
     unsigned char uc;
     void *p;
 
-    CHECK_RELEASED_AGAIN(self);
+    CHECK_RELEASED_VALUE_AGAIN(self);
 
 #if PY_LITTLE_ENDIAN
     int endian = 1;
@@ -1940,33 +1948,41 @@ unpack_single(PyMemoryViewObject *self, const char *ptr, const char *fmt)
 
 convert_uc:
     /* PyLong_FromUnsignedLong() is slower */
-    return PyLong_FromLong(uc);
+    return PyValue_FromInt32(uc);
 convert_ld:
-    return PyLong_FromLong(ld);
+    return PyValue_FromLongLong(ld);
 convert_lu:
-    return PyLong_FromUnsignedLong(lu);
+    return PyValue_FromUnsignedLongLong(lu);
 convert_lld:
-    return PyLong_FromLongLong(lld);
+    return PyValue_FromLongLong(lld);
 convert_llu:
-    return PyLong_FromUnsignedLongLong(llu);
+    return PyValue_FromUnsignedLongLong(llu);
 convert_zd:
-    return PyLong_FromSsize_t(zd);
+    return PyValue_FromLongLong(zd);
 convert_zu:
-    return PyLong_FromSize_t(zu);
+    return PyValue_FromUnsignedLongLong(zu);
 convert_double:
-    return PyFloat_FromDouble(d[0]);
+    return PyValue_FromDouble(d[0]);
 convert_double_complex:
-    return PyComplex_FromDoubles(d[0], d[1]);
+    return PyValue_FromResult(PyComplex_FromDoubles(d[0], d[1]));
 convert_bool:
-    return PyBool_FromLong(ld);
+    return PyValue_FromObject(PyBool_FromLong(ld));
 convert_bytes:
-    return PyBytes_FromStringAndSize(ptr, 1);
+    return PyValue_FromResult(PyBytes_FromStringAndSize(ptr, 1));
 convert_pointer:
-    return PyLong_FromVoidPtr(p);
+    return PyValue_FromResult(PyLong_FromVoidPtr(p));
 err_format:
     PyErr_Format(PyExc_NotImplementedError,
         "memoryview: format %s not supported", fmt);
-    return NULL;
+    return PyValue_NULL;
+}
+
+/* unpack_single_value() for a caller that takes an object: an inline int or
+   float is boxed. */
+static PyObject *
+unpack_single(PyMemoryViewObject *self, const char *ptr, const char *fmt)
+{
+    return PyValue_Object(unpack_single_value(self, ptr, fmt));
 }
 
 #define PACK_SINGLE(ptr, src, type) \
@@ -2313,7 +2329,7 @@ tolist_base(PyMemoryViewObject *self, const char *ptr, const Py_ssize_t *shape,
             const Py_ssize_t *strides, const Py_ssize_t *suboffsets,
             const char *fmt)
 {
-    PyObject *lst, *item;
+    PyObject *lst;
     Py_ssize_t i;
 
     lst = PyList_New(shape[0]);
@@ -2322,12 +2338,12 @@ tolist_base(PyMemoryViewObject *self, const char *ptr, const Py_ssize_t *shape,
 
     for (i = 0; i < shape[0]; ptr+=strides[0], i++) {
         const char *xptr = ADJUST_PTR(ptr, suboffsets, 0);
-        item = unpack_single(self, xptr, fmt);
-        if (item == NULL) {
+        PyValue item = unpack_single_value(self, xptr, fmt);
+        if (PyValue_IsNull(item)) {
             Py_DECREF(lst);
             return NULL;
         }
-        PyList_SET_ITEM(lst, i, item);
+        PyList_SET_VALUE(lst, i, item);
     }
 
     return lst;
@@ -2593,33 +2609,39 @@ ptr_from_tuple(const Py_buffer *view, PyObject *tup)
 /* Return the item at index. In a one-dimensional view, this is an object
    with the type specified by view->format. Otherwise, the item is a sub-view.
    The function is used in memory_subscript() and memory_as_sequence. */
-static PyObject *
-memory_item(PyObject *_self, Py_ssize_t index)
+static PyValue
+memory_item_value(PyMemoryViewObject *self, Py_ssize_t index)
 {
-    PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
     Py_buffer *view = &(self->view);
     const char *fmt;
 
-    CHECK_RELEASED(self);
+    CHECK_RELEASED_VALUE(self);
 
     fmt = adjust_fmt(view);
     if (fmt == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (view->ndim == 0) {
         PyErr_SetString(PyExc_TypeError, "invalid indexing of 0-dim memory");
-        return NULL;
+        return PyValue_NULL;
     }
     if (view->ndim == 1) {
         char *ptr = ptr_from_index(view, index);
         if (ptr == NULL)
-            return NULL;
-        return unpack_single(self, ptr, fmt);
+            return PyValue_NULL;
+        return unpack_single_value(self, ptr, fmt);
     }
 
     PyErr_SetString(PyExc_NotImplementedError,
         "multi-dimensional sub-views are not implemented");
-    return NULL;
+    return PyValue_NULL;
+}
+
+static PyObject *
+memory_item(PyObject *_self, Py_ssize_t index)
+{
+    return PyValue_Object(
+        memory_item_value((PyMemoryViewObject *)_self, index));
 }
 
 /* Return the item at position *key* (a tuple of indices). */
@@ -3011,7 +3033,7 @@ memoryview_index_impl(PyMemoryViewObject *self, PyObject *value,
         assert(0 <= start);
         assert(start <= stop);
 
-        PyObject *obj = _PyObject_CAST(self);
+        PyValue v = PyValue_FromObject(value);
         for (Py_ssize_t index = start; index < stop; index++) {
             // Note: while memoryviews can be mutated during iterations
             // when calling the == operator, their shape cannot. As such,
@@ -3019,16 +3041,14 @@ memoryview_index_impl(PyMemoryViewObject *self, PyObject *value,
             // entire loop.
             assert(index < n);
 
-            PyObject *item = memory_item(obj, index);
-            if (item == NULL) {
+            PyValue item = memory_item_value(self, index);
+            if (PyValue_IsNull(item)) {
                 return NULL;
             }
-            if (item == value) {
-                Py_DECREF(item);
+            if (PyValue_Is(item, v)) {
                 return PyLong_FromSsize_t(index);
             }
-            int contained = PyObject_RichCompareBool(item, value, Py_EQ);
-            Py_DECREF(item);
+            int contained = PyObject_RichCompareBoolValue(item, v, Py_EQ);
             if (contained > 0) {  // more likely than 'contained < 0'
                 return PyLong_FromSsize_t(index);
             }

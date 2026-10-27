@@ -461,25 +461,21 @@ PyDoc_STRVAR(set_add__doc__,
     {"add", _PyCFunction_CAST(set_add), METH_O, set_add__doc__},
 
 static PyObject *
-set_add_impl(PySetObject *so, PyObject *key);
+set_add_impl(PySetObject *so, PyValue key);
 
 static PyValue
 set_add(PyObject *so, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *key;
+    PyValue key;
     PyObject *_return_value;
 
-    key = PyValue_Object(arg);
-    if (key == NULL) {
-        goto exit;
-    }
+    key = arg;
     Py_BEGIN_CRITICAL_SECTION(so);
     _return_value = set_add_impl((PySetObject *)so, key);
     Py_END_CRITICAL_SECTION();
     return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -493,23 +489,19 @@ PyDoc_STRVAR(set___contains____doc__,
     {"__contains__", _PyCFunction_CAST(set___contains__), METH_O|METH_COEXIST, set___contains____doc__},
 
 static PyObject *
-set___contains___impl(PySetObject *so, PyObject *key);
+set___contains___impl(PySetObject *so, PyValue key);
 
 static PyValue
 set___contains__(PyObject *so, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *key;
+    PyValue key;
     PyObject *_return_value;
 
-    key = PyValue_Object(arg);
-    if (key == NULL) {
-        goto exit;
-    }
+    key = arg;
     _return_value = set___contains___impl((PySetObject *)so, key);
     return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -523,23 +515,19 @@ PyDoc_STRVAR(frozenset___contains____doc__,
     {"__contains__", _PyCFunction_CAST(frozenset___contains__), METH_O|METH_COEXIST, frozenset___contains____doc__},
 
 static PyObject *
-frozenset___contains___impl(PySetObject *so, PyObject *key);
+frozenset___contains___impl(PySetObject *so, PyValue key);
 
 static PyValue
 frozenset___contains__(PyObject *so, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *key;
+    PyValue key;
     PyObject *_return_value;
 
-    key = PyValue_Object(arg);
-    if (key == NULL) {
-        goto exit;
-    }
+    key = arg;
     _return_value = frozenset___contains___impl((PySetObject *)so, key);
     return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -555,25 +543,21 @@ PyDoc_STRVAR(set_remove__doc__,
     {"remove", _PyCFunction_CAST(set_remove), METH_O, set_remove__doc__},
 
 static PyObject *
-set_remove_impl(PySetObject *so, PyObject *key);
+set_remove_impl(PySetObject *so, PyValue key);
 
 static PyValue
 set_remove(PyObject *so, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *key;
+    PyValue key;
     PyObject *_return_value;
 
-    key = PyValue_Object(arg);
-    if (key == NULL) {
-        goto exit;
-    }
+    key = arg;
     Py_BEGIN_CRITICAL_SECTION(so);
     _return_value = set_remove_impl((PySetObject *)so, key);
     Py_END_CRITICAL_SECTION();
     return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -590,25 +574,21 @@ PyDoc_STRVAR(set_discard__doc__,
     {"discard", _PyCFunction_CAST(set_discard), METH_O, set_discard__doc__},
 
 static PyObject *
-set_discard_impl(PySetObject *so, PyObject *key);
+set_discard_impl(PySetObject *so, PyValue key);
 
 static PyValue
 set_discard(PyObject *so, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *key;
+    PyValue key;
     PyObject *_return_value;
 
-    key = PyValue_Object(arg);
-    if (key == NULL) {
-        goto exit;
-    }
+    key = arg;
     Py_BEGIN_CRITICAL_SECTION(so);
     _return_value = set_discard_impl((PySetObject *)so, key);
     Py_END_CRITICAL_SECTION();
     return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -659,4 +639,4 @@ set___sizeof__(PyObject *so, PyObject *Py_UNUSED(ignored))
 
     return return_value;
 }
-/*[clinic end generated code: output=c537ed15eca9dc57 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5feba840be2c9ad2 input=a9049054013a1b77]*/

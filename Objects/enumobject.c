@@ -378,12 +378,8 @@ reversed_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 static PyValue
 reversed_setstate(PyObject *op, PyValue state_value)
 {
-    PyObject *state = PyValue_Object(state_value);
-    if (state == NULL) {
-        return PyValue_NULL;
-    }
     reversedobject *ro = _reversedobject_CAST(op);
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = PyLong_AsSsize_tValue(state_value);
     if (index == -1 && PyErr_Occurred())
         return PyValue_NULL;
     Py_ssize_t ro_index = FT_ATOMIC_LOAD_SSIZE_RELAXED(ro->index);

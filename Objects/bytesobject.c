@@ -3102,21 +3102,20 @@ _PyBytes_FromIterator(PyObject *it, PyObject *x)
     char *str = PyBytesWriter_GetData(writer);
 
     /* Run the iterator to exhaustion */
+    PyValue it_value = PyValue_FromObject(it);
     for (i = 0; ; i++) {
-        PyObject *item;
+        PyValue item;
         Py_ssize_t value;
 
         /* Get the next item */
-        item = PyIter_Next(it);
-        if (item == NULL) {
-            if (PyErr_Occurred())
-                goto error;
+        int status = PyIter_NextValue(it_value, &item);
+        if (status < 0)
+            goto error;
+        if (status == 0)
             break;
-        }
 
         /* Interpret it as an int (__index__) */
-        value = PyNumber_AsSsize_t(item, NULL);
-        Py_DECREF(item);
+        value = PyNumber_AsSsize_tValue(item, NULL);
         if (value == -1 && PyErr_Occurred())
             goto error;
 
@@ -3592,11 +3591,7 @@ PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
 static PyValue
 striter_setstate(PyObject *op, PyValue state_value)
 {
-    PyObject *state = PyValue_Object(state_value);
-    if (state == NULL) {
-        return PyValue_NULL;
-    }
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = PyLong_AsSsize_tValue(state_value);
     if (index == -1 && PyErr_Occurred())
         return PyValue_NULL;
     striterobject *it = _striterobject_CAST(op);

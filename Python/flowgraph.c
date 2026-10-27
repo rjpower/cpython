@@ -3947,17 +3947,17 @@ build_cellfixedoffsets(_PyCompile_CodeUnitMetadata *umd)
     PyValue name_value, cellindex;
     Py_ssize_t pos = 0;
     while (_PyDict_NextValue(umd->u_cellvars, &pos, &name_value, &cellindex, NULL)) {
-        PyObject *varname = PyValue_ObjectBorrow(name_value);
-        PyObject *varindex;
-        if (PyDict_GetItemRef(umd->u_varnames, varname, &varindex) < 0) {
+        PyValue varindex;
+        int found = _PyDict_GetItemValue(umd->u_varnames, name_value,
+                                         &varindex);
+        if (found < 0) {
             goto error;
         }
-        if (varindex == NULL) {
+        if (!found) {
             continue;
         }
 
-        int argoffset = PyLong_AsInt(varindex);
-        Py_DECREF(varindex);
+        int argoffset = PyLong_AsIntValue(varindex);
         if (argoffset == -1 && PyErr_Occurred()) {
             goto error;
         }

@@ -78,14 +78,14 @@ PyDoc_STRVAR(list_insert__doc__,
     {"insert", _PyCFunction_CAST(list_insert), METH_FASTCALL, list_insert__doc__},
 
 static PyObject *
-list_insert_impl(PyListObject *self, Py_ssize_t index, PyObject *object);
+list_insert_impl(PyListObject *self, Py_ssize_t index, PyValue object);
 
 static PyValue
 list_insert(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
     PyValue return_value = PyValue_NULL;
     Py_ssize_t index;
-    PyObject *object;
+    PyValue object;
     PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("insert", nargs, 2, 2)) {
@@ -102,10 +102,7 @@ list_insert(PyObject *self, const PyValue *args, Py_ssize_t nargs)
         }
         index = ival;
     }
-    object = PyValue_Object(args[1]);
-    if (object == NULL) {
-        goto exit;
-    }
+    object = args[1];
     Py_BEGIN_CRITICAL_SECTION(self);
     _return_value = list_insert_impl((PyListObject *)self, index, object);
     Py_END_CRITICAL_SECTION();
@@ -173,25 +170,21 @@ PyDoc_STRVAR(list_append__doc__,
     {"append", _PyCFunction_CAST(list_append), METH_O, list_append__doc__},
 
 static PyObject *
-list_append_impl(PyListObject *self, PyObject *object);
+list_append_impl(PyListObject *self, PyValue object);
 
 static PyValue
 list_append(PyObject *self, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *object;
+    PyValue object;
     PyObject *_return_value;
 
-    object = PyValue_Object(arg);
-    if (object == NULL) {
-        goto exit;
-    }
+    object = arg;
     Py_BEGIN_CRITICAL_SECTION(self);
     _return_value = list_append_impl((PyListObject *)self, object);
     Py_END_CRITICAL_SECTION();
     return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -236,7 +229,7 @@ PyDoc_STRVAR(list_pop__doc__,
 #define LIST_POP_METHODDEF    \
     {"pop", _PyCFunction_CAST(list_pop), METH_FASTCALL, list_pop__doc__},
 
-static PyObject *
+static PyValue
 list_pop_impl(PyListObject *self, Py_ssize_t index);
 
 static PyValue
@@ -244,7 +237,7 @@ list_pop(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
     PyValue return_value = PyValue_NULL;
     Py_ssize_t index = -1;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("pop", nargs, 0, 1)) {
         goto exit;
@@ -267,7 +260,7 @@ skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
     _return_value = list_pop_impl((PyListObject *)self, index);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -395,26 +388,23 @@ PyDoc_STRVAR(list_index__doc__,
 #define LIST_INDEX_METHODDEF    \
     {"index", _PyCFunction_CAST(list_index), METH_FASTCALL, list_index__doc__},
 
-static PyObject *
-list_index_impl(PyListObject *self, PyObject *value, Py_ssize_t start,
+static PyValue
+list_index_impl(PyListObject *self, PyValue value, Py_ssize_t start,
                 Py_ssize_t stop);
 
 static PyValue
 list_index(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *value;
+    PyValue value;
     Py_ssize_t start = 0;
     Py_ssize_t stop = PY_SSIZE_T_MAX;
-    PyObject *_return_value;
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
-    value = PyValue_Object(args[0]);
-    if (value == NULL) {
-        goto exit;
-    }
+    value = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
@@ -441,7 +431,7 @@ list_index(PyObject *self, const PyValue *args, Py_ssize_t nargs)
     }
 skip_optional:
     _return_value = list_index_impl((PyListObject *)self, value, start, stop);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -456,24 +446,20 @@ PyDoc_STRVAR(list_count__doc__,
 #define LIST_COUNT_METHODDEF    \
     {"count", _PyCFunction_CAST(list_count), METH_O, list_count__doc__},
 
-static PyObject *
-list_count_impl(PyListObject *self, PyObject *value);
+static PyValue
+list_count_impl(PyListObject *self, PyValue value);
 
 static PyValue
 list_count(PyObject *self, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *value;
-    PyObject *_return_value;
+    PyValue value;
+    PyValue _return_value;
 
-    value = PyValue_Object(arg);
-    if (value == NULL) {
-        goto exit;
-    }
+    value = arg;
     _return_value = list_count_impl((PyListObject *)self, value);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _return_value;
 
-exit:
     return return_value;
 }
 
@@ -489,25 +475,21 @@ PyDoc_STRVAR(list_remove__doc__,
     {"remove", _PyCFunction_CAST(list_remove), METH_O, list_remove__doc__},
 
 static PyObject *
-list_remove_impl(PyListObject *self, PyObject *value);
+list_remove_impl(PyListObject *self, PyValue value);
 
 static PyValue
 list_remove(PyObject *self, PyValue arg)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *value;
+    PyValue value;
     PyObject *_return_value;
 
-    value = PyValue_Object(arg);
-    if (value == NULL) {
-        goto exit;
-    }
+    value = arg;
     Py_BEGIN_CRITICAL_SECTION(self);
     _return_value = list_remove_impl((PyListObject *)self, value);
     Py_END_CRITICAL_SECTION();
     return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -587,4 +569,4 @@ list___reversed__(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return list___reversed___impl((PyListObject *)self);
 }
-/*[clinic end generated code: output=0707a3e8af99d0a0 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=7baec8aaa977defd input=a9049054013a1b77]*/

@@ -431,7 +431,6 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
     if (res < 0) {
         goto fail;
     }
-    PyObject *get = _PyValueRoot_Object(&method);
     seen = PySet_New(NULL);
     if (seen == NULL) {
         goto fail;
@@ -446,36 +445,40 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
         goto fail;
     }
     for (Py_ssize_t i = 0; i < nkeys; i++) {
-        PyObject *key = PyTuple_GET_ITEM(keys, i);
-        if (PySet_Contains(seen, key) || PySet_Add(seen, key)) {
+        PyValue key = PyTuple_GET_VALUE(keys, i);
+        if (_PySet_ContainsValue((PySetObject *)seen, key) ||
+            _PySet_AddValue((PySetObject *)seen, key))
+        {
             if (!_PyErr_Occurred(tstate)) {
-                // Seen it before!
-                _PyErr_Format(tstate, PyExc_ValueError,
-                              "mapping pattern checks duplicate key (%R)", key);
+                // Seen it before!  The message boxes an inline key.
+                PyObject *key_obj = PyValue_Object(key);
+                if (key_obj != NULL) {
+                    _PyErr_Format(tstate, PyExc_ValueError,
+                                  "mapping pattern checks duplicate key (%R)",
+                                  key_obj);
+                }
             }
             goto fail;
         }
-        PyObject *self_obj = _PyValueRoot_Object(&self);
-        PyObject *args[] = { self_obj, key, dummy };
-        PyObject *value = NULL;
+        PyValue args[] = { self.value, key, PyValue_FromObject(dummy) };
+        PyValue value;
         if (!PyValue_IsNull(self.value)) {
-            value = PyObject_Vectorcall(get, args, 3, NULL);
+            value = PyObject_VectorcallValue(method.value, args, 3, NULL);
         }
         else {
-            value = PyObject_Vectorcall(get, &args[1], 2, NULL);
+            value = PyObject_VectorcallValue(method.value, &args[1], 2, NULL);
         }
-        if (value == NULL) {
+        if (PyValue_IsNull(value)) {
             goto fail;
         }
-        if (value == dummy) {
+        if (PyValue_Is(value, args[2])) {
             // key not in map!
-            Py_DECREF(value);
             Py_DECREF(values);
             // Return None:
             values = Py_NewRef(Py_None);
             goto done;
         }
-        PyTuple_SET_ITEM(values, i, value);
+        PyTuple_SET_VALUE(values, i, value);
     }
     // Success:
 done:
@@ -1097,16 +1100,12 @@ _PyEval_GetIter(PyValue iterable, PyValue *index_or_null, int yield_from)
         return iterable;
     }
     /* Pop iterable, and push iterator then NULL. An int or float is not
-       iterable; PyObject_GetIter() raises the error. */
-    PyObject *iterable_o = PyValue_Object(iterable);
-    if (iterable_o == NULL) {
+       iterable; PyObject_GetIterValue() raises the error. */
+    PyValue iter = PyObject_GetIterValue(iterable);
+    if (PyValue_IsNull(iter)) {
         return _PyValue_ERROR;
     }
-    PyObject *iter_o = PyObject_GetIter(iterable_o);
-    if (iter_o == NULL) {
-        return _PyValue_ERROR;
-    }
-    return PyValue_FromObject(iter_o);
+    return iter;
 }
 
 int _PyEval_StoreName(PyThreadState *tstate, PyValue v, PyObject *name, PyObject* ns)
@@ -1763,12 +1762,9 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func,
                 goto kw_fail;
             }
 
-            PyObject *value = PyValue_Object(arg_value);
-            if (value == NULL) {
-                goto kw_fail;
-            }
-            int err = PyDict_SetItem(kwdict, keyword, value);
-            Py_DECREF(value);
+            int err = _PyDict_SetItemValue((PyDictObject *)kwdict,
+                                           PyValue_FromObject(keyword),
+                                           arg_value);
             if (err == -1) {
                 goto kw_fail;
             }
@@ -1836,12 +1832,13 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func,
                 continue;
             PyObject *varname = PyTuple_GET_ITEM(co->co_localsplusnames, i);
             if (func->func_kwdefaults != NULL) {
-                PyObject *def;
-                if (PyDict_GetItemRef(func->func_kwdefaults, varname, &def) < 0) {
+                PyValue def;
+                if (_PyDict_GetItemValue(func->func_kwdefaults,
+                                         PyValue_FromObject(varname), &def) < 0) {
                     goto fail_post_args;
                 }
-                if (def) {
-                    localsplus[i] = PyValue_FromObject(def);
+                if (!PyValue_IsNull(def)) {
+                    localsplus[i] = def;
                     continue;
                 }
             }
@@ -2206,7 +2203,6 @@ _PyEval_UnpackIterableValues(PyThreadState *tstate, PyObject *v,
     int i = 0, j = 0;
     Py_ssize_t ll = 0;
     PyObject *it;  /* iter(v) */
-    PyObject *w;
     PyObject *l = NULL; /* variable list */
     assert(v != NULL);
 
@@ -2247,14 +2243,14 @@ _PyEval_UnpackIterableValues(PyThreadState *tstate, PyObject *v,
 
     if (argcntafter == -1) {
         /* We better have exhausted the iterator now. */
-        w = PyIter_Next(it);
-        if (w == NULL) {
-            if (_PyErr_Occurred(tstate))
-                goto Error;
-            Py_DECREF(it);
+        PyValue w;
+        int status = PyIter_NextValue(PyValue_FromObject(it), &w);
+        if (status < 0) {
+            goto Error;
+        }
+        if (status == 0) {
             return 1;
         }
-        Py_DECREF(w);
 
         if (PyList_CheckExact(v) || PyTuple_CheckExact(v)
               || PyDict_CheckExact(v)) {
@@ -2902,24 +2898,25 @@ borrow_or_box(PyValue ref, PyObject **box)
     return PyValue_ObjectBorrow(ref);
 }
 
+// container[start:stop] for a list, tuple or str whose bounds are not both
+// inline ints or None, which these helpers take as objects.
 static PyObject *
-binary_slice(PyObject *container, PyObject *start, PyObject *stop)
+binary_slice_boxed(PyObject *(*slice)(PyObject *, PyObject *, PyObject *),
+                   PyObject *container, PyValue start_st, PyValue stop_st)
 {
-    if (PyList_CheckExact(container)) {
-        return _PyList_BinarySlice(container, start, stop);
+    PyObject *start_box, *stop_box = NULL, *res = NULL;
+    PyObject *start_o = borrow_or_box(start_st, &start_box);
+    if (start_o == NULL) {
+        goto done;
     }
-    if (PyTuple_CheckExact(container)) {
-        return _PyTuple_BinarySlice(container, start, stop);
+    PyObject *stop_o = borrow_or_box(stop_st, &stop_box);
+    if (stop_o == NULL) {
+        goto done;
     }
-    if (PyUnicode_CheckExact(container)) {
-        return _PyUnicode_BinarySlice(container, start, stop);
-    }
-    PyObject *slice = PySlice_New(start, stop, NULL);
-    if (slice == NULL) {
-        return NULL;
-    }
-    PyObject *res = PyObject_GetItem(container, slice);
-    Py_DECREF(slice);
+    res = slice(container, start_o, stop_o);
+done:
+    Py_XDECREF(start_box);
+    Py_XDECREF(stop_box);
     return res;
 }
 
@@ -2945,25 +2942,29 @@ _PyEval_BinarySlice(PyValue container_st, PyValue start_st, PyValue stop_st)
             return PyUnicode_Substring(container, start, stop);
         }
     }
-    PyObject *container_box, *start_box = NULL, *stop_box = NULL, *res = NULL;
-    PyObject *container = borrow_or_box(container_st, &container_box);
-    if (container == NULL) {
-        goto done;
+    if (!PyValue_IsInline(container_st)) {
+        PyObject *container = PyValue_ObjectBorrow(container_st);
+        if (PyList_CheckExact(container)) {
+            return binary_slice_boxed(_PyList_BinarySlice, container,
+                                      start_st, stop_st);
+        }
+        if (PyTuple_CheckExact(container)) {
+            return binary_slice_boxed(_PyTuple_BinarySlice, container,
+                                      start_st, stop_st);
+        }
+        if (PyUnicode_CheckExact(container)) {
+            return binary_slice_boxed(_PyUnicode_BinarySlice, container,
+                                      start_st, stop_st);
+        }
     }
-    PyObject *start_o = borrow_or_box(start_st, &start_box);
-    if (start_o == NULL) {
-        goto done;
+    // A slice holds values, so its bounds are not boxed.
+    PyObject *slice = _PySlice_FromValues(start_st, stop_st, PyValue_NULL);
+    if (slice == NULL) {
+        return NULL;
     }
-    PyObject *stop_o = borrow_or_box(stop_st, &stop_box);
-    if (stop_o == NULL) {
-        goto done;
-    }
-    res = binary_slice(container, start_o, stop_o);
-done:
-    Py_XDECREF(container_box);
-    Py_XDECREF(start_box);
-    Py_XDECREF(stop_box);
-    return res;
+    // This returns an object: an inline item is boxed.
+    return PyValue_Object(PyObject_GetItemValue(container_st,
+                                                PyValue_FromObject(slice)));
 }
 
 // container[start:stop] = v, for STORE_SLICE. Return 0, or -1 with an
@@ -2980,36 +2981,13 @@ _PyEval_StoreSlice(PyValue v_st, PyValue container_st,
         return _PyList_StoreSlice(PyValue_ObjectBorrow(container_st), start, stop,
                                   PyValue_ObjectBorrow(v_st));
     }
-    PyObject *v_box, *container_box = NULL, *start_box = NULL, *stop_box = NULL;
-    int err = -1;
-    PyObject *v = borrow_or_box(v_st, &v_box);
-    if (v == NULL) {
-        goto done;
-    }
-    PyObject *container = borrow_or_box(container_st, &container_box);
-    if (container == NULL) {
-        goto done;
-    }
-    PyObject *start_o = borrow_or_box(start_st, &start_box);
-    if (start_o == NULL) {
-        goto done;
-    }
-    PyObject *stop_o = borrow_or_box(stop_st, &stop_box);
-    if (stop_o == NULL) {
-        goto done;
-    }
-    PyObject *slice = PySlice_New(start_o, stop_o, NULL);
+    // A slice holds values, so its bounds are not boxed.
+    PyObject *slice = _PySlice_FromValues(start_st, stop_st, PyValue_NULL);
     if (slice == NULL) {
-        goto done;
+        return -1;
     }
-    err = PyObject_SetItem(container, slice, v);
-    Py_DECREF(slice);
-done:
-    Py_XDECREF(v_box);
-    Py_XDECREF(container_box);
-    Py_XDECREF(start_box);
-    Py_XDECREF(stop_box);
-    return err;
+    return PyObject_SetItemValue(container_st, PyValue_FromObject(slice),
+                                 v_st);
 }
 
 /* isinstance(inst, cls), for CALL_ISINSTANCE when inst or cls may be inline.

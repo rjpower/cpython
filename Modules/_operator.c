@@ -2,7 +2,7 @@
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
-#include "pycore_value.h"         // _PyObject_ValueIdentity()
+#include "pycore_value.h"         // _PyValue_None
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_typeobject.h"    // _PyType_GetModuleState()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternMortal()
@@ -42,34 +42,34 @@ used for special methods; variants without leading and trailing\n\
 /*[clinic input]
 _operator.truth -> bool
 
-    a: object
+    a: value
     /
 
 Return True if a is true, False otherwise.
 [clinic start generated code]*/
 
 static int
-_operator_truth_impl(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=eaf87767234fa5d7 input=bc74a4cd90235875]*/
+_operator_truth_impl(PyObject *module, PyValue a)
+/*[clinic end generated code: output=c6c477d8ef522bb3 input=5e73c6b579661d9f]*/
 {
-    return PyObject_IsTrue(a);
+    return PyObject_IsTrueValue(a);
 }
 
 /*[clinic input]
-_operator.add
+_operator.add -> value
 
-    a: object
-    b: object
+    a: value
+    b: value
     /
 
 Same as a + b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_add_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=8292984204f45164 input=5efe3bff856ac215]*/
+static PyValue
+_operator_add_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=26139dcc66ee0815 input=af1e6e44c248eb57]*/
 {
-    return PyNumber_Add(a, b);
+    return PyNumber_AddValue(a, b);
 }
 
 /*[clinic input]
@@ -78,11 +78,11 @@ _operator.sub = _operator.add
 Same as a - b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_sub_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=4adfc3b888c1ee2e input=6494c6b100b8e795]*/
+static PyValue
+_operator_sub_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=7dcf37390054befa input=6494c6b100b8e795]*/
 {
-    return PyNumber_Subtract(a, b);
+    return PyNumber_SubtractValue(a, b);
 }
 
 /*[clinic input]
@@ -91,11 +91,11 @@ _operator.mul = _operator.add
 Same as a * b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_mul_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=d24d66f55a01944c input=2368615b4358b70d]*/
+static PyValue
+_operator_mul_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=063027b543a1e0b8 input=2368615b4358b70d]*/
 {
-    return PyNumber_Multiply(a, b);
+    return PyNumber_MultiplyValue(a, b);
 }
 
 /*[clinic input]
@@ -104,11 +104,11 @@ _operator.matmul = _operator.add
 Same as a @ b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_matmul_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=a20d917eb35d0101 input=9ab304e37fb42dd4]*/
+static PyValue
+_operator_matmul_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=98925dfcf40de730 input=9ab304e37fb42dd4]*/
 {
-    return PyNumber_MatrixMultiply(a, b);
+    return PyNumber_MatrixMultiplyValue(a, b);
 }
 
 /*[clinic input]
@@ -117,11 +117,11 @@ _operator.floordiv = _operator.add
 Same as a // b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_floordiv_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=df26b71a60589f99 input=bb2e88ba446c612c]*/
+static PyValue
+_operator_floordiv_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=c0bbb590c380603c input=bb2e88ba446c612c]*/
 {
-    return PyNumber_FloorDivide(a, b);
+    return PyNumber_FloorDivideValue(a, b);
 }
 
 /*[clinic input]
@@ -130,11 +130,11 @@ _operator.truediv = _operator.add
 Same as a / b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_truediv_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=0e6a959944d77719 input=ecbb947673f4eb1f]*/
+static PyValue
+_operator_truediv_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=dbab85c7b4990e87 input=ecbb947673f4eb1f]*/
 {
-    return PyNumber_TrueDivide(a, b);
+    return PyNumber_TrueDivideValue(a, b);
 }
 
 /*[clinic input]
@@ -143,27 +143,27 @@ _operator.mod = _operator.add
 Same as a % b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_mod_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=9519822f0bbec166 input=102e19b422342ac1]*/
+static PyValue
+_operator_mod_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=44cca18dfd86c75d input=102e19b422342ac1]*/
 {
-    return PyNumber_Remainder(a, b);
+    return PyNumber_RemainderValue(a, b);
 }
 
 /*[clinic input]
-_operator.neg
+_operator.neg -> value
 
-    a: object
+    a: value
     /
 
 Same as -a.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_neg_impl(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=f94efb887b5a0e95 input=84f09bdcf27c96ec]*/
+static PyValue
+_operator_neg_impl(PyObject *module, PyValue a)
+/*[clinic end generated code: output=403491495f3fc80c input=16d00ba04d25beb3]*/
 {
-    return PyNumber_Negative(a);
+    return PyNumber_NegativeValue(a);
 }
 
 /*[clinic input]
@@ -172,11 +172,11 @@ _operator.pos = _operator.neg
 Same as +a.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_pos_impl(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=f912b25fd4828381 input=b6445b63fddb8772]*/
+static PyValue
+_operator_pos_impl(PyObject *module, PyValue a)
+/*[clinic end generated code: output=85eb5280dbc1fa03 input=b6445b63fddb8772]*/
 {
-    return PyNumber_Positive(a);
+    return PyNumber_PositiveValue(a);
 }
 
 /*[clinic input]
@@ -185,11 +185,11 @@ _operator.abs = _operator.neg
 Same as abs(a).
 [clinic start generated code]*/
 
-static PyObject *
-_operator_abs_impl(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=555c764aa0e45ccc input=341d07ba86f58039]*/
+static PyValue
+_operator_abs_impl(PyObject *module, PyValue a)
+/*[clinic end generated code: output=4c26c605721e4302 input=341d07ba86f58039]*/
 {
-    return PyNumber_Absolute(a);
+    return PyNumber_AbsoluteValue(a);
 }
 
 /*[clinic input]
@@ -198,11 +198,11 @@ _operator.inv = _operator.neg
 Same as ~a.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_inv_impl(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=34689754097e28c8 input=b01a4677739f6eb2]*/
+static PyValue
+_operator_inv_impl(PyObject *module, PyValue a)
+/*[clinic end generated code: output=402761f2019f1c7b input=b01a4677739f6eb2]*/
 {
-    return PyNumber_Invert(a);
+    return PyNumber_InvertValue(a);
 }
 
 /*[clinic input]
@@ -211,11 +211,11 @@ _operator.invert = _operator.neg
 Same as ~a.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_invert_impl(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=77fe45dcba10eeae input=7f2d607176672e55]*/
+static PyValue
+_operator_invert_impl(PyObject *module, PyValue a)
+/*[clinic end generated code: output=7faff32ab21cf9ba input=7f2d607176672e55]*/
 {
-    return PyNumber_Invert(a);
+    return PyNumber_InvertValue(a);
 }
 
 /*[clinic input]
@@ -224,11 +224,11 @@ _operator.lshift = _operator.add
 Same as a << b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_lshift_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=37f7e52c41435bd8 input=746e8a160cbbc9eb]*/
+static PyValue
+_operator_lshift_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=10bc6ee825745002 input=746e8a160cbbc9eb]*/
 {
-    return PyNumber_Lshift(a, b);
+    return PyNumber_LshiftValue(a, b);
 }
 
 /*[clinic input]
@@ -237,11 +237,11 @@ _operator.rshift = _operator.add
 Same as a >> b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_rshift_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=4593c7ef30ec2ee3 input=d2c85bb5a64504c2]*/
+static PyValue
+_operator_rshift_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=a1da905289057d8a input=d2c85bb5a64504c2]*/
 {
-    return PyNumber_Rshift(a, b);
+    return PyNumber_RshiftValue(a, b);
 }
 
 /*[clinic input]
@@ -251,10 +251,11 @@ Same as not a.
 [clinic start generated code]*/
 
 static int
-_operator_not__impl(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=743f9c24a09759ef input=854156d50804d9b8]*/
+_operator_not__impl(PyObject *module, PyValue a)
+/*[clinic end generated code: output=57643f973b3e4fce input=854156d50804d9b8]*/
 {
-    return PyObject_Not(a);
+    int res = PyObject_IsTrueValue(a);
+    return res < 0 ? res : !res;
 }
 
 /*[clinic input]
@@ -263,11 +264,11 @@ _operator.and_ = _operator.add
 Same as a & b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_and__impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=93c4fe88f7b76d9e input=4f3057c90ec4c99f]*/
+static PyValue
+_operator_and__impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=051c38eb56b7e8e4 input=4f3057c90ec4c99f]*/
 {
-    return PyNumber_And(a, b);
+    return PyNumber_AndValue(a, b);
 }
 
 /*[clinic input]
@@ -276,11 +277,11 @@ _operator.xor = _operator.add
 Same as a ^ b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_xor_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=b24cd8b79fde0004 input=3c5cfa7253d808dd]*/
+static PyValue
+_operator_xor_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=16fae1660805f59f input=3c5cfa7253d808dd]*/
 {
-    return PyNumber_Xor(a, b);
+    return PyNumber_XorValue(a, b);
 }
 
 /*[clinic input]
@@ -289,11 +290,11 @@ _operator.or_ = _operator.add
 Same as a | b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_or__impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=58024867b8d90461 input=b40c6c44f7c79c09]*/
+static PyValue
+_operator_or__impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=f87162b397a43270 input=b40c6c44f7c79c09]*/
 {
-    return PyNumber_Or(a, b);
+    return PyNumber_OrValue(a, b);
 }
 
 /*[clinic input]
@@ -302,11 +303,11 @@ _operator.iadd = _operator.add
 Same as a += b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_iadd_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=07dc627832526eb5 input=d22a91c07ac69227]*/
+static PyValue
+_operator_iadd_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=1c3abfe543e0cafa input=d22a91c07ac69227]*/
 {
-    return PyNumber_InPlaceAdd(a, b);
+    return PyNumber_InPlaceAddValue(a, b);
 }
 
 /*[clinic input]
@@ -315,11 +316,11 @@ _operator.isub = _operator.add
 Same as a -= b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_isub_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=4513467d23b5e0b1 input=4591b00d0a0ccafd]*/
+static PyValue
+_operator_isub_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=638b331b98523efa input=4591b00d0a0ccafd]*/
 {
-    return PyNumber_InPlaceSubtract(a, b);
+    return PyNumber_InPlaceSubtractValue(a, b);
 }
 
 /*[clinic input]
@@ -328,11 +329,11 @@ _operator.imul = _operator.add
 Same as a *= b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_imul_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=5e87dacd19a71eab input=0e01fb8631e1b76f]*/
+static PyValue
+_operator_imul_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=384f10b28e4d06f2 input=0e01fb8631e1b76f]*/
 {
-    return PyNumber_InPlaceMultiply(a, b);
+    return PyNumber_InPlaceMultiplyValue(a, b);
 }
 
 /*[clinic input]
@@ -341,11 +342,11 @@ _operator.imatmul = _operator.add
 Same as a @= b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_imatmul_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=d603cbdf716ce519 input=bb614026372cd542]*/
+static PyValue
+_operator_imatmul_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=90c1e5c21b952431 input=bb614026372cd542]*/
 {
-    return PyNumber_InPlaceMatrixMultiply(a, b);
+    return PyNumber_InPlaceMatrixMultiplyValue(a, b);
 }
 
 /*[clinic input]
@@ -354,11 +355,11 @@ _operator.ifloordiv = _operator.add
 Same as a //= b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_ifloordiv_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=535336048c681794 input=9df3b5021cff4ca1]*/
+static PyValue
+_operator_ifloordiv_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=1132876b1bc8c572 input=9df3b5021cff4ca1]*/
 {
-    return PyNumber_InPlaceFloorDivide(a, b);
+    return PyNumber_InPlaceFloorDivideValue(a, b);
 }
 
 /*[clinic input]
@@ -367,11 +368,11 @@ _operator.itruediv = _operator.add
 Same as a /= b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_itruediv_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=28017fbd3563952f input=9a1ee01608f5f590]*/
+static PyValue
+_operator_itruediv_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=3fd5abae09ecba67 input=9a1ee01608f5f590]*/
 {
-    return PyNumber_InPlaceTrueDivide(a, b);
+    return PyNumber_InPlaceTrueDivideValue(a, b);
 }
 
 /*[clinic input]
@@ -380,11 +381,11 @@ _operator.imod = _operator.add
 Same as a %= b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_imod_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=f7c540ae0fc70904 input=d0c384a3ce38e1dd]*/
+static PyValue
+_operator_imod_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=794e9bfca91b0e4f input=d0c384a3ce38e1dd]*/
 {
-    return PyNumber_InPlaceRemainder(a, b);
+    return PyNumber_InPlaceRemainderValue(a, b);
 }
 
 /*[clinic input]
@@ -393,11 +394,11 @@ _operator.ilshift = _operator.add
 Same as a <<= b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_ilshift_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=e73a8fee1ac18749 input=e21b6b310f54572e]*/
+static PyValue
+_operator_ilshift_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=ea7dac583733f5c6 input=e21b6b310f54572e]*/
 {
-    return PyNumber_InPlaceLshift(a, b);
+    return PyNumber_InPlaceLshiftValue(a, b);
 }
 
 /*[clinic input]
@@ -406,11 +407,11 @@ _operator.irshift = _operator.add
 Same as a >>= b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_irshift_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=97f2af6b5ff2ed81 input=6778dbd0f6e1ec16]*/
+static PyValue
+_operator_irshift_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=5bbf459cb18c119c input=6778dbd0f6e1ec16]*/
 {
-    return PyNumber_InPlaceRshift(a, b);
+    return PyNumber_InPlaceRshiftValue(a, b);
 }
 
 /*[clinic input]
@@ -419,11 +420,11 @@ _operator.iand = _operator.add
 Same as a &= b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_iand_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=4599e9d40cbf7d00 input=71dfd8e70c156a7b]*/
+static PyValue
+_operator_iand_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=4f9f5ccd62952776 input=71dfd8e70c156a7b]*/
 {
-    return PyNumber_InPlaceAnd(a, b);
+    return PyNumber_InPlaceAndValue(a, b);
 }
 
 /*[clinic input]
@@ -432,11 +433,11 @@ _operator.ixor = _operator.add
 Same as a ^= b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_ixor_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=5ff881766872be03 input=695c32bec0604d86]*/
+static PyValue
+_operator_ixor_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=813d465ca7ae70ec input=695c32bec0604d86]*/
 {
-    return PyNumber_InPlaceXor(a, b);
+    return PyNumber_InPlaceXorValue(a, b);
 }
 
 /*[clinic input]
@@ -445,35 +446,39 @@ _operator.ior = _operator.add
 Same as a |= b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_ior_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=48aac319445bf759 input=8f01d03eda9920cf]*/
+static PyValue
+_operator_ior_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=a68ee9ad517256b3 input=8f01d03eda9920cf]*/
 {
-    return PyNumber_InPlaceOr(a, b);
+    return PyNumber_InPlaceOrValue(a, b);
 }
 
 /*[clinic input]
-_operator.concat = _operator.add
+_operator.concat
+
+    a: object
+    b: object
+    /
 
 Same as a + b, for a and b sequences.
 [clinic start generated code]*/
 
 static PyObject *
 _operator_concat_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=80028390942c5f11 input=8544ccd5341a3658]*/
+/*[clinic end generated code: output=80028390942c5f11 input=866e4d7d1af47625]*/
 {
     return PySequence_Concat(a, b);
 }
 
 /*[clinic input]
-_operator.iconcat = _operator.add
+_operator.iconcat = _operator.concat
 
 Same as a += b, for a and b sequences.
 [clinic start generated code]*/
 
 static PyObject *
 _operator_iconcat_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=3ea0a162ebb2e26d input=8f5fe5722fcd837e]*/
+/*[clinic end generated code: output=3ea0a162ebb2e26d input=5d34198d4099a271]*/
 {
     return PySequence_InPlaceConcat(a, b);
 }
@@ -481,18 +486,18 @@ _operator_iconcat_impl(PyObject *module, PyObject *a, PyObject *b)
 /*[clinic input]
 _operator.contains -> bool
 
-    a: object
-    b: object
+    a: value
+    b: value
     /
 
 Same as b in a (note reversed operands).
 [clinic start generated code]*/
 
 static int
-_operator_contains_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=413b4dbe82b6ffc1 input=9122a69b505fde13]*/
+_operator_contains_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=9f586cf12c680a94 input=5e87615a6f5a98b2]*/
 {
-    return PySequence_Contains(a, b);
+    return PySequence_ContainsValue(a, b);
 }
 
 /*[clinic input]
@@ -526,41 +531,40 @@ _operator_countOf_impl(PyObject *module, PyObject *a, PyObject *b)
 }
 
 /*[clinic input]
-_operator.getitem
+_operator.getitem -> value
 
-    a: object
-    b: object
+    a: value
+    b: value
     /
 
 Same as a[b].
 [clinic start generated code]*/
 
-static PyObject *
-_operator_getitem_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=6c8d8101a676e594 input=6682797320e48845]*/
+static PyValue
+_operator_getitem_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=0707979c86b9739e input=3b8d1878c75f7cde]*/
 {
-    return PyObject_GetItem(a, b);
+    return PyObject_GetItemValue(a, b);
 }
 
 /*[clinic input]
-_operator.setitem
+_operator.setitem -> value
 
-    a: object
-    b: object
-    c: object
+    a: value
+    b: value
+    c: value
     /
 
 Same as a[b] = c.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_setitem_impl(PyObject *module, PyObject *a, PyObject *b,
-                       PyObject *c)
-/*[clinic end generated code: output=1324f9061ae99e25 input=ceaf453c4d3a58df]*/
+static PyValue
+_operator_setitem_impl(PyObject *module, PyValue a, PyValue b, PyValue c)
+/*[clinic end generated code: output=6074cb3e1f090d9e input=a7ff6f96bcbedbce]*/
 {
-    if (-1 == PyObject_SetItem(a, b, c))
-        return NULL;
-    Py_RETURN_NONE;
+    if (-1 == PyObject_SetItemValue(a, b, c))
+        return PyValue_NULL;
+    return _PyValue_None;
 }
 
 /*[clinic input]
@@ -569,30 +573,30 @@ _operator.delitem = _operator.getitem
 Same as del a[b].
 [clinic start generated code]*/
 
-static PyObject *
-_operator_delitem_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=db18f61506295799 input=991bec56a0d3ec7f]*/
+static PyValue
+_operator_delitem_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=ba9241b68e974c45 input=991bec56a0d3ec7f]*/
 {
-    if (-1 == PyObject_DelItem(a, b))
-        return NULL;
-    Py_RETURN_NONE;
+    if (-1 == PyObject_DelItemValue(a, b))
+        return PyValue_NULL;
+    return _PyValue_None;
 }
 
 /*[clinic input]
-_operator.eq
+_operator.eq -> value
 
-    a: object
-    b: object
+    a: value
+    b: value
     /
 
 Same as a == b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_eq_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=8d7d46ed4135677c input=586fca687a95a83f]*/
+static PyValue
+_operator_eq_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=99e923213d1ae99c input=59dcce457e035d7e]*/
 {
-    return PyObject_RichCompare(a, b, Py_EQ);
+    return PyObject_RichCompareValue(a, b, Py_EQ);
 }
 
 /*[clinic input]
@@ -601,11 +605,11 @@ _operator.ne = _operator.eq
 Same as a != b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_ne_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=c99bd0c3a4c01297 input=5d88f23d35e9abac]*/
+static PyValue
+_operator_ne_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=e8533084d7f71648 input=5d88f23d35e9abac]*/
 {
-    return PyObject_RichCompare(a, b, Py_NE);
+    return PyObject_RichCompareValue(a, b, Py_NE);
 }
 
 /*[clinic input]
@@ -614,11 +618,11 @@ _operator.lt = _operator.eq
 Same as a < b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_lt_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=082d7c45c440e535 input=34a59ad6d39d3a2b]*/
+static PyValue
+_operator_lt_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=1cea7d483f8ed443 input=34a59ad6d39d3a2b]*/
 {
-    return PyObject_RichCompare(a, b, Py_LT);
+    return PyObject_RichCompareValue(a, b, Py_LT);
 }
 
 /*[clinic input]
@@ -627,11 +631,11 @@ _operator.le = _operator.eq
 Same as a <= b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_le_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=00970a2923d0ae17 input=b812a7860a0bef44]*/
+static PyValue
+_operator_le_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=6b9311335490223d input=b812a7860a0bef44]*/
 {
-    return PyObject_RichCompare(a, b, Py_LE);
+    return PyObject_RichCompareValue(a, b, Py_LE);
 }
 
 /*[clinic input]
@@ -640,11 +644,11 @@ _operator.gt = _operator.eq
 Same as a > b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_gt_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=8d373349ecf25641 input=9bdb45b995ada35b]*/
+static PyValue
+_operator_gt_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=c18764d049b717cf input=9bdb45b995ada35b]*/
 {
-    return PyObject_RichCompare(a, b, Py_GT);
+    return PyObject_RichCompareValue(a, b, Py_GT);
 }
 
 /*[clinic input]
@@ -653,11 +657,11 @@ _operator.ge = _operator.eq
 Same as a >= b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_ge_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=7ce3882256d4b137 input=cf1dc4a5ca9c35f5]*/
+static PyValue
+_operator_ge_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=af1f48cbf91a0e74 input=cf1dc4a5ca9c35f5]*/
 {
-    return PyObject_RichCompare(a, b, Py_GE);
+    return PyObject_RichCompareValue(a, b, Py_GE);
 }
 
 /*[clinic input]
@@ -666,11 +670,11 @@ _operator.pow = _operator.add
 Same as a ** b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_pow_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=09e668ad50036120 input=690b40f097ab1637]*/
+static PyValue
+_operator_pow_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=4619010a4fa227fb input=690b40f097ab1637]*/
 {
-    return PyNumber_Power(a, b, Py_None);
+    return PyNumber_PowerValue(a, b, _PyValue_None);
 }
 
 /*[clinic input]
@@ -679,27 +683,27 @@ _operator.ipow = _operator.add
 Same as a **= b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_ipow_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=7189ff4d4367c808 input=f00623899d07499a]*/
+static PyValue
+_operator_ipow_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=489e5aa585af7985 input=f00623899d07499a]*/
 {
-    return PyNumber_InPlacePower(a, b, Py_None);
+    return PyNumber_InPlacePowerValue(a, b, _PyValue_None);
 }
 
 /*[clinic input]
-_operator.index
+_operator.index -> value
 
-    a: object
+    a: value
     /
 
 Same as a.__index__()
 [clinic start generated code]*/
 
-static PyObject *
-_operator_index_impl(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=ad256eb9a76a51bf input=6f54d50ea64a579c]*/
+static PyValue
+_operator_index_impl(PyObject *module, PyValue a)
+/*[clinic end generated code: output=47d1bd75fad616b5 input=813a0d70a6356af6]*/
 {
-    return PyNumber_Index(a);
+    return PyNumber_IndexValue(a);
 }
 
 /*[clinic input]
@@ -708,12 +712,11 @@ _operator.is_ = _operator.add
 Same as a is b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_is__impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=bcd47a402e482e1d input=5fa9b97df03c427f]*/
+static PyValue
+_operator_is__impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=6122c59e819d4acb input=5fa9b97df03c427f]*/
 {
-    int is = _PyObject_ValueIdentity(a) == _PyObject_ValueIdentity(b);
-    return Py_NewRef(is ? Py_True : Py_False);
+    return PyValue_Is(a, b) ? _PyValue_True : _PyValue_False;
 }
 
 /*[clinic input]
@@ -722,12 +725,11 @@ _operator.is_not = _operator.add
 Same as a is not b.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_is_not_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=491a1f2f81f6c7f9 input=5a93f7e1a93535f1]*/
+static PyValue
+_operator_is_not_impl(PyObject *module, PyValue a, PyValue b)
+/*[clinic end generated code: output=4b71429aa3915a3d input=5a93f7e1a93535f1]*/
 {
-    int is = _PyObject_ValueIdentity(a) == _PyObject_ValueIdentity(b);
-    return Py_NewRef(is ? Py_False : Py_True);
+    return PyValue_Is(a, b) ? _PyValue_False : _PyValue_True;
 }
 
 /*[clinic input]
@@ -736,12 +738,11 @@ _operator.is_none = _operator.neg
 Same as a is None.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_is_none_impl(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=cbc8d01db6290088 input=0448b38af7b8533d]*/
+static PyValue
+_operator_is_none_impl(PyObject *module, PyValue a)
+/*[clinic end generated code: output=d2798335a6ee4c92 input=0448b38af7b8533d]*/
 {
-    PyObject *result = Py_IsNone(a) ? Py_True : Py_False;
-    return Py_NewRef(result);
+    return _PyValue_IsNone(a) ? _PyValue_True : _PyValue_False;
 }
 
 /*[clinic input]
@@ -750,12 +751,11 @@ _operator.is_not_none = _operator.neg
 Same as a is not None.
 [clinic start generated code]*/
 
-static PyObject *
-_operator_is_not_none_impl(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=57ecf0b94b29b976 input=7587f38ebac51688]*/
+static PyValue
+_operator_is_not_none_impl(PyObject *module, PyValue a)
+/*[clinic end generated code: output=ef1ed4e874ea1461 input=7587f38ebac51688]*/
 {
-    PyObject *result = Py_IsNone(a) ? Py_False : Py_True;
-    return Py_NewRef(result);
+    return _PyValue_IsNone(a) ? _PyValue_False : _PyValue_True;
 }
 
 /* compare_digest **********************************************************/
@@ -833,7 +833,11 @@ _operator_length_hint_impl(PyObject *module, PyObject *obj,
 /* NOTE: Keep in sync with _hashopenssl.c implementation. */
 
 /*[clinic input]
-_operator._compare_digest = _operator.eq
+_operator._compare_digest
+
+    a: object
+    b: object
+    /
 
 Return 'a == b'.
 
@@ -850,7 +854,7 @@ types and lengths of a and b--but not their values.
 
 static PyObject *
 _operator__compare_digest_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=11d452bdd3a23cbc input=9ac7e2c4e30bc356]*/
+/*[clinic end generated code: output=11d452bdd3a23cbc input=be5e52568718548e]*/
 {
     int rc;
 
@@ -1026,8 +1030,8 @@ typedef struct {
 // Forward declarations
 static PyValue
 itemgetter_vectorcall(PyValue, const PyValue *, size_t, PyObject *);
-static PyObject *
-itemgetter_call_impl(itemgetterobject *, PyObject *);
+static PyValue
+itemgetter_call_impl(itemgetterobject *, PyValue);
 
 /* AC 3.5: treats first argument as an iterable, otherwise uses *args */
 static PyObject *
@@ -1114,7 +1118,7 @@ itemgetter_call(PyObject *op, PyObject *args, PyObject *kw)
     if (!_PyArg_CheckPositional("itemgetter", PyTuple_GET_SIZE(args), 1, 1))
         return NULL;
     itemgetterobject *ig = itemgetterobject_CAST(op);
-    return itemgetter_call_impl(ig, PyTuple_GET_ITEM(args, 0));
+    return PyValue_Object(itemgetter_call_impl(ig, PyTuple_GET_VALUE(args, 0)));
 }
 
 static PyValue
@@ -1129,28 +1133,22 @@ itemgetter_vectorcall(PyValue op, const PyValue *args,
         return PyValue_NULL;
     }
     itemgetterobject *ig = itemgetterobject_CAST(PyValue_ObjectBorrow(op));
-    // A box of an inline argument, for the object protocol.
-    PyObject *obj = PyValue_Object(args[0]);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(itemgetter_call_impl(ig, obj));
+    return itemgetter_call_impl(ig, args[0]);
 }
 
-static PyObject *
-itemgetter_call_impl(itemgetterobject *ig, PyObject *obj)
+static PyValue
+itemgetter_call_impl(itemgetterobject *ig, PyValue obj)
 {
     PyObject *result;
     Py_ssize_t i, nitems=ig->nitems;
     if (nitems == 1) {
         if (ig->index >= 0
-            && PyTuple_CheckExact(obj)
-            && ig->index < PyTuple_GET_SIZE(obj))
+            && PyValue_Type(obj) == &PyTuple_Type
+            && ig->index < PyTuple_GET_SIZE(PyValue_ObjectBorrow(obj)))
         {
-            result = PyTuple_GET_ITEM(obj, ig->index);
-            return Py_NewRef(result);
+            return PyTuple_GET_VALUE(PyValue_ObjectBorrow(obj), ig->index);
         }
-        return PyObject_GetItem(obj, ig->item);
+        return PyObject_GetItemValue(obj, PyValue_FromObject(ig->item));
     }
 
     assert(PyTuple_Check(ig->item));
@@ -1158,19 +1156,17 @@ itemgetter_call_impl(itemgetterobject *ig, PyObject *obj)
 
     result = PyTuple_New(nitems);
     if (result == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     for (i=0 ; i < nitems ; i++) {
-        PyObject *item, *val;
-        item = PyTuple_GET_ITEM(ig->item, i);
-        val = PyObject_GetItem(obj, item);
-        if (val == NULL) {
+        PyValue val = PyObject_GetItemValue(obj, PyTuple_GET_VALUE(ig->item, i));
+        if (PyValue_IsNull(val)) {
             Py_DECREF(result);
-            return NULL;
+            return PyValue_NULL;
         }
-        PyTuple_SET_ITEM(result, i, val);
+        PyTuple_SET_VALUE(result, i, val);
     }
-    return result;
+    return PyValue_FromObject(result);
 }
 
 static PyObject *
@@ -1259,8 +1255,8 @@ typedef struct {
 // Forward declarations
 static PyValue
 attrgetter_vectorcall(PyValue, const PyValue *, size_t, PyObject *);
-static PyObject *
-attrgetter_call_impl(attrgetterobject *, PyObject *);
+static PyValue
+attrgetter_call_impl(attrgetterobject *, PyValue);
 
 /* AC 3.5: treats first argument as an iterable, otherwise uses *args */
 static PyObject *
@@ -1398,11 +1394,9 @@ attrgetter_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-dotted_getattr(PyObject *obj, PyObject *attr)
+static PyValue
+dotted_getattr(PyValue obj, PyObject *attr)
 {
-    PyObject *newobj;
-
     /* attr is either a tuple or instance of str.
        Ensured by the setup code of attrgetter_new */
     if (PyTuple_CheckExact(attr)) { /* chained getattr */
@@ -1410,25 +1404,17 @@ dotted_getattr(PyObject *obj, PyObject *attr)
         PyObject *attr_name;
 
         name_count = PyTuple_GET_SIZE(attr);
-        Py_INCREF(obj);
         for (name_idx = 0; name_idx < name_count; ++name_idx) {
             attr_name = PyTuple_GET_ITEM(attr, name_idx);
-            newobj = PyObject_GetAttr(obj, attr_name);
-            Py_DECREF(obj);
-            if (newobj == NULL) {
-                return NULL;
+            obj = PyObject_GetAttrValue(obj, attr_name);
+            if (PyValue_IsNull(obj)) {
+                return PyValue_NULL;
             }
-            /* here */
-            obj = newobj;
         }
-    } else { /* single getattr */
-        newobj = PyObject_GetAttr(obj, attr);
-        if (newobj == NULL)
-            return NULL;
-        obj = newobj;
+        return obj;
     }
-
-    return obj;
+    /* single getattr */
+    return PyObject_GetAttrValue(obj, attr);
 }
 
 static PyObject *
@@ -1439,7 +1425,7 @@ attrgetter_call(PyObject *op, PyObject *args, PyObject *kw)
     if (!_PyArg_CheckPositional("attrgetter", PyTuple_GET_SIZE(args), 1, 1))
         return NULL;
     attrgetterobject *ag = attrgetterobject_CAST(op);
-    return attrgetter_call_impl(ag, PyTuple_GET_ITEM(args, 0));
+    return PyValue_Object(attrgetter_call_impl(ag, PyTuple_GET_VALUE(args, 0)));
 }
 
 static PyValue
@@ -1454,16 +1440,11 @@ attrgetter_vectorcall(PyValue op, const PyValue *args,
         return PyValue_NULL;
     }
     attrgetterobject *ag = attrgetterobject_CAST(PyValue_ObjectBorrow(op));
-    // A box of an inline argument, for the object protocol.
-    PyObject *obj = PyValue_Object(args[0]);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(attrgetter_call_impl(ag, obj));
+    return attrgetter_call_impl(ag, args[0]);
 }
 
-static PyObject *
-attrgetter_call_impl(attrgetterobject *ag, PyObject *obj)
+static PyValue
+attrgetter_call_impl(attrgetterobject *ag, PyValue obj)
 {
     PyObject *result;
     Py_ssize_t i, nattrs=ag->nattrs;
@@ -1478,19 +1459,18 @@ attrgetter_call_impl(attrgetterobject *ag, PyObject *obj)
 
     result = PyTuple_New(nattrs);
     if (result == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     for (i=0 ; i < nattrs ; i++) {
-        PyObject *attr, *val;
-        attr = PyTuple_GET_ITEM(ag->attr, i);
-        val = dotted_getattr(obj, attr);
-        if (val == NULL) {
+        PyObject *attr = PyTuple_GET_ITEM(ag->attr, i);
+        PyValue val = dotted_getattr(obj, attr);
+        if (PyValue_IsNull(val)) {
             Py_DECREF(result);
-            return NULL;
+            return PyValue_NULL;
         }
-        PyTuple_SET_ITEM(result, i, val);
+        PyTuple_SET_VALUE(result, i, val);
     }
-    return result;
+    return PyValue_FromObject(result);
 }
 
 static PyObject *
@@ -1843,7 +1823,8 @@ methodcaller_repr(PyObject *op)
     }
 
     for (i = 0; i < numposargs; ++i) {
-        PyObject *onerepr = PyObject_Repr(PyTuple_GET_ITEM(mc->args, i));
+        PyObject *onerepr = PyValue_Object(
+            PyObject_ReprValue(PyTuple_GET_VALUE(mc->args, i)));
         if (onerepr == NULL)
             goto done;
         PyTuple_SET_ITEM(argreprs, i, onerepr);
@@ -1902,8 +1883,7 @@ methodcaller_reduce(PyObject *op, PyObject *Py_UNUSED(dummy))
             return NULL;
         PyTuple_SET_ITEM(newargs, 0, Py_NewRef(mc->name));
         for (i = 0; i < callargcount; ++i) {
-            PyObject *arg = PyTuple_GET_ITEM(mc->args, i);
-            PyTuple_SET_ITEM(newargs, i + 1, Py_NewRef(arg));
+            PyTuple_SET_VALUE(newargs, i + 1, PyTuple_GET_VALUE(mc->args, i));
         }
         return Py_BuildValue("ON", Py_TYPE(mc), newargs);
     }

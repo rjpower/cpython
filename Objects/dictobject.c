@@ -348,14 +348,12 @@ static int dictresize(PyDictObject *mp, uint8_t log_newsize, int unicode);
 static PyObject* dict_iter(PyObject *dict);
 
 static int
-setitem_lock_held(PyDictObject *mp, PyObject *key, PyObject *value);
-static int
 setitem_value_lock_held(PyDictObject *mp, PyValue key, PyValue value);
 static Py_hash_t
 value_hash_dict_key(PyDictObject *mp, PyValue key);
 static int
-dict_setdefault_ref_lock_held(PyObject *d, PyObject *key, PyObject *default_value,
-                    PyObject **result, int incref_result);
+dict_setdefault_value_lock_held(PyObject *d, PyValue key, PyValue default_value,
+                                PyValue *result);
 
 #ifndef NDEBUG
 static int _PyObject_InlineValuesConsistencyCheck(PyObject *obj);
@@ -2215,15 +2213,6 @@ PyDict_SetItem(PyObject *op, PyObject *key, PyObject *value)
                                 PyValue_FromObject(key), PyValue_FromObject(value));
 }
 
-static int
-setitem_lock_held(PyDictObject *mp, PyObject *key, PyObject *value)
-{
-    assert(key);
-    assert(value);
-    return setitem_value_lock_held(mp, PyValue_FromObject(key),
-                                   PyValue_FromObject(value));
-}
-
 
 int
 _PyDict_SetItem_KnownHash_LockHeld(PyDictObject *mp, PyObject *key, PyObject *value,
@@ -2680,6 +2669,39 @@ PyDict_Next(PyObject *op, Py_ssize_t *ppos, PyObject **pkey, PyObject **pvalue)
 }
 
 
+/* dict.pop() of a key with a known hash, on values: 1 and the value in
+   *result if key was present, 0 and PyValue_NULL if not, or -1 and
+   PyValue_NULL with an exception set. */
+static int
+dict_pop_value_known_hash(PyDictObject *mp, PyValue key, Py_hash_t hash,
+                          PyValue *result)
+{
+    assert(PyDict_Check(mp));
+    assert(can_modify_dict(mp));
+
+    *result = PyValue_NULL;
+    if (mp->ma_used == 0) {
+        return 0;
+    }
+
+    PyValue old_value;
+    Py_ssize_t ix = _Py_dict_lookup(mp, key, hash, &old_value);
+    if (ix == DKIX_ERROR) {
+        return -1;
+    }
+
+    if (ix == DKIX_EMPTY || PyValue_IsNull(old_value)) {
+        return 0;
+    }
+
+    _PyDict_NotifyEvent(PyDict_EVENT_DELETED, mp, key, PyValue_NULL);
+    delitem_common(mp, hash, ix, old_value);
+
+    ASSERT_CONSISTENT(mp);
+    *result = old_value;
+    return 1;
+}
+
 /* Internal version of dict.pop(). */
 int
 _PyDict_Pop_KnownHash(PyDictObject *mp, PyObject *key, Py_hash_t hash,
@@ -2728,6 +2750,34 @@ _PyDict_Pop_KnownHash(PyDictObject *mp, PyObject *key, Py_hash_t hash,
         *result = old_object;
     }
     return 1;
+}
+
+/* pop_lock_held() on values. */
+static int
+pop_value_lock_held(PyObject *op, PyValue key, PyValue *result)
+{
+    *result = PyValue_NULL;
+    if (!PyDict_Check(op)) {
+        if (PyFrozenDict_Check(op)) {
+            frozendict_does_not_support("deletion");
+        }
+        else {
+            PyErr_BadInternalCall();
+        }
+        return -1;
+    }
+    PyDictObject *dict = (PyDictObject *)op;
+    assert(can_modify_dict(dict));
+
+    if (dict->ma_used == 0) {
+        return 0;
+    }
+
+    Py_hash_t hash = value_hash_dict_key(dict, key);
+    if (hash == -1) {
+        return -1;
+    }
+    return dict_pop_value_known_hash(dict, key, hash, result);
 }
 
 static int
@@ -2966,19 +3016,20 @@ _PyDict_FromKeys(PyObject *cls, PyObject *iterable, PyObject *value)
         goto Fail;
     }
 
+    PyValue it_value = PyValue_FromObject(it);
+    PyValue value_v = PyValue_FromObject(value);
     if (PyDict_CheckExact(d)) {
         int status = 0;
 
         Py_BEGIN_CRITICAL_SECTION(d);
         while (1) {
-            PyObject *key;
-            status = PyIter_NextItem(it, &key);
+            PyValue key;
+            status = PyIter_NextValue(it_value, &key);
             if (status <= 0) {
                 break;
             }
 
-            status = setitem_lock_held((PyDictObject *)d, key, value);
-            Py_DECREF(key);
+            status = setitem_value_lock_held((PyDictObject *)d, key, value_v);
             if (status < 0) {
                 break;
             }
@@ -2991,8 +3042,8 @@ _PyDict_FromKeys(PyObject *cls, PyObject *iterable, PyObject *value)
     }
     else if (PyFrozenDict_Check(d)) {
         while (1) {
-            PyObject *key;
-            int status = PyIter_NextItem(it, &key);
+            PyValue key;
+            int status = PyIter_NextValue(it_value, &key);
             if (status < 0) {
                 goto Fail;
             }
@@ -3000,7 +3051,7 @@ _PyDict_FromKeys(PyObject *cls, PyObject *iterable, PyObject *value)
                 break;
             }
 
-            status = setitem_lock_held((PyDictObject *)d, key, value);
+            status = setitem_value_lock_held((PyDictObject *)d, key, value_v);
             if (status < 0) {
                 goto Fail;
             }
@@ -3008,8 +3059,8 @@ _PyDict_FromKeys(PyObject *cls, PyObject *iterable, PyObject *value)
     }
     else {
         while (1) {
-            PyObject *key;
-            int status = PyIter_NextItem(it, &key);
+            PyValue key;
+            int status = PyIter_NextValue(it_value, &key);
             if (status < 0) {
                 goto Fail;
             }
@@ -3017,8 +3068,7 @@ _PyDict_FromKeys(PyObject *cls, PyObject *iterable, PyObject *value)
                 break;
             }
 
-            status = PyObject_SetItem(d, key, value);
-            Py_DECREF(key);
+            status = PyObject_SetItemValue(PyValue_FromObject(d), key, value_v);
             if (status < 0) {
                 goto Fail;
             }
@@ -3207,25 +3257,30 @@ frozendict_length(PyObject *self)
 }
 
 /* The result of subscripting the dict self with the missing key: the
-   result of __missing__ for a subclass that has one, or NULL with a
-   KeyError. */
-static PyObject *
-dict_missing(PyObject *self, PyObject *key)
+   result of __missing__ for a subclass that has one, or PyValue_NULL with a
+   KeyError.  Only the KeyError boxes an inline key. */
+static PyValue
+dict_missing(PyObject *self, PyValue key)
 {
     if (!PyAnyDict_CheckExact(self)) {
         /* Look up __missing__ method if we're a subclass. */
         PyObject *missing = _PyObject_LookupSpecial(self, &_Py_ID(__missing__));
         if (missing != NULL) {
-            PyObject *res = PyObject_CallOneArg(missing, key);
-            Py_DECREF(missing);
-            return res;
+            // As PyObject_CallOneArg() does, with the key as a value.
+            PyValue args[2] = {PyValue_NULL, key};
+            return PyObject_VectorcallValue(
+                PyValue_FromObject(missing), args + 1,
+                1 | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
         }
         if (PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    _PyErr_SetKeyError(key);
-    return NULL;
+    PyObject *key_o = PyValue_Object(key);
+    if (key_o != NULL) {
+        _PyErr_SetKeyError(key_o);
+    }
+    return PyValue_NULL;
 }
 
 PyObject *
@@ -3239,14 +3294,14 @@ _PyDict_SubscriptKnownHash(PyObject *self, PyObject *key, Py_hash_t hash)
     if (ix == DKIX_ERROR)
         return NULL;
     if (ix == DKIX_EMPTY || PyValue_IsNull(value)) {
-        return dict_missing(self, key);
+        return PyValue_Object(dict_missing(self, PyValue_FromObject(key)));
     }
     return PyValue_Object(value);
 }
 
 /* _PyDict_Subscript() of a key that is a value, for a dict or a subclass
    that does not override __getitem__.  Only a missing key is boxed, for
-   __missing__ or the KeyError. */
+   the KeyError. */
 PyValue
 _PyDict_SubscriptValue(PyObject *self, PyValue key)
 {
@@ -3255,16 +3310,7 @@ _PyDict_SubscriptValue(PyObject *self, PyValue key)
     if (found != 0) {
         return value;
     }
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyValueRoot key_root;
-    PyObject *res = NULL;
-    PyObject *key_o = _PyValueRoot_PushObject(tstate, &key_root, key,
-                                              _PY_BOX_OTHER);
-    if (key_o != NULL) {
-        res = dict_missing(self, key_o);
-    }
-    _PyThreadState_PopValueRoot(tstate, &key_root);
-    return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
+    return dict_missing(self, key);
 }
 
 PyObject *
@@ -3551,7 +3597,6 @@ merge_from_seq2_lock_held(PyObject *d, PyObject *seq2, int override)
         return -1;
 
     for (i = 0; ; ++i) {
-        PyObject *key, *value;
         Py_ssize_t n;
 
         fast = NULL;
@@ -3591,9 +3636,9 @@ merge_from_seq2_lock_held(PyObject *d, PyObject *seq2, int override)
             }
         }
         else {
-            key = PySequence_Fast_GET_ITEM(fast, 0);
-            value = PySequence_Fast_GET_ITEM(fast, 1);
-            if (dict_setdefault_ref_lock_held(d, key, value, NULL, 0) < 0) {
+            if (dict_setdefault_value_lock_held(
+                    d, PySequence_Fast_GET_VALUE(fast, 0),
+                    PySequence_Fast_GET_VALUE(fast, 1), NULL) < 0) {
                 goto Fail;
             }
         }
@@ -3757,7 +3802,7 @@ dict_merge(PyObject *a, PyObject *b, int override, PyObject **dupkey)
 
         PyObject *keys = PyMapping_Keys(b);
         PyObject *iter;
-        PyObject *key, *value;
+        PyValue key, value;
         int status;
 
         if (keys == NULL) {
@@ -3777,36 +3822,34 @@ dict_merge(PyObject *a, PyObject *b, int override, PyObject **dupkey)
             goto slow_exit;
         }
 
-        for (key = PyIter_Next(iter); key; key = PyIter_Next(iter)) {
+        PyValue iter_value = PyValue_FromObject(iter);
+        PyValue b_value = PyValue_FromObject(b);
+        while ((status = PyIter_NextValue(iter_value, &key)) > 0) {
             if (override != 1) {
-                status = dict_contains(a, key);
+                status = _PyDict_ContainsValue(a, key);
                 if (status != 0) {
                     if (status > 0) {
                         if (dupkey == NULL) {
-                            Py_DECREF(key);
                             continue;
                         }
-                        *dupkey = key;
-                        res = -2;
+                        // The caller reports the duplicate key.
+                        *dupkey = PyValue_Object(key);
+                        res = *dupkey == NULL ? -1 : -2;
                     }
                     else {
-                        Py_DECREF(key);
                         res = -1;
                     }
                     Py_DECREF(iter);
                     goto slow_exit;
                 }
             }
-            value = PyObject_GetItem(b, key);
-            if (value == NULL) {
+            value = PyObject_GetItemValue(b_value, key);
+            if (PyValue_IsNull(value)) {
                 Py_DECREF(iter);
-                Py_DECREF(key);
                 res = -1;
                 goto slow_exit;
             }
-            status = setitem_lock_held(mp, key, value);
-            Py_DECREF(key);
-            Py_DECREF(value);
+            status = setitem_value_lock_held(mp, key, value);
             if (status < 0) {
                 Py_DECREF(iter);
                 res = -1;
@@ -3815,7 +3858,7 @@ dict_merge(PyObject *a, PyObject *b, int override, PyObject **dupkey)
             }
         }
         Py_DECREF(iter);
-        if (PyErr_Occurred()) {
+        if (status < 0) {
             /* Iterator completed, via error */
             res = -1;
             goto slow_exit;
@@ -4176,17 +4219,17 @@ dict_richcompare(PyObject *v, PyObject *w, int op)
 @coexist
 dict.__contains__
 
-  key: object
+  key: value
   /
 
 True if the dictionary has the specified key, else False.
 [clinic start generated code]*/
 
 static PyObject *
-dict___contains___impl(PyDictObject *self, PyObject *key)
-/*[clinic end generated code: output=1b314e6da7687dae input=fe1cb42ad831e820]*/
+dict___contains___impl(PyDictObject *self, PyValue key)
+/*[clinic end generated code: output=c1cb4f46a3e2a9b7 input=f523b38306b3e6f9]*/
 {
-    int contains = dict_contains((PyObject *)self, key);
+    int contains = _PyDict_ContainsValue((PyObject *)self, key);
     if (contains < 0) {
         return NULL;
     }
@@ -4197,40 +4240,42 @@ dict___contains___impl(PyDictObject *self, PyObject *key)
 }
 
 /*[clinic input]
-dict.get
+dict.get -> value
 
-    key: object
-    default: object = None
+    key: value
+    default: value = None
     /
 
 Return the value for key if key is in the dictionary, else default.
 [clinic start generated code]*/
 
-static PyObject *
-dict_get_impl(PyDictObject *self, PyObject *key, PyObject *default_value)
-/*[clinic end generated code: output=bba707729dee05bf input=279ddb5790b6b107]*/
+static PyValue
+dict_get_impl(PyDictObject *self, PyValue key, PyValue default_value)
+/*[clinic end generated code: output=93903aa66c38d9e6 input=333a46b0303c2a67]*/
 {
     PyValue val;
     Py_hash_t hash;
     Py_ssize_t ix;
 
-    hash = _PyObject_HashDictKey(key);
+    hash = value_hash_dict_key(self, key);
     if (hash == -1) {
-        dict_unhashable_type((PyObject*)self, key);
-        return NULL;
+        return PyValue_NULL;
     }
-    ix = dict_lookup_object(self, key, hash, &val);
+    ix = _Py_dict_lookup(self, key, hash, &val);
     if (ix == DKIX_ERROR)
-        return NULL;
+        return PyValue_NULL;
     if (ix == DKIX_EMPTY || PyValue_IsNull(val)) {
         return default_value;
     }
-    return PyValue_Object(val);
+    return val;
 }
 
+/* d.setdefault(key, default_value): 1 and the value if key is present, 0
+   and default_value if it was inserted, or -1 and PyValue_NULL with an
+   exception set.  result may be NULL. */
 static int
-dict_setdefault_ref_lock_held(PyObject *d, PyObject *key, PyObject *default_value,
-                    PyObject **result, int incref_result)
+dict_setdefault_value_lock_held(PyObject *d, PyValue key, PyValue default_value,
+                                PyValue *result)
 {
     if (!PyDict_Check(d)) {
         if (PyFrozenDict_Check(d)) {
@@ -4240,25 +4285,24 @@ dict_setdefault_ref_lock_held(PyObject *d, PyObject *key, PyObject *default_valu
             PyErr_BadInternalCall();
         }
         if (result) {
-            *result = NULL;
+            *result = PyValue_NULL;
         }
         return -1;
     }
     assert(can_modify_dict((PyDictObject*)d));
 
     PyDictObject *mp = (PyDictObject *)d;
-    PyValue key_value = PyValue_FromObject(key);
-    PyValue default_v = PyValue_FromObject(default_value);
+    PyValue key_value = key;
+    PyValue default_v = default_value;
     PyValue value;
     Py_hash_t hash;
     Py_ssize_t ix;
     int found;
 
-    hash = _PyObject_HashDictKey(key);
+    hash = value_hash_dict_key(mp, key);
     if (hash == -1) {
-        dict_unhashable_type(d, key);
         if (result) {
-            *result = NULL;
+            *result = PyValue_NULL;
         }
         return -1;
     }
@@ -4266,7 +4310,7 @@ dict_setdefault_ref_lock_held(PyObject *d, PyObject *key, PyObject *default_valu
     if (mp->ma_keys == Py_EMPTY_KEYS) {
         if (insert_to_emptydict(mp, key_value, hash, default_v) < 0) {
             if (result) {
-                *result = NULL;
+                *result = PyValue_NULL;
             }
             return -1;
         }
@@ -4276,13 +4320,14 @@ dict_setdefault_ref_lock_held(PyObject *d, PyObject *key, PyObject *default_valu
         return 0;
     }
 
-    if (_PyDict_HasSplitTable(mp) && PyUnicode_CheckExact(key)) {
-        ix = insert_split_key(mp->ma_keys, key, hash);
+    if (_PyDict_HasSplitTable(mp) && PyValue_Type(key) == &PyUnicode_Type) {
+        PyObject *key_o = PyValue_ObjectBorrow(key);
+        ix = insert_split_key(mp->ma_keys, key_o, hash);
         if (ix != DKIX_EMPTY) {
             value = mp->ma_values->values[ix];
             found = !PyValue_IsNull(value);
             if (!found) {
-                _PyDict_InsertSplitValue(mp, key, default_v, ix);
+                _PyDict_InsertSplitValue(mp, key_o, default_v, ix);
                 value = default_v;
             }
             goto done;
@@ -4293,7 +4338,7 @@ dict_setdefault_ref_lock_held(PyObject *d, PyObject *key, PyObject *default_valu
         ix = _Py_dict_lookup(mp, key_value, hash, &value);
         if (ix == DKIX_ERROR) {
             if (result) {
-                *result = NULL;
+                *result = PyValue_NULL;
             }
             return -1;
         }
@@ -4303,7 +4348,7 @@ dict_setdefault_ref_lock_held(PyObject *d, PyObject *key, PyObject *default_valu
         // See comment to this function in insertdict.
         if (insert_combined_dict(mp, hash, key_value, default_v) < 0) {
             if (result) {
-                *result = NULL;
+                *result = PyValue_NULL;
             }
             return -1;
         }
@@ -4322,12 +4367,7 @@ dict_setdefault_ref_lock_held(PyObject *d, PyObject *key, PyObject *default_valu
 done:
     ASSERT_CONSISTENT(mp);
     if (result) {
-        // The caller's frame keeps a box alive; incref_result is moot.
-        (void)incref_result;
-        *result = PyValue_Object(value);
-        if (*result == NULL) {
-            return -1;
-        }
+        *result = value;
     }
     return found;
 }
@@ -4337,28 +4377,38 @@ PyDict_SetDefaultRef(PyObject *d, PyObject *key, PyObject *default_value,
                      PyObject **result)
 {
     int res;
+    PyValue value;
     Py_BEGIN_CRITICAL_SECTION(d);
-    res = dict_setdefault_ref_lock_held(d, key, default_value, result, 1);
+    res = dict_setdefault_value_lock_held(d, PyValue_FromResult(key),
+                                          PyValue_FromResult(default_value),
+                                          result ? &value : NULL);
     Py_END_CRITICAL_SECTION();
+    if (result) {
+        *result = PyValue_Object(value);
+        if (*result == NULL && res >= 0) {
+            res = -1;
+        }
+    }
     return res;
 }
 
 PyObject *
 PyDict_SetDefault(PyObject *d, PyObject *key, PyObject *defaultobj)
 {
-    PyObject *result;
+    PyValue result;
     Py_BEGIN_CRITICAL_SECTION(d);
-    dict_setdefault_ref_lock_held(d, key, defaultobj, &result, 0);
+    dict_setdefault_value_lock_held(d, PyValue_FromResult(key),
+                                    PyValue_FromResult(defaultobj), &result);
     Py_END_CRITICAL_SECTION();
-    return result;
+    return PyValue_Object(result);
 }
 
 /*[clinic input]
 @critical_section
-dict.setdefault
+dict.setdefault -> value
 
-    key: object
-    default: object = None
+    key: value
+    default: value = None
     /
 
 Insert key with a value of default if key is not in the dictionary.
@@ -4366,13 +4416,12 @@ Insert key with a value of default if key is not in the dictionary.
 Return the value for key if key is in the dictionary, else default.
 [clinic start generated code]*/
 
-static PyObject *
-dict_setdefault_impl(PyDictObject *self, PyObject *key,
-                     PyObject *default_value)
-/*[clinic end generated code: output=f8c1101ebf69e220 input=9237af9a0a224302]*/
+static PyValue
+dict_setdefault_impl(PyDictObject *self, PyValue key, PyValue default_value)
+/*[clinic end generated code: output=393cfe3fe80951d5 input=9c68ad577488943b]*/
 {
-    PyObject *val;
-    dict_setdefault_ref_lock_held((PyObject *)self, key, default_value, &val, 1);
+    PyValue val;
+    dict_setdefault_value_lock_held((PyObject *)self, key, default_value, &val);
     return val;
 }
 
@@ -4393,10 +4442,10 @@ dict_clear_impl(PyDictObject *self)
 
 /*[clinic input]
 @permit_long_summary
-dict.pop
+dict.pop -> value
 
-    key: object
-    default: object = NULL
+    key: value
+    default: value = NULL
     /
 
 D.pop(k[,d]) -> v, remove specified key and return the corresponding value.
@@ -4405,11 +4454,27 @@ If the key is not found, return the default if given; otherwise,
 raise a KeyError.
 [clinic start generated code]*/
 
-static PyObject *
-dict_pop_impl(PyDictObject *self, PyObject *key, PyObject *default_value)
-/*[clinic end generated code: output=3abb47b89f24c21c input=d409c7eb2de67e38]*/
+static PyValue
+dict_pop_impl(PyDictObject *self, PyValue key, PyValue default_value)
+/*[clinic end generated code: output=d7da17522b33c692 input=a7a8c43ae20a4163]*/
 {
-    return dict_pop_default((PyObject*)self, key, default_value);
+    PyValue result;
+    int found;
+    Py_BEGIN_CRITICAL_SECTION(self);
+    found = pop_value_lock_held((PyObject *)self, key, &result);
+    Py_END_CRITICAL_SECTION();
+    if (found != 0) {
+        return result;
+    }
+    if (!PyValue_IsNull(default_value)) {
+        return default_value;
+    }
+    // The KeyError holds the key, boxed if it is inline.
+    PyObject *key_o = PyValue_Object(key);
+    if (key_o != NULL) {
+        _PyErr_SetKeyError(key_o);
+    }
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -5755,15 +5820,17 @@ all_contained_in(PyObject *self, PyObject *other)
 
     if (iter == NULL)
         return -1;
+    PyValue iter_value = PyValue_FromObject(iter);
+    PyValue other_value = PyValue_FromObject(other);
     for (;;) {
-        PyObject *next = PyIter_Next(iter);
-        if (next == NULL) {
-            if (PyErr_Occurred())
+        PyValue next;
+        int status = PyIter_NextValue(iter_value, &next);
+        if (status <= 0) {
+            if (status < 0)
                 ok = -1;
             break;
         }
-        ok = PySequence_Contains(other, next);
-        Py_DECREF(next);
+        ok = PySequence_ContainsValue(other_value, next);
         if (ok <= 0)
             break;
     }
@@ -5925,15 +5992,31 @@ dictviews_sub(PyObject *self, PyObject *other)
 static int
 dictitems_contains(PyObject *dv, PyObject *obj);
 
+/* key in self, for a keys or items view self. */
+static int
+dictview_contains_value(PyObject *self, PyValue key)
+{
+    if (PyDictKeys_Check(self)) {
+        _PyDictViewObject *dv = (_PyDictViewObject *)self;
+        if (dv->dv_dict == NULL)
+            return 0;
+        return _PyDict_ContainsValue((PyObject *)dv->dv_dict, key);
+    }
+    /* else PyDictItems_Check(self): an item is a pair, never inline. */
+    if (PyValue_IsInline(key)) {
+        return 0;
+    }
+    return dictitems_contains(self, PyValue_ObjectBorrow(key));
+}
+
 PyObject *
 _PyDictView_Intersect(PyObject* self, PyObject *other)
 {
     PyObject *result;
     PyObject *it;
-    PyObject *key;
+    PyValue key;
     Py_ssize_t len_self;
     int rv;
-    objobjproc dict_contains;
 
     /* Python interpreter swaps parameters when dict view
        is on right side of & */
@@ -5976,28 +6059,21 @@ _PyDictView_Intersect(PyObject* self, PyObject *other)
         return NULL;
     }
 
-    if (PyDictKeys_Check(self)) {
-        dict_contains = dictkeys_contains;
-    }
-    /* else PyDictItems_Check(self) */
-    else {
-        dict_contains = dictitems_contains;
-    }
-
-    while ((key = PyIter_Next(it)) != NULL) {
-        rv = dict_contains(self, key);
+    PyValue it_value = PyValue_FromObject(it);
+    int status;
+    while ((status = PyIter_NextValue(it_value, &key)) > 0) {
+        rv = dictview_contains_value(self, key);
         if (rv < 0) {
             goto error;
         }
         if (rv) {
-            if (PySet_Add(result, key)) {
+            if (_PySet_AddValue((PySetObject *)result, key)) {
                 goto error;
             }
         }
-        Py_DECREF(key);
     }
     Py_DECREF(it);
-    if (PyErr_Occurred()) {
+    if (status < 0) {
         Py_DECREF(result);
         return NULL;
     }
@@ -6006,7 +6082,6 @@ _PyDictView_Intersect(PyObject* self, PyObject *other)
 error:
     Py_DECREF(it);
     Py_DECREF(result);
-    Py_DECREF(key);
     return NULL;
 }
 
@@ -6176,7 +6251,6 @@ dictviews_isdisjoint(PyObject *self, PyValue other_value)
         return PyValue_NULL;
     }
     PyObject *it;
-    PyObject *item = NULL;
 
     if (self == other) {
         if (dictview_len(self) == 0)
@@ -6204,9 +6278,12 @@ dictviews_isdisjoint(PyObject *self, PyValue other_value)
     if (it == NULL)
         return PyValue_NULL;
 
-    while ((item = PyIter_Next(it)) != NULL) {
-        int contains = PySequence_Contains(self, item);
-        Py_DECREF(item);
+    PyValue it_value = PyValue_FromObject(it);
+    PyValue self_value = PyValue_FromObject(self);
+    PyValue item;
+    int status;
+    while ((status = PyIter_NextValue(it_value, &item)) > 0) {
+        int contains = PySequence_ContainsValue(self_value, item);
         if (contains == -1) {
             Py_DECREF(it);
             return PyValue_NULL;
@@ -6218,8 +6295,8 @@ dictviews_isdisjoint(PyObject *self, PyValue other_value)
         }
     }
     Py_DECREF(it);
-    if (PyErr_Occurred())
-        return PyValue_NULL; /* PyIter_Next raised an exception. */
+    if (status < 0)
+        return PyValue_NULL; /* PyIter_NextValue raised an exception. */
     return PyValue_FromObject(Py_True);
 }
 
@@ -6312,17 +6389,16 @@ dictitems_contains(PyObject *self, PyObject *obj)
 {
     _PyDictViewObject *dv = (_PyDictViewObject *)self;
     int result;
-    PyObject *key, *value, *found;
+    PyValue found;
     if (dv->dv_dict == NULL)
         return 0;
     if (!PyTuple_Check(obj) || PyTuple_GET_SIZE(obj) != 2)
         return 0;
-    key = PyTuple_GET_ITEM(obj, 0);
-    value = PyTuple_GET_ITEM(obj, 1);
-    result = PyDict_GetItemRef((PyObject *)dv->dv_dict, key, &found);
+    PyValue key = PyTuple_GET_VALUE(obj, 0);
+    PyValue value = PyTuple_GET_VALUE(obj, 1);
+    result = _PyDict_GetItemValue((PyObject *)dv->dv_dict, key, &found);
     if (result == 1) {
-        result = PyObject_RichCompareBool(found, value, Py_EQ);
-        Py_DECREF(found);
+        result = PyObject_RichCompareBoolValue(found, value, Py_EQ);
     }
     return result;
 }
@@ -7601,7 +7677,7 @@ _shuffle_bits(Py_uhash_t h)
 // Compute hash((key, value)).
 // Code copied from tuple_hash().
 static Py_hash_t
-frozendict_pair_hash(Py_hash_t key_hash, PyObject *value)
+frozendict_pair_hash(Py_hash_t key_hash, PyValue value)
 {
     assert(key_hash != -1);
 
@@ -7613,7 +7689,7 @@ frozendict_pair_hash(Py_hash_t key_hash, PyObject *value)
     acc = _PyTuple_HASH_XXROTATE(acc);
     acc *= _PyTuple_HASH_XXPRIME_1;
 
-    lane = PyObject_Hash(value);
+    lane = PyObject_HashValue(value);
     if (lane == (Py_uhash_t)-1) {
         return -1;
     }
@@ -7652,10 +7728,10 @@ frozendict_hash(PyObject *op)
         return -1;
     }
 
-    PyObject *value;  // borrowed ref
+    PyValue key, value;
     Py_ssize_t pos = 0;
     Py_hash_t key_hash;
-    while (_PyDict_Next(op, &pos, NULL, &value, &key_hash)) {
+    while (_PyDict_NextValue(op, &pos, &key, &value, &key_hash)) {
         Py_hash_t pair_hash = frozendict_pair_hash(key_hash, value);
         if (pair_hash == -1) {
             _Py_LeaveRecursiveCall();

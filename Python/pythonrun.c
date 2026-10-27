@@ -347,13 +347,13 @@ _PyRun_InteractiveOne(FILE *fp, PyObject *filename, PyCompilerFlags *flags)
             if (xs == NULL) {
                 goto error;
             }
-            PyObject *exc_lineno = PyObject_GetAttr(exc, &_Py_ID(lineno));
-            if (exc_lineno == NULL) {
+            PyValue exc_lineno = PyObject_GetAttrValue(PyValue_FromObject(exc),
+                                                       &_Py_ID(lineno));
+            if (PyValue_IsNull(exc_lineno)) {
                 Py_DECREF(xs);
                 goto error;
             }
-            int n = PyLong_AsInt(exc_lineno);
-            Py_DECREF(exc_lineno);
+            int n = PyLong_AsIntValue(exc_lineno);
             if (n <= 0 || n > PyList_GET_SIZE(xs)) {
                 Py_DECREF(xs);
                 goto error;

@@ -493,34 +493,30 @@ set_discard_entry(PySetObject *so, PyValue key, Py_hash_t hash)
     return DISCARD_FOUND;
 }
 
-/* The set_*_key() functions take an object, whose canonical value the set
-   holds or looks for: a box of an inline value is not kept. */
 static int
-set_add_key(PySetObject *so, PyObject *key)
+set_add_key(PySetObject *so, PyValue key)
 {
-    return _PySet_AddValue(so, PyValue_FromObject(key));
+    return _PySet_AddValue(so, key);
 }
 
 static int
-set_contains_key(PySetObject *so, PyObject *key)
+set_contains_key(PySetObject *so, PyValue key)
 {
-    PyValue key_value = PyValue_FromObject(key);
-    Py_hash_t hash = set_value_hash(key_value);
+    Py_hash_t hash = set_value_hash(key);
     if (hash == -1) {
         return -1;
     }
-    return set_contains_entry(so, key_value, hash);
+    return set_contains_entry(so, key, hash);
 }
 
 static int
-set_discard_key(PySetObject *so, PyObject *key)
+set_discard_key(PySetObject *so, PyValue key)
 {
-    PyValue key_value = PyValue_FromObject(key);
-    Py_hash_t hash = set_value_hash(key_value);
+    Py_hash_t hash = set_value_hash(key);
     if (hash == -1) {
         return -1;
     }
-    return set_discard_entry(so, key_value, hash);
+    return set_discard_entry(so, key, hash);
 }
 
 static void
@@ -1104,17 +1100,17 @@ set_update_iterable_lock_held(PySetObject *so, PyObject *other)
         return -1;
     }
 
-    PyObject *key;
-    while ((key = PyIter_Next(it)) != NULL) {
+    PyValue it_value = PyValue_FromObject(it);
+    PyValue key;
+    int status;
+    while ((status = PyIter_NextValue(it_value, &key)) > 0) {
         if (set_add_key(so, key)) {
             Py_DECREF(it);
-            Py_DECREF(key);
             return -1;
         }
-        Py_DECREF(key);
     }
     Py_DECREF(it);
-    if (PyErr_Occurred())
+    if (status < 0)
         return -1;
     return 0;
 }
@@ -1588,7 +1584,7 @@ static PyObject *
 set_intersection(PySetObject *so, PyObject *other)
 {
     PySetObject *result;
-    PyObject *key, *it, *tmp;
+    PyObject *it, *tmp;
     PyValue key_value;
     Py_hash_t hash;
     int rv;
@@ -1635,8 +1631,9 @@ set_intersection(PySetObject *so, PyObject *other)
         return NULL;
     }
 
-    while ((key = PyIter_Next(it)) != NULL) {
-        key_value = PyValue_FromObject(key);
+    PyValue it_value = PyValue_FromObject(it);
+    int status;
+    while ((status = PyIter_NextValue(it_value, &key_value)) > 0) {
         hash = PyObject_HashValue(key_value);
         if (hash == -1)
             goto error;
@@ -1647,14 +1644,12 @@ set_intersection(PySetObject *so, PyObject *other)
             if (set_add_entry(result, key_value, hash))
                 goto error;
             if (PySet_GET_SIZE(result) >= PySet_GET_SIZE(so)) {
-                Py_DECREF(key);
                 break;
             }
         }
-        Py_DECREF(key);
     }
     Py_DECREF(it);
-    if (PyErr_Occurred()) {
+    if (status < 0) {
         Py_DECREF(result);
         return NULL;
     }
@@ -1663,7 +1658,6 @@ set_intersection(PySetObject *so, PyObject *other)
   error:
     Py_DECREF(it);
     Py_DECREF(result);
-    Py_DECREF(key);
     return NULL;
 }
 
@@ -1791,7 +1785,7 @@ static PyObject *
 set_isdisjoint_impl(PySetObject *so, PyObject *other)
 /*[clinic end generated code: output=273493f2d57c565e input=32f8dcab5e0fc7d6]*/
 {
-    PyObject *key, *it, *tmp;
+    PyObject *it, *tmp;
     int rv;
 
     if ((PyObject *)so == other) {
@@ -1826,9 +1820,11 @@ set_isdisjoint_impl(PySetObject *so, PyObject *other)
     if (it == NULL)
         return NULL;
 
-    while ((key = PyIter_Next(it)) != NULL) {
+    PyValue it_value = PyValue_FromObject(it);
+    PyValue key;
+    int status;
+    while ((status = PyIter_NextValue(it_value, &key)) > 0) {
         rv = set_contains_key(so, key);
-        Py_DECREF(key);
         if (rv < 0) {
             Py_DECREF(it);
             return NULL;
@@ -1839,7 +1835,7 @@ set_isdisjoint_impl(PySetObject *so, PyObject *other)
         }
     }
     Py_DECREF(it);
-    if (PyErr_Occurred())
+    if (status < 0)
         return NULL;
     Py_RETURN_TRUE;
 }
@@ -1878,21 +1874,22 @@ set_difference_update_internal(PySetObject *so, PyObject *other)
 
         Py_DECREF(other);
     } else {
-        PyObject *key, *it;
+        PyObject *it;
         it = PyObject_GetIter(other);
         if (it == NULL)
             return -1;
 
-        while ((key = PyIter_Next(it)) != NULL) {
+        PyValue it_value = PyValue_FromObject(it);
+        PyValue key;
+        int status;
+        while ((status = PyIter_NextValue(it_value, &key)) > 0) {
             if (set_discard_key(so, key) < 0) {
                 Py_DECREF(it);
-                Py_DECREF(key);
                 return -1;
             }
-            Py_DECREF(key);
         }
         Py_DECREF(it);
-        if (PyErr_Occurred())
+        if (status < 0)
             return -1;
     }
     /* If more than 1/4th are dummies, then resize them away. */
@@ -2318,13 +2315,15 @@ set_issuperset_impl(PySetObject *so, PyObject *other)
         return set_issubset_impl((PySetObject *)other, (PyObject *)so);
     }
 
-    PyObject *key, *it = PyObject_GetIter(other);
+    PyObject *it = PyObject_GetIter(other);
     if (it == NULL) {
         return NULL;
     }
-    while ((key = PyIter_Next(it)) != NULL) {
+    PyValue it_value = PyValue_FromObject(it);
+    PyValue key;
+    int status;
+    while ((status = PyIter_NextValue(it_value, &key)) > 0) {
         int rv = set_contains_key(so, key);
-        Py_DECREF(key);
         if (rv < 0) {
             Py_DECREF(it);
             return NULL;
@@ -2335,7 +2334,7 @@ set_issuperset_impl(PySetObject *so, PyObject *other)
         }
     }
     Py_DECREF(it);
-    if (PyErr_Occurred()) {
+    if (status < 0) {
         return NULL;
     }
     Py_RETURN_TRUE;
@@ -2389,7 +2388,7 @@ set_richcompare(PyObject *self, PyObject *w, int op)
 @critical_section
 set.add
     so: setobject
-    object as key: object
+    object as key: value
     /
 
 Add an element to a set.
@@ -2398,8 +2397,8 @@ This has no effect if the element is already present.
 [clinic start generated code]*/
 
 static PyObject *
-set_add_impl(PySetObject *so, PyObject *key)
-/*[clinic end generated code: output=4cc4a937f1425c96 input=03baf62cb0e66514]*/
+set_add_impl(PySetObject *so, PyValue key)
+/*[clinic end generated code: output=f9cbb456e5397b9c input=688f6c6cb612a9b2]*/
 {
     if (set_add_key(so, key))
         return NULL;
@@ -2441,19 +2440,19 @@ set_contains(PyObject *self, PyObject *key)
 @coexist
 set.__contains__
     so: setobject
-    object as key: object
+    object as key: value
     /
 
 x.__contains__(y) <==> y in x.
 [clinic start generated code]*/
 
 static PyObject *
-set___contains___impl(PySetObject *so, PyObject *key)
-/*[clinic end generated code: output=b44863d034b3c70e input=cf4c72db704e4cf0]*/
+set___contains___impl(PySetObject *so, PyValue key)
+/*[clinic end generated code: output=adf227b224694fbd input=769fbca5e7d36bf4]*/
 {
     long result;
 
-    result = _PySet_ContainsValue(so, PyValue_FromObject(key));
+    result = _PySet_ContainsValue(so, key);
     if (result < 0)
         return NULL;
     return PyBool_FromLong(result);
@@ -2463,30 +2462,31 @@ set___contains___impl(PySetObject *so, PyObject *key)
 @coexist
 frozenset.__contains__
     so: setobject
-    object as key: object
+    object as key: value
     /
 
 x.__contains__(y) <==> y in x.
 [clinic start generated code]*/
 
 static PyObject *
-frozenset___contains___impl(PySetObject *so, PyObject *key)
-/*[clinic end generated code: output=2301ed91bc3a6dd5 input=2f04922a98d8bab7]*/
+frozenset___contains___impl(PySetObject *so, PyValue key)
+/*[clinic end generated code: output=fa60f3132436d6eb input=5e1cb793463c2479]*/
 {
-    PyValue key_value = PyValue_FromObject(key);
-    Py_hash_t hash = PyObject_HashValue(key_value);
+    Py_hash_t hash = PyObject_HashValue(key);
     if (hash == -1) {
-        if (!PySet_Check(key) || !PyErr_ExceptionMatches(PyExc_TypeError)) {
-            set_unhashable_type(key);
+        // An inline value is always hashable.
+        PyObject *key_o = PyValue_ObjectBorrow(key);
+        if (!PySet_Check(key_o) || !PyErr_ExceptionMatches(PyExc_TypeError)) {
+            set_unhashable_type(key_o);
             return NULL;
         }
         PyErr_Clear();
-        Py_BEGIN_CRITICAL_SECTION(key);
-        hash = frozenset_hash_impl(key);
+        Py_BEGIN_CRITICAL_SECTION(key_o);
+        hash = frozenset_hash_impl(key_o);
         Py_END_CRITICAL_SECTION();
     }
     setentry *entry; // unused
-    int status = set_do_lookup(so, so->table, so->mask, key_value, hash, &entry,
+    int status = set_do_lookup(so, so->table, so->mask, key, hash, &entry,
                            set_compare_frozenset);
     if (status < 0)
         return NULL;
@@ -2497,7 +2497,7 @@ frozenset___contains___impl(PySetObject *so, PyObject *key)
 @critical_section
 set.remove
     so: setobject
-    object as key: object
+    object as key: value
     /
 
 Remove an element from a set; it must be a member.
@@ -2506,27 +2506,35 @@ If the element is not a member, raise a KeyError.
 [clinic start generated code]*/
 
 static PyObject *
-set_remove_impl(PySetObject *so, PyObject *key)
-/*[clinic end generated code: output=0b9134a2a2200363 input=893e1cb1df98227a]*/
+set_remove_impl(PySetObject *so, PyValue key)
+/*[clinic end generated code: output=9ac3b06dc271c8e5 input=de0e21592b58af6c]*/
 {
     int rv;
 
     rv = set_discard_key(so, key);
     if (rv < 0) {
-        if (!PySet_Check(key) || !PyErr_ExceptionMatches(PyExc_TypeError))
+        // An inline key is not a set.
+        if (PyValue_IsInline(key)
+            || !PySet_Check(PyValue_ObjectBorrow(key))
+            || !PyErr_ExceptionMatches(PyExc_TypeError))
             return NULL;
+        PyObject *key_o = PyValue_ObjectBorrow(key);
         PyErr_Clear();
         Py_hash_t hash;
-        Py_BEGIN_CRITICAL_SECTION(key);
-        hash = frozenset_hash_impl(key);
+        Py_BEGIN_CRITICAL_SECTION(key_o);
+        hash = frozenset_hash_impl(key_o);
         Py_END_CRITICAL_SECTION();
-        rv = set_discard_entry(so, PyValue_FromObject(key), hash);
+        rv = set_discard_entry(so, key, hash);
         if (rv < 0)
             return NULL;
     }
 
     if (rv == DISCARD_NOTFOUND) {
-        _PyErr_SetKeyError(key);
+        // The KeyError holds the key, boxed if it is inline.
+        PyObject *key_o = PyValue_Object(key);
+        if (key_o != NULL) {
+            _PyErr_SetKeyError(key_o);
+        }
         return NULL;
     }
     Py_RETURN_NONE;
@@ -2536,7 +2544,7 @@ set_remove_impl(PySetObject *so, PyObject *key)
 @critical_section
 set.discard
     so: setobject
-    object as key: object
+    object as key: value
     /
 
 Remove an element from a set if it is a member.
@@ -2546,21 +2554,25 @@ an exception when an element is missing from the set.
 [clinic start generated code]*/
 
 static PyObject *
-set_discard_impl(PySetObject *so, PyObject *key)
-/*[clinic end generated code: output=eec3b687bf32759e input=861cb7fb69b4def0]*/
+set_discard_impl(PySetObject *so, PyValue key)
+/*[clinic end generated code: output=5fdba57e70a98c28 input=2200ed58f3903dda]*/
 {
     int rv;
 
     rv = set_discard_key(so, key);
     if (rv < 0) {
-        if (!PySet_Check(key) || !PyErr_ExceptionMatches(PyExc_TypeError))
+        // An inline key is not a set.
+        if (PyValue_IsInline(key)
+            || !PySet_Check(PyValue_ObjectBorrow(key))
+            || !PyErr_ExceptionMatches(PyExc_TypeError))
             return NULL;
+        PyObject *key_o = PyValue_ObjectBorrow(key);
         PyErr_Clear();
         Py_hash_t hash;
-        Py_BEGIN_CRITICAL_SECTION(key);
-        hash = frozenset_hash_impl(key);
+        Py_BEGIN_CRITICAL_SECTION(key_o);
+        hash = frozenset_hash_impl(key_o);
         Py_END_CRITICAL_SECTION();
-        rv = set_discard_entry(so, PyValue_FromObject(key), hash);
+        rv = set_discard_entry(so, key, hash);
         if (rv < 0)
             return NULL;
     }
@@ -2933,7 +2945,7 @@ PySet_Contains(PyObject *anyset, PyObject *key)
         return -1;
     }
 
-    return set_contains_key((PySetObject *)anyset, key);
+    return set_contains_key((PySetObject *)anyset, PyValue_FromObject(key));
 }
 
 int
@@ -2946,7 +2958,7 @@ PySet_Discard(PyObject *set, PyObject *key)
 
     int rv;
     Py_BEGIN_CRITICAL_SECTION(set);
-    rv = set_discard_key((PySetObject *)set, key);
+    rv = set_discard_key((PySetObject *)set, PyValue_FromObject(key));
     Py_END_CRITICAL_SECTION();
     return rv;
 }
@@ -2957,7 +2969,7 @@ PySet_Add(PyObject *anyset, PyObject *key)
     if (PySet_Check(anyset)) {
         int rv;
         Py_BEGIN_CRITICAL_SECTION(anyset);
-        rv = set_add_key((PySetObject *)anyset, key);
+        rv = set_add_key((PySetObject *)anyset, PyValue_FromObject(key));
         Py_END_CRITICAL_SECTION();
         return rv;
     }
@@ -2974,7 +2986,7 @@ PySet_Add(PyObject *anyset, PyObject *key)
         if (PyFrozenSet_CheckExact(anyset) && !PyObject_GC_IsTracked(anyset) && PyObject_GC_IsTracked(key)) {
             _PyObject_GC_TRACK(anyset);
         }
-        return set_add_key((PySetObject *)anyset, key);
+        return set_add_key((PySetObject *)anyset, PyValue_FromObject(key));
     }
 
     PyErr_BadInternalCall();

@@ -2923,6 +2923,37 @@ vectorcall_method(PyObject *name, PyObject *const *args, Py_ssize_t nargs)
     return retval;
 }
 
+/* vectorcall_method() on values: args[0] is the object self, and an inline
+   int or float argument or result is not boxed.  nargs is at most 3. */
+static PyValue
+vectorcall_method_value(PyObject *name, const PyValue *args, Py_ssize_t nargs)
+{
+    assert(1 <= nargs && nargs <= 3);
+    assert(PyValue_IsObject(args[0]));
+
+    // stack[0] is free for PY_VECTORCALL_ARGUMENTS_OFFSET.
+    PyValue stack[4];
+    memcpy(stack + 1, args, nargs * sizeof(PyValue));
+
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue retval = PyValue_NULL;
+    _PyValueRoot cref;
+    _PyThreadState_PushValueRoot(tstate, &cref);
+    int unbound = lookup_method(PyValue_ObjectBorrow(args[0]), name,
+                                &cref.value);
+    if (unbound >= 0) {
+        PyObject *func = _PyValueRoot_Object(&cref);
+        EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_SLOT, func);
+        PyValue *callargs = unbound ? stack + 1 : stack + 2;
+        size_t nargsf = unbound ? (size_t)nargs : (size_t)nargs - 1;
+        retval = PyObject_VectorcallValue(
+            PyValue_FromObject(func), callargs,
+            nargsf | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
+    }
+    _PyThreadState_PopValueRoot(tstate, &cref);
+    return retval;
+}
+
 /* Clone of vectorcall_method() that returns NotImplemented
  * when the lookup fails. */
 static PyObject *
@@ -9527,24 +9558,23 @@ static PyObject *
 wrap_indexargfunc(PyObject *self, PyObject *args, void *wrapped)
 {
     ssizeargfunc func = (ssizeargfunc)wrapped;
-    PyObject* o;
     Py_ssize_t i;
 
     if (!check_num_args(args, 1))
         return NULL;
-    o = PyTuple_GET_ITEM(args, 0);
-    i = PyNumber_AsSsize_t(o, PyExc_OverflowError);
+    i = PyNumber_AsSsize_tValue(PyTuple_GET_VALUE(args, 0),
+                                PyExc_OverflowError);
     if (i == -1 && PyErr_Occurred())
         return NULL;
     return (*func)(self, i);
 }
 
 static Py_ssize_t
-getindex(PyObject *self, PyObject *arg)
+getindex(PyObject *self, PyValue arg)
 {
     Py_ssize_t i;
 
-    i = PyNumber_AsSsize_t(arg, PyExc_OverflowError);
+    i = PyNumber_AsSsize_tValue(arg, PyExc_OverflowError);
     if (i == -1 && PyErr_Occurred())
         return -1;
     if (i < 0) {
@@ -9565,12 +9595,10 @@ static PyObject *
 wrap_sq_item(PyObject *self, PyObject *args, void *wrapped)
 {
     ssizeargfunc func = (ssizeargfunc)wrapped;
-    PyObject *arg;
     Py_ssize_t i;
 
     if (PyTuple_GET_SIZE(args) == 1) {
-        arg = PyTuple_GET_ITEM(args, 0);
-        i = getindex(self, arg);
+        i = getindex(self, PyTuple_GET_VALUE(args, 0));
         if (i == -1 && PyErr_Occurred())
             return NULL;
         return (*func)(self, i);
@@ -9590,7 +9618,7 @@ wrap_sq_setitem(PyObject *self, PyObject *args, void *wrapped)
 
     if (!PyArg_UnpackTuple(args, "__setitem__", 2, 2, &arg, &value))
         return NULL;
-    i = getindex(self, arg);
+    i = getindex(self, PyValue_FromObject(arg));
     if (i == -1 && PyErr_Occurred())
         return NULL;
     res = (*func)(self, i, value);
@@ -9605,12 +9633,10 @@ wrap_sq_delitem(PyObject *self, PyObject *args, void *wrapped)
     ssizeobjargproc func = (ssizeobjargproc)wrapped;
     Py_ssize_t i;
     int res;
-    PyObject *arg;
 
     if (!check_num_args(args, 1))
         return NULL;
-    arg = PyTuple_GET_ITEM(args, 0);
-    i = getindex(self, arg);
+    i = getindex(self, PyTuple_GET_VALUE(args, 0));
     if (i == -1 && PyErr_Occurred())
         return NULL;
     res = (*func)(self, i, NULL);
@@ -10182,71 +10208,69 @@ FUNCNAME(PyObject *self, PyObject *other) \
 static Py_ssize_t
 slot_sq_length(PyObject *self)
 {
-    PyObject* stack[1] = {self};
-    PyObject *res = vectorcall_method(&_Py_ID(__len__), stack, 1);
+    PyValue stack[1] = {PyValue_FromObject(self)};
+    PyValue res = vectorcall_method_value(&_Py_ID(__len__), stack, 1);
     Py_ssize_t len;
 
-    if (res == NULL)
+    if (PyValue_IsNull(res))
         return -1;
 
-    Py_SETREF(res, _PyNumber_Index(res));
-    if (res == NULL)
+    res = PyNumber_IndexValue(res);
+    if (PyValue_IsNull(res))
         return -1;
 
-    assert(PyLong_Check(res));
-    if (_PyLong_IsNegative((PyLongObject *)res)) {
-        Py_DECREF(res);
+    assert(PyValue_Type(res) == &PyLong_Type);
+    int negative = PyValue_IsInlineInt(res)
+        ? PyValue_Int32(res) < 0
+        : _PyLong_IsNegative((PyLongObject *)PyValue_ObjectBorrow(res));
+    if (negative) {
         PyErr_SetString(PyExc_ValueError,
                         "__len__() should return >= 0");
         return -1;
     }
 
-    len = PyNumber_AsSsize_t(res, PyExc_OverflowError);
+    len = PyNumber_AsSsize_tValue(res, PyExc_OverflowError);
     assert(len >= 0 || PyErr_ExceptionMatches(PyExc_OverflowError));
-    Py_DECREF(res);
     return len;
 }
 
 static PyObject *
 slot_sq_item(PyObject *self, Py_ssize_t i)
 {
-    PyObject *ival = PyLong_FromSsize_t(i);
-    if (ival == NULL) {
+    PyValue ival = PyValue_FromLongLong(i);
+    if (PyValue_IsNull(ival)) {
         return NULL;
     }
-    PyObject *stack[2] = {self, ival};
-    PyObject *retval = vectorcall_method(&_Py_ID(__getitem__), stack, 2);
-    Py_DECREF(ival);
-    return retval;
+    PyValue stack[2] = {PyValue_FromObject(self), ival};
+    return PyValue_Object(
+        vectorcall_method_value(&_Py_ID(__getitem__), stack, 2));
 }
 
 static int
 slot_sq_ass_item(PyObject *self, Py_ssize_t index, PyObject *value)
 {
-    PyObject *stack[3];
-    PyObject *res;
-    PyObject *index_obj;
+    PyValue stack[3];
+    PyValue res;
+    PyValue index_value;
 
-    index_obj = PyLong_FromSsize_t(index);
-    if (index_obj == NULL) {
+    index_value = PyValue_FromLongLong(index);
+    if (PyValue_IsNull(index_value)) {
         return -1;
     }
 
-    stack[0] = self;
-    stack[1] = index_obj;
+    stack[0] = PyValue_FromObject(self);
+    stack[1] = index_value;
     if (value == NULL) {
-        res = vectorcall_method(&_Py_ID(__delitem__), stack, 2);
+        res = vectorcall_method_value(&_Py_ID(__delitem__), stack, 2);
     }
     else {
-        stack[2] = value;
-        res = vectorcall_method(&_Py_ID(__setitem__), stack, 3);
+        stack[2] = PyValue_FromObject(value);
+        res = vectorcall_method_value(&_Py_ID(__setitem__), stack, 3);
     }
-    Py_DECREF(index_obj);
 
-    if (res == NULL) {
+    if (PyValue_IsNull(res)) {
         return -1;
     }
-    Py_DECREF(res);
     return 0;
 }
 

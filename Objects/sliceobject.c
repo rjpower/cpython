@@ -413,24 +413,152 @@ static PyMemberDef slice_members[] = {
     {0}
 };
 
-/* Helper function to convert a slice argument to a PyLong, and raise TypeError
-   with a suitable message on failure. */
+/* Helper function to convert a slice argument to an int value, and raise
+   TypeError with a suitable message on failure. */
 
-static PyObject*
+static PyValue
 evaluate_slice_index(PyValue value)
 {
     if (PyValue_IsInlineInt(value)) {
-        return PyValue_Object(value);
+        return value;
     }
     if (PyValue_IsObject(value) && _PyIndex_Check(PyValue_ObjectBorrow(value))) {
-        return PyNumber_Index(PyValue_ObjectBorrow(value));
+        return PyNumber_IndexValue(value);
     }
     else {
         PyErr_SetString(PyExc_TypeError,
                         "slice indices must be integers or "
                         "None or have an __index__ method");
-        return NULL;
+        return PyValue_NULL;
     }
+}
+
+/* The sign of the int value v: -1, 0 or 1. */
+static int
+int_value_sign(PyValue v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        int32_t i = PyValue_Int32(v);
+        return (i > 0) - (i < 0);
+    }
+    int sign;
+    (void)PyLong_GetSign(PyValue_ObjectBorrow(v), &sign);
+    return sign;
+}
+
+/* _PySlice_GetLongIndices() on values: the bounds and the length are int
+   values, inline when they fit. */
+static int
+slice_long_indices(PySliceObject *self, PyValue length,
+                   PyValue *start_ptr, PyValue *stop_ptr, PyValue *step_ptr)
+{
+    PyValue start, stop, step;
+    PyValue upper, lower;
+    int step_is_negative, cmp_result;
+
+    *start_ptr = *stop_ptr = *step_ptr = PyValue_NULL;
+
+    /* Convert step to an integer; raise for zero step. */
+    if (_PyValue_IsNone(self->step)) {
+        step = PyValue_FromInt32(1);
+        step_is_negative = 0;
+    }
+    else {
+        step = evaluate_slice_index(self->step);
+        if (PyValue_IsNull(step)) {
+            return -1;
+        }
+        assert(PyType_IsSubtype(PyValue_Type(step), &PyLong_Type));
+
+        int step_sign = int_value_sign(step);
+        if (step_sign == 0) {
+            PyErr_SetString(PyExc_ValueError,
+                            "slice step cannot be zero");
+            return -1;
+        }
+        step_is_negative = step_sign < 0;
+    }
+
+    /* Find lower and upper bounds for start and stop. */
+    if (step_is_negative) {
+        lower = PyValue_FromInt32(-1);
+        upper = PyNumber_AddValue(length, lower);
+        if (PyValue_IsNull(upper))
+            return -1;
+    }
+    else {
+        lower = PyValue_FromInt32(0);
+        upper = length;
+    }
+
+    /* Compute start. */
+    if (_PyValue_IsNone(self->start)) {
+        start = step_is_negative ? upper : lower;
+    }
+    else {
+        start = evaluate_slice_index(self->start);
+        if (PyValue_IsNull(start))
+            return -1;
+
+        if (int_value_sign(start) < 0) {
+            /* start += length */
+            start = PyNumber_AddValue(start, length);
+            if (PyValue_IsNull(start))
+                return -1;
+
+            cmp_result = PyObject_RichCompareBoolValue(start, lower, Py_LT);
+            if (cmp_result < 0)
+                return -1;
+            if (cmp_result) {
+                start = lower;
+            }
+        }
+        else {
+            cmp_result = PyObject_RichCompareBoolValue(start, upper, Py_GT);
+            if (cmp_result < 0)
+                return -1;
+            if (cmp_result) {
+                start = upper;
+            }
+        }
+    }
+
+    /* Compute stop. */
+    if (_PyValue_IsNone(self->stop)) {
+        stop = step_is_negative ? lower : upper;
+    }
+    else {
+        stop = evaluate_slice_index(self->stop);
+        if (PyValue_IsNull(stop))
+            return -1;
+
+        if (int_value_sign(stop) < 0) {
+            /* stop += length */
+            stop = PyNumber_AddValue(stop, length);
+            if (PyValue_IsNull(stop))
+                return -1;
+
+            cmp_result = PyObject_RichCompareBoolValue(stop, lower, Py_LT);
+            if (cmp_result < 0)
+                return -1;
+            if (cmp_result) {
+                stop = lower;
+            }
+        }
+        else {
+            cmp_result = PyObject_RichCompareBoolValue(stop, upper, Py_GT);
+            if (cmp_result < 0)
+                return -1;
+            if (cmp_result) {
+                stop = upper;
+            }
+        }
+    }
+
+    *start_ptr = start;
+    *stop_ptr = stop;
+    *step_ptr = step;
+    return 0;
 }
 
 /* Compute slice indices given a slice and length.  Return -1 on failure.  Used
@@ -442,162 +570,49 @@ _PySlice_GetLongIndices(PySliceObject *self, PyObject *length,
                         PyObject **start_ptr, PyObject **stop_ptr,
                         PyObject **step_ptr)
 {
-    PyObject *start=NULL, *stop=NULL, *step=NULL;
-    PyObject *upper=NULL, *lower=NULL;
-    int step_is_negative, cmp_result;
-
-    /* Convert step to an integer; raise for zero step. */
-    if (_PyValue_IsNone(self->step)) {
-        step = _PyLong_GetOne();
-        step_is_negative = 0;
-    }
-    else {
-        step = evaluate_slice_index(self->step);
-        if (step == NULL) {
-            goto error;
-        }
-        assert(PyLong_Check(step));
-
-        int step_sign;
-        (void)PyLong_GetSign(step, &step_sign);
-        if (step_sign == 0) {
-            PyErr_SetString(PyExc_ValueError,
-                            "slice step cannot be zero");
-            goto error;
-        }
-        step_is_negative = step_sign < 0;
-    }
-
-    /* Find lower and upper bounds for start and stop. */
-    if (step_is_negative) {
-        lower = PyLong_FromLong(-1L);
-        if (lower == NULL)
-            goto error;
-
-        upper = PyNumber_Add(length, lower);
-        if (upper == NULL)
-            goto error;
-    }
-    else {
-        lower = _PyLong_GetZero();
-        upper = Py_NewRef(length);
-    }
-
-    /* Compute start. */
-    if (_PyValue_IsNone(self->start)) {
-        start = Py_NewRef(step_is_negative ? upper : lower);
-    }
-    else {
-        start = evaluate_slice_index(self->start);
-        if (start == NULL)
-            goto error;
-
-        if (_PyLong_IsNegative((PyLongObject *)start)) {
-            /* start += length */
-            PyObject *tmp = PyNumber_Add(start, length);
-            Py_SETREF(start, tmp);
-            if (start == NULL)
-                goto error;
-
-            cmp_result = PyObject_RichCompareBool(start, lower, Py_LT);
-            if (cmp_result < 0)
-                goto error;
-            if (cmp_result) {
-                Py_SETREF(start, Py_NewRef(lower));
-            }
-        }
-        else {
-            cmp_result = PyObject_RichCompareBool(start, upper, Py_GT);
-            if (cmp_result < 0)
-                goto error;
-            if (cmp_result) {
-                Py_SETREF(start, Py_NewRef(upper));
-            }
-        }
-    }
-
-    /* Compute stop. */
-    if (_PyValue_IsNone(self->stop)) {
-        stop = Py_NewRef(step_is_negative ? lower : upper);
-    }
-    else {
-        stop = evaluate_slice_index(self->stop);
-        if (stop == NULL)
-            goto error;
-
-        if (_PyLong_IsNegative((PyLongObject *)stop)) {
-            /* stop += length */
-            PyObject *tmp = PyNumber_Add(stop, length);
-            Py_SETREF(stop, tmp);
-            if (stop == NULL)
-                goto error;
-
-            cmp_result = PyObject_RichCompareBool(stop, lower, Py_LT);
-            if (cmp_result < 0)
-                goto error;
-            if (cmp_result) {
-                Py_SETREF(stop, Py_NewRef(lower));
-            }
-        }
-        else {
-            cmp_result = PyObject_RichCompareBool(stop, upper, Py_GT);
-            if (cmp_result < 0)
-                goto error;
-            if (cmp_result) {
-                Py_SETREF(stop, Py_NewRef(upper));
-            }
-        }
-    }
-
-    *start_ptr = start;
-    *stop_ptr = stop;
-    *step_ptr = step;
-    Py_DECREF(upper);
-    Py_DECREF(lower);
-    return 0;
-
-  error:
+    PyValue start, stop, step;
     *start_ptr = *stop_ptr = *step_ptr = NULL;
-    Py_XDECREF(start);
-    Py_XDECREF(stop);
-    Py_XDECREF(step);
-    Py_XDECREF(upper);
-    Py_XDECREF(lower);
-    return -1;
+    if (slice_long_indices(self, PyValue_FromObject(length),
+                           &start, &stop, &step) < 0) {
+        return -1;
+    }
+    // The caller takes int objects: inline bounds are boxed.
+    PyObject *start_o = PyValue_Object(start);
+    PyObject *stop_o = PyValue_Object(stop);
+    PyObject *step_o = PyValue_Object(step);
+    if (start_o == NULL || stop_o == NULL || step_o == NULL) {
+        return -1;
+    }
+    *start_ptr = start_o;
+    *stop_ptr = stop_o;
+    *step_ptr = step_o;
+    return 0;
 }
 
 /* Implementation of slice.indices. */
 
 static PyValue
-slice_indices(PyObject *op, PyValue len_value)
+slice_indices(PyObject *op, PyValue len)
 {
-    PyObject *len = PyValue_Object(len_value);
-    if (len == NULL) {
-        return PyValue_NULL;
-    }
     PySliceObject *self = _PySlice_CAST(op);
-    PyObject *start, *stop, *step;
-    PyObject *length;
-    int error;
+    PyValue indices[3];
 
     /* Convert length to an integer if necessary; raise for negative length. */
-    length = PyNumber_Index(len);
-    if (length == NULL)
+    PyValue length = PyNumber_IndexValue(len);
+    if (PyValue_IsNull(length))
         return PyValue_NULL;
 
-    if (_PyLong_IsNegative((PyLongObject *)length)) {
+    if (int_value_sign(length) < 0) {
         PyErr_SetString(PyExc_ValueError,
                         "length should not be negative");
-        Py_DECREF(length);
         return PyValue_NULL;
     }
 
-    error = _PySlice_GetLongIndices(self, length, &start, &stop, &step);
-    Py_DECREF(length);
-    if (error == -1)
+    if (slice_long_indices(self, length,
+                           &indices[0], &indices[1], &indices[2]) < 0) {
         return PyValue_NULL;
-    else
-        return PyValue_FromResult(Py_BuildValue("(NNN)", start, stop, step));
+    }
+    return PyValue_FromResult(_PyTuple_FromValues(indices, 3));
 }
 
 PyDoc_STRVAR(slice_indices_doc,

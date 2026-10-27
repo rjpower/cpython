@@ -8,6 +8,7 @@
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_bitutils.h"      // _Py_bit_length()
 #include "pycore_long.h"          // _PyLong_GetZero()
+#include "pycore_value.h"         // PyValue
 
 #include "clinic/mathintegermodule.c.h"
 
@@ -18,140 +19,158 @@ module math.integer
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=e3d09c1c90de7fa8]*/
 
 
+/* The greatest common divisor of two exact ints, a and b: computed in C
+   when both are inline, so that neither is boxed. */
+static PyValue
+value_gcd(PyValue a, PyValue b)
+{
+    if (PyValue_IsInlineInt(a) && PyValue_IsInlineInt(b)) {
+        // |INT32_MIN| does not fit in int32, but does in int64.
+        int64_t x = llabs((long long)PyValue_Int32(a));
+        int64_t y = llabs((long long)PyValue_Int32(b));
+        while (y != 0) {
+            int64_t t = x % y;
+            x = y;
+            y = t;
+        }
+        return PyValue_FromLongLong(x);
+    }
+    PyObject *a_o = PyValue_Object(a);
+    PyObject *b_o = PyValue_Object(b);
+    if (a_o == NULL || b_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(_PyLong_GCD(a_o, b_o));
+}
+
+
 /*[clinic input]
-math.integer.gcd
+math.integer.gcd -> value
 
     *integers as args: array
 
 Greatest Common Divisor.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_integer_gcd_impl(PyObject *module, const PyValue *args,
                       Py_ssize_t args_length)
-/*[clinic end generated code: output=b996dcea8367051b input=a90cde2ac5281551]*/
+/*[clinic end generated code: output=3674efabfd574c6a input=8043961e45fab6fa]*/
 {
     if (args_length == 0) {
-        return PyLong_FromLong(0);
+        return PyValue_FromInt32(0);
     }
 
     // Fast-path for the common case: gcd(int, int)
     if (args_length == 2 && PyValue_Type(args[0]) == &PyLong_Type
         && PyValue_Type(args[1]) == &PyLong_Type)
     {
-        PyObject *a = PyValue_Object(args[0]);
-        PyObject *b = PyValue_Object(args[1]);
-        if (a == NULL || b == NULL) {
-            return NULL;
-        }
-        return _PyLong_GCD(a, b);
+        return value_gcd(args[0], args[1]);
     }
 
-    PyObject *res = PyValue_Object(PyNumber_IndexValue(args[0]));
-    if (res == NULL) {
-        return NULL;
+    PyValue res = PyNumber_IndexValue(args[0]);
+    if (PyValue_IsNull(res)) {
+        return PyValue_NULL;
     }
     if (args_length == 1) {
-        Py_SETREF(res, PyNumber_Absolute(res));
-        return res;
+        return PyNumber_AbsoluteValue(res);
     }
 
-    PyObject *one = _PyLong_GetOne();  // borrowed ref
+    PyValue one = PyValue_FromInt32(1);
     for (Py_ssize_t i = 1; i < args_length; i++) {
-        PyObject *x = PyValue_Object(PyNumber_IndexValue(args[i]));
-        if (x == NULL) {
-            Py_DECREF(res);
-            return NULL;
+        PyValue x = PyNumber_IndexValue(args[i]);
+        if (PyValue_IsNull(x)) {
+            return PyValue_NULL;
         }
-        if (res == one) {
+        if (PyValue_Is(res, one)) {
             /* Fast path: just check arguments.
                It is okay to use identity comparison here. */
-            Py_DECREF(x);
             continue;
         }
-        Py_SETREF(res, _PyLong_GCD(res, x));
-        Py_DECREF(x);
-        if (res == NULL) {
-            return NULL;
+        res = value_gcd(res, x);
+        if (PyValue_IsNull(res)) {
+            return PyValue_NULL;
         }
     }
     return res;
 }
 
 
-static PyObject *
-long_lcm(PyObject *a, PyObject *b)
+/* Is v, an exact int, zero? */
+static int
+value_is_zero(PyValue v)
 {
-    PyObject *g, *m, *f, *ab;
+    if (PyValue_IsInlineInt(v)) {
+        return PyValue_Int32(v) == 0;
+    }
+    return _PyLong_IsZero((PyLongObject *)PyValue_ObjectBorrow(v));
+}
 
-    if (_PyLong_IsZero((PyLongObject *)a) || _PyLong_IsZero((PyLongObject *)b)) {
-        return PyLong_FromLong(0);
+static PyValue
+long_lcm(PyValue a, PyValue b)
+{
+    PyValue g, m, f;
+
+    if (value_is_zero(a) || value_is_zero(b)) {
+        return PyValue_FromInt32(0);
     }
-    g = _PyLong_GCD(a, b);
-    if (g == NULL) {
-        return NULL;
+    g = value_gcd(a, b);
+    if (PyValue_IsNull(g)) {
+        return PyValue_NULL;
     }
-    f = PyNumber_FloorDivide(a, g);
-    Py_DECREF(g);
-    if (f == NULL) {
-        return NULL;
+    f = PyNumber_FloorDivideValue(a, g);
+    if (PyValue_IsNull(f)) {
+        return PyValue_NULL;
     }
-    m = PyNumber_Multiply(f, b);
-    Py_DECREF(f);
-    if (m == NULL) {
-        return NULL;
+    m = PyNumber_MultiplyValue(f, b);
+    if (PyValue_IsNull(m)) {
+        return PyValue_NULL;
     }
-    ab = PyNumber_Absolute(m);
-    Py_DECREF(m);
-    return ab;
+    return PyNumber_AbsoluteValue(m);
 }
 
 
 /*[clinic input]
-math.integer.lcm
+math.integer.lcm -> value
 
     *integers as args: array
 
 Least Common Multiple.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_integer_lcm_impl(PyObject *module, const PyValue *args,
                       Py_ssize_t args_length)
-/*[clinic end generated code: output=1a2e4a0ee8b91abc input=261bddc85a136bdf]*/
+/*[clinic end generated code: output=71be139b5cebe723 input=2ad5a11819525e04]*/
 {
-    PyObject *res, *x;
+    PyValue res, x;
     Py_ssize_t i;
 
     if (args_length == 0) {
-        return PyLong_FromLong(1);
+        return PyValue_FromInt32(1);
     }
-    res = PyValue_Object(PyNumber_IndexValue(args[0]));
-    if (res == NULL) {
-        return NULL;
+    res = PyNumber_IndexValue(args[0]);
+    if (PyValue_IsNull(res)) {
+        return PyValue_NULL;
     }
     if (args_length == 1) {
-        Py_SETREF(res, PyNumber_Absolute(res));
-        return res;
+        return PyNumber_AbsoluteValue(res);
     }
 
-    PyObject *zero = _PyLong_GetZero();  // borrowed ref
+    PyValue zero = PyValue_FromInt32(0);
     for (i = 1; i < args_length; i++) {
-        x = PyValue_Object(PyNumber_IndexValue(args[i]));
-        if (x == NULL) {
-            Py_DECREF(res);
-            return NULL;
+        x = PyNumber_IndexValue(args[i]);
+        if (PyValue_IsNull(x)) {
+            return PyValue_NULL;
         }
-        if (res == zero) {
+        if (PyValue_Is(res, zero)) {
             /* Fast path: just check arguments.
                It is okay to use identity comparison here. */
-            Py_DECREF(x);
             continue;
         }
-        Py_SETREF(res, long_lcm(res, x));
-        Py_DECREF(x);
-        if (res == NULL) {
-            return NULL;
+        res = long_lcm(res, x);
+        if (PyValue_IsNull(res)) {
+            return PyValue_NULL;
         }
     }
     return res;

@@ -21,6 +21,7 @@
 #include "pycore_compile.h"
 #include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_flowgraph.h"     // _PyCfg_FromInstructionSequence()
+#include "pycore_list.h"          // _PyList_AppendValue()
 #include "pycore_regcfg.h"        // _PyRegCfg_Free()
 #include "pycore_pystate.h"       // _Py_GetConfig()
 #include "pycore_runtime.h"       // _Py_ID()
@@ -511,26 +512,26 @@ merge_consts_recursive(PyObject *const_cache, PyObject *o)
 Py_ssize_t
 _PyCompile_DictAddObj(PyObject *dict, PyObject *o)
 {
-    PyObject *v;
+    PyValue key = PyValue_FromObject(o);
+    PyValue v;
     Py_ssize_t arg;
 
-    if (PyDict_GetItemRef(dict, o, &v) < 0) {
+    int found = _PyDict_GetItemValue(dict, key, &v);
+    if (found < 0) {
         return ERROR;
     }
-    if (!v) {
+    if (!found) {
         arg = PyDict_GET_SIZE(dict);
-        v = PyLong_FromSsize_t(arg);
-        if (!v) {
+        v = PyValue_FromLongLong(arg);
+        if (PyValue_IsNull(v)) {
             return ERROR;
         }
-        if (PyDict_SetItem(dict, o, v) < 0) {
-            Py_DECREF(v);
+        if (_PyDict_SetItemValue((PyDictObject *)dict, key, v) < 0) {
             return ERROR;
         }
     }
     else
-        arg = PyLong_AsLong(v);
-    Py_DECREF(v);
+        arg = PyLong_AsLongValue(v);
     return arg;
 }
 
@@ -551,24 +552,21 @@ static PyObject *
 list2dict(PyObject *list)
 {
     Py_ssize_t i, n;
-    PyObject *v, *k;
     PyObject *dict = PyDict_New();
     if (!dict) return NULL;
 
     n = PyList_Size(list);
     for (i = 0; i < n; i++) {
-        v = PyLong_FromSsize_t(i);
-        if (!v) {
+        PyValue v = PyValue_FromLongLong(i);
+        if (PyValue_IsNull(v)) {
             Py_DECREF(dict);
             return NULL;
         }
-        k = PyList_GET_ITEM(list, i);
-        if (PyDict_SetItem(dict, k, v) < 0) {
-            Py_DECREF(v);
+        if (_PyDict_SetItemValue((PyDictObject *)dict,
+                                 PyList_GET_VALUE(list, i), v) < 0) {
             Py_DECREF(dict);
             return NULL;
         }
-        Py_DECREF(v);
     }
     return dict;
 }
@@ -585,7 +583,7 @@ static PyObject *
 dictbytype(PyObject *src, int scope_type, int flag, Py_ssize_t offset)
 {
     Py_ssize_t i = offset, num_keys, key_i;
-    PyObject *k, *v, *dest = PyDict_New();
+    PyObject *k, *dest = PyDict_New();
     PyObject *sorted_keys;
 
     assert(offset >= 0);
@@ -611,36 +609,36 @@ dictbytype(PyObject *src, int scope_type, int flag, Py_ssize_t offset)
 
     for (key_i = 0; key_i < num_keys; key_i++) {
         k = PyList_GET_ITEM(sorted_keys, key_i);
-        v = PyDict_GetItemWithError(src, k);
-        if (!v) {
-            if (!PyErr_Occurred()) {
+        PyValue v;
+        int found = _PyDict_GetItemValue(src, PyValue_FromObject(k), &v);
+        if (found <= 0) {
+            if (found == 0) {
                 PyErr_SetObject(PyExc_KeyError, k);
             }
             Py_DECREF(sorted_keys);
             Py_DECREF(dest);
             return NULL;
         }
-        long vi = PyLong_AsLong(v);
+        long vi = PyLong_AsLongValue(v);
         if (vi == -1 && PyErr_Occurred()) {
             Py_DECREF(sorted_keys);
             Py_DECREF(dest);
             return NULL;
         }
         if (SYMBOL_TO_SCOPE(vi) == scope_type || vi & flag) {
-            PyObject *item = PyLong_FromSsize_t(i);
-            if (item == NULL) {
+            PyValue item = PyValue_FromLongLong(i);
+            if (PyValue_IsNull(item)) {
                 Py_DECREF(sorted_keys);
                 Py_DECREF(dest);
                 return NULL;
             }
             i++;
-            if (PyDict_SetItem(dest, k, item) < 0) {
+            if (_PyDict_SetItemValue((PyDictObject *)dest,
+                                     PyValue_FromObject(k), item) < 0) {
                 Py_DECREF(sorted_keys);
-                Py_DECREF(item);
                 Py_DECREF(dest);
                 return NULL;
             }
-            Py_DECREF(item);
         }
     }
     Py_DECREF(sorted_keys);
@@ -1094,11 +1092,11 @@ _PyCompile_GetRefType(compiler *c, PyObject *name)
 static int
 dict_lookup_arg(PyObject *dict, PyObject *name)
 {
-    PyObject *v = PyDict_GetItemWithError(dict, name);
-    if (v == NULL) {
+    PyValue v;
+    if (_PyDict_GetItemValue(dict, PyValue_FromObject(name), &v) <= 0) {
         return ERROR;
     }
-    return PyLong_AsLong(v);
+    return PyLong_AsLongValue(v);
 }
 
 int
@@ -1280,23 +1278,21 @@ _PyCompile_AddDeferredAnnotation(compiler *c, stmt_ty s,
         return ERROR;
     }
     Py_DECREF(ptr);
-    PyObject *index;
+    PyValue index;
     if (c->u->u_scope_type == COMPILE_SCOPE_MODULE || c->u->u_in_conditional_block) {
-        index = PyLong_FromLong(c->u->u_next_conditional_annotation_index);
-        if (index == NULL) {
+        index = PyValue_FromLongLong(c->u->u_next_conditional_annotation_index);
+        // The caller takes the index as an object.
+        *conditional_annotation_index = PyValue_Object(index);
+        if (*conditional_annotation_index == NULL) {
             return ERROR;
         }
-        *conditional_annotation_index = Py_NewRef(index);
         c->u->u_next_conditional_annotation_index++;
     }
     else {
-        index = PyLong_FromLong(-1);
-        if (index == NULL) {
-            return ERROR;
-        }
+        index = PyValue_FromLongLong(-1);
     }
-    int rc = PyList_Append(c->u->u_conditional_annotation_indices, index);
-    Py_DECREF(index);
+    int rc = _PyList_AppendValue(
+        (PyListObject *)c->u->u_conditional_annotation_indices, index);
     RETURN_IF_ERROR(rc);
     return SUCCESS;
 }

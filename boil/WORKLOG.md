@@ -1517,3 +1517,27 @@ failure, only at the threshold (recorded for step 7/10). Remaining:
 __slots__, sets, the hot callers that still box (reserved dict watchers,
 the unspecialised attribute lookup, enumerate over lists), the 8-byte
 header, the weakref side table, ports categorisation, §18.
+
+### 2026-10-27 01:50 — step 6a milestone 2: every container holds PyValue; the header is one word
+
+Since milestone 1: a boxing accessor with no error channel collects,
+retries once, then aborts naming the accessor (b164b4ad838); __slots__
+hold PyValue (ab31d98bf69; float 1266M -> 859M per loop, -32%); sets
+hold PyValue (0b8cbe360c5); the hot callers take values (d408626d7af,
+8b9e4756fd4: list append, the core dict watchers, generic getattr,
+enumerate over list and tuple iterators, STORE_GLOBAL; richards makes
+zero boxes per loop, spectral_norm 1420M -> 1179M); float ** float with
+a positive base has a per-operation inline handler (85449792f97, magic
+3719; nbody 1007M -> 778M, zero boxes). Per loop now against step 1:
+richards 580M vs 578M, go 1265M vs 1245M, nbody 778M vs 1030M, float
+859M vs 779M (its 300k boxes per loop are arguments to C math functions,
+inherent until 6b). The object header is one word, type pointer and
+sixteen flag bits (76232f16b53): getsizeof of int/float/3-tuple/10-list/
+small instance 32/24/72/136/48 -> 24/16/64/128/40; the collector's
+"is this block an object" test moves from a header magic to an object
+map, one bit per 8-byte word per 32 MiB chunk. Ruled: PyGC_Head, now a
+zeroed 16-byte pre-header, goes in 6a after the weakref side table.
+Ports on cpython-3.16-value-v0: six, attrs, pycparser, markupsafe and
+cython (pure) pass; cffi and pyyaml fail on `&PyTuple_GET_ITEM` as an
+lvalue and `ob_item` as `PyObject**`; numpy is blocked on the same
+Cython utility code. That is 6b's input.

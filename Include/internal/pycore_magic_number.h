@@ -318,6 +318,8 @@ Known values:
     Python 3.16a1 3718 (marshal shares the references of equal int32 and float values)
     Python 3.16a1 3719 (BINARY_OP_POWER_FLOAT)
     Python 3.16a1 3720 (remove BINARY_OP_POWER_FLOAT)
+    Python 3.16a1 3721 (the shape in the header: shape handlers on by default,
+                        48-byte attribute feedback entries)
 
     Python 3.17 will start with 3750
 
@@ -327,7 +329,7 @@ Known values:
 
 */
 
-#define PYC_MAGIC_NUMBER 3720
+#define PYC_MAGIC_NUMBER 3721
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

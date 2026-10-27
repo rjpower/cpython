@@ -1407,7 +1407,10 @@ def write_uop(
     storage = Storage.for_uop(stack, uop, emitter.out)
     for cache in uop.caches:
         if cache.name != "unused":
-            if cache.size == 4 and cache.name.endswith("_value"):
+            if cache.name in ("shape", "shape_to"):
+                # Shape pointers, borrowed from the owner's type.
+                value = f"_PyShape *{cache.name} = fb->{cache.name};"
+            elif cache.size == 4 and cache.name.endswith("_value"):
                 value = f"PyValue {cache.name} = fb->{cache.name};"
             elif cache.size == 4:
                 value = f"PyObject *{cache.name} = (PyObject *)fb->{cache.name};"

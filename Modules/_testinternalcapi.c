@@ -2187,8 +2187,8 @@ get_object_dict_values(PyObject *self, PyValue arg)
     return PyValue_FromResult(res);
 }
 
-#ifdef Py_SHAPES
-// The shape index of an object with inline values, or None if it has none.
+// The index of the shape of an object with inline values in its type's
+// table, or None in dictionary mode or for a type without inline values.
 static PyValue
 get_object_shape(PyObject *self, PyValue arg)
 {
@@ -2199,8 +2199,8 @@ get_object_shape(PyObject *self, PyValue arg)
     if (!_PyType_HasFeature(Py_TYPE(obj), Py_TPFLAGS_INLINE_VALUES)) {
         return PyValue_FromObject(Py_None);
     }
-    uint8_t shape = _PyObject_InlineValues(obj)->shape;
-    if (shape == _Py_SHAPE_NONE) {
+    int shape = _PyShape_Index(_PyObject_SHAPE(obj));
+    if (shape == _Py_SHAPE_INDEX_DICT) {
         return PyValue_FromObject(Py_None);
     }
     return PyValue_FromResult(PyLong_FromLong(shape));
@@ -2221,9 +2221,8 @@ get_type_shape_count(PyObject *self, PyValue arg)
         return PyValue_NULL;
     }
     return PyValue_FromResult(
-        PyLong_FromLong(_PyType_Shapes((PyTypeObject *)type)->nshapes));
+        PyLong_FromLong(_PyType_ShapeCount((PyTypeObject *)type)));
 }
-#endif
 
 
 static PyObject*
@@ -3791,10 +3790,8 @@ static PyMethodDef module_functions[] = {
                               check_pyobject_uninitialized_is_freed, METH_NOARGS},
     {"pymem_getallocatorsname", test_pymem_getallocatorsname, METH_NOARGS},
     {"get_object_dict_values", _PyCFunction_CAST(get_object_dict_values), METH_O},
-#ifdef Py_SHAPES
     {"get_object_shape", _PyCFunction_CAST(get_object_shape), METH_O},
     {"get_type_shape_count", _PyCFunction_CAST(get_type_shape_count), METH_O},
-#endif
     {"hamt", new_hamt, METH_NOARGS},
     {"dict_getitem_knownhash",  dict_getitem_knownhash,          METH_VARARGS},
     {"create_interpreter", _PyCFunction_CAST(create_interpreter),
@@ -3918,11 +3915,9 @@ module_exec(PyObject *module)
         return 1;
     }
 
-#ifdef Py_SHAPES
     if (PyModule_AddIntMacro(module, _Py_SHAPE_MAX_PER_TYPE) < 0) {
         return 1;
     }
-#endif
 
 #ifdef _Py_WITH_FRAME_POINTERS
     if (PyModule_AddIntMacro(module, _Py_WITH_FRAME_POINTERS) < 0) {

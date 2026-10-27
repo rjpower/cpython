@@ -15,8 +15,8 @@ extern "C" {
 PyAPI_DATA(PyTypeObject) PyDict_Type;
 
 #define PyDict_Check(op) \
-                 PyType_FastSubclass(Py_TYPE(op), Py_TPFLAGS_DICT_SUBCLASS)
-#define PyDict_CheckExact(op) Py_IS_TYPE((op), &PyDict_Type)
+                 _PyObject_FastSubclass(op, Py_TPFLAGS_DICT_SUBCLASS)
+#define PyDict_CheckExact(op) _Py_IS_ROOT_SHAPE((op), &PyDict_Type)
 
 PyAPI_FUNC(PyObject *) PyDict_New(void);
 PyAPI_FUNC(PyObject *) PyDict_GetItem(PyObject *mp, PyObject *key);

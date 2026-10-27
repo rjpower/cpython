@@ -9,7 +9,7 @@ extern "C" {
 
 PyAPI_DATA(PyTypeObject) PySentinel_Type;
 
-#define PySentinel_CheckExact(op) Py_IS_TYPE((op), &PySentinel_Type)
+#define PySentinel_CheckExact(op) _Py_IS_ROOT_SHAPE((op), &PySentinel_Type)
 
 /* Alias as long as subclasses are not allowed. */
 #define PySentinel_Check(op) PySentinel_CheckExact(op)

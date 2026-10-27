@@ -299,8 +299,8 @@ id(foo)''')
 
         self.assertEqual(gdb_repr, '0x0')
 
-    # The type is the header word's bits 0-47.
-    TYPE = '((PyTypeObject *)(v->ob_header & 0xffffffffffff))'
+    # The header word's bits 0-47 are the shape, whose type field is the type.
+    TYPE = '(((struct _PyShape *)(v->ob_header & 0xffffffffffff))->type)'
 
     def test_NULL_ob_type(self):
         'Ensure that a PyObject* with NULL ob_type is handled gracefully'

@@ -241,6 +241,12 @@ struct _typeobject {
     _Py_iteritemfunc _tp_iteritem;
 
     void *_tp_cache;
+
+    /* The shape of every object of this type that has no attributes in
+       slots; the only shape of a type without attribute slots.  Filled by
+       PyType_Ready(), and for the static builtin types also at runtime
+       start, before any static object is used (_PyTypes_InitRootShapes()). */
+    struct _PyShape tp_root_shape;
 };
 
 #define _Py_ATTR_CACHE_UNUSED (30000)  // (see tp_versions_used)
@@ -280,6 +286,7 @@ typedef struct _heaptypeobject {
     PyBufferProcs as_buffer;
     PyObject *ht_name, *ht_slots, *ht_qualname;
     struct _dictkeysobject *ht_cached_keys;
+    struct _PyTypeShapes *ht_shapes; // the shapes after the root, if any
     PyObject *ht_module;
     char *_ht_tpname;  // Storage for "tp_name"; see PyType_FromModuleAndSpec
     void *ht_token;  // Storage for the "Py_tp_token" slot

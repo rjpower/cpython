@@ -98,7 +98,7 @@ FRAME_OWNED_BY_INTERPRETER = 3
 MAX_OUTPUT_LEN=1024
 
 # Include/object.h: the type pointer is the header word's bits 0-47.
-HEADER_TYPE_MASK = (1 << 48) - 1
+HEADER_SHAPE_MASK = (1 << 48) - 1
 
 hexdigits = "0123456789abcdef"
 
@@ -203,7 +203,8 @@ class PyObjectPtr(object):
            PyVarObject ob_base;
         so that the "ob_size" field is located insize the "ob_base" field, and
         the "ob_type" is most easily accessed by casting back to a (PyObject*).
-        The type is the low 48 bits of the header word, "ob_header".
+        The low 48 bits of the header word, "ob_header", are the object's
+        shape, and the shape's "type" field is its type.
         '''
         if self.is_null():
             raise NullPyObjectPtr(self)
@@ -211,8 +212,13 @@ class PyObjectPtr(object):
         if name == 'ob_type':
             pyo_ptr = self._gdbval.cast(PyObjectPtr.get_gdb_type())
             header = int(pyo_ptr.dereference()['ob_header'])
-            return gdb.Value(header & HEADER_TYPE_MASK).cast(
-                PyTypeObjectPtr.get_gdb_type())
+            shape = header & HEADER_SHAPE_MASK
+            if shape == 0:
+                return gdb.Value(0).cast(PyTypeObjectPtr.get_gdb_type())
+            # gdb.MemoryError, a RuntimeError, if the header is corrupt.
+            shape_ptr = gdb.Value(shape).cast(
+                gdb.lookup_type('struct _PyShape').pointer())
+            return shape_ptr.dereference()['type']
 
         if name == 'ob_size':
             pyo_ptr = self._gdbval.cast(PyVarObjectPtr.get_gdb_type())

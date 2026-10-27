@@ -147,7 +147,7 @@ struct PyCodeObject _PyCode_DEF(1);
 
 PyAPI_DATA(PyTypeObject) PyCode_Type;
 
-#define PyCode_Check(op) Py_IS_TYPE((op), &PyCode_Type)
+#define PyCode_Check(op) _Py_IS_ROOT_SHAPE((op), &PyCode_Type)
 
 static inline Py_ssize_t PyCode_GetNumFree(PyCodeObject *op) {
     assert(PyCode_Check(op));

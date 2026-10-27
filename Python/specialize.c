@@ -338,6 +338,7 @@ typedef struct {
     uint32_t aux;
     uint32_t index;
     const void *descr;
+    _PyShape *shape;
 } fb_row;
 
 static _PyFbBlock *
@@ -367,6 +368,7 @@ fb_row_of(_PyFbHeader *h)
             row.aux = ((_PyFbAttr *)h)->dict_version;
             row.index = ((_PyFbAttr *)h)->index;
             row.descr = ((_PyFbAttr *)h)->descr;
+            row.shape = ((_PyFbAttr *)h)->shape;
             break;
         case FB_CALL:
             row.type_version = ((_PyFbCall *)h)->func_version;
@@ -385,6 +387,7 @@ fb_put_row(_PyFbPoly *poly, int i, fb_row row, int opcode)
     poly->aux[i] = row.aux;
     poly->index[i] = row.index;
     poly->descr[i] = row.descr;
+    poly->shape[i] = row.shape;
     poly->handler[i] = (uint16_t)opcode;
 }
 
@@ -499,7 +502,8 @@ fb_record(_PyInstr *instr, _PyFbHeader *h, int opcode)
     int i = 0;
     while (i < FB_POLY_SIZE && poly->handler[i] != 0 &&
            (poly->type_version[i] != row.type_version ||
-            poly->aux[i] != row.aux || poly->handler[i] != opcode)) {
+            poly->aux[i] != row.aux || poly->shape[i] != row.shape ||
+            poly->handler[i] != opcode)) {
         i++;
     }
     if (i == FB_POLY_SIZE) {
@@ -775,11 +779,10 @@ analyze_descriptor_store(PyTypeObject *type, PyObject *name, PyObject **descr, u
     return classify_descriptor(descriptor, false);
 }
 
-#ifdef Py_SHAPES
 /* Whether the site specialised for another shape of the same type before,
  * which the poly table that fb_begin() filled records. */
 static bool
-fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, uint8_t shape)
+fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, _PyShape *shape)
 {
     _PyFbHeader *h = instr_fb(instr);
     if (h->poly == 0) {
@@ -790,7 +793,7 @@ fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, uint8_t shape)
         int opcode = poly->handler[i];
         if ((opcode == LOAD_ATTR_SHAPE || opcode == STORE_ATTR_SHAPE ||
              opcode == STORE_ATTR_SHAPE_ADD) &&
-            poly->type_version[i] == tp_version && poly->aux[i] != shape)
+            poly->type_version[i] == tp_version && poly->shape[i] != shape)
         {
             return true;
         }
@@ -799,30 +802,28 @@ fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, uint8_t shape)
 }
 
 /* Fill in the shape fields of FB for an access to slot INDEX of OWNER, and
- * return the shape opcode to use, or 0 if OWNER has no shape or, for a load,
- * lacks the slot.  A site that sees several shapes of one type, as with
- * attributes that only some instances set, keeps to the instance value
- * handlers, which check presence instead of the shape. */
+ * return the shape opcode to use, or 0 if OWNER is in dictionary mode or,
+ * for a load, lacks the slot.  A site that sees several shapes of one type,
+ * as with attributes that only some instances set, keeps to the instance
+ * value handlers, which check presence instead of the shape. */
 static int
 specialize_shape_access(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
-                        PyTypeObject *type, unsigned int tp_version,
-                        Py_ssize_t index, int base_op)
+                        unsigned int tp_version, Py_ssize_t index, int base_op)
 {
-    PyDictValues *values = _PyObject_InlineValues(owner);
-    uint8_t shape = values->shape;
-    if (shape == _Py_SHAPE_NONE || fb_saw_other_shape(instr, tp_version, shape)) {
+    _PyShape *shape = _PyObject_SHAPE(owner);
+    if (_PyShape_IsDictMode(shape) || fb_saw_other_shape(instr, tp_version, shape)) {
         return 0;
     }
     int opcode;
-    if (_PyShape_HasSlot(type, shape, index)) {
+    if (_PyShape_HasSlot(shape, index)) {
         opcode = base_op == LOAD_ATTR ? LOAD_ATTR_SHAPE : STORE_ATTR_SHAPE;
     }
     else if (base_op == LOAD_ATTR) {
         return 0;
     }
     else {
-        uint8_t shape_to = _PyShape_Add(type, shape, index);
-        if (shape_to == _Py_SHAPE_NONE) {
+        _PyShape *shape_to = _PyShape_Add(shape, index);
+        if (shape_to == NULL) {
             return 0;
         }
         fb->shape_to = shape_to;
@@ -831,7 +832,6 @@ specialize_shape_access(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
     fb->shape = shape;
     return opcode;
 }
-#endif
 
 static int
 specialize_dict_access_inline(
@@ -857,14 +857,12 @@ specialize_dict_access_inline(
     char *value_addr = (char *)&_PyObject_InlineValues(owner)->values[index];
     fb->offset = (uint32_t)(value_addr - (char *)owner);
     fb->type_version = tp_version;
-#ifdef Py_SHAPES
-    int shape_op = specialize_shape_access(owner, instr, fb, type, tp_version,
+    int shape_op = specialize_shape_access(owner, instr, fb, tp_version,
                                            index, base_op);
     if (shape_op != 0) {
         specialize(instr, shape_op);
         return 1;
     }
-#endif
     specialize(instr, values_op);
     return 1;
 }

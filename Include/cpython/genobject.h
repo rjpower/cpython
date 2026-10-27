@@ -14,7 +14,7 @@ typedef struct _PyGenObject PyGenObject;
 PyAPI_DATA(PyTypeObject) PyGen_Type;
 
 #define PyGen_Check(op) PyObject_TypeCheck((op), &PyGen_Type)
-#define PyGen_CheckExact(op) Py_IS_TYPE((op), &PyGen_Type)
+#define PyGen_CheckExact(op) _Py_IS_ROOT_SHAPE((op), &PyGen_Type)
 
 Py_DEPRECATED(3.16) PyAPI_FUNC(PyObject *) PyGen_New(PyFrameObject *);
 Py_DEPRECATED(3.16) PyAPI_FUNC(PyObject *) PyGen_NewWithQualName(PyFrameObject *,
@@ -28,7 +28,7 @@ typedef struct _PyCoroObject PyCoroObject;
 
 PyAPI_DATA(PyTypeObject) PyCoro_Type;
 
-#define PyCoro_CheckExact(op) Py_IS_TYPE((op), &PyCoro_Type)
+#define PyCoro_CheckExact(op) _Py_IS_ROOT_SHAPE((op), &PyCoro_Type)
 Py_DEPRECATED(3.16) PyAPI_FUNC(PyObject *) PyCoro_New(PyFrameObject *,
     PyObject *name, PyObject *qualname);
 
@@ -43,9 +43,9 @@ PyAPI_DATA(PyTypeObject) _PyAsyncGenASend_Type;
 Py_DEPRECATED(3.16) PyAPI_FUNC(PyObject *) PyAsyncGen_New(PyFrameObject *,
     PyObject *name, PyObject *qualname);
 
-#define PyAsyncGen_CheckExact(op) Py_IS_TYPE((op), &PyAsyncGen_Type)
+#define PyAsyncGen_CheckExact(op) _Py_IS_ROOT_SHAPE((op), &PyAsyncGen_Type)
 
-#define PyAsyncGenASend_CheckExact(op) Py_IS_TYPE((op), &_PyAsyncGenASend_Type)
+#define PyAsyncGenASend_CheckExact(op) _Py_IS_ROOT_SHAPE((op), &_PyAsyncGenASend_Type)
 
 #undef _PyGenObject_HEAD
 

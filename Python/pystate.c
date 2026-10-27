@@ -2,6 +2,7 @@
 /* Thread and interpreter state structures and their interfaces */
 
 #include "Python.h"
+#include "pycore_shape.h"       // _PyTypes_InitRootShapes()
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_audit.h"         // _Py_AuditHookEntry
 #include "pycore_backoff.h"       // JUMP_BACKWARD_INITIAL_VALUE, SIDE_EXIT_INITIAL_VALUE
@@ -368,6 +369,9 @@ _PyRuntimeState_Init(_PyRuntimeState *runtime)
     if (_PyStatus_EXCEPTION(status)) {
         return status;
     }
+
+    // Before any static object is used: Py_TYPE() reads the root shapes.
+    _PyTypes_InitRootShapes();
 
     init_runtime(runtime, open_code_hook, open_code_userdata, audit_hook_head,
                  unicode_next_index);

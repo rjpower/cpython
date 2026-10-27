@@ -13,7 +13,7 @@ extern "C" {
 
 PyAPI_DATA(PyTypeObject) PyCFunction_Type;
 
-#define PyCFunction_CheckExact(op) Py_IS_TYPE((op), &PyCFunction_Type)
+#define PyCFunction_CheckExact(op) _Py_IS_ROOT_SHAPE((op), &PyCFunction_Type)
 #define PyCFunction_Check(op) PyObject_TypeCheck((op), &PyCFunction_Type)
 
 typedef PyObject *(*PyCFunction)(PyObject *, PyObject *);

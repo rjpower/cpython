@@ -34,7 +34,7 @@ SOURCE_DIRS = ("Objects", "Python", "Modules", "Include")
 # Conditionals taken as false; every other #if/#ifdef is taken as true, and
 # every #ifndef too.
 FALSE_MACROS = {"Py_GIL_DISABLED", "MS_WINDOWS", "__APPLE__", "Py_TRACE_REFS",
-                "Py_STATS", "_Py_TIER2", "Py_SHAPES", "__EMSCRIPTEN__"}
+                "Py_STATS", "_Py_TIER2", "__EMSCRIPTEN__"}
 
 # The PyTypeObject fields in order, after PyVarObject_HEAD_INIT.
 TYPE_FIELDS = [

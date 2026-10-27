@@ -2,6 +2,7 @@
 /* Generic object operations; and implementation of None */
 
 #include "Python.h"
+#include "pycore_shape.h"       // _PyTypes_InitRootShapes()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
 #include "pycore_context.h"       // _PyContextTokenMissing_Type
@@ -2412,6 +2413,22 @@ static PyTypeObject* static_types[_Py_NUM_MANAGED_PREINITIALIZED_TYPES] = {
 };
 
 
+/* The root shapes of the static builtin types, filled before any static
+   object is used: a static object's header points to its type's root shape,
+   whose type field the positional initializers of PyTypeObject leave NULL.
+   PyType_Ready() fills them again. */
+void
+_PyTypes_InitRootShapes(void)
+{
+    for (size_t i=0; i < Py_ARRAY_LENGTH(static_types); i++) {
+        if (static_types[i] != NULL) {
+            _PyShape_InitRoot(static_types[i]);
+        }
+    }
+    _PyExc_InitRootShapes();
+}
+
+
 PyStatus
 _PyTypes_InitTypes(PyInterpreterState *interp)
 {
@@ -2473,9 +2490,9 @@ static inline void
 new_reference(PyObject *op)
 {
     // A new object has no collector flags, whatever its block held before,
-    // and its type, if the caller set it first, is kept.  The object map
+    // and its shape, if the caller set it first, is kept.  The object map
     // tells the collector's heap walk that the block holds an object.
-    op->ob_header &= _Py_HEADER_TYPE_MASK;
+    op->ob_header &= _Py_HEADER_SHAPE_MASK;
     _PyGC_ObjectMapSet(op);
     _PyReftracerTrack(op, PyRefTracer_CREATE);
 }

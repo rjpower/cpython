@@ -1,6 +1,7 @@
 /* Type object implementation */
 
 #include "Python.h"
+#include "pycore_shape.h"       // _PyShape_InitRoot()
 #include "pycore_abstract.h"      // _PySequence_IterSearch()
 #include "pycore_call.h"          // _PyObject_VectorcallTstate()
 #include "pycore_code.h"          // CO_FAST_FREE
@@ -330,6 +331,7 @@ type_set_flags(PyTypeObject *tp, unsigned long flags)
 {
     ASSERT_WORLD_STOPPED_OR_NEW_TYPE(tp);
     tp->tp_flags = flags;
+    _PyShape_SetTypeFlags(tp, flags);
 }
 
 static void
@@ -969,6 +971,8 @@ set_version_unlocked(PyTypeObject *tp, unsigned int version)
         tp->tp_versions_used++;
     }
     FT_ATOMIC_STORE_UINT_RELAXED(tp->tp_version_tag, version);
+    // Every shape of the type carries its version, for the attribute guards.
+    _PyShape_SetTypeVersion(tp, version);
     if (version != 0) {
         PyTypeObject **slot =
             interp->types.type_version_cache
@@ -5999,7 +6003,7 @@ _PyType_SetFlags(PyTypeObject *self, unsigned long mask, unsigned long flags)
     if (new_flags != self->tp_flags) {
         types_stop_world();
         // can't use new_flags here since they could be out-of-date
-        self->tp_flags = (self->tp_flags & ~mask) | flags;
+        type_set_flags(self, (self->tp_flags & ~mask) | flags);
         types_start_world();
     }
 }
@@ -6556,6 +6560,7 @@ type_dealloc(PyObject *self)
     if (et->ht_cached_keys) {
         _PyDict_RemoveKeysForClass(et);
     }
+    _PyShape_FreeTypeShapes(et);
     Py_XDECREF(et->ht_module);
     PyMem_Free(et->_ht_tpname);
     et->ht_token = NULL;
@@ -6685,6 +6690,7 @@ type___sizeof___impl(PyTypeObject *self)
         size = sizeof(PyHeapTypeObject);
         if (et->ht_cached_keys)
             size += _PyDict_KeysSize(et->ht_cached_keys);
+        size += _PyShape_TypeShapesSize(et);
     }
     else {
         size = sizeof(PyTypeObject);
@@ -6742,6 +6748,10 @@ type_traverse(PyObject *self, visitproc visit, void *arg)
     _Py_VISIT_ATOMIC(ht->ht_name);
     _Py_VISIT_ATOMIC(ht->ht_qualname);
     Py_VISIT(ht->ht_slots);
+    int err = _PyShape_TraverseTypeShapes(ht, visit, arg);
+    if (err) {
+        return err;
+    }
     return _PyDict_TraverseKeysForClass(ht, visit, arg);
 }
 
@@ -7328,6 +7338,12 @@ object_set_class_world_stopped(PyObject *self, PyTypeObject *newto)
         }
 
         Py_SET_TYPE(self, newto);
+        if (newto->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
+            // The inline values were detached above: the attributes are
+            // in the dict.
+            assert(oldto->tp_flags & Py_TPFLAGS_INLINE_VALUES);
+            _PyObject_SetDictModeShape(self);
+        }
 
         return 0;
     }
@@ -8630,7 +8646,7 @@ type_ready_set_type(PyTypeObject *type)
        not NULL (it's initialized to &PyType_Type).      But coverity doesn't
        know that. */
     PyTypeObject *base = type->tp_base;
-    if (Py_IS_TYPE(type, NULL) && base != NULL) {
+    if (_PyObject_SHAPE(type) == NULL && base != NULL) {
         Py_SET_TYPE(type, Py_TYPE(base));
     }
 
@@ -9019,6 +9035,10 @@ type_ready_managed_dict(PyTypeObject *type)
     }
     if (type->tp_itemsize == 0) {
         type_add_flags(type, Py_TPFLAGS_INLINE_VALUES);
+        if (et->ht_shapes == NULL && _PyShape_InitTypeShapes(et) < 0) {
+            PyErr_NoMemory();
+            return -1;
+        }
     }
     return 0;
 }
@@ -9076,6 +9096,9 @@ static int
 type_ready(PyTypeObject *type, int initial, int add_subclasses)
 {
     ASSERT_TYPE_LOCK_HELD();
+
+    // Objects of the type have its root shape: fill it before any exists.
+    _PyShape_InitRoot(type);
 
     _PyObject_ASSERT((PyObject *)type, !is_readying(type));
     start_readying(type);

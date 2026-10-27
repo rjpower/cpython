@@ -11,7 +11,7 @@ extern "C" {
 
 extern PyTypeObject _PyInterpolation_Type;
 
-#define _PyInterpolation_CheckExact(op) Py_IS_TYPE((op), &_PyInterpolation_Type)
+#define _PyInterpolation_CheckExact(op) _Py_IS_ROOT_SHAPE((op), &_PyInterpolation_Type)
 
 PyAPI_FUNC(PyObject *) _PyInterpolation_Build(PyObject *value, PyObject *str,
                                               int conversion, PyObject *format_spec);

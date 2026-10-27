@@ -114,12 +114,15 @@ whose size is determined when the object is allocated.
 #if SIZEOF_VOID_P != 8
 #  error "the object header needs 64-bit pointers"
 #endif
-/* The header is one word: the type pointer in bits 0-47 (no user-space
+/* The header is one word: the shape pointer in bits 0-47 (no user-space
  * pointer is wider) and sixteen flag bits in 48-63, ob_flags, which belong to
- * the collector (see _Py_GC_MARKED_FLAG and the flags beside it).  Read the
- * type with Py_TYPE(), which masks the flags off, and write it with
- * Py_SET_TYPE(), which keeps them.  _Py_ANONYMOUS lets C99 and C++03
- * accept a struct whose only member is the anonymous union. */
+ * the collector (see _Py_GC_MARKED_FLAG and the flags beside it).  The shape
+ * (struct _PyShape below; boil/design/09-object-protocol.md) says which type
+ * the object has and, for an instance with attribute slots, which attributes
+ * it has and where.  Read the type with Py_TYPE(), which follows the shape,
+ * and set it with Py_SET_TYPE(), which stores the type's root shape and keeps
+ * the flags.  _Py_ANONYMOUS lets C99 and C++03 accept a struct whose only
+ * member is the anonymous union. */
 _Py_ANONYMOUS struct _object {
     _Py_ANONYMOUS union {
         uintptr_t ob_header;
@@ -137,7 +140,44 @@ _Py_ANONYMOUS struct _object {
 };
 #endif
 
-#define _Py_HEADER_TYPE_MASK (((uintptr_t)1 << 48) - 1)
+#define _Py_HEADER_SHAPE_MASK (((uintptr_t)1 << 48) - 1)
+
+#ifndef _Py_OPAQUE_PYOBJECT
+/* A shape: the hidden class of an object (boil/design/09-object-protocol.md).
+ * Every object has one, and its header points to it.  The type owns its
+ * shapes; a type whose instances have no attribute slots has exactly one,
+ * its root shape, which is embedded in the type object (tp_root_shape), so
+ * that the header of a static object is an address constant.
+ *
+ * Every field but type_version and flags is fixed when the shape is made.
+ * type_version mirrors type->tp_version_tag: the type writes it into each of
+ * its shapes whenever its version changes, so that an attribute guard is
+ * "the header is this shape" and "the shape's type_version is this
+ * version".  flags is a copy of type->tp_flags, rewritten whenever the type's
+ * flags change; the Check macros read it, and only for bits fixed when the
+ * type is readied (the *_SUBCLASS bits and Py_TPFLAGS_HAVE_GC).  The fields
+ * after them are the shape tree, which only the core reads
+ * (Include/internal/pycore_shape.h). */
+typedef struct _PyShapeSlot _PyShapeSlot;
+struct _PyShape {
+    PyTypeObject *type;             // the owner: Py_TYPE() of every object with this shape
+    unsigned long flags;            // a copy of type->tp_flags
+    uint32_t type_version;          // type->tp_version_tag
+    uint16_t nslots;                // slots in use, holes included
+    uint8_t shape_kind;             // _PyShapeKind (pycore_shape.h)
+    uint8_t edge_slot;              // the slot the edge from parent filled
+    struct _PyShape *parent;        // NULL for a root or dictionary-mode shape
+    PyObject *edge_name;            // the name the edge from parent added
+    struct _PyShape *children;      // the transitions: first child
+    struct _PyShape *sibling;       // the next child of parent
+    _PyShapeSlot *slots;            // nslots entries (pycore_shape.h)
+};
+typedef struct _PyShape _PyShape;
+
+/* The shape of OB: the header with the collector's flags masked off. */
+#define _PyObject_SHAPE(ob) \
+    ((_PyShape *)(_PyObject_CAST(ob)->ob_header & _Py_HEADER_SHAPE_MASK))
+#endif
 
 /* Cast argument to PyObject* type. */
 #define _PyObject_CAST(op) _Py_CAST(PyObject*, (op))
@@ -173,11 +213,6 @@ PyAPI_FUNC(void) Py_SET_SIZE(PyVarObject *ob, Py_ssize_t size);
 
 #ifndef _Py_OPAQUE_PYOBJECT
 
-static inline void
-Py_SET_TYPE(PyObject *ob, PyTypeObject *type)
-{
-    ob->ob_header = (ob->ob_header & ~_Py_HEADER_TYPE_MASK) | (uintptr_t)type;
-}
 
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 < _Py_PACK_VERSION(3, 11)
 // Non-limited API & limited API 3.11 & below: use static inline functions and
@@ -186,7 +221,6 @@ Py_SET_TYPE(PyObject *ob, PyTypeObject *type)
 #  define Py_SIZE(ob) _Py_SIZE_impl(_PyObject_CAST(ob))
 #  define Py_IS_TYPE(ob, type) _Py_IS_TYPE_impl(_PyObject_CAST(ob), (type))
 #  define Py_SET_SIZE(ob, size) _Py_SET_SIZE_impl(_PyVarObject_CAST(ob), (size))
-#  define Py_SET_TYPE(ob, type) Py_SET_TYPE(_PyObject_CAST(ob), type)
 #elif Py_LIMITED_API+0 < _Py_PACK_VERSION(3, 15)
 // Limited API 3.11-3.14: use static inline functions, without casts
 #  define Py_SIZE(ob) _Py_SIZE_impl(ob)
@@ -203,7 +237,13 @@ Py_SET_TYPE(PyObject *ob, PyTypeObject *type)
 static inline
 PyTypeObject* _Py_TYPE_impl(PyObject *ob)
 {
-    return (PyTypeObject *)(ob->ob_header & _Py_HEADER_TYPE_MASK);
+#ifdef Py_DEBUG
+    // An object whose header has no shape, or whose type's root shape was
+    // never filled (a static type outside the early pass, never readied,
+    // whose objects were not made by _PyObject_Init).
+    assert(_PyObject_SHAPE(ob) != NULL && _PyObject_SHAPE(ob)->type != NULL);
+#endif
+    return _PyObject_SHAPE(ob)->type;
 }
 
 // bpo-39573: The Py_SET_SIZE() function must be used to set an object size.
@@ -752,6 +792,39 @@ times.
 #  undef Py_CPYTHON_OBJECT_H
 #endif
 
+#ifndef _Py_OPAQUE_PYOBJECT
+/* The root shape of TYPE: the shape of its objects that have no attributes
+   in slots, and the only shape of a type without attribute slots. */
+#define _Py_TYPE_ROOT_SHAPE(type) (&_Py_CAST(PyTypeObject*, (type))->tp_root_shape)
+
+/* Py_SET_TYPE() gives OB the root shape of TYPE.  An object of a type with
+   attribute slots then has no attributes in its shape: the caller of
+   Py_SET_TYPE() on such an object makes its shape agree with its slots. */
+static inline void
+Py_SET_TYPE(PyObject *ob, PyTypeObject *type)
+{
+    ob->ob_header = ((ob->ob_header & ~_Py_HEADER_SHAPE_MASK)
+                     | (uintptr_t)_Py_TYPE_ROOT_SHAPE(type));
+}
+#define Py_SET_TYPE(ob, type) Py_SET_TYPE(_PyObject_CAST(ob), (type))
+
+/* An exact type test against a type with one shape is one compare of the
+   header with a constant: _Py_IS_ROOT_SHAPE(ob, &PyList_Type) is
+   Py_IS_TYPE(ob, &PyList_Type) without the load of the shape's type.  TYPE
+   must have no attribute slots (no Py_TPFLAGS_INLINE_VALUES), so that no
+   object of TYPE has another shape; the exact Check macros of the builtin
+   types use it. */
+#define _Py_IS_ROOT_SHAPE(ob, type) \
+    ((_PyObject_CAST(ob)->ob_header & _Py_HEADER_SHAPE_MASK) \
+     == (uintptr_t)_Py_TYPE_ROOT_SHAPE(type))
+
+/* The type flags of OB, read from its shape: the bits the Check macros
+   test, fixed when the type is readied. */
+#define _PyObject_TYPE_FLAGS(ob) (_PyObject_SHAPE(ob)->flags)
+#define _PyObject_FastSubclass(ob, flag) \
+    ((_PyObject_TYPE_FLAGS(ob) & (unsigned long)(flag)) != 0)
+#endif
+
 
 static inline int
 PyType_HasFeature(PyTypeObject *type, unsigned long feature)
@@ -769,7 +842,7 @@ PyType_HasFeature(PyTypeObject *type, unsigned long feature)
 #define PyType_FastSubclass(type, flag) PyType_HasFeature((type), (flag))
 
 static inline int PyType_Check(PyObject *op) {
-    return PyType_FastSubclass(Py_TYPE(op), Py_TPFLAGS_TYPE_SUBCLASS);
+    return _PyObject_FastSubclass(op, Py_TPFLAGS_TYPE_SUBCLASS);
 }
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 < 0x030b0000
 #  define PyType_Check(op) PyType_Check(_PyObject_CAST(op))
@@ -779,7 +852,7 @@ static inline int PyType_Check(PyObject *op) {
     (assert(PyType_Check(op)), _Py_CAST(PyTypeObject*, (op)))
 
 static inline int PyType_CheckExact(PyObject *op) {
-    return Py_IS_TYPE(op, &PyType_Type);
+    return _Py_IS_ROOT_SHAPE(op, &PyType_Type);
 }
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 < 0x030b0000
 #  define PyType_CheckExact(op) PyType_CheckExact(_PyObject_CAST(op))

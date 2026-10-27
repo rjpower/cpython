@@ -1,17 +1,13 @@
-"""Shapes: per-type hidden classes for instances with inline values.
+"""Shapes: the hidden classes in the object header.
 
-Built with --with-shapes; see boil/design/04-shapes.md.
+See boil/design/09-object-protocol.md and 04-shapes.md.
 """
 
 import dis
 import itertools
 import unittest
-from test.support import (Py_SHAPES, cpython_only, requires_specialization,
-                          reset_code)
+from test.support import cpython_only, requires_specialization, reset_code
 from test.support.import_helper import import_module
-
-if not Py_SHAPES:
-    raise unittest.SkipTest("requires a build configured --with-shapes")
 
 _testinternalcapi = import_module("_testinternalcapi")
 shape_of = _testinternalcapi.get_object_shape

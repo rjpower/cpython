@@ -59,9 +59,7 @@
 // preprocessor.
 
 #undef Py_IS_TYPE
-#define Py_IS_TYPE(ob, type) \
-    ((PyTypeObject *)(_PyObject_CAST(ob)->ob_header & _Py_HEADER_TYPE_MASK) \
-     == (type))
+#define Py_IS_TYPE(ob, tp) (_PyObject_SHAPE(ob)->type == (tp))
 
 #endif
 

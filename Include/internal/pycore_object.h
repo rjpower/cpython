@@ -125,6 +125,8 @@ extern void _PyObject_FiniState(PyInterpreterState *interp);
 PyAPI_FUNC(void) _PyObject_CheckObjectHeap(PyObject *op, PyTypeObject *tp);
 #endif
 
+extern void _PyShape_InitRoot(PyTypeObject *type);  // pycore_shape.h
+
 static inline void
 _PyObject_Init(PyObject *op, PyTypeObject *typeobj)
 {
@@ -136,6 +138,11 @@ _PyObject_Init(PyObject *op, PyTypeObject *typeobj)
 #ifdef Py_DEBUG
     _PyObject_CheckObjectHeap(op, typeobj);
 #endif
+    if (_Py_TYPE_ROOT_SHAPE(typeobj)->type == NULL) {
+        // A static type used without PyType_Ready(): its first object
+        // fills its root shape.
+        _PyShape_InitRoot(typeobj);
+    }
     Py_SET_TYPE(op, typeobj);
     assert(_PyType_HasFeature(typeobj, Py_TPFLAGS_HEAPTYPE) || _Py_IsImmortal(typeobj));
     _Py_INCREF_TYPE(typeobj);

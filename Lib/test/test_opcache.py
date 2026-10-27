@@ -8,7 +8,7 @@ import types
 import unittest
 from test.support import (threading_helper, check_impl_detail,
                           requires_specialization,
-                          cpython_only, reset_code, Py_SHAPES)
+                          cpython_only, reset_code)
 from test.support.import_helper import import_module
 
 # Skip this module on other interpreters, it is cpython specific:
@@ -17,10 +17,9 @@ if check_impl_detail(cpython=False):
 
 _testinternalcapi = import_module("_testinternalcapi")
 
-# Instances with inline values and no __dict__ get the shape handlers
-# under --with-shapes.
-LOAD_ATTR_INSTANCE = "LOAD_ATTR_SHAPE" if Py_SHAPES else "LOAD_ATTR_INSTANCE_VALUE"
-STORE_ATTR_INSTANCE = "STORE_ATTR_SHAPE" if Py_SHAPES else "STORE_ATTR_INSTANCE_VALUE"
+# Instances with inline values and no __dict__ get the shape handlers.
+LOAD_ATTR_INSTANCE = "LOAD_ATTR_SHAPE"
+STORE_ATTR_INSTANCE = "STORE_ATTR_SHAPE"
 
 
 def have_dict_key_versions():
@@ -2559,8 +2558,8 @@ class TestFeedback(TestBase):
             return o.x
 
         handler = dis._specialized_opmap[LOAD_ATTR_INSTANCE]
-        # A row's aux field holds the shape of the object, if it has one.
-        aux = _testinternalcapi.get_object_shape(objects[0]) if Py_SHAPES else 0
+        # The shape is a row field of its own, not aux.
+        aux = 0
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             f(objects[0])
         self.assert_specialized(f, LOAD_ATTR_INSTANCE)

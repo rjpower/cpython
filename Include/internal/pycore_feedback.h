@@ -36,7 +36,7 @@ extern "C" {
  *              24  POP_JUMP_IF_FALSE, _TRUE
  *     UNARY    24  TO_BOOL, UNPACK_SEQUENCE, FOR_ITER, GET_ITER, SEND
  *     BINARY   32  BINARY_OP, COMPARE_OP, CONTAINS_OP, STORE_SUBSCR
- *     ATTR     40  LOAD_ATTR, STORE_ATTR, LOAD_SUPER_ATTR
+ *     ATTR     48  LOAD_ATTR, STORE_ATTR, LOAD_SUPER_ATTR
  *     GLOBAL   32  LOAD_GLOBAL
  *     CALL     24  CALL, CALL_KW, CALL_FUNCTION_EX
  *
@@ -109,8 +109,9 @@ typedef struct {
     const void *descr;              // _PyBinaryOpSpecializationDescr for BINARY_OP_EXTEND
 } _PyFbBinary;
 
-/* LOAD_ATTR, STORE_ATTR, LOAD_SUPER_ATTR.  The shape fields are used with
- * Py_SHAPES (Include/internal/pycore_dict.h). */
+/* LOAD_ATTR, STORE_ATTR, LOAD_SUPER_ATTR.  shape and shape_to are borrowed
+ * from the owner's type, which outlives every object that has them
+ * (Include/internal/pycore_shape.h). */
 typedef struct {
     _PyFbHeader h;
     uint32_t type_version;          // Py_TYPE(owner)
@@ -118,7 +119,6 @@ typedef struct {
         uint32_t dict_version;      // LOAD_ATTR_MODULE: keys version of the module dict
         uint32_t func_version;      // property getter or __getattribute__
         uint32_t class_version;     // owner, for loads from a class
-        uint32_t shape;             // the owner's shape index
     };
     union {
         uint32_t index;
@@ -134,8 +134,9 @@ typedef struct {
         PyValue attr_value;
         PyObject *fget;
         PyObject *getattribute;
-        uint32_t shape_to;          // STORE_ATTR_SHAPE_ADD: the shape after the store
+        _PyShape *shape_to;         // STORE_ATTR_SHAPE_ADD: the shape after the store
     };
+    _PyShape *shape;                // the owner's shape, for the shape handlers
 } _PyFbAttr;
 
 // LOAD_GLOBAL
@@ -160,14 +161,16 @@ typedef struct {
 /* One row per observation.  type_version[i] is the first version of the
  * observation and aux[i] the second: the operand types for BINARY, the
  * receiver type and the dict, function or class version for ATTR, the
- * function and callable type versions for CALL.  index[i] and descr[i] are
- * the entry's index and descr fields, handler[i] the specialised opcode. */
+ * function and callable type versions for CALL.  index[i], descr[i] and
+ * shape[i] are the entry's index, descr and shape fields, handler[i] the
+ * specialised opcode. */
 typedef struct {
     uint32_t type_version[FB_POLY_SIZE];
     uint32_t aux[FB_POLY_SIZE];
     uint32_t index[FB_POLY_SIZE];
     uint16_t handler[FB_POLY_SIZE];
     const void *descr[FB_POLY_SIZE];    // borrowed, as in the entry
+    _PyShape *shape[FB_POLY_SIZE];      // ATTR: the entry's shape, borrowed
 } _PyFbPoly;
 
 typedef struct _PyFbBlock {

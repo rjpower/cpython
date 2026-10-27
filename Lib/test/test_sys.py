@@ -1908,8 +1908,9 @@ class SizeofTest(unittest.TestCase):
         check((), vsize('') + self.P)
         check((1,2,3), vsize('') + self.P + 3*self.P)
         # type
-        # static type: PyTypeObject
-        fmt = 'P2nPI13Pl4Pn9Pn12PI2PcP'
+        # static type: PyTypeObject, its root shape last
+        shape = 'PlIHBB5P'
+        fmt = 'P2nPI13Pl4Pn9Pn12PI2PcP' + shape
         s = vsize(fmt)
         check(int, s)
         typeid = 'n' if support.Py_GIL_DISABLED else ''
@@ -1920,20 +1921,29 @@ class SizeofTest(unittest.TestCase):
                   '3P'                  # PyMappingMethods
                   '10P'                 # PySequenceMethods
                   '2P'                  # PyBufferProcs
-                  '7P'
+                  '8P'
                   '1PIP'                # Specializer cache
                   + typeid              # heap type id (free-threaded only)
                   )
         class newstyleclass(object): pass
-        # Separate block for PyDictKeysObject with 8 keys and 5 entries
-        check(newstyleclass, s + calcsize(DICT_KEY_STRUCT_FORMAT) + 64 + 42*calcsize("2P"))
+        # Separate blocks for PyDictKeysObject with 8 keys and 5 entries and
+        # for the table of shapes, which has the dictionary-mode shape and
+        # room for 64
+        shapes = calcsize('B' + shape + '64P')
+        check(newstyleclass, s + calcsize(DICT_KEY_STRUCT_FORMAT) + 64
+              + 42*calcsize("2P") + shapes)
         # dict with shared keys
         [newstyleclass() for _ in range(100)]
         check(newstyleclass().__dict__, size('nQ2P') + self.P)
         o = newstyleclass()
         o.a = o.b = o.c = o.d = o.e = o.f = o.g = o.h = 1
-        # Separate block for PyDictKeysObject with 16 keys and 10 entries
-        check(newstyleclass, s + calcsize(DICT_KEY_STRUCT_FORMAT) + 64 + 42*calcsize("2P"))
+        # Separate block for PyDictKeysObject with 16 keys and 10 entries,
+        # and one more shape with a slot of (name, kind): after 100
+        # instances, o's inline values have room for one attribute, and
+        # the second sends it to dictionary mode
+        shapes += calcsize(shape) + calcsize('PB0P')
+        check(newstyleclass, s + calcsize(DICT_KEY_STRUCT_FORMAT) + 64
+              + 42*calcsize("2P") + shapes)
         # dict with shared keys
         check(newstyleclass().__dict__, size('nQ2P') + self.P)
         # unicode

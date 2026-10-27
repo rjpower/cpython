@@ -3,6 +3,7 @@
 #include "pycore_c_array.h"       // _Py_CArray_EnsureCapacity
 #include "pycore_flowgraph.h"
 #include "pycore_compile.h"
+#include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_intrinsics.h"
 #include "pycore_pymem.h"         // _PyMem_IsPtrFreed()
 #include "pycore_long.h"          // _PY_IS_SMALL_INT()
@@ -3942,9 +3943,11 @@ build_cellfixedoffsets(_PyCompile_CodeUnitMetadata *umd)
         fixed[i] = nlocals + i;
     }
 
-    PyObject *varname, *cellindex;
+    // The names are strings and the indices int32: nothing is boxed.
+    PyValue name_value, cellindex;
     Py_ssize_t pos = 0;
-    while (PyDict_Next(umd->u_cellvars, &pos, &varname, &cellindex)) {
+    while (_PyDict_NextValue(umd->u_cellvars, &pos, &name_value, &cellindex, NULL)) {
+        PyObject *varname = PyValue_ObjectBorrow(name_value);
         PyObject *varindex;
         if (PyDict_GetItemRef(umd->u_varnames, varname, &varindex) < 0) {
             goto error;
@@ -3959,10 +3962,7 @@ build_cellfixedoffsets(_PyCompile_CodeUnitMetadata *umd)
             goto error;
         }
 
-        int oldindex = PyLong_AsInt(cellindex);
-        if (oldindex == -1 && PyErr_Occurred()) {
-            goto error;
-        }
+        int oldindex = PyValue_Int32(cellindex);
         fixed[oldindex] = argoffset;
     }
     return fixed;

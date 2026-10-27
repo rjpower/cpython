@@ -3454,11 +3454,13 @@ _Py_DumpExtensionModules(int fd, PyInterpreterState *interp)
     }
 
     Py_ssize_t pos;
+    PyValue key_value, value_value;
     PyObject *key, *value;
 
     // Avoid PyDict_GetItemString() which calls PyUnicode_FromString(),
     // memory cannot be allocated on the heap in a signal handler.
-    // Iterate on the dict instead.
+    // Iterate on the dict instead, and on its values rather than objects,
+    // since an object made for an inline value would allocate too.
     PyObject *stdlib_module_names = NULL;
     if (interp->sysdict != NULL) {
         pos = 0;
@@ -3466,10 +3468,14 @@ _Py_DumpExtensionModules(int fd, PyInterpreterState *interp)
             // If we cannot acquire the lock, just don't dump the list of extension modules.
             return;
         }
-        while (_PyDict_Next(interp->sysdict, &pos, &key, &value, NULL)) {
+        while (_PyDict_NextValue(interp->sysdict, &pos, &key_value, &value_value, NULL)) {
+            if (PyValue_IsInline(key_value) || PyValue_IsInline(value_value)) {
+                continue;
+            }
+            key = PyValue_ObjectBorrow(key_value);
             if (PyUnicode_Check(key)
                && PyUnicode_CompareWithASCIIString(key, "stdlib_module_names") == 0) {
-                stdlib_module_names = value;
+                stdlib_module_names = PyValue_ObjectBorrow(value_value);
                 break;
             }
         }
@@ -3489,7 +3495,12 @@ _Py_DumpExtensionModules(int fd, PyInterpreterState *interp)
         // If we cannot acquire the lock, just don't dump the list of extension modules.
         return;
     }
-    while (_PyDict_Next(modules, &pos, &key, &value, NULL)) {
+    while (_PyDict_NextValue(modules, &pos, &key_value, &value_value, NULL)) {
+        if (PyValue_IsInline(key_value) || PyValue_IsInline(value_value)) {
+            continue;
+        }
+        key = PyValue_ObjectBorrow(key_value);
+        value = PyValue_ObjectBorrow(value_value);
         if (!PyUnicode_Check(key)) {
             continue;
         }

@@ -921,6 +921,78 @@ class ContainerCanonicalTest(unittest.TestCase):
         self.assertLess(types.CellType(), types.CellType(0))
         self.assertEqual(types.CellType(), types.CellType())
 
+    def test_dict(self):
+        for value in self.VALUES:
+            with self.subTest(value=value):
+                d = {}
+                self.limited.dict_setitem(d, distinct(value), distinct(value))
+                self.check_read(value, d[value])
+                self.check_read(value, self.limited.dict_getitem(d, value))
+                rc, pos, key, item = self.limited.dict_next(d, 0)
+                self.check_read(value, key)
+                self.check_read(value, item)
+                self.check_read(value, next(iter(d)))
+                self.check_read(value, next(reversed(d)))
+                for pair in (next(iter(d.items())), next(reversed(d.items()))):
+                    self.check_read(value, pair[0])
+                    self.check_read(value, pair[1])
+                self.check_read(value, list(d.values())[0])
+                self.check_read(value, d.get(distinct(value)))
+                self.check_read(value, d.setdefault(distinct(value), None))
+                self.assertEqual(d, {value: value})
+                self.assertEqual(gc.get_referents(d), [])
+                key, item = d.copy().popitem()
+                self.check_read(value, key)
+                self.check_read(value, item)
+                self.check_read(value, d.pop(value))
+                self.assertEqual(d, {})
+
+    def test_dict_mixed_keys(self):
+        # 1, 1.0 and True are one key; the first key stored is kept.
+        d = {1: 'a'}
+        d[1.0] = 'b'
+        d[True] = 'c'
+        self.assertEqual(d, {1: 'c'})
+        self.assertIs(type(next(iter(d))), int)
+        keys = [70000, 2.5, 2**40, 'x', -0.0, (1, 2.5)]
+        d = dict.fromkeys(keys, 1.5)
+        for key in keys:
+            self.assertIn(key, d)
+            self.check_read(1.5, d[key])
+        self.assertIn(0, d)  # -0.0 == 0
+        self.assertEqual(list(d), keys)
+
+    def test_instance_attributes(self):
+        class C:
+            pass
+        for value in self.VALUES:
+            with self.subTest(value=value):
+                c = C()
+                c.a = distinct(value)
+                setattr(c, 'b', distinct(value))
+                for _ in range(3):  # specialised and unspecialised reads
+                    self.check_read(value, c.a)
+                    self.check_read(value, getattr(c, 'b'))
+                self.assertEqual(gc.get_referents(c), [C])
+                d = c.__dict__
+                self.check_read(value, d['a'])
+                c.a = distinct(value)
+                self.check_read(value, d['a'])
+                d['b'] = distinct(value)
+                self.check_read(value, c.b)
+                del c.a
+                self.assertEqual(d, {'b': value})
+
+    def test_globals(self):
+        for value in self.VALUES:
+            with self.subTest(value=value):
+                ns = {'v': distinct(value)}
+                exec("def f():\n    return v\n", ns)
+                for _ in range(3):
+                    self.check_read(value, ns['f']())
+                ns['v'] = distinct(value)
+                self.check_read(value, ns['f']())
+
     def test_outside_int32_is_an_object(self):
         x = distinct(2**40)
         lst = [None]

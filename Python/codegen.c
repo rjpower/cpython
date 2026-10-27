@@ -21,6 +21,7 @@
 #include "pycore_c_array.h"       // _Py_c_array_t
 #include "pycore_code.h"          // COMPARISON_LESS_THAN
 #include "pycore_compile.h"
+#include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_instruction_sequence.h" // _PyInstructionSequence_NewLabel()
 #include "pycore_intrinsics.h"
 #include "pycore_long.h"          // _PyLong_GetZero()
@@ -4917,12 +4918,13 @@ codegen_push_inlined_comprehension_locals(compiler *c, location loc,
 {
     // iterate over names bound in the comprehension and ensure we isolate
     // them from the outer scope as needed
-    PyObject *k, *v;
+    // The names are strings and the flags int32: nothing is boxed.
+    PyValue name_value, flags_value;
     Py_ssize_t pos = 0;
-    while (PyDict_Next(comp->ste_symbols, &pos, &k, &v)) {
-        long symbol = PyLong_AsLong(v);
-        assert(symbol >= 0 || PyErr_Occurred());
-        RETURN_IF_ERROR(symbol);
+    while (_PyDict_NextValue(comp->ste_symbols, &pos, &name_value, &flags_value, NULL)) {
+        PyObject *k = PyValue_ObjectBorrow(name_value);
+        long symbol = PyValue_Int32(flags_value);
+        assert(symbol >= 0);
         long scope = SYMBOL_TO_SCOPE(symbol);
 
         if ((symbol & DEF_LOCAL) && !(symbol & DEF_NONLOCAL)) {

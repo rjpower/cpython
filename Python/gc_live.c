@@ -225,7 +225,7 @@ run_destroy_hook(PyThreadState *tstate, PyObject *op)
         int bits = (int)(mp->_ma_watcher_tag & DICT_WATCHER_MASK
                          & ~DICT_RESERVED_WATCHERS_MASK);
         if (bits) {
-            _PyDict_SendEvent(bits, PyDict_EVENT_DEALLOCATED, mp, NULL, NULL);
+            _PyDict_SendEvent(bits, PyDict_EVENT_DEALLOCATED, mp, PyValue_NULL, PyValue_NULL);
         }
     }
     else if (PyType_Check(op)) {

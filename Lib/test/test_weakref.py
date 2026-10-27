@@ -1083,6 +1083,10 @@ class ReferencesTestCase(TestBase):
         stderr = res.err.decode("ascii", "backslashreplace")
         self.assertNotRegex(stderr, "_Py_Dealloc: Deallocator of type 'TestObj'")
 
+    # In a release build the eval loop can hold a dead object in a
+    # callee-saved register, which the C function it calls saves in its frame,
+    # and the conservative stack scan keeps that object alive.
+    @unittest.skipUnless(Py_DEBUG, "the eval loop's registers keep a dead object alive")
     def test_clearing_weakrefs_in_gc(self):
         # This test checks that when finalizers are called:
         # 1. weakrefs with callbacks have been cleared
@@ -1666,6 +1670,10 @@ class MappingTestCase(TestBase):
             self.assertEqual(len(dict), 0)
         self.assertEqual(len(dict), 0)
 
+    # In a release build the eval loop can hold a dead object in a
+    # callee-saved register, which the C function it calls saves in its frame,
+    # and the conservative stack scan keeps that object alive.
+    @unittest.skipUnless(Py_DEBUG, "the eval loop's registers keep a dead object alive")
     def test_weak_keys_destroy_while_iterating(self):
         # Issue #7105: iterators shouldn't crash when a key is implicitly removed
         dict, objects = self.make_weak_keyed_dict()
@@ -1692,6 +1700,10 @@ class MappingTestCase(TestBase):
         dict, objects = self.make_weak_keyed_dict()
         self.check_weak_del_and_len_while_iterating(dict, testcontext)
 
+    # In a release build the eval loop can hold a dead object in a
+    # callee-saved register, which the C function it calls saves in its frame,
+    # and the conservative stack scan keeps that object alive.
+    @unittest.skipUnless(Py_DEBUG, "the eval loop's registers keep a dead object alive")
     def test_weak_values_destroy_while_iterating(self):
         # Issue #7105: iterators shouldn't crash when a key is implicitly removed
         dict, objects = self.make_weak_valued_dict()

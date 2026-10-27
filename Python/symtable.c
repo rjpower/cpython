@@ -1,5 +1,6 @@
 #include "Python.h"
 #include "pycore_ast.h"           // stmt_ty
+#include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_parser.h"        // _PyParser_ASTFromString()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
@@ -876,17 +877,17 @@ finalize_inlined_comprehension(PySTEntryObject *ste, PySTEntryObject *comp,
                                 PyObject *comp_free, PyObject *outer_newfree,
                                 PyObject *inlined_cells)
 {
-    PyObject *k, *v;
+    PyObject *k;
     Py_ssize_t pos = 0;
 
     assert(comp->ste_type == InlinedComprehensionBlock);
     assert(comp->ste_parent != NULL);
 
-    while (PyDict_Next(comp->ste_symbols, &pos, &k, &v)) {
-        long comp_flags = PyLong_AsLong(v);
-        if (comp_flags == -1 && PyErr_Occurred()) {
-            goto error;
-        }
+    // The names are strings and the flags int32: nothing is boxed.
+    PyValue name_value, flags_value;
+    while (_PyDict_NextValue(comp->ste_symbols, &pos, &name_value, &flags_value, NULL)) {
+        k = PyValue_ObjectBorrow(name_value);
+        long comp_flags = PyValue_Int32(flags_value);
         int scope = SYMBOL_TO_SCOPE(comp_flags);
         if (scope == CELL) {
             if (PySet_Add(inlined_cells, k) < 0) {
@@ -969,18 +970,18 @@ error:
 static int
 analyze_cells(PyObject *scopes, PyObject *free, PyObject *inlined_cells)
 {
-    PyObject *name, *v, *v_cell;
+    PyObject *name, *v_cell;
     int success = 0;
     Py_ssize_t pos = 0;
 
     v_cell = PyLong_FromLong(CELL);
     if (!v_cell)
         return 0;
-    while (PyDict_Next(scopes, &pos, &name, &v)) {
-        long scope = PyLong_AsLong(v);
-        if (scope == -1 && PyErr_Occurred()) {
-            goto error;
-        }
+    // The names are strings and the flags int32: nothing is boxed.
+    PyValue name_value, flags_value;
+    while (_PyDict_NextValue(scopes, &pos, &name_value, &flags_value, NULL)) {
+        name = PyValue_ObjectBorrow(name_value);
+        long scope = PyValue_Int32(flags_value);
         if (scope != LOCAL)
             continue;
         int contains = PySet_Contains(free, name);
@@ -1048,11 +1049,11 @@ update_symbols(PyObject *symbols, PyObject *scopes,
     Py_ssize_t pos = 0;
 
     /* Update scope information for all symbols in this scope */
-    while (PyDict_Next(symbols, &pos, &name, &v)) {
-        long flags = PyLong_AsLong(v);
-        if (flags == -1 && PyErr_Occurred()) {
-            return 0;
-        }
+    // The names are strings and the flags int32: nothing is boxed.
+    PyValue name_value, flags_value;
+    while (_PyDict_NextValue(symbols, &pos, &name_value, &flags_value, NULL)) {
+        name = PyValue_ObjectBorrow(name_value);
+        long flags = PyValue_Int32(flags_value);
         if (PyDict_GetItemRef(scopes, name, &v_scope) < 0) {
             return 0;
         }
@@ -1182,7 +1183,7 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
               PyObject *global, PyObject *type_params,
               PySTEntryObject *class_entry)
 {
-    PyObject *name, *v, *local = NULL, *scopes = NULL, *newbound = NULL;
+    PyObject *name, *local = NULL, *scopes = NULL, *newbound = NULL;
     PyObject *newglobal = NULL, *newfree = NULL, *inlined_cells = NULL;
     PyObject *temp;
     int success = 0;
@@ -1241,11 +1242,11 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
     /* Record bindings and global/nonlocal declarations first so child
        blocks see this scope's locals. Uses are classified after children
        so inlined comprehensions can add USE flags to this table. */
-    while (PyDict_Next(ste->ste_symbols, &pos, &name, &v)) {
-        long flags = PyLong_AsLong(v);
-        if (flags == -1 && PyErr_Occurred()) {
-            goto error;
-        }
+    // The names are strings and the flags int32: nothing is boxed.
+    PyValue name_value, flags_value;
+    while (_PyDict_NextValue(ste->ste_symbols, &pos, &name_value, &flags_value, NULL)) {
+        name = PyValue_ObjectBorrow(name_value);
+        long flags = PyValue_Int32(flags_value);
         if (!(flags & (DEF_GLOBAL | DEF_NONLOCAL | DEF_BOUND))) {
             continue;
         }
@@ -1333,11 +1334,9 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
 
     /* Complete the classification. */
     pos = 0;
-    while (PyDict_Next(ste->ste_symbols, &pos, &name, &v)) {
-        long flags = PyLong_AsLong(v);
-        if (flags == -1 && PyErr_Occurred()) {
-            goto error;
-        }
+    while (_PyDict_NextValue(ste->ste_symbols, &pos, &name_value, &flags_value, NULL)) {
+        name = PyValue_ObjectBorrow(name_value);
+        long flags = PyValue_Int32(flags_value);
         int contains = PyDict_Contains(scopes, name);
         if (contains < 0) {
             goto error;

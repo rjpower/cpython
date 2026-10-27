@@ -2134,14 +2134,11 @@ get_object_dict_values(PyObject *self, PyObject *obj)
     }
     _Py_DECLARE_STR(anon_null, "<NULL>");
     for(int i = 0; i < size; i++) {
-        PyObject *item = values->values[i];
-        if (item == NULL) {
-            item = &_Py_STR(anon_null);
+        PyValue item = values->values[i];
+        if (PyValue_IsNull(item)) {
+            item = PyValue_FromObject(&_Py_STR(anon_null));
         }
-        else {
-            Py_INCREF(item);
-        }
-        PyTuple_SET_ITEM(res, i, item);
+        PyTuple_SET_VALUE(res, i, item);
     }
     return res;
 }

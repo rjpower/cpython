@@ -19,6 +19,7 @@
 #include "pycore_capsule.h"       // _PyCapsule_SetTraverse()
 #include "pycore_code.h"
 #include "pycore_compile.h"
+#include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_flowgraph.h"     // _PyCfg_FromInstructionSequence()
 #include "pycore_regcfg.h"        // _PyRegCfg_Free()
 #include "pycore_pystate.h"       // _Py_GetConfig()
@@ -648,14 +649,12 @@ static int
 add_cell_names_from_symbols(PyObject *symbols, PyObject *names)
 {
     Py_ssize_t pos = 0;
-    PyObject *k, *v;
-    while (PyDict_Next(symbols, &pos, &k, &v)) {
-        long flags = PyLong_AsLong(v);
-        if (flags == -1 && PyErr_Occurred()) {
-            return ERROR;
-        }
+    PyValue k, v;
+    // The names are strings and the flags are int32, so neither is boxed.
+    while (_PyDict_NextValue(symbols, &pos, &k, &v, NULL)) {
+        long flags = PyValue_Int32(v);
         if (SYMBOL_TO_SCOPE(flags) == CELL) {
-            if (PySet_Add(names, k) < 0) {
+            if (PySet_Add(names, PyValue_ObjectBorrow(k)) < 0) {
                 return ERROR;
             }
         }
@@ -1464,24 +1463,25 @@ _PyCompile_ConstCacheMergeOne(PyObject *const_cache, PyObject **obj)
 static PyObject *
 consts_dict_keys_inorder(PyObject *dict)
 {
-    PyObject *consts, *k, *v;
+    PyObject *consts;
+    PyValue k, v;
     Py_ssize_t i, pos = 0, size = PyDict_GET_SIZE(dict);
 
     consts = PyList_New(size);   /* PyCode_Optimize() requires a list */
     if (consts == NULL)
         return NULL;
-    while (PyDict_Next(dict, &pos, &k, &v)) {
-        assert(PyLong_CheckExact(v));
-        i = PyLong_AsLong(v);
+    // A constant key can be inline, and an index is, so nothing is boxed.
+    while (_PyDict_NextValue(dict, &pos, &k, &v, NULL)) {
+        i = PyValue_Int32(v);
         /* The keys of the dictionary can be tuples wrapping a constant.
          * (see _PyCompile_DictAddObj and _PyCode_ConstantKey). In that case
          * the object we want is always second. */
-        if (PyTuple_CheckExact(k)) {
-            k = PyTuple_GET_ITEM(k, 1);
+        if (PyValue_Type(k) == &PyTuple_Type) {
+            k = PyTuple_GET_VALUE(PyValue_ObjectBorrow(k), 1);
         }
         assert(i < size);
         assert(i >= 0);
-        PyList_SET_ITEM(consts, i, Py_NewRef(k));
+        PyList_SET_VALUE(consts, i, k);
     }
     return consts;
 }

@@ -565,9 +565,9 @@ specialize_module_load_attr_lock_held(PyDictObject *dict, _PyInstr *instr, PyObj
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NON_STRING);
         return -1;
     }
-    PyObject *value;
+    PyValue value;
     Py_ssize_t index = _PyDict_LookupIndexAndValue(dict, name, &value);
-    if (value != NULL && PyLazyImport_CheckExact(value)) {
+    if (!PyValue_IsNull(value) && PyValue_Type(value) == &PyLazyImport_Type) {
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
         return -1;
     }
@@ -884,9 +884,9 @@ specialize_dict_access_hint(
         SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_SPLIT_DICT);
         return 0;
     }
-    PyObject *value;
+    PyValue value;
     Py_ssize_t index = _PyDict_LookupIndexAndValue(dict, name, &value);
-    if (value == NULL && index >= 0) {
+    if (PyValue_IsNull(value) && index >= 0) {
         // A split table's shared keys can hold names this dict lacks.
         index = DKIX_EMPTY;
     }
@@ -1563,13 +1563,13 @@ specialize_load_global_lock_held(
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_LOAD_GLOBAL_NON_STRING_OR_SPLIT);
         goto fail;
     }
-    PyObject *value;
+    PyValue value;
     Py_ssize_t index = _PyDict_LookupIndexAndValue((PyDictObject *)globals, name, &value);
     if (index == DKIX_ERROR) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_EXPECTED_ERROR);
         goto fail;
     }
-    if (value != NULL && PyLazyImport_CheckExact(value)) {
+    if (!PyValue_IsNull(value) && PyValue_Type(value) == &PyLazyImport_Type) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
         goto fail;
     }
@@ -1601,7 +1601,7 @@ specialize_load_global_lock_held(
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_EXPECTED_ERROR);
         goto fail;
     }
-    if (value != NULL && PyLazyImport_CheckExact(value)) {
+    if (!PyValue_IsNull(value) && PyValue_Type(value) == &PyLazyImport_Type) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
         goto fail;
     }

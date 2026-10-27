@@ -1,6 +1,7 @@
 #include "Python.h"
 #include "pycore_code.h"            // write_location_entry_start()
 #include "pycore_compile.h"
+#include "pycore_dict.h"              // _PyDict_NextValue()
 #include "pycore_flowgraph.h"
 #include "pycore_ir.h"                // IR_WORD()
 #include "pycore_long.h"              // _PyLong_CheckExactAndCompact()
@@ -373,21 +374,19 @@ assemble_emit(struct assembler *a, _PyRegCfg *cfg, int first_lineno,
 static PyObject *
 dict_keys_inorder(PyObject *dict, Py_ssize_t offset)
 {
-    PyObject *tuple, *k, *v;
+    PyObject *tuple;
+    PyValue k, v;
     Py_ssize_t pos = 0, size = PyDict_GET_SIZE(dict);
 
     tuple = PyTuple_New(size);
     if (tuple == NULL)
         return NULL;
-    while (PyDict_Next(dict, &pos, &k, &v)) {
-        Py_ssize_t i = PyLong_AsSsize_t(v);
-        if (i == -1 && PyErr_Occurred()) {
-            Py_DECREF(tuple);
-            return NULL;
-        }
+    // The values are int32 indices, so nothing is boxed.
+    while (_PyDict_NextValue(dict, &pos, &k, &v, NULL)) {
+        Py_ssize_t i = PyValue_Int32(v);
         assert((i - offset) < size);
         assert((i - offset) >= 0);
-        PyTuple_SET_ITEM(tuple, i - offset, Py_NewRef(k));
+        PyTuple_SET_VALUE(tuple, i - offset, k);
     }
     return tuple;
 }
@@ -400,10 +399,11 @@ static int
 compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
                         int flags, PyObject *names, PyObject *kinds)
 {
-    PyObject *k, *v;
+    PyValue kv, v;
+    PyObject *k;
     Py_ssize_t pos = 0;
 
-    // Set the locals kinds.  Arg vars fill the first portion of the list.
+    // Set the locals kinds.  The names are strings and the offsets int32.  Arg vars fill the first portion of the list.
     struct {
         int count;
         _PyLocals_Kind kind;
@@ -420,11 +420,9 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
         max = argvarkinds[i].count < 0
             ? INT_MAX
             : max + argvarkinds[i].count;
-        while (pos < max && PyDict_Next(umd->u_varnames, &pos, &k, &v)) {
-            int offset = PyLong_AsInt(v);
-            if (offset == -1 && PyErr_Occurred()) {
-                return ERROR;
-            }
+        while (pos < max && _PyDict_NextValue(umd->u_varnames, &pos, &kv, &v, NULL)) {
+            k = PyValue_ObjectBorrow(kv);
+            int offset = PyValue_Int32(v);
             assert(offset >= 0);
             assert(offset < nlocalsplus);
 
@@ -452,7 +450,8 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
     // This counter mirrors the fix done in fix_cell_offsets().
     int numdropped = 0, cellvar_offset = -1;
     pos = 0;
-    while (PyDict_Next(umd->u_cellvars, &pos, &k, &v)) {
+    while (_PyDict_NextValue(umd->u_cellvars, &pos, &kv, &v, NULL)) {
+        k = PyValue_ObjectBorrow(kv);
         int has_name = PyDict_Contains(umd->u_varnames, k);
         RETURN_IF_ERROR(has_name);
         if (has_name) {
@@ -461,10 +460,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
             continue;
         }
 
-        cellvar_offset = PyLong_AsInt(v);
-        if (cellvar_offset == -1 && PyErr_Occurred()) {
-            return ERROR;
-        }
+        cellvar_offset = PyValue_Int32(v);
         assert(cellvar_offset >= 0);
         cellvar_offset += nlocals - numdropped;
         assert(cellvar_offset < nlocalsplus);
@@ -472,11 +468,9 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
     }
 
     pos = 0;
-    while (PyDict_Next(umd->u_freevars, &pos, &k, &v)) {
-        int offset = PyLong_AsInt(v);
-        if (offset == -1 && PyErr_Occurred()) {
-            return ERROR;
-        }
+    while (_PyDict_NextValue(umd->u_freevars, &pos, &kv, &v, NULL)) {
+        k = PyValue_ObjectBorrow(kv);
+        int offset = PyValue_Int32(v);
         assert(offset >= 0);
         offset += nlocals - numdropped;
         assert(offset < nlocalsplus);

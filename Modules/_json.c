@@ -822,7 +822,7 @@ _parse_object_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ss
                 Py_DECREF(item);
             }
             else {
-                int err = _PyDict_SetItem_Take2((PyDictObject *)rval, key, val);
+                int err = PyDict_SetItem(rval, key, val);
                 key = NULL;
                 if (err < 0)
                     goto bail;

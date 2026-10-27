@@ -14210,14 +14210,12 @@
             {
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                PyObject **value_ptr = (PyObject**)(((char *)owner_o) + offset);
-                PyObject *attr_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(*value_ptr);
-                if (attr_o == NULL) {
+                attr = *(PyValue *)(((char *)owner_o) + offset);
+                if (PyValue_IsNull(attr)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                attr = PyValue_FromObject(attr_o);
                 STAT_INC(LOAD_ATTR, hit);
                 o = owner;
             }
@@ -14466,13 +14464,12 @@
                 assert(keys->dk_kind == DICT_KEYS_UNICODE);
                 assert(index < FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries));
                 PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(keys) + index;
-                PyObject *attr_o = FT_ATOMIC_LOAD_PTR_CONSUME(ep->me_value);
-                if (attr_o == NULL) {
+                attr = ep->me_value;
+                if (PyValue_IsNull(attr)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                attr = PyValue_FromObject(attr_o);
                 STAT_INC(LOAD_ATTR, hit);
                 o = owner;
             }
@@ -14814,9 +14811,8 @@
             {
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                PyObject *attr_o = *(PyObject **)((char *)owner_o + offset);
-                assert(attr_o != NULL);
-                attr = PyValue_FromObject(attr_o);
+                attr = *(PyValue *)((char *)owner_o + offset);
+                assert(!PyValue_IsNull(attr));
                 STAT_INC(LOAD_ATTR, hit);
                 o = owner;
             }
@@ -14954,7 +14950,6 @@
                 }
                 PyDictKeysObject *dk = FT_ATOMIC_LOAD_PTR(dict->ma_keys);
                 assert(PyDict_CheckExact((PyObject *)dict));
-                PyObject *attr_o;
                 if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries)) {
                     if (true) {
                         UPDATE_MISS_STATS(LOAD_ATTR);
@@ -14978,8 +14973,8 @@
                         JUMP_TO_PREDICTED(LOAD_ATTR);
                     }
                 }
-                attr_o = FT_ATOMIC_LOAD_PTR(ep->me_value);
-                if (attr_o == NULL) {
+                attr = ep->me_value;
+                if (PyValue_IsNull(attr)) {
                     if (true) {
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -14987,7 +14982,6 @@
                     }
                 }
                 STAT_INC(LOAD_ATTR, hit);
-                attr = PyValue_FromObject(attr_o);
                 o = owner;
             }
             // _POP_TOP
@@ -15539,13 +15533,12 @@
                 }
                 assert(keys->dk_kind == DICT_KEYS_UNICODE);
                 PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-                PyObject *res_o = FT_ATOMIC_LOAD_PTR_CONSUME(entries[index].me_value);
-                if (res_o == NULL) {
+                res = entries[index].me_value;
+                if (PyValue_IsNull(res)) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
                 }
-                res = PyValue_FromObject(res_o);
                 STAT_INC(LOAD_GLOBAL, hit);
             }
             // _PUSH_NULL_CONDITIONAL
@@ -15594,13 +15587,12 @@
                 assert(keys->dk_kind == DICT_KEYS_UNICODE);
                 PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
                 assert(index < DK_SIZE(keys));
-                PyObject *res_o = FT_ATOMIC_LOAD_PTR_CONSUME(entries[index].me_value);
-                if (res_o == NULL) {
+                res = entries[index].me_value;
+                if (PyValue_IsNull(res)) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
                 }
-                res = PyValue_FromObject(res_o);
                 STAT_INC(LOAD_GLOBAL, hit);
             }
             // _PUSH_NULL_CONDITIONAL
@@ -16640,55 +16632,13 @@
             else {
                 dict_st_object = PyValue_ObjectBorrow(dict_st);
             }
-            PyObject *key_object;
-            _PyValueRoot key_root;
-            if (Py_UNLIKELY(PyValue_IsInline(key))) {
-                key_object = _PyValue_BoxInline(key);
-                if (key_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(MAP_ADD, _PY_BOX_CONTAINER_STORE);
-            }
-            else {
-                key_object = PyValue_ObjectBorrow(key);
-            }
-            PyObject *value_object;
-            _PyValueRoot value_root;
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                value_object = _PyValue_BoxInline(value);
-                if (value_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(MAP_ADD, _PY_BOX_CONTAINER_STORE);
-            }
-            else {
-                value_object = PyValue_ObjectBorrow(value);
-            }
             PyObject *dict = dict_st_object;
             assert(PyDict_CheckExact(dict));
             if (Py_UNLIKELY(PyValue_IsInline(dict_st))) {
                 _PyThreadState_PushValueRoot(tstate, &dict_st_root);
                 dict_st_root.object = dict_st_object;
             }
-            if (Py_UNLIKELY(PyValue_IsInline(key))) {
-                _PyThreadState_PushValueRoot(tstate, &key_root);
-                key_root.object = key_object;
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                _PyThreadState_PushValueRoot(tstate, &value_root);
-                value_root.object = value_object;
-            }
-            int err = _PyDict_SetItem_Take2(
-                (PyDictObject *)dict,
-                key_object,
-                value_object
-            );
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                _PyThreadState_PopValueRoot(tstate, &value_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(key))) {
-                _PyThreadState_PopValueRoot(tstate, &key_root);
-            }
+            int err = _PyDict_SetItemValue((PyDictObject *)dict, key, value);
             if (Py_UNLIKELY(PyValue_IsInline(dict_st))) {
                 _PyThreadState_PopValueRoot(tstate, &dict_st_root);
             }
@@ -19001,24 +18951,13 @@
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t offset = fb->offset;
-                PyObject *value_object;
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    value_object = _PyValue_BoxInline(value);
-                    if (value_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_ATTR_INSTANCE_VALUE, _PY_BOX_ATTRIBUTE_STORE);
-                }
-                else {
-                    value_object = PyValue_ObjectBorrow(value);
-                }
                 PyObject *owner_o = PyValue_ObjectBorrow(owner);
                 STAT_INC(STORE_ATTR, hit);
                 assert(_PyObject_GetManagedDict(owner_o) == NULL);
-                PyObject **value_ptr = (PyObject**)(((char *)owner_o) + offset);
-                PyObject *old_value = *value_ptr;
-                FT_ATOMIC_STORE_PTR_RELEASE(*value_ptr, value_object);
-                if (old_value == NULL) {
+                PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
+                PyValue old_value = *value_ptr;
+                *value_ptr = value;
+                if (PyValue_IsNull(old_value)) {
                     PyDictValues *values = _PyObject_InlineValues(owner_o);
                     Py_ssize_t index = value_ptr - values->values;
                     _PyDictValues_AddToInsertionOrder(values, index);
@@ -19026,7 +18965,6 @@
                 }
                 UNLOCK_OBJECT(owner_o);
                 o = owner;
-                Py_XDECREF(old_value);
             }
             // _POP_TOP
             {
@@ -19171,25 +19109,12 @@
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t offset = fb->offset;
-                PyObject *value_object;
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    value_object = _PyValue_BoxInline(value);
-                    if (value_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_ATTR_SHAPE, _PY_BOX_ATTRIBUTE_STORE);
-                }
-                else {
-                    value_object = PyValue_ObjectBorrow(value);
-                }
                 PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                PyObject **value_ptr = (PyObject **)((char *)owner_o + offset);
-                PyObject *old_value = *value_ptr;
-                assert(old_value != NULL);
-                *value_ptr = value_object;
+                PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
+                assert(!PyValue_IsNull(*value_ptr));
+                *value_ptr = value;
                 STAT_INC(STORE_ATTR, hit);
                 o = owner;
-                Py_DECREF(old_value);
             }
             // _POP_TOP
             {
@@ -19247,21 +19172,10 @@
                 value = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t shape_to = fb->shape_to;
                 uint32_t offset = fb->offset;
-                PyObject *value_object;
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    value_object = _PyValue_BoxInline(value);
-                    if (value_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_ATTR_SHAPE_ADD, _PY_BOX_ATTRIBUTE_STORE);
-                }
-                else {
-                    value_object = PyValue_ObjectBorrow(value);
-                }
                 PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                PyObject **value_ptr = (PyObject **)((char *)owner_o + offset);
-                assert(*value_ptr == NULL);
-                *value_ptr = value_object;
+                PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
+                assert(PyValue_IsNull(*value_ptr));
+                *value_ptr = value;
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
                 _PyDictValues_SetShape(values, (uint8_t)shape_to);
@@ -19387,18 +19301,6 @@
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t hint = fb->hint;
-                PyObject *value_object;
-                _PyValueRoot value_root;
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    value_object = _PyValue_BoxInline(value);
-                    if (value_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_ATTR_WITH_HINT, _PY_BOX_ATTRIBUTE_STORE);
-                }
-                else {
-                    value_object = PyValue_ObjectBorrow(value);
-                }
                 PyObject *owner_o = PyValue_ObjectBorrow(owner);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
                 PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
@@ -19433,10 +19335,9 @@
                         JUMP_TO_PREDICTED(STORE_ATTR);
                     }
                 }
-                PyObject **value_ptr = dict->ma_values == NULL ?
+                PyValue *value_ptr = dict->ma_values == NULL ?
                 &ep->me_value : &dict->ma_values->values[hint];
-                PyObject *old_value = *value_ptr;
-                if (old_value == NULL) {
+                if (PyValue_IsNull(*value_ptr)) {
                     UNLOCK_OBJECT(dict);
                     if (true) {
                         UPDATE_MISS_STATS(STORE_ATTR);
@@ -19444,19 +19345,12 @@
                         JUMP_TO_PREDICTED(STORE_ATTR);
                     }
                 }
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PushValueRoot(tstate, &value_root);
-                    value_root.object = value_object;
-                }
-                _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, dict, name, value_object);
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PopValueRoot(tstate, &value_root);
-                }
-                FT_ATOMIC_STORE_PTR_RELEASE(*value_ptr, value_object);
+                _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, dict,
+                                PyValue_FromObject(name), value);
+                *value_ptr = value;
                 UNLOCK_OBJECT(dict);
                 STAT_INC(STORE_ATTR, hit);
                 o = owner;
-                Py_XDECREF(old_value);
             }
             // _POP_TOP
             {
@@ -19859,50 +19753,10 @@
                 sub = IR_SLOT(IR_FIELD_B(this_instr));
                 dict_st = nos;
                 value = IR_SLOT(IR_FIELD_C(this_instr));
-                PyObject *value_object;
-                _PyValueRoot value_root;
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    value_object = _PyValue_BoxInline(value);
-                    if (value_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_SUBSCR_DICT, _PY_BOX_CONTAINER_STORE);
-                }
-                else {
-                    value_object = PyValue_ObjectBorrow(value);
-                }
-                PyObject *sub_object;
-                _PyValueRoot sub_root;
-                if (Py_UNLIKELY(PyValue_IsInline(sub))) {
-                    sub_object = _PyValue_BoxInline(sub);
-                    if (sub_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(STORE_SUBSCR_DICT, _PY_BOX_CONTAINER_STORE);
-                }
-                else {
-                    sub_object = PyValue_ObjectBorrow(sub);
-                }
                 PyObject *dict = PyValue_ObjectBorrow(dict_st);
                 assert(Py_TYPE(dict)->tp_as_mapping->mp_ass_subscript == _PyDict_StoreSubscript);
                 STAT_INC(STORE_SUBSCR, hit);
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PushValueRoot(tstate, &value_root);
-                    value_root.object = value_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(sub))) {
-                    _PyThreadState_PushValueRoot(tstate, &sub_root);
-                    sub_root.object = sub_object;
-                }
-                int err = _PyDict_SetItem_Take2((PyDictObject *)dict,
-                    sub_object,
-                    value_object);
-                if (Py_UNLIKELY(PyValue_IsInline(sub))) {
-                    _PyThreadState_PopValueRoot(tstate, &sub_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PopValueRoot(tstate, &value_root);
-                }
+                int err = _PyDict_SetItemValue((PyDictObject *)dict, sub, value);
                 if (err) {
                     IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));

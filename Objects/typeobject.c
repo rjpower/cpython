@@ -5819,8 +5819,8 @@ find_name_in_mro(PyTypeObject *type, PyObject *name, PyValue *out)
         PyObject *base = PyTuple_GET_ITEM(mro, i);
         PyObject *dict = lookup_tp_dict(_PyType_CAST(base));
         assert(dict && PyDict_Check(dict));
-        Py_ssize_t ix = _Py_dict_lookup_value(
-            (PyDictObject *)dict, name, hash, out);
+        Py_ssize_t ix = _Py_dict_lookup(
+            (PyDictObject *)dict, PyValue_FromObject(name), hash, out);
         if (ix == DKIX_ERROR) {
             PyErr_Clear();
             res = -1;

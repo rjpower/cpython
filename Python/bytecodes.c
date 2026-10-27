@@ -1329,9 +1329,7 @@ dummy_func(
             PyObject *dict = PyValue_ObjectBorrow(dict_st);
             assert(Py_TYPE(dict)->tp_as_mapping->mp_ass_subscript == _PyDict_StoreSubscript);
             STAT_INC(STORE_SUBSCR, hit);
-            int err = _PyDict_SetItem_Take2((PyDictObject *)dict,
-                                            PyValue_ObjectBorrow(sub),
-                                            PyValue_ObjectBorrow(value));
+            int err = _PyDict_SetItemValue((PyDictObject *)dict, sub, value);
             DEAD(value);
             DEAD(sub);
             if (err) {
@@ -2079,9 +2077,8 @@ dummy_func(
             assert(keys->dk_kind == DICT_KEYS_UNICODE);
             PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
             assert(index < DK_SIZE(keys));
-            PyObject *res_o = FT_ATOMIC_LOAD_PTR_CONSUME(entries[index].me_value);
-            DEOPT_IF(res_o == NULL);
-            res = PyValue_FromObject(res_o);
+            res = entries[index].me_value;
+            DEOPT_IF(PyValue_IsNull(res));
             STAT_INC(LOAD_GLOBAL, hit);
         }
 
@@ -2093,9 +2090,8 @@ dummy_func(
             DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != builtins_version);
             assert(keys->dk_kind == DICT_KEYS_UNICODE);
             PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-            PyObject *res_o = FT_ATOMIC_LOAD_PTR_CONSUME(entries[index].me_value);
-            DEOPT_IF(res_o == NULL);
-            res = PyValue_FromObject(res_o);
+            res = entries[index].me_value;
+            DEOPT_IF(PyValue_IsNull(res));
             STAT_INC(LOAD_GLOBAL, hit);
         }
 
@@ -2417,12 +2413,7 @@ dummy_func(
             PyObject *dict = PyValue_ObjectBorrow(dict_st);
             assert(PyDict_CheckExact(dict));
             /* dict[key] = value */
-            // Do not DECREF INPUTS because the function steals the references
-            int err = _PyDict_SetItem_Take2(
-                (PyDictObject *)dict,
-                PyValue_ObjectBorrow(key),
-                PyValue_ObjectBorrow(value)
-            );
+            int err = _PyDict_SetItemValue((PyDictObject *)dict, key, value);
             DEAD(value);
             DEAD(key);
             ERROR_IF(err != 0);
@@ -2648,10 +2639,8 @@ dummy_func(
 
         op(_LOAD_ATTR_INSTANCE_VALUE, (offset/1, owner -- attr, o)) {
             PyObject *owner_o = PyValue_ObjectBorrow(owner);
-            PyObject **value_ptr = (PyObject**)(((char *)owner_o) + offset);
-            PyObject *attr_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(*value_ptr);
-            DEOPT_IF(attr_o == NULL);
-            attr = PyValue_FromObject(attr_o);
+            attr = *(PyValue *)(((char *)owner_o) + offset);
+            DEOPT_IF(PyValue_IsNull(attr));
             STAT_INC(LOAD_ATTR, hit);
             o = owner;
             DEAD(owner);
@@ -2678,10 +2667,9 @@ dummy_func(
 
         op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr, o)) {
             PyObject *owner_o = PyValue_ObjectBorrow(owner);
-            PyObject *attr_o = *(PyObject **)((char *)owner_o + offset);
+            attr = *(PyValue *)((char *)owner_o + offset);
             // The shape proves the slot filled.
-            assert(attr_o != NULL);
-            attr = PyValue_FromObject(attr_o);
+            assert(!PyValue_IsNull(attr));
             STAT_INC(LOAD_ATTR, hit);
             o = owner;
             DEAD(owner);
@@ -2706,9 +2694,8 @@ dummy_func(
             assert(keys->dk_kind == DICT_KEYS_UNICODE);
             assert(index < FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries));
             PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(keys) + index;
-            PyObject *attr_o = FT_ATOMIC_LOAD_PTR_CONSUME(ep->me_value);
-            EXIT_IF(attr_o == NULL);
-            attr = PyValue_FromObject(attr_o);
+            attr = ep->me_value;
+            EXIT_IF(PyValue_IsNull(attr));
             STAT_INC(LOAD_ATTR, hit);
             o = owner;
             DEAD(owner);
@@ -2728,7 +2715,6 @@ dummy_func(
             EXIT_IF(dict == NULL);
             PyDictKeysObject *dk = FT_ATOMIC_LOAD_PTR(dict->ma_keys);
             assert(PyDict_CheckExact((PyObject *)dict));
-            PyObject *attr_o;
             if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries)) {
                 EXIT_IF(true);
             }
@@ -2741,12 +2727,11 @@ dummy_func(
             if (FT_ATOMIC_LOAD_PTR_RELAXED(ep->me_key) != name) {
                 EXIT_IF(true);
             }
-            attr_o = FT_ATOMIC_LOAD_PTR(ep->me_value);
-            if (attr_o == NULL) {
+            attr = ep->me_value;
+            if (PyValue_IsNull(attr)) {
                 EXIT_IF(true);
             }
             STAT_INC(LOAD_ATTR, hit);
-            attr = PyValue_FromObject(attr_o);
             o = owner;
             DEAD(owner);
         }
@@ -2874,11 +2859,11 @@ dummy_func(
 
             STAT_INC(STORE_ATTR, hit);
             assert(_PyObject_GetManagedDict(owner_o) == NULL);
-            PyObject **value_ptr = (PyObject**)(((char *)owner_o) + offset);
-            PyObject *old_value = *value_ptr;
-            FT_ATOMIC_STORE_PTR_RELEASE(*value_ptr, PyValue_ObjectBorrow(value));
+            PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
+            PyValue old_value = *value_ptr;
+            *value_ptr = value;
             DEAD(value);
-            if (old_value == NULL) {
+            if (PyValue_IsNull(old_value)) {
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 Py_ssize_t index = value_ptr - values->values;
                 _PyDictValues_AddToInsertionOrder(values, index);
@@ -2887,7 +2872,6 @@ dummy_func(
             UNLOCK_OBJECT(owner_o);
             o = owner;
             DEAD(owner);
-            Py_XDECREF(old_value);
         }
 
         op(_LOCK_OBJECT, (value -- value)) {
@@ -2904,15 +2888,13 @@ dummy_func(
 
         op(_STORE_ATTR_SHAPE, (offset/1, value, owner -- o)) {
             PyObject *owner_o = PyValue_ObjectBorrow(owner);
-            PyObject **value_ptr = (PyObject **)((char *)owner_o + offset);
-            PyObject *old_value = *value_ptr;
-            assert(old_value != NULL);
-            *value_ptr = PyValue_ObjectBorrow(value);
+            PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
+            assert(!PyValue_IsNull(*value_ptr));
+            *value_ptr = value;
             DEAD(value);
             STAT_INC(STORE_ATTR, hit);
             o = owner;
             DEAD(owner);
-            Py_DECREF(old_value);
         }
 
         macro(STORE_ATTR_SHAPE) =
@@ -2924,9 +2906,9 @@ dummy_func(
 
         op(_STORE_ATTR_SHAPE_ADD, (shape_to/0, offset/1, value, owner -- o)) {
             PyObject *owner_o = PyValue_ObjectBorrow(owner);
-            PyObject **value_ptr = (PyObject **)((char *)owner_o + offset);
-            assert(*value_ptr == NULL);
-            *value_ptr = PyValue_ObjectBorrow(value);
+            PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
+            assert(PyValue_IsNull(*value_ptr));
+            *value_ptr = value;
             DEAD(value);
             PyDictValues *values = _PyObject_InlineValues(owner_o);
             _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
@@ -2966,24 +2948,20 @@ dummy_func(
             }
             // A split table keeps its values, such as an object's inline
             // values, apart from its keys.
-            PyObject **value_ptr = dict->ma_values == NULL ?
+            PyValue *value_ptr = dict->ma_values == NULL ?
                 &ep->me_value : &dict->ma_values->values[hint];
-            PyObject *old_value = *value_ptr;
-            if (old_value == NULL) {
+            if (PyValue_IsNull(*value_ptr)) {
                 UNLOCK_OBJECT(dict);
                 DEOPT_IF(true);
             }
-            _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, dict, name, PyValue_ObjectBorrow(value));
-            FT_ATOMIC_STORE_PTR_RELEASE(*value_ptr, PyValue_ObjectBorrow(value));
+            _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, dict,
+                                PyValue_FromObject(name), value);
+            *value_ptr = value;
             DEAD(value);
             UNLOCK_OBJECT(dict);
-
-            // old_value should be DECREFed after GC track checking is done, if not, it could raise a segmentation fault,
-            // when dict only holds the strong reference to value in ep->me_value.
             STAT_INC(STORE_ATTR, hit);
             o = owner;
             DEAD(owner);
-            Py_XDECREF(old_value);
         }
 
         macro(STORE_ATTR_WITH_HINT) =

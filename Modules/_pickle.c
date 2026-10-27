@@ -5444,7 +5444,7 @@ _pickle_PicklerMemoProxy_copy_impl(PicklerMemoProxyObject *self)
                 Py_DECREF(key);
                 goto error;
             }
-            status = _PyDict_SetItem_Take2((PyDictObject *)new_memo, key, value);
+            status = PyDict_SetItem(new_memo, key, value);
             if (status < 0)
                 goto error;
         }

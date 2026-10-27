@@ -1,4 +1,5 @@
-"""Smoke test for cffi: call libc through ABI mode, including a callback."""
+"""Smoke test for cffi: call libc through in-line ABI mode, including a
+callback."""
 
 import importlib.metadata
 
@@ -45,3 +46,14 @@ assert list(values) == [1, 3, 5, 9]
 pairs = ffi.new("struct pair[2]", [(1, 0.5), (2, 1.5)])
 assert ffi.sizeof("struct pair") == 16 and pairs[1].value == 1.5
 assert ffi.unpack(ffi.cast("char *", buffer), 2) == b"42"
+
+# The backend's METH_O functions, and slice assignment from an iterator.
+assert ffi.alignof("struct pair") == 8
+assert ffi.typeof(pairs) is ffi.typeof("struct pair[2]")
+values[1:3] = iter([7, 8])
+assert list(values) == [1, 7, 8, 9]
+handle = ffi.new_handle(pairs)
+assert ffi.from_handle(handle) is pairs
+ffi.errno = 7
+assert ffi.errno == 7
+ffi.release(values)

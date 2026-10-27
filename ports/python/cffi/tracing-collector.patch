@@ -1,0 +1,242 @@
+--- a/src/c/_cffi_backend.c
++++ b/src/c/_cffi_backend.c
+@@ -479,6 +479,7 @@
+ {
+     Py_VISIT(ct->ct_itemdescr);
+     Py_VISIT(ct->ct_stuff);
++    Py_VISIT(ct->ct_unique_key);
+     return 0;
+ }
+ 
+@@ -774,6 +775,15 @@
+     PyObject_Del(cf);
+ }
+ 
++/* The tracing collector traces every type that holds references, GC or
++   not. */
++static int
++cfield_traverse(CFieldObject *cf, visitproc visit, void *arg)
++{
++    Py_VISIT(cf->cf_type);
++    return 0;
++}
++
+ #undef OFF
+ #define OFF(x) offsetof(CFieldObject, x)
+ 
+@@ -809,7 +819,7 @@
+     0,                                          /* tp_as_buffer */
+     Py_TPFLAGS_DEFAULT,                         /* tp_flags */
+     0,                                          /* tp_doc */
+-    0,                                          /* tp_traverse */
++    (traverseproc)cfield_traverse,              /* tp_traverse */
+     0,                                          /* tp_clear */
+     0,                                          /* tp_richcompare */
+     0,                                          /* tp_weaklistoffset */
+@@ -1976,8 +1986,27 @@
+     PyObject_Free(view);
+ }
+ 
++/* The tracing collector traces every type that holds references, GC or
++   not, and a non-GC subtype does not inherit tp_traverse: each CData type
++   visits its c_type. */
++static int cdata_traverse(CDataObject *cd, visitproc visit, void *arg)
++{
++    Py_VISIT(cd->c_type);
++    return 0;
++}
++
++static int cdataowning_traverse(CDataObject *cd, visitproc visit, void *arg)
++{
++    if (cd->c_type->ct_flags & CT_IS_PTR_TO_OWNED) {
++        /* for ffi.new("struct *") */
++        Py_VISIT(((CDataObject_own_structptr *)cd)->structobj);
++    }
++    return cdata_traverse(cd, visit, arg);
++}
++
+ static int cdataowninggc_traverse(CDataObject *cd, visitproc visit, void *arg)
+ {
++    Py_VISIT(cd->c_type);
+     if (cd->c_type->ct_flags & CT_IS_VOID_PTR) {        /* a handle */
+         PyObject *x = ((CDataObject_own_structptr *)cd)->structobj;
+         Py_VISIT(x);
+@@ -1993,10 +2022,19 @@
+ static int cdatafrombuf_traverse(CDataObject *cd, visitproc visit, void *arg)
+ {
+     Py_buffer *view = ((CDataObject_frombuf *)cd)->bufferview;
++    Py_VISIT(cd->c_type);
+     Py_VISIT(view->obj);
+     return 0;
+ }
+ 
++/* Releasing the buffer may call the exporter's Python code, which a
++   dealloc must not run under the tracing collector.  PyBuffer_Release()
++   does nothing for a view already released. */
++static void cdatafrombuf_finalize(CDataObject *cd)
++{
++    PyBuffer_Release(((CDataObject_frombuf *)cd)->bufferview);
++}
++
+ static int cdataowninggc_clear(CDataObject *cd)
+ {
+     if (cd->c_type->ct_flags & CT_IS_VOID_PTR) {        /* a handle */
+@@ -2083,6 +2121,7 @@
+ 
+ static int cdatagcp_traverse(CDataObject_gcp *cd, visitproc visit, void *arg)
+ {
++    Py_VISIT(cd->head.c_type);
+     Py_VISIT(cd->destructor);
+     Py_VISIT(cd->origobj);
+     return 0;
+@@ -3425,7 +3464,7 @@
+     "The internal base type for CData objects.  Use FFI.CData to access "
+     "it.  Always check with isinstance(): subtypes are sometimes returned "
+     "on CPython, for performance reasons.",     /* tp_doc */
+-    0,                                          /* tp_traverse */
++    (traverseproc)cdata_traverse,               /* tp_traverse */
+     0,                                          /* tp_clear */
+     cdata_richcompare,                          /* tp_richcompare */
+     offsetof(CDataObject, c_weakreflist),       /* tp_weaklistoffset */
+@@ -3468,7 +3507,7 @@
+     Py_TPFLAGS_DEFAULT,                         /* tp_flags */
+     "This is an internal subtype of _CDataBase for performance only on "
+     "CPython.  Check with isinstance(x, ffi.CData).",   /* tp_doc */
+-    0,                                          /* tp_traverse */
++    (traverseproc)cdataowning_traverse,         /* tp_traverse */
+     0,                                          /* tp_clear */
+     0,  /* inherited */                         /* tp_richcompare */
+     0,  /* inherited */                         /* tp_weaklistoffset */
+@@ -3485,7 +3524,7 @@
+     0,                                          /* tp_init */
+     0,                                          /* tp_alloc */
+     0,                                          /* tp_new */
+-    free,                                       /* tp_free */
++    PyObject_Free,                              /* tp_free */
+ };
+ 
+ static PyTypeObject CDataOwningGC_Type = {
+@@ -3572,6 +3611,15 @@
+     0,                                          /* tp_alloc */
+     0,                                          /* tp_new */
+     PyObject_GC_Del,                            /* tp_free */
++    0,                                          /* tp_is_gc */
++    0,                                          /* tp_bases */
++    0,                                          /* tp_mro */
++    0,                                          /* tp_cache */
++    0,                                          /* tp_subclasses */
++    0,                                          /* tp_weaklist */
++    0,                                          /* tp_del */
++    0,                                          /* version_tag */
++    (destructor)cdatafrombuf_finalize,          /* tp_finalize */
+ };
+ 
+ static PyTypeObject CDataGCP_Type = {
+@@ -3659,6 +3707,14 @@
+     PyObject_Del(it);
+ }
+ 
++static int
++cdataiter_traverse(CDataIterObject *it, visitproc visit, void *arg)
++{
++    Py_VISIT(it->di_object);
++    Py_VISIT(it->di_itemtype);
++    return 0;
++}
++
+ static PyTypeObject CDataIter_Type = {
+     PyVarObject_HEAD_INIT(NULL, 0)
+     "_cffi_backend.__CData_iterator",       /* tp_name */
+@@ -3682,7 +3738,7 @@
+     0,                                      /* tp_as_buffer */
+     Py_TPFLAGS_DEFAULT,                     /* tp_flags */
+     0,                                      /* tp_doc */
+-    0,                                      /* tp_traverse */
++    (traverseproc)cdataiter_traverse,       /* tp_traverse */
+     0,                                      /* tp_clear */
+     0,                                      /* tp_richcompare */
+     0,                                      /* tp_weaklistoffset */
+@@ -3720,12 +3776,14 @@
+                                            int dont_clear)
+ {
+     /* note: objects with &CDataOwning_Type are always allocated with
+-       either a plain malloc() or calloc(), and freed with free(). */
++       either PyObject_Malloc() or PyObject_Calloc(), and freed with
++       PyObject_Free(): the tracing collector sees only objects in its
++       heap, and frees them itself. */
+     CDataObject *cd;
+     if (dont_clear)
+-        cd = malloc(size);
++        cd = PyObject_Malloc(size);
+     else
+-        cd = calloc(size, 1);
++        cd = PyObject_Calloc(size, 1);
+     if (PyObject_Init((PyObject *)cd, &CDataOwning_Type) == NULL)
+         return NULL;
+ 
+--- a/src/c/cglob.c
++++ b/src/c/cglob.c
+@@ -18,6 +18,16 @@
+     PyObject_Del(gs);
+ }
+ 
++/* The tracing collector traces every type that holds references, GC or
++   not. */
++static int glob_support_traverse(GlobSupportObject *gs, visitproc visit,
++                                 void *arg)
++{
++    Py_VISIT(gs->gs_name);
++    Py_VISIT(gs->gs_type);
++    return 0;
++}
++
+ static PyTypeObject GlobSupport_Type = {
+     PyVarObject_HEAD_INIT(NULL, 0)
+     "_cffi_backend.__FFIGlobSupport",
+@@ -39,6 +49,8 @@
+     0,                                          /* tp_setattro */
+     0,                                          /* tp_as_buffer */
+     Py_TPFLAGS_DEFAULT,                         /* tp_flags */
++    0,                                          /* tp_doc */
++    (traverseproc)glob_support_traverse,        /* tp_traverse */
+ };
+ 
+ #define GlobSupport_Check(ob)  (Py_TYPE(ob) == &GlobSupport_Type)
+--- a/src/c/ffi_obj.c
++++ b/src/c/ffi_obj.c
+@@ -80,7 +80,22 @@
+     Py_VISIT(ffi->types_builder.types_dict);
+     Py_VISIT(ffi->types_builder.included_ffis);
+     Py_VISIT(ffi->types_builder.included_libs);
++    Py_VISIT(ffi->types_builder._keepalive1);
++    Py_VISIT(ffi->types_builder._keepalive2);
+     Py_VISIT(ffi->gc_wrefs);
++    Py_VISIT(ffi->gc_wrefs_freelist);
++    Py_VISIT(ffi->init_once_cache);
++    if (!ffi->ctx_is_static) {
++        /* The types realized so far, which realize_c_type() caches in
++           the PyMem array that cdlopen.c built.  A static context's array
++           is in the extension module's data, which the collector scans. */
++        int i;
++        for (i = 0; i < ffi->types_builder.ctx.num_types; i++) {
++            _cffi_opcode_t op = _CFFI_LOAD_OP(ffi->types_builder.ctx.types[i]);
++            if ((((uintptr_t)op) & 1) == 0)
++                Py_VISIT((PyObject *)op);
++        }
++    }
+     return 0;
+ }
+ 
+--- a/src/c/misc_thread_common.h
++++ b/src/c/misc_thread_common.h
+@@ -221,8 +221,8 @@
+     /* thread-safety: we have the GIL here, and 'tstate' is the one that
+        corresponds to our own thread.  We are allocating a new 'canary'
+        and setting it up for our own thread, both in 'tdict' (which owns
+-       the reference) and in 'tls->local_thread_canary' (which doesn't). */
+-    assert(Py_REFCNT(canary) == 1);
++       the reference) and in 'tls->local_thread_canary' (which doesn't).
++       Nothing is reference counted, so there is no count to assert. */
+     tls->local_thread_canary = canary;
+     {
+         /* this extra PyGILState_Ensure() is deliberately never paired

@@ -1,0 +1,835 @@
+--- a/src/c/_cffi_backend.c
++++ b/src/c/_cffi_backend.c
+@@ -842,7 +842,7 @@
+     else {
+         PyObject *io;
+         PY_LONG_LONG res;
+-        PyNumberMethods *nb = ob->ob_type->tp_as_number;
++        PyNumberMethods *nb = Py_TYPE(ob)->tp_as_number;
+ 
+         if (CDataObject_Or_PyFloat_Check(ob) ||
+                 nb == NULL || nb->nb_int == NULL) {
+@@ -886,7 +886,7 @@
+     else {
+         PyObject *io;
+         unsigned PY_LONG_LONG res;
+-        PyNumberMethods *nb = ob->ob_type->tp_as_number;
++        PyNumberMethods *nb = Py_TYPE(ob)->tp_as_number;
+ 
+         if ((strict && CDataObject_Or_PyFloat_Check(ob)) ||
+                 nb == NULL || nb->nb_int == NULL) {
+@@ -1482,7 +1482,6 @@
+     CTypeDescrObject *ctitem = ct->ct_itemdescr;
+ 
+     if (PyList_Check(init) || PyTuple_Check(init)) {
+-        PyObject **items;
+         Py_ssize_t i, n;
+         n = PySequence_Fast_GET_SIZE(init);
+         if (ct->ct_length >= 0 && n > ct->ct_length) {
+@@ -1491,9 +1490,10 @@
+                          ct->ct_name, n);
+             return -1;
+         }
+-        items = PySequence_Fast_ITEMS(init);
+         for (i=0; i<n; i++) {
+-            if (convert_from_object(data, ctitem, items[i]) < 0)
++            /* The items are PyValue: box an inline int or float. */
++            PyObject *item = PyValue_Object(PySequence_Fast_GET_VALUE(init, i));
++            if (item == NULL || convert_from_object(data, ctitem, item) < 0)
+                 return -1;
+             data += ctitem->ct_size;
+         }
+@@ -1584,7 +1584,6 @@
+     }
+ 
+     if (PyList_Check(init) || PyTuple_Check(init)) {
+-        PyObject **items = PySequence_Fast_ITEMS(init);
+         Py_ssize_t i, n = PySequence_Fast_GET_SIZE(init);
+         CFieldObject *cf = (CFieldObject *)ct->ct_extra;
+ 
+@@ -1597,7 +1596,10 @@
+                              ct->ct_name, n);
+                 return -1;
+             }
+-            if (convert_vfield_from_object(data, cf, items[i], optvarsize) < 0)
++            /* The items are PyValue: box an inline int or float. */
++            PyObject *item = PyValue_Object(PySequence_Fast_GET_VALUE(init, i));
++            if (item == NULL ||
++                    convert_vfield_from_object(data, cf, item, optvarsize) < 0)
+                 return -1;
+             cf = cf->cf_next;
+         }
+@@ -2521,19 +2523,20 @@
+     Py_ssize_t start, stop;
+     CTypeDescrObject *ct;
+ 
+-    start = PyLong_AsSsize_t(slice->start);
++    /* A slice holds its bounds as PyValue. */
++    start = PyLong_AsSsize_tValue(slice->start);
+     if (start == -1 && PyErr_Occurred()) {
+-        if (slice->start == Py_None)
++        if (PyValue_Is(slice->start, PyValue_FromObject(Py_None)))
+             PyErr_SetString(PyExc_IndexError, "slice start must be specified");
+         return NULL;
+     }
+-    stop = PyLong_AsSsize_t(slice->stop);
++    stop = PyLong_AsSsize_tValue(slice->stop);
+     if (stop == -1 && PyErr_Occurred()) {
+-        if (slice->stop == Py_None)
++        if (PyValue_Is(slice->stop, PyValue_FromObject(Py_None)))
+             PyErr_SetString(PyExc_IndexError, "slice stop must be specified");
+         return NULL;
+     }
+-    if (slice->step != Py_None) {
++    if (!PyValue_Is(slice->step, PyValue_FromObject(Py_None))) {
+         PyErr_SetString(PyExc_IndexError, "slice with step not supported");
+         return NULL;
+     }
+@@ -2598,7 +2601,6 @@
+ {
+     Py_ssize_t bounds[2], i, length, itemsize;
+     PyObject *it, *item;
+-    PyObject *(*iternext)(PyObject *);
+     char *cdata;
+     int err;
+     CTypeDescrObject *ct = _cdata_getslicearg(cd, slice, bounds);
+@@ -2656,10 +2658,9 @@
+     it = PyObject_GetIter(v);
+     if (it == NULL)
+         return -1;
+-    iternext = *it->ob_type->tp_iternext;
+-
++    /* tp_iternext returns a PyValue: PyIter_Next() gives the object. */
+     for (i = 0; i < length; i++) {
+-        item = iternext(it);
++        item = PyIter_Next(it);
+         if (item == NULL) {
+             if (!PyErr_Occurred())
+                 PyErr_Format(PyExc_ValueError,
+@@ -2674,7 +2675,7 @@
+ 
+         cdata += itemsize;
+     }
+-    item = iternext(it);
++    item = PyIter_Next(it);
+     if (item != NULL) {
+         Py_DECREF(item);
+         PyErr_Format(PyExc_ValueError,
+@@ -3640,15 +3641,15 @@
+     CTypeDescrObject *di_itemtype;
+ } CDataIterObject;
+ 
+-static PyObject *
++static PyValue
+ cdataiter_next(CDataIterObject *it)
+ {
+     char *result = it->di_next;
+     if (result != it->di_stop) {
+         it->di_next = result + it->di_itemtype->ct_size;
+-        return convert_to_object(result, it->di_itemtype);
++        return PyValue_FromResult(convert_to_object(result, it->di_itemtype));
+     }
+-    return NULL;
++    return PyValue_NULL;
+ }
+ 
+ static void
+@@ -3981,7 +3982,7 @@
+             }
+         }
+     }
+-    nb = ob->ob_type->tp_as_number;
++    nb = Py_TYPE(ob)->tp_as_number;
+     if (nb == NULL || (nb->nb_float == NULL && nb->nb_int == NULL)) {
+         PyErr_SetString(PyExc_TypeError, "integer/float expected");
+         return -1;
+@@ -5879,15 +5880,26 @@
+                                           int ellipsis, int fabi)
+ {
+     CTypeDescrObject *fct, **pfargs;
+-    Py_ssize_t nargs;
++    Py_ssize_t i, nargs;
+     char *repl = "(*)";
+ 
+     fb->nb_bytes = 0;
+     fb->bufferp = NULL;
+     fb->fct = NULL;
+ 
+-    pfargs = (CTypeDescrObject **)&PyTuple_GET_ITEM(fargs, 0);
++    /* The tuple's items are PyValue, so copy the ctypes into an array on
++       the stack, where the collector sees them. */
+     nargs = PyTuple_GET_SIZE(fargs);
++    pfargs = alloca(sizeof(CTypeDescrObject *) * (nargs + 1));
++    for (i = 0; i < nargs; i++) {
++        PyValue farg = PyTuple_GET_VALUE(fargs, i);
++        if (!PyValue_IsObject(farg) ||
++                !CTypeDescr_Check(PyValue_ObjectBorrow(farg))) {
++            PyErr_SetString(PyExc_TypeError, "expected a tuple of ctypes");
++            return NULL;
++        }
++        pfargs[i] = (CTypeDescrObject *)PyValue_ObjectBorrow(farg);
++    }
+ #if defined(MS_WIN32) && !defined(_WIN64)
+     if (fabi == FFI_STDCALL)
+         repl = "(__stdcall *)";
+@@ -6570,17 +6582,21 @@
+     return NULL;
+ }
+ 
+-static PyObject *b_alignof(PyObject *self, PyObject *arg)
++static PyValue b_alignof(PyObject *self, PyValue arg_value)
+ {
+     int align;
++    PyObject *arg = PyValue_Object(arg_value);
++    if (arg == NULL)
++        return PyValue_NULL;
++
+     if (!CTypeDescr_Check(arg)) {
+         PyErr_SetString(PyExc_TypeError, "expected a 'ctype' object");
+-        return NULL;
++        return PyValue_NULL;
+     }
+     align = get_alignment((CTypeDescrObject *)arg);
+     if (align < 0)
+-        return NULL;
+-    return PyLong_FromLong(align);
++        return PyValue_NULL;
++    return PyValue_FromResult(PyLong_FromLong(align));
+ }
+ 
+ static Py_ssize_t direct_sizeof_cdata(CDataObject *cd)
+@@ -6598,9 +6614,12 @@
+     return size;
+ }
+ 
+-static PyObject *b_sizeof(PyObject *self, PyObject *arg)
++static PyValue b_sizeof(PyObject *self, PyValue arg_value)
+ {
+     Py_ssize_t size;
++    PyObject *arg = PyValue_Object(arg_value);
++    if (arg == NULL)
++        return PyValue_NULL;
+ 
+     if (CData_Check(arg)) {
+         size = direct_sizeof_cdata((CDataObject *)arg);
+@@ -6610,28 +6629,31 @@
+         if (size < 0) {
+             PyErr_Format(PyExc_ValueError, "ctype '%s' is of unknown size",
+                          ((CTypeDescrObject *)arg)->ct_name);
+-            return NULL;
++            return PyValue_NULL;
+         }
+     }
+     else {
+         PyErr_SetString(PyExc_TypeError,
+                         "expected a 'cdata' or 'ctype' object");
+-        return NULL;
++        return PyValue_NULL;
+     }
+-    return PyLong_FromSsize_t(size);
++    return PyValue_FromResult(PyLong_FromSsize_t(size));
+ }
+ 
+-static PyObject *b_typeof(PyObject *self, PyObject *arg)
++static PyValue b_typeof(PyObject *self, PyValue arg_value)
+ {
+     PyObject *res;
++    PyObject *arg = PyValue_Object(arg_value);
++    if (arg == NULL)
++        return PyValue_NULL;
+ 
+     if (!CData_Check(arg)) {
+         PyErr_SetString(PyExc_TypeError, "expected a 'cdata' object");
+-        return NULL;
++        return PyValue_NULL;
+     }
+     res = (PyObject *)((CDataObject *)arg)->c_type;
+     Py_INCREF(res);
+-    return res;
++    return PyValue_FromResult(res);
+ }
+ 
+ static CTypeDescrObject *direct_typeoffsetof(CTypeDescrObject *ct,
+@@ -7084,20 +7106,20 @@
+     return PyLong_FromLong(err);
+ }
+ 
+-static PyObject *b_set_errno(PyObject *self, PyObject *arg)
++static PyValue b_set_errno(PyObject *self, PyValue arg)
+ {
+-    long ival = PyLong_AsLong(arg);
++    long ival = PyLong_AsLongValue(arg);
+     if (ival == -1 && PyErr_Occurred())
+-        return NULL;
++        return PyValue_NULL;
+     else if (ival < INT_MIN || ival > INT_MAX) {
+         PyErr_SetString(PyExc_OverflowError, "errno value too large");
+-        return NULL;
++        return PyValue_NULL;
+     }
+     errno = (int)ival;
+     save_errno_only();
+     errno = 0;
+     Py_INCREF(Py_None);
+-    return Py_None;
++    return PyValue_FromResult(Py_None);
+ }
+ 
+ static PyObject *newp_handle(CTypeDescrObject *ct_voidp, PyObject *x)
+@@ -7132,27 +7154,31 @@
+     return newp_handle(ct, x);
+ }
+ 
+-static PyObject *b_from_handle(PyObject *self, PyObject *arg)
++static PyValue b_from_handle(PyObject *self, PyValue arg_value)
+ {
+     CTypeDescrObject *ct;
+     CDataObject_own_structptr *orgcd;
+     PyObject *x;
++    PyObject *arg = PyValue_Object(arg_value);
++    if (arg == NULL)
++        return PyValue_NULL;
++
+     if (!CData_Check(arg)) {
+         PyErr_SetString(PyExc_TypeError, "expected a 'cdata' object");
+-        return NULL;
++        return PyValue_NULL;
+     }
+     ct = ((CDataObject *)arg)->c_type;
+     if (!(ct->ct_flags & CT_IS_VOIDCHAR_PTR)) {
+         PyErr_Format(PyExc_TypeError,
+                      "expected a 'cdata' object with a 'void *' out of "
+                      "new_handle(), got '%s'", ct->ct_name);
+-        return NULL;
++        return PyValue_NULL;
+     }
+     orgcd = (CDataObject_own_structptr *)((CDataObject *)arg)->c_data;
+     if (!orgcd) {
+         PyErr_SetString(PyExc_RuntimeError,
+                         "cannot use from_handle() on NULL pointer");
+-        return NULL;
++        return PyValue_NULL;
+     }
+     if (Py_REFCNT(orgcd) <= 0 || Py_TYPE(orgcd) != &CDataOwningGC_Type) {
+         Py_FatalError("ffi.from_handle() detected that the address passed "
+@@ -7162,7 +7188,7 @@
+     }
+     x = orgcd->structobj;
+     Py_INCREF(x);
+-    return x;
++    return PyValue_FromResult(x);
+ }
+ 
+ static int _my_PyObject_GetContiguousBuffer(PyObject *x, Py_buffer *view,
+@@ -7346,7 +7372,7 @@
+ }
+ 
+ /* forward, in commontypes.c */
+-static PyObject *b__get_common_types(PyObject *self, PyObject *arg);
++static PyValue b__get_common_types(PyObject *self, PyValue arg);
+ 
+ static PyObject *b_gcp(PyObject *self, PyObject *args, PyObject *kwds)
+ {
+@@ -7376,13 +7402,17 @@
+     return (PyObject *)cd;
+ }
+ 
+-static PyObject *b_release(PyObject *self, PyObject *arg)
++static PyValue b_release(PyObject *self, PyValue arg_value)
+ {
++    PyObject *arg = PyValue_Object(arg_value);
++    if (arg == NULL)
++        return PyValue_NULL;
++
+     if (!CData_Check(arg)) {
+         PyErr_SetString(PyExc_TypeError, "expected a 'cdata' object");
+-        return NULL;
++        return PyValue_NULL;
+     }
+-    return cdata_exit(arg, NULL);
++    return PyValue_FromResult(cdata_exit(arg, NULL));
+ }
+ 
+ /************************************************************/
+@@ -7644,7 +7674,7 @@
+     return Py_None;
+ }
+ 
+-static PyObject *b_init_cffi_1_0_external_module(PyObject *, PyObject *);
++static PyValue b_init_cffi_1_0_external_module(PyObject *, PyValue);
+ /* forward, see cffi1_module.c */
+ 
+ 
+@@ -7662,30 +7692,30 @@
+     {"newp", b_newp, METH_VARARGS},
+     {"cast", b_cast, METH_VARARGS},
+     {"callback", b_callback, METH_VARARGS},
+-    {"alignof", b_alignof, METH_O},
+-    {"sizeof", b_sizeof, METH_O},
+-    {"typeof", b_typeof, METH_O},
++    {"alignof", _PyCFunction_CAST(b_alignof), METH_O},
++    {"sizeof", _PyCFunction_CAST(b_sizeof), METH_O},
++    {"typeof", _PyCFunction_CAST(b_typeof), METH_O},
+     {"typeoffsetof", b_typeoffsetof, METH_VARARGS},
+     {"rawaddressof", b_rawaddressof, METH_VARARGS},
+     {"getcname", b_getcname, METH_VARARGS},
+     {"string", (PyCFunction)b_string, METH_VARARGS | METH_KEYWORDS},
+     {"unpack", (PyCFunction)b_unpack, METH_VARARGS | METH_KEYWORDS},
+     {"get_errno", b_get_errno, METH_NOARGS},
+-    {"set_errno", b_set_errno, METH_O},
++    {"set_errno", _PyCFunction_CAST(b_set_errno), METH_O},
+     {"newp_handle", b_newp_handle, METH_VARARGS},
+-    {"from_handle", b_from_handle, METH_O},
++    {"from_handle", _PyCFunction_CAST(b_from_handle), METH_O},
+     {"from_buffer", b_from_buffer, METH_VARARGS},
+     {"memmove", (PyCFunction)b_memmove, METH_VARARGS | METH_KEYWORDS},
+     {"gcp", (PyCFunction)b_gcp, METH_VARARGS | METH_KEYWORDS},
+-    {"release", b_release, METH_O},
++    {"release", _PyCFunction_CAST(b_release), METH_O},
+ #ifdef MS_WIN32
+     {"getwinerror", (PyCFunction)b_getwinerror, METH_VARARGS | METH_KEYWORDS},
+ #endif
+     {"_get_types", b__get_types, METH_NOARGS},
+-    {"_get_common_types", b__get_common_types, METH_O},
++    {"_get_common_types", _PyCFunction_CAST(b__get_common_types), METH_O},
+     {"_testfunc", b__testfunc, METH_VARARGS},
+     {"_testbuff", b__testbuff, METH_VARARGS},
+-    {"_init_cffi_1_0_external_module", b_init_cffi_1_0_external_module, METH_O},
++    {"_init_cffi_1_0_external_module", _PyCFunction_CAST(b_init_cffi_1_0_external_module), METH_O},
+     {NULL,     NULL}    /* Sentinel */
+ };
+ 
+--- a/src/c/call_python.c
++++ b/src/c/call_python.c
+@@ -60,7 +60,7 @@
+     return NULL;
+ }
+ 
+-static PyObject *_ffi_def_extern_decorator(PyObject *outer_args, PyObject *fn)
++static PyValue _ffi_def_extern_decorator(PyObject *outer_args, PyValue fn_value)
+ {
+     const char *s;
+     PyObject *error, *onerror, *infotuple, *old1;
+@@ -73,18 +73,21 @@
+     PyObject *name = NULL;
+     PyObject *interpstate_dict;
+     PyObject *interpstate_key;
++    PyObject *fn = PyValue_Object(fn_value);
++    if (fn == NULL)
++        return PyValue_NULL;
+ 
+     if (!PyArg_ParseTuple(outer_args, "OzOO", &ffi, &s, &error, &onerror))
+-        return NULL;
++        return PyValue_NULL;
+ 
+     if (s == NULL) {
+         name = PyObject_GetAttrString(fn, "__name__");
+         if (name == NULL)
+-            return NULL;
++            return PyValue_NULL;
+         s = PyUnicode_AsUTF8(name);
+         if (s == NULL) {
+             Py_DECREF(name);
+-            return NULL;
++            return PyValue_NULL;
+         }
+     }
+ 
+@@ -100,12 +103,12 @@
+     ct = realize_c_type(types_builder, types_builder->ctx.types,
+                         _CFFI_GETARG(g->type_op));
+     if (ct == NULL)
+-        return NULL;
++        return PyValue_NULL;
+ 
+     infotuple = prepare_callback_info_tuple(ct, fn, error, onerror, 0);
+     Py_DECREF(ct);
+     if (infotuple == NULL)
+-        return NULL;
++        return PyValue_NULL;
+ 
+     /* don't directly attach infotuple to externpy: in the presence of
+        subinterpreters, each time we switch to a different
+@@ -115,21 +118,21 @@
+     interpstate_dict = _get_interpstate_dict();
+     if (interpstate_dict == NULL) {
+         Py_DECREF(infotuple);
+-        return PyErr_NoMemory();
++        return PyValue_FromResult(PyErr_NoMemory());
+     }
+ 
+     externpy = (struct _cffi_externpy_s *)g->address;
+     interpstate_key = PyLong_FromVoidPtr((void *)externpy);
+     if (interpstate_key == NULL) {
+         Py_DECREF(infotuple);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     err = PyDict_SetItem(interpstate_dict, interpstate_key, infotuple);
+     Py_DECREF(interpstate_key);
+     Py_DECREF(infotuple);    /* interpstate_dict owns the last ref */
+     if (err < 0)
+-        return NULL;
++        return PyValue_NULL;
+ 
+     /* force _update_cache_to_call_python() to be called the next time
+        the C function invokes cffi_call_python, to update the cache */
+@@ -139,14 +142,13 @@
+     Py_XDECREF(old1);
+ 
+     /* return the function object unmodified */
+-    Py_INCREF(fn);
+-    return fn;
++    return fn_value;
+ 
+  not_found:
+     PyErr_Format(FFIError, "ffi.def_extern('%s'): no 'extern \"Python\"' "
+                  "function with this name", s);
+     Py_XDECREF(name);
+-    return NULL;
++    return PyValue_NULL;
+ }
+ 
+ 
+--- a/src/c/cffi1_module.c
++++ b/src/c/cffi1_module.c
+@@ -138,7 +138,7 @@
+     return m;
+ }
+ 
+-static PyObject *b_init_cffi_1_0_external_module(PyObject *self, PyObject *arg)
++static PyValue b_init_cffi_1_0_external_module(PyObject *self, PyValue arg_value)
+ {
+     PyObject *m, *modules_dict;
+     FFIObject *ffi;
+@@ -147,10 +147,13 @@
+     char *module_name, *exports, *module_name_with_lib;
+     void **raw;
+     const struct _cffi_type_context_s *ctx;
++    PyObject *arg = PyValue_Object(arg_value);
++    if (arg == NULL)
++        return PyValue_NULL;
+ 
+     raw = (void **)PyLong_AsVoidPtr(arg);
+     if (raw == NULL)
+-        return NULL;
++        return PyValue_NULL;
+ 
+     module_name = (char *)raw[0];
+     version = (Py_ssize_t)raw[1];
+@@ -164,7 +167,7 @@
+                 "This module might need a more recent version of cffi "
+                 "than the one currently installed, which is %s",
+                 module_name, (void *)version, CFFI_VERSION);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     /* initialize the exports array */
+@@ -178,39 +181,39 @@
+     /* make the module object */
+     m = _my_Py_InitModule(module_name);
+     if (m == NULL)
+-        return NULL;
++        return PyValue_NULL;
+ 
+     /* build the FFI and Lib object inside this new module */
+     ffi = ffi_internal_new(&FFI_Type, ctx);
+     Py_XINCREF(ffi);    /* make the ffi object really immortal */
+     if (ffi == NULL || PyModule_AddObject(m, "ffi", (PyObject *)ffi) < 0)
+-        return NULL;
++        return PyValue_NULL;
+ 
+     lib = lib_internal_new(ffi, module_name, NULL, 0);
+     if (lib == NULL || PyModule_AddObject(m, "lib", (PyObject *)lib) < 0)
+-        return NULL;
++        return PyValue_NULL;
+ 
+     if (make_included_tuples(module_name, ctx->includes,
+                              &ffi->types_builder.included_ffis,
+                              &lib->l_types_builder->included_libs) < 0)
+-        return NULL;
++        return PyValue_NULL;
+ 
+     /* add manually 'module_name.lib' in sys.modules:
+        see test_import_from_lib */
+     modules_dict = PySys_GetObject("modules");
+     if (!modules_dict)
+-        return NULL;
++        return PyValue_NULL;
+     module_name_with_lib = alloca(strlen(module_name) + 5);
+     strcpy(module_name_with_lib, module_name);
+     strcat(module_name_with_lib, ".lib");
+     if (PyDict_SetItemString(modules_dict, module_name_with_lib,
+                              (PyObject *)lib) < 0)
+-        return NULL;
++        return PyValue_NULL;
+ 
+     /* add manually 'module_name' in sys.modules: it seems that 
+        Py_InitModule() is not enough to do that */
+     if (PyDict_SetItemString(modules_dict, module_name, m) < 0)
+-        return NULL;
++        return PyValue_NULL;
+ 
+-    return m;
++    return PyValue_FromResult(m);
+ }
+--- a/src/c/commontypes.c
++++ b/src/c/commontypes.c
+@@ -199,20 +199,24 @@
+     return entry + strlen(entry) + 1;
+ }
+ 
+-static PyObject *b__get_common_types(PyObject *self, PyObject *arg)
++static PyValue b__get_common_types(PyObject *self, PyValue arg_value)
+ {
+     int err;
+     size_t i;
++    PyObject *arg = PyValue_Object(arg_value);
++    if (arg == NULL)
++        return PyValue_NULL;
++
+     for (i = 0; i < num_common_simple_types; i++) {
+         const char *s = common_simple_types[i];
+         PyObject *o = PyUnicode_FromString(s + strlen(s) + 1);
+         if (o == NULL)
+-            return NULL;
++            return PyValue_NULL;
+         err = PyDict_SetItemString(arg, s, o);
+         Py_DECREF(o);
+         if (err < 0)
+-            return NULL;
++            return PyValue_NULL;
+     }
+     Py_INCREF(Py_None);
+-    return Py_None;
++    return PyValue_FromResult(Py_None);
+ }
+--- a/src/c/ffi_obj.c
++++ b/src/c/ffi_obj.c
+@@ -258,9 +258,12 @@
+ "Return the size in bytes of the argument.\n"
+ "It can be a string naming a C type, or a 'cdata' instance.");
+ 
+-static PyObject *ffi_sizeof(FFIObject *self, PyObject *arg)
++static PyValue ffi_sizeof(FFIObject *self, PyValue arg_value)
+ {
+     Py_ssize_t size;
++    PyObject *arg = PyValue_Object(arg_value);
++    if (arg == NULL)
++        return PyValue_NULL;
+ 
+     if (CData_Check(arg)) {
+         size = direct_sizeof_cdata((CDataObject *)arg);
+@@ -268,36 +271,41 @@
+     else {
+         CTypeDescrObject *ct = _ffi_type(self, arg, ACCEPT_ALL);
+         if (ct == NULL)
+-            return NULL;
++            return PyValue_NULL;
+         if (ct->ct_flags & (CT_STRUCT | CT_UNION)) {
+             if (force_lazy_struct(ct) < 0)
+-                return NULL;
++                return PyValue_NULL;
+         }
+         size = cffi_get_size(ct);
+         if (size < 0) {
+             PyErr_Format(FFIError, "don't know the size of ctype '%s'",
+                          ct->ct_name);
+-            return NULL;
++            return PyValue_NULL;
+         }
+     }
+-    return PyLong_FromSsize_t(size);
++    return PyValue_FromResult(PyLong_FromSsize_t(size));
+ }
+ 
+ PyDoc_STRVAR(ffi_alignof_doc,
+ "Return the natural alignment size in bytes of the argument.\n"
+ "It can be a string naming a C type, or a 'cdata' instance.");
+ 
+-static PyObject *ffi_alignof(FFIObject *self, PyObject *arg)
++static PyValue ffi_alignof(FFIObject *self, PyValue arg_value)
+ {
+     int align;
+-    CTypeDescrObject *ct = _ffi_type(self, arg, ACCEPT_ALL);
++    CTypeDescrObject *ct;
++    PyObject *arg = PyValue_Object(arg_value);
++    if (arg == NULL)
++        return PyValue_NULL;
++
++    ct = _ffi_type(self, arg, ACCEPT_ALL);
+     if (ct == NULL)
+-        return NULL;
++        return PyValue_NULL;
+ 
+     align = get_alignment(ct);
+     if (align < 0)
+-        return NULL;
+-    return PyLong_FromLong(align);
++        return PyValue_NULL;
++    return PyValue_FromResult(PyLong_FromLong(align));
+ }
+ 
+ PyDoc_STRVAR(ffi_typeof_doc,
+@@ -307,16 +315,21 @@
+ 
+ static PyObject *_cpyextfunc_type_index(PyObject *x);  /* forward */
+ 
+-static PyObject *ffi_typeof(FFIObject *self, PyObject *arg)
++static PyValue ffi_typeof(FFIObject *self, PyValue arg_value)
+ {
+-    PyObject *x = (PyObject *)_ffi_type(self, arg, ACCEPT_STRING|ACCEPT_CDATA);
++    PyObject *x;
++    PyObject *arg = PyValue_Object(arg_value);
++    if (arg == NULL)
++        return PyValue_NULL;
++
++    x = (PyObject *)_ffi_type(self, arg, ACCEPT_STRING|ACCEPT_CDATA);
+     if (x != NULL) {
+         Py_INCREF(x);
+     }
+     else {
+         x = _cpyextfunc_type_index(arg);
+     }
+-    return x;
++    return PyValue_FromResult(x);
+ }
+ 
+ PyDoc_STRVAR(ffi_new_doc,
+@@ -678,10 +691,14 @@
+ "back to the original object, use from_handle().  You must keep alive\n"
+ "the cdata object returned by new_handle()!");
+ 
+-static PyObject *ffi_new_handle(FFIObject *self, PyObject *arg)
++static PyValue ffi_new_handle(FFIObject *self, PyValue arg_value)
+ {
++    PyObject *arg = PyValue_Object(arg_value);
++    if (arg == NULL)
++        return PyValue_NULL;
++
+     /* g_ct_voidp is equal to <ctype 'void *'> */
+-    return newp_handle(g_ct_voidp, arg);
++    return PyValue_FromResult(newp_handle(g_ct_voidp, arg));
+ }
+ 
+ PyDoc_STRVAR(ffi_from_handle_doc,
+@@ -750,13 +767,13 @@
+ "(see the docs for details).");
+ 
+ /* forward; see call_python.c */
+-static PyObject *_ffi_def_extern_decorator(PyObject *, PyObject *);
++static PyValue _ffi_def_extern_decorator(PyObject *, PyValue);
+ 
+ static PyObject *ffi_def_extern(FFIObject *self, PyObject *args,
+                                 PyObject *kwds)
+ {
+     static PyMethodDef md = {"def_extern_decorator",
+-                             (PyCFunction)_ffi_def_extern_decorator, METH_O};
++                             _PyCFunction_CAST(_ffi_def_extern_decorator), METH_O};
+     PyObject *name = Py_None, *error = Py_None;
+     PyObject *res, *onerror = Py_None;
+     static char *keywords[] = {"name", "error", "onerror", NULL};
+@@ -781,15 +798,16 @@
+ "via a decorator).  Important: the callback object must be manually\n"
+ "kept alive for as long as the callback may be invoked from the C code.");
+ 
+-static PyObject *_ffi_callback_decorator(PyObject *outer_args, PyObject *fn)
++static PyValue _ffi_callback_decorator(PyObject *outer_args, PyValue fn)
+ {
+-    PyObject *res, *old;
++    PyObject *res;
++    PyValue old;
+ 
+-    old = PyTuple_GET_ITEM(outer_args, 1);
+-    PyTuple_SET_ITEM(outer_args, 1, fn);
++    old = PyTuple_GET_VALUE(outer_args, 1);
++    PyTuple_SET_VALUE(outer_args, 1, fn);
+     res = b_callback(NULL, outer_args);
+-    PyTuple_SET_ITEM(outer_args, 1, old);
+-    return res;
++    PyTuple_SET_VALUE(outer_args, 1, old);
++    return PyValue_FromResult(res);
+ }
+ 
+ static PyObject *ffi_callback(FFIObject *self, PyObject *args, PyObject *kwds)
+@@ -818,7 +836,7 @@
+     }
+     else {
+         static PyMethodDef md = {"callback_decorator",
+-                                 (PyCFunction)_ffi_callback_decorator, METH_O};
++                                 _PyCFunction_CAST(_ffi_callback_decorator), METH_O};
+         res = PyCFunction_New(&md, args);
+     }
+     Py_DECREF(args);
+@@ -845,10 +863,12 @@
+ 
+ static int ffi_set_errno(PyObject *self, PyObject *newval, void *closure)
+ {
+-    PyObject *x = b_set_errno(NULL, newval);
+-    if (x == NULL)
++    if (newval == NULL) {
++        PyErr_SetString(PyExc_AttributeError, "cannot delete errno");
++        return -1;
++    }
++    if (PyValue_IsNull(b_set_errno(NULL, PyValue_FromObject(newval))))
+         return -1;
+-    Py_DECREF(x);
+     return 0;
+ }
+ 
+@@ -1101,14 +1121,14 @@
+ #define METH_VKW  (METH_VARARGS | METH_KEYWORDS)
+ static PyMethodDef ffi_methods[] = {
+  {"addressof",  (PyCFunction)ffi_addressof,  METH_VARARGS, ffi_addressof_doc},
+- {"alignof",    (PyCFunction)ffi_alignof,    METH_O,       ffi_alignof_doc},
++ {"alignof",    _PyCFunction_CAST(ffi_alignof),    METH_O,       ffi_alignof_doc},
+  {"def_extern", (PyCFunction)ffi_def_extern, METH_VKW,     ffi_def_extern_doc},
+  {"callback",   (PyCFunction)ffi_callback,   METH_VKW,     ffi_callback_doc},
+  {"cast",       (PyCFunction)ffi_cast,       METH_VARARGS, ffi_cast_doc},
+  {"dlclose",    (PyCFunction)ffi_dlclose,    METH_VARARGS, ffi_dlclose_doc},
+  {"dlopen",     (PyCFunction)ffi_dlopen,     METH_VARARGS, ffi_dlopen_doc},
+  {"from_buffer",(PyCFunction)ffi_from_buffer,METH_VKW,     ffi_from_buffer_doc},
+- {"from_handle",(PyCFunction)ffi_from_handle,METH_O,       ffi_from_handle_doc},
++ {"from_handle",_PyCFunction_CAST(ffi_from_handle),METH_O,       ffi_from_handle_doc},
+  {"gc",         (PyCFunction)ffi_gc,         METH_VKW,     ffi_gc_doc},
+  {"getctype",   (PyCFunction)ffi_getctype,   METH_VKW,     ffi_getctype_doc},
+ #ifdef MS_WIN32
+@@ -1120,12 +1140,12 @@
+  {"memmove",    (PyCFunction)ffi_memmove,    METH_VKW,     ffi_memmove_doc},
+  {"new",        (PyCFunction)ffi_new,        METH_VKW,     ffi_new_doc},
+ {"new_allocator",(PyCFunction)ffi_new_allocator,METH_VKW,ffi_new_allocator_doc},
+- {"new_handle", (PyCFunction)ffi_new_handle, METH_O,       ffi_new_handle_doc},
++ {"new_handle", _PyCFunction_CAST(ffi_new_handle), METH_O,       ffi_new_handle_doc},
+  {"offsetof",   (PyCFunction)ffi_offsetof,   METH_VARARGS, ffi_offsetof_doc},
+- {"release",    (PyCFunction)ffi_release,    METH_O,       ffi_release_doc},
+- {"sizeof",     (PyCFunction)ffi_sizeof,     METH_O,       ffi_sizeof_doc},
++ {"release",    _PyCFunction_CAST(ffi_release),    METH_O,       ffi_release_doc},
++ {"sizeof",     _PyCFunction_CAST(ffi_sizeof),     METH_O,       ffi_sizeof_doc},
+  {"string",     (PyCFunction)ffi_string,     METH_VKW,     ffi_string_doc},
+- {"typeof",     (PyCFunction)ffi_typeof,     METH_O,       ffi_typeof_doc},
++ {"typeof",     _PyCFunction_CAST(ffi_typeof),     METH_O,       ffi_typeof_doc},
+  {"unpack",     (PyCFunction)ffi_unpack,     METH_VKW,     ffi_unpack_doc},
+  {NULL}
+ };
+--- a/src/c/minibuffer.h
++++ b/src/c/minibuffer.h
+@@ -236,7 +236,7 @@
+     else {
+         PyErr_Format(PyExc_TypeError,
+                      "buffer indices must be integers, not %.200s",
+-                     item->ob_type->tp_name);
++                     Py_TYPE(item)->tp_name);
+         return NULL;
+     }
+ }
+@@ -275,7 +275,7 @@
+     else {
+         PyErr_Format(PyExc_TypeError,
+                      "buffer indices must be integers, not %.200s",
+-                     item->ob_type->tp_name);
++                     Py_TYPE(item)->tp_name);
+         return -1;
+     }
+ }

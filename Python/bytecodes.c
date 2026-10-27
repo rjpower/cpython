@@ -986,23 +986,18 @@ dummy_func(
             res = PyValue_FromObject(temp);
         }
 
-       // The descriptors take objects, so this is not a guard: the generator
-       // boxes inline operands in place first, and a failed match
-       // re-executes BINARY_OP with the boxes.
        op(_BINARY_OP_EXTEND, (descr/4, left, right -- res, l, r)) {
-            PyObject *left_o = PyValue_ObjectBorrow(left);
-            PyObject *right_o = PyValue_ObjectBorrow(right);
             assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
             _PyBinaryOpSpecializationDescr *d = (_PyBinaryOpSpecializationDescr*)descr;
             assert(d != NULL);
             int match = (d->guard != NULL)
-                ? d->guard(left_o, right_o)
-                : (Py_TYPE(left_o) == d->lhs_type && Py_TYPE(right_o) == d->rhs_type);
+                ? d->guard(left, right)
+                : (PyValue_Type(left) == d->lhs_type && PyValue_Type(right) == d->rhs_type);
             EXIT_IF(!match);
 
             STAT_INC(BINARY_OP, hit);
 
-            PyObject *res_o = d->action(left_o, right_o);
+            PyObject *res_o = d->action(left, right);
             if (res_o == NULL) {
                 ERROR_NO_POP();
             }
@@ -1203,22 +1198,20 @@ dummy_func(
             _GUARD_NOS_DICT_SUBSCRIPT + unused/5 + _BINARY_OP_SUBSCR_DICT + POP_TOP + POP_TOP;
 
         op(_BINARY_OP_SUBSCR_DICT, (dict_st, sub_st -- res, ds, ss)) {
-            PyObject *sub = PyValue_ObjectBorrow(sub_st);
             PyObject *dict = PyValue_ObjectBorrow(dict_st);
             assert(Py_TYPE(dict)->tp_as_mapping->mp_subscript == _PyDict_Subscript);
             STAT_INC(BINARY_OP, hit);
-            PyObject *res_o = _PyDict_Subscript(dict, sub);
-            if (res_o == NULL) {
+            res = _PyDict_SubscriptValue(dict, sub_st);
+            if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
             }
-            res = PyValue_FromObject(res_o);
             ds = dict_st;
             ss = sub_st;
             INPUTS_DEAD();
         }
 
         op(_BINARY_OP_SUBSCR_CHECK_FUNC, (container, unused -- container, unused, getitem)) {
-            PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(container));
+            PyTypeObject *tp = PyValue_Type(container);
             EXIT_IF(!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE));
             PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
             PyObject *getitem_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.getitem);
@@ -1250,12 +1243,14 @@ dummy_func(
             _PUSH_FRAME;
 
         inst(LIST_APPEND, (list, unused[oparg-1], v -- list, unused[oparg-1])) {
+            assert(PyValue_IsObject(list));
             int err = _PyList_AppendValue((PyListObject *)PyValue_ObjectBorrow(list), v);
             DEAD(v);
             ERROR_IF(err < 0);
         }
 
         inst(SET_ADD, (set, unused[oparg-1], v -- set, unused[oparg-1])) {
+            assert(PyValue_IsObject(set));
             int err = _PySet_AddValue((PySetObject *)PyValue_ObjectBorrow(set), v);
             DEAD(v);
             ERROR_IF(err);
@@ -1985,6 +1980,7 @@ dummy_func(
         }
 
         inst(LOAD_FROM_DICT_OR_GLOBALS, (mod_or_class_dict -- v)) {
+            assert(PyValue_IsObject(mod_or_class_dict));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *namespace = PyValue_ObjectBorrow(mod_or_class_dict);
             int err;
@@ -2134,6 +2130,7 @@ dummy_func(
         }
 
         inst(LOAD_FROM_DICT_OR_DEREF, (class_dict_st -- value)) {
+            assert(PyValue_IsObject(class_dict_st));
             PyObject *name;
             PyObject *class_dict = PyValue_ObjectBorrow(class_dict_st);
 
@@ -2252,6 +2249,7 @@ dummy_func(
         }
 
         op(_LIST_EXTEND, (list_st, unused[oparg-1], iterable_st -- list_st, unused[oparg-1], i)) {
+            assert(PyValue_IsObject(list_st));
             PyObject *list = PyValue_ObjectBorrow(list_st);
             PyObject *iterable = PyValue_ObjectBorrow(iterable_st);
 
@@ -2276,6 +2274,7 @@ dummy_func(
         macro(LIST_EXTEND) = _LIST_EXTEND + POP_TOP;
 
         op(_SET_UPDATE, (set, unused[oparg-1], iterable -- set, unused[oparg-1], i)) {
+            assert(PyValue_IsObject(set));
             int err = _PySet_Update(PyValue_ObjectBorrow(set),
                                     PyValue_ObjectBorrow(iterable));
             if (err < 0) {
@@ -2347,6 +2346,7 @@ dummy_func(
         };
 
         op(_DICT_UPDATE, (dict, unused[oparg - 1], update -- dict, unused[oparg - 1], upd)) {
+            assert(PyValue_IsObject(dict));
             PyObject *dict_o = PyValue_ObjectBorrow(dict);
             PyObject *update_o = PyValue_ObjectBorrow(update);
 
@@ -2379,6 +2379,7 @@ dummy_func(
         macro(DICT_UPDATE) = _DICT_UPDATE + POP_TOP;
 
         op(_DICT_MERGE, (callable, unused, unused, dict, unused[oparg - 1], update -- callable, unused, unused, dict, unused[oparg - 1], u)) {
+            assert(PyValue_IsObject(dict));
             PyObject *callable_o = PyValue_ObjectBorrow(callable);
             PyObject *dict_o = PyValue_ObjectBorrow(dict);
             PyObject *update_o = PyValue_ObjectBorrow(update);
@@ -2397,6 +2398,7 @@ dummy_func(
         macro(DICT_MERGE) = _DICT_MERGE + POP_TOP;
 
         inst(MAP_ADD, (dict_st, unused[oparg - 1], key, value -- dict_st, unused[oparg - 1])) {
+            assert(PyValue_IsObject(dict_st));
             PyObject *dict = PyValue_ObjectBorrow(dict_st);
             assert(PyDict_CheckExact(dict));
             /* dict[key] = value */
@@ -2672,8 +2674,9 @@ dummy_func(
             _PUSH_NULL_CONDITIONAL;
 
         op(_LOAD_ATTR_MODULE, (dict_version/2, index/1, owner -- attr, o)) {
+            EXIT_IF(PyValue_Type(owner) != &PyModule_Type);
+            assert(PyValue_IsObject(owner));
             PyObject *owner_o = PyValue_ObjectBorrow(owner);
-            EXIT_IF(!PyModule_CheckExact(owner_o));
             PyDictObject *dict = (PyDictObject *)((PyModuleObject *)owner_o)->md_dict;
             assert(dict != NULL);
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
@@ -3135,12 +3138,11 @@ dummy_func(
         macro(CONTAINS_OP_DICT) = _GUARD_TOS_ANY_DICT + unused/1 + _CONTAINS_OP_DICT + POP_TOP + POP_TOP;
 
         op(_CONTAINS_OP_DICT, (left, right -- b, l, r)) {
-            PyObject *left_o = PyValue_ObjectBorrow(left);
             PyObject *right_o = PyValue_ObjectBorrow(right);
 
             assert(PyAnyDict_CheckExact(right_o));
             STAT_INC(CONTAINS_OP, hit);
-            int res = PyDict_Contains(right_o, left_o);
+            int res = _PyDict_ContainsValue(right_o, left);
             if (res < 0) {
                 ERROR_NO_POP();
             }
@@ -5343,6 +5345,7 @@ dummy_func(
             _CHECK_PERIODIC_AT_END;
 
         op(_MAKE_FUNCTION, (codeobj_st -- func, co)) {
+            assert(PyValue_IsObject(codeobj_st));
             PyObject *codeobj = PyValue_ObjectBorrow(codeobj_st);
 
             PyFunctionObject *func_obj = (PyFunctionObject *)
@@ -5362,6 +5365,8 @@ dummy_func(
         macro(MAKE_FUNCTION) = _MAKE_FUNCTION + POP_TOP;
 
         inst(SET_FUNCTION_ATTRIBUTE, (attr_st, func_in -- func_out)) {
+            assert(PyValue_IsObject(attr_st));
+            assert(PyValue_IsObject(func_in));
             PyObject *func = PyValue_ObjectBorrow(func_in);
             PyObject *attr = PyValue_ObjectBorrow(attr_st);
             DEAD(attr_st);

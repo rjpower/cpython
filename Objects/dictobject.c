@@ -3216,6 +3216,28 @@ frozendict_length(PyObject *self)
     return _PyAnyDict_CAST(self)->ma_used;
 }
 
+/* The result of subscripting the dict self with the missing key: the
+   result of __missing__ for a subclass that has one, or NULL with a
+   KeyError. */
+static PyObject *
+dict_missing(PyObject *self, PyObject *key)
+{
+    if (!PyAnyDict_CheckExact(self)) {
+        /* Look up __missing__ method if we're a subclass. */
+        PyObject *missing = _PyObject_LookupSpecial(self, &_Py_ID(__missing__));
+        if (missing != NULL) {
+            PyObject *res = PyObject_CallOneArg(missing, key);
+            Py_DECREF(missing);
+            return res;
+        }
+        if (PyErr_Occurred()) {
+            return NULL;
+        }
+    }
+    _PyErr_SetKeyError(key);
+    return NULL;
+}
+
 PyObject *
 _PyDict_SubscriptKnownHash(PyObject *self, PyObject *key, Py_hash_t hash)
 {
@@ -3227,23 +3249,32 @@ _PyDict_SubscriptKnownHash(PyObject *self, PyObject *key, Py_hash_t hash)
     if (ix == DKIX_ERROR)
         return NULL;
     if (ix == DKIX_EMPTY || PyValue_IsNull(value)) {
-        if (!PyAnyDict_CheckExact(mp)) {
-            /* Look up __missing__ method if we're a subclass. */
-            PyObject *missing, *res;
-            missing = _PyObject_LookupSpecial(
-                    (PyObject *)mp, &_Py_ID(__missing__));
-            if (missing != NULL) {
-                res = PyObject_CallOneArg(missing, key);
-                Py_DECREF(missing);
-                return res;
-            }
-            else if (PyErr_Occurred())
-                return NULL;
-        }
-        _PyErr_SetKeyError(key);
-        return NULL;
+        return dict_missing(self, key);
     }
     return PyValue_Object(value);
+}
+
+/* _PyDict_Subscript() of a key that is a value, for a dict or a subclass
+   that does not override __getitem__.  Only a missing key is boxed, for
+   __missing__ or the KeyError. */
+PyValue
+_PyDict_SubscriptValue(PyObject *self, PyValue key)
+{
+    PyValue value;
+    int found = _PyDict_GetItemValue(self, key, &value);
+    if (found != 0) {
+        return value;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot key_root;
+    PyObject *res = NULL;
+    PyObject *key_o = _PyValueRoot_PushObject(tstate, &key_root, key,
+                                              _PY_BOX_OTHER);
+    if (key_o != NULL) {
+        res = dict_missing(self, key_o);
+    }
+    _PyThreadState_PopValueRoot(tstate, &key_root);
+    return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
 }
 
 PyObject *

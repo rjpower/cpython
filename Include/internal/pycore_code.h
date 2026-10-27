@@ -323,9 +323,10 @@ adaptive_counter_backoff(_Py_BackoffCounter counter) {
 
 /* Specialization Extensions */
 
-/* callbacks for an external specialization */
-typedef int (*binaryopguardfunc)(PyObject *lhs, PyObject *rhs);
-typedef PyObject *(*binaryopactionfunc)(PyObject *lhs, PyObject *rhs);
+/* callbacks for an external specialization.  The operands are values, so
+   an int or float operand may be inline. */
+typedef int (*binaryopguardfunc)(PyValue lhs, PyValue rhs);
+typedef PyObject *(*binaryopactionfunc)(PyValue lhs, PyValue rhs);
 
 typedef struct {
     int oparg;

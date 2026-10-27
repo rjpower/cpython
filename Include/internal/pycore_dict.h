@@ -167,6 +167,7 @@ PyAPI_FUNC(int) _PyDict_SetItemValue(PyDictObject *op, PyValue key, PyValue valu
 PyAPI_FUNC(int) _PyDict_GetItemValue(PyObject *op, PyValue key, PyValue *result);
 PyAPI_FUNC(int) _PyDict_DelItemValue(PyObject *op, PyValue key);
 PyAPI_FUNC(int) _PyDict_ContainsValue(PyObject *op, PyValue key);
+PyAPI_FUNC(PyValue) _PyDict_SubscriptValue(PyObject *self, PyValue key);
 // Exported for external JIT support
 // Sets dict[name] to value, or deletes it if value is PyValue_NULL.
 PyAPI_FUNC(int) _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyValue value);

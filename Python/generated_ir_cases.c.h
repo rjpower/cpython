@@ -427,72 +427,18 @@
                 right = IR_SLOT(IR_FIELD_C(this_instr));
                 left = IR_SLOT(IR_FIELD_B(this_instr));
                 PyObject *descr = (PyObject *)fb->descr;
-                PyObject *left_object;
-                _PyValueRoot left_root;
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left_object = _PyValue_BoxInline(left);
-                    if (left_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP_EXTEND, _PY_BOX_OTHER);
-                }
-                else {
-                    left_object = PyValue_ObjectBorrow(left);
-                }
-                PyObject *right_object;
-                _PyValueRoot right_root;
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    right_object = _PyValue_BoxInline(right);
-                    if (right_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP_EXTEND, _PY_BOX_OTHER);
-                }
-                else {
-                    right_object = PyValue_ObjectBorrow(right);
-                }
-                PyObject *left_o = left_object;
-                PyObject *right_o = right_object;
                 assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
                 _PyBinaryOpSpecializationDescr *d = (_PyBinaryOpSpecializationDescr*)descr;
                 assert(d != NULL);
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PushValueRoot(tstate, &left_root);
-                    left_root.object = left_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    _PyThreadState_PushValueRoot(tstate, &right_root);
-                    right_root.object = right_object;
-                }
                 int match = (d->guard != NULL)
-                ? d->guard(left_o, right_o)
-            : (Py_TYPE(left_o) == d->lhs_type && Py_TYPE(right_o) == d->rhs_type);
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    _PyThreadState_PopValueRoot(tstate, &right_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PopValueRoot(tstate, &left_root);
-                }
+                ? d->guard(left, right)
+            : (PyValue_Type(left) == d->lhs_type && PyValue_Type(right) == d->rhs_type);
                 if (!match) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PushValueRoot(tstate, &left_root);
-                    left_root.object = left_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    _PyThreadState_PushValueRoot(tstate, &right_root);
-                    right_root.object = right_object;
-                }
-                PyObject *res_o = d->action(left_o, right_o);
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    _PyThreadState_PopValueRoot(tstate, &right_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PopValueRoot(tstate, &left_root);
-                }
+                PyObject *res_o = d->action(left, right);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
@@ -2595,34 +2541,13 @@
             {
                 sub_st = IR_SLOT(IR_FIELD_C(this_instr));
                 dict_st = nos;
-                PyObject *sub_st_object;
-                _PyValueRoot sub_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(sub_st))) {
-                    sub_st_object = _PyValue_BoxInline(sub_st);
-                    if (sub_st_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP_SUBSCR_DICT, _PY_BOX_OTHER);
-                }
-                else {
-                    sub_st_object = PyValue_ObjectBorrow(sub_st);
-                }
-                PyObject *sub = sub_st_object;
                 PyObject *dict = PyValue_ObjectBorrow(dict_st);
                 assert(Py_TYPE(dict)->tp_as_mapping->mp_subscript == _PyDict_Subscript);
                 STAT_INC(BINARY_OP, hit);
-                if (Py_UNLIKELY(PyValue_IsInline(sub_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &sub_st_root);
-                    sub_st_root.object = sub_st_object;
-                }
-                PyObject *res_o = _PyDict_Subscript(dict, sub);
-                if (Py_UNLIKELY(PyValue_IsInline(sub_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &sub_st_root);
-                }
-                if (res_o == NULL) {
+                res = _PyDict_SubscriptValue(dict, sub_st);
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
                 ds = dict_st;
                 ss = sub_st;
             }
@@ -2667,18 +2592,7 @@
             // _BINARY_OP_SUBSCR_CHECK_FUNC
             {
                 container = IR_SLOT(IR_FIELD_B(this_instr));
-                PyObject *container_object;
-                if (Py_UNLIKELY(PyValue_IsInline(container))) {
-                    container_object = _PyValue_BoxInline(container);
-                    if (container_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(BINARY_OP_SUBSCR_GETITEM, _PY_BOX_OTHER);
-                }
-                else {
-                    container_object = PyValue_ObjectBorrow(container);
-                }
-                PyTypeObject *tp = Py_TYPE(container_object);
+                PyTypeObject *tp = PyValue_Type(container);
                 if (!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -8343,30 +8257,10 @@
             {
                 right = tos;
                 left = IR_SLOT(IR_FIELD_B(this_instr));
-                PyObject *left_object;
-                _PyValueRoot left_root;
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left_object = _PyValue_BoxInline(left);
-                    if (left_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CONTAINS_OP_DICT, _PY_BOX_OTHER);
-                }
-                else {
-                    left_object = PyValue_ObjectBorrow(left);
-                }
-                PyObject *left_o = left_object;
                 PyObject *right_o = PyValue_ObjectBorrow(right);
                 assert(PyAnyDict_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PushValueRoot(tstate, &left_root);
-                    left_root.object = left_object;
-                }
-                int res = PyDict_Contains(right_o, left_o);
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    _PyThreadState_PopValueRoot(tstate, &left_root);
-                }
+                int res = _PyDict_ContainsValue(right_o, left);
                 if (res < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -8705,18 +8599,6 @@
                 else {
                     callable_object = PyValue_ObjectBorrow(callable);
                 }
-                PyObject *dict_object;
-                _PyValueRoot dict_root;
-                if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                    dict_object = _PyValue_BoxInline(dict);
-                    if (dict_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(DICT_MERGE, _PY_BOX_CONTAINER_STORE);
-                }
-                else {
-                    dict_object = PyValue_ObjectBorrow(dict);
-                }
                 PyObject *update_object;
                 _PyValueRoot update_root;
                 if (Py_UNLIKELY(PyValue_IsInline(update))) {
@@ -8729,17 +8611,14 @@
                 else {
                     update_object = PyValue_ObjectBorrow(update);
                 }
+                assert(PyValue_IsObject(dict));
                 PyObject *callable_o = callable_object;
-                PyObject *dict_o = dict_object;
+                PyObject *dict_o = PyValue_ObjectBorrow(dict);
                 PyObject *update_o = update_object;
                 PyObject *dupkey = NULL;
                 if (Py_UNLIKELY(PyValue_IsInline(callable))) {
                     _PyThreadState_PushValueRoot(tstate, &callable_root);
                     callable_root.object = callable_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                    _PyThreadState_PushValueRoot(tstate, &dict_root);
-                    dict_root.object = dict_object;
                 }
                 if (Py_UNLIKELY(PyValue_IsInline(update))) {
                     _PyThreadState_PushValueRoot(tstate, &update_root);
@@ -8749,9 +8628,6 @@
                 if (Py_UNLIKELY(PyValue_IsInline(update))) {
                     _PyThreadState_PopValueRoot(tstate, &update_root);
                 }
-                if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                    _PyThreadState_PopValueRoot(tstate, &dict_root);
-                }
                 if (Py_UNLIKELY(PyValue_IsInline(callable))) {
                     _PyThreadState_PopValueRoot(tstate, &callable_root);
                 }
@@ -8760,10 +8636,6 @@
                         _PyThreadState_PushValueRoot(tstate, &callable_root);
                         callable_root.object = callable_object;
                     }
-                    if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                        _PyThreadState_PushValueRoot(tstate, &dict_root);
-                        dict_root.object = dict_object;
-                    }
                     if (Py_UNLIKELY(PyValue_IsInline(update))) {
                         _PyThreadState_PushValueRoot(tstate, &update_root);
                         update_root.object = update_object;
@@ -8771,9 +8643,6 @@
                     _PyEval_FormatKwargsError(tstate, callable_o, update_o, dupkey);
                     if (Py_UNLIKELY(PyValue_IsInline(update))) {
                         _PyThreadState_PopValueRoot(tstate, &update_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                        _PyThreadState_PopValueRoot(tstate, &dict_root);
                     }
                     if (Py_UNLIKELY(PyValue_IsInline(callable))) {
                         _PyThreadState_PopValueRoot(tstate, &callable_root);
@@ -8815,18 +8684,6 @@
             {
                 update = window[1 + (oparg - 1)];
                 dict = window[0];
-                PyObject *dict_object;
-                _PyValueRoot dict_root;
-                if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                    dict_object = _PyValue_BoxInline(dict);
-                    if (dict_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(DICT_UPDATE, _PY_BOX_CONTAINER_STORE);
-                }
-                else {
-                    dict_object = PyValue_ObjectBorrow(dict);
-                }
                 PyObject *update_object;
                 _PyValueRoot update_root;
                 if (Py_UNLIKELY(PyValue_IsInline(update))) {
@@ -8839,12 +8696,9 @@
                 else {
                     update_object = PyValue_ObjectBorrow(update);
                 }
-                PyObject *dict_o = dict_object;
+                assert(PyValue_IsObject(dict));
+                PyObject *dict_o = PyValue_ObjectBorrow(dict);
                 PyObject *update_o = update_object;
-                if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                    _PyThreadState_PushValueRoot(tstate, &dict_root);
-                    dict_root.object = dict_object;
-                }
                 if (Py_UNLIKELY(PyValue_IsInline(update))) {
                     _PyThreadState_PushValueRoot(tstate, &update_root);
                     update_root.object = update_object;
@@ -8853,18 +8707,11 @@
                 if (Py_UNLIKELY(PyValue_IsInline(update))) {
                     _PyThreadState_PopValueRoot(tstate, &update_root);
                 }
-                if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                    _PyThreadState_PopValueRoot(tstate, &dict_root);
-                }
                 if (err < 0) {
                     int matches = _PyErr_ExceptionMatches(tstate, PyExc_AttributeError);
                     if (matches) {
                         _PyValueRoot exc;
                         _PyThreadState_PushValueRoot(tstate, &exc);
-                        if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                            _PyThreadState_PushValueRoot(tstate, &dict_root);
-                            dict_root.object = dict_object;
-                        }
                         if (Py_UNLIKELY(PyValue_IsInline(update))) {
                             _PyThreadState_PushValueRoot(tstate, &update_root);
                             update_root.object = update_object;
@@ -8872,13 +8719,6 @@
                         exc.value = PyValue_FromObject(_PyErr_GetRaisedException(tstate));
                         if (Py_UNLIKELY(PyValue_IsInline(update))) {
                             _PyThreadState_PopValueRoot(tstate, &update_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                            _PyThreadState_PopValueRoot(tstate, &dict_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                            _PyThreadState_PushValueRoot(tstate, &dict_root);
-                            dict_root.object = dict_object;
                         }
                         if (Py_UNLIKELY(PyValue_IsInline(update))) {
                             _PyThreadState_PushValueRoot(tstate, &update_root);
@@ -8888,15 +8728,8 @@
                         if (Py_UNLIKELY(PyValue_IsInline(update))) {
                             _PyThreadState_PopValueRoot(tstate, &update_root);
                         }
-                        if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                            _PyThreadState_PopValueRoot(tstate, &dict_root);
-                        }
                         PyValue exc_ref = _PyThreadState_PopValueRoot(tstate, &exc);
                         if (has_keys == 0) {
-                            if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                                _PyThreadState_PushValueRoot(tstate, &dict_root);
-                                dict_root.object = dict_object;
-                            }
                             if (Py_UNLIKELY(PyValue_IsInline(update))) {
                                 _PyThreadState_PushValueRoot(tstate, &update_root);
                                 update_root.object = update_object;
@@ -8907,15 +8740,8 @@
                             if (Py_UNLIKELY(PyValue_IsInline(update))) {
                                 _PyThreadState_PopValueRoot(tstate, &update_root);
                             }
-                            if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                                _PyThreadState_PopValueRoot(tstate, &dict_root);
-                            }
                         }
                         else {
-                            if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                                _PyThreadState_PushValueRoot(tstate, &dict_root);
-                                dict_root.object = dict_object;
-                            }
                             if (Py_UNLIKELY(PyValue_IsInline(update))) {
                                 _PyThreadState_PushValueRoot(tstate, &update_root);
                                 update_root.object = update_object;
@@ -8923,9 +8749,6 @@
                             _PyErr_ChainExceptions1(PyValue_ObjectBorrow(exc_ref));
                             if (Py_UNLIKELY(PyValue_IsInline(update))) {
                                 _PyThreadState_PopValueRoot(tstate, &update_root);
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(dict))) {
-                                _PyThreadState_PopValueRoot(tstate, &dict_root);
                             }
                         }
                     }
@@ -12368,18 +12191,8 @@
             PyValue v;
             v = window[1 + (oparg-1)];
             list = window[0];
-            PyObject *list_object;
-            if (Py_UNLIKELY(PyValue_IsInline(list))) {
-                list_object = _PyValue_BoxInline(list);
-                if (list_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(LIST_APPEND, _PY_BOX_CONTAINER_STORE);
-            }
-            else {
-                list_object = PyValue_ObjectBorrow(list);
-            }
-            int err = _PyList_AppendValue((PyListObject *)list_object, v);
+            assert(PyValue_IsObject(list));
+            int err = _PyList_AppendValue((PyListObject *)PyValue_ObjectBorrow(list), v);
             if (err < 0) {
                 window[1 + (oparg-1)] = PyValue_NULL;
                 JUMP_TO_LABEL(error);
@@ -12411,18 +12224,6 @@
             {
                 iterable_st = window[1 + (oparg-1)];
                 list_st = window[0];
-                PyObject *list_st_object;
-                _PyValueRoot list_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(list_st))) {
-                    list_st_object = _PyValue_BoxInline(list_st);
-                    if (list_st_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(LIST_EXTEND, _PY_BOX_CONTAINER_STORE);
-                }
-                else {
-                    list_st_object = PyValue_ObjectBorrow(list_st);
-                }
                 PyObject *iterable_st_object;
                 _PyValueRoot iterable_st_root;
                 if (Py_UNLIKELY(PyValue_IsInline(iterable_st))) {
@@ -12435,12 +12236,9 @@
                 else {
                     iterable_st_object = PyValue_ObjectBorrow(iterable_st);
                 }
-                PyObject *list = list_st_object;
+                assert(PyValue_IsObject(list_st));
+                PyObject *list = PyValue_ObjectBorrow(list_st);
                 PyObject *iterable = iterable_st_object;
-                if (Py_UNLIKELY(PyValue_IsInline(list_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &list_st_root);
-                    list_st_root.object = list_st_object;
-                }
                 if (Py_UNLIKELY(PyValue_IsInline(iterable_st))) {
                     _PyThreadState_PushValueRoot(tstate, &iterable_st_root);
                     iterable_st_root.object = iterable_st_object;
@@ -12449,18 +12247,11 @@
                 if (Py_UNLIKELY(PyValue_IsInline(iterable_st))) {
                     _PyThreadState_PopValueRoot(tstate, &iterable_st_root);
                 }
-                if (Py_UNLIKELY(PyValue_IsInline(list_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &list_st_root);
-                }
                 if (none_val == NULL) {
                     int matches = _PyErr_ExceptionMatches(tstate, PyExc_TypeError);
                     if (matches &&
                         (Py_TYPE(iterable)->tp_iter == NULL && !PySequence_Check(iterable)))
                     {
-                        if (Py_UNLIKELY(PyValue_IsInline(list_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &list_st_root);
-                            list_st_root.object = list_st_object;
-                        }
                         if (Py_UNLIKELY(PyValue_IsInline(iterable_st))) {
                             _PyThreadState_PushValueRoot(tstate, &iterable_st_root);
                             iterable_st_root.object = iterable_st_object;
@@ -12468,13 +12259,6 @@
                         _PyErr_Clear(tstate);
                         if (Py_UNLIKELY(PyValue_IsInline(iterable_st))) {
                             _PyThreadState_PopValueRoot(tstate, &iterable_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(list_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &list_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(list_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &list_st_root);
-                            list_st_root.object = list_st_object;
                         }
                         if (Py_UNLIKELY(PyValue_IsInline(iterable_st))) {
                             _PyThreadState_PushValueRoot(tstate, &iterable_st_root);
@@ -12485,9 +12269,6 @@
                                   Py_TYPE(iterable)->tp_name);
                         if (Py_UNLIKELY(PyValue_IsInline(iterable_st))) {
                             _PyThreadState_PopValueRoot(tstate, &iterable_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(list_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &list_st_root);
                         }
                     }
                     JUMP_TO_LABEL(error);
@@ -13056,23 +12837,13 @@
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t dict_version = fb->dict_version;
                 uint32_t index = fb->index;
-                PyObject *owner_object;
-                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                    owner_object = _PyValue_BoxInline(owner);
-                    if (owner_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(LOAD_ATTR_MODULE, _PY_BOX_OTHER);
-                }
-                else {
-                    owner_object = PyValue_ObjectBorrow(owner);
-                }
-                PyObject *owner_o = owner_object;
-                if (!PyModule_CheckExact(owner_o)) {
+                if (PyValue_Type(owner) != &PyModule_Type) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
+                assert(PyValue_IsObject(owner));
+                PyObject *owner_o = PyValue_ObjectBorrow(owner);
                 PyDictObject *dict = (PyDictObject *)((PyModuleObject *)owner_o)->md_dict;
                 assert(dict != NULL);
                 PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
@@ -13878,32 +13649,14 @@
             PyValue class_dict_st;
             PyValue value;
             class_dict_st = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *class_dict_st_object;
-            _PyValueRoot class_dict_st_root;
-            if (Py_UNLIKELY(PyValue_IsInline(class_dict_st))) {
-                class_dict_st_object = _PyValue_BoxInline(class_dict_st);
-                if (class_dict_st_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(LOAD_FROM_DICT_OR_DEREF, _PY_BOX_OTHER);
-            }
-            else {
-                class_dict_st_object = PyValue_ObjectBorrow(class_dict_st);
-            }
+            assert(PyValue_IsObject(class_dict_st));
             PyObject *name;
-            PyObject *class_dict = class_dict_st_object;
+            PyObject *class_dict = PyValue_ObjectBorrow(class_dict_st);
             assert(class_dict);
             assert(oparg >= 0 && oparg < _PyFrame_GetCode(frame)->co_nlocalsplus);
             name = GETITEM(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
             int err;
-            if (Py_UNLIKELY(PyValue_IsInline(class_dict_st))) {
-                _PyThreadState_PushValueRoot(tstate, &class_dict_st_root);
-                class_dict_st_root.object = class_dict_st_object;
-            }
             PyObject* value_o = _PyMapping_GetOptionalItem2(class_dict, name, &err);
-            if (Py_UNLIKELY(PyValue_IsInline(class_dict_st))) {
-                _PyThreadState_PopValueRoot(tstate, &class_dict_st_root);
-            }
             if (err < 0) {
                 JUMP_TO_LABEL(error);
             }
@@ -13912,28 +13665,14 @@
                 PyCellObject *cell = (PyCellObject *)PyValue_ObjectBorrow(GETLOCAL(oparg));
                 result = _PyCell_GetValue(cell);
                 if (PyValue_IsNull(result)) {
-                    if (Py_UNLIKELY(PyValue_IsInline(class_dict_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &class_dict_st_root);
-                        class_dict_st_root.object = class_dict_st_object;
-                    }
                     _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
-                    if (Py_UNLIKELY(PyValue_IsInline(class_dict_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &class_dict_st_root);
-                    }
                     JUMP_TO_LABEL(error);
                 }
             }
             else {
                 if (PyLazyImport_CheckExact(value_o)) {
-                    if (Py_UNLIKELY(PyValue_IsInline(class_dict_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &class_dict_st_root);
-                        class_dict_st_root.object = class_dict_st_object;
-                    }
                     Py_SETREF(value_o, _PyLazyImport_Reify(
                                   tstate, value_o, name, class_dict));
-                    if (Py_UNLIKELY(PyValue_IsInline(class_dict_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &class_dict_st_root);
-                    }
                     if (value_o == NULL) {
                         JUMP_TO_LABEL(error);
                     }
@@ -13962,38 +13701,13 @@
             PyValue mod_or_class_dict;
             PyValue v;
             mod_or_class_dict = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *mod_or_class_dict_object;
-            _PyValueRoot mod_or_class_dict_root;
-            if (Py_UNLIKELY(PyValue_IsInline(mod_or_class_dict))) {
-                mod_or_class_dict_object = _PyValue_BoxInline(mod_or_class_dict);
-                if (mod_or_class_dict_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(LOAD_FROM_DICT_OR_GLOBALS, _PY_BOX_OTHER);
-            }
-            else {
-                mod_or_class_dict_object = PyValue_ObjectBorrow(mod_or_class_dict);
-            }
+            assert(PyValue_IsObject(mod_or_class_dict));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyObject *namespace = mod_or_class_dict_object;
+            PyObject *namespace = PyValue_ObjectBorrow(mod_or_class_dict);
             int err;
-            if (Py_UNLIKELY(PyValue_IsInline(mod_or_class_dict))) {
-                _PyThreadState_PushValueRoot(tstate, &mod_or_class_dict_root);
-                mod_or_class_dict_root.object = mod_or_class_dict_object;
-            }
             PyObject *v_o = _PyMapping_GetOptionalItem2(namespace, name, &err);
-            if (Py_UNLIKELY(PyValue_IsInline(mod_or_class_dict))) {
-                _PyThreadState_PopValueRoot(tstate, &mod_or_class_dict_root);
-            }
             if (v_o != NULL && PyLazyImport_CheckExact(v_o)) {
-                if (Py_UNLIKELY(PyValue_IsInline(mod_or_class_dict))) {
-                    _PyThreadState_PushValueRoot(tstate, &mod_or_class_dict_root);
-                    mod_or_class_dict_root.object = mod_or_class_dict_object;
-                }
                 Py_SETREF(v_o, _PyLazyImport_Reify(tstate, v_o, name, namespace));
-                if (Py_UNLIKELY(PyValue_IsInline(mod_or_class_dict))) {
-                    _PyThreadState_PopValueRoot(tstate, &mod_or_class_dict_root);
-                }
                 if (v_o == NULL) {
                     err = -1;
                 }
@@ -14003,14 +13717,7 @@
                 JUMP_TO_LABEL(error);
             }
             if (v_o == NULL) {
-                if (Py_UNLIKELY(PyValue_IsInline(mod_or_class_dict))) {
-                    _PyThreadState_PushValueRoot(tstate, &mod_or_class_dict_root);
-                    mod_or_class_dict_root.object = mod_or_class_dict_object;
-                }
                 _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, &v);
-                if (Py_UNLIKELY(PyValue_IsInline(mod_or_class_dict))) {
-                    _PyThreadState_PopValueRoot(tstate, &mod_or_class_dict_root);
-                }
                 if (PyValue_IsNull(v)) {
                     IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
@@ -15150,28 +14857,10 @@
             // _MAKE_FUNCTION
             {
                 codeobj_st = IR_SLOT(IR_FIELD_B(this_instr));
-                PyObject *codeobj_st_object;
-                _PyValueRoot codeobj_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(codeobj_st))) {
-                    codeobj_st_object = _PyValue_BoxInline(codeobj_st);
-                    if (codeobj_st_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(MAKE_FUNCTION, _PY_BOX_OTHER);
-                }
-                else {
-                    codeobj_st_object = PyValue_ObjectBorrow(codeobj_st);
-                }
-                PyObject *codeobj = codeobj_st_object;
-                if (Py_UNLIKELY(PyValue_IsInline(codeobj_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &codeobj_st_root);
-                    codeobj_st_root.object = codeobj_st_object;
-                }
+                assert(PyValue_IsObject(codeobj_st));
+                PyObject *codeobj = PyValue_ObjectBorrow(codeobj_st);
                 PyFunctionObject *func_obj = (PyFunctionObject *)
                 PyFunction_New(codeobj, GLOBALS());
-                if (Py_UNLIKELY(PyValue_IsInline(codeobj_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &codeobj_st_root);
-                }
                 if (func_obj == NULL) {
                     JUMP_TO_LABEL(error);
                 }
@@ -15211,28 +14900,10 @@
             value = window[2 + (oparg - 1)];
             key = window[1 + (oparg - 1)];
             dict_st = window[0];
-            PyObject *dict_st_object;
-            _PyValueRoot dict_st_root;
-            if (Py_UNLIKELY(PyValue_IsInline(dict_st))) {
-                dict_st_object = _PyValue_BoxInline(dict_st);
-                if (dict_st_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(MAP_ADD, _PY_BOX_CONTAINER_STORE);
-            }
-            else {
-                dict_st_object = PyValue_ObjectBorrow(dict_st);
-            }
-            PyObject *dict = dict_st_object;
+            assert(PyValue_IsObject(dict_st));
+            PyObject *dict = PyValue_ObjectBorrow(dict_st);
             assert(PyDict_CheckExact(dict));
-            if (Py_UNLIKELY(PyValue_IsInline(dict_st))) {
-                _PyThreadState_PushValueRoot(tstate, &dict_st_root);
-                dict_st_root.object = dict_st_object;
-            }
             int err = _PyDict_SetItemValue((PyDictObject *)dict, key, value);
-            if (Py_UNLIKELY(PyValue_IsInline(dict_st))) {
-                _PyThreadState_PopValueRoot(tstate, &dict_st_root);
-            }
             if (err != 0) {
                 window[1 + (oparg - 1)] = PyValue_NULL;
                 window[2 + (oparg - 1)] = PyValue_NULL;
@@ -17208,26 +16879,8 @@
             PyValue v;
             v = window[1 + (oparg-1)];
             set = window[0];
-            PyObject *set_object;
-            _PyValueRoot set_root;
-            if (Py_UNLIKELY(PyValue_IsInline(set))) {
-                set_object = _PyValue_BoxInline(set);
-                if (set_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(SET_ADD, _PY_BOX_CONTAINER_STORE);
-            }
-            else {
-                set_object = PyValue_ObjectBorrow(set);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(set))) {
-                _PyThreadState_PushValueRoot(tstate, &set_root);
-                set_root.object = set_object;
-            }
-            int err = _PySet_AddValue((PySetObject *)set_object, v);
-            if (Py_UNLIKELY(PyValue_IsInline(set))) {
-                _PyThreadState_PopValueRoot(tstate, &set_root);
-            }
+            assert(PyValue_IsObject(set));
+            int err = _PySet_AddValue((PySetObject *)PyValue_ObjectBorrow(set), v);
             if (err) {
                 window[1 + (oparg-1)] = PyValue_NULL;
                 JUMP_TO_LABEL(error);
@@ -17254,30 +16907,10 @@
             PyValue func_out;
             func_in = IR_SLOT(IR_FIELD_C(this_instr));
             attr_st = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *attr_st_object;
-            if (Py_UNLIKELY(PyValue_IsInline(attr_st))) {
-                attr_st_object = _PyValue_BoxInline(attr_st);
-                if (attr_st_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(SET_FUNCTION_ATTRIBUTE, _PY_BOX_OTHER);
-            }
-            else {
-                attr_st_object = PyValue_ObjectBorrow(attr_st);
-            }
-            PyObject *func_in_object;
-            if (Py_UNLIKELY(PyValue_IsInline(func_in))) {
-                func_in_object = _PyValue_BoxInline(func_in);
-                if (func_in_object == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(SET_FUNCTION_ATTRIBUTE, _PY_BOX_OTHER);
-            }
-            else {
-                func_in_object = PyValue_ObjectBorrow(func_in);
-            }
-            PyObject *func = func_in_object;
-            PyObject *attr = attr_st_object;
+            assert(PyValue_IsObject(attr_st));
+            assert(PyValue_IsObject(func_in));
+            PyObject *func = PyValue_ObjectBorrow(func_in);
+            PyObject *attr = PyValue_ObjectBorrow(attr_st);
             func_out = func_in;
             assert(PyFunction_Check(func));
             size_t offset = _Py_FunctionAttributeOffsets[oparg];
@@ -17314,18 +16947,6 @@
             {
                 iterable = window[1 + (oparg-1)];
                 set = window[0];
-                PyObject *set_object;
-                _PyValueRoot set_root;
-                if (Py_UNLIKELY(PyValue_IsInline(set))) {
-                    set_object = _PyValue_BoxInline(set);
-                    if (set_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(SET_UPDATE, _PY_BOX_CONTAINER_STORE);
-                }
-                else {
-                    set_object = PyValue_ObjectBorrow(set);
-                }
                 PyObject *iterable_object;
                 _PyValueRoot iterable_root;
                 if (Py_UNLIKELY(PyValue_IsInline(iterable))) {
@@ -17338,21 +16959,15 @@
                 else {
                     iterable_object = PyValue_ObjectBorrow(iterable);
                 }
-                if (Py_UNLIKELY(PyValue_IsInline(set))) {
-                    _PyThreadState_PushValueRoot(tstate, &set_root);
-                    set_root.object = set_object;
-                }
+                assert(PyValue_IsObject(set));
                 if (Py_UNLIKELY(PyValue_IsInline(iterable))) {
                     _PyThreadState_PushValueRoot(tstate, &iterable_root);
                     iterable_root.object = iterable_object;
                 }
-                int err = _PySet_Update(set_object,
+                int err = _PySet_Update(PyValue_ObjectBorrow(set),
                                     iterable_object);
                 if (Py_UNLIKELY(PyValue_IsInline(iterable))) {
                     _PyThreadState_PopValueRoot(tstate, &iterable_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(set))) {
-                    _PyThreadState_PopValueRoot(tstate, &set_root);
                 }
                 if (err < 0) {
                     JUMP_TO_LABEL(error);

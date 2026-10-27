@@ -2325,15 +2325,39 @@ binary_op_fail_kind(int oparg, PyObject *lhs, PyObject *rhs)
 
 /** Binary Op Specialization Extensions */
 
+/* The actions of descriptors whose operands are neither int nor float. */
+#define OBJECT_ACTION(NAME, FUNC) \
+    static PyObject * \
+    (NAME)(PyValue lhs, PyValue rhs) \
+    { \
+        return FUNC(PyValue_ObjectBorrow(lhs), PyValue_ObjectBorrow(rhs)); \
+    }
+OBJECT_ACTION(list_concat,  _PyList_Concat)
+OBJECT_ACTION(tuple_concat, _PyTuple_Concat)
+OBJECT_ACTION(bytes_concat, _PyBytes_Concat)
+OBJECT_ACTION(dict_or,      _PyDict_Or)
+OBJECT_ACTION(dict_ior,     _PyDict_IOr)
+#undef OBJECT_ACTION
+
+// The repeat count of an exact int: inline, or an int object outside int32.
+static Py_ssize_t
+repeat_count(PyValue count)
+{
+    if (PyValue_IsInlineInt(count)) {
+        return PyValue_Int32(count);
+    }
+    return PyLong_AsSsize_t(PyValue_ObjectBorrow(count));
+}
+
 #define SEQ_INT_MULTIPLY_ACTION(NAME, REPEAT, SEQ, COUNT) \
     static PyObject * \
-    (NAME)(PyObject *lhs, PyObject *rhs) \
+    (NAME)(PyValue lhs, PyValue rhs) \
     { \
-        Py_ssize_t count = PyLong_AsSsize_t(COUNT); \
+        Py_ssize_t count = repeat_count(COUNT); \
         if (count == -1 && PyErr_Occurred()) { \
             return NULL; \
         } \
-        return REPEAT(SEQ, count); \
+        return REPEAT(PyValue_ObjectBorrow(SEQ), count); \
     }
 SEQ_INT_MULTIPLY_ACTION(str_int_multiply,   _PyUnicode_Repeat, lhs, rhs)
 SEQ_INT_MULTIPLY_ACTION(int_str_multiply,   _PyUnicode_Repeat, rhs, lhs)
@@ -2345,11 +2369,11 @@ SEQ_INT_MULTIPLY_ACTION(int_tuple_multiply, _PyTuple_Repeat,   rhs, lhs)
 
 static _PyBinaryOpSpecializationDescr binaryop_extend_descrs[] = {
     /* list-list concatenation: _PyList_Concat always allocates a new list */
-    {NB_ADD, NULL, _PyList_Concat, &PyList_Type, 1, &PyList_Type, &PyList_Type},
+    {NB_ADD, NULL, list_concat, &PyList_Type, 1, &PyList_Type, &PyList_Type},
     /* tuple-tuple concatenation: _PyTuple_Concat has a zero-length shortcut
        that can return one of the operands, so the result is not guaranteed
        to be a freshly allocated object. */
-    {NB_ADD, NULL, _PyTuple_Concat, &PyTuple_Type, 0, &PyTuple_Type, &PyTuple_Type},
+    {NB_ADD, NULL, tuple_concat, &PyTuple_Type, 0, &PyTuple_Type, &PyTuple_Type},
 
     /* str * int / int * str: call _PyUnicode_Repeat directly.
        _PyUnicode_Repeat returns the original when n == 1. */
@@ -2360,8 +2384,8 @@ static _PyBinaryOpSpecializationDescr binaryop_extend_descrs[] = {
 
     /* bytes + bytes: bytes_concat may return an operand when one side
        is empty, so result is not always unique. */
-    {NB_ADD, NULL, _PyBytes_Concat, &PyBytes_Type, 0, &PyBytes_Type, &PyBytes_Type},
-    {NB_INPLACE_ADD, NULL, _PyBytes_Concat, &PyBytes_Type, 0, &PyBytes_Type, &PyBytes_Type},
+    {NB_ADD, NULL, bytes_concat, &PyBytes_Type, 0, &PyBytes_Type, &PyBytes_Type},
+    {NB_INPLACE_ADD, NULL, bytes_concat, &PyBytes_Type, 0, &PyBytes_Type, &PyBytes_Type},
 
     /* bytes * int / int * bytes: call _PyBytes_Repeat directly.
        _PyBytes_Repeat returns the original when n == 1. */
@@ -2378,12 +2402,12 @@ static _PyBinaryOpSpecializationDescr binaryop_extend_descrs[] = {
     {NB_INPLACE_MULTIPLY, NULL, int_tuple_multiply, &PyTuple_Type, 0, &PyLong_Type, &PyTuple_Type},
 
     /* dict | dict */
-    {NB_OR, NULL, _PyDict_Or, &PyDict_Type, 1, &PyDict_Type, &PyDict_Type},
-    {NB_INPLACE_OR, NULL, _PyDict_IOr, &PyDict_Type, 0, &PyDict_Type, &PyDict_Type},
+    {NB_OR, NULL, dict_or, &PyDict_Type, 1, &PyDict_Type, &PyDict_Type},
+    {NB_INPLACE_OR, NULL, dict_ior, &PyDict_Type, 0, &PyDict_Type, &PyDict_Type},
 };
 
 static int
-binary_op_extended_specialization(PyObject *lhs, PyObject *rhs, int oparg,
+binary_op_extended_specialization(PyValue lhs, PyValue rhs, int oparg,
                                   _PyBinaryOpSpecializationDescr **descr)
 {
     size_t n = sizeof(binaryop_extend_descrs)/sizeof(_PyBinaryOpSpecializationDescr);
@@ -2394,7 +2418,7 @@ binary_op_extended_specialization(PyObject *lhs, PyObject *rhs, int oparg,
         }
         int match = (d->guard != NULL)
             ? d->guard(lhs, rhs)
-            : (Py_TYPE(lhs) == d->lhs_type && Py_TYPE(rhs) == d->rhs_type);
+            : (PyValue_Type(lhs) == d->lhs_type && PyValue_Type(rhs) == d->rhs_type);
         if (match) {
             *descr = d;
             return 1;
@@ -2580,7 +2604,7 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
     }
 
     _PyBinaryOpSpecializationDescr *descr;
-    if (binary_op_extended_specialization(lhs, rhs, oparg, &descr)) {
+    if (binary_op_extended_specialization(lhs_st, rhs_st, oparg, &descr)) {
         fb->descr = descr;
         specialize(instr, BINARY_OP_EXTEND);
         return;
@@ -2596,8 +2620,7 @@ _Py_Specialize_BinaryOp(PyValue lhs_st, PyValue rhs_st, _PyInstr *instr,
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[BINARY_OP] == INLINE_CACHE_ENTRIES_BINARY_OP);
-    // The boxes are temporary: BINARY_OP_EXTEND, for one, boxes inline
-    // operands each time it runs.
+    // The boxes are temporary: the specialised handlers take values.
     PyObject *lhs = PyValue_Object(lhs_st);
     PyObject *rhs = PyValue_Object(rhs_st);
     if (lhs == NULL || rhs == NULL) {

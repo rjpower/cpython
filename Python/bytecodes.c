@@ -609,6 +609,7 @@ dummy_func(
             BINARY_OP_ADD_FLOAT,
             BINARY_OP_SUBTRACT_FLOAT,
             BINARY_OP_TRUEDIV_FLOAT,
+            BINARY_OP_POWER_FLOAT,
             BINARY_OP_ADD_UNICODE,
             BINARY_OP_SUBSCR_LIST_INT,
             BINARY_OP_SUBSCR_LIST_SLICE,
@@ -919,6 +920,25 @@ dummy_func(
             INPUTS_DEAD();
         }
 
+        // A positive finite base, a finite exponent and a finite result:
+        // there float ** float is pow(), which neither raises nor gives a
+        // complex.  Otherwise it exits, and BINARY_OP decides.
+        inline_ok pure op(_BINARY_OP_POWER_FLOAT, (left, right -- res, l, r)) {
+            double a, b;
+            EXIT_IF(!_PyValue_FloatOperandValues(left, right, &a, &b));
+            EXIT_IF(!(a > 0.0 && isfinite(a) && isfinite(b)));
+            double d = pow(a, b);
+            EXIT_IF(!isfinite(d));
+            STAT_INC(BINARY_OP, hit);
+            res = PyValue_FromDouble(d);
+            if (PyValue_IsNull(res)) {
+                ERROR_NO_POP();
+            }
+            l = left;
+            r = right;
+            INPUTS_DEAD();
+        }
+
         macro(BINARY_OP_MULTIPLY_FLOAT) =
             unused/5 + _BINARY_OP_MULTIPLY_FLOAT + POP_TOP + POP_TOP;
         macro(BINARY_OP_ADD_FLOAT) =
@@ -927,6 +947,8 @@ dummy_func(
             unused/5 + _BINARY_OP_SUBTRACT_FLOAT + POP_TOP + POP_TOP;
         macro(BINARY_OP_TRUEDIV_FLOAT) =
             unused/5 + _BINARY_OP_TRUEDIV_FLOAT + POP_TOP + POP_TOP;
+        macro(BINARY_OP_POWER_FLOAT) =
+            unused/5 + _BINARY_OP_POWER_FLOAT + POP_TOP + POP_TOP;
 
         pure op(_BINARY_OP_ADD_UNICODE, (left, right -- res, l, r)) {
             PyObject *left_o = PyValue_ObjectBorrow(left);

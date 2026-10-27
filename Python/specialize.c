@@ -2478,6 +2478,13 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
                 return;
             }
             break;
+        case NB_POWER:
+        case NB_INPLACE_POWER:
+            if (floats && _PyValue_NumberAsDouble(lhs_st) > 0.0) {
+                specialize(instr, BINARY_OP_POWER_FLOAT);
+                return;
+            }
+            break;
         case NB_FLOOR_DIVIDE:
         case NB_INPLACE_FLOOR_DIVIDE:
             if (compact_ints && _PyValue_CompactInt(rhs_st) != 0) {

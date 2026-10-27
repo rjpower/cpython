@@ -316,6 +316,7 @@ Known values:
     Python 3.16a1 3716 (a call may store its result in a local)
     Python 3.16a1 3717 (a result copied from an input may take a folded store)
     Python 3.16a1 3718 (marshal shares the references of equal int32 and float values)
+    Python 3.16a1 3719 (BINARY_OP_POWER_FLOAT)
 
     Python 3.17 will start with 3750
 
@@ -325,7 +326,7 @@ Known values:
 
 */
 
-#define PYC_MAGIC_NUMBER 3718
+#define PYC_MAGIC_NUMBER 3719
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

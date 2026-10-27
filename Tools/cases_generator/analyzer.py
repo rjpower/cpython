@@ -686,6 +686,8 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyValue_FloatOperandsCheck",
     "_PyValue_NumberAsDouble",
     "_PyValue_FloatOperandValues",
+    "isfinite",
+    "pow",
     # Allocate an int or float; see PyValue_Object below.
     "PyValue_FromDouble",
     "_PyValue_LshiftInt32",

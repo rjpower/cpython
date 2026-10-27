@@ -505,15 +505,14 @@ class CodeTest(unittest.TestCase):
         def foo():
             pass
 
-        # assert that opcode 127 is invalid
-        self.assertEqual(opname[127], '<127>')
-
-        # change the first handler to 0x7f (=127); the constructor
-        # rejects words whose handler does not exist
-        msg = "word 0 has no handler 127"
+        # Every handler below len(opname) is named, so the first one past
+        # it is invalid: change the first word's handler (its low 16 bits)
+        # to it; the constructor rejects words whose handler does not exist
+        bad = len(opname)
+        msg = f"word 0 has no handler {bad}"
         with self.assertRaisesRegex(ValueError, msg):
             foo.__code__.replace(
-                co_code=b'\x7f\x00' + foo.__code__.co_code[2:])
+                co_code=bad.to_bytes(2, 'little') + foo.__code__.co_code[2:])
 
     def test_code_units_padded(self):
         # Cython passes zeroed code in 2-byte units that only spans its line

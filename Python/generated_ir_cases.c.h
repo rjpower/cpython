@@ -2969,6 +2969,65 @@
             DISPATCH();
         }
 
+        TARGET(BINARY_OP_POWER_FLOAT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = BINARY_OP_POWER_FLOAT;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(BINARY_OP_POWER_FLOAT);
+            PyValue left;
+            PyValue right;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
+            // _BINARY_OP_POWER_FLOAT
+            {
+                right = IR_SLOT(IR_FIELD_C(this_instr));
+                left = IR_SLOT(IR_FIELD_B(this_instr));
+                double a, b;
+                if (!_PyValue_FloatOperandValues(left, right, &a, &b)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
+                }
+                if (!(a > 0.0 && isfinite(a) && isfinite(b))) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
+                }
+                double d = pow(a, b);
+                if (!isfinite(d)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
+                }
+                STAT_INC(BINARY_OP, hit);
+                res = PyValue_FromDouble(d);
+                if (PyValue_IsNull(res)) {
+                    JUMP_TO_LABEL(error);
+                }
+                l = left;
+                r = right;
+            }
+            // _POP_TOP
+            {
+                value = r;
+                (void)value;
+            }
+            // _POP_TOP
+            {
+                value = l;
+                (void)value;
+            }
+            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            DISPATCH();
+        }
+
         TARGET(BINARY_OP_REMAINDER) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_REMAINDER;

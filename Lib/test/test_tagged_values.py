@@ -462,6 +462,26 @@ class InlineFloatTest(unittest.TestCase):
         self.assertNotIn("BINARY_OP_EXTEND", names)
         self.assertEqual(f(3), (1.125, True))
 
+    def test_power(self):
+        def f(x, y):
+            return x ** y
+        warm(f, 2.0, -1.5)
+        self.assertIn("BINARY_OP_POWER_FLOAT", opnames(f))
+        for x, y in [(2.0, -1.5), (2.0, 3), (3, 0.5), (1.0, 1e308),
+                     (0.5, 2000.0), (1e-300, 0.5), (2.5, 0.0)]:
+            with self.subTest(x=x, y=y):
+                self.assertEqual(f(x, y), operator.pow(x, y))
+                self.assertIs(type(f(x, y)), float)
+        # The cases that are not pow() exit to BINARY_OP.
+        self.assertEqual(f(-8.0, 1/3), operator.pow(-8.0, 1/3))
+        self.assertIs(type(f(-8.0, 1/3)), complex)
+        self.assertEqual(f(-2.0, 2.0), 4.0)
+        self.assertRaises(ZeroDivisionError, f, 0.0, -1.0)
+        self.assertRaises(OverflowError, f, 10.0, 400.0)
+        self.assertTrue(math.isnan(f(float("nan"), 2.0)))
+        self.assertEqual(f(math.inf, 2.0), math.inf)
+        self.assertEqual(f(2.0, -math.inf), 0.0)
+
     def test_results_are_inline(self):
         def f(a, b, i):
             s = a + b

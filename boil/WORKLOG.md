@@ -1439,7 +1439,7 @@ referrer first in reverse postorder (e638f8018da); pyexpat drops its
 finalizer. The alias-fold rule that existed for borrowing is gone
 (337416c0d6d), measured at zero on richards and go.
 
-### 2026-10-26 17:40 — step 5c done: one build, no reference counts, ports on cpython-3.16-gc-v1
+### 2026-10-26 17:15 — step 5c done: one build, no reference counts, ports on cpython-3.16-gc-v1
 
 Rungs 3a, 4 and 5 are complete; note 06 section 17 has the record. The
 sweep deallocates flagged objects referrer first, in reverse postorder of

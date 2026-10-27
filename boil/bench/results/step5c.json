@@ -1837,6 +1837,533 @@
     "loops": 1,
     "runs": 3
    }
+  },
+  "time": {
+   "richards": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 54332980.0,
+    "values": [
+     54030248.0,
+     55870160.0,
+     60457021.0,
+     54332980.0,
+     53696550.5
+    ],
+    "loops": 2,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "go": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 110973635.0,
+    "values": [
+     110973635.0,
+     142746599.0,
+     107171309.0,
+     129123587.0,
+     109106953.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "nbody": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 165442361.0,
+    "values": [
+     177260571.0,
+     137371132.0,
+     169383318.0,
+     139872929.0,
+     165442361.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "float": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 117116066.0,
+    "values": [
+     139961260.0,
+     117116066.0,
+     102874661.0,
+     143398253.0,
+     116354372.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "spectral_norm": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 104679303.0,
+    "values": [
+     104679303.0,
+     106055842.0,
+     93139395.0,
+     92581801.0,
+     106057333.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "raytrace": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 377762197.0,
+    "values": [
+     419354446.0,
+     348252128.0,
+     377762197.0,
+     416225785.0,
+     375405641.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "deltablue": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 4284252.766666667,
+    "values": [
+     4284252.766666667,
+     4495041.533333333,
+     3826088.033333333,
+     4354275.9,
+     3697298.5
+    ],
+    "loops": 30,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "chaos": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 84080734.5,
+    "values": [
+     92133378.5,
+     73702070.0,
+     84080734.5,
+     73361392.5,
+     84336041.5
+    ],
+    "loops": 2,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "nqueens": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 129175727.0,
+    "values": [
+     129175727.0,
+     128606994.0,
+     127861579.0,
+     131096960.0,
+     141500970.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "fannkuch": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 483650178.0,
+    "values": [
+     517696836.0,
+     503152459.0,
+     479700192.0,
+     483650178.0,
+     482609330.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "generators": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 59525965.0,
+    "values": [
+     59413504.0,
+     59525965.0,
+     72944344.5,
+     61254881.5,
+     59469644.5
+    ],
+    "loops": 2,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "comprehensions": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 39572.864,
+    "values": [
+     39572.864,
+     38653.90633333333,
+     34793.10016666666,
+     40399.986333333334,
+     41277.01066666667
+    ],
+    "loops": 6000,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "coroutines": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 66214739.5,
+    "values": [
+     69661212.75,
+     62938995.25,
+     60812733.5,
+     66214739.5,
+     70147356.25
+    ],
+    "loops": 4,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "unpack_sequence": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 18494.96925,
+    "values": [
+     16008.1325,
+     18494.96925,
+     18875.30175,
+     18832.424,
+     16750.5425
+    ],
+    "loops": 4000,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "deepcopy": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 425420.95666666667,
+    "values": [
+     425420.95666666667,
+     476549.3,
+     423636.2133333333,
+     474681.32,
+     422643.5733333333
+    ],
+    "loops": 300,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "deepcopy_reduce": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 5561.42335,
+    "values": [
+     5561.42335,
+     5610.91815,
+     5580.127,
+     4766.4225,
+     5370.86555
+    ],
+    "loops": 20000,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "deepcopy_memo": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 31733.12825,
+    "values": [
+     31733.12825,
+     29361.69475,
+     32035.71,
+     31903.79925,
+     31548.207
+    ],
+    "loops": 4000,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "json_dumps": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 15845018.4,
+    "values": [
+     13967866.8,
+     16108328.2,
+     16206116.8,
+     15845018.4,
+     13954544.7
+    ],
+    "loops": 10,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "json_loads": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 746375.515,
+    "values": [
+     781127.395,
+     776689.665,
+     743979.945,
+     739374.365,
+     746375.515
+    ],
+    "loops": 200,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "pickle": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 364323.82,
+    "values": [
+     379279.4475,
+     364323.82,
+     367090.9625,
+     346951.1075,
+     354776.58
+    ],
+    "loops": 400,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "unpickle": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 510559.19666666666,
+    "values": [
+     546745.27,
+     510559.19666666666,
+     496418.06666666665,
+     522022.67333333334,
+     496240.6
+    ],
+    "loops": 300,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "regex_compile": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 228537504.0,
+    "values": [
+     225985928.0,
+     226178409.0,
+     255566796.0,
+     230515248.0,
+     228537504.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "logging_format": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 96688.5,
+    "values": [
+     93672.689,
+     98123.269,
+     86635.072,
+     98403.78,
+     96688.5
+    ],
+    "loops": 1000,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "logging_silent": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 1356.4347666666667,
+    "values": [
+     1492.5440166666667,
+     1636.1923333333334,
+     1356.4347666666667,
+     1333.9841333333334,
+     1277.0452333333333
+    ],
+    "loops": 60000,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "logging_simple": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 88464.684,
+    "values": [
+     88464.684,
+     91134.802,
+     82468.304,
+     79216.782,
+     90344.267
+    ],
+    "loops": 1000,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "xml_etree_generate": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 172673029.0,
+    "values": [
+     156998654.0,
+     195504823.0,
+     177823405.0,
+     172673029.0,
+     162720633.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "xml_etree_iterparse": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 150383940.0,
+    "values": [
+     155980777.0,
+     150383940.0,
+     148287536.0,
+     150607901.0,
+     149159902.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "xml_etree_parse": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 180466482.0,
+    "values": [
+     187561980.0,
+     176599465.0,
+     181505029.0,
+     180466482.0,
+     178322558.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "xml_etree_process": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 101107180.0,
+    "values": [
+     101107180.0,
+     112226093.0,
+     98775563.0,
+     109122722.0,
+     97492285.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "tuples_10m": {
+    "group": "memory",
+    "unit": "ns per loop",
+    "value": 2754318295.0,
+    "values": [
+     2754318295.0,
+     2441097540.0,
+     3261766482.0,
+     2725261561.0,
+     2937605357.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "instances_1m": {
+    "group": "memory",
+    "unit": "ns per loop",
+    "value": 406476360.0,
+    "values": [
+     492845250.0,
+     445766093.0,
+     405655795.0,
+     403328148.0,
+     406476360.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "dicts_200k": {
+    "group": "memory",
+    "unit": "ns per loop",
+    "value": 92406251.0,
+    "values": [
+     92406251.0,
+     94688566.0,
+     83730502.0,
+     97476604.0,
+     90840080.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "collector_live16": {
+    "group": "memory",
+    "unit": "s per allocated GB",
+    "value": 1.523002927,
+    "values": [
+     1.519593475,
+     1.514601131,
+     1.523002927,
+     1.529512492,
+     1.564784008
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "collector_live128": {
+    "group": "memory",
+    "unit": "s per allocated GB",
+    "value": 1.878621795,
+    "values": [
+     1.926297666,
+     1.858813413,
+     1.847766508,
+     1.928081298,
+     1.878621795
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "collector_live512": {
+    "group": "memory",
+    "unit": "s per allocated GB",
+    "value": 2.321923253,
+    "values": [
+     1.907311308,
+     2.321923253,
+     1.944718989,
+     2.362862848,
+     2.398729718
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   }
   }
  },
  "runs": {
@@ -2093,6 +2620,54 @@
      20.1142578125,
      19.4013671875,
      19.23828125
+    ]
+   }
+  },
+  "time": {
+   "timestamp": "2026-10-27T14:41:26-07:00",
+   "commit": {
+    "sha": "41157098106ef8fec7940db6d38f7f623ab0b0d6",
+    "dirty": false
+   },
+   "load_1min": {
+    "max": 2.3984375,
+    "samples": [
+     1.72216796875,
+     1.72216796875,
+     1.72216796875,
+     1.72216796875,
+     1.72216796875,
+     1.72216796875,
+     1.6640625,
+     1.6640625,
+     1.6640625,
+     1.6640625,
+     1.8515625,
+     1.8515625,
+     1.8515625,
+     1.86376953125,
+     1.86376953125,
+     1.86376953125,
+     1.86376953125,
+     1.86376953125,
+     1.79443359375,
+     1.79443359375,
+     1.79443359375,
+     1.79443359375,
+     1.79443359375,
+     1.81103515625,
+     1.81103515625,
+     1.81103515625,
+     1.81103515625,
+     1.81103515625,
+     1.81103515625,
+     1.826171875,
+     2.1474609375,
+     2.3759765625,
+     2.3759765625,
+     2.3984375,
+     2.33056640625,
+     2.392578125
     ]
    }
   }

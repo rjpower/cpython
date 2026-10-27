@@ -273,7 +273,10 @@ typedef PyObject *(*reprfunc)(PyObject *);
 typedef Py_hash_t (*hashfunc)(PyObject *);
 typedef PyObject *(*richcmpfunc) (PyObject *, PyObject *, int);
 typedef PyObject *(*getiterfunc) (PyObject *);
-typedef PyObject *(*iternextfunc) (PyObject *);
+/* The next item of an iterator as a value, or PyValue_NULL when it is
+   exhausted (with no exception set, or with StopIteration set) or on error
+   (with another exception set). */
+typedef PyValue (*iternextfunc) (PyObject *);
 /* The result of _tp_iteritem: the item at index as a value and the index of
    the next, or PyValue_NULL and the index at the end, or PyValue_NULL and a
    negative index with an exception set. */

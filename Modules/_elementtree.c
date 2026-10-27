@@ -2277,7 +2277,7 @@ parent_stack_push_new(ElementIterObject *it, ElementObject *parent)
     return 0;
 }
 
-static PyObject *
+static PyValue
 elementiter_next(PyObject *op)
 {
     ElementIterObject *it = _ElementIter_CAST(op);
@@ -2304,7 +2304,7 @@ elementiter_next(PyObject *op)
         if (!it->parent_stack_used) {
             if (!it->root_element) {
                 PyErr_SetNone(PyExc_StopIteration);
-                return NULL;
+                return PyValue_NULL;
             }
 
             elem = it->root_element;  /* steals a reference */
@@ -2345,7 +2345,7 @@ elementiter_next(PyObject *op)
         if (parent_stack_push_new(it, elem) < 0) {
             Py_DECREF(elem);
             PyErr_NoMemory();
-            return NULL;
+            return PyValue_NULL;
         }
         if (it->gettext) {
             if (elem->tag != Py_None && !PyUnicode_Check(elem->tag)) {
@@ -2357,21 +2357,21 @@ elementiter_next(PyObject *op)
         }
 
         if (it->sought_tag == Py_None)
-            return (PyObject *)elem;
+            return PyValue_FromObject(elem);
 
         rc = PyObject_RichCompareBool(elem->tag, it->sought_tag, Py_EQ);
         if (rc > 0)
-            return (PyObject *)elem;
+            return PyValue_FromObject(elem);
 
         Py_DECREF(elem);
         if (rc < 0)
-            return NULL;
+            return PyValue_NULL;
         continue;
 
 gettext:
         Py_DECREF(elem);
         if (!text) {
-            return NULL;
+            return PyValue_NULL;
         }
         if (text == Py_None) {
             Py_DECREF(text);
@@ -2379,14 +2379,14 @@ gettext:
         else {
             rc = PyObject_IsTrue(text);
             if (rc > 0)
-                return text;
+                return PyValue_FromObject(text);
             Py_DECREF(text);
             if (rc < 0)
-                return NULL;
+                return PyValue_NULL;
         }
     }
 
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyType_Slot elementiter_slots[] = {

@@ -3151,7 +3151,7 @@ error:
     return NULL;
 }
 
-static PyObject *
+static PyValue
 branchesiter_next(PyObject *op)
 {
     branchesiterator *bi = branchesiterator_CAST(op);
@@ -3164,7 +3164,7 @@ branchesiter_next(PyObject *op)
             case FOR_ITER: {
                 bi->bi_offset = next_offset;
                 int target = jump_dest(code, offset) + 2; // Skips END_FOR and POP_ITER
-                return int_triple(offset, next_offset, target);
+                return PyValue_FromResult(int_triple(offset, next_offset, target));
             }
             case POP_JUMP_IF_FALSE:
             case POP_JUMP_IF_TRUE:
@@ -3175,7 +3175,7 @@ branchesiter_next(PyObject *op)
                 /* Skip NOT_TAKEN */
                 int not_taken = next_offset + 1;
                 bi->bi_offset = not_taken;
-                return int_triple(offset, not_taken, jump_dest(code, offset));
+                return PyValue_FromResult(int_triple(offset, not_taken, jump_dest(code, offset)));
             }
             case END_ASYNC_FOR: {
                 // The END_SEND of the SEND that END_ASYNC_FOR names
@@ -3184,12 +3184,12 @@ branchesiter_next(PyObject *op)
                 assert(base_opcode(code, src_offset) == END_SEND);
                 assert(base_opcode(code, src_offset + 1) == NOT_TAKEN);
                 int not_taken = src_offset + 2;
-                return int_triple(src_offset, not_taken, next_offset);
+                return PyValue_FromResult(int_triple(src_offset, not_taken, next_offset));
             }
         }
         offset = next_offset;
     }
-    return NULL;
+    return PyValue_NULL;
 }
 
 static void

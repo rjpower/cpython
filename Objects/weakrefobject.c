@@ -874,23 +874,23 @@ proxy_iter(PyObject *proxy)
     return res;
 }
 
-static PyObject *
+static PyValue
 proxy_iternext(PyObject *proxy)
 {
     PyObject *obj = _PyWeakref_GET_REF(proxy);
     if (!proxy_check_ref(obj)) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (!PyIter_Check(obj)) {
         PyErr_Format(PyExc_TypeError,
             "Weakref proxy referenced a non-iterator '%.200s' object",
             Py_TYPE(obj)->tp_name);
         Py_DECREF(obj);
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject* res = PyIter_Next(obj);
     Py_DECREF(obj);
-    return res;
+    return PyValue_FromResult(res);
 }
 
 

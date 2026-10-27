@@ -17139,7 +17139,7 @@ ScandirIterator_closedir(ScandirIterator *iterator)
     }
 }
 
-static PyObject *
+static PyValue
 ScandirIterator_iternext(PyObject *op)
 {
     ScandirIterator *iterator = ScandirIterator_CAST(op);
@@ -17187,7 +17187,7 @@ ScandirIterator_iternext(PyObject *op)
         PyObject *module = PyType_GetModule(Py_TYPE(iterator));
         PyObject *entry = DirEntry_from_find_data(module, &iterator->path, &file_data);
         if (entry != NULL) {
-            return entry;
+            return PyValue_FromObject(entry);
         }
     }
     else if (error != ERROR_SUCCESS && error != ERROR_NO_MORE_FILES) {
@@ -17197,7 +17197,7 @@ ScandirIterator_iternext(PyObject *op)
 
     /* Error or no more files */
     ScandirIterator_closedir(iterator);
-    return NULL;
+    return PyValue_NULL;
 }
 
 #else /* POSIX */
@@ -17233,7 +17233,7 @@ ScandirIterator_closedir(ScandirIterator *iterator)
     }
 }
 
-static PyObject *
+static PyValue
 ScandirIterator_iternext(PyObject *op)
 {
     ScandirIterator *iterator = ScandirIterator_CAST(op);
@@ -17310,7 +17310,7 @@ ScandirIterator_iternext(PyObject *op)
             PyMem_RawFree(name);
         }
         if (entry != NULL) {
-            return entry;
+            return PyValue_FromObject(entry);
         }
     }
     else if (no_memory) {
@@ -17323,7 +17323,7 @@ ScandirIterator_iternext(PyObject *op)
 
     /* Error or no more files */
     ScandirIterator_closedir(iterator);
-    return NULL;
+    return PyValue_NULL;
 }
 
 #endif

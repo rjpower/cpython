@@ -164,13 +164,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 longrangeiter_next_impl(longrangeiterobject *self);
 
-static PyObject *
+static PyValue
 longrangeiter_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = longrangeiter_next_impl((longrangeiterobject *)self);
@@ -178,4 +178,4 @@ longrangeiter_next(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=8c4b51042cef2a74 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c6c54ee6566017c5 input=a9049054013a1b77]*/

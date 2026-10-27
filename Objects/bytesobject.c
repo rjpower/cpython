@@ -3535,7 +3535,7 @@ striter_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 striter_next(PyObject *op)
 {
     striterobject *it = _striterobject_CAST(op);
@@ -3544,17 +3544,17 @@ striter_next(PyObject *op)
     assert(it != NULL);
     seq = it->it_seq;
     if (seq == NULL)
-        return NULL;
+        return PyValue_NULL;
     assert(PyBytes_Check(seq));
 
     if (it->it_index < PyBytes_GET_SIZE(seq)) {
-        return _PyLong_FromUnsignedChar(
+        return PyValue_FromInt32(
             (unsigned char)seq->ob_sval[it->it_index++]);
     }
 
     it->it_seq = NULL;
     Py_DECREF(seq);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *

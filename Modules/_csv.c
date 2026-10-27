@@ -1026,9 +1026,9 @@ parse_reset(ReaderObj *self)
 _csv.Reader.__next__ as Reader_iternext
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 Reader_iternext_impl(ReaderObj *self)
-/*[clinic end generated code: output=3a02b0254a76e1fc input=97c70a4e2fe621e4]*/
+/*[clinic end generated code: output=66199893b366ab11 input=97c70a4e2fe621e4]*/
 {
     PyObject *fields = NULL;
     Py_UCS4 c;
@@ -1040,11 +1040,11 @@ Reader_iternext_impl(ReaderObj *self)
     _csvstate *module_state = _csv_state_from_type(Py_TYPE(self),
                                                    "Reader.__next__");
     if (module_state == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (parse_reset(self) < 0)
-        return NULL;
+        return PyValue_NULL;
     do {
         lineobj = PyIter_Next(self->input_iter);
         if (lineobj == NULL) {
@@ -1057,7 +1057,7 @@ Reader_iternext_impl(ReaderObj *self)
                 else if (parse_save_field(self) >= 0)
                     break;
             }
-            return NULL;
+            return PyValue_NULL;
         }
         if (!PyUnicode_Check(lineobj)) {
             PyErr_Format(module_state->error_obj,
@@ -1067,13 +1067,13 @@ Reader_iternext_impl(ReaderObj *self)
                          Py_TYPE(lineobj)->tp_name
                 );
             Py_DECREF(lineobj);
-            return NULL;
+            return PyValue_NULL;
         }
         if (self->fields == NULL) {
             PyErr_SetString(module_state->error_obj,
                             "iterator has already advanced the reader");
             Py_DECREF(lineobj);
-            return NULL;
+            return PyValue_NULL;
         }
         ++self->line_num;
         kind = PyUnicode_KIND(lineobj);
@@ -1096,7 +1096,7 @@ Reader_iternext_impl(ReaderObj *self)
     fields = self->fields;
     self->fields = NULL;
 err:
-    return fields;
+    return PyValue_FromResult(fields);
 }
 
 static void

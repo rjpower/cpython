@@ -360,6 +360,18 @@ _enter_buffered_busy(buffered *self)
         return -1; \
     }
 
+#define CHECK_INITIALIZED_VALUE(self) \
+    if (self->ok <= 0) { \
+        if (self->detached) { \
+            PyErr_SetString(PyExc_ValueError, \
+                 "raw stream has been detached"); \
+        } else { \
+            PyErr_SetString(PyExc_ValueError, \
+                "I/O operation on uninitialized object"); \
+        } \
+        return PyValue_NULL; \
+    }
+
 #define IS_CLOSED(self) \
     (!self->buffer ? 1 : \
     (self->fast_closed_checks \
@@ -1497,14 +1509,14 @@ end:
     return res;
 }
 
-static PyObject *
+static PyValue
 buffered_iternext(PyObject *op)
 {
     buffered *self = buffered_CAST(op);
     PyObject *line;
     PyTypeObject *tp;
 
-    CHECK_INITIALIZED(self);
+    CHECK_INITIALIZED_VALUE(self);
 
     _PyIO_State *state = find_io_state_by_def(Py_TYPE(self));
     tp = Py_TYPE(self);
@@ -1524,20 +1536,20 @@ buffered_iternext(PyObject *op)
                          "readline() should have returned a bytes object, "
                          "not '%.200s'", Py_TYPE(line)->tp_name);
             Py_DECREF(line);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
     if (line == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (PyBytes_GET_SIZE(line) == 0) {
         /* Reached EOF or would have blocked */
         Py_DECREF(line);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return line;
+    return PyValue_FromObject(line);
 }
 
 static PyObject *

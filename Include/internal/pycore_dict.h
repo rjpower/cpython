@@ -168,8 +168,6 @@ PyAPI_FUNC(int) _PyDict_GetItemValue(PyObject *op, PyValue key, PyValue *result)
 PyAPI_FUNC(int) _PyDict_DelItemValue(PyObject *op, PyValue key);
 PyAPI_FUNC(int) _PyDict_ContainsValue(PyObject *op, PyValue key);
 PyAPI_FUNC(PyValue) _PyDict_SubscriptValue(PyObject *self, PyValue key);
-// PyIter_NextValue() of a dict key or value iterator.
-extern int _PyDictIter_NextValue(PyObject *it, PyValue *item);
 // Exported for external JIT support
 // Sets dict[name] to value, or deletes it if value is PyValue_NULL.
 PyAPI_FUNC(int) _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyValue value);

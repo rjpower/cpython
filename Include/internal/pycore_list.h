@@ -75,9 +75,6 @@ typedef struct {
     PyListObject *it_seq; /* Set to NULL when iterator is exhausted */
 } _PyListIterObject;
 
-// The next item of a list iterator as its value, so that no box is made:
-// 1, or 0 at the end.
-extern int _PyListIter_NextValue(PyObject *it, PyValue *item);
 
 struct PyValue;
 

@@ -141,7 +141,7 @@ enum_next_long(enumobject *en, PyValue next_item)
     return _PyTuple_FromValues(pair, 2);
 }
 
-static PyObject *
+static PyValue
 enum_next(PyObject *op)
 {
     enumobject *en = _enumobject_CAST(op);
@@ -150,22 +150,22 @@ enum_next(PyObject *op)
 
     // The pair holds values: an inline index or item has no box.
     if (PyIter_NextValue(PyValue_FromObject(it), &next_item) <= 0)
-        return NULL;
+        return PyValue_NULL;
 
     Py_ssize_t en_index = FT_ATOMIC_LOAD_SSIZE_RELAXED(en->en_index);
     if (en_index == PY_SSIZE_T_MAX)
-        return enum_next_long(en, next_item);
+        return PyValue_FromResult(enum_next_long(en, next_item));
 
     PyValue next_index = en_index <= INT32_MAX
         ? PyValue_FromInt32((int32_t)en_index)
         : _PyValue_BoxInt64(en_index);
     if (PyValue_IsNull(next_index)) {
-        return NULL;
+        return PyValue_NULL;
     }
     FT_ATOMIC_STORE_SSIZE_RELAXED(en->en_index, en_index + 1);
 
     PyValue pair[2] = {next_index, next_item};
-    return _PyTuple_FromValues(pair, 2);
+    return PyValue_FromResult(_PyTuple_FromValues(pair, 2));
 }
 
 static PyObject *
@@ -321,7 +321,7 @@ reversed_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 reversed_next(PyObject *op)
 {
     reversedobject *ro = _reversedobject_CAST(op);
@@ -332,7 +332,7 @@ reversed_next(PyObject *op)
         item = PySequence_GetItem(ro->seq, index);
         if (item != NULL) {
             FT_ATOMIC_STORE_SSIZE_RELAXED(ro->index, index - 1);
-            return item;
+            return PyValue_FromResult(item);
         }
         if (PyErr_ExceptionMatches(PyExc_IndexError) ||
             PyErr_ExceptionMatches(PyExc_StopIteration))
@@ -340,7 +340,7 @@ reversed_next(PyObject *op)
     }
     FT_ATOMIC_STORE_SSIZE_RELAXED(ro->index, -1);
     Py_CLEAR(ro->seq);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *

@@ -15,7 +15,7 @@ typedef struct {
 #define templateiterobject_CAST(op) \
     (assert(_PyTemplateIter_CheckExact(op)), _Py_CAST(templateiterobject*, (op)))
 
-static PyObject *
+static PyValue
 templateiter_next(PyObject *op)
 {
     templateiterobject *self = templateiterobject_CAST(op);
@@ -24,7 +24,7 @@ templateiter_next(PyObject *op)
         item = PyIter_Next(self->stringsiter);
         self->from_strings = 0;
         if (item == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         if (PyUnicode_GET_LENGTH(item) == 0) {
             Py_SETREF(item, PyIter_Next(self->interpolationsiter));
@@ -35,7 +35,7 @@ templateiter_next(PyObject *op)
         item = PyIter_Next(self->interpolationsiter);
         self->from_strings = 1;
     }
-    return item;
+    return PyValue_FromResult(item);
 }
 
 static void

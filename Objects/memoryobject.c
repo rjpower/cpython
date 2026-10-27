@@ -3693,32 +3693,32 @@ memoryiter_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 memoryiter_next(PyObject *self)
 {
     memoryiterobject *it = (memoryiterobject *)self;
     PyMemoryViewObject *seq;
     seq = it->it_seq;
     if (seq == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (it->it_index < it->it_length) {
-        CHECK_RELEASED(seq);
+        CHECK_RELEASED_VALUE(seq);
         Py_buffer *view = &(seq->view);
         char *ptr = (char *)seq->view.buf;
 
         ptr += view->strides[0] * it->it_index++;
         ptr = ADJUST_PTR(ptr, view->suboffsets, 0);
         if (ptr == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
-        return unpack_single(seq, ptr, it->it_fmt);
+        return unpack_single_value(seq, ptr, it->it_fmt);
     }
 
     it->it_seq = NULL;
     Py_DECREF(seq);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *

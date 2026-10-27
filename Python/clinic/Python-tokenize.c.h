@@ -89,13 +89,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 tokenizeriter_next_impl(tokenizeriterobject *self);
 
-static PyObject *
+static PyValue
 tokenizeriter_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = tokenizeriter_next_impl((tokenizeriterobject *)self);
@@ -103,4 +103,4 @@ tokenizeriter_next(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=9a63baba675cbde1 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e3819647c34e693b input=a9049054013a1b77]*/

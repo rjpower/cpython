@@ -3526,15 +3526,15 @@ PyAIter_Check(PyObject *obj)
 {
     PyTypeObject *tp = Py_TYPE(obj);
     return (tp->tp_as_async != NULL &&
-            tp->tp_as_async->am_anext != NULL &&
-            tp->tp_as_async->am_anext != &_PyObject_NextNotImplemented);
+            tp->tp_as_async->am_anext != NULL);
 }
 
 static int
-iternext(PyObject *iter, PyObject **item)
+iternext(PyObject *iter, PyValue *item)
 {
     iternextfunc tp_iternext = Py_TYPE(iter)->tp_iternext;
-    if ((*item = tp_iternext(iter))) {
+    *item = tp_iternext(iter);
+    if (!PyValue_IsNull(*item)) {
         return 1;
     }
 
@@ -3588,10 +3588,10 @@ PyIter_Next(PyObject *iter)
 }
 
 /* The item, containment and iteration protocols on values.  A list or
-   tuple indexed by an inline int, an exact dict, set or frozenset, and the
-   iterators of lists and tuples are worked on without a box; anything else
-   boxes its inline operands for the type's slots (see "The number protocol
-   on values" above). */
+   tuple indexed by an inline int, and an exact dict, set or frozenset, are
+   worked on without a box; anything else boxes its inline operands for the
+   type's slots (see "The number protocol on values" above).  Iteration
+   takes the item from tp_iternext as a value. */
 
 /* index normalised for a sequence of n items: -1 if it is out of range. */
 static inline Py_ssize_t
@@ -3792,8 +3792,8 @@ PyObject_GetIterValue(PyValue o)
 }
 
 /* As PyIter_NextItem(): 1 and the next item, 0 and PyValue_NULL when the
-   iterator is exhausted, or -1 and PyValue_NULL with an exception set.  A
-   list or tuple iterator's item is not boxed. */
+   iterator is exhausted, or -1 and PyValue_NULL with an exception set.  The
+   item comes from tp_iternext as a value, so it is never boxed. */
 int
 PyIter_NextValue(PyValue iter, PyValue *item)
 {
@@ -3804,29 +3804,11 @@ PyIter_NextValue(PyValue iter, PyValue *item)
         return -1;
     }
     PyObject *it = PyValue_ObjectBorrow(iter);
-    PyTypeObject *tp = Py_TYPE(it);
-    if (tp == &PyListIter_Type) {
-        return _PyListIter_NextValue(it, item);
-    }
-    if (tp == &PyTupleIter_Type) {
-        return _PyTupleIter_NextValue(it, item);
-    }
-    if (tp == &PyDictIterKey_Type || tp == &PyDictIterValue_Type) {
-        return _PyDictIter_NextValue(it, item);
-    }
-    if (tp == &PySetIter_Type) {
-        return _PySetIter_NextValue(it, item);
-    }
-    if (tp->tp_iternext == NULL) {
+    if (Py_TYPE(it)->tp_iternext == NULL) {
         PyErr_Format(PyExc_TypeError, "expected an iterator, got '%T'", it);
         return -1;
     }
-    PyObject *res;
-    int status = iternext(it, &res);
-    if (status > 0) {
-        *item = PyValue_FromObject(res);
-    }
-    return status;
+    return iternext(it, item);
 }
 
 
@@ -3889,7 +3871,7 @@ PyIter_Send(PyObject *iter, PyObject *arg, PyObject **result)
         return res;
     }
     if (arg == Py_None && PyIter_Check(iter)) {
-        *result = Py_TYPE(iter)->tp_iternext(iter);
+        *result = PyValue_Object(Py_TYPE(iter)->tp_iternext(iter));
     }
     else {
         *result = PyObject_CallMethodOneArg(iter, &_Py_ID(send), arg);

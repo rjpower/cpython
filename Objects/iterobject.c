@@ -54,7 +54,7 @@ iter_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 iter_iternext(PyObject *iterator)
 {
     seqiterobject *it;
@@ -65,14 +65,14 @@ iter_iternext(PyObject *iterator)
     it = (seqiterobject *)iterator;
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
     if (index < 0)
-        return NULL;
+        return PyValue_NULL;
     seq = it->it_seq;
     if (seq == NULL)
-        return NULL;
+        return PyValue_NULL;
     if (index == PY_SSIZE_T_MAX) {
         PyErr_SetString(PyExc_OverflowError,
                         "iter index too large");
-        return NULL;
+        return PyValue_NULL;
     }
 
     result = PySequence_GetItem(seq, index);
@@ -84,7 +84,7 @@ iter_iternext(PyObject *iterator)
         if (FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index) >= 0) {
             FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index + 1);
         }
-        return result;
+        return PyValue_FromResult(result);
     }
     if (PyErr_ExceptionMatches(PyExc_IndexError) ||
         PyErr_ExceptionMatches(PyExc_StopIteration))
@@ -95,7 +95,7 @@ iter_iternext(PyObject *iterator)
         Py_CLEAR(it->it_seq);
         PyErr_Clear();
     }
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *
@@ -262,25 +262,25 @@ calliter_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 calliter_iternext(PyObject *op)
 {
     calliterobject *it = (calliterobject*)op;
     PyObject *result;
 
     if (it->it_callable == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     result = _PyObject_CallNoArgs(it->it_callable);
     /* The call can exhaust the iterator re-entrantly. */
     if (result != NULL && it->it_callable != NULL) {
         if (it->it_sentinel == NULL) {
-            return result; /* Common case, fast path */
+            return PyValue_FromResult(result); /* Common case, fast path */
         }
         int ok = PyObject_RichCompareBool(it->it_sentinel, result, Py_EQ);
         if (ok == 0) {
-            return result; /* Common case, fast path */
+            return PyValue_FromResult(result); /* Common case, fast path */
         }
 
         if (ok > 0) {
@@ -297,7 +297,7 @@ calliter_iternext(PyObject *op)
                                "callable raised StopIteration");
     }
     Py_XDECREF(result);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *

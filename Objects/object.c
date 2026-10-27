@@ -1333,13 +1333,13 @@ PyObject_SelfIter(PyObject *obj)
    on every iteration.
  */
 
-PyObject *
+PyValue
 _PyObject_NextNotImplemented(PyObject *self)
 {
     PyErr_Format(PyExc_TypeError,
                  "'%.200s' object is not iterable",
                  Py_TYPE(self)->tp_name);
-    return NULL;
+    return PyValue_NULL;
 }
 
 

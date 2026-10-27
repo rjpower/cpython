@@ -1134,8 +1134,11 @@ error:
     return NULL;
 }
 
+/* The next row, or NULL: with an exception set on error, without one at the
+   end of the result set.  fetchone(), fetchmany() and fetchall() keep the
+   row as an object; tp_iternext converts it to a value. */
 static PyObject *
-pysqlite_cursor_iternext(PyObject *op)
+cursor_next_row(PyObject *op)
 {
     pysqlite_Cursor *self = _pysqlite_Cursor_CAST(op);
     if (!check_cursor(self)) {
@@ -1190,6 +1193,12 @@ reset_failure:
     return NULL;
 }
 
+static PyValue
+pysqlite_cursor_iternext(PyObject *op)
+{
+    return PyValue_FromResult(cursor_next_row(op));
+}
+
 /*[clinic input]
 _sqlite3.Cursor.fetchone as pysqlite_cursor_fetchone
 
@@ -1202,7 +1211,7 @@ pysqlite_cursor_fetchone_impl(pysqlite_Cursor *self)
 {
     PyObject* row;
 
-    row = pysqlite_cursor_iternext((PyObject *)self);
+    row = cursor_next_row((PyObject *)self);
     if (!row && !PyErr_Occurred()) {
         Py_RETURN_NONE;
     }
@@ -1231,7 +1240,7 @@ pysqlite_cursor_fetchmany_impl(pysqlite_Cursor *self, uint32_t maxrows)
         return NULL;
     }
 
-    while (maxrows > 0 && (row = pysqlite_cursor_iternext((PyObject *)self))) {
+    while (maxrows > 0 && (row = cursor_next_row((PyObject *)self))) {
         int rc = PyList_Append(list, row);
         Py_DECREF(row);
         if (rc < 0) {
@@ -1266,7 +1275,7 @@ pysqlite_cursor_fetchall_impl(pysqlite_Cursor *self)
         return NULL;
     }
 
-    while ((row = pysqlite_cursor_iternext((PyObject *)self))) {
+    while ((row = cursor_next_row((PyObject *)self))) {
         if (PyList_Append(list, row) < 0) {
             Py_DECREF(row);
             break;

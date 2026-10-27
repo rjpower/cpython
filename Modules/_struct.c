@@ -2270,27 +2270,27 @@ static PyMethodDef unpackiter_methods[] = {
     {NULL,              NULL}           /* sentinel */
 };
 
-static PyObject *
+static PyValue
 unpackiter_iternext(PyObject *op)
 {
     unpackiterobject *self = unpackiterobject_CAST(op);
     _structmodulestate *state = get_struct_state_iterinst(self);
     PyObject *result;
     if (self->so == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (self->index >= self->buf.len) {
         /* Iterator exhausted */
         Py_CLEAR(self->so);
         PyBuffer_Release(&self->buf);
-        return NULL;
+        return PyValue_NULL;
     }
     assert(self->index + self->so->s_size <= self->buf.len);
     result = s_unpack_internal(self->so,
                                (char*)self->buf.buf + self->index,
                                state);
     self->index += self->so->s_size;
-    return result;
+    return PyValue_FromResult(result);
 }
 
 static PyType_Slot unpackiter_type_slots[] = {

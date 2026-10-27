@@ -81,6 +81,20 @@ static int _io_StringIO___init__(PyObject *self, PyObject *args, PyObject *kwarg
         return -1; \
     }
 
+#define CHECK_INITIALIZED_VALUE(self) \
+    if (self->ok <= 0) { \
+        PyErr_SetString(PyExc_ValueError, \
+            "I/O operation on uninitialized object"); \
+        return PyValue_NULL; \
+    }
+
+#define CHECK_CLOSED_VALUE(self) \
+    if (self->closed) { \
+        PyErr_SetString(PyExc_ValueError, \
+            "I/O operation on closed file"); \
+        return PyValue_NULL; \
+    }
+
 #define ENSURE_REALIZED(self) \
     if (realize(self) < 0) { \
         return NULL; \
@@ -424,17 +438,19 @@ _io_StringIO_readline_impl(stringio *self, Py_ssize_t size)
 _io.StringIO.__next__ as stringio_iternext
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 stringio_iternext_impl(stringio *self)
-/*[clinic end generated code: output=51eb3991b1c79c41 input=b6cf3e73fab6b42e]*/
+/*[clinic end generated code: output=f32ecf9b32199b79 input=b6cf3e73fab6b42e]*/
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(self);
 
     PyObject *line;
 
-    CHECK_INITIALIZED(self);
-    CHECK_CLOSED(self);
-    ENSURE_REALIZED(self);
+    CHECK_INITIALIZED_VALUE(self);
+    CHECK_CLOSED_VALUE(self);
+    if (realize(self) < 0) {
+        return PyValue_NULL;
+    }
 
     if (Py_IS_TYPE(self, self->module_state->PyStringIO_Type)) {
         /* Skip method call overhead for speed */
@@ -448,20 +464,20 @@ stringio_iternext_impl(stringio *self)
                          "readline() should have returned a str object, "
                          "not '%.200s'", Py_TYPE(line)->tp_name);
             Py_DECREF(line);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
     if (line == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (PyUnicode_GET_LENGTH(line) == 0) {
         /* Reached EOF */
         Py_DECREF(line);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return line;
+    return PyValue_FromObject(line);
 }
 
 /*[clinic input]

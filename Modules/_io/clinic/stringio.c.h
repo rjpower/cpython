@@ -151,13 +151,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 stringio_iternext_impl(stringio *self);
 
-static PyObject *
+static PyValue
 stringio_iternext(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = stringio_iternext_impl((stringio *)self);
@@ -597,4 +597,4 @@ _io_StringIO_newlines_get(PyObject *self, void *Py_UNUSED(context))
 
 #define _IO_STRINGIO_NEWLINES_GETSETDEF {"newlines", (getter)_io_StringIO_newlines_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=6c37ba007d257b47 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e37e4acd4d291519 input=a9049054013a1b77]*/

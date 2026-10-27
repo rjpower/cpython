@@ -3085,7 +3085,7 @@ bytearrayiter_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 bytearrayiter_next(PyObject *self)
 {
     bytesiterobject *it = _bytesiterobject_CAST(self);
@@ -3094,7 +3094,7 @@ bytearrayiter_next(PyObject *self)
     assert(it != NULL);
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
     if (index < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyByteArrayObject *seq = it->it_seq;
     assert(PyByteArray_Check(seq));
@@ -3111,10 +3111,10 @@ bytearrayiter_next(PyObject *self)
     if (val == -1) {
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, -1);
         Py_CLEAR(it->it_seq);
-        return NULL;
+        return PyValue_NULL;
     }
     FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index + 1);
-    return _PyLong_FromUnsignedChar((unsigned char)val);
+    return PyValue_FromInt32((unsigned char)val);
 }
 
 static PyObject *

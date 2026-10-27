@@ -254,7 +254,7 @@ _PyGen_YieldFromRef(_PyInterpreterFrame *frame)
 }
 
 static PySendResult
-gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
+gen_send_ex2(PyGenObject *gen, PyObject *arg, PyValue *presult, int exc)
 {
     assert(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_EXECUTING);
 
@@ -280,11 +280,7 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
     }
 
     EVAL_CALL_STAT_INC(EVAL_CALL_GENERATOR);
-    PyValue result_v = _PyEval_EvalFrame(tstate, frame, exc);
-    // The send protocol speaks objects: a yielded or returned inline value
-    // is boxed here.
-    PyObject *result = PyValue_IsNull(result_v) ? NULL
-                                                : PyValue_Object(result_v);
+    PyValue result = _PyEval_EvalFrame(tstate, frame, exc);
     assert(tstate->exc_info == prev_exc_info);
     assert(gen->gi_exc_state.previous_item == NULL);
     assert(frame->previous == NULL);
@@ -297,11 +293,7 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
     int return_kind = ((_PyThreadStateImpl *)tstate)->generator_return_kind;
 
     if (return_kind == GENERATOR_YIELD) {
-        if (result == NULL) {
-            // The box of a yielded inline value failed.
-            *presult = NULL;
-            return PYGEN_ERROR;
-        }
+        assert(!PyValue_IsNull(result));
         assert(!_PyErr_Occurred(tstate));
         assert(FRAME_STATE_SUSPENDED(gen->gi_frame_state));
         *presult = result;
@@ -314,11 +306,12 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
 
     /* If the generator just returned (as opposed to yielding), signal
      * that the generator is exhausted. */
-    if (result) {
-        assert(result == Py_None || !PyAsyncGen_CheckExact(gen));
-        if (result == Py_None && !PyAsyncGen_CheckExact(gen) && !arg) {
+    if (!PyValue_IsNull(result)) {
+        int is_none = PyValue_Is(result, _PyValue_None);
+        assert(is_none || !PyAsyncGen_CheckExact(gen));
+        if (is_none && !PyAsyncGen_CheckExact(gen) && !arg) {
             /* Return NULL if called by gen_iternext() */
-            Py_CLEAR(result);
+            result = PyValue_NULL;
         }
     }
     else {
@@ -328,15 +321,27 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
     }
 
     *presult = result;
-    return result ? PYGEN_RETURN : PYGEN_ERROR;
+    return PyValue_IsNull(result) ? PYGEN_ERROR : PYGEN_RETURN;
+}
+
+/* The result of a send for the protocols that speak objects: a yielded or
+   returned inline value is boxed here, and a failed box is an error. */
+static PySendResult
+send_result_object(PySendResult status, PyValue result, PyObject **presult)
+{
+    *presult = PyValue_Object(result);
+    if (*presult == NULL && !PyValue_IsNull(result)) {
+        return PYGEN_ERROR;
+    }
+    return status;
 }
 
 // Set the generator 'gen' to the executing state and send 'arg' into it.
 // See gen_send_ex2() for details.
 static PySendResult
-gen_send_ex(PyGenObject *gen, PyObject *arg, PyObject **presult)
+gen_send_ex(PyGenObject *gen, PyObject *arg, PyValue *presult)
 {
-    *presult = NULL;
+    *presult = PyValue_NULL;
     int8_t frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
     do {
         if (frame_state == FRAME_CREATED && arg && arg != Py_None) {
@@ -368,7 +373,7 @@ gen_send_ex(PyGenObject *gen, PyObject *arg, PyObject **presult)
             else if (arg) {
                 /* `gen` is an exhausted generator:
                 only return value if called from send(). */
-                *presult = Py_None;
+                *presult = _PyValue_None;
                 return PYGEN_RETURN;
             }
             return PYGEN_ERROR;
@@ -385,7 +390,9 @@ static PySendResult
 PyGen_am_send(PyObject *self, PyObject *arg, PyObject **result)
 {
     PyGenObject *gen = _PyGen_CAST(self);
-    return gen_send_ex(gen, arg, result);
+    PyValue value;
+    PySendResult status = gen_send_ex(gen, arg, &value);
+    return send_result_object(status, value, result);
 }
 
 static PyObject *
@@ -412,9 +419,11 @@ return next yielded value or raise StopIteration.");
 static PyObject *
 gen_send(PyObject *op, PyObject *arg)
 {
+    PyValue value;
     PyObject *result;
     PyGenObject *gen = _PyGen_CAST(op);
-    if (gen_send_ex(gen, arg, &result) == PYGEN_RETURN) {
+    PySendResult status = gen_send_ex(gen, arg, &value);
+    if (send_result_object(status, value, &result) == PYGEN_RETURN) {
         return gen_set_stop_iteration(gen, result);
     }
     return result;
@@ -531,8 +540,10 @@ gen_close(PyObject *self, PyObject *args)
         PyErr_SetNone(PyExc_GeneratorExit);
     }
 
+    PyValue retval_v;
     PyObject *retval;
-    if (gen_send_ex2(gen, Py_None, &retval, 1) == PYGEN_RETURN) {
+    PySendResult status = gen_send_ex2(gen, Py_None, &retval_v, 1);
+    if (send_result_object(status, retval_v, &retval) == PYGEN_RETURN) {
         // the generator returned a value while closing, return the value here
         assert(!PyErr_Occurred());
         return retval;
@@ -622,8 +633,10 @@ gen_throw_current_exception(PyGenObject *gen)
 {
     assert(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_EXECUTING);
 
+    PyValue value;
     PyObject *result;
-    if (gen_send_ex2(gen, Py_None, &result, 1) == PYGEN_RETURN) {
+    PySendResult status = gen_send_ex2(gen, Py_None, &value, 1);
+    if (send_result_object(status, value, &result) == PYGEN_RETURN) {
         return gen_set_stop_iteration(gen, result);
     }
     return result;
@@ -786,18 +799,22 @@ gen_throw(PyObject *op, const PyValue *args, Py_ssize_t nargs)
 }
 
 
-static PyObject *
+static PyValue
 gen_iternext(PyObject *self)
 {
     assert(PyGen_CheckExact(self) || PyCoro_CheckExact(self));
     PyGenObject *gen = _PyGen_CAST(self);
 
-    PyObject *result;
+    PyValue result;
     if (gen_send_ex(gen, NULL, &result) == PYGEN_RETURN) {
-        if (result != Py_None) {
-            _PyGen_SetStopIterationValue(result);
+        // StopIteration holds the returned value as an object.
+        if (!PyValue_Is(result, _PyValue_None)) {
+            PyObject *value = PyValue_Object(result);
+            if (value != NULL) {
+                _PyGen_SetStopIterationValue(value);
+            }
         }
-        Py_CLEAR(result);
+        return PyValue_NULL;
     }
     return result;
 }
@@ -1476,7 +1493,7 @@ coro_wrapper_dealloc(PyObject *self)
     PyObject_GC_Del(cw);
 }
 
-static PyObject *
+static PyValue
 coro_wrapper_iternext(PyObject *self)
 {
     PyCoroWrapper *cw = _PyCoroWrapper_CAST(self);
@@ -2116,10 +2133,10 @@ async_gen_asend_send_method(PyObject *self, PyValue arg)
 }
 
 
-static PyObject *
+static PyValue
 async_gen_asend_iternext(PyObject *ags)
 {
-    return async_gen_asend_send(ags, NULL);
+    return PyValue_FromResult(async_gen_asend_send(ags, NULL));
 }
 
 
@@ -2629,10 +2646,10 @@ do_throw:
 }
 
 
-static PyObject *
+static PyValue
 async_gen_athrow_iternext(PyObject *agt)
 {
-    return async_gen_athrow_send(agt, Py_None);
+    return PyValue_FromResult(async_gen_athrow_send(agt, Py_None));
 }
 
 

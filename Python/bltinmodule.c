@@ -651,7 +651,7 @@ filter_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 filter_next(PyObject *self)
 {
     filterobject *lz = _filterobject_CAST(self);
@@ -663,7 +663,7 @@ filter_next(PyObject *self)
         PyValue item;
         int ok = PyIter_NextValue(it, &item);
         if (ok <= 0) {
-            return NULL;
+            return PyValue_NULL;
         }
 
         if (checktrue) {
@@ -671,16 +671,15 @@ filter_next(PyObject *self)
         } else {
             PyValue good = PyObject_VectorcallValue(func, &item, 1, NULL);
             if (PyValue_IsNull(good)) {
-                return NULL;
+                return PyValue_NULL;
             }
             ok = PyObject_IsTrueValue(good);
         }
         if (ok > 0) {
-            // tp_iternext returns an object: only an item that passes is boxed.
-            return PyValue_Object(item);
+            return item;
         }
         if (ok < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
 }
@@ -1572,26 +1571,32 @@ map_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 map_next(PyObject *self)
 {
     mapobject *lz = _mapobject_CAST(self);
     Py_ssize_t i;
     PyValue small_stack[_PY_FASTCALL_SMALL_STACK];
     PyValue *stack;
-    PyObject *result = NULL;
+    PyValue result = PyValue_NULL;
     PyThreadState *tstate = _PyThreadState_GET();
+    // Items beyond the small stack, which the conservative scan of this C
+    // frame covers, go in a tuple that a value root keeps alive while the
+    // iterators and the function run.
+    _PyValueRoot holder;
 
     const Py_ssize_t niters = PyTuple_GET_SIZE(lz->iters);
     if (niters <= (Py_ssize_t)Py_ARRAY_LENGTH(small_stack)) {
         stack = small_stack;
     }
     else {
-        stack = PyMem_Malloc(niters * sizeof(stack[0]));
-        if (stack == NULL) {
-            _PyErr_NoMemory(tstate);
-            return NULL;
+        PyObject *items = PyTuple_New(niters);
+        if (items == NULL) {
+            return PyValue_NULL;
         }
+        _PyThreadState_PushValueRoot(tstate, &holder);
+        holder.value = PyValue_FromObject(items);
+        stack = _PyTuple_ITEMS(items);
     }
 
     for (i = 0; i < niters; i++) {
@@ -1609,9 +1614,8 @@ map_next(PyObject *self)
         }
     }
 
-    // tp_iternext returns an object: the result is boxed, the arguments not.
-    result = PyValue_Object(_PyObject_VectorcallValueTstate(
-        tstate, PyValue_FromObject(lz->func), stack, niters, NULL));
+    result = _PyObject_VectorcallValueTstate(
+        tstate, PyValue_FromObject(lz->func), stack, niters, NULL);
     goto exit;
 
 check:
@@ -1643,11 +1647,11 @@ check:
     // All arguments are exhausted. Success!
 
 exit_no_result:
-    assert(result == NULL);
+    assert(PyValue_IsNull(result));
 
 exit:
     if (stack != small_stack) {
-        PyMem_Free(stack);
+        _PyThreadState_PopValueRoot(tstate, &holder);
     }
     return result;
 }
@@ -1754,7 +1758,7 @@ PyTypeObject PyMap_Type = {
 static PyValue
 builtin_next(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *it, *res;
+    PyObject *it;
 
     if (!_PyArg_CheckPositional("next", nargs, 1, 2))
         return PyValue_NULL;
@@ -1770,9 +1774,9 @@ builtin_next(PyObject *self, const PyValue *args, Py_ssize_t nargs)
         return PyValue_NULL;
     }
 
-    res = (*Py_TYPE(it)->tp_iternext)(it);
-    if (res != NULL) {
-        return PyValue_FromObject(res);
+    PyValue res = (*Py_TYPE(it)->tp_iternext)(it);
+    if (!PyValue_IsNull(res)) {
+        return res;
     } else if (nargs > 1) {
         if (PyErr_Occurred()) {
             if(!PyErr_ExceptionMatches(PyExc_StopIteration))
@@ -3198,7 +3202,7 @@ zip_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 zip_next(PyObject *self)
 {
     zipobject *lz = _zipobject_CAST(self);
@@ -3209,51 +3213,53 @@ zip_next(PyObject *self)
     int status;
 
     if (tuplesize == 0)
-        return NULL;
+        return PyValue_NULL;
 
     PyObject *result = PyTuple_New(tuplesize);
     if (result == NULL)
-        return NULL;
+        return PyValue_NULL;
     for (i=0 ; i < tuplesize ; i++) {
         status = PyIter_NextValue(PyTuple_GET_VALUE(lz->ittuple, i), &item);
         if (status < 0) {
             // next() on argument i raised an exception (not StopIteration)
-            return NULL;
+            return PyValue_NULL;
         }
         if (status == 0) {
             if (lz->strict) {
                 goto check;
             }
-            return NULL;
+            return PyValue_NULL;
         }
         PyTuple_SET_VALUE(result, i, item);
     }
-    return result;
+    return PyValue_FromObject(result);
 check:
     if (i) {
         // ValueError: zip() argument 2 is shorter than argument 1
         // ValueError: zip() argument 3 is shorter than arguments 1-2
         const char* plural = i == 1 ? " " : "s 1-";
-        return PyErr_Format(PyExc_ValueError,
-                            "zip() argument %zd is shorter than argument%s%zd",
-                            i + 1, plural, i);
+        PyErr_Format(PyExc_ValueError,
+                     "zip() argument %zd is shorter than argument%s%zd",
+                     i + 1, plural, i);
+        return PyValue_NULL;
     }
     for (i = 1; i < tuplesize; i++) {
         status = PyIter_NextValue(PyTuple_GET_VALUE(lz->ittuple, i), &item);
         if (status > 0) {
             const char* plural = i == 1 ? " " : "s 1-";
-            return PyErr_Format(PyExc_ValueError,
-                                "zip() argument %zd is longer than argument%s%zd",
-                                i + 1, plural, i);
+            PyErr_Format(PyExc_ValueError,
+                         "zip() argument %zd is longer than argument%s%zd",
+                         i + 1, plural, i);
+            return PyValue_NULL;
         }
         if (status < 0) {
             // next() on argument i raised an exception (not StopIteration)
-            return NULL;
+            return PyValue_NULL;
         }
         // Argument i is exhausted. So far so good...
     }
     // All arguments are exhausted. Success!
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *

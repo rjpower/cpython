@@ -412,7 +412,7 @@ slot typedefs
 +-----------------------------+-----------------------------+----------------------+
 | :c:type:`getiterfunc`       | :c:type:`PyObject` *        | :c:type:`PyObject` * |
 +-----------------------------+-----------------------------+----------------------+
-| :c:type:`iternextfunc`      | :c:type:`PyObject` *        | :c:type:`PyObject` * |
+| :c:type:`iternextfunc`      | :c:type:`PyObject` *        | PyValue              |
 +-----------------------------+-----------------------------+----------------------+
 | :c:type:`lenfunc`           | :c:type:`PyObject` *        | :c:type:`Py_ssize_t` |
 +-----------------------------+-----------------------------+----------------------+
@@ -1886,11 +1886,13 @@ and :c:data:`PyType_Type` effectively act as defaults.)
    An optional pointer to a function that returns the next item in an
    :term:`iterator`. The signature is::
 
-      PyObject *tp_iternext(PyObject *self);
+      PyValue tp_iternext(PyObject *self);
 
-   When the iterator is :term:`exhausted`, the ``tp_iternext`` function must
-   return ``NULL``; a :exc:`StopIteration` exception may or may not be set.
-   When another error occurs, it must return ``NULL`` too.
+   The item is returned as a value, so an int or float item held inline is
+   not boxed.  When the iterator is :term:`exhausted`, the ``tp_iternext``
+   function must return ``PyValue_NULL``; a :exc:`StopIteration` exception
+   may or may not be set.  When another error occurs, it must return
+   ``PyValue_NULL`` too.
    The presence of ``tp_iternext`` signals that the instances of this type are
    iterators.
 
@@ -1898,7 +1900,7 @@ and :c:data:`PyType_Type` effectively act as defaults.)
    function should return the iterator instance itself (not a new iterator
    instance).
 
-   This function has the same signature as :c:func:`PyIter_Next`.
+   :c:func:`PyIter_Next` returns the item of this function as an object.
 
    **Inheritance:**
 
@@ -3243,7 +3245,7 @@ Slot Type typedefs
 
    See :c:member:`~PyTypeObject.tp_iter`.
 
-.. c:type:: PyObject *(*iternextfunc)(PyObject *)
+.. c:type:: PyValue (*iternextfunc)(PyObject *)
 
    See :c:member:`~PyTypeObject.tp_iternext`.
 

@@ -452,12 +452,11 @@ finalize_iterator(PyObject *it)
 static PyObject*
 consume_iterator(PyObject *it)
 {
-    PyObject *(*iternext)(PyObject *);
-    PyObject *item;
+    iternextfunc iternext;
 
     iternext = *Py_TYPE(it)->tp_iternext;
-    while ((item = iternext(it)) != NULL) {
-        Py_DECREF(item);
+    while (!PyValue_IsNull(iternext(it))) {
+        /* Discard the item. */
     }
     return finalize_iterator(it);
 }
@@ -478,7 +477,8 @@ deque_extend_impl(dequeobject *deque, PyObject *iterable)
 /*[clinic end generated code: output=8b5ffa57ce82d980 input=85861954127c81da]*/
 {
     PyObject *it, *item;
-    PyObject *(*iternext)(PyObject *);
+    PyValue value;
+    iternextfunc iternext;
     Py_ssize_t maxlen = deque->maxlen;
 
     /* Handle case where id(deque) == id(iterable) */
@@ -508,8 +508,12 @@ deque_extend_impl(dequeobject *deque, PyObject *iterable)
     }
 
     iternext = *Py_TYPE(it)->tp_iternext;
-    while ((item = iternext(it)) != NULL) {
-        if (deque_append_lock_held(deque, item, maxlen) == -1) {
+    while (!PyValue_IsNull(value = iternext(it))) {
+        // A deque holds objects: an inline item is boxed here.
+        item = PyValue_Object(value);
+        if (item == NULL
+            || deque_append_lock_held(deque, item, maxlen) == -1)
+        {
             Py_DECREF(it);
             return NULL;
         }
@@ -533,7 +537,8 @@ deque_extendleft_impl(dequeobject *deque, PyObject *iterable)
 /*[clinic end generated code: output=ba44191aa8e35a26 input=640dabd086115689]*/
 {
     PyObject *it, *item;
-    PyObject *(*iternext)(PyObject *);
+    PyValue value;
+    iternextfunc iternext;
     Py_ssize_t maxlen = deque->maxlen;
 
     /* Handle case where id(deque) == id(iterable) */
@@ -563,8 +568,12 @@ deque_extendleft_impl(dequeobject *deque, PyObject *iterable)
     }
 
     iternext = *Py_TYPE(it)->tp_iternext;
-    while ((item = iternext(it)) != NULL) {
-        if (deque_appendleft_lock_held(deque, item, maxlen) == -1) {
+    while (!PyValue_IsNull(value = iternext(it))) {
+        // A deque holds objects: an inline item is boxed here.
+        item = PyValue_Object(value);
+        if (item == NULL
+            || deque_appendleft_lock_held(deque, item, maxlen) == -1)
+        {
             Py_DECREF(it);
             return NULL;
         }
@@ -1975,7 +1984,7 @@ dequeiter_next_lock_held(dequeiterobject *it, dequeobject *deque)
     return Py_NewRef(item);
 }
 
-static PyObject *
+static PyValue
 dequeiter_next(PyObject *op)
 {
     PyObject *result;
@@ -1987,7 +1996,7 @@ dequeiter_next(PyObject *op)
     result = dequeiter_next_lock_held(it, deque);
     Py_END_CRITICAL_SECTION2();
 
-    return result;
+    return PyValue_FromResult(result);
 }
 
 static PyObject *
@@ -2006,10 +2015,7 @@ dequeiter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     /* consume items from the queue */
     for(i=0; i<index; i++) {
-        PyObject *item = dequeiter_next((PyObject *)it);
-        if (item) {
-            Py_DECREF(item);
-        } else {
+        if (PyValue_IsNull(dequeiter_next((PyObject *)it))) {
             /*
              * It's safe to read directly from it without acquiring the
              * per-object lock; the iterator isn't visible to any other threads
@@ -2126,7 +2132,7 @@ dequereviter_next_lock_held(dequeiterobject *it, dequeobject *deque)
     return Py_NewRef(item);
 }
 
-static PyObject *
+static PyValue
 dequereviter_next(PyObject *self)
 {
     PyObject *item;
@@ -2137,7 +2143,7 @@ dequereviter_next(PyObject *self)
     Py_BEGIN_CRITICAL_SECTION2(it, deque);
     item = dequereviter_next_lock_held(it, deque);
     Py_END_CRITICAL_SECTION2();
-    return item;
+    return PyValue_FromResult(item);
 }
 
 static PyObject *
@@ -2156,10 +2162,7 @@ dequereviter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     /* consume items from the queue */
     for(i=0; i<index; i++) {
-        PyObject *item = dequereviter_next((PyObject *)it);
-        if (item) {
-            Py_DECREF(item);
-        } else {
+        if (PyValue_IsNull(dequereviter_next((PyObject *)it))) {
             /*
              * It's safe to read directly from it without acquiring the
              * per-object lock; the iterator isn't visible to any other threads

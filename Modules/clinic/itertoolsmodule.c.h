@@ -574,13 +574,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 chain_next_impl(chainobject *self);
 
-static PyObject *
+static PyValue
 chain_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = chain_next_impl((chainobject *)self);
@@ -589,13 +589,13 @@ chain_next(PyObject *self)
     return return_value;
 }
 
-static PyObject *
+static PyValue
 product_next_impl(productobject *self);
 
-static PyObject *
+static PyValue
 product_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = product_next_impl((productobject *)self);
@@ -683,13 +683,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 combinations_next_impl(combinationsobject *self);
 
-static PyObject *
+static PyValue
 combinations_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = combinations_next_impl((combinationsobject *)self);
@@ -778,13 +778,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 cwr_next_impl(cwrobject *self);
 
-static PyObject *
+static PyValue
 cwr_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = cwr_next_impl((cwrobject *)self);
@@ -865,13 +865,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 permutations_next_impl(permutationsobject *self);
 
-static PyObject *
+static PyValue
 permutations_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = permutations_next_impl((permutationsobject *)self);
@@ -964,13 +964,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 accumulate_next_impl(accumulateobject *self);
 
-static PyObject *
+static PyValue
 accumulate_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = accumulate_next_impl((accumulateobject *)self);
@@ -1168,13 +1168,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 zip_longest_next_impl(ziplongestobject *self);
 
-static PyObject *
+static PyValue
 zip_longest_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = zip_longest_next_impl((ziplongestobject *)self);
@@ -1182,4 +1182,4 @@ zip_longest_next(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=a730492fe8d97f9e input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f4fb255285d50e2c input=a9049054013a1b77]*/

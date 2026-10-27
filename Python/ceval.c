@@ -3751,19 +3751,8 @@ PyValue _PyForIter_VirtualIteratorNext(PyThreadState* tstate, _PyInterpreterFram
         *index_ptr = _PyValue_TagIndex(i);
         return next_index.value;
     }
-    // Iterators that have a value form; none raises StopIteration.
-    PyTypeObject *tp = Py_TYPE(iter_o);
-    if (tp == &PyDictIterKey_Type || tp == &PyDictIterValue_Type
-        || tp == &PySetIter_Type)
-    {
-        PyValue item;
-        int status = tp == &PySetIter_Type
-            ? _PySetIter_NextValue(iter_o, &item)
-            : _PyDictIter_NextValue(iter_o, &item);
-        return status < 0 ? _PyValue_ERROR : item;
-    }
-    PyObject *next = (*tp->tp_iternext)(iter_o);
-    if (next == NULL) {
+    PyValue next = (*Py_TYPE(iter_o)->tp_iternext)(iter_o);
+    if (PyValue_IsNull(next)) {
         if (_PyErr_Occurred(tstate)) {
             if (_PyErr_ExceptionMatches(tstate, PyExc_StopIteration)) {
                 _PyEval_MonitorRaise(tstate, frame, frame->instr_ptr);
@@ -3775,7 +3764,7 @@ PyValue _PyForIter_VirtualIteratorNext(PyThreadState* tstate, _PyInterpreterFram
         }
         return PyValue_NULL;
     }
-    return PyValue_FromObject(next);
+    return next;
 }
 
 /* Check if a 'cls' provides the given special method. */

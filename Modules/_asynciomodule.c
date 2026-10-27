@@ -1844,7 +1844,7 @@ FutureIter_am_send(PyObject *op,
 }
 
 
-static PyObject *
+static PyValue
 FutureIter_iternext(PyObject *it)
 {
     PyObject *result;
@@ -1852,11 +1852,11 @@ FutureIter_iternext(PyObject *it)
         case PYGEN_RETURN:
             (void)_PyGen_SetStopIterationValue(result);
             Py_DECREF(result);
-            return NULL;
+            return PyValue_NULL;
         case PYGEN_NEXT:
-            return result;
+            return PyValue_FromObject(result);
         case PYGEN_ERROR:
-            return NULL;
+            return PyValue_NULL;
         default:
             Py_UNREACHABLE();
     }
@@ -1868,7 +1868,7 @@ FutureIter_send(PyObject *self, PyValue unused)
     /* Future.__iter__ doesn't care about values that are pushed to the
      * generator, it just returns self.result().
      */
-    return PyValue_FromResult(FutureIter_iternext(self));
+    return FutureIter_iternext(self);
 }
 
 static PyValue

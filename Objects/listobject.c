@@ -3702,7 +3702,7 @@ PyTypeObject PyList_Type = {
 
 static void listiter_dealloc(PyObject *);
 static int listiter_traverse(PyObject *, visitproc, void *);
-static PyObject *listiter_next(PyObject *);
+static PyValue listiter_next(PyObject *);
 static PyObject *listiter_len(PyObject *, PyObject *);
 static PyObject *listiter_reduce_general(void *_it, int forward);
 static PyObject *listiter_reduce(PyObject *, PyObject *);
@@ -3787,42 +3787,23 @@ listiter_traverse(PyObject *it, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 listiter_next(PyObject *self)
 {
     _PyListIterObject *it = (_PyListIterObject *)self;
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
-    PyValue item;
-    if (!_PyListIter_NextValue(self, &item)) {
-        return NULL;
-    }
-    PyObject *res = PyValue_Object(item);
-    if (res == NULL) {
-        // The next call gives this item again.
-        FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index);
-    }
-    return res;
-}
-
-int
-_PyListIter_NextValue(PyObject *self, PyValue *item)
-{
-    assert(Py_IS_TYPE(self, &PyListIter_Type));
-    _PyListIterObject *it = (_PyListIterObject *)self;
-    Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
     if (index < 0) {
-        return 0;
+        return PyValue_NULL;
     }
     PyListObject *seq = it->it_seq;
     if (!valid_index(index, Py_SIZE(seq))) {
         // out-of-bounds
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, -1);
         it->it_seq = NULL;
-        return 0;
+        return PyValue_NULL;
     }
-    *item = seq->ob_item[index];
     FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index + 1);
-    return 1;
+    return seq->ob_item[index];
 }
 
 static PyObject *
@@ -3872,7 +3853,7 @@ typedef struct {
 
 static void listreviter_dealloc(PyObject *);
 static int listreviter_traverse(PyObject *, visitproc, void *);
-static PyObject *listreviter_next(PyObject *);
+static PyValue listreviter_next(PyObject *);
 static PyObject *listreviter_len(PyObject *, PyObject *);
 static PyObject *listreviter_reduce(PyObject *, PyObject *);
 static PyValue listreviter_setstate(PyObject *, PyValue);
@@ -3955,27 +3936,25 @@ listreviter_traverse(PyObject *it, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 listreviter_next(PyObject *self)
 {
     listreviterobject *it = (listreviterobject *)self;
     assert(it != NULL);
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
     if (index < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyListObject *seq = it->it_seq;
     assert(PyList_Check(seq));
-    PyObject *item = list_get_item_ref(seq, index);
-    if (item != NULL) {
+    if (valid_index(index, Py_SIZE(seq))) {
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index - 1);
-        return item;
+        return seq->ob_item[index];
     }
     FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, -1);
     it->it_seq = NULL;
-    Py_DECREF(seq);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *

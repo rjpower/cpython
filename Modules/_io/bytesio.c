@@ -768,22 +768,24 @@ _io_BytesIO_truncate_impl(bytesio *self, PyObject *size)
 _io.BytesIO.__next__ as bytesio_iternext
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 bytesio_iternext_impl(bytesio *self)
-/*[clinic end generated code: output=f530bdee3a720d48 input=7fb3a763efe11a21]*/
+/*[clinic end generated code: output=8fd0cab06f21f1f3 input=7fb3a763efe11a21]*/
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(self);
 
     Py_ssize_t n;
 
-    CHECK_CLOSED(self);
+    if (check_closed(self)) {
+        return PyValue_NULL;
+    }
 
     n = scan_eol_lock_held(self, -1);
 
     if (n == 0)
-        return NULL;
+        return PyValue_NULL;
 
-    return read_bytes_lock_held(self, n);
+    return PyValue_FromResult(read_bytes_lock_held(self, n));
 }
 
 /*[clinic input]

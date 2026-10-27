@@ -965,7 +965,7 @@ static PyNumberMethods ga_as_number = {
         .nb_or = _Py_union_type_or, // Add __or__ function
 };
 
-static PyObject *
+static PyValue
 ga_iternext(PyObject *op)
 {
     gaiterobject *gi = (gaiterobject*)op;
@@ -976,16 +976,16 @@ ga_iternext(PyObject *op)
     Py_END_CRITICAL_SECTION();
     if (obj == NULL) {
         PyErr_SetNone(PyExc_StopIteration);
-        return NULL;
+        return PyValue_NULL;
     }
     gaobject *alias = (gaobject *)obj;
     PyObject *starred_alias = Py_GenericAlias(alias->origin, alias->args);
     Py_DECREF(obj);
     if (starred_alias == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     ((gaobject *)starred_alias)->starred = true;
-    return starred_alias;
+    return PyValue_FromResult(starred_alias);
 }
 
 static void

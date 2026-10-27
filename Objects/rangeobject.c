@@ -857,17 +857,17 @@ PyTypeObject PyRange_Type = {
    in the normal case, but possible for any numeric value.
 */
 
-static PyObject *
+static PyValue
 rangeiter_next(PyObject *op)
 {
-    PyObject *ret = NULL;
+    PyValue ret = PyValue_NULL;
     Py_BEGIN_CRITICAL_SECTION(op);
     _PyRangeIterObject *r = (_PyRangeIterObject*)op;
     if (r->len > 0) {
         long result = r->start;
         r->start = result + r->step;
         r->len--;
-        ret = PyLong_FromLong(result);
+        ret = PyValue_FromLongLong(result);
     }
     Py_END_CRITICAL_SECTION();
     return ret;
@@ -1175,27 +1175,26 @@ longrangeiter_dealloc(PyObject *op)
 longrange_iterator.__next__ as longrangeiter_next
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 longrangeiter_next_impl(longrangeiterobject *self)
-/*[clinic end generated code: output=49bf9a9b89c07ba5 input=2c4ac537c23a92d3]*/
+/*[clinic end generated code: output=8a1276251a5304d2 input=2c4ac537c23a92d3]*/
 {
     longrangeiterobject *r = self;
     if (PyObject_RichCompareBool(r->len, _PyLong_GetZero(), Py_GT) != 1)
-        return NULL;
+        return PyValue_NULL;
 
     PyObject *new_start = PyNumber_Add(r->start, r->step);
     if (new_start == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *new_len = PyNumber_Subtract(r->len, _PyLong_GetOne());
     if (new_len == NULL) {
-        Py_DECREF(new_start);
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *result = r->start;
     r->start = new_start;
-    Py_SETREF(r->len, new_len);
-    return result;
+    r->len = new_len;
+    return PyValue_FromObject(result);
 }
 
 static int

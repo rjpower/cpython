@@ -354,7 +354,7 @@ _PyObject_MaybeCallSpecialOneArg(PyObject *self, PyObject *attr, PyObject *arg);
 extern int _PyObject_IsAbstract(PyObject *);
 
 PyAPI_FUNC(int) _PyObject_GetMethod(PyObject *obj, PyObject *name, PyObject **method);
-extern PyObject* _PyObject_NextNotImplemented(PyObject *);
+extern PyValue _PyObject_NextNotImplemented(PyObject *);
 
 // Pickle support.
 // Export for '_datetime' shared extension

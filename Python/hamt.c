@@ -2480,7 +2480,7 @@ hamt_baseiter_tp_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 hamt_baseiter_tp_iternext(PyObject *op)
 {
     PyHamtIterator *it = (PyHamtIterator*)op;
@@ -2491,10 +2491,10 @@ hamt_baseiter_tp_iternext(PyObject *op)
     switch (res) {
         case I_END:
             PyErr_SetNone(PyExc_StopIteration);
-            return NULL;
+            return PyValue_NULL;
 
         case I_ITEM: {
-            return (*(it->hi_yield))(key, val);
+            return PyValue_FromResult((*(it->hi_yield))(key, val));
         }
 
         default: {

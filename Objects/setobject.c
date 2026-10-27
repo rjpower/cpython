@@ -944,9 +944,8 @@ static PyMethodDef setiter_methods[] = {
     {NULL,              NULL}           /* sentinel */
 };
 
-/* PyIter_NextValue() of a set iterator. */
-int
-_PySetIter_NextValue(PyObject *self, PyValue *item)
+static PyValue
+setiter_iternext(PyObject *self)
 {
     setiterobject *si = (setiterobject*)self;
     PyValue value = PyValue_NULL;
@@ -954,9 +953,8 @@ _PySetIter_NextValue(PyObject *self, PyValue *item)
     setentry *entry;
     PySetObject *so = si->si_set;
 
-    *item = PyValue_NULL;
     if (so == NULL)
-        return 0;
+        return PyValue_NULL;
     assert (PyAnySet_Check(so));
 
     Py_ssize_t so_used = FT_ATOMIC_LOAD_SSIZE_RELAXED(so->used);
@@ -965,7 +963,7 @@ _PySetIter_NextValue(PyObject *self, PyValue *item)
         PyErr_SetString(PyExc_RuntimeError,
                         "Set changed size during iteration");
         si->si_used = -1; /* Make this state sticky */
-        return -1;
+        return PyValue_NULL;
     }
 
     Py_BEGIN_CRITICAL_SECTION(so);
@@ -980,31 +978,13 @@ _PySetIter_NextValue(PyObject *self, PyValue *item)
         value = entry[i].key;
     }
     Py_END_CRITICAL_SECTION();
-    if (PyValue_IsNull(value)) {
-        si->si_pos = i+1;
-        si->si_set = NULL;
-        return 0;
-    }
     si->si_pos = i+1;
+    if (PyValue_IsNull(value)) {
+        si->si_set = NULL;
+        return PyValue_NULL;
+    }
     si->len--;
-    *item = value;
-    return 1;
-}
-
-static PyObject *setiter_iternext(PyObject *self)
-{
-    PyValue item;
-    if (_PySetIter_NextValue(self, &item) <= 0) {
-        return NULL;
-    }
-    PyObject *key = PyValue_Object(item);
-    if (key == NULL) {
-        // The next call gives this element again.
-        setiterobject *si = (setiterobject*)self;
-        si->si_pos--;
-        si->len++;
-    }
-    return key;
+    return value;
 }
 
 PyTypeObject PySetIter_Type = {

@@ -1628,6 +1628,17 @@ _io_TextIOWrapper_closed_get_impl(textio *self);
         return -1; \
     }
 
+#define CHECK_ATTACHED_VALUE(self) \
+    if (self->ok <= 0) { \
+        PyErr_SetString(PyExc_ValueError, \
+            "I/O operation on uninitialized object"); \
+        return PyValue_NULL; \
+    } else if (self->detached) { \
+        PyErr_SetString(PyExc_ValueError, \
+             "underlying buffer has been detached"); \
+        return PyValue_NULL; \
+    }
+
 
 /*[clinic input]
 @critical_section
@@ -3312,14 +3323,14 @@ _io_TextIOWrapper_close_impl(textio *self)
 _io.TextIOWrapper.__next__ as textiowrapper_iternext
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 textiowrapper_iternext_impl(textio *self)
-/*[clinic end generated code: output=f365c4287cd43a1f input=c5b4c79faf0c98cb]*/
+/*[clinic end generated code: output=dd5d97ab97536d9e input=c5b4c79faf0c98cb]*/
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(self);
     PyObject *line;
 
-    CHECK_ATTACHED(self);
+    CHECK_ATTACHED_VALUE(self);
 
     self->telling = 0;
     if (Py_IS_TYPE(self, self->state->PyTextIOWrapper_Type)) {
@@ -3333,22 +3344,22 @@ textiowrapper_iternext_impl(textio *self)
                          "readline() should have returned a str object, "
                          "not '%.200s'", Py_TYPE(line)->tp_name);
             Py_DECREF(line);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
     if (line == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (PyUnicode_GET_LENGTH(line) == 0) {
         /* Reached EOF or would have blocked */
         Py_DECREF(line);
         Py_CLEAR(self->snapshot);
         self->telling = self->seekable;
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return line;
+    return PyValue_FromObject(line);
 }
 
 /*[clinic input]

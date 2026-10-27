@@ -3230,7 +3230,7 @@ array_iter(PyObject *op)
     return (PyObject *)it;
 }
 
-static PyObject *
+static PyValue
 arrayiter_next(PyObject *op)
 {
     arrayiterobject *it = arrayiterobject_CAST(op);
@@ -3241,17 +3241,17 @@ arrayiter_next(PyObject *op)
 #endif
     arrayobject *ao = it->ao;
     if (ao == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 #ifndef NDEBUG
     assert(array_Check(ao, state));
 #endif
     if (it->index < Py_SIZE(ao)) {
-        return (*it->getitem)(ao, it->index++);
+        return PyValue_FromResult((*it->getitem)(ao, it->index++));
     }
     it->ao = NULL;
     Py_DECREF(ao);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static void

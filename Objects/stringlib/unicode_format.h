@@ -997,7 +997,7 @@ formatteriter_dealloc(PyObject *op)
    format_spec is the string after the ':'.  mibht be None
    conversion is either None, or the string after the '!'
 */
-static PyObject *
+static PyValue
 formatteriter_next(PyObject *op)
 {
     formatteriterobject *it = (formatteriterobject*)op;
@@ -1016,7 +1016,7 @@ formatteriter_next(PyObject *op)
     assert(0 <= result && result <= 2);
     if (result == 0 || result == 1)
         /* if 0, error has already been set, if 1, iterator is empty */
-        return NULL;
+        return PyValue_NULL;
     else {
         PyObject *literal_str = NULL;
         PyObject *field_name_str = NULL;
@@ -1059,7 +1059,7 @@ formatteriter_next(PyObject *op)
         Py_XDECREF(field_name_str);
         Py_XDECREF(format_spec_str);
         Py_XDECREF(conversion_str);
-        return tuple;
+        return PyValue_FromResult(tuple);
     }
 }
 
@@ -1160,7 +1160,7 @@ fieldnameiter_dealloc(PyObject *op)
               false if we used index syntax (e.g., '[foo]')
    value is an integer or string
 */
-static PyObject *
+static PyValue
 fieldnameiter_next(PyObject *op)
 {
     fieldnameiterobject *it = (fieldnameiterobject*)op;
@@ -1173,7 +1173,7 @@ fieldnameiter_next(PyObject *op)
                                     &idx, &name);
     if (result == 0 || result == 1)
         /* if 0, error has already been set, if 1, iterator is empty */
-        return NULL;
+        return PyValue_NULL;
     else {
         PyObject* result = NULL;
         PyObject* is_attr_obj = NULL;
@@ -1192,12 +1192,12 @@ fieldnameiter_next(PyObject *op)
             goto error;
 
         /* return a tuple of values */
-        return _PyTuple_FromPairSteal(is_attr_obj, obj);
+        return PyValue_FromResult(_PyTuple_FromPairSteal(is_attr_obj, obj));
 
     error:
         Py_XDECREF(is_attr_obj);
         Py_XDECREF(obj);
-        return result;
+        return PyValue_FromResult(result);
     }
 }
 

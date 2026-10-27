@@ -14844,7 +14844,7 @@ unicodeiter_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 unicodeiter_next(PyObject *op)
 {
     unicodeiterobject *it = (unicodeiterobject *)op;
@@ -14853,7 +14853,7 @@ unicodeiter_next(PyObject *op)
     assert(it != NULL);
     seq = it->it_seq;
     if (seq == NULL)
-        return NULL;
+        return PyValue_NULL;
     assert(_PyUnicode_CHECK(seq));
 
     if (it->it_index < PyUnicode_GET_LENGTH(seq)) {
@@ -14861,22 +14861,22 @@ unicodeiter_next(PyObject *op)
         const void *data = PyUnicode_DATA(seq);
         Py_UCS4 chr = PyUnicode_READ(kind, data, it->it_index);
         it->it_index++;
-        return unicode_char(chr);
+        return PyValue_FromResult(unicode_char(chr));
     }
 
     it->it_seq = NULL;
     Py_DECREF(seq);
-    return NULL;
+    return PyValue_NULL;
 }
 
-static PyObject *
+static PyValue
 unicode_ascii_iter_next(PyObject *op)
 {
     unicodeiterobject *it = (unicodeiterobject *)op;
     assert(it != NULL);
     PyObject *seq = it->it_seq;
     if (seq == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     assert(_PyUnicode_CHECK(seq));
     assert(PyUnicode_IS_COMPACT_ASCII(seq));
@@ -14885,11 +14885,11 @@ unicode_ascii_iter_next(PyObject *op)
         Py_UCS1 chr = (Py_UCS1)PyUnicode_READ(PyUnicode_1BYTE_KIND,
                                               data, it->it_index);
         it->it_index++;
-        return (PyObject*)&_Py_SINGLETON(strings).ascii[chr];
+        return PyValue_FromResult((PyObject*)&_Py_SINGLETON(strings).ascii[chr]);
     }
     it->it_seq = NULL;
     Py_DECREF(seq);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *

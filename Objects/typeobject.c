@@ -9859,15 +9859,16 @@ RICHCMP_WRAPPER(ge, Py_GE)
 static PyObject *
 wrap_next(PyObject *self, PyObject *args, void *wrapped)
 {
-    unaryfunc func = (unaryfunc)wrapped;
-    PyObject *res;
+    iternextfunc func = (iternextfunc)wrapped;
+    PyValue res;
 
     if (!check_num_args(args, 0))
         return NULL;
     res = (*func)(self);
-    if (res == NULL && !PyErr_Occurred())
+    if (PyValue_IsNull(res) && !PyErr_Occurred())
         PyErr_SetNone(PyExc_StopIteration);
-    return res;
+    // A wrapper returns an object: an inline item is boxed here.
+    return PyValue_Object(res);
 }
 
 static PyObject *
@@ -10699,11 +10700,11 @@ slot_tp_iter(PyObject *self)
     return PySeqIter_New(self);
 }
 
-static PyObject *
+static PyValue
 slot_tp_iternext(PyObject *self)
 {
-    PyObject *stack[1] = {self};
-    return vectorcall_method(&_Py_ID(__next__), stack, 1);
+    PyValue stack[1] = {PyValue_FromObject(self)};
+    return vectorcall_method_value(&_Py_ID(__next__), stack, 1);
 }
 
 int

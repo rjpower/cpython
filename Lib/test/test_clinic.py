@@ -874,18 +874,19 @@ class ClinicWholeFileTest(TestCase):
             #endif
         """
         generated = self.clinic.parse(dedent(block))
+        # tp_iternext returns the item as a value.
         self.assertIn(dedent("""
-            static PyObject *
+            static PyValue
             Foo_next(PyObject *self)
             {
                 return Foo_next_impl((FooObject *)self);
             }
         """), generated)
         self.assertIn(dedent("""
-            static PyObject *
+            static PyValue
             foo_iternext(PyObject *self)
             {
-                PyObject *return_value = NULL;
+                PyValue return_value = PyValue_NULL;
 
                 Py_BEGIN_CRITICAL_SECTION(self);
                 return_value = foo_iternext_impl((FooObject *)self);
@@ -894,7 +895,7 @@ class ClinicWholeFileTest(TestCase):
                 return return_value;
             }
         """), generated)
-        self.assertIn("#if defined(CONDITION)\n\nstatic PyObject *\n"
+        self.assertIn("#if defined(CONDITION)\n\nstatic PyValue\n"
                       "foo_iternext_cond_impl(FooObject *self);", generated)
         # A slot function is not stored in a PyMethodDef.
         for text in "METHODDEF", "PyDoc_", "#ifndef":
@@ -3393,7 +3394,7 @@ class ClinicParserTest(TestCase):
         self.assertIs(function.kind, FunctionKind.SLOT)
         self.assertIs(function.slot, SLOTS["__next__"])
         self.assertEqual(function.c_basename, "Foo_next")
-        self.assertEqual(function.return_converter.type, "PyObject *")
+        self.assertEqual(function.return_converter.type, "PyValue")
         self.assertEqual(list(function.parameters), ["self"])
 
     def test_slot_coexist_is_a_method(self):

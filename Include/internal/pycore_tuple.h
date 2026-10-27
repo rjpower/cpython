@@ -51,9 +51,6 @@ typedef struct {
     PyTupleObject *it_seq; /* Set to NULL when iterator is exhausted */
 } _PyTupleIterObject;
 
-// The next item of a tuple iterator as its value, so that no box is made:
-// 1, or 0 at the end.
-extern int _PyTupleIter_NextValue(PyObject *it, PyValue *item);
 
 #define _PyTuple_RESET_HASH_CACHE(op)       \
     do {                                    \

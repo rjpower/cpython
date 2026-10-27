@@ -234,16 +234,16 @@ _get_col_offsets(tokenizeriterobject *it, const struct token *token,
 _tokenizer.tokenizeriter.__next__ as tokenizeriter_next
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 tokenizeriter_next_impl(tokenizeriterobject *self)
-/*[clinic end generated code: output=745c9c646781ff45 input=66f70c965ba8ccfe]*/
+/*[clinic end generated code: output=b7970d403e1168f1 input=66f70c965ba8ccfe]*/
 {
     tokenizeriterobject *it = self;
     PyObject* result = NULL;
 
     if (it->done) {
         PyErr_SetString(PyExc_StopIteration, "EOF");
-        return NULL;
+        return PyValue_NULL;
     }
 
     struct token token;
@@ -329,7 +329,7 @@ exit:
     if (type == ENDMARKER) {
         it->done = 1;
     }
-    return result;
+    return PyValue_FromResult(result);
 }
 
 static void

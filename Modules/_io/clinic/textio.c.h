@@ -1185,13 +1185,13 @@ _io_TextIOWrapper_close(PyObject *self, PyObject *Py_UNUSED(ignored))
     return return_value;
 }
 
-static PyObject *
+static PyValue
 textiowrapper_iternext_impl(textio *self);
 
-static PyObject *
+static PyValue
 textiowrapper_iternext(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = textiowrapper_iternext_impl((textio *)self);
@@ -1350,4 +1350,4 @@ _io_TextIOWrapper_buffer_get(PyObject *self, void *Py_UNUSED(context))
 
 #define _IO_TEXTIOWRAPPER_BUFFER_GETSETDEF {"buffer", (getter)_io_TextIOWrapper_buffer_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=7bec6a1e3bb763d1 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=1fb31b89c6c51840 input=a9049054013a1b77]*/

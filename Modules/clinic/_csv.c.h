@@ -95,13 +95,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 Reader_iternext_impl(ReaderObj *self);
 
-static PyObject *
+static PyValue
 Reader_iternext(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = Reader_iternext_impl((ReaderObj *)self);
@@ -502,4 +502,4 @@ skip_optional_pos:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=7ef32ddff951504f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f9a1ab634dafa55b input=a9049054013a1b77]*/

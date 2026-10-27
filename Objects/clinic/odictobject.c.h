@@ -478,13 +478,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 odictiter_iternext_impl(PyObject *self);
 
-static PyObject *
+static PyValue
 odictiter_iternext(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = odictiter_iternext_impl(self);
@@ -492,4 +492,4 @@ odictiter_iternext(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=3fa30ddfeb8c49c2 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=a6d199dbd347fef5 input=a9049054013a1b77]*/

@@ -1801,20 +1801,20 @@ odictiter_nextkey(odictiterobject *di)
 odictiter.__next__ as odictiter_iternext
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 odictiter_iternext_impl(PyObject *self)
-/*[clinic end generated code: output=71aef8eec9e1a133 input=bc8bec6c85481b93]*/
+/*[clinic end generated code: output=ecff2c9dcce52c0a input=bc8bec6c85481b93]*/
 {
     odictiterobject *di = (odictiterobject*)self;
     PyObject *result, *value;
     PyObject *key = odictiter_nextkey(di);  /* new reference */
 
     if (key == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     /* Handle the keys case. */
     if (! (di->kind & _odict_ITER_VALUES)) {
-        return key;
+        return PyValue_FromResult(key);
     }
 
     if (PyDict_GetItemRef((PyObject *)di->di_odict, key, &value) != 1) {
@@ -1827,7 +1827,7 @@ odictiter_iternext_impl(PyObject *self)
     /* Handle the values case. */
     if (!(di->kind & _odict_ITER_KEYS)) {
         Py_DECREF(key);
-        return value;
+        return PyValue_FromResult(value);
     }
 
     /* Handle the items case. */
@@ -1836,12 +1836,12 @@ odictiter_iternext_impl(PyObject *self)
         goto error;
     }
 
-    return result;
+    return PyValue_FromResult(result);
 
 error:
     Py_CLEAR(di->di_current);
     Py_CLEAR(di->di_odict);
-    return NULL;
+    return PyValue_NULL;
 }
 
 

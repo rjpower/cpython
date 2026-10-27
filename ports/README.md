@@ -143,6 +143,13 @@ Under abi_id cpython-3.16-value-v1 calls pass values (note 08, section 4):
   `PyValue callable, const PyValue *args` and returns `PyValue`. Call one
   with `PyObject_VectorcallValue()`; `PyObject_Vectorcall()` is the
   compatibility form and boxes.
+- `tp_iternext` (`iternextfunc`, `Py_tp_iternext`) is
+  `PyValue f(PyObject *self)`: the next item, or `PyValue_NULL` when the
+  iterator is exhausted (with no exception or `StopIteration` set) or on
+  error. Return an item made as an object with `PyValue_FromResult()`.
+  Take items with `PyIter_NextValue()`; `PyIter_Next()` is the
+  compatibility form and boxes. A `Py_tp_iternext` slot entry passes
+  through `void *`, so the compiler does not catch an unconverted function.
 - `__class_getitem__` entries use `Py_GenericAliasValue`.
 - An object stays alive until its last release call (`Py_DECREF`,
   `Py_XDECREF`, `Py_CLEAR`, `Py_SETREF`, `Py_XSETREF`): reference-correct

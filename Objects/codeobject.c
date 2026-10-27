@@ -1330,13 +1330,13 @@ _source_offset_converter(void *arg) {
     return PyLong_FromLong(*value);
 }
 
-static PyObject *
+static PyValue
 lineiter_next(PyObject *self)
 {
     lineiterator *li = (lineiterator*)self;
     PyCodeAddressRange *bounds = &li->li_line;
     if (!_PyLineTable_NextAddressRange(bounds)) {
-        return NULL;
+        return PyValue_NULL;
     }
     int start = bounds->ar_start;
     int line = bounds->ar_line;
@@ -1347,8 +1347,8 @@ lineiter_next(PyObject *self)
             break;
         }
     }
-    return Py_BuildValue("iiO&", start, bounds->ar_end,
-                         _source_offset_converter, &line);
+    return PyValue_FromResult(Py_BuildValue("iiO&", start, bounds->ar_end,
+                         _source_offset_converter, &line));
 }
 
 static int
@@ -1432,23 +1432,23 @@ positionsiter_dealloc(PyObject *self)
     Py_TYPE(pi)->tp_free(pi);
 }
 
-static PyObject*
+static PyValue
 positionsiter_next(PyObject *self)
 {
     positionsiterator *pi = (positionsiterator*)self;
     if (pi->pi_offset >= pi->pi_range.ar_end) {
         assert(pi->pi_offset == pi->pi_range.ar_end);
         if (at_end(&pi->pi_range)) {
-            return NULL;
+            return PyValue_NULL;
         }
         advance_with_locations(&pi->pi_range, &pi->pi_endline, &pi->pi_column, &pi->pi_endcolumn);
     }
     pi->pi_offset += 1;
-    return Py_BuildValue("(O&O&O&O&)",
+    return PyValue_FromResult(Py_BuildValue("(O&O&O&O&)",
         _source_offset_converter, &pi->pi_range.ar_line,
         _source_offset_converter, &pi->pi_endline,
         _source_offset_converter, &pi->pi_column,
-        _source_offset_converter, &pi->pi_endcolumn);
+        _source_offset_converter, &pi->pi_endcolumn));
 }
 
 static int

@@ -728,21 +728,21 @@ iobase_iter(PyObject *self)
     return Py_NewRef(self);
 }
 
-static PyObject *
+static PyValue
 iobase_iternext(PyObject *self)
 {
     PyObject *line = PyObject_CallMethodNoArgs(self, &_Py_ID(readline));
 
     if (line == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (PyObject_Size(line) <= 0) {
         /* Error or empty */
         Py_DECREF(line);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return line;
+    return PyValue_FromObject(line);
 }
 
 /*[clinic input]

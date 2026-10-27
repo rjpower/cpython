@@ -1794,3 +1794,23 @@ new and tripped 6b's debug heap check (29cbc5795a2); it now gets its
 storage from the object allocator, which is the rule for any C++ object
 that is a PyObject. gate.sh ignores the test_sys remote-exec test so the
 later checks of a level run.
+
+## 2026-10-27 15:30 PDT: 10a design adopted (note 11)
+
+Note 11, precise roots, landed on the integration branch (22a38cc021a)
+after two codex review rounds (revise, then accept with the kill-mode
+landing rule). Decisions: an attributed DWARF unwind walk; frames are
+precise or opaque by a section marker; the precise set is the eval loop
+and handlers, the entry paths, the call layer (about 80 functions) and
+about 25 ceval helpers; the rest of core C and all extensions stay opaque
+and conservatively scanned, with PyMem blocks followed only from extension
+frames; allocator slack rejected on its measured RSS cost (+8.5% geomean);
+a frame is a root from push to pop; tier 1 gets safepoint tables; step 7
+inherits the root set and the barrier rule. The coordinator added open
+question 10 at adoption: the C-mode checker (a CFG, liveness and
+provenance analysis over a declared C subset) is the largest tool in rung
+1, so it has a one-day box, with the kill-mode verifier, the retain gate
+and the inline audit as the proof if it overruns, and no 8.2 skip removed
+on the dynamic proof alone. Note 06 rows 10a and 7 updated. The 10a
+implementation starts in its own worktree after 6c lands, so that the two
+do not contend for the eval loop.

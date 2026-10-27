@@ -118,8 +118,9 @@ whose size is determined when the object is allocated.
  * pointer is wider) and sixteen flag bits in 48-63, ob_flags, which belong to
  * the collector (see _Py_GC_MARKED_FLAG and the flags beside it).  Read the
  * type with Py_TYPE(), which masks the flags off, and write it with
- * Py_SET_TYPE(), which keeps them. */
-struct _object {
+ * Py_SET_TYPE(), which keeps them.  _Py_ANONYMOUS lets C99 and C++03
+ * accept a struct whose only member is the anonymous union. */
+_Py_ANONYMOUS struct _object {
     _Py_ANONYMOUS union {
         uintptr_t ob_header;
         struct {

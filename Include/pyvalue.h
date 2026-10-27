@@ -152,8 +152,9 @@ static inline PyValue
 PyValue_FromDouble(double d)
 {
     if (!isnan(d)) {
+        PyValue v;
         _PyValue_STAT_INC(inline_floats_created);
-        PyValue v = _PyValue_FromBits(_PyValue_DoubleBits(d));
+        v = _PyValue_FromBits(_PyValue_DoubleBits(d));
         // So that the caller's test for failure folds away on this path.
         if (PyValue_IsNull(v)) {
             Py_UNREACHABLE();
@@ -206,12 +207,14 @@ PyAPI_FUNC(PyValue) _PyValue_FromLongObject(PyObject *op);
 static inline PyValue
 _PyValue_FromObject(PyObject *op)
 {
+    PyTypeObject *tp;
     assert(op != NULL);
     assert(((uintptr_t)op & _PyValue_TAG_BITS) == 0);
-    PyTypeObject *tp = Py_TYPE(op);
+    tp = Py_TYPE(op);
     if (tp == &PyFloat_Type) {
+        double d;
         _PyValue_HIDE_ORIGIN(op);
-        double d = PyFloat_AS_DOUBLE(op);
+        d = PyFloat_AS_DOUBLE(op);
         if (!isnan(d)) {
             return _PyValue_FromBits(_PyValue_DoubleBits(d));
         }
@@ -248,9 +251,10 @@ PyValue_Int32(PyValue v)
 static inline double
 PyValue_Double(PyValue v)
 {
-    assert(PyValue_IsInlineFloat(v));
-    uint64_t u = v.bits - _PyValue_DOUBLE_OFFSET;
+    uint64_t u;
     double d;
+    assert(PyValue_IsInlineFloat(v));
+    u = v.bits - _PyValue_DOUBLE_OFFSET;
     memcpy(&d, &u, sizeof(d));
     return d;
 }

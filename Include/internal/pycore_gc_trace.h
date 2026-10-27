@@ -197,9 +197,9 @@ _PyGC_ObjectMapBit(uintptr_t addr)
 static inline uint64_t *
 _PyGC_ObjectMapChunkOf(uintptr_t addr)
 {
-    uint64_t **map = _Py_atomic_load_ptr_relaxed(&_PyGC_object_map);
+    uint64_t **map = (uint64_t **)_Py_atomic_load_ptr_relaxed(&_PyGC_object_map);
     return map != NULL
-        ? _Py_atomic_load_ptr_relaxed(&map[addr >> _PyGC_MAP_CHUNK_SHIFT])
+        ? (uint64_t *)_Py_atomic_load_ptr_relaxed(&map[addr >> _PyGC_MAP_CHUNK_SHIFT])
         : NULL;
 }
 

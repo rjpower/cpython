@@ -28,11 +28,17 @@ pysqlite_cursor_init(PyObject *self, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("Cursor", PyTuple_GET_SIZE(args), 1, 1)) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(PyTuple_GET_ITEM(args, 0), clinic_state()->ConnectionType)) {
-        _PyArg_BadArgument("Cursor", "argument 1", (clinic_state()->ConnectionType)->tp_name, PyTuple_GET_ITEM(args, 0));
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, clinic_state()->ConnectionType)) {
+            _PyArg_BadArgument("Cursor", "argument 1", (clinic_state()->ConnectionType)->tp_name, _arg);
+            goto exit;
+        }
+        connection = (pysqlite_Connection *)_arg;
     }
-    connection = (pysqlite_Connection *)PyTuple_GET_ITEM(args, 0);
     return_value = pysqlite_cursor_init_impl((pysqlite_Cursor *)self, connection);
 
 exit:
@@ -52,27 +58,38 @@ static PyObject *
 pysqlite_cursor_execute_impl(pysqlite_Cursor *self, PyObject *sql,
                              PyObject *parameters);
 
-static PyObject *
-pysqlite_cursor_execute(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+pysqlite_cursor_execute(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *sql;
     PyObject *parameters = NULL;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("execute", nargs, 1, 2)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("execute", "argument 1", "str", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("execute", "argument 1", "str", _arg);
+            goto exit;
+        }
+        sql = _arg;
     }
-    sql = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    parameters = args[1];
+    parameters = PyValue_Object(args[1]);
+    if (parameters == NULL) {
+        goto exit;
+    }
 skip_optional:
-    return_value = pysqlite_cursor_execute_impl((pysqlite_Cursor *)self, sql, parameters);
+    _return_value = pysqlite_cursor_execute_impl((pysqlite_Cursor *)self, sql, parameters);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -91,23 +108,34 @@ static PyObject *
 pysqlite_cursor_executemany_impl(pysqlite_Cursor *self, PyObject *sql,
                                  PyObject *seq_of_parameters);
 
-static PyObject *
-pysqlite_cursor_executemany(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+pysqlite_cursor_executemany(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *sql;
     PyObject *seq_of_parameters;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("executemany", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("executemany", "argument 1", "str", args[0]);
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("executemany", "argument 1", "str", _arg);
+            goto exit;
+        }
+        sql = _arg;
+    }
+    seq_of_parameters = PyValue_Object(args[1]);
+    if (seq_of_parameters == NULL) {
         goto exit;
     }
-    sql = args[0];
-    seq_of_parameters = args[1];
-    return_value = pysqlite_cursor_executemany_impl((pysqlite_Cursor *)self, sql, seq_of_parameters);
+    _return_value = pysqlite_cursor_executemany_impl((pysqlite_Cursor *)self, sql, seq_of_parameters);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -120,27 +148,35 @@ PyDoc_STRVAR(pysqlite_cursor_executescript__doc__,
 "Executes multiple SQL statements at once.");
 
 #define PYSQLITE_CURSOR_EXECUTESCRIPT_METHODDEF    \
-    {"executescript", (PyCFunction)pysqlite_cursor_executescript, METH_O, pysqlite_cursor_executescript__doc__},
+    {"executescript", _PyCFunction_CAST(pysqlite_cursor_executescript), METH_O, pysqlite_cursor_executescript__doc__},
 
 static PyObject *
 pysqlite_cursor_executescript_impl(pysqlite_Cursor *self,
                                    const char *sql_script);
 
-static PyObject *
-pysqlite_cursor_executescript(PyObject *self, PyObject *arg)
+static PyValue
+pysqlite_cursor_executescript(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *sql_script;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("executescript", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("executescript", "argument", "str", _arg);
+            goto exit;
+        }
+        sql_script = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (sql_script == NULL) {
+            goto exit;
+        }
     }
-    sql_script = _PyUnicode_AsUTF8NoNUL(arg);
-    if (sql_script == NULL) {
-        goto exit;
-    }
-    return_value = pysqlite_cursor_executescript_impl((pysqlite_Cursor *)self, sql_script);
+    _return_value = pysqlite_cursor_executescript_impl((pysqlite_Cursor *)self, sql_script);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -179,10 +215,10 @@ PyDoc_STRVAR(pysqlite_cursor_fetchmany__doc__,
 static PyObject *
 pysqlite_cursor_fetchmany_impl(pysqlite_Cursor *self, uint32_t maxrows);
 
-static PyObject *
-pysqlite_cursor_fetchmany(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+pysqlite_cursor_fetchmany(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -209,9 +245,10 @@ pysqlite_cursor_fetchmany(PyObject *self, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     uint32_t maxrows = ((pysqlite_Cursor *)self)->arraysize;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -221,11 +258,18 @@ pysqlite_cursor_fetchmany(PyObject *self, PyObject *const *args, Py_ssize_t narg
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!_PyLong_UInt32_Converter(args[0], &maxrows)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UInt32_Converter(_arg, &maxrows)) {
+            goto exit;
+        }
     }
 skip_optional_pos:
-    return_value = pysqlite_cursor_fetchmany_impl((pysqlite_Cursor *)self, maxrows);
+    _return_value = pysqlite_cursor_fetchmany_impl((pysqlite_Cursor *)self, maxrows);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -256,18 +300,26 @@ PyDoc_STRVAR(pysqlite_cursor_setinputsizes__doc__,
 "Required by DB-API. Does nothing in sqlite3.");
 
 #define PYSQLITE_CURSOR_SETINPUTSIZES_METHODDEF    \
-    {"setinputsizes", (PyCFunction)pysqlite_cursor_setinputsizes, METH_O, pysqlite_cursor_setinputsizes__doc__},
+    {"setinputsizes", _PyCFunction_CAST(pysqlite_cursor_setinputsizes), METH_O, pysqlite_cursor_setinputsizes__doc__},
 
 static PyObject *
 pysqlite_cursor_setinputsizes_impl(pysqlite_Cursor *self, PyObject *sizes);
 
-static PyObject *
-pysqlite_cursor_setinputsizes(PyObject *self, PyObject *sizes)
+static PyValue
+pysqlite_cursor_setinputsizes(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *sizes;
+    PyObject *_return_value;
 
-    return_value = pysqlite_cursor_setinputsizes_impl((pysqlite_Cursor *)self, sizes);
+    sizes = PyValue_Object(arg);
+    if (sizes == NULL) {
+        goto exit;
+    }
+    _return_value = pysqlite_cursor_setinputsizes_impl((pysqlite_Cursor *)self, sizes);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -284,23 +336,31 @@ static PyObject *
 pysqlite_cursor_setoutputsize_impl(pysqlite_Cursor *self, PyObject *size,
                                    PyObject *column);
 
-static PyObject *
-pysqlite_cursor_setoutputsize(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+pysqlite_cursor_setoutputsize(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *size;
     PyObject *column = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("setoutputsize", nargs, 1, 2)) {
         goto exit;
     }
-    size = args[0];
+    size = PyValue_Object(args[0]);
+    if (size == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    column = args[1];
+    column = PyValue_Object(args[1]);
+    if (column == NULL) {
+        goto exit;
+    }
 skip_optional:
-    return_value = pysqlite_cursor_setoutputsize_impl((pysqlite_Cursor *)self, size, column);
+    _return_value = pysqlite_cursor_setoutputsize_impl((pysqlite_Cursor *)self, size, column);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -358,4 +418,4 @@ exit:
 }
 #define _SQLITE3_CURSOR_ARRAYSIZE_GETSETDEF {"arraysize", (getter)_sqlite3_Cursor_arraysize_get, (setter)_sqlite3_Cursor_arraysize_set, NULL},
 
-/*[clinic end generated code: output=9ae9919401ec193c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=44183fe5b5ce8222 input=a9049054013a1b77]*/

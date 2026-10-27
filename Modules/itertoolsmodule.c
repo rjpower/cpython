@@ -1932,7 +1932,7 @@ This is the union of the types of the input iterable contents.");
 
 static PyMethodDef chain_methods[] = {
     ITERTOOLS_CHAIN_FROM_ITERABLE_METHODDEF
-    {"__class_getitem__",    Py_GenericAlias,
+    {"__class_getitem__",    _PyCFunction_CAST(Py_GenericAliasValue),
     METH_O|METH_CLASS,       chain_class_getitem_doc},
     {NULL,              NULL}           /* sentinel */
 };

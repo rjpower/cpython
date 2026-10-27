@@ -1617,8 +1617,9 @@ Check whether a path is in the shared cache.
 [clinic start generated code]*/
 
 static PyObject *
-_ctypes__dyld_shared_cache_contains_path(PyObject *module, PyObject *name)
-/*[clinic end generated code: output=1d3fed04c0490294 input=bb910a42599d991f]*/
+_ctypes__dyld_shared_cache_contains_path_impl(PyObject *module,
+                                              PyObject *name)
+/*[clinic end generated code: output=d6eda7ee66c87d62 input=bb910a42599d991f]*/
 {
      PyObject *name2;
      char *name_str;
@@ -1893,8 +1894,8 @@ Return the size in bytes of a C instance.
 [clinic start generated code]*/
 
 static PyObject *
-_ctypes_sizeof(PyObject *module, PyObject *obj)
-/*[clinic end generated code: output=ed38a3f364d7bd3e input=321fd0f65cb2d623]*/
+_ctypes_sizeof_impl(PyObject *module, PyObject *obj)
+/*[clinic end generated code: output=4743c1669617a17f input=321fd0f65cb2d623]*/
 {
     ctypes_state *st = get_module_state(module);
 
@@ -1930,8 +1931,8 @@ The argument is a C type or a C instance.
 [clinic start generated code]*/
 
 static PyObject *
-_ctypes_alignment(PyObject *module, PyObject *obj)
-/*[clinic end generated code: output=a7abe04d98641d93 input=3c78c5425bc83928]*/
+_ctypes_alignment_impl(PyObject *module, PyObject *obj)
+/*[clinic end generated code: output=8f51bb2557f9725d input=3c78c5425bc83928]*/
 {
     ctypes_state *st = get_module_state(module);
     StgInfo *info;
@@ -2029,8 +2030,8 @@ Increment the reference count of the object and return it.
 [clinic start generated code]*/
 
 static PyObject *
-_ctypes_Py_INCREF(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=ebf05a7f9ba69657 input=04fcd9c30fee39ea]*/
+_ctypes_Py_INCREF_impl(PyObject *module, PyObject *arg)
+/*[clinic end generated code: output=de21b5b7572dcc2b input=04fcd9c30fee39ea]*/
 {
     Py_INCREF(arg); /* that's what this function is for */
     Py_INCREF(arg); /* that for returning it */
@@ -2047,8 +2048,8 @@ Decrement the reference count of the object and return it.
 [clinic start generated code]*/
 
 static PyObject *
-_ctypes_Py_DECREF(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=d7933cd7be22ccde input=108543079a732003]*/
+_ctypes_Py_DECREF_impl(PyObject *module, PyObject *arg)
+/*[clinic end generated code: output=4be1cb67e4102822 input=108543079a732003]*/
 {
     Py_DECREF(arg); /* that's what this function is for */
     Py_INCREF(arg); /* that's for returning it */
@@ -2162,8 +2163,8 @@ Return buffer interface information.
 [clinic start generated code]*/
 
 static PyObject *
-_ctypes_buffer_info(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=31f942a6fce6d671 input=cb023e7f9c959f72]*/
+_ctypes_buffer_info_impl(PyObject *module, PyObject *arg)
+/*[clinic end generated code: output=4eeb39f862919bfd input=cb023e7f9c959f72]*/
 {
     PyObject *shape;
     Py_ssize_t i;
@@ -2192,27 +2193,31 @@ _ctypes_buffer_info(PyObject *module, PyObject *arg)
 }
 
 
-static PyObject *
-_ctypes_getattr(PyObject *Py_UNUSED(module), PyObject *name)
+static PyValue
+_ctypes_getattr(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *name = PyValue_Object(arg);
+    if (name == NULL) {
+        return PyValue_NULL;
+    }
     if (PyUnicode_Check(name) && PyUnicode_EqualToUTF8(name, "__version__")) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
                          "'__version__' is deprecated and slated for "
                          "removal in Python 3.20",
                          1) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
-        return PyUnicode_FromString("1.1.0");  // Do not change
+        return PyValue_FromResult(PyUnicode_FromString("1.1.0"));  // Do not change
     }
 
     PyErr_Format(PyExc_AttributeError,
                  "module '_ctypes' has no attribute %R", name);
-    return NULL;
+    return PyValue_NULL;
 }
 
 
 PyMethodDef _ctypes_module_methods[] = {
-    {"__getattr__", _ctypes_getattr, METH_O},
+    {"__getattr__", _PyCFunction_CAST(_ctypes_getattr), METH_O},
     _CTYPES_GET_ERRNO_METHODDEF
     _CTYPES_SET_ERRNO_METHODDEF
     _CTYPES__UNPICKLE_METHODDEF

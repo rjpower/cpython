@@ -160,8 +160,8 @@ Same as -a.
 [clinic start generated code]*/
 
 static PyObject *
-_operator_neg(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=36e08ecfc6a1c08c input=84f09bdcf27c96ec]*/
+_operator_neg_impl(PyObject *module, PyObject *a)
+/*[clinic end generated code: output=f94efb887b5a0e95 input=84f09bdcf27c96ec]*/
 {
     return PyNumber_Negative(a);
 }
@@ -173,8 +173,8 @@ Same as +a.
 [clinic start generated code]*/
 
 static PyObject *
-_operator_pos(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=dad7a126221dd091 input=b6445b63fddb8772]*/
+_operator_pos_impl(PyObject *module, PyObject *a)
+/*[clinic end generated code: output=f912b25fd4828381 input=b6445b63fddb8772]*/
 {
     return PyNumber_Positive(a);
 }
@@ -186,8 +186,8 @@ Same as abs(a).
 [clinic start generated code]*/
 
 static PyObject *
-_operator_abs(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=1389a93ba053ea3e input=341d07ba86f58039]*/
+_operator_abs_impl(PyObject *module, PyObject *a)
+/*[clinic end generated code: output=555c764aa0e45ccc input=341d07ba86f58039]*/
 {
     return PyNumber_Absolute(a);
 }
@@ -199,8 +199,8 @@ Same as ~a.
 [clinic start generated code]*/
 
 static PyObject *
-_operator_inv(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=a56875ba075ee06d input=b01a4677739f6eb2]*/
+_operator_inv_impl(PyObject *module, PyObject *a)
+/*[clinic end generated code: output=34689754097e28c8 input=b01a4677739f6eb2]*/
 {
     return PyNumber_Invert(a);
 }
@@ -212,8 +212,8 @@ Same as ~a.
 [clinic start generated code]*/
 
 static PyObject *
-_operator_invert(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=406b5aa030545fcc input=7f2d607176672e55]*/
+_operator_invert_impl(PyObject *module, PyObject *a)
+/*[clinic end generated code: output=77fe45dcba10eeae input=7f2d607176672e55]*/
 {
     return PyNumber_Invert(a);
 }
@@ -696,8 +696,8 @@ Same as a.__index__()
 [clinic start generated code]*/
 
 static PyObject *
-_operator_index(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=d972b0764ac305fc input=6f54d50ea64a579c]*/
+_operator_index_impl(PyObject *module, PyObject *a)
+/*[clinic end generated code: output=ad256eb9a76a51bf input=6f54d50ea64a579c]*/
 {
     return PyNumber_Index(a);
 }
@@ -737,8 +737,8 @@ Same as a is None.
 [clinic start generated code]*/
 
 static PyObject *
-_operator_is_none(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=07159cc102261dec input=0448b38af7b8533d]*/
+_operator_is_none_impl(PyObject *module, PyObject *a)
+/*[clinic end generated code: output=cbc8d01db6290088 input=0448b38af7b8533d]*/
 {
     PyObject *result = Py_IsNone(a) ? Py_True : Py_False;
     return Py_NewRef(result);
@@ -751,8 +751,8 @@ Same as a is not None.
 [clinic start generated code]*/
 
 static PyObject *
-_operator_is_not_none(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=b0168a51451d9140 input=7587f38ebac51688]*/
+_operator_is_not_none_impl(PyObject *module, PyObject *a)
+/*[clinic end generated code: output=57ecf0b94b29b976 input=7587f38ebac51688]*/
 {
     PyObject *result = Py_IsNone(a) ? Py_False : Py_True;
     return Py_NewRef(result);
@@ -924,13 +924,13 @@ PyDoc_STRVAR(_operator_call__doc__,
 #define _OPERATOR_CALL_METHODDEF    \
     {"call", _PyCFunction_CAST(_operator_call), METH_FASTCALL | METH_KEYWORDS, _operator_call__doc__},
 
-static PyObject *
-_operator_call(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_operator_call(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (!_PyArg_CheckPositional("call", nargs, 1, PY_SSIZE_T_MAX)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyObject_Vectorcall(
+    return PyObject_VectorcallValue(
             args[0],
             &args[1], (PyVectorcall_NARGS(nargs) - 1) | PY_VECTORCALL_ARGUMENTS_OFFSET,
             kwnames);

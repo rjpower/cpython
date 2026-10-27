@@ -655,27 +655,35 @@ range_hash(PyObject *op)
     return result;
 }
 
-static PyObject *
-range_count(PyObject *self, PyObject *ob)
+static PyValue
+range_count(PyObject *self, PyValue ob_value)
 {
+    PyObject *ob = PyValue_Object(ob_value);
+    if (ob == NULL) {
+        return PyValue_NULL;
+    }
     rangeobject *r = (rangeobject*)self;
     if (PyLong_CheckExact(ob) || PyBool_Check(ob)) {
         int result = range_contains_long(r, ob);
         if (result == -1)
-            return NULL;
-        return PyLong_FromLong(result);
+            return PyValue_NULL;
+        return PyValue_FromLongLong(result);
     } else {
         Py_ssize_t count;
         count = _PySequence_IterSearch((PyObject*)r, ob, PY_ITERSEARCH_COUNT);
         if (count == -1)
-            return NULL;
-        return PyLong_FromSsize_t(count);
+            return PyValue_NULL;
+        return PyValue_FromLongLong(count);
     }
 }
 
-static PyObject *
-range_index(PyObject *self, PyObject *ob)
+static PyValue
+range_index(PyObject *self, PyValue ob_value)
 {
+    PyObject *ob = PyValue_Object(ob_value);
+    if (ob == NULL) {
+        return PyValue_NULL;
+    }
     rangeobject *r = (rangeobject*)self;
     int contains;
 
@@ -683,33 +691,33 @@ range_index(PyObject *self, PyObject *ob)
         Py_ssize_t index;
         index = _PySequence_IterSearch((PyObject*)r, ob, PY_ITERSEARCH_INDEX);
         if (index == -1)
-            return NULL;
-        return PyLong_FromSsize_t(index);
+            return PyValue_NULL;
+        return PyValue_FromLongLong(index);
     }
 
     contains = range_contains_long(r, ob);
     if (contains == -1)
-        return NULL;
+        return PyValue_NULL;
 
     if (contains) {
         PyObject *idx = PyNumber_Subtract(ob, r->start);
         if (idx == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
 
         if (r->step == _PyLong_GetOne()) {
-            return idx;
+            return PyValue_FromResult(idx);
         }
 
         /* idx = (ob - r.start) // r.step */
         PyObject *sidx = PyNumber_FloorDivide(idx, r->step);
         Py_DECREF(idx);
-        return sidx;
+        return PyValue_FromResult(sidx);
     }
 
     /* object is not in the range */
     PyErr_SetString(PyExc_ValueError, "range.index(x): x not in range");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PySequenceMethods range_as_sequence = {
@@ -809,8 +817,8 @@ PyDoc_STRVAR(index_doc,
 static PyMethodDef range_methods[] = {
     {"__reversed__",    range_reverse,              METH_NOARGS, reverse_doc},
     {"__reduce__",      range_reduce,               METH_NOARGS},
-    {"count",           range_count,                METH_O,      count_doc},
-    {"index",           range_index,                METH_O,      index_doc},
+    {"count",           _PyCFunction_CAST(range_count),                METH_O,      count_doc},
+    {"index",           _PyCFunction_CAST(range_index),                METH_O,      index_doc},
     {NULL,              NULL}           /* sentinel */
 };
 

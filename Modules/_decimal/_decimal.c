@@ -2077,8 +2077,8 @@ Set a new default context.
 [clinic start generated code]*/
 
 static PyObject *
-_decimal_setcontext(PyObject *module, PyObject *context)
-/*[clinic end generated code: output=8065f870be2852ce input=b57d7ee786b022a6]*/
+_decimal_setcontext_impl(PyObject *module, PyObject *context)
+/*[clinic end generated code: output=a153db61419f41bb input=b57d7ee786b022a6]*/
 {
     return PyDec_SetCurrentContext(module, context);
 }
@@ -2213,9 +2213,9 @@ Restore the global context.
 
 static PyObject *
 _decimal_ContextManager___exit___impl(PyDecContextManagerObject *self,
-                                      PyObject * const *exc_info,
+                                      const PyValue *exc_info,
                                       Py_ssize_t exc_info_length)
-/*[clinic end generated code: output=744a645b0145842d input=a86ec9080e28dff3]*/
+/*[clinic end generated code: output=38740607b0178279 input=a86ec9080e28dff3]*/
 {
     PyObject *ret;
     ret = PyDec_SetCurrentContext(PyType_GetModule(Py_TYPE(self)), self->global);
@@ -5843,8 +5843,8 @@ _decimal.Decimal.__deepcopy__
 [clinic start generated code]*/
 
 static PyObject *
-_decimal_Decimal___deepcopy__(PyObject *self, PyObject *memo)
-/*[clinic end generated code: output=988fb34e0136b376 input=f95598c6f43233aa]*/
+_decimal_Decimal___deepcopy___impl(PyObject *self, PyObject *memo)
+/*[clinic end generated code: output=816138d04d950813 input=f95598c6f43233aa]*/
 {
     return Py_NewRef(self);
 }

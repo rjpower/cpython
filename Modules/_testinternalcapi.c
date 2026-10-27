@@ -935,19 +935,23 @@ test_bytes_find(PyObject *self, PyObject *Py_UNUSED(args))
 }
 
 
-static PyObject *
-normalize_path(PyObject *self, PyObject *filename)
+static PyValue
+normalize_path(PyObject *self, PyValue arg)
 {
+    PyObject *filename = PyValue_Object(arg);
+    if (filename == NULL) {
+        return PyValue_NULL;
+    }
     Py_ssize_t size = -1;
     wchar_t *encoded = PyUnicode_AsWideCharString(filename, &size);
     if (encoded == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *result = PyUnicode_FromWideChar(_Py_normpath(encoded, size), -1);
     PyMem_Free(encoded);
 
-    return result;
+    return PyValue_FromResult(result);
 }
 
 static PyObject *
@@ -1102,17 +1106,21 @@ record_eval(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
 }
 
 
-static PyObject *
-set_eval_frame_record(PyObject *self, PyObject *list)
+static PyValue
+set_eval_frame_record(PyObject *self, PyValue arg)
 {
+    PyObject *list = PyValue_Object(arg);
+    if (list == NULL) {
+        return PyValue_NULL;
+    }
     module_state *state = get_module_state(self);
     if (!PyList_Check(list)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a list");
-        return NULL;
+        return PyValue_NULL;
     }
     Py_XSETREF(state->record_list, Py_NewRef(list));
     _PyInterpreterState_SetEvalFrameFunc(_PyInterpreterState_GET(), record_eval);
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 // Defined in interpreter.c
@@ -1441,60 +1449,82 @@ perf_map_state_teardown(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(ignored))
     Py_RETURN_NONE;
 }
 
-static PyObject *
-iframe_getcode(PyObject *self, PyObject *frame)
+static PyValue
+iframe_getcode(PyObject *self, PyValue arg)
 {
+    PyObject *frame = PyValue_Object(arg);
+    if (frame == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyFrame_Check(frame)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a frame");
-        return NULL;
+        return PyValue_NULL;
     }
     struct _PyInterpreterFrame *f = ((PyFrameObject *)frame)->f_frame;
-    return PyUnstable_InterpreterFrame_GetCode(f);
+    return PyValue_FromResult(PyUnstable_InterpreterFrame_GetCode(f));
 }
 
-static PyObject *
-iframe_getline(PyObject *self, PyObject *frame)
+static PyValue
+iframe_getline(PyObject *self, PyValue arg)
 {
+    PyObject *frame = PyValue_Object(arg);
+    if (frame == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyFrame_Check(frame)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a frame");
-        return NULL;
+        return PyValue_NULL;
     }
     struct _PyInterpreterFrame *f = ((PyFrameObject *)frame)->f_frame;
-    return PyLong_FromLong(PyUnstable_InterpreterFrame_GetLine(f));
+    return PyValue_FromResult(
+        PyLong_FromLong(PyUnstable_InterpreterFrame_GetLine(f)));
 }
 
-static PyObject *
-iframe_getlasti(PyObject *self, PyObject *frame)
+static PyValue
+iframe_getlasti(PyObject *self, PyValue arg)
 {
+    PyObject *frame = PyValue_Object(arg);
+    if (frame == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyFrame_Check(frame)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a frame");
-        return NULL;
+        return PyValue_NULL;
     }
     struct _PyInterpreterFrame *f = ((PyFrameObject *)frame)->f_frame;
-    return PyLong_FromLong(PyUnstable_InterpreterFrame_GetLasti(f));
+    return PyValue_FromResult(
+        PyLong_FromLong(PyUnstable_InterpreterFrame_GetLasti(f)));
 }
 
-static PyObject *
-code_returns_only_none(PyObject *self, PyObject *arg)
+static PyValue
+code_returns_only_none(PyObject *self, PyValue value)
 {
+    PyObject *arg = PyValue_Object(value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyCode_Check(arg)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a code object");
-        return NULL;
+        return PyValue_NULL;
     }
     PyCodeObject *code = (PyCodeObject *)arg;
     int res = _PyCode_ReturnsOnlyNone(code);
-    return PyBool_FromLong(res);
+    return PyValue_FromResult(PyBool_FromLong(res));
 }
 
-static PyObject *
-get_co_framesize(PyObject *self, PyObject *arg)
+static PyValue
+get_co_framesize(PyObject *self, PyValue value)
 {
+    PyObject *arg = PyValue_Object(value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyCode_Check(arg)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a code object");
-        return NULL;
+        return PyValue_NULL;
     }
     PyCodeObject *code = (PyCodeObject *)arg;
-    return PyLong_FromLong(code->co_framesize);
+    return PyValue_FromResult(PyLong_FromLong(code->co_framesize));
 }
 
 /* The feedback entry of the instruction at word index I of the executing
@@ -1592,34 +1622,42 @@ get_ir(PyObject *self, PyObject *args)
 
 /* Set the farthest exit of FOR_ITER and SEND that the assembler does not
  * relax, for code compiled from now on, and return the previous one. */
-static PyObject *
-set_ir_max_forward(PyObject *self, PyObject *arg)
+static PyValue
+set_ir_max_forward(PyObject *self, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     int value = PyLong_AsInt(arg);
     if (value == -1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (value < 0 || value > IR_MAX_FORWARD) {
         PyErr_SetString(PyExc_ValueError, "distance out of range");
-        return NULL;
+        return PyValue_NULL;
     }
     int old = _PyIR_MaxForward;
     _PyIR_MaxForward = value;
-    return PyLong_FromLong(old);
+    return PyValue_FromResult(PyLong_FromLong(old));
 }
 
-static PyObject *
-get_co_localskinds(PyObject *self, PyObject *arg)
+static PyValue
+get_co_localskinds(PyObject *self, PyValue value)
 {
+    PyObject *arg = PyValue_Object(value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyCode_Check(arg)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a code object");
-        return NULL;
+        return PyValue_NULL;
     }
     PyCodeObject *co = (PyCodeObject *)arg;
 
     PyObject *kinds = PyDict_New();
     if (kinds == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     for (int offset = 0; offset < co->co_nlocalsplus; offset++) {
         PyObject *name = PyTuple_GET_ITEM(co->co_localsplusnames, offset);
@@ -1627,16 +1665,16 @@ get_co_localskinds(PyObject *self, PyObject *arg)
         PyObject *kind = PyLong_FromLong(k);
         if (kind == NULL) {
             Py_DECREF(kinds);
-            return NULL;
+            return PyValue_NULL;
         }
         int res = PyDict_SetItem(kinds, name, kind);
         Py_DECREF(kind);
         if (res < 0) {
             Py_DECREF(kinds);
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    return kinds;
+    return PyValue_FromResult(kinds);
 }
 
 static PyObject *
@@ -2022,13 +2060,17 @@ test_tstate_capi(PyObject *self, PyObject *Py_UNUSED(args))
 
 
 /* Test _PyUnicode_TransformDecimalAndSpaceToASCII() */
-static PyObject *
-unicode_transformdecimalandspacetoascii(PyObject *self, PyObject *arg)
+static PyValue
+unicode_transformdecimalandspacetoascii(PyObject *self, PyValue value)
 {
+    PyObject *arg = PyValue_Object(value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     if (arg == Py_None) {
         arg = NULL;
     }
-    return _PyUnicode_TransformDecimalAndSpaceToASCII(arg);
+    return PyValue_FromResult(_PyUnicode_TransformDecimalAndSpaceToASCII(arg));
 }
 
 static PyObject *
@@ -2111,16 +2153,20 @@ test_pymem_getallocatorsname(PyObject *self, PyObject *args)
     return PyUnicode_FromString(name);
 }
 
-static PyObject *
-get_object_dict_values(PyObject *self, PyObject *obj)
+static PyValue
+get_object_dict_values(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     PyTypeObject *type = Py_TYPE(obj);
     if (!_PyType_HasFeature(type, Py_TPFLAGS_INLINE_VALUES)) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
     PyDictValues *values = _PyObject_InlineValues(obj);
     if (!values->valid) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
     PyDictKeysObject *keys = ((PyHeapTypeObject *)type)->ht_cached_keys;
     assert(keys != NULL);
@@ -2128,7 +2174,7 @@ get_object_dict_values(PyObject *self, PyObject *obj)
     assert(size >= 0);
     PyObject *res = PyTuple_New(size);
     if (res == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     _Py_DECLARE_STR(anon_null, "<NULL>");
     for(int i = 0; i < size; i++) {
@@ -2138,35 +2184,44 @@ get_object_dict_values(PyObject *self, PyObject *obj)
         }
         PyTuple_SET_VALUE(res, i, item);
     }
-    return res;
+    return PyValue_FromResult(res);
 }
 
 #ifdef Py_SHAPES
 // The shape index of an object with inline values, or None if it has none.
-static PyObject *
-get_object_shape(PyObject *self, PyObject *obj)
+static PyValue
+get_object_shape(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     if (!_PyType_HasFeature(Py_TYPE(obj), Py_TPFLAGS_INLINE_VALUES)) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
     uint8_t shape = _PyObject_InlineValues(obj)->shape;
     if (shape == _Py_SHAPE_NONE) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return PyLong_FromLong(shape);
+    return PyValue_FromResult(PyLong_FromLong(shape));
 }
 
 // The number of shapes of a type with inline values.
-static PyObject *
-get_type_shape_count(PyObject *self, PyObject *type)
+static PyValue
+get_type_shape_count(PyObject *self, PyValue arg)
 {
+    PyObject *type = PyValue_Object(arg);
+    if (type == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyType_Check(type) ||
         !_PyType_HasFeature((PyTypeObject *)type, Py_TPFLAGS_INLINE_VALUES))
     {
         PyErr_SetString(PyExc_TypeError, "expected a type with inline values");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromLong(_PyType_Shapes((PyTypeObject *)type)->nshapes);
+    return PyValue_FromResult(
+        PyLong_FromLong(_PyType_Shapes((PyTypeObject *)type)->nshapes));
 }
 #endif
 
@@ -2502,14 +2557,18 @@ run_in_subinterp_with_config(PyObject *self, PyObject *args, PyObject *kwargs)
 }
 
 
-static PyObject *
-normalize_interp_id(PyObject *self, PyObject *idobj)
+static PyValue
+normalize_interp_id(PyObject *self, PyValue arg)
 {
+    PyObject *idobj = PyValue_Object(arg);
+    if (idobj == NULL) {
+        return PyValue_NULL;
+    }
     int64_t interpid = _PyInterpreterState_ObjectToID(idobj);
     if (interpid < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromLongLong(interpid);
+    return PyValue_FromResult(PyLong_FromLongLong(interpid));
 }
 
 static PyObject *
@@ -2527,66 +2586,86 @@ unused_interpreter_id(PyObject *self, PyObject *Py_UNUSED(ignored))
     return PyLong_FromLongLong(interpid);
 }
 
-static PyObject *
-interpreter_exists(PyObject *self, PyObject *idobj)
+static PyValue
+interpreter_exists(PyObject *self, PyValue arg)
 {
+    PyObject *idobj = PyValue_Object(arg);
+    if (idobj == NULL) {
+        return PyValue_NULL;
+    }
     PyInterpreterState *interp = _PyInterpreterState_LookUpIDObject(idobj);
     if (interp == NULL) {
         if (PyErr_ExceptionMatches(PyExc_InterpreterNotFoundError)) {
             PyErr_Clear();
-            Py_RETURN_FALSE;
+            return PyValue_FromObject(Py_False);
         }
         assert(PyErr_Occurred());
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_TRUE;
+    return PyValue_FromObject(Py_True);
 }
 
-static PyObject *
-get_interpreter_refcount(PyObject *self, PyObject *idobj)
+static PyValue
+get_interpreter_refcount(PyObject *self, PyValue arg)
 {
+    PyObject *idobj = PyValue_Object(arg);
+    if (idobj == NULL) {
+        return PyValue_NULL;
+    }
     PyInterpreterState *interp = _PyInterpreterState_LookUpIDObject(idobj);
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromLongLong(interp->id_refcount);
+    return PyValue_FromResult(PyLong_FromLongLong(interp->id_refcount));
 }
 
-static PyObject *
-link_interpreter_refcount(PyObject *self, PyObject *idobj)
+static PyValue
+link_interpreter_refcount(PyObject *self, PyValue arg)
 {
+    PyObject *idobj = PyValue_Object(arg);
+    if (idobj == NULL) {
+        return PyValue_NULL;
+    }
     PyInterpreterState *interp = _PyInterpreterState_LookUpIDObject(idobj);
     if (interp == NULL) {
         assert(PyErr_Occurred());
-        return NULL;
+        return PyValue_NULL;
     }
     _PyInterpreterState_RequireIDRef(interp, 1);
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
-unlink_interpreter_refcount(PyObject *self, PyObject *idobj)
+static PyValue
+unlink_interpreter_refcount(PyObject *self, PyValue arg)
 {
+    PyObject *idobj = PyValue_Object(arg);
+    if (idobj == NULL) {
+        return PyValue_NULL;
+    }
     PyInterpreterState *interp = _PyInterpreterState_LookUpIDObject(idobj);
     if (interp == NULL) {
         assert(PyErr_Occurred());
-        return NULL;
+        return PyValue_NULL;
     }
     _PyInterpreterState_RequireIDRef(interp, 0);
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
-interpreter_refcount_linked(PyObject *self, PyObject *idobj)
+static PyValue
+interpreter_refcount_linked(PyObject *self, PyValue arg)
 {
+    PyObject *idobj = PyValue_Object(arg);
+    if (idobj == NULL) {
+        return PyValue_NULL;
+    }
     PyInterpreterState *interp = _PyInterpreterState_LookUpIDObject(idobj);
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (_PyInterpreterState_RequiresIDRef(interp)) {
-        Py_RETURN_TRUE;
+        return PyValue_FromObject(Py_True);
     }
-    Py_RETURN_FALSE;
+    return PyValue_FromObject(Py_False);
 }
 
 
@@ -2830,23 +2909,31 @@ reset_rare_event_counters(PyObject *self, PyObject *Py_UNUSED(type))
 
 
 
-static PyObject *
-has_inline_values(PyObject *self, PyObject *obj)
+static PyValue
+has_inline_values(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     if ((Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES) &&
         _PyObject_InlineValues(obj)->valid) {
-        Py_RETURN_TRUE;
+        return PyValue_FromObject(Py_True);
     }
-    Py_RETURN_FALSE;
+    return PyValue_FromObject(Py_False);
 }
 
-static PyObject *
-has_split_table(PyObject *self, PyObject *obj)
+static PyValue
+has_split_table(PyObject *self, PyValue arg)
 {
-    if (PyDict_Check(obj) && _PyDict_HasSplitTable((PyDictObject *)obj)) {
-        Py_RETURN_TRUE;
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
     }
-    Py_RETURN_FALSE;
+    if (PyDict_Check(obj) && _PyDict_HasSplitTable((PyDictObject *)obj)) {
+        return PyValue_FromObject(Py_True);
+    }
+    return PyValue_FromObject(Py_False);
 }
 
 // Circumvents standard version assignment machinery - use with caution and only on
@@ -2908,10 +2995,15 @@ identify_type_slot_wrappers(PyObject *self, PyObject *Py_UNUSED(ignored))
 }
 
 
-static PyObject *
-has_deferred_refcount(PyObject *self, PyObject *op)
+static PyValue
+has_deferred_refcount(PyObject *self, PyValue arg)
 {
-    return PyBool_FromLong(_PyObject_HasDeferredRefcount(op));
+    PyObject *op = PyValue_Object(arg);
+    if (op == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(
+        PyBool_FromLong(_PyObject_HasDeferredRefcount(op)));
 }
 
 static PyObject *
@@ -2920,45 +3012,53 @@ get_tracked_heap_size(PyObject *self, PyObject *Py_UNUSED(ignored))
     return PyLong_FromInt64(PyInterpreterState_Get()->gc.heap_size);
 }
 
-static PyObject *
-is_static_immortal(PyObject *self, PyObject *op)
+static PyValue
+is_static_immortal(PyObject *self, PyValue arg)
 {
-    if (_Py_IsStaticImmortal(op)) {
-        Py_RETURN_TRUE;
+    PyObject *op = PyValue_Object(arg);
+    if (op == NULL) {
+        return PyValue_NULL;
     }
-    Py_RETURN_FALSE;
+    if (_Py_IsStaticImmortal(op)) {
+        return PyValue_FromObject(Py_True);
+    }
+    return PyValue_FromObject(Py_False);
 }
 
-static PyObject *
-incref_decref_delayed(PyObject *self, PyObject *op)
+static PyValue
+incref_decref_delayed(PyObject *self, PyValue op)
 {
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 // Encode an exact int32 or non-NaN float as an inline stack value, check that
 // the operations valid on any PyValue treat it as a value, then box it.
-static PyObject *
-value_box_roundtrip(PyObject *self, PyObject *arg)
+static PyValue
+value_box_roundtrip(PyObject *self, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     PyValue ref;
     if (PyLong_CheckExact(arg)) {
         int32_t i;
         if (PyLong_AsInt32(arg, &i) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
         ref = PyValue_FromInt32(i);
         if (!PyValue_IsInlineInt(ref) || PyValue_Int32(ref) != i
             || !_PyValue_BothInlineInt(ref, ref) || PyValue_Type(ref) != &PyLong_Type)
         {
             PyErr_SetString(PyExc_AssertionError, "bad inline int");
-            return NULL;
+            return PyValue_NULL;
         }
     }
     else if (PyFloat_CheckExact(arg)) {
         double d = PyFloat_AS_DOUBLE(arg);
         if (isnan(d)) {
             PyErr_SetString(PyExc_ValueError, "NaN has no inline encoding");
-            return NULL;
+            return PyValue_NULL;
         }
         ref = PyValue_FromDouble(d);
         double back = PyValue_Double(ref);
@@ -2966,12 +3066,12 @@ value_box_roundtrip(PyObject *self, PyObject *arg)
             || PyValue_IsInlineInt(ref) || PyValue_Type(ref) != &PyFloat_Type)
         {
             PyErr_SetString(PyExc_AssertionError, "bad inline float");
-            return NULL;
+            return PyValue_NULL;
         }
     }
     else {
         PyErr_SetString(PyExc_TypeError, "expected an exact int or float");
-        return NULL;
+        return PyValue_NULL;
     }
     if (!PyValue_IsInline(ref) || _PyValue_IsPointerSpace(ref)
         || _PyValue_IsTaggedIndex(ref) || PyValue_IsNull(ref)
@@ -2982,43 +3082,47 @@ value_box_roundtrip(PyObject *self, PyObject *arg)
         || PyValue_Is(ref, _PyValue_None))
     {
         PyErr_SetString(PyExc_AssertionError, "inline value predicates disagree");
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *box = PyValue_Object(ref);
     if (box == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     // A box converts back to the canonical, inline value.
     if (PyValue_FromObject(box).bits != ref.bits) {
         PyErr_SetString(PyExc_AssertionError, "box is not canonicalised");
-        return NULL;
+        return PyValue_NULL;
     }
-    return box;
+    return PyValue_FromResult(box);
 }
 
 // The names of the frame's local variables that hold inline values.
-static PyObject *
-inline_locals(PyObject *self, PyObject *frame)
+static PyValue
+inline_locals(PyObject *self, PyValue arg)
 {
+    PyObject *frame = PyValue_Object(arg);
+    if (frame == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyFrame_Check(frame)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a frame");
-        return NULL;
+        return PyValue_NULL;
     }
     _PyInterpreterFrame *f = ((PyFrameObject *)frame)->f_frame;
     PyCodeObject *co = _PyFrame_GetCode(f);
     PyObject *names = PySet_New(NULL);
     if (names == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     for (int i = 0; i < co->co_nlocalsplus; i++) {
         if (PyValue_IsInline(f->base[i]) &&
             PySet_Add(names, PyTuple_GET_ITEM(co->co_localsplusnames, i)) < 0)
         {
             Py_DECREF(names);
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    return names;
+    return PyValue_FromResult(names);
 }
 
 #ifdef __EMSCRIPTEN__
@@ -3052,14 +3156,18 @@ emscripten_set_up_async_input_device(PyObject *self, PyObject *Py_UNUSED(ignored
 }
 #endif
 
-static PyObject *
-simple_pending_call(PyObject *self, PyObject *callable)
+static PyValue
+simple_pending_call(PyObject *self, PyValue arg)
 {
+    PyObject *callable = PyValue_Object(arg);
+    if (callable == NULL) {
+        return PyValue_NULL;
+    }
     if (_PyEval_AddPendingCall(_PyInterpreterState_GET(), _pending_callback, Py_NewRef(callable), 0) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 static PyValue
@@ -3069,21 +3177,29 @@ vectorcall_nop(PyValue callable, const PyValue *args,
     return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
-set_vectorcall_nop(PyObject *self, PyObject *func)
+static PyValue
+set_vectorcall_nop(PyObject *self, PyValue arg)
 {
+    PyObject *func = PyValue_Object(arg);
+    if (func == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyFunction_Check(func)) {
         PyErr_SetString(PyExc_TypeError, "expected function");
-        return NULL;
+        return PyValue_NULL;
     }
 
     ((PyFunctionObject*)func)->vectorcall = vectorcall_nop;
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
-module_get_gc_hooks(PyObject *self, PyObject *arg)
+static PyValue
+module_get_gc_hooks(PyObject *self, PyValue value)
 {
+    PyObject *arg = PyValue_Object(value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     PyModuleObject *mod = (PyModuleObject *)arg;
     PyObject *traverse = NULL;
     PyObject *clear = NULL;
@@ -3106,7 +3222,7 @@ finally:
     Py_XDECREF(traverse);
     Py_XDECREF(clear);
     Py_XDECREF(free);
-    return result;
+    return PyValue_FromResult(result);
 }
 
 
@@ -3224,9 +3340,13 @@ test_interp_view_countdown(PyObject *self, PyObject *unused)
 
 #undef NUM_LOCKS
 
-static PyObject *
-_pyerr_setkeyerror(PyObject *self, PyObject *arg)
+static PyValue
+_pyerr_setkeyerror(PyObject *self, PyValue value)
 {
+    PyObject *arg = PyValue_Object(value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     // Test that _PyErr_SetKeyError() overrides the current exception
     // if an exception is set
     PyErr_NoMemory();
@@ -3234,7 +3354,7 @@ _pyerr_setkeyerror(PyObject *self, PyObject *arg)
     _PyErr_SetKeyError(arg);
 
     assert(PyErr_Occurred());
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *
@@ -3402,15 +3522,19 @@ gc_verify_count(PyObject *self, PyObject *Py_UNUSED(args))
 
 /* The classes of roots that keep the object at an address (an int, so that
    the argument does not keep it), as a _PyGC_TRACE_ROOT_* mask. */
-static PyObject *
-gc_live_roots_of(PyObject *self, PyObject *addr)
+static PyValue
+gc_live_roots_of(PyObject *self, PyValue arg)
 {
+    PyObject *addr = PyValue_Object(arg);
+    if (addr == NULL) {
+        return PyValue_NULL;
+    }
     void *p = PyLong_AsVoidPtr(addr);
     if (p == NULL && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromLong(_PyGC_TraceLiveRootsOf(_PyThreadState_GET(),
-                                                  (uintptr_t)p));
+    return PyValue_FromResult(PyLong_FromLong(
+        _PyGC_TraceLiveRootsOf(_PyThreadState_GET(), (uintptr_t)p)));
 }
 
 /* The address of the object that the live mark finds at an address, or 0. */
@@ -3433,54 +3557,71 @@ gc_live_lookup(PyObject *self, PyObject *args)
 /* Does the live mark take a raw PyObject_Malloc() block that starts with a
    copy of op's header word for an object?  The block is in an object heap's
    page, but the object map has no bit for it. */
-static PyObject *
-gc_raw_block_is_object(PyObject *self, PyObject *op)
+static PyValue
+gc_raw_block_is_object(PyObject *self, PyValue arg)
 {
+    PyObject *op = PyValue_Object(arg);
+    if (op == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *block = PyObject_Malloc(4 * sizeof(PyObject *));
     if (block == NULL) {
-        return PyErr_NoMemory();
+        return PyValue_FromResult(PyErr_NoMemory());
     }
     memset(block, 0, 4 * sizeof(PyObject *));
     block->ob_header = op->ob_header;
     uintptr_t found = _PyGC_TraceLiveLookup(_PyThreadState_GET(),
                                             (uintptr_t)block, 0);
     PyObject_Free(block);
-    return PyBool_FromLong(found != 0);
+    return PyValue_FromResult(PyBool_FromLong(found != 0));
 }
 
 /* The mimalloc segment that the collector's segment map holds for an
    address, or 0. */
-static PyObject *
-gc_segment_of(PyObject *self, PyObject *addr)
+static PyValue
+gc_segment_of(PyObject *self, PyValue arg)
 {
+    PyObject *addr = PyValue_Object(arg);
+    if (addr == NULL) {
+        return PyValue_NULL;
+    }
     void *p = PyLong_AsVoidPtr(addr);
     if (p == NULL && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromVoidPtr((void *)_PyGC_TraceSegmentOf((uintptr_t)p));
+    return PyValue_FromResult(
+        PyLong_FromVoidPtr((void *)_PyGC_TraceSegmentOf((uintptr_t)p)));
 }
 
 /* Addresses in the object's mimalloc segment that hold no block. */
-static PyObject *
-gc_segment_probes(PyObject *self, PyObject *op)
+static PyValue
+gc_segment_probes(PyObject *self, PyValue arg)
 {
+    PyObject *op = PyValue_Object(arg);
+    if (op == NULL) {
+        return PyValue_NULL;
+    }
     uintptr_t probes[4];
     _PyGC_TraceSegmentProbes(op, probes);
-    return Py_BuildValue("(KKKK)",
-                         (unsigned long long)probes[0],
-                         (unsigned long long)probes[1],
-                         (unsigned long long)probes[2],
-                         (unsigned long long)probes[3]);
+    return PyValue_FromResult(Py_BuildValue("(KKKK)",
+                                            (unsigned long long)probes[0],
+                                            (unsigned long long)probes[1],
+                                            (unsigned long long)probes[2],
+                                            (unsigned long long)probes[3]));
 }
 
 /* Call factory() and keep the result only in a C local across a verified
    collection.  Return (holes, id of the object). */
-static PyObject *
-gc_verify_with_c_local(PyObject *self, PyObject *factory)
+static PyValue
+gc_verify_with_c_local(PyObject *self, PyValue arg)
 {
+    PyObject *factory = PyValue_Object(arg);
+    if (factory == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *obj = PyObject_CallNoArgs(factory);
     if (obj == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *holes = verify_and_get_holes();
     PyObject *res = NULL;
@@ -3488,7 +3629,7 @@ gc_verify_with_c_local(PyObject *self, PyObject *factory)
         res = Py_BuildValue("(NK)", holes, (unsigned long long)(uintptr_t)obj);
     }
     Py_DECREF(obj);
-    return res;
+    return PyValue_FromResult(res);
 }
 
 /* Call factory() and keep the result only in a C local while calling
@@ -3550,11 +3691,15 @@ clear_dead_stack(void)
 /* Call factory() and keep the result only in a PyMem_Malloc() array across
    a verified collection: the pattern that a tracing collector cannot see,
    which the verifier must report.  Return (holes, the object). */
-static PyObject *
-gc_verify_with_pymem_array(PyObject *self, PyObject *factory)
+static PyValue
+gc_verify_with_pymem_array(PyObject *self, PyValue arg)
 {
+    PyObject *factory = PyValue_Object(arg);
+    if (factory == NULL) {
+        return PyValue_NULL;
+    }
     if (store_in_hidden_array(factory) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     clear_dead_stack();
     PyObject *holes = verify_and_get_holes();
@@ -3570,7 +3715,7 @@ gc_verify_with_pymem_array(PyObject *self, PyObject *factory)
         Py_DECREF(array[2]);
     }
     PyMem_Free(array);
-    return res;
+    return PyValue_FromResult(res);
 }
 
 static PyMethodDef module_functions[] = {
@@ -3578,13 +3723,13 @@ static PyMethodDef module_functions[] = {
     {"gc_verify", gc_verify, METH_NOARGS},
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
     {"gc_verify_count", gc_verify_count, METH_NOARGS},
-    {"gc_live_roots_of", gc_live_roots_of, METH_O},
+    {"gc_live_roots_of", _PyCFunction_CAST(gc_live_roots_of), METH_O},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
-    {"gc_raw_block_is_object", gc_raw_block_is_object, METH_O},
-    {"gc_segment_of", gc_segment_of, METH_O},
-    {"gc_segment_probes", gc_segment_probes, METH_O},
-    {"gc_verify_with_c_local", gc_verify_with_c_local, METH_O},
-    {"gc_verify_with_pymem_array", gc_verify_with_pymem_array, METH_O},
+    {"gc_raw_block_is_object", _PyCFunction_CAST(gc_raw_block_is_object), METH_O},
+    {"gc_segment_of", _PyCFunction_CAST(gc_segment_of), METH_O},
+    {"gc_segment_probes", _PyCFunction_CAST(gc_segment_probes), METH_O},
+    {"gc_verify_with_c_local", _PyCFunction_CAST(gc_verify_with_c_local), METH_O},
+    {"gc_verify_with_pymem_array", _PyCFunction_CAST(gc_verify_with_pymem_array), METH_O},
     {"call_with_c_local", call_with_c_local, METH_VARARGS},
     {"get_eval_frame_stats", get_eval_frame_stats, METH_NOARGS, NULL},
     {"get_recursion_depth", get_recursion_depth, METH_NOARGS},
@@ -3602,13 +3747,13 @@ static PyMethodDef module_functions[] = {
     {"reset_path_config", test_reset_path_config, METH_NOARGS},
     {"test_edit_cost", test_edit_cost, METH_NOARGS},
     {"test_bytes_find", test_bytes_find, METH_NOARGS},
-    {"normalize_path", normalize_path, METH_O, NULL},
+    {"normalize_path", _PyCFunction_CAST(normalize_path), METH_O, NULL},
     {"get_getpath_codeobject", get_getpath_codeobject, METH_NOARGS, NULL},
     {"encode_locale", encode_locale, METH_VARARGS},
     {"decode_locale", decode_locale, METH_VARARGS},
     {"set_eval_frame_default", set_eval_frame_default, METH_NOARGS, NULL},
     {"set_eval_frame_interp", set_eval_frame_interp, METH_VARARGS, NULL},
-    {"set_eval_frame_record", set_eval_frame_record, METH_O, NULL},
+    {"set_eval_frame_record", _PyCFunction_CAST(set_eval_frame_record), METH_O, NULL},
     {"is_specialization_enabled", is_specialization_enabled, METH_NOARGS, NULL},
     _TESTINTERNALCAPI_COMPILER_CLEANDOC_METHODDEF
     _TESTINTERNALCAPI_NEW_INSTRUCTION_SEQUENCE_METHODDEF
@@ -3619,15 +3764,15 @@ static PyMethodDef module_functions[] = {
     {"clear_extension", clear_extension, METH_VARARGS, NULL},
     {"write_perf_map_entry", write_perf_map_entry, METH_VARARGS},
     {"perf_map_state_teardown", perf_map_state_teardown, METH_NOARGS},
-    {"iframe_getcode", iframe_getcode, METH_O, NULL},
-    {"iframe_getline", iframe_getline, METH_O, NULL},
-    {"iframe_getlasti", iframe_getlasti, METH_O, NULL},
-    {"code_returns_only_none", code_returns_only_none, METH_O, NULL},
-    {"get_co_framesize", get_co_framesize, METH_O, NULL},
-    {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
+    {"iframe_getcode", _PyCFunction_CAST(iframe_getcode), METH_O, NULL},
+    {"iframe_getline", _PyCFunction_CAST(iframe_getline), METH_O, NULL},
+    {"iframe_getlasti", _PyCFunction_CAST(iframe_getlasti), METH_O, NULL},
+    {"code_returns_only_none", _PyCFunction_CAST(code_returns_only_none), METH_O, NULL},
+    {"get_co_framesize", _PyCFunction_CAST(get_co_framesize), METH_O, NULL},
+    {"get_co_localskinds", _PyCFunction_CAST(get_co_localskinds), METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
-    {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},
+    {"set_ir_max_forward", _PyCFunction_CAST(set_ir_max_forward), METH_O, NULL},
     {"get_code_var_counts", _PyCFunction_CAST(get_code_var_counts),
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"verify_stateless_code", _PyCFunction_CAST(verify_stateless_code),
@@ -3637,7 +3782,7 @@ static PyMethodDef module_functions[] = {
     {"pending_identify", pending_identify, METH_VARARGS, NULL},
     {"_PyTraceMalloc_GetTraceback", tracemalloc_get_traceback, METH_VARARGS},
     {"test_tstate_capi", test_tstate_capi, METH_NOARGS, NULL},
-    {"_PyUnicode_TransformDecimalAndSpaceToASCII", unicode_transformdecimalandspacetoascii, METH_O},
+    {"_PyUnicode_TransformDecimalAndSpaceToASCII", _PyCFunction_CAST(unicode_transformdecimalandspacetoascii), METH_O},
     {"check_pyobject_forbidden_bytes_is_freed",
                             check_pyobject_forbidden_bytes_is_freed, METH_NOARGS},
     {"check_pyobject_freed_is_freed", check_pyobject_freed_is_freed, METH_NOARGS},
@@ -3645,10 +3790,10 @@ static PyMethodDef module_functions[] = {
     {"check_pyobject_uninitialized_is_freed",
                               check_pyobject_uninitialized_is_freed, METH_NOARGS},
     {"pymem_getallocatorsname", test_pymem_getallocatorsname, METH_NOARGS},
-    {"get_object_dict_values", get_object_dict_values, METH_O},
+    {"get_object_dict_values", _PyCFunction_CAST(get_object_dict_values), METH_O},
 #ifdef Py_SHAPES
-    {"get_object_shape", get_object_shape, METH_O},
-    {"get_type_shape_count", get_type_shape_count, METH_O},
+    {"get_object_shape", _PyCFunction_CAST(get_object_shape), METH_O},
+    {"get_type_shape_count", _PyCFunction_CAST(get_type_shape_count), METH_O},
 #endif
     {"hamt", new_hamt, METH_NOARGS},
     {"dict_getitem_knownhash",  dict_getitem_knownhash,          METH_VARARGS},
@@ -3661,14 +3806,14 @@ static PyMethodDef module_functions[] = {
     {"run_in_subinterp_with_config",
      _PyCFunction_CAST(run_in_subinterp_with_config),
      METH_VARARGS | METH_KEYWORDS},
-    {"normalize_interp_id", normalize_interp_id, METH_O},
+    {"normalize_interp_id", _PyCFunction_CAST(normalize_interp_id), METH_O},
     {"next_interpreter_id", next_interpreter_id, METH_NOARGS},
     {"unused_interpreter_id", unused_interpreter_id, METH_NOARGS},
-    {"interpreter_exists", interpreter_exists, METH_O},
-    {"get_interpreter_refcount", get_interpreter_refcount, METH_O},
-    {"link_interpreter_refcount", link_interpreter_refcount,     METH_O},
-    {"unlink_interpreter_refcount", unlink_interpreter_refcount, METH_O},
-    {"interpreter_refcount_linked", interpreter_refcount_linked, METH_O},
+    {"interpreter_exists", _PyCFunction_CAST(interpreter_exists), METH_O},
+    {"get_interpreter_refcount", _PyCFunction_CAST(get_interpreter_refcount), METH_O},
+    {"link_interpreter_refcount", _PyCFunction_CAST(link_interpreter_refcount), METH_O},
+    {"unlink_interpreter_refcount", _PyCFunction_CAST(unlink_interpreter_refcount), METH_O},
+    {"interpreter_refcount_linked", _PyCFunction_CAST(interpreter_refcount_linked), METH_O},
     {"compile_perf_trampoline_entry", compile_perf_trampoline_entry, METH_VARARGS},
     {"perf_trampoline_set_persist_after_fork", perf_trampoline_set_persist_after_fork, METH_VARARGS},
     {"get_crossinterp_data",    _PyCFunction_CAST(get_crossinterp_data),
@@ -3677,30 +3822,30 @@ static PyMethodDef module_functions[] = {
     _TESTINTERNALCAPI_TEST_LONG_NUMBITS_METHODDEF
     {"get_rare_event_counters", get_rare_event_counters, METH_NOARGS},
     {"reset_rare_event_counters", reset_rare_event_counters, METH_NOARGS},
-    {"has_inline_values", has_inline_values, METH_O},
-    {"has_split_table", has_split_table, METH_O},
+    {"has_inline_values", _PyCFunction_CAST(has_inline_values), METH_O},
+    {"has_split_table", _PyCFunction_CAST(has_split_table), METH_O},
     {"type_assign_specific_version_unsafe", type_assign_specific_version_unsafe, METH_VARARGS,
      PyDoc_STR("forcefully assign type->tp_version_tag")},
 
     GH_119213_GETARGS_METHODDEF
     {"get_static_builtin_types", get_static_builtin_types, METH_NOARGS},
     {"identify_type_slot_wrappers", identify_type_slot_wrappers, METH_NOARGS},
-    {"has_deferred_refcount", has_deferred_refcount, METH_O},
+    {"has_deferred_refcount", _PyCFunction_CAST(has_deferred_refcount), METH_O},
     {"get_tracked_heap_size", get_tracked_heap_size, METH_NOARGS},
-    {"is_static_immortal", is_static_immortal, METH_O},
-    {"incref_decref_delayed", incref_decref_delayed, METH_O},
-    {"value_box_roundtrip", value_box_roundtrip, METH_O},
-    {"inline_locals", inline_locals, METH_O},
+    {"is_static_immortal", _PyCFunction_CAST(is_static_immortal), METH_O},
+    {"incref_decref_delayed", _PyCFunction_CAST(incref_decref_delayed), METH_O},
+    {"value_box_roundtrip", _PyCFunction_CAST(value_box_roundtrip), METH_O},
+    {"inline_locals", _PyCFunction_CAST(inline_locals), METH_O},
     GET_NEXT_DICT_KEYS_VERSION_METHODDEF
 #ifdef __EMSCRIPTEN__
     {"emscripten_set_up_async_input_device", emscripten_set_up_async_input_device, METH_NOARGS},
 #endif
-    {"simple_pending_call", simple_pending_call, METH_O},
-    {"set_vectorcall_nop", set_vectorcall_nop, METH_O},
-    {"module_get_gc_hooks", module_get_gc_hooks, METH_O},
+    {"simple_pending_call", _PyCFunction_CAST(simple_pending_call), METH_O},
+    {"set_vectorcall_nop", _PyCFunction_CAST(set_vectorcall_nop), METH_O},
+    {"module_get_gc_hooks", _PyCFunction_CAST(module_get_gc_hooks), METH_O},
     {"test_threadstate_set_stack_protection",
      test_threadstate_set_stack_protection, METH_NOARGS},
-    {"_pyerr_setkeyerror", _pyerr_setkeyerror, METH_O},
+    {"_pyerr_setkeyerror", _PyCFunction_CAST(_pyerr_setkeyerror), METH_O},
     {"test_interp_guard_countdown", test_interp_guard_countdown, METH_NOARGS},
     {"test_interp_view_countdown", test_interp_view_countdown, METH_NOARGS},
     {"test_thread_state_ensure_from_view_interp_switch", test_thread_state_ensure_from_view_interp_switch, METH_NOARGS},

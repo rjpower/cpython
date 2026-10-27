@@ -8,6 +8,7 @@
 #endif
 
 #include "Python.h"
+#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_bytesobject.h"   // _PyBytes_RepeatBuffer
 #include "pycore_call.h"          // _PyObject_CallMethod()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
@@ -1738,7 +1739,8 @@ array_array_fromfile_impl(arrayobject *self, PyTypeObject *cls, PyObject *f,
 
     not_enough_bytes = (PyBytes_GET_SIZE(b) != nbytes);
 
-    res = array_array_frombytes((PyObject *)self, b);
+    res = PyValue_Object(array_array_frombytes((PyObject *)self,
+                                               PyValue_FromObject(b)));
     Py_DECREF(b);
     if (res == NULL)
         return NULL;
@@ -2625,7 +2627,7 @@ static PyMethodDef array_methods[] = {
     ARRAY_ARRAY_TOBYTES_METHODDEF
     ARRAY_ARRAY_TOUNICODE_METHODDEF
     ARRAY_ARRAY___SIZEOF___METHODDEF
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
      PyDoc_STR("Arrays are generic over the type of their elements")},
     {NULL, NULL}  /* sentinel */
 };
@@ -3026,7 +3028,8 @@ array_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             else if (initial != NULL && (PyByteArray_Check(initial) ||
                                PyBytes_Check(initial))) {
                 PyObject *v;
-                v = array_array_frombytes((PyObject *)a, initial);
+                v = PyValue_Object(array_array_frombytes(
+                    (PyObject *)a, PyValue_FromObject(initial)));
                 if (v == NULL) {
                     Py_DECREF(a);
                     Py_XDECREF(it);

@@ -5,21 +5,12 @@
 #undef NDEBUG
 
 
-// Use the limited C API
-#if !defined(Py_LIMITED_API)
-// Need limited C API version 3.5 for PyModule_AddFunctions()
-#define Py_LIMITED_API 0x03050000
+// Argument Clinic's output uses the internal C API.
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
 #endif
-
-// Make sure that the internal C API cannot be used.
-#undef Py_BUILD_CORE_MODULE
-#undef Py_BUILD_CORE_BUILTIN
 
 #include "Python.h"
-
-#ifdef Py_BUILD_CORE
-#  error "Py_BUILD_CORE macro must not be defined"
-#endif
 
 int _PyTestLimitedCAPI_Init_Abstract(PyObject *module);
 int _PyTestLimitedCAPI_Init_ByteArray(PyObject *module);

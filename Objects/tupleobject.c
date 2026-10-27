@@ -923,7 +923,7 @@ static PyMethodDef tuple_methods[] = {
     TUPLE___GETNEWARGS___METHODDEF
     TUPLE_INDEX_METHODDEF
     TUPLE_COUNT_METHODDEF
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS, tuple_class_getitem_doc},
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS, tuple_class_getitem_doc},
     {NULL,              NULL}           /* sentinel */
 };
 
@@ -1146,13 +1146,17 @@ tupleiter_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
     return Py_BuildValue("N(())", iter);
 }
 
-static PyObject *
-tupleiter_setstate(PyObject *self, PyObject *state)
+static PyValue
+tupleiter_setstate(PyObject *self, PyValue state_value)
 {
+    PyObject *state = PyValue_Object(state_value);
+    if (state == NULL) {
+        return PyValue_NULL;
+    }
     _PyTupleIterObject *it = _PyTupleIterObject_CAST(self);
     Py_ssize_t index = PyLong_AsSsize_t(state);
     if (index == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     if (it->it_seq != NULL) {
         if (index < 0)
             index = 0;
@@ -1160,7 +1164,7 @@ tupleiter_setstate(PyObject *self, PyObject *state)
             index = PyTuple_GET_SIZE(it->it_seq); /* exhausted iterator */
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index);
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
@@ -1169,7 +1173,7 @@ PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
 static PyMethodDef tupleiter_methods[] = {
     {"__length_hint__", tupleiter_len, METH_NOARGS, length_hint_doc},
     {"__reduce__", tupleiter_reduce, METH_NOARGS, reduce_doc},
-    {"__setstate__", tupleiter_setstate, METH_O, setstate_doc},
+    {"__setstate__", _PyCFunction_CAST(tupleiter_setstate), METH_O, setstate_doc},
     {NULL, NULL, 0, NULL} /* sentinel */
 };
 

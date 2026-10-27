@@ -7,7 +7,7 @@ preserve
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-#include "pycore_tuple.h"         // _PyTuple_Objects()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(tb_new__doc__,
 "traceback(tb_next, tb_frame, tb_lasti, tb_lineno)\n"
@@ -49,35 +49,39 @@ tb_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    PyObject * const *fastargs;
+    PyValue argsbuf[4];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    PyObject *const *argitems;
     PyObject *tb_next;
     PyFrameObject *tb_frame;
     int tb_lasti;
     int tb_lineno;
 
-    argitems = _PyTuple_Objects(args);
-    if (argitems == NULL) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 4, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    tb_next = fastargs[0];
-    if (!PyObject_TypeCheck(fastargs[1], &PyFrame_Type)) {
-        _PyArg_BadArgument("traceback", "argument 'tb_frame'", (&PyFrame_Type)->tp_name, fastargs[1]);
+    tb_next = PyValue_Object(fastargs[0]);
+    if (tb_next == NULL) {
         goto exit;
     }
-    tb_frame = (PyFrameObject *)fastargs[1];
-    tb_lasti = PyLong_AsInt(fastargs[2]);
+    {
+        PyObject *_arg = PyValue_Object(fastargs[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, &PyFrame_Type)) {
+            _PyArg_BadArgument("traceback", "argument 'tb_frame'", (&PyFrame_Type)->tp_name, _arg);
+            goto exit;
+        }
+        tb_frame = (PyFrameObject *)_arg;
+    }
+    tb_lasti = PyLong_AsIntValue(fastargs[2]);
     if (tb_lasti == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    tb_lineno = PyLong_AsInt(fastargs[3]);
+    tb_lineno = PyLong_AsIntValue(fastargs[3]);
     if (tb_lineno == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -126,4 +130,4 @@ traceback_tb_next_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
 }
 #define TRACEBACK_TB_NEXT_GETSETDEF {"tb_next", (getter)traceback_tb_next_get, (setter)traceback_tb_next_set, NULL},
 
-/*[clinic end generated code: output=66512bf8e2251c56 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=cbb8167d029bd717 input=a9049054013a1b77]*/

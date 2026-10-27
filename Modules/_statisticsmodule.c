@@ -1,8 +1,9 @@
 /* statistics accelerator C extension: _statistics module. */
 
-// Need limited C API version 3.13 for Py_mod_gil
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#  define Py_LIMITED_API 0x030d0000
+// Argument Clinic's output uses the internal C API.
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
 
 #include "Python.h"
 #include "clinic/_statisticsmodule.c.h"

@@ -2,44 +2,56 @@
 #include "util.h"
 
 
-static PyObject *
-complex_fromccomplex(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+complex_fromccomplex(PyObject *Py_UNUSED(module), PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     Py_complex complex;
 
     if (!PyArg_Parse(obj, "D", &complex)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyComplex_FromCComplex(complex);
+    return PyValue_FromResult(PyComplex_FromCComplex(complex));
 }
 
-static PyObject *
-complex_asccomplex(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+complex_asccomplex(PyObject *Py_UNUSED(module), PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     Py_complex complex;
 
     NULLABLE(obj);
     complex = PyComplex_AsCComplex(obj);
 
     if (complex.real == -1. && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyComplex_FromCComplex(complex);
+    return PyValue_FromResult(PyComplex_FromCComplex(complex));
 }
 
-static PyObject*
-_py_c_neg(PyObject *Py_UNUSED(module), PyObject *num)
+static PyValue
+_py_c_neg(PyObject *Py_UNUSED(module), PyValue num_value)
 {
+    PyObject *num = PyValue_Object(num_value);
+    if (num == NULL) {
+        return PyValue_NULL;
+    }
     Py_complex complex;
 
     complex = PyComplex_AsCComplex(num);
     if (complex.real == -1. && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyComplex_FromCComplex(_Py_c_neg(complex));
+    return PyValue_FromResult(PyComplex_FromCComplex(_Py_c_neg(complex)));
 }
 
 #define _PY_C_FUNC2(suffix)                                      \
@@ -63,9 +75,13 @@ _PY_C_FUNC2(prod)
 _PY_C_FUNC2(quot)
 _PY_C_FUNC2(pow)
 
-static PyObject*
-_py_c_abs(PyObject *Py_UNUSED(module), PyObject* obj)
+static PyValue
+_py_c_abs(PyObject *Py_UNUSED(module), PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     Py_complex complex;
     double res;
 
@@ -73,24 +89,24 @@ _py_c_abs(PyObject *Py_UNUSED(module), PyObject* obj)
     complex = PyComplex_AsCComplex(obj);
 
     if (complex.real == -1. && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     res = _Py_c_abs(complex);
-    return Py_BuildValue("di", res, errno);
+    return PyValue_FromResult(Py_BuildValue("di", res, errno));
 }
 
 
 static PyMethodDef test_methods[] = {
-    {"complex_fromccomplex", complex_fromccomplex, METH_O},
-    {"complex_asccomplex", complex_asccomplex, METH_O},
+    {"complex_fromccomplex", _PyCFunction_CAST(complex_fromccomplex), METH_O},
+    {"complex_asccomplex", _PyCFunction_CAST(complex_asccomplex), METH_O},
     {"_py_c_sum", _py_c_sum, METH_VARARGS},
     {"_py_c_diff", _py_c_diff, METH_VARARGS},
-    {"_py_c_neg", _py_c_neg, METH_O},
+    {"_py_c_neg", _PyCFunction_CAST(_py_c_neg), METH_O},
     {"_py_c_prod", _py_c_prod, METH_VARARGS},
     {"_py_c_quot", _py_c_quot, METH_VARARGS},
     {"_py_c_pow", _py_c_pow, METH_VARARGS},
-    {"_py_c_abs", _py_c_abs, METH_O},
+    {"_py_c_abs", _PyCFunction_CAST(_py_c_abs), METH_O},
     {NULL},
 };
 

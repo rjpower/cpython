@@ -805,82 +805,68 @@ _Py_VectorCallInstrumentation_Values(
     return res;
 }
 
-Py_NO_INLINE PyObject *
+Py_NO_INLINE PyValue
 _Py_BuiltinCallFast_Values(
     PyValue callable,
     PyValue *arguments,
     int total_args)
 {
-    PyObject *res;
-    VALUES_TO_OBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        return NULL;
-    }
     PyObject *callable_o = PyValue_ObjectBorrow(callable);
     PyCFunction cfunc = PyCFunction_GET_FUNCTION(callable_o);
-    res = _PyCFunctionFast_CAST(cfunc)(
+    PyValue res = _PyCFunctionFast_CAST(cfunc)(
         PyCFunction_GET_SELF(callable_o),
-        args_o,
+        arguments,
         total_args
     );
-    VALUES_TO_OBJECTS_CLEANUP(args_o);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
+    assert(PyValue_IsNull(res) ^ (PyErr_Occurred() == NULL));
     return res;
 }
 
-Py_NO_INLINE PyObject *
+Py_NO_INLINE PyValue
 _Py_BuiltinCallFastWithKeywords_Values(
     PyValue callable,
     PyValue *arguments,
     int total_args)
 {
-    PyObject *res;
-    VALUES_TO_OBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        return NULL;
-    }
     PyObject *callable_o = PyValue_ObjectBorrow(callable);
     PyCFunctionFastWithKeywords cfunc =
         _PyCFunctionFastWithKeywords_CAST(PyCFunction_GET_FUNCTION(callable_o));
-    res = cfunc(PyCFunction_GET_SELF(callable_o), args_o, total_args, NULL);
-    VALUES_TO_OBJECTS_CLEANUP(args_o);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
+    PyValue res = cfunc(PyCFunction_GET_SELF(callable_o), arguments,
+                        total_args, NULL);
+    assert(PyValue_IsNull(res) ^ (PyErr_Occurred() == NULL));
     return res;
 }
 
-Py_NO_INLINE PyObject *
+/* self is an object: a method called on an inline value boxes it. */
+Py_NO_INLINE PyValue
 _PyCallMethodDescriptorFast_Values(
     PyValue callable,
     PyCFunctionFast cfunc,
     PyValue *arguments,
     int total_args)
 {
-    PyObject *res;
-    VALUES_TO_OBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        return NULL;
+    PyObject *self = PyValue_Object(arguments[0]);
+    if (self == NULL) {
+        return PyValue_NULL;
     }
-    res = cfunc(args_o[0], (args_o + 1), total_args - 1);
-    VALUES_TO_OBJECTS_CLEANUP(args_o);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
+    PyValue res = cfunc(self, arguments + 1, total_args - 1);
+    assert(PyValue_IsNull(res) ^ (PyErr_Occurred() == NULL));
     return res;
 }
 
-Py_NO_INLINE PyObject *
+Py_NO_INLINE PyValue
 _PyCallMethodDescriptorFastWithKeywords_Values(
     PyValue callable,
     PyCFunctionFastWithKeywords cfunc,
     PyValue *arguments,
     int total_args)
 {
-    PyObject *res;
-    VALUES_TO_OBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        return NULL;
+    PyObject *self = PyValue_Object(arguments[0]);
+    if (self == NULL) {
+        return PyValue_NULL;
     }
-    res = cfunc(args_o[0], (args_o + 1), total_args-1, NULL);
-    VALUES_TO_OBJECTS_CLEANUP(args_o);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
+    PyValue res = cfunc(self, arguments + 1, total_args - 1, NULL);
+    assert(PyValue_IsNull(res) ^ (PyErr_Occurred() == NULL));
     return res;
 }
 

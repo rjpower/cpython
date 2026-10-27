@@ -4678,7 +4678,7 @@ In either case, this is followed by: for k in F:  D[k] = F[k]");
 
 static PyMethodDef mapp_methods[] = {
     DICT___CONTAINS___METHODDEF
-    {"__getitem__",     _PyDict_Subscript,                 METH_O | METH_COEXIST,
+    {"__getitem__",     _PyCFunction_CAST(_PyDict_SubscriptValue), METH_O | METH_COEXIST,
      getitem__doc__},
     DICT___SIZEOF___METHODDEF
     DICT_GET_METHODDEF
@@ -4694,7 +4694,7 @@ static PyMethodDef mapp_methods[] = {
     DICT_CLEAR_METHODDEF
     DICT_COPY_METHODDEF
     DICT___REVERSED___METHODDEF
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
      PyDoc_STR("dicts are generic over two types, signifying (respectively) the types of their keys and values")},
     {NULL,              NULL}   /* sentinel */
 };
@@ -6168,17 +6168,21 @@ static PyNumberMethods dictviews_as_number = {
     dictviews_or,                       /*nb_or*/
 };
 
-static PyObject*
-dictviews_isdisjoint(PyObject *self, PyObject *other)
+static PyValue
+dictviews_isdisjoint(PyObject *self, PyValue other_value)
 {
+    PyObject *other = PyValue_Object(other_value);
+    if (other == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *it;
     PyObject *item = NULL;
 
     if (self == other) {
         if (dictview_len(self) == 0)
-            Py_RETURN_TRUE;
+            return PyValue_FromObject(Py_True);
         else
-            Py_RETURN_FALSE;
+            return PyValue_FromObject(Py_False);
     }
 
     /* Iterate over the shorter object (only if other is a set,
@@ -6187,7 +6191,7 @@ dictviews_isdisjoint(PyObject *self, PyObject *other)
         Py_ssize_t len_self = dictview_len(self);
         Py_ssize_t len_other = PyObject_Size(other);
         if (len_other == -1)
-            return NULL;
+            return PyValue_NULL;
 
         if ((len_other > len_self)) {
             PyObject *tmp = other;
@@ -6198,25 +6202,25 @@ dictviews_isdisjoint(PyObject *self, PyObject *other)
 
     it = PyObject_GetIter(other);
     if (it == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     while ((item = PyIter_Next(it)) != NULL) {
         int contains = PySequence_Contains(self, item);
         Py_DECREF(item);
         if (contains == -1) {
             Py_DECREF(it);
-            return NULL;
+            return PyValue_NULL;
         }
 
         if (contains) {
             Py_DECREF(it);
-            Py_RETURN_FALSE;
+            return PyValue_FromObject(Py_False);
         }
     }
     Py_DECREF(it);
     if (PyErr_Occurred())
-        return NULL; /* PyIter_Next raised an exception. */
-    Py_RETURN_TRUE;
+        return PyValue_NULL; /* PyIter_Next raised an exception. */
+    return PyValue_FromObject(Py_True);
 }
 
 PyDoc_STRVAR(isdisjoint_doc,
@@ -6228,7 +6232,7 @@ PyDoc_STRVAR(reversed_keys_doc,
 "Return a reverse iterator over the dict keys.");
 
 static PyMethodDef dictkeys_methods[] = {
-    {"isdisjoint",      dictviews_isdisjoint,           METH_O,
+    {"isdisjoint",      _PyCFunction_CAST(dictviews_isdisjoint),           METH_O,
      isdisjoint_doc},
     {"__reversed__",    dictkeys_reversed,              METH_NOARGS,
      reversed_keys_doc},
@@ -6340,7 +6344,7 @@ PyDoc_STRVAR(reversed_items_doc,
 "Return a reverse iterator over the dict items.");
 
 static PyMethodDef dictitems_methods[] = {
-    {"isdisjoint",      dictviews_isdisjoint,           METH_O,
+    {"isdisjoint",      _PyCFunction_CAST(dictviews_isdisjoint),           METH_O,
      isdisjoint_doc},
     {"__reversed__",    dictitems_reversed,             METH_NOARGS,
      reversed_items_doc},
@@ -7551,7 +7555,7 @@ static PyMappingMethods frozendict_as_mapping = {
 
 static PyMethodDef frozendict_methods[] = {
     DICT___CONTAINS___METHODDEF
-    {"__getitem__", _PyDict_Subscript, METH_O | METH_COEXIST, getitem__doc__},
+    {"__getitem__", _PyCFunction_CAST(_PyDict_SubscriptValue), METH_O | METH_COEXIST, getitem__doc__},
     DICT___SIZEOF___METHODDEF
     DICT_GET_METHODDEF
     DICT_KEYS_METHODDEF
@@ -7560,7 +7564,7 @@ static PyMethodDef frozendict_methods[] = {
     DICT_FROMKEYS_METHODDEF
     FROZENDICT_COPY_METHODDEF
     DICT___REVERSED___METHODDEF
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
      PyDoc_STR("frozendicts are generic over two types, signifying (respectively) the types of the frozendict's keys and values")},
     {"__getnewargs__", frozendict_getnewargs, METH_NOARGS},
     {NULL,              NULL}   /* sentinel */

@@ -2,59 +2,79 @@
 #include "util.h"
 
 
-static PyObject *
-function_get_code(PyObject *self, PyObject *func)
+static PyValue
+function_get_code(PyObject *self, PyValue func_value)
 {
+    PyObject *func = PyValue_Object(func_value);
+    if (func == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *code = PyFunction_GetCode(func);
     if (code != NULL) {
-        return Py_NewRef(code);
+        return PyValue_FromResult(Py_NewRef(code));
     } else {
-        return NULL;
+        return PyValue_NULL;
     }
 }
 
 
-static PyObject *
-function_get_globals(PyObject *self, PyObject *func)
+static PyValue
+function_get_globals(PyObject *self, PyValue func_value)
 {
+    PyObject *func = PyValue_Object(func_value);
+    if (func == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *globals = PyFunction_GetGlobals(func);
     if (globals != NULL) {
-        return Py_NewRef(globals);
+        return PyValue_FromResult(Py_NewRef(globals));
     } else {
-        return NULL;
+        return PyValue_NULL;
     }
 }
 
 
-static PyObject *
-function_get_module(PyObject *self, PyObject *func)
+static PyValue
+function_get_module(PyObject *self, PyValue func_value)
 {
+    PyObject *func = PyValue_Object(func_value);
+    if (func == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *module = PyFunction_GetModule(func);
     if (module != NULL) {
-        return Py_NewRef(module);
+        return PyValue_FromResult(Py_NewRef(module));
     } else {
-        return NULL;
+        return PyValue_NULL;
     }
 }
 
 
-static PyObject *
-function_get_module_macro(PyObject *self, PyObject *func)
+static PyValue
+function_get_module_macro(PyObject *self, PyValue func_value)
 {
-    return Py_XNewRef(PyFunction_GET_MODULE(func));
+    PyObject *func = PyValue_Object(func_value);
+    if (func == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(Py_XNewRef(PyFunction_GET_MODULE(func)));
 }
 
 
-static PyObject *
-function_get_defaults(PyObject *self, PyObject *func)
+static PyValue
+function_get_defaults(PyObject *self, PyValue func_value)
 {
+    PyObject *func = PyValue_Object(func_value);
+    if (func == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *defaults = PyFunction_GetDefaults(func);
     if (defaults != NULL) {
-        return Py_NewRef(defaults);
+        return PyValue_FromResult(Py_NewRef(defaults));
     } else if (PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     } else {
-        Py_RETURN_NONE;  // This can happen when `defaults` are set to `None`
+        return PyValue_FromObject(Py_None);  // This can happen when `defaults` are set to `None`
     }
 }
 
@@ -73,16 +93,20 @@ function_set_defaults(PyObject *self, PyObject *args)
 }
 
 
-static PyObject *
-function_get_kw_defaults(PyObject *self, PyObject *func)
+static PyValue
+function_get_kw_defaults(PyObject *self, PyValue func_value)
 {
+    PyObject *func = PyValue_Object(func_value);
+    if (func == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *defaults = PyFunction_GetKwDefaults(func);
     if (defaults != NULL) {
-        return Py_NewRef(defaults);
+        return PyValue_FromResult(Py_NewRef(defaults));
     } else if (PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     } else {
-        Py_RETURN_NONE;  // This can happen when `kwdefaults` are set to `None`
+        return PyValue_FromObject(Py_None);  // This can happen when `kwdefaults` are set to `None`
     }
 }
 
@@ -101,16 +125,20 @@ function_set_kw_defaults(PyObject *self, PyObject *args)
 }
 
 
-static PyObject *
-function_get_closure(PyObject *self, PyObject *func)
+static PyValue
+function_get_closure(PyObject *self, PyValue func_value)
 {
+    PyObject *func = PyValue_Object(func_value);
+    if (func == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *closure = PyFunction_GetClosure(func);
     if (closure != NULL) {
-        return Py_NewRef(closure);
+        return PyValue_FromResult(Py_NewRef(closure));
     } else if (PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     } else {
-        Py_RETURN_NONE;  // This can happen when `closure` is set to `None`
+        return PyValue_FromObject(Py_None);  // This can happen when `closure` is set to `None`
     }
 }
 
@@ -130,25 +158,29 @@ function_set_closure(PyObject *self, PyObject *args)
 }
 
 
-static PyObject *
-function_get_annotations(PyObject *self, PyObject *func)
+static PyValue
+function_get_annotations(PyObject *self, PyValue func_value)
 {
-    return Py_XNewRef(PyFunction_GetAnnotations(func));
+    PyObject *func = PyValue_Object(func_value);
+    if (func == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(Py_XNewRef(PyFunction_GetAnnotations(func)));
 }
 
 
 static PyMethodDef test_methods[] = {
-    {"function_get_code", function_get_code, METH_O, NULL},
-    {"function_get_globals", function_get_globals, METH_O, NULL},
-    {"function_get_module", function_get_module, METH_O, NULL},
-    {"function_get_module_macro", function_get_module_macro, METH_O, NULL},
-    {"function_get_defaults", function_get_defaults, METH_O, NULL},
+    {"function_get_code", _PyCFunction_CAST(function_get_code), METH_O, NULL},
+    {"function_get_globals", _PyCFunction_CAST(function_get_globals), METH_O, NULL},
+    {"function_get_module", _PyCFunction_CAST(function_get_module), METH_O, NULL},
+    {"function_get_module_macro", _PyCFunction_CAST(function_get_module_macro), METH_O, NULL},
+    {"function_get_defaults", _PyCFunction_CAST(function_get_defaults), METH_O, NULL},
     {"function_set_defaults", function_set_defaults, METH_VARARGS, NULL},
-    {"function_get_kw_defaults", function_get_kw_defaults, METH_O, NULL},
+    {"function_get_kw_defaults", _PyCFunction_CAST(function_get_kw_defaults), METH_O, NULL},
     {"function_set_kw_defaults", function_set_kw_defaults, METH_VARARGS, NULL},
-    {"function_get_closure", function_get_closure, METH_O, NULL},
+    {"function_get_closure", _PyCFunction_CAST(function_get_closure), METH_O, NULL},
     {"function_set_closure", function_set_closure, METH_VARARGS, NULL},
-    {"function_get_annotations", function_get_annotations, METH_O, NULL},
+    {"function_get_annotations", _PyCFunction_CAST(function_get_annotations), METH_O, NULL},
     {NULL},
 };
 

@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
-#include "pycore_value.h"         // _PyValue_ObjectArray()
 
 PyDoc_STRVAR(tuple_index__doc__,
 "index($self, value, start=0, stop=sys.maxsize, /)\n"
@@ -20,32 +19,49 @@ static PyObject *
 tuple_index_impl(PyTupleObject *self, PyObject *value, Py_ssize_t start,
                  Py_ssize_t stop);
 
-static PyObject *
-tuple_index(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+tuple_index(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *value;
     Py_ssize_t start = 0;
     Py_ssize_t stop = PY_SSIZE_T_MAX;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
-    value = args[0];
+    value = PyValue_Object(args[0]);
+    if (value == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndexNotNone(args[1], &start)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyEval_SliceIndexNotNone(_arg, &start)) {
+            goto exit;
+        }
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndexNotNone(args[2], &stop)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[2]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyEval_SliceIndexNotNone(_arg, &stop)) {
+            goto exit;
+        }
     }
 skip_optional:
-    return_value = tuple_index_impl((PyTupleObject *)self, value, start, stop);
+    _return_value = tuple_index_impl((PyTupleObject *)self, value, start, stop);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -58,18 +74,26 @@ PyDoc_STRVAR(tuple_count__doc__,
 "Return number of occurrences of value.");
 
 #define TUPLE_COUNT_METHODDEF    \
-    {"count", (PyCFunction)tuple_count, METH_O, tuple_count__doc__},
+    {"count", _PyCFunction_CAST(tuple_count), METH_O, tuple_count__doc__},
 
 static PyObject *
 tuple_count_impl(PyTupleObject *self, PyObject *value);
 
-static PyObject *
-tuple_count(PyObject *self, PyObject *value)
+static PyValue
+tuple_count(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *value;
+    PyObject *_return_value;
 
-    return_value = tuple_count_impl((PyTupleObject *)self, value);
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
+    _return_value = tuple_count_impl((PyTupleObject *)self, value);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -104,7 +128,10 @@ tuple_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (PyTuple_GET_SIZE(args) < 1) {
         goto skip_optional;
     }
-    iterable = PyTuple_GET_ITEM(args, 0);
+    iterable = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (iterable == NULL) {
+        goto exit;
+    }
 skip_optional:
     return_value = tuple_new_impl(type, iterable);
 
@@ -112,10 +139,11 @@ exit:
     return return_value;
 }
 
-static PyObject *
-tuple_vectorcall_objects(PyObject *type, PyObject *const *args,
+static PyValue
+tuple_vectorcall(PyValue type_value, const PyValue *args,
     size_t nargsf, PyObject *kwnames)
 {
+    PyObject *type = PyValue_ObjectBorrow(type_value);
     PyObject *return_value = NULL;
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     PyObject *iterable = NULL;
@@ -133,27 +161,15 @@ tuple_vectorcall_objects(PyObject *type, PyObject *const *args,
     if (nargs < 1) {
         goto skip_optional;
     }
-    iterable = args[0];
+    iterable = PyValue_Object(args[0]);
+    if (iterable == NULL) {
+        goto exit;
+    }
 skip_optional:
     return_value = tuple_new_impl(_PyType_CAST(type), iterable);
 
 exit:
-    return return_value;
-}
-
-static PyValue
-tuple_vectorcall(PyValue type, const PyValue *args,
-    size_t nargsf, PyObject *kwnames)
-{
-    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
-    PyObject *const *args_o =
-        (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
-    if (args_o == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(tuple_vectorcall_objects(
-        PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
+    return PyValue_FromResult(return_value);
 }
 
 PyDoc_STRVAR(tuple___getnewargs____doc__,
@@ -172,4 +188,4 @@ tuple___getnewargs__(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return tuple___getnewargs___impl((PyTupleObject *)self);
 }
-/*[clinic end generated code: output=2f7c4290b4bc5dda input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6fee3d891e4c4c81 input=a9049054013a1b77]*/

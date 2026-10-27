@@ -23,14 +23,14 @@ static PyObject *
 _testmultiphase_StateAccessType_get_defining_module_impl(StateAccessTypeObject *self,
                                                          PyTypeObject *cls);
 
-static PyObject *
-_testmultiphase_StateAccessType_get_defining_module(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_testmultiphase_StateAccessType_get_defining_module(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "get_defining_module() takes no arguments");
-        return NULL;
+        return PyValue_NULL;
     }
-    return _testmultiphase_StateAccessType_get_defining_module_impl((StateAccessTypeObject *)self, cls);
+    return PyValue_FromResult(_testmultiphase_StateAccessType_get_defining_module_impl((StateAccessTypeObject *)self, cls));
 }
 
 PyDoc_STRVAR(_testmultiphase_StateAccessType_getmodulebydef_bad_def__doc__,
@@ -46,14 +46,14 @@ static PyObject *
 _testmultiphase_StateAccessType_getmodulebydef_bad_def_impl(StateAccessTypeObject *self,
                                                             PyTypeObject *cls);
 
-static PyObject *
-_testmultiphase_StateAccessType_getmodulebydef_bad_def(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_testmultiphase_StateAccessType_getmodulebydef_bad_def(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "getmodulebydef_bad_def() takes no arguments");
-        return NULL;
+        return PyValue_NULL;
     }
-    return _testmultiphase_StateAccessType_getmodulebydef_bad_def_impl((StateAccessTypeObject *)self, cls);
+    return PyValue_FromResult(_testmultiphase_StateAccessType_getmodulebydef_bad_def_impl((StateAccessTypeObject *)self, cls));
 }
 
 PyDoc_STRVAR(_testmultiphase_StateAccessType_increment_count_clinic__doc__,
@@ -74,10 +74,10 @@ _testmultiphase_StateAccessType_increment_count_clinic_impl(StateAccessTypeObjec
                                                             PyTypeObject *cls,
                                                             int n, int twice);
 
-static PyObject *
-_testmultiphase_StateAccessType_increment_count_clinic(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_testmultiphase_StateAccessType_increment_count_clinic(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -104,10 +104,11 @@ _testmultiphase_StateAccessType_increment_count_clinic(PyObject *self, PyTypeObj
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     int n = 1;
     int twice = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -117,8 +118,8 @@ _testmultiphase_StateAccessType_increment_count_clinic(PyObject *self, PyTypeObj
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        n = PyLong_AsInt(args[0]);
+    if (!PyValue_IsNull(args[0])) {
+        n = PyLong_AsIntValue(args[0]);
         if (n == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -130,12 +131,13 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    twice = PyObject_IsTrue(args[1]);
+    twice = PyObject_IsTrueValue(args[1]);
     if (twice < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    return_value = _testmultiphase_StateAccessType_increment_count_clinic_impl((StateAccessTypeObject *)self, cls, n, twice);
+    _return_value = _testmultiphase_StateAccessType_increment_count_clinic_impl((StateAccessTypeObject *)self, cls, n, twice);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -154,13 +156,13 @@ static PyObject *
 _testmultiphase_StateAccessType_get_count_impl(StateAccessTypeObject *self,
                                                PyTypeObject *cls);
 
-static PyObject *
-_testmultiphase_StateAccessType_get_count(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_testmultiphase_StateAccessType_get_count(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "get_count() takes no arguments");
-        return NULL;
+        return PyValue_NULL;
     }
-    return _testmultiphase_StateAccessType_get_count_impl((StateAccessTypeObject *)self, cls);
+    return PyValue_FromResult(_testmultiphase_StateAccessType_get_count_impl((StateAccessTypeObject *)self, cls));
 }
-/*[clinic end generated code: output=94d1e7af5f3169da input=a9049054013a1b77]*/
+/*[clinic end generated code: output=99c7f586f7184fe8 input=a9049054013a1b77]*/

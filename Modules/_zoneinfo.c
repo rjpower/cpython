@@ -664,26 +664,30 @@ zoneinfo_ZoneInfo_tzname_impl(PyObject *self, PyTypeObject *cls,
 
 #define GET_DT_TZINFO PyDateTime_DATE_GET_TZINFO
 
-static PyObject *
-zoneinfo_fromutc(PyObject *obj_self, PyObject *dt)
+static PyValue
+zoneinfo_fromutc(PyObject *obj_self, PyValue arg)
 {
+    PyObject *dt = PyValue_Object(arg);
+    if (dt == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyDateTime_Check(dt)) {
         PyErr_SetString(PyExc_TypeError,
                         "fromutc: argument must be a datetime");
-        return NULL;
+        return PyValue_NULL;
     }
     if (GET_DT_TZINFO(dt) != obj_self) {
         PyErr_SetString(PyExc_ValueError,
                         "fromutc: dt.tzinfo "
                         "is not self");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyZoneInfo_ZoneInfo *self = PyZoneInfo_ZoneInfo_CAST(obj_self);
 
     int64_t timestamp;
     if (get_local_timestamp(dt, &timestamp)) {
-        return NULL;
+        return PyValue_NULL;
     }
     size_t num_trans = self->num_transitions;
 
@@ -741,7 +745,7 @@ zoneinfo_fromutc(PyObject *obj_self, PyObject *dt)
 
     PyObject *tmp = PyNumber_Add(dt, tti->utcoff);
     if (tmp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (fold) {
@@ -753,18 +757,18 @@ zoneinfo_fromutc(PyObject *obj_self, PyObject *dt)
             PyObject *replace = PyObject_GetAttrString(tmp, "replace");
             Py_DECREF(tmp);
             if (replace == NULL) {
-                return NULL;
+                return PyValue_NULL;
             }
             PyObject *args = PyTuple_New(0);
             if (args == NULL) {
                 Py_DECREF(replace);
-                return NULL;
+                return PyValue_NULL;
             }
             PyObject *kwargs = PyDict_New();
             if (kwargs == NULL) {
                 Py_DECREF(replace);
                 Py_DECREF(args);
-                return NULL;
+                return PyValue_NULL;
             }
 
             dt = NULL;
@@ -777,14 +781,14 @@ zoneinfo_fromutc(PyObject *obj_self, PyObject *dt)
             Py_DECREF(replace);
 
             if (dt == NULL) {
-                return NULL;
+                return PyValue_NULL;
             }
         }
     }
     else {
         dt = tmp;
     }
-    return dt;
+    return PyValue_FromResult(dt);
 }
 
 static PyObject *
@@ -2684,7 +2688,7 @@ static PyMethodDef zoneinfo_methods[] = {
     ZONEINFO_ZONEINFO_UTCOFFSET_METHODDEF
     ZONEINFO_ZONEINFO_DST_METHODDEF
     ZONEINFO_ZONEINFO_TZNAME_METHODDEF
-    {"fromutc", zoneinfo_fromutc, METH_O,
+    {"fromutc", _PyCFunction_CAST(zoneinfo_fromutc), METH_O,
      PyDoc_STR("Given a datetime with local time in UTC, retrieve an adjusted "
                "datetime in local time.")},
     {"__reduce__", zoneinfo_reduce, METH_NOARGS,

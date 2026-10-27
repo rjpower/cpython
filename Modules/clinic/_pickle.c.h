@@ -6,7 +6,7 @@ preserve
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
-#include "pycore_tuple.h"         // _PyTuple_Objects()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 PyDoc_STRVAR(_pickle_Pickler_clear_memo__doc__,
@@ -45,11 +45,12 @@ static PyObject *
 _pickle_Pickler_dump_impl(PicklerObject *self, PyTypeObject *cls,
                           PyObject *obj);
 
-static PyObject *
-_pickle_Pickler_dump(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_Pickler_dump(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *obj;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("dump", kwnames)) {
         goto exit;
@@ -57,8 +58,12 @@ _pickle_Pickler_dump(PyObject *self, PyTypeObject *cls, PyObject *const *args, P
     if (!_PyArg_CheckPositional("dump", nargs, 1, 1)) {
         goto exit;
     }
-    obj = args[0];
-    return_value = _pickle_Pickler_dump_impl((PicklerObject *)self, cls, obj);
+    obj = PyValue_Object(args[0]);
+    if (obj == NULL) {
+        goto exit;
+    }
+    _return_value = _pickle_Pickler_dump_impl((PicklerObject *)self, cls, obj);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -162,37 +167,38 @@ _pickle_Pickler___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    PyObject * const *fastargs;
+    PyValue argsbuf[4];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
-    PyObject *const *argitems;
     PyObject *file;
     PyObject *protocol = Py_None;
     int fix_imports = 1;
     PyObject *buffer_callback = Py_None;
 
-    argitems = _PyTuple_Objects(args);
-    if (argitems == NULL) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    file = fastargs[0];
+    file = PyValue_Object(fastargs[0]);
+    if (file == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (fastargs[1]) {
-        protocol = fastargs[1];
+    if (!PyValue_IsNull(fastargs[1])) {
+        protocol = PyValue_Object(fastargs[1]);
+        if (protocol == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (fastargs[2]) {
-        fix_imports = PyObject_IsTrue(fastargs[2]);
+    if (!PyValue_IsNull(fastargs[2])) {
+        fix_imports = PyObject_IsTrueValue(fastargs[2]);
         if (fix_imports < 0) {
             goto exit;
         }
@@ -200,7 +206,10 @@ _pickle_Pickler___init__(PyObject *self, PyObject *args, PyObject *kwargs)
             goto skip_optional_pos;
         }
     }
-    buffer_callback = fastargs[3];
+    buffer_callback = PyValue_Object(fastargs[3]);
+    if (buffer_callback == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = _pickle_Pickler___init___impl((PicklerObject *)self, file, protocol, fix_imports, buffer_callback);
 
@@ -274,11 +283,12 @@ static PyObject *
 _pickle_Unpickler_persistent_load_impl(UnpicklerObject *self,
                                        PyTypeObject *cls, PyObject *pid);
 
-static PyObject *
-_pickle_Unpickler_persistent_load(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_Unpickler_persistent_load(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *pid;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("persistent_load", kwnames)) {
         goto exit;
@@ -286,8 +296,12 @@ _pickle_Unpickler_persistent_load(PyObject *self, PyTypeObject *cls, PyObject *c
     if (!_PyArg_CheckPositional("persistent_load", nargs, 1, 1)) {
         goto exit;
     }
-    pid = args[0];
-    return_value = _pickle_Unpickler_persistent_load_impl((UnpicklerObject *)self, cls, pid);
+    pid = PyValue_Object(args[0]);
+    if (pid == NULL) {
+        goto exit;
+    }
+    _return_value = _pickle_Unpickler_persistent_load_impl((UnpicklerObject *)self, cls, pid);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -309,14 +323,14 @@ PyDoc_STRVAR(_pickle_Unpickler_load__doc__,
 static PyObject *
 _pickle_Unpickler_load_impl(UnpicklerObject *self, PyTypeObject *cls);
 
-static PyObject *
-_pickle_Unpickler_load(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_Unpickler_load(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "load() takes no arguments");
-        return NULL;
+        return PyValue_NULL;
     }
-    return _pickle_Unpickler_load_impl((UnpicklerObject *)self, cls);
+    return PyValue_FromResult(_pickle_Unpickler_load_impl((UnpicklerObject *)self, cls));
 }
 
 PyDoc_STRVAR(_pickle_Unpickler_find_class__doc__,
@@ -340,12 +354,13 @@ _pickle_Unpickler_find_class_impl(UnpicklerObject *self, PyTypeObject *cls,
                                   PyObject *module_name,
                                   PyObject *global_name);
 
-static PyObject *
-_pickle_Unpickler_find_class(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_Unpickler_find_class(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *module_name;
     PyObject *global_name;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("find_class", kwnames)) {
         goto exit;
@@ -353,9 +368,16 @@ _pickle_Unpickler_find_class(PyObject *self, PyTypeObject *cls, PyObject *const 
     if (!_PyArg_CheckPositional("find_class", nargs, 2, 2)) {
         goto exit;
     }
-    module_name = args[0];
-    global_name = args[1];
-    return_value = _pickle_Unpickler_find_class_impl((UnpicklerObject *)self, cls, module_name, global_name);
+    module_name = PyValue_Object(args[0]);
+    if (module_name == NULL) {
+        goto exit;
+    }
+    global_name = PyValue_Object(args[1]);
+    if (global_name == NULL) {
+        goto exit;
+    }
+    _return_value = _pickle_Unpickler_find_class_impl((UnpicklerObject *)self, cls, module_name, global_name);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -450,32 +472,30 @@ _pickle_Unpickler___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    PyObject * const *fastargs;
+    PyValue argsbuf[5];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
-    PyObject *const *argitems;
     PyObject *file;
     int fix_imports = 1;
     const char *encoding = "ASCII";
     const char *errors = "strict";
     PyObject *buffers = NULL;
 
-    argitems = _PyTuple_Objects(args);
-    if (argitems == NULL) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    file = fastargs[0];
+    file = PyValue_Object(fastargs[0]);
+    if (file == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (fastargs[1]) {
-        fix_imports = PyObject_IsTrue(fastargs[1]);
+    if (!PyValue_IsNull(fastargs[1])) {
+        fix_imports = PyObject_IsTrueValue(fastargs[1]);
         if (fix_imports < 0) {
             goto exit;
         }
@@ -483,33 +503,48 @@ _pickle_Unpickler___init__(PyObject *self, PyObject *args, PyObject *kwargs)
             goto skip_optional_kwonly;
         }
     }
-    if (fastargs[2]) {
-        if (!PyUnicode_Check(fastargs[2])) {
-            _PyArg_BadArgument("Unpickler", "argument 'encoding'", "str", fastargs[2]);
-            goto exit;
-        }
-        encoding = _PyUnicode_AsUTF8NoNUL(fastargs[2]);
-        if (encoding == NULL) {
-            goto exit;
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    if (fastargs[3]) {
-        if (!PyUnicode_Check(fastargs[3])) {
-            _PyArg_BadArgument("Unpickler", "argument 'errors'", "str", fastargs[3]);
-            goto exit;
-        }
-        errors = _PyUnicode_AsUTF8NoNUL(fastargs[3]);
-        if (errors == NULL) {
-            goto exit;
+    if (!PyValue_IsNull(fastargs[2])) {
+        {
+            PyObject *_arg = PyValue_Object(fastargs[2]);
+            if (_arg == NULL) {
+                goto exit;
+            }
+            if (!PyUnicode_Check(_arg)) {
+                _PyArg_BadArgument("Unpickler", "argument 'encoding'", "str", _arg);
+                goto exit;
+            }
+            encoding = _PyUnicode_AsUTF8NoNUL(_arg);
+            if (encoding == NULL) {
+                goto exit;
+            }
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    buffers = fastargs[4];
+    if (!PyValue_IsNull(fastargs[3])) {
+        {
+            PyObject *_arg = PyValue_Object(fastargs[3]);
+            if (_arg == NULL) {
+                goto exit;
+            }
+            if (!PyUnicode_Check(_arg)) {
+                _PyArg_BadArgument("Unpickler", "argument 'errors'", "str", _arg);
+                goto exit;
+            }
+            errors = _PyUnicode_AsUTF8NoNUL(_arg);
+            if (errors == NULL) {
+                goto exit;
+            }
+        }
+        if (!--noptargs) {
+            goto skip_optional_kwonly;
+        }
+    }
+    buffers = PyValue_Object(fastargs[4]);
+    if (buffers == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
     return_value = _pickle_Unpickler___init___impl((UnpicklerObject *)self, file, fix_imports, encoding, errors, buffers);
 
@@ -611,10 +646,10 @@ _pickle_dump_impl(PyObject *module, PyObject *obj, PyObject *file,
                   PyObject *protocol, int fix_imports,
                   PyObject *buffer_callback);
 
-static PyObject *
-_pickle_dump(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_dump(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -641,26 +676,36 @@ _pickle_dump(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
+    PyValue argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *obj;
     PyObject *file;
     PyObject *protocol = Py_None;
     int fix_imports = 1;
     PyObject *buffer_callback = Py_None;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    obj = args[0];
-    file = args[1];
+    obj = PyValue_Object(args[0]);
+    if (obj == NULL) {
+        goto exit;
+    }
+    file = PyValue_Object(args[1]);
+    if (file == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[2]) {
-        protocol = args[2];
+    if (!PyValue_IsNull(args[2])) {
+        protocol = PyValue_Object(args[2]);
+        if (protocol == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -669,8 +714,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[3]) {
-        fix_imports = PyObject_IsTrue(args[3]);
+    if (!PyValue_IsNull(args[3])) {
+        fix_imports = PyObject_IsTrueValue(args[3]);
         if (fix_imports < 0) {
             goto exit;
         }
@@ -678,9 +723,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    buffer_callback = args[4];
+    buffer_callback = PyValue_Object(args[4]);
+    if (buffer_callback == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _pickle_dump_impl(module, obj, file, protocol, fix_imports, buffer_callback);
+    _return_value = _pickle_dump_impl(module, obj, file, protocol, fix_imports, buffer_callback);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -717,10 +766,10 @@ static PyObject *
 _pickle_dumps_impl(PyObject *module, PyObject *obj, PyObject *protocol,
                    int fix_imports, PyObject *buffer_callback);
 
-static PyObject *
-_pickle_dumps(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_dumps(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
@@ -747,24 +796,31 @@ _pickle_dumps(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
+    PyValue argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *obj;
     PyObject *protocol = Py_None;
     int fix_imports = 1;
     PyObject *buffer_callback = Py_None;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    obj = args[0];
+    obj = PyValue_Object(args[0]);
+    if (obj == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
-        protocol = args[1];
+    if (!PyValue_IsNull(args[1])) {
+        protocol = PyValue_Object(args[1]);
+        if (protocol == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -773,8 +829,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[2]) {
-        fix_imports = PyObject_IsTrue(args[2]);
+    if (!PyValue_IsNull(args[2])) {
+        fix_imports = PyObject_IsTrueValue(args[2]);
         if (fix_imports < 0) {
             goto exit;
         }
@@ -782,9 +838,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    buffer_callback = args[3];
+    buffer_callback = PyValue_Object(args[3]);
+    if (buffer_callback == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _pickle_dumps_impl(module, obj, protocol, fix_imports, buffer_callback);
+    _return_value = _pickle_dumps_impl(module, obj, protocol, fix_imports, buffer_callback);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -827,10 +887,10 @@ _pickle_load_impl(PyObject *module, PyObject *file, int fix_imports,
                   const char *encoding, const char *errors,
                   PyObject *buffers);
 
-static PyObject *
-_pickle_load(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_load(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -857,25 +917,29 @@ _pickle_load(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
+    PyValue argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *file;
     int fix_imports = 1;
     const char *encoding = "ASCII";
     const char *errors = "strict";
     PyObject *buffers = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    file = args[0];
+    file = PyValue_Object(args[0]);
+    if (file == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        fix_imports = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        fix_imports = PyObject_IsTrueValue(args[1]);
         if (fix_imports < 0) {
             goto exit;
         }
@@ -883,35 +947,51 @@ _pickle_load(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
             goto skip_optional_kwonly;
         }
     }
-    if (args[2]) {
-        if (!PyUnicode_Check(args[2])) {
-            _PyArg_BadArgument("load", "argument 'encoding'", "str", args[2]);
-            goto exit;
-        }
-        encoding = _PyUnicode_AsUTF8NoNUL(args[2]);
-        if (encoding == NULL) {
-            goto exit;
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    if (args[3]) {
-        if (!PyUnicode_Check(args[3])) {
-            _PyArg_BadArgument("load", "argument 'errors'", "str", args[3]);
-            goto exit;
-        }
-        errors = _PyUnicode_AsUTF8NoNUL(args[3]);
-        if (errors == NULL) {
-            goto exit;
+    if (!PyValue_IsNull(args[2])) {
+        {
+            PyObject *_arg = PyValue_Object(args[2]);
+            if (_arg == NULL) {
+                goto exit;
+            }
+            if (!PyUnicode_Check(_arg)) {
+                _PyArg_BadArgument("load", "argument 'encoding'", "str", _arg);
+                goto exit;
+            }
+            encoding = _PyUnicode_AsUTF8NoNUL(_arg);
+            if (encoding == NULL) {
+                goto exit;
+            }
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    buffers = args[4];
+    if (!PyValue_IsNull(args[3])) {
+        {
+            PyObject *_arg = PyValue_Object(args[3]);
+            if (_arg == NULL) {
+                goto exit;
+            }
+            if (!PyUnicode_Check(_arg)) {
+                _PyArg_BadArgument("load", "argument 'errors'", "str", _arg);
+                goto exit;
+            }
+            errors = _PyUnicode_AsUTF8NoNUL(_arg);
+            if (errors == NULL) {
+                goto exit;
+            }
+        }
+        if (!--noptargs) {
+            goto skip_optional_kwonly;
+        }
+    }
+    buffers = PyValue_Object(args[4]);
+    if (buffers == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _pickle_load_impl(module, file, fix_imports, encoding, errors, buffers);
+    _return_value = _pickle_load_impl(module, file, fix_imports, encoding, errors, buffers);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -945,10 +1025,10 @@ _pickle_loads_impl(PyObject *module, PyObject *data, int fix_imports,
                    const char *encoding, const char *errors,
                    PyObject *buffers);
 
-static PyObject *
-_pickle_loads(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_loads(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
@@ -975,25 +1055,29 @@ _pickle_loads(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
+    PyValue argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *data;
     int fix_imports = 1;
     const char *encoding = "ASCII";
     const char *errors = "strict";
     PyObject *buffers = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    data = args[0];
+    data = PyValue_Object(args[0]);
+    if (data == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        fix_imports = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        fix_imports = PyObject_IsTrueValue(args[1]);
         if (fix_imports < 0) {
             goto exit;
         }
@@ -1001,37 +1085,53 @@ _pickle_loads(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObjec
             goto skip_optional_kwonly;
         }
     }
-    if (args[2]) {
-        if (!PyUnicode_Check(args[2])) {
-            _PyArg_BadArgument("loads", "argument 'encoding'", "str", args[2]);
-            goto exit;
-        }
-        encoding = _PyUnicode_AsUTF8NoNUL(args[2]);
-        if (encoding == NULL) {
-            goto exit;
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    if (args[3]) {
-        if (!PyUnicode_Check(args[3])) {
-            _PyArg_BadArgument("loads", "argument 'errors'", "str", args[3]);
-            goto exit;
-        }
-        errors = _PyUnicode_AsUTF8NoNUL(args[3]);
-        if (errors == NULL) {
-            goto exit;
+    if (!PyValue_IsNull(args[2])) {
+        {
+            PyObject *_arg = PyValue_Object(args[2]);
+            if (_arg == NULL) {
+                goto exit;
+            }
+            if (!PyUnicode_Check(_arg)) {
+                _PyArg_BadArgument("loads", "argument 'encoding'", "str", _arg);
+                goto exit;
+            }
+            encoding = _PyUnicode_AsUTF8NoNUL(_arg);
+            if (encoding == NULL) {
+                goto exit;
+            }
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    buffers = args[4];
+    if (!PyValue_IsNull(args[3])) {
+        {
+            PyObject *_arg = PyValue_Object(args[3]);
+            if (_arg == NULL) {
+                goto exit;
+            }
+            if (!PyUnicode_Check(_arg)) {
+                _PyArg_BadArgument("loads", "argument 'errors'", "str", _arg);
+                goto exit;
+            }
+            errors = _PyUnicode_AsUTF8NoNUL(_arg);
+            if (errors == NULL) {
+                goto exit;
+            }
+        }
+        if (!--noptargs) {
+            goto skip_optional_kwonly;
+        }
+    }
+    buffers = PyValue_Object(args[4]);
+    if (buffers == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _pickle_loads_impl(module, data, fix_imports, encoding, errors, buffers);
+    _return_value = _pickle_loads_impl(module, data, fix_imports, encoding, errors, buffers);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=49bbd75e7a368466 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c0e999de8e081dd4 input=a9049054013a1b77]*/

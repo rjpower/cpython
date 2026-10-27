@@ -1,7 +1,3 @@
-// Need limited C API version 3.13 for Py_mod_gil
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#  define Py_LIMITED_API 0x030d0000
-
 // gh-85283: On Windows, Py_LIMITED_API requires Py_BUILD_CORE to not attempt
 // linking the extension to python3.lib (which fails). Py_BUILD_CORE_MODULE is
 // needed to import Python symbols. Then Python.h undefines Py_BUILD_CORE and
@@ -918,12 +914,23 @@ EXPORT(TestReg) get_last_tfrsuv_arg(void)
     return last_tfrsuv_arg;
 }
 
+/* get_generated_test_data() is generated in the object form. */
+static PyValue
+py_get_generated_test_data(PyObject *self, PyValue arg)
+{
+    PyObject *name = PyValue_Object(arg);
+    if (name == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(get_generated_test_data(self, name));
+}
+
 static PyMethodDef module_methods[] = {
     {"get_last_tf_arg_s", get_last_tf_arg_s, METH_NOARGS},
     {"get_last_tf_arg_u", get_last_tf_arg_u, METH_NOARGS},
     {"func_si", py_func_si, METH_VARARGS},
     {"func", py_func, METH_NOARGS},
-    {"get_generated_test_data", get_generated_test_data, METH_O},
+    {"get_generated_test_data", _PyCFunction_CAST(py_get_generated_test_data), METH_O},
     { NULL, NULL, 0, NULL},
 };
 

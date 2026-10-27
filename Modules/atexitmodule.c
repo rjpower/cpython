@@ -301,22 +301,29 @@ atexit.register\n\
 \n\
     func - function to be unregistered");
 
-static PyObject *
-atexit_unregister(PyObject *module, PyObject *func)
+static PyValue
+atexit_unregister(PyObject *module, PyValue arg)
 {
+    PyObject *func = PyValue_Object(arg);
+    if (func == NULL) {
+        return PyValue_NULL;
+    }
     struct atexit_state *state = get_atexit_state();
     int result;
     Py_BEGIN_CRITICAL_SECTION(state->callbacks);
     result = atexit_unregister_locked(state->callbacks, func);
     Py_END_CRITICAL_SECTION();
-    return result < 0 ? NULL : Py_None;
+    if (result < 0) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObject(Py_None);
 }
 
 
 static PyMethodDef atexit_methods[] = {
     ATEXIT_REGISTER_METHODDEF
     {"_clear", atexit_clear, METH_NOARGS, atexit_clear__doc__},
-    {"unregister", atexit_unregister, METH_O, atexit_unregister__doc__},
+    {"unregister", _PyCFunction_CAST(atexit_unregister), METH_O, atexit_unregister__doc__},
     {"_run_exitfuncs", atexit_run_exitfuncs, METH_NOARGS,
         atexit_run_exitfuncs__doc__},
     {"_ncallbacks", atexit_ncallbacks, METH_NOARGS,

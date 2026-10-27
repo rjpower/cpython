@@ -1,6 +1,3 @@
-// Need limited C API 3.14 to test PyLong_AsInt64()
-#define Py_LIMITED_API 0x030e0000
-
 #include "parts.h"
 #include "util.h"
 #include "clinic/long.c.h"
@@ -535,28 +532,40 @@ _testlimitedcapi_test_long_as_double_impl(PyObject *module)
     return Py_None;
 }
 
-static PyObject *
-pylong_check(PyObject *module, PyObject *obj)
+static PyValue
+pylong_check(PyObject *module, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyLong_Check(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyLong_Check(obj)));
 }
 
-static PyObject *
-pylong_checkexact(PyObject *module, PyObject *obj)
+static PyValue
+pylong_checkexact(PyObject *module, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyLong_CheckExact(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyLong_CheckExact(obj)));
 }
 
-static PyObject *
-pylong_fromdouble(PyObject *module, PyObject *arg)
+static PyValue
+pylong_fromdouble(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     double value;
     if (!PyArg_Parse(arg, "d", &value)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromDouble(value);
+    return PyValue_FromResult(PyLong_FromDouble(value));
 }
 
 static PyObject *
@@ -578,11 +587,15 @@ pylong_fromstring(PyObject *module, PyObject *args)
     return Py_BuildValue("Nn", result, (Py_ssize_t)(end - str));
 }
 
-static PyObject *
-pylong_fromvoidptr(PyObject *module, PyObject *arg)
+static PyValue
+pylong_fromvoidptr(PyObject *module, PyValue value)
 {
+    PyObject *arg = PyValue_Object(value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
-    return PyLong_FromVoidPtr((void *)arg);
+    return PyValue_FromResult(PyLong_FromVoidPtr((void *)arg));
 }
 
 /*[clinic input]
@@ -592,8 +605,8 @@ _testlimitedcapi.PyLong_AsInt
 [clinic start generated code]*/
 
 static PyObject *
-_testlimitedcapi_PyLong_AsInt(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=d91db4c1287f85fa input=32c66be86f3265a1]*/
+_testlimitedcapi_PyLong_AsInt_impl(PyObject *module, PyObject *arg)
+/*[clinic end generated code: output=97d4dfbe5dfffd09 input=32c66be86f3265a1]*/
 {
     NULLABLE(arg);
     assert(!PyErr_Occurred());
@@ -604,204 +617,272 @@ _testlimitedcapi_PyLong_AsInt(PyObject *module, PyObject *arg)
     return PyLong_FromLong(value);
 }
 
-static PyObject *
-pylong_aslong(PyObject *module, PyObject *arg)
+static PyValue
+pylong_aslong(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     long value = PyLong_AsLong(arg);
     if (value == -1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromLong(value);
+    return PyValue_FromResult(PyLong_FromLong(value));
 }
 
-static PyObject *
-pylong_aslongandoverflow(PyObject *module, PyObject *arg)
+static PyValue
+pylong_aslongandoverflow(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     int overflow = UNINITIALIZED_INT;
     long value = PyLong_AsLongAndOverflow(arg, &overflow);
     if (value == -1 && PyErr_Occurred()) {
         assert(overflow == 0);
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_BuildValue("li", value, overflow);
+    return PyValue_FromResult(Py_BuildValue("li", value, overflow));
 }
 
-static PyObject *
-pylong_asunsignedlong(PyObject *module, PyObject *arg)
+static PyValue
+pylong_asunsignedlong(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     unsigned long value = PyLong_AsUnsignedLong(arg);
     if (value == (unsigned long)-1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromUnsignedLong(value);
+    return PyValue_FromResult(PyLong_FromUnsignedLong(value));
 }
 
-static PyObject *
-pylong_asunsignedlongmask(PyObject *module, PyObject *arg)
+static PyValue
+pylong_asunsignedlongmask(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     unsigned long value = PyLong_AsUnsignedLongMask(arg);
     if (value == (unsigned long)-1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromUnsignedLong(value);
+    return PyValue_FromResult(PyLong_FromUnsignedLong(value));
 }
 
-static PyObject *
-pylong_aslonglong(PyObject *module, PyObject *arg)
+static PyValue
+pylong_aslonglong(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     long long value = PyLong_AsLongLong(arg);
     if (value == -1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromLongLong(value);
+    return PyValue_FromResult(PyLong_FromLongLong(value));
 }
 
-static PyObject *
-pylong_aslonglongandoverflow(PyObject *module, PyObject *arg)
+static PyValue
+pylong_aslonglongandoverflow(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     int overflow = UNINITIALIZED_INT;
     long long value = PyLong_AsLongLongAndOverflow(arg, &overflow);
     if (value == -1 && PyErr_Occurred()) {
         assert(overflow == 0);
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_BuildValue("Li", value, overflow);
+    return PyValue_FromResult(Py_BuildValue("Li", value, overflow));
 }
 
-static PyObject *
-pylong_asunsignedlonglong(PyObject *module, PyObject *arg)
+static PyValue
+pylong_asunsignedlonglong(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     unsigned long long value = PyLong_AsUnsignedLongLong(arg);
     if (value == (unsigned long long)-1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromUnsignedLongLong(value);
+    return PyValue_FromResult(PyLong_FromUnsignedLongLong(value));
 }
 
-static PyObject *
-pylong_asunsignedlonglongmask(PyObject *module, PyObject *arg)
+static PyValue
+pylong_asunsignedlonglongmask(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     unsigned long long value = PyLong_AsUnsignedLongLongMask(arg);
     if (value == (unsigned long long)-1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromUnsignedLongLong(value);
+    return PyValue_FromResult(PyLong_FromUnsignedLongLong(value));
 }
 
-static PyObject *
-pylong_as_ssize_t(PyObject *module, PyObject *arg)
+static PyValue
+pylong_as_ssize_t(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     Py_ssize_t value = PyLong_AsSsize_t(arg);
     if (value == -1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromSsize_t(value);
+    return PyValue_FromResult(PyLong_FromSsize_t(value));
 }
 
-static PyObject *
-pylong_as_size_t(PyObject *module, PyObject *arg)
+static PyValue
+pylong_as_size_t(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     size_t value = PyLong_AsSize_t(arg);
     if (value == (size_t)-1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromSize_t(value);
+    return PyValue_FromResult(PyLong_FromSize_t(value));
 }
 
-static PyObject *
-pylong_asdouble(PyObject *module, PyObject *arg)
+static PyValue
+pylong_asdouble(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     double value = PyLong_AsDouble(arg);
     if (value == -1.0 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyFloat_FromDouble(value);
+    return PyValue_FromResult(PyFloat_FromDouble(value));
 }
 
-static PyObject *
-pylong_asvoidptr(PyObject *module, PyObject *arg)
+static PyValue
+pylong_asvoidptr(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     void *value = PyLong_AsVoidPtr(arg);
     if (value == NULL) {
         if (PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return Py_NewRef((PyObject *)value);
+    return PyValue_FromResult(Py_NewRef((PyObject *)value));
 }
 
-static PyObject *
-pylong_aspid(PyObject *module, PyObject *arg)
+static PyValue
+pylong_aspid(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     pid_t value = PyLong_AsPid(arg);
     if (value == -1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromPid(value);
+    return PyValue_FromResult(PyLong_FromPid(value));
 }
 
 
-static PyObject *
-pylong_asint32(PyObject *module, PyObject *arg)
+static PyValue
+pylong_asint32(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     int32_t value = UNINITIALIZED_INT;
     if (PyLong_AsInt32(arg, &value) < 0) {
         assert(value == UNINITIALIZED_INT);
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromInt32(value);
+    return PyValue_FromResult(PyLong_FromInt32(value));
 }
 
-static PyObject *
-pylong_asuint32(PyObject *module, PyObject *arg)
+static PyValue
+pylong_asuint32(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     uint32_t value = UNINITIALIZED_INT;
     if (PyLong_AsUInt32(arg, &value) < 0) {
         assert(value == UNINITIALIZED_INT);
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromUInt32(value);
+    return PyValue_FromResult(PyLong_FromUInt32(value));
 }
 
 
-static PyObject *
-pylong_asint64(PyObject *module, PyObject *arg)
+static PyValue
+pylong_asint64(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     int64_t value = UNINITIALIZED_INT;
     if (PyLong_AsInt64(arg, &value) < 0) {
         assert(value == UNINITIALIZED_INT);
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromInt64(value);
+    return PyValue_FromResult(PyLong_FromInt64(value));
 }
 
-static PyObject *
-pylong_asuint64(PyObject *module, PyObject *arg)
+static PyValue
+pylong_asuint64(PyObject *module, PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     uint64_t value = UNINITIALIZED_INT;
     if (PyLong_AsUInt64(arg, &value) < 0) {
         assert(value == UNINITIALIZED_INT);
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromUInt64(value);
+    return PyValue_FromResult(PyLong_FromUInt64(value));
 }
 
 
@@ -813,29 +894,29 @@ static PyMethodDef test_methods[] = {
     _TESTLIMITEDCAPI_TEST_LONG_AS_UNSIGNED_LONG_LONG_MASK_METHODDEF
     _TESTLIMITEDCAPI_TEST_LONG_LONG_AND_OVERFLOW_METHODDEF
     _TESTLIMITEDCAPI_TEST_LONGLONG_API_METHODDEF
-    {"pylong_check",                pylong_check,               METH_O},
-    {"pylong_checkexact",           pylong_checkexact,          METH_O},
-    {"pylong_fromdouble",           pylong_fromdouble,          METH_O},
+    {"pylong_check",                _PyCFunction_CAST(pylong_check), METH_O},
+    {"pylong_checkexact",           _PyCFunction_CAST(pylong_checkexact), METH_O},
+    {"pylong_fromdouble",           _PyCFunction_CAST(pylong_fromdouble), METH_O},
     {"pylong_fromstring",           pylong_fromstring,          METH_VARARGS},
-    {"pylong_fromvoidptr",          pylong_fromvoidptr,         METH_O},
+    {"pylong_fromvoidptr",          _PyCFunction_CAST(pylong_fromvoidptr), METH_O},
     _TESTLIMITEDCAPI_PYLONG_ASINT_METHODDEF
-    {"pylong_aslong",               pylong_aslong,              METH_O},
-    {"pylong_aslongandoverflow",    pylong_aslongandoverflow,   METH_O},
-    {"pylong_asunsignedlong",       pylong_asunsignedlong,      METH_O},
-    {"pylong_asunsignedlongmask",   pylong_asunsignedlongmask,  METH_O},
-    {"pylong_aslonglong",           pylong_aslonglong,          METH_O},
-    {"pylong_aslonglongandoverflow", pylong_aslonglongandoverflow, METH_O},
-    {"pylong_asunsignedlonglong",   pylong_asunsignedlonglong,  METH_O},
-    {"pylong_asunsignedlonglongmask", pylong_asunsignedlonglongmask, METH_O},
-    {"pylong_as_ssize_t",           pylong_as_ssize_t,          METH_O},
-    {"pylong_as_size_t",            pylong_as_size_t,           METH_O},
-    {"pylong_asdouble",             pylong_asdouble,            METH_O},
-    {"pylong_asvoidptr",            pylong_asvoidptr,           METH_O},
-    {"pylong_aspid",                pylong_aspid,               METH_O},
-    {"pylong_asint32",              pylong_asint32,             METH_O},
-    {"pylong_asuint32",             pylong_asuint32,            METH_O},
-    {"pylong_asint64",              pylong_asint64,             METH_O},
-    {"pylong_asuint64",             pylong_asuint64,            METH_O},
+    {"pylong_aslong",               _PyCFunction_CAST(pylong_aslong), METH_O},
+    {"pylong_aslongandoverflow",    _PyCFunction_CAST(pylong_aslongandoverflow), METH_O},
+    {"pylong_asunsignedlong",       _PyCFunction_CAST(pylong_asunsignedlong), METH_O},
+    {"pylong_asunsignedlongmask",   _PyCFunction_CAST(pylong_asunsignedlongmask), METH_O},
+    {"pylong_aslonglong",           _PyCFunction_CAST(pylong_aslonglong), METH_O},
+    {"pylong_aslonglongandoverflow", _PyCFunction_CAST(pylong_aslonglongandoverflow), METH_O},
+    {"pylong_asunsignedlonglong",   _PyCFunction_CAST(pylong_asunsignedlonglong), METH_O},
+    {"pylong_asunsignedlonglongmask", _PyCFunction_CAST(pylong_asunsignedlonglongmask), METH_O},
+    {"pylong_as_ssize_t",           _PyCFunction_CAST(pylong_as_ssize_t), METH_O},
+    {"pylong_as_size_t",            _PyCFunction_CAST(pylong_as_size_t), METH_O},
+    {"pylong_asdouble",             _PyCFunction_CAST(pylong_asdouble), METH_O},
+    {"pylong_asvoidptr",            _PyCFunction_CAST(pylong_asvoidptr), METH_O},
+    {"pylong_aspid",                _PyCFunction_CAST(pylong_aspid), METH_O},
+    {"pylong_asint32",              _PyCFunction_CAST(pylong_asint32), METH_O},
+    {"pylong_asuint32",             _PyCFunction_CAST(pylong_asuint32), METH_O},
+    {"pylong_asint64",              _PyCFunction_CAST(pylong_asint64), METH_O},
+    {"pylong_asuint64",             _PyCFunction_CAST(pylong_asuint64), METH_O},
     {NULL},
 };
 

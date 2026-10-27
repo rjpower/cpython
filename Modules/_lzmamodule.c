@@ -1425,18 +1425,22 @@ PyDoc_STRVAR(_lzma__encode_filter_properties__doc__,
 "The result does not include the filter ID itself, only the options.");
 
 #define _LZMA__ENCODE_FILTER_PROPERTIES_METHODDEF    \
-    {"_encode_filter_properties", _lzma__encode_filter_properties, METH_O, _lzma__encode_filter_properties__doc__},
+    {"_encode_filter_properties", _PyCFunction_CAST(_lzma__encode_filter_properties), METH_O, _lzma__encode_filter_properties__doc__},
 
 static PyObject *
 _lzma__encode_filter_properties_impl(PyObject *module, lzma_filter filter);
 
-static PyObject *
-_lzma__encode_filter_properties(PyObject *module, PyObject *arg)
+static PyValue
+_lzma__encode_filter_properties(PyObject *module, PyValue arg_v)
 {
     PyObject *return_value = NULL;
     lzma_filter filter = {LZMA_VLI_UNKNOWN, NULL};
     _lzma_state *state = get_lzma_state(module);
     assert(state != NULL);
+    PyObject *arg = PyValue_Object(arg_v);
+    if (arg == NULL) {
+        goto exit;
+    }
     if (!lzma_filter_converter(state, arg, &filter)) {
         goto exit;
     }
@@ -1448,7 +1452,7 @@ exit:
        PyMem_Free(filter.options);
     }
 
-    return return_value;
+    return PyValue_FromResult(return_value);
 }
 
 static PyObject *

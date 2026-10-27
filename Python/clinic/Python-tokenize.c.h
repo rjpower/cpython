@@ -7,7 +7,7 @@ preserve
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-#include "pycore_tuple.h"         // _PyTuple_Objects()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 static PyObject *
@@ -44,39 +44,43 @@ tokenizeriter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
+    PyValue argsbuf[3];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 2;
-    PyObject *const *argitems;
     PyObject *readline;
     int extra_tokens;
     const char *encoding = NULL;
 
-    argitems = _PyTuple_Objects(args);
-    if (argitems == NULL) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 1, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    readline = fastargs[0];
-    extra_tokens = PyObject_IsTrue(fastargs[1]);
+    readline = PyValue_Object(fastargs[0]);
+    if (readline == NULL) {
+        goto exit;
+    }
+    extra_tokens = PyObject_IsTrueValue(fastargs[1]);
     if (extra_tokens < 0) {
         goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyUnicode_Check(fastargs[2])) {
-        _PyArg_BadArgument("tokenizeriter", "argument 'encoding'", "str", fastargs[2]);
-        goto exit;
-    }
-    encoding = _PyUnicode_AsUTF8NoNUL(fastargs[2]);
-    if (encoding == NULL) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(fastargs[2]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("tokenizeriter", "argument 'encoding'", "str", _arg);
+            goto exit;
+        }
+        encoding = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (encoding == NULL) {
+            goto exit;
+        }
     }
 skip_optional_kwonly:
     return_value = tokenizeriter_new_impl(type, readline, extra_tokens, encoding);
@@ -99,4 +103,4 @@ tokenizeriter_next(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=fab3a2f9cff18d3e input=a9049054013a1b77]*/
+/*[clinic end generated code: output=9a63baba675cbde1 input=a9049054013a1b77]*/

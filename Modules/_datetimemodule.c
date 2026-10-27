@@ -4157,22 +4157,22 @@ tzinfo_nogo(const char* methodname)
 
 /* Methods.  A subclass must implement these. */
 
-static PyObject *
-tzinfo_tzname(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(dt))
+static PyValue
+tzinfo_tzname(PyObject *Py_UNUSED(self), PyValue Py_UNUSED(dt))
 {
-    return tzinfo_nogo("tzname");
+    return PyValue_FromResult(tzinfo_nogo("tzname"));
 }
 
-static PyObject *
-tzinfo_utcoffset(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(dt))
+static PyValue
+tzinfo_utcoffset(PyObject *Py_UNUSED(self), PyValue Py_UNUSED(dt))
 {
-    return tzinfo_nogo("utcoffset");
+    return PyValue_FromResult(tzinfo_nogo("utcoffset"));
 }
 
-static PyObject *
-tzinfo_dst(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(dt))
+static PyValue
+tzinfo_dst(PyObject *Py_UNUSED(self), PyValue Py_UNUSED(dt))
 {
-    return tzinfo_nogo("dst");
+    return PyValue_FromResult(tzinfo_nogo("dst"));
 }
 
 
@@ -4182,9 +4182,13 @@ static PyObject *add_datetime_timedelta(PyDateTime_DateTime *date,
 static PyObject *datetime_utcoffset(PyObject *self, PyObject *);
 static PyObject *datetime_dst(PyObject *self, PyObject *);
 
-static PyObject *
-tzinfo_fromutc(PyObject *self, PyObject *dt)
+static PyValue
+tzinfo_fromutc(PyObject *self, PyValue arg)
 {
+    PyObject *dt = PyValue_Object(arg);
+    if (dt == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *result = NULL;
     PyObject *off = NULL, *dst = NULL;
     PyDateTime_Delta *delta = NULL;
@@ -4192,17 +4196,17 @@ tzinfo_fromutc(PyObject *self, PyObject *dt)
     if (!PyDateTime_Check(dt)) {
         PyErr_SetString(PyExc_TypeError,
                         "fromutc: argument must be a datetime");
-        return NULL;
+        return PyValue_NULL;
     }
     if (GET_DT_TZINFO(dt) != self) {
         PyErr_SetString(PyExc_ValueError, "fromutc: dt.tzinfo "
                         "is not self");
-        return NULL;
+        return PyValue_NULL;
     }
 
     off = datetime_utcoffset(dt, NULL);
     if (off == NULL)
-        return NULL;
+        return PyValue_NULL;
     if (off == Py_None) {
         PyErr_SetString(PyExc_ValueError, "fromutc: non-None "
                         "utcoffset() result required");
@@ -4240,7 +4244,7 @@ tzinfo_fromutc(PyObject *self, PyObject *dt)
     Py_DECREF(delta);
     Py_DECREF(dst);
     Py_DECREF(off);
-    return result;
+    return PyValue_FromResult(result);
 
 Inconsistent:
     PyErr_SetString(PyExc_ValueError, "fromutc: tz.dst() gave "
@@ -4252,7 +4256,7 @@ Fail:
     Py_XDECREF(dst);
     Py_XDECREF(delta);
     Py_XDECREF(result);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*
@@ -4291,17 +4295,17 @@ tzinfo_reduce(PyObject *self, PyObject *Py_UNUSED(dummy))
 
 static PyMethodDef tzinfo_methods[] = {
 
-    {"tzname", tzinfo_tzname, METH_O,
+    {"tzname", _PyCFunction_CAST(tzinfo_tzname), METH_O,
      PyDoc_STR("datetime -> string name of time zone.")},
 
-    {"utcoffset", tzinfo_utcoffset, METH_O,
+    {"utcoffset", _PyCFunction_CAST(tzinfo_utcoffset), METH_O,
      PyDoc_STR("datetime -> timedelta showing offset from UTC, negative "
            "values indicating West of UTC")},
 
-    {"dst", tzinfo_dst, METH_O,
+    {"dst", _PyCFunction_CAST(tzinfo_dst), METH_O,
      PyDoc_STR("datetime -> DST offset as timedelta positive east of UTC.")},
 
-    {"fromutc", tzinfo_fromutc, METH_O,
+    {"fromutc", _PyCFunction_CAST(tzinfo_fromutc), METH_O,
      PyDoc_STR("datetime in UTC -> datetime in local time.")},
 
     {"__reduce__",  tzinfo_reduce, METH_NOARGS,
@@ -4492,51 +4496,68 @@ timezone_str(PyObject *op)
     return PyUnicode_FromFormat("UTC%c%02d:%02d", sign, hours, minutes);
 }
 
-static PyObject *
-timezone_tzname(PyObject *op, PyObject *dt)
+static PyValue
+timezone_tzname(PyObject *op, PyValue arg)
 {
+    PyObject *dt = PyValue_Object(arg);
+    if (dt == NULL) {
+        return PyValue_NULL;
+    }
     if (_timezone_check_argument(dt, "tzname") == -1)
-        return NULL;
+        return PyValue_NULL;
 
-    return timezone_str(op);
+    return PyValue_FromResult(timezone_str(op));
 }
 
-static PyObject *
-timezone_utcoffset(PyObject *op, PyObject *dt)
+static PyValue
+timezone_utcoffset(PyObject *op, PyValue arg)
 {
+    PyObject *dt = PyValue_Object(arg);
+    if (dt == NULL) {
+        return PyValue_NULL;
+    }
     if (_timezone_check_argument(dt, "utcoffset") == -1)
-        return NULL;
+        return PyValue_NULL;
 
     PyDateTime_TimeZone *self = PyTimeZone_CAST(op);
-    return Py_NewRef(self->offset);
+    return PyValue_FromResult(Py_NewRef(self->offset));
 }
 
-static PyObject *
-timezone_dst(PyObject *op, PyObject *dt)
+static PyValue
+timezone_dst(PyObject *op, PyValue arg)
 {
+    PyObject *dt = PyValue_Object(arg);
+    if (dt == NULL) {
+        return PyValue_NULL;
+    }
     if (_timezone_check_argument(dt, "dst") == -1)
-        return NULL;
+        return PyValue_NULL;
 
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
-timezone_fromutc(PyObject *op, PyObject *arg)
+static PyValue
+timezone_fromutc(PyObject *op, PyValue arg_v)
 {
+    PyObject *arg = PyValue_Object(arg_v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyDateTime_Check(arg)) {
         PyErr_SetString(PyExc_TypeError,
                         "fromutc: argument must be a datetime");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyDateTime_DateTime *dt = (PyDateTime_DateTime *)arg;  // fast safe cast
     if (!HASTZINFO(dt) || dt->tzinfo != op) {
         PyErr_SetString(PyExc_ValueError, "fromutc: dt.tzinfo is not self");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyDateTime_TimeZone *self = PyTimeZone_CAST(op);
-    return add_datetime_timedelta(dt, (PyDateTime_Delta *)self->offset, 1);
+    return PyValue_FromResult(
+        add_datetime_timedelta(dt, (PyDateTime_Delta *)self->offset, 1));
 }
 
 static PyObject *
@@ -4549,17 +4570,17 @@ timezone_getinitargs(PyObject *op, PyObject *Py_UNUSED(dummy))
 }
 
 static PyMethodDef timezone_methods[] = {
-    {"tzname", timezone_tzname, METH_O,
+    {"tzname", _PyCFunction_CAST(timezone_tzname), METH_O,
      PyDoc_STR("If name is specified when timezone is created, returns the name."
                "  Otherwise returns offset as 'UTC(+|-)HH:MM'.")},
 
-    {"utcoffset", timezone_utcoffset, METH_O,
+    {"utcoffset", _PyCFunction_CAST(timezone_utcoffset), METH_O,
      PyDoc_STR("Return fixed offset.")},
 
-    {"dst", timezone_dst, METH_O,
+    {"dst", _PyCFunction_CAST(timezone_dst), METH_O,
      PyDoc_STR("Return None.")},
 
-    {"fromutc", timezone_fromutc, METH_O,
+    {"fromutc", _PyCFunction_CAST(timezone_fromutc), METH_O,
      PyDoc_STR("datetime in UTC -> datetime in local time.")},
 
     {"__getinitargs__", timezone_getinitargs, METH_NOARGS,

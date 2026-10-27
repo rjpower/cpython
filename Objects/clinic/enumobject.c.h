@@ -6,8 +6,7 @@ preserve
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-#include "pycore_tuple.h"         // _PyTuple_Objects()
-#include "pycore_value.h"         // _PyValue_ObjectArray()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(enum_new__doc__,
 "enumerate(iterable, start=0)\n"
@@ -28,7 +27,7 @@ static PyObject *
 enum_new_impl(PyTypeObject *type, PyObject *iterable, PyObject *start);
 
 static PyObject *
-enum_new_helper(PyTypeObject *type, PyObject *const *args,
+enum_new_helper(PyTypeObject *type, const PyValue *args,
     Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
@@ -58,8 +57,8 @@ enum_new_helper(PyTypeObject *type, PyObject *const *args,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
+    PyValue argsbuf[2];
+    const PyValue *fastargs;
     Py_ssize_t noptargs = nargs + nkw - 1;
     PyObject *iterable;
     PyObject *start = 0;
@@ -69,11 +68,17 @@ enum_new_helper(PyTypeObject *type, PyObject *const *args,
     if (!fastargs) {
         goto exit;
     }
-    iterable = fastargs[0];
+    iterable = PyValue_Object(fastargs[0]);
+    if (iterable == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    start = fastargs[1];
+    start = PyValue_Object(fastargs[1]);
+    if (start == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = enum_new_impl(type, iterable, start);
 
@@ -84,20 +89,17 @@ exit:
 static PyObject *
 enum_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    PyObject *const *argitems = _PyTuple_Objects(args);
-    if (argitems == NULL) {
-        return NULL;
-    }
-    return enum_new_helper(type, argitems,
+    return enum_new_helper(type, _PyTuple_ITEMS(args),
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
         kwargs, NULL);
 }
 
-static PyObject *
-enum_vectorcall_objects(PyObject *type, PyObject *const *args,
+static PyValue
+enum_vectorcall(PyValue type_value, const PyValue *args,
     size_t nargsf, PyObject *kwnames)
 {
+    PyObject *type = PyValue_ObjectBorrow(type_value);
     PyObject *return_value = NULL;
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     PyObject *iterable;
@@ -108,34 +110,27 @@ enum_vectorcall_objects(PyObject *type, PyObject *const *args,
      * vectorcall doesn't deal e.g. with users reassigning __init__. */
     assert(PyType_HasFeature(_PyType_CAST(type), Py_TPFLAGS_IMMUTABLETYPE));
     if (kwnames != NULL || nargs < 1 || nargs > 2) {
-        return enum_new_helper(_PyType_CAST(type), args, nargs,
+        return PyValue_FromResult(enum_new_helper(_PyType_CAST(type),
+            args, nargs,
             kwnames ? PyTuple_GET_SIZE(kwnames) : 0,
-            NULL, kwnames);
+            NULL, kwnames));
     }
-    iterable = args[0];
+    iterable = PyValue_Object(args[0]);
+    if (iterable == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    start = args[1];
+    start = PyValue_Object(args[1]);
+    if (start == NULL) {
+        goto exit;
+    }
 skip_optional:
     return_value = enum_new_impl(_PyType_CAST(type), iterable, start);
 
-    return return_value;
-}
-
-static PyValue
-enum_vectorcall(PyValue type, const PyValue *args,
-    size_t nargsf, PyObject *kwnames)
-{
-    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
-    PyObject *const *args_o =
-        (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
-    if (args_o == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(enum_vectorcall_objects(
-        PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
+exit:
+    return PyValue_FromResult(return_value);
 }
 
 PyDoc_STRVAR(reversed_new__doc__,
@@ -161,17 +156,21 @@ reversed_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("reversed", PyTuple_GET_SIZE(args), 1, 1)) {
         goto exit;
     }
-    seq = PyTuple_GET_ITEM(args, 0);
+    seq = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (seq == NULL) {
+        goto exit;
+    }
     return_value = reversed_new_impl(type, seq);
 
 exit:
     return return_value;
 }
 
-static PyObject *
-reversed_vectorcall_objects(PyObject *type, PyObject *const *args,
+static PyValue
+reversed_vectorcall(PyValue type_value, const PyValue *args,
     size_t nargsf, PyObject *kwnames)
 {
+    PyObject *type = PyValue_ObjectBorrow(type_value);
     PyObject *return_value = NULL;
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     PyObject *seq;
@@ -186,25 +185,13 @@ reversed_vectorcall_objects(PyObject *type, PyObject *const *args,
     if (!_PyArg_CheckPositional("reversed", nargs, 1, 1)) {
         goto exit;
     }
-    seq = args[0];
+    seq = PyValue_Object(args[0]);
+    if (seq == NULL) {
+        goto exit;
+    }
     return_value = reversed_new_impl(_PyType_CAST(type), seq);
 
 exit:
-    return return_value;
+    return PyValue_FromResult(return_value);
 }
-
-static PyValue
-reversed_vectorcall(PyValue type, const PyValue *args,
-    size_t nargsf, PyObject *kwnames)
-{
-    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
-    PyObject *const *args_o =
-        (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
-    if (args_o == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(reversed_vectorcall_objects(
-        PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
-}
-/*[clinic end generated code: output=d870f779aa6d12b0 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=a0e48d9f988cb94a input=a9049054013a1b77]*/

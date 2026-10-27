@@ -64,10 +64,6 @@
           pass
    */
 
-// Need limited C API version 3.13 for Py_mod_gil
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#  define Py_LIMITED_API 0x030d0000
-
 #include "Python.h"
 #include <string.h>
 
@@ -218,32 +214,35 @@ Xxo_setattro(PyObject *op, PyObject *name, PyObject *v)
  * specifies metadata.
  */
 
-static PyObject *
+static PyValue
 Xxo_demo(PyObject *op, PyTypeObject *defining_class,
-         PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+         const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (kwnames != NULL && PyObject_Length(kwnames)) {
         PyErr_SetString(PyExc_TypeError, "demo() takes no keyword arguments");
-        return NULL;
+        return PyValue_NULL;
     }
     if (nargs != 1) {
         PyErr_SetString(PyExc_TypeError, "demo() takes exactly 1 argument");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *o = args[0];
+    PyObject *o = PyValue_Object(args[0]);
+    if (o == NULL) {
+        return PyValue_NULL;
+    }
 
     /* Test if the argument is "str" */
     if (PyUnicode_Check(o)) {
-        return Py_NewRef(o);
+        return PyValue_FromResult(Py_NewRef(o));
     }
 
     /* test if the argument is of the Xxo class */
     if (PyObject_TypeCheck(o, defining_class)) {
-        return Py_NewRef(o);
+        return PyValue_FromResult(Py_NewRef(o));
     }
 
-    return Py_NewRef(Py_None);
+    return PyValue_FromResult(Py_NewRef(Py_None));
 }
 
 static PyMethodDef Xxo_methods[] = {

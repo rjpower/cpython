@@ -3,19 +3,27 @@
 
 
 /* Test PyBytes_Check() */
-static PyObject *
-bytes_check(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+bytes_check(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyBytes_Check(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyBytes_Check(obj)));
 }
 
 /* Test PyBytes_CheckExact() */
-static PyObject *
-bytes_checkexact(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+bytes_checkexact(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyBytes_CheckExact(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyBytes_CheckExact(obj)));
 }
 
 /* Test PyBytes_FromStringAndSize() */
@@ -37,32 +45,44 @@ bytes_fromstringandsize(PyObject *Py_UNUSED(module), PyObject *args)
 }
 
 /* Test PyBytes_FromString() */
-static PyObject *
-bytes_fromstring(PyObject *Py_UNUSED(module), PyObject *arg)
+static PyValue
+bytes_fromstring(PyObject *Py_UNUSED(module), PyValue value)
 {
+    PyObject *arg = PyValue_Object(value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     const char *s;
     Py_ssize_t size;
 
     if (!PyArg_Parse(arg, "z#", &s, &size)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyBytes_FromString(s);
+    return PyValue_FromResult(PyBytes_FromString(s));
 }
 
 /* Test PyBytes_FromObject() */
-static PyObject *
-bytes_fromobject(PyObject *Py_UNUSED(module), PyObject *arg)
+static PyValue
+bytes_fromobject(PyObject *Py_UNUSED(module), PyValue value)
 {
+    PyObject *arg = PyValue_Object(value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
-    return PyBytes_FromObject(arg);
+    return PyValue_FromResult(PyBytes_FromObject(arg));
 }
 
 /* Test PyBytes_Size() */
-static PyObject *
-bytes_size(PyObject *Py_UNUSED(module), PyObject *arg)
+static PyValue
+bytes_size(PyObject *Py_UNUSED(module), PyValue value)
 {
+    PyObject *arg = PyValue_Object(value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
-    RETURN_SIZE(PyBytes_Size(arg));
+    RETURN_SIZE_VALUE(PyBytes_Size(arg));
 }
 
 /* Test PyUnicode_AsString() */
@@ -228,12 +248,12 @@ bytes_decodeescape(PyObject *Py_UNUSED(module), PyObject *args)
 
 
 static PyMethodDef test_methods[] = {
-    {"bytes_check", bytes_check, METH_O},
-    {"bytes_checkexact", bytes_checkexact, METH_O},
+    {"bytes_check", _PyCFunction_CAST(bytes_check), METH_O},
+    {"bytes_checkexact", _PyCFunction_CAST(bytes_checkexact), METH_O},
     {"bytes_fromstringandsize", bytes_fromstringandsize, METH_VARARGS},
-    {"bytes_fromstring", bytes_fromstring, METH_O},
-    {"bytes_fromobject", bytes_fromobject, METH_O},
-    {"bytes_size", bytes_size, METH_O},
+    {"bytes_fromstring", _PyCFunction_CAST(bytes_fromstring), METH_O},
+    {"bytes_fromobject", _PyCFunction_CAST(bytes_fromobject), METH_O},
+    {"bytes_size", _PyCFunction_CAST(bytes_size), METH_O},
     {"bytes_asstring", bytes_asstring, METH_VARARGS},
     {"bytes_asstringandsize", bytes_asstringandsize, METH_VARARGS},
     {"bytes_asstringandsize_null", bytes_asstringandsize_null, METH_VARARGS},

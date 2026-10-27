@@ -112,15 +112,19 @@ override_vectorcall(PyValue callable, const PyValue *args, size_t nargsf,
     return PyValue_FromResult(PyUnicode_FromString("overridden"));
 }
 
-static PyObject *
-function_setvectorcall(PyObject *self, PyObject *func)
+static PyValue
+function_setvectorcall(PyObject *self, PyValue func_value)
 {
+    PyObject *func = PyValue_Object(func_value);
+    if (func == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyFunction_Check(func)) {
         PyErr_SetString(PyExc_TypeError, "'func' must be a function");
-        return NULL;
+        return PyValue_NULL;
     }
     PyFunction_SetVectorcall((PyFunctionObject *)func, override_vectorcall);
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 /*[clinic input]
@@ -266,7 +270,7 @@ _testcapi_has_vectorcall_flag_impl(PyObject *module, PyTypeObject *type)
 static PyMethodDef TestMethods[] = {
     _TESTCAPI_PYOBJECT_FASTCALLDICT_METHODDEF
     _TESTCAPI_PYOBJECT_VECTORCALL_METHODDEF
-    {"function_setvectorcall", function_setvectorcall, METH_O},
+    {"function_setvectorcall", _PyCFunction_CAST(function_setvectorcall), METH_O},
     _TESTCAPI_PYVECTORCALL_CALL_METHODDEF
     _TESTCAPI_MAKE_VECTORCALL_CLASS_METHODDEF
     _TESTCAPI_HAS_VECTORCALL_FLAG_METHODDEF

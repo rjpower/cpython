@@ -6,7 +6,7 @@ preserve
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_BadArgument()
-#include "pycore_tuple.h"         // _PyTuple_Objects()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(complex_conjugate__doc__,
 "conjugate($self, /)\n"
@@ -50,23 +50,31 @@ PyDoc_STRVAR(complex___format____doc__,
 "Convert to a string according to format_spec.");
 
 #define COMPLEX___FORMAT___METHODDEF    \
-    {"__format__", (PyCFunction)complex___format__, METH_O, complex___format____doc__},
+    {"__format__", _PyCFunction_CAST(complex___format__), METH_O, complex___format____doc__},
 
 static PyObject *
 complex___format___impl(PyComplexObject *self, PyObject *format_spec);
 
-static PyObject *
-complex___format__(PyObject *self, PyObject *arg)
+static PyValue
+complex___format__(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *format_spec;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("__format__", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("__format__", "argument", "str", _arg);
+            goto exit;
+        }
+        format_spec = _arg;
     }
-    format_spec = arg;
-    return_value = complex___format___impl((PyComplexObject *)self, format_spec);
+    _return_value = complex___format___impl((PyComplexObject *)self, format_spec);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -134,19 +142,14 @@ complex_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
+    PyValue argsbuf[2];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *const *argitems;
     PyObject *r = NULL;
     PyObject *i = NULL;
 
-    argitems = _PyTuple_Objects(args);
-    if (argitems == NULL) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -154,13 +157,19 @@ complex_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (fastargs[0]) {
-        r = fastargs[0];
+    if (!PyValue_IsNull(fastargs[0])) {
+        r = PyValue_Object(fastargs[0]);
+        if (r == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    i = fastargs[1];
+    i = PyValue_Object(fastargs[1]);
+    if (i == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = complex_new_impl(type, r, i);
 
@@ -175,18 +184,26 @@ PyDoc_STRVAR(complex_from_number__doc__,
 "Convert number to a complex floating-point number.");
 
 #define COMPLEX_FROM_NUMBER_METHODDEF    \
-    {"from_number", (PyCFunction)complex_from_number, METH_O|METH_CLASS, complex_from_number__doc__},
+    {"from_number", _PyCFunction_CAST(complex_from_number), METH_O|METH_CLASS, complex_from_number__doc__},
 
 static PyObject *
 complex_from_number_impl(PyTypeObject *type, PyObject *number);
 
-static PyObject *
-complex_from_number(PyObject *type, PyObject *number)
+static PyValue
+complex_from_number(PyObject *type, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *number;
+    PyObject *_return_value;
 
-    return_value = complex_from_number_impl((PyTypeObject *)type, number);
+    number = PyValue_Object(arg);
+    if (number == NULL) {
+        goto exit;
+    }
+    _return_value = complex_from_number_impl((PyTypeObject *)type, number);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
-/*[clinic end generated code: output=4b0a0fa060e272af input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0ab233a4d2821103 input=a9049054013a1b77]*/

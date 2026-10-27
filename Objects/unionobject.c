@@ -502,22 +502,30 @@ _Py_union_from_tuple(PyObject *args)
     return make_union(&ub);
 }
 
-static PyObject *
-union_class_getitem(PyObject *cls, PyObject *args)
+static PyValue
+union_class_getitem(PyObject *cls, PyValue args_value)
 {
-    return _Py_union_from_tuple(args);
+    PyObject *args = PyValue_Object(args_value);
+    if (args == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(_Py_union_from_tuple(args));
 }
 
-static PyObject *
-union_mro_entries(PyObject *self, PyObject *args)
+static PyValue
+union_mro_entries(PyObject *self, PyValue args_value)
 {
-    return PyErr_Format(PyExc_TypeError,
-                        "Cannot subclass %R", self);
+    PyObject *args = PyValue_Object(args_value);
+    if (args == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(PyErr_Format(PyExc_TypeError,
+                        "Cannot subclass %R", self));
 }
 
 static PyMethodDef union_methods[] = {
-    {"__mro_entries__", union_mro_entries, METH_O},
-    {"__class_getitem__", union_class_getitem, METH_O|METH_CLASS,
+    {"__mro_entries__", _PyCFunction_CAST(union_mro_entries), METH_O},
+    {"__class_getitem__", _PyCFunction_CAST(union_class_getitem), METH_O|METH_CLASS,
      PyDoc_STR("Create a union containing the given types")},
     {0}
 };

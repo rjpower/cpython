@@ -84,8 +84,8 @@ static PyMemberDef encoder_members[] = {
 
 static PyObject *
 ascii_escape_unicode(PyObject *pystr);
-static PyObject *
-py_encode_basestring_ascii(PyObject* Py_UNUSED(self), PyObject *pystr);
+static PyValue
+py_encode_basestring_ascii(PyObject *module, PyValue arg);
 
 static PyObject *
 scan_once_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ssize_t idx, Py_ssize_t *next_idx_ptr);
@@ -1346,10 +1346,10 @@ encoder_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     if (PyCFunction_Check(s->encoder)) {
         PyCFunction f = PyCFunction_GetFunction(s->encoder);
-        if (f == py_encode_basestring_ascii) {
+        if (f == _PyCFunction_CAST(py_encode_basestring_ascii)) {
             s->fast_encode = write_escaped_ascii;
         }
-        else if (f == py_encode_basestring) {
+        else if (f == _PyCFunction_CAST(py_encode_basestring)) {
             s->fast_encode = write_escaped_unicode;
         }
     }

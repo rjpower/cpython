@@ -243,9 +243,11 @@ class HANDLE_return_converter(CReturnConverter):
         self.declare(data)
         self.err_occurred_if("_return_value == INVALID_HANDLE_VALUE", data)
         data.return_conversion.append(
-            'if (_return_value == NULL) {\n    Py_RETURN_NONE;\n}\n')
-        data.return_conversion.append(
-            'return_value = HANDLE_TO_PYNUM(_return_value);\n')
+            'if (_return_value == NULL) {\n    '
+            + self.result_assignment('Py_None', data)
+            + '    goto exit;\n}\n')
+        data.return_conversion.append(self.result_assignment(
+            'HANDLE_TO_PYNUM(_return_value)', data))
 
 class DWORD_return_converter(CReturnConverter):
     type = 'DWORD'
@@ -253,8 +255,8 @@ class DWORD_return_converter(CReturnConverter):
     def render(self, function, data):
         self.declare(data)
         self.err_occurred_if("_return_value == PY_DWORD_MAX", data)
-        data.return_conversion.append(
-            'return_value = PyLong_FromUnsignedLong(_return_value);\n')
+        data.return_conversion.append(self.result_assignment(
+            'PyLong_FromUnsignedLong(_return_value)', data))
 
 class LPVOID_return_converter(CReturnConverter):
     type = 'LPVOID'
@@ -262,10 +264,10 @@ class LPVOID_return_converter(CReturnConverter):
     def render(self, function, data):
         self.declare(data)
         self.err_occurred_if("_return_value == NULL", data)
-        data.return_conversion.append(
-            'return_value = HANDLE_TO_PYNUM(_return_value);\n')
+        data.return_conversion.append(self.result_assignment(
+            'HANDLE_TO_PYNUM(_return_value)', data))
 [python start generated code]*/
-/*[python end generated code: output=da39a3ee5e6b4b0d input=59b6c67bbb5411d5]*/
+/*[python end generated code: output=da39a3ee5e6b4b0d input=96678e4599453cc8]*/
 
 #include "clinic/_winapi.c.h"
 
@@ -895,11 +897,16 @@ gethandle(PyObject* obj, const char* name)
     return ret;
 }
 
-static PyObject *
-sortenvironmentkey(PyObject *module, PyObject *item)
+static PyValue
+sortenvironmentkey(PyObject *module, PyValue arg)
 {
-    return _winapi_LCMapStringEx_impl(NULL, LOCALE_NAME_INVARIANT,
-                                      LCMAP_UPPERCASE, item);
+    PyObject *item = PyValue_Object(arg);
+    if (item == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(
+        _winapi_LCMapStringEx_impl(NULL, LOCALE_NAME_INVARIANT,
+                                   LCMAP_UPPERCASE, item));
 }
 
 static PyMethodDef sortenvironmentkey_def = {

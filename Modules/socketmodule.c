@@ -5994,8 +5994,8 @@ Set the hostname to name.
 [clinic start generated code]*/
 
 static PyObject *
-_socket_sethostname(PyObject *module, PyObject *hnobj)
-/*[clinic end generated code: output=0b789350cbbc4553 input=89c1a7022cb1082a]*/
+_socket_sethostname_impl(PyObject *module, PyObject *hnobj)
+/*[clinic end generated code: output=6f071e07a4789dea input=89c1a7022cb1082a]*/
 {
     Py_buffer buf;
     int res, flag = 0;
@@ -6057,8 +6057,8 @@ The address is a string of the form '255.255.255.255'.
 [clinic start generated code]*/
 
 static PyObject *
-_socket_gethostbyname(PyObject *module, PyObject *hobj)
-/*[clinic end generated code: output=19f571343780c48b input=3c0d3b92e44a1795]*/
+_socket_gethostbyname_impl(PyObject *module, PyObject *hobj)
+/*[clinic end generated code: output=cb4fd60e8c231ee0 input=3c0d3b92e44a1795]*/
 {
     struct sockaddr_in addrbuf;
     char *name;
@@ -6258,8 +6258,8 @@ addresses, which are strings of the form '255.255.255.255'.
 [clinic start generated code]*/
 
 static PyObject *
-_socket_gethostbyname_ex(PyObject *module, PyObject *hobj)
-/*[clinic end generated code: output=a1ea4607d257756e input=1ee9eb485339c58b]*/
+_socket_gethostbyname_ex_impl(PyObject *module, PyObject *hobj)
+/*[clinic end generated code: output=6fd64c19228dfbf3 input=1ee9eb485339c58b]*/
 {
     char *name;
     int h_error;
@@ -6348,8 +6348,8 @@ number.
 [clinic start generated code]*/
 
 static PyObject *
-_socket_gethostbyaddr(PyObject *module, PyObject *hobj)
-/*[clinic end generated code: output=4ba6c4d7a3085ab5 input=c602ba97bf0d395b]*/
+_socket_gethostbyaddr_impl(PyObject *module, PyObject *hobj)
+/*[clinic end generated code: output=42d17b060da09b5b input=c602ba97bf0d395b]*/
 {
     char *ip_num;
     sock_addr_t addr;
@@ -6575,8 +6575,8 @@ won't work for socket file descriptors.
 [clinic start generated code]*/
 
 static PyObject *
-_socket_close(PyObject *module, PyObject *fdobj)
-/*[clinic end generated code: output=1d62092e6fc365dc input=b9fc18380117ee4b]*/
+_socket_close_impl(PyObject *module, PyObject *fdobj)
+/*[clinic end generated code: output=916ba5b8be87d91f input=b9fc18380117ee4b]*/
 {
     SOCKET_T fd;
     int res;
@@ -6613,8 +6613,8 @@ descriptors.
 [clinic start generated code]*/
 
 static PyObject *
-_socket_dup(PyObject *module, PyObject *fdobj)
-/*[clinic end generated code: output=7e9c4485cf5a76c0 input=d1d74c320feb3d04]*/
+_socket_dup_impl(PyObject *module, PyObject *fdobj)
+/*[clinic end generated code: output=be8befb3358ac5ed input=d1d74c320feb3d04]*/
 {
     SOCKET_T fd, newfd;
     PyObject *newfdobj;
@@ -7319,8 +7319,8 @@ When the socket module is first imported, the default is None.
 [clinic start generated code]*/
 
 static PyObject *
-_socket_setdefaulttimeout(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=b5d59296163d66bf input=929785d885173684]*/
+_socket_setdefaulttimeout_impl(PyObject *module, PyObject *arg)
+/*[clinic end generated code: output=7bac93360049e5fb input=929785d885173684]*/
 {
     PyTime_t timeout;
 

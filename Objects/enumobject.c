@@ -189,7 +189,7 @@ PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
 
 static PyMethodDef enum_methods[] = {
     {"__reduce__", enum_reduce, METH_NOARGS, reduce_doc},
-    {"__class_getitem__",    Py_GenericAlias,
+    {"__class_getitem__",    _PyCFunction_CAST(Py_GenericAliasValue),
     METH_O|METH_CLASS,       PyDoc_STR("'enumerate' objects are generic over the type of their values")},
     {NULL,              NULL}           /* sentinel */
 };
@@ -375,13 +375,17 @@ reversed_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
     }
 }
 
-static PyObject *
-reversed_setstate(PyObject *op, PyObject *state)
+static PyValue
+reversed_setstate(PyObject *op, PyValue state_value)
 {
+    PyObject *state = PyValue_Object(state_value);
+    if (state == NULL) {
+        return PyValue_NULL;
+    }
     reversedobject *ro = _reversedobject_CAST(op);
     Py_ssize_t index = PyLong_AsSsize_t(state);
     if (index == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     Py_ssize_t ro_index = FT_ATOMIC_LOAD_SSIZE_RELAXED(ro->index);
     // if the iterator is exhausted we do not set the state
     // this is for backwards compatibility reasons. in practice this situation
@@ -389,14 +393,14 @@ reversed_setstate(PyObject *op, PyObject *state)
     if (ro_index != -1) {
         Py_ssize_t n = PySequence_Size(ro->seq);
         if (n < 0)
-            return NULL;
+            return PyValue_NULL;
         if (index < -1)
             index = -1;
         else if (index > n-1)
             index = n-1;
         FT_ATOMIC_STORE_SSIZE_RELAXED(ro->index, index);
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
@@ -404,7 +408,7 @@ PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
 static PyMethodDef reversediter_methods[] = {
     {"__length_hint__", reversed_len, METH_NOARGS, length_hint_doc},
     {"__reduce__", reversed_reduce, METH_NOARGS, reduce_doc},
-    {"__setstate__", reversed_setstate, METH_O, setstate_doc},
+    {"__setstate__", _PyCFunction_CAST(reversed_setstate), METH_O, setstate_doc},
     {NULL,              NULL}           /* sentinel */
 };
 

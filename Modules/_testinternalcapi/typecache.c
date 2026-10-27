@@ -66,22 +66,26 @@ type_cache_lookup(PyObject *Py_UNUSED(self), PyObject *args)
                          (unsigned long)r.version_tag);
 }
 
-static PyObject *
-type_cache_invalidate(PyObject *Py_UNUSED(self), PyObject *type_obj)
+static PyValue
+type_cache_invalidate(PyObject *Py_UNUSED(self), PyValue arg)
 {
+    PyObject *type_obj = PyValue_Object(arg);
+    if (type_obj == NULL) {
+        return PyValue_NULL;
+    }
     if (require_type(type_obj) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     Py_BEGIN_CRITICAL_SECTION_MUTEX(&_PyInterpreterState_GET()->types.mutex);
     _PyTypeCache_Invalidate((PyTypeObject *)type_obj);
     Py_END_CRITICAL_SECTION();
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 
 static PyMethodDef test_methods[] = {
     {"type_cache_lookup", type_cache_lookup, METH_VARARGS},
-    {"type_cache_invalidate", type_cache_invalidate, METH_O},
+    {"type_cache_invalidate", _PyCFunction_CAST(type_cache_invalidate), METH_O},
     {NULL},
 };
 

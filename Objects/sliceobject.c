@@ -568,9 +568,13 @@ _PySlice_GetLongIndices(PySliceObject *self, PyObject *length,
 
 /* Implementation of slice.indices. */
 
-static PyObject*
-slice_indices(PyObject *op, PyObject* len)
+static PyValue
+slice_indices(PyObject *op, PyValue len_value)
 {
+    PyObject *len = PyValue_Object(len_value);
+    if (len == NULL) {
+        return PyValue_NULL;
+    }
     PySliceObject *self = _PySlice_CAST(op);
     PyObject *start, *stop, *step;
     PyObject *length;
@@ -579,21 +583,21 @@ slice_indices(PyObject *op, PyObject* len)
     /* Convert length to an integer if necessary; raise for negative length. */
     length = PyNumber_Index(len);
     if (length == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (_PyLong_IsNegative((PyLongObject *)length)) {
         PyErr_SetString(PyExc_ValueError,
                         "length should not be negative");
         Py_DECREF(length);
-        return NULL;
+        return PyValue_NULL;
     }
 
     error = _PySlice_GetLongIndices(self, length, &start, &stop, &step);
     Py_DECREF(length);
     if (error == -1)
-        return NULL;
+        return PyValue_NULL;
     else
-        return Py_BuildValue("(NNN)", start, stop, step);
+        return PyValue_FromResult(Py_BuildValue("(NNN)", start, stop, step));
 }
 
 PyDoc_STRVAR(slice_indices_doc,
@@ -617,9 +621,9 @@ slice_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
 
 static PyMethodDef slice_methods[] = {
-    {"indices", slice_indices, METH_O, slice_indices_doc},
+    {"indices", _PyCFunction_CAST(slice_indices), METH_O, slice_indices_doc},
     {"__reduce__", slice_reduce, METH_NOARGS, reduce_doc},
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
      "slices are generic over the types of their start, end, and step values"},
     {NULL, NULL}
 };

@@ -3,19 +3,27 @@
 
 
 /* Test PyByteArray_Check() */
-static PyObject *
-bytearray_check(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+bytearray_check(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyByteArray_Check(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyByteArray_Check(obj)));
 }
 
 /* Test PyByteArray_CheckExact() */
-static PyObject *
-bytearray_checkexact(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+bytearray_checkexact(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyByteArray_CheckExact(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyByteArray_CheckExact(obj)));
 }
 
 /* Test PyByteArray_FromStringAndSize() */
@@ -37,19 +45,27 @@ bytearray_fromstringandsize(PyObject *Py_UNUSED(module), PyObject *args)
 }
 
 /* Test PyByteArray_FromObject() */
-static PyObject *
-bytearray_fromobject(PyObject *Py_UNUSED(module), PyObject *arg)
+static PyValue
+bytearray_fromobject(PyObject *Py_UNUSED(module), PyValue value)
 {
+    PyObject *arg = PyValue_Object(value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
-    return PyByteArray_FromObject(arg);
+    return PyValue_FromResult(PyByteArray_FromObject(arg));
 }
 
 /* Test PyByteArray_Size() */
-static PyObject *
-bytearray_size(PyObject *Py_UNUSED(module), PyObject *arg)
+static PyValue
+bytearray_size(PyObject *Py_UNUSED(module), PyValue value)
 {
+    PyObject *arg = PyValue_Object(value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
-    RETURN_SIZE(PyByteArray_Size(arg));
+    RETURN_SIZE_VALUE(PyByteArray_Size(arg));
 }
 
 /* Test PyUnicode_AsString() */
@@ -101,11 +117,11 @@ bytearray_resize(PyObject *Py_UNUSED(module), PyObject *args)
 
 
 static PyMethodDef test_methods[] = {
-    {"bytearray_check", bytearray_check, METH_O},
-    {"bytearray_checkexact", bytearray_checkexact, METH_O},
+    {"bytearray_check", _PyCFunction_CAST(bytearray_check), METH_O},
+    {"bytearray_checkexact", _PyCFunction_CAST(bytearray_checkexact), METH_O},
     {"bytearray_fromstringandsize", bytearray_fromstringandsize, METH_VARARGS},
-    {"bytearray_fromobject", bytearray_fromobject, METH_O},
-    {"bytearray_size", bytearray_size, METH_O},
+    {"bytearray_fromobject", _PyCFunction_CAST(bytearray_fromobject), METH_O},
+    {"bytearray_size", _PyCFunction_CAST(bytearray_size), METH_O},
     {"bytearray_asstring", bytearray_asstring, METH_VARARGS},
     {"bytearray_concat", bytearray_concat, METH_VARARGS},
     {"bytearray_resize", bytearray_resize, METH_VARARGS},

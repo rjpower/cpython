@@ -3589,12 +3589,16 @@ striter_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 
 PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
 
-static PyObject *
-striter_setstate(PyObject *op, PyObject *state)
+static PyValue
+striter_setstate(PyObject *op, PyValue state_value)
 {
+    PyObject *state = PyValue_Object(state_value);
+    if (state == NULL) {
+        return PyValue_NULL;
+    }
     Py_ssize_t index = PyLong_AsSsize_t(state);
     if (index == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     striterobject *it = _striterobject_CAST(op);
     if (it->it_seq != NULL) {
         if (index < 0)
@@ -3603,7 +3607,7 @@ striter_setstate(PyObject *op, PyObject *state)
             index = PyBytes_GET_SIZE(it->it_seq); /* iterator exhausted */
         it->it_index = index;
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
@@ -3611,7 +3615,7 @@ PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
 static PyMethodDef striter_methods[] = {
     {"__length_hint__", striter_len, METH_NOARGS, length_hint_doc},
     {"__reduce__",      striter_reduce, METH_NOARGS, reduce_doc},
-    {"__setstate__",    striter_setstate, METH_O, setstate_doc},
+    {"__setstate__",    _PyCFunction_CAST(striter_setstate), METH_O, setstate_doc},
     {NULL,              NULL}           /* sentinel */
 };
 

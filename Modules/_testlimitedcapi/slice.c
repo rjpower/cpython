@@ -1,16 +1,16 @@
-// Need limited C API 3.6.1 for PySlice_Unpack() and PySlice_AdjustIndices()
-   // and for PySlice_GetIndicesEx() implemented as a macro.
-#define Py_LIMITED_API 0x03060100
-
 #include "parts.h"
 #include "util.h"
 
 
-static PyObject *
-slice_check(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+slice_check(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PySlice_Check(obj));
+    return PyValue_FromResult(PyLong_FromLong(PySlice_Check(obj)));
 }
 
 static PyObject *
@@ -113,9 +113,13 @@ slice_getindicesex_seq_macro(PyObject *Py_UNUSED(module), PyObject *args)
     return Py_BuildValue("nnnn", start, stop, step, slicelength);
 }
 
-static PyObject *
-slice_unpack(PyObject *Py_UNUSED(module), PyObject *slice)
+static PyValue
+slice_unpack(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *slice = PyValue_Object(arg);
+    if (slice == NULL) {
+        return PyValue_NULL;
+    }
     Py_ssize_t start = UNINITIALIZED_SIZE;
     Py_ssize_t stop = UNINITIALIZED_SIZE;
     Py_ssize_t step = UNINITIALIZED_SIZE;
@@ -123,13 +127,13 @@ slice_unpack(PyObject *Py_UNUSED(module), PyObject *slice)
     NULLABLE(slice);
     if (PySlice_Unpack(slice, &start, &stop, &step) < 0) {
         assert(PyErr_Occurred());
-        return NULL;
+        return PyValue_NULL;
     }
     assert(!PyErr_Occurred());
     assert(start != UNINITIALIZED_SIZE);
     assert(stop != UNINITIALIZED_SIZE);
     assert(step != UNINITIALIZED_SIZE);
-    return Py_BuildValue("nnn", start, stop, step);
+    return PyValue_FromResult(Py_BuildValue("nnn", start, stop, step));
 }
 
 static PyObject *
@@ -214,7 +218,7 @@ _Py_COMP_DIAG_POP
 
 
 static PyMethodDef test_methods[] = {
-    {"slice_check", slice_check, METH_O},
+    {"slice_check", _PyCFunction_CAST(slice_check), METH_O},
     {"slice_new", slice_new, METH_VARARGS},
     {"slice_getindices", slice_getindices, METH_VARARGS},
     {"slice_getindicesex_macro", slice_getindicesex_macro, METH_VARARGS},
@@ -223,7 +227,7 @@ static PyMethodDef test_methods[] = {
      METH_VARARGS},
     {"slice_getindicesex_seq_func", slice_getindicesex_seq_func,
      METH_VARARGS},
-    {"slice_unpack", slice_unpack, METH_O},
+    {"slice_unpack", _PyCFunction_CAST(slice_unpack), METH_O},
     {"slice_adjustindices", slice_adjustindices, METH_VARARGS},
     {NULL},
 };

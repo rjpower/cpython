@@ -2781,11 +2781,15 @@ hamt_get_impl(PyHamtObject *self, PyObject *key, PyObject *def)
     }
 }
 
-static PyObject *
-hamt_py_delete(PyObject *op, PyObject *key)
+static PyValue
+hamt_py_delete(PyObject *op, PyValue key_value)
 {
+    PyObject *key = PyValue_Object(key_value);
+    if (key == NULL) {
+        return PyValue_NULL;
+    }
     PyHamtObject *self = _PyHamtObject_CAST(op);
-    return (PyObject *)_PyHamt_Without(self, key);
+    return PyValue_FromResult((PyObject *)_PyHamt_Without(self, key));
 }
 
 static PyObject *
@@ -2822,7 +2826,7 @@ hamt_py_dump(PyObject *op, PyObject *Py_UNUSED(args))
 static PyMethodDef PyHamt_methods[] = {
     HAMT_SET_METHODDEF
     HAMT_GET_METHODDEF
-    {"delete", hamt_py_delete, METH_O, NULL},
+    {"delete", _PyCFunction_CAST(hamt_py_delete), METH_O, NULL},
     {"items", hamt_py_items, METH_NOARGS, NULL},
     {"keys", hamt_py_keys, METH_NOARGS, NULL},
     {"values", hamt_py_values, METH_NOARGS, NULL},

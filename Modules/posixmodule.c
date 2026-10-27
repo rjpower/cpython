@@ -1108,6 +1108,18 @@ _PyLong_FromDev(dev_t dev)
     return PyLong_FromUnsignedLongLong((unsigned long long)dev);
 }
 
+/* _PyLong_FromDev() for a parser which returns a value. */
+static PyValue
+_PyValue_FromDev(dev_t dev)
+{
+#ifdef NODEV
+    if (dev == NODEV) {
+        return PyValue_FromLongLong((long long)dev);
+    }
+#endif
+    return PyValue_FromUnsignedLongLong((unsigned long long)dev);
+}
+
 
 #if (defined(HAVE_MKNOD) && defined(HAVE_MAKEDEV)) || defined(HAVE_DEVICE_MACROS)
 static int
@@ -1712,16 +1724,6 @@ idtype_t_converter(PyObject *arg, void *addr)
     return 1;
 }
 #endif
-
-static PyObject *
-PyLong_FromPy_off_t(Py_off_t offset)
-{
-#ifdef HAVE_LARGEFILE_SUPPORT
-    return PyLong_FromLongLong(offset);
-#else
-    return PyLong_FromLong(offset);
-#endif
-}
 
 #ifdef HAVE_SIGSET_T
 /* Convert an iterable of integers to a sigset.
@@ -3219,6 +3221,8 @@ class dev_t_return_converter(unsigned_long_return_converter):
     type = 'dev_t'
     conversion_fn = '_PyLong_FromDev'
     unsigned_cast = '(dev_t)'
+    value_conversion_fn = '_PyValue_FromDev'
+    value_cast = ''
 
 class idtype_t_converter(CConverter):
     type = 'idtype_t'
@@ -3250,7 +3254,9 @@ class intptr_t_converter(CConverter):
 
 class Py_off_t_return_converter(long_return_converter):
     type = 'Py_off_t'
-    conversion_fn = 'PyLong_FromPy_off_t'
+    conversion_fn = 'PyLong_FromLongLong'
+    cast = '(long long)'
+    value_conversion_fn = 'PyValue_FromLongLong'
 
 class confname_converter(CConverter):
     type="int"
@@ -3267,7 +3273,7 @@ class confname_converter(CConverter):
         """, argname=argname, converter=self.converter, table=self.table)
 
 [python start generated code]*/
-/*[python end generated code: output=da39a3ee5e6b4b0d input=7ceccf55bb600f61]*/
+/*[python end generated code: output=da39a3ee5e6b4b0d input=f63794bafc91b2b6]*/
 
 /*[clinic input]
 
@@ -10495,8 +10501,8 @@ Set the groups of the current process to list.
 [clinic start generated code]*/
 
 static PyObject *
-os_setgroups(PyObject *module, PyObject *groups)
-/*[clinic end generated code: output=3fcb32aad58c5ecd input=fa742ca3daf85a7e]*/
+os_setgroups_impl(PyObject *module, PyObject *groups)
+/*[clinic end generated code: output=4d4c65fcc8539606 input=fa742ca3daf85a7e]*/
 {
     if (!PySequence_Check(groups)) {
         PyErr_SetString(PyExc_TypeError, "setgroups argument must be a sequence");
@@ -16826,7 +16832,7 @@ static PyMethodDef DirEntry_methods[] = {
     OS_DIRENTRY_STAT_METHODDEF
     OS_DIRENTRY_INODE_METHODDEF
     OS_DIRENTRY___FSPATH___METHODDEF
-    {"__class_getitem__",       Py_GenericAlias,
+    {"__class_getitem__",       _PyCFunction_CAST(Py_GenericAliasValue),
     METH_O|METH_CLASS,          PyDoc_STR("DirEntry is generic over the type of the path (str or bytes)")},
     {NULL}
 };
@@ -17345,9 +17351,9 @@ Close the scandir iterator.
 [clinic start generated code]*/
 
 static PyObject *
-os_ScandirIterator___exit___impl(PyObject *self, PyObject * const *exc_info,
+os_ScandirIterator___exit___impl(PyObject *self, const PyValue *exc_info,
                                  Py_ssize_t exc_info_length)
-/*[clinic end generated code: output=5d3941725a7c97c7 input=ff3ffe83ae605a36]*/
+/*[clinic end generated code: output=e564994c7b8fad1d input=ff3ffe83ae605a36]*/
 {
     ScandirIterator_closedir(ScandirIterator_CAST(self));
     Py_RETURN_NONE;

@@ -420,6 +420,17 @@ gen_send(PyObject *op, PyObject *arg)
     return result;
 }
 
+/* gen_send() as a METH_O method. */
+static PyValue
+gen_send_method(PyObject *op, PyValue arg)
+{
+    PyObject *arg_o = PyValue_Object(arg);
+    if (arg_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(gen_send(op, arg_o));
+}
+
 PyDoc_STRVAR(close_doc,
 "close() -> raise GeneratorExit inside generator.");
 
@@ -732,8 +743,8 @@ throw_here:
 }
 
 
-static PyObject *
-gen_throw(PyObject *op, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+gen_throw(PyObject *op, const PyValue *args, Py_ssize_t nargs)
 {
     PyGenObject *gen = _PyGen_CAST(op);
     PyObject *typ;
@@ -741,25 +752,37 @@ gen_throw(PyObject *op, PyObject *const *args, Py_ssize_t nargs)
     PyObject *val = NULL;
 
     if (!_PyArg_CheckPositional("throw", nargs, 1, 3)) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (nargs > 1) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
                             "the (type, exc, tb) signature of throw() is deprecated, "
                             "use the single-arg signature instead.",
                             1) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    typ = args[0];
+    typ = PyValue_Object(args[0]);
+    if (typ == NULL) {
+        return PyValue_NULL;
+    }
     if (nargs == 3) {
-        val = args[1];
-        tb = args[2];
+        val = PyValue_Object(args[1]);
+        if (val == NULL) {
+            return PyValue_NULL;
+        }
+        tb = PyValue_Object(args[2]);
+        if (tb == NULL) {
+            return PyValue_NULL;
+        }
     }
     else if (nargs == 2) {
-        val = args[1];
+        val = PyValue_Object(args[1]);
+        if (val == NULL) {
+            return PyValue_NULL;
+        }
     }
-    return _gen_throw(gen, 1, typ, val, tb);
+    return PyValue_FromResult(_gen_throw(gen, 1, typ, val, tb));
 }
 
 
@@ -1022,11 +1045,11 @@ PyDoc_STRVAR(sizeof__doc__,
 "gen.__sizeof__() -> size of gen in memory, in bytes");
 
 static PyMethodDef gen_methods[] = {
-    {"send", gen_send, METH_O, send_doc},
+    {"send", _PyCFunction_CAST(gen_send_method), METH_O, send_doc},
     {"throw", _PyCFunction_CAST(gen_throw), METH_FASTCALL, throw_doc},
     {"close", gen_close, METH_NOARGS, close_doc},
     {"__sizeof__", gen_sizeof, METH_NOARGS, sizeof__doc__},
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
      PyDoc_STR("generators are generic over the types of their yield, send, and return values")},
     {NULL, NULL}        /* Sentinel */
 };
@@ -1375,11 +1398,11 @@ PyDoc_STRVAR(coro_close_doc,
 "close() -> raise GeneratorExit inside coroutine.");
 
 static PyMethodDef coro_methods[] = {
-    {"send", gen_send, METH_O, coro_send_doc},
+    {"send", _PyCFunction_CAST(gen_send_method), METH_O, coro_send_doc},
     {"throw",_PyCFunction_CAST(gen_throw), METH_FASTCALL, coro_throw_doc},
     {"close", gen_close, METH_NOARGS, coro_close_doc},
     {"__sizeof__", gen_sizeof, METH_NOARGS, sizeof__doc__},
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
      PyDoc_STR("coroutines are generic over the types of their yield, send, and return values")},
     {NULL, NULL}        /* Sentinel */
 };
@@ -1460,15 +1483,19 @@ coro_wrapper_iternext(PyObject *self)
     return gen_iternext((PyObject *)cw->cw_coroutine);
 }
 
-static PyObject *
-coro_wrapper_send(PyObject *self, PyObject *arg)
+static PyValue
+coro_wrapper_send(PyObject *self, PyValue arg_value)
 {
+    PyObject *arg = PyValue_Object(arg_value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     PyCoroWrapper *cw = _PyCoroWrapper_CAST(self);
-    return gen_send((PyObject *)cw->cw_coroutine, arg);
+    return PyValue_FromResult(gen_send((PyObject *)cw->cw_coroutine, arg));
 }
 
-static PyObject *
-coro_wrapper_throw(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+coro_wrapper_throw(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
     PyCoroWrapper *cw = _PyCoroWrapper_CAST(self);
     return gen_throw((PyObject*)cw->cw_coroutine, args, nargs);
@@ -1490,7 +1517,7 @@ coro_wrapper_traverse(PyObject *self, visitproc visit, void *arg)
 }
 
 static PyMethodDef coro_wrapper_methods[] = {
-    {"send", coro_wrapper_send, METH_O, coro_send_doc},
+    {"send", _PyCFunction_CAST(coro_wrapper_send), METH_O, coro_send_doc},
     {"throw", _PyCFunction_CAST(coro_wrapper_throw), METH_FASTCALL,
      coro_throw_doc},
     {"close", coro_wrapper_close, METH_NOARGS, coro_close_doc},
@@ -1736,14 +1763,18 @@ async_gen_anext(PyObject *self)
 }
 
 
-static PyObject *
-async_gen_asend(PyObject *op, PyObject *arg)
+static PyValue
+async_gen_asend(PyObject *op, PyValue arg_value)
 {
+    PyObject *arg = PyValue_Object(arg_value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     PyAsyncGenObject *o = (PyAsyncGenObject*)op;
     if (async_gen_init_hooks(o)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return async_gen_asend_new(o, arg);
+    return PyValue_FromResult(async_gen_asend_new(o, arg));
 }
 
 
@@ -1843,11 +1874,11 @@ the (type, val, tb) signature is deprecated, \n\
 and may be removed in a future version of Python.");
 
 static PyMethodDef async_gen_methods[] = {
-    {"asend", async_gen_asend, METH_O, async_asend_doc},
+    {"asend", _PyCFunction_CAST(async_gen_asend), METH_O, async_asend_doc},
     {"athrow", async_gen_athrow, METH_VARARGS, async_athrow_doc},
     {"aclose", async_gen_aclose, METH_NOARGS, async_aclose_doc},
     {"__sizeof__", gen_sizeof, METH_NOARGS, sizeof__doc__},
-    {"__class_getitem__",    Py_GenericAlias,
+    {"__class_getitem__",    _PyCFunction_CAST(Py_GenericAliasValue),
     METH_O|METH_CLASS,       PyDoc_STR("async generators are generic over the types of their yield and send values")},
     {NULL, NULL}        /* Sentinel */
 };
@@ -2073,6 +2104,17 @@ async_gen_asend_send(PyObject *self, PyObject *arg)
     return result;
 }
 
+/* async_gen_asend_send() as a METH_O method. */
+static PyValue
+async_gen_asend_send_method(PyObject *self, PyValue arg)
+{
+    PyObject *arg_o = PyValue_Object(arg);
+    if (arg_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(async_gen_asend_send(self, arg_o));
+}
+
 
 static PyObject *
 async_gen_asend_iternext(PyObject *ags)
@@ -2081,8 +2123,8 @@ async_gen_asend_iternext(PyObject *ags)
 }
 
 
-static PyObject *
-async_gen_asend_throw(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+async_gen_asend_throw(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
     PyAsyncGenASend *o = _PyAsyncGenASend_CAST(self);
 
@@ -2092,7 +2134,7 @@ async_gen_asend_throw(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
             PyErr_SetString(
                 PyExc_RuntimeError,
                 "cannot reuse already awaited __anext__()/asend()");
-            return NULL;
+            return PyValue_NULL;
         }
         if (state == AWAITABLE_STATE_ITER) {
             goto do_throw;
@@ -2109,12 +2151,12 @@ async_gen_asend_throw(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         PyErr_SetString(
             PyExc_RuntimeError,
             "anext(): asynchronous generator is already running");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *result;
 do_throw:
-    result = gen_throw((PyObject*)o->ags_gen, args, nargs);
+    result = PyValue_Object(gen_throw((PyObject*)o->ags_gen, args, nargs));
     result = async_gen_unwrap_value(o->ags_gen, result);
 
     if (result == NULL) {
@@ -2122,7 +2164,7 @@ do_throw:
         FT_ATOMIC_STORE_INT8_RELEASE(o->ags_gen->ag_running_async, 0);
     }
 
-    return result;
+    return PyValue_FromResult(result);
 }
 
 
@@ -2134,7 +2176,8 @@ async_gen_asend_close(PyObject *self, PyObject *args)
         Py_RETURN_NONE;
     }
 
-    PyObject *result = async_gen_asend_throw(self, &PyExc_GeneratorExit, 1);
+    PyValue exc = PyValue_FromObject(PyExc_GeneratorExit);
+    PyObject *result = PyValue_Object(async_gen_asend_throw(self, &exc, 1));
     if (result == NULL) {
         if (PyErr_ExceptionMatches(PyExc_StopIteration) ||
             PyErr_ExceptionMatches(PyExc_StopAsyncIteration) ||
@@ -2162,7 +2205,7 @@ async_gen_asend_finalize(PyObject *self)
 }
 
 static PyMethodDef async_gen_asend_methods[] = {
-    {"send", async_gen_asend_send, METH_O, send_doc},
+    {"send", _PyCFunction_CAST(async_gen_asend_send_method), METH_O, send_doc},
     {"throw", _PyCFunction_CAST(async_gen_asend_throw), METH_FASTCALL, throw_doc},
     {"close", async_gen_asend_close, METH_NOARGS, close_doc},
     {NULL, NULL}        /* Sentinel */
@@ -2496,9 +2539,20 @@ check_error:
     return NULL;
 }
 
+/* async_gen_athrow_send() as a METH_O method. */
+static PyValue
+async_gen_athrow_send_method(PyObject *self, PyValue arg)
+{
+    PyObject *arg_o = PyValue_Object(arg);
+    if (arg_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(async_gen_athrow_send(self, arg_o));
+}
 
-static PyObject *
-async_gen_athrow_throw(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+
+static PyValue
+async_gen_athrow_throw(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
     PyAsyncGenAThrow *o = _PyAsyncGenAThrow_CAST(self);
 
@@ -2508,7 +2562,7 @@ async_gen_athrow_throw(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
             PyErr_SetString(
                 PyExc_RuntimeError,
                 "cannot reuse already awaited aclose()/athrow()");
-            return NULL;
+            return PyValue_NULL;
         }
         if (state == AWAITABLE_STATE_ITER) {
             goto do_throw;
@@ -2532,19 +2586,19 @@ async_gen_athrow_throw(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
                 PyExc_RuntimeError,
                 "athrow(): asynchronous generator is already running");
         }
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *retval;
 do_throw:
-    retval = gen_throw((PyObject*)o->agt_gen, args, nargs);
+    retval = PyValue_Object(gen_throw((PyObject*)o->agt_gen, args, nargs));
     if (o->agt_typ) {
         retval = async_gen_unwrap_value(o->agt_gen, retval);
         if (retval == NULL) {
             FT_ATOMIC_STORE_INT8_RELAXED(o->agt_state, AWAITABLE_STATE_CLOSED);
             FT_ATOMIC_STORE_INT8_RELEASE(o->agt_gen->ag_running_async, 0);
         }
-        return retval;
+        return PyValue_FromResult(retval);
     }
     else {
         /* aclose() mode */
@@ -2553,7 +2607,7 @@ do_throw:
             FT_ATOMIC_STORE_INT8_RELEASE(o->agt_gen->ag_running_async, 0);
             Py_DECREF(retval);
             PyErr_SetString(PyExc_RuntimeError, ASYNC_GEN_IGNORED_EXIT_MSG);
-            return NULL;
+            return PyValue_NULL;
         }
         if (retval == NULL) {
             FT_ATOMIC_STORE_INT8_RELAXED(o->agt_state, AWAITABLE_STATE_CLOSED);
@@ -2570,7 +2624,7 @@ do_throw:
             PyErr_Clear();
             PyErr_SetNone(PyExc_StopIteration);
         }
-        return retval;
+        return PyValue_FromResult(retval);
     }
 }
 
@@ -2589,8 +2643,9 @@ async_gen_athrow_close(PyObject *self, PyObject *args)
     if (FT_ATOMIC_LOAD_INT8_RELAXED(agt->agt_state) == AWAITABLE_STATE_CLOSED) {
         Py_RETURN_NONE;
     }
-    PyObject *result = async_gen_athrow_throw((PyObject*)agt,
-                                              &PyExc_GeneratorExit, 1);
+    PyValue exc = PyValue_FromObject(PyExc_GeneratorExit);
+    PyObject *result = PyValue_Object(async_gen_athrow_throw((PyObject*)agt,
+                                                             &exc, 1));
     if (result == NULL) {
         if (PyErr_ExceptionMatches(PyExc_StopIteration) ||
             PyErr_ExceptionMatches(PyExc_StopAsyncIteration) ||
@@ -2619,7 +2674,7 @@ async_gen_athrow_finalize(PyObject *op)
 }
 
 static PyMethodDef async_gen_athrow_methods[] = {
-    {"send", async_gen_athrow_send, METH_O, send_doc},
+    {"send", _PyCFunction_CAST(async_gen_athrow_send_method), METH_O, send_doc},
     {"throw", _PyCFunction_CAST(async_gen_athrow_throw),
     METH_FASTCALL, throw_doc},
     {"close", async_gen_athrow_close, METH_NOARGS, close_doc},

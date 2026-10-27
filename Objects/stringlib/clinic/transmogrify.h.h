@@ -5,7 +5,6 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
 PyDoc_STRVAR(stringlib_expandtabs__doc__,
@@ -22,10 +21,10 @@ PyDoc_STRVAR(stringlib_expandtabs__doc__,
 static PyObject *
 stringlib_expandtabs_impl(PyObject *self, int tabsize);
 
-static PyObject *
-stringlib_expandtabs(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+stringlib_expandtabs(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -52,9 +51,10 @@ stringlib_expandtabs(PyObject *self, PyObject *const *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     int tabsize = 8;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -64,12 +64,13 @@ stringlib_expandtabs(PyObject *self, PyObject *const *args, Py_ssize_t nargs, Py
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    tabsize = PyLong_AsInt(args[0]);
+    tabsize = PyLong_AsIntValue(args[0]);
     if (tabsize == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_pos:
-    return_value = stringlib_expandtabs_impl(self, tabsize);
+    _return_value = stringlib_expandtabs_impl(self, tabsize);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -89,22 +90,22 @@ PyDoc_STRVAR(stringlib_ljust__doc__,
 static PyObject *
 stringlib_ljust_impl(PyObject *self, Py_ssize_t width, char fillchar);
 
-static PyObject *
-stringlib_ljust(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+stringlib_ljust(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t width;
     char fillchar = ' ';
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("ljust", nargs, 1, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -114,32 +115,39 @@ stringlib_ljust(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (PyBytes_Check(args[1])) {
-        if (PyBytes_GET_SIZE(args[1]) != 1) {
-            PyErr_Format(PyExc_TypeError,
-                "ljust(): argument 2 must be a byte string of length 1, "
-                "not a bytes object of length %zd",
-                PyBytes_GET_SIZE(args[1]));
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
             goto exit;
         }
-        fillchar = PyBytes_AS_STRING(args[1])[0];
-    }
-    else if (PyByteArray_Check(args[1])) {
-        if (PyByteArray_GET_SIZE(args[1]) != 1) {
-            PyErr_Format(PyExc_TypeError,
-                "ljust(): argument 2 must be a byte string of length 1, "
-                "not a bytearray object of length %zd",
-                PyByteArray_GET_SIZE(args[1]));
+        if (PyBytes_Check(_arg)) {
+            if (PyBytes_GET_SIZE(_arg) != 1) {
+                PyErr_Format(PyExc_TypeError,
+                    "ljust(): argument 2 must be a byte string of length 1, "
+                    "not a bytes object of length %zd",
+                    PyBytes_GET_SIZE(_arg));
+                goto exit;
+            }
+            fillchar = PyBytes_AS_STRING(_arg)[0];
+        }
+        else if (PyByteArray_Check(_arg)) {
+            if (PyByteArray_GET_SIZE(_arg) != 1) {
+                PyErr_Format(PyExc_TypeError,
+                    "ljust(): argument 2 must be a byte string of length 1, "
+                    "not a bytearray object of length %zd",
+                    PyByteArray_GET_SIZE(_arg));
+                goto exit;
+            }
+            fillchar = PyByteArray_AS_STRING(_arg)[0];
+        }
+        else {
+            _PyArg_BadArgument("ljust", "argument 2", "a byte string of length 1", _arg);
             goto exit;
         }
-        fillchar = PyByteArray_AS_STRING(args[1])[0];
-    }
-    else {
-        _PyArg_BadArgument("ljust", "argument 2", "a byte string of length 1", args[1]);
-        goto exit;
     }
 skip_optional:
-    return_value = stringlib_ljust_impl(self, width, fillchar);
+    _return_value = stringlib_ljust_impl(self, width, fillchar);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -159,22 +167,22 @@ PyDoc_STRVAR(stringlib_rjust__doc__,
 static PyObject *
 stringlib_rjust_impl(PyObject *self, Py_ssize_t width, char fillchar);
 
-static PyObject *
-stringlib_rjust(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+stringlib_rjust(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t width;
     char fillchar = ' ';
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("rjust", nargs, 1, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -184,32 +192,39 @@ stringlib_rjust(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (PyBytes_Check(args[1])) {
-        if (PyBytes_GET_SIZE(args[1]) != 1) {
-            PyErr_Format(PyExc_TypeError,
-                "rjust(): argument 2 must be a byte string of length 1, "
-                "not a bytes object of length %zd",
-                PyBytes_GET_SIZE(args[1]));
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
             goto exit;
         }
-        fillchar = PyBytes_AS_STRING(args[1])[0];
-    }
-    else if (PyByteArray_Check(args[1])) {
-        if (PyByteArray_GET_SIZE(args[1]) != 1) {
-            PyErr_Format(PyExc_TypeError,
-                "rjust(): argument 2 must be a byte string of length 1, "
-                "not a bytearray object of length %zd",
-                PyByteArray_GET_SIZE(args[1]));
+        if (PyBytes_Check(_arg)) {
+            if (PyBytes_GET_SIZE(_arg) != 1) {
+                PyErr_Format(PyExc_TypeError,
+                    "rjust(): argument 2 must be a byte string of length 1, "
+                    "not a bytes object of length %zd",
+                    PyBytes_GET_SIZE(_arg));
+                goto exit;
+            }
+            fillchar = PyBytes_AS_STRING(_arg)[0];
+        }
+        else if (PyByteArray_Check(_arg)) {
+            if (PyByteArray_GET_SIZE(_arg) != 1) {
+                PyErr_Format(PyExc_TypeError,
+                    "rjust(): argument 2 must be a byte string of length 1, "
+                    "not a bytearray object of length %zd",
+                    PyByteArray_GET_SIZE(_arg));
+                goto exit;
+            }
+            fillchar = PyByteArray_AS_STRING(_arg)[0];
+        }
+        else {
+            _PyArg_BadArgument("rjust", "argument 2", "a byte string of length 1", _arg);
             goto exit;
         }
-        fillchar = PyByteArray_AS_STRING(args[1])[0];
-    }
-    else {
-        _PyArg_BadArgument("rjust", "argument 2", "a byte string of length 1", args[1]);
-        goto exit;
     }
 skip_optional:
-    return_value = stringlib_rjust_impl(self, width, fillchar);
+    _return_value = stringlib_rjust_impl(self, width, fillchar);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -229,22 +244,22 @@ PyDoc_STRVAR(stringlib_center__doc__,
 static PyObject *
 stringlib_center_impl(PyObject *self, Py_ssize_t width, char fillchar);
 
-static PyObject *
-stringlib_center(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+stringlib_center(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t width;
     char fillchar = ' ';
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("center", nargs, 1, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -254,32 +269,39 @@ stringlib_center(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (PyBytes_Check(args[1])) {
-        if (PyBytes_GET_SIZE(args[1]) != 1) {
-            PyErr_Format(PyExc_TypeError,
-                "center(): argument 2 must be a byte string of length 1, "
-                "not a bytes object of length %zd",
-                PyBytes_GET_SIZE(args[1]));
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
             goto exit;
         }
-        fillchar = PyBytes_AS_STRING(args[1])[0];
-    }
-    else if (PyByteArray_Check(args[1])) {
-        if (PyByteArray_GET_SIZE(args[1]) != 1) {
-            PyErr_Format(PyExc_TypeError,
-                "center(): argument 2 must be a byte string of length 1, "
-                "not a bytearray object of length %zd",
-                PyByteArray_GET_SIZE(args[1]));
+        if (PyBytes_Check(_arg)) {
+            if (PyBytes_GET_SIZE(_arg) != 1) {
+                PyErr_Format(PyExc_TypeError,
+                    "center(): argument 2 must be a byte string of length 1, "
+                    "not a bytes object of length %zd",
+                    PyBytes_GET_SIZE(_arg));
+                goto exit;
+            }
+            fillchar = PyBytes_AS_STRING(_arg)[0];
+        }
+        else if (PyByteArray_Check(_arg)) {
+            if (PyByteArray_GET_SIZE(_arg) != 1) {
+                PyErr_Format(PyExc_TypeError,
+                    "center(): argument 2 must be a byte string of length 1, "
+                    "not a bytearray object of length %zd",
+                    PyByteArray_GET_SIZE(_arg));
+                goto exit;
+            }
+            fillchar = PyByteArray_AS_STRING(_arg)[0];
+        }
+        else {
+            _PyArg_BadArgument("center", "argument 2", "a byte string of length 1", _arg);
             goto exit;
         }
-        fillchar = PyByteArray_AS_STRING(args[1])[0];
-    }
-    else {
-        _PyArg_BadArgument("center", "argument 2", "a byte string of length 1", args[1]);
-        goto exit;
     }
 skip_optional:
-    return_value = stringlib_center_impl(self, width, fillchar);
+    _return_value = stringlib_center_impl(self, width, fillchar);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -294,32 +316,33 @@ PyDoc_STRVAR(stringlib_zfill__doc__,
 "The original string is never truncated.");
 
 #define STRINGLIB_ZFILL_METHODDEF    \
-    {"zfill", (PyCFunction)stringlib_zfill, METH_O, stringlib_zfill__doc__},
+    {"zfill", _PyCFunction_CAST(stringlib_zfill), METH_O, stringlib_zfill__doc__},
 
 static PyObject *
 stringlib_zfill_impl(PyObject *self, Py_ssize_t width);
 
-static PyObject *
-stringlib_zfill(PyObject *self, PyObject *arg)
+static PyValue
+stringlib_zfill(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t width;
+    PyObject *_return_value;
 
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(arg);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(arg);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         width = ival;
     }
-    return_value = stringlib_zfill_impl(self, width);
+    _return_value = stringlib_zfill_impl(self, width);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=670549f9dcc1e2cc input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c5c74deae66c1061 input=a9049054013a1b77]*/

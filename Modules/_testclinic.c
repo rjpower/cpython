@@ -7,6 +7,7 @@
 
 #include "Python.h"
 #include "pycore_object.h"        // _PyObject_IsFreed()
+#include "pycore_tuple.h"         // _PyTuple_FromValues()
 
 
 // Used for clone_with_conv_f1 and clone_with_conv_v2
@@ -65,10 +66,10 @@ pack_arguments_newref(int argc, ...)
 
 static PyObject *
 pack_arguments_2pos_varpos(PyObject *a, PyObject *b,
-                           PyObject * const *args, Py_ssize_t args_length)
+                           const PyValue *args, Py_ssize_t args_length)
 /*[clinic end generated code: output=267032f41bd039cc input=86ee3064b7853e86]*/
 {
-    PyObject *tuple = PyTuple_FromArray(args, args_length);
+    PyObject *tuple = _PyTuple_FromValues(args, args_length);
     if (tuple == NULL) {
         return NULL;
     }
@@ -1175,11 +1176,11 @@ varpos_array
 [clinic start generated code]*/
 
 static PyObject *
-varpos_array_impl(PyObject *module, PyObject * const *args,
+varpos_array_impl(PyObject *module, const PyValue *args,
                   Py_ssize_t args_length)
-/*[clinic end generated code: output=a25f42f39c9b13ad input=97b8bdcf87e019c7]*/
+/*[clinic end generated code: output=fdcde4abb2fcdcf1 input=97b8bdcf87e019c7]*/
 {
-    return PyTuple_FromArray(args, args_length);
+    return _PyTuple_FromValues(args, args_length);
 }
 
 
@@ -1195,8 +1196,8 @@ posonly_varpos_array
 
 static PyObject *
 posonly_varpos_array_impl(PyObject *module, PyObject *a, PyObject *b,
-                          PyObject * const *args, Py_ssize_t args_length)
-/*[clinic end generated code: output=267032f41bd039cc input=86ee3064b7853e86]*/
+                          const PyValue *args, Py_ssize_t args_length)
+/*[clinic end generated code: output=40d542da8d9a1eab input=86ee3064b7853e86]*/
 {
     return pack_arguments_2pos_varpos(a, b, args, args_length);
 }
@@ -1214,9 +1215,9 @@ posonly_req_opt_varpos_array
 
 static PyObject *
 posonly_req_opt_varpos_array_impl(PyObject *module, PyObject *a, PyObject *b,
-                                  PyObject * const *args,
+                                  const PyValue *args,
                                   Py_ssize_t args_length)
-/*[clinic end generated code: output=f2f93c77ead93699 input=b01d7728164fd93e]*/
+/*[clinic end generated code: output=74bdc4beb7a4a24b input=b01d7728164fd93e]*/
 {
     return pack_arguments_2pos_varpos(a, b, args, args_length);
 }
@@ -1234,9 +1235,8 @@ posonly_poskw_varpos_array
 
 static PyObject *
 posonly_poskw_varpos_array_impl(PyObject *module, PyObject *a, PyObject *b,
-                                PyObject * const *args,
-                                Py_ssize_t args_length)
-/*[clinic end generated code: output=155811a8b2d65a12 input=5fb08cdc6afb9d7c]*/
+                                const PyValue *args, Py_ssize_t args_length)
+/*[clinic end generated code: output=9bb59b76e4a483b2 input=5fb08cdc6afb9d7c]*/
 {
     return pack_arguments_2pos_varpos(a, b, args, args_length);
 }
@@ -1762,11 +1762,11 @@ _testclinic.TestClass.varpos_array_no_fastcall
 
 static PyObject *
 _testclinic_TestClass_varpos_array_no_fastcall_impl(PyTypeObject *type,
-                                                    PyObject * const *args,
+                                                    const PyValue *args,
                                                     Py_ssize_t args_length)
-/*[clinic end generated code: output=27c9da663e942617 input=9ba5ae1f1eb58777]*/
+/*[clinic end generated code: output=d6a839e52759f4ac input=9ba5ae1f1eb58777]*/
 {
-    return PyTuple_FromArray(args, args_length);
+    return _PyTuple_FromValues(args, args_length);
 }
 
 
@@ -1786,9 +1786,9 @@ static PyObject *
 _testclinic_TestClass_posonly_varpos_array_no_fastcall_impl(PyTypeObject *type,
                                                             PyObject *a,
                                                             PyObject *b,
-                                                            PyObject * const *args,
+                                                            const PyValue *args,
                                                             Py_ssize_t args_length)
-/*[clinic end generated code: output=71e676f1870b5a7e input=18eadf4c6eaab613]*/
+/*[clinic end generated code: output=4d560909d2691c03 input=18eadf4c6eaab613]*/
 {
     return pack_arguments_2pos_varpos(a, b, args, args_length);
 }
@@ -1810,9 +1810,9 @@ static PyObject *
 _testclinic_TestClass_posonly_req_opt_varpos_array_no_fastcall_impl(PyTypeObject *type,
                                                                     PyObject *a,
                                                                     PyObject *b,
-                                                                    PyObject * const *args,
+                                                                    const PyValue *args,
                                                                     Py_ssize_t args_length)
-/*[clinic end generated code: output=abb395cae91d48ac input=5bf791fdad70b480]*/
+/*[clinic end generated code: output=a01046689abe7e4f input=5bf791fdad70b480]*/
 {
     return pack_arguments_2pos_varpos(a, b, args, args_length);
 }
@@ -1834,9 +1834,9 @@ static PyObject *
 _testclinic_TestClass_posonly_poskw_varpos_array_no_fastcall_impl(PyTypeObject *type,
                                                                   PyObject *a,
                                                                   PyObject *b,
-                                                                  PyObject * const *args,
+                                                                  const PyValue *args,
                                                                   Py_ssize_t args_length)
-/*[clinic end generated code: output=aaddd9530048b229 input=9ed3842f4d472d45]*/
+/*[clinic end generated code: output=2f775c5acfbde6a2 input=9ed3842f4d472d45]*/
 {
     return pack_arguments_2pos_varpos(a, b, args, args_length);
 }

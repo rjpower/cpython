@@ -25,19 +25,25 @@ two types exist -- :ref:`GenericAlias <types-genericalias>` and
    from ``__args__``.  On failure, an exception is raised and ``NULL`` is
    returned.
 
-   Here's an example of how to make an extension type generic::
+   .. seealso:: The data model method :meth:`~object.__class_getitem__`.
+
+   .. versionadded:: 3.9
+
+.. c:function:: PyValue Py_GenericAliasValue(PyObject *origin, PyValue args)
+
+   :c:func:`Py_GenericAlias` in the :c:macro:`METH_O` calling convention, for
+   a ``__class_getitem__`` method.  Here's an example of how to make an
+   extension type generic::
 
       ...
       static PyMethodDef my_obj_methods[] = {
           // Other methods.
           ...
-          {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS, "my_obj is generic over its contained type"}
+          {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS, "my_obj is generic over its contained type"}
           ...
       }
 
-   .. seealso:: The data model method :meth:`~object.__class_getitem__`.
-
-   .. versionadded:: 3.9
+   .. versionadded:: 3.16
 
 .. c:var:: PyTypeObject Py_GenericAliasType
 

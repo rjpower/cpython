@@ -767,8 +767,8 @@ _contextvars_Context_copy_impl(PyContext *self)
 }
 
 
-static PyObject *
-context_run(PyObject *self, PyObject *const *args,
+static PyValue
+context_run(PyObject *self, const PyValue *args,
             Py_ssize_t nargs, PyObject *kwnames)
 {
     PyThreadState *ts = _PyThreadState_GET();
@@ -776,19 +776,18 @@ context_run(PyObject *self, PyObject *const *args,
     if (nargs < 1) {
         _PyErr_SetString(ts, PyExc_TypeError,
                          "run() missing 1 required positional argument");
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (_PyContext_Enter(ts, self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *call_result = _PyObject_VectorcallTstate(
+    PyValue call_result = _PyObject_VectorcallValueTstate(
         ts, args[0], args + 1, nargs - 1, kwnames);
 
     if (_PyContext_Exit(ts, self)) {
-        Py_XDECREF(call_result);
-        return NULL;
+        return PyValue_NULL;
     }
 
     return call_result;
@@ -1147,7 +1146,7 @@ static PyMethodDef PyContextVar_methods[] = {
     _CONTEXTVARS_CONTEXTVAR_GET_METHODDEF
     _CONTEXTVARS_CONTEXTVAR_SET_METHODDEF
     _CONTEXTVARS_CONTEXTVAR_RESET_METHODDEF
-    {"__class_getitem__", Py_GenericAlias,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue),
     METH_O|METH_CLASS,
     PyDoc_STR("ContextVars are generic over the type of their contained values")},
     {NULL, NULL}
@@ -1314,7 +1313,7 @@ token_exit_impl(PyContextToken *self, PyObject *type, PyObject *val,
 }
 
 static PyMethodDef PyContextTokenType_methods[] = {
-    {"__class_getitem__",    Py_GenericAlias,
+    {"__class_getitem__",    _PyCFunction_CAST(Py_GenericAliasValue),
     METH_O|METH_CLASS,
     PyDoc_STR("Tokens are generic over the same type as the ContextVar which created them.")},
     TOKEN_ENTER_METHODDEF

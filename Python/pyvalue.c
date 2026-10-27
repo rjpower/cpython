@@ -130,6 +130,16 @@ _PyValue_BoxInt64(int64_t value)
 }
 
 PyValue
+_PyValue_BoxUInt64(uint64_t value)
+{
+    PyObject *op = PyLong_FromUnsignedLongLong(value);
+    if (op == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObject(op);
+}
+
+PyValue
 _PyValue_LshiftInt32(int32_t value, int32_t shift)
 {
     assert(shift >= 0);

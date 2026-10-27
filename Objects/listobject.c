@@ -1256,7 +1256,7 @@ list_extend_impl(PyListObject *self, PyObject *iterable)
 PyObject *
 _PyList_Extend(PyListObject *self, PyObject *iterable)
 {
-    return list_extend((PyObject*)self, iterable);
+    return list_extend_impl(self, iterable);
 }
 
 int
@@ -3303,10 +3303,10 @@ list___sizeof___impl(PyListObject *self)
 }
 
 static PyObject *list_iter(PyObject *seq);
-static PyObject *list_subscript(PyObject*, PyObject*);
+static PyValue list___getitem__(PyObject *, PyValue);
 
 static PyMethodDef list_methods[] = {
-    {"__getitem__", list_subscript, METH_O|METH_COEXIST,
+    {"__getitem__", _PyCFunction_CAST(list___getitem__), METH_O|METH_COEXIST,
      PyDoc_STR("__getitem__($self, index, /)\n--\n\nReturn self[index].")},
     LIST___REVERSED___METHODDEF
     LIST___SIZEOF___METHODDEF
@@ -3321,7 +3321,7 @@ static PyMethodDef list_methods[] = {
     LIST_COUNT_METHODDEF
     LIST_REVERSE_METHODDEF
     LIST_SORT_METHODDEF
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
      PyDoc_STR("lists are generic over the type of their contents")},
     {NULL,              NULL}           /* sentinel */
 };
@@ -3417,6 +3417,16 @@ list_subscript(PyObject* _self, PyObject* item)
                      Py_TYPE(item)->tp_name);
         return NULL;
     }
+}
+
+static PyValue
+list___getitem__(PyObject *self, PyValue item)
+{
+    PyObject *item_o = PyValue_Object(item);
+    if (item_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(list_subscript(self, item_o));
 }
 
 static Py_ssize_t
@@ -3687,7 +3697,7 @@ static PyObject *listiter_next(PyObject *);
 static PyObject *listiter_len(PyObject *, PyObject *);
 static PyObject *listiter_reduce_general(void *_it, int forward);
 static PyObject *listiter_reduce(PyObject *, PyObject *);
-static PyObject *listiter_setstate(PyObject *, PyObject *state);
+static PyValue listiter_setstate(PyObject *, PyValue state);
 
 PyDoc_STRVAR(length_hint_doc, "Private method returning an estimate of len(list(it)).");
 PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
@@ -3696,7 +3706,7 @@ PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
 static PyMethodDef listiter_methods[] = {
     {"__length_hint__", listiter_len, METH_NOARGS, length_hint_doc},
     {"__reduce__", listiter_reduce, METH_NOARGS, reduce_doc},
-    {"__setstate__", listiter_setstate, METH_O, setstate_doc},
+    {"__setstate__", _PyCFunction_CAST(listiter_setstate), METH_O, setstate_doc},
     {NULL,              NULL}           /* sentinel */
 };
 
@@ -3826,13 +3836,17 @@ listiter_reduce(PyObject *it, PyObject *Py_UNUSED(ignored))
     return listiter_reduce_general(it, 1);
 }
 
-static PyObject *
-listiter_setstate(PyObject *self, PyObject *state)
+static PyValue
+listiter_setstate(PyObject *self, PyValue state_value)
 {
+    PyObject *state = PyValue_Object(state_value);
+    if (state == NULL) {
+        return PyValue_NULL;
+    }
     _PyListIterObject *it = (_PyListIterObject *)self;
     Py_ssize_t index = PyLong_AsSsize_t(state);
     if (index == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     if (it->it_seq != NULL) {
         if (index < -1)
             index = -1;
@@ -3840,7 +3854,7 @@ listiter_setstate(PyObject *self, PyObject *state)
             index = PyList_GET_SIZE(it->it_seq); /* iterator exhausted */
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index);
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 /*********************** List Reverse Iterator **************************/
@@ -3856,12 +3870,12 @@ static int listreviter_traverse(PyObject *, visitproc, void *);
 static PyObject *listreviter_next(PyObject *);
 static PyObject *listreviter_len(PyObject *, PyObject *);
 static PyObject *listreviter_reduce(PyObject *, PyObject *);
-static PyObject *listreviter_setstate(PyObject *, PyObject *);
+static PyValue listreviter_setstate(PyObject *, PyValue);
 
 static PyMethodDef listreviter_methods[] = {
     {"__length_hint__", listreviter_len, METH_NOARGS, length_hint_doc},
     {"__reduce__", listreviter_reduce, METH_NOARGS, reduce_doc},
-    {"__setstate__", listreviter_setstate, METH_O, setstate_doc},
+    {"__setstate__", _PyCFunction_CAST(listreviter_setstate), METH_O, setstate_doc},
     {NULL,              NULL}           /* sentinel */
 };
 
@@ -3976,13 +3990,17 @@ listreviter_reduce(PyObject *it, PyObject *Py_UNUSED(ignored))
     return listiter_reduce_general(it, 0);
 }
 
-static PyObject *
-listreviter_setstate(PyObject *self, PyObject *state)
+static PyValue
+listreviter_setstate(PyObject *self, PyValue state_value)
 {
+    PyObject *state = PyValue_Object(state_value);
+    if (state == NULL) {
+        return PyValue_NULL;
+    }
     listreviterobject *it = (listreviterobject *)self;
     Py_ssize_t index = PyLong_AsSsize_t(state);
     if (index == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     if (it->it_seq != NULL) {
         if (index < -1)
             index = -1;
@@ -3990,7 +4008,7 @@ listreviter_setstate(PyObject *self, PyObject *state)
             index = PyList_GET_SIZE(it->it_seq) - 1;
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index);
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 /* common pickling support */

@@ -334,6 +334,28 @@ class ClinicWholeFileTest(TestCase):
         """
         self.expect_failure(block, err, lineno=8)
 
+    def test_value_return_custom_conversion_fn(self):
+        # A long-family return converter with its own object conversion and
+        # none for a value keeps its conversion in a parser which returns a
+        # value.
+        block = """
+            /*[python input]
+            class mine_return_converter(long_return_converter):
+                conversion_fn = 'mine_from_long'
+            [python start generated code]*/
+            /*[clinic input]
+            output preset block
+            module m
+            m.f -> mine
+                a: object
+                /
+            [clinic start generated code]*/
+        """
+        generated = self.clinic.parse(dedent(block))
+        self.assertIn("PyValue_FromResult(mine_from_long(_return_value))",
+                      generated)
+        self.assertNotIn("PyValue_FromLongLong", generated)
+
     def test_ambiguous_group_and_optional_parameters(self):
         err = ("Function 'my_test_func' has an ambiguous group configuration: "
                "a call with 2 argument(s) can be parsed in more than one way.")
@@ -477,11 +499,35 @@ class ClinicWholeFileTest(TestCase):
             "\\n");
 
             #define FN_METHODDEF    \\
-                {"fn", (PyCFunction)fn, METH_O, fn__doc__},
+                {"fn", _PyCFunction_CAST(fn), METH_O, fn__doc__},
 
             static PyObject *
-            fn(PyObject *module, PyObject *a)
-            /*[clinic end generated code: output=be6798b148ab4e53 input=524ce2e021e4eba6]*/
+            fn_impl(PyObject *module, PyObject *a);
+
+            static PyValue
+            fn(PyObject *module, PyValue arg);
+
+            static PyValue
+            fn(PyObject *module, PyValue arg)
+            {
+                PyValue return_value = PyValue_NULL;
+                PyObject *a;
+                PyObject *_return_value;
+
+                a = PyValue_Object(arg);
+                if (a == NULL) {
+                    goto exit;
+                }
+                _return_value = fn_impl(module, a);
+                return_value = PyValue_FromResult(_return_value);
+
+            exit:
+                return return_value;
+            }
+
+            static PyObject *
+            fn_impl(PyObject *module, PyObject *a)
+            /*[clinic end generated code: output=55b7b756d8b26545 input=524ce2e021e4eba6]*/
         """)
         block = dedent("""
             /*[clinic input]
@@ -4004,7 +4050,7 @@ class ClinicExternalTest(TestCase):
             # Verify by checking the checksum.
             checksum = (
                 "/*[clinic end generated code: "
-                "output=04ff553a5507879b input=9543a8d2da235301]*/\n"
+                "output=998da0cb5ffd0da2 input=9543a8d2da235301]*/\n"
             )
             with open(fn, encoding='utf-8') as f:
                 generated = f.read()
@@ -4287,6 +4333,7 @@ class ClinicExternalTest(TestCase):
             "unsigned_long",
             "unsigned_long_long",
             "unsigned_short",
+            "value",
         )
         finale = dedent("""
             Return converters:
@@ -4301,6 +4348,7 @@ class ClinicExternalTest(TestCase):
                 size_t()
                 unsigned_int()
                 unsigned_long()
+                value()
 
             All converters also accept (c_default=None, py_default=None, annotation=None).
             All return converters also accept (py_default=None).
@@ -4587,11 +4635,35 @@ class ClinicExternalTest(TestCase):
             "\\n");
 
             #define FUNC_METHODDEF    \\
-                {"func", (PyCFunction)func, METH_O, func__doc__},
+                {"func", _PyCFunction_CAST(func), METH_O, func__doc__},
 
             static PyObject *
-            func(PyObject *module, PyObject *a)
-            /*[clinic end generated code: output=3dde2d13002165b9 input=a9049054013a1b77]*/
+            func_impl(PyObject *module, PyObject *a);
+
+            static PyValue
+            func(PyObject *module, PyValue arg);
+
+            static PyValue
+            func(PyObject *module, PyValue arg)
+            {
+                PyValue return_value = PyValue_NULL;
+                PyObject *a;
+                PyObject *_return_value;
+
+                a = PyValue_Object(arg);
+                if (a == NULL) {
+                    goto exit;
+                }
+                _return_value = func_impl(module, a);
+                return_value = PyValue_FromResult(_return_value);
+
+            exit:
+                return return_value;
+            }
+
+            static PyObject *
+            func_impl(PyObject *module, PyObject *a)
+            /*[clinic end generated code: output=6cbdfd8fe90f0746 input=a9049054013a1b77]*/
         """)
         with os_helper.temp_dir() as tmp_dir:
             in_fn = os.path.join(tmp_dir, "test.c")

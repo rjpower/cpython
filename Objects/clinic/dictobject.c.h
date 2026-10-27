@@ -32,23 +32,31 @@ PyDoc_STRVAR(dict_fromkeys__doc__,
 static PyObject *
 dict_fromkeys_impl(PyTypeObject *type, PyObject *iterable, PyObject *value);
 
-static PyObject *
-dict_fromkeys(PyObject *type, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+dict_fromkeys(PyObject *type, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *iterable;
     PyObject *value = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("fromkeys", nargs, 1, 2)) {
         goto exit;
     }
-    iterable = args[0];
+    iterable = PyValue_Object(args[0]);
+    if (iterable == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    value = args[1];
+    value = PyValue_Object(args[1]);
+    if (value == NULL) {
+        goto exit;
+    }
 skip_optional:
-    return_value = dict_fromkeys_impl((PyTypeObject *)type, iterable, value);
+    _return_value = dict_fromkeys_impl((PyTypeObject *)type, iterable, value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -79,18 +87,26 @@ PyDoc_STRVAR(dict___contains____doc__,
 "True if the dictionary has the specified key, else False.");
 
 #define DICT___CONTAINS___METHODDEF    \
-    {"__contains__", (PyCFunction)dict___contains__, METH_O|METH_COEXIST, dict___contains____doc__},
+    {"__contains__", _PyCFunction_CAST(dict___contains__), METH_O|METH_COEXIST, dict___contains____doc__},
 
 static PyObject *
 dict___contains___impl(PyDictObject *self, PyObject *key);
 
-static PyObject *
-dict___contains__(PyObject *self, PyObject *key)
+static PyValue
+dict___contains__(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *key;
+    PyObject *_return_value;
 
-    return_value = dict___contains___impl((PyDictObject *)self, key);
+    key = PyValue_Object(arg);
+    if (key == NULL) {
+        goto exit;
+    }
+    _return_value = dict___contains___impl((PyDictObject *)self, key);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -106,23 +122,31 @@ PyDoc_STRVAR(dict_get__doc__,
 static PyObject *
 dict_get_impl(PyDictObject *self, PyObject *key, PyObject *default_value);
 
-static PyObject *
-dict_get(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+dict_get(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *default_value = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("get", nargs, 1, 2)) {
         goto exit;
     }
-    key = args[0];
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    default_value = args[1];
+    default_value = PyValue_Object(args[1]);
+    if (default_value == NULL) {
+        goto exit;
+    }
 skip_optional:
-    return_value = dict_get_impl((PyDictObject *)self, key, default_value);
+    _return_value = dict_get_impl((PyDictObject *)self, key, default_value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -143,25 +167,33 @@ static PyObject *
 dict_setdefault_impl(PyDictObject *self, PyObject *key,
                      PyObject *default_value);
 
-static PyObject *
-dict_setdefault(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+dict_setdefault(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *default_value = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("setdefault", nargs, 1, 2)) {
         goto exit;
     }
-    key = args[0];
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    default_value = args[1];
+    default_value = PyValue_Object(args[1]);
+    if (default_value == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = dict_setdefault_impl((PyDictObject *)self, key, default_value);
+    _return_value = dict_setdefault_impl((PyDictObject *)self, key, default_value);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -200,23 +232,31 @@ PyDoc_STRVAR(dict_pop__doc__,
 static PyObject *
 dict_pop_impl(PyDictObject *self, PyObject *key, PyObject *default_value);
 
-static PyObject *
-dict_pop(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+dict_pop(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *default_value = NULL;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("pop", nargs, 1, 2)) {
         goto exit;
     }
-    key = args[0];
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    default_value = args[1];
+    default_value = PyValue_Object(args[1]);
+    if (default_value == NULL) {
+        goto exit;
+    }
 skip_optional:
-    return_value = dict_pop_impl((PyDictObject *)self, key, default_value);
+    _return_value = dict_pop_impl((PyDictObject *)self, key, default_value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -356,4 +396,4 @@ frozendict_copy(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return frozendict_copy_impl((PyFrozenDictObject *)self);
 }
-/*[clinic end generated code: output=46d2d00147dd7917 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=99721d7d26a3fce7 input=a9049054013a1b77]*/

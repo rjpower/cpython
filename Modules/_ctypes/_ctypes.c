@@ -5293,7 +5293,7 @@ Array_length(PyObject *myself)
 }
 
 static PyMethodDef Array_methods[] = {
-    {"__class_getitem__",    Py_GenericAlias,
+    {"__class_getitem__",    _PyCFunction_CAST(Py_GenericAliasValue),
     METH_O|METH_CLASS,       PyDoc_STR("Arrays are generic over the type of their elements")},
     { NULL, NULL }
 };

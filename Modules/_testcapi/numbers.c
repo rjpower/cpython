@@ -2,11 +2,15 @@
 #include "util.h"
 
 
-static PyObject *
-number_check(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+number_check(PyObject *Py_UNUSED(module), PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyNumber_Check(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyNumber_Check(obj)));
 }
 
 #define BINARYFUNC(funcsuffix, methsuffix)                           \
@@ -51,11 +55,15 @@ BINARYFUNC(Divmod, divmod)
 TERNARYFUNC(Power, power)
 
 #define UNARYFUNC(funcsuffix, methsuffix)                            \
-    static PyObject *                                                \
-    number_##methsuffix(PyObject *Py_UNUSED(module), PyObject *obj)  \
+    static PyValue                                                   \
+    number_##methsuffix(PyObject *Py_UNUSED(module), PyValue arg)    \
     {                                                                \
+        PyObject *obj = PyValue_Object(arg);                         \
+        if (obj == NULL) {                                           \
+            return PyValue_NULL;                                     \
+        }                                                            \
         NULLABLE(obj);                                               \
-        return PyNumber_##funcsuffix(obj);                           \
+        return PyValue_FromResult(PyNumber_##funcsuffix(obj));       \
     };
 
 UNARYFUNC(Negative, negative)
@@ -126,7 +134,7 @@ number_asssizet(PyObject *Py_UNUSED(module), PyObject *args)
 
 
 static PyMethodDef test_methods[] = {
-    {"number_check", number_check, METH_O},
+    {"number_check", _PyCFunction_CAST(number_check), METH_O},
     {"number_add", number_add, METH_VARARGS},
     {"number_subtract", number_subtract, METH_VARARGS},
     {"number_multiply", number_multiply, METH_VARARGS},
@@ -136,10 +144,10 @@ static PyMethodDef test_methods[] = {
     {"number_remainder", number_remainder, METH_VARARGS},
     {"number_divmod", number_divmod, METH_VARARGS},
     {"number_power", number_power, METH_VARARGS},
-    {"number_negative", number_negative, METH_O},
-    {"number_positive", number_positive, METH_O},
-    {"number_absolute", number_absolute, METH_O},
-    {"number_invert", number_invert, METH_O},
+    {"number_negative", _PyCFunction_CAST(number_negative), METH_O},
+    {"number_positive", _PyCFunction_CAST(number_positive), METH_O},
+    {"number_absolute", _PyCFunction_CAST(number_absolute), METH_O},
+    {"number_invert", _PyCFunction_CAST(number_invert), METH_O},
     {"number_lshift", number_lshift, METH_VARARGS},
     {"number_rshift", number_rshift, METH_VARARGS},
     {"number_and", number_and, METH_VARARGS},
@@ -158,9 +166,9 @@ static PyMethodDef test_methods[] = {
     {"number_inplaceand", number_inplaceand, METH_VARARGS},
     {"number_inplacexor", number_inplacexor, METH_VARARGS},
     {"number_inplaceor", number_inplaceor, METH_VARARGS},
-    {"number_long", number_long, METH_O},
-    {"number_float", number_float, METH_O},
-    {"number_index", number_index, METH_O},
+    {"number_long", _PyCFunction_CAST(number_long), METH_O},
+    {"number_float", _PyCFunction_CAST(number_float), METH_O},
+    {"number_index", _PyCFunction_CAST(number_index), METH_O},
     {"number_tobase", number_tobase, METH_VARARGS},
     {"number_asssizet", number_asssizet, METH_VARARGS},
     {NULL},

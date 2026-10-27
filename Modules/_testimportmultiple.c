@@ -4,9 +4,6 @@
  * foo, bar), only the first one is called the same as the compiled file.
  */
 
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#  define Py_LIMITED_API 0x030d0000
-
 #include <Python.h>
 
 static PyModuleDef_Slot shared_slots[] = {

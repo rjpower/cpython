@@ -1226,10 +1226,9 @@ Release the underlying buffer exposed by the memoryview object.
 [clinic start generated code]*/
 
 static PyObject *
-memoryview___exit___impl(PyMemoryViewObject *self,
-                         PyObject * const *exc_info,
+memoryview___exit___impl(PyMemoryViewObject *self, const PyValue *exc_info,
                          Py_ssize_t exc_info_length)
-/*[clinic end generated code: output=c055c4c69baf495d input=881969146ff4d413]*/
+/*[clinic end generated code: output=4ed187b9f576181a input=881969146ff4d413]*/
 {
     return memoryview_release_impl(self);
 }
@@ -3638,7 +3637,7 @@ static PyMethodDef memory_methods[] = {
     MEMORYVIEW_INDEX_METHODDEF
     {"__enter__",   memory_enter, METH_NOARGS, NULL},
     MEMORYVIEW___EXIT___METHODDEF
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
      PyDoc_STR("memoryviews are generic over the type of their underlying data")},
     {NULL,          NULL}
 };

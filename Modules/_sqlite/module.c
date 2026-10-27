@@ -54,18 +54,18 @@ module _sqlite3
  */
 #include "clinic/_sqlite3.connect.c.h"
 
-static PyObject *
-pysqlite_connect(PyObject *module, PyObject *const *args, Py_ssize_t nargsf,
+static PyValue
+pysqlite_connect(PyObject *module, const PyValue *args, Py_ssize_t nargsf,
                  PyObject *kwnames)
 {
     pysqlite_state *state = pysqlite_get_state(module);
-    PyObject *factory = (PyObject *)state->ConnectionType;
+    PyValue factory = PyValue_FromObject(state->ConnectionType);
 
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (nargs > 1) {
         PyErr_Format(PyExc_TypeError,
             "connect() takes at most 1 positional arguments (%zd given)", nargs);
-        return NULL;
+        return PyValue_NULL;
     }
     if (kwnames != NULL) {
         for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(kwnames); i++) {
@@ -77,7 +77,7 @@ pysqlite_connect(PyObject *module, PyObject *const *args, Py_ssize_t nargsf,
         }
     }
 
-    return PyObject_Vectorcall(factory, args, nargsf, kwnames);
+    return PyObject_VectorcallValue(factory, args, nargsf, kwnames);
 }
 
 /*[clinic input]

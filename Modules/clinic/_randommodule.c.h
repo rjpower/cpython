@@ -45,11 +45,12 @@ PyDoc_STRVAR(_random_Random_seed__doc__,
 static PyObject *
 _random_Random_seed_impl(RandomObject *self, PyObject *n);
 
-static PyObject *
-_random_Random_seed(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_random_Random_seed(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *n = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("seed", nargs, 0, 1)) {
         goto exit;
@@ -57,11 +58,15 @@ _random_Random_seed(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    n = args[0];
+    n = PyValue_Object(args[0]);
+    if (n == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _random_Random_seed_impl((RandomObject *)self, n);
+    _return_value = _random_Random_seed_impl((RandomObject *)self, n);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -98,20 +103,28 @@ PyDoc_STRVAR(_random_Random_setstate__doc__,
 "setstate(state) -> None.  Restores generator state.");
 
 #define _RANDOM_RANDOM_SETSTATE_METHODDEF    \
-    {"setstate", (PyCFunction)_random_Random_setstate, METH_O, _random_Random_setstate__doc__},
+    {"setstate", _PyCFunction_CAST(_random_Random_setstate), METH_O, _random_Random_setstate__doc__},
 
 static PyObject *
 _random_Random_setstate_impl(RandomObject *self, PyObject *state);
 
-static PyObject *
-_random_Random_setstate(PyObject *self, PyObject *state)
+static PyValue
+_random_Random_setstate(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *state;
+    PyObject *_return_value;
 
+    state = PyValue_Object(arg);
+    if (state == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _random_Random_setstate_impl((RandomObject *)self, state);
+    _return_value = _random_Random_setstate_impl((RandomObject *)self, state);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -122,23 +135,31 @@ PyDoc_STRVAR(_random_Random_getrandbits__doc__,
 "getrandbits(k) -> x.  Generates an int with k random bits.");
 
 #define _RANDOM_RANDOM_GETRANDBITS_METHODDEF    \
-    {"getrandbits", (PyCFunction)_random_Random_getrandbits, METH_O, _random_Random_getrandbits__doc__},
+    {"getrandbits", _PyCFunction_CAST(_random_Random_getrandbits), METH_O, _random_Random_getrandbits__doc__},
 
 static PyObject *
 _random_Random_getrandbits_impl(RandomObject *self, uint64_t k);
 
-static PyObject *
-_random_Random_getrandbits(PyObject *self, PyObject *arg)
+static PyValue
+_random_Random_getrandbits(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     uint64_t k;
+    PyObject *_return_value;
 
-    if (!_PyLong_UInt64_Converter(arg, &k)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UInt64_Converter(_arg, &k)) {
+            goto exit;
+        }
     }
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _random_Random_getrandbits_impl((RandomObject *)self, k);
+    _return_value = _random_Random_getrandbits_impl((RandomObject *)self, k);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -165,7 +186,10 @@ random_init(PyObject *self, PyObject *args, PyObject *kwargs)
     if (PyTuple_GET_SIZE(args) < 1) {
         goto skip_optional;
     }
-    seed = PyTuple_GET_ITEM(args, 0);
+    seed = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (seed == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = random_init_impl((RandomObject *)self, seed);
@@ -174,4 +198,4 @@ skip_optional:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=ec95f7df0c3f3c19 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=da1b61e0ba03f106 input=a9049054013a1b77]*/

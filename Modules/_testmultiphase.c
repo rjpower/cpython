@@ -226,21 +226,21 @@ PyDoc_STRVAR(_StateAccessType_decrement_count__doc__,
 "(This is to test both positional and keyword arguments.");
 
 // Intentionally does not use Argument Clinic
-static PyObject *
+static PyValue
 _StateAccessType_increment_count_noclinic(PyObject *self,
                                           PyTypeObject *defining_class,
-                                          PyObject *const *args,
+                                          const PyValue *args,
                                           Py_ssize_t nargs,
                                           PyObject *kwnames)
 {
     if (!_PyArg_CheckPositional("StateAccessTypeObject.decrement_count", nargs, 0, 1)) {
-        return NULL;
+        return PyValue_NULL;
     }
     long n = 1;
     if (nargs) {
-        n = PyLong_AsLong(args[0]);
+        n = PyLong_AsLongValue(args[0]);
         if (PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
     if (kwnames && PyTuple_Check(kwnames)) {
@@ -253,7 +253,7 @@ _StateAccessType_increment_count_noclinic(PyObject *self,
                 PyExc_TypeError,
                 "decrement_count only takes 'twice' keyword argument"
             );
-            return NULL;
+            return PyValue_NULL;
         }
         n *= 2;
     }
@@ -261,7 +261,7 @@ _StateAccessType_increment_count_noclinic(PyObject *self,
     assert(m_state == PyType_GetModuleState_DuringGC(defining_class));
     m_state->counter += n;
 
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 /*[clinic input]

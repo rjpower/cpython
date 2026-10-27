@@ -7,7 +7,7 @@ preserve
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-#include "pycore_tuple.h"         // _PyTuple_Objects()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(function___annotate____doc__,
 "Get the code object for a function.");
@@ -188,11 +188,10 @@ func_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[6];
-    PyObject * const *fastargs;
+    PyValue argsbuf[6];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 2;
-    PyObject *const *argitems;
     PyCodeObject *code;
     PyObject *globals;
     PyObject *name = Py_None;
@@ -200,47 +199,67 @@ func_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *closure = Py_None;
     PyObject *kwdefaults = Py_None;
 
-    argitems = _PyTuple_Objects(args);
-    if (argitems == NULL) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(fastargs[0], &PyCode_Type)) {
-        _PyArg_BadArgument("function", "argument 'code'", (&PyCode_Type)->tp_name, fastargs[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(fastargs[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, &PyCode_Type)) {
+            _PyArg_BadArgument("function", "argument 'code'", (&PyCode_Type)->tp_name, _arg);
+            goto exit;
+        }
+        code = (PyCodeObject *)_arg;
     }
-    code = (PyCodeObject *)fastargs[0];
-    if (!PyDict_Check(fastargs[1])) {
-        _PyArg_BadArgument("function", "argument 'globals'", "dict", fastargs[1]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(fastargs[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyDict_Check(_arg)) {
+            _PyArg_BadArgument("function", "argument 'globals'", "dict", _arg);
+            goto exit;
+        }
+        globals = _arg;
     }
-    globals = fastargs[1];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (fastargs[2]) {
-        name = fastargs[2];
+    if (!PyValue_IsNull(fastargs[2])) {
+        name = PyValue_Object(fastargs[2]);
+        if (name == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (fastargs[3]) {
-        defaults = fastargs[3];
+    if (!PyValue_IsNull(fastargs[3])) {
+        defaults = PyValue_Object(fastargs[3]);
+        if (defaults == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (fastargs[4]) {
-        closure = fastargs[4];
+    if (!PyValue_IsNull(fastargs[4])) {
+        closure = PyValue_Object(fastargs[4]);
+        if (closure == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    kwdefaults = fastargs[5];
+    kwdefaults = PyValue_Object(fastargs[5]);
+    if (kwdefaults == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = func_new_impl(type, code, globals, name, defaults, closure, kwdefaults);
 
@@ -253,4 +272,4 @@ exit:
 
 #define FUNCTION___TYPE_PARAMS___GETSETDEF {"__type_params__", (getter)function___type_params___get, (setter)function___type_params___set, function___type_params____doc__},
 
-/*[clinic end generated code: output=2a0be32786ccec7a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f6dfa9b98f64694e input=a9049054013a1b77]*/

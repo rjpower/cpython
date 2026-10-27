@@ -5030,10 +5030,10 @@ save(PickleState *st, PicklerObject *self, PyObject *obj, int pers_save)
     return save_object(st, self, obj, pers_save, 0);
 }
 
-static PyObject *
-persistent_id(PyObject *self, PyObject *obj)
+static PyValue
+persistent_id(PyObject *self, PyValue obj)
 {
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 static PyObject *Pickler_getattr(PyObject *self, PyObject *name);
@@ -5069,7 +5069,7 @@ dump(PickleState *state, PicklerObject *self, PyObject *obj)
     }
     if (PyCFunction_Check(tmp) &&
         PyCFunction_GET_SELF(tmp) == (PyObject *)self &&
-        PyCFunction_GET_FUNCTION(tmp) == persistent_id)
+        PyCFunction_GET_FUNCTION(tmp) == _PyCFunction_CAST(persistent_id))
     {
         Py_CLEAR(tmp);
     }
@@ -5225,7 +5225,7 @@ _pickle_Pickler___sizeof___impl(PicklerObject *self)
 }
 
 static struct PyMethodDef Pickler_methods[] = {
-    {"persistent_id", persistent_id, METH_O,
+    {"persistent_id", _PyCFunction_CAST(persistent_id), METH_O,
         PyDoc_STR("persistent_id($self, obj, /)\n--\n\n")},
     _PICKLE_PICKLER_DUMP_METHODDEF
     _PICKLE_PICKLER_CLEAR_MEMO_METHODDEF

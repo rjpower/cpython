@@ -14329,24 +14329,25 @@ obj2ast_type_param(struct ast_state *state, PyObject* obj, type_param_ty* out,
 
 
 /* Helper for checking if a node class is abstract in the tests. */
-static PyObject *
-ast_is_abstract(PyObject *Py_UNUSED(module), PyObject *cls) {
+static PyValue
+ast_is_abstract(PyObject *Py_UNUSED(module), PyValue cls_value) {
+    PyObject *cls = PyValue_Object(cls_value);
+    if (cls == NULL) {
+        return PyValue_NULL;
+    }
     struct ast_state *state = get_ast_state();
     if (state == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     int contains = PySet_Contains(state->abstract_types, cls);
     if (contains == -1) {
-        return NULL;
+        return PyValue_NULL;
     }
-    else if (contains == 1) {
-        Py_RETURN_TRUE;
-    }
-    Py_RETURN_FALSE;
+    return PyValue_FromObject(contains ? Py_True : Py_False);
 }
 
 static struct PyMethodDef astmodule_methods[] = {
-    {"_is_abstract", ast_is_abstract, METH_O, NULL},
+    {"_is_abstract", _PyCFunction_CAST(ast_is_abstract), METH_O, NULL},
     {NULL}  /* Sentinel */
 };
 

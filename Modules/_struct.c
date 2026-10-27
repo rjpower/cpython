@@ -8,6 +8,7 @@
 #endif
 
 #include "Python.h"
+#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_bytesobject.h"   // _PyBytesWriter
 #include "pycore_lock.h"          // _PyOnceFlag_CallOnce()
 #include "pycore_long.h"          // _PyLong_AsByteArray()
@@ -2371,7 +2372,7 @@ Struct_iter_unpack_impl(PyStructObject *self, PyObject *buffer)
  *
  */
 static int
-s_pack_internal(PyStructObject *soself, PyObject *const *args,
+s_pack_internal(PyStructObject *soself, const PyValue *args,
                 char* buf, _structmodulestate *state)
 {
     formatcode *code;
@@ -2386,7 +2387,11 @@ s_pack_internal(PyStructObject *soself, PyObject *const *args,
         char *res = buf + code->offset;
         Py_ssize_t j = code->repeat;
         while (j--) {
-            PyObject *v = args[i++];
+            // The packing functions read objects.
+            PyObject *v = PyValue_Object(args[i++]);
+            if (v == NULL) {
+                return -1;
+            }
             if (strcmp(e->format, "s") == 0) {
                 Py_ssize_t n;
                 int isstring;
@@ -2470,9 +2475,9 @@ format strings.
 [clinic start generated code]*/
 
 static PyObject *
-Struct_pack_impl(PyStructObject *self, PyObject * const *values,
+Struct_pack_impl(PyStructObject *self, const PyValue *values,
                  Py_ssize_t values_length)
-/*[clinic end generated code: output=5766e18f596cae9e input=295f4b1a97747458]*/
+/*[clinic end generated code: output=e73c1e9ff8f63cd6 input=295f4b1a97747458]*/
 {
     _structmodulestate *state = get_struct_state_structinst(self);
 
@@ -2520,9 +2525,9 @@ more on format strings.
 
 static PyObject *
 Struct_pack_into_impl(PyStructObject *self, Py_buffer *buffer,
-                      Py_ssize_t offset, PyObject * const *values,
+                      Py_ssize_t offset, const PyValue *values,
                       Py_ssize_t values_length)
-/*[clinic end generated code: output=aa9d9a93f5f8f77b input=a2b8749e3843f01b]*/
+/*[clinic end generated code: output=4b013d019689310c input=a2b8749e3843f01b]*/
 {
     _structmodulestate *state = get_struct_state_structinst(self);
 
@@ -2750,9 +2755,9 @@ to the format string.  See help(struct) for more on format strings.
 [clinic start generated code]*/
 
 static PyObject *
-pack_impl(PyObject *module, PyStructObject *s_object,
-          PyObject * const *values, Py_ssize_t values_length)
-/*[clinic end generated code: output=2f874191ddecdec0 input=8144972342391de1]*/
+pack_impl(PyObject *module, PyStructObject *s_object, const PyValue *values,
+          Py_ssize_t values_length)
+/*[clinic end generated code: output=d412db27ad83b0e1 input=8144972342391de1]*/
 {
     return Struct_pack_impl(s_object, values, values_length);
 }
@@ -2776,9 +2781,9 @@ the buffer.  See help(struct) for more on format strings.
 
 static PyObject *
 pack_into_impl(PyObject *module, PyStructObject *s_object, Py_buffer *buffer,
-               Py_ssize_t offset, PyObject * const *values,
+               Py_ssize_t offset, const PyValue *values,
                Py_ssize_t values_length)
-/*[clinic end generated code: output=e8bf7d422b2088ef input=548c35c57db7436a]*/
+/*[clinic end generated code: output=c468c8ca53e0d4f3 input=548c35c57db7436a]*/
 {
     return Struct_pack_into_impl(s_object, buffer, offset,
                                  values, values_length);

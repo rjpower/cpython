@@ -62,12 +62,17 @@ failed:
     return NULL;
 }
 
-static PyObject *
-without_gc(PyObject *Py_UNUSED(self), PyObject *obj)
+static PyValue
+without_gc(PyObject *Py_UNUSED(self), PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     PyTypeObject *tp = (PyTypeObject*)obj;
     if (!PyType_Check(obj) || !PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE)) {
-        return PyErr_Format(PyExc_TypeError, "heap type expected, got %R", obj);
+        return PyValue_FromResult(
+            PyErr_Format(PyExc_TypeError, "heap type expected, got %R", obj));
     }
     if (PyType_IS_GC(tp)) {
         // Don't try this at home, kids:
@@ -77,7 +82,7 @@ without_gc(PyObject *Py_UNUSED(self), PyObject *obj)
         tp->tp_clear = NULL;
     }
     assert(!PyType_IS_GC(tp));
-    return Py_NewRef(obj);
+    return PyValue_FromResult(Py_NewRef(obj));
 }
 
 static void
@@ -540,31 +545,35 @@ calling_capsule_destructor(PyObject *capsule)
     Py_DECREF(callable);
 }
 
-static PyObject *
-capsule_calling(PyObject *self, PyObject *callable)
+static PyValue
+capsule_calling(PyObject *self, PyValue callable_value)
 {
+    PyObject *callable = PyValue_Object(callable_value);
+    if (callable == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *capsule = PyCapsule_New(&pymem_slot, "_testcapi.calling",
                                       calling_capsule_destructor);
     if (capsule == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (PyCapsule_SetContext(capsule, Py_NewRef(callable)) < 0) {
         Py_DECREF(callable);
         Py_DECREF(capsule);
-        return NULL;
+        return PyValue_NULL;
     }
-    return capsule;
+    return PyValue_FromResult(capsule);
 }
 
 static PyMethodDef test_methods[] = {
-    {"capsule_calling", capsule_calling, METH_O},
+    {"capsule_calling", _PyCFunction_CAST(capsule_calling), METH_O},
     {"gc_hold_in_pymem", gc_hold_in_pymem, METH_VARARGS},
     {"gc_release_pymem", gc_release_pymem, METH_NOARGS},
     {"test_gc_control", test_gc_control, METH_NOARGS},
     {"test_gc_visit_objects_basic", test_gc_visit_objects_basic, METH_NOARGS, NULL},
     {"test_gc_visit_objects_frozen", test_gc_visit_objects_frozen, METH_NOARGS, NULL},
     {"test_gc_visit_objects_exit_early", test_gc_visit_objects_exit_early, METH_NOARGS, NULL},
-    {"without_gc", without_gc, METH_O, NULL},
+    {"without_gc", _PyCFunction_CAST(without_gc), METH_O, NULL},
     {"with_tp_del", with_tp_del, METH_VARARGS, NULL},
     {NULL}
 };

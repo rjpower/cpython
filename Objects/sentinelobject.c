@@ -165,10 +165,10 @@ sentinel_copy(PyObject *self, PyObject *Py_UNUSED(ignored))
     return Py_NewRef(self);
 }
 
-static PyObject *
-sentinel_deepcopy(PyObject *self, PyObject *Py_UNUSED(memo))
+static PyValue
+sentinel_deepcopy(PyObject *self, PyValue Py_UNUSED(memo))
 {
-    return Py_NewRef(self);
+    return PyValue_FromResult(Py_NewRef(self));
 }
 
 static PyObject *
@@ -180,7 +180,7 @@ sentinel_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 
 static PyMethodDef sentinel_methods[] = {
     {"__copy__", sentinel_copy, METH_NOARGS, NULL},
-    {"__deepcopy__", sentinel_deepcopy, METH_O, NULL},
+    {"__deepcopy__", _PyCFunction_CAST(sentinel_deepcopy), METH_O, NULL},
     {"__reduce__", sentinel_reduce, METH_NOARGS, NULL},
     {NULL, NULL}
 };

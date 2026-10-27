@@ -11,7 +11,6 @@
 #include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
-#include "pycore_value.h"         // _PyValue_ObjectArray()
 
 
 /*[clinic input]
@@ -266,15 +265,6 @@ getset_set(PyObject *self, PyObject *obj, PyObject *value)
  *
  * First, common helpers
  */
-/* The arguments as objects (_PyValue_ObjectArray()), for a METH_FASTCALL
-   function, which takes objects. */
-static inline PyObject *const *
-objects_of(const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
-{
-    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
-    return (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
-}
-
 static inline int
 method_check_args(PyObject *func, const PyValue *args, Py_ssize_t nargs,
                   PyObject *kwnames, PyObject **pself)
@@ -402,16 +392,11 @@ method_vectorcall_FASTCALL_KEYWORDS_METHOD(
     if (meth == NULL) {
         return PyValue_NULL;
     }
-    PyObject *const *args_o = objects_of(args + 1, nargs - 1, kwnames);
-    if (args_o == NULL) {
-        _Py_LeaveRecursiveCallTstate(tstate);
-        return PyValue_NULL;
-    }
-    PyObject *result = meth(self,
-                            ((PyMethodDescrObject *)func)->d_common.d_type,
-                            args_o, nargs-1, kwnames);
+    PyValue result = meth(self,
+                          ((PyMethodDescrObject *)func)->d_common.d_type,
+                          args+1, nargs-1, kwnames);
     _Py_LeaveRecursiveCall();
-    return PyValue_FromResult(result);
+    return result;
 }
 
 static PyValue
@@ -430,14 +415,9 @@ method_vectorcall_FASTCALL(
     if (meth == NULL) {
         return PyValue_NULL;
     }
-    PyObject *const *args_o = objects_of(args + 1, nargs - 1, kwnames);
-    if (args_o == NULL) {
-        _Py_LeaveRecursiveCallTstate(tstate);
-        return PyValue_NULL;
-    }
-    PyObject *result = meth(self, args_o, nargs-1);
+    PyValue result = meth(self, args+1, nargs-1);
     _Py_LeaveRecursiveCallTstate(tstate);
-    return PyValue_FromResult(result);
+    return result;
 }
 
 static PyValue
@@ -456,14 +436,9 @@ method_vectorcall_FASTCALL_KEYWORDS(
     if (meth == NULL) {
         return PyValue_NULL;
     }
-    PyObject *const *args_o = objects_of(args + 1, nargs - 1, kwnames);
-    if (args_o == NULL) {
-        _Py_LeaveRecursiveCallTstate(tstate);
-        return PyValue_NULL;
-    }
-    PyObject *result = meth(self, args_o, nargs-1, kwnames);
+    PyValue result = meth(self, args+1, nargs-1, kwnames);
     _Py_LeaveRecursiveCallTstate(tstate);
-    return PyValue_FromResult(result);
+    return result;
 }
 
 static PyValue
@@ -516,18 +491,13 @@ method_vectorcall_O(
         }
         return PyValue_NULL;
     }
-    PyCFunction meth = (PyCFunction)method_enter_call(tstate, func);
+    PyCFunctionO meth = (PyCFunctionO)method_enter_call(tstate, func);
     if (meth == NULL) {
         return PyValue_NULL;
     }
-    PyObject *arg = PyValue_Object(args[1]);
-    if (arg == NULL) {
-        _Py_LeaveRecursiveCallTstate(tstate);
-        return PyValue_NULL;
-    }
-    PyObject *result = _PyCFunction_TrampolineCall(meth, self, arg);
+    PyValue result = meth(self, args[1]);
     _Py_LeaveRecursiveCallTstate(tstate);
-    return PyValue_FromResult(result);
+    return result;
 }
 
 
@@ -1172,8 +1142,8 @@ static PySequenceMethods mappingproxy_as_sequence = {
     0,                                          /* sq_inplace_repeat */
 };
 
-static PyObject *
-mappingproxy_get(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+mappingproxy_get(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
     mappingproxyobject *pp = (mappingproxyobject *)self;
     /* newargs: mapping, key, default=None */
@@ -1184,11 +1154,11 @@ mappingproxy_get(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_UnpackStack(args, nargs, "get", 1, 2,
                             &newargs[1], &newargs[2]))
     {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyObject_VectorcallMethod(&_Py_ID(get), newargs,
+    return PyValue_FromResult(PyObject_VectorcallMethod(&_Py_ID(get), newargs,
                                      3 | PY_VECTORCALL_ARGUMENTS_OFFSET,
-                                     NULL);
+                                     NULL));
 }
 
 static PyObject *
@@ -1241,7 +1211,7 @@ static PyMethodDef mappingproxy_methods[] = {
      PyDoc_STR("D.items() -> a set-like object providing a view on D's items")},
     {"copy",      mappingproxy_copy,       METH_NOARGS,
      PyDoc_STR("D.copy() -> a shallow copy of D")},
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
      PyDoc_STR("mappingproxy objects are generic over two types, signifying (respectively) the types of their keys and values")},
     {"__reversed__", mappingproxy_reversed, METH_NOARGS,
      PyDoc_STR("D.__reversed__() -> reverse iterator")},
@@ -1647,30 +1617,42 @@ static PyMemberDef property_members[] = {
 PyDoc_STRVAR(getter_doc,
              "Descriptor to obtain a copy of the property with a different getter.");
 
-static PyObject *
-property_getter(PyObject *self, PyObject *getter)
+static PyValue
+property_getter(PyObject *self, PyValue getter_value)
 {
-    return property_copy(self, getter, NULL, NULL);
+    PyObject *getter = PyValue_Object(getter_value);
+    if (getter == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(property_copy(self, getter, NULL, NULL));
 }
 
 
 PyDoc_STRVAR(setter_doc,
              "Descriptor to obtain a copy of the property with a different setter.");
 
-static PyObject *
-property_setter(PyObject *self, PyObject *setter)
+static PyValue
+property_setter(PyObject *self, PyValue setter_value)
 {
-    return property_copy(self, NULL, setter, NULL);
+    PyObject *setter = PyValue_Object(setter_value);
+    if (setter == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(property_copy(self, NULL, setter, NULL));
 }
 
 
 PyDoc_STRVAR(deleter_doc,
              "Descriptor to obtain a copy of the property with a different deleter.");
 
-static PyObject *
-property_deleter(PyObject *self, PyObject *deleter)
+static PyValue
+property_deleter(PyObject *self, PyValue deleter_value)
 {
-    return property_copy(self, NULL, NULL, deleter);
+    PyObject *deleter = PyValue_Object(deleter_value);
+    if (deleter == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(property_copy(self, NULL, NULL, deleter));
 }
 
 
@@ -1695,9 +1677,9 @@ property___set_name___impl(propertyobject *self, PyObject *owner,
 }
 
 static PyMethodDef property_methods[] = {
-    {"getter", property_getter, METH_O, getter_doc},
-    {"setter", property_setter, METH_O, setter_doc},
-    {"deleter", property_deleter, METH_O, deleter_doc},
+    {"getter", _PyCFunction_CAST(property_getter), METH_O, getter_doc},
+    {"setter", _PyCFunction_CAST(property_setter), METH_O, setter_doc},
+    {"deleter", _PyCFunction_CAST(property_deleter), METH_O, deleter_doc},
     PROPERTY___SET_NAME___METHODDEF
     {0}
 };

@@ -50,10 +50,10 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
                           PyObject *uid_object, int child_umask,
                           PyObject *preexec_fn);
 
-static PyObject *
-subprocess_fork_exec(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+subprocess_fork_exec(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *process_args;
     PyObject *executable_list;
     int close_fds;
@@ -76,78 +76,116 @@ subprocess_fork_exec(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     PyObject *uid_object;
     int child_umask;
     PyObject *preexec_fn;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("fork_exec", nargs, 22, 22)) {
         goto exit;
     }
-    process_args = args[0];
-    executable_list = args[1];
-    close_fds = PyObject_IsTrue(args[2]);
+    process_args = PyValue_Object(args[0]);
+    if (process_args == NULL) {
+        goto exit;
+    }
+    executable_list = PyValue_Object(args[1]);
+    if (executable_list == NULL) {
+        goto exit;
+    }
+    close_fds = PyObject_IsTrueValue(args[2]);
     if (close_fds < 0) {
         goto exit;
     }
-    if (!PyTuple_Check(args[3])) {
-        _PyArg_BadArgument("fork_exec", "argument 4", "tuple", args[3]);
+    {
+        PyObject *_arg = PyValue_Object(args[3]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyTuple_Check(_arg)) {
+            _PyArg_BadArgument("fork_exec", "argument 4", "tuple", _arg);
+            goto exit;
+        }
+        py_fds_to_keep = _arg;
+    }
+    cwd_obj = PyValue_Object(args[4]);
+    if (cwd_obj == NULL) {
         goto exit;
     }
-    py_fds_to_keep = args[3];
-    cwd_obj = args[4];
-    env_list = args[5];
-    p2cread = PyLong_AsInt(args[6]);
+    env_list = PyValue_Object(args[5]);
+    if (env_list == NULL) {
+        goto exit;
+    }
+    p2cread = PyLong_AsIntValue(args[6]);
     if (p2cread == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    p2cwrite = PyLong_AsInt(args[7]);
+    p2cwrite = PyLong_AsIntValue(args[7]);
     if (p2cwrite == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    c2pread = PyLong_AsInt(args[8]);
+    c2pread = PyLong_AsIntValue(args[8]);
     if (c2pread == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    c2pwrite = PyLong_AsInt(args[9]);
+    c2pwrite = PyLong_AsIntValue(args[9]);
     if (c2pwrite == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    errread = PyLong_AsInt(args[10]);
+    errread = PyLong_AsIntValue(args[10]);
     if (errread == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    errwrite = PyLong_AsInt(args[11]);
+    errwrite = PyLong_AsIntValue(args[11]);
     if (errwrite == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    errpipe_read = PyLong_AsInt(args[12]);
+    errpipe_read = PyLong_AsIntValue(args[12]);
     if (errpipe_read == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    errpipe_write = PyLong_AsInt(args[13]);
+    errpipe_write = PyLong_AsIntValue(args[13]);
     if (errpipe_write == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    restore_signals = PyObject_IsTrue(args[14]);
+    restore_signals = PyObject_IsTrueValue(args[14]);
     if (restore_signals < 0) {
         goto exit;
     }
-    call_setsid = PyObject_IsTrue(args[15]);
+    call_setsid = PyObject_IsTrueValue(args[15]);
     if (call_setsid < 0) {
         goto exit;
     }
-    pgid_to_set = PyLong_AsPid(args[16]);
-    if (pgid_to_set == (pid_t)(-1) && PyErr_Occurred()) {
+    {
+        PyObject *_arg = PyValue_Object(args[16]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        pgid_to_set = PyLong_AsPid(_arg);
+        if (pgid_to_set == (pid_t)(-1) && PyErr_Occurred()) {
+            goto exit;
+        }
+    }
+    gid_object = PyValue_Object(args[17]);
+    if (gid_object == NULL) {
         goto exit;
     }
-    gid_object = args[17];
-    extra_groups_packed = args[18];
-    uid_object = args[19];
-    child_umask = PyLong_AsInt(args[20]);
+    extra_groups_packed = PyValue_Object(args[18]);
+    if (extra_groups_packed == NULL) {
+        goto exit;
+    }
+    uid_object = PyValue_Object(args[19]);
+    if (uid_object == NULL) {
+        goto exit;
+    }
+    child_umask = PyLong_AsIntValue(args[20]);
     if (child_umask == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    preexec_fn = args[21];
-    return_value = subprocess_fork_exec_impl(module, process_args, executable_list, close_fds, py_fds_to_keep, cwd_obj, env_list, p2cread, p2cwrite, c2pread, c2pwrite, errread, errwrite, errpipe_read, errpipe_write, restore_signals, call_setsid, pgid_to_set, gid_object, extra_groups_packed, uid_object, child_umask, preexec_fn);
+    preexec_fn = PyValue_Object(args[21]);
+    if (preexec_fn == NULL) {
+        goto exit;
+    }
+    _return_value = subprocess_fork_exec_impl(module, process_args, executable_list, close_fds, py_fds_to_keep, cwd_obj, env_list, p2cread, p2cwrite, c2pread, c2pwrite, errread, errwrite, errpipe_read, errpipe_write, restore_signals, call_setsid, pgid_to_set, gid_object, extra_groups_packed, uid_object, child_umask, preexec_fn);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=59df66f994e6251d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=9149607dd1d1b271 input=a9049054013a1b77]*/

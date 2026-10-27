@@ -3,6 +3,7 @@ preserve
 [clinic start generated code]*/
 
 #include "pycore_modsupport.h"    // _PyArg_BadArgument()
+#include "pycore_tuple.h"         // _PyTuple_FromValues()
 
 PyDoc_STRVAR(getpath_abspath__doc__,
 "abspath($module, path, /)\n"
@@ -11,26 +12,34 @@ PyDoc_STRVAR(getpath_abspath__doc__,
 "Return the absolute path.");
 
 #define GETPATH_ABSPATH_METHODDEF    \
-    {"abspath", (PyCFunction)getpath_abspath, METH_O, getpath_abspath__doc__},
+    {"abspath", _PyCFunction_CAST(getpath_abspath), METH_O, getpath_abspath__doc__},
 
 static PyObject *
 getpath_abspath_impl(PyObject *module, const wchar_t *path);
 
-static PyObject *
-getpath_abspath(PyObject *module, PyObject *arg)
+static PyValue
+getpath_abspath(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const wchar_t *path = NULL;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("abspath", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("abspath", "argument", "str", _arg);
+            goto exit;
+        }
+        path = PyUnicode_AsWideCharString(_arg, NULL);
+        if (path == NULL) {
+            goto exit;
+        }
     }
-    path = PyUnicode_AsWideCharString(arg, NULL);
-    if (path == NULL) {
-        goto exit;
-    }
-    return_value = getpath_abspath_impl(module, path);
+    _return_value = getpath_abspath_impl(module, path);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for path */
@@ -46,23 +55,31 @@ PyDoc_STRVAR(getpath_basename__doc__,
 "Return the final component of the path.");
 
 #define GETPATH_BASENAME_METHODDEF    \
-    {"basename", (PyCFunction)getpath_basename, METH_O, getpath_basename__doc__},
+    {"basename", _PyCFunction_CAST(getpath_basename), METH_O, getpath_basename__doc__},
 
 static PyObject *
 getpath_basename_impl(PyObject *module, PyObject *path);
 
-static PyObject *
-getpath_basename(PyObject *module, PyObject *arg)
+static PyValue
+getpath_basename(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *path;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("basename", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("basename", "argument", "str", _arg);
+            goto exit;
+        }
+        path = _arg;
     }
-    path = arg;
-    return_value = getpath_basename_impl(module, path);
+    _return_value = getpath_basename_impl(module, path);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -75,23 +92,31 @@ PyDoc_STRVAR(getpath_dirname__doc__,
 "Return the directory component of the path.");
 
 #define GETPATH_DIRNAME_METHODDEF    \
-    {"dirname", (PyCFunction)getpath_dirname, METH_O, getpath_dirname__doc__},
+    {"dirname", _PyCFunction_CAST(getpath_dirname), METH_O, getpath_dirname__doc__},
 
 static PyObject *
 getpath_dirname_impl(PyObject *module, PyObject *path);
 
-static PyObject *
-getpath_dirname(PyObject *module, PyObject *arg)
+static PyValue
+getpath_dirname(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *path;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("dirname", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("dirname", "argument", "str", _arg);
+            goto exit;
+        }
+        path = _arg;
     }
-    path = arg;
-    return_value = getpath_dirname_impl(module, path);
+    _return_value = getpath_dirname_impl(module, path);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -104,31 +129,37 @@ PyDoc_STRVAR(getpath_isabs__doc__,
 "Return True if the path is absolute.");
 
 #define GETPATH_ISABS_METHODDEF    \
-    {"isabs", (PyCFunction)getpath_isabs, METH_O, getpath_isabs__doc__},
+    {"isabs", _PyCFunction_CAST(getpath_isabs), METH_O, getpath_isabs__doc__},
 
 static int
 getpath_isabs_impl(PyObject *module, const wchar_t *path);
 
-static PyObject *
-getpath_isabs(PyObject *module, PyObject *arg)
+static PyValue
+getpath_isabs(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const wchar_t *path = NULL;
     int _return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("isabs", "argument", "str", arg);
-        goto exit;
-    }
-    path = PyUnicode_AsWideCharString(arg, NULL);
-    if (path == NULL) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("isabs", "argument", "str", _arg);
+            goto exit;
+        }
+        path = PyUnicode_AsWideCharString(_arg, NULL);
+        if (path == NULL) {
+            goto exit;
+        }
     }
     _return_value = getpath_isabs_impl(module, path);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     /* Cleanup for path */
@@ -150,10 +181,10 @@ static int
 getpath_hassuffix_impl(PyObject *module, PyObject *pathobj,
                        PyObject *suffixobj);
 
-static PyObject *
-getpath_hassuffix(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+getpath_hassuffix(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *pathobj;
     PyObject *suffixobj;
     int _return_value;
@@ -161,21 +192,33 @@ getpath_hassuffix(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("hassuffix", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("hassuffix", "argument 1", "str", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("hassuffix", "argument 1", "str", _arg);
+            goto exit;
+        }
+        pathobj = _arg;
     }
-    pathobj = args[0];
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("hassuffix", "argument 2", "str", args[1]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("hassuffix", "argument 2", "str", _arg);
+            goto exit;
+        }
+        suffixobj = _arg;
     }
-    suffixobj = args[1];
     _return_value = getpath_hassuffix_impl(module, pathobj, suffixobj);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -188,31 +231,37 @@ PyDoc_STRVAR(getpath_isdir__doc__,
 "Return True if the path is a directory.");
 
 #define GETPATH_ISDIR_METHODDEF    \
-    {"isdir", (PyCFunction)getpath_isdir, METH_O, getpath_isdir__doc__},
+    {"isdir", _PyCFunction_CAST(getpath_isdir), METH_O, getpath_isdir__doc__},
 
 static int
 getpath_isdir_impl(PyObject *module, const wchar_t *path);
 
-static PyObject *
-getpath_isdir(PyObject *module, PyObject *arg)
+static PyValue
+getpath_isdir(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const wchar_t *path = NULL;
     int _return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("isdir", "argument", "str", arg);
-        goto exit;
-    }
-    path = PyUnicode_AsWideCharString(arg, NULL);
-    if (path == NULL) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("isdir", "argument", "str", _arg);
+            goto exit;
+        }
+        path = PyUnicode_AsWideCharString(_arg, NULL);
+        if (path == NULL) {
+            goto exit;
+        }
     }
     _return_value = getpath_isdir_impl(module, path);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     /* Cleanup for path */
@@ -228,28 +277,34 @@ PyDoc_STRVAR(getpath_isfile__doc__,
 "Return True if the path is a regular file.");
 
 #define GETPATH_ISFILE_METHODDEF    \
-    {"isfile", (PyCFunction)getpath_isfile, METH_O, getpath_isfile__doc__},
+    {"isfile", _PyCFunction_CAST(getpath_isfile), METH_O, getpath_isfile__doc__},
 
 static int
 getpath_isfile_impl(PyObject *module, PyObject *pathobj);
 
-static PyObject *
-getpath_isfile(PyObject *module, PyObject *arg)
+static PyValue
+getpath_isfile(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *pathobj;
     int _return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("isfile", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("isfile", "argument", "str", _arg);
+            goto exit;
+        }
+        pathobj = _arg;
     }
-    pathobj = arg;
     _return_value = getpath_isfile_impl(module, pathobj);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -262,28 +317,34 @@ PyDoc_STRVAR(getpath_isxfile__doc__,
 "Return True if the path is an executable file.");
 
 #define GETPATH_ISXFILE_METHODDEF    \
-    {"isxfile", (PyCFunction)getpath_isxfile, METH_O, getpath_isxfile__doc__},
+    {"isxfile", _PyCFunction_CAST(getpath_isxfile), METH_O, getpath_isxfile__doc__},
 
 static int
 getpath_isxfile_impl(PyObject *module, PyObject *pathobj);
 
-static PyObject *
-getpath_isxfile(PyObject *module, PyObject *arg)
+static PyValue
+getpath_isxfile(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *pathobj;
     int _return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("isxfile", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("isxfile", "argument", "str", _arg);
+            goto exit;
+        }
+        pathobj = _arg;
     }
-    pathobj = arg;
     _return_value = getpath_isxfile_impl(module, pathobj);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -301,17 +362,19 @@ PyDoc_STRVAR(getpath_joinpath__doc__,
 static PyObject *
 getpath_joinpath_impl(PyObject *module, PyObject *args);
 
-static PyObject *
-getpath_joinpath(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+getpath_joinpath(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *__clinic_args = NULL;
+    PyObject *_return_value;
 
-    __clinic_args = PyTuple_FromArray(args, nargs);
+    __clinic_args = _PyTuple_FromValues(args, nargs);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    return_value = getpath_joinpath_impl(module, __clinic_args);
+    _return_value = getpath_joinpath_impl(module, __clinic_args);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for args */
@@ -327,23 +390,31 @@ PyDoc_STRVAR(getpath_readlines__doc__,
 "Return the lines of the file.");
 
 #define GETPATH_READLINES_METHODDEF    \
-    {"readlines", (PyCFunction)getpath_readlines, METH_O, getpath_readlines__doc__},
+    {"readlines", _PyCFunction_CAST(getpath_readlines), METH_O, getpath_readlines__doc__},
 
 static PyObject *
 getpath_readlines_impl(PyObject *module, PyObject *pathobj);
 
-static PyObject *
-getpath_readlines(PyObject *module, PyObject *arg)
+static PyValue
+getpath_readlines(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *pathobj;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("readlines", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("readlines", "argument", "str", _arg);
+            goto exit;
+        }
+        pathobj = _arg;
     }
-    pathobj = arg;
-    return_value = getpath_readlines_impl(module, pathobj);
+    _return_value = getpath_readlines_impl(module, pathobj);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -356,25 +427,33 @@ PyDoc_STRVAR(getpath_realpath__doc__,
 "Resolve a symlinked file.");
 
 #define GETPATH_REALPATH_METHODDEF    \
-    {"realpath", (PyCFunction)getpath_realpath, METH_O, getpath_realpath__doc__},
+    {"realpath", _PyCFunction_CAST(getpath_realpath), METH_O, getpath_realpath__doc__},
 
 static PyObject *
 getpath_realpath_impl(PyObject *module, PyObject *pathobj);
 
-static PyObject *
-getpath_realpath(PyObject *module, PyObject *arg)
+static PyValue
+getpath_realpath(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *pathobj;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("realpath", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("realpath", "argument", "str", _arg);
+            goto exit;
+        }
+        pathobj = _arg;
     }
-    pathobj = arg;
-    return_value = getpath_realpath_impl(module, pathobj);
+    _return_value = getpath_realpath_impl(module, pathobj);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=74266cdd2d87e28d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=a34aa6f84370f3b5 input=a9049054013a1b77]*/

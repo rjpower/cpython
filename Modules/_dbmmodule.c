@@ -516,9 +516,9 @@ Close the database.
 [clinic start generated code]*/
 
 static PyObject *
-_dbm_dbm___exit___impl(dbmobject *self, PyObject * const *exc_info,
+_dbm_dbm___exit___impl(dbmobject *self, const PyValue *exc_info,
                        Py_ssize_t exc_info_length)
-/*[clinic end generated code: output=f9549bf513b3285d input=340d8190b6fb0f15]*/
+/*[clinic end generated code: output=e219691f409a3638 input=340d8190b6fb0f15]*/
 {
     return _dbm_dbm_close_impl(self);
 }

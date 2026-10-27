@@ -1699,7 +1699,7 @@ static PyMethodDef FutureType_methods[] = {
     _ASYNCIO_FUTURE_DONE_METHODDEF
     _ASYNCIO_FUTURE_GET_LOOP_METHODDEF
     _ASYNCIO_FUTURE__MAKE_CANCELLED_ERROR_METHODDEF
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
     PyDoc_STR("Futures are generic over the type of their results")},
     {NULL, NULL}        /* Sentinel */
 };
@@ -1862,39 +1862,47 @@ FutureIter_iternext(PyObject *it)
     }
 }
 
-static PyObject *
-FutureIter_send(PyObject *self, PyObject *unused)
+static PyValue
+FutureIter_send(PyObject *self, PyValue unused)
 {
     /* Future.__iter__ doesn't care about values that are pushed to the
      * generator, it just returns self.result().
      */
-    return FutureIter_iternext(self);
+    return PyValue_FromResult(FutureIter_iternext(self));
 }
 
-static PyObject *
-FutureIter_throw(PyObject *op, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+FutureIter_throw(PyObject *op, const PyValue *args, Py_ssize_t nargs)
 {
     futureiterobject *self = (futureiterobject*)op;
     PyObject *type, *val = NULL, *tb = NULL;
     if (!_PyArg_CheckPositional("throw", nargs, 1, 3)) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (nargs > 1) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
                             "the (type, exc, tb) signature of throw() is deprecated, "
                             "use the single-arg signature instead.",
                             1) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
-    type = args[0];
-    if (nargs == 3) {
-        val = args[1];
-        tb = args[2];
+    type = PyValue_Object(args[0]);
+    if (type == NULL) {
+        return PyValue_NULL;
     }
-    else if (nargs == 2) {
-        val = args[1];
+    if (nargs >= 2) {
+        val = PyValue_Object(args[1]);
+        if (val == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    if (nargs == 3) {
+        tb = PyValue_Object(args[2]);
+        if (tb == NULL) {
+            return PyValue_NULL;
+        }
     }
 
     if (val == Py_None) {
@@ -1904,7 +1912,7 @@ FutureIter_throw(PyObject *op, PyObject *const *args, Py_ssize_t nargs)
         tb = NULL;
     } else if (tb != NULL && !PyTraceBack_Check(tb)) {
         PyErr_SetString(PyExc_TypeError, "throw() third argument must be a traceback");
-        return NULL;
+        return PyValue_NULL;
     }
 
     Py_INCREF(type);
@@ -1939,13 +1947,13 @@ FutureIter_throw(PyObject *op, PyObject *const *args, Py_ssize_t nargs)
 
     PyErr_Restore(type, val, tb);
 
-    return NULL;
+    return PyValue_NULL;
 
   fail:
     Py_DECREF(type);
     Py_XDECREF(val);
     Py_XDECREF(tb);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *
@@ -1976,7 +1984,7 @@ FutureIter_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static PyMethodDef FutureIter_methods[] = {
-    {"send",  FutureIter_send, METH_O, NULL},
+    {"send",  _PyCFunction_CAST(FutureIter_send), METH_O, NULL},
     {"throw", _PyCFunction_CAST(FutureIter_throw), METH_FASTCALL, NULL},
     {"close", FutureIter_close, METH_NOARGS, NULL},
     {NULL, NULL}        /* Sentinel */
@@ -2032,7 +2040,7 @@ class _asyncio.Task "TaskObj *" "&Task_Type"
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=719dcef0fcc03b37]*/
 
 static int task_call_step_soon(asyncio_state *state, TaskObj *, PyObject *);
-static PyObject *task_wakeup(PyObject *op, PyObject *arg);
+static PyValue task_wakeup(PyObject *op, PyValue arg_v);
 static PyObject *task_step(asyncio_state *, TaskObj *, PyObject *);
 static int task_eager_start(_PyThreadStateImpl *ts, asyncio_state *state, TaskObj *task);
 
@@ -2144,7 +2152,7 @@ TaskStepMethWrapper_new(TaskObj *task, PyObject *arg)
 
 static  PyMethodDef TaskWakeupDef = {
     "task_wakeup",
-    task_wakeup,
+    _PyCFunction_CAST(task_wakeup),
     METH_O,
     NULL
 };
@@ -2870,7 +2878,7 @@ static PyMethodDef TaskType_methods[] = {
     _ASYNCIO_TASK_SET_NAME_METHODDEF
     _ASYNCIO_TASK_GET_CORO_METHODDEF
     _ASYNCIO_TASK_GET_CONTEXT_METHODDEF
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
     PyDoc_STR("Tasks are generic over the return type of their wrapped coroutines")},
     {NULL, NULL}        /* Sentinel */
 };
@@ -3524,15 +3532,19 @@ task_wakeup_lock_held(TaskObj *task, PyObject *o)
     return result;
 }
 
-static PyObject *
-task_wakeup(PyObject *op, PyObject *arg)
+static PyValue
+task_wakeup(PyObject *op, PyValue arg_v)
 {
+    PyObject *arg = PyValue_Object(arg_v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     TaskObj *task = (TaskObj*)op;
     PyObject *res;
     Py_BEGIN_CRITICAL_SECTION(task);
     res = task_wakeup_lock_held(task, arg);
     Py_END_CRITICAL_SECTION();
-    return res;
+    return PyValue_FromResult(res);
 }
 
 
@@ -3574,8 +3586,8 @@ This function is thread-specific.
 [clinic start generated code]*/
 
 static PyObject *
-_asyncio__set_running_loop(PyObject *module, PyObject *loop)
-/*[clinic end generated code: output=ae56bf7a28ca189a input=4c9720233d606604]*/
+_asyncio__set_running_loop_impl(PyObject *module, PyObject *loop)
+/*[clinic end generated code: output=d34270166e2641bd input=4c9720233d606604]*/
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
     if (loop == Py_None) {

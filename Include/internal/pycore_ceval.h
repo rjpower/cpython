@@ -382,26 +382,26 @@ _Py_VectorCallInstrumentation_Values(
     _PyInstr* this_instr,
     PyThreadState* tstate);
 
-PyAPI_FUNC(PyObject *)
+PyAPI_FUNC(PyValue)
 _Py_BuiltinCallFast_Values(
     PyValue callable,
     PyValue *arguments,
     int total_args);
 
-PyAPI_FUNC(PyObject *)
+PyAPI_FUNC(PyValue)
 _Py_BuiltinCallFastWithKeywords_Values(
     PyValue callable,
     PyValue *arguments,
     int total_args);
 
-PyAPI_FUNC(PyObject *)
+PyAPI_FUNC(PyValue)
 _PyCallMethodDescriptorFast_Values(
     PyValue callable,
     PyCFunctionFast cfunc,
     PyValue *arguments,
     int total_args);
 
-PyAPI_FUNC(PyObject *)
+PyAPI_FUNC(PyValue)
 _PyCallMethodDescriptorFastWithKeywords_Values(
     PyValue callable,
     PyCFunctionFastWithKeywords cfunc,

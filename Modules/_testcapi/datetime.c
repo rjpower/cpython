@@ -407,57 +407,76 @@ get_datetime_fromtimestamp(PyObject *self, PyObject *args)
     return rv;
 }
 
-static PyObject *
-test_PyDateTime_GET(PyObject *self, PyObject *obj)
+static PyValue
+test_PyDateTime_GET(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     int year, month, day;
 
     year = PyDateTime_GET_YEAR(obj);
     month = PyDateTime_GET_MONTH(obj);
     day = PyDateTime_GET_DAY(obj);
 
-    return Py_BuildValue("(iii)", year, month, day);
+    return PyValue_FromResult(Py_BuildValue("(iii)", year, month, day));
 }
 
-static PyObject *
-test_PyDateTime_DATE_GET(PyObject *self, PyObject *obj)
+static PyValue
+test_PyDateTime_DATE_GET(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     int hour = PyDateTime_DATE_GET_HOUR(obj);
     int minute = PyDateTime_DATE_GET_MINUTE(obj);
     int second = PyDateTime_DATE_GET_SECOND(obj);
     int microsecond = PyDateTime_DATE_GET_MICROSECOND(obj);
     PyObject *tzinfo = PyDateTime_DATE_GET_TZINFO(obj);
 
-    return Py_BuildValue("(iiiiO)", hour, minute, second, microsecond, tzinfo);
+    return PyValue_FromResult(
+        Py_BuildValue("(iiiiO)", hour, minute, second, microsecond, tzinfo));
 }
 
-static PyObject *
-test_PyDateTime_TIME_GET(PyObject *self, PyObject *obj)
+static PyValue
+test_PyDateTime_TIME_GET(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     int hour = PyDateTime_TIME_GET_HOUR(obj);
     int minute = PyDateTime_TIME_GET_MINUTE(obj);
     int second = PyDateTime_TIME_GET_SECOND(obj);
     int microsecond = PyDateTime_TIME_GET_MICROSECOND(obj);
     PyObject *tzinfo = PyDateTime_TIME_GET_TZINFO(obj);
 
-    return Py_BuildValue("(iiiiO)", hour, minute, second, microsecond, tzinfo);
+    return PyValue_FromResult(
+        Py_BuildValue("(iiiiO)", hour, minute, second, microsecond, tzinfo));
 }
 
-static PyObject *
-test_PyDateTime_DELTA_GET(PyObject *self, PyObject *obj)
+static PyValue
+test_PyDateTime_DELTA_GET(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     int days = PyDateTime_DELTA_GET_DAYS(obj);
     int seconds = PyDateTime_DELTA_GET_SECONDS(obj);
     int microseconds = PyDateTime_DELTA_GET_MICROSECONDS(obj);
 
-    return Py_BuildValue("(iii)", days, seconds, microseconds);
+    return PyValue_FromResult(
+        Py_BuildValue("(iii)", days, seconds, microseconds));
 }
 
 static PyMethodDef test_methods[] = {
-    {"PyDateTime_DATE_GET",         test_PyDateTime_DATE_GET,       METH_O},
-    {"PyDateTime_DELTA_GET",        test_PyDateTime_DELTA_GET,      METH_O},
-    {"PyDateTime_GET",              test_PyDateTime_GET,            METH_O},
-    {"PyDateTime_TIME_GET",         test_PyDateTime_TIME_GET,       METH_O},
+    {"PyDateTime_DATE_GET",         _PyCFunction_CAST(test_PyDateTime_DATE_GET), METH_O},
+    {"PyDateTime_DELTA_GET",        _PyCFunction_CAST(test_PyDateTime_DELTA_GET), METH_O},
+    {"PyDateTime_GET",              _PyCFunction_CAST(test_PyDateTime_GET), METH_O},
+    {"PyDateTime_TIME_GET",         _PyCFunction_CAST(test_PyDateTime_TIME_GET), METH_O},
     {"datetime_check_date",         datetime_check_date,            METH_VARARGS},
     {"datetime_check_datetime",     datetime_check_datetime,        METH_VARARGS},
     {"datetime_check_delta",        datetime_check_delta,           METH_VARARGS},

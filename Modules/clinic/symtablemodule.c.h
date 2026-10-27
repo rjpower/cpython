@@ -24,10 +24,10 @@ _symtable_symtable_impl(PyObject *module, PyObject *source,
                         PyObject *filename, const char *startstr,
                         PyObject *modname);
 
-static PyObject *
-_symtable_symtable(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_symtable_symtable(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -54,36 +54,56 @@ _symtable_symtable(PyObject *module, PyObject *const *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
+    PyValue argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 3;
     PyObject *source;
     PyObject *filename = NULL;
     const char *startstr;
     PyObject *modname = Py_None;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    source = args[0];
-    if (!PyUnicode_FSDecoder(args[1], &filename)) {
+    source = PyValue_Object(args[0]);
+    if (source == NULL) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[2])) {
-        _PyArg_BadArgument("symtable", "argument 3", "str", args[2]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_FSDecoder(_arg, &filename)) {
+            goto exit;
+        }
     }
-    startstr = _PyUnicode_AsUTF8NoNUL(args[2]);
-    if (startstr == NULL) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[2]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("symtable", "argument 3", "str", _arg);
+            goto exit;
+        }
+        startstr = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (startstr == NULL) {
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    modname = args[3];
+    modname = PyValue_Object(args[3]);
+    if (modname == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _symtable_symtable_impl(module, source, filename, startstr, modname);
+    _return_value = _symtable_symtable_impl(module, source, filename, startstr, modname);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for filename */
@@ -91,4 +111,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=05dc02396a7c52b9 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6521016e203f8cef input=a9049054013a1b77]*/

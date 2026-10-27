@@ -28,8 +28,8 @@ _typing._idfunc -> object
 [clinic start generated code]*/
 
 static PyObject *
-_typing__idfunc(PyObject *module, PyObject *x)
-/*[clinic end generated code: output=63c38be4a6ec5f2c input=49f17284b43de451]*/
+_typing__idfunc_impl(PyObject *module, PyObject *x)
+/*[clinic end generated code: output=56d9144afa60d13f input=49f17284b43de451]*/
 {
     return Py_NewRef(x);
 }

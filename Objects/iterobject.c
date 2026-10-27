@@ -142,19 +142,23 @@ iter_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 
 PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
 
-static PyObject *
-iter_setstate(PyObject *op, PyObject *state)
+static PyValue
+iter_setstate(PyObject *op, PyValue state_value)
 {
+    PyObject *state = PyValue_Object(state_value);
+    if (state == NULL) {
+        return PyValue_NULL;
+    }
     seqiterobject *it = (seqiterobject*)op;
     Py_ssize_t index = PyLong_AsSsize_t(state);
     if (index == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     if (index < 0)
         index = 0;
     if (it->it_seq && FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index) >= 0) {
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index);
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
@@ -162,7 +166,7 @@ PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
 static PyMethodDef seqiter_methods[] = {
     {"__length_hint__", iter_len, METH_NOARGS, length_hint_doc},
     {"__reduce__", iter_reduce, METH_NOARGS, reduce_doc},
-    {"__setstate__", iter_setstate, METH_O, setstate_doc},
+    {"__setstate__", _PyCFunction_CAST(iter_setstate), METH_O, setstate_doc},
     {NULL,              NULL}           /* sentinel */
 };
 
@@ -328,9 +332,13 @@ calliter_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
     }
 }
 
-static PyObject *
-calliter_setstate(PyObject *op, PyObject *state)
+static PyValue
+calliter_setstate(PyObject *op, PyValue state_value)
 {
+    PyObject *state = PyValue_Object(state_value);
+    if (state == NULL) {
+        return PyValue_NULL;
+    }
     calliterobject *it = (calliterobject*)op;
     PyObject *sentinel, *stop_exc;
 
@@ -343,7 +351,7 @@ calliter_setstate(PyObject *op, PyObject *state)
         goto error;
     }
     if (_PyEval_CheckExceptTypeValid(_PyThreadState_GET(), stop_exc) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (it->it_callable != NULL) {
         Py_XSETREF(it->it_sentinel,
@@ -351,16 +359,16 @@ calliter_setstate(PyObject *op, PyObject *state)
                    Py_NewRef(PyTuple_GET_ITEM(sentinel, 0)) : NULL);
         Py_SETREF(it->it_stop_exc, Py_NewRef(stop_exc));
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 
 error:
     PyErr_SetString(PyExc_TypeError, "invalid state for callable_iterator");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyMethodDef calliter_methods[] = {
     {"__reduce__", calliter_reduce, METH_NOARGS, reduce_doc},
-    {"__setstate__", calliter_setstate, METH_O, setstate_doc},
+    {"__setstate__", _PyCFunction_CAST(calliter_setstate), METH_O, setstate_doc},
     {NULL,              NULL}           /* sentinel */
 };
 

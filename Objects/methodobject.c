@@ -7,7 +7,6 @@
 #include "pycore_object.h"
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
-#include "pycore_value.h"         // _PyValue_ObjectArray()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 
@@ -423,15 +422,6 @@ cfunction_enter_call(PyThreadState *tstate, PyObject *func)
     return (funcptr)PyCFunction_GET_FUNCTION(func);
 }
 
-/* The arguments as objects (_PyValue_ObjectArray()), for a METH_FASTCALL
-   function, which takes objects. */
-static inline PyObject *const *
-objects_of(const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
-{
-    Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
-    return (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
-}
-
 /* Now the actual vectorcall functions */
 static PyValue
 cfunction_vectorcall_FASTCALL(
@@ -448,14 +438,9 @@ cfunction_vectorcall_FASTCALL(
     if (meth == NULL) {
         return PyValue_NULL;
     }
-    PyObject *const *args_o = objects_of(args, nargs, kwnames);
-    if (args_o == NULL) {
-        _Py_LeaveRecursiveCallTstate(tstate);
-        return PyValue_NULL;
-    }
-    PyObject *result = meth(PyCFunction_GET_SELF(func), args_o, nargs);
+    PyValue result = meth(PyCFunction_GET_SELF(func), args, nargs);
     _Py_LeaveRecursiveCallTstate(tstate);
-    return PyValue_FromResult(result);
+    return result;
 }
 
 static PyValue
@@ -470,14 +455,9 @@ cfunction_vectorcall_FASTCALL_KEYWORDS(
     if (meth == NULL) {
         return PyValue_NULL;
     }
-    PyObject *const *args_o = objects_of(args, nargs, kwnames);
-    if (args_o == NULL) {
-        _Py_LeaveRecursiveCallTstate(tstate);
-        return PyValue_NULL;
-    }
-    PyObject *result = meth(PyCFunction_GET_SELF(func), args_o, nargs, kwnames);
+    PyValue result = meth(PyCFunction_GET_SELF(func), args, nargs, kwnames);
     _Py_LeaveRecursiveCallTstate(tstate);
-    return PyValue_FromResult(result);
+    return result;
 }
 
 static PyValue
@@ -492,14 +472,9 @@ cfunction_vectorcall_FASTCALL_KEYWORDS_METHOD(
     if (meth == NULL) {
         return PyValue_NULL;
     }
-    PyObject *const *args_o = objects_of(args, nargs, kwnames);
-    if (args_o == NULL) {
-        _Py_LeaveRecursiveCallTstate(tstate);
-        return PyValue_NULL;
-    }
-    PyObject *result = meth(PyCFunction_GET_SELF(func), cls, args_o, nargs, kwnames);
+    PyValue result = meth(PyCFunction_GET_SELF(func), cls, args, nargs, kwnames);
     _Py_LeaveRecursiveCallTstate(tstate);
-    return PyValue_FromResult(result);
+    return result;
 }
 
 static PyValue
@@ -550,19 +525,13 @@ cfunction_vectorcall_O(
         }
         return PyValue_NULL;
     }
-    PyCFunction meth = (PyCFunction)cfunction_enter_call(tstate, func);
+    PyCFunctionO meth = (PyCFunctionO)cfunction_enter_call(tstate, func);
     if (meth == NULL) {
         return PyValue_NULL;
     }
-    PyObject *arg = PyValue_Object(args[0]);
-    if (arg == NULL) {
-        _Py_LeaveRecursiveCallTstate(tstate);
-        return PyValue_NULL;
-    }
-    PyObject *result = _PyCFunction_TrampolineCall(
-        meth, PyCFunction_GET_SELF(func), arg);
+    PyValue result = meth(PyCFunction_GET_SELF(func), args[0]);
     _Py_LeaveRecursiveCallTstate(tstate);
-    return PyValue_FromResult(result);
+    return result;
 }
 
 

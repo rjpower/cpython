@@ -12,20 +12,28 @@ PyDoc_STRVAR(readline_parse_and_bind__doc__,
 "Execute the init line provided in the string argument.");
 
 #define READLINE_PARSE_AND_BIND_METHODDEF    \
-    {"parse_and_bind", (PyCFunction)readline_parse_and_bind, METH_O, readline_parse_and_bind__doc__},
+    {"parse_and_bind", _PyCFunction_CAST(readline_parse_and_bind), METH_O, readline_parse_and_bind__doc__},
 
 static PyObject *
 readline_parse_and_bind_impl(PyObject *module, PyObject *string);
 
-static PyObject *
-readline_parse_and_bind(PyObject *module, PyObject *string)
+static PyValue
+readline_parse_and_bind(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *string;
+    PyObject *_return_value;
 
+    string = PyValue_Object(arg);
+    if (string == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_parse_and_bind_impl(module, string);
+    _return_value = readline_parse_and_bind_impl(module, string);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -43,11 +51,12 @@ PyDoc_STRVAR(readline_read_init_file__doc__,
 static PyObject *
 readline_read_init_file_impl(PyObject *module, PyObject *filename_obj);
 
-static PyObject *
-readline_read_init_file(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+readline_read_init_file(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *filename_obj = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("read_init_file", nargs, 0, 1)) {
         goto exit;
@@ -55,11 +64,15 @@ readline_read_init_file(PyObject *module, PyObject *const *args, Py_ssize_t narg
     if (nargs < 1) {
         goto skip_optional;
     }
-    filename_obj = args[0];
+    filename_obj = PyValue_Object(args[0]);
+    if (filename_obj == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_read_init_file_impl(module, filename_obj);
+    _return_value = readline_read_init_file_impl(module, filename_obj);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -79,11 +92,12 @@ PyDoc_STRVAR(readline_read_history_file__doc__,
 static PyObject *
 readline_read_history_file_impl(PyObject *module, PyObject *filename_obj);
 
-static PyObject *
-readline_read_history_file(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+readline_read_history_file(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *filename_obj = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("read_history_file", nargs, 0, 1)) {
         goto exit;
@@ -91,11 +105,15 @@ readline_read_history_file(PyObject *module, PyObject *const *args, Py_ssize_t n
     if (nargs < 1) {
         goto skip_optional;
     }
-    filename_obj = args[0];
+    filename_obj = PyValue_Object(args[0]);
+    if (filename_obj == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_read_history_file_impl(module, filename_obj);
+    _return_value = readline_read_history_file_impl(module, filename_obj);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -115,11 +133,12 @@ PyDoc_STRVAR(readline_write_history_file__doc__,
 static PyObject *
 readline_write_history_file_impl(PyObject *module, PyObject *filename_obj);
 
-static PyObject *
-readline_write_history_file(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+readline_write_history_file(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *filename_obj = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("write_history_file", nargs, 0, 1)) {
         goto exit;
@@ -127,11 +146,15 @@ readline_write_history_file(PyObject *module, PyObject *const *args, Py_ssize_t 
     if (nargs < 1) {
         goto skip_optional;
     }
-    filename_obj = args[0];
+    filename_obj = PyValue_Object(args[0]);
+    if (filename_obj == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_write_history_file_impl(module, filename_obj);
+    _return_value = readline_write_history_file_impl(module, filename_obj);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -154,28 +177,33 @@ static PyObject *
 readline_append_history_file_impl(PyObject *module, int nelements,
                                   PyObject *filename_obj);
 
-static PyObject *
-readline_append_history_file(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+readline_append_history_file(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int nelements;
     PyObject *filename_obj = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("append_history_file", nargs, 1, 2)) {
         goto exit;
     }
-    nelements = PyLong_AsInt(args[0]);
+    nelements = PyLong_AsIntValue(args[0]);
     if (nelements == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    filename_obj = args[1];
+    filename_obj = PyValue_Object(args[1]);
+    if (filename_obj == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_append_history_file_impl(module, nelements, filename_obj);
+    _return_value = readline_append_history_file_impl(module, nelements, filename_obj);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -192,22 +220,24 @@ PyDoc_STRVAR(readline_set_history_length__doc__,
 "A negative length is used to inhibit history truncation.");
 
 #define READLINE_SET_HISTORY_LENGTH_METHODDEF    \
-    {"set_history_length", (PyCFunction)readline_set_history_length, METH_O, readline_set_history_length__doc__},
+    {"set_history_length", _PyCFunction_CAST(readline_set_history_length), METH_O, readline_set_history_length__doc__},
 
 static PyObject *
 readline_set_history_length_impl(PyObject *module, int length);
 
-static PyObject *
-readline_set_history_length(PyObject *module, PyObject *arg)
+static PyValue
+readline_set_history_length(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int length;
+    PyObject *_return_value;
 
-    length = PyLong_AsInt(arg);
+    length = PyLong_AsIntValue(arg);
     if (length == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = readline_set_history_length_impl(module, length);
+    _return_value = readline_set_history_length_impl(module, length);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -248,11 +278,12 @@ static PyObject *
 readline_set_completion_display_matches_hook_impl(PyObject *module,
                                                   PyObject *function);
 
-static PyObject *
-readline_set_completion_display_matches_hook(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+readline_set_completion_display_matches_hook(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *function = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("set_completion_display_matches_hook", nargs, 0, 1)) {
         goto exit;
@@ -260,11 +291,15 @@ readline_set_completion_display_matches_hook(PyObject *module, PyObject *const *
     if (nargs < 1) {
         goto skip_optional;
     }
-    function = args[0];
+    function = PyValue_Object(args[0]);
+    if (function == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_set_completion_display_matches_hook_impl(module, function);
+    _return_value = readline_set_completion_display_matches_hook_impl(module, function);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -285,11 +320,12 @@ PyDoc_STRVAR(readline_set_startup_hook__doc__,
 static PyObject *
 readline_set_startup_hook_impl(PyObject *module, PyObject *function);
 
-static PyObject *
-readline_set_startup_hook(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+readline_set_startup_hook(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *function = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("set_startup_hook", nargs, 0, 1)) {
         goto exit;
@@ -297,11 +333,15 @@ readline_set_startup_hook(PyObject *module, PyObject *const *args, Py_ssize_t na
     if (nargs < 1) {
         goto skip_optional;
     }
-    function = args[0];
+    function = PyValue_Object(args[0]);
+    if (function == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_set_startup_hook_impl(module, function);
+    _return_value = readline_set_startup_hook_impl(module, function);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -325,11 +365,12 @@ PyDoc_STRVAR(readline_set_pre_input_hook__doc__,
 static PyObject *
 readline_set_pre_input_hook_impl(PyObject *module, PyObject *function);
 
-static PyObject *
-readline_set_pre_input_hook(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+readline_set_pre_input_hook(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *function = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("set_pre_input_hook", nargs, 0, 1)) {
         goto exit;
@@ -337,11 +378,15 @@ readline_set_pre_input_hook(PyObject *module, PyObject *const *args, Py_ssize_t 
     if (nargs < 1) {
         goto skip_optional;
     }
-    function = args[0];
+    function = PyValue_Object(args[0]);
+    if (function == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_set_pre_input_hook_impl(module, function);
+    _return_value = readline_set_pre_input_hook_impl(module, function);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -438,20 +483,28 @@ PyDoc_STRVAR(readline_set_completer_delims__doc__,
 "Set the word delimiters for completion.");
 
 #define READLINE_SET_COMPLETER_DELIMS_METHODDEF    \
-    {"set_completer_delims", (PyCFunction)readline_set_completer_delims, METH_O, readline_set_completer_delims__doc__},
+    {"set_completer_delims", _PyCFunction_CAST(readline_set_completer_delims), METH_O, readline_set_completer_delims__doc__},
 
 static PyObject *
 readline_set_completer_delims_impl(PyObject *module, PyObject *string);
 
-static PyObject *
-readline_set_completer_delims(PyObject *module, PyObject *string)
+static PyValue
+readline_set_completer_delims(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *string;
+    PyObject *_return_value;
 
+    string = PyValue_Object(arg);
+    if (string == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_set_completer_delims_impl(module, string);
+    _return_value = readline_set_completer_delims_impl(module, string);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -462,24 +515,26 @@ PyDoc_STRVAR(readline_remove_history_item__doc__,
 "Remove history item given by its zero-based position.");
 
 #define READLINE_REMOVE_HISTORY_ITEM_METHODDEF    \
-    {"remove_history_item", (PyCFunction)readline_remove_history_item, METH_O, readline_remove_history_item__doc__},
+    {"remove_history_item", _PyCFunction_CAST(readline_remove_history_item), METH_O, readline_remove_history_item__doc__},
 
 static PyObject *
 readline_remove_history_item_impl(PyObject *module, int entry_number);
 
-static PyObject *
-readline_remove_history_item(PyObject *module, PyObject *arg)
+static PyValue
+readline_remove_history_item(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int entry_number;
+    PyObject *_return_value;
 
-    entry_number = PyLong_AsInt(arg);
+    entry_number = PyLong_AsIntValue(arg);
     if (entry_number == -1 && PyErr_Occurred()) {
         goto exit;
     }
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_remove_history_item_impl(module, entry_number);
+    _return_value = readline_remove_history_item_impl(module, entry_number);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -500,28 +555,36 @@ static PyObject *
 readline_replace_history_item_impl(PyObject *module, int entry_number,
                                    PyObject *line);
 
-static PyObject *
-readline_replace_history_item(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+readline_replace_history_item(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int entry_number;
     PyObject *line;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("replace_history_item", nargs, 2, 2)) {
         goto exit;
     }
-    entry_number = PyLong_AsInt(args[0]);
+    entry_number = PyLong_AsIntValue(args[0]);
     if (entry_number == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("replace_history_item", "argument 2", "str", args[1]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("replace_history_item", "argument 2", "str", _arg);
+            goto exit;
+        }
+        line = _arg;
     }
-    line = args[1];
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_replace_history_item_impl(module, entry_number, line);
+    _return_value = readline_replace_history_item_impl(module, entry_number, line);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -534,20 +597,28 @@ PyDoc_STRVAR(readline_add_history__doc__,
 "Add an item to the history buffer.");
 
 #define READLINE_ADD_HISTORY_METHODDEF    \
-    {"add_history", (PyCFunction)readline_add_history, METH_O, readline_add_history__doc__},
+    {"add_history", _PyCFunction_CAST(readline_add_history), METH_O, readline_add_history__doc__},
 
 static PyObject *
 readline_add_history_impl(PyObject *module, PyObject *string);
 
-static PyObject *
-readline_add_history(PyObject *module, PyObject *string)
+static PyValue
+readline_add_history(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *string;
+    PyObject *_return_value;
 
+    string = PyValue_Object(arg);
+    if (string == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_add_history_impl(module, string);
+    _return_value = readline_add_history_impl(module, string);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -558,23 +629,25 @@ PyDoc_STRVAR(readline_set_auto_history__doc__,
 "Enables or disables automatic history.");
 
 #define READLINE_SET_AUTO_HISTORY_METHODDEF    \
-    {"set_auto_history", (PyCFunction)readline_set_auto_history, METH_O, readline_set_auto_history__doc__},
+    {"set_auto_history", _PyCFunction_CAST(readline_set_auto_history), METH_O, readline_set_auto_history__doc__},
 
 static PyObject *
 readline_set_auto_history_impl(PyObject *module,
                                int _should_auto_add_history);
 
-static PyObject *
-readline_set_auto_history(PyObject *module, PyObject *arg)
+static PyValue
+readline_set_auto_history(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _should_auto_add_history;
+    PyObject *_return_value;
 
-    _should_auto_add_history = PyObject_IsTrue(arg);
+    _should_auto_add_history = PyObject_IsTrueValue(arg);
     if (_should_auto_add_history < 0) {
         goto exit;
     }
-    return_value = readline_set_auto_history_impl(module, _should_auto_add_history);
+    _return_value = readline_set_auto_history_impl(module, _should_auto_add_history);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -620,11 +693,12 @@ PyDoc_STRVAR(readline_set_completer__doc__,
 static PyObject *
 readline_set_completer_impl(PyObject *module, PyObject *function);
 
-static PyObject *
-readline_set_completer(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+readline_set_completer(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *function = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("set_completer", nargs, 0, 1)) {
         goto exit;
@@ -632,11 +706,15 @@ readline_set_completer(PyObject *module, PyObject *const *args, Py_ssize_t nargs
     if (nargs < 1) {
         goto skip_optional;
     }
-    function = args[0];
+    function = PyValue_Object(args[0]);
+    if (function == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_set_completer_impl(module, function);
+    _return_value = readline_set_completer_impl(module, function);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -673,24 +751,26 @@ PyDoc_STRVAR(readline_get_history_item__doc__,
 "Return the current contents of history item at one-based index.");
 
 #define READLINE_GET_HISTORY_ITEM_METHODDEF    \
-    {"get_history_item", (PyCFunction)readline_get_history_item, METH_O, readline_get_history_item__doc__},
+    {"get_history_item", _PyCFunction_CAST(readline_get_history_item), METH_O, readline_get_history_item__doc__},
 
 static PyObject *
 readline_get_history_item_impl(PyObject *module, int idx);
 
-static PyObject *
-readline_get_history_item(PyObject *module, PyObject *arg)
+static PyValue
+readline_get_history_item(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int idx;
+    PyObject *_return_value;
 
-    idx = PyLong_AsInt(arg);
+    idx = PyLong_AsIntValue(arg);
     if (idx == -1 && PyErr_Occurred()) {
         goto exit;
     }
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_get_history_item_impl(module, idx);
+    _return_value = readline_get_history_item_impl(module, idx);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -779,20 +859,28 @@ PyDoc_STRVAR(readline_insert_text__doc__,
 "Insert text into the line buffer at the cursor position.");
 
 #define READLINE_INSERT_TEXT_METHODDEF    \
-    {"insert_text", (PyCFunction)readline_insert_text, METH_O, readline_insert_text__doc__},
+    {"insert_text", _PyCFunction_CAST(readline_insert_text), METH_O, readline_insert_text__doc__},
 
 static PyObject *
 readline_insert_text_impl(PyObject *module, PyObject *string);
 
-static PyObject *
-readline_insert_text(PyObject *module, PyObject *string)
+static PyValue
+readline_insert_text(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *string;
+    PyObject *_return_value;
 
+    string = PyValue_Object(arg);
+    if (string == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = readline_insert_text_impl(module, string);
+    _return_value = readline_insert_text_impl(module, string);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -835,4 +923,4 @@ readline_redisplay(PyObject *module, PyObject *Py_UNUSED(ignored))
 #ifndef READLINE_CLEAR_HISTORY_METHODDEF
     #define READLINE_CLEAR_HISTORY_METHODDEF
 #endif /* !defined(READLINE_CLEAR_HISTORY_METHODDEF) */
-/*[clinic end generated code: output=acf4e4c35191cf09 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=a1128f122118689c input=a9049054013a1b77]*/

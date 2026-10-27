@@ -2,7 +2,6 @@
 preserve
 [clinic start generated code]*/
 
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
@@ -19,14 +18,14 @@ PyDoc_STRVAR(_ctypes_CType_Type___sizeof____doc__,
 static PyObject *
 _ctypes_CType_Type___sizeof___impl(PyObject *self, PyTypeObject *cls);
 
-static PyObject *
-_ctypes_CType_Type___sizeof__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ctypes_CType_Type___sizeof__(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "__sizeof__() takes no arguments");
-        return NULL;
+        return PyValue_NULL;
     }
-    return _ctypes_CType_Type___sizeof___impl(self, cls);
+    return PyValue_FromResult(_ctypes_CType_Type___sizeof___impl(self, cls));
 }
 
 static PyObject *
@@ -70,11 +69,12 @@ static PyObject *
 CDataType_from_address_impl(PyObject *type, PyTypeObject *cls,
                             PyObject *value);
 
-static PyObject *
-CDataType_from_address(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+CDataType_from_address(PyObject *type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *value;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("from_address", kwnames)) {
         goto exit;
@@ -82,8 +82,12 @@ CDataType_from_address(PyObject *type, PyTypeObject *cls, PyObject *const *args,
     if (!_PyArg_CheckPositional("from_address", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = CDataType_from_address_impl(type, cls, value);
+    value = PyValue_Object(args[0]);
+    if (value == NULL) {
+        goto exit;
+    }
+    _return_value = CDataType_from_address_impl(type, cls, value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -104,12 +108,13 @@ static PyObject *
 CDataType_from_buffer_impl(PyObject *type, PyTypeObject *cls, PyObject *obj,
                            Py_ssize_t offset);
 
-static PyObject *
-CDataType_from_buffer(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+CDataType_from_buffer(PyObject *type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *obj;
     Py_ssize_t offset = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("from_buffer", kwnames)) {
         goto exit;
@@ -117,29 +122,32 @@ CDataType_from_buffer(PyObject *type, PyTypeObject *cls, PyObject *const *args, 
     if (!_PyArg_CheckPositional("from_buffer", nargs, 1, 2)) {
         goto exit;
     }
-    obj = args[0];
+    obj = PyValue_Object(args[0]);
+    if (obj == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         offset = ival;
-        if (offset < 0) {
-            PyErr_SetString(PyExc_ValueError,
-                            "offset cannot be negative");
-            goto exit;
-        }
+            if (offset < 0) {
+                PyErr_SetString(PyExc_ValueError,
+                                "offset cannot be negative");
+                goto exit;
+            }
     }
 skip_optional:
-    return_value = CDataType_from_buffer_impl(type, cls, obj, offset);
+    _return_value = CDataType_from_buffer_impl(type, cls, obj, offset);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -160,12 +168,13 @@ static PyObject *
 CDataType_from_buffer_copy_impl(PyObject *type, PyTypeObject *cls,
                                 Py_buffer *buffer, Py_ssize_t offset);
 
-static PyObject *
-CDataType_from_buffer_copy(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+CDataType_from_buffer_copy(PyObject *type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer buffer = {NULL, NULL};
     Py_ssize_t offset = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("from_buffer_copy", kwnames)) {
         goto exit;
@@ -173,31 +182,37 @@ CDataType_from_buffer_copy(PyObject *type, PyTypeObject *cls, PyObject *const *a
     if (!_PyArg_CheckPositional("from_buffer_copy", nargs, 1, 2)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &buffer, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &buffer, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         offset = ival;
-        if (offset < 0) {
-            PyErr_SetString(PyExc_ValueError,
-                            "offset cannot be negative");
-            goto exit;
-        }
+            if (offset < 0) {
+                PyErr_SetString(PyExc_ValueError,
+                                "offset cannot be negative");
+                goto exit;
+            }
     }
 skip_optional:
-    return_value = CDataType_from_buffer_copy_impl(type, cls, &buffer, offset);
+    _return_value = CDataType_from_buffer_copy_impl(type, cls, &buffer, offset);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for buffer */
@@ -223,12 +238,13 @@ static PyObject *
 CDataType_in_dll_impl(PyObject *type, PyTypeObject *cls, PyObject *dll,
                       const char *name);
 
-static PyObject *
-CDataType_in_dll(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+CDataType_in_dll(PyObject *type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *dll;
     const char *name;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("in_dll", kwnames)) {
         goto exit;
@@ -236,16 +252,26 @@ CDataType_in_dll(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ss
     if (!_PyArg_CheckPositional("in_dll", nargs, 2, 2)) {
         goto exit;
     }
-    dll = args[0];
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("in_dll", "argument 2", "str", args[1]);
+    dll = PyValue_Object(args[0]);
+    if (dll == NULL) {
         goto exit;
     }
-    name = _PyUnicode_AsUTF8NoNUL(args[1]);
-    if (name == NULL) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("in_dll", "argument 2", "str", _arg);
+            goto exit;
+        }
+        name = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (name == NULL) {
+            goto exit;
+        }
     }
-    return_value = CDataType_in_dll_impl(type, cls, dll, name);
+    _return_value = CDataType_in_dll_impl(type, cls, dll, name);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -263,11 +289,12 @@ PyDoc_STRVAR(CDataType_from_param__doc__,
 static PyObject *
 CDataType_from_param_impl(PyObject *type, PyTypeObject *cls, PyObject *value);
 
-static PyObject *
-CDataType_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+CDataType_from_param(PyObject *type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *value;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("from_param", kwnames)) {
         goto exit;
@@ -275,8 +302,12 @@ CDataType_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, P
     if (!_PyArg_CheckPositional("from_param", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = CDataType_from_param_impl(type, cls, value);
+    value = PyValue_Object(args[0]);
+    if (value == NULL) {
+        goto exit;
+    }
+    _return_value = CDataType_from_param_impl(type, cls, value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -294,11 +325,12 @@ static PyObject *
 PyCPointerType_set_type_impl(PyTypeObject *self, PyTypeObject *cls,
                              PyObject *type);
 
-static PyObject *
-PyCPointerType_set_type(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+PyCPointerType_set_type(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *type;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("set_type", kwnames)) {
         goto exit;
@@ -306,8 +338,12 @@ PyCPointerType_set_type(PyObject *self, PyTypeObject *cls, PyObject *const *args
     if (!_PyArg_CheckPositional("set_type", nargs, 1, 1)) {
         goto exit;
     }
-    type = args[0];
-    return_value = PyCPointerType_set_type_impl((PyTypeObject *)self, cls, type);
+    type = PyValue_Object(args[0]);
+    if (type == NULL) {
+        goto exit;
+    }
+    _return_value = PyCPointerType_set_type_impl((PyTypeObject *)self, cls, type);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -326,11 +362,12 @@ static PyObject *
 PyCPointerType_from_param_impl(PyObject *type, PyTypeObject *cls,
                                PyObject *value);
 
-static PyObject *
-PyCPointerType_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+PyCPointerType_from_param(PyObject *type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *value;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("from_param", kwnames)) {
         goto exit;
@@ -338,8 +375,12 @@ PyCPointerType_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *ar
     if (!_PyArg_CheckPositional("from_param", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = PyCPointerType_from_param_impl(type, cls, value);
+    value = PyValue_Object(args[0]);
+    if (value == NULL) {
+        goto exit;
+    }
+    _return_value = PyCPointerType_from_param_impl(type, cls, value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -446,11 +487,12 @@ PyDoc_STRVAR(c_wchar_p_from_param__doc__,
 static PyObject *
 c_wchar_p_from_param_impl(PyObject *type, PyTypeObject *cls, PyObject *value);
 
-static PyObject *
-c_wchar_p_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+c_wchar_p_from_param(PyObject *type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *value;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("from_param", kwnames)) {
         goto exit;
@@ -458,8 +500,12 @@ c_wchar_p_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, P
     if (!_PyArg_CheckPositional("from_param", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = c_wchar_p_from_param_impl(type, cls, value);
+    value = PyValue_Object(args[0]);
+    if (value == NULL) {
+        goto exit;
+    }
+    _return_value = c_wchar_p_from_param_impl(type, cls, value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -476,11 +522,12 @@ PyDoc_STRVAR(c_char_p_from_param__doc__,
 static PyObject *
 c_char_p_from_param_impl(PyObject *type, PyTypeObject *cls, PyObject *value);
 
-static PyObject *
-c_char_p_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+c_char_p_from_param(PyObject *type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *value;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("from_param", kwnames)) {
         goto exit;
@@ -488,8 +535,12 @@ c_char_p_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py
     if (!_PyArg_CheckPositional("from_param", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = c_char_p_from_param_impl(type, cls, value);
+    value = PyValue_Object(args[0]);
+    if (value == NULL) {
+        goto exit;
+    }
+    _return_value = c_char_p_from_param_impl(type, cls, value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -506,11 +557,12 @@ PyDoc_STRVAR(c_void_p_from_param__doc__,
 static PyObject *
 c_void_p_from_param_impl(PyObject *type, PyTypeObject *cls, PyObject *value);
 
-static PyObject *
-c_void_p_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+c_void_p_from_param(PyObject *type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *value;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("from_param", kwnames)) {
         goto exit;
@@ -518,8 +570,12 @@ c_void_p_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py
     if (!_PyArg_CheckPositional("from_param", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = c_void_p_from_param_impl(type, cls, value);
+    value = PyValue_Object(args[0]);
+    if (value == NULL) {
+        goto exit;
+    }
+    _return_value = c_void_p_from_param_impl(type, cls, value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -538,11 +594,12 @@ static PyObject *
 PyCSimpleType_from_param_impl(PyObject *type, PyTypeObject *cls,
                               PyObject *value);
 
-static PyObject *
-PyCSimpleType_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+PyCSimpleType_from_param(PyObject *type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *value;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("from_param", kwnames)) {
         goto exit;
@@ -550,8 +607,12 @@ PyCSimpleType_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *arg
     if (!_PyArg_CheckPositional("from_param", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = PyCSimpleType_from_param_impl(type, cls, value);
+    value = PyValue_Object(args[0]);
+    if (value == NULL) {
+        goto exit;
+    }
+    _return_value = PyCSimpleType_from_param_impl(type, cls, value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -568,18 +629,20 @@ PyDoc_STRVAR(_ctypes_PyCData___reduce____doc__,
 static PyObject *
 _ctypes_PyCData___reduce___impl(PyObject *myself, PyTypeObject *cls);
 
-static PyObject *
-_ctypes_PyCData___reduce__(PyObject *myself, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ctypes_PyCData___reduce__(PyObject *myself, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "__reduce__() takes no arguments");
         goto exit;
     }
     Py_BEGIN_CRITICAL_SECTION(myself);
-    return_value = _ctypes_PyCData___reduce___impl(myself, cls);
+    _return_value = _ctypes_PyCData___reduce___impl(myself, cls);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -597,21 +660,23 @@ static PyObject *
 _ctypes_PyCData___setstate___impl(PyObject *myself, PyObject *dict,
                                   const char *data, Py_ssize_t data_length);
 
-static PyObject *
-_ctypes_PyCData___setstate__(PyObject *myself, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ctypes_PyCData___setstate__(PyObject *myself, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *dict;
     const char *data;
     Py_ssize_t data_length;
+    PyObject *_return_value;
 
     if (!PyArg_ParseArray(args, nargs, "O!s#:__setstate__",
         &PyDict_Type, &dict, &data, &data_length)) {
         goto exit;
     }
     Py_BEGIN_CRITICAL_SECTION(myself);
-    return_value = _ctypes_PyCData___setstate___impl(myself, dict, data, data_length);
+    _return_value = _ctypes_PyCData___setstate___impl(myself, dict, data, data_length);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -855,14 +920,14 @@ PyDoc_STRVAR(Simple_from_outparm__doc__,
 static PyObject *
 Simple_from_outparm_impl(PyObject *self, PyTypeObject *cls);
 
-static PyObject *
-Simple_from_outparm(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+Simple_from_outparm(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "__ctypes_from_outparam__() takes no arguments");
-        return NULL;
+        return PyValue_NULL;
     }
-    return Simple_from_outparm_impl(self, cls);
+    return PyValue_FromResult(Simple_from_outparm_impl(self, cls));
 }
 
 static int
@@ -938,4 +1003,4 @@ Pointer_bool(PyObject *self)
 
 #define _CTYPES_SIMPLE_VALUE_GETSETDEF {"value", (getter)_ctypes_Simple_value_get, (setter)_ctypes_Simple_value_set, NULL},
 
-/*[clinic end generated code: output=5d9dd4bbae13cfca input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f989f1d092f2986d input=a9049054013a1b77]*/

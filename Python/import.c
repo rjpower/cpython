@@ -4963,8 +4963,8 @@ Create an extension module.
 [clinic start generated code]*/
 
 static PyObject *
-_imp_create_builtin(PyObject *module, PyObject *spec)
-/*[clinic end generated code: output=ace7ff22271e6f39 input=37f966f890384e47]*/
+_imp_create_builtin_impl(PyObject *module, PyObject *spec)
+/*[clinic end generated code: output=a8f15136199d464b input=37f966f890384e47]*/
 {
     PyThreadState *tstate = _PyThreadState_GET();
 

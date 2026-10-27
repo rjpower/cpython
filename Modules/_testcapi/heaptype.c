@@ -6,13 +6,17 @@ static struct PyModuleDef *_testcapimodule = NULL;  // set at initialization
 
 /* Tests for heap types (PyType_From*) */
 
-static PyObject *pytype_fromspec_meta(PyObject* self, PyObject *meta)
+static PyValue pytype_fromspec_meta(PyObject* self, PyValue meta_value)
 {
+    PyObject *meta = PyValue_Object(meta_value);
+    if (meta == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyType_Check(meta)) {
         PyErr_SetString(
             PyExc_TypeError,
             "pytype_fromspec_meta: must be invoked with a type argument!");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyType_Slot HeapCTypeViaMetaclass_slots[] = {
@@ -27,8 +31,8 @@ static PyObject *pytype_fromspec_meta(PyObject* self, PyObject *meta)
         HeapCTypeViaMetaclass_slots
     };
 
-    return PyType_FromMetaclass(
-        (PyTypeObject *) meta, NULL, &HeapCTypeViaMetaclass_spec, NULL);
+    return PyValue_FromResult(PyType_FromMetaclass(
+        (PyTypeObject *) meta, NULL, &HeapCTypeViaMetaclass_spec, NULL));
 }
 
 
@@ -349,13 +353,17 @@ PyType_Spec repeated_members_slots_spec = {
     .slots = repeated_members_slots,
 };
 
-static PyObject *
-create_type_from_repeated_slots(PyObject *self, PyObject *variant_obj)
+static PyValue
+create_type_from_repeated_slots(PyObject *self, PyValue variant_obj_value)
 {
+    PyObject *variant_obj = PyValue_Object(variant_obj_value);
+    if (variant_obj == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *class = NULL;
     int variant = PyLong_AsLong(variant_obj);
     if (PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
     switch (variant) {
         case 0:
@@ -368,13 +376,17 @@ create_type_from_repeated_slots(PyObject *self, PyObject *variant_obj)
             PyErr_SetString(PyExc_ValueError, "bad test variant");
             break;
         }
-    return class;
+    return PyValue_FromResult(class);
 }
 
 
-static PyObject *
-make_immutable_type_with_base(PyObject *self, PyObject *base)
+static PyValue
+make_immutable_type_with_base(PyObject *self, PyValue base_value)
 {
+    PyObject *base = PyValue_Object(base_value);
+    if (base == NULL) {
+        return PyValue_NULL;
+    }
     assert(PyType_Check(base));
     PyType_Spec ImmutableSubclass_spec = {
         .name = "ImmutableSubclass",
@@ -382,12 +394,17 @@ make_immutable_type_with_base(PyObject *self, PyObject *base)
         .slots = empty_type_slots,
         .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_IMMUTABLETYPE,
     };
-    return PyType_FromSpecWithBases(&ImmutableSubclass_spec, base);
+    return PyValue_FromResult(
+        PyType_FromSpecWithBases(&ImmutableSubclass_spec, base));
 }
 
-static PyObject *
-make_type_with_base(PyObject *self, PyObject *base)
+static PyValue
+make_type_with_base(PyObject *self, PyValue base_value)
 {
+    PyObject *base = PyValue_Object(base_value);
+    if (base == NULL) {
+        return PyValue_NULL;
+    }
     assert(PyType_Check(base));
     PyType_Spec ImmutableSubclass_spec = {
         .name = "_testcapi.Subclass",
@@ -395,19 +412,24 @@ make_type_with_base(PyObject *self, PyObject *base)
         .slots = empty_type_slots,
         .flags = Py_TPFLAGS_DEFAULT,
     };
-    return PyType_FromSpecWithBases(&ImmutableSubclass_spec, base);
+    return PyValue_FromResult(
+        PyType_FromSpecWithBases(&ImmutableSubclass_spec, base));
 }
 
 
-static PyObject *
-pyobject_getitemdata(PyObject *self, PyObject *o)
+static PyValue
+pyobject_getitemdata(PyObject *self, PyValue o_value)
 {
+    PyObject *o = PyValue_Object(o_value);
+    if (o == NULL) {
+        return PyValue_NULL;
+    }
     void *pointer = PyObject_GetItemData(o);
     assert(pointer == PyObject_GetItemData_DuringGC(o));
     if (pointer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromVoidPtr(pointer);
+    return PyValue_FromResult(PyLong_FromVoidPtr(pointer));
 }
 
 
@@ -457,14 +479,18 @@ create_type_with_token(PyObject *module, PyObject *args)
     return PyType_FromMetaclass(NULL, module, &spec, NULL);
 }
 
-static PyObject *
-get_tp_token(PyObject *self, PyObject *type)
+static PyValue
+get_tp_token(PyObject *self, PyValue type_value)
 {
+    PyObject *type = PyValue_Object(type_value);
+    if (type == NULL) {
+        return PyValue_NULL;
+    }
     void *token = PyType_GetSlot((PyTypeObject *)type, Py_tp_token);
     if (PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromVoidPtr(token);
+    return PyValue_FromResult(PyLong_FromVoidPtr(token));
 }
 
 static PyObject *
@@ -533,12 +559,16 @@ error:
     return NULL;
 }
 
-static PyObject *
-pytype_getmodulebydef(PyObject *self, PyObject *type)
+static PyValue
+pytype_getmodulebydef(PyObject *self, PyValue type_value)
 {
+    PyObject *type = PyValue_Object(type_value);
+    if (type == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *mod = PyType_GetModuleByDef((PyTypeObject *)type, _testcapimodule);
     assert(mod == PyType_GetModuleByToken_DuringGC((PyTypeObject *)type, _testcapimodule));
-    return Py_XNewRef(mod);
+    return PyValue_FromResult(Py_XNewRef(mod));
 }
 
 static PyObject *
@@ -579,22 +609,22 @@ create_heapctype_with_none_bases_slot(PyObject *self, PyObject *Py_UNUSED(ignore
 
 
 static PyMethodDef TestMethods[] = {
-    {"pytype_fromspec_meta",    pytype_fromspec_meta,            METH_O},
+    {"pytype_fromspec_meta",    _PyCFunction_CAST(pytype_fromspec_meta), METH_O},
     {"test_type_from_ephemeral_spec", test_type_from_ephemeral_spec, METH_NOARGS},
     {"create_type_from_repeated_slots",
-        create_type_from_repeated_slots, METH_O},
+        _PyCFunction_CAST(create_type_from_repeated_slots), METH_O},
     {"test_from_spec_metatype_inheritance", test_from_spec_metatype_inheritance,
      METH_NOARGS},
     {"test_from_spec_invalid_metatype_inheritance",
      test_from_spec_invalid_metatype_inheritance,
      METH_NOARGS},
-    {"make_immutable_type_with_base", make_immutable_type_with_base, METH_O},
-    {"make_type_with_base", make_type_with_base, METH_O},
-    {"pyobject_getitemdata", pyobject_getitemdata, METH_O},
+    {"make_immutable_type_with_base", _PyCFunction_CAST(make_immutable_type_with_base), METH_O},
+    {"make_type_with_base", _PyCFunction_CAST(make_type_with_base), METH_O},
+    {"pyobject_getitemdata", _PyCFunction_CAST(pyobject_getitemdata), METH_O},
     {"create_type_with_token", create_type_with_token, METH_VARARGS},
-    {"get_tp_token", get_tp_token, METH_O},
+    {"get_tp_token", _PyCFunction_CAST(get_tp_token), METH_O},
     {"pytype_getbasebytoken", pytype_getbasebytoken, METH_VARARGS},
-    {"pytype_getmodulebydef", pytype_getmodulebydef, METH_O},
+    {"pytype_getmodulebydef", _PyCFunction_CAST(pytype_getmodulebydef), METH_O},
     {"pytype_getmodulebytoken", pytype_getmodulebytoken, METH_VARARGS},
     {"create_heapctype_with_none_bases_slot",
         create_heapctype_with_none_bases_slot, METH_NOARGS},

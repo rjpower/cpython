@@ -41,11 +41,12 @@ PyDoc_STRVAR(blob_read__doc__,
 static PyObject *
 blob_read_impl(pysqlite_Blob *self, int length);
 
-static PyObject *
-blob_read(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+blob_read(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int length = -1;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("read", nargs, 0, 1)) {
         goto exit;
@@ -53,12 +54,13 @@ blob_read(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    length = PyLong_AsInt(args[0]);
+    length = PyLong_AsIntValue(args[0]);
     if (length == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = blob_read_impl((pysqlite_Blob *)self, length);
+    _return_value = blob_read_impl((pysqlite_Blob *)self, length);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -74,21 +76,29 @@ PyDoc_STRVAR(blob_write__doc__,
 "of the blob will result in an exception being raised.");
 
 #define BLOB_WRITE_METHODDEF    \
-    {"write", (PyCFunction)blob_write, METH_O, blob_write__doc__},
+    {"write", _PyCFunction_CAST(blob_write), METH_O, blob_write__doc__},
 
 static PyObject *
 blob_write_impl(pysqlite_Blob *self, Py_buffer *data);
 
-static PyObject *
-blob_write(PyObject *self, PyObject *arg)
+static PyValue
+blob_write(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer data = {NULL, NULL};
+    PyObject *_return_value;
 
-    if (PyObject_GetBuffer(arg, &data, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
-    return_value = blob_write_impl((pysqlite_Blob *)self, &data);
+    _return_value = blob_write_impl((pysqlite_Blob *)self, &data);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for data */
@@ -116,29 +126,31 @@ PyDoc_STRVAR(blob_seek__doc__,
 static PyObject *
 blob_seek_impl(pysqlite_Blob *self, int offset, int origin);
 
-static PyObject *
-blob_seek(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+blob_seek(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int offset;
     int origin = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("seek", nargs, 1, 2)) {
         goto exit;
     }
-    offset = PyLong_AsInt(args[0]);
+    offset = PyLong_AsIntValue(args[0]);
     if (offset == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    origin = PyLong_AsInt(args[1]);
+    origin = PyLong_AsIntValue(args[1]);
     if (origin == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = blob_seek_impl((pysqlite_Blob *)self, offset, origin);
+    _return_value = blob_seek_impl((pysqlite_Blob *)self, offset, origin);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -193,23 +205,34 @@ static PyObject *
 blob_exit_impl(pysqlite_Blob *self, PyObject *type, PyObject *val,
                PyObject *tb);
 
-static PyObject *
-blob_exit(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+blob_exit(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *type;
     PyObject *val;
     PyObject *tb;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("__exit__", nargs, 3, 3)) {
         goto exit;
     }
-    type = args[0];
-    val = args[1];
-    tb = args[2];
-    return_value = blob_exit_impl((pysqlite_Blob *)self, type, val, tb);
+    type = PyValue_Object(args[0]);
+    if (type == NULL) {
+        goto exit;
+    }
+    val = PyValue_Object(args[1]);
+    if (val == NULL) {
+        goto exit;
+    }
+    tb = PyValue_Object(args[2]);
+    if (tb == NULL) {
+        goto exit;
+    }
+    _return_value = blob_exit_impl((pysqlite_Blob *)self, type, val, tb);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=b0e3d38063739b17 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4037bafe5ddf23fc input=a9049054013a1b77]*/

@@ -1,31 +1,40 @@
-// Need limited C API version 3.15 for PySys_GetAttr() etc
-#define Py_LIMITED_API 0x030f0000
-
 #include "parts.h"
 #include "util.h"
 
 
-static PyObject *
-sys_getattr(PyObject *Py_UNUSED(module), PyObject *name)
+static PyValue
+sys_getattr(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *name = PyValue_Object(arg);
+    if (name == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(name);
-    return PySys_GetAttr(name);
+    return PyValue_FromResult(PySys_GetAttr(name));
 }
 
-static PyObject *
-sys_getattrstring(PyObject *Py_UNUSED(module), PyObject *arg)
+static PyValue
+sys_getattrstring(PyObject *Py_UNUSED(module), PyValue value)
 {
+    PyObject *arg = PyValue_Object(value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     const char *name;
     Py_ssize_t size;
     if (!PyArg_Parse(arg, "z#", &name, &size)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PySys_GetAttrString(name);
+    return PyValue_FromResult(PySys_GetAttrString(name));
 }
 
-static PyObject *
-sys_getoptionalattr(PyObject *Py_UNUSED(module), PyObject *name)
+static PyValue
+sys_getoptionalattr(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *name = PyValue_Object(arg);
+    if (name == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *value = UNINITIALIZED_PTR;
     NULLABLE(name);
 
@@ -33,55 +42,63 @@ sys_getoptionalattr(PyObject *Py_UNUSED(module), PyObject *name)
         case -1:
             assert(value == NULL);
             assert(PyErr_Occurred());
-            return NULL;
+            return PyValue_NULL;
         case 0:
             assert(value == NULL);
-            return Py_NewRef(PyExc_AttributeError);
+            return PyValue_FromResult(Py_NewRef(PyExc_AttributeError));
         case 1:
-            return value;
+            return PyValue_FromResult(value);
         default:
             Py_FatalError("PySys_GetOptionalAttr() returned invalid code");
     }
 }
 
-static PyObject *
-sys_getoptionalattrstring(PyObject *Py_UNUSED(module), PyObject *arg)
+static PyValue
+sys_getoptionalattrstring(PyObject *Py_UNUSED(module), PyValue v)
 {
+    PyObject *arg = PyValue_Object(v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *value = UNINITIALIZED_PTR;
     const char *name;
     Py_ssize_t size;
     if (!PyArg_Parse(arg, "z#", &name, &size)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     switch (PySys_GetOptionalAttrString(name, &value)) {
         case -1:
             assert(value == NULL);
             assert(PyErr_Occurred());
-            return NULL;
+            return PyValue_NULL;
         case 0:
             assert(value == NULL);
-            return Py_NewRef(PyExc_AttributeError);
+            return PyValue_FromResult(Py_NewRef(PyExc_AttributeError));
         case 1:
-            return value;
+            return PyValue_FromResult(value);
         default:
             Py_FatalError("PySys_GetOptionalAttrString() returned invalid code");
     }
 }
 
-static PyObject *
-sys_getobject(PyObject *Py_UNUSED(module), PyObject *arg)
+static PyValue
+sys_getobject(PyObject *Py_UNUSED(module), PyValue value)
 {
+    PyObject *arg = PyValue_Object(value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     const char *name;
     Py_ssize_t size;
     if (!PyArg_Parse(arg, "z#", &name, &size)) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *result = PySys_GetObject(name);
     if (result == NULL) {
         result = PyExc_AttributeError;
     }
-    return Py_NewRef(result);
+    return PyValue_FromResult(Py_NewRef(result));
 }
 
 static PyObject *
@@ -106,11 +123,11 @@ sys_getxoptions(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(ignored))
 
 
 static PyMethodDef test_methods[] = {
-    {"sys_getattr", sys_getattr, METH_O},
-    {"sys_getattrstring", sys_getattrstring, METH_O},
-    {"sys_getoptionalattr", sys_getoptionalattr, METH_O},
-    {"sys_getoptionalattrstring", sys_getoptionalattrstring, METH_O},
-    {"sys_getobject", sys_getobject, METH_O},
+    {"sys_getattr", _PyCFunction_CAST(sys_getattr), METH_O},
+    {"sys_getattrstring", _PyCFunction_CAST(sys_getattrstring), METH_O},
+    {"sys_getoptionalattr", _PyCFunction_CAST(sys_getoptionalattr), METH_O},
+    {"sys_getoptionalattrstring", _PyCFunction_CAST(sys_getoptionalattrstring), METH_O},
+    {"sys_getobject", _PyCFunction_CAST(sys_getobject), METH_O},
     {"sys_setobject", sys_setobject, METH_VARARGS},
     {"sys_getxoptions", sys_getxoptions, METH_NOARGS},
     {NULL},

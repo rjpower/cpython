@@ -6,7 +6,7 @@ preserve
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-#include "pycore_tuple.h"         // _PyTuple_Objects()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 static PyObject *
 sentinel_new_impl(PyTypeObject *type, PyObject *name, PyObject *repr);
@@ -41,36 +41,40 @@ sentinel_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
+    PyValue argsbuf[2];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
-    PyObject *const *argitems;
     PyObject *name;
     PyObject *repr = Py_None;
 
-    argitems = _PyTuple_Objects(args);
-    if (argitems == NULL) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (!PyUnicode_Check(fastargs[0])) {
-        _PyArg_BadArgument("sentinel", "argument 1", "str", fastargs[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(fastargs[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("sentinel", "argument 1", "str", _arg);
+            goto exit;
+        }
+        name = _arg;
     }
-    name = fastargs[0];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    repr = fastargs[1];
+    repr = PyValue_Object(fastargs[1]);
+    if (repr == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
     return_value = sentinel_new_impl(type, name, repr);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=849211fcdb1c1a07 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=d6d0317ec84994f9 input=a9049054013a1b77]*/

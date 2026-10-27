@@ -2612,9 +2612,9 @@ For 0 returns the entire match.
 [clinic start generated code]*/
 
 static PyObject *
-_sre_SRE_Match_group_impl(MatchObject *self, PyObject * const *args,
+_sre_SRE_Match_group_impl(MatchObject *self, const PyValue *args,
                           Py_ssize_t args_length)
-/*[clinic end generated code: output=240cddd2cf62ee2a input=f6d9bfa0d01f3cda]*/
+/*[clinic end generated code: output=752e028bbe845ba5 input=f6d9bfa0d01f3cda]*/
 {
     PyObject* result;
     Py_ssize_t i;
@@ -2623,16 +2623,26 @@ _sre_SRE_Match_group_impl(MatchObject *self, PyObject * const *args,
     case 0:
         result = match_getslice(self, _PyLong_GetZero(), Py_None);
         break;
-    case 1:
-        result = match_getslice(self, args[0], Py_None);
+    case 1: {
+        // match_getindex() reads an object.
+        PyObject *index = PyValue_Object(args[0]);
+        if (index == NULL) {
+            return NULL;
+        }
+        result = match_getslice(self, index, Py_None);
         break;
+    }
     default:
         /* fetch multiple items */
         result = PyTuple_New(args_length);
         if (!result)
             return NULL;
         for (i = 0; i < args_length; i++) {
-            PyObject* item = match_getslice(self, args[i], Py_None);
+            PyObject *index = PyValue_Object(args[i]);
+            if (index == NULL) {
+                return NULL;
+            }
+            PyObject* item = match_getslice(self, index, Py_None);
             if (!item) {
                 Py_DECREF(result);
                 return NULL;
@@ -3380,7 +3390,7 @@ static PyMethodDef pattern_methods[] = {
     _SRE_SRE_PATTERN___COPY___METHODDEF
     _SRE_SRE_PATTERN___DEEPCOPY___METHODDEF
     _SRE_SRE_PATTERN__FAIL_AFTER_METHODDEF
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
      PyDoc_STR("Patterns are generic over the type of string they handle (str or bytes)")},
     {NULL, NULL}
 };
@@ -3436,7 +3446,7 @@ static PyMethodDef match_methods[] = {
     _SRE_SRE_MATCH_EXPAND_METHODDEF
     _SRE_SRE_MATCH___COPY___METHODDEF
     _SRE_SRE_MATCH___DEEPCOPY___METHODDEF
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
      PyDoc_STR("Matches are generic over the type of string which was matched (str or bytes)")},
     {NULL, NULL}
 };

@@ -2,18 +2,26 @@
 #include "util.h"
 
 
-static PyObject *
-dict_check(PyObject *self, PyObject *obj)
+static PyValue
+dict_check(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyDict_Check(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyDict_Check(obj)));
 }
 
-static PyObject *
-dict_checkexact(PyObject *self, PyObject *obj)
+static PyValue
+dict_checkexact(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyDict_CheckExact(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyDict_CheckExact(obj)));
 }
 
 static PyObject *
@@ -22,26 +30,38 @@ dict_new(PyObject *self, PyObject *Py_UNUSED(ignored))
     return PyDict_New();
 }
 
-static PyObject *
-dictproxy_new(PyObject *self, PyObject *obj)
+static PyValue
+dictproxy_new(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyDictProxy_New(obj);
+    return PyValue_FromResult(PyDictProxy_New(obj));
 }
 
-static PyObject *
-dict_clear(PyObject *self, PyObject *obj)
+static PyValue
+dict_clear(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
     PyDict_Clear(obj);
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
-dict_copy(PyObject *self, PyObject *obj)
+static PyValue
+dict_copy(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyDict_Copy(obj);
+    return PyValue_FromResult(PyDict_Copy(obj));
 }
 
 static PyObject *
@@ -56,11 +76,15 @@ dict_contains(PyObject *self, PyObject *args)
     RETURN_INT(PyDict_Contains(obj, key));
 }
 
-static PyObject *
-dict_size(PyObject *self, PyObject *obj)
+static PyValue
+dict_size(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    RETURN_SIZE(PyDict_Size(obj));
+    RETURN_SIZE_VALUE(PyDict_Size(obj));
 }
 
 static PyObject *
@@ -174,25 +198,37 @@ dict_delitemstring(PyObject *self, PyObject *args)
     RETURN_INT(PyDict_DelItemString(mapping, key));
 }
 
-static PyObject *
-dict_keys(PyObject *self, PyObject *obj)
+static PyValue
+dict_keys(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyDict_Keys(obj);
+    return PyValue_FromResult(PyDict_Keys(obj));
 }
 
-static PyObject *
-dict_values(PyObject *self, PyObject *obj)
+static PyValue
+dict_values(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyDict_Values(obj);
+    return PyValue_FromResult(PyDict_Values(obj));
 }
 
-static PyObject *
-dict_items(PyObject *self, PyObject *obj)
+static PyValue
+dict_items(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyDict_Items(obj);
+    return PyValue_FromResult(PyDict_Items(obj));
 }
 
 static PyObject *
@@ -256,13 +292,13 @@ dict_mergefromseq2(PyObject *self, PyObject *args)
 
 
 static PyMethodDef test_methods[] = {
-    {"dict_check", dict_check, METH_O},
-    {"dict_checkexact", dict_checkexact, METH_O},
+    {"dict_check", _PyCFunction_CAST(dict_check), METH_O},
+    {"dict_checkexact", _PyCFunction_CAST(dict_checkexact), METH_O},
     {"dict_new", dict_new, METH_NOARGS},
-    {"dictproxy_new", dictproxy_new, METH_O},
-    {"dict_clear", dict_clear, METH_O},
-    {"dict_copy", dict_copy, METH_O},
-    {"dict_size", dict_size, METH_O},
+    {"dictproxy_new", _PyCFunction_CAST(dictproxy_new), METH_O},
+    {"dict_clear", _PyCFunction_CAST(dict_clear), METH_O},
+    {"dict_copy", _PyCFunction_CAST(dict_copy), METH_O},
+    {"dict_size", _PyCFunction_CAST(dict_size), METH_O},
     {"dict_getitem", dict_getitem, METH_VARARGS},
     {"dict_getitemwitherror", dict_getitemwitherror, METH_VARARGS},
     {"dict_getitemstring", dict_getitemstring, METH_VARARGS},
@@ -271,9 +307,9 @@ static PyMethodDef test_methods[] = {
     {"dict_setitemstring", dict_setitemstring, METH_VARARGS},
     {"dict_delitem", dict_delitem, METH_VARARGS},
     {"dict_delitemstring", dict_delitemstring, METH_VARARGS},
-    {"dict_keys", dict_keys, METH_O},
-    {"dict_values", dict_values, METH_O},
-    {"dict_items", dict_items, METH_O},
+    {"dict_keys", _PyCFunction_CAST(dict_keys), METH_O},
+    {"dict_values", _PyCFunction_CAST(dict_values), METH_O},
+    {"dict_items", _PyCFunction_CAST(dict_items), METH_O},
     {"dict_next", dict_next, METH_VARARGS},
     {"dict_merge", dict_merge, METH_VARARGS},
     {"dict_update", dict_update, METH_VARARGS},

@@ -163,6 +163,30 @@ PyValue_FromDouble(double d)
     return _PyValue_BoxDouble(d);
 }
 
+// A new int object for value, or PyValue_NULL with an exception set.
+PyAPI_FUNC(PyValue) _PyValue_BoxInt64(int64_t value);
+PyAPI_FUNC(PyValue) _PyValue_BoxUInt64(uint64_t value);
+
+/* The value i: an inline int if it fits in int32, otherwise a new int
+   object.  PyValue_NULL with an exception set if allocating fails. */
+static inline PyValue
+PyValue_FromLongLong(long long i)
+{
+    if (INT32_MIN <= i && i <= INT32_MAX) {
+        return PyValue_FromInt32((int32_t)i);
+    }
+    return _PyValue_BoxInt64(i);
+}
+
+static inline PyValue
+PyValue_FromUnsignedLongLong(unsigned long long i)
+{
+    if (i <= INT32_MAX) {
+        return PyValue_FromInt32((int32_t)i);
+    }
+    return _PyValue_BoxUInt64(i);
+}
+
 // The canonical value of an exact int object that is not compact.
 PyAPI_FUNC(PyValue) _PyValue_FromLongObject(PyObject *op);
 

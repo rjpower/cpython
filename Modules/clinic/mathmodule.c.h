@@ -16,7 +16,28 @@ PyDoc_STRVAR(math_ceil__doc__,
 "This is the smallest integer >= x.");
 
 #define MATH_CEIL_METHODDEF    \
-    {"ceil", (PyCFunction)math_ceil, METH_O, math_ceil__doc__},
+    {"ceil", _PyCFunction_CAST(math_ceil), METH_O, math_ceil__doc__},
+
+static PyObject *
+math_ceil_impl(PyObject *module, PyObject *number);
+
+static PyValue
+math_ceil(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *number;
+    PyObject *_return_value;
+
+    number = PyValue_Object(arg);
+    if (number == NULL) {
+        goto exit;
+    }
+    _return_value = math_ceil_impl(module, number);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(math_floor__doc__,
 "floor($module, x, /)\n"
@@ -27,7 +48,28 @@ PyDoc_STRVAR(math_floor__doc__,
 "This is the largest integer <= x.");
 
 #define MATH_FLOOR_METHODDEF    \
-    {"floor", (PyCFunction)math_floor, METH_O, math_floor__doc__},
+    {"floor", _PyCFunction_CAST(math_floor), METH_O, math_floor__doc__},
+
+static PyObject *
+math_floor_impl(PyObject *module, PyObject *number);
+
+static PyValue
+math_floor(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *number;
+    PyObject *_return_value;
+
+    number = PyValue_Object(arg);
+    if (number == NULL) {
+        goto exit;
+    }
+    _return_value = math_floor_impl(module, number);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(math_fmax__doc__,
 "fmax($module, x, y, /)\n"
@@ -41,10 +83,10 @@ PyDoc_STRVAR(math_fmax__doc__,
 static double
 math_fmax_impl(PyObject *module, double x, double y);
 
-static PyObject *
-math_fmax(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+math_fmax(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
     double y;
     double _return_value;
@@ -52,31 +94,19 @@ math_fmax(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("fmax", nargs, 2, 2)) {
         goto exit;
     }
-    if (PyFloat_CheckExact(args[0])) {
-        x = PyFloat_AS_DOUBLE(args[0]);
+    x = PyFloat_AsDoubleValue(args[0]);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(args[0]);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    if (PyFloat_CheckExact(args[1])) {
-        y = PyFloat_AS_DOUBLE(args[1]);
-    }
-    else
-    {
-        y = PyFloat_AsDouble(args[1]);
-        if (y == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
+    y = PyFloat_AsDoubleValue(args[1]);
+    if (y == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
     _return_value = math_fmax_impl(module, x, y);
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyFloat_FromDouble(_return_value);
+    return_value = PyValue_FromDouble(_return_value);
 
 exit:
     return return_value;
@@ -94,10 +124,10 @@ PyDoc_STRVAR(math_fmin__doc__,
 static double
 math_fmin_impl(PyObject *module, double x, double y);
 
-static PyObject *
-math_fmin(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+math_fmin(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
     double y;
     double _return_value;
@@ -105,31 +135,19 @@ math_fmin(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("fmin", nargs, 2, 2)) {
         goto exit;
     }
-    if (PyFloat_CheckExact(args[0])) {
-        x = PyFloat_AS_DOUBLE(args[0]);
+    x = PyFloat_AsDoubleValue(args[0]);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(args[0]);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    if (PyFloat_CheckExact(args[1])) {
-        y = PyFloat_AS_DOUBLE(args[1]);
-    }
-    else
-    {
-        y = PyFloat_AsDouble(args[1]);
-        if (y == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
+    y = PyFloat_AsDoubleValue(args[1]);
+    if (y == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
     _return_value = math_fmin_impl(module, x, y);
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyFloat_FromDouble(_return_value);
+    return_value = PyValue_FromDouble(_return_value);
 
 exit:
     return return_value;
@@ -142,28 +160,24 @@ PyDoc_STRVAR(math_signbit__doc__,
 "Return True if the sign of x is negative and False otherwise.");
 
 #define MATH_SIGNBIT_METHODDEF    \
-    {"signbit", (PyCFunction)math_signbit, METH_O, math_signbit__doc__},
+    {"signbit", _PyCFunction_CAST(math_signbit), METH_O, math_signbit__doc__},
 
 static PyObject *
 math_signbit_impl(PyObject *module, double x);
 
-static PyObject *
-math_signbit(PyObject *module, PyObject *arg)
+static PyValue
+math_signbit(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
+    PyObject *_return_value;
 
-    if (PyFloat_CheckExact(arg)) {
-        x = PyFloat_AS_DOUBLE(arg);
+    x = PyFloat_AsDoubleValue(arg);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(arg);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = math_signbit_impl(module, x);
+    _return_value = math_signbit_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -178,7 +192,28 @@ PyDoc_STRVAR(math_fsum__doc__,
 "Assumes IEEE-754 floating-point arithmetic.");
 
 #define MATH_FSUM_METHODDEF    \
-    {"fsum", (PyCFunction)math_fsum, METH_O, math_fsum__doc__},
+    {"fsum", _PyCFunction_CAST(math_fsum), METH_O, math_fsum__doc__},
+
+static PyObject *
+math_fsum_impl(PyObject *module, PyObject *seq);
+
+static PyValue
+math_fsum(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *seq;
+    PyObject *_return_value;
+
+    seq = PyValue_Object(arg);
+    if (seq == NULL) {
+        goto exit;
+    }
+    _return_value = math_fsum_impl(module, seq);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(math_trunc__doc__,
 "trunc($module, x, /)\n"
@@ -189,7 +224,28 @@ PyDoc_STRVAR(math_trunc__doc__,
 "Uses the __trunc__ magic method.");
 
 #define MATH_TRUNC_METHODDEF    \
-    {"trunc", (PyCFunction)math_trunc, METH_O, math_trunc__doc__},
+    {"trunc", _PyCFunction_CAST(math_trunc), METH_O, math_trunc__doc__},
+
+static PyObject *
+math_trunc_impl(PyObject *module, PyObject *x);
+
+static PyValue
+math_trunc(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *x;
+    PyObject *_return_value;
+
+    x = PyValue_Object(arg);
+    if (x == NULL) {
+        goto exit;
+    }
+    _return_value = math_trunc_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(math_frexp__doc__,
 "frexp($module, x, /)\n"
@@ -202,28 +258,24 @@ PyDoc_STRVAR(math_frexp__doc__,
 "x == m * 2**e exactly.  Else, return (x, 0).");
 
 #define MATH_FREXP_METHODDEF    \
-    {"frexp", (PyCFunction)math_frexp, METH_O, math_frexp__doc__},
+    {"frexp", _PyCFunction_CAST(math_frexp), METH_O, math_frexp__doc__},
 
 static PyObject *
 math_frexp_impl(PyObject *module, double x);
 
-static PyObject *
-math_frexp(PyObject *module, PyObject *arg)
+static PyValue
+math_frexp(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
+    PyObject *_return_value;
 
-    if (PyFloat_CheckExact(arg)) {
-        x = PyFloat_AS_DOUBLE(arg);
+    x = PyFloat_AsDoubleValue(arg);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(arg);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = math_frexp_impl(module, x);
+    _return_value = math_frexp_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -243,28 +295,27 @@ PyDoc_STRVAR(math_ldexp__doc__,
 static PyObject *
 math_ldexp_impl(PyObject *module, double x, PyObject *i);
 
-static PyObject *
-math_ldexp(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+math_ldexp(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
     PyObject *i;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("ldexp", nargs, 2, 2)) {
         goto exit;
     }
-    if (PyFloat_CheckExact(args[0])) {
-        x = PyFloat_AS_DOUBLE(args[0]);
+    x = PyFloat_AsDoubleValue(args[0]);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(args[0]);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
+    i = PyValue_Object(args[1]);
+    if (i == NULL) {
+        goto exit;
     }
-    i = args[1];
-    return_value = math_ldexp_impl(module, x, i);
+    _return_value = math_ldexp_impl(module, x, i);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -279,28 +330,24 @@ PyDoc_STRVAR(math_modf__doc__,
 "Both results carry the sign of x and are floats.");
 
 #define MATH_MODF_METHODDEF    \
-    {"modf", (PyCFunction)math_modf, METH_O, math_modf__doc__},
+    {"modf", _PyCFunction_CAST(math_modf), METH_O, math_modf__doc__},
 
 static PyObject *
 math_modf_impl(PyObject *module, double x);
 
-static PyObject *
-math_modf(PyObject *module, PyObject *arg)
+static PyValue
+math_modf(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
+    PyObject *_return_value;
 
-    if (PyFloat_CheckExact(arg)) {
-        x = PyFloat_AS_DOUBLE(arg);
+    x = PyFloat_AsDoubleValue(arg);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(arg);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = math_modf_impl(module, x);
+    _return_value = math_modf_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -313,7 +360,24 @@ PyDoc_STRVAR(math_log2__doc__,
 "Return the base 2 logarithm of x.");
 
 #define MATH_LOG2_METHODDEF    \
-    {"log2", (PyCFunction)math_log2, METH_O, math_log2__doc__},
+    {"log2", _PyCFunction_CAST(math_log2), METH_O, math_log2__doc__},
+
+static PyValue
+math_log2_impl(PyObject *module, PyValue x);
+
+static PyValue
+math_log2(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValue x;
+    PyValue _return_value;
+
+    x = arg;
+    _return_value = math_log2_impl(module, x);
+    return_value = _return_value;
+
+    return return_value;
+}
 
 PyDoc_STRVAR(math_log10__doc__,
 "log10($module, x, /)\n"
@@ -322,7 +386,24 @@ PyDoc_STRVAR(math_log10__doc__,
 "Return the base 10 logarithm of x.");
 
 #define MATH_LOG10_METHODDEF    \
-    {"log10", (PyCFunction)math_log10, METH_O, math_log10__doc__},
+    {"log10", _PyCFunction_CAST(math_log10), METH_O, math_log10__doc__},
+
+static PyValue
+math_log10_impl(PyObject *module, PyValue x);
+
+static PyValue
+math_log10(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValue x;
+    PyValue _return_value;
+
+    x = arg;
+    _return_value = math_log10_impl(module, x);
+    return_value = _return_value;
+
+    return return_value;
+}
 
 PyDoc_STRVAR(math_fma__doc__,
 "fma($module, x, y, z, /)\n"
@@ -338,48 +419,32 @@ PyDoc_STRVAR(math_fma__doc__,
 static PyObject *
 math_fma_impl(PyObject *module, double x, double y, double z);
 
-static PyObject *
-math_fma(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+math_fma(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
     double y;
     double z;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("fma", nargs, 3, 3)) {
         goto exit;
     }
-    if (PyFloat_CheckExact(args[0])) {
-        x = PyFloat_AS_DOUBLE(args[0]);
+    x = PyFloat_AsDoubleValue(args[0]);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(args[0]);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
+    y = PyFloat_AsDoubleValue(args[1]);
+    if (y == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    if (PyFloat_CheckExact(args[1])) {
-        y = PyFloat_AS_DOUBLE(args[1]);
+    z = PyFloat_AsDoubleValue(args[2]);
+    if (z == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        y = PyFloat_AsDouble(args[1]);
-        if (y == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    if (PyFloat_CheckExact(args[2])) {
-        z = PyFloat_AS_DOUBLE(args[2]);
-    }
-    else
-    {
-        z = PyFloat_AsDouble(args[2]);
-        if (z == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = math_fma_impl(module, x, y, z);
+    _return_value = math_fma_impl(module, x, y, z);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -399,37 +464,27 @@ PyDoc_STRVAR(math_fmod__doc__,
 static PyObject *
 math_fmod_impl(PyObject *module, double x, double y);
 
-static PyObject *
-math_fmod(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+math_fmod(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
     double y;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("fmod", nargs, 2, 2)) {
         goto exit;
     }
-    if (PyFloat_CheckExact(args[0])) {
-        x = PyFloat_AS_DOUBLE(args[0]);
+    x = PyFloat_AsDoubleValue(args[0]);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(args[0]);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
+    y = PyFloat_AsDoubleValue(args[1]);
+    if (y == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    if (PyFloat_CheckExact(args[1])) {
-        y = PyFloat_AS_DOUBLE(args[1]);
-    }
-    else
-    {
-        y = PyFloat_AsDouble(args[1]);
-        if (y == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = math_fmod_impl(module, x, y);
+    _return_value = math_fmod_impl(module, x, y);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -453,19 +508,27 @@ PyDoc_STRVAR(math_dist__doc__,
 static PyObject *
 math_dist_impl(PyObject *module, PyObject *p, PyObject *q);
 
-static PyObject *
-math_dist(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+math_dist(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *p;
     PyObject *q;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("dist", nargs, 2, 2)) {
         goto exit;
     }
-    p = args[0];
-    q = args[1];
-    return_value = math_dist_impl(module, p, q);
+    p = PyValue_Object(args[0]);
+    if (p == NULL) {
+        goto exit;
+    }
+    q = PyValue_Object(args[1]);
+    if (q == NULL) {
+        goto exit;
+    }
+    _return_value = math_dist_impl(module, p, q);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -492,19 +555,21 @@ PyDoc_STRVAR(math_hypot__doc__,
     {"hypot", _PyCFunction_CAST(math_hypot), METH_FASTCALL, math_hypot__doc__},
 
 static PyObject *
-math_hypot_impl(PyObject *module, PyObject * const *args,
+math_hypot_impl(PyObject *module, const PyValue *args,
                 Py_ssize_t args_length);
 
-static PyObject *
-math_hypot(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+math_hypot(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
-    PyObject * const *__clinic_args;
+    PyValue return_value = PyValue_NULL;
+    const PyValue *__clinic_args;
     Py_ssize_t args_length;
+    PyObject *_return_value;
 
     __clinic_args = args;
     args_length = nargs;
-    return_value = math_hypot_impl(module, __clinic_args, args_length);
+    _return_value = math_hypot_impl(module, __clinic_args, args_length);
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -528,19 +593,27 @@ PyDoc_STRVAR(math_sumprod__doc__,
 static PyObject *
 math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q);
 
-static PyObject *
-math_sumprod(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+math_sumprod(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *p;
     PyObject *q;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("sumprod", nargs, 2, 2)) {
         goto exit;
     }
-    p = args[0];
-    q = args[1];
-    return_value = math_sumprod_impl(module, p, q);
+    p = PyValue_Object(args[0]);
+    if (p == NULL) {
+        goto exit;
+    }
+    q = PyValue_Object(args[1]);
+    if (q == NULL) {
+        goto exit;
+    }
+    _return_value = math_sumprod_impl(module, p, q);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -558,37 +631,27 @@ PyDoc_STRVAR(math_pow__doc__,
 static PyObject *
 math_pow_impl(PyObject *module, double x, double y);
 
-static PyObject *
-math_pow(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+math_pow(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
     double y;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("pow", nargs, 2, 2)) {
         goto exit;
     }
-    if (PyFloat_CheckExact(args[0])) {
-        x = PyFloat_AS_DOUBLE(args[0]);
+    x = PyFloat_AsDoubleValue(args[0]);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(args[0]);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
+    y = PyFloat_AsDoubleValue(args[1]);
+    if (y == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    if (PyFloat_CheckExact(args[1])) {
-        y = PyFloat_AS_DOUBLE(args[1]);
-    }
-    else
-    {
-        y = PyFloat_AsDouble(args[1]);
-        if (y == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = math_pow_impl(module, x, y);
+    _return_value = math_pow_impl(module, x, y);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -601,28 +664,24 @@ PyDoc_STRVAR(math_degrees__doc__,
 "Convert angle x from radians to degrees.");
 
 #define MATH_DEGREES_METHODDEF    \
-    {"degrees", (PyCFunction)math_degrees, METH_O, math_degrees__doc__},
+    {"degrees", _PyCFunction_CAST(math_degrees), METH_O, math_degrees__doc__},
 
 static PyObject *
 math_degrees_impl(PyObject *module, double x);
 
-static PyObject *
-math_degrees(PyObject *module, PyObject *arg)
+static PyValue
+math_degrees(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
+    PyObject *_return_value;
 
-    if (PyFloat_CheckExact(arg)) {
-        x = PyFloat_AS_DOUBLE(arg);
+    x = PyFloat_AsDoubleValue(arg);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(arg);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = math_degrees_impl(module, x);
+    _return_value = math_degrees_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -635,28 +694,24 @@ PyDoc_STRVAR(math_radians__doc__,
 "Convert angle x from degrees to radians.");
 
 #define MATH_RADIANS_METHODDEF    \
-    {"radians", (PyCFunction)math_radians, METH_O, math_radians__doc__},
+    {"radians", _PyCFunction_CAST(math_radians), METH_O, math_radians__doc__},
 
 static PyObject *
 math_radians_impl(PyObject *module, double x);
 
-static PyObject *
-math_radians(PyObject *module, PyObject *arg)
+static PyValue
+math_radians(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
+    PyObject *_return_value;
 
-    if (PyFloat_CheckExact(arg)) {
-        x = PyFloat_AS_DOUBLE(arg);
+    x = PyFloat_AsDoubleValue(arg);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(arg);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = math_radians_impl(module, x);
+    _return_value = math_radians_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -669,28 +724,24 @@ PyDoc_STRVAR(math_isfinite__doc__,
 "Return True if x is neither an infinity nor a NaN, and False otherwise.");
 
 #define MATH_ISFINITE_METHODDEF    \
-    {"isfinite", (PyCFunction)math_isfinite, METH_O, math_isfinite__doc__},
+    {"isfinite", _PyCFunction_CAST(math_isfinite), METH_O, math_isfinite__doc__},
 
 static PyObject *
 math_isfinite_impl(PyObject *module, double x);
 
-static PyObject *
-math_isfinite(PyObject *module, PyObject *arg)
+static PyValue
+math_isfinite(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
+    PyObject *_return_value;
 
-    if (PyFloat_CheckExact(arg)) {
-        x = PyFloat_AS_DOUBLE(arg);
+    x = PyFloat_AsDoubleValue(arg);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(arg);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = math_isfinite_impl(module, x);
+    _return_value = math_isfinite_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -703,28 +754,24 @@ PyDoc_STRVAR(math_isnormal__doc__,
 "Return True if x is normal, and False otherwise.");
 
 #define MATH_ISNORMAL_METHODDEF    \
-    {"isnormal", (PyCFunction)math_isnormal, METH_O, math_isnormal__doc__},
+    {"isnormal", _PyCFunction_CAST(math_isnormal), METH_O, math_isnormal__doc__},
 
 static PyObject *
 math_isnormal_impl(PyObject *module, double x);
 
-static PyObject *
-math_isnormal(PyObject *module, PyObject *arg)
+static PyValue
+math_isnormal(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
+    PyObject *_return_value;
 
-    if (PyFloat_CheckExact(arg)) {
-        x = PyFloat_AS_DOUBLE(arg);
+    x = PyFloat_AsDoubleValue(arg);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(arg);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = math_isnormal_impl(module, x);
+    _return_value = math_isnormal_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -737,28 +784,24 @@ PyDoc_STRVAR(math_issubnormal__doc__,
 "Return True if x is subnormal, and False otherwise.");
 
 #define MATH_ISSUBNORMAL_METHODDEF    \
-    {"issubnormal", (PyCFunction)math_issubnormal, METH_O, math_issubnormal__doc__},
+    {"issubnormal", _PyCFunction_CAST(math_issubnormal), METH_O, math_issubnormal__doc__},
 
 static PyObject *
 math_issubnormal_impl(PyObject *module, double x);
 
-static PyObject *
-math_issubnormal(PyObject *module, PyObject *arg)
+static PyValue
+math_issubnormal(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
+    PyObject *_return_value;
 
-    if (PyFloat_CheckExact(arg)) {
-        x = PyFloat_AS_DOUBLE(arg);
+    x = PyFloat_AsDoubleValue(arg);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(arg);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = math_issubnormal_impl(module, x);
+    _return_value = math_issubnormal_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -771,28 +814,24 @@ PyDoc_STRVAR(math_isnan__doc__,
 "Return True if x is a NaN (not a number), and False otherwise.");
 
 #define MATH_ISNAN_METHODDEF    \
-    {"isnan", (PyCFunction)math_isnan, METH_O, math_isnan__doc__},
+    {"isnan", _PyCFunction_CAST(math_isnan), METH_O, math_isnan__doc__},
 
 static PyObject *
 math_isnan_impl(PyObject *module, double x);
 
-static PyObject *
-math_isnan(PyObject *module, PyObject *arg)
+static PyValue
+math_isnan(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
+    PyObject *_return_value;
 
-    if (PyFloat_CheckExact(arg)) {
-        x = PyFloat_AS_DOUBLE(arg);
+    x = PyFloat_AsDoubleValue(arg);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(arg);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = math_isnan_impl(module, x);
+    _return_value = math_isnan_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -805,28 +844,24 @@ PyDoc_STRVAR(math_isinf__doc__,
 "Return True if x is a positive or negative infinity, and False otherwise.");
 
 #define MATH_ISINF_METHODDEF    \
-    {"isinf", (PyCFunction)math_isinf, METH_O, math_isinf__doc__},
+    {"isinf", _PyCFunction_CAST(math_isinf), METH_O, math_isinf__doc__},
 
 static PyObject *
 math_isinf_impl(PyObject *module, double x);
 
-static PyObject *
-math_isinf(PyObject *module, PyObject *arg)
+static PyValue
+math_isinf(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
+    PyObject *_return_value;
 
-    if (PyFloat_CheckExact(arg)) {
-        x = PyFloat_AS_DOUBLE(arg);
+    x = PyFloat_AsDoubleValue(arg);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(arg);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = math_isinf_impl(module, x);
+    _return_value = math_isinf_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -861,10 +896,10 @@ static int
 math_isclose_impl(PyObject *module, double a, double b, double rel_tol,
                   double abs_tol);
 
-static PyObject *
-math_isclose(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+math_isclose(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
@@ -891,7 +926,7 @@ math_isclose(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
+    PyValue argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     double a;
     double b;
@@ -904,60 +939,36 @@ math_isclose(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
     if (!args) {
         goto exit;
     }
-    if (PyFloat_CheckExact(args[0])) {
-        a = PyFloat_AS_DOUBLE(args[0]);
+    a = PyFloat_AsDoubleValue(args[0]);
+    if (a == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        a = PyFloat_AsDouble(args[0]);
-        if (a == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    if (PyFloat_CheckExact(args[1])) {
-        b = PyFloat_AS_DOUBLE(args[1]);
-    }
-    else
-    {
-        b = PyFloat_AsDouble(args[1]);
-        if (b == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
+    b = PyFloat_AsDoubleValue(args[1]);
+    if (b == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[2]) {
-        if (PyFloat_CheckExact(args[2])) {
-            rel_tol = PyFloat_AS_DOUBLE(args[2]);
-        }
-        else
-        {
-            rel_tol = PyFloat_AsDouble(args[2]);
-            if (rel_tol == -1.0 && PyErr_Occurred()) {
-                goto exit;
-            }
+    if (!PyValue_IsNull(args[2])) {
+        rel_tol = PyFloat_AsDoubleValue(args[2]);
+        if (rel_tol == -1.0 && PyErr_Occurred()) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (PyFloat_CheckExact(args[3])) {
-        abs_tol = PyFloat_AS_DOUBLE(args[3]);
-    }
-    else
-    {
-        abs_tol = PyFloat_AsDouble(args[3]);
-        if (abs_tol == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
+    abs_tol = PyFloat_AsDoubleValue(args[3]);
+    if (abs_tol == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
 skip_optional_kwonly:
     _return_value = math_isclose_impl(module, a, b, rel_tol, abs_tol);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -981,10 +992,10 @@ PyDoc_STRVAR(math_prod__doc__,
 static PyObject *
 math_prod_impl(PyObject *module, PyObject *iterable, PyObject *start);
 
-static PyObject *
-math_prod(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+math_prod(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -1011,23 +1022,31 @@ math_prod(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *k
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *iterable;
     PyObject *start = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    iterable = args[0];
+    iterable = PyValue_Object(args[0]);
+    if (iterable == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    start = args[1];
+    start = PyValue_Object(args[1]);
+    if (start == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = math_prod_impl(module, iterable, start);
+    _return_value = math_prod_impl(module, iterable, start);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1050,10 +1069,10 @@ PyDoc_STRVAR(math_nextafter__doc__,
 static PyObject *
 math_nextafter_impl(PyObject *module, double x, double y, PyObject *steps);
 
-static PyObject *
-math_nextafter(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+math_nextafter(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -1080,43 +1099,36 @@ math_nextafter(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObje
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     double x;
     double y;
     PyObject *steps = Py_None;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (PyFloat_CheckExact(args[0])) {
-        x = PyFloat_AS_DOUBLE(args[0]);
+    x = PyFloat_AsDoubleValue(args[0]);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        x = PyFloat_AsDouble(args[0]);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    if (PyFloat_CheckExact(args[1])) {
-        y = PyFloat_AS_DOUBLE(args[1]);
-    }
-    else
-    {
-        y = PyFloat_AsDouble(args[1]);
-        if (y == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
+    y = PyFloat_AsDoubleValue(args[1]);
+    if (y == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    steps = args[2];
+    steps = PyValue_Object(args[2]);
+    if (steps == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = math_nextafter_impl(module, x, y, steps);
+    _return_value = math_nextafter_impl(module, x, y, steps);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1129,35 +1141,29 @@ PyDoc_STRVAR(math_ulp__doc__,
 "Return the value of the least significant bit of the float x.");
 
 #define MATH_ULP_METHODDEF    \
-    {"ulp", (PyCFunction)math_ulp, METH_O, math_ulp__doc__},
+    {"ulp", _PyCFunction_CAST(math_ulp), METH_O, math_ulp__doc__},
 
 static double
 math_ulp_impl(PyObject *module, double x);
 
-static PyObject *
-math_ulp(PyObject *module, PyObject *arg)
+static PyValue
+math_ulp(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
     double _return_value;
 
-    if (PyFloat_CheckExact(arg)) {
-        x = PyFloat_AS_DOUBLE(arg);
-    }
-    else
-    {
-        x = PyFloat_AsDouble(arg);
-        if (x == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
+    x = PyFloat_AsDoubleValue(arg);
+    if (x == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
     _return_value = math_ulp_impl(module, x);
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyFloat_FromDouble(_return_value);
+    return_value = PyValue_FromDouble(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=25c71f0265028d7e input=a9049054013a1b77]*/
+/*[clinic end generated code: output=dd453cb9a21fd5f3 input=a9049054013a1b77]*/

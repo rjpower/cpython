@@ -17,14 +17,19 @@ PyAPI_DATA(PyTypeObject) PyCFunction_Type;
 #define PyCFunction_Check(op) PyObject_TypeCheck((op), &PyCFunction_Type)
 
 typedef PyObject *(*PyCFunction)(PyObject *, PyObject *);
-typedef PyObject *(*PyCFunctionFast) (PyObject *, PyObject *const *, Py_ssize_t);
 typedef PyObject *(*PyCFunctionWithKeywords)(PyObject *, PyObject *,
                                              PyObject *);
-typedef PyObject *(*PyCFunctionFastWithKeywords) (PyObject *,
-                                                  PyObject *const *, Py_ssize_t,
-                                                  PyObject *);
-typedef PyObject *(*PyCMethod)(PyObject *, PyTypeObject *, PyObject *const *,
-                               Py_ssize_t, PyObject *);
+
+/* METH_O, METH_FASTCALL and METH_METHOD functions take their arguments as
+   values and return a value, PyValue_NULL with an exception set.  self stays
+   an object; keyword names are objects. */
+typedef PyValue (*PyCFunctionO)(PyObject *, PyValue);
+typedef PyValue (*PyCFunctionFast) (PyObject *, const PyValue *, Py_ssize_t);
+typedef PyValue (*PyCFunctionFastWithKeywords) (PyObject *,
+                                                const PyValue *, Py_ssize_t,
+                                                PyObject *);
+typedef PyValue (*PyCMethod)(PyObject *, PyTypeObject *, const PyValue *,
+                             Py_ssize_t, PyObject *);
 
 // For backwards compatibility. `METH_FASTCALL` was added to the stable API in
 // 3.10 alongside `_PyCFunctionFastWithKeywords` and `_PyCFunctionFast`.
@@ -54,6 +59,8 @@ typedef PyCFunctionFastWithKeywords _PyCFunctionFastWithKeywords;
 // The macros below are given for semantic convenience, allowing users
 // to see whether a cast to suppress an undefined behavior is necessary.
 // Note: At runtime, the original function signature must be respected.
+#define _PyCFunctionO_CAST(func)                        \
+    _Py_FUNC_CAST(PyCFunctionO, func)
 #define _PyCFunctionFast_CAST(func)                     \
     _Py_FUNC_CAST(PyCFunctionFast, func)
 #define _PyCFunctionWithKeywords_CAST(func)             \

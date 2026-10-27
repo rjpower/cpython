@@ -1,8 +1,5 @@
 /* Test version macros in the limited API */
 
-// Need limited C API version 3.14 for Py_PACK_VERSION()
-#define Py_LIMITED_API 0x030e0000
-
 #include "parts.h"
 #include "clinic/version.c.h"
 #include <stdio.h>

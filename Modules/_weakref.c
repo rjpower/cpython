@@ -70,8 +70,8 @@ Return a list of all weak reference objects pointing to 'object'.
 [clinic start generated code]*/
 
 static PyObject *
-_weakref_getweakrefs(PyObject *module, PyObject *object)
-/*[clinic end generated code: output=25c7731d8e011824 input=00c6d0e5d3206693]*/
+_weakref_getweakrefs_impl(PyObject *module, PyObject *object)
+/*[clinic end generated code: output=5ec268989fb8f035 input=00c6d0e5d3206693]*/
 {
     if (!_PyType_SUPPORTS_WEAKREFS(Py_TYPE(object))) {
         return PyList_New(0);

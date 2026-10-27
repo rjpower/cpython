@@ -585,8 +585,8 @@ sys_audit_impl(PyObject *module, const char *event, PyObject *args)
 }
 
 
-static PyObject *
-sys_breakpointhook(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *keywords)
+static PyValue
+sys_breakpointhook(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *keywords)
 {
     PyThreadState *tstate = _PyThreadState_GET();
     assert(!_PyErr_Occurred(tstate));
@@ -597,7 +597,7 @@ sys_breakpointhook(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
     }
     else if (!strcmp(envar, "0")) {
         /* The breakpoint is explicitly no-op'd. */
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
     /* According to POSIX the string returned by getenv() might be invalidated
      * or the string content might be overwritten by a subsequent call to
@@ -606,7 +606,7 @@ sys_breakpointhook(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
     envar = _PyMem_RawStrdup(envar);
     if (envar == NULL) {
         _PyErr_NoMemory(tstate);
-        return NULL;
+        return PyValue_NULL;
     }
     const char *last_dot = strrchr(envar, '.');
     const char *attrname = NULL;
@@ -627,7 +627,7 @@ sys_breakpointhook(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
     }
     if (modulepath == NULL) {
         PyMem_RawFree(envar);
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *module = PyImport_Import(modulepath);
@@ -638,7 +638,7 @@ sys_breakpointhook(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
             goto warn;
         }
         PyMem_RawFree(envar);
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *hook = PyObject_GetAttrString(module, attrname);
@@ -649,12 +649,11 @@ sys_breakpointhook(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
             goto warn;
         }
         PyMem_RawFree(envar);
-        return NULL;
+        return PyValue_NULL;
     }
     PyMem_RawFree(envar);
-    PyObject *retval = PyObject_Vectorcall(hook, args, nargs, keywords);
-    Py_DECREF(hook);
-    return retval;
+    return PyObject_VectorcallValue(PyValue_FromObject(hook), args, nargs,
+                                    keywords);
 
   warn:
     /* If any of the imports went wrong, then warn and ignore. */
@@ -665,10 +664,10 @@ sys_breakpointhook(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
     PyMem_RawFree(envar);
     if (status < 0) {
         /* Printing the warning raised an exception. */
-        return NULL;
+        return PyValue_NULL;
     }
     /* The warning was (probably) issued. */
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 PyDoc_STRVAR(breakpointhook_doc,
@@ -752,8 +751,8 @@ Print an object to sys.stdout and also save it in builtins._
 [clinic start generated code]*/
 
 static PyObject *
-sys_displayhook(PyObject *module, PyObject *o)
-/*[clinic end generated code: output=347477d006df92ed input=08ba730166d7ef72]*/
+sys_displayhook_impl(PyObject *module, PyObject *o)
+/*[clinic end generated code: output=4d4b3b8da55d7592 input=08ba730166d7ef72]*/
 {
     PyObject *outf;
     PyObject *builtins;
@@ -894,8 +893,8 @@ The unraisable argument has the following attributes:
 [clinic start generated code]*/
 
 static PyObject *
-sys_unraisablehook(PyObject *module, PyObject *unraisable)
-/*[clinic end generated code: output=bb92838b32abaa14 input=ec3af148294af8d3]*/
+sys_unraisablehook_impl(PyObject *module, PyObject *unraisable)
+/*[clinic end generated code: output=c445b65a0d2768b2 input=ec3af148294af8d3]*/
 {
     return _PyErr_WriteUnraisableDefaultHook(unraisable);
 }
@@ -1146,8 +1145,8 @@ in the library manual.
 [clinic start generated code]*/
 
 static PyObject *
-sys_settrace(PyObject *module, PyObject *function)
-/*[clinic end generated code: output=999d12e9d6ec4678 input=8107feb01c5f1c4e]*/
+sys_settrace_impl(PyObject *module, PyObject *function)
+/*[clinic end generated code: output=fef648b3869c06f6 input=8107feb01c5f1c4e]*/
 {
     PyThreadState *tstate = _PyThreadState_GET();
     if (function == Py_None) {
@@ -1177,8 +1176,8 @@ in the library manual.
 [clinic start generated code]*/
 
 static PyObject *
-sys__settraceallthreads(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=161cca30207bf3ca input=e5750f5dc01142eb]*/
+sys__settraceallthreads_impl(PyObject *module, PyObject *arg)
+/*[clinic end generated code: output=dd77e5bb32aadf4a input=e5750f5dc01142eb]*/
 {
     PyObject* argument = NULL;
     Py_tracefunc func = NULL;
@@ -1228,8 +1227,8 @@ chapter in the library manual.
 [clinic start generated code]*/
 
 static PyObject *
-sys_setprofile(PyObject *module, PyObject *function)
-/*[clinic end generated code: output=1c3503105939db9c input=055d0d7961413a62]*/
+sys_setprofile_impl(PyObject *module, PyObject *function)
+/*[clinic end generated code: output=1e118df26fc8fc65 input=055d0d7961413a62]*/
 {
     PyThreadState *tstate = _PyThreadState_GET();
     if (function == Py_None) {
@@ -1259,8 +1258,8 @@ chapter in the library manual.
 [clinic start generated code]*/
 
 static PyObject *
-sys__setprofileallthreads(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=2d61319e27b309fe input=9a3dc3352c63b471]*/
+sys__setprofileallthreads_impl(PyObject *module, PyObject *arg)
+/*[clinic end generated code: output=df4046aaabf669ff input=9a3dc3352c63b471]*/
 {
     PyObject* argument = NULL;
     Py_tracefunc func = NULL;

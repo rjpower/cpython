@@ -1,6 +1,3 @@
-// Need limited C API version 3.16 for Py_HashBuffer()
-#define Py_LIMITED_API 0x03100000
-
 #include "parts.h"
 #include "util.h"
 

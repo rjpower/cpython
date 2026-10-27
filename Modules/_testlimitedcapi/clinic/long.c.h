@@ -139,5 +139,26 @@ PyDoc_STRVAR(_testlimitedcapi_PyLong_AsInt__doc__,
 "\n");
 
 #define _TESTLIMITEDCAPI_PYLONG_ASINT_METHODDEF    \
-    {"PyLong_AsInt", (PyCFunction)_testlimitedcapi_PyLong_AsInt, METH_O, _testlimitedcapi_PyLong_AsInt__doc__},
-/*[clinic end generated code: output=fb5c95bd0a4bdad8 input=a9049054013a1b77]*/
+    {"PyLong_AsInt", _PyCFunction_CAST(_testlimitedcapi_PyLong_AsInt), METH_O, _testlimitedcapi_PyLong_AsInt__doc__},
+
+static PyObject *
+_testlimitedcapi_PyLong_AsInt_impl(PyObject *module, PyObject *arg);
+
+static PyValue
+_testlimitedcapi_PyLong_AsInt(PyObject *module, PyValue arg_)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *arg;
+    PyObject *_return_value;
+
+    arg = PyValue_Object(arg_);
+    if (arg == NULL) {
+        goto exit;
+    }
+    _return_value = _testlimitedcapi_PyLong_AsInt_impl(module, arg);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
+/*[clinic end generated code: output=578399377d780f45 input=a9049054013a1b77]*/

@@ -5,7 +5,6 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 
@@ -81,32 +80,36 @@ PyDoc_STRVAR(list_insert__doc__,
 static PyObject *
 list_insert_impl(PyListObject *self, Py_ssize_t index, PyObject *object);
 
-static PyObject *
-list_insert(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+list_insert(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t index;
     PyObject *object;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("insert", nargs, 2, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         index = ival;
     }
-    object = args[1];
+    object = PyValue_Object(args[1]);
+    if (object == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = list_insert_impl((PyListObject *)self, index, object);
+    _return_value = list_insert_impl((PyListObject *)self, index, object);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -167,20 +170,28 @@ PyDoc_STRVAR(list_append__doc__,
 "Append object to the end of the list.");
 
 #define LIST_APPEND_METHODDEF    \
-    {"append", (PyCFunction)list_append, METH_O, list_append__doc__},
+    {"append", _PyCFunction_CAST(list_append), METH_O, list_append__doc__},
 
 static PyObject *
 list_append_impl(PyListObject *self, PyObject *object);
 
-static PyObject *
-list_append(PyObject *self, PyObject *object)
+static PyValue
+list_append(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *object;
+    PyObject *_return_value;
 
+    object = PyValue_Object(arg);
+    if (object == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = list_append_impl((PyListObject *)self, object);
+    _return_value = list_append_impl((PyListObject *)self, object);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -191,18 +202,26 @@ PyDoc_STRVAR(list_extend__doc__,
 "Extend list by appending elements from the iterable.");
 
 #define LIST_EXTEND_METHODDEF    \
-    {"extend", (PyCFunction)list_extend, METH_O, list_extend__doc__},
+    {"extend", _PyCFunction_CAST(list_extend), METH_O, list_extend__doc__},
 
 static PyObject *
 list_extend_impl(PyListObject *self, PyObject *iterable);
 
-static PyObject *
-list_extend(PyObject *self, PyObject *iterable)
+static PyValue
+list_extend(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *iterable;
+    PyObject *_return_value;
 
-    return_value = list_extend_impl((PyListObject *)self, iterable);
+    iterable = PyValue_Object(arg);
+    if (iterable == NULL) {
+        goto exit;
+    }
+    _return_value = list_extend_impl((PyListObject *)self, iterable);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -220,11 +239,12 @@ PyDoc_STRVAR(list_pop__doc__,
 static PyObject *
 list_pop_impl(PyListObject *self, Py_ssize_t index);
 
-static PyObject *
-list_pop(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+list_pop(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t index = -1;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("pop", nargs, 0, 1)) {
         goto exit;
@@ -234,10 +254,9 @@ list_pop(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -246,8 +265,9 @@ list_pop(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = list_pop_impl((PyListObject *)self, index);
+    _return_value = list_pop_impl((PyListObject *)self, index);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -273,10 +293,10 @@ PyDoc_STRVAR(list_sort__doc__,
 static PyObject *
 list_sort_impl(PyListObject *self, PyObject *keyfunc, int reverse);
 
-static PyObject *
-list_sort(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+list_sort(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -303,10 +323,11 @@ list_sort(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwn
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *keyfunc = Py_None;
     int reverse = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -316,20 +337,24 @@ list_sort(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwn
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[0]) {
-        keyfunc = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        keyfunc = PyValue_Object(args[0]);
+        if (keyfunc == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    reverse = PyObject_IsTrue(args[1]);
+    reverse = PyObject_IsTrueValue(args[1]);
     if (reverse < 0) {
         goto exit;
     }
 skip_optional_kwonly:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = list_sort_impl((PyListObject *)self, keyfunc, reverse);
+    _return_value = list_sort_impl((PyListObject *)self, keyfunc, reverse);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -374,32 +399,49 @@ static PyObject *
 list_index_impl(PyListObject *self, PyObject *value, Py_ssize_t start,
                 Py_ssize_t stop);
 
-static PyObject *
-list_index(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+list_index(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *value;
     Py_ssize_t start = 0;
     Py_ssize_t stop = PY_SSIZE_T_MAX;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
-    value = args[0];
+    value = PyValue_Object(args[0]);
+    if (value == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndexNotNone(args[1], &start)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyEval_SliceIndexNotNone(_arg, &start)) {
+            goto exit;
+        }
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndexNotNone(args[2], &stop)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[2]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyEval_SliceIndexNotNone(_arg, &stop)) {
+            goto exit;
+        }
     }
 skip_optional:
-    return_value = list_index_impl((PyListObject *)self, value, start, stop);
+    _return_value = list_index_impl((PyListObject *)self, value, start, stop);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -412,18 +454,26 @@ PyDoc_STRVAR(list_count__doc__,
 "Return number of occurrences of value.");
 
 #define LIST_COUNT_METHODDEF    \
-    {"count", (PyCFunction)list_count, METH_O, list_count__doc__},
+    {"count", _PyCFunction_CAST(list_count), METH_O, list_count__doc__},
 
 static PyObject *
 list_count_impl(PyListObject *self, PyObject *value);
 
-static PyObject *
-list_count(PyObject *self, PyObject *value)
+static PyValue
+list_count(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *value;
+    PyObject *_return_value;
 
-    return_value = list_count_impl((PyListObject *)self, value);
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
+    _return_value = list_count_impl((PyListObject *)self, value);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -436,20 +486,28 @@ PyDoc_STRVAR(list_remove__doc__,
 "Raises ValueError if the value is not present.");
 
 #define LIST_REMOVE_METHODDEF    \
-    {"remove", (PyCFunction)list_remove, METH_O, list_remove__doc__},
+    {"remove", _PyCFunction_CAST(list_remove), METH_O, list_remove__doc__},
 
 static PyObject *
 list_remove_impl(PyListObject *self, PyObject *value);
 
-static PyObject *
-list_remove(PyObject *self, PyObject *value)
+static PyValue
+list_remove(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *value;
+    PyObject *_return_value;
 
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = list_remove_impl((PyListObject *)self, value);
+    _return_value = list_remove_impl((PyListObject *)self, value);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -483,7 +541,10 @@ list___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     if (PyTuple_GET_SIZE(args) < 1) {
         goto skip_optional;
     }
-    iterable = PyTuple_GET_ITEM(args, 0);
+    iterable = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (iterable == NULL) {
+        goto exit;
+    }
 skip_optional:
     return_value = list___init___impl((PyListObject *)self, iterable);
 
@@ -526,4 +587,4 @@ list___reversed__(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return list___reversed___impl((PyListObject *)self);
 }
-/*[clinic end generated code: output=58c4d4bbc099cb34 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0707a3e8af99d0a0 input=a9049054013a1b77]*/

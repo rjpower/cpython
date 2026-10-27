@@ -1480,14 +1480,14 @@ typedef struct {
 /* Forward declaration */
 static int create_localsdict(localobject *self, thread_module_state *state,
                              PyObject **localsdict, PyObject **sentinel_wr);
-static PyObject *clear_locals(PyObject *meth_self, PyObject *dummyweakref);
+static PyValue clear_locals(PyObject *meth_self, PyValue arg);
 
 /* Create a weakref to the sentinel localdummy for the current thread */
 static PyObject *
 create_sentinel_wr(localobject *self)
 {
     static PyMethodDef wr_callback_def = {
-        "clear_locals", clear_locals, METH_O
+        "clear_locals", _PyCFunction_CAST(clear_locals), METH_O
     };
 
     PyThreadState *tstate = PyThreadState_Get();
@@ -1858,13 +1858,17 @@ local_getattro(PyObject *op, PyObject *name)
 
 /* Called when a dummy is destroyed, indicating that the owning thread is being
  * cleared. */
-static PyObject *
-clear_locals(PyObject *locals_and_key, PyObject *dummyweakref)
+static PyValue
+clear_locals(PyObject *locals_and_key, PyValue arg)
 {
+    PyObject *dummyweakref = PyValue_Object(arg);
+    if (dummyweakref == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *localweakref = PyTuple_GetItem(locals_and_key, 0);
     localobject *self = localobject_CAST(_PyWeakref_GET_REF(localweakref));
     if (self == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
 
     /* If the thread-local object is still alive and not being cleared,
@@ -1884,7 +1888,7 @@ clear_locals(PyObject *locals_and_key, PyObject *dummyweakref)
     }
 
     Py_DECREF(self);
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 /* Module functions */
@@ -2348,8 +2352,8 @@ Handle uncaught Thread.run() exception.
 [clinic start generated code]*/
 
 static PyObject *
-_thread__excepthook(PyObject *module, PyObject *args)
-/*[clinic end generated code: output=cadc54a3be0e6007 input=5ae2316c400a3497]*/
+_thread__excepthook_impl(PyObject *module, PyObject *args)
+/*[clinic end generated code: output=2fe7e28146948136 input=5ae2316c400a3497]*/
 {
     thread_module_state *state = get_thread_state(module);
 
@@ -2479,8 +2483,8 @@ threading module.
 [clinic start generated code]*/
 
 static PyObject *
-_thread__make_thread_handle(PyObject *module, PyObject *identobj)
-/*[clinic end generated code: output=afa56c40a7e1c394 input=57bb20ebf5825dd1]*/
+_thread__make_thread_handle_impl(PyObject *module, PyObject *identobj)
+/*[clinic end generated code: output=9091e4c706f431e4 input=57bb20ebf5825dd1]*/
 {
     thread_module_state *state = get_thread_state(module);
     if (!PyLong_Check(identobj)) {

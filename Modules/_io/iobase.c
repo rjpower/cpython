@@ -832,8 +832,8 @@ lines provided to have a line separator at the end.
 [clinic start generated code]*/
 
 static PyObject *
-_io__IOBase_writelines(PyObject *self, PyObject *lines)
-/*[clinic end generated code: output=976eb0a9b60a6628 input=cac3fc8864183359]*/
+_io__IOBase_writelines_impl(PyObject *self, PyObject *lines)
+/*[clinic end generated code: output=8d914adbb8b3d62c input=cac3fc8864183359]*/
 {
     PyObject *iter, *res;
 
@@ -1068,8 +1068,8 @@ _io._RawIOBase.readinto
 [clinic start generated code]*/
 
 static PyObject *
-_io__RawIOBase_readinto(PyObject *self, PyObject *buffer)
-/*[clinic end generated code: output=081b8cdfaf3a40ff input=99d4bea2acd659c8]*/
+_io__RawIOBase_readinto_impl(PyObject *self, PyObject *buffer)
+/*[clinic end generated code: output=f50061a7c597f436 input=99d4bea2acd659c8]*/
 {
     PyErr_SetNone(PyExc_NotImplementedError);
     return NULL;
@@ -1082,8 +1082,8 @@ _io._RawIOBase.write
 [clinic start generated code]*/
 
 static PyObject *
-_io__RawIOBase_write(PyObject *self, PyObject *buffer)
-/*[clinic end generated code: output=7add3f2c8715c3a8 input=e6a1534adb876fe2]*/
+_io__RawIOBase_write_impl(PyObject *self, PyObject *buffer)
+/*[clinic end generated code: output=a308e91cb21783a8 input=e6a1534adb876fe2]*/
 {
     PyErr_SetNone(PyExc_NotImplementedError);
     return NULL;

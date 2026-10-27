@@ -8,7 +8,7 @@ preserve
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long.h"          // _PyLong_UnsignedLongLong_Converter()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-#include "pycore_tuple.h"         // _PyTuple_Objects()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(_remote_debugging_RemoteUnwinder___init____doc__,
 "RemoteUnwinder(pid, *, all_threads=False, only_active_thread=False,\n"
@@ -94,11 +94,10 @@ _remote_debugging_RemoteUnwinder___init__(PyObject *self, PyObject *args, PyObje
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[11];
-    PyObject * const *fastargs;
+    PyValue argsbuf[11];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
-    PyObject *const *argitems;
     pid_t pid;
     int all_threads = 0;
     int only_active_thread = 0;
@@ -111,24 +110,26 @@ _remote_debugging_RemoteUnwinder___init__(PyObject *self, PyObject *args, PyObje
     int cache_frames = 0;
     int stats = 0;
 
-    argitems = _PyTuple_Objects(args);
-    if (argitems == NULL) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    pid = PyLong_AsPid(fastargs[0]);
-    if (pid == (pid_t)(-1) && PyErr_Occurred()) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(fastargs[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        pid = PyLong_AsPid(_arg);
+        if (pid == (pid_t)(-1) && PyErr_Occurred()) {
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (fastargs[1]) {
-        all_threads = PyObject_IsTrue(fastargs[1]);
+    if (!PyValue_IsNull(fastargs[1])) {
+        all_threads = PyObject_IsTrueValue(fastargs[1]);
         if (all_threads < 0) {
             goto exit;
         }
@@ -136,8 +137,8 @@ _remote_debugging_RemoteUnwinder___init__(PyObject *self, PyObject *args, PyObje
             goto skip_optional_kwonly;
         }
     }
-    if (fastargs[2]) {
-        only_active_thread = PyObject_IsTrue(fastargs[2]);
+    if (!PyValue_IsNull(fastargs[2])) {
+        only_active_thread = PyObject_IsTrueValue(fastargs[2]);
         if (only_active_thread < 0) {
             goto exit;
         }
@@ -145,8 +146,8 @@ _remote_debugging_RemoteUnwinder___init__(PyObject *self, PyObject *args, PyObje
             goto skip_optional_kwonly;
         }
     }
-    if (fastargs[3]) {
-        mode = PyLong_AsInt(fastargs[3]);
+    if (!PyValue_IsNull(fastargs[3])) {
+        mode = PyLong_AsIntValue(fastargs[3]);
         if (mode == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -154,8 +155,8 @@ _remote_debugging_RemoteUnwinder___init__(PyObject *self, PyObject *args, PyObje
             goto skip_optional_kwonly;
         }
     }
-    if (fastargs[4]) {
-        debug = PyObject_IsTrue(fastargs[4]);
+    if (!PyValue_IsNull(fastargs[4])) {
+        debug = PyObject_IsTrueValue(fastargs[4]);
         if (debug < 0) {
             goto exit;
         }
@@ -163,8 +164,8 @@ _remote_debugging_RemoteUnwinder___init__(PyObject *self, PyObject *args, PyObje
             goto skip_optional_kwonly;
         }
     }
-    if (fastargs[5]) {
-        skip_non_matching_threads = PyObject_IsTrue(fastargs[5]);
+    if (!PyValue_IsNull(fastargs[5])) {
+        skip_non_matching_threads = PyObject_IsTrueValue(fastargs[5]);
         if (skip_non_matching_threads < 0) {
             goto exit;
         }
@@ -172,8 +173,8 @@ _remote_debugging_RemoteUnwinder___init__(PyObject *self, PyObject *args, PyObje
             goto skip_optional_kwonly;
         }
     }
-    if (fastargs[6]) {
-        native = PyObject_IsTrue(fastargs[6]);
+    if (!PyValue_IsNull(fastargs[6])) {
+        native = PyObject_IsTrueValue(fastargs[6]);
         if (native < 0) {
             goto exit;
         }
@@ -181,8 +182,8 @@ _remote_debugging_RemoteUnwinder___init__(PyObject *self, PyObject *args, PyObje
             goto skip_optional_kwonly;
         }
     }
-    if (fastargs[7]) {
-        gc = PyObject_IsTrue(fastargs[7]);
+    if (!PyValue_IsNull(fastargs[7])) {
+        gc = PyObject_IsTrueValue(fastargs[7]);
         if (gc < 0) {
             goto exit;
         }
@@ -190,8 +191,8 @@ _remote_debugging_RemoteUnwinder___init__(PyObject *self, PyObject *args, PyObje
             goto skip_optional_kwonly;
         }
     }
-    if (fastargs[8]) {
-        opcodes = PyObject_IsTrue(fastargs[8]);
+    if (!PyValue_IsNull(fastargs[8])) {
+        opcodes = PyObject_IsTrueValue(fastargs[8]);
         if (opcodes < 0) {
             goto exit;
         }
@@ -199,8 +200,8 @@ _remote_debugging_RemoteUnwinder___init__(PyObject *self, PyObject *args, PyObje
             goto skip_optional_kwonly;
         }
     }
-    if (fastargs[9]) {
-        cache_frames = PyObject_IsTrue(fastargs[9]);
+    if (!PyValue_IsNull(fastargs[9])) {
+        cache_frames = PyObject_IsTrueValue(fastargs[9]);
         if (cache_frames < 0) {
             goto exit;
         }
@@ -208,7 +209,7 @@ _remote_debugging_RemoteUnwinder___init__(PyObject *self, PyObject *args, PyObje
             goto skip_optional_kwonly;
         }
     }
-    stats = PyObject_IsTrue(fastargs[10]);
+    stats = PyObject_IsTrueValue(fastargs[10]);
     if (stats < 0) {
         goto exit;
     }
@@ -598,31 +599,32 @@ _remote_debugging_GCMonitor___init__(PyObject *self, PyObject *args, PyObject *k
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
+    PyValue argsbuf[2];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
-    PyObject *const *argitems;
     pid_t pid;
     int debug = 0;
 
-    argitems = _PyTuple_Objects(args);
-    if (argitems == NULL) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    pid = PyLong_AsPid(fastargs[0]);
-    if (pid == (pid_t)(-1) && PyErr_Occurred()) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(fastargs[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        pid = PyLong_AsPid(_arg);
+        if (pid == (pid_t)(-1) && PyErr_Occurred()) {
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    debug = PyObject_IsTrue(fastargs[1]);
+    debug = PyObject_IsTrueValue(fastargs[1]);
     if (debug < 0) {
         goto exit;
     }
@@ -669,10 +671,10 @@ static PyObject *
 _remote_debugging_GCMonitor_get_gc_stats_impl(GCMonitorObject *self,
                                               int all_interpreters);
 
-static PyObject *
-_remote_debugging_GCMonitor_get_gc_stats(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_remote_debugging_GCMonitor_get_gc_stats(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -699,9 +701,10 @@ _remote_debugging_GCMonitor_get_gc_stats(PyObject *self, PyObject *const *args, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     int all_interpreters = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -711,14 +714,15 @@ _remote_debugging_GCMonitor_get_gc_stats(PyObject *self, PyObject *const *args, 
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    all_interpreters = PyObject_IsTrue(args[0]);
+    all_interpreters = PyObject_IsTrueValue(args[0]);
     if (all_interpreters < 0) {
         goto exit;
     }
 skip_optional_pos:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _remote_debugging_GCMonitor_get_gc_stats_impl((GCMonitorObject *)self, all_interpreters);
+    _return_value = _remote_debugging_GCMonitor_get_gc_stats_impl((GCMonitorObject *)self, all_interpreters);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -781,11 +785,10 @@ _remote_debugging_BinaryWriter___init__(PyObject *self, PyObject *args, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[6];
-    PyObject * const *fastargs;
+    PyValue argsbuf[6];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 3;
-    PyObject *const *argitems;
     PyObject *filename;
     unsigned long long sample_interval_us;
     unsigned long long start_time_us;
@@ -793,27 +796,38 @@ _remote_debugging_BinaryWriter___init__(PyObject *self, PyObject *args, PyObject
     int mode = -1;
     int capture_features = -1;
 
-    argitems = _PyTuple_Objects(args);
-    if (argitems == NULL) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    filename = fastargs[0];
-    if (!_PyLong_UnsignedLongLong_Converter(fastargs[1], &sample_interval_us)) {
+    filename = PyValue_Object(fastargs[0]);
+    if (filename == NULL) {
         goto exit;
     }
-    if (!_PyLong_UnsignedLongLong_Converter(fastargs[2], &start_time_us)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(fastargs[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UnsignedLongLong_Converter(_arg, &sample_interval_us)) {
+            goto exit;
+        }
+    }
+    {
+        PyObject *_arg = PyValue_Object(fastargs[2]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UnsignedLongLong_Converter(_arg, &start_time_us)) {
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (fastargs[3]) {
-        compression = PyLong_AsInt(fastargs[3]);
+    if (!PyValue_IsNull(fastargs[3])) {
+        compression = PyLong_AsIntValue(fastargs[3]);
         if (compression == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -821,8 +835,8 @@ _remote_debugging_BinaryWriter___init__(PyObject *self, PyObject *args, PyObject
             goto skip_optional_kwonly;
         }
     }
-    if (fastargs[4]) {
-        mode = PyLong_AsInt(fastargs[4]);
+    if (!PyValue_IsNull(fastargs[4])) {
+        mode = PyLong_AsIntValue(fastargs[4]);
         if (mode == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -830,7 +844,7 @@ _remote_debugging_BinaryWriter___init__(PyObject *self, PyObject *args, PyObject
             goto skip_optional_kwonly;
         }
     }
-    capture_features = PyLong_AsInt(fastargs[5]);
+    capture_features = PyLong_AsIntValue(fastargs[5]);
     if (capture_features == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -860,10 +874,10 @@ _remote_debugging_BinaryWriter_write_sample_impl(BinaryWriterObject *self,
                                                  PyObject *stack_frames,
                                                  unsigned long long timestamp_us);
 
-static PyObject *
-_remote_debugging_BinaryWriter_write_sample(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_remote_debugging_BinaryWriter_write_sample(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -890,20 +904,31 @@ _remote_debugging_BinaryWriter_write_sample(PyObject *self, PyObject *const *arg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     PyObject *stack_frames;
     unsigned long long timestamp_us;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    stack_frames = args[0];
-    if (!_PyLong_UnsignedLongLong_Converter(args[1], &timestamp_us)) {
+    stack_frames = PyValue_Object(args[0]);
+    if (stack_frames == NULL) {
         goto exit;
     }
-    return_value = _remote_debugging_BinaryWriter_write_sample_impl((BinaryWriterObject *)self, stack_frames, timestamp_us);
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UnsignedLongLong_Converter(_arg, &timestamp_us)) {
+            goto exit;
+        }
+    }
+    _return_value = _remote_debugging_BinaryWriter_write_sample_impl((BinaryWriterObject *)self, stack_frames, timestamp_us);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -926,10 +951,10 @@ _remote_debugging_BinaryWriter_set_stats_impl(BinaryWriterObject *self,
                                               PyObject *error_rate,
                                               PyObject *missed_samples);
 
-static PyObject *
-_remote_debugging_BinaryWriter_set_stats(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_remote_debugging_BinaryWriter_set_stats(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
@@ -956,50 +981,46 @@ _remote_debugging_BinaryWriter_set_stats(PyObject *self, PyObject *const *args, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
+    PyValue argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     double duration_sec;
     double sample_rate;
     PyObject *error_rate = Py_None;
     PyObject *missed_samples = Py_None;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (PyFloat_CheckExact(args[0])) {
-        duration_sec = PyFloat_AS_DOUBLE(args[0]);
+    duration_sec = PyFloat_AsDoubleValue(args[0]);
+    if (duration_sec == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        duration_sec = PyFloat_AsDouble(args[0]);
-        if (duration_sec == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    if (PyFloat_CheckExact(args[1])) {
-        sample_rate = PyFloat_AS_DOUBLE(args[1]);
-    }
-    else
-    {
-        sample_rate = PyFloat_AsDouble(args[1]);
-        if (sample_rate == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
+    sample_rate = PyFloat_AsDoubleValue(args[1]);
+    if (sample_rate == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[2]) {
-        error_rate = args[2];
+    if (!PyValue_IsNull(args[2])) {
+        error_rate = PyValue_Object(args[2]);
+        if (error_rate == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    missed_samples = args[3];
+    missed_samples = PyValue_Object(args[3]);
+    if (missed_samples == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
-    return_value = _remote_debugging_BinaryWriter_set_stats_impl((BinaryWriterObject *)self, duration_sec, sample_rate, error_rate, missed_samples);
+    _return_value = _remote_debugging_BinaryWriter_set_stats_impl((BinaryWriterObject *)self, duration_sec, sample_rate, error_rate, missed_samples);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1076,10 +1097,10 @@ _remote_debugging_BinaryWriter___exit___impl(BinaryWriterObject *self,
                                              PyObject *exc_val,
                                              PyObject *exc_tb);
 
-static PyObject *
-_remote_debugging_BinaryWriter___exit__(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_remote_debugging_BinaryWriter___exit__(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -1106,11 +1127,12 @@ _remote_debugging_BinaryWriter___exit__(PyObject *self, PyObject *const *args, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *exc_type = Py_None;
     PyObject *exc_val = Py_None;
     PyObject *exc_tb = Py_None;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1120,21 +1142,31 @@ _remote_debugging_BinaryWriter___exit__(PyObject *self, PyObject *const *args, P
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        exc_type = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        exc_type = PyValue_Object(args[0]);
+        if (exc_type == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (args[1]) {
-        exc_val = args[1];
+    if (!PyValue_IsNull(args[1])) {
+        exc_val = PyValue_Object(args[1]);
+        if (exc_val == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    exc_tb = args[2];
+    exc_tb = PyValue_Object(args[2]);
+    if (exc_tb == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
-    return_value = _remote_debugging_BinaryWriter___exit___impl((BinaryWriterObject *)self, exc_type, exc_val, exc_tb);
+    _return_value = _remote_debugging_BinaryWriter___exit___impl((BinaryWriterObject *)self, exc_type, exc_val, exc_tb);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1207,22 +1239,20 @@ _remote_debugging_BinaryReader___init__(PyObject *self, PyObject *args, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject * const *fastargs;
+    PyValue argsbuf[1];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    PyObject *const *argitems;
     PyObject *filename;
 
-    argitems = _PyTuple_Objects(args);
-    if (argitems == NULL) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywords(argitems, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    filename = fastargs[0];
+    filename = PyValue_Object(fastargs[0]);
+    if (filename == NULL) {
+        goto exit;
+    }
     return_value = _remote_debugging_BinaryReader___init___impl((BinaryReaderObject *)self, filename);
 
 exit:
@@ -1250,10 +1280,10 @@ _remote_debugging_BinaryReader_replay_impl(BinaryReaderObject *self,
                                            PyObject *collector,
                                            PyObject *progress_callback);
 
-static PyObject *
-_remote_debugging_BinaryReader_replay(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_remote_debugging_BinaryReader_replay(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -1280,23 +1310,31 @@ _remote_debugging_BinaryReader_replay(PyObject *self, PyObject *const *args, Py_
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *collector;
     PyObject *progress_callback = Py_None;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    collector = args[0];
+    collector = PyValue_Object(args[0]);
+    if (collector == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    progress_callback = args[1];
+    progress_callback = PyValue_Object(args[1]);
+    if (progress_callback == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
-    return_value = _remote_debugging_BinaryReader_replay_impl((BinaryReaderObject *)self, collector, progress_callback);
+    _return_value = _remote_debugging_BinaryReader_replay_impl((BinaryReaderObject *)self, collector, progress_callback);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1395,10 +1433,10 @@ _remote_debugging_BinaryReader___exit___impl(BinaryReaderObject *self,
                                              PyObject *exc_val,
                                              PyObject *exc_tb);
 
-static PyObject *
-_remote_debugging_BinaryReader___exit__(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_remote_debugging_BinaryReader___exit__(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -1425,11 +1463,12 @@ _remote_debugging_BinaryReader___exit__(PyObject *self, PyObject *const *args, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *exc_type = Py_None;
     PyObject *exc_val = Py_None;
     PyObject *exc_tb = Py_None;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1439,21 +1478,31 @@ _remote_debugging_BinaryReader___exit__(PyObject *self, PyObject *const *args, P
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        exc_type = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        exc_type = PyValue_Object(args[0]);
+        if (exc_type == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (args[1]) {
-        exc_val = args[1];
+    if (!PyValue_IsNull(args[1])) {
+        exc_val = PyValue_Object(args[1]);
+        if (exc_val == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    exc_tb = args[2];
+    exc_tb = PyValue_Object(args[2]);
+    if (exc_tb == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
-    return_value = _remote_debugging_BinaryReader___exit___impl((BinaryReaderObject *)self, exc_type, exc_val, exc_tb);
+    _return_value = _remote_debugging_BinaryReader___exit___impl((BinaryReaderObject *)self, exc_type, exc_val, exc_tb);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1510,10 +1559,10 @@ static PyObject *
 _remote_debugging_get_child_pids_impl(PyObject *module, pid_t pid,
                                       int recursive);
 
-static PyObject *
-_remote_debugging_get_child_pids(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_remote_debugging_get_child_pids(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -1540,29 +1589,37 @@ _remote_debugging_get_child_pids(PyObject *module, PyObject *const *args, Py_ssi
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     pid_t pid;
     int recursive = 1;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    pid = PyLong_AsPid(args[0]);
-    if (pid == (pid_t)(-1) && PyErr_Occurred()) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        pid = PyLong_AsPid(_arg);
+        if (pid == (pid_t)(-1) && PyErr_Occurred()) {
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    recursive = PyObject_IsTrue(args[1]);
+    recursive = PyObject_IsTrueValue(args[1]);
     if (recursive < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    return_value = _remote_debugging_get_child_pids_impl(module, pid, recursive);
+    _return_value = _remote_debugging_get_child_pids_impl(module, pid, recursive);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1580,10 +1637,10 @@ PyDoc_STRVAR(_remote_debugging_is_python_process__doc__,
 static PyObject *
 _remote_debugging_is_python_process_impl(PyObject *module, pid_t pid);
 
-static PyObject *
-_remote_debugging_is_python_process(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_remote_debugging_is_python_process(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -1610,19 +1667,27 @@ _remote_debugging_is_python_process(PyObject *module, PyObject *const *args, Py_
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     pid_t pid;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    pid = PyLong_AsPid(args[0]);
-    if (pid == (pid_t)(-1) && PyErr_Occurred()) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        pid = PyLong_AsPid(_arg);
+        if (pid == (pid_t)(-1) && PyErr_Occurred()) {
+            goto exit;
+        }
     }
-    return_value = _remote_debugging_is_python_process_impl(module, pid);
+    _return_value = _remote_debugging_is_python_process_impl(module, pid);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1661,10 +1726,10 @@ static PyObject *
 _remote_debugging_get_gc_stats_impl(PyObject *module, pid_t pid,
                                     int all_interpreters);
 
-static PyObject *
-_remote_debugging_get_gc_stats(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_remote_debugging_get_gc_stats(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -1691,31 +1756,39 @@ _remote_debugging_get_gc_stats(PyObject *module, PyObject *const *args, Py_ssize
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     pid_t pid;
     int all_interpreters = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    pid = PyLong_AsPid(args[0]);
-    if (pid == (pid_t)(-1) && PyErr_Occurred()) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        pid = PyLong_AsPid(_arg);
+        if (pid == (pid_t)(-1) && PyErr_Occurred()) {
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    all_interpreters = PyObject_IsTrue(args[1]);
+    all_interpreters = PyObject_IsTrueValue(args[1]);
     if (all_interpreters < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    return_value = _remote_debugging_get_gc_stats_impl(module, pid, all_interpreters);
+    _return_value = _remote_debugging_get_gc_stats_impl(module, pid, all_interpreters);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=36dac277d62a1aa5 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=d86479bda6dc57b2 input=a9049054013a1b77]*/

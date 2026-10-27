@@ -248,10 +248,15 @@ unicode_copycharacters(PyObject *self, PyObject *args, PyObject *kwargs)
 
 
 // Test PyUnstable_Unicode_GET_CACHED_HASH()
-static PyObject*
-unicode_GET_CACHED_HASH(PyObject *self, PyObject *arg)
+static PyValue
+unicode_GET_CACHED_HASH(PyObject *self, PyValue arg_value)
 {
-    return PyLong_FromSsize_t(PyUnstable_Unicode_GET_CACHED_HASH(arg));
+    PyObject *arg = PyValue_Object(arg_value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(
+        PyLong_FromSsize_t(PyUnstable_Unicode_GET_CACHED_HASH(arg)));
 }
 
 
@@ -384,33 +389,45 @@ unicode_write(PyObject *self, PyObject *args)
 
 
 /* Test PyUnicode_KIND() macro */
-static PyObject *
-unicode_kind(PyObject *self, PyObject *unicode)
+static PyValue
+unicode_kind(PyObject *self, PyValue unicode_value)
 {
+    PyObject *unicode = PyValue_Object(unicode_value);
+    if (unicode == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(unicode);
 
     int kind = PyUnicode_KIND(unicode);
-    return PyLong_FromLong(kind);
+    return PyValue_FromResult(PyLong_FromLong(kind));
 }
 
 
 /* Test PyUnicode_MAX_CHAR_VALUE() macro */
-static PyObject *
-unicode_max_char_value(PyObject *self, PyObject *unicode)
+static PyValue
+unicode_max_char_value(PyObject *self, PyValue unicode_value)
 {
+    PyObject *unicode = PyValue_Object(unicode_value);
+    if (unicode == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(unicode);
 
     Py_UCS4 maxchar = PyUnicode_MAX_CHAR_VALUE(unicode);
-    return PyLong_FromUnsignedLong(maxchar);
+    return PyValue_FromResult(PyLong_FromUnsignedLong(maxchar));
 }
 
 
 /* Test PyUnicode_GET_LENGTH() macro */
-static PyObject *
-unicode_getlength_macro(PyObject *self, PyObject *arg)
+static PyValue
+unicode_getlength_macro(PyObject *self, PyValue arg_value)
 {
+    PyObject *arg = PyValue_Object(arg_value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
-    return PyLong_FromSsize_t(PyUnicode_GET_LENGTH(arg));
+    return PyValue_FromResult(PyLong_FromSsize_t(PyUnicode_GET_LENGTH(arg)));
 }
 
 
@@ -430,38 +447,54 @@ unicode_equal(PyObject *self, PyObject *args)
 
 
 /* Test PyUnicode_CHECK_INTERNED() macro */
-static PyObject *
-unicode_check_interned(PyObject *self, PyObject *arg)
+static PyValue
+unicode_check_interned(PyObject *self, PyValue arg_value)
 {
+    PyObject *arg = PyValue_Object(arg_value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
-    RETURN_UINT(PyUnicode_CHECK_INTERNED(arg));
+    RETURN_UINT_VALUE(PyUnicode_CHECK_INTERNED(arg));
 }
 
 
 /* Test PyUnicode_IS_ASCII() macro */
-static PyObject *
-unicode_is_ascii(PyObject *self, PyObject *arg)
+static PyValue
+unicode_is_ascii(PyObject *self, PyValue arg_value)
 {
+    PyObject *arg = PyValue_Object(arg_value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
-    RETURN_UINT(PyUnicode_IS_ASCII(arg));
+    RETURN_UINT_VALUE(PyUnicode_IS_ASCII(arg));
 }
 
 
 /* Test PyUnicode_IS_COMPACT() macro */
-static PyObject *
-unicode_is_compact(PyObject *self, PyObject *arg)
+static PyValue
+unicode_is_compact(PyObject *self, PyValue arg_value)
 {
+    PyObject *arg = PyValue_Object(arg_value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
-    RETURN_UINT(PyUnicode_IS_COMPACT(arg));
+    RETURN_UINT_VALUE(PyUnicode_IS_COMPACT(arg));
 }
 
 
 /* Test PyUnicode_IS_COMPACT_ASCII() macro */
-static PyObject *
-unicode_is_compact_ascii(PyObject *self, PyObject *arg)
+static PyValue
+unicode_is_compact_ascii(PyObject *self, PyValue arg_value)
 {
+    PyObject *arg = PyValue_Object(arg_value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
-    RETURN_INT(PyUnicode_IS_COMPACT_ASCII(arg));
+    RETURN_INT_VALUE(PyUnicode_IS_COMPACT_ASCII(arg));
 }
 
 
@@ -657,35 +690,43 @@ writer_write_ucs4(PyObject *self_raw, PyObject *args)
 }
 
 
-static PyObject*
-writer_write_str(PyObject *self_raw, PyObject *obj)
+static PyValue
+writer_write_str(PyObject *self_raw, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     WriterObject *self = (WriterObject *)self_raw;
     if (writer_check(self) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     NULLABLE(obj);
     if (PyUnicodeWriter_WriteStr(self->writer, obj) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 
-static PyObject*
-writer_write_repr(PyObject *self_raw, PyObject *obj)
+static PyValue
+writer_write_repr(PyObject *self_raw, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     WriterObject *self = (WriterObject *)self_raw;
     if (writer_check(self) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     NULLABLE(obj);
     if (PyUnicodeWriter_WriteRepr(self->writer, obj) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 
@@ -906,20 +947,20 @@ static PyMethodDef TestMethods[] = {
     {"unicode_asucs4copy",       unicode_asucs4copy,             METH_VARARGS},
     {"unicode_asutf8",           unicode_asutf8,                 METH_VARARGS},
     {"unicode_copycharacters",   _PyCFunction_CAST(unicode_copycharacters), METH_VARARGS | METH_KEYWORDS},
-    {"unicode_GET_CACHED_HASH",  unicode_GET_CACHED_HASH,        METH_O},
+    {"unicode_GET_CACHED_HASH",  _PyCFunction_CAST(unicode_GET_CACHED_HASH), METH_O},
     {"test_py_identifier",       test_py_identifier,             METH_NOARGS},
     {"corrupt_unicode",          corrupt_unicode,                METH_VARARGS},
     {"unicode_read_char",        unicode_read_char,              METH_VARARGS},
     {"unicode_read",             unicode_read,                   METH_VARARGS},
     {"unicode_write",            unicode_write,                  METH_VARARGS},
-    {"unicode_kind",             unicode_kind,                   METH_O},
-    {"unicode_max_char_value",   unicode_max_char_value,         METH_O},
-    {"unicode_getlength_macro",  unicode_getlength_macro,        METH_O},
+    {"unicode_kind",             _PyCFunction_CAST(unicode_kind), METH_O},
+    {"unicode_max_char_value",   _PyCFunction_CAST(unicode_max_char_value), METH_O},
+    {"unicode_getlength_macro",  _PyCFunction_CAST(unicode_getlength_macro), METH_O},
     {"unicode_equal",            unicode_equal,                  METH_VARARGS},
-    {"unicode_check_interned",   unicode_check_interned,         METH_O},
-    {"unicode_is_ascii",         unicode_is_ascii,               METH_O},
-    {"unicode_is_compact",       unicode_is_compact,             METH_O},
-    {"unicode_is_compact_ascii", unicode_is_compact_ascii,       METH_O},
+    {"unicode_check_interned",   _PyCFunction_CAST(unicode_check_interned), METH_O},
+    {"unicode_is_ascii",         _PyCFunction_CAST(unicode_is_ascii), METH_O},
+    {"unicode_is_compact",       _PyCFunction_CAST(unicode_is_compact), METH_O},
+    {"unicode_is_compact_ascii", _PyCFunction_CAST(unicode_is_compact_ascii), METH_O},
     {NULL},
 };
 

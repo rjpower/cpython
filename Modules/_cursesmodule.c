@@ -6219,8 +6219,8 @@ returning the new window object.
 [clinic start generated code]*/
 
 static PyObject *
-_curses_getwin(PyObject *module, PyObject *file)
-/*[clinic end generated code: output=a79e0df3379af756 input=f713d2bba0e4c929]*/
+_curses_getwin_impl(PyObject *module, PyObject *file)
+/*[clinic end generated code: output=daba34c164e754df input=f713d2bba0e4c929]*/
 {
     FILE *fp;
     PyObject *data;
@@ -6284,8 +6284,8 @@ scr_init() or scr_set().
 [clinic start generated code]*/
 
 static PyObject *
-_curses_scr_dump(PyObject *module, PyObject *filename)
-/*[clinic end generated code: output=4425cfa505ac9577 input=358db4b370975345]*/
+_curses_scr_dump_impl(PyObject *module, PyObject *filename)
+/*[clinic end generated code: output=c879f7ea27bb72ce input=358db4b370975345]*/
 ScreenDumpFunctionBody(scr_dump)
 
 /*[clinic input]
@@ -6302,8 +6302,8 @@ contents.
 [clinic start generated code]*/
 
 static PyObject *
-_curses_scr_restore(PyObject *module, PyObject *filename)
-/*[clinic end generated code: output=71d669fb560fa57b input=30b1d6b2c328dd55]*/
+_curses_scr_restore_impl(PyObject *module, PyObject *filename)
+/*[clinic end generated code: output=5f1bd5dbcbf3d078 input=30b1d6b2c328dd55]*/
 ScreenDumpFunctionBody(scr_restore)
 
 /*[clinic input]
@@ -6320,8 +6320,8 @@ another program has drawn the screen.
 [clinic start generated code]*/
 
 static PyObject *
-_curses_scr_init(PyObject *module, PyObject *filename)
-/*[clinic end generated code: output=2e861d381d710419 input=81c45e4702124ef6]*/
+_curses_scr_init_impl(PyObject *module, PyObject *filename)
+/*[clinic end generated code: output=4cdd3e3f5ece7182 input=81c45e4702124ef6]*/
 ScreenDumpFunctionBody(scr_init)
 
 #ifdef HAVE_CURSES_SCR_SET
@@ -6338,8 +6338,8 @@ This combines the effects of scr_restore() and scr_init().
 [clinic start generated code]*/
 
 static PyObject *
-_curses_scr_set(PyObject *module, PyObject *filename)
-/*[clinic end generated code: output=6056fdec12c5935f input=d248c20543cc289b]*/
+_curses_scr_set_impl(PyObject *module, PyObject *filename)
+/*[clinic end generated code: output=ed5663a0e5e656bb input=d248c20543cc289b]*/
 ScreenDumpFunctionBody(scr_set)
 #endif /* HAVE_CURSES_SCR_SET */
 #endif /* HAVE_CURSES_SCR_DUMP */
@@ -7260,8 +7260,8 @@ Returns None if the previous screen was the one created by initscr().
 [clinic start generated code]*/
 
 static PyObject *
-_curses_set_term(PyObject *module, PyObject *screen)
-/*[clinic end generated code: output=204cf9c40523bdef input=ed4dba18dd9adf6a]*/
+_curses_set_term_impl(PyObject *module, PyObject *screen)
+/*[clinic end generated code: output=773b484839bbe61d input=ed4dba18dd9adf6a]*/
 {
     PyCursesScreenObject *so = curses_check_screen(module, screen);
     if (so == NULL) {
@@ -8449,8 +8449,8 @@ single byte; use wunctrl() for other characters.
 [clinic start generated code]*/
 
 static PyObject *
-_curses_unctrl(PyObject *module, PyObject *ch)
-/*[clinic end generated code: output=8e07fafc430c9434 input=eed6686669f5ca21]*/
+_curses_unctrl_impl(PyObject *module, PyObject *ch)
+/*[clinic end generated code: output=b05311dc5abc4020 input=eed6686669f5ca21]*/
 {
     chtype ch_;
 
@@ -8480,8 +8480,8 @@ for example as ^C.  Printing characters are left as they are.
 [clinic start generated code]*/
 
 static PyObject *
-_curses_wunctrl(PyObject *module, PyObject *ch)
-/*[clinic end generated code: output=7b16d5534ff05728 input=9ceb6749118bd07c]*/
+_curses_wunctrl_impl(PyObject *module, PyObject *ch)
+/*[clinic end generated code: output=00e9dab9d637d42f input=9ceb6749118bd07c]*/
 {
     PyCursesStatefulInitialised(module);
 
@@ -8585,8 +8585,8 @@ Push ch so the next getch() will return it.
 [clinic start generated code]*/
 
 static PyObject *
-_curses_ungetch(PyObject *module, PyObject *ch)
-/*[clinic end generated code: output=9b19d8268376d887 input=6681e6ae4c42e5eb]*/
+_curses_ungetch_impl(PyObject *module, PyObject *ch)
+/*[clinic end generated code: output=3755ad69e1b749bd input=6681e6ae4c42e5eb]*/
 {
     PyCursesStatefulInitialised(module);
 
@@ -8619,8 +8619,8 @@ Push ch so the next get_wch() will return it.
 [clinic start generated code]*/
 
 static PyObject *
-_curses_unget_wch(PyObject *module, PyObject *ch)
-/*[clinic end generated code: output=1974c9fb01d37863 input=0d56dc65a46feebb]*/
+_curses_unget_wch_impl(PyObject *module, PyObject *ch)
+/*[clinic end generated code: output=9888df547fa60ae5 input=0d56dc65a46feebb]*/
 {
     wchar_t wch;
 

@@ -1,9 +1,6 @@
 /* Test Vectorcall in the limited API.  A vectorcall function takes values,
    which the limited API cannot express, so only calls out are tested. */
 
-// Need limited C API version 3.12 for PyObject_Vectorcall()
-#define Py_LIMITED_API 0x030c0000
-
 #include "parts.h"
 #include "clinic/vectorcall_limited.c.h"
 
@@ -20,8 +17,8 @@ _testlimitedcapi.call_vectorcall
 [clinic start generated code]*/
 
 static PyObject *
-_testlimitedcapi_call_vectorcall(PyObject *module, PyObject *callable)
-/*[clinic end generated code: output=9cbb7832263a8eef input=0743636c12dccb28]*/
+_testlimitedcapi_call_vectorcall_impl(PyObject *module, PyObject *callable)
+/*[clinic end generated code: output=9080ce93cec41419 input=0743636c12dccb28]*/
 {
     PyObject *args[3] = { NULL, NULL, NULL };
     PyObject *kwname = NULL, *kwnames = NULL, *result = NULL;
@@ -73,8 +70,9 @@ _testlimitedcapi.call_vectorcall_method
 [clinic start generated code]*/
 
 static PyObject *
-_testlimitedcapi_call_vectorcall_method(PyObject *module, PyObject *callable)
-/*[clinic end generated code: output=4558323a46cc09eb input=a736f7dbf15f1be5]*/
+_testlimitedcapi_call_vectorcall_method_impl(PyObject *module,
+                                             PyObject *callable)
+/*[clinic end generated code: output=61e185caefaf49d7 input=a736f7dbf15f1be5]*/
 {
     PyObject *args[3] = { NULL, NULL, NULL };
     PyObject *name = NULL, *kwname = NULL,

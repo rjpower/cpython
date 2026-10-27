@@ -771,27 +771,31 @@ ga_richcompare(PyObject *a, PyObject *b, int op)
     return PyObject_RichCompare(aa->args, bb->args, Py_EQ);
 }
 
-static PyObject *
-ga_mro_entries(PyObject *self, PyObject *args)
+static PyValue
+ga_mro_entries(PyObject *self, PyValue args_value)
 {
+    PyObject *args = PyValue_Object(args_value);
+    if (args == NULL) {
+        return PyValue_NULL;
+    }
     gaobject *alias = (gaobject *)self;
-    return PyTuple_Pack(1, alias->origin);
+    return PyValue_FromResult(PyTuple_Pack(1, alias->origin));
 }
 
-static PyObject *
-ga_instancecheck(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+ga_instancecheck(PyObject *self, PyValue Py_UNUSED(ignored))
 {
     PyErr_SetString(PyExc_TypeError,
                     "isinstance() argument 2 cannot be a parameterized generic");
-    return NULL;
+    return PyValue_NULL;
 }
 
-static PyObject *
-ga_subclasscheck(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+ga_subclasscheck(PyObject *self, PyValue Py_UNUSED(ignored))
 {
     PyErr_SetString(PyExc_TypeError,
                     "issubclass() argument 2 cannot be a parameterized generic");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *
@@ -851,9 +855,9 @@ error:
 }
 
 static PyMethodDef ga_methods[] = {
-    {"__mro_entries__", ga_mro_entries, METH_O},
-    {"__instancecheck__", ga_instancecheck, METH_O},
-    {"__subclasscheck__", ga_subclasscheck, METH_O},
+    {"__mro_entries__", _PyCFunction_CAST(ga_mro_entries), METH_O},
+    {"__instancecheck__", _PyCFunction_CAST(ga_instancecheck), METH_O},
+    {"__subclasscheck__", _PyCFunction_CAST(ga_subclasscheck), METH_O},
     {"__reduce__", ga_reduce, METH_NOARGS},
     {"__dir__", ga_dir, METH_NOARGS},
     {0}
@@ -1107,4 +1111,14 @@ Py_GenericAlias(PyObject *origin, PyObject *args)
         return NULL;
     }
     return (PyObject *)alias;
+}
+
+PyValue
+Py_GenericAliasValue(PyObject *origin, PyValue args)
+{
+    PyObject *args_obj = PyValue_Object(args);
+    if (args_obj == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(Py_GenericAlias(origin, args_obj));
 }

@@ -12547,8 +12547,8 @@ Example: '.'.join(['ab', 'pq', 'rs']) -> 'ab.pq.rs'
 [clinic start generated code]*/
 
 static PyObject *
-unicode_join(PyObject *self, PyObject *iterable)
-/*[clinic end generated code: output=6857e7cecfe7bf98 input=fd330a11ee845fb2]*/
+unicode_join_impl(PyObject *self, PyObject *iterable)
+/*[clinic end generated code: output=7e0b141551fac277 input=fd330a11ee845fb2]*/
 {
     return PyUnicode_Join(self, iterable);
 }
@@ -13314,8 +13314,8 @@ the original string and two empty strings.
 [clinic start generated code]*/
 
 static PyObject *
-unicode_partition(PyObject *self, PyObject *sep)
-/*[clinic end generated code: output=e4ced7bd253ca3c4 input=e45faa8c26270cb1]*/
+unicode_partition_impl(PyObject *self, PyObject *sep)
+/*[clinic end generated code: output=cd2404748c0ed478 input=e45faa8c26270cb1]*/
 {
     return PyUnicode_Partition(self, sep);
 }
@@ -13335,8 +13335,8 @@ empty strings and the original string.
 [clinic start generated code]*/
 
 static PyObject *
-unicode_rpartition(PyObject *self, PyObject *sep)
-/*[clinic end generated code: output=1aa13cf1156572aa input=53a7f8cb19975b7c]*/
+unicode_rpartition_impl(PyObject *self, PyObject *sep)
+/*[clinic end generated code: output=3985705ff87ecbba input=53a7f8cb19975b7c]*/
 {
     return PyUnicode_RPartition(self, sep);
 }
@@ -13576,8 +13576,8 @@ None are deleted.
 [clinic start generated code]*/
 
 static PyObject *
-unicode_translate(PyObject *self, PyObject *table)
-/*[clinic end generated code: output=3cb448ff2fd96bf3 input=48cf0efe06bc1b75]*/
+unicode_translate_impl(PyObject *self, PyObject *table)
+/*[clinic end generated code: output=e5136a430e6daa47 input=48cf0efe06bc1b75]*/
 {
     return _PyUnicode_TranslateCharmap(self, table, "ignore");
 }
@@ -14048,7 +14048,7 @@ static PyMethodDef unicode_methods[] = {
     UNICODE_ISPRINTABLE_METHODDEF
     UNICODE_ZFILL_METHODDEF
     {"format", _PyCFunction_CAST(do_string_format), METH_VARARGS | METH_KEYWORDS, format__doc__},
-    {"format_map", do_string_format_map, METH_O, format_map__doc__},
+    {"format_map", _PyCFunction_CAST(do_string_format_map), METH_O, format_map__doc__},
     UNICODE___FORMAT___METHODDEF
     UNICODE_MAKETRANS_METHODDEF
     UNICODE_SIZEOF_METHODDEF
@@ -14928,13 +14928,17 @@ unicodeiter_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 
 PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
 
-static PyObject *
-unicodeiter_setstate(PyObject *op, PyObject *state)
+static PyValue
+unicodeiter_setstate(PyObject *op, PyValue state_value)
 {
+    PyObject *state = PyValue_Object(state_value);
+    if (state == NULL) {
+        return PyValue_NULL;
+    }
     unicodeiterobject *it = (unicodeiterobject *)op;
     Py_ssize_t index = PyLong_AsSsize_t(state);
     if (index == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     if (it->it_seq != NULL) {
         if (index < 0)
             index = 0;
@@ -14942,7 +14946,7 @@ unicodeiter_setstate(PyObject *op, PyObject *state)
             index = PyUnicode_GET_LENGTH(it->it_seq); /* iterator truncated */
         it->it_index = index;
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
@@ -14950,7 +14954,7 @@ PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
 static PyMethodDef unicodeiter_methods[] = {
     {"__length_hint__", unicodeiter_len, METH_NOARGS, length_hint_doc},
     {"__reduce__",      unicodeiter_reduce, METH_NOARGS, reduce_doc},
-    {"__setstate__",    unicodeiter_setstate, METH_O, setstate_doc},
+    {"__setstate__",    _PyCFunction_CAST(unicodeiter_setstate), METH_O, setstate_doc},
     {NULL,      NULL}       /* sentinel */
 };
 
@@ -15255,9 +15259,9 @@ _PyUnicode_Fini(PyInterpreterState *interp)
    to the string.Formatter class implemented in Python. */
 
 static PyMethodDef _string_methods[] = {
-    {"formatter_field_name_split", formatter_field_name_split,
+    {"formatter_field_name_split", _PyCFunction_CAST(formatter_field_name_split),
      METH_O, PyDoc_STR("split the argument as a field name")},
-    {"formatter_parser", formatter_parser,
+    {"formatter_parser", _PyCFunction_CAST(formatter_parser),
      METH_O, PyDoc_STR("parse the argument as a format string")},
     {NULL, NULL}
 };

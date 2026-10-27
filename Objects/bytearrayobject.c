@@ -2204,20 +2204,20 @@ bytearray_capitalize(PyObject *self, PyObject *Py_UNUSED(ignored))
     return ret;
 }
 
-static PyObject *
-bytearray_center(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+bytearray_center(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *ret;
+    PyValue ret;
     Py_BEGIN_CRITICAL_SECTION(self);
     ret = stringlib_center(self, args, nargs);
     Py_END_CRITICAL_SECTION();
     return ret;
 }
 
-static PyObject *
-bytearray_expandtabs(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+bytearray_expandtabs(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *ret;
+    PyValue ret;
     Py_BEGIN_CRITICAL_SECTION(self);
     ret = stringlib_expandtabs(self, args, nargs, kwnames);
     Py_END_CRITICAL_SECTION();
@@ -2516,10 +2516,10 @@ bytearray_lower(PyObject *self, PyObject *Py_UNUSED(ignored))
     return ret;
 }
 
-static PyObject *
-bytearray_zfill(PyObject *self, PyObject *arg)
+static PyValue
+bytearray_zfill(PyObject *self, PyValue arg)
 {
-    PyObject *ret;
+    PyValue ret;
     Py_BEGIN_CRITICAL_SECTION(self);
     ret = stringlib_zfill(self, arg);
     Py_END_CRITICAL_SECTION();
@@ -2644,20 +2644,20 @@ bytearray_join_impl(PyByteArrayObject *self, PyObject *iterable_of_bytes)
     return ret;
 }
 
-static PyObject *
-bytearray_ljust(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+bytearray_ljust(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *ret;
+    PyValue ret;
     Py_BEGIN_CRITICAL_SECTION(self);
     ret = stringlib_ljust(self, args, nargs);
     Py_END_CRITICAL_SECTION();
     return ret;
 }
 
-static PyObject *
-bytearray_rjust(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+bytearray_rjust(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *ret;
+    PyValue ret;
     Py_BEGIN_CRITICAL_SECTION(self);
     ret = stringlib_rjust(self, args, nargs);
     Py_END_CRITICAL_SECTION();
@@ -2912,7 +2912,7 @@ static PyMethodDef bytearray_methods[] = {
     {"title", bytearray_title, METH_NOARGS, _Py_title__doc__},
     BYTEARRAY_TRANSLATE_METHODDEF
     {"upper", bytearray_upper, METH_NOARGS, _Py_upper__doc__},
-    {"zfill", bytearray_zfill, METH_O, stringlib_zfill__doc__},
+    {"zfill", _PyCFunction_CAST(bytearray_zfill), METH_O, stringlib_zfill__doc__},
     {NULL}
 };
 
@@ -3121,12 +3121,16 @@ bytearrayiter_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
     return Py_BuildValue("N(())", iter);
 }
 
-static PyObject *
-bytearrayiter_setstate(PyObject *self, PyObject *state)
+static PyValue
+bytearrayiter_setstate(PyObject *self, PyValue state_value)
 {
+    PyObject *state = PyValue_Object(state_value);
+    if (state == NULL) {
+        return PyValue_NULL;
+    }
     Py_ssize_t index = PyLong_AsSsize_t(state);
     if (index == -1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     bytesiterobject *it = _bytesiterobject_CAST(self);
@@ -3142,7 +3146,7 @@ bytearrayiter_setstate(PyObject *self, PyObject *state)
         }
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index);
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
@@ -3152,7 +3156,7 @@ static PyMethodDef bytearrayiter_methods[] = {
      length_hint_doc},
      {"__reduce__",     bytearrayiter_reduce, METH_NOARGS,
      bytearray_reduce__doc__},
-    {"__setstate__",    bytearrayiter_setstate, METH_O,
+    {"__setstate__",    _PyCFunction_CAST(bytearrayiter_setstate), METH_O,
      setstate_doc},
     {NULL, NULL} /* sentinel */
 };

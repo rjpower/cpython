@@ -806,39 +806,54 @@ framelocalsproxy_contains(PyObject *self, PyObject *key)
     return 0;
 }
 
-static PyObject* framelocalsproxy___contains__(PyObject *self, PyObject *key)
+static PyValue
+framelocalsproxy___contains__(PyObject *self, PyValue key_value)
 {
+    PyObject *key = PyValue_Object(key_value);
+    if (key == NULL) {
+        return PyValue_NULL;
+    }
     int result = framelocalsproxy_contains(self, key);
     if (result < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyBool_FromLong(result);
+    return PyValue_FromResult(PyBool_FromLong(result));
 }
 
-static PyObject*
-framelocalsproxy_update(PyObject *self, PyObject *other)
+static PyValue
+framelocalsproxy_update(PyObject *self, PyValue other_value)
 {
+    PyObject *other = PyValue_Object(other_value);
+    if (other == NULL) {
+        return PyValue_NULL;
+    }
     if (framelocalsproxy_merge(self, other) < 0) {
         PyErr_SetString(PyExc_TypeError, "update() argument must be dict or another FrameLocalsProxy");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject*
-framelocalsproxy_get(PyObject* self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+framelocalsproxy_get(PyObject* self, const PyValue *args, Py_ssize_t nargs)
 {
     if (nargs < 1 || nargs > 2) {
         PyErr_SetString(PyExc_TypeError, "get expected 1 or 2 arguments");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *key = args[0];
+    PyObject *key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *default_value = Py_None;
 
     if (nargs == 2) {
-        default_value = args[1];
+        default_value = PyValue_Object(args[1]);
+        if (default_value == NULL) {
+            return PyValue_NULL;
+        }
     }
 
     PyObject *result = framelocalsproxy_getitem(self, key);
@@ -846,27 +861,33 @@ framelocalsproxy_get(PyObject* self, PyObject *const *args, Py_ssize_t nargs)
     if (result == NULL) {
         if (PyErr_ExceptionMatches(PyExc_KeyError)) {
             PyErr_Clear();
-            return Py_XNewRef(default_value);
+            return PyValue_FromResult(Py_XNewRef(default_value));
         }
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return result;
+    return PyValue_FromResult(result);
 }
 
-static PyObject*
-framelocalsproxy_setdefault(PyObject* self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+framelocalsproxy_setdefault(PyObject* self, const PyValue *args, Py_ssize_t nargs)
 {
     if (nargs < 1 || nargs > 2) {
         PyErr_SetString(PyExc_TypeError, "setdefault expected 1 or 2 arguments");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *key = args[0];
+    PyObject *key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *default_value = Py_None;
 
     if (nargs == 2) {
-        default_value = args[1];
+        default_value = PyValue_Object(args[1]);
+        if (default_value == NULL) {
+            return PyValue_NULL;
+        }
     }
 
     PyObject *result = framelocalsproxy_getitem(self, key);
@@ -875,67 +896,73 @@ framelocalsproxy_setdefault(PyObject* self, PyObject *const *args, Py_ssize_t na
         if (PyErr_ExceptionMatches(PyExc_KeyError)) {
             PyErr_Clear();
             if (framelocalsproxy_setitem(self, key, default_value) < 0) {
-                return NULL;
+                return PyValue_NULL;
             }
-            return Py_XNewRef(default_value);
+            return PyValue_FromResult(Py_XNewRef(default_value));
         }
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return result;
+    return PyValue_FromResult(result);
 }
 
-static PyObject*
-framelocalsproxy_pop(PyObject* self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+framelocalsproxy_pop(PyObject* self, const PyValue *args, Py_ssize_t nargs)
 {
     if (!_PyArg_CheckPositional("pop", nargs, 1, 2)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *key = args[0];
+    PyObject *key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *default_value = NULL;
 
     if (nargs == 2) {
-        default_value = args[1];
+        default_value = PyValue_Object(args[1]);
+        if (default_value == NULL) {
+            return PyValue_NULL;
+        }
     }
 
     PyFrameObject *frame = PyFrameLocalsProxyObject_CAST(self)->frame;
 
     int i = framelocalsproxy_getkeyindex(frame, key, false, NULL);
     if (i == -2) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (i >= 0) {
         PyErr_SetString(PyExc_ValueError, "cannot remove local variables from FrameLocalsProxy");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *result = NULL;
 
     if (frame->f_extra_locals == NULL) {
         if (default_value != NULL) {
-            return Py_XNewRef(default_value);
+            return PyValue_FromResult(Py_XNewRef(default_value));
         } else {
             _PyErr_SetKeyError(key);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
     if (PyDict_Pop(frame->f_extra_locals, key, &result) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (result == NULL) {
         if (default_value != NULL) {
-            return Py_XNewRef(default_value);
+            return PyValue_FromResult(Py_XNewRef(default_value));
         } else {
             _PyErr_SetKeyError(key);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
-    return result;
+    return PyValue_FromResult(result);
 }
 
 static PyObject*
@@ -986,10 +1013,20 @@ static PyMappingMethods framelocalsproxy_as_mapping = {
     .mp_ass_subscript = framelocalsproxy_setitem,
 };
 
+static PyValue
+framelocalsproxy___getitem__(PyObject *self, PyValue key)
+{
+    PyObject *key_o = PyValue_Object(key);
+    if (key_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(framelocalsproxy_getitem(self, key_o));
+}
+
 static PyMethodDef framelocalsproxy_methods[] = {
-    {"__contains__", framelocalsproxy___contains__, METH_O | METH_COEXIST, NULL},
-    {"__getitem__", framelocalsproxy_getitem, METH_O | METH_COEXIST, NULL},
-    {"update", framelocalsproxy_update, METH_O, NULL},
+    {"__contains__", _PyCFunction_CAST(framelocalsproxy___contains__), METH_O | METH_COEXIST, NULL},
+    {"__getitem__", _PyCFunction_CAST(framelocalsproxy___getitem__), METH_O | METH_COEXIST, NULL},
+    {"update", _PyCFunction_CAST(framelocalsproxy_update), METH_O, NULL},
     {"__reversed__", framelocalsproxy_reversed, METH_NOARGS, NULL},
     {"copy", framelocalsproxy_copy, METH_NOARGS, NULL},
     {"keys", framelocalsproxy_keys, METH_NOARGS, NULL},

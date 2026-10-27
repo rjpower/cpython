@@ -5,10 +5,6 @@
  * See the xxlimited module for an extension module template.
  */
 
-// Test the limited C API version 3.5
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#  define Py_LIMITED_API 0x03050000
-
 #include "Python.h"
 
 /* Xxo objects */

@@ -1,6 +1,3 @@
-// Need limited C API 3.13 for PyLong_AsInt()
-#define Py_LIMITED_API 0x030d0000
-
 #include "parts.h"
 #include "util.h"
 #include "clinic/file.c.h"
@@ -101,8 +98,8 @@ _testcapi.pyobject_asfiledescriptor
 [clinic start generated code]*/
 
 static PyObject *
-_testcapi_pyobject_asfiledescriptor(PyObject *module, PyObject *obj)
-/*[clinic end generated code: output=2d640c6a1970c721 input=45fa1171d62b18d7]*/
+_testcapi_pyobject_asfiledescriptor_impl(PyObject *module, PyObject *obj)
+/*[clinic end generated code: output=5aec02264d875b03 input=45fa1171d62b18d7]*/
 {
     NULLABLE(obj);
     RETURN_INT(PyObject_AsFileDescriptor(obj));

@@ -216,17 +216,22 @@ static PyTypeObject _HashInheritanceTester_Type = {
     PyType_GenericNew,                  /* tp_new */
 };
 
-static PyObject*
-pycompilestring(PyObject* self, PyObject *obj) {
+static PyValue
+pycompilestring(PyObject* self, PyValue obj_value) {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     if (PyBytes_CheckExact(obj) == 0) {
         PyErr_SetString(PyExc_ValueError, "Argument must be a bytes object");
-        return NULL;
+        return PyValue_NULL;
     }
     const char *the_string = PyBytes_AsString(obj);
     if (the_string == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_CompileString(the_string, "<string>", Py_file_input);
+    return PyValue_FromResult(
+        Py_CompileString(the_string, "<string>", Py_file_input));
 }
 
 static PyObject*
@@ -1011,13 +1016,17 @@ error:
 /* This tests functions that historically supported write locks.  It is
    wrong to call getbuffer() with view==NULL and a compliant getbufferproc
    is entitled to segfault in that case. */
-static PyObject *
-getbuffer_with_null_view(PyObject* self, PyObject *obj)
+static PyValue
+getbuffer_with_null_view(PyObject* self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     if (PyObject_GetBuffer(obj, NULL, PyBUF_SIMPLE) < 0)
-        return NULL;
+        return PyValue_NULL;
 
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 /* PyBuffer_SizeFromFormat() */
@@ -1502,10 +1511,14 @@ meth_varargs_keywords(PyObject* self, PyObject* args, PyObject* kwargs)
     return Py_BuildValue("NON", _null_to_none(self), args, _null_to_none(kwargs));
 }
 
-static PyObject*
-meth_o(PyObject* self, PyObject* obj)
+static PyValue
+meth_o(PyObject* self, PyValue obj_value)
 {
-    return Py_BuildValue("NO", _null_to_none(self), obj);
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(Py_BuildValue("NO", _null_to_none(self), obj));
 }
 
 static PyObject*
@@ -1515,40 +1528,41 @@ meth_noargs(PyObject* self, PyObject *Py_UNUSED(dummy))
 }
 
 static PyObject*
-_fastcall_to_tuple(PyObject* const* args, Py_ssize_t nargs)
+_fastcall_to_tuple(const PyValue *args, Py_ssize_t nargs)
 {
     PyObject *tuple = PyTuple_New(nargs);
     if (tuple == NULL) {
         return NULL;
     }
     for (Py_ssize_t i=0; i < nargs; i++) {
-        Py_INCREF(args[i]);
-        PyTuple_SET_ITEM(tuple, i, args[i]);
+        PyTuple_SET_VALUE(tuple, i, args[i]);
     }
     return tuple;
 }
 
-static PyObject*
-meth_fastcall(PyObject* self, PyObject* const* args, Py_ssize_t nargs)
+static PyValue
+meth_fastcall(PyObject* self, const PyValue *args, Py_ssize_t nargs)
 {
-    return Py_BuildValue(
+    return PyValue_FromResult(Py_BuildValue(
         "NN", _null_to_none(self), _fastcall_to_tuple(args, nargs)
-    );
+    ));
 }
 
-static PyObject*
-meth_fastcall_keywords(PyObject* self, PyObject* const* args,
+static PyValue
+meth_fastcall_keywords(PyObject* self, const PyValue *args,
                        Py_ssize_t nargs, PyObject* kwargs)
 {
     PyObject *pyargs = _fastcall_to_tuple(args, nargs);
     if (pyargs == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     assert(args != NULL || nargs == 0);
-    PyObject* const* args_offset = args == NULL ? NULL : args + nargs;
-    PyObject *pykwargs = PyObject_Vectorcall((PyObject*)&PyDict_Type,
-                                              args_offset, 0, kwargs);
-    return Py_BuildValue("NNN", _null_to_none(self), pyargs, pykwargs);
+    const PyValue *args_offset = args == NULL ? NULL : args + nargs;
+    PyObject *pykwargs = PyValue_Object(
+        PyObject_VectorcallValue(PyValue_FromObject(&PyDict_Type),
+                                 args_offset, 0, kwargs));
+    return PyValue_FromResult(
+        Py_BuildValue("NNN", _null_to_none(self), pyargs, pykwargs));
 }
 
 static PyObject*
@@ -1667,14 +1681,18 @@ test_tstate_capi(PyObject *self, PyObject *Py_UNUSED(args))
     Py_RETURN_NONE;
 }
 
-static PyObject *
-gen_get_code(PyObject *self, PyObject *gen)
+static PyValue
+gen_get_code(PyObject *self, PyValue gen_value)
 {
+    PyObject *gen = PyValue_Object(gen_value);
+    if (gen == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyGen_Check(gen)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a generator object");
-        return NULL;
+        return PyValue_NULL;
     }
-    return (PyObject *)PyGen_GetCode((PyGenObject *)gen);
+    return PyValue_FromResult((PyObject *)PyGen_GetCode((PyGenObject *)gen));
 }
 
 static PyObject *
@@ -1903,16 +1921,20 @@ error:
     return res;
 }
 
-static PyObject *
-settrace_to_record(PyObject *self, PyObject *list)
+static PyValue
+settrace_to_record(PyObject *self, PyValue list_value)
 {
+    PyObject *list = PyValue_Object(list_value);
+    if (list == NULL) {
+        return PyValue_NULL;
+    }
 
    if (!PyList_Check(list)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a list");
-        return NULL;
+        return PyValue_NULL;
     }
     PyEval_SetTrace(record_func, list);
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 static int
@@ -1931,15 +1953,19 @@ error_func(PyObject *obj, PyFrameObject *f, int what, PyObject *arg)
     return -1;
 }
 
-static PyObject *
-settrace_to_error(PyObject *self, PyObject *list)
+static PyValue
+settrace_to_error(PyObject *self, PyValue list_value)
 {
+    PyObject *list = PyValue_Object(list_value);
+    if (list == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyList_Check(list)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a list");
-        return NULL;
+        return PyValue_NULL;
     }
     PyEval_SetTrace(error_func, list);
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 static PyObject *
@@ -2253,9 +2279,13 @@ static void finalize_thread_hang_cleanup_callback(void *Py_UNUSED(arg)) {
 //
 // Must be called with a single nullary callable function that should block
 // (with GIL released) until finalization is in progress.
-static PyObject *
-finalize_thread_hang(PyObject *self, PyObject *callback)
+static PyValue
+finalize_thread_hang(PyObject *self, PyValue callback_value)
 {
+    PyObject *callback = PyValue_Object(callback_value);
+    if (callback == NULL) {
+        return PyValue_NULL;
+    }
     // WASI builds some pthread stuff but doesn't have these APIs today?
 #if defined(_POSIX_THREADS) && !defined(__wasi__)
     pthread_cleanup_push(finalize_thread_hang_cleanup_callback, NULL);
@@ -2266,7 +2296,7 @@ finalize_thread_hang(PyObject *self, PyObject *callback)
 #if defined(_POSIX_THREADS) && !defined(__wasi__)
     pthread_cleanup_pop(0);
 #endif
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 
@@ -2318,24 +2348,32 @@ test_atexit(PyObject *self, PyObject *Py_UNUSED(args))
     Py_RETURN_NONE;
 }
 
-static PyObject*
-code_offset_to_line(PyObject* self, PyObject* const* args, Py_ssize_t nargsf)
+static PyValue
+code_offset_to_line(PyObject* self, const PyValue *args, Py_ssize_t nargsf)
 {
     Py_ssize_t nargs = _PyVectorcall_NARGS(nargsf);
     if (nargs != 2) {
         PyErr_SetString(PyExc_TypeError, "code_offset_to_line takes 2 arguments");
-        return NULL;
+        return PyValue_NULL;
+    }
+    PyObject *offset_obj = PyValue_Object(args[1]);
+    if (offset_obj == NULL) {
+        return PyValue_NULL;
     }
     int offset;
-    if (PyLong_AsInt32(args[1], &offset) < 0) {
-        return NULL;
+    if (PyLong_AsInt32(offset_obj, &offset) < 0) {
+        return PyValue_NULL;
     }
-    PyCodeObject *code = (PyCodeObject *)args[0];
+    PyCodeObject *code = (PyCodeObject *)PyValue_Object(args[0]);
+    if (code == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyCode_Check(code)) {
         PyErr_SetString(PyExc_TypeError, "first arg must be a code object");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromInt32(PyCode_Addr2Line(code, offset));
+    return PyValue_FromResult(
+        PyLong_FromInt32(PyCode_Addr2Line(code, offset)));
 }
 
 
@@ -2356,16 +2394,20 @@ _reftrace_printer(PyObject *obj, PyRefTracerEvent event, void *counter_data)
 }
 
 // A simple reftrace printer for very simple tests
-static PyObject *
-toggle_reftrace_printer(PyObject *ob, PyObject *arg)
+static PyValue
+toggle_reftrace_printer(PyObject *ob, PyValue arg_value)
 {
+    PyObject *arg = PyValue_Object(arg_value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     if (arg == Py_True) {
         PyRefTracer_SetTracer(_reftrace_printer, NULL);
     }
     else {
         PyRefTracer_SetTracer(NULL, NULL);
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 
@@ -2740,16 +2782,20 @@ uptime_bsd(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(args))
    compiler from removing the variable. */
 static PyObject *volatile static_object = NULL;
 
-static PyObject *
-set_static_object(PyObject *self, PyObject *obj)
+static PyValue
+set_static_object(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     Py_XSETREF(static_object, Py_IsNone(obj) ? NULL : Py_NewRef(obj));
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 
 static PyMethodDef TestMethods[] = {
-    {"set_static_object",       set_static_object,               METH_O},
+    {"set_static_object",       _PyCFunction_CAST(set_static_object), METH_O},
     {"set_errno",               set_errno,                       METH_VARARGS},
     {"test_config",             test_config,                     METH_NOARGS},
     {"test_sizeof_c_types",     test_sizeof_c_types,             METH_NOARGS},
@@ -2766,7 +2812,7 @@ static PyMethodDef TestMethods[] = {
 #if (defined(__linux__) || defined(__FreeBSD__)) && defined(__GNUC__)
     {"test_pep3118_obsolete_write_locks", test_pep3118_obsolete_write_locks, METH_NOARGS},
 #endif
-    {"getbuffer_with_null_view", getbuffer_with_null_view,       METH_O},
+    {"getbuffer_with_null_view", _PyCFunction_CAST(getbuffer_with_null_view), METH_O},
     {"PyBuffer_SizeFromFormat",  test_PyBuffer_SizeFromFormat,   METH_VARARGS},
     {"py_buildvalue",            py_buildvalue,                  METH_VARARGS},
     {"py_buildvalue_ints",       py_buildvalue_ints,             METH_VARARGS},
@@ -2800,7 +2846,7 @@ static PyMethodDef TestMethods[] = {
     {"return_null_without_error", return_null_without_error, METH_NOARGS},
     {"return_result_with_error", return_result_with_error, METH_NOARGS},
     {"getitem_with_error", getitem_with_error, METH_VARARGS},
-    {"Py_CompileString",     pycompilestring, METH_O},
+    {"Py_CompileString",     _PyCFunction_CAST(pycompilestring), METH_O},
     {"Py_CompileStringExFlags", pycompilestringexflags, METH_VARARGS},
     {"raise_SIGINT_then_send_None", raise_SIGINT_then_send_None, METH_VARARGS},
     {"stack_pointer", stack_pointer, METH_NOARGS},
@@ -2813,7 +2859,7 @@ static PyMethodDef TestMethods[] = {
     {"bad_get", bad_get, METH_VARARGS},
     {"meth_varargs", meth_varargs, METH_VARARGS},
     {"meth_varargs_keywords", _PyCFunction_CAST(meth_varargs_keywords), METH_VARARGS|METH_KEYWORDS},
-    {"meth_o", meth_o, METH_O},
+    {"meth_o", _PyCFunction_CAST(meth_o), METH_O},
     {"meth_noargs", meth_noargs, METH_NOARGS},
     {"meth_fastcall", _PyCFunction_CAST(meth_fastcall), METH_FASTCALL},
     {"meth_fastcall_keywords", _PyCFunction_CAST(meth_fastcall_keywords), METH_FASTCALL|METH_KEYWORDS},
@@ -2821,19 +2867,19 @@ static PyMethodDef TestMethods[] = {
     {"pynumber_tobase", pynumber_tobase, METH_VARARGS},
     {"get_basic_static_type", get_basic_static_type, METH_VARARGS, NULL},
     {"test_tstate_capi", test_tstate_capi, METH_NOARGS, NULL},
-    {"gen_get_code", gen_get_code, METH_O, NULL},
+    {"gen_get_code", _PyCFunction_CAST(gen_get_code), METH_O, NULL},
     {"get_feature_macros", get_feature_macros, METH_NOARGS, NULL},
     {"test_code_api", test_code_api, METH_NOARGS, NULL},
-    {"settrace_to_error", settrace_to_error, METH_O, NULL},
-    {"settrace_to_record", settrace_to_record, METH_O, NULL},
+    {"settrace_to_error", _PyCFunction_CAST(settrace_to_error), METH_O, NULL},
+    {"settrace_to_record", _PyCFunction_CAST(settrace_to_record), METH_O, NULL},
     {"test_macros", test_macros, METH_NOARGS, NULL},
     {"test_weakref_capi", test_weakref_capi, METH_NOARGS},
     {"function_set_warning", function_set_warning, METH_NOARGS},
     {"test_critical_sections", test_critical_sections, METH_NOARGS},
-    {"finalize_thread_hang", finalize_thread_hang, METH_O, NULL},
+    {"finalize_thread_hang", _PyCFunction_CAST(finalize_thread_hang), METH_O, NULL},
     {"test_atexit", test_atexit, METH_NOARGS},
     {"code_offset_to_line", _PyCFunction_CAST(code_offset_to_line), METH_FASTCALL},
-    {"toggle_reftrace_printer", toggle_reftrace_printer, METH_O},
+    {"toggle_reftrace_printer", _PyCFunction_CAST(toggle_reftrace_printer), METH_O},
     {"create_managed_weakref_nogc_type",
         create_managed_weakref_nogc_type, METH_NOARGS},
     {"test_soft_deprecated_macros", test_soft_deprecated_macros, METH_NOARGS},
@@ -3155,15 +3201,15 @@ generic_alias_dealloc(PyObject *op)
     Py_TYPE(self)->tp_free(self);
 }
 
-static PyObject *
-generic_alias_mro_entries(PyObject *op, PyObject *Py_UNUSED(bases))
+static PyValue
+generic_alias_mro_entries(PyObject *op, PyValue Py_UNUSED(bases))
 {
     PyGenericAliasObject *self = (PyGenericAliasObject*)op;
-    return PyTuple_Pack(1, self->item);
+    return PyValue_FromResult(PyTuple_Pack(1, self->item));
 }
 
 static PyMethodDef generic_alias_methods[] = {
-    {"__mro_entries__", generic_alias_mro_entries, METH_O, NULL},
+    {"__mro_entries__", _PyCFunction_CAST(generic_alias_mro_entries), METH_O, NULL},
     {NULL}  /* sentinel */
 };
 
@@ -3192,14 +3238,18 @@ typedef struct {
     PyObject_HEAD
 } PyGenericObject;
 
-static PyObject *
-generic_class_getitem(PyObject *type, PyObject *item)
+static PyValue
+generic_class_getitem(PyObject *type, PyValue item_value)
 {
-    return generic_alias_new(item);
+    PyObject *item = PyValue_Object(item_value);
+    if (item == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(generic_alias_new(item));
 }
 
 static PyMethodDef generic_methods[] = {
-    {"__class_getitem__", generic_class_getitem, METH_O|METH_CLASS, NULL},
+    {"__class_getitem__", _PyCFunction_CAST(generic_class_getitem), METH_O|METH_CLASS, NULL},
     {NULL}  /* sentinel */
 };
 
@@ -3215,7 +3265,7 @@ static PyTypeObject Generic_Type = {
 static PyMethodDef meth_instance_methods[] = {
     {"meth_varargs", meth_varargs, METH_VARARGS},
     {"meth_varargs_keywords", _PyCFunction_CAST(meth_varargs_keywords), METH_VARARGS|METH_KEYWORDS},
-    {"meth_o", meth_o, METH_O},
+    {"meth_o", _PyCFunction_CAST(meth_o), METH_O},
     {"meth_noargs", meth_noargs, METH_NOARGS},
     {"meth_fastcall", _PyCFunction_CAST(meth_fastcall), METH_FASTCALL},
     {"meth_fastcall_keywords", _PyCFunction_CAST(meth_fastcall_keywords), METH_FASTCALL|METH_KEYWORDS},
@@ -3242,7 +3292,7 @@ static PyTypeObject MethInstance_Type = {
 static PyMethodDef meth_class_methods[] = {
     {"meth_varargs", meth_varargs, METH_VARARGS|METH_CLASS},
     {"meth_varargs_keywords", _PyCFunction_CAST(meth_varargs_keywords), METH_VARARGS|METH_KEYWORDS|METH_CLASS},
-    {"meth_o", meth_o, METH_O|METH_CLASS},
+    {"meth_o", _PyCFunction_CAST(meth_o), METH_O|METH_CLASS},
     {"meth_noargs", meth_noargs, METH_NOARGS|METH_CLASS},
     {"meth_fastcall", _PyCFunction_CAST(meth_fastcall), METH_FASTCALL|METH_CLASS},
     {"meth_fastcall_keywords", _PyCFunction_CAST(meth_fastcall_keywords), METH_FASTCALL|METH_KEYWORDS|METH_CLASS},
@@ -3264,7 +3314,7 @@ static PyTypeObject MethClass_Type = {
 static PyMethodDef meth_static_methods[] = {
     {"meth_varargs", meth_varargs, METH_VARARGS|METH_STATIC},
     {"meth_varargs_keywords", _PyCFunction_CAST(meth_varargs_keywords), METH_VARARGS|METH_KEYWORDS|METH_STATIC},
-    {"meth_o", meth_o, METH_O|METH_STATIC},
+    {"meth_o", _PyCFunction_CAST(meth_o), METH_O|METH_STATIC},
     {"meth_noargs", meth_noargs, METH_NOARGS|METH_STATIC},
     {"meth_fastcall", _PyCFunction_CAST(meth_fastcall), METH_FASTCALL|METH_STATIC},
     {"meth_fastcall_keywords", _PyCFunction_CAST(meth_fastcall_keywords), METH_FASTCALL|METH_KEYWORDS|METH_STATIC},

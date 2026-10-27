@@ -3449,8 +3449,8 @@ _tkinter._flatten
 [clinic start generated code]*/
 
 static PyObject *
-_tkinter__flatten(PyObject *module, PyObject *item)
-/*[clinic end generated code: output=cad02a3f97f29862 input=6b9c12260aa1157f]*/
+_tkinter__flatten_impl(PyObject *module, PyObject *item)
+/*[clinic end generated code: output=925c9d4b089b66a3 input=6b9c12260aa1157f]*/
 {
     FlattenContext context;
 

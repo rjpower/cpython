@@ -64,6 +64,12 @@ test_with_docstring(PyObject *self, PyObject *Py_UNUSED(ignored))
     Py_RETURN_NONE;
 }
 
+static PyValue
+test_with_docstring_o(PyObject *self, PyValue Py_UNUSED(arg))
+{
+    return PyValue_FromObject(Py_None);
+}
+
 static PyMethodDef test_methods[] = {
     {"docstring_empty",
         test_with_docstring, METH_VARARGS,
@@ -75,7 +81,7 @@ static PyMethodDef test_methods[] = {
         test_with_docstring, METH_NOARGS,
         docstring_no_signature},
     {"docstring_no_signature_o",
-        test_with_docstring, METH_O,
+        _PyCFunction_CAST(test_with_docstring_o), METH_O,
         docstring_no_signature},
     {"docstring_with_invalid_signature",
         test_with_docstring, METH_VARARGS,
@@ -115,25 +121,25 @@ static PyMethodDef DocStringNoSignatureTest_methods[] = {
         test_with_docstring, METH_NOARGS,
         docstring_no_signature},
     {"meth_o",
-        test_with_docstring, METH_O,
+        _PyCFunction_CAST(test_with_docstring_o), METH_O,
         docstring_no_signature},
     {"meth_noargs_class",
         test_with_docstring, METH_NOARGS|METH_CLASS,
         docstring_no_signature},
     {"meth_o_class",
-        test_with_docstring, METH_O|METH_CLASS,
+        _PyCFunction_CAST(test_with_docstring_o), METH_O|METH_CLASS,
         docstring_no_signature},
     {"meth_noargs_static",
         test_with_docstring, METH_NOARGS|METH_STATIC,
         docstring_no_signature},
     {"meth_o_static",
-        test_with_docstring, METH_O|METH_STATIC,
+        _PyCFunction_CAST(test_with_docstring_o), METH_O|METH_STATIC,
         docstring_no_signature},
     {"meth_noargs_coexist",
         test_with_docstring, METH_NOARGS|METH_COEXIST,
         docstring_no_signature},
     {"meth_o_coexist",
-        test_with_docstring, METH_O|METH_COEXIST,
+        _PyCFunction_CAST(test_with_docstring_o), METH_O|METH_COEXIST,
         docstring_no_signature},
     {NULL},
 };

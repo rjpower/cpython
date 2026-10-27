@@ -4478,24 +4478,18 @@ dummy_func(
                 args--;
             }
             STAT_INC(CALL, hit);
-            PyCFunction cfunc = PyCFunction_GET_FUNCTION(callable_o);
-            PyValue arg = args[0];
-            _PyValueRoot arg_root;
-            PyObject *arg_o = _PyValue_ObjectRooted(tstate, arg, &arg_root, _PY_BOX_CALL);
-            if (arg_o == NULL) {
-                ERROR_NO_POP();
-            }
-            PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, PyCFunction_GET_SELF(callable_o), arg_o);
-            _PyValue_UnrootObject(tstate, arg, &arg_root);
+            PyCFunctionO cfunc =
+                _PyCFunctionO_CAST(PyCFunction_GET_FUNCTION(callable_o));
+            PyValue res_v = cfunc(PyCFunction_GET_SELF(callable_o), args[0]);
             _Py_LeaveRecursiveCallTstate(tstate);
-            assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
-            if (res_o == NULL) {
+            assert(PyValue_IsNull(res_v) ^ (_PyErr_Occurred(tstate) == NULL));
+            if (PyValue_IsNull(res_v)) {
                 ERROR_NO_POP();
             }
             c = callable;
             s = args[0];
             INPUTS_DEAD();
-            res = PyValue_FromObject(res_o);
+            res = res_v;
         }
 
         macro(CALL_BUILTIN_O) =
@@ -4524,15 +4518,15 @@ dummy_func(
                 total_args++;
             }
             STAT_INC(CALL, hit);
-            PyObject *res_o = _Py_BuiltinCallFast_Values(
+            PyValue res_v = _Py_BuiltinCallFast_Values(
                 callable,
                 arguments,
                 total_args
             );
-            if (res_o == NULL) {
+            if (PyValue_IsNull(res_v)) {
                 ERROR_NO_POP();
             }
-            callable = PyValue_FromObject(res_o);
+            callable = res_v;
         }
 
         macro(CALL_BUILTIN_FAST) =
@@ -4560,11 +4554,11 @@ dummy_func(
                 total_args++;
             }
             STAT_INC(CALL, hit);
-            PyObject *res_o = _Py_BuiltinCallFastWithKeywords_Values(callable, arguments, total_args);
-            if (res_o == NULL) {
+            PyValue res_v = _Py_BuiltinCallFastWithKeywords_Values(callable, arguments, total_args);
+            if (PyValue_IsNull(res_v)) {
                 ERROR_NO_POP();
             }
-            callable = PyValue_FromObject(res_o);
+            callable = res_v;
         }
 
         macro(CALL_BUILTIN_FAST_WITH_KEYWORDS) =
@@ -4708,32 +4702,26 @@ dummy_func(
                 arguments--;
             }
             STAT_INC(CALL, hit);
-            PyCFunction cfunc = method->d_method->ml_meth;
+            PyCFunctionO cfunc = _PyCFunctionO_CAST(method->d_method->ml_meth);
+            // self is an object: a method called on an inline value boxes it.
             PyValue self_value = arguments[0];
-            PyValue arg_value = arguments[1];
-            _PyValueRoot self_root, arg_root;
+            _PyValueRoot self_root;
             PyObject *self = _PyValue_ObjectRooted(tstate, self_value, &self_root, _PY_BOX_CALL);
             if (self == NULL) {
                 ERROR_NO_POP();
             }
-            PyObject *arg = _PyValue_ObjectRooted(tstate, arg_value, &arg_root, _PY_BOX_CALL);
-            if (arg == NULL) {
-                _PyValue_UnrootObject(tstate, self_value, &self_root);
-                ERROR_NO_POP();
-            }
-            PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self, arg);
-            _PyValue_UnrootObject(tstate, arg_value, &arg_root);
+            PyValue res_v = cfunc(self, arguments[1]);
             _PyValue_UnrootObject(tstate, self_value, &self_root);
             _Py_LeaveRecursiveCallTstate(tstate);
-            assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
-            if (res_o == NULL) {
+            assert(PyValue_IsNull(res_v) ^ (_PyErr_Occurred(tstate) == NULL));
+            if (PyValue_IsNull(res_v)) {
                 ERROR_NO_POP();
             }
             c = callable;
             s = arguments[0];
             a = arguments[1];
             INPUTS_DEAD();
-            res = PyValue_FromObject(res_o);
+            res = res_v;
         }
 
         op(_CHECK_RECURSION_LIMIT, ( -- )) {
@@ -4780,16 +4768,16 @@ dummy_func(
             assert(!PyValue_IsNull(arguments[0]));
             STAT_INC(CALL, hit);
             PyCFunctionFastWithKeywords cfunc = _PyCFunctionFastWithKeywords_CAST(method->d_method->ml_meth);
-            PyObject *res_o = _PyCallMethodDescriptorFastWithKeywords_Values(
+            PyValue res_v = _PyCallMethodDescriptorFastWithKeywords_Values(
                 callable,
                 cfunc,
                 arguments,
                 total_args
             );
-            if (res_o == NULL) {
+            if (PyValue_IsNull(res_v)) {
                 ERROR_NO_POP();
             }
-            callable = PyValue_FromObject(res_o);
+            callable = res_v;
         }
 
         macro(CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS) =
@@ -4884,16 +4872,16 @@ dummy_func(
             assert(!PyValue_IsNull(arguments[0]));
             STAT_INC(CALL, hit);
             PyCFunctionFast cfunc = _PyCFunctionFast_CAST(method->d_method->ml_meth);
-            PyObject *res_o = _PyCallMethodDescriptorFast_Values(
+            PyValue res_v = _PyCallMethodDescriptorFast_Values(
                 callable,
                 cfunc,
                 arguments,
                 total_args
             );
-            if (res_o == NULL) {
+            if (PyValue_IsNull(res_v)) {
                 ERROR_NO_POP();
             }
-            callable = PyValue_FromObject(res_o);
+            callable = res_v;
         }
 
         macro(CALL_METHOD_DESCRIPTOR_FAST) =

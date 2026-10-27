@@ -2,24 +2,36 @@
 #include "util.h"
 
 
-static PyObject *
-tuple_check(PyObject* Py_UNUSED(module), PyObject *obj)
+static PyValue
+tuple_check(PyObject* Py_UNUSED(module), PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyTuple_Check(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyTuple_Check(obj)));
 }
 
-static PyObject *
-tuple_checkexact(PyObject* Py_UNUSED(module), PyObject *obj)
+static PyValue
+tuple_checkexact(PyObject* Py_UNUSED(module), PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyTuple_CheckExact(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyTuple_CheckExact(obj)));
 }
 
-static PyObject *
-tuple_new(PyObject* Py_UNUSED(module), PyObject *len)
+static PyValue
+tuple_new(PyObject* Py_UNUSED(module), PyValue arg)
 {
-    return PyTuple_New(PyLong_AsSsize_t(len));
+    PyObject *len = PyValue_Object(arg);
+    if (len == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(PyTuple_New(PyLong_AsSsize_t(len)));
 }
 
 static PyObject *
@@ -42,11 +54,15 @@ tuple_pack(PyObject *Py_UNUSED(module), PyObject *args)
     return PyTuple_Pack(size);
 }
 
-static PyObject *
-tuple_size(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+tuple_size(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    RETURN_SIZE(PyTuple_Size(obj));
+    RETURN_SIZE_VALUE(PyTuple_Size(obj));
 }
 
 static PyObject *
@@ -114,11 +130,11 @@ tuple_setitem(PyObject *Py_UNUSED(module), PyObject *args)
 
 
 static PyMethodDef test_methods[] = {
-    {"tuple_check", tuple_check, METH_O},
-    {"tuple_checkexact", tuple_checkexact, METH_O},
-    {"tuple_new", tuple_new, METH_O},
+    {"tuple_check", _PyCFunction_CAST(tuple_check), METH_O},
+    {"tuple_checkexact", _PyCFunction_CAST(tuple_checkexact), METH_O},
+    {"tuple_new", _PyCFunction_CAST(tuple_new), METH_O},
     {"tuple_pack", tuple_pack, METH_VARARGS},
-    {"tuple_size", tuple_size, METH_O},
+    {"tuple_size", _PyCFunction_CAST(tuple_size), METH_O},
     {"tuple_getitem", tuple_getitem, METH_VARARGS},
     {"tuple_getslice", tuple_getslice, METH_VARARGS},
     {"tuple_setitem", tuple_setitem, METH_VARARGS},

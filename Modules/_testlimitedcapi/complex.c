@@ -2,18 +2,26 @@
 #include "util.h"
 
 
-static PyObject *
-complex_check(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+complex_check(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyComplex_Check(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyComplex_Check(obj)));
 }
 
-static PyObject *
-complex_checkexact(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+complex_checkexact(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyComplex_CheckExact(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyComplex_CheckExact(obj)));
 }
 
 static PyObject *
@@ -28,43 +36,51 @@ complex_fromdoubles(PyObject *Py_UNUSED(module), PyObject *args)
     return PyComplex_FromDoubles(real, imag);
 }
 
-static PyObject *
-complex_realasdouble(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+complex_realasdouble(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     double real;
 
     NULLABLE(obj);
     real = PyComplex_RealAsDouble(obj);
 
     if (real == -1. && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyFloat_FromDouble(real);
+    return PyValue_FromResult(PyFloat_FromDouble(real));
 }
 
-static PyObject *
-complex_imagasdouble(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+complex_imagasdouble(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     double imag;
 
     NULLABLE(obj);
     imag = PyComplex_ImagAsDouble(obj);
 
     if (imag == -1. && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyFloat_FromDouble(imag);
+    return PyValue_FromResult(PyFloat_FromDouble(imag));
 }
 
 
 static PyMethodDef test_methods[] = {
-    {"complex_check", complex_check, METH_O},
-    {"complex_checkexact", complex_checkexact, METH_O},
+    {"complex_check", _PyCFunction_CAST(complex_check), METH_O},
+    {"complex_checkexact", _PyCFunction_CAST(complex_checkexact), METH_O},
     {"complex_fromdoubles", complex_fromdoubles, METH_VARARGS},
-    {"complex_realasdouble", complex_realasdouble, METH_O},
-    {"complex_imagasdouble", complex_imagasdouble, METH_O},
+    {"complex_realasdouble", _PyCFunction_CAST(complex_realasdouble), METH_O},
+    {"complex_imagasdouble", _PyCFunction_CAST(complex_imagasdouble), METH_O},
     {NULL},
 };
 

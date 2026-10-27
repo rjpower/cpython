@@ -1,6 +1,3 @@
-// Need limited C API version 3.13 for PyImport_AddModuleRef()
-#define Py_LIMITED_API 0x030d0000
-
 #include "parts.h"
 #include "util.h"
 
@@ -32,25 +29,33 @@ pyimport_getmoduledict(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
 
 
 /* Test PyImport_GetModule() */
-static PyObject *
-pyimport_getmodule(PyObject *Py_UNUSED(module), PyObject *name)
+static PyValue
+pyimport_getmodule(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *name = PyValue_Object(arg);
+    if (name == NULL) {
+        return PyValue_NULL;
+    }
     assert(!PyErr_Occurred());
     NULLABLE(name);
     PyObject *module = PyImport_GetModule(name);
     if (module == NULL && !PyErr_Occurred()) {
-        return Py_NewRef(PyExc_KeyError);
+        return PyValue_FromResult(Py_NewRef(PyExc_KeyError));
     }
-    return module;
+    return PyValue_FromResult(module);
 }
 
 
 /* Test PyImport_AddModuleObject() */
-static PyObject *
-pyimport_addmoduleobject(PyObject *Py_UNUSED(module), PyObject *name)
+static PyValue
+pyimport_addmoduleobject(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *name = PyValue_Object(arg);
+    if (name == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(name);
-    return Py_XNewRef(PyImport_AddModuleObject(name));
+    return PyValue_FromResult(Py_XNewRef(PyImport_AddModuleObject(name)));
 }
 
 
@@ -83,11 +88,15 @@ pyimport_addmoduleref(PyObject *Py_UNUSED(module), PyObject *args)
 
 
 /* Test PyImport_Import() */
-static PyObject *
-pyimport_import(PyObject *Py_UNUSED(module), PyObject *name)
+static PyValue
+pyimport_import(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *name = PyValue_Object(arg);
+    if (name == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(name);
-    return PyImport_Import(name);
+    return PyValue_FromResult(PyImport_Import(name));
 }
 
 
@@ -194,11 +203,15 @@ pyimport_importfrozenmodule(PyObject *Py_UNUSED(module), PyObject *args)
 
 
 /* Test PyImport_ImportFrozenModuleObject() */
-static PyObject *
-pyimport_importfrozenmoduleobject(PyObject *Py_UNUSED(module), PyObject *name)
+static PyValue
+pyimport_importfrozenmoduleobject(PyObject *Py_UNUSED(module), PyValue arg)
 {
+    PyObject *name = PyValue_Object(arg);
+    if (name == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(name);
-    RETURN_INT(PyImport_ImportFrozenModuleObject(name));
+    RETURN_INT_VALUE(PyImport_ImportFrozenModuleObject(name));
 }
 
 
@@ -275,18 +288,18 @@ static PyMethodDef test_methods[] = {
     {"PyImport_GetMagicNumber", pyimport_getmagicnumber, METH_NOARGS},
     {"PyImport_GetMagicTag", pyimport_getmagictag, METH_NOARGS},
     {"PyImport_GetModuleDict", pyimport_getmoduledict, METH_NOARGS},
-    {"PyImport_GetModule", pyimport_getmodule, METH_O},
-    {"PyImport_AddModuleObject", pyimport_addmoduleobject, METH_O},
+    {"PyImport_GetModule", _PyCFunction_CAST(pyimport_getmodule), METH_O},
+    {"PyImport_AddModuleObject", _PyCFunction_CAST(pyimport_addmoduleobject), METH_O},
     {"PyImport_AddModule", pyimport_addmodule, METH_VARARGS},
     {"PyImport_AddModuleRef", pyimport_addmoduleref, METH_VARARGS},
-    {"PyImport_Import", pyimport_import, METH_O},
+    {"PyImport_Import", _PyCFunction_CAST(pyimport_import), METH_O},
     {"PyImport_ImportModule", pyimport_importmodule, METH_VARARGS},
     {"PyImport_ImportModuleNoBlock", pyimport_importmodulenoblock, METH_VARARGS},
     {"PyImport_ImportModuleEx", pyimport_importmoduleex, METH_VARARGS},
     {"PyImport_ImportModuleLevel", pyimport_importmodulelevel, METH_VARARGS},
     {"PyImport_ImportModuleLevelObject", pyimport_importmodulelevelobject, METH_VARARGS},
     {"PyImport_ImportFrozenModule", pyimport_importfrozenmodule, METH_VARARGS},
-    {"PyImport_ImportFrozenModuleObject", pyimport_importfrozenmoduleobject, METH_O},
+    {"PyImport_ImportFrozenModuleObject", _PyCFunction_CAST(pyimport_importfrozenmoduleobject), METH_O},
     {"PyImport_ExecCodeModule", pyimport_executecodemodule, METH_VARARGS},
     {"PyImport_ExecCodeModuleEx", pyimport_executecodemoduleex, METH_VARARGS},
     {"PyImport_ExecCodeModuleWithPathnames", pyimport_executecodemodulewithpathnames, METH_VARARGS},

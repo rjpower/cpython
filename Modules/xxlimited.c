@@ -72,14 +72,6 @@
           pass
    */
 
-// Target both flavors of the Stable ABI.
-// Both are set to version 3.15, which adds PyModExport
-// (When using a build tool, check if it has an option to set these
-//  so they do not need to be defined in the source.)
-#define Py_LIMITED_API 0x030f0000   // abi3 (GIL-enabled builds)
-#define Py_TARGET_ABI3T 0x030f0000  // abi3t (free-threaded builds)
-
-
 #include "Python.h"
 #include <string.h>
 
@@ -367,32 +359,35 @@ Xxo_setattro(PyObject *self, PyObject *name, PyObject *v)
  * specifies metadata.
  */
 
-static PyObject *
+static PyValue
 Xxo_demo(PyObject *self, PyTypeObject *defining_class,
-         PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+         const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (kwnames != NULL && PyObject_Length(kwnames)) {
         PyErr_SetString(PyExc_TypeError, "demo() takes no keyword arguments");
-        return NULL;
+        return PyValue_NULL;
     }
     if (nargs != 1) {
         PyErr_SetString(PyExc_TypeError, "demo() takes exactly 1 argument");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *o = args[0];
+    PyObject *o = PyValue_Object(args[0]);
+    if (o == NULL) {
+        return PyValue_NULL;
+    }
 
     /* Test if the argument is "str" */
     if (PyUnicode_Check(o)) {
-        return Py_NewRef(o);
+        return PyValue_FromResult(Py_NewRef(o));
     }
 
     /* test if the argument is of the Xxo class */
     if (PyObject_TypeCheck(o, defining_class)) {
-        return Py_NewRef(o);
+        return PyValue_FromResult(Py_NewRef(o));
     }
 
-    return Py_NewRef(Py_None);
+    return PyValue_FromResult(Py_NewRef(Py_None));
 }
 
 static PyMethodDef Xxo_methods[] = {

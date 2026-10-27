@@ -176,10 +176,6 @@ _PyValue_CompactInt(PyValue v)
     return (int32_t)_PyLong_CompactValue((PyLongObject *)PyValue_ObjectBorrow(v));
 }
 
-// A new int for a result outside int32 (the slow path of int arithmetic),
-// or PyValue_NULL with an exception set.
-PyAPI_FUNC(PyValue) _PyValue_BoxInt64(int64_t value);
-
 // value << shift for a shift of 32 or more places, which makes a long int,
 // or PyValue_NULL with an exception set.
 PyAPI_FUNC(PyValue) _PyValue_LshiftInt32(int32_t value, int32_t shift);

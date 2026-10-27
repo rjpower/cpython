@@ -577,6 +577,29 @@ class CConverter(metaclass=CConverterAutoRegister):
                 argname=argname, cast=cast)
         return None
 
+    def parse_value_arg(self, argname: str, displayname: str, *,
+                        limited_capi: bool) -> str | None:
+        """Return the code which converts the argument argname, a PyValue
+        expression, or None if the converter cannot be inlined.
+
+        By default the value is boxed (an inline int or float becomes a new
+        object) and parsed by parse_arg().  A converter which can read a
+        value overrides this, so that an inline argument is not boxed.
+        """
+        if self.format_unit == 'O':
+            cast = '(%s)' % self.type if self.type != 'PyObject *' else ''
+            return self.format_code("""
+                {paramname} = {cast}PyValue_Object({argname});
+                if ({paramname} == NULL) {{{{
+                    goto exit;
+                }}}}
+                """,
+                argname=argname, cast=cast)
+        code = self.parse_arg('_arg', displayname, limited_capi=limited_capi)
+        if code is None:
+            return None
+        return box_value_arg(argname, code)
+
     def set_template_dict(self, template_dict: TemplateDict) -> None:
         pass
 
@@ -594,6 +617,22 @@ class CConverter(metaclass=CConverterAutoRegister):
 
     def get_includes(self) -> list[Include]:
         return self._includes
+
+
+def box_value_arg(argname: str, code: str) -> str:
+    """Wrap code, which parses the object _arg, in a block which boxes the
+    value argname into _arg."""
+    return "\n".join([
+        libclinic.normalize_snippet("""
+            {{
+                PyObject *_arg = PyValue_Object(%s);
+                if (_arg == NULL) {{
+                    goto exit;
+                }}
+            """ % argname),
+        libclinic.normalize_snippet(code, indent=4),
+        "}}",
+    ])
 
 
 ConverterType = Callable[..., CConverter]

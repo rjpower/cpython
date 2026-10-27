@@ -6545,11 +6545,11 @@ type___subclasses___impl(PyTypeObject *self)
     return _PyType_GetSubclasses(self);
 }
 
-static PyObject *
-type_prepare(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
+static PyValue
+type_prepare(PyObject *self, const PyValue *args, Py_ssize_t nargs,
              PyObject *kwnames)
 {
-    return PyDict_New();
+    return PyValue_FromResult(PyDict_New());
 }
 
 
@@ -7908,10 +7908,14 @@ object___reduce_ex___impl(PyObject *self, int protocol)
     return _common_reduce(self, protocol);
 }
 
-static PyObject *
-object_subclasshook(PyObject *cls, PyObject *args)
+static PyValue
+object_subclasshook(PyObject *cls, PyValue args_value)
 {
-    Py_RETURN_NOTIMPLEMENTED;
+    PyObject *args = PyValue_Object(args_value);
+    if (args == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObject(Py_NotImplemented);
 }
 
 PyDoc_STRVAR(object_subclasshook_doc,
@@ -8042,7 +8046,7 @@ static PyMethodDef object_methods[] = {
     OBJECT___REDUCE_EX___METHODDEF
     OBJECT___REDUCE___METHODDEF
     OBJECT___GETSTATE___METHODDEF
-    {"__subclasshook__", object_subclasshook, METH_CLASS | METH_O,
+    {"__subclasshook__", _PyCFunction_CAST(object_subclasshook), METH_CLASS | METH_O,
      object_subclasshook_doc},
     {"__init_subclass__", object_init_subclass, METH_CLASS | METH_NOARGS,
      object_init_subclass_doc},
@@ -9959,8 +9963,8 @@ wrap_init(PyObject *self, PyObject *args, void *wrapped, PyObject *kwds)
     Py_RETURN_NONE;
 }
 
-static PyObject *
-tp_new_wrapper(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+tp_new_wrapper(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     PyTypeObject *staticbase;
     PyObject *arg0, *res;
@@ -9968,7 +9972,7 @@ tp_new_wrapper(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject
     if (self == NULL || !PyType_Check(self)) {
         PyErr_Format(PyExc_SystemError,
                      "__new__() called with non-type 'self'");
-        return NULL;
+        return PyValue_NULL;
     }
     PyTypeObject *type = (PyTypeObject *)self;
 
@@ -9976,15 +9980,18 @@ tp_new_wrapper(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject
         PyErr_Format(PyExc_TypeError,
                      "%s.__new__(): not enough arguments",
                      type->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
-    arg0 = args[0];
+    arg0 = PyValue_Object(args[0]);
+    if (arg0 == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyType_Check(arg0)) {
         PyErr_Format(PyExc_TypeError,
                      "%s.__new__(X): X is not a type object (%s)",
                      type->tp_name,
                      Py_TYPE(arg0)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
     PyTypeObject *subtype = (PyTypeObject *)arg0;
 
@@ -9995,7 +10002,7 @@ tp_new_wrapper(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject
                      subtype->tp_name,
                      subtype->tp_name,
                      type->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Check that the use doesn't do something silly and unsafe like
@@ -10010,38 +10017,38 @@ tp_new_wrapper(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject
         if (staticbase->tp_new == NULL) {
             PyErr_Format(PyExc_TypeError,
                          "cannot create '%s' instances", subtype->tp_name);
-            return NULL;
+            return PyValue_NULL;
         }
         PyErr_Format(PyExc_TypeError,
                      "%s.__new__(%s) is not safe, use %s.__new__()",
                      type->tp_name,
                      subtype->tp_name,
                      staticbase->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *args_tuple = PyTuple_FromArray(args + 1, nargs - 1);
+    PyObject *args_tuple = _PyTuple_FromValues(args + 1, nargs - 1);
     if (args_tuple == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *kwds = NULL;
     if (kwnames != NULL) {
-        // The keyword arguments are objects until METH_FASTCALL takes values.
         kwds = PyDict_New();
         if (kwds == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(kwnames); i++) {
-            if (PyDict_SetItem(kwds, PyTuple_GET_ITEM(kwnames, i),
-                               args[nargs + i]) < 0) {
-                return NULL;
+            if (_PyDict_SetItemValue((PyDictObject *)kwds,
+                                     PyTuple_GET_VALUE(kwnames, i),
+                                     args[nargs + i]) < 0) {
+                return PyValue_NULL;
             }
         }
     }
     res = type->tp_new(subtype, args_tuple, kwds);
     Py_DECREF(args_tuple);
     Py_XDECREF(kwds);
-    return res;
+    return PyValue_FromResult(res);
 }
 
 static struct PyMethodDef tp_new_methoddef[] = {
@@ -11464,6 +11471,20 @@ has_slotdef(PyObject *name)
  * This function will only return an error if the queued_updates argument is
  * provided and allocating memory for the queue fails.  Other exceptions that
  * occur internally are ignored, such as when looking up descriptors. */
+/* True if descr is a METH_COEXIST method, which a type defines beside its
+   own slot function for the same operation, and slot is that slot function.
+   The method takes and returns values, so it is not the slot function
+   itself. */
+static int
+coexist_method_is_slot(PyMethodDescrObject *descr, int offset, void *slot)
+{
+    if (!(descr->d_method->ml_flags & METH_COEXIST)) {
+        return 0;
+    }
+    void **base_ptr = slotptr(PyDescr_TYPE(descr), offset);
+    return base_ptr != NULL && *base_ptr == slot;
+}
+
 static int
 update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
                 slot_update_t *queued_updates)
@@ -11590,7 +11611,9 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
         else {
             use_generic = 1;
             if (generic == NULL && Py_IS_TYPE(descr, &PyMethodDescr_Type) &&
-                *ptr == ((PyMethodDescrObject *)descr)->d_method->ml_meth)
+                (*ptr == ((PyMethodDescrObject *)descr)->d_method->ml_meth ||
+                 coexist_method_is_slot((PyMethodDescrObject *)descr,
+                                        p->offset, *ptr)))
             {
                 generic = *ptr;
             }

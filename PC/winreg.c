@@ -259,10 +259,10 @@ class HKEY_return_converter(CReturnConverter):
     def render(self, function, data):
         self.declare(data)
         self.err_occurred_if_null_pointer("_return_value", data)
-        data.return_conversion.append(
-            'return_value = PyHKEY_FromHKEY(_PyModule_GetState(module), _return_value);\n')
+        data.return_conversion.append(self.result_assignment(
+            'PyHKEY_FromHKEY(_PyModule_GetState(module), _return_value)', data))
 [python start generated code]*/
-/*[python end generated code: output=da39a3ee5e6b4b0d input=e345501438d93fa2]*/
+/*[python end generated code: output=da39a3ee5e6b4b0d input=2a72a32eb39ce6b3]*/
 
 #include "clinic/winreg.c.h"
 
@@ -809,8 +809,8 @@ closed when the hkey object is destroyed by Python.
 [clinic start generated code]*/
 
 static PyObject *
-winreg_CloseKey(PyObject *module, PyObject *hkey)
-/*[clinic end generated code: output=a4fa537019a80d15 input=5b1aac65ba5127ad]*/
+winreg_CloseKey_impl(PyObject *module, PyObject *hkey)
+/*[clinic end generated code: output=4aae444afdbaca69 input=5b1aac65ba5127ad]*/
 {
     if (!PyHKEY_Close(_PyModule_GetState(module), hkey)) {
         return NULL;

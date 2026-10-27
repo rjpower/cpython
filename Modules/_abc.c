@@ -184,23 +184,27 @@ _in_weak_set(_abc_data *impl, PyObject **pset, PyObject *obj)
     return res;
 }
 
-static PyObject *
-_destroy(PyObject *setweakref, PyObject *objweakref)
+static PyValue
+_destroy(PyObject *setweakref, PyValue arg)
 {
+    PyObject *objweakref = PyValue_Object(arg);
+    if (objweakref == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *set = _PyWeakref_GET_REF(setweakref);
     if (set == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
     if (PySet_Discard(set, objweakref) < 0) {
         Py_DECREF(set);
-        return NULL;
+        return PyValue_NULL;
     }
     Py_DECREF(set);
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 static PyMethodDef _destroy_def = {
-    "_destroy", _destroy, METH_O
+    "_destroy", _PyCFunction_CAST(_destroy), METH_O
 };
 
 static int
@@ -252,8 +256,8 @@ Should be only used by refleak.py
 [clinic start generated code]*/
 
 static PyObject *
-_abc__reset_registry(PyObject *module, PyObject *self)
-/*[clinic end generated code: output=92d591a43566cc10 input=12a0b7eb339ac35c]*/
+_abc__reset_registry_impl(PyObject *module, PyObject *self)
+/*[clinic end generated code: output=835445bfaaafcd9d input=12a0b7eb339ac35c]*/
 {
     _abc_data *impl = _get_impl(module, self);
     if (impl == NULL) {
@@ -283,8 +287,8 @@ Should be only used by refleak.py
 [clinic start generated code]*/
 
 static PyObject *
-_abc__reset_caches(PyObject *module, PyObject *self)
-/*[clinic end generated code: output=f296f0d5c513f80c input=c0ac616fd8acfb6f]*/
+_abc__reset_caches_impl(PyObject *module, PyObject *self)
+/*[clinic end generated code: output=c1ebdd7ae339dd42 input=c0ac616fd8acfb6f]*/
 {
     _abc_data *impl = _get_impl(module, self);
     if (impl == NULL) {
@@ -322,8 +326,8 @@ instead use ABC._dump_registry() for a nice repr.
 [clinic start generated code]*/
 
 static PyObject *
-_abc__get_dump(PyObject *module, PyObject *self)
-/*[clinic end generated code: output=9d9569a8e2c1c443 input=2c5deb1bfe9e3c79]*/
+_abc__get_dump_impl(PyObject *module, PyObject *self)
+/*[clinic end generated code: output=23022b85852a78c0 input=2c5deb1bfe9e3c79]*/
 {
     _abc_data *impl = _get_impl(module, self);
     if (impl == NULL) {
@@ -478,8 +482,8 @@ Internal ABC helper for class set-up. Should be never used outside abc module.
 [clinic start generated code]*/
 
 static PyObject *
-_abc__abc_init(PyObject *module, PyObject *self)
-/*[clinic end generated code: output=594757375714cda1 input=0b3513f947736d39]*/
+_abc__abc_init_impl(PyObject *module, PyObject *self)
+/*[clinic end generated code: output=b167957e8eac01f6 input=0b3513f947736d39]*/
 {
     _abcmodule_state *state = get_abc_state(module);
     PyObject *data;

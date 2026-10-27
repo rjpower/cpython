@@ -27,21 +27,27 @@ Greatest Common Divisor.
 [clinic start generated code]*/
 
 static PyObject *
-math_integer_gcd_impl(PyObject *module, PyObject * const *args,
+math_integer_gcd_impl(PyObject *module, const PyValue *args,
                       Py_ssize_t args_length)
-/*[clinic end generated code: output=8e9c5bab06bea203 input=a90cde2ac5281551]*/
+/*[clinic end generated code: output=b996dcea8367051b input=a90cde2ac5281551]*/
 {
-    // Fast-path for the common case: gcd(int, int)
-    if (args_length == 2 && PyLong_CheckExact(args[0]) && PyLong_CheckExact(args[1]))
-    {
-        return _PyLong_GCD(args[0], args[1]);
-    }
-
     if (args_length == 0) {
         return PyLong_FromLong(0);
     }
 
-    PyObject *res = PyNumber_Index(args[0]);
+    // Fast-path for the common case: gcd(int, int)
+    if (args_length == 2 && PyValue_Type(args[0]) == &PyLong_Type
+        && PyValue_Type(args[1]) == &PyLong_Type)
+    {
+        PyObject *a = PyValue_Object(args[0]);
+        PyObject *b = PyValue_Object(args[1]);
+        if (a == NULL || b == NULL) {
+            return NULL;
+        }
+        return _PyLong_GCD(a, b);
+    }
+
+    PyObject *res = PyValue_Object(PyNumber_IndexValue(args[0]));
     if (res == NULL) {
         return NULL;
     }
@@ -52,7 +58,7 @@ math_integer_gcd_impl(PyObject *module, PyObject * const *args,
 
     PyObject *one = _PyLong_GetOne();  // borrowed ref
     for (Py_ssize_t i = 1; i < args_length; i++) {
-        PyObject *x = _PyNumber_Index(args[i]);
+        PyObject *x = PyValue_Object(PyNumber_IndexValue(args[i]));
         if (x == NULL) {
             Py_DECREF(res);
             return NULL;
@@ -110,9 +116,9 @@ Least Common Multiple.
 [clinic start generated code]*/
 
 static PyObject *
-math_integer_lcm_impl(PyObject *module, PyObject * const *args,
+math_integer_lcm_impl(PyObject *module, const PyValue *args,
                       Py_ssize_t args_length)
-/*[clinic end generated code: output=3e88889b866ccc28 input=261bddc85a136bdf]*/
+/*[clinic end generated code: output=1a2e4a0ee8b91abc input=261bddc85a136bdf]*/
 {
     PyObject *res, *x;
     Py_ssize_t i;
@@ -120,7 +126,7 @@ math_integer_lcm_impl(PyObject *module, PyObject * const *args,
     if (args_length == 0) {
         return PyLong_FromLong(1);
     }
-    res = PyNumber_Index(args[0]);
+    res = PyValue_Object(PyNumber_IndexValue(args[0]));
     if (res == NULL) {
         return NULL;
     }
@@ -131,7 +137,7 @@ math_integer_lcm_impl(PyObject *module, PyObject * const *args,
 
     PyObject *zero = _PyLong_GetZero();  // borrowed ref
     for (i = 1; i < args_length; i++) {
-        x = PyNumber_Index(args[i]);
+        x = PyValue_Object(PyNumber_IndexValue(args[i]));
         if (x == NULL) {
             Py_DECREF(res);
             return NULL;
@@ -350,8 +356,8 @@ Return the integer part of the square root of the input.
 [clinic start generated code]*/
 
 static PyObject *
-math_integer_isqrt(PyObject *module, PyObject *n)
-/*[clinic end generated code: output=551031e41a0f5d9e input=921ddd9853133d8d]*/
+math_integer_isqrt_impl(PyObject *module, PyObject *n)
+/*[clinic end generated code: output=78d1349256a39595 input=921ddd9853133d8d]*/
 {
     int a_too_large, c_bit_length;
     int64_t c, d;
@@ -688,8 +694,8 @@ Find n!.
 [clinic start generated code]*/
 
 static PyObject *
-math_integer_factorial(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=131c23fd48650414 input=742f4dfa490a1b07]*/
+math_integer_factorial_impl(PyObject *module, PyObject *arg)
+/*[clinic end generated code: output=1cfd5fe17d7a7387 input=742f4dfa490a1b07]*/
 {
     long x, two_valuation;
     int overflow;
@@ -1046,7 +1052,7 @@ math_integer_perm_impl(PyObject *module, PyObject *n, PyObject *k)
     long long ki, ni;
 
     if (k == Py_None) {
-        return math_integer_factorial(module, n);
+        return math_integer_factorial_impl(module, n);
     }
     n = PyNumber_Index(n);
     if (n == NULL) {

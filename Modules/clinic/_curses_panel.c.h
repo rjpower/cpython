@@ -147,25 +147,27 @@ PyDoc_STRVAR(_curses_panel_panel_move__doc__,
 static PyObject *
 _curses_panel_panel_move_impl(PyCursesPanelObject *self, int y, int x);
 
-static PyObject *
-_curses_panel_panel_move(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_panel_panel_move(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int y;
     int x;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("move", nargs, 2, 2)) {
         goto exit;
     }
-    y = PyLong_AsInt(args[0]);
+    y = PyLong_AsIntValue(args[0]);
     if (y == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    x = PyLong_AsInt(args[1]);
+    x = PyLong_AsIntValue(args[1]);
     if (x == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_panel_panel_move_impl((PyCursesPanelObject *)self, y, x);
+    _return_value = _curses_panel_panel_move_impl((PyCursesPanelObject *)self, y, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -196,24 +198,32 @@ PyDoc_STRVAR(_curses_panel_panel_replace__doc__,
 "Change the window associated with the panel to the window win.");
 
 #define _CURSES_PANEL_PANEL_REPLACE_METHODDEF    \
-    {"replace", (PyCFunction)_curses_panel_panel_replace, METH_O, _curses_panel_panel_replace__doc__},
+    {"replace", _PyCFunction_CAST(_curses_panel_panel_replace), METH_O, _curses_panel_panel_replace__doc__},
 
 static PyObject *
 _curses_panel_panel_replace_impl(PyCursesPanelObject *self,
                                  PyCursesWindowObject *win);
 
-static PyObject *
-_curses_panel_panel_replace(PyObject *self, PyObject *arg)
+static PyValue
+_curses_panel_panel_replace(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyCursesWindowObject *win;
+    PyObject *_return_value;
 
-    if (!PyObject_TypeCheck(arg, &PyCursesWindow_Type)) {
-        _PyArg_BadArgument("replace", "argument", (&PyCursesWindow_Type)->tp_name, arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, &PyCursesWindow_Type)) {
+            _PyArg_BadArgument("replace", "argument", (&PyCursesWindow_Type)->tp_name, _arg);
+            goto exit;
+        }
+        win = (PyCursesWindowObject *)_arg;
     }
-    win = (PyCursesWindowObject *)arg;
-    return_value = _curses_panel_panel_replace_impl((PyCursesPanelObject *)self, win);
+    _return_value = _curses_panel_panel_replace_impl((PyCursesPanelObject *)self, win);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -226,19 +236,27 @@ PyDoc_STRVAR(_curses_panel_panel_set_userptr__doc__,
 "Set the panel\'s user pointer to obj.");
 
 #define _CURSES_PANEL_PANEL_SET_USERPTR_METHODDEF    \
-    {"set_userptr", (PyCFunction)_curses_panel_panel_set_userptr, METH_O, _curses_panel_panel_set_userptr__doc__},
+    {"set_userptr", _PyCFunction_CAST(_curses_panel_panel_set_userptr), METH_O, _curses_panel_panel_set_userptr__doc__},
 
 static PyObject *
 _curses_panel_panel_set_userptr_impl(PyCursesPanelObject *self,
                                      PyObject *obj);
 
-static PyObject *
-_curses_panel_panel_set_userptr(PyObject *self, PyObject *obj)
+static PyValue
+_curses_panel_panel_set_userptr(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *obj;
+    PyObject *_return_value;
 
-    return_value = _curses_panel_panel_set_userptr_impl((PyCursesPanelObject *)self, obj);
+    obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        goto exit;
+    }
+    _return_value = _curses_panel_panel_set_userptr_impl((PyCursesPanelObject *)self, obj);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -287,23 +305,31 @@ PyDoc_STRVAR(_curses_panel_new_panel__doc__,
 "The new panel is placed on top of the panel stack.");
 
 #define _CURSES_PANEL_NEW_PANEL_METHODDEF    \
-    {"new_panel", (PyCFunction)_curses_panel_new_panel, METH_O, _curses_panel_new_panel__doc__},
+    {"new_panel", _PyCFunction_CAST(_curses_panel_new_panel), METH_O, _curses_panel_new_panel__doc__},
 
 static PyObject *
 _curses_panel_new_panel_impl(PyObject *module, PyCursesWindowObject *win);
 
-static PyObject *
-_curses_panel_new_panel(PyObject *module, PyObject *arg)
+static PyValue
+_curses_panel_new_panel(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyCursesWindowObject *win;
+    PyObject *_return_value;
 
-    if (!PyObject_TypeCheck(arg, &PyCursesWindow_Type)) {
-        _PyArg_BadArgument("new_panel", "argument", (&PyCursesWindow_Type)->tp_name, arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, &PyCursesWindow_Type)) {
+            _PyArg_BadArgument("new_panel", "argument", (&PyCursesWindow_Type)->tp_name, _arg);
+            goto exit;
+        }
+        win = (PyCursesWindowObject *)_arg;
     }
-    win = (PyCursesWindowObject *)arg;
-    return_value = _curses_panel_new_panel_impl(module, win);
+    _return_value = _curses_panel_new_panel_impl(module, win);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -347,4 +373,4 @@ _curses_panel_update_panels(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
     return _curses_panel_update_panels_impl(module);
 }
-/*[clinic end generated code: output=ec3fe619150e512e input=a9049054013a1b77]*/
+/*[clinic end generated code: output=782d8acb8eb6a011 input=a9049054013a1b77]*/

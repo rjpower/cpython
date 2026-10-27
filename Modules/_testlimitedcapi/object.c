@@ -1,6 +1,3 @@
-// Need limited C API version 3.13 for Py_GetConstant()
-#define Py_LIMITED_API 0x030d0000
-
 #include "parts.h"
 #include "util.h"
 

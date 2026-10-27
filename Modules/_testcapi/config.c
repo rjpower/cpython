@@ -1,31 +1,39 @@
 #include "parts.h"
 
 
-static PyObject *
-_testcapi_config_get(PyObject *module, PyObject *name_obj)
+static PyValue
+_testcapi_config_get(PyObject *module, PyValue name_obj_value)
 {
+    PyObject *name_obj = PyValue_Object(name_obj_value);
+    if (name_obj == NULL) {
+        return PyValue_NULL;
+    }
     const char *name;
     if (PyArg_Parse(name_obj, "s", &name) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyConfig_Get(name);
+    return PyValue_FromResult(PyConfig_Get(name));
 }
 
 
-static PyObject *
-_testcapi_config_getint(PyObject *module, PyObject *name_obj)
+static PyValue
+_testcapi_config_getint(PyObject *module, PyValue name_obj_value)
 {
+    PyObject *name_obj = PyValue_Object(name_obj_value);
+    if (name_obj == NULL) {
+        return PyValue_NULL;
+    }
     const char *name;
     if (PyArg_Parse(name_obj, "s", &name) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     int value;
     if (PyConfig_GetInt(name, &value) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromLong(value);
+    return PyValue_FromResult(PyLong_FromLong(value));
 }
 
 
@@ -54,8 +62,8 @@ _testcapi_config_set(PyObject *module, PyObject *args)
 
 
 static PyMethodDef test_methods[] = {
-    {"config_get", _testcapi_config_get, METH_O},
-    {"config_getint", _testcapi_config_getint, METH_O},
+    {"config_get", _PyCFunction_CAST(_testcapi_config_get), METH_O},
+    {"config_getint", _PyCFunction_CAST(_testcapi_config_getint), METH_O},
     {"config_names", _testcapi_config_names, METH_NOARGS},
     {"config_set", _testcapi_config_set, METH_VARARGS},
     {NULL}

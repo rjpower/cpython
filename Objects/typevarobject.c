@@ -855,12 +855,16 @@ typevar_has_default_impl(typevarobject *self)
     Py_RETURN_FALSE;
 }
 
-static PyObject *
-typevar_mro_entries(PyObject *self, PyObject *args)
+static PyValue
+typevar_mro_entries(PyObject *self, PyValue args_value)
 {
+    PyObject *args = PyValue_Object(args_value);
+    if (args == NULL) {
+        return PyValue_NULL;
+    }
     PyErr_SetString(PyExc_TypeError,
                     "Cannot subclass an instance of TypeVar");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyMethodDef typevar_methods[] = {
@@ -868,7 +872,7 @@ static PyMethodDef typevar_methods[] = {
     TYPEVAR_TYPING_PREPARE_SUBST_METHODDEF
     TYPEVAR_REDUCE_METHODDEF
     TYPEVAR_HAS_DEFAULT_METHODDEF
-    {"__mro_entries__", typevar_mro_entries, METH_O},
+    {"__mro_entries__", _PyCFunction_CAST(typevar_mro_entries), METH_O},
     {0}
 };
 
@@ -1040,16 +1044,20 @@ paramspecargs_new_impl(PyTypeObject *type, PyObject *origin)
     return (PyObject *)paramspecattr_new(type, origin);
 }
 
-static PyObject *
-paramspecargs_mro_entries(PyObject *self, PyObject *args)
+static PyValue
+paramspecargs_mro_entries(PyObject *self, PyValue args_value)
 {
+    PyObject *args = PyValue_Object(args_value);
+    if (args == NULL) {
+        return PyValue_NULL;
+    }
     PyErr_SetString(PyExc_TypeError,
                     "Cannot subclass an instance of ParamSpecArgs");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyMethodDef paramspecargs_methods[] = {
-    {"__mro_entries__", paramspecargs_mro_entries, METH_O},
+    {"__mro_entries__", _PyCFunction_CAST(paramspecargs_mro_entries), METH_O},
     {0}
 };
 
@@ -1120,16 +1128,20 @@ paramspeckwargs_new_impl(PyTypeObject *type, PyObject *origin)
     return (PyObject *)paramspecattr_new(type, origin);
 }
 
-static PyObject *
-paramspeckwargs_mro_entries(PyObject *self, PyObject *args)
+static PyValue
+paramspeckwargs_mro_entries(PyObject *self, PyValue args_value)
 {
+    PyObject *args = PyValue_Object(args_value);
+    if (args == NULL) {
+        return PyValue_NULL;
+    }
     PyErr_SetString(PyExc_TypeError,
                     "Cannot subclass an instance of ParamSpecKwargs");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyMethodDef paramspeckwargs_methods[] = {
-    {"__mro_entries__", paramspeckwargs_mro_entries, METH_O},
+    {"__mro_entries__", _PyCFunction_CAST(paramspeckwargs_mro_entries), METH_O},
     {0}
 };
 
@@ -1417,12 +1429,16 @@ paramspec_has_default_impl(paramspecobject *self)
     Py_RETURN_FALSE;
 }
 
-static PyObject *
-paramspec_mro_entries(PyObject *self, PyObject *args)
+static PyValue
+paramspec_mro_entries(PyObject *self, PyValue args_value)
 {
+    PyObject *args = PyValue_Object(args_value);
+    if (args == NULL) {
+        return PyValue_NULL;
+    }
     PyErr_SetString(PyExc_TypeError,
                     "Cannot subclass an instance of ParamSpec");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyMethodDef paramspec_methods[] = {
@@ -1430,7 +1446,7 @@ static PyMethodDef paramspec_methods[] = {
     PARAMSPEC_TYPING_PREPARE_SUBST_METHODDEF
     PARAMSPEC_HAS_DEFAULT_METHODDEF
     PARAMSPEC_REDUCE_METHODDEF
-    {"__mro_entries__", paramspec_mro_entries, METH_O},
+    {"__mro_entries__", _PyCFunction_CAST(paramspec_mro_entries), METH_O},
     {0}
 };
 
@@ -1702,12 +1718,16 @@ typevartuple_has_default_impl(typevartupleobject *self)
     Py_RETURN_FALSE;
 }
 
-static PyObject *
-typevartuple_mro_entries(PyObject *self, PyObject *args)
+static PyValue
+typevartuple_mro_entries(PyObject *self, PyValue args_value)
 {
+    PyObject *args = PyValue_Object(args_value);
+    if (args == NULL) {
+        return PyValue_NULL;
+    }
     PyErr_SetString(PyExc_TypeError,
                     "Cannot subclass an instance of TypeVarTuple");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static int
@@ -1773,7 +1793,7 @@ static PyMethodDef typevartuple_methods[] = {
     TYPEVARTUPLE_TYPING_PREPARE_SUBST_METHODDEF
     TYPEVARTUPLE_REDUCE_METHODDEF
     TYPEVARTUPLE_HAS_DEFAULT_METHODDEF
-    {"__mro_entries__", typevartuple_mro_entries, METH_O},
+    {"__mro_entries__", _PyCFunction_CAST(typevartuple_mro_entries), METH_O},
     {0}
 };
 

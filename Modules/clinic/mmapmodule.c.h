@@ -5,7 +5,6 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
@@ -90,11 +89,12 @@ PyDoc_STRVAR(mmap_mmap_read__doc__,
 static PyObject *
 mmap_mmap_read_impl(mmap_object *self, Py_ssize_t num_bytes);
 
-static PyObject *
-mmap_mmap_read(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+mmap_mmap_read(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t num_bytes = PY_SSIZE_T_MAX;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("read", nargs, 0, 1)) {
         goto exit;
@@ -102,13 +102,20 @@ mmap_mmap_read(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    if (!_Py_convert_optional_to_ssize_t(args[0], &num_bytes)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_Py_convert_optional_to_ssize_t(_arg, &num_bytes)) {
+            goto exit;
+        }
     }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = mmap_mmap_read_impl((mmap_object *)self, num_bytes);
+    _return_value = mmap_mmap_read_impl((mmap_object *)self, num_bytes);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -126,32 +133,46 @@ static PyObject *
 mmap_mmap_find_impl(mmap_object *self, Py_buffer *view, PyObject *start,
                     PyObject *end);
 
-static PyObject *
-mmap_mmap_find(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+mmap_mmap_find(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer view = {NULL, NULL};
     PyObject *start = Py_None;
     PyObject *end = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("find", nargs, 1, 3)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &view, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &view, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    start = args[1];
+    start = PyValue_Object(args[1]);
+    if (start == NULL) {
+        goto exit;
+    }
     if (nargs < 3) {
         goto skip_optional;
     }
-    end = args[2];
+    end = PyValue_Object(args[2]);
+    if (end == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = mmap_mmap_find_impl((mmap_object *)self, &view, start, end);
+    _return_value = mmap_mmap_find_impl((mmap_object *)self, &view, start, end);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for view */
@@ -174,32 +195,46 @@ static PyObject *
 mmap_mmap_rfind_impl(mmap_object *self, Py_buffer *view, PyObject *start,
                      PyObject *end);
 
-static PyObject *
-mmap_mmap_rfind(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+mmap_mmap_rfind(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer view = {NULL, NULL};
     PyObject *start = Py_None;
     PyObject *end = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("rfind", nargs, 1, 3)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &view, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &view, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    start = args[1];
+    start = PyValue_Object(args[1]);
+    if (start == NULL) {
+        goto exit;
+    }
     if (nargs < 3) {
         goto skip_optional;
     }
-    end = args[2];
+    end = PyValue_Object(args[2]);
+    if (end == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = mmap_mmap_rfind_impl((mmap_object *)self, &view, start, end);
+    _return_value = mmap_mmap_rfind_impl((mmap_object *)self, &view, start, end);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for view */
@@ -216,23 +251,31 @@ PyDoc_STRVAR(mmap_mmap_write__doc__,
 "\n");
 
 #define MMAP_MMAP_WRITE_METHODDEF    \
-    {"write", (PyCFunction)mmap_mmap_write, METH_O, mmap_mmap_write__doc__},
+    {"write", _PyCFunction_CAST(mmap_mmap_write), METH_O, mmap_mmap_write__doc__},
 
 static PyObject *
 mmap_mmap_write_impl(mmap_object *self, Py_buffer *data);
 
-static PyObject *
-mmap_mmap_write(PyObject *self, PyObject *arg)
+static PyValue
+mmap_mmap_write(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer data = {NULL, NULL};
+    PyObject *_return_value;
 
-    if (PyObject_GetBuffer(arg, &data, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = mmap_mmap_write_impl((mmap_object *)self, &data);
+    _return_value = mmap_mmap_write_impl((mmap_object *)self, &data);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for data */
@@ -249,39 +292,47 @@ PyDoc_STRVAR(mmap_mmap_write_byte__doc__,
 "\n");
 
 #define MMAP_MMAP_WRITE_BYTE_METHODDEF    \
-    {"write_byte", (PyCFunction)mmap_mmap_write_byte, METH_O, mmap_mmap_write_byte__doc__},
+    {"write_byte", _PyCFunction_CAST(mmap_mmap_write_byte), METH_O, mmap_mmap_write_byte__doc__},
 
 static PyObject *
 mmap_mmap_write_byte_impl(mmap_object *self, unsigned char value);
 
-static PyObject *
-mmap_mmap_write_byte(PyObject *self, PyObject *arg)
+static PyValue
+mmap_mmap_write_byte(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     unsigned char value;
+    PyObject *_return_value;
 
     {
-        long ival = PyLong_AsLong(arg);
-        if (ival == -1 && PyErr_Occurred()) {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
             goto exit;
         }
-        else if (ival < 0) {
-            PyErr_SetString(PyExc_OverflowError,
-                            "unsigned byte integer is less than minimum");
-            goto exit;
-        }
-        else if (ival > UCHAR_MAX) {
-            PyErr_SetString(PyExc_OverflowError,
-                            "unsigned byte integer is greater than maximum");
-            goto exit;
-        }
-        else {
-            value = (unsigned char) ival;
+        {
+            long ival = PyLong_AsLong(_arg);
+            if (ival == -1 && PyErr_Occurred()) {
+                goto exit;
+            }
+            else if (ival < 0) {
+                PyErr_SetString(PyExc_OverflowError,
+                                "unsigned byte integer is less than minimum");
+                goto exit;
+            }
+            else if (ival > UCHAR_MAX) {
+                PyErr_SetString(PyExc_OverflowError,
+                                "unsigned byte integer is greater than maximum");
+                goto exit;
+            }
+            else {
+                value = (unsigned char) ival;
+            }
         }
     }
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = mmap_mmap_write_byte_impl((mmap_object *)self, value);
+    _return_value = mmap_mmap_write_byte_impl((mmap_object *)self, value);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -318,23 +369,23 @@ PyDoc_STRVAR(mmap_mmap_resize__doc__,
 "\n");
 
 #define MMAP_MMAP_RESIZE_METHODDEF    \
-    {"resize", (PyCFunction)mmap_mmap_resize, METH_O, mmap_mmap_resize__doc__},
+    {"resize", _PyCFunction_CAST(mmap_mmap_resize), METH_O, mmap_mmap_resize__doc__},
 
 static PyObject *
 mmap_mmap_resize_impl(mmap_object *self, Py_ssize_t new_size);
 
-static PyObject *
-mmap_mmap_resize(PyObject *self, PyObject *arg)
+static PyValue
+mmap_mmap_resize(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t new_size;
+    PyObject *_return_value;
 
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(arg);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(arg);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -342,8 +393,9 @@ mmap_mmap_resize(PyObject *self, PyObject *arg)
         new_size = ival;
     }
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = mmap_mmap_resize_impl((mmap_object *)self, new_size);
+    _return_value = mmap_mmap_resize_impl((mmap_object *)self, new_size);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -386,10 +438,10 @@ static PyObject *
 mmap_mmap_flush_impl(mmap_object *self, Py_ssize_t offset, Py_ssize_t size,
                      int flags);
 
-static PyObject *
-mmap_mmap_flush(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+mmap_mmap_flush(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -416,11 +468,12 @@ mmap_mmap_flush(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     Py_ssize_t offset = 0;
     Py_ssize_t size = -1;
     int flags = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -433,10 +486,9 @@ mmap_mmap_flush(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObjec
     noptargs--;
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -449,10 +501,9 @@ mmap_mmap_flush(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObjec
     noptargs--;
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -463,14 +514,15 @@ skip_optional_posonly:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    flags = PyLong_AsInt(args[2]);
+    flags = PyLong_AsIntValue(args[2]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_kwonly:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = mmap_mmap_flush_impl((mmap_object *)self, offset, size, flags);
+    _return_value = mmap_mmap_flush_impl((mmap_object *)self, offset, size, flags);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -487,22 +539,22 @@ PyDoc_STRVAR(mmap_mmap_seek__doc__,
 static PyObject *
 mmap_mmap_seek_impl(mmap_object *self, Py_ssize_t dist, int how);
 
-static PyObject *
-mmap_mmap_seek(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+mmap_mmap_seek(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t dist;
     int how = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("seek", nargs, 1, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -512,14 +564,15 @@ mmap_mmap_seek(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 2) {
         goto skip_optional;
     }
-    how = PyLong_AsInt(args[1]);
+    how = PyLong_AsIntValue(args[1]);
     if (how == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = mmap_mmap_seek_impl((mmap_object *)self, dist, how);
+    _return_value = mmap_mmap_seek_impl((mmap_object *)self, dist, how);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -531,28 +584,36 @@ PyDoc_STRVAR(mmap_mmap_set_name__doc__,
 "\n");
 
 #define MMAP_MMAP_SET_NAME_METHODDEF    \
-    {"set_name", (PyCFunction)mmap_mmap_set_name, METH_O, mmap_mmap_set_name__doc__},
+    {"set_name", _PyCFunction_CAST(mmap_mmap_set_name), METH_O, mmap_mmap_set_name__doc__},
 
 static PyObject *
 mmap_mmap_set_name_impl(mmap_object *self, const char *name);
 
-static PyObject *
-mmap_mmap_set_name(PyObject *self, PyObject *arg)
+static PyValue
+mmap_mmap_set_name(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *name;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("set_name", "argument", "str", arg);
-        goto exit;
-    }
-    name = _PyUnicode_AsUTF8NoNUL(arg);
-    if (name == NULL) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("set_name", "argument", "str", _arg);
+            goto exit;
+        }
+        name = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (name == NULL) {
+            goto exit;
+        }
     }
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = mmap_mmap_set_name_impl((mmap_object *)self, name);
+    _return_value = mmap_mmap_set_name_impl((mmap_object *)self, name);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -587,23 +648,23 @@ static PyObject *
 mmap_mmap_move_impl(mmap_object *self, Py_ssize_t dest, Py_ssize_t src,
                     Py_ssize_t cnt);
 
-static PyObject *
-mmap_mmap_move(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+mmap_mmap_move(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t dest;
     Py_ssize_t src;
     Py_ssize_t cnt;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("move", nargs, 3, 3)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -612,10 +673,9 @@ mmap_mmap_move(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -624,10 +684,9 @@ mmap_mmap_move(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[2]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -635,8 +694,9 @@ mmap_mmap_move(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         cnt = ival;
     }
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = mmap_mmap_move_impl((mmap_object *)self, dest, src, cnt);
+    _return_value = mmap_mmap_move_impl((mmap_object *)self, dest, src, cnt);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -677,23 +737,34 @@ static PyObject *
 mmap_mmap___exit___impl(mmap_object *self, PyObject *exc_type,
                         PyObject *exc_value, PyObject *traceback);
 
-static PyObject *
-mmap_mmap___exit__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+mmap_mmap___exit__(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *exc_type;
     PyObject *exc_value;
     PyObject *traceback;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("__exit__", nargs, 3, 3)) {
         goto exit;
     }
-    exc_type = args[0];
-    exc_value = args[1];
-    traceback = args[2];
+    exc_type = PyValue_Object(args[0]);
+    if (exc_type == NULL) {
+        goto exit;
+    }
+    exc_value = PyValue_Object(args[1]);
+    if (exc_value == NULL) {
+        goto exit;
+    }
+    traceback = PyValue_Object(args[2]);
+    if (traceback == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = mmap_mmap___exit___impl((mmap_object *)self, exc_type, exc_value, traceback);
+    _return_value = mmap_mmap___exit___impl((mmap_object *)self, exc_type, exc_value, traceback);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -755,39 +826,45 @@ static PyObject *
 mmap_mmap__protect_impl(mmap_object *self, unsigned int flNewProtect,
                         Py_ssize_t start, Py_ssize_t length);
 
-static PyObject *
-mmap_mmap__protect(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+mmap_mmap__protect(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     unsigned int flNewProtect;
     Py_ssize_t start;
     Py_ssize_t length;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_protect", nargs, 3, 3)) {
         goto exit;
     }
     {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[0], &flNewProtect, sizeof(unsigned int),
-                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                Py_ASNATIVEBYTES_ALLOW_INDEX |
-                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-        if (_bytes < 0) {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
             goto exit;
         }
-        if ((size_t)_bytes > sizeof(unsigned int)) {
-            if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                "integer value out of range", 1) < 0)
-            {
+        {
+            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &flNewProtect, sizeof(unsigned int),
+                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                    Py_ASNATIVEBYTES_ALLOW_INDEX |
+                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+            if (_bytes < 0) {
                 goto exit;
+            }
+            if ((size_t)_bytes > sizeof(unsigned int)) {
+                if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                    "integer value out of range", 1) < 0)
+                {
+                    goto exit;
+                }
             }
         }
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -796,10 +873,9 @@ mmap_mmap__protect(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[2]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -807,8 +883,9 @@ mmap_mmap__protect(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         length = ival;
     }
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = mmap_mmap__protect_impl((mmap_object *)self, flNewProtect, start, length);
+    _return_value = mmap_mmap__protect_impl((mmap_object *)self, flNewProtect, start, length);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -830,18 +907,19 @@ static PyObject *
 mmap_mmap_madvise_impl(mmap_object *self, int option, Py_ssize_t start,
                        PyObject *length_obj);
 
-static PyObject *
-mmap_mmap_madvise(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+mmap_mmap_madvise(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int option;
     Py_ssize_t start = 0;
     PyObject *length_obj = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("madvise", nargs, 1, 3)) {
         goto exit;
     }
-    option = PyLong_AsInt(args[0]);
+    option = PyLong_AsIntValue(args[0]);
     if (option == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -850,10 +928,9 @@ mmap_mmap_madvise(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -863,11 +940,15 @@ mmap_mmap_madvise(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 3) {
         goto skip_optional;
     }
-    length_obj = args[2];
+    length_obj = PyValue_Object(args[2]);
+    if (length_obj == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = mmap_mmap_madvise_impl((mmap_object *)self, option, start, length_obj);
+    _return_value = mmap_mmap_madvise_impl((mmap_object *)self, option, start, length_obj);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -965,4 +1046,4 @@ mmap_ass_subscript(PyObject *self, PyObject *item, PyObject *value)
 #ifndef MMAP_MMAP_MADVISE_METHODDEF
     #define MMAP_MMAP_MADVISE_METHODDEF
 #endif /* !defined(MMAP_MMAP_MADVISE_METHODDEF) */
-/*[clinic end generated code: output=c295afe2d5c354ee input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2cf2c44f0c039097 input=a9049054013a1b77]*/

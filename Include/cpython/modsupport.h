@@ -3,12 +3,12 @@
 #endif
 
 PyAPI_FUNC(int) PyArg_ParseArray(
-    PyObject *const *args,
+    const PyValue *args,
     Py_ssize_t nargs,
     const char *format,
     ...);
 PyAPI_FUNC(int) PyArg_ParseArrayAndKeywords(
-    PyObject *const *args,
+    const PyValue *args,
     Py_ssize_t nargs,
     PyObject *kwnames,
     const char *format,

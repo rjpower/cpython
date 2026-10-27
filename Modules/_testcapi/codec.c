@@ -3,22 +3,30 @@
 
 // === Codecs registration and un-registration ================================
 
-static PyObject *
-codec_register(PyObject *Py_UNUSED(module), PyObject *search_function)
+static PyValue
+codec_register(PyObject *Py_UNUSED(module), PyValue search_function_value)
 {
-    if (PyCodec_Register(search_function) < 0) {
-        return NULL;
+    PyObject *search_function = PyValue_Object(search_function_value);
+    if (search_function == NULL) {
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    if (PyCodec_Register(search_function) < 0) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
-codec_unregister(PyObject *Py_UNUSED(module), PyObject *search_function)
+static PyValue
+codec_unregister(PyObject *Py_UNUSED(module), PyValue search_function_value)
 {
-    if (PyCodec_Unregister(search_function) < 0) {
-        return NULL;
+    PyObject *search_function = PyValue_Object(search_function_value);
+    if (search_function == NULL) {
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    if (PyCodec_Unregister(search_function) < 0) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObject(Py_None);
 }
 
 static PyObject *
@@ -149,45 +157,65 @@ codec_lookup_error(PyObject *Py_UNUSED(module), PyObject *args)
     return PyCodec_LookupError(encoding);
 }
 
-static PyObject *
-codec_strict_errors(PyObject *Py_UNUSED(module), PyObject *exc)
+static PyValue
+codec_strict_errors(PyObject *Py_UNUSED(module), PyValue exc_value)
 {
+    PyObject *exc = PyValue_Object(exc_value);
+    if (exc == NULL) {
+        return PyValue_NULL;
+    }
     assert(exc != NULL);
-    return PyCodec_StrictErrors(exc);
+    return PyValue_FromResult(PyCodec_StrictErrors(exc));
 }
 
-static PyObject *
-codec_ignore_errors(PyObject *Py_UNUSED(module), PyObject *exc)
+static PyValue
+codec_ignore_errors(PyObject *Py_UNUSED(module), PyValue exc_value)
 {
+    PyObject *exc = PyValue_Object(exc_value);
+    if (exc == NULL) {
+        return PyValue_NULL;
+    }
     assert(exc != NULL);
-    return PyCodec_IgnoreErrors(exc);
+    return PyValue_FromResult(PyCodec_IgnoreErrors(exc));
 }
 
-static PyObject *
-codec_replace_errors(PyObject *Py_UNUSED(module), PyObject *exc)
+static PyValue
+codec_replace_errors(PyObject *Py_UNUSED(module), PyValue exc_value)
 {
+    PyObject *exc = PyValue_Object(exc_value);
+    if (exc == NULL) {
+        return PyValue_NULL;
+    }
     assert(exc != NULL);
-    return PyCodec_ReplaceErrors(exc);
+    return PyValue_FromResult(PyCodec_ReplaceErrors(exc));
 }
 
-static PyObject *
-codec_xmlcharrefreplace_errors(PyObject *Py_UNUSED(module), PyObject *exc)
+static PyValue
+codec_xmlcharrefreplace_errors(PyObject *Py_UNUSED(module), PyValue exc_value)
 {
+    PyObject *exc = PyValue_Object(exc_value);
+    if (exc == NULL) {
+        return PyValue_NULL;
+    }
     assert(exc != NULL);
-    return PyCodec_XMLCharRefReplaceErrors(exc);
+    return PyValue_FromResult(PyCodec_XMLCharRefReplaceErrors(exc));
 }
 
-static PyObject *
-codec_backslashreplace_errors(PyObject *Py_UNUSED(module), PyObject *exc)
+static PyValue
+codec_backslashreplace_errors(PyObject *Py_UNUSED(module), PyValue exc_value)
 {
+    PyObject *exc = PyValue_Object(exc_value);
+    if (exc == NULL) {
+        return PyValue_NULL;
+    }
     assert(exc != NULL);
-    return PyCodec_BackslashReplaceErrors(exc);
+    return PyValue_FromResult(PyCodec_BackslashReplaceErrors(exc));
 }
 
 static PyMethodDef test_methods[] = {
     /* codecs registration */
-    {"codec_register", codec_register, METH_O},
-    {"codec_unregister", codec_unregister, METH_O},
+    {"codec_register", _PyCFunction_CAST(codec_register), METH_O},
+    {"codec_unregister", _PyCFunction_CAST(codec_unregister), METH_O},
     {"codec_known_encoding", codec_known_encoding, METH_VARARGS},
     /* encoding and decoding interface */
     {"codec_encode", codec_encode, METH_VARARGS},
@@ -201,11 +229,11 @@ static PyMethodDef test_methods[] = {
     /* error handling */
     {"codec_register_error", codec_register_error, METH_VARARGS},
     {"codec_lookup_error", codec_lookup_error, METH_VARARGS},
-    {"codec_strict_errors", codec_strict_errors, METH_O},
-    {"codec_ignore_errors", codec_ignore_errors, METH_O},
-    {"codec_replace_errors", codec_replace_errors, METH_O},
-    {"codec_xmlcharrefreplace_errors", codec_xmlcharrefreplace_errors, METH_O},
-    {"codec_backslashreplace_errors", codec_backslashreplace_errors, METH_O},
+    {"codec_strict_errors", _PyCFunction_CAST(codec_strict_errors), METH_O},
+    {"codec_ignore_errors", _PyCFunction_CAST(codec_ignore_errors), METH_O},
+    {"codec_replace_errors", _PyCFunction_CAST(codec_replace_errors), METH_O},
+    {"codec_xmlcharrefreplace_errors", _PyCFunction_CAST(codec_xmlcharrefreplace_errors), METH_O},
+    {"codec_backslashreplace_errors", _PyCFunction_CAST(codec_backslashreplace_errors), METH_O},
     // PyCodec_NameReplaceErrors() is tested in _testlimitedcapi/codec.c
     {NULL, NULL, 0, NULL},
 };

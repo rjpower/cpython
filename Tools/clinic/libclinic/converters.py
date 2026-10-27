@@ -137,6 +137,28 @@ class bool_converter(CConverter):
                 argname=argname)
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
 
+    def parse_value_arg(self, argname: str, displayname: str, *,
+                        limited_capi: bool) -> str | None:
+        if self.format_unit == 'i':
+            return self.format_code("""
+                {paramname} = PyLong_AsIntValue({argname});
+                if ({paramname} == -1 && PyErr_Occurred()) {{{{
+                    goto exit;
+                }}}}
+                """,
+                argname=argname)
+        elif self.format_unit == 'p':
+            return self.format_code("""
+                {paramname} = PyObject_IsTrueValue({argname});
+                if ({paramname} < 0) {{{{
+                    goto exit;
+                }}}}
+                """,
+                argname=argname)
+        return super().parse_value_arg(argname, displayname,
+                                       limited_capi=limited_capi)
+
+
 
 class defining_class_converter(CConverter):
     """
@@ -359,6 +381,20 @@ class int_converter(CConverter):
             )
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
 
+    def parse_value_arg(self, argname: str, displayname: str, *,
+                        limited_capi: bool) -> str | None:
+        if self.format_unit == 'i':
+            return self.format_code("""
+                {paramname} = PyLong_AsIntValue({argname});
+                if ({paramname} == -1 && PyErr_Occurred()) {{{{
+                    goto exit;
+                }}}}
+                """,
+                argname=argname)
+        return super().parse_value_arg(argname, displayname,
+                                       limited_capi=limited_capi)
+
+
 
 class unsigned_int_converter(BaseUnsignedIntConverter):
     type = 'unsigned int'
@@ -388,6 +424,20 @@ class long_converter(CConverter):
                 argname=argname)
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
 
+    def parse_value_arg(self, argname: str, displayname: str, *,
+                        limited_capi: bool) -> str | None:
+        if self.format_unit == 'l':
+            return self.format_code("""
+                {paramname} = PyLong_AsLongValue({argname});
+                if ({paramname} == -1 && PyErr_Occurred()) {{{{
+                    goto exit;
+                }}}}
+                """,
+                argname=argname)
+        return super().parse_value_arg(argname, displayname,
+                                       limited_capi=limited_capi)
+
+
 
 class unsigned_long_converter(BaseUnsignedIntConverter):
     type = 'unsigned long'
@@ -416,6 +466,20 @@ class long_long_converter(CConverter):
                 """,
                 argname=argname)
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
+
+    def parse_value_arg(self, argname: str, displayname: str, *,
+                        limited_capi: bool) -> str | None:
+        if self.format_unit == 'L':
+            return self.format_code("""
+                {paramname} = PyLong_AsLongLongValue({argname});
+                if ({paramname} == -1 && PyErr_Occurred()) {{{{
+                    goto exit;
+                }}}}
+                """,
+                argname=argname)
+        return super().parse_value_arg(argname, displayname,
+                                       limited_capi=limited_capi)
+
 
 
 class unsigned_long_long_converter(BaseUnsignedIntConverter):
@@ -511,6 +575,39 @@ class Py_ssize_t_converter(CConverter):
             bad_argument=self.bad_argument(displayname, 'integer or None', limited_capi=limited_capi),
             non_negative_check=non_negative_check,
         )
+
+    def parse_value_arg(self, argname: str, displayname: str, *,
+                        limited_capi: bool) -> str | None:
+        if self.format_unit != 'n':
+            return super().parse_value_arg(argname, displayname,
+                                           limited_capi=limited_capi)
+        non_negative_check = ''
+        if not self.allow_negative:
+            non_negative_check = self.format_code("""
+                    if ({paramname} < 0) {{{{
+                        PyErr_SetString(PyExc_ValueError,
+                                        "{paramname} cannot be negative");
+                        goto exit;
+                    }}}}""",
+                argname=argname,
+            )
+        return self.format_code("""
+            {{{{
+                Py_ssize_t ival = -1;
+                PyValue ivalue = PyNumber_IndexValue({argname});
+                if (!PyValue_IsNull(ivalue)) {{{{
+                    ival = PyLong_AsSsize_tValue(ivalue);
+                }}}}
+                if (ival == -1 && PyErr_Occurred()) {{{{
+                    goto exit;
+                }}}}
+                {paramname} = ival;{non_negative_check}
+            }}}}
+            """,
+            argname=argname,
+            non_negative_check=non_negative_check,
+        )
+
 
 
 class slice_index_converter(CConverter):
@@ -688,6 +785,20 @@ class float_converter(CConverter):
                     argname=argname)
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
 
+    def parse_value_arg(self, argname: str, displayname: str, *,
+                        limited_capi: bool) -> str | None:
+        if self.format_unit == 'f':
+            return self.format_code("""
+                {paramname} = (float) PyFloat_AsDoubleValue({argname});
+                if ({paramname} == -1.0 && PyErr_Occurred()) {{{{
+                    goto exit;
+                }}}}
+                """,
+                argname=argname)
+        return super().parse_value_arg(argname, displayname,
+                                       limited_capi=limited_capi)
+
+
 
 class double_converter(CConverter):
     type = 'double'
@@ -720,6 +831,20 @@ class double_converter(CConverter):
                     """,
                     argname=argname)
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
+
+    def parse_value_arg(self, argname: str, displayname: str, *,
+                        limited_capi: bool) -> str | None:
+        if self.format_unit == 'd':
+            return self.format_code("""
+                {paramname} = PyFloat_AsDoubleValue({argname});
+                if ({paramname} == -1.0 && PyErr_Occurred()) {{{{
+                    goto exit;
+                }}}}
+                """,
+                argname=argname)
+        return super().parse_value_arg(argname, displayname,
+                                       limited_capi=limited_capi)
+
 
 
 class Py_complex_converter(CConverter):
@@ -767,6 +892,37 @@ class object_converter(CConverter):
         default = self.default
         if default is None or isinstance(default, bool):
             self.c_default = "Py_" + repr(default)
+
+class value_converter(CConverter):
+    """An argument of any type, passed to the impl as a PyValue, so that an
+    inline int or float is not boxed."""
+    type = 'PyValue'
+    format_unit = 'O'
+    c_ignored_default = 'PyValue_NULL'
+    # PyArg_Parse() has no format unit for a value.
+    broken_limited_capi = True
+
+    def c_default_init(self) -> None:
+        if self.default is not None:
+            fail("value: only None and NULL defaults are supported")
+        self.c_default = 'PyValue_FromObject(Py_None)'
+
+    def use_converter(self) -> None:
+        fail("value: the arguments must be parsed one by one")
+
+    def parse_arg(self, argname: str, displayname: str, *, limited_capi: bool) -> str | None:
+        # A setter receives the new value as an object.
+        return self.format_code("""
+            {paramname} = PyValue_FromObject({argname});
+            """,
+            argname=argname)
+
+    def parse_value_arg(self, argname: str, displayname: str, *,
+                        limited_capi: bool) -> str | None:
+        return self.format_code("""
+            {paramname} = {argname};
+            """,
+            argname=argname)
 
 #
 # We define three conventions for buffer types in the 'accept' argument:
@@ -1374,12 +1530,13 @@ class varpos_tuple_converter(VarPosCConverter):
                     }}}}
                     """
             else:
+                self.add_include('pycore_tuple.h', '_PyTuple_FromValues()')
                 start = f'args + {max_pos}' if max_pos else 'args'
                 size = f'nargs - {max_pos}' if max_pos else 'nargs'
                 if min(pos_only, min_pos) < max_pos:
                     return f"""
                         {paramname} = nargs > {max_pos}
-                            ? PyTuple_FromArray({start}, {size})
+                            ? _PyTuple_FromValues({start}, {size})
                             : PyTuple_New(0);
                         if ({paramname} == NULL) {{{{
                             goto exit;
@@ -1387,7 +1544,7 @@ class varpos_tuple_converter(VarPosCConverter):
                         """
                 else:
                     return f"""
-                        {paramname} = PyTuple_FromArray({start}, {size});
+                        {paramname} = _PyTuple_FromValues({start}, {size});
                         if ({paramname} == NULL) {{{{
                             goto exit;
                         }}}}
@@ -1405,15 +1562,15 @@ class varpos_tuple_converter(VarPosCConverter):
 
 
 class varpos_array_converter(VarPosCConverter):
-    type = 'PyObject * const *'
+    type = 'const PyValue *'
     length = True
 
     def parse_vararg(self, *, pos_only: int, min_pos: int, max_pos: int,
                      fastcall: bool, limited_capi: bool) -> str:
         paramname = self.parser_name
         if not fastcall:
-            self.add_include('pycore_tuple.h', '_PyTuple_Objects()')
-        start = 'args' if fastcall else 'varitems'
+            self.add_include('pycore_tuple.h', '_PyTuple_ITEMS()')
+        start = 'args' if fastcall else '_PyTuple_ITEMS(args)'
         size = 'nargs' if fastcall else 'PyTuple_GET_SIZE(args)'
         if max_pos:
             if min(pos_only, min_pos) < max_pos:
@@ -1422,13 +1579,7 @@ class varpos_array_converter(VarPosCConverter):
             else:
                 start = f'{start} + {max_pos}'
                 size = f'{size} - {max_pos}'
-        boxing = '' if fastcall else """
-            PyObject *const *varitems = _PyTuple_Objects(args);
-            if (varitems == NULL) {{
-                goto exit;
-            }}
-            """
-        return boxing + f"""
+        return f"""
             {paramname} = {start};
             {self.length_name} = {size};
             """

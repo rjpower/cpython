@@ -793,15 +793,19 @@ partial_reduce(PyObject *self, PyObject *Py_UNUSED(args))
                          pto->dict ? pto->dict : Py_None);
 }
 
-static PyObject *
-partial_setstate(PyObject *self, PyObject *state)
+static PyValue
+partial_setstate(PyObject *self, PyValue arg)
 {
+    PyObject *state = PyValue_Object(arg);
+    if (state == NULL) {
+        return PyValue_NULL;
+    }
     partialobject *pto = partialobject_CAST(self);
     PyObject *fn, *fnargs, *kw, *dict;
 
     if (!PyTuple_Check(state)) {
         PyErr_SetString(PyExc_TypeError, "invalid partial state");
-        return NULL;
+        return PyValue_NULL;
     }
     if (!PyArg_ParseTuple(state, "OOOO", &fn, &fnargs, &kw, &dict) ||
         !PyCallable_Check(fn) ||
@@ -810,14 +814,14 @@ partial_setstate(PyObject *self, PyObject *state)
         (dict != Py_None && !PyDict_Check(dict)))
     {
         PyErr_SetString(PyExc_TypeError, "invalid partial state");
-        return NULL;
+        return PyValue_NULL;
     }
 
     Py_ssize_t nargs = PyTuple_GET_SIZE(fnargs);
     if (nargs && PyTuple_GET_ITEM(fnargs, nargs - 1) == pto->placeholder) {
         PyErr_SetString(PyExc_TypeError,
                         "trailing Placeholders are not allowed");
-        return NULL;
+        return PyValue_NULL;
     }
     /* Count placeholders */
     Py_ssize_t phcount = 0;
@@ -832,7 +836,7 @@ partial_setstate(PyObject *self, PyObject *state)
     else
         Py_INCREF(fnargs);
     if (fnargs == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (kw == Py_None)
         kw = PyDict_New();
@@ -842,7 +846,7 @@ partial_setstate(PyObject *self, PyObject *state)
         Py_INCREF(kw);
     if (kw == NULL) {
         Py_DECREF(fnargs);
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (dict == Py_None)
@@ -855,13 +859,13 @@ partial_setstate(PyObject *self, PyObject *state)
     pto->phcount = phcount;
     Py_XSETREF(pto->dict, dict);
     partial_setvectorcall(pto);
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 static PyMethodDef partial_methods[] = {
     {"__reduce__", partial_reduce, METH_NOARGS},
-    {"__setstate__", partial_setstate, METH_O},
-    {"__class_getitem__",    Py_GenericAlias,
+    {"__setstate__", _PyCFunction_CAST(partial_setstate), METH_O},
+    {"__class_getitem__",    _PyCFunction_CAST(Py_GenericAliasValue),
     METH_O|METH_CLASS,
     PyDoc_STR("partial is generic over the wrapped function's return type")},
     {NULL,              NULL}           /* sentinel */
@@ -1827,8 +1831,9 @@ Return a deep copy of the wrapper, which is the wrapper itself.
 [clinic start generated code]*/
 
 static PyObject *
-_functools__lru_cache_wrapper___deepcopy__(PyObject *self, PyObject *memo)
-/*[clinic end generated code: output=3445cd9d96273c9e input=84f706565f55ce46]*/
+_functools__lru_cache_wrapper___deepcopy___impl(PyObject *self,
+                                                PyObject *memo)
+/*[clinic end generated code: output=ae037abe862b9ff8 input=84f706565f55ce46]*/
 {
     return Py_NewRef(self);
 }

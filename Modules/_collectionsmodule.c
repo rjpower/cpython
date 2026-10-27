@@ -487,7 +487,7 @@ deque_extend_impl(dequeobject *deque, PyObject *iterable)
         PyObject *s = PySequence_List(iterable);
         if (s == NULL)
             return NULL;
-        result = deque_extend((PyObject*)deque, s);
+        result = deque_extend_impl(deque, s);
         Py_DECREF(s);
         return result;
     }
@@ -579,7 +579,7 @@ deque_inplace_concat(PyObject *self, PyObject *other)
     PyObject *result;
 
     // deque_extend is thread-safe
-    result = deque_extend((PyObject*)deque, other);
+    result = deque_extend_impl(deque, other);
     if (result == NULL)
         return result;
     Py_INCREF(deque);
@@ -1846,7 +1846,7 @@ static PyMethodDef deque_methods[] = {
     DEQUE_REVERSE_METHODDEF
     DEQUE_ROTATE_METHODDEF
     DEQUE___SIZEOF___METHODDEF
-    {"__class_getitem__",       Py_GenericAlias,
+    {"__class_getitem__",       _PyCFunction_CAST(Py_GenericAliasValue),
     METH_O|METH_CLASS,          PyDoc_STR("deques are generic over the type of their contents")},
     {NULL,              NULL}   /* sentinel */
 };
@@ -2216,9 +2216,13 @@ PyDoc_STRVAR(defdict_missing_doc,
   return value\n\
 ");
 
-static PyObject *
-defdict_missing(PyObject *op, PyObject *key)
+static PyValue
+defdict_missing(PyObject *op, PyValue arg)
 {
+    PyObject *key = PyValue_Object(arg);
+    if (key == NULL) {
+        return PyValue_NULL;
+    }
     defdictobject *dd = defdictobject_CAST(op);
     PyObject *factory = dd->default_factory;
     PyObject *value;
@@ -2226,19 +2230,19 @@ defdict_missing(PyObject *op, PyObject *key)
         /* XXX Call dict.__missing__(key) */
         PyObject *tup;
         tup = PyTuple_Pack(1, key);
-        if (!tup) return NULL;
+        if (!tup) return PyValue_NULL;
         PyErr_SetObject(PyExc_KeyError, tup);
         Py_DECREF(tup);
-        return NULL;
+        return PyValue_NULL;
     }
     value = _PyObject_CallNoArgs(factory);
     if (value == NULL)
-        return value;
+        return PyValue_FromResult(value);
     PyObject *result = NULL;
     (void)PyDict_SetDefaultRef(op, key, value, &result);
     // 'result' is NULL, or a strong reference to 'value' or 'op[key]'
     Py_DECREF(value);
-    return result;
+    return PyValue_FromResult(result);
 }
 
 static inline PyObject*
@@ -2324,7 +2328,7 @@ of the dictionary's keys and values");
 
 
 static PyMethodDef defdict_methods[] = {
-    {"__missing__", defdict_missing, METH_O,
+    {"__missing__", _PyCFunction_CAST(defdict_missing), METH_O,
      defdict_missing_doc},
     {"copy", defdict_copy, METH_NOARGS,
      defdict_copy_doc},
@@ -2332,7 +2336,7 @@ static PyMethodDef defdict_methods[] = {
      defdict_copy_doc},
     {"__reduce__", defdict_reduce, METH_NOARGS,
      reduce_doc},
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
      defdict_class_getitem_doc},
     {NULL}
 };

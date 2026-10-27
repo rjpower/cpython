@@ -8,7 +8,7 @@ from libclinic.function import (
     count_required, group_to_variable_name, permute_optional_groups,
     GETTER, SETTER, SETTER_AND_DELETER, METHOD_INIT, METHOD_NEW, SLOT,
     ACCESSORS, SETTERS)
-from libclinic.converter import CConverter
+from libclinic.converter import CConverter, box_value_arg
 from libclinic.converters import (
     defining_class_converter, object_converter, self_converter)
 if TYPE_CHECKING:
@@ -103,7 +103,7 @@ PARSER_PROTOTYPE_KEYWORD: Final[str] = libclinic.normalize_snippet("""
 """)
 PARSER_PROTOTYPE_KEYWORD_HELPER: Final[str] = libclinic.normalize_snippet("""
     static {return_type}
-    {c_basename}_helper({self_type}{self_name}, PyObject *const *args,
+    {c_basename}_helper({self_type}{self_name}, const PyValue *args,
         Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames)
 """)
 PARSER_PROTOTYPE_VARARGS: Final[str] = libclinic.normalize_snippet("""
@@ -111,21 +111,21 @@ PARSER_PROTOTYPE_VARARGS: Final[str] = libclinic.normalize_snippet("""
     {c_basename}({self_type}{self_name}, PyObject *args)
 """)
 PARSER_PROTOTYPE_FASTCALL: Final[str] = libclinic.normalize_snippet("""
-    static PyObject *
-    {c_basename}({self_type}{self_name}, PyObject *const *args, Py_ssize_t nargs)
+    static {return_type}
+    {c_basename}({self_type}{self_name}, const PyValue *args, Py_ssize_t nargs)
 """)
 PARSER_PROTOTYPE_FASTCALL_KEYWORDS: Final[str] = libclinic.normalize_snippet("""
-    static PyObject *
-    {c_basename}({self_type}{self_name}, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+    static {return_type}
+    {c_basename}({self_type}{self_name}, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 """)
 PARSER_PROTOTYPE_VECTORCALL: Final[str] = libclinic.normalize_snippet("""
-    static PyObject *
-    {vc_basename}(PyObject *type, PyObject *const *args,
+    static PyValue
+    {vc_basename}(PyValue type_value, const PyValue *args,
         size_t nargsf, PyObject *kwnames)
 """)
 PARSER_PROTOTYPE_DEF_CLASS: Final[str] = libclinic.normalize_snippet("""
-    static PyObject *
-    {c_basename}({self_type}{self_name}, PyTypeObject *{defining_class_name}, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+    static {return_type}
+    {c_basename}({self_type}{self_name}, PyTypeObject *{defining_class_name}, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 """)
 PARSER_PROTOTYPE_NOARGS: Final[str] = libclinic.normalize_snippet("""
     static PyObject *
@@ -407,6 +407,37 @@ class ParseArgsCodeGen:
     def use_pyobject_self(self) -> bool:
         return self.self_parameter_converter.use_pyobject_self(self.func)
 
+    def returns_value(self) -> bool:
+        """Does the parser return a PyValue?
+
+        METH_O and METH_FASTCALL functions return a value, so that a
+        return converter builds an inline int or float without allocating.
+        """
+        if (self.limited_capi or self.is_new_or_init()
+                or self.func.kind in ACCESSORS or self.func.kind is SLOT):
+            return False
+        flags = set(self.flags.split('|'))
+        return 'METH_O' in flags or 'METH_FASTCALL' in flags
+
+    def parse_arg(self, converter: CConverter, argname: str,
+                  displayname: str, *, limited_capi: bool) -> str | None:
+        """Return the code which converts the argument argname.
+
+        An argument is a PyValue, except with the limited C API, where it is
+        an object.
+        """
+        if limited_capi:
+            return converter.parse_arg(argname, displayname,
+                                       limited_capi=limited_capi)
+        return converter.parse_value_arg(argname, displayname,
+                                         limited_capi=limited_capi)
+
+    def is_present(self, argname: str) -> str:
+        """Return the C condition that the optional argument was passed."""
+        if self.limited_capi:
+            return argname
+        return f'!PyValue_IsNull({argname})'
+
     def select_prototypes(self) -> None:
         self.docstring_prototype = ''
         self.docstring_definition = ''
@@ -543,8 +574,13 @@ class ParseArgsCodeGen:
 
             self.flags = "METH_METHOD|METH_FASTCALL|METH_KEYWORDS"
             self.parser_prototype = PARSER_PROTOTYPE_DEF_CLASS
-            return_error = ('return NULL;' if simple_return
-                            else 'goto exit;')
+            if not simple_return:
+                return_error = 'goto exit;'
+            elif self.returns_value():
+                return_error = 'return PyValue_NULL;'
+            else:
+                return_error = 'return NULL;'
+
             parser_code = [libclinic.normalize_snippet("""
                 if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {{
                     PyErr_SetString(PyExc_TypeError, "{name}() takes no arguments");
@@ -558,17 +594,24 @@ class ParseArgsCodeGen:
         """Generate the parsing function from the code which parses
         the arguments."""
         if self.use_simple_return():
+            impl_call = '{c_basename}_impl({impl_arguments})'
+            if self.returns_value():
+                impl_call = f'PyValue_FromResult({impl_call})'
             self.parser_definition = '\n'.join([
                 self.parser_prototype,
                 '{{',
                 *parser_code,
-                '    return {c_basename}_impl({impl_arguments});',
+                f'    return {impl_call};',
                 '}}'])
         else:
             self.parser_body(*parser_code)
 
     def parse_one_arg(self) -> None:
         self.flags = "METH_O"
+
+        if not self.limited_capi:
+            self.parse_one_value_arg()
+            return
 
         if (isinstance(self.converters[0], object_converter) and
             self.converters[0].format_unit == 'O'):
@@ -609,6 +652,33 @@ class ParseArgsCodeGen:
 
             parser_code = libclinic.normalize_snippet(parsearg, indent=4)
             self.parser_body(parser_code)
+
+    def parse_one_value_arg(self) -> None:
+        """Generate the METH_O parser, which takes the argument as a value.
+
+        The impl takes the converted argument, so there is always a parser,
+        even for an object argument.
+        """
+        argname = 'arg'
+        if argname in (self.parameters[0].name,
+                       self.converters[0].parser_name):
+            argname += '_'
+        self.parser_prototype = libclinic.normalize_snippet("""
+            static {return_type}
+            {c_basename}({self_type}{self_name}, PyValue %s)
+            """ % argname)
+
+        displayname = self.parameters[0].get_displayname(0)
+        parsearg = self.parse_arg(self.converters[0], argname, displayname,
+                                  limited_capi=False)
+        if parsearg is None:
+            self.converters[0].use_converter()
+            parsearg = box_value_arg(argname, """
+                if (!PyArg_Parse(_arg, "{format_units}:{name}", {parse_arguments})) {{
+                    goto exit;
+                }}
+                """)
+        self.parser_body(libclinic.normalize_snippet(parsearg, indent=4))
 
     def option_group_subsets(self) -> dict[int, ParamTuple]:
         # positional only, grouped, optional arguments!
@@ -733,9 +803,9 @@ class ParseArgsCodeGen:
                 else:
                     # The position of the argument differs between the calls.
                     displayname = p.get_displayname(0)
-                parsearg = p.converter.parse_arg(argname_fmt % index_expr,
-                                                 displayname,
-                                                 limited_capi=self.limited_capi)
+                parsearg = self.parse_arg(p.converter, argname_fmt % index_expr,
+                                          displayname,
+                                          limited_capi=self.limited_capi)
                 if parsearg is None:
                     return None
                 if not group_id and (has_optional or p.is_optional()):
@@ -969,9 +1039,9 @@ class ParseArgsCodeGen:
         """
         parser_code: list[str] = []
         for i, p in enumerate(self.parameters):
-            parsearg = p.converter.parse_arg(argname_fmt % i,
-                                             p.get_displayname(i + 1),
-                                             limited_capi=limited_capi)
+            parsearg = self.parse_arg(p.converter, argname_fmt % i,
+                                      p.get_displayname(i + 1),
+                                      limited_capi=limited_capi)
             if parsearg is None:
                 if self.varpos:
                     raise ValueError(
@@ -1023,7 +1093,7 @@ class ParseArgsCodeGen:
         self.parser_prototype = PARSER_PROTOTYPE_VARARGS
         if self.limited_capi:
             return 'PyTuple_Size(args)', 'PyTuple_GetItem(args, %s)'
-        return 'PyTuple_GET_SIZE(args)', 'PyTuple_GET_ITEM(args, %s)'
+        return 'PyTuple_GET_SIZE(args)', 'PyTuple_GET_VALUE(args, %s)'
 
     def render_parse_all_arguments(self) -> str:
         """Return the beginning of the call which parses all arguments.
@@ -1126,9 +1196,12 @@ class ParseArgsCodeGen:
             parser_code.extend(self._check_positional(nargs))
 
         has_optional = False
+        item = ('PyTuple_GET_ITEM(args, %d)' if self.limited_capi
+                else 'PyTuple_GET_VALUE(args, %d)')
         for i, p in enumerate(self.parameters):
-            parse_arg = p.converter.parse_arg(
-                f'PyTuple_GET_ITEM(args, {i})',
+            parse_arg = self.parse_arg(
+                p.converter,
+                item % i,
                 p.get_displayname(i+1),
                 limited_capi=self.limited_capi,
             )
@@ -1182,7 +1255,7 @@ class ParseArgsCodeGen:
             other = '%s'
         return '\n'.join([
             libclinic.normalize_snippet(f"""
-                if ({argname_fmt % i}) {{{{
+                if ({self.is_present(argname_fmt % i)}) {{{{
                     PyErr_Format(PyExc_TypeError,
                             "argument for {self.func.name}() given by "
                             "name ('{p.name}') and {other}"{arg});
@@ -1246,9 +1319,9 @@ class ParseArgsCodeGen:
                 self.flags = "METH_FASTCALL|METH_KEYWORDS"
                 self.parser_prototype = PARSER_PROTOTYPE_FASTCALL_KEYWORDS
                 self.declarations = declare_parser(self.func, codegen=self.codegen)
-                self.declarations += "\nPyObject *argsbuf[%s];" % (len(self.converters) or 1)
+                self.declarations += "\nPyValue argsbuf[%s];" % (len(self.converters) or 1)
                 if self.varpos:
-                    self.declarations += "\nPyObject * const *fastargs;"
+                    self.declarations += "\nconst PyValue *fastargs;"
                     argsname = 'fastargs'
                     argname_fmt = 'fastargs[%d]'
                 else:
@@ -1265,8 +1338,8 @@ class ParseArgsCodeGen:
                 argsname = 'fastargs'
                 argname_fmt = 'fastargs[%d]'
                 self.declarations = declare_parser(self.func, codegen=self.codegen)
-                self.declarations += "\nPyObject *argsbuf[%s];" % (len(self.converters) or 1)
-                self.declarations += "\nPyObject * const *fastargs;"
+                self.declarations += "\nPyValue argsbuf[%s];" % (len(self.converters) or 1)
+                self.declarations += "\nconst PyValue *fastargs;"
                 if has_optional_kw:
                     self.declarations += (
                         "\nPy_ssize_t noptargs = %s + nkw - %d;"
@@ -1279,23 +1352,14 @@ class ParseArgsCodeGen:
                 argsname = 'fastargs'
                 argname_fmt = 'fastargs[%d]'
                 self.declarations = declare_parser(self.func, codegen=self.codegen)
-                self.declarations += "\nPyObject *argsbuf[%s];" % (len(self.converters) or 1)
-                self.declarations += "\nPyObject * const *fastargs;"
+                self.declarations += "\nPyValue argsbuf[%s];" % (len(self.converters) or 1)
+                self.declarations += "\nconst PyValue *fastargs;"
                 self.declarations += "\nPy_ssize_t nargs = PyTuple_GET_SIZE(args);"
                 if has_optional_kw:
                     self.declarations += "\nPy_ssize_t noptargs = %s + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - %d;" % (nargs, self.min_pos + self.min_kw_only)
-                self.codegen.add_include('pycore_tuple.h', '_PyTuple_Objects()')
-                self.declarations += "\nPyObject *const *argitems;"
-                unpack_args = 'argitems, nargs, kwargs, NULL'
-            parser_code = []
-            if unpack_args.startswith('argitems'):
-                parser_code.append(libclinic.normalize_snippet("""
-                    argitems = _PyTuple_Objects(args);
-                    if (argitems == NULL) {{
-                        goto exit;
-                    }}
-                    """, indent=4))
-            parser_code += [libclinic.normalize_snippet(f"""
+                self.codegen.add_include('pycore_tuple.h', '_PyTuple_ITEMS()')
+                unpack_args = '_PyTuple_ITEMS(args), nargs, kwargs, NULL'
+            parser_code = [libclinic.normalize_snippet(f"""
                 {argsname} = _PyArg_UnpackKeywords({unpack_args}, &_parser,
                         /*minpos*/ {self.min_pos}, /*maxpos*/ {self.max_pos}, /*minkw*/ {self.min_kw_only}, /*varpos*/ {1 if self.varpos else 0}, argsbuf);
                 if (!{argsname}) {{{{
@@ -1310,7 +1374,7 @@ class ParseArgsCodeGen:
         if use_parser_code:
             if deprecated_keywords:
                 code = clang.deprecate_keyword_use(self.func, deprecated_keywords,
-                                                   argname_fmt,
+                                                   self.is_present(argname_fmt),
                                                    codegen=self.codegen,
                                                    fastcall=self.fastcall)
                 parser_code.append(code)
@@ -1321,7 +1385,8 @@ class ParseArgsCodeGen:
                     raise ValueError("defining_class should be the first "
                                     "parameter (after clang)")
                 displayname = p.get_displayname(i+1)
-                parsearg = p.converter.parse_arg(argname_fmt % i, displayname, limited_capi=self.limited_capi)
+                parsearg = self.parse_arg(p.converter, argname_fmt % i, displayname,
+                                          limited_capi=self.limited_capi)
                 if parsearg is not None:
                     # The conflict is reported before warning about the
                     # deprecated name which caused it.
@@ -1370,7 +1435,7 @@ class ParseArgsCodeGen:
                         add_label = label
                         parser_code.append(libclinic.normalize_snippet("""
                             if (%s) {{
-                            """ % (argname_fmt % i), indent=4))
+                            """ % self.is_present(argname_fmt % i), indent=4))
                         parser_code.append(libclinic.normalize_snippet(parsearg, indent=8))
                         parser_code.append(libclinic.normalize_snippet("""
                                 if (!--noptargs) {{
@@ -1470,16 +1535,11 @@ class ParseArgsCodeGen:
         """
         self.parser_helper = self.parser_definition
         self.parser_prototype = PARSER_PROTOTYPE_KEYWORD
-        failure = '-1' if self.func.kind is METHOD_INIT else 'NULL'
-        self.codegen.add_include('pycore_tuple.h', '_PyTuple_Objects()')
+        self.codegen.add_include('pycore_tuple.h', '_PyTuple_ITEMS()')
         self.parser_definition = '\n'.join([
             self.parser_prototype,
             '{{',
-            '    PyObject *const *argitems = _PyTuple_Objects(args);',
-            '    if (argitems == NULL) {{',
-            f'        return {failure};',
-            '    }}',
-            '    return {c_basename}_helper({self_name}, argitems,',
+            '    return {c_basename}_helper({self_name}, _PyTuple_ITEMS(args),',
             '        PyTuple_GET_SIZE(args),',
             '        kwargs ? PyDict_GET_SIZE(kwargs) : 0,',
             '        kwargs, NULL);',
@@ -1521,7 +1581,8 @@ class ParseArgsCodeGen:
 
     def process_methoddef(self, clang: CLanguage) -> None:
         methoddef_cast_end = ""
-        if self.flags in ('METH_NOARGS', 'METH_O', 'METH_VARARGS'):
+        if (self.flags in ('METH_NOARGS', 'METH_VARARGS')
+                or (self.flags == 'METH_O' and self.limited_capi)):
             methoddef_cast = "(PyCFunction)"
         elif self.func.kind is GETTER:
             methoddef_cast = "" # This should end up unused
@@ -1566,6 +1627,8 @@ class ParseArgsCodeGen:
         if self.impl_prototype:
             self.impl_prototype += ";"
 
+        if self.returns_value():
+            self.return_value_declaration = "PyValue {parser_retval} = PyValue_NULL;"
         self.parser_definition = self.parser_definition.replace("{return_value_declaration}", self.return_value_declaration)
         if self.parser_helper:
             self.parser_helper = self.parser_helper.replace(
@@ -1641,7 +1704,7 @@ class ParseArgsCodeGen:
                              finale: str) -> None:
         """Wrap parser code in the vectorcall prototype."""
         prototype = PARSER_PROTOTYPE_VECTORCALL.replace(
-            "{vc_basename}", self.func.c_basename_vectorcall + "_objects")
+            "{vc_basename}", self.func.c_basename_vectorcall)
         lines = [prototype, preamble, *fields, finale]
 
         if self.func.kind is METHOD_INIT:
@@ -1649,27 +1712,8 @@ class ParseArgsCodeGen:
             self.codegen.add_include('pycore_runtime.h', '_Py_SINGLETON()')
         else:
             markers = VECTORCALL_FINALE_MARKERS_NEW
-        code = libclinic.linear_format("\n".join(lines), **markers)
-        # The vectorcall convention takes values; the parser above takes
-        # objects until the converters read values.
-        self.codegen.add_include('pycore_value.h', '_PyValue_ObjectArray()')
-        wrapper = libclinic.normalize_snippet("""
-            static PyValue
-            {vc_basename}(PyValue type, const PyValue *args,
-                size_t nargsf, PyObject *kwnames)
-            {{
-                Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-                Py_ssize_t n = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0);
-                PyObject *const *args_o =
-                    (PyObject *const *)_PyValue_ObjectArray((PyValue *)args, n);
-                if (args_o == NULL) {{
-                    return PyValue_NULL;
-                }}
-                return PyValue_FromResult({vc_basename}_objects(
-                    PyValue_ObjectBorrow(type), args_o, nargs, kwnames));
-            }}
-            """).replace("{vc_basename}", self.func.c_basename_vectorcall)
-        self.vectorcall_definition = code + "\n\n" + wrapper
+        self.vectorcall_definition = libclinic.linear_format(
+            "\n".join(lines), **markers)
 
     def vectorcall_body(self, *fields: str) -> None:
         """Assemble a vectorcall function that parses inline and calls the impl.
@@ -1680,13 +1724,19 @@ class ParseArgsCodeGen:
         """
         preamble = libclinic.normalize_snippet("""
             {{
+                PyObject *type = PyValue_ObjectBorrow(type_value);
                 PyObject *return_value = NULL;
                 Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
                 {init_declarations}
                 {declarations}
                 {initializers}
         """) + "\n"
-        self._assemble_vectorcall(preamble, fields, PARSER_FINALE_SKELETON)
+        # The type object returns an object, which the vectorcall returns as
+        # a value.
+        finale = PARSER_FINALE_SKELETON.replace(
+            "return {parser_retval};",
+            "return PyValue_FromResult({parser_retval});")
+        self._assemble_vectorcall(preamble, fields, finale)
 
     def parse_vectorcall_pos_only(self) -> None:
         """All positional sometimes optional arguments."""
@@ -1718,31 +1768,33 @@ class ParseArgsCodeGen:
         nkw: Number of keyword arguments.
         """
         if self.func.kind is METHOD_INIT:
-            receiver = "self"
-            bind_result = "_result = "
             prologue = libclinic.normalize_snippet("""
                 self = _PyType_CAST(type)->tp_new(_PyType_CAST(type),
                     (PyObject *)&_Py_SINGLETON(tuple_empty), NULL);
                 if (self == NULL) {{
-                    return NULL;
+                    return PyValue_NULL;
                 }}
             """, indent=4)
             epilogue = libclinic.normalize_snippet("""
                 if (_result != 0) {{
                     Py_DECREF(self);
-                    return NULL;
+                    return PyValue_NULL;
                 }}
-                return self;
+                return PyValue_FromObject(self);
             """, indent=4)
+            helper_call = libclinic.normalize_snippet("""
+                _result = {c_basename}_helper(self, args, nargs,
+                    %s,
+                    NULL, kwnames);
+            """ % nkw, indent=4)
         else:
-            receiver = "_PyType_CAST(type)"
-            bind_result = "return "
             prologue = epilogue = ""
-        helper_call = libclinic.normalize_snippet(f"""
-            {bind_result}{{c_basename}}_helper({receiver}, args, nargs,
-                {nkw},
-                NULL, kwnames);
-        """, indent=4)
+            helper_call = libclinic.normalize_snippet("""
+                return PyValue_FromResult({c_basename}_helper(_PyType_CAST(type),
+                    args, nargs,
+                    %s,
+                    NULL, kwnames));
+            """ % nkw, indent=4)
         parts = [prologue, helper_call, epilogue]
         return "\n".join(part for part in parts if part)
 
@@ -1753,6 +1805,7 @@ class ParseArgsCodeGen:
             'kwnames ? PyTuple_GET_SIZE(kwnames) : 0'))
         preamble = libclinic.normalize_snippet("""
             {{
+                PyObject *type = PyValue_ObjectBorrow(type_value);
                 Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
                 {init_declarations}
         """) + "\n"

@@ -1538,14 +1538,18 @@ PyDoc_STRVAR(csv_writerow_doc,
 "\n"
 "Non-string elements will be converted to string.");
 
-static PyObject *
-csv_writerow(PyObject *op, PyObject *seq)
+static PyValue
+csv_writerow(PyObject *op, PyValue arg)
 {
+    PyObject *seq = PyValue_Object(arg);
+    if (seq == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *result;
     Py_BEGIN_CRITICAL_SECTION(op);
     result = csv_writerow_lock_held(op, seq);
     Py_END_CRITICAL_SECTION();
-    return result;
+    return PyValue_FromResult(result);
 }
 
 PyDoc_STRVAR(csv_writerows_doc,
@@ -1555,34 +1559,37 @@ PyDoc_STRVAR(csv_writerows_doc,
 "\n"
 "Non-string elements will be converted to string.");
 
-static PyObject *
-csv_writerows(PyObject *self, PyObject *seqseq)
+static PyValue
+csv_writerows(PyObject *self, PyValue arg)
 {
-    PyObject *row_iter, *row_obj, *result;
+    PyObject *seqseq = PyValue_Object(arg);
+    if (seqseq == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *row_iter, *row_obj;
+    PyValue result;
 
     row_iter = PyObject_GetIter(seqseq);
     if (row_iter == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     while ((row_obj = PyIter_Next(row_iter))) {
-        result = csv_writerow(self, row_obj);
+        result = csv_writerow(self, PyValue_FromObject(row_obj));
         Py_DECREF(row_obj);
-        if (!result) {
+        if (PyValue_IsNull(result)) {
             Py_DECREF(row_iter);
-            return NULL;
+            return PyValue_NULL;
         }
-        else
-             Py_DECREF(result);
     }
     Py_DECREF(row_iter);
     if (PyErr_Occurred())
-        return NULL;
-    Py_RETURN_NONE;
+        return PyValue_NULL;
+    return PyValue_FromObject(Py_None);
 }
 
 static struct PyMethodDef Writer_methods[] = {
-    {"writerow", csv_writerow, METH_O, csv_writerow_doc},
-    {"writerows", csv_writerows, METH_O, csv_writerows_doc},
+    {"writerow", _PyCFunction_CAST(csv_writerow), METH_O, csv_writerow_doc},
+    {"writerows", _PyCFunction_CAST(csv_writerows), METH_O, csv_writerows_doc},
     {NULL, NULL, 0, NULL}  /* sentinel */
 };
 

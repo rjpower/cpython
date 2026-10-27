@@ -36,6 +36,9 @@ def function_of(expr):
 
 def sources(paths):
     for top in paths:
+        if os.path.isfile(os.path.join(R, top)):
+            yield os.path.join(R, top)
+            continue
         for root, dirs, files in os.walk(os.path.join(R, top)):
             dirs[:] = [d for d in dirs if d not in ("build", "_decimal/libmpdec")]
             for f in files:

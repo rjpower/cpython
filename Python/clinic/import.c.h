@@ -87,27 +87,41 @@ static PyObject *
 _imp__fix_co_filename_impl(PyObject *module, PyCodeObject *code,
                            PyObject *path);
 
-static PyObject *
-_imp__fix_co_filename(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_imp__fix_co_filename(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyCodeObject *code;
     PyObject *path;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_fix_co_filename", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(args[0], &PyCode_Type)) {
-        _PyArg_BadArgument("_fix_co_filename", "argument 1", (&PyCode_Type)->tp_name, args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, &PyCode_Type)) {
+            _PyArg_BadArgument("_fix_co_filename", "argument 1", (&PyCode_Type)->tp_name, _arg);
+            goto exit;
+        }
+        code = (PyCodeObject *)_arg;
     }
-    code = (PyCodeObject *)args[0];
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("_fix_co_filename", "argument 2", "str", args[1]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("_fix_co_filename", "argument 2", "str", _arg);
+            goto exit;
+        }
+        path = _arg;
     }
-    path = args[1];
-    return_value = _imp__fix_co_filename_impl(module, code, path);
+    _return_value = _imp__fix_co_filename_impl(module, code, path);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -120,7 +134,28 @@ PyDoc_STRVAR(_imp_create_builtin__doc__,
 "Create an extension module.");
 
 #define _IMP_CREATE_BUILTIN_METHODDEF    \
-    {"create_builtin", (PyCFunction)_imp_create_builtin, METH_O, _imp_create_builtin__doc__},
+    {"create_builtin", _PyCFunction_CAST(_imp_create_builtin), METH_O, _imp_create_builtin__doc__},
+
+static PyObject *
+_imp_create_builtin_impl(PyObject *module, PyObject *spec);
+
+static PyValue
+_imp_create_builtin(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *spec;
+    PyObject *_return_value;
+
+    spec = PyValue_Object(arg);
+    if (spec == NULL) {
+        goto exit;
+    }
+    _return_value = _imp_create_builtin_impl(module, spec);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(_imp_extension_suffixes__doc__,
 "extension_suffixes($module, /)\n"
@@ -147,23 +182,31 @@ PyDoc_STRVAR(_imp_init_frozen__doc__,
 "Initializes a frozen module.");
 
 #define _IMP_INIT_FROZEN_METHODDEF    \
-    {"init_frozen", (PyCFunction)_imp_init_frozen, METH_O, _imp_init_frozen__doc__},
+    {"init_frozen", _PyCFunction_CAST(_imp_init_frozen), METH_O, _imp_init_frozen__doc__},
 
 static PyObject *
 _imp_init_frozen_impl(PyObject *module, PyObject *name);
 
-static PyObject *
-_imp_init_frozen(PyObject *module, PyObject *arg)
+static PyValue
+_imp_init_frozen(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *name;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("init_frozen", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("init_frozen", "argument", "str", _arg);
+            goto exit;
+        }
+        name = _arg;
     }
-    name = arg;
-    return_value = _imp_init_frozen_impl(module, name);
+    _return_value = _imp_init_frozen_impl(module, name);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -189,10 +232,10 @@ PyDoc_STRVAR(_imp_find_frozen__doc__,
 static PyObject *
 _imp_find_frozen_impl(PyObject *module, PyObject *name, int withdata);
 
-static PyObject *
-_imp_find_frozen(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_imp_find_frozen(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -219,30 +262,38 @@ _imp_find_frozen(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *name;
     int withdata = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("find_frozen", "argument 1", "str", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("find_frozen", "argument 1", "str", _arg);
+            goto exit;
+        }
+        name = _arg;
     }
-    name = args[0];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    withdata = PyObject_IsTrue(args[1]);
+    withdata = PyObject_IsTrueValue(args[1]);
     if (withdata < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    return_value = _imp_find_frozen_impl(module, name, withdata);
+    _return_value = _imp_find_frozen_impl(module, name, withdata);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -261,27 +312,38 @@ static PyObject *
 _imp_get_frozen_object_impl(PyObject *module, PyObject *name,
                             PyObject *dataobj);
 
-static PyObject *
-_imp_get_frozen_object(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_imp_get_frozen_object(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *name;
     PyObject *dataobj = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("get_frozen_object", nargs, 1, 2)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("get_frozen_object", "argument 1", "str", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("get_frozen_object", "argument 1", "str", _arg);
+            goto exit;
+        }
+        name = _arg;
     }
-    name = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    dataobj = args[1];
+    dataobj = PyValue_Object(args[1]);
+    if (dataobj == NULL) {
+        goto exit;
+    }
 skip_optional:
-    return_value = _imp_get_frozen_object_impl(module, name, dataobj);
+    _return_value = _imp_get_frozen_object_impl(module, name, dataobj);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -294,23 +356,31 @@ PyDoc_STRVAR(_imp_is_frozen_package__doc__,
 "Returns True if the module name is of a frozen package.");
 
 #define _IMP_IS_FROZEN_PACKAGE_METHODDEF    \
-    {"is_frozen_package", (PyCFunction)_imp_is_frozen_package, METH_O, _imp_is_frozen_package__doc__},
+    {"is_frozen_package", _PyCFunction_CAST(_imp_is_frozen_package), METH_O, _imp_is_frozen_package__doc__},
 
 static PyObject *
 _imp_is_frozen_package_impl(PyObject *module, PyObject *name);
 
-static PyObject *
-_imp_is_frozen_package(PyObject *module, PyObject *arg)
+static PyValue
+_imp_is_frozen_package(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *name;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("is_frozen_package", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("is_frozen_package", "argument", "str", _arg);
+            goto exit;
+        }
+        name = _arg;
     }
-    name = arg;
-    return_value = _imp_is_frozen_package_impl(module, name);
+    _return_value = _imp_is_frozen_package_impl(module, name);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -323,23 +393,31 @@ PyDoc_STRVAR(_imp_is_builtin__doc__,
 "Returns True if the module name corresponds to a built-in module.");
 
 #define _IMP_IS_BUILTIN_METHODDEF    \
-    {"is_builtin", (PyCFunction)_imp_is_builtin, METH_O, _imp_is_builtin__doc__},
+    {"is_builtin", _PyCFunction_CAST(_imp_is_builtin), METH_O, _imp_is_builtin__doc__},
 
 static PyObject *
 _imp_is_builtin_impl(PyObject *module, PyObject *name);
 
-static PyObject *
-_imp_is_builtin(PyObject *module, PyObject *arg)
+static PyValue
+_imp_is_builtin(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *name;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("is_builtin", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("is_builtin", "argument", "str", _arg);
+            goto exit;
+        }
+        name = _arg;
     }
-    name = arg;
-    return_value = _imp_is_builtin_impl(module, name);
+    _return_value = _imp_is_builtin_impl(module, name);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -352,23 +430,31 @@ PyDoc_STRVAR(_imp_is_frozen__doc__,
 "Returns True if the module name corresponds to a frozen module.");
 
 #define _IMP_IS_FROZEN_METHODDEF    \
-    {"is_frozen", (PyCFunction)_imp_is_frozen, METH_O, _imp_is_frozen__doc__},
+    {"is_frozen", _PyCFunction_CAST(_imp_is_frozen), METH_O, _imp_is_frozen__doc__},
 
 static PyObject *
 _imp_is_frozen_impl(PyObject *module, PyObject *name);
 
-static PyObject *
-_imp_is_frozen(PyObject *module, PyObject *arg)
+static PyValue
+_imp_is_frozen(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *name;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("is_frozen", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("is_frozen", "argument", "str", _arg);
+            goto exit;
+        }
+        name = _arg;
     }
-    name = arg;
-    return_value = _imp_is_frozen_impl(module, name);
+    _return_value = _imp_is_frozen_impl(module, name);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -402,22 +488,24 @@ PyDoc_STRVAR(_imp__override_frozen_modules_for_tests__doc__,
 "See frozen_modules() in Lib/test/support/import_helper.py.");
 
 #define _IMP__OVERRIDE_FROZEN_MODULES_FOR_TESTS_METHODDEF    \
-    {"_override_frozen_modules_for_tests", (PyCFunction)_imp__override_frozen_modules_for_tests, METH_O, _imp__override_frozen_modules_for_tests__doc__},
+    {"_override_frozen_modules_for_tests", _PyCFunction_CAST(_imp__override_frozen_modules_for_tests), METH_O, _imp__override_frozen_modules_for_tests__doc__},
 
 static PyObject *
 _imp__override_frozen_modules_for_tests_impl(PyObject *module, int override);
 
-static PyObject *
-_imp__override_frozen_modules_for_tests(PyObject *module, PyObject *arg)
+static PyValue
+_imp__override_frozen_modules_for_tests(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int override;
+    PyObject *_return_value;
 
-    override = PyLong_AsInt(arg);
+    override = PyLong_AsIntValue(arg);
     if (override == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _imp__override_frozen_modules_for_tests_impl(module, override);
+    _return_value = _imp__override_frozen_modules_for_tests_impl(module, override);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -432,23 +520,25 @@ PyDoc_STRVAR(_imp__override_multi_interp_extensions_check__doc__,
 "(-1: \"never\", 1: \"always\", 0: no override)");
 
 #define _IMP__OVERRIDE_MULTI_INTERP_EXTENSIONS_CHECK_METHODDEF    \
-    {"_override_multi_interp_extensions_check", (PyCFunction)_imp__override_multi_interp_extensions_check, METH_O, _imp__override_multi_interp_extensions_check__doc__},
+    {"_override_multi_interp_extensions_check", _PyCFunction_CAST(_imp__override_multi_interp_extensions_check), METH_O, _imp__override_multi_interp_extensions_check__doc__},
 
 static PyObject *
 _imp__override_multi_interp_extensions_check_impl(PyObject *module,
                                                   int override);
 
-static PyObject *
-_imp__override_multi_interp_extensions_check(PyObject *module, PyObject *arg)
+static PyValue
+_imp__override_multi_interp_extensions_check(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int override;
+    PyObject *_return_value;
 
-    override = PyLong_AsInt(arg);
+    override = PyLong_AsIntValue(arg);
     if (override == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _imp__override_multi_interp_extensions_check_impl(module, override);
+    _return_value = _imp__override_multi_interp_extensions_check_impl(module, override);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -468,23 +558,31 @@ PyDoc_STRVAR(_imp_create_dynamic__doc__,
 static PyObject *
 _imp_create_dynamic_impl(PyObject *module, PyObject *spec, PyObject *file);
 
-static PyObject *
-_imp_create_dynamic(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_imp_create_dynamic(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *spec;
     PyObject *file = NULL;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("create_dynamic", nargs, 1, 2)) {
         goto exit;
     }
-    spec = args[0];
+    spec = PyValue_Object(args[0]);
+    if (spec == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    file = args[1];
+    file = PyValue_Object(args[1]);
+    if (file == NULL) {
+        goto exit;
+    }
 skip_optional:
-    return_value = _imp_create_dynamic_impl(module, spec, file);
+    _return_value = _imp_create_dynamic_impl(module, spec, file);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -501,22 +599,27 @@ PyDoc_STRVAR(_imp_exec_dynamic__doc__,
 "Initialize an extension module.");
 
 #define _IMP_EXEC_DYNAMIC_METHODDEF    \
-    {"exec_dynamic", (PyCFunction)_imp_exec_dynamic, METH_O, _imp_exec_dynamic__doc__},
+    {"exec_dynamic", _PyCFunction_CAST(_imp_exec_dynamic), METH_O, _imp_exec_dynamic__doc__},
 
 static int
 _imp_exec_dynamic_impl(PyObject *module, PyObject *mod);
 
-static PyObject *
-_imp_exec_dynamic(PyObject *module, PyObject *mod)
+static PyValue
+_imp_exec_dynamic(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *mod;
     int _return_value;
 
+    mod = PyValue_Object(arg);
+    if (mod == NULL) {
+        goto exit;
+    }
     _return_value = _imp_exec_dynamic_impl(module, mod);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -531,22 +634,27 @@ PyDoc_STRVAR(_imp_exec_builtin__doc__,
 "Initialize a built-in module.");
 
 #define _IMP_EXEC_BUILTIN_METHODDEF    \
-    {"exec_builtin", (PyCFunction)_imp_exec_builtin, METH_O, _imp_exec_builtin__doc__},
+    {"exec_builtin", _PyCFunction_CAST(_imp_exec_builtin), METH_O, _imp_exec_builtin__doc__},
 
 static int
 _imp_exec_builtin_impl(PyObject *module, PyObject *mod);
 
-static PyObject *
-_imp_exec_builtin(PyObject *module, PyObject *mod)
+static PyValue
+_imp_exec_builtin(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *mod;
     int _return_value;
 
+    mod = PyValue_Object(arg);
+    if (mod == NULL) {
+        goto exit;
+    }
     _return_value = _imp_exec_builtin_impl(module, mod);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -563,10 +671,10 @@ PyDoc_STRVAR(_imp_source_hash__doc__,
 static PyObject *
 _imp_source_hash_impl(PyObject *module, long key, Py_buffer *source);
 
-static PyObject *
-_imp_source_hash(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_imp_source_hash(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -593,23 +701,31 @@ _imp_source_hash(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     long key;
     Py_buffer source = {NULL, NULL};
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    key = PyLong_AsLong(args[0]);
+    key = PyLong_AsLongValue(args[0]);
     if (key == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[1], &source, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &source, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
-    return_value = _imp_source_hash_impl(module, key, &source);
+    _return_value = _imp_source_hash_impl(module, key, &source);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for source */
@@ -633,23 +749,34 @@ static PyObject *
 _imp__set_lazy_attributes_impl(PyObject *module, PyObject *modobj,
                                PyObject *name);
 
-static PyObject *
-_imp__set_lazy_attributes(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_imp__set_lazy_attributes(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *modobj;
     PyObject *name;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_set_lazy_attributes", nargs, 2, 2)) {
         goto exit;
     }
-    modobj = args[0];
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("_set_lazy_attributes", "argument 2", "str", args[1]);
+    modobj = PyValue_Object(args[0]);
+    if (modobj == NULL) {
         goto exit;
     }
-    name = args[1];
-    return_value = _imp__set_lazy_attributes_impl(module, modobj, name);
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("_set_lazy_attributes", "argument 2", "str", _arg);
+            goto exit;
+        }
+        name = _arg;
+    }
+    _return_value = _imp__set_lazy_attributes_impl(module, modobj, name);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -662,4 +789,4 @@ exit:
 #ifndef _IMP_EXEC_DYNAMIC_METHODDEF
     #define _IMP_EXEC_DYNAMIC_METHODDEF
 #endif /* !defined(_IMP_EXEC_DYNAMIC_METHODDEF) */
-/*[clinic end generated code: output=df90a204438a7f21 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=7e7ee3198c304dcd input=a9049054013a1b77]*/

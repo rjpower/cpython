@@ -1,7 +1,7 @@
 // The PyValue protocols (Include/cpython/abstract.h).
 //
-// Each wrapper takes objects and passes their canonical values, so an int
-// that fits in int32 arrives inline, as does a float other than NaN.  A
+// Each wrapper passes the canonical values of its arguments, so an int that
+// fits in int32 arrives inline, as does a float other than NaN.  A
 // value result comes back as (object, kind), where kind is "int" or "float"
 // for an inline value and "object" otherwise; a result that is not
 // canonical raises AssertionError.
@@ -41,11 +41,11 @@ value_result(PyValue v)
     return Py_BuildValue("(Os)", op, kind_of(v));
 }
 
-// The kind of the canonical value of obj.
-static PyObject *
-value_kind(PyObject *Py_UNUSED(module), PyObject *obj)
+// The kind of the canonical value v.
+static PyValue
+value_kind(PyObject *Py_UNUSED(module), PyValue v)
 {
-    return PyUnicode_FromString(kind_of(PyValue_FromObject(obj)));
+    return PyValue_FromResult(PyUnicode_FromString(kind_of(v)));
 }
 
 #define BINARY(NAME) \
@@ -102,10 +102,10 @@ TERNARY(InPlacePower)
 #undef TERNARY
 
 #define UNARY(PREFIX, NAME) \
-    static PyObject * \
-    PREFIX##_##NAME(PyObject *Py_UNUSED(module), PyObject *o) \
+    static PyValue \
+    PREFIX##_##NAME(PyObject *Py_UNUSED(module), PyValue o) \
     { \
-        return value_result(Py##PREFIX##_##NAME##Value(PyValue_FromObject(o))); \
+        return PyValue_FromResult(value_result(Py##PREFIX##_##NAME##Value(o))); \
     }
 UNARY(Number, Negative)
 UNARY(Number, Positive)
@@ -167,21 +167,21 @@ object_richcomparebool(PyObject *Py_UNUSED(module), PyObject *args)
                                              PyValue_FromObject(o2), op));
 }
 
-static PyObject *
-object_istrue(PyObject *Py_UNUSED(module), PyObject *o)
+static PyValue
+object_istrue(PyObject *Py_UNUSED(module), PyValue o)
 {
-    RETURN_INT(PyObject_IsTrueValue(PyValue_FromObject(o)));
+    RETURN_INT_VALUE(PyObject_IsTrueValue(o));
 }
 
-static PyObject *
-object_hash(PyObject *Py_UNUSED(module), PyObject *o)
+static PyValue
+object_hash(PyObject *Py_UNUSED(module), PyValue o)
 {
-    Py_hash_t hash = PyObject_HashValue(PyValue_FromObject(o));
+    Py_hash_t hash = PyObject_HashValue(o);
     if (hash == -1) {
         assert(PyErr_Occurred());
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromSsize_t(hash);
+    return PyValue_FromResult(PyLong_FromSsize_t(hash));
 }
 
 static PyObject *
@@ -230,24 +230,24 @@ sequence_contains(PyObject *Py_UNUSED(module), PyObject *args)
 }
 
 // (1, (item, kind)), (0, None) when exhausted, or an exception.
-static PyObject *
-iter_next(PyObject *Py_UNUSED(module), PyObject *iter)
+static PyValue
+iter_next(PyObject *Py_UNUSED(module), PyValue iter)
 {
     PyValue item = PyValue_FromInt32(-1);
-    int res = PyIter_NextValue(PyValue_FromObject(iter), &item);
+    int res = PyIter_NextValue(iter, &item);
     if (res < 0) {
         assert(PyErr_Occurred() && PyValue_IsNull(item));
-        return NULL;
+        return PyValue_NULL;
     }
     if (res == 0) {
         assert(!PyErr_Occurred() && PyValue_IsNull(item));
-        return Py_BuildValue("(iO)", 0, Py_None);
+        return PyValue_FromResult(Py_BuildValue("(iO)", 0, Py_None));
     }
     PyObject *pair = value_result(item);
     if (pair == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_BuildValue("(iN)", 1, pair);
+    return PyValue_FromResult(Py_BuildValue("(iN)", 1, pair));
 }
 
 static PyObject *
@@ -264,14 +264,14 @@ object_format(PyObject *Py_UNUSED(module), PyObject *args)
 #define BINARY_ENTRY(NAME) {#NAME "Value", number_##NAME, METH_VARARGS}
 
 #define AS_C(NAME, TYPE, BUILD) \
-    static PyObject * \
-    as_c_##NAME(PyObject *Py_UNUSED(module), PyObject *o) \
+    static PyValue \
+    as_c_##NAME(PyObject *Py_UNUSED(module), PyValue o) \
     { \
-        TYPE r = NAME##Value(PyValue_FromObject(o)); \
+        TYPE r = NAME##Value(o); \
         if (r == (TYPE)-1 && PyErr_Occurred()) { \
-            return NULL; \
+            return PyValue_NULL; \
         } \
-        return BUILD(r); \
+        return PyValue_FromResult(BUILD(r)); \
     }
 AS_C(PyLong_AsLong, long, PyLong_FromLong)
 AS_C(PyLong_AsInt, int, PyLong_FromLong)
@@ -297,13 +297,13 @@ number_as_ssize_t(PyObject *Py_UNUSED(module), PyObject *args)
 }
 
 static PyMethodDef test_methods[] = {
-    {"AsLongValue", as_c_PyLong_AsLong, METH_O},
-    {"AsIntValue", as_c_PyLong_AsInt, METH_O},
-    {"AsLongLongValue", as_c_PyLong_AsLongLong, METH_O},
-    {"AsSsize_tValue", as_c_PyLong_AsSsize_t, METH_O},
+    {"AsLongValue", _PyCFunction_CAST(as_c_PyLong_AsLong), METH_O},
+    {"AsIntValue", _PyCFunction_CAST(as_c_PyLong_AsInt), METH_O},
+    {"AsLongLongValue", _PyCFunction_CAST(as_c_PyLong_AsLongLong), METH_O},
+    {"AsSsize_tValue", _PyCFunction_CAST(as_c_PyLong_AsSsize_t), METH_O},
     {"NumberAsSsize_tValue", number_as_ssize_t, METH_VARARGS},
-    {"AsDoubleValue", as_c_PyFloat_AsDouble, METH_O},
-    {"value_kind", value_kind, METH_O},
+    {"AsDoubleValue", _PyCFunction_CAST(as_c_PyFloat_AsDouble), METH_O},
+    {"value_kind", _PyCFunction_CAST(value_kind), METH_O},
     BINARY_ENTRY(Add),
     BINARY_ENTRY(Subtract),
     BINARY_ENTRY(Multiply),
@@ -330,28 +330,28 @@ static PyMethodDef test_methods[] = {
     BINARY_ENTRY(InPlaceAnd),
     BINARY_ENTRY(InPlaceOr),
     BINARY_ENTRY(InPlaceXor),
-    {"NegativeValue", Number_Negative, METH_O},
-    {"PositiveValue", Number_Positive, METH_O},
-    {"InvertValue", Number_Invert, METH_O},
-    {"AbsoluteValue", Number_Absolute, METH_O},
-    {"IndexValue", Number_Index, METH_O},
-    {"LongValue", Number_Long, METH_O},
-    {"FloatValue", Number_Float, METH_O},
+    {"NegativeValue", _PyCFunction_CAST(Number_Negative), METH_O},
+    {"PositiveValue", _PyCFunction_CAST(Number_Positive), METH_O},
+    {"InvertValue", _PyCFunction_CAST(Number_Invert), METH_O},
+    {"AbsoluteValue", _PyCFunction_CAST(Number_Absolute), METH_O},
+    {"IndexValue", _PyCFunction_CAST(Number_Index), METH_O},
+    {"LongValue", _PyCFunction_CAST(Number_Long), METH_O},
+    {"FloatValue", _PyCFunction_CAST(Number_Float), METH_O},
     {"GetAttrValue", object_getattr, METH_VARARGS},
     {"SetAttrValue", object_setattr, METH_VARARGS},
     {"RichCompareValue", object_richcompare, METH_VARARGS},
     {"RichCompareBoolValue", object_richcomparebool, METH_VARARGS},
-    {"IsTrueValue", object_istrue, METH_O},
-    {"HashValue", object_hash, METH_O},
+    {"IsTrueValue", _PyCFunction_CAST(object_istrue), METH_O},
+    {"HashValue", _PyCFunction_CAST(object_hash), METH_O},
     {"GetItemValue", object_getitem, METH_VARARGS},
     {"SetItemValue", object_setitem, METH_VARARGS},
     {"DelItemValue", object_delitem, METH_VARARGS},
     {"ContainsValue", sequence_contains, METH_VARARGS},
-    {"GetIterValue", Object_GetIter, METH_O},
-    {"NextValue", iter_next, METH_O},
-    {"StrValue", Object_Str, METH_O},
-    {"ReprValue", Object_Repr, METH_O},
-    {"ASCIIValue", Object_ASCII, METH_O},
+    {"GetIterValue", _PyCFunction_CAST(Object_GetIter), METH_O},
+    {"NextValue", _PyCFunction_CAST(iter_next), METH_O},
+    {"StrValue", _PyCFunction_CAST(Object_Str), METH_O},
+    {"ReprValue", _PyCFunction_CAST(Object_Repr), METH_O},
+    {"ASCIIValue", _PyCFunction_CAST(Object_ASCII), METH_O},
     {"FormatValue", object_format, METH_VARARGS},
     {NULL},
 };

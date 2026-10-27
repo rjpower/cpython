@@ -1858,8 +1858,10 @@ retention failures (the conservative scan's), and poisoning reports
 use-after-poison. Gates: gate 0 1,898 tests; gate 1 1,456 on both builds;
 gate 2 556/564 files, 50,734 tests, only test_sys's pre-existing
 remote-exec timeout; gate 3 the same on build/debug, regen unchanged.
-test_cext under -u cpu fails 5 of 16 on VirtualPyObject (a C++ `new`
-object) since 29cbc5795a2's object-heap check, which is in 10a's base;
-10a does not change it. The rung 1 work doc and its review are
+test_cext under -u cpu failed 5 of 16 on VirtualPyObject (a C++ `new`
+object) under 29cbc5795a2's object-heap check, which is in 10a's base;
+after merging the integration branch at 15:10's 6c rung 1 and rung 2
+(a6288f5e776, which brings 0a1d762a998's fix), build/debug runs 16, 7
+skipped, success, and gates 0 (1,898) and 1 (1,456) pass again. The rung 1 work doc and its review are
 887f403e01a; the C mode started 16:04 and has until 2026-10-28 16:04.
 ||||||| c2ab4382dea

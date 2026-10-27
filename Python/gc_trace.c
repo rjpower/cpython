@@ -1218,6 +1218,25 @@ _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
     return 0;
 }
 
+#ifdef Py_DEBUG
+/* A span does not run past its buffer, when the buffer is a block of the
+   mimalloc heaps (PyMem_Malloc() and the like). */
+static void
+check_value_span(const _PyValueRoot *r)
+{
+    assert(r->n >= 0);
+    assert(r->n == 0 || r->base != NULL);
+    if (r->n == 0 || !mi_is_in_heap_region(r->base)) {
+        return;
+    }
+    mi_page_t *page = _mi_ptr_page(r->base);
+    uintptr_t start = (uintptr_t)mi_page_start(page);
+    size_t bsize = mi_page_block_size(page);
+    uintptr_t block = start + ((uintptr_t)r->base - start) / bsize * bsize;
+    assert((uintptr_t)(r->base + r->n) <= block + mi_usable_size((void *)block));
+}
+#endif
+
 int
 _PyGC_TraceVisitThreadState(PyThreadState *p, visitproc visit, void *arg)
 {
@@ -1239,8 +1258,13 @@ _PyGC_TraceVisitThreadState(PyThreadState *p, visitproc visit, void *arg)
     Py_VISIT(ts->asyncio_running_task);
     Py_VISIT(ts->lazy_imports);
     for (_PyValueRoot *r = ts->gc_trace.value_roots; r != NULL; r = r->next) {
-        if (PyValue_IsObject(r->value)) {
-            Py_VISIT(PyValue_ObjectBorrow(r->value));
+#ifdef Py_DEBUG
+        check_value_span(r);
+#endif
+        for (Py_ssize_t i = 0; i < r->n; i++) {
+            if (PyValue_IsObject(r->base[i])) {
+                Py_VISIT(PyValue_ObjectBorrow(r->base[i]));
+            }
         }
     }
     return 0;

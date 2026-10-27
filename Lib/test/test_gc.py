@@ -1516,6 +1516,11 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertEqual(lookup(id(again) + size - 64, True), id(again))
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_value_spans(self):
+        # Note 11 section 8.4: a span roots exactly its appended prefix.
+        _testinternalcapi.test_value_spans()
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_root_stats(self):
         # The root phase's counters: one schema for the total and the last
         # collection, which a collection moves.

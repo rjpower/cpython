@@ -313,8 +313,45 @@ _PyThreadState_PushValueRoot(PyThreadState *tstate, _PyValueRoot *root)
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
     root->value = PyValue_NULL;
+    root->base = &root->value;
+    root->n = 1;
     root->next = ts->gc_trace.value_roots;
     ts->gc_trace.value_roots = root;
+}
+
+/* Push root as a span over base, a buffer of the caller's, holding nothing
+   yet.  Popped with _PyThreadState_PopValueRoot(). */
+static inline void
+_PyThreadState_PushValueSpan(PyThreadState *tstate, _PyValueRoot *root,
+                             PyValue *base)
+{
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    root->value = PyValue_NULL;
+    root->base = base;
+    root->n = 0;
+    root->next = ts->gc_trace.value_roots;
+    ts->gc_trace.value_roots = root;
+}
+
+/* Store v at the end of the span and extend the span over it, in one step,
+   so that the collector never visits a slot that is not yet filled nor
+   misses one that is.  The caller sized the buffer.  v is stored as it is:
+   a raw box (_PyValue_FromBits() of a box's pointer) stays the box, which
+   is what keeps a box that C code points into alive. */
+static inline void
+_PyValueSpan_Append(_PyValueRoot *root, PyValue v)
+{
+    root->base[root->n] = v;
+    root->n++;
+}
+
+/* The span's buffer moved to base, which holds the values appended so far,
+   as PyMem_Realloc() leaves them.  Call it before any other collecting
+   call. */
+static inline void
+_PyValueSpan_Rebase(_PyValueRoot *root, PyValue *base)
+{
+    root->base = base;
 }
 
 /* The collector scans most C frames conservatively, so a popped value left

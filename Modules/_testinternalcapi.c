@@ -39,6 +39,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
 #include "pycore_unicodeobject.h" // _PyUnicode_TransformDecimalAndSpaceToASCII()
+#include "pycore_value.h"         // _PyThreadState_PushValueSpan()
 
 #include "clinic/_testinternalcapi.c.h"
 
@@ -3567,6 +3568,95 @@ gc_root_stats(PyObject *self, PyObject *Py_UNUSED(args))
     return Py_BuildValue("{sNsN}", "total", t, "last", l);
 }
 
+/* Is op reached from the thread states' roots, which hold the value
+   roots and spans?  -1 on error. */
+static int
+in_value_roots(PyObject *op)
+{
+    int r = _PyGC_TraceLiveRootsOf(_PyThreadState_GET(), (uintptr_t)op);
+    return r < 0 ? -1 : (r & _PyGC_TRACE_ROOT_TSTATE) != 0;
+}
+
+#define SPAN_EXPECT(op, want, what) \
+    do { \
+        int _r = in_value_roots(op); \
+        if (_r < 0) { \
+            goto error; \
+        } \
+        if (_r != (want)) { \
+            PyErr_Format(PyExc_AssertionError, "%s: %s", (what), \
+                         (want) ? "not visited" : "still visited"); \
+            goto error; \
+        } \
+    } while (0)
+
+/* The collector visits a span's values from base[0] to base[n - 1]: only
+   appended values, NULL and inline ones skipped, a raw box as the box, a
+   rebased buffer, and nothing once popped; a one-value root is a span of
+   one. */
+static PyObject *
+test_value_spans(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyObject *a = NULL, *b = NULL, *c = NULL, *box = NULL;
+    _PyValueRoot span, one;
+    int pushed = 0;
+    PyValue *buf = PyMem_Malloc(4 * sizeof(PyValue));
+    if (buf == NULL) {
+        return PyErr_NoMemory();
+    }
+    a = PyList_New(0);
+    b = PyList_New(0);
+    c = PyList_New(0);
+    box = PyFloat_FromDouble(1.5);
+    if (a == NULL || b == NULL || c == NULL || box == NULL) {
+        goto error;
+    }
+    _PyThreadState_PushValueSpan(tstate, &span, buf);
+    pushed = 1;
+    _PyValueSpan_Append(&span, PyValue_FromObject(a));
+    // Stored past the prefix, not appended: not visited
+    buf[1] = PyValue_FromObject(b);
+    SPAN_EXPECT(a, 1, "an appended value");
+    SPAN_EXPECT(b, 0, "a value past the span");
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    _PyValueSpan_Append(&span, PyValue_FromInt32(7));
+    _PyValueSpan_Append(&span, _PyValue_FromBits((uintptr_t)box));
+    if (buf[3].bits != (uintptr_t)box) {
+        PyErr_SetString(PyExc_AssertionError, "a raw box was canonicalized");
+        goto error;
+    }
+    SPAN_EXPECT(box, 1, "a raw box");
+    PyValue *moved = PyMem_Realloc(buf, 64 * sizeof(PyValue));
+    if (moved == NULL) {
+        PyErr_NoMemory();
+        goto error;
+    }
+    buf = moved;
+    _PyValueSpan_Rebase(&span, buf);
+    SPAN_EXPECT(a, 1, "a value after a rebase");
+    _PyThreadState_PopValueRoot(tstate, &span);
+    pushed = 0;
+    SPAN_EXPECT(a, 0, "a popped span's value");
+
+    _PyThreadState_PushValueRoot(tstate, &one);
+    one.object = c;
+    SPAN_EXPECT(c, 1, "a one-value root");
+    _PyThreadState_PopValueRoot(tstate, &one);
+    SPAN_EXPECT(c, 0, "a popped one-value root");
+    PyMem_Free(buf);
+    Py_RETURN_NONE;
+
+error:
+    if (pushed) {
+        _PyThreadState_PopValueRoot(tstate, &span);
+    }
+    PyMem_Free(buf);
+    return NULL;
+}
+
+#undef SPAN_EXPECT
+
 /* The classes of roots that keep the object at an address (an int, so that
    the argument does not keep it), as a _PyGC_TRACE_ROOT_* mask. */
 static PyValue
@@ -3771,6 +3861,7 @@ static PyMethodDef module_functions[] = {
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
     {"gc_verify_count", gc_verify_count, METH_NOARGS},
     {"gc_live_roots_of", _PyCFunction_CAST(gc_live_roots_of), METH_O},
+    {"test_value_spans", test_value_spans, METH_NOARGS},
     {"gc_root_stats", gc_root_stats, METH_NOARGS},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
     {"gc_raw_block_is_object", _PyCFunction_CAST(gc_raw_block_is_object), METH_O},

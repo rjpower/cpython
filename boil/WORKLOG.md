@@ -1758,3 +1758,16 @@ is heaviest (nbody 8.19, fannkuch 7.63, coroutines 7.52). The time metric
 is not yet of record: it is taken only from a run whose 1-minute load
 stays below 4 throughout, and the 6b gate and the 6c builds have kept the
 machine busy; a watcher takes it in the first quiet window.
+
+### 2026-10-27 14:45 — B: time of record
+
+The time metric of record ran in quiet windows with --max-load 4 (highest
+1-minute load sampled 2.08, 2.15 and 2.4; one step5c attempt refused at
+5.52 and repeated). Geomean against baseline, step1 then step5c: kernels
+1.039 and 1.309, memory 1.181 and 2.113. step5c's time exceeds its
+instructions most where allocation is heaviest (coroutines 2.458 against
+1.354, comprehensions 2.135 against 1.361, generators 1.749). The
+collector benchmark of record: baseline 0.533, 0.580 and 0.547 s per
+allocated GB at 16, 128 and 512 MB live; step5c 2.859, 3.237 and 4.248
+times that, growing with the live heap. boil/bench/results/ now holds
+instr, time and rss for all three labels of record.

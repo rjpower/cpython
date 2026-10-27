@@ -16,11 +16,49 @@
       "touches": {
         "Cython/Utility/ModuleSetupCode.c": "a069bbb204c5ceff6729d5ffb0ca4e3daf11f514d5cb70a54c5bfe93fba5f5c1"
       }
+    },
+    {
+      "file": "item-values.patch",
+      "sha256": "240dd0ab49adeaefb121a25967391d0bedd13530df78c7052e0f80f07d5e56b5",
+      "touches": {
+        "Cython/Includes/cpython/sequence.pxd": "51a8d75ba4bfb2cc829980c3b171621c647d2140cc3f77fa02e5786c1ce1d83a",
+        "Cython/Utility/MatchCase.c": "5a25bc912c9c2dabb3c5d0408900d8e5937f865b550b45be9d4eb8f8106433a2",
+        "Cython/Utility/ObjectHandling.c": "faf3268d038deb49a26b53011e4fa89d457716f02f701447cfb899231cf563bb",
+        "Cython/Utility/Optimize.c": "8da19aef99e09902ec5dfedaab70e2e744f244c1d07f21b9781040c44307fbe0"
+      }
+    },
+    {
+      "file": "cyfunction-weakref.patch",
+      "sha256": "ab3a897ce46c21029b71e3dd0592c56bab849f4a0d0e383634b08d713d247153",
+      "touches": {
+        "Cython/Utility/CythonFunction.c": "410b087d808dd416fea314146b492e34f7b01d61fbdd5fa1c9fecf1e477abedb"
+      }
+    },
+    {
+      "file": "value-calls.patch",
+      "sha256": "9c4526053bc858cc78cdad8ff3d4ec1ec7dc9f9e43190195225ffc425fc651ba",
+      "touches": {
+        "Cython/Compiler/Code.py": "ba134dcdf959497c6fa8f62c286365acdbcb660d1c8c62c6245338979c32bbe5",
+        "Cython/Compiler/ExprNodes.py": "9ff814ef32e1c99cee9682af35740a4843e487e0075e1de8461e82350f00c95a",
+        "Cython/Compiler/Naming.py": "b17adb6a6555eadbd57570eb34398e9fe963e51ac0c2e51737b7b82c9bcd74d4",
+        "Cython/Compiler/Nodes.py": "5ece15862e13069082a33c53cb1f1b958a90e9c160be3daccade5eec3a247667",
+        "Cython/Compiler/PyrexTypes.py": "e3e78ff4adf53b77730d69fc53c8bf9a891a5a8ef7482d5d18fe6d8e36d70050",
+        "Cython/Compiler/TypeSlots.py": "4327f08528b6a5e542dfc39ce6f60fff24419e81f21f48af674ea95277b69f78",
+        "Cython/Utility/AsyncGen.c": "3888b31a15fc8f0693a68d0899492d1b51724110236d0bb1ccb8c8f563f7a4ff",
+        "Cython/Utility/Coroutine.c": "5cf309a791bcf3cc536cc3985e79dc9c921e4422cf70d44221a1c663d739d779",
+        "Cython/Utility/CythonFunction.c": "410b087d808dd416fea314146b492e34f7b01d61fbdd5fa1c9fecf1e477abedb",
+        "Cython/Utility/FunctionArguments.c": "1eebc86617465886e5f88f93ad311b23f6240a8bac9555a046f2cbb37d5234dd",
+        "Cython/Utility/ModuleSetupCode.c": "a069bbb204c5ceff6729d5ffb0ca4e3daf11f514d5cb70a54c5bfe93fba5f5c1",
+        "Cython/Utility/ObjectHandling.c": "faf3268d038deb49a26b53011e4fa89d457716f02f701447cfb899231cf563bb"
+      }
     }
   ],
   "tests": [
     {
       "script": "tests/smoke.py"
+    },
+    {
+      "script": "tests/values.py"
     }
   ]
 }

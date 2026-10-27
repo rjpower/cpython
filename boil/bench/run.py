@@ -34,6 +34,15 @@ rss
     inherits the parent's high-water mark); median of ``--rss-runs``
     (default 3) processes.
 
+The JSON holds the build, the machine, ``results`` (metric, then benchmark,
+then the entry with its value, the per-run values and the loop and run
+counts) and ``runs`` (per metric: the timestamp, the bench commit and the
+1-minute load averages sampled before every measurement and at the end).
+``--update`` merges a run's metrics into an existing file for the same build,
+so instr and rss can be recorded under load and time later on an idle
+machine; ``--max-load`` makes a run fail, writing nothing, if any sample
+reaches the limit.
+
 This script needs only the standard library and any Python 3.10 or later; the
 interpreter under test is ``--build``.
 """
@@ -300,7 +309,7 @@ def git(*args: str) -> str:
 
 def machine() -> dict:
     info = {"hostname": platform.node(), "kernel": platform.release(),
-            "cpus": os.cpu_count(), "load_average": list(os.getloadavg())}
+            "cpus": os.cpu_count()}
     for path, key, field in (("/proc/cpuinfo", "cpu", "model name"),
                              ("/proc/meminfo", "memory", "MemTotal")):
         try:
@@ -369,15 +378,28 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--instr-runs", type=int, default=4)
     ap.add_argument("--time-runs", type=int, default=5)
     ap.add_argument("--rss-runs", type=int, default=3)
+    ap.add_argument("--max-load", type=float,
+                    help="fail if the 1-minute load average reaches this before any measurement")
+    ap.add_argument("--update", action="store_true",
+                    help="merge into the existing -o file for the same build")
     ap.add_argument("-o", "--output", type=Path, help="JSON file (default: stdout)")
     args = ap.parse_args(argv)
+    if args.update and not (args.output and args.output.exists()):
+        raise SystemExit("run.py: --update needs an existing -o file")
 
     python = resolve_build(args.build)
     metrics = split(args.metric, METRICS, "metric")
     benches = select(split(args.set, GROUPS, "set"), args.only)
     label = args.label or python.parent.name
     started = datetime.datetime.now().astimezone()
-    machine_info = machine()
+    loads: list[float] = []
+
+    def sample_load() -> None:
+        load = os.getloadavg()[0]
+        loads.append(load)
+        if args.max_load is not None and load >= args.max_load:
+            raise MeasurementError(f"1-minute load average {load:.2f} reached --max-load "
+                                   f"{args.max_load}; nothing written")
     with tempfile.TemporaryDirectory(prefix="boil-bench-") as tmp:
         ctx = Context(python, Path(tmp) / "pycache", Path(tmp))
         results: dict[str, dict] = {}
@@ -395,25 +417,32 @@ def main(argv: list[str] | None = None) -> int:
                 table = results.setdefault(metric, {})
                 chosen = [b for b in benches if metric in metrics_of(b)]
                 for bench in chosen:
+                    sample_load()
                     entry = measure(ctx, bench, runs, args.loops or bench.loops)
                     table[bench.name] = entry
                     print(f"{label} {metric} {bench.group}/{bench.name} "
                           f"{entry['value']:,.1f} {entry['unit']}", file=sys.stderr, flush=True)
                 if metric == "instr":
                     subtract_skeletons(table, chosen)
+            sample_load()
         except MeasurementError as exc:
             print(f"run.py: {exc}", file=sys.stderr)
             return 1
-    machine_info["load_average_end"] = list(os.getloadavg())
-    report = {
-        "schema": "boil-bench/1",
-        "timestamp": started.isoformat(timespec="seconds"),
-        "commit": {"sha": git("rev-parse", "HEAD"),
-                   "dirty": bool(git("status", "--porcelain", "--", "boil/bench"))},
-        "machine": machine_info,
-        "build": build,
-        "results": results,
-    }
+    run_info = {"timestamp": started.isoformat(timespec="seconds"),
+                "commit": {"sha": git("rev-parse", "HEAD"),
+                           "dirty": bool(git("status", "--porcelain", "--", "boil/bench"))},
+                "load_1min": {"max": max(loads), "samples": loads}}
+    report = {"schema": "boil-bench/1", "build": build, "machine": machine(),
+              "results": {}, "runs": {}}
+    if args.update:
+        report = json.loads(args.output.read_text())
+        if (report["build"]["path"], report["build"]["label"]) != (build["path"], label):
+            raise SystemExit(f"run.py: {args.output} holds another build")
+        if report["machine"]["hostname"] != platform.node():
+            raise SystemExit(f"run.py: {args.output} was recorded on another machine")
+    for metric, table in results.items():
+        report["results"][metric] = table
+        report["runs"][metric] = run_info
     text = json.dumps(report, indent=1) + "\n"
     if args.output:
         args.output.write_text(text)

@@ -32,8 +32,8 @@ class RunTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp)
 
     def run_bench(self, metric: str, *extra: str, name: str = "richards",
-                  group: str = "kernels") -> dict:
-        out = self.tmp / f"{metric}.json"
+                  group: str = "kernels", output: str | None = None) -> dict:
+        out = self.tmp / (output or f"{metric}.json")
         subprocess.run([sys.executable, str(BENCH / "run.py"), "--build", PYTHON,
                         "--label", "test", "--set", group, "--only", name,
                         "--metric", metric, "--loops", "1", *extra, "-o", str(out)],
@@ -44,7 +44,8 @@ class RunTest(unittest.TestCase):
                     name: str = "richards") -> dict:
         self.assertEqual(report["schema"], "boil-bench/1")
         self.assertEqual(report["build"]["label"], "test")
-        self.assertIn("sha", report["commit"])
+        self.assertIn("sha", report["runs"][metric]["commit"])
+        self.assertGreaterEqual(report["runs"][metric]["load_1min"]["max"], 0)
         entry = report["results"][metric][name]
         self.assertEqual(entry["group"], report["results"][metric][name]["group"])
         self.assertEqual(entry["runs"], runs)
@@ -91,6 +92,15 @@ class RunTest(unittest.TestCase):
         entry = self.check_entry(report, "time", 1, name="collector_live16")
         self.assertEqual(entry["unit"], "s per allocated GB")
         self.assertLess(entry["value"], 60)
+
+    def test_update_merges_metrics_and_max_load_refuses(self):
+        self.run_bench("time", "--time-runs", "1", name="logging_silent")
+        report = self.run_bench("rss", "--rss-runs", "1", "--update", name="logging_silent",
+                                output="time.json")
+        self.assertEqual(set(report["results"]), {"time", "rss"})
+        self.assertEqual(set(report["runs"]), {"time", "rss"})
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.run_bench("time", "--max-load", "0", name="logging_silent")
 
 
 if __name__ == "__main__":

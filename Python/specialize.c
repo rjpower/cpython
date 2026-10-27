@@ -2138,21 +2138,26 @@ _Py_Specialize_CallKw(PyValue callable_st, _PyInstr *instr, int nargs)
 
 #ifdef Py_STATS
 static int
-binary_op_fail_kind(int oparg, PyObject *lhs, PyObject *rhs)
+binary_op_fail_kind(int oparg, PyValue lhs_st, PyValue rhs_st)
 {
+    PyTypeObject *lhs_type = PyValue_Type(lhs_st);
+    PyTypeObject *rhs_type = PyValue_Type(rhs_st);
+    // rhs is an int that is not a non-negative compact one
+    bool rhs_other_int = rhs_type == &PyLong_Type &&
+        !(_PyValue_IsCompactInt(rhs_st) && _PyValue_CompactInt(rhs_st) >= 0);
     switch (oparg) {
         case NB_ADD:
         case NB_INPLACE_ADD:
-            if (!Py_IS_TYPE(lhs, Py_TYPE(rhs))) {
+            if (lhs_type != rhs_type) {
                 return SPEC_FAIL_BINARY_OP_ADD_DIFFERENT_TYPES;
             }
             return SPEC_FAIL_BINARY_OP_ADD_OTHER;
         case NB_AND:
         case NB_INPLACE_AND:
-            if (!Py_IS_TYPE(lhs, Py_TYPE(rhs))) {
+            if (lhs_type != rhs_type) {
                 return SPEC_FAIL_BINARY_OP_AND_DIFFERENT_TYPES;
             }
-            if (PyLong_CheckExact(lhs)) {
+            if (lhs_type == &PyLong_Type) {
                 return SPEC_FAIL_BINARY_OP_AND_INT;
             }
             return SPEC_FAIL_BINARY_OP_AND_OTHER;
@@ -2167,16 +2172,16 @@ binary_op_fail_kind(int oparg, PyObject *lhs, PyObject *rhs)
             return SPEC_FAIL_BINARY_OP_MATRIX_MULTIPLY;
         case NB_MULTIPLY:
         case NB_INPLACE_MULTIPLY:
-            if (!Py_IS_TYPE(lhs, Py_TYPE(rhs))) {
+            if (lhs_type != rhs_type) {
                 return SPEC_FAIL_BINARY_OP_MULTIPLY_DIFFERENT_TYPES;
             }
             return SPEC_FAIL_BINARY_OP_MULTIPLY_OTHER;
         case NB_OR:
         case NB_INPLACE_OR:
-            if (!Py_IS_TYPE(lhs, Py_TYPE(rhs))) {
+            if (lhs_type != rhs_type) {
                 return SPEC_FAIL_BINARY_OP_OR_DIFFERENT_TYPES;
             }
-            if (PyLong_CheckExact(lhs)) {
+            if (lhs_type == &PyLong_Type) {
                 return SPEC_FAIL_BINARY_OP_OR_INT;
             }
             return SPEC_FAIL_BINARY_OP_OR;
@@ -2191,55 +2196,55 @@ binary_op_fail_kind(int oparg, PyObject *lhs, PyObject *rhs)
             return SPEC_FAIL_BINARY_OP_RSHIFT;
         case NB_SUBTRACT:
         case NB_INPLACE_SUBTRACT:
-            if (!Py_IS_TYPE(lhs, Py_TYPE(rhs))) {
+            if (lhs_type != rhs_type) {
                 return SPEC_FAIL_BINARY_OP_SUBTRACT_DIFFERENT_TYPES;
             }
             return SPEC_FAIL_BINARY_OP_SUBTRACT_OTHER;
         case NB_TRUE_DIVIDE:
         case NB_INPLACE_TRUE_DIVIDE:
-            if (!Py_IS_TYPE(lhs, Py_TYPE(rhs))) {
+            if (lhs_type != rhs_type) {
                 return SPEC_FAIL_BINARY_OP_TRUE_DIVIDE_DIFFERENT_TYPES;
             }
-            if (PyFloat_CheckExact(lhs)) {
+            if (lhs_type == &PyFloat_Type) {
                 return SPEC_FAIL_BINARY_OP_TRUE_DIVIDE_FLOAT;
             }
             return SPEC_FAIL_BINARY_OP_TRUE_DIVIDE_OTHER;
         case NB_XOR:
         case NB_INPLACE_XOR:
-            if (!Py_IS_TYPE(lhs, Py_TYPE(rhs))) {
+            if (lhs_type != rhs_type) {
                 return SPEC_FAIL_BINARY_OP_XOR_DIFFERENT_TYPES;
             }
-            if (PyLong_CheckExact(lhs)) {
+            if (lhs_type == &PyLong_Type) {
                 return SPEC_FAIL_BINARY_OP_XOR_INT;
             }
             return SPEC_FAIL_BINARY_OP_XOR;
         case NB_SUBSCR:
-            if (PyList_CheckExact(lhs)) {
-                if (PyLong_CheckExact(rhs) && !_PyLong_IsNonNegativeCompact((PyLongObject *)rhs)) {
+            if (lhs_type == &PyList_Type) {
+                if (rhs_other_int) {
                     return SPEC_FAIL_OUT_OF_RANGE;
                 }
-                if (PySlice_Check(rhs)) {
+                if (rhs_type == &PySlice_Type) {
                     return SPEC_FAIL_BINARY_OP_SUBSCR_LIST_SLICE;
                 }
             }
-            if (PyTuple_CheckExact(lhs)) {
-                if (PyLong_CheckExact(rhs) && !_PyLong_IsNonNegativeCompact((PyLongObject *)rhs)) {
+            if (lhs_type == &PyTuple_Type) {
+                if (rhs_other_int) {
                     return SPEC_FAIL_OUT_OF_RANGE;
                 }
-                if (PySlice_Check(rhs)) {
+                if (rhs_type == &PySlice_Type) {
                     return SPEC_FAIL_BINARY_OP_SUBSCR_TUPLE_SLICE;
                 }
             }
-            if (PyUnicode_CheckExact(lhs)) {
-                if (PyLong_CheckExact(rhs) && !_PyLong_IsNonNegativeCompact((PyLongObject *)rhs)) {
+            if (lhs_type == &PyUnicode_Type) {
+                if (rhs_other_int) {
                     return SPEC_FAIL_OUT_OF_RANGE;
                 }
-                if (PySlice_Check(rhs)) {
+                if (rhs_type == &PySlice_Type) {
                     return SPEC_FAIL_BINARY_OP_SUBSCR_STRING_SLICE;
                 }
             }
             unsigned int tp_version;
-            PyTypeObject *container_type = Py_TYPE(lhs);
+            PyTypeObject *container_type = lhs_type;
             PyObject *descriptor = _PyType_LookupRefAndVersion(container_type, &_Py_ID(__getitem__), &tp_version);
             if (descriptor && Py_TYPE(descriptor) == &PyFunction_Type) {
                 if (!(container_type->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
@@ -2266,15 +2271,15 @@ binary_op_fail_kind(int oparg, PyObject *lhs, PyObject *rhs)
             }
             Py_XDECREF(descriptor);
 
-            if (PyObject_TypeCheck(lhs, &PyDictProxy_Type)) {
+            if (PyType_IsSubtype(lhs_type, &PyDictProxy_Type)) {
                 return SPEC_FAIL_BINARY_OP_SUBSCR_MAPPINGPROXY;
             }
 
-            if (PyObject_TypeCheck(lhs, &PyBytes_Type)) {
+            if (PyType_IsSubtype(lhs_type, &PyBytes_Type)) {
                 return SPEC_FAIL_BINARY_OP_SUBSCR_BYTES;
             }
 
-            if (PyObject_TypeCheck(lhs, &PyRange_Type)) {
+            if (PyType_IsSubtype(lhs_type, &PyRange_Type)) {
                 return SPEC_FAIL_BINARY_OP_SUBSCR_RANGE;
             }
 
@@ -2314,7 +2319,7 @@ binary_op_fail_kind(int oparg, PyObject *lhs, PyObject *rhs)
                 return SPEC_FAIL_BINARY_OP_SUBSCR_STRUCTTIME;
             }
 
-            if (PySlice_Check(rhs)) {
+            if (rhs_type == &PySlice_Type) {
                 return SPEC_FAIL_BINARY_OP_SUBSCR_OTHER_SLICE;
             }
             return SPEC_FAIL_BINARY_OP_SUBSCR;
@@ -2427,14 +2432,14 @@ binary_op_extended_specialization(PyValue lhs, PyValue rhs, int oparg,
     return 0;
 }
 
-// lhs and rhs are the operands as objects; lhs_st and rhs_st as values,
-// which the int tests read, since an inline int need not be compact boxed.
+// The operands are values: the types and int tests read them without a box.
 static void
-specialize_binary_op(PyObject *lhs, PyObject *rhs,
-                     PyValue lhs_st, PyValue rhs_st,
+specialize_binary_op(PyValue lhs_st, PyValue rhs_st,
                      _PyInstr *instr, int oparg, PyValue *locals)
 {
-    _PyFbBinary *fb = fb_begin_binary(instr, Py_TYPE(lhs), Py_TYPE(rhs));
+    PyTypeObject *lhs_type = PyValue_Type(lhs_st);
+    PyTypeObject *rhs_type = PyValue_Type(rhs_st);
+    _PyFbBinary *fb = fb_begin_binary(instr, lhs_type, rhs_type);
     fb->descr = NULL;
     bool compact_ints =
         _PyValue_IsCompactInt(lhs_st) && _PyValue_IsCompactInt(rhs_st);
@@ -2452,18 +2457,16 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
                 specialize(instr, BINARY_OP_ADD_FLOAT);
                 return;
             }
-            if (!Py_IS_TYPE(lhs, Py_TYPE(rhs))) {
+            if (lhs_type != rhs_type) {
                 break;
             }
-            if (PyUnicode_CheckExact(lhs)) {
+            if (lhs_type == &PyUnicode_Type) {
                 // A STORE_FAST folded into the word: its dst names the local
                 _PyInterpreterFrame *frame = current_frame();
                 int local = _PyCode_InstrStoredLocal(
                     _PyFrame_GetCode(frame), _PyFrame_InstrOffset(frame, instr));
                 bool to_store = local >= 0;
-                if (to_store && PyValue_IsObject(locals[local]) &&
-                    PyValue_ObjectBorrow(locals[local]) == lhs)
-                {
+                if (to_store && PyValue_Is(locals[local], lhs_st)) {
                     specialize(instr, BINARY_OP_INPLACE_ADD_UNICODE);
                     return;
                 }
@@ -2551,16 +2554,16 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
             break;
         case NB_SUBSCR:
             if (_PyValue_IsCompactInt(rhs_st) && _PyValue_CompactInt(rhs_st) >= 0) {
-                if (PyList_CheckExact(lhs)) {
+                if (lhs_type == &PyList_Type) {
                     specialize(instr, BINARY_OP_SUBSCR_LIST_INT);
                     return;
                 }
-                if (PyTuple_CheckExact(lhs)) {
+                if (lhs_type == &PyTuple_Type) {
                     specialize(instr, BINARY_OP_SUBSCR_TUPLE_INT);
                     return;
                 }
-                if (PyUnicode_CheckExact(lhs)) {
-                    if (PyUnicode_IS_COMPACT_ASCII(lhs)) {
+                if (lhs_type == &PyUnicode_Type) {
+                    if (PyUnicode_IS_COMPACT_ASCII(PyValue_ObjectBorrow(lhs_st))) {
                         specialize(instr, BINARY_OP_SUBSCR_STR_INT);
                         return;
                     } else {
@@ -2569,18 +2572,18 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
                     }
                 }
             }
-            if (Py_TYPE(lhs)->tp_as_mapping != NULL &&
-                Py_TYPE(lhs)->tp_as_mapping->mp_subscript == _PyDict_Subscript)
+            if (lhs_type->tp_as_mapping != NULL &&
+                lhs_type->tp_as_mapping->mp_subscript == _PyDict_Subscript)
             {
                 specialize(instr, BINARY_OP_SUBSCR_DICT);
                 return;
             }
-            if (PyList_CheckExact(lhs) && PySlice_Check(rhs)) {
+            if (lhs_type == &PyList_Type && rhs_type == &PySlice_Type) {
                 specialize(instr, BINARY_OP_SUBSCR_LIST_SLICE);
                 return;
             }
             unsigned int tp_version;
-            PyTypeObject *container_type = Py_TYPE(lhs);
+            PyTypeObject *container_type = lhs_type;
             PyObject *descriptor = _PyType_LookupRefAndVersion(container_type, &_Py_ID(__getitem__), &tp_version);
             if (descriptor && Py_TYPE(descriptor) == &PyFunction_Type &&
                 container_type->tp_flags & Py_TPFLAGS_HEAPTYPE)
@@ -2610,7 +2613,7 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
         return;
     }
 
-    SPECIALIZATION_FAIL(BINARY_OP, binary_op_fail_kind(oparg, lhs, rhs));
+    SPECIALIZATION_FAIL(BINARY_OP, binary_op_fail_kind(oparg, lhs_st, rhs_st));
     unspecialize(instr);
 }
 
@@ -2620,18 +2623,7 @@ _Py_Specialize_BinaryOp(PyValue lhs_st, PyValue rhs_st, _PyInstr *instr,
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[BINARY_OP] == INLINE_CACHE_ENTRIES_BINARY_OP);
-    // The boxes are temporary: the specialised handlers take values.
-    PyObject *lhs = PyValue_Object(lhs_st);
-    PyObject *rhs = PyValue_Object(rhs_st);
-    if (lhs == NULL || rhs == NULL) {
-        PyErr_Clear();
-        unspecialize(instr);
-    }
-    else {
-        specialize_binary_op(lhs, rhs, lhs_st, rhs_st, instr, oparg, locals);
-    }
-    Py_XDECREF(lhs);
-    Py_XDECREF(rhs);
+    specialize_binary_op(lhs_st, rhs_st, instr, oparg, locals);
 }
 
 

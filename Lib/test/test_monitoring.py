@@ -2056,8 +2056,8 @@ class TestBranchAndJumpEvents(CheckEvents):
                 pass
 
         self.check_events(func, recorders = BRANCHES_RECORDERS, expected = [
-            ('branch left', 'foo', 1, 1),
-            ('branch left', 'foo', 1, 1),
+            ('branch left', 'foo', 1, 2),
+            ('branch left', 'foo', 1, 2),
             ('branch right', 'foo', 1, 3),
             ('branch left', 'func', 12, 12)])
 

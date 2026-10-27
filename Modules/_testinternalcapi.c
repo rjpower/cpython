@@ -3520,6 +3520,54 @@ gc_verify_count(PyObject *self, PyObject *Py_UNUSED(args))
     return PyLong_FromSsize_t(_PyGC_TraceCount(_PyInterpreterState_GET()));
 }
 
+static PyObject *
+root_stats_dict(const _PyGCRootStats *s)
+{
+    static const char *const names[] = _PyGC_SCAN_CLASS_NAMES;
+    PyObject *d = PyDict_New();
+    if (d == NULL) {
+        return NULL;
+    }
+#define SET(key, value) \
+    do { \
+        PyObject *v = PyLong_FromLongLong(value); \
+        if (v == NULL || PyDict_SetItemString(d, (key), v) < 0) { \
+            return NULL; \
+        } \
+    } while (0)
+#define FIELD(name) SET(#name, s->name);
+    _PyGC_ROOT_STATS_FIELDS(FIELD)
+#undef FIELD
+    for (int i = 0; i < _PyGC_SCAN_CLASSES; i++) {
+        char key[32];
+        PyOS_snprintf(key, sizeof(key), "%s_words", names[i]);
+        SET(key, s->words[i]);
+        PyOS_snprintf(key, sizeof(key), "%s_hits", names[i]);
+        SET(key, s->hits[i]);
+    }
+#undef SET
+    return d;
+}
+
+/* The live collector's root-phase counters (note 11 section 9): a dict
+   with "total", summed over this interpreter's collections, and "last",
+   its last collection. */
+static PyObject *
+gc_root_stats(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    _PyGCRootStats total, last;
+    _PyGC_LiveGetRootStats(_PyInterpreterState_GET(), &total, &last);
+    PyObject *t = root_stats_dict(&total);
+    if (t == NULL) {
+        return NULL;
+    }
+    PyObject *l = root_stats_dict(&last);
+    if (l == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("{sNsN}", "total", t, "last", l);
+}
+
 /* The classes of roots that keep the object at an address (an int, so that
    the argument does not keep it), as a _PyGC_TRACE_ROOT_* mask. */
 static PyValue
@@ -3724,6 +3772,7 @@ static PyMethodDef module_functions[] = {
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
     {"gc_verify_count", gc_verify_count, METH_NOARGS},
     {"gc_live_roots_of", _PyCFunction_CAST(gc_live_roots_of), METH_O},
+    {"gc_root_stats", gc_root_stats, METH_NOARGS},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
     {"gc_raw_block_is_object", _PyCFunction_CAST(gc_raw_block_is_object), METH_O},
     {"gc_segment_of", _PyCFunction_CAST(gc_segment_of), METH_O},

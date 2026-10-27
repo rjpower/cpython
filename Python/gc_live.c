@@ -110,15 +110,89 @@ struct _gc_live_state {
     Py_ssize_t bytes_freed;
     Py_ssize_t live_bytes;
     Py_ssize_t pause_max_ns;
+    // The root phase's counters (_PyGC_LiveGetRootStats()), and the
+    // process they were counted in: a forked child starts from zero.
+    _PyGCRootStats root_total;
+    _PyGCRootStats root_last;
+    long root_pid;
 };
+
+static long
+current_pid(void)
+{
+#ifdef HAVE_GETPID
+    return (long)getpid();
+#else
+    return 0;
+#endif
+}
 
 static struct _gc_live_state *
 get_live(PyInterpreterState *interp)
 {
     if (interp->gc.live == NULL) {
         interp->gc.live = calloc(1, sizeof(struct _gc_live_state));
+        if (interp->gc.live != NULL) {
+            interp->gc.live->root_pid = current_pid();
+        }
     }
     return interp->gc.live;
+}
+
+/* Count one mark's root phase: each mark is charged once, to the
+   interpreter that ran it, whichever interpreters' heaps it covered. */
+static void
+add_root_stats(struct _gc_live_state *ls, _PyGCRootStats *s)
+{
+    long pid = current_pid();
+    if (pid != ls->root_pid) {
+        ls->root_total = (_PyGCRootStats){0};
+        ls->root_pid = pid;
+    }
+    s->collections = 1;
+    ls->root_last = *s;
+    _PyGCRootStats *total = &ls->root_total;
+#define ADD(name) total->name += s->name;
+    _PyGC_ROOT_STATS_FIELDS(ADD)
+#undef ADD
+    for (int i = 0; i < _PyGC_SCAN_CLASSES; i++) {
+        total->words[i] += s->words[i];
+        total->hits[i] += s->hits[i];
+    }
+}
+
+/* PYTHON_GCROOTSTATS=path appends an interpreter's root counters to path
+   when it is finalized, as one JSON line with the process and interpreter
+   ids, for summing over a test suite (boil/tools/measure/root_stats.py).
+   A forked child that has not collected writes nothing, so that its
+   parent's counts are not counted twice; a process that exits without
+   finalizing writes nothing.  A measurement switch: a file that cannot be
+   written is ignored. */
+static void
+dump_root_stats(PyInterpreterState *interp, struct _gc_live_state *ls)
+{
+    const char *path = getenv("PYTHON_GCROOTSTATS");
+    if (path == NULL || path[0] == '\0' || ls->root_pid != current_pid()) {
+        return;
+    }
+    FILE *out = fopen(path, "a");
+    if (out == NULL) {
+        return;
+    }
+    const _PyGCRootStats *s = &ls->root_total;
+    static const char *const names[] = _PyGC_SCAN_CLASS_NAMES;
+    fprintf(out, "{\"pid\": %ld, \"interp\": %lld", ls->root_pid,
+            (long long)interp->id);
+#define DUMP(name) fprintf(out, ", \"" #name "\": %lld", (long long)s->name);
+    _PyGC_ROOT_STATS_FIELDS(DUMP)
+#undef DUMP
+    for (int i = 0; i < _PyGC_SCAN_CLASSES; i++) {
+        fprintf(out, ", \"%s_words\": %lld, \"%s_hits\": %lld",
+                names[i], (long long)s->words[i],
+                names[i], (long long)s->hits[i]);
+    }
+    fprintf(out, "}\n");
+    fclose(out);
 }
 
 static GCState *
@@ -1082,6 +1156,7 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
     if (_PyGC_TraceLiveMark(tstate, &res) < 0) {
         goto done;  // out of memory: nothing is freed
     }
+    add_root_stats(ls, &res.roots);
     if (clear_callback_weakrefs(ls, &res) < 0
         || handle_finalizers(gc, ls, &res, &garbage) < 0
         || queue_destroy_hooks(ls, &res) < 0)
@@ -1397,6 +1472,7 @@ _PyGC_Fini(PyInterpreterState *interp)
     _PyGC_TraceFini(interp);
     struct _gc_live_state *ls = gcstate->live;
     if (ls != NULL) {
+        dump_root_stats(interp, ls);
         gcstate->live = NULL;
         free(ls->immortal);
         free(ls->queue);
@@ -1812,6 +1888,16 @@ int
 PyObject_GC_IsFinalized(PyObject *obj)
 {
     return _PyObject_IS_GC(obj) && _PyGC_FINALIZED(obj);
+}
+
+void
+_PyGC_LiveGetRootStats(PyInterpreterState *interp, _PyGCRootStats *total,
+                       _PyGCRootStats *last)
+{
+    struct _gc_live_state *ls = interp->gc.live;
+    int counted = ls != NULL && ls->root_pid == current_pid();
+    *total = counted ? ls->root_total : (_PyGCRootStats){0};
+    *last = counted ? ls->root_last : (_PyGCRootStats){0};
 }
 
 /* gc.get_stats(): totals since startup. */

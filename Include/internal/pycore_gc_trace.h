@@ -258,6 +258,36 @@ typedef struct {
     uint16_t kinds;
 } _PyGCDeadObject;
 
+/* The root phase's counters (note 11 section 9).  The conservative scans
+ * count the words they read by class, and the words of them that hit an
+ * object; the stack scan counts the eval-loop words it excludes.  Each time
+ * is in nanoseconds and includes the marking that its roots cause.  The
+ * walk's counters (frames, descriptor cache, fallbacks) are zero until the
+ * walk exists, so that every build reports one schema. */
+#define _PyGC_SCAN_STACK    0  /* C stacks */
+#define _PyGC_SCAN_REGS     1  /* captured register arrays */
+#define _PyGC_SCAN_MEM      2  /* PyMem blocks the scans lead to */
+#define _PyGC_SCAN_SHALLOW  3  /* blocks of objects marked without traversal */
+#define _PyGC_SCAN_DATA     4  /* writable data segments */
+#define _PyGC_SCAN_STRUCTS  5  /* thread and interpreter structs, data stacks */
+#define _PyGC_SCAN_CLASSES  6
+#define _PyGC_SCAN_CLASS_NAMES \
+    {"stack", "regs", "mem", "shallow", "data", "structs"}
+
+#define _PyGC_ROOT_STATS_FIELDS(X) \
+    X(collections) X(threads) X(activations_skipped) X(eval_words_skipped) \
+    X(frames_walked) X(cache_hits) X(cache_misses) X(cache_flushes) \
+    X(fallbacks) X(precise_ns) X(stack_ns) X(data_ns) X(structs_ns) \
+    X(roots_ns)
+
+typedef struct {
+#define _PyGC_ROOT_STATS_FIELD(name) int64_t name;
+    _PyGC_ROOT_STATS_FIELDS(_PyGC_ROOT_STATS_FIELD)
+#undef _PyGC_ROOT_STATS_FIELD
+    int64_t words[_PyGC_SCAN_CLASSES];
+    int64_t hits[_PyGC_SCAN_CLASSES];
+} _PyGCRootStats;
+
 typedef struct {
     _PyGCDeadObject *dead;    // from malloc(); the caller frees it
     Py_ssize_t ndead;
@@ -266,6 +296,7 @@ typedef struct {
     Py_ssize_t live_bytes;    // the blocks of the reachable objects
     Py_ssize_t nmarked;
     Py_ssize_t nshallow;
+    _PyGCRootStats roots;     // this collection's root phase
 } _PyGCMarkResult;
 
 /* Mark everything reachable from the roots of the interpreters that share
@@ -400,6 +431,12 @@ _PyGC_LiveClearEvalStack(void)
 {
     _PyGC_ClearStackBelow(1024);
 }
+
+/* The root phase's counters, summed over the collections of interp, and
+ * those of its last collection.  Export for _testinternalcapi. */
+PyAPI_FUNC(void) _PyGC_LiveGetRootStats(PyInterpreterState *interp,
+                                        _PyGCRootStats *total,
+                                        _PyGCRootStats *last);
 
 /* Totals for gc.get_stats(): the bytes the sweeps freed, the bytes the last
  * collection found live, and the longest pause in seconds. */

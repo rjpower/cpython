@@ -1512,6 +1512,77 @@ class TracingCollectorTests(unittest.TestCase):
             self.assertEqual(lookup(far, True), id(again))
         self.assertEqual(lookup(id(again) + size - 64, True), id(again))
 
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_root_stats(self):
+        # The root phase's counters: one schema for the total and the last
+        # collection, which a collection moves.
+        before = _testinternalcapi.gc_root_stats()
+        self.assertEqual(before["total"].keys(), before["last"].keys())
+        gc.collect()
+        after = _testinternalcapi.gc_root_stats()
+        total, last = after["total"], after["last"]
+        self.assertGreater(total["collections"],
+                           before["total"]["collections"])
+        self.assertEqual(last["collections"], 1)
+        self.assertGreaterEqual(last["threads"], 1)
+        self.assertGreater(last["stack_words"], 0)
+        self.assertGreater(last["data_words"], 0)
+        self.assertGreater(last["roots_ns"], 0)
+        self.assertGreaterEqual(last["roots_ns"],
+                                last["precise_ns"] + last["stack_ns"])
+        for key, value in last.items():
+            self.assertGreaterEqual(total[key], value, key)
+        for cls in ("stack", "regs", "mem", "shallow", "data", "structs"):
+            self.assertLessEqual(last[f"{cls}_hits"], last[f"{cls}_words"])
+        # A diagnostic mark is not counted.
+        _testinternalcapi.gc_live_roots_of(id(after))
+        self.assertEqual(_testinternalcapi.gc_root_stats()["total"], total)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    @support.requires_fork()
+    def test_root_stats_dump(self):
+        # PYTHON_GCROOTSTATS appends one line per finalized interpreter; a
+        # forked child counts only its own collections.
+        import json
+        import os
+        code = textwrap.dedent("""
+            import gc, os, sys
+            import _interpreters
+            for _ in range(20):
+                gc.collect()
+            interp = _interpreters.create()
+            _interpreters.run_string(interp, "import gc; gc.collect()")
+            _interpreters.destroy(interp)
+            pid = os.fork()
+            if pid == 0:
+                gc.collect()
+                sys.exit(0)
+            os.waitpid(pid, 0)
+            print(pid)
+        """)
+        with temp_dir() as tmp:
+            path = os.path.join(tmp, "roots.jsonl")
+            rc, out, err = assert_python_ok("-c", code,
+                                            PYTHON_GCROOTSTATS=path)
+            with open(path) as f:
+                records = [json.loads(line) for line in f]
+        child = int(out.split()[-1])
+        by_pid = {}
+        for rec in records:
+            by_pid.setdefault(rec["pid"], []).append(rec)
+        self.assertEqual(len(by_pid), 2, records)
+        parent = [r for p, rs in by_pid.items() if p != child for r in rs]
+        self.assertEqual(sorted(r["interp"] != 0 for r in parent),
+                         [False, True])
+        main = next(r for r in parent if r["interp"] == 0)
+        sub = next(r for r in parent if r["interp"] != 0)
+        self.assertGreaterEqual(main["collections"], 20)
+        self.assertGreaterEqual(sub["collections"], 1)
+        [forked] = by_pid[child]
+        self.assertEqual(forked["interp"], 0)
+        self.assertGreaterEqual(forked["collections"], 1)
+        self.assertLess(forked["collections"], 20)
+
 
 class PythonFinalizationTests(unittest.TestCase):
     def test_ast_fini(self):

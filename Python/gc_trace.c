@@ -336,8 +336,10 @@ typedef struct {
 
     int conservative;     // the root being scanned is conservative
     int scan_mem;         // follow words into mem heap blocks
+    int scan_class;       // _PyGC_SCAN_* of the words being scanned
+    _PyGCRootStats *stats;  // the live mark's counters, or NULL
     addrset mem_scanned;  // mem blocks queued for scanning
-    uintptr_t *mem_stack; // (start, end) pairs of mem blocks to scan
+    uintptr_t *mem_stack; // (start, end, class) of blocks to scan
     size_t mem_sp;
     size_t mem_cap;
     Py_ssize_t nmemblocks;
@@ -496,11 +498,11 @@ walk_heaps(trace_t *t)
     return 0;
 }
 
-/* Queue [start, end) for a conservative scan. */
+/* Queue [start, end) for a conservative scan, counted as class cls. */
 static void
-queue_range(trace_t *t, uintptr_t start, uintptr_t end)
+queue_range(trace_t *t, uintptr_t start, uintptr_t end, int cls)
 {
-    if (t->mem_sp + 2 > t->mem_cap) {
+    if (t->mem_sp + 3 > t->mem_cap) {
         size_t cap = t->mem_cap ? t->mem_cap * 2 : 256;
         uintptr_t *stack = realloc(t->mem_stack, cap * sizeof(uintptr_t));
         if (stack == NULL) {
@@ -512,6 +514,7 @@ queue_range(trace_t *t, uintptr_t start, uintptr_t end)
     }
     t->mem_stack[t->mem_sp++] = start;
     t->mem_stack[t->mem_sp++] = end;
+    t->mem_stack[t->mem_sp++] = (uintptr_t)cls;
 }
 
 static int
@@ -562,7 +565,7 @@ queue_mem_block(trace_t *t, uintptr_t addr)
         t->oom |= added < 0;
         return;
     }
-    queue_range(t, block, block + r->bsize);
+    queue_range(t, block, block + r->bsize, _PyGC_SCAN_MEM);
     t->nmemblocks++;
 }
 
@@ -575,7 +578,7 @@ queue_object_block(trace_t *t, uintptr_t addr)
         return;
     }
     uintptr_t block = r->start + (addr - r->start) / r->bsize * r->bsize;
-    queue_range(t, block, block + r->bsize);
+    queue_range(t, block, block + r->bsize, _PyGC_SCAN_SHALLOW);
 }
 
 /* Map an address anywhere in an object block to the object, or 0. */
@@ -951,13 +954,16 @@ static void
 scan_queued(trace_t *t)
 {
     int scan_mem = t->scan_mem;
+    int scan_class = t->scan_class;
     t->scan_mem = 1;
     while (t->mem_sp > 0 && !t->oom) {
+        t->scan_class = (int)t->mem_stack[--t->mem_sp];
         uintptr_t end = t->mem_stack[--t->mem_sp];
         uintptr_t start = t->mem_stack[--t->mem_sp];
         scan_range(t, start, end);
     }
     t->scan_mem = scan_mem;
+    t->scan_class = scan_class;
 }
 
 /* --- register capture ---------------------------------------------------- */
@@ -1015,6 +1021,10 @@ scan_stack(trace_t *t, PyThreadState *p, uintptr_t start, uintptr_t top)
     if (p == _PyThreadState_GET() && ts->gc_trace.scan_activations) {
         act = NULL;
     }
+    if (t->stats != NULL) {
+        t->stats->threads++;
+    }
+    t->scan_class = _PyGC_SCAN_STACK;
     // Innermost first, so at increasing addresses
     for (; act != NULL && start < top; act = act->prev) {
         if (act->lo == 0 || act->hi <= start) {
@@ -1022,6 +1032,13 @@ scan_stack(trace_t *t, PyThreadState *p, uintptr_t start, uintptr_t top)
         }
         if (act->lo > start) {
             scan_range(t, start, Py_MIN(act->lo, top));
+        }
+        if (t->stats != NULL) {
+            uintptr_t lo = Py_MAX(act->lo, start);
+            uintptr_t hi = Py_MIN(act->hi, top);
+            t->stats->activations_skipped++;
+            t->stats->eval_words_skipped +=
+                hi > lo ? (int64_t)((hi - lo) / sizeof(uintptr_t)) : 0;
         }
         start = act->hi;
     }
@@ -1037,6 +1054,7 @@ scan_current_thread(trace_t *t, PyThreadState *tstate)
 {
     uintptr_t regs[24] = {0};
     _PyGC_CaptureRegisters(regs);
+    t->scan_class = _PyGC_SCAN_REGS;
     scan_range(t, (uintptr_t)regs, (uintptr_t)(regs + 24));
     uintptr_t top = stack_top(tstate);
     uintptr_t here = (uintptr_t)__builtin_frame_address(0);
@@ -1080,6 +1098,7 @@ scan_other_thread(trace_t *t, PyThreadState *p)
     if (!ts->gc_trace.valid) {
         return;  // never attached
     }
+    t->scan_class = _PyGC_SCAN_REGS;
     scan_range(t, (uintptr_t)ts->gc_trace.regs,
                (uintptr_t)(ts->gc_trace.regs + 24));
     scan_stack(t, p, ts->gc_trace.sp, stack_top(p));
@@ -1558,7 +1577,7 @@ live_mark(trace_t *t, PyObject *op, int conservative)
            it owns. */
         mi_page_t *page = live_page_of(t, (uintptr_t)op);
         uintptr_t block = live_block_of(page, (uintptr_t)op);
-        queue_range(t, block, block + page->block_size);
+        queue_range(t, block, block + page->block_size, _PyGC_SCAN_SHALLOW);
         return;
     }
     op->ob_flags = flags | _Py_GC_MARKED_FLAG;
@@ -1635,12 +1654,20 @@ live_traverse_root(PyObject *op, void *arg)
 static void
 live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop)
 {
+    _PyGCRootStats *stats = t->stats;
+    int cls = t->scan_class;
+    if (stats != NULL && stop > start) {
+        stats->words[cls] += (int64_t)((stop - start) / sizeof(uintptr_t));
+    }
     for (uintptr_t *p = (uintptr_t *)start;
          (uintptr_t)p + sizeof(uintptr_t) <= stop; p++)
     {
         uintptr_t w = *p;
         PyObject *op = live_lookup(t, w, 1);
         if (op != NULL) {
+            if (stats != NULL) {
+                stats->hits[cls]++;
+            }
             live_mark(t, op, 1);
             live_drain(t);
         }
@@ -1914,10 +1941,20 @@ live_mark_thread(trace_t *t, PyThreadState *p, unsigned int roots)
     }
 }
 
+static inline int64_t
+live_now(void)
+{
+    PyTime_t now = 0;
+    (void)PyTime_PerfCounterRaw(&now);
+    return (int64_t)now;
+}
+
 static void
 live_mark_roots(trace_t *t, PyThreadState *tstate)
 {
     unsigned int roots = t->roots;
+    _PyGCRootStats *stats = t->stats;
+    int64_t t0 = live_now();
     // Precise roots
     t->conservative = 0;
     for (int d = 0; d < t->ndomain && !t->oom; d++) {
@@ -1945,6 +1982,7 @@ live_mark_roots(trace_t *t, PyThreadState *tstate)
             live_drain(t);
         }
     }
+    int64_t t1 = live_now();
     // Conservative roots: the C stacks and registers, and the mem blocks
     // they point into, transitively.
     /* Every thread's stack is scanned from where it last recorded its
@@ -1954,6 +1992,7 @@ live_mark_roots(trace_t *t, PyThreadState *tstate)
         t->scan_mem = 1;
         _PyThreadStateImpl *cur = (_PyThreadStateImpl *)tstate;
         if (cur->gc_trace.entry_sp != 0) {
+            t->scan_class = _PyGC_SCAN_REGS;
             scan_range(t, (uintptr_t)cur->gc_trace.entry_regs,
                        (uintptr_t)(cur->gc_trace.entry_regs + 24));
             scan_stack(t, tstate, cur->gc_trace.entry_sp, stack_top(tstate));
@@ -1975,19 +2014,31 @@ live_mark_roots(trace_t *t, PyThreadState *tstate)
         t->scan_mem = 0;
         scan_queued(t);
     }
+    int64_t t2 = live_now();
     // The data segments, then the thread and interpreter structs
     if (roots & _PyGC_TRACE_ROOT_DATA) {
+        t->scan_class = _PyGC_SCAN_DATA;
         scan_data_segments(t);
         scan_queued(t);
     }
+    int64_t t3 = live_now();
     if (roots & _PyGC_TRACE_ROOT_STRUCTS) {
         for (int d = 0; d < t->ndomain && !t->oom; d++) {
             t->interp = t->domain[d];
+            t->scan_class = _PyGC_SCAN_STRUCTS;
             scan_structs(t);
             scan_queued(t);
         }
     }
+    int64_t t4 = live_now();
     t->interp = tstate->interp;
+    if (stats != NULL) {
+        stats->precise_ns += t1 - t0;
+        stats->stack_ns += t2 - t1;
+        stats->data_ns += t3 - t2;
+        stats->structs_ns += t4 - t3;
+        stats->roots_ns += t4 - t0;
+    }
 }
 
 static void
@@ -2043,6 +2094,7 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
         .live = 1,
         .roots = _PyGC_TRACE_ROOT_ALL,
         .debug_offset = _PyMem_DebugEnabled() ? 2 * sizeof(size_t) : 0,
+        .stats = &res->roots,
     };
     int rc = -1;
     if (addrset_init(&t.mem_scanned, 256) < 0) {

@@ -80,8 +80,9 @@ per-loop cost; it is a recorded number, not a gate (section 9).
 **Validity.** A type modification (a new descriptor on the class, a
 changed base) must defeat every guard on the type's shapes. Shapes are
 owned by their type, at most 64 of them, so `type_modified` writes the new
-version into each: `shape->type_version` is the one mutable word in an
-otherwise immutable struct. An attribute guard is therefore the header
+version into each. `shape->type_version` and the slot kinds, which only
+generalise (section 5), are the mutable parts of an otherwise immutable
+struct; changing a kind gives that one shape a fresh version. An attribute guard is therefore the header
 compare plus `shape->type_version == v`: two dependent loads and two
 compares, against today's three loads (type, version, shape byte). This
 is V8's prototype validity cell with one cell per shape. Tier 1 removes
@@ -154,6 +155,15 @@ MRO result:
 5. otherwise the attribute is missing: `__getattr__` if the type has one,
    else `AttributeError`.
 
+A type with `__getattr__` and the default `__getattribute__` calls
+`__getattr__` on an AttributeError from any step, so for such a type a
+plan whose execution can raise AttributeError (ABSENT, PROPERTY,
+DATA_DESCR, DESCR, and DICT whose fallback is ABSENT) is GENERIC; SLOT,
+METHOD and CLASS_VALUE cannot raise it and are unaffected, as in today's
+specialiser. A custom `__getattribute__` makes every plan GENERIC; when it
+is a Python function and there is no `__getattr__`, `value` holds it, for
+`LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN`.
+
 For a shape-mode object, step 2 is decided by the shape: the name is in
 a slot or it is not. In dictionary mode step 2 is a dict lookup at
 execution, so a DICT plan carries the outcome of steps 3 to 5 as its
@@ -163,26 +173,27 @@ fallback.
 
 ```c
 typedef enum {
-    _Py_LOOKUP_SLOT,          // instance storage at byte `offset`; `slot_kind`
+    _Py_LOOKUP_SLOT,          // a shape slot at byte `offset`; `slot_kind`
     _Py_LOOKUP_DICT,          // the instance dict; on a miss, `fallback`
-    _Py_LOOKUP_DATA_DESCR,    // a data descriptor `value`; its tp_descr_get is read at execution
+    _Py_LOOKUP_DATA_DESCR,    // a data descriptor `value`; its tp_descr_get is read at execution;
+                              // a __slots__ member records its byte `offset` and `member`
     _Py_LOOKUP_PROPERTY,      // a property `value`; its getter is read at execution
     _Py_LOOKUP_METHOD,        // a function or method descriptor `value`, not shadowed
     _Py_LOOKUP_DESCR,         // another non-data descriptor `value` (classmethod, staticmethod, ...)
     _Py_LOOKUP_CLASS_VALUE,   // a class attribute without __get__: `value`
     _Py_LOOKUP_ABSENT,        // AttributeError
     _Py_LOOKUP_MODULE,        // the receiver's module dict, then the class (receiver-dependent)
-    _Py_LOOKUP_GENERIC,       // tp_getattro is not generic, __getattr__ exists,
-                              // or descr's type is mutable
+    _Py_LOOKUP_GENERIC,       // tp_getattro is not generic, __getattr__ and a plan
+                              // that can raise AttributeError, or descr's type is mutable
 } _PyLookupKind;
 
 typedef struct {
     uint8_t kind;
     uint8_t fallback;         // DICT: the kind of steps 3-5 (METHOD, DESCR, CLASS_VALUE, ABSENT)
     uint8_t slot_kind;        // SLOT: BOXED, I32, F64 (section 5)
-    uint8_t may_be_empty;     // SLOT: a __slots__ member, which may be unbound
+    uint8_t member;           // DATA_DESCR: a __slots__ member, loaded at `offset`
     uint32_t type_version;    // the guard: shape->type_version when classified
-    uint32_t offset;          // SLOT: byte offset from the object start
+    uint32_t offset;          // SLOT, member: byte offset from the object start
     PyValue value;            // borrowed: the MRO result; valid while the guard holds
 } _PyLookupPlan;
 ```
@@ -211,12 +222,14 @@ plan, and keep their receiver-aware specialisations (`LOAD_ATTR_CLASS`).
 Plans do not depend on the binding mode, so there is no `for_call`
 argument and no binding mode in a cache key. Two executors share the plan:
 
-- **The value form** (`o.m`, `PyObject_GetAttrValue`): SLOT loads (and
-  raises if `may_be_empty` and unbound); DICT looks up, then executes the
+- **The value form** (`o.m`, `PyObject_GetAttrValue`): SLOT loads; DICT
+  looks up, then executes the
   fallback; METHOD and DESCR call `Py_TYPE(value)->tp_descr_get(value, o,
   type)`, so `f = o.m` is a bound method and `staticmethod` and
   `classmethod` behave as now; CLASS_VALUE returns `value`; DATA_DESCR
-  calls the descriptor type's current `tp_descr_get`; PROPERTY calls the
+  for a member loads the slot at `offset` and raises AttributeError if it
+  is unbound, and otherwise calls the descriptor type's current
+  `tp_descr_get`; PROPERTY calls the
   property's current getter (AttributeError if it has none); ABSENT
   raises with the usual suggestion; GENERIC calls `tp_getattro`.
 - **The call-pair form** (`LOAD_ATTR` with the method bit,
@@ -232,12 +245,12 @@ satisfies (section 5), returns one of:
 | Outcome | Meaning | Execution |
 |---|---|---|
 | REPLACE | the name is in slot `offset` and the value's kind fits | write the slot |
-| GENERALISE | the name is in a slot whose kind the value does not fit; `shape_to` the shape with that slot BOXED, or NULL if the edge does not exist yet | prepare, write the slot, then the header |
+| GENERALISE | the name is in a slot whose kind the value does not fit | set the slot's kind to BOXED in the shape, give the shape a fresh version, then write the slot; the header is unchanged |
 | ADD | a new name; `shape_to` the ADD edge, or NULL if it does not exist yet | prepare, write the slot, then the header |
 | REMOVE | DELETE of a slot name; `shape_to` the parent (last slot) or the hole shape, or NULL | prepare, clear the slot, then the header |
 | TO_DICT | a limit (capacity, 30 slots, 64 shapes) forbids a new shape | convert to dictionary mode, then store in the dict |
 | DICT | dictionary mode | store in or delete from the dict |
-| DATA_DESCR | a data descriptor wins | call its type's current `tp_descr_set` |
+| DATA_DESCR | a data descriptor wins | a member: write or clear the slot at `offset`; otherwise call its type's current `tp_descr_set` |
 | GENERIC | a custom `tp_setattro`, or `descr`'s type is mutable | call `tp_setattro` |
 | MISSING | DELETE of a name the object does not have | AttributeError |
 
@@ -254,7 +267,8 @@ slot first and then the shape, with release order.
 `Python/typecache.c` becomes the (shape, name) plan cache. It stays per
 type, because the type owns the shapes and `type_modified` already clears
 the type's cache: an entry is keyed by (shape, interned name) and holds a
-plan. The entry for the root shape holds the MRO result in `value`, which
+plan, valid while its `type_version` equals the shape's, so a shape
+whose kind was generalised drops its own entries and no others. The entry for the root shape holds the MRO result in `value`, which
 is the raw lookup `_PyType_Lookup` and `_PyType_LookupValueAndVersion`
 answer, so the special-method lookups beneath ordinary lookup keep their
 contract. There is no recursion: classification of a non-root shape reads
@@ -309,6 +323,10 @@ walk.
   `_Py_Specialize_LoadAttr` interleaves resolution (`analyze_descriptor`
   and its callers) with writes to the entry; 6c separates them, so the
   specialiser is "take the plan, write the entry, pick the handler".
+  A DICT plan is a cached path, not the generic one: the entry records
+  the dict's keys version and the name's index as a hint (the guard of
+  today's `WITH_HINT` handlers), so an object that copy or pickle put
+  into dictionary mode keeps a one-compare load.
 - Tier 0: the handler in the entry selects the template.
 - Tier 1: the plan gives the guard and the load, or the callee to inline.
 
@@ -339,12 +357,19 @@ Kinds only generalise. The first store of a name picks the kind of its
 value (the ADD edge is keyed by name and kind); a store whose value does
 not satisfy the slot's kind (an int out of int32 range, a NaN, a value of
 another type) takes the GENERALISE outcome to a shape with that slot
-BOXED. The load path does not test the tag when the plan says I32 or F64,
-which is the gain the JIT wants. The generalised shape replaces the old
-one: the old shape is marked deprecated and points to its replacement,
-and an object that still carries it moves to the replacement on its next
-slow-path access (same layout, header rewrite only), so a site does not
-stay polymorphic over the two (V8's map deprecation).
+BOXED in place. The load path does not test the tag when the plan says
+I32 or F64, which is the gain the JIT wants.
+
+Generalisation is in place (coordinator ruling, 2026-10-27). Every slot
+holds a `PyValue`, so a kind change moves no field: the slot's kind in the
+shape becomes BOXED, and the shape takes a fresh `type_version` from the
+global tag counter. That invalidates every feedback entry, plan and
+compiled guard on that shape and nothing else, and every object carrying
+the shape stays valid. There is no second shape, no deprecation and no
+migration. V8 deprecates maps because its representation changes move
+fields; ours do not. An ADD edge still records the kind its first value
+gave, so a later object built along the same edge gets the generalised
+shape.
 
 `__slots__` members are BOXED in 6c. Dict code never sees a kind: a dict
 holds `PyValue`s, so dictionary conversion copies slots as they are.
@@ -380,7 +405,9 @@ entries by reason over the benchmark set and the suite.
 
 **Dictionary mode** is the type's dictionary-mode shape, whose slot 0
 holds the instance dict or NULL (empty, created on demand); the other
-slots are cleared. It is terminal for the object. It is entered by a limit
+slots are cleared. It is terminal for the object in 6c. Its loads and
+stores are still cached, with the dict's keys version and an index hint
+(4.8). It is entered by a limit
 (capacity, 30 slots, 64 shapes), by `__class__` assignment, by `obj.__dict__
 = d`, and by materialising the dict: `obj.__dict__`, `vars(obj)`,
 `PyObject_GenericGetDict`, `_PyObject_GetDictPtr` and the default
@@ -419,11 +446,12 @@ replaces the instance dict; storing NULL empties it.
 descriptors, so `C.a`, `copyreg._slotnames`, pickling's `(dict, slots)`
 state, inheritance of base members and the duplicate-name check are
 unchanged. They are not shape slots: a member has a fixed offset and no
-occupancy fact. Classification sees the member descriptor (a data
-descriptor of an immutable type) and returns SLOT with `may_be_empty`,
-kind BOXED and the member's offset, so a load checks for NULL and raises
-AttributeError when the member is unbound, and a delete clears it without
-a transition. The 30-slot limit does not apply to members. A class with
+occupancy fact, and its kind is BOXED. The handler is still chosen
+through the plan: a member descriptor is a data descriptor of an immutable
+type, so classification returns DATA_DESCR with `member` set and the
+member's offset, and its executor is the slot load with the shape guard,
+which checks for NULL and raises AttributeError when the member is
+unbound; a delete clears it without a transition. The 30-slot limit does not apply to members. A class with
 `__slots__` and `__dict__` has members before `tp_basicsize` and shape
 slots after it. `LOAD_ATTR_SLOT` and `STORE_ATTR_SLOT` stay as the
 handlers for may-be-empty slots, with the shape guard in place of the
@@ -455,8 +483,8 @@ capacity above.
    lets the callee's IR be inlined with its own feedback.
 
 Attribute stores follow the store plan: `STORE_ATTR_SHAPE` (REPLACE),
-`STORE_ATTR_SHAPE_TRANSITION` (ADD or GENERALISE with an existing
-`shape_to`: guard the source shape, write the slot, then the new shape
+`STORE_ATTR_SHAPE_TRANSITION` (ADD with an existing `shape_to`: guard
+the source shape, write the slot, then the new shape
 into the header with release order; no capacity check, section 6), the
 data descriptor, and the generic path for the rest.
 
@@ -498,14 +526,18 @@ The rungs of the step (each with its work doc under boil/design/work/):
    `STORE_ATTR_INSTANCE_VALUE`, `STORE_ATTR_WITH_HINT` and their guards
    deleted. `LOAD_ATTR_SLOT` and `STORE_ATTR_SLOT` stay for `__slots__`
    members, with the shape guard.
-4. Slot kinds as promises (section 5), with GENERALISE and deprecation;
-   the `str +=` decision (note 08's register).
+4. Slot kinds as promises (section 5), with GENERALISE in place; the
+   `str +=` decision (note 08's register).
 5. Measurements and the write-up.
 
 Boundaries. Custom `tp_getattro` and `tp_setattro`, `tp_descr_get` and
 `tp_descr_set`, and native descriptor calls stay `PyObject*` interfaces in
 6c: the executor boxes at them. Note 08's register records this as
 "object slots box", retired by step 6d.
+
+Later decisions, handed off (not 6c work): re-shaping a dictionary-mode
+object whose dict has only string keys back to a shape on a slow-path
+access.
 
 Gates (boil/PROCESS.md): level 0 after every build; level 1 with the
 rung's test files before each commit; level 2 at milestones; level 3 at
@@ -562,10 +594,10 @@ blocking issues; each is resolved by a decision above.
 | 1. Module lookups; `for_call` missing from the cache key | MODULE is a receiver-dependent strategy executed against the receiver's dict; the specialiser takes keys version and index from the receiver; plans are independent of binding, so there is no `for_call` | 4.3, 4.4 |
 | 2. Ordinary loads must bind | the precedence of `PyObject_GenericGetAttr` in five steps; DESCR for other non-data descriptors; DICT carries a class fallback; a value form that binds and a call-pair form that does not | 4.2, 4.4 |
 | 3. Descriptor mutation | a descriptor of a mutable type yields GENERIC; PROPERTY and DATA_DESCR read the descriptor's current getter at execution; handlers guard the getter after loading it; lazy deoptimisation for active compiled code, a note for steps 8 and 9 | 4.3, 4.7 |
-| 4. Materialised `__dict__` | option A: reading `__dict__` enters dictionary mode; slot 0 holds an ordinary dict; no back-pointer; `_PyObject_GetDictPtr` returns slot 0's address | 6 |
+| 4. Materialised `__dict__` | option A: reading `__dict__` enters dictionary mode; slot 0 holds an ordinary dict; no back-pointer; `_PyObject_GetDictPtr` returns slot 0's address; DICT plans stay cached with a keys-version hint; re-shaping is a later decision | 6, 4.8, 9 |
 | 5. Allocation and capacity | capacity is a type constant from `__static_attributes__`; a shape proves its slots exist; byte offsets in plans cover native bases; conversion builds the dict before touching the object | 6, 4.5 |
-| 6. `__slots__` presence and kinds | members stay on `tp_members`, are not shape slots, are BOXED and may be empty; `LOAD_ATTR_SLOT` and `STORE_ATTR_SLOT` stay | 6 |
-| 7. Kind lattice and float encoding | I32 and F64 each below BOXED; slots hold `PyValue`, F64 decoded by `PyValue_Double()` | 5 |
+| 6. `__slots__` presence and kinds | members stay on `tp_members`, are not shape slots, are BOXED and may be empty; a member is a DATA_DESCR plan whose executor is the slot load with the shape guard; `LOAD_ATTR_SLOT` and `STORE_ATTR_SLOT` stay | 4.3, 6 |
+| 7. Kind lattice and float encoding | I32 and F64 each below BOXED; slots hold `PyValue`, F64 decoded by `PyValue_Double()`; generalisation in place with a fresh shape version, no deprecation (coordinator ruling) | 5, 4.5 |
 | 8. Store-plan inputs and allocation | three phases; the resolver takes `op` and `value_kind`; preparation is the one allocating step; failure leaves slots and header unchanged | 4.1, 4.5 |
 | 9. The collector's contract | the type's traverse visits shape names; caches are borrowed, never roots, validated through the live receiver; value roots across allocating calls; instances are swept before their type | 2, 4.7, 6 |
 

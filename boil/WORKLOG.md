@@ -1610,3 +1610,28 @@ positive-base guard is the case in point), and proposes splitting step 10
 so that precise roots (10a) run after 6c and before the generational
 collector and the JITs. A pyperformance timing run against the Phase 1
 baseline starts now as the first wall-clock measurement since Phase 1.
+
+### 2026-10-27 06:40 — plan revised at the 6a review; 6b launched
+
+The user ruled on note 08: 6b is the PyValue C API; step 10 splits into
+10a (precise roots, after 6c, before the generational collector and the
+JITs) and 10b (moving); and from here no step tunes for its own numbers,
+each step is rigorous and correct and leaves on the table performance work
+a later step would discard. Note 09 answers the question the user put
+about user classes: the shape moves into the header word (type through the
+shape, root shape per type, flags and a mutable type_version in the shape),
+every slot holds a PyValue with the slot kind as a promise, and lookup is a
+pure plan from (shape, name) that the generic getattr, the specialiser,
+tier 0 and tier 1 all consume, so ordinary lookup is inspectable data
+rather than the side effect of tp_getattro. Note 06 sections 3.2, 3.3 and
+6 carry the revision; 6c is redefined around note 09.
+
+The first pyperformance run died at import in every benchmark: pyperf's
+psutil came as a prebuilt abi3 wheel, which reads the old header and
+segfaults. psutil rebuilt from source works. 6b therefore also removes the
+stable ABI (.abi3 out of the extension suffixes, Py_LIMITED_API an error)
+so an incompatible wheel fails to import instead of crashing. The timing
+run is in progress. 6b's agent is launched with a hard stop of 2026-10-31
+12:00, rungs: value-typed protocols with tag dispatch (POWER_FLOAT
+removed), vectorcall and METH_FASTCALL over PyValue arrays, the
+compatibility layer and abi3 removal, the eight ports on value-v1, record.

@@ -527,7 +527,7 @@ entry; nothing lives on a prototype branch.
 | 3a | Frames and calls (section 4): no stack pointer, frame header on its own stack, value stack with overlapping argument windows, `RETURN`/`YIELD` writing the caller's dst, state in registers in the tail-call build; dead temporaries are NULL so that unwinding, frame clear and traversal visit every slot without a depth; RESUME folded into frame entry and resume. | `stackpointer`, `_PyFrame_StackPush/Pop`, `return_offset`, `gi_yield_offset`, the argument copy in `CALL_PY_EXACT_ARGS`, `RESUME`, `RESUME_CHECK`, the exception table's depth | suite; ports; call micro-benchmark and per-loop instructions recorded against 2b | 4 days |
 | 3b | The register CFG (note 07): stack-to-register conversion at the end of the CFG optimiser, a pass driver, general load and store folding, `SWAP`, `COPY` and `POP_TOP` by renaming, liveness, register compaction. | `regalloc.c`'s depth pass and peepholes, `COPY`, `SWAP`, `POP_TOP` as instructions where renaming covers them | suite; ports; the loads 2b could not fold gone from the Py_STATS mix; frame slots per code object recorded | 4 days |
 | 4 | Collector, verifier mode. `Python/gc_trace.c`: mark from precise roots (frames, thread and interpreter state, registered static types) and conservative roots (C stacks, data segments) via mimalloc's block lookup; `tp_traverse` audit tool that reports every type with pointer members and no traverse; at every `gc.collect` in a debug build, report any object with a nonzero count that the mark did not reach. Reference counting still owns memory. | nothing yet | zero unreached-but-counted objects across the full suite and the seven ports with the verifier on | 4 days |
-| 5 | Collector, live, in three sub-steps (5a flag build, 5b full suite and ports, 5c default on and refcount code deleted; the header shrink and the weakref side table move to 6a). `--with-gc` configure flag first, default later in the step. Eight-byte header; `Py_INCREF`/`Py_DECREF` to no-ops; sweep by heap visit; finaliser queue; weak reference side table; `tp_dealloc` audit and `OWNS_RESOURCES` flag; `sys.getrefcount` removed; stdlib audit for refcount timing; free-threaded build removed. Sub-gates: 5a flag build runs the smoke ladder; 5b full suite; 5c ports rebuild with patch counts recorded; 5d default on, refcount paths deleted. | `ob_refcnt`, `Py_TAG_REFCNT`, `_PyStackRef` ownership, `IR_BORROW` remnants, the cycle collector (`gc.c`), free lists, the free-threaded build and `gc_free_threading.c`, `Py_STACKREF_DEBUG` | suite; ports; instructions per loop down on richards and go; pyperformance geomean and RSS recorded and compared with Phase 1 | 10 days, in four sub-steps |
+| 5 | Collector, live, in three sub-steps (5a flag build, 5b full suite and ports, 5c default on and refcount code deleted; the header shrink and the weakref side table move to 6a). `--with-gc` configure flag first, default later in the step. Eight-byte header; `Py_INCREF`/`Py_DECREF` to no-ops; sweep by heap visit; finaliser queue; weak reference side table; `tp_dealloc` audit and `OWNS_RESOURCES` flag; `sys.getrefcount` removed; stdlib audit for refcount timing; free-threaded build removed. Sub-gates: 5a flag build runs the smoke ladder; 5b full suite; 5c ports rebuild with patch counts recorded; 5d default on, refcount paths deleted. Done in three: 5a (section 15), 5b (16), 5c (17, which took 5d's default and deletions); sweep by block moved to 6a or later. | reference counting in `ob_refcnt` (the field goes with the header shrink in 6a), `Py_TAG_REFCNT`, `_PyStackRef` ownership, `IR_BORROW` remnants, the cycle collector (`gc.c`), free lists, the free-threaded build and `gc_free_threading.c`, `Py_STACKREF_DEBUG` | suite; ports; instructions per loop down on richards and go; RSS and pauses recorded (pyperformance dropped for 5c, 2026-10-26) | 10 days, in four sub-steps |
 | 6a | `PyValue` in the core: list, tuple, dict, set, instance slots, cells, globals hold `PyValue`; `_PyStackRef` renamed to `PyValue` and the duplicate helpers deleted; boxing only at the `PyObject*` conversion. | `_PyStackRef`, `PyStackRef_*`, `Py_STACKREF_INLINE_VALUES`, the boxing at container stores | suite; nbody, float, spectral_norm instructions per loop; RSS | 5 days |
 | 6b | `PyValue` at the C API boundary and in the ports: item accessors become boxing functions; Cython port patched and the Cython-generated ports regenerated; numpy; patch counts recorded. | `PyList_GET_ITEM` and family as macros | all seven ports green; hand-written patch lines per port recorded | 5 days |
 | 6c | Shapes default on, with I32 and F64 slot kinds live, `LOAD_ATTR_SHAPE_POLY`, method loads through shapes. | `--with-shapes`, shared keys for instances, the `PyDictValues` header | suite; ports; richards, raytrace, deltablue, nbody per loop | 4 days |
@@ -2745,3 +2745,318 @@ warning in eight before.
   nbody's collection is 5a's again. A type with a trivial dealloc (float,
   int, compact str, tuples of those) could be freed by block without
   calling `tp_dealloc` (15.6).
+
+## 17. Step 5c decisions
+
+Step 5c makes the tracing collector the only build and deletes reference
+counting from the implementation. From 5b's record (f58c4aeb94a) to the
+ports commit (ff6750d3e3a), 114 commits changed 357 files, with 3,733
+insertions and 26,211 deletions (`git diff --shortstat`). Three rulings shaped
+the step: no performance stopgaps before 6a; 3b (sweep by block) is
+dropped and recorded as a later item (17.10); pyperformance is not run.
+
+### 17.1 One build
+
+The collector is the only build (834938a4ffa). `--with-gc`,
+`--disable-gil` and `--with-trace-refs` are gone. Every `#ifdef Py_GC` was
+resolved to its Py_GC branch with unifdef, together with Py_GIL_DISABLED,
+Py_TRACE_REFS, Py_REF_DEBUG and Py_STACKREF_DEBUG, and then edited by hand.
+gc.c, gc_free_threading.c, brc.c, uniqueid.c and index_pool.c went with
+their builds, about 10,200 lines. The tests whose only subject was
+reference counting were deleted, one commit per file (86 commits).
+
+The test_profile flake that 5b handed on was an upstream bug. A dead
+cProfile profiler reset the thread's profile function in its dealloc,
+though since 3.12 it installs none. Under the collector it died at a later
+collection, which could fall inside another test's `sys.setprofile()`. The
+dealloc no longer touches the profile function (820e883eca3). Reference
+counting has the same bug when the last reference goes while a profile
+function is set.
+
+### 17.2 Ownership and roots
+
+`_PyStackRef` owns nothing; a stackref is copied, and dropping it is no
+operation (4ce392155b3, c8be90a3087). The ownership names were then
+deleted, and every caller says what happens: `PyStackRef_FromPyObject`,
+`PyStackRef_AsPyObjectBorrow`, an assignment, or nothing. In bytecodes.c a
+close of an input became `DEAD(input)`. The encoding and the name are
+unchanged.
+
+Removing the borrow tag exposed the eval loop's C frame. Its spill area
+held stale copies of dead locals as exact pointers, and the conservative
+scan kept them: a dead local survived its first collection 99 times in 100
+on the debug build. The first installment of step 10's precise roots went
+in (3d91660d780):
+
+- each eval-loop activation records its C frame extent in a
+  `_PyEvalActivation`, and the scan of every thread skips those ranges;
+- `_PyCStackRef` records are linked on the thread state and visited
+  precisely;
+- helpers that handlers call and that may run code are `Py_NO_INLINE`,
+  so their frames are scanned.
+
+This holds only if a handler keeps every live value in a frame slot or a
+`_PyCStackRef` at any call that may collect. The cases generator enforces
+it (a1ddf08f03a). A consumed input keeps its slot until the handler leaves,
+and `root_check.py` fails the build if a C local holds an object across an
+escaping call with nothing to anchor it. Five handlers were fixed.
+
+**The inline path.** A collection that an allocation runs at once, past the
+second threshold and without reaching the eval breaker, still scans every
+C frame, because the handler that allocated may be between a C local and
+its slot.
+
+**Where a box goes.** The box of an inline input goes into the input's
+slot, a local's included, so that the slot keeps the box alive across the
+escaping call that needed it. Later arithmetic on that local then reads a
+heap box rather than the inline value. The placement was chosen to satisfy
+the root rule. 6a, which boxes only at the `PyObject*` conversion, should
+decide whether the box belongs in a `_PyCStackRef` instead.
+test_tagged_values's test of the old placement is deleted (41da9b3e399).
+
+### 17.3 Reference counting deleted
+
+- `Py_INCREF` and `Py_DECREF` do nothing. `ob_refcnt` holds the constant
+  `_Py_GC_REFCNT` in every object, and immortality is a bit in `ob_flags`
+  (6ebcce0c482). `Py_CLEAR`, `Py_SETREF` and `Py_XSETREF` are assignments.
+  The header keeps its size; the shrink is 6a's.
+- `sys.getrefcount`, `sys.gettotalrefcount`, `_Py_RefTotal`,
+  `_Py_NegativeRefcount` and the `Py_REF_DEBUG` feature macro are gone
+  from the code, the stable ABI list and the docs (86c6b699487).
+- The object free lists are gone (1ed9272f452): every site allocates and
+  frees directly, and pycore_freelist.h, the free-list statistics and the
+  `_Py*_DebugMallocStats` functions go with them. The MemoryError reserve
+  stays, since it exists for when allocation fails. That commit says the
+  lists no longer save what they were built to save; that was not
+  measured, and the RSS and pause figures of 17.9 do not separate it.
+- The trashcan is gone; the `Py_TRASHCAN_BEGIN` and `END` macros stay
+  empty for extensions.
+- The generator-emitted ownership instructions are gone: `_MAKE_HEAP_SAFE`
+  and the typed `_POP_TOP_*` uops.
+
+Verification. At `-l 2`, Py_STATS counts 12.75M dispatches on richards and
+37.08M on go, against 12.77M and 37.12M at step 3b, and no removed name
+appears. In dev-default's ceval.o, `BINARY_OP_ADD_INT` is 65 instructions
+with no memory increment or decrement; `LOAD_ATTR_INSTANCE_VALUE` is 37
+with no calls; `CALL_PY_EXACT_ARGS` is 96, whose only memory decrement is
+`tstate->py_recursion_remaining`.
+
+### 17.4 Uniqueness
+
+Without counts nothing can be proven unique, so every branch that
+`_PyObject_IsUniquelyReferenced()` guarded takes its shared path, and the
+function is deleted (7895226c47d). This covers the 52 sites of 15.7:
+
+- iterators build a fresh result tuple for each item (zip, enumerate,
+  pairwise, zip_longest, the dict and OrderedDict item iterators), or
+  update a copy of the previous one (product, combinations,
+  combinations_with_replacement, permutations);
+- `functools.reduce` calls its function through vectorcall;
+- `PyBytes_Concat`, `PyUnicode_Append`, `_PyBytes_ResizeKeepOnError` and
+  the unicode resize always copy;
+- set, long, elementtree, tee, frame, marshal and `__class__` assignment
+  take their general paths;
+- `PyUnstable_Object_IsUniquelyReferenced` and `PyUnstable_SetImmortal`
+  return 0.
+
+Buffers whose owner is known keep their in-place resize: the unicode
+writer's and `PyBytesWriter`'s, which assert that they own the object.
+BytesIO tracks sharing itself.
+
+Cost, in user-mode instructions per item at 200,000 items, best of three.
+Against the build before (C5) nothing changes except `reduce`, which drops
+from 2,351 to 1,879: under the collector the uniqueness test had already
+returned false. Against 5b's reference-counting build the iterators cost
+2.1 to 2.4 times as much, and controls that never reused anything 1.9
+times. The lost reuse is therefore the gap between those, and the rest is
+allocation and collection.
+
+**`s += t` is quadratic.** An append costs 1,204 instructions on 5b's
+reference-counting build and 230,353 here at 200,000 characters (5b's
+collector build is the same). This is not fixed in 5c; it is a design item
+for 6a. The two principled candidates:
+
+- a rope or builder representation for str, as V8's ConsString, so that
+  concatenation does not copy;
+- a compiler-emitted in-place append where the compiler can prove that
+  the local's value is unshared. It generally cannot without escape
+  analysis, which this design does not have.
+
+PyPy documents the same quadratic behaviour.
+
+### 17.5 Referrer first
+
+The sweep deallocates the dead instances of
+`Py_TPFLAGS_DEALLOC_READS_REFERENTS` types first, and now in referrer-first
+order among themselves (e638f8018da). Each is traversed for its references
+to other dead instances of flagged types. If there are any, the order is
+the reverse postorder of a depth-first search over those references,
+started from each object in heap order, so a referrer comes before its
+referent. A cycle is broken where the search enters it. Without such
+references, as for managed buffers, which refer only to their exporter, the
+order is the heap's and no graph is built (23c4d99af63). If the collector
+cannot allocate the graph it sweeps in heap order.
+
+Only direct references count: a flagged object that reaches another
+through an unflagged container is not ordered against it. numpy's
+neighborhood iterator reads its array through an unflagged iterator, which
+is why its patch drops the read (17.7).
+
+pyexpat drops the finalizer that freed a subparser's `XML_Parser` before
+the sweep, and sets the flag. `_testcapi.DeallocReader` can refer to
+another DeallocReader. test_gc deallocates 300 chains of five readers, each
+allocated referent first, which abort under heap order, and cycles of
+readers.
+
+Pauses, the minimum of seven `gc.collect()` calls with the objects already
+unreachable, against the build before 3a:
+
+| unreachable | before | after |
+|---|---|---|
+| 1,000,000 `object()` | 19.1 ms | 18.4 ms |
+| 300,000 memoryviews (300,000 flagged managed buffers) | 66.6 to 71.1 ms | 85.2 to 85.8 ms |
+| 20,000 expat parser and subparser pairs | 32.0 ms | 24.6 ms |
+
+The memoryview cost is the traversal of each managed buffer and the read
+of its exporter's header; peak RSS is 2 MB higher. The first version
+sorted every flagged object and searched the keys for each reference: 116
+ms and 19 MB more. The expat case is faster because the finalizer pass is
+gone. Moving the sweep's loop body into a function that gcc did not inline
+cost nbody 1.9% and float 1.8% per loop; it is now `Py_ALWAYS_INLINE`
+(0c5f6ac3aa8).
+
+### 17.6 The alias fold
+
+The cases generator refused to fold a `STORE_FAST` into an instruction
+whose result was copied from an input (`out = in;`), because the input
+might have been a borrow. A borrow is now a copy, so the rule, the
+`no_fold` annotation, the lexer keyword and `_PyIR_NO_FOLD` are deleted
+(337416c0d6d). FORMAT_SIMPLE, END_SEND, JUMP_IF_FALSE_OR_POP,
+JUMP_IF_TRUE_OR_POP and SET_FUNCTION_ATTRIBUTE now fold their store. The
+LOAD_ATTR family already did: its `_PyIR_NO_FOLD` flag had no consumer.
+
+Before is the tree of 0c5f6ac3aa8 without the fold (richards per loop at
+41da9b3e399, which differs only in the sweep); after is 23c4d99af63.
+
+| | before | after |
+|---|---|---|
+| richards dispatches, `-l 2` | 12,727,326 | 12,727,420 |
+| go dispatches, `-l 2` | 37,083,635 | 37,083,412 |
+| per loop (M), richards / go / nbody / float | 520.4 / 1175.8 / 1426.6 / 1022.1 | 520.0 / 1176.4 / 1427.2 / 1022.1 |
+
+Neither benchmark runs a newly folded form in its loop, so on these the
+fold measures nothing. An f-string assigned to a local saves one
+dispatch.
+
+### 17.7 Ports
+
+All eight ports build and pass `ports check` on dev-default, under the new
+abi_id cpython-3.16-gc-v1, and on dev-debug, under cpython-3.16-gc-debug-v1
+(ff6750d3e3a). `check` runs every test script a second time under
+`-X gcverify=auto`, held-objects scripts included; the driver no longer
+asks whether the interpreter was built `--with-gc`. The cpython recipe
+loses its free-threaded variant.
+
+| port | patch lines | change in 5c |
+|---|---|---|
+| six, attrs, markupsafe, pycparser, pyyaml | 0 | |
+| cffi | 10 | |
+| cython | 44 | |
+| numpy | 539 | the neighborhood iterator's dealloc no longer decrefs its object padding constant: the decref did nothing and read an array the collector may already have swept |
+
+### 17.8 Tests
+
+Full suite, -j8, 564 files, at 0c5f6ac3aa8 (3a and the alias fold
+included):
+
+| build | wall time | result |
+|---|---|---|
+| dev-default | 4 min 49 s | test_sys's remote-exec timeout |
+| dev-debug | 12 min 56 s | the same |
+
+The rung 2 gate (be80af1d808, both builds) found two stale tests besides:
+test_sysconfig required the `Py_GIL_DISABLED` config var, which 834938a4ffa
+removed (247633454ee), and the box placement of 17.2.
+test_capi's PEP 523 recording tests now run with automatic collection off,
+since a collection inside the recorded loop ran finalizers (be80af1d808).
+
+**Retention, the measured limit of conservative roots.**
+`test_release_task_refs` passed 0 of 10 runs on dev-default and on the
+frozen build from before the eval loop's frames stopped being roots, and 9
+of 10 on dev-debug. The only root of the result was a word on a pool
+thread's stack, in a C callee of `PyObject_Vectorcall` that was blocked, so
+a callee-saved register or spill slot of a C frame. The test is skipped on
+every build (dd9b74cda06). test_weakref's `libreftest` doctest failed once
+in 11 runs under -j load and passed 20 of 20 otherwise, the same kind of
+retention. Step 10's precise roots remove both.
+
+### 17.9 Measurements
+
+User-mode instructions per loop of one pyperformance worker, as in 15.6,
+gcc 15, dev-default at 23c4d99af63:
+
+| per loop (M) | step 1 | 5b refcount | 5b collector | 5c milestone 1 | 5c |
+|---|---|---|---|---|---|
+| richards | 577 | 675.1 | 624.7 | 518.1 | 520.0 |
+| go | 1244 | 1623.8 | 1549.4 | 1225.9 | 1176.4 |
+| nbody | 1030 | 1407.1 | 1800.2 | 1454.9 | 1427.2 |
+| float | 780 | 948.5 | 1196.5 | 1051.2 | 1022.1 |
+
+From milestone 1 (a1ddf08f03a) to 5c, measured at the rung 2 commits that
+changed the interpreter (M per loop; richards moved within its noise of about 3M):
+
+| commit | go | nbody | float |
+|---|---|---|---|
+| c8be90a3087, stackrefs use plain operations; the typed `_POP_TOP_*` and `_MAKE_HEAP_SAFE` uops go | -36.6 | -1.8 | -10.4 |
+| 6ebcce0c482, immortality is a header bit; the refcount helpers go | -6.6 | -13.8 | -9.5 |
+| 1ed9272f452, the free lists go | -6.9 | -12.7 | -9.1 |
+| 7895226c47d and later | +0.6 | +0.6 | -0.1 |
+
+Without the free lists, a float or tuple allocation goes straight to
+mimalloc and its free to the sweep. Against the reference-counting build of 5b, go is 27.6% and
+richards 23.0% lower; nbody is 1.4% and float 7.8% higher, the cost of
+allocating and collecting the boxes that inline floats do not yet avoid
+(6a).
+
+Startup, median of five, user-mode instructions:
+
+| | step 1 | 5b refcount | 5b collector | 5c |
+|---|---|---|---|---|
+| `-c pass` | 54.1M | 48.6M | 69.5M | 68.4M |
+| `-S -c pass` | 36.3M | 33.0M | 52.1M | 51.5M |
+
+The difference from the reference-counting build is still the five
+shutdown marks of 16.4 over the startup heap.
+
+Peak RSS in KiB, median of three, and the collections of each workload
+from `gc.get_stats()` at exit:
+
+| workload | 5b refcount | 5b collector | 5c | collections | freed | live after | longest pause |
+|---|---|---|---|---|---|---|---|
+| startup | 12,104 | 14,120 | 14,580 | 0 | | | |
+| import 13 stdlib packages | 26,352 | 38,844 | 39,124 | 1 | 11 MB | 7.4 MB | 10.9 ms |
+| 200,000 small dicts kept | 66,516 | 85,256 | 85,920 | 2 | 11 MB | 24.1 MB | 21.3 ms |
+| 5M float additions to a global | 12,144 | 98,788 | 99,240 | 8 | 302 MB | 1.8 MB | 48.3 ms |
+| 10M two-tuples | 11,920 | 56,916 | 57,628 | 28 | 936 MB | 1.8 MB | 25.7 ms |
+| nbody, 10 loops | 25,536 | 102,700 | 103,000 | 17 | 691 MB | 10.1 MB | 53.9 ms |
+
+5c's memory and pauses are 5b's collector's within 4%: the deletions
+changed what runs, not what is allocated. The float loop allocates a box
+for each sum because it stores to a global.
+
+### 17.10 For 6a and later
+
+- **`s += t`** (17.4): a rope or builder str, or an in-place append that
+  needs escape analysis.
+- **The box placement** (17.2).
+- **The per-object sweep cost.** 3b, sweep by block for types with trivial
+  deallocs (15.7), was dropped from 5c. On nbody the collector is about a
+  quarter of the instructions (`live_walk_block` 10.7%, `collect` 8%, the
+  sweep and the frees the rest).
+- **Retention** (17.8): step 10.
+- **Docs.** InternalDocs/garbage_collector.md still describes the
+  reference-counting collector, and the C API pages document `Py_INCREF`
+  and the reference-count functions as before. InternalDocs/stackrefs.md
+  and the cases generator's interpreter_definition.md are rewritten.
+- **A remnant.** gc_trace.c keeps its `!WITH_MIMALLOC` stubs, though
+  configure now rejects `--without-mimalloc`.

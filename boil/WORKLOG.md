@@ -1494,3 +1494,26 @@ Step 6a launched: PyValue replaces _PyStackRef; list, tuple, dict, set,
 cells, globals and instance slots hold PyValue with canonical inline
 storage; boxing only at the PyObject* conversion; 8-byte header;
 weakrefs in a side table. Budget 5 days.
+
+### 2026-10-26 23:05 — step 6a milestone 1: tuples, lists, cells, dicts, globals and instance values hold PyValue
+
+`_PyStackRef` is `PyValue`, public in Include/pyvalue.h, with the helper
+set reduced to the minimum and no aliases (98f38e1da76). Every PyValue is
+canonical: construction from a PyObject* inlines an int32-fitting int or
+a non-NaN float, so identity is a bit compare and a box lives only in a C
+local rooted by push and pop around the escaping call (a495d4cbdc2). The
+interim cost of canonicalising loads from containers that still held
+pointers was richards +18% and go +26% per loop; the container
+conversions then removed it in turn: tuples and lists (20693f43a82;
+nbody 1427M -> 999M per loop, below step 1's 1030M, the 1.5M list-store
+boxes per loop gone), cells (e94834f371d), dicts, globals and instance
+values (0389837b3fc; richards 590M, go 1353M; attribute-store boxes on
+go 447k -> 0). Full suite green on both builds at each commit, fresh pyc
+caches. Ruled: a box allocation inside an accessor with no error channel
+(PyList_GET_ITEM, PyDict_Next and the like) collects, retries once, then
+aborts naming the accessor, because a silent early end would be a latent
+bug in every port. Found on the way: the allocator never collected on
+failure, only at the threshold (recorded for step 7/10). Remaining:
+__slots__, sets, the hot callers that still box (reserved dict watchers,
+the unspecialised attribute lookup, enumerate over lists), the 8-byte
+header, the weakref side table, ports categorisation, §18.

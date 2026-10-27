@@ -1668,3 +1668,29 @@ goes to the slot END_FOR consumes. Two more release-build retention tests
 joined hack-register row 7. Rung 2 (vectorcall, METH_FASTCALL and METH_O
 over PyValue, clinic regenerated) is under way with the agent's three
 proposals accepted.
+
+### 2026-10-27 10:40 — 6b rung 2 gate (calls on values) clean
+
+Gate run here on a detached checkout of 3832173d942, fresh builds and pyc
+caches: default 556/564 files, 50,729 tests, 3 min 10 s, only test_sys's
+pre-existing remote-exec timeout; debug 8 min 53 s, only test_sys. The
+six and attrs check could not run against the gate interpreter: the
+working tree's ports/sdk.json had already moved to cpython-3.16-value-v1
+for rung 3, so the checker refused the value-v0 builds. The agent's own
+check at the rung end (build --force then check on value-v0) had six and
+attrs PASS with 0 patch lines; the ports are re-checked here at the rung 4
+gate on value-v1. Rung 2 landed in three commits: vectorcall takes and
+returns values (057a2b29eba), the eval loop returns a value (ff137bee8b2,
+PEP 523's frame evaluation function changes signature), and METH_O and
+METH_FASTCALL take and return values with Argument Clinic reading inline
+ints and floats directly and boxing only object-typed parameters
+(3832173d942, 345 files; the limited-API modules became core modules).
+Two defects found and fixed on the way: a return converter with a custom
+conversion bypassed by the value path (posix.makedev), and dict subclasses
+losing BINARY_OP_SUBSCR_DICT because an inherited slot was recognised by
+pointer equality with a METH_COEXIST method that now takes a value. Four
+more tests carry conservative-root skips with probe evidence, including a
+new kind: a one-past-the-end argument pointer in a callee-saved register
+aliasing the next block, which has its own hack-register row (retired by
+10a for core frames, 10b or allocator slack for extensions). Rung 2
+finished about 20 hours ahead of its deadline; rung 3 is under way.

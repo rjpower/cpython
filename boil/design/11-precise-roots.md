@@ -1,6 +1,6 @@
 # 11: Precise roots: an attributed stack walk over precise and opaque frames
 
-Status: design, 2026-10-27, revised after review round 1, for step 10a
+Status: design, 2026-10-27, revised after review rounds 1 and 2, for step 10a
 (note 06 section 6, note 08 sections 3 and 6). It decides what the
 collector reads as roots after 10a, how it tells a root from a stale word
 on a C stack, and what tier 0 and tier 1 must provide; it retires the
@@ -34,8 +34,8 @@ the opaque remainder is 10b's, listed in section 12.
    object the function uses afterwards, and every argument of that call, is
    anchored: in a slot of a pushed interpreter frame, in a pushed
    `_PyValueRoot` span over its initialized part, in a field the mark
-   visits, or borrowed through an edge that cannot change during the call
-   (section 2.1). Object parameters are anchored by the callee, unless every
+   visits, or borrowed through a strong traced edge that cannot change
+   during the call (section 2.1). Object parameters are anchored by the callee, unless every
    caller is precise and checked. root_check enforces it on handlers, its C
    mode on precise C functions, an inline audit on the linked binary, and
    the verifier at run time.
@@ -51,10 +51,11 @@ the opaque remainder is 10b's, listed in section 12.
    collector_live128. The one-past-the-end hazard is retired for precise
    frames, because they are not scanned. It remains for opaque frames until
    10b (section 6.1).
-7. **A frame is a root from push to pop.** The collector visits every
-   frame on each thread's data stack by its header, linked into the frame
-   chain or not; a returning frame stores its result in the caller's slot
-   before it is unlinked (section 4.4). The struct scan goes; data segments
+7. **A frame is a root from push to pop, and while it runs.** The
+   collector visits every frame on each thread's data stack by its header,
+   linked into the frame chain or not, and every frame on the chain,
+   running generator frames included; a returning frame stores its result
+   in the caller's slot before it is unlinked (section 4.4). The struct scan goes; data segments
    stay to 10b.
 8. **Tier 0 keeps every value in a frame slot at every call.** Tier 1
    records one safepoint table per call site and per eval-breaker check,
@@ -62,14 +63,14 @@ the opaque remainder is 10b's, listed in section 12.
    interpreter slot or compiler temporary, is in a frame slot or a listed
    spill slot, never a register (section 5).
 9. **Step 7 inherits an enumerable root set and one barrier rule**: slots of
-   a pushed frame need no barrier, and a heap-owned frame remembers its
-   owner when it leaves the data stack (section 11).
+   a pushed or running frame need no barrier, and a heap-owned frame
+   remembers its owner when it stops running (section 11).
 
 ## 1. What is scanned after 10a
 
 | Root | Before 10a | After 10a |
 |---|---|---|
-| interpreter frames | the frame chain | every frame on each data stack, by header (4.4); generator and frame-object frames through their objects |
+| interpreter frames | the frame chain | every frame on each data stack, by header, and every frame on the chain, running generator frames included (4.4); suspended generator and frame-object frames through their objects |
 | the eval loop's entry frame | skipped | its return slot, by a visitor of its own (4.3) |
 | thread state and interpreter fields, static types, immortal objects, the finaliser queue, `_PyGCRoot` | precise | precise |
 | `_PyValueRoot` | precise, one value | precise, a span over an initialized prefix (6.2) |
@@ -88,7 +89,7 @@ scanned: interior pointers, shallow marking, the NOSCAN heap.
 
 | Class | Members | Check |
 |---|---|---|
-| eval loop | `_PyEval_EvalFrameDefault`; every generated handler in the tail-call build; every function in Python/ceval.c, including the about 25 `Py_NO_INLINE` helpers | root_check on handlers with allocating calls as safepoints (4.2); the C mode on ceval.c; the inline audit; the verifier |
+| eval loop | `_PyEval_EvalFrameDefault`; every generated handler in the tail-call build; every function in Python/ceval.c, the about 25 `Py_NO_INLINE` helpers from rung 2 (opaque and scanned until then) | root_check on handlers with allocating calls as safepoints (4.2); the C mode on ceval.c; the inline audit; the verifier |
 | call layer | Objects/call.c's dispatch (`PyObject_VectorcallValue`, `_PyObject_VectorcallTstate`, `_PyObject_MakeTpCall`, `_PyVectorcall_Call`, `_PyObject_Call`, `PyObject_Call`, `_PyStack_UnpackDict`, `_PyFunction_Vectorcall`, the `*Prepend*` forms, `_Py_CheckFunctionResult*`); `cfunction_vectorcall_*`, `cfunction_call`; `method_vectorcall_*`, `wrapperdescr_call`, `classmethoddescr_call`; `method_vectorcall`; `context_run`; the generator send path (`gen_send_ex2`, `gen_send_ex`, `gen_iternext`, `gen_throw`, the coroutine wrappers); typeobject.c's `slot_*` and `vectorcall_method` family. About 80 | the C mode, run by the build; the inline audit; the verifier |
 | entry paths | the collector (Python/gc_live.c, the mark in Python/gc_trace.c); `gc.collect()`'s clinic wrapper and impl; `_PyGC_Collect`; `_Py_HandlePending`, `_Py_RunGC`; the allocation path from `PyObject_Malloc`, `gc_alloc`, `_PyObject_GC_New`, `_PyObject_GC_NewVar`, `PyType_GenericAlloc` and the boxing retry to `_PyGC_LiveOnThreshold` and `_PyGC_LiveCollectHere`; the detach path (3.3) | the same |
 | JIT | tier 0 blocks, tier 1 code | section 5 |
@@ -101,7 +102,10 @@ provides `__start_py_gc_precise` and `__stop_py_gc_precise`, and a pc in
 that range classifies its frame. The cases generator emits the macro on
 every handler in the tail-call build. A precise function inlined into an
 opaque caller, or a `.cold` part split out of one, is classified opaque,
-which is safe.
+which is safe. The build's stamp rule runs the C mode over every
+`Py_GC_PRECISE` definition in the tree, so a function marked before it
+passes fails the build: promotion is conditional on the check by
+construction.
 
 **The inline audit.** The converse is not safe: an opaque function inlined
 into a precise one puts its locals in a precise frame, unchecked. The
@@ -112,7 +116,11 @@ reads the linked image's DWARF, and for every precise function lists its
 function that the C mode checked through its body; otherwise the build
 fails, naming the pair. The step also fails on a `.cold` part of a precise
 function. It is exact for any optimisation level and LTO, because it reads
-what the compiler did.
+what the compiler did. It fails closed: the gated builds carry `-g`, and a
+precise symbol with no DWARF entry, an image without `.debug_info`, or a
+clone (`.isra`, `.constprop`, `.part`) of a precise function not itself in
+the section fails the step; a test builds one file without `-g` and
+expects the failure.
 
 ### 2.1 root_check's C mode
 
@@ -131,6 +139,12 @@ listed out-parameter forms such as `PyDict_Next`), and object pointers in
 struct locals other than the span type. A rejected function cannot be
 marked precise.
 
+**The eval loop's body.** `_PyEval_EvalFrameDefault` is hand-written entry
+and exit code around the generated region (the cases include). The C mode
+checks the hand-written parts, and treats the generated region, whose
+dispatch uses computed `goto`, as one statement whose safepoints root_check
+has checked handler by handler. No other function may use computed `goto`.
+
 **Analysis.** It builds the control-flow graph, gotos and cleanup labels
 included, and computes liveness of object-typed locals and parameters. At
 each safepoint every live object local, and every argument of the call,
@@ -148,8 +162,8 @@ list. The C mode keeps three:
   extern function with a reviewed comment;
 - *collecting, not reentrant*: allocates but runs no Python. An inline
   collection defers finalizers and weakref callbacks, and the collector
-  changes no edge of a reachable object, so the graph is unchanged across
-  the call: the analyzer's allocating functions;
+  changes no strong edge of a reachable object; it clears weak references
+  to unreachable objects. The analyzer's allocating functions;
 - *reentrant*: every other call, the default.
 
 **Anchors.** A value is anchored by:
@@ -160,12 +174,15 @@ list. The C mode keeps three:
 - *a span*: the checker tracks `_PyThreadState_PushValueRoot` and its pop
   as a scope that must be closed on every path, and anchors a local stored
   into the span's covered prefix while the span is pushed;
-- *a borrow*: a load through an anchored object. Across a non-reentrant
-  call any field qualifies, since nothing changes it. Across a reentrant
-  call only the listed immutable edges do: a tuple's items, a code
-  object's fields, a bound method's `im_func` and `im_self`; `ob_type`,
-  `func_code`, list items and dict values do not. `FT_ATOMIC_LOAD_*` is
-  ordering, not ownership, and adds nothing;
+- *a borrow*: a load through a strong field of an anchored object, one
+  that the type's traverse visits. A weak field (`wr_object`), a borrowed
+  cache and any field the mark does not trace never anchor; their target
+  needs a span of its own. Across a non-reentrant call any strong field
+  qualifies, since no mutator runs and the collector clears only weak
+  fields. Across a reentrant call only the listed immutable strong edges
+  do: a tuple's items, a code object's fields, a bound method's `im_func`
+  and `im_self`; `ob_type`, `func_code`, list items and dict values do
+  not. `FT_ATOMIC_LOAD_*` is ordering, not ownership, and adds nothing;
 - *a parameter*: not anchored by default, because an opaque caller may hold
   an argument only in an argument register (`f(PyLong_FromLong(5))`). A
   precise function that uses an object parameter after a collecting call
@@ -180,7 +197,7 @@ function is promoted: a value held across a call with no span; one stored
 into a span after its pop; a span popped on one path and not on a cleanup
 `goto`; a `PyValue *` from `PyMem_Malloc` treated as slots; an anchor
 overwritten before the use; a list item borrowed across a reentrant call;
-a parameter used after a collecting call without a span; and an opaque
+a weakref's target borrowed across an allocation; a parameter used after a collecting call without a span; and an opaque
 static function that the inline audit finds inlined into a precise one.
 
 ## 3. The walk
@@ -212,7 +229,10 @@ convention clause. It needs neither frame pointers nor a prologue shape.
 A descriptor gives, for a pc, the CFA rule (a register and an offset), the
 return address's location, the save slot of each callee-saved register
 (x86-64: rbx, rbp, r12 to r15; arm64: x19 to x29, d8 to d15), the preserved
-set, and for JIT code its tagged slots. JIT descriptors come from a range
+set, and for JIT code its tagged slots. The return address rule is per
+architecture: on x86-64 it is always a CFA-relative memory slot; on arm64
+it is x30's rule, a save slot or, in a frame that has not saved it, the
+register itself, pending like any callee-saved register. JIT descriptors come from a range
 table that tier 0 and tier 1 register into and that is consulted first. For
 C code the descriptor is decoded from the object's `.eh_frame`:
 `_dl_find_object()` (glibc 2.35 and later; this machine has 2.43) gives the
@@ -235,46 +255,62 @@ mapped at its address never meets an old entry. Decoding reads only the
 unwind data of objects with a pc on a walked stack, which cannot be
 unloaded while their code is on a stack. The JIT unregisters a range
 before it frees or reuses the code, at the point where its executor
-lifetime already requires that no stack returns into it.
+lifetime already requires that no stack returns into it. The descriptor
+cache is per interpreter, read and flushed by its collector under its own
+GIL; the JIT range table is process-wide, updated under a mutex and read
+under it by the root phase.
 
 ### 3.3 Start contexts
 
 A start context is one frame stopped at a call: the pc, the sp, and the
 callee-saved registers' values at that point. `_PyGC_CaptureCaller(ctx)`
-produces one. It is an assembly function (x86-64 and arm64, in
-Python/gc_capture.S), so no prologue runs before it reads anything: it
-stores the callee-saved registers as at entry, which are its caller's by
-the ABI, its return address, and its entry sp plus the return address
-size. The context describes the caller at the call instruction.
+produces one. It is an assembly function (Python/gc_capture.S), so no
+prologue runs before it reads anything, and it stores the callee-saved
+registers as at entry, which are its caller's by the ABI. On x86-64 the
+pc is `[rsp]` and the caller's sp is `rsp + 8`; on arm64 the pc is x30 and
+the sp is unchanged, since `BL` pushes nothing. The context describes the
+caller at the call instruction.
 
 - **The collecting thread.** The collection's entry calls it and stays on
   the stack for the whole collection, so the context and the frames
   outward from it are valid throughout.
-- **A detached thread.** `PyEval_SaveThread`, `PyEval_ReleaseThread` and
-  `detach_thread` are in section `py_gc_detach`. On detach the thread calls
-  `_PyGC_CaptureCaller` and at once unwinds through the frames in that
-  section, while their save slots are live, to the first frame outside it:
-  the caller that blocks while detached. It stores that frame's pc, sp and
-  recovered register values in the thread state. That frame and those
-  outward do not return while the thread is detached, as today's capture
-  assumes; values the caller holds across the region are in its frame or
-  in those registers. The unwind uses descriptors of the core image only.
-  It replaces today's capture, whose comment ("before this function can
-  change a callee-saved register") the compiler does not guarantee.
+- **A detached thread.** No opaque frame is known to persist: a wrapper
+  such as `_PyThreadState_Swap()`, or an extension helper that calls
+  `PyEval_SaveThread()`, may return while the thread is still detached.
+  What persists is the innermost precise frame P, because precise code
+  runs attached: the eval loop, the call layer or an entry path below
+  which the detaching C code was called. On detach, in every detach entry
+  (`PyEval_SaveThread`, `PyEval_ReleaseThread`, the swap paths and
+  `detach_thread`), the thread captures its context and at once unwinds,
+  while every save slot is live, to P. It stores P's pc and sp, the
+  register values pending at P, and the capture's sp and registers. A
+  collection then scans `[capture sp, P's sp)` and the captured registers
+  conservatively, as one opaque region whose PyMem blocks are followed,
+  which is today's scan for that part, and walks from P outward. If the
+  unwind finds no P, or fails, the whole stack is that region. It replaces
+  today's capture, whose comment ("before this function can change a
+  callee-saved register") the compiler does not guarantee.
 
 ### 3.4 Validation and fallback
 
 Each step checks that the CFA is above the frame's sp, strictly above the
 previous CFA, and at most the thread's stack base (`c_stack_top`), and that
 the return address and save slots lie within the frame's extent. The walk
+reads only `[sp, stack base]` of a thread that is alive; a recorded stack
+of a thread that has exited is scanned conservatively, clipped to the
+readable mappings, as today. The walk
 ends at a frame whose return address rule is undefined (`_start`,
 `start_thread`) or at the stack base. A failed check or a pc with no
 descriptor stops the walk: it scans the rest of the stack from that frame's
-sp, and every pending location, conservatively, and counts the event. Debug
+sp, and every pending location, conservatively with PyMem blocks
+followed, as an extension frame is, and counts the event. Debug
 builds print the pc and its object once; the suite must record zero.
 Conservative scanning is the failure mode of the one walk, not a second
-path. Platforms other than ELF on x86-64 and arm64 scan conservatively in
-full, as today.
+path. Platforms other than ELF on x86-64 and arm64, and arm64 until its walk
+tests pass, scan conservatively in full, as today: the activation ranges'
+exclusion and the clears are deleted for them too, so they keep the
+pre-10a retention without its mitigations, and correctness, which never
+depended on the mitigations.
 
 **Cost.** A warm step is a hash lookup, a few loads and range tests: about
 a microsecond per hundred frames. On collector_live16 today's whole
@@ -363,9 +399,12 @@ slot past the arguments to NULL before anything that may collect, and the
 push stores a NULL executable that the visitor skips until it is set; no
 call between push and initialize may collect, which root_check and the C
 mode check as an adjacency rule. Generator and frame-object frames are
-visited through their objects, and the entry frame as in 4.3. A frame is
-therefore a root from push to pop, linked or not, and the chain keeps only
-its other jobs (tracebacks, `sys._getframe`).
+visited through their objects, and the entry frame as in 4.3. A running
+generator or coroutine frame lives in its object's `owned_slots`, not on
+the data stack; the collector also walks each thread's chain and visits
+every frame on it, so a running heap frame is a root from resume to
+suspension or clearing. A frame is therefore a root from push to pop and
+while it runs, linked or not.
 
 **Return order.** `_RETURN_VALUE`, `_RETURN_GENERATOR`, `_YIELD_VALUE` and
 the generator return path store the transferred value in the caller's
@@ -458,16 +497,19 @@ core C for PyMem arrays of `PyObject *` or `PyValue`, and the review:
 | `_PyObjectArray_FromValues()` and its callers | boxes of inline arguments | `[0, i)` as boxes are made |
 | `PyEval_EvalCodeEx()` | `newargs` | `[0, n)` as copied |
 | Objects/call.c `values_of()`, `_PyStack_UnpackDict()`, the two `*Prepend*` buffers | argument copies | `[0, n)` as copied |
-| `partial_vectorcall()` | `stack`, and its realloc | the filled prefix, rebased after realloc |
+| `partial_vectorcall()` | `stack`, and its realloc | two spans, the keyword suffix and the positional prefix, each over what is written, rebased after realloc |
 | `mro_implementation_unlocked()` | `to_merge` | `[0, n)` |
+| `_Py_VaBuildStack()` and `do_mkstack()` (Python/modsupport.c), with their callers in Objects/call.c (`PyObject_CallFunction`, `PyObject_CallMethod` and the `_SizeT` forms) | the built argument stack | `[0, i)` in `do_mkstack()` as values are built; the caller's span over `[0, n)` through the call and cleanup |
 | `PyUnicodeWriter`, `PyBytesWriter` | their buffer objects | `_PyGCRoot`, creation to finish or discard |
 
 Heap-owned arrays (a list's `ob_item`, the unpickler's `data`) are visited
-through their objects and are not on the list. The grep cannot see arrays
-inside structs or with computed sizes, so reading does not close the
-inventory: the verifier's PyMem mode (8.3) does, and decision 5 holds only
-once that mode reports no site over the debug suite and the stress runs.
-Until then the transitive scan stays on for core frames too.
+through their objects and are not on the list. The first grep missed
+`do_mkstack()`, whose size is written `n * sizeof(stack[0])`, so rung 3
+classifies every PyMem allocation in core C by its result's type (127
+calls in Objects/ and Python/ alone) in its work doc, and the PyMem mode
+(8.3) with injection at each listed site is the dynamic check. Decision 5
+holds only once both are clean; until then the transitive scan stays on
+for core frames too.
 
 **Span rules.** `_PyValueRoot` becomes a span: `PyValue *base`,
 `Py_ssize_t n`, an inline `value`, `next`. One value is a span of one over
@@ -567,19 +609,21 @@ side table records each with the word's address, its owner (function,
 class) and the collection number. Two modes use Q, one for retention and
 one for detection.
 
-- **`PYTHON_GCVERIFY=retain`.** B decides: Q is kept intact, header and
-  referents untouched, its weakrefs not cleared and its finalizers not run,
-  so the program behaves exactly as under the conservative collector. A
-  later collection that reaches a Q object from A's precise roots reports
-  a missed root and aborts: the program can only have obtained it from a
-  skipped word. Reach through conservative words only is counted, not
-  reported, because a stale word of a popped precise frame can resurface
-  in a new opaque frame. One that finds it outside B frees it as stale. This
-  detects every missed root that the program stores into a rooted place;
-  it misses one that is read and dropped.
-- **`PYTHON_GCVERIFY=kill`.** A decides: Q dies with the precise collector's
-  full semantics (weakrefs cleared, callbacks and finalizers run, destroy
-  hooks run). Its object blocks and the PyMem blocks its hooks free are
+- **`PYTHON_GCVERIFY=retain`**, a diagnostic. B decides: Q is kept
+  intact, header and referents untouched, its weakrefs not cleared and its
+  finalizers not run, so the program behaves as under the conservative
+  collector. A later collection that reaches a Q object from A's precise
+  roots reports a candidate with its record; it is not proof, since a
+  live weakref, `gc.get_objects()` or `gc.get_referrers()` can hand the
+  program a Q object legitimately, and a stale word of a popped precise
+  frame can resurface in a new opaque frame. Retain mode attributes
+  retention and gives provenance when kill mode traps. It is not a gate,
+  and test_gc's reclamation assertions skip under it.
+- **`PYTHON_GCVERIFY=kill`**, the gate. A decides: Q dies with the precise
+  collector's full semantics (weakrefs cleared, callbacks and finalizers
+  run, destroy hooks run). Quarantine starts after the sweep: an object a
+  finalizer resurrects lives on as normal, and only blocks actually freed
+  are held. Its object blocks and the PyMem blocks its hooks free are
   then held back from the allocator for 16 collections, filled with the
   debug build's freed pattern and given a trap type whose slots and
   attribute access abort with the side-table record; `Py_TYPE` in debug
@@ -594,11 +638,16 @@ one for detection.
 precise frame across a collection on purpose and then uses it by a field
 read (`ob_size`), a cached interior pointer (`ob_item`), a slot call
 (`tp_repr`), finalization (a finalizer that touches it), and a store into a
-list. Retain mode must report the store; kill mode in the debug build the
-slot call, the finalizer and the store; kill mode under ASan all five.
+list. Kill mode in the debug build must trap the slot call, the finalizer
+and the store; kill mode under ASan all five; retain mode must report the
+store as a candidate. A sixth case is the counterexample: an object kept
+by a stale word and handed back by a live weakref, which kill mode
+handles as dead (the weakref returns None) and retain mode classifies as
+weakref provenance.
 
-**Gate.** The dev-debug suite must finish with zero missed roots in retain
-mode, and the 8.2 list and the stress set with zero in kill mode, under
+**Gate.** The dev-debug suite in kill mode must finish with zero traps,
+reclamation assertions included, since kill mode has the post-10a
+collector's semantics; and the 8.2 list and the stress set likewise under
 ASan if that build works at rung 0 (13.6). Stale counts per test file are
 recorded.
 
@@ -613,7 +662,8 @@ test_sort, test_functools and test_context at N = 1,000 at each rung end,
 and the full suite at N = 100,000 once. *Injection*:
 `_testinternalcapi.gc_collect_at(site)` arms a collection at a named site
 (push before initialize, inside `initialize_locals`, return before the
-store, `take_ownership`, span rebase, detach capture), because allocation
+store, `take_ownership`, span rebase, inside `do_mkstack()`, between a
+weakref load and its use, detach capture), because allocation
 intervals do not ensure those transitions are hit.
 
 ### 8.4 New tests
@@ -627,13 +677,21 @@ intervals do not ensure those transitions are hit.
   frame object (`sys._getframe()` taken), the result used afterwards.
 - test_gc, borrowing: a C function borrows a list's item, calls back into
   Python, which clears the list and collects, and then uses the item; it
-  must be anchored, and kill mode traps it otherwise.
+  must be anchored, and kill mode traps it otherwise. The same with a
+  weakref's target across an injected allocation.
+- Spans: a `PyObject *` span holding a box of a non-NaN float, which must
+  survive as the same pointer; NULL entries in a prefix; a rebase; an
+  allocation failure mid-fill; `PyObject_CallFunction()` with six freshly
+  built arguments and a collection injected in `do_mkstack()`, and its
+  failure cleanup; `functools.partial` with merged keywords.
 - `_testinternalcapi` walk tests on compiled stacks, not synthetic ones: a
   chain of C functions, each built to keep a different callee-saved
   register live across a callback, with opaque and precise frames
   alternating; a detached thread blocked in `Py_BEGIN_ALLOW_THREADS` with
-  an object held only in a callee-saved register; the walk must find each
-  opaque one and skip each precise one.
+  an object held only in a callee-saved register; an extension helper
+  that detaches and returns before blocking; the swap path in a `-O0`
+  build; a kept thread state of an exited thread. The walk must find each
+  opaque value and skip each precise frame.
 - Loader: a small shared library built twice with different frame layouts;
   one copy is loaded, a callback through it collects, it is unloaded, the
   other is loaded at the same path, and a callback collects again; the
@@ -654,10 +712,13 @@ Recorded, not gated, as every step records (note 10):
   first-collection decode time after startup and after importing the
   stdlib's shared modules; a 1,000-deep recursion through C callbacks; 100
   detached threads; the pause distribution (median, p99, max) on the
-  collector benchmark; the detach capture's cost on a pipe-read loop.
+  collector benchmark; the detach capture's cost on a pipe-read loop;
+  repeated `PyObject_Vectorcall()` from C with small and heap argument
+  arrays, for the public entries' spans.
 - **The internal set** as label `step10a`: the collector benchmark (time
   and instr), the memory group's RSS, kernels instr with perf attribution
-  as in note 06 section 19.10.
+  as in note 06 section 19.10. The baseline is the merged predecessor of
+  10a's first rung, which replaces ac59664de47 if 6c lands first.
 
 Expected direction, without a target: the root phase down slightly (eval
 frames and the 16 KB clears go, data segments stay); fewer instructions
@@ -675,8 +736,8 @@ reviewed work doc (`boil/design/work/10a-<n>.md`) and ends at gate level 3
 | Rung | Days | Work | Ladder (smallest first) |
 |---|---|---|---|
 | 0 | 0.5 | Baseline counters (9); c_roots committed as `boil/tools/measure/c_roots.py`; measurements at ac59664de47; the ASan build tried | `python -c pass`; counters on collector_live16 |
-| 1 | 2 | The walk (3.1 to 3.4), the capture stub and detach unwind, classification, the loader generation; `Py_GC_PRECISE` on ceval.c, the handlers and the entry paths; allocations as safepoints; the data-stack visit, the entry visitor and the return order (4.3, 4.4); the inline audit; retain mode, injection and stress; activations, clears, `_PyGC_CLEAR_ARRAY` and the inline full scan deleted | the inline audit on ceval.c; the compiled-stack walk tests; the injection tests; the probe; test_gc; test_weakref, test_generators, test_coroutines, test_asyncgen, test_capi, test_ctypes; the loader test; both suites; stress on the rung's set |
-| 2 | 1.5 | The C mode (2.1) with its negative tests first; then the call layer and helpers precise, with spans and `Py_GC_ARGS_ANCHORED`; the 8.2 skips removed | the negative tests; the C mode on call.c alone; the borrowing test; the probe's call-layer cases; test_call, test_capi, test_descr, test_context, test_asyncgen, test_weakref, multiprocessing; both suites; 8.2 at 20/20 |
+| 1 | 2.5 | The C mode (2.1) and its negative tests, first; the walk (3.1 to 3.4), the capture stub and detach unwind, classification, the loader generation; the data-stack and chain visits, the entry visitor and the return order (4.3, 4.4); the inline audit; kill and retain modes, injection and stress; then `Py_GC_PRECISE` on the eval loop, the handlers and the entry paths, each passing the C mode; allocations as safepoints; activations, clears, `_PyGC_CLEAR_ARRAY` and the inline full scan deleted | the negative tests; the C mode on the eval loop's hand-written parts; the inline audit; the compiled-stack walk tests; the injection tests; the probe; test_gc; test_weakref, test_generators, test_coroutines, test_asyncgen, test_capi, test_ctypes; the loader test; both suites; stress on the rung's set |
+| 2 | 1 | The ceval.c helpers and the call layer precise, with spans and `Py_GC_ARGS_ANCHORED`; the 8.2 skips removed | the C mode on call.c alone; the borrowing test; the probe's call-layer cases; test_call, test_capi, test_descr, test_context, test_asyncgen, test_weakref, multiprocessing; both suites; 8.2 at 20/20 |
 | 3 | 1 | PyMem: the spans of 6.2, `_PyList_AsTupleAndClear` reordered, the writers' `_PyGCRoot`, the PyMem mode; kill mode and its demonstration; transitive scan off for core frames once the mode is clean; `-ftrivial-auto-var-init=zero` removed; the struct scan deleted | test_sort, test_functools, test_descr's mro tests, test_json, test_unicode; the demonstration; both suites; the verifier gate; 8.2 at 20/20 without the flag |
 | 4 | 0.5 | Gate level 4: `step10a` recorded, note 06 section 20 with measurements and attribution, the hack register updated | `boil/bench/run.py --set all --metric instr,rss` and the memory group's time on an idle machine |
 
@@ -686,10 +747,9 @@ or inline-audit failure, or the probe below 100/100. Retention counts and
 measurements do not.
 
 **Scope cut**, in this order, if a rung passes its deadline by more than
-half a day: the typeobject.c `slot_*` functions stay opaque, with their
+half a day: the arm64 walk stays disabled, conservative in full; the typeobject.c `slot_*` functions stay opaque, with their
 tests' skips naming the owner; the transitive PyMem scan stays on for core
-frames (decision 5 moves to 10b); the struct scan stays to 10b; arm64
-descriptors are compiled but not run. Never cut: the walk, the eval loop,
+frames (decision 5 moves to 10b); the struct scan stays to 10b. Never cut: the walk, the eval loop,
 the entry paths and the dispatch core precise, the transitions of 4.4, the
 verifier and the probe.
 
@@ -706,11 +766,14 @@ verifier and the probe.
 - **Where the remembered set hooks.** The write barrier goes on every store
   into a heap object: the container store macros, instance slots, cells,
   globals dicts. A frame's slots are written with no barrier while it is on
-  the data stack, which is a root. A frame whose storage is a heap object
-  adds its owner to the remembered set when it leaves the data stack: a
-  generator or coroutine at yield and at return (`owned_slots`), and a
-  frame object at `take_ownership()`: one barrier per suspension, not per
-  slot store, which tier 0 and tier 1 inherit.
+  the data stack or running on the chain, both visited in full by every
+  minor collection. A frame whose storage is a heap object adds its owner
+  to the remembered set when it stops running: a generator or coroutine at
+  yield and at return (`owned_slots`), and a frame object at
+  `take_ownership()`: one barrier per suspension, not per slot store,
+  which tier 0 and tier 1 inherit. Step 7's test: a minor collection
+  inside a resumed old generator, and an old coroutine, after it stores a
+  young object and before its next yield.
 - **The verifier pattern.** Step 7's barrier verifier (a full mark after
   each minor collection) uses retain mode's form on the difference.
 - **The header.** 10a changes no header bit; step 7 decides side bitmaps
@@ -768,6 +831,16 @@ subset, the functions whose frames held the only root of a live object;
    otherwise keep the detach frames on the stack until reattach (a
    capture in the caller's macro, `Py_BEGIN_ALLOW_THREADS`), a larger
    change to the public macros.
+8. **Tier 1's frames under inspection.** `f_locals`, `sys._getframe()` and
+   reentrant callbacks need virtual frames and stale physical slots
+   materialized. Recommendation: deoptimise on inspection from the same
+   safepoint entry, as V8 does; 10a fixes only that the map is complete,
+   and tier 1's design owns materialization.
+9. **Adoption.** Note 06 section 6 and note 08's retirement rows are
+   updated when this note is adopted, and each partial landing records in
+   the hack register which mechanisms it actually retired.
+   Recommendation: the coordinator does both at adoption, the rung reports
+   the second.
 
 ## 14. Sources
 
@@ -828,3 +901,43 @@ Non-blocking: the scope against notes 06 and 08 is stated at the top; tier
 frame has its own visitor (4.3); cold and worst-case costs are recorded
 (9). The reviewer's questions are answered by open question 1, the inline
 audit (2), the landing rule (10) and injection (8.3).
+
+Round 2 (the same file, overwritten), verdict revise. Each blocking issue
+was taken as a change; the step brief allows two rounds, so there is no third, and
+what remains is in section 13.
+
+1. *Non-reentrant calls do not preserve weak edges.* Borrows need a strong
+   traced field; weak fields and caches need a span; a negative test and
+   an injected collection between a weakref load and its use (2.1, 8.3,
+   8.4).
+2. *A detached snapshot can describe a returned frame.* The detach unwind
+   now runs to the innermost precise frame, which runs attached and so
+   persists; everything below it is one conservative region with PyMem
+   followed, as today; exited threads are clipped to readable mappings;
+   tests for a returning helper, the swap path at `-O0` and an exited
+   thread (3.3, 3.4, 8.4).
+3. *The PyMem inventory misses `do_mkstack()`.* Added with its callers;
+   `partial_vectorcall()` gets two spans; rung 3 classifies every PyMem
+   allocation by type; injection and failure tests (6.2, 8.4).
+4. *Retain mode reports legitimate weakref access.* Retain mode is a
+   diagnostic that reports candidates; kill mode, with the post-10a
+   semantics, is the gate; quarantine starts after the sweep and
+   resurrection; the weakref counterexample is a demonstration case (8.3).
+5. *Rung 1 removes protection before its proof.* The C mode and its
+   negative tests come first in rung 1, the stamp rule makes every marked
+   function pass it, the helpers move to rung 2 and stay scanned until
+   then, and the eval loop's generated region is defined for the C mode
+   (2, 2.1, 10).
+6. *Running heap frames.* The chain is visited too, so a running generator
+   or coroutine frame is a root from resume to suspension, and step 7's
+   once-per-suspension barrier holds; step 7's test named (4.4, 11).
+7. *arm64 capture.* Per-architecture capture and return-address rules; the
+   arm64 walk is disabled until its tests pass, which is the first scope
+   cut (3.2, 3.3, 3.4, 10).
+
+Non-blocking: the inline audit fails closed (2); raw-box, NULL, rebase and
+failure span tests (8.4); a C API measurement and the baseline rule (9);
+adoption (13.9). Questions: the cache is per interpreter and the JIT range
+table process-wide under a mutex (3.2); every fallback follows PyMem
+(3.4); tier 1 materialization is 13.8; unsupported platforms keep full
+conservative scanning without the mitigations (3.4).

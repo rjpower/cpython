@@ -1057,7 +1057,7 @@ static PyGetSetDef HASH_getsets[] = {
 static PyObject *
 _hashlib_HASH_repr(PyObject *self)
 {
-    PyObject *name = _hashlib_HASH_get_name(self, NULL);
+    PyObject *name = PyValue_Object(_hashlib_HASH_get_name(self, NULL));
     if (name == NULL) {
         return NULL;
     }

@@ -1,7 +1,8 @@
 # 13: Callbacks and finalizers run on the interpreter that owns them
 
-Status: design, 2026-10-28, revised after review round 1 (revise; Review
-below), for step 7a (boil/PROCESS.md section 0, moved ahead of step 7
+Status: design, 2026-10-28, revised after review rounds 1 and 2 (both
+revise; Review below; two rounds are the cap and the coordinator rules
+on what round 2's revisions leave open), for step 7a (boil/PROCESS.md section 0, moved ahead of step 7
 on 2026-10-28). It retires finding B of note 08 (the hack register's
 shared-heap row) and note 11 question 18, and closes the collector holes
 found while reading for it: a shared-heap interpreter with its own GIL
@@ -39,8 +40,15 @@ tables (section 3.4). Coordinator rulings of 2026-10-28 are marked
 7. **A domain shares one GIL.** `use_main_obmalloc` with `OWN_GIL` is
    rejected at configuration with `InterpreterError`, an intentional
    compatibility break (section 7.2, ruled).
-8. **Destruction discovery passes the owner explicitly**: watcher masks
-   and code-extra free functions are the owner's (section 3.4, ruled).
+8. **Destruction metadata is the owner's**: discovery reads the owner's
+   watcher masks and code-extra table, and registering a watcher or
+   setting a code extra on an object another interpreter owns is refused
+   (section 3.4, ruled for discovery; the refusal is round 2's).
+9. **Order holds across owners**: a call waits for the earlier calls of
+   other owners in its batch that reach its object, without any thread
+   waiting for another interpreter (section 3.5).
+10. **A collection pins its domain from the mark to the splice**, so no
+    interpreter it names is freed under it (section 3.2).
 
 ## 1. The problem
 
@@ -157,10 +165,10 @@ sub-processes only once the interpreter has no threads left.
   thread drops the last reference, which is less defined than this. The
   rule is recorded in `Doc/library/gc.rst`.
 - *Cross-interpreter order.* Finalizers run referrer first within one
-  collection (note 06 16.2). The order now holds within each owner's
-  queue; between two owners it is not defined. A referrer and referent
-  pair that crosses interpreters is possible only in a shared heap, and
-  PEP 442 promises no order for cycles anyway.
+  collection (note 06 16.2), and a referrer and referent pair can cross
+  interpreters in a shared heap: a `BufferedWriter` made on a
+  subinterpreter over a `FileIO` made on the main interpreter. Section
+  3.5 keeps the order across owners.
 - *Static and non-heap immortal objects.* They are not in the object
   heaps, so the walk never lists them dead and no call is about one. A
   weak reference object is always a heap object. The lookup asserts a
@@ -175,7 +183,9 @@ sub-processes only once the interpreter has no threads left.
 
 Each interpreter's `struct _gc_live_state` holds a FIFO list of nodes,
 `live_call {next, op, callback, kind}`, with head and tail pointers,
-replacing today's array. A node comes from the C library's `malloc`
+replacing today's array, and a list of waiting nodes (3.5), whose
+nodes carry a count of the calls they wait for and the list of nodes
+that wait for them. A node comes from the C library's `malloc`
 when the call is queued, where `queue_push()` grows the array today, and
 is freed after the call runs. The owner is implied by the queue that
 holds the node. The state also gains `phase` (initialising, open,
@@ -207,10 +217,20 @@ freed. What was batched is still routed, by splicing, so every queued
 call reaches its owner and no call runs on another interpreter.
 
 The domain is the mark's: `_PyGC_TraceLiveMark()` copies the domain's
-interpreters and sub-processes into the mark result. No interpreter of
-the domain can be deleted between the mark and the splice: deletion of a
-shared-heap interpreter needs the domain's one GIL (section 7.2), which
-the collecting thread holds, and its unlink takes the head lock (5.3).
+interpreters and sub-processes into the mark result. **The pin.** The
+GIL does not keep them alive: `PyInterpreterState_Delete()` detaches its
+thread, releasing the GIL, before it unlinks and frees the interpreter
+(pystate.c), so it can run while another thread's collection is between
+its mark and its splice. `live_domain()` therefore increments a runtime
+count of pinned collections under the head lock, and `collect()`
+decrements it under the head lock after `route_calls()`. The unlink in
+`PyInterpreterState_Delete()` (and the fork child's disposal, 5.5,
+where no collection can run) takes the head lock and, while the count is
+non-zero, releases it and waits on a `PyEvent` that the decrement sets.
+The deleting thread holds neither the GIL nor the head lock while it
+waits, and the collection it waits for needs neither from it, so the
+wait ends. Every interpreter the batch can name, and its live state,
+therefore exists until the splice is done.
 
 ### 3.3 Memory and bounds
 
@@ -246,21 +266,109 @@ interpreter (`_PyDict_SendEvent()`, `free_code_extras()`).
 The masks become per domain entry, set from each interpreter's tables;
 `live_walk_heaps()` sets the current entry as it walks each
 interpreter's heaps and abandoned segments; `live_destroy_hook_of()`
-takes the owner and calls `_PyCode_HasExtraFreeIn(owner, op)`. The hook
-runs on the owner (section 2), so the run reads the same tables. No
+takes the owner and calls `_PyCode_HasExtraFree(owner, op)` (the
+function gains the parameter; gc_trace.c is its one caller). The same
+owner argument covers function and code watchers, which are per
+interpreter rather than per object (`active_func_watchers`,
+`active_code_watchers`): discovery tests the owner's set, and the event
+is sent on the owner. The hook runs on the owner (section 2), so the run
+reads the same tables. No
 index is ever read through another interpreter's table: section 5.3
 retires the indices of a closing interpreter's surviving objects before
 its heap changes owner.
 
-Watching a foreign object. `PyDict_Watch()` lets interpreter A watch a
-dict that B owns, which only a shared heap allows. A's watcher keeps
-receiving the modification events of the interpreter that modifies the
-dict, as now; the DEALLOCATED event goes to the owner's watchers only,
-so A's watcher does not hear of the dict's death unless A is B. This is
-documented in `Doc/c-api/dict.rst` beside `PyDict_Watch()`. Under
-reference counting the event went to whichever interpreter dropped the
-last reference, through that interpreter's table, which could call the
-wrong watcher; the new rule cannot.
+**Registration is the owner's.** Discovery through the owner's tables
+is right only if every index on an object is the owner's. Today
+interpreter A can set an extra on B's code object with A's index
+(`PyUnstable_Code_SetExtra()`), or watch B's dict or type with A's
+watcher id (`PyDict_Watch()`, `PyType_Watch()`), which only a shared
+heap allows; the bit or slot then means a different watcher or free
+function in B's table, and B's watcher with the colliding id hears of a
+dict it never watched. These three functions now look the object's
+owner up (`_PyGC_LiveOwnerOf(op)`, the segment lookup of section 2
+against the live interpreters, under the head lock) and refuse a
+foreign object: `PyDict_Watch()` and `PyType_Watch()` raise
+`ValueError` ("cannot watch an object owned by another interpreter"),
+and `PyUnstable_Code_SetExtra()` raises `SystemError`, both documented
+(`Doc/c-api/dict.rst`, `type.rst`, `code.rst`). `PyUnstable_Code_GetExtra()`
+on a foreign code object returns no extra. The reserved dict watcher ids
+(`DICT_RESERVED_WATCHERS_MASK`: the builtins and module watchers that
+`pylifecycle.c`, `moduleobject.c` and the specializer install) are
+exempt: every interpreter registers the same callbacks under them, so
+they mean the same in every table, and the collector already leaves them
+to `dict_dealloc()`. This is a compatibility
+break confined to shared heaps (an isolated interpreter cannot reach a
+foreign object), listed with 7.2's in PROCESS.md 0.1. Keeping the
+registering interpreter beside each bit or slot was the alternative;
+it costs a field per watched object and still leaves the question of
+which interpreter runs the foreign watcher when the object dies on its
+owner.
+
+### 3.5 Order across owners
+
+Within one owner's queue, calls run in batch order, which puts each
+finalizer before the finalizers of what its object reaches (note 06
+16.2's referrer-first order, `finalizer_order()`). Across owners the
+same must hold: a `BufferedWriter` owned by an idle subinterpreter
+wraps a `FileIO` owned by the main interpreter; both die together, with
+no cycle; if the main interpreter closes the file first, the writer's
+flush is lost. Rooting both keeps the memory, not the resource.
+
+**The rule.** A call R of owner O waits for every call of another
+owner that precedes it in the batch's order and whose object reaches
+R's object through dead objects; it is released when those have run,
+and only after the call before it of its own owner in the batch has
+been released, so each owner's batch order holds. Waits point
+backwards in the batch order, so they cannot form a cycle. No thread
+waits: R sits on its owner's waiting list (a root, 3.3) and the
+completion of its last predecessor, on whichever interpreter that runs,
+splices it to its owner's queue tail and sets that owner's
+`queue_ready`, which the owner's next GIL acquisition sees (section 4).
+
+**Which calls.** The predecessors are finalizers and legacy `tp_del`s,
+the calls that use their object's referents. The waiters are
+finalizers, legacy `tp_del`s and destroy hooks (a capsule destructor or
+`m_free` on the main interpreter must not run before a subinterpreter's
+finalizer that uses the capsule or module). Weak reference callbacks
+neither wait nor are waited for: they are queued first in every batch,
+as now, and their order relative to finalizers is unchanged.
+
+**Computing it.** Only a batch whose finalizers, legacy calls and
+destroy hooks have more than one owner needs it. For each owner A among
+them, in batch order of A's calls, a traversal from each A call's
+object over dead objects marks what it reaches with that call's
+position, skipping what an earlier A call already reached; so every
+dead object gets the earliest position of an A call that reaches it.
+A call R of another owner whose object carries a position before R's
+own waits for the last A call before R (A's queue runs its calls in
+order, so that covers every A predecessor). The cost is one traversal
+of the reachable dead objects per owner present, `O(K·D)`, against the
+collection's `O(D)` sweep; the positions are kept in a C `malloc`
+address table for the duration. If that table cannot be allocated, the
+batch's calls are chained in plain batch order across owners instead
+(each call waits for the previous call of another owner): correct, and
+slower to drain; the counter `order_fallbacks` records it.
+
+**What waiting costs.** A main-interpreter call that waits for an idle
+subinterpreter's finalizer waits until that interpreter runs or closes
+(5.1 drains it at the close). That is the dependency itself: the file
+cannot be closed before the writer that owns its buffer has flushed.
+Section 11 measures how long such calls wait.
+
+### 3.6 Delivery markers
+
+`queue_legacy()` sets `_Py_GC_DEL_CALLED_FLAG` when it queues a
+`tp_del`, and the heap walk clears that flag on every marked object as
+"reachable again" (gc_trace.c), so a call waiting in an idle queue,
+marked through the queue at each collection, loses its marker and its
+object's next death would run `tp_del` again. Delivery is recorded at
+execution instead: `run_queue()` sets `_Py_GC_DEL_CALLED_FLAG` just
+before it calls `tp_del`, and `handle_finalizers()` relies on the queue
+root, not the flag, to keep a queued object from being queued twice. A
+PEP 442 finalizer already records delivery at execution
+(`PyObject_CallFinalizer()` sets the finalized flag), and a destroy
+hook's `_Py_GC_NOTIFIED_FLAG` is never cleared by the walk, so the two
+other kinds need no change.
 
 ## 4. When a queue drains
 
@@ -354,35 +462,64 @@ name lookups may fail, and its error report is structurally safe
 `sys.stderr` gone `PyErr_FormatUnraisable()` falls back to the default
 hook and then to silence, Python/errors.c). That is the state the
 reference-counting build gives an object that dies at that point, and
-what this design relies on for the close.
+the state in which the close runs.
 
-**The close** is the first thing `_PyGC_Fini()` does. If the queue was
-ever opened, it drains it once more, on the same thread, in the same
-state as the last collection's drain; this runs what another
-interpreter's collection spliced to it after its last drain (a shutdown
-finalizer released the GIL and a main-interpreter thread collected).
-Then the phase becomes closed, and the queue is empty except in the
-case of 5.4. From here the owner lookup maps the interpreter's
-sub-process to the main interpreter (decision 5), so nothing more
-reaches the closed queue. The live state is not freed at the close and
-`get_live()` never recreates one after it; it is adopted or freed at
-deletion (5.3).
+**The close** is the first thing `_PyGC_Fini()` does, on the
+interpreter's last thread, right after the last collection. It is a
+sequence; each step finishes before the next starts:
+
+1. *Drain.* If the queue was ever opened, `run_queue()` runs until the
+   queue and the waiting list are empty, including what another
+   interpreter's collection spliced here after the last drain (a
+   shutdown finalizer released the GIL and a main-interpreter thread
+   collected) and what the calls themselves queue.
+2. *Retire the metadata* (5.2), for a shared-heap interpreter that was
+   opened.
+3. *Drain again*, as in step 1, for what step 2's free functions caused.
+4. *Publish the close.* The phase becomes closed under the head lock.
+   From here the owner lookup maps the interpreter's sub-process to the
+   main interpreter (decision 5), so nothing more reaches the closed
+   queue. The live state is not freed and `get_live()` never recreates
+   one; it is adopted or freed at deletion (5.3, 5.4).
+
+Steps 1 and 3 can loop only as long as calls keep making garbage with
+calls, as any drain can.
 
 ### 5.2 Retiring the destruction metadata
 
 A shared-heap interpreter's objects can outlive it (5.3). Before its
 heap changes owner, the close retires the indices of section 3.4 on its
-surviving objects, on its own thread, with its tables: a walk of the
-interpreter's own heaps and abandoned segments (the object listing of
-`_PyGC_TraceLiveHeapObjects()`, restricted to one interpreter) calls
-`free_code_extras()` on each code object with extras, as its dealloc
-would, and clears the non-reserved watcher bits of each dict and type.
+surviving objects, on its own thread, with its tables:
+
+- *Freeze.* The phase becomes retiring. In it,
+  `PyUnstable_Code_SetExtra()` and the non-reserved `PyDict_Watch()` and
+  `PyType_Watch()` on an object this interpreter owns are refused like a
+  foreign object's (3.4), so no new index appears during the step.
+- *Snapshot.* The objects of the interpreter's own heaps and abandoned
+  segments that carry an extra or a non-reserved watcher bit are listed
+  (the walk of `_PyGC_TraceLiveHeapObjects()`, restricted to one
+  sub-process and filtered) into a C `malloc` array registered as a
+  `_PyGCRoot` for the step, so a collection that a free function runs
+  keeps them alive and their addresses valid.
+- *Retire.* For each, the watcher bits are cleared, then
+  `_PyCode_ClearExtras(co, 1)` runs the free functions, as the object's
+  dealloc would have, and empties the extras. A free function may
+  allocate, collect, release the GIL or queue calls; step 3 of the close
+  drains what it queued, and an object it creates cannot carry an index,
+  since the freeze holds.
+- *Failure.* If the snapshot cannot be allocated, the step clears the
+  same state without calls, in a second walk that allocates nothing
+  (`_PyCode_ClearExtras(co, 0)` frees the extras array and leaks what
+  its slots point to), and counts `retire_fallbacks`.
+
 These are C calls into the interpreter's own extensions, made where
 reference counting would have made them for objects that die at the end
 of `interpreter_clear()`. A surviving code object loses its extras, a
 cache whose owner is gone; a surviving dict stops being watched by
-watchers that no longer exist. An isolated interpreter skips the walk:
-nothing outlives it that another interpreter can reach.
+watchers that no longer exist. A never-opened interpreter (5.4) and the
+fork child (5.5) run no free function: the step is the allocation-free
+clear. An isolated interpreter skips it: nothing outlives it that
+another interpreter can reach.
 
 ### 5.3 Adoption at deletion (ruled)
 
@@ -400,9 +537,10 @@ frees it, so what only they reach is freed too. Its registered
 `_PyGCRoot` nodes stay linked to an interpreter that no longer exists.
 
 **The adoption.** `PyInterpreterState_Delete()` unlinks the interpreter
-under the head lock, which every mark holds from `live_domain()` to the
-end of the heap walk. In the same critical section it calls
-`_PyGC_LiveAdopt(interp)` (gc_live.c), which allocates nothing:
+under the head lock, once no collection pins the domain (3.2); every
+mark holds the head lock from `live_domain()` to the end of the heap
+walk. In the same critical section it calls `_PyGC_LiveAdopt(interp)`
+(gc_live.c), which allocates nothing:
 
 - the interpreter's live state is linked into the main interpreter's
   list of adopted states, keeping its immortal registry and its kept
@@ -415,26 +553,61 @@ end of the heap walk. In the same critical section it calls
 - its sub-process is put on the main interpreter's pending list.
 
 A mark therefore sees the interpreter either listed in the domain, with
-its own state, or adopted, never neither. The next main-domain
-collection, at the start of `_PyGC_TraceLiveMark()` under the head lock
-and with the GIL held, absorbs each pending sub-process into the main
-interpreter's: `_mi_subproc_absorb(main, retired)`, a new function in
-Objects/mimalloc/arena-abandon.c, re-points each abandoned segment's
-`subproc` (arena segments in place, the OS list spliced), moves the
-abandoned counts under both sub-processes' `abandoned_os_lock` and
-`abandoned_os_visit_lock` (taken in a fixed order, main first; no
-mimalloc path takes the head lock), and then `mi_subproc_delete()`s the
-empty sub-process. No thread of the retired sub-process exists, and the
-collecting thread holds the GIL, so no other thread allocates or
-reclaims during the absorption.
+its own state, or adopted, never neither. Everything the adoption
+writes is read only under the head lock.
+
+**The absorption.** The next main-domain collection, at the start of
+`_PyGC_TraceLiveMark()` under the head lock and with the GIL held,
+absorbs each pending sub-process into the main interpreter's with
+`_mi_subproc_absorb(main, retired)`, a new function in
+Objects/mimalloc/arena-abandon.c, which follows mimalloc's own
+synchronisation for abandoned segments:
+
+- *Arena segments.* For each arena, it takes the arena's
+  `abandoned_visit_lock` (blocking), scans `blocks_abandoned`, and for
+  each set bit whose segment's `subproc` is the retired one, writes the
+  main sub-process into the field and moves one from the retired
+  sub-process's `abandoned_count` to the main one's, leaving the bit
+  set. Every path that clears an abandoned bit takes that arena lock
+  first when `mi_option_visit_abandoned` is on, as it is in this build
+  (`mi_arena_segment_clear_abandoned_next_field()`; the reclaim on free
+  is off, `mi_option_abandoned_reclaim_on_free`), so no clearer is
+  between its clear and its re-set while the scan reads the arena, and
+  the scan cannot miss a segment.
+- *OS segments.* It takes the retired sub-process's
+  `abandoned_os_visit_lock`, then the main one's, then the retired
+  one's `abandoned_os_lock`, then the main one's (visit before list, as
+  `mi_arena_segment_clear_abandoned_next_list()` does; retired before
+  main; no other path holds two sub-processes' locks), re-points each
+  segment of the retired list, appends the list to the main one's, and
+  moves `abandoned_os_list_count` and `abandoned_count`.
+- *Delete.* The retired sub-process's `abandoned_count` is then zero,
+  which a debug build asserts, and `mi_subproc_delete()` frees it. If it
+  is not zero, it stays pending and the next collection repeats.
+
+**Who else can be in that heap.** No thread of the retired sub-process
+exists: its interpreter has been unlinked after its last thread state
+was deleted. With 7.2's rejection in force, every other thread of the
+shared domain belongs to an interpreter that shares the GIL the
+collecting thread holds, so none of them runs, allocates or reclaims.
+Threads of isolated interpreters, under their own GILs, do run; they
+touch the retired heap's segments only through the shared arena
+bitmaps, by clearing and re-setting a bit whose segment belongs to
+another sub-process, and the arena lock above excludes that. So at the
+absorption nothing but the collecting thread is in that heap.
 
 After it the segments are ordinary abandoned segments of the main
 interpreter's sub-process: the walk visits them as it visits any exited
 main thread's, the owner lookup gives the main interpreter, and main
 threads reclaim them through mimalloc's own path, which frees empty
 pages and segments. No table of retired sub-processes exists, so the
-domain cap of 64 counts live interpreters only, and serial creation and
-deletion cannot fill it.
+domain cap of 64 counts live interpreters only.
+
+**The main interpreter's deletion** frees the adopted states (their
+immortal arrays), drops the kept-thread references
+(`decref_threadstate()`), and frees its own state;
+`Py_Initialize()` after `Py_FinalizeEx()` starts from a fresh state in
+`_PyGC_Init()`, which resets the phase.
 
 **What remains.** A daemon thread of a deleted interpreter that is still
 alive, hung in `take_gil()`, keeps its own heap, which it never
@@ -455,37 +628,60 @@ domain and the mark ignores them.
 
 An interpreter whose initialisation failed is torn down by
 `new_interpreter()`'s error path with its queue never opened, and its
-calls cannot run on it (that is finding B). For a shared-heap one, the
-close splices the queue onto the main interpreter's, as the owner rule
-then says. For an isolated one they are discarded: no collection will
-visit that heap again, so no deallocator runs for their objects and
-nothing a call would have done happens later by another route; the
-objects leak with the heap, as the blocks an isolated interpreter leaks
-do today. The count of discarded calls by kind is the only drop record:
-`_testinternalcapi.gc_queue_info()["discarded"]`, and a line on the C
-stderr when `gc.DEBUG_UNCOLLECTABLE` is set.
+calls cannot run on it (that is finding B). Its close does not drain
+and runs no free function (5.2). For a shared-heap one, the close
+splices the queue and the waiting list onto the main interpreter's, as
+the owner rule then says. For an isolated one they are discarded: no
+collection will visit that heap again, so no deallocator runs for their
+objects and nothing a call would have done happens later by another
+route; the objects leak with the heap, as the blocks an isolated
+interpreter leaves today do. The discarded calls are counted by kind in
+the main interpreter's live state, which outlives every subinterpreter,
+readable as `_testinternalcapi.gc_queue_info()["discarded"]`, and a line
+goes to the C stderr when `gc.DEBUG_UNCOLLECTABLE` is set. The leak of
+an isolated interpreter's remaining heap at deletion predates 7a and is
+handed to step 7 (a deleted isolated heap has no roots left, so a
+collection of it alone, with its resource-owning deallocators, would
+free it).
 
 The main interpreter's close drains like any other. By then every other
 interpreter has been deleted (`finalize_subinterpreters()`), and the
 main interpreter's other threads hang in `take_gil()`, so nothing can
-arrive after it; the close asserts an empty queue.
+arrive after it; the close asserts an empty queue and waiting list.
 
 ### 5.5 The fork child
 
-`_PyInterpreterState_DeleteExceptMain()` deletes every other interpreter
-with no thread state current and under the head lock, through
-`PyInterpreterState_Clear()` and `free_interpreter()`. Today that path
-reaches `interpreter_clear()`'s `_PyGC_CollectNoFail(NULL)`, which
-`collect_from_entry()` dereferences. The disposal runs no code:
-`_PyGC_CollectNoFail()` with no thread state does nothing, and
-`_PyGC_Fini()` with none closes without the drain and the metadata walk
-(5.2), and splices or discards as for a never-opened interpreter. The
-adoption is called from the deletion loop under the head lock it already
-holds. A surviving code object of such an interpreter keeps its extras
-without their free function having run, and its dicts their watcher
-bits; both are cleared without calls at the adoption, so that no index
-is read through the main interpreter's tables. The fork child is the one
-place where the extras leak.
+`_PyInterpreterState_DeleteExceptMain()` deletes every other
+interpreter in the child, with no thread state current and under the
+head lock, through `PyInterpreterState_Clear()` and `free_interpreter()`.
+That path is broken today independently of the queues:
+`interpreter_clear()` asserts and uses a thread state, `PyThreadState_Clear()`
+wants a current thread of the same interpreter, the clearing can notify
+watchers, and deleting thread states takes the head lock the caller
+holds. The child replaces it with a dedicated disposal,
+`dispose_after_fork(interp)` (pystate.c), which runs no Python code,
+calls no watcher, destructor or free function, and takes no lock the
+caller holds:
+
+- the interpreter's thread states are unlinked and freed without
+  `PyThreadState_Clear()`; their mimalloc heaps are abandoned into the
+  interpreter's sub-process, the mimalloc-only part of
+  `_PyThreadState_ClearMimallocHeaps()`, which the child already applies
+  to the main interpreter's dead threads;
+- `_PyGC_Fini()` is replaced by its allocation-free close: no drain, the
+  metadata cleared without calls (5.2's failure step), then for a
+  shared-heap interpreter the adoption of 5.3 (its calls, frames and
+  objects become the main interpreter's garbage and run there as the
+  owner rule says), and for an isolated one the discard of 5.4;
+- nothing else of the interpreter is cleared: its dicts, modules and
+  caches are its heap's objects, adopted or leaked with it;
+- the interpreter struct and, for an isolated interpreter, its
+  sub-process are freed as `free_interpreter()` does.
+
+The extras that the child clears without calls leak; their free
+functions belong to extensions of an interpreter that does not exist in
+the child, and running them there is what the disposal must not do. This
+is permanent behaviour of the fork child, documented in gc.rst.
 
 ## 6. The existing deferrals
 
@@ -606,18 +802,26 @@ Each with the test of section 9 that proves it.
 4. **Each call runs at most once, and is lost only in 5.4's discard**: a
    node is spliced, never copied, and routing cannot fail. Tests 9.4,
    9.5, 9.11 (failure injection).
-5. **Per-owner order is collection order**: callbacks, then finalizers
-   referrer first, then legacy, then destroy hooks. test_gc's
-   `test_finalizer_order` and `test_dealloc_reads_referents`, and 9.10
-   for mixed-owner batches.
+5. **Order is the batch's, within and across owners**: callbacks, then
+   finalizers referrer first, then legacy, then destroy hooks, and no
+   call runs before an earlier call of another owner that reaches its
+   object (3.5). test_gc's `test_finalizer_order` and
+   `test_dealloc_reads_referents`, 9.10 and 9.14.
 6. **A queue with work and an open phase is drained at its owner's next
    safepoint**, also with automatic collection off. Test 9.12.
 7. **The domain has one GIL.** Test 9.8.
 8. **Every live block of a shared heap is traced and swept, its heap
    immortals' referents kept, its roots valid**, also after its
    interpreter's deletion. Test 9.7 under kill and ASan.
-9. **Destruction metadata is read only through its owner's tables.**
-   Test 9.9.
+9. **Destruction metadata is read only through its owner's tables**,
+   and every index on an object is its owner's. Tests 9.9 and 9.5 (c).
+10. **No interpreter a batch names is freed before the splice** (the
+    pin, 3.2). Test 9.16.
+11. **A legacy `tp_del` runs once per death**, however long its call
+    waits (3.6). Test 9.15.
+12. **The fork child's disposal runs no code of a deleted interpreter**;
+    a shared-heap interpreter's calls run afterwards on the main
+    interpreter, as the owner rule says. Test 9.13.
 
 ## 9. Tests
 
@@ -663,7 +867,7 @@ dead weak reference's callback does not run.
    `_testinternalcapi.gc_queue_info(id)["length"]` is non-zero. Then
    `_interpreters.destroy()`: the pipe holds the subinterpreter's id.
    Under kill on debug as well.
-5. **The close's own drain, and the discard.** (a) A legacy interpreter
+5. **The close.** (a) A legacy interpreter
    whose shutdown finalizer releases the GIL while a main-interpreter
    thread collects garbage of the closing interpreter: the call runs on
    the closing interpreter, at its close. (b) `_testinternalcapi`'s
@@ -671,6 +875,15 @@ dead weak reference's callback does not run.
    queues a callback in it before the opening and ends it through the
    failure path: `discarded["callback"]` rises by one and the process
    exits 0; the shared-heap variant's call runs on the main interpreter.
+   (c) Retirement under reentry: a code-extra free function of the
+   closing interpreter calls `gc.collect()`, releases the GIL to a
+   main-interpreter thread that collects, queues a weak reference
+   callback, and tries to set a new extra (refused, `SystemError`
+   reported unraisable); the close ends with an empty queue and every
+   snapshot object's extras freed once. (d) With the snapshot's
+   allocation failing (`gc_queue_fail_alloc()` aimed at it), the close
+   takes the allocation-free clear, `retire_fallbacks` is 1, and a
+   surviving code object has no extras.
 6. **Reentrancy.** A main-interpreter weak reference callback that
    creates a legacy subinterpreter (`_testcapi.run_in_subinterp("x =
    1")`), and another that calls `gc.collect()`, under
@@ -708,7 +921,13 @@ dead weak reference's callback does not run.
    object of the subinterpreter with an extra dies in a main-interpreter
    collection and its own free function runs; one that survives the
    subinterpreter's deletion has its own free function run at the close,
-   and the main interpreter's free function never runs for it.
+   and the main interpreter's free function never runs for it. (c)
+   Foreign registration: the subinterpreter's `PyDict_Watch()` and
+   `PyType_Watch()` with a non-reserved id on a main-interpreter dict
+   and heap type raise `ValueError`, its `PyUnstable_Code_SetExtra()` on
+   a main-interpreter code object raises `SystemError`, and the reserved
+   module watcher still watches a main-interpreter globals dict that the
+   subinterpreter's specializer reaches.
 10. **Mixed-owner ordering.** A batch of referrer-first finalizer pairs
     from two interpreters with entries already queued on both, grown
     past a thousand nodes, with a finalizer that releases the GIL
@@ -728,7 +947,50 @@ dead weak reference's callback does not run.
 13. **The fork child.** A process with a persistent legacy interpreter
     holding queued calls and stashed objects, and an isolated one, forks;
     the child exits 0, reads the stashed objects under kill, and runs no
-    call of either deleted interpreter except as the owner rule says.
+    code of either deleted interpreter during the disposal: a recording
+    dict watcher, a code-extra free function and a capsule destructor
+    registered by the deleted interpreters record nothing until the
+    disposal returns, and afterwards only the shared-heap interpreter's
+    queued calls run, on the main interpreter.
+14. **Split-owner buffered write.** A persistent legacy interpreter
+    wraps a `FileIO` that the main interpreter opened and stashed
+    (`stash_get()`) in a `BufferedWriter` and a `TextIOWrapper`, writes
+    a line without flushing, and drops them with no cycle, as does the
+    main interpreter; the main interpreter collects several times while
+    the subinterpreter is idle (the file stays open:
+    `gc_queue_info()["waiting"]` counts the `FileIO`'s finalizer), then
+    runs the subinterpreter once, then collects. Pass: the file holds the
+    line exactly once, under kill on debug as well. The same with the
+    owners swapped.
+15. **Legacy delivery marker.** An acyclic object with a legacy `tp_del`
+    (a class made with `_testcapi.with_tp_del()` whose
+    `__tp_del__` counts its calls) owned by an
+    idle legacy interpreter dies; the main interpreter collects five
+    times; the subinterpreter runs, delivering `tp_del` once; then five
+    more collections. Pass: the counter is 1.
+16. **The pin.** A debug-only hook
+    (`_testinternalcapi.gc_pause_after_mark()`) makes the next collection
+    of the main interpreter wait between its mark and its splice on an
+    event, while a second thread deletes a legacy interpreter whose
+    garbage the mark found. Pass: the deletion does not unlink until the
+    event is set and the collection has spliced; the calls run on the
+    main interpreter (the closed owner) under ASan.
+17. **Every kind routed.** For each call kind (weak reference callback,
+    PEP 442 finalizer, legacy `tp_del`, a capsule destructor, a module's
+    `m_free`, a buffer release with `__release_buffer__`) and each
+    direction (main garbage found by a subinterpreter's collection, and
+    the reverse): the call runs once on the owner. A variant keeps the
+    object alive by a conservative C-stack word for one collection
+    (`_testinternalcapi.gc_hold_on_stack()`) before it dies. A weak
+    reference owned by B to an object owned by A delivers its callback
+    on B.
+18. **Absorption under concurrency.** Four threads of two isolated
+    interpreters allocate and free small and huge (OS-segment) objects
+    in a loop, abandoning and reclaiming segments, while the main
+    interpreter creates, fills and deletes 200 legacy interpreters and
+    collects after each; under ASan and on debug. Pass: no abort, every
+    pending sub-process deleted, `gc_queue_info()["absorbed"]` equals
+    the deletions that left segments.
 
 The gate set of the rung (work doc 7a-1.md) is these, test_gc,
 test_weakref, test_finalization, test_capi, test_code, test_threading,
@@ -752,7 +1014,13 @@ Deleted:
   section 0.1's manifest exists), 10a-2.md's accepted shared-heap
   failures, and the hack register's shared-heap row of note 08, each
   with this note as the retirement;
-- the acceptance of `use_main_obmalloc` with `OWN_GIL`.
+- the acceptance of `use_main_obmalloc` with `OWN_GIL`, and of
+  watcher and code-extra registration on another interpreter's object;
+- the fork child's `PyInterpreterState_Clear()` of other interpreters,
+  replaced by the disposal of 5.5;
+- `_PyCode_HasExtraFree()`'s reading of the current interpreter's table:
+  it takes the interpreter as a parameter, and its one caller passes the
+  owner.
 
 Handed to step 7 (the generational collector):
 
@@ -764,6 +1032,8 @@ Handed to step 7 (the generational collector):
 - Stop-the-world across a domain's GILs, the condition for lifting 7.2.
 - The domain cap of 64 live interpreters.
 - A hung daemon thread's heap after its interpreter's deletion (5.3).
+- The heap an isolated interpreter leaves at deletion (5.4), with its
+  condition: a collection of the deleted heap alone, which has no roots.
 
 Handed to 10b: a moving collector keeps the property that a block's
 segment names its owner: a nursery is per thread, so per interpreter,
@@ -791,6 +1061,18 @@ Recorded, not gated (note 06 plan revision of 2026-10-27).
   splice counter (`moved`, in the root stats), and RSS; then after 100
   create and destroy cycles (9.7 e), RSS and the mapped segments of the
   main sub-process.
+- **Node cost.** A burst benchmark (`queue_latency.py --burst`):
+  10^6 objects each with a cheap weak reference callback, and 10^5
+  capsules with a C destructor, made garbage at once; instructions per
+  call for queueing and draining, and peak RSS, against the baseline's
+  array queue.
+- **Waiting across owners.** In 9.14's shape with 10^4 writer and file
+  pairs: how many calls wait (`waiting`), the dependency pass's
+  instructions per collection, and `order_fallbacks`.
+- **Teardown.** The time and instructions of the close of a legacy
+  interpreter (the drains, the metadata walk) and of its deletion
+  (adoption), separately, over 9.7 (e)'s cycles; and the time of the
+  absorption at the next collection.
 - **Callback latency.** (a) In one interpreter, nanoseconds from the
   start of `gc.collect()` to a weak reference callback, expected
   unchanged; (b) a legacy subinterpreter that collects main-interpreter
@@ -801,10 +1083,11 @@ Recorded, not gated (note 06 plan revision of 2026-10-27).
 ## 12. Rungs
 
 One rung (7a-1) carries the design: the node queue and the batch, the
-owner lookup and the splice, the opening and the close, the drain
-permission, the take_gil check, the adoption and absorption, the
-metadata retirement, the per-owner discovery, the fork-child disposal,
-the configuration rejection, and the tests of section 9. If it passes
+owner lookup and the splice, the pin, the order across owners, the
+delivery markers, the opening and the close, the drain permission, the
+take_gil check, the adoption and absorption, the metadata retirement,
+the per-owner discovery and the registration refusal, the fork-child
+disposal, the configuration rejection, and the tests of section 9. If it passes
 its deadline the measurement tool is cut first, then 9.7 (e)'s RSS
 record; nothing that an invariant of section 8 rests on is cut. The
 work doc lists the files.
@@ -817,6 +1100,17 @@ work doc lists the files.
 2. **A main thread blocked on a subinterpreter's callback.** No core
    path is known (7.3). Recommendation: none until a test shows one;
    then the fix is that test's.
+3. **The registration refusal (3.4) is a second compatibility break.**
+   It is round 2's answer to foreign registration and was not ruled with
+   7.2. Recommendation: accept, with a row beside 7.2's in PROCESS.md
+   0.1. The alternative, keeping the registering interpreter with each
+   index, is recorded in 3.4.
+4. **File ownership for the refusal.** It edits `PyDict_Watch()`
+   (Objects/dictobject.c), `PyType_Watch()` (Objects/typeobject.c, 6d's
+   and 10a's file) and `PyUnstable_Code_SetExtra()`
+   (Objects/codeobject.c, shared under the append-only rule): three
+   guards of a few lines at the top of existing functions. Needs a
+   ruling or hand-offs.
 
 ## Review
 
@@ -883,3 +1177,69 @@ resize case stated (section 2); the fork child's no-code disposal is
 named (5.5) and tested (9.13); the main interpreter's close drains and
 asserts empty, and drop at the main close is no longer a question
 (5.4).
+
+### Round 2 (codex, 2026-10-28 10:22 PDT; reviews/13-interpreter-queues-review-2.md): revise
+
+Seven blocking issues, all accepted; each changed the design.
+
+1. *Cross-owner order loses buffered output* (a wrapper in an idle
+   subinterpreter over a raw file in main). Changed: a call waits for
+   the earlier foreign finalizer and legacy calls that reach its object,
+   found by one incremental traversal per owner with position stamps;
+   no interpreter waits on another synchronously, and memory failure
+   falls back to a chain (3.5, decision 9, invariant 5). Test 9.14
+   checks the bytes written.
+2. *The copied domain can name freed interpreters before routing*
+   (`PyInterpreterState_Delete()` detaches before it unlinks).
+   Changed: a collection pins its domain from the mark to the splice;
+   deletion's unlink waits for no pin under the head lock; closed owners
+   are canonicalised before the pin is dropped (3.2, decision 10,
+   invariant 10). Test 9.16 orders mark, deletion and routing with a
+   debug hook.
+3. *An idle queue erases the legacy delivery marker.* Changed:
+   `run_queue()` sets `_Py_GC_DEL_CALLED_FLAG` when it runs `tp_del`,
+   not `queue_legacy()` when it queues it, so the walk's clearing of a
+   pending object's flag loses nothing; the queue root keeps a queued
+   object from being queued twice (3.6, invariant 11). Test 9.15.
+4. *Allocation ownership does not establish metadata ownership* (a
+   foreign code extra index, a foreign watcher bit). Changed:
+   registration on another interpreter's object is refused
+   (`PyDict_Watch()` and `PyType_Watch()` raise ValueError,
+   `PyUnstable_Code_SetExtra()` SystemError), the reserved dict watcher
+   ids excepted (3.4). Test 9.9 (c) registers foreignly. The refusal is
+   a compatibility break and needs a ruling (13, question 3).
+5. *Metadata retirement is not a defined transition.* Changed: 5.1
+   gives the close in four steps and 5.2 the retirement: freeze new
+   metadata on the closing interpreter, take a snapshot rooted by a span,
+   retire, drain what the free functions queued, repeat until a pass
+   finds nothing, then publish the closed phase; a snapshot allocation
+   failure keeps the interpreter's tables and adopts them unretired. A
+   never-opened interpreter runs no free function (5.2, 5.4). Tests 9.5
+   (c) and (d).
+6. *Absorption's locks do not protect arena enumeration.* Changed: the
+   absorption takes each arena's `abandoned_visit_lock` before the OS
+   list lock, retired sub-process before main, as mimalloc's own
+   visitors do; with 7.2's rule a thread of another own-GIL interpreter
+   in the domain has nothing in that heap (5.3). Test 9.18 runs isolated
+   allocation and reclaim through repeated adoption, arena and OS
+   segments.
+7. *Fork-child disposal needs a thread state.* Changed: a dedicated
+   `dispose_after_fork()` that needs no current thread, runs no
+   callback, frees the states' memory under the held head lock, and
+   leaks Python objects of the deleted interpreters (5.5, invariant
+   12). Test 9.13 asserts disposal and the absence of forbidden calls.
+
+Non-blocking: the test matrix routes every kind, including capsule,
+module and buffer-release hooks, retention by a C-stack word, and a
+weak reference owned by B on A's object (9.17); section 11 measures
+node cost under a callback burst, the order pass, and teardown and
+absorption separately; `_PyCode_HasExtraFree()` takes the interpreter
+instead of gaining a twin (10, and the work document); file ownership is
+in the work document, with the refusal's files left to the coordinator
+(13, question 4).
+
+Questions: the discard counters live in the main interpreter's state
+(5.4); the main interpreter's deletion frees the adopted states and
+releases their kept threads, every `Py_FinalizeEx()` cycle (5.3); the
+fork child's leak is permanent and accepted, the isolated heap's is
+handed to step 7 with its condition (10).

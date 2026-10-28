@@ -288,14 +288,18 @@ and gate 4 with `GATE_LABEL=copyprop`.
 
 - The specializer contract, enforced by a checker: 10a tooling (a 0.3
   row; the coordinator adds it).
-- The type-cache-miss path of the specializers' MRO lookups (see the
-  contract above): reported to the coordinator, owner to be ruled.
+- `type_lookup_runs_no_code()` in `Python/specialize.c` repeats the
+  static `mro_dicts_unicode()` of `Objects/typeobject.c`, which 10a rung
+  2b owns while it is running. Once 10a lands, the typeobject.c function
+  is exported and the specialize.c copy goes. Owner: the coordinator, to
+  relay to 10a, or to this agent after 10a lands.
 - The anchor for a folded operand across the reader's own collecting
   calls: 10a rung 3 (a 0.3 row, with test 10 as its oracle).
 - The allocation bound: review 2 §5.3's row (10a rung 3), with the added
   acceptance clause.
-- Per-instruction events: the 0.2 row (coordinator, at landing) and the
-  library documentation (this rung, if approved).
+- Per-instruction events: the 0.2 row (the coordinator). The library
+  documentation is approved and committed (`Doc/library/sys.monitoring.rst`,
+  INSTRUCTION; `Doc/reference/datamodel.rst`, `f_trace_opcodes`).
 - `INSTRUMENTED_JUMP` hides an escaping call from the analyzer, so
   `HAS_ESCAPES_FLAG` is wrong for the instrumented jump handlers.
   Nothing reads it for those handlers today. Owner: the cases generator,
@@ -322,7 +326,7 @@ the last round, so the coordinator rules on what stays open):
 
 | Finding | Disposition |
 |---|---|
-| B1: the specializers' MRO lookups can reach `__eq__` on a type-cache miss; `mro_dicts_unicode()` runs after the lookup | Open, for a coordinator ruling: a second `specialize.c` guard (check the MRO dicts before each specializer type lookup, with a fixture that forces a miss) or a 0.3 row. |
+| B1: the specializers' MRO lookups can reach `__eq__` on a type-cache miss; `mro_dicts_unicode()` runs after the lookup | Ruled option (a), on condition that a fixture reaches the path. The fixture changes the type before every call, which forces the miss. Without the check, the probe gave a wrong result in 8, 4, 8, 4 and 1 of 400 calls (class attribute, instance class attribute, subscript `__getitem__`, `__getattr__` hook, `__getattribute__` lookup). Fixed in 4d6fd6e5196: `type_lookup_runs_no_code()` runs before every specializer type lookup, the statistics-only ones included. Test `test_specializer_type_lookup_runs_no_code`; its control (the tree at ecaa09f9267) fails. |
 | B2: the reader analysis took stack effects for reads; an unused peek emits no load | Fixed in 9a0281115b1: `inputs_read_after_code()` follows `Stack.pop()`'s `used` rule. Test 14 gains an unused peek that runs code, and checks the emitted order of the call and the load. The control (the previous analysis) fails. The tables do not change. |
 | B3: test 10 cannot be the anchor row's oracle | Accepted. Test 10 stays as a semantic regression; its comment names the row and says why it passes. The row's oracle must inject a collection where only the reader's precise frame holds the operand, and must fail with that root omitted. The coordinator writes this into the row. |
 | Witness the execution forms; witness the monitoring callbacks | e7cdcac58d0: every rebinding records its frame and the handler executing there. Tests 1, 2 and 3 assert the generic and the specialised handler, and the monitoring test asserts its CALL, PY_START and LINE callbacks. |

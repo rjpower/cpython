@@ -1,0 +1,50 @@
+PyCFunction_Call: PyObject_Call
+PyList_GetSlice: PyList_New
+PyList_SetSlice: PyList_New
+PyMem_Calloc: gc_count_alloc
+PyMem_Malloc: gc_count_alloc
+PyMem_Realloc: gc_count_alloc
+PyObject_Calloc: gc_count_alloc
+PyObject_Realloc: gc_count_alloc
+PyTuple_FromArray: tuple_alloc
+PyTuple_Pack: tuple_alloc
+Py_MakePendingCalls: handle_signals
+_PyEval_MakePendingCalls: handle_signals
+_PyGC_Fini: current_pid
+_PyGC_Init: current_pid, get_live
+_PyGC_LiveAddImmortal: current_pid, get_live
+_PyGC_LiveGetRootStats: current_pid
+_PyGC_LiveKeepThreads: current_pid, get_live
+_PyGC_LiveKeptThreads: current_pid, get_live
+_PyGC_LiveWalkCache: current_pid, get_live
+_PyGen_ClearFrame: gen_clear_frame
+_PyList_BinarySlice: PyList_New
+_PyList_Concat: PyList_New
+_PyList_StoreSlice: PyList_New
+_PyMem_Strdup: gc_count_alloc
+_PyObject_CallFunctionVa: _Py_CheckFunctionResultValue
+_PyTuple_BinarySlice: _PyTuple_FromValues, tuple_alloc
+_PyTuple_Concat: tuple_alloc
+_PyTuple_FromArraySteal: tuple_alloc
+_PyTuple_FromPairSteal: tuple_alloc
+_PyTuple_Repeat: tuple_alloc
+_PyTuple_Resize: PyTuple_New, tuple_alloc
+collect: current_pid, get_live
+gen_dealloc: gen_clear_frame
+list_ass_subscript: PyList_New
+list_copy: PyList_New
+list_repeat: PyList_New
+list_slice_subscript: PyList_New
+listiter_reduce: PyList_New
+listreviter_reduce: PyList_New
+make_new_frozenset: make_new_set, make_new_set_untracked
+make_new_set_basetype_untracked: make_new_set_untracked
+set_copy_untracked_lock_held: make_new_set_untracked
+set_difference_untracked: make_new_set_untracked
+set_intersection: make_new_set_untracked
+set_new: make_new_set, make_new_set_untracked
+set_symmetric_difference_impl: make_new_set_untracked
+set_vectorcall: make_new_set, make_new_set_untracked
+tuple_slice: _PyTuple_FromValues, tuple_alloc
+tuple_subscript: tuple_alloc
+wrapper_call: wrapperdescr_raw_call

@@ -3,6 +3,7 @@
 #include "pycore_context.h"
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_gc.h"            // _PyObject_GC_MAY_BE_TRACKED()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_hamt.h"
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_object.h"
@@ -767,7 +768,8 @@ _contextvars_Context_copy_impl(PyContext *self)
 }
 
 
-static PyValue
+/* The span: the context, kwnames and the call's result */
+Py_GC_PRECISE static PyValue
 context_run(PyObject *self, const PyValue *args,
             Py_ssize_t nargs, PyObject *kwnames)
 {
@@ -779,18 +781,27 @@ context_run(PyObject *self, const PyValue *args,
         return PyValue_NULL;
     }
 
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(ts, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
+    _PyValueSpan_AppendObject(&span, kwnames);
+    PyValue res = PyValue_NULL;
     if (_PyContext_Enter(ts, self)) {
-        return PyValue_NULL;
+        goto done;
     }
 
     PyValue call_result = _PyObject_VectorcallValueTstate(
         ts, args[0], args + 1, nargs - 1, kwnames);
+    _PyValueSpan_Append(&span, call_result);
 
     if (_PyContext_Exit(ts, self)) {
-        return PyValue_NULL;
+        goto done;
     }
-
-    return call_result;
+    res = call_result;
+done:
+    _PyThreadState_PopValueRoot(ts, &span);
+    return res;
 }
 
 

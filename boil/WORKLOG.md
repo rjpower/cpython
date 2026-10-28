@@ -1836,3 +1836,26 @@ recorded under "As built" in boil/design/work/6c-rung2.md and move to rung
 3: the prepare/commit split of stores, the storage adapter's precondition,
 stores over non-data class attributes, the set-only descriptor test's
 type, and names. Rung 3, the instance layout, starts with its work doc.
+
+## 2026-10-27 20:05 PDT: traverse audit landed (boil/audit)
+
+Triggered by 6c's test_buffer failure, a missing traverse in _testbuffer's
+ndarray (49580514d90). The finding behind it: Tools/boil/traverse_audit.py
+had listed that type all along, and the audit was never a gate, so its
+output was not read. The tool now follows pointers and arrays to plain
+structs two levels deep, learns bases from tp_base assignments and
+FromSpecWithBases, reads same-file callees for the partial check, and has
+a --check mode with an allowlist (Tools/boil/traverse_allow.txt, each entry
+with a reason) that gate.sh level 3 runs. Fixed, each with a test that
+collects, fills freed memory and uses the referent: _ssl's socket traverse
+(visited only its type; not built here, checked by reading), _testcapi's
+awaitType and GenericAlias, xxmodule.Xxo (not built), _remote_debugging's
+BinaryReader strings and BinaryWriter hash keys (the tool cannot see
+hash tables; found by grep). Handed to 6c and ruled there: the collector
+marks the dict word at tp_dictoffset and the runtime-managed storage of
+every instance before tp_traverse, which removes the heaptype.c trio from
+the allowlist once it lands. Gate 2 on the branch: 556/564 files, 50,851
+tests, no failures; one env-changed in test_inspect (an unraisable
+KeyError '__import__' while a coroutine was finalised), not seen before,
+to be watched in the next gates. OpenSSL headers are absent on this
+machine, so test_ssl runs in no gate.

@@ -995,11 +995,11 @@ class IRStack(Stack):
                 out.emit(f"IR_STORE_DST({FIELD_VARS[lay.dst]}, {var.name});\n")
                 return True
             # Before the end, dst gets the result only if it is a
-            # temporary; a local gets it at the end.  Across an escaping
+            # temporary; a local gets it at the end.  Across a collecting
             # call the result would be held only in C (_PyEvalActivation).
-            if self.escaping:
+            if self.collecting:
                 raise StackError(
-                    f"'{var.name}' is defined before an escaping call, and "
+                    f"'{var.name}' is defined before a collecting call, and "
                     "dst may name a local, which takes it only at the end")
             out.emit(f"IR_STORE_TEMP_DST({FIELD_VARS[lay.dst]}, {var.name});\n")
             return False
@@ -1018,10 +1018,10 @@ class IRStack(Stack):
         leave with it."""
         if self.final or self.error_exit:
             raise StackError(f"'{var.name}' has no slot at position {p}")
-        if self.escaping:
+        if self.collecting:
             # The collector does not scan the eval loop's C frame
             # (_PyEvalActivation)
-            raise StackError(f"'{var.name}' has no slot across an escaping call")
+            raise StackError(f"'{var.name}' has no slot across a collecting call")
         return False
 
     def save_variables(self, out: CWriter) -> None:
@@ -1075,7 +1075,7 @@ class IRStack(Stack):
         above = may_be_positive(self.physical_sp - self.logical_sp)
         # Until the handler leaves, the slots that the stack gave up keep
         # their values: what the handler took from its dead inputs is held
-        # there across its escaping calls (_PyEvalActivation).
+        # there across its collecting calls (_PyEvalActivation).
         leaving = self.final or self.error_exit or self.syncing
         if above and leaving:
             self.vacate(out, self.logical_sp, self.physical_sp)

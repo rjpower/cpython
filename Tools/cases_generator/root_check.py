@@ -1,22 +1,27 @@
-"""Check that no handler holds a value only in a C local across an escaping call.
+"""Check that no handler holds a value only in a C local across a collecting call.
 
 The collector does not scan the eval loop's own C frame (_PyEvalActivation
-in Include/internal/pycore_tstate.h) when a collection is entered from the
-eval breaker or from an escaping call: everything a handler holds there must
-be in a frame slot, which the mark visits precisely.  The stack items of a
-uop are in slots across an escaping call (the IR generator checks that the
-ones without a slot of their own are not live there).  This module checks
-the other C locals that hold objects: across an escaping call, each one
-that is used afterwards must hold a value that something the collector sees
-holds too, an "anchored" value: a stack item, a constant of the code, an
-attribute of the frame, a static object, or a borrowed reference out of an
-anchored value.  A value that the call makes or returns, or that the old
+in Include/internal/pycore_tstate.h): everything a handler holds there must
+be in a frame slot, which the mark visits precisely, at each call that may
+collect, an allocating call included (call_effects.py).  The stack items of
+a uop are in slots across a collecting call (the IR generator checks that
+the ones without a slot of their own are not live there).  This module
+checks the other C locals that hold objects: across a collecting call, each
+one that is used afterwards must hold a value that something the collector
+sees holds too, an "anchored" value: a stack item, a constant of the code,
+an attribute of the frame, a static object, or a borrowed reference out of
+an anchored value.  A value that the call makes or returns, or that the old
 reference counting code took a new reference to, is not anchored.
+
+Across an allocating call, which runs no Python code, a value loaded from a
+frame slot is anchored too until a store to a slot: the slot holds it.  A
+field of an object, a cache included, does not qualify.
 """
 
 from dataclasses import dataclass, field
 import re
 
+import call_effects
 import lexer
 from parser import Stmt, SimpleStmt, BlockStmt, IfStmt, WhileStmt, ForStmt, MacroIfStmt
 
@@ -51,12 +56,6 @@ BORROWING = {
     "PyExceptionInstance_Class",
 }
 
-# Escaping calls that only allocate: a collection there is one that an
-# allocation runs at once, which scans the eval loop's frame too
-ALLOCATING = {
-    "PyType_GenericAlloc",
-}
-
 # Calls and macros whose result is anchored whatever their arguments are:
 # the code's constants and names, the frame's attributes, static objects
 ANCHORED_CALLS = {
@@ -83,6 +82,14 @@ LEAVING = {
     "ERROR_NO_POP", "JUMP_TO_LABEL", "DISPATCH", "DISPATCH_INLINED",
     "DISPATCH_SAME_OPARG", "Py_UNREACHABLE", "GOTO_TIER_TWO", "GOTO_TIER_ONE",
 }
+
+# Loads from the frame's slots
+SLOT_LOADS = {"GETLOCAL"}
+
+# The first argument a callee that is not precise reads from the stack
+# (System V x86-64: six in registers), whose frame scan does not reach its
+# caller's extent, where the argument is (note 11 question 13)
+FIRST_STACK_ARG = 7
 
 # `F(x, v)` assigns v to x
 ASSIGNING = {"Py_SETREF", "Py_XSETREF"}
@@ -325,6 +332,8 @@ class Checker:
         self.variables = variables
         self.stack_names = stack_names
         self.held = held
+        # The event of the allocating call being checked, if it is one
+        self.alloc_at: int | None = None
 
     def anchored_expr(self, tkns: list[lexer.Token], before: int,
                       seen: frozenset[str]) -> bool:
@@ -388,6 +397,8 @@ class Checker:
                 fname = tkns[0].text
                 if fname in ANCHORED_CALLS:
                     return True
+                if fname in SLOT_LOADS and self.alloc_at is not None:
+                    return not self.slot_written(before, self.alloc_at)
                 if fname in BORROWING:
                     first = self.first_arg(tkns[2:close])
                     return self.anchored_expr(first, before, seen)
@@ -400,6 +411,20 @@ class Checker:
         # *p, a value pointer into the slots
         if tkns[0].text == "*" and len(tkns) == 2:
             return True
+        return False
+
+    def slot_written(self, i: int, s: int) -> bool:
+        """Whether an event after i and before s stores to a slot, or is in a
+        loop, where a store may come round"""
+        if self.events[s].loops or self.events[i].loops:
+            return True
+        for ev in self.events[i + 1:s]:
+            tkns = [t for t in ev.tokens if t.kind != "COMMENT"]
+            for k, t in enumerate(tkns):
+                if t.text in SLOT_LOADS and k + 1 < len(tkns) and tkns[k + 1].text == "(":
+                    close = self.matching(tkns, k + 1)
+                    if close + 1 < len(tkns) and tkns[close + 1].text == "=":
+                        return True
         return False
 
     @staticmethod
@@ -508,15 +533,37 @@ class Checker:
             if ev.stmt is None or ev.stmt not in escaping:
                 continue
             call = escaping[ev.stmt].call  # type: ignore[attr-defined]
-            if call.text in ALLOCATING:
-                continue
+            self.alloc_at = s if call_effects.kind(call.text) == "alloc" else None
             for var in self.variables.values():
                 if not self.live_across(var, s):
                     continue
                 if self.anchored_var(var, s, frozenset({var.name})):
                     continue
                 errors.append((call, f"'{var.name}' is held only in a C local "
-                               f"across the escaping call to '{call.text}'"))
+                               f"across the collecting call to '{call.text}'"))
+            self.alloc_at = None
+            errors += self.stack_args(ev, s)
+        return errors
+
+    def stack_args(self, ev: Event, s: int) -> list[tuple[lexer.Token, str]]:
+        """A C local passed at position FIRST_STACK_ARG or later to a
+        collecting call must be anchored: the callee may be opaque, whose
+        scan does not reach the argument (note 11 question 13)."""
+        errors = []
+        tkns = [t for t in ev.tokens if t.kind != "COMMENT"]
+        for k, t in enumerate(tkns[:-1]):
+            if t.kind != "IDENTIFIER" or tkns[k + 1].text != "(":
+                continue
+            if call_effects.kind(t.text) == "none" or t.text.upper() == t.text:
+                continue
+            close = self.matching(tkns, k + 1)
+            args = split_args(tkns[k + 2:close])
+            for n, arg in enumerate(args[FIRST_STACK_ARG - 1:], FIRST_STACK_ARG):
+                if len(arg) == 1 and arg[0].text in self.variables and \
+                        not self.anchored_var(self.variables[arg[0].text], s,
+                                              frozenset({arg[0].text})):
+                    errors.append((t, f"argument {n} of '{t.text}' is passed "
+                                   f"on the stack and is not anchored"))
         return errors
 
 
@@ -541,6 +588,22 @@ def push_before_initialize(
     return errors
 
 
+def split_args(tkns: list[lexer.Token]) -> list[list[lexer.Token]]:
+    "The top-level comma-separated parts of an argument list"
+    args: list[list[lexer.Token]] = [[]]
+    depth = 0
+    for t in tkns:
+        if t.text in ("(", "[", "{"):
+            depth += 1
+        elif t.text in (")", "]", "}"):
+            depth -= 1
+        if t.text == "," and depth == 0:
+            args.append([])
+        else:
+            args[-1].append(t)
+    return [a for a in args if a]
+
+
 def stack_item_names(uop: object) -> set[str]:
     stack = getattr(uop, "stack", None)
     if stack is None:
@@ -550,7 +613,7 @@ def stack_item_names(uop: object) -> set[str]:
 
 def check_uop(uop: object) -> list[tuple[lexer.Token, str]]:
     body = uop.body  # type: ignore[attr-defined]
-    escaping = uop.properties.escaping_calls  # type: ignore[attr-defined]
+    escaping = uop.properties.collecting_calls  # type: ignore[attr-defined]
     if not escaping:
         return []
     events = linearize(body)

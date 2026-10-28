@@ -1786,6 +1786,36 @@ class TracingCollectorTests(unittest.TestCase):
         print("ok")
     """)
 
+    # 10a-1b.md item 2: an allocation may collect, so a handler holds no
+    # object only in a C local across one.  _ALLOCATE_OBJECT's __init__
+    # comes from the type's untraced cache; a generic operation on two
+    # inline floats boxes both, and the second box may collect the first.
+    ALLOCATION_SAFEPOINTS = textwrap.dedent("""
+        import _testinternalcapi
+        class Base:
+            def __init__(self, x):
+                self.x = [x]
+        class Derived(Base):
+            pass
+        # A collection at every allocation from here
+        _testinternalcapi.gc_set_stress(1)
+        for i in range(100):
+            assert Derived(i).x == [i]
+        def ops(a, b):
+            return a ** b, a < b, divmod(a, b), a % b
+        for i in range(1, 40):
+            a, b = i + 0.5, 1.25
+            assert ops(a, b) == (a ** b, a < b, divmod(a, b), a % b)
+        _testinternalcapi.gc_set_stress(0)
+        print("ok")
+    """)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_allocation_safepoints(self):
+        env = {"PYTHON_GCVERIFY": "kill"} if support.Py_DEBUG else {}
+        rc, out, err = assert_python_ok("-c", self.ALLOCATION_SAFEPOINTS, **env)
+        self.assertEqual(out.strip(), b"ok")
+
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_return_order(self):
         env = {"PYTHON_GCSTRESS": "50"}

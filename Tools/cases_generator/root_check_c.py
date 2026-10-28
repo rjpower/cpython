@@ -37,112 +37,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Iterator
 
+import call_effects
 import lexer
 
 
 # --- tables ------------------------------------------------------------------
-
-# Calls that neither allocate an object nor run Python code.  Object-
-# returning item and cell readers are not here: they box an inline value
-# (note 11 question 12).
-NON_COLLECTING = {
-    # reference counting is gone (step 5c): these are no-ops or stores
-    "Py_INCREF", "Py_DECREF", "Py_XINCREF", "Py_XDECREF", "Py_CLEAR",
-    "Py_SETREF", "Py_XSETREF", "Py_NewRef", "Py_XNewRef",
-    # header and type predicates
-    "Py_TYPE", "Py_SIZE", "Py_IS_TYPE", "Py_SET_TYPE", "Py_SET_SIZE",
-    "Py_Is", "Py_IsNone", "Py_IsTrue", "Py_IsFalse",
-    "PyType_HasFeature", "_PyType_HasFeature", "PyType_IsSubtype",
-    "PyObject_TypeCheck", "PyType_GetFlags",
-    # values
-    "PyValue_IsNull", "PyValue_IsObject", "PyValue_IsInline", "PyValue_Is",
-    "PyValue_ObjectBorrow", "PyValue_FromObject", "PyValue_Type",
-    "PyValue_IsInt", "PyValue_IsFloat", "PyValue_Bits",
-    "PyTuple_GET_VALUE", "PyList_GET_VALUE", "PyCell_GET_VALUE",
-    # an empty asm that hides a pointer's origin from the optimizer
-    "_PyValue_HIDE_ORIGIN",
-    # the value of an exact int that is not compact: PyLong_AsLongAndOverflow()
-    # on an exact int calls no __index__ and allocates nothing
-    # (Python/pyvalue.c)
-    "_PyValue_FromLongObject",
-    "_PyDict_NextValue",
-    "PyTuple_SET_ITEM", "PyList_SET_ITEM", "PyTuple_SET_VALUE",
-    "PyList_SET_VALUE", "_PyTuple_ITEMS", "_PyList_ITEMS",
-    "PyFunction_GET_CODE", "PyFunction_GET_GLOBALS",
-    "PyFunction_GET_BUILTINS", "PyMethod_GET_FUNCTION", "PyMethod_GET_SELF",
-    "PyCFunction_GET_FUNCTION", "PyCFunction_GET_SELF",
-    "PyCFunction_GET_FLAGS",
-    # casts
-    "_PyObject_CAST", "_PyType_CAST", "_PyVarObject_CAST", "_Py_CAST",
-    "_PyCFunction_CAST", "_PyFunction_CAST", "_PyTuple_CAST", "_PyList_CAST",
-    # statics
-    "_Py_ID", "_Py_STR", "_Py_LATIN1_CHR", "_PyLong_GetZero",
-    "_PyLong_GetOne",
-    # thread state and errors that only read
-    "_PyThreadState_GET", "PyThreadState_Get", "_PyInterpreterState_GET",
-    "PyInterpreterState_Get", "PyErr_Occurred", "_PyErr_Occurred",
-    "PyErr_Clear", "_PyErr_Clear",
-    # the frame's fields
-    "_PyFrame_GetCode", "_PyFrame_GetFunction", "_PyFrame_GetGlobals",
-    "_PyFrame_GetBuiltins", "_PyFrame_GetLocalsArray",
-    # assertions and libc
-    "assert", "Py_UNREACHABLE", "Py_FatalError", "Py_UNUSED",
-    "Py_ARRAY_LENGTH", "Py_MIN", "Py_MAX", "Py_ABS", "memcpy", "memmove",
-    "memset", "memcmp", "strlen", "strcmp", "strncmp", "strchr", "isnan",
-    # reads the stack pointer, with an intrinsic or an asm
-    "_Py_get_machine_stack_pointer",
-    "_Py_EnsureTstateNotNULL", "Py_BEGIN_CRITICAL_SECTION",
-    "Py_END_CRITICAL_SECTION", "Py_BEGIN_CRITICAL_SECTION2",
-    "Py_END_CRITICAL_SECTION2",
-    # value roots and spans
-    "_PyThreadState_PushValueRoot", "_PyThreadState_PopValueRoot",
-    "_PyThreadState_PushValueSpan", "_PyValueSpan_Append",
-    "_PyValueSpan_AppendObject", "_PyValueSpan_Rebase",
-    # The mem domain counts its bytes for the trigger but never collects
-    # (Objects/obmalloc.c, gc_count_alloc()): its callers do not expect a
-    # collection.
-    "PyMem_Malloc", "PyMem_Calloc", "PyMem_Realloc", "PyMem_Free",
-    "PyMem_New", "PyMem_Resize", "PyMem_Del",
-    "PyMem_RawMalloc", "PyMem_RawCalloc", "PyMem_RawRealloc", "PyMem_RawFree",
-    # variable arguments: reads of the va_list, which holds no object of
-    # its own
-    "va_start", "va_copy", "va_arg", "va_end",
-    # statistics
-    "CALL_STAT_INC", "EVAL_CALL_STAT_INC", "EVAL_CALL_STAT_INC_IF_FUNCTION",
-    "OBJECT_STAT_INC", "VALUE_BOX_STAT_INC",
-}
-NON_COLLECTING_PATTERNS = (
-    re.compile(r"^_?Py\w*_Check(Exact)?$"),
-    re.compile(r"^_?Py\w*_CHECK\w*$"),
-    re.compile(r"^_?Py\w*_GET_(SIZE|LENGTH)$"),
-    re.compile(r"^_?Py\w*_AS_\w+$"),
-    re.compile(r"^_?Py_atomic_\w+$"),
-    re.compile(r"^FT_ATOMIC_\w+$"),
-    re.compile(r"^_Py_hashtable_\w+$"),
-)
-
-# Calls that allocate and run no Python code: collecting, not reentrant.
-ALLOCATING = {
-    "PyLong_FromLong", "PyLong_FromSsize_t", "PyLong_FromSize_t",
-    "PyLong_FromLongLong", "PyLong_FromUnsignedLong",
-    "PyLong_FromUnsignedLongLong", "PyLong_FromDouble", "PyFloat_FromDouble",
-    "PyBool_FromLong", "PyTuple_New", "PyList_New", "PyDict_New",
-    "PySet_New", "PyFrozenSet_New", "PyCell_New", "PyMethod_New",
-    "_PyTuple_FromValues", "_PyTuple_FromArray", "_PyTuple_FromArraySteal",
-    "_PyList_FromArraySteal", "PyTuple_Pack", "PyValue_Object",
-    "_PyValue_BoxInline", "PyValue_ObjectNew", "_PyValueRoot_Object",
-    "_PyValueRoot_PushObject", "_PyValue_ObjectRooted",
-    "PyTuple_GET_ITEM", "PyList_GET_ITEM", "PyCell_GET",
-    "PyTuple_GetItem", "PyList_GetItem", "PySequence_Fast_GET_ITEM",
-    "PyType_GenericAlloc", "_PyType_AllocNoTrack", "PyObject_Malloc",
-    "PyObject_Calloc", "PyObject_Realloc", "PyObject_New",
-    "PyObject_NewVar", "PyObject_GC_New", "PyObject_GC_NewVar",
-    "_PyObject_GC_New", "_PyObject_GC_NewVar",
-    "PyUnicode_FromString", "PyUnicode_FromStringAndSize",
-    "PyBytes_FromStringAndSize",
-    "_Py_EnterRecursiveCallTstate", "_Py_EnterRecursiveCall",
-    "_PyErr_NoMemory", "PyErr_NoMemory",
-}
 
 # Calls whose result is a borrow out of their first argument: the source is
 # field(arg, FIELD).
@@ -1678,10 +1577,10 @@ class Classifier:
             return "reentrant"  # a call through a pointer
         if name in self.memo:
             return self.memo[name]
-        if name in ALLOCATING:
-            k = "alloc"
-        elif name in NON_COLLECTING or name in self.extra or any(
-                p.match(name) for p in NON_COLLECTING_PATTERNS):
+        listed = call_effects.kind(name)
+        if listed is not None:
+            k = listed
+        elif name in self.extra:
             k = "none"
         elif name in self.inline_bodies:
             self.memo[name] = "reentrant"  # a cycle counts as collecting
@@ -2502,7 +2401,8 @@ class FunctionChecker:
                 continue
             # A call that cannot collect and is not listed as writing its
             # arguments (Py_ARRAY_LENGTH, a predicate) stores nothing.
-            if name in NON_COLLECTING and name not in MUTATING:
+            if name is not None and call_effects.kind(name) == "none" \
+                    and name not in MUTATING:
                 continue
             if b is not None and self.kinds.get(b) == "array" \
                     and not self.span_backed(b, st):

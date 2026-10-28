@@ -210,7 +210,7 @@ class TestAnalysisErrors(unittest.TestCase):
             c = PyValue_FromObject(o);
             INPUTS_DEAD();
         }
-        """, "'o' is held only in a C local across the escaping call "
+        """, "'o' is held only in a C local across the collecting call "
              "to 'escaping_call'")
         self.check_error("""
         inst(OP, (a -- c)) {
@@ -238,6 +238,84 @@ class TestAnalysisErrors(unittest.TestCase):
             _PyInterpreterFrame *f = _PyThreadState_PushFrameUnchecked(tstate, 4);
             _PyFrame_Initialize(tstate, f, PyValue_NULL, NULL, NULL, f->base, 0, frame);
             escaping_call();
+        }
+        """)
+
+    def test_root_held_across_allocation(self):
+        # An allocation may collect (call_effects.py)
+        self.check_error("""
+        inst(OP, (a -- c)) {
+            PyObject *o = PyObject_Repr(PyValue_ObjectBorrow(a));
+            PyObject *n = PyLong_FromLong(1);
+            c = PyValue_FromObject(o);
+            use(n);
+            INPUTS_DEAD();
+        }
+        """, "'o' is held only in a C local across the collecting call "
+             "to 'PyLong_FromLong'")
+        # A field of an object, a type's cache included, is no borrow
+        self.check_error("""
+        inst(OP, (a -- c)) {
+            PyHeapTypeObject *cls = (PyHeapTypeObject *)PyValue_ObjectBorrow(a);
+            PyObject *init = cls->_spec_cache.init;
+            PyObject *o = PyType_GenericAlloc((PyTypeObject *)cls, 0);
+            use(o);
+            c = PyValue_FromObject(init);
+            INPUTS_DEAD();
+        }
+        """, "'init' is held only in a C local across the collecting call "
+             "to 'PyType_GenericAlloc'")
+
+    def test_slot_load_across_allocation(self):
+        # A value loaded from a slot is anchored by the slot across an
+        # allocation, which runs no Python code, until a slot is written
+        self.generate("""
+        inst(OP, (--)) {
+            PyValue initial = GETLOCAL(oparg);
+            PyObject *cell = PyCell_New(NULL);
+            ERROR_IF(cell == NULL);
+            PyCell_SET_VALUE(cell, initial);
+            GETLOCAL(oparg) = PyValue_FromObject(cell);
+        }
+        """)
+        self.check_error("""
+        inst(OP, (--)) {
+            PyValue initial = GETLOCAL(oparg);
+            GETLOCAL(oparg) = PyValue_NULL;
+            PyObject *cell = PyCell_New(NULL);
+            ERROR_IF(cell == NULL);
+            PyCell_SET_VALUE(cell, initial);
+            GETLOCAL(oparg) = PyValue_FromObject(cell);
+        }
+        """, "'initial' is held only in a C local across the collecting "
+             "call to 'PyCell_New'")
+        # Across a call that may run Python code, the slot may change
+        self.check_error("""
+        inst(OP, (--)) {
+            PyValue initial = GETLOCAL(oparg);
+            escaping_call();
+            GETLOCAL(oparg) = initial;
+        }
+        """, "'initial' is held only in a C local across the collecting "
+             "call to 'escaping_call'")
+
+    def test_stack_passed_argument(self):
+        # The seventh argument is on the stack, where an opaque callee's
+        # frame scan does not reach (note 11 question 13)
+        self.check_error("""
+        inst(OP, (a -- c)) {
+            PyObject *o = PyObject_Repr(PyValue_ObjectBorrow(a));
+            PyObject *r = seven(1, 2, 3, 4, 5, 6, o);
+            c = PyValue_FromObject(r);
+            INPUTS_DEAD();
+        }
+        """, "argument 7 of 'seven' is passed on the stack and is not anchored")
+        self.generate("""
+        inst(OP, (a -- c)) {
+            PyObject *o = PyValue_ObjectBorrow(a);
+            PyObject *r = seven(1, 2, 3, 4, 5, 6, o);
+            c = PyValue_FromObject(r);
+            INPUTS_DEAD();
         }
         """)
 
@@ -325,7 +403,9 @@ class TestIRCases(unittest.TestCase):
     def test_register_style(self):
         # Inputs that are only used as objects are read through their
         # fields.  They stay in their slots until the handler leaves, so the
-        # slots keep them alive across calls that may collect.
+        # slots keep them alive across calls that may collect.  Boxing the
+        # second input allocates, so the first box has a root while it does;
+        # the root is popped before either exit.
         input = """
         inst(OP, (left, right -- res)) {
             PyObject *l = PyValue_ObjectBorrow(left);
@@ -366,7 +446,15 @@ class TestIRCases(unittest.TestCase):
             }
             PyObject *right_object;
             if (Py_UNLIKELY(PyValue_IsInline(right))) {
+                _PyValueRoot left_root;
+                if (Py_UNLIKELY(PyValue_IsInline(left))) {
+                    _PyThreadState_PushValueRoot(tstate, &left_root);
+                    left_root.object = left_object;
+                }
                 right_object = _PyValue_BoxInline(right);
+                if (Py_UNLIKELY(PyValue_IsInline(left))) {
+                    _PyThreadState_PopValueRoot(tstate, &left_root);
+                }
                 if (right_object == NULL) {
                     JUMP_TO_LABEL(error);
                 }
@@ -523,6 +611,28 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(fmt.inputs, ["nos", "unused"])
         self.assertEqual(fmt.dst_offset, -1)
         self.assertEqual(fmt.borrow_mask, 0b10)
+
+    def test_box_root_across_allocation(self):
+        # A box is held in a C local, which the collector does not scan, so
+        # an allocating call in the body has the box's root pushed around it.
+        input = """
+        inst(OP, (value -- res)) {
+            PyObject *o = PyValue_ObjectBorrow(value);
+            PyObject *f = PyFloat_FromDouble(1.0);
+            if (f == NULL) {
+                ERROR_NO_POP();
+            }
+            res = PyValue_FromObject(SPAM(o, f));
+            INPUTS_DEAD();
+        }
+    """
+        handler = self.handler(self.ir_output(input), "OP")
+        call = handler.index("PyFloat_FromDouble(1.0)")
+        push = handler.index("_PyThreadState_PushValueRoot(tstate, &value_root);")
+        pop = handler.index("_PyThreadState_PopValueRoot(tstate, &value_root);")
+        self.assertIn("_PyValueRoot value_root;", handler[:push])
+        self.assertLess(push, call)
+        self.assertLess(call, pop)
 
     def test_window_style(self):
         # An array input selects the window style: A names dst and B the
@@ -1490,6 +1600,25 @@ Py_GC_PRECISE static void f(PyObject *const *args, Py_ssize_t n) {
     }
 
     NEGATIVE_MORE = {
+        # Boxing allocates: the second box may collect the first
+        "box_collects_earlier_box": ("""
+Py_GC_PRECISE static void f(PyValue x, PyValue y) {
+    PyObject *a = PyValue_Object(x);
+    PyObject *b = PyValue_Object(y);
+    use(a);
+    use(b);
+}
+""", "'a' is held only in a C local across the collecting call to 'PyValue_Object'"),
+        # A type's cache is not traced: a load from it is no borrow, even
+        # across an allocation
+        "cache_is_not_a_borrow": ("""
+Py_GC_PRECISE static void f(PyHeapTypeObject *cls) {
+    PyObject *init = cls->_spec_cache.init;
+    PyObject *o = PyType_GenericAlloc((PyTypeObject *)cls, 0);
+    use(init);
+    use(o);
+}
+""", "'init' is held only in a C local across the collecting call to 'PyType_GenericAlloc'"),
         "copy_after_pop": ("""
 Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *p) {
     PyValue buf[1];

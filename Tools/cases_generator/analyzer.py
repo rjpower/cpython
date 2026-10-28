@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import itertools
+import call_effects
 import lexer
 import parser
 import re
@@ -15,7 +16,11 @@ class EscapingCall:
 
 @dataclass
 class Properties:
+    # The calls that may run Python code; the stack is synced before them
     escaping_calls: dict[SimpleStmt, EscapingCall]
+    # Those and the allocating calls (call_effects.py): a collection may
+    # start at any of them, so values in C locals need roots across them
+    collecting_calls: dict[SimpleStmt, EscapingCall]
     escapes: bool
     error_with_pop: bool
     error_without_pop: bool
@@ -54,6 +59,7 @@ class Properties:
     def dump(self, indent: str) -> None:
         simple_properties = self.__dict__.copy()
         del simple_properties["escaping_calls"]
+        del simple_properties["collecting_calls"]
         text = "escaping_calls:\n"
         for tkns in self.escaping_calls.values():
             text += f"{indent}    {tkns}\n"
@@ -63,10 +69,13 @@ class Properties:
     @staticmethod
     def from_list(properties: list["Properties"]) -> "Properties":
         escaping_calls: dict[SimpleStmt, EscapingCall] = {}
+        collecting_calls: dict[SimpleStmt, EscapingCall] = {}
         for p in properties:
             escaping_calls.update(p.escaping_calls)
+            collecting_calls.update(p.collecting_calls)
         return Properties(
             escaping_calls=escaping_calls,
+            collecting_calls=collecting_calls,
             escapes = any(p.escapes for p in properties),
             error_with_pop=any(p.error_with_pop for p in properties),
             error_without_pop=any(p.error_without_pop for p in properties),
@@ -99,6 +108,7 @@ class Properties:
 
 SKIP_PROPERTIES = Properties(
     escaping_calls={},
+    collecting_calls={},
     escapes=False,
     error_with_pop=False,
     error_without_pop=False,
@@ -529,193 +539,6 @@ def has_error_without_pop(op: parser.CodeDef) -> bool:
     )
 
 
-NON_ESCAPING_FUNCTIONS = (
-    "PyCFunction_GET_FLAGS",
-    "PyCFunction_GET_FUNCTION",
-    "PyCFunction_GET_SELF",
-    "PyCell_GetRef",
-    "PyCell_New",
-    "PyCell_GET_VALUE",
-    "PyCell_SET_VALUE",
-    "_PyCell_GetValue",
-    "_PyCell_SwapValue",
-    "PyExceptionInstance_Class",
-    "PyException_GetCause",
-    "PyException_GetContext",
-    "PyException_GetTraceback",
-    "PyFloat_AS_DOUBLE",
-    "PyFloat_FromDouble",
-    "PyFunction_GET_CODE",
-    "PyFunction_GET_GLOBALS",
-    "PyList_GET_ITEM",
-    "PyList_GET_VALUE",
-    "PyList_GET_SIZE",
-    "PyList_SET_ITEM",
-    "PyLong_AsLong",
-    "PyLong_FromLong",
-    "PyLong_FromSsize_t",
-    "PySlice_New",
-    "PyValue_ObjectBorrow",
-    # Nothing is reference counted: a decref or a clear releases nothing
-    # and runs no code.
-    "Py_DECREF",
-    "Py_XDECREF",
-    "Py_CLEAR",
-    "Py_SETREF",
-    "Py_XSETREF",
-    "_PyGC_CLEAR_ARRAY",
-    # Frame bookkeeping, which runs no code
-    "_PyFrame_Copy",
-    "_PyThreadState_PopFrame",
-    "_PyThreadState_UpdateLastProfiledFrame",
-    "_PyThreadState_PushValueRoot",
-    "_PyThreadState_PopValueRoot",
-    "PyValue_FromObject",
-    "_PyValue_False",
-    "_PyValue_IsNone",
-    "PyValue_Is",
-    "_PyValue_IsTrue",
-    "_PyValue_IsFalse",
-    "PyValue_IsNull",
-    "_PyValue_None",
-    "PyValue_Type",
-    "_PyValue_True",
-    "PyBytes_GET_SIZE",
-    "PyDict_GET_SIZE",
-    "PySet_GET_SIZE",
-    "PyTuple_GET_ITEM",
-    "PyTuple_GET_VALUE",
-    "PyTuple_GET_SIZE",
-    "PyType_HasFeature",
-    "PyUnicode_Concat",
-    "PyUnicode_GET_LENGTH",
-    "PyUnicode_READ_CHAR",
-    "PyUnicode_IS_COMPACT_ASCII",
-    "PyUnicode_1BYTE_DATA",
-    "Py_ARRAY_LENGTH",
-    "Py_FatalError",
-    "Py_INCREF",
-    "Py_IS_TYPE",
-    "Py_NewRef",
-    "Py_REFCNT",
-    "Py_SIZE",
-    "Py_TYPE",
-    "Py_UNREACHABLE",
-    "Py_Unicode_GET_LENGTH",
-    "_PyCode_CODE",
-    "_PyObject_SetShape",
-    "_PyErr_Occurred",
-    "_PyFb_Entry",
-    "_PyFb_Header",
-    "_PyFb_HasEntry",
-    "_PyFrame_GetBytecode",
-    "_PyFrame_GetCode",
-    "_PyFrame_IsIncomplete",
-    "_PyFrame_PushUnchecked",
-    "_PyFrame_PushOverlapping",
-    "_PyFrame_SetReturnValue",
-    "_PyFrame_Slots",
-    "_PyFrame_AssertTemporariesClear",
-    "_PyEval_GeneratorReturnTarget",
-    "_PyFunction_SetVersion",
-    "_PyGen_GetGeneratorFromFrame",
-    "gen_try_set_executing",
-    "_PyInterpreterState_GET",
-    "_PyList_AppendValue",
-    "_PyList_ITEMS",
-    "_PyLong_CompactValue",
-    "_PyLong_DigitCount",
-    "_PyLong_IsCompact",
-    "_PyLong_IsNegative",
-    "_PyLong_IsNonNegativeCompact",
-    "_PyLong_IsZero",
-    "_PyLong_BothAreCompact",
-    "_PyObject_GC_IS_SHARED",
-    "_PyObject_GC_IS_TRACKED",
-    "_PyObject_GC_MAY_BE_TRACKED",
-    "_PyObject_GC_TRACK",
-    "_PyObject_IsUniquelyReferenced",
-    "_PyObject_SHAPE",
-    "_PyObject_DictAt",
-    "_PyFrame_FbPoly",
-    "_PyFb_ShapeRow",
-    "_PyThreadState_HasStackSpace",
-    "_PyTuple_FromValues",
-    "_PyTuple_ITEMS",
-    "_PyType_HasFeature",
-    "_PyUnicode_Equal",
-    "_PyUnicode_JoinArray",
-    "_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY",
-    "_Py_ID",
-    "_Py_IsImmortal",
-    "_Py_IsOwnedByCurrentThread",
-    "_Py_LeaveRecursiveCallPy",
-    "_Py_LeaveRecursiveCallTstate",
-    "_Py_NewRef",
-    "_Py_SINGLETON",
-    "_Py_STR",
-    "_Py_TryIncrefCompare",
-    "_Py_atomic_compare_exchange_uint8",
-    "_Py_atomic_load_ptr_acquire",
-    "_Py_atomic_load_uintptr_relaxed",
-    "_Py_set_eval_breaker_bit",
-    "advance_backoff_counter",
-    "assert",
-    "backoff_counter_triggers",
-    "JUMP_TO_LABEL",
-    "restart_backoff_counter",
-    "_Py_ReachedRecursionLimit",
-    "_PyValue_IsTaggedIndex",
-    "_PyValue_TagIndex",
-    "_PyValue_UntagIndex",
-    "_PyValue_IncrementTaggedIndexNoOverflow",
-    "PyValue_IsObject",
-    "_PyValue_IsPointerSpace",
-    "_PyValue_IsPointerSpaceAt",
-    "_PyValue_IsInlineAt",
-    "PyValue_IsInline",
-    "PyValue_IsInlineInt",
-    "PyValue_IsInlineFloat",
-    "_PyValue_FitsKind",
-    "_PyValue_BothInlineInt",
-    "PyValue_FromInt32",
-    "_PyValue_FromBits",
-    "_PyValue_DoubleBits",
-    "PyValue_Int32",
-    "_PyValue_IsCompactInt",
-    "_PyValue_CompactInt",
-    "_PyValue_BoxInt64",
-    "PyValue_Double",
-    "_PyValue_FloatCheckExact",
-    "_PyValue_FloatOperandsCheck",
-    "_PyValue_NumberAsDouble",
-    "_PyValue_FloatOperandValues",
-    "isfinite",
-    "pow",
-    # Allocate an int or float; see PyValue_Object below.
-    "PyValue_FromDouble",
-    "_PyValue_LshiftInt32",
-    # Boxing allocates an int or float, which runs no Python code and
-    # cannot start a collection.
-    "PyValue_Object",
-    "_PyValue_BoxInline",
-    "_PyValue_ObjectRooted",
-    "_PyValue_UnrootObject",
-    "_PyValue_IsError",
-    "_PyValue_IsValid",
-    "_PyValue_Wrap",
-    "_PyValue_Unwrap",
-    "_PyLong_CheckExactAndCompact",
-    "_Py_unset_eval_breaker_bit",
-    "_Py_set_eval_breaker_bit",
-    "doesnt_escape",
-    "_Py_GatherStats_GetIter",
-    "_PyStolenTuple_Free",
-    "PyObject_GC_UnTrack",
-    "_PyErr_ExceptionMatches",
-)
-
-
 def check_escaping_calls(instr: parser.CodeDef, escapes: dict[SimpleStmt, EscapingCall]) -> None:
     error: lexer.Token | None = None
     calls = {e.call for e in escapes.values()}
@@ -747,7 +570,10 @@ def check_escaping_calls(instr: parser.CodeDef, escapes: dict[SimpleStmt, Escapi
     if error is not None:
         raise analysis_error(f"Escaping call '{error.text} in condition", error)
 
-def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, EscapingCall]) -> None:
+def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, EscapingCall],
+                                 collecting: bool = False) -> None:
+    """Note in result the first call of stmt that may run Python code, or,
+    if collecting, the first that may start a collection (call_effects.py)"""
     tokens = stmt.contents
     for idx, tkn in enumerate(tokens):
         try:
@@ -768,7 +594,8 @@ def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, Esca
                 continue
             if tkn.text.endswith("CheckExact"):
                 continue
-            if tkn.text in NON_ESCAPING_FUNCTIONS:
+            effect = call_effects.kind(tkn.text)
+            if effect == "none" or (effect == "alloc" and not collecting):
                 continue
         elif tkn.kind == "RPAREN":
             prev = tokens[idx-1]
@@ -780,16 +607,18 @@ def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, Esca
         result[stmt] = EscapingCall(stmt, tkn)
 
 
-def find_escaping_api_calls(instr: parser.CodeDef) -> dict[SimpleStmt, EscapingCall]:
+def find_escaping_api_calls(instr: parser.CodeDef,
+                            collecting: bool = False) -> dict[SimpleStmt, EscapingCall]:
     result: dict[SimpleStmt, EscapingCall] = {}
 
     def visit(stmt: Stmt) -> None:
         if not isinstance(stmt, SimpleStmt):
             return
-        escaping_call_in_simple_stmt(stmt, result)
+        escaping_call_in_simple_stmt(stmt, result, collecting)
 
     instr.block.accept(visit)
-    check_escaping_calls(instr, result)
+    if not collecting:
+        check_escaping_calls(instr, result)
     return result
 
 
@@ -921,6 +750,7 @@ def switches_frame(op: parser.CodeDef) -> bool:
 
 def compute_properties(op: parser.CodeDef) -> Properties:
     escaping_calls = find_escaping_api_calls(op)
+    collecting_calls = find_escaping_api_calls(op, collecting=True)
     has_free = (
         variable_used(op, "PyCell_New")
         or variable_used(op, "PyCell_GetRef")
@@ -955,6 +785,7 @@ def compute_properties(op: parser.CodeDef) -> Properties:
             op.tokens[0])
     return Properties(
         escaping_calls=escaping_calls,
+        collecting_calls=collecting_calls,
         escapes=escapes,
         error_with_pop=error_with_pop,
         error_without_pop=error_without_pop,

@@ -4344,12 +4344,16 @@ dummy_func(
             PyCodeObject *code = (PyCodeObject *)init_func->func_code;
             EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize + _Py_InitCleanup.co_framesize));
             STAT_INC(CALL, hit);
+            // The type's cache is not traced (type_traverse()), so init_func
+            // goes to its slot before the allocation, which may collect.
+            // The type is the allocation's argument, which the callee
+            // anchors.
+            callable = PyValue_FromObject(init_func);
             PyObject *self_o = PyType_GenericAlloc(tp, 0);
             if (self_o == NULL) {
                 ERROR_NO_POP();
             }
             self_or_null = PyValue_FromObject(self_o);
-            callable = PyValue_FromObject(init_func);
         }
 
         op(_CREATE_INIT_FRAME, (init, self, args[oparg] -- init_frame)) {

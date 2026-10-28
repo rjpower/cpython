@@ -5980,15 +5980,21 @@ mro_dicts_unicode(PyTypeObject *type)
 }
 
 /* Phase 1 of the generic protocol for NAME on objects of SHAPE: the MRO
-   result, and whether a plan built on it may be cached. */
+   result, the type version it was found under (in *VERSION), and whether
+   a plan built on it may be cached.  The two versions are different
+   things: the type's covers the MRO result, which a lookup that ran user
+   code may have outdated, and the shape's covers the shape's plans
+   (note 09 section 5), which a generalisation renews. */
 static PyValue
-lookup_plan_facts(_PyShape *shape, PyObject *name, int *cacheable)
+lookup_plan_facts(_PyShape *shape, PyObject *name, int *cacheable,
+                  unsigned int *version)
 {
     PyTypeObject *type = shape->type;
     PyValue descr;
-    unsigned int version = _PyType_LookupValueAndVersion(type, name, &descr);
-    *cacheable = (MCACHE_CACHEABLE_NAME(name) && version != 0
-                  && version == shape->type_version
+    *version = _PyType_LookupValueAndVersion(type, name, &descr);
+    *cacheable = (MCACHE_CACHEABLE_NAME(name) && *version != 0
+                  && *version == FT_ATOMIC_LOAD_UINT_RELAXED(type->tp_version_tag)
+                  && FT_ATOMIC_LOAD_UINT32_RELAXED(shape->type_version) != 0
                   && mro_dicts_unicode(type));
     return descr;
 }
@@ -6008,11 +6014,14 @@ _PyShape_LookupPlan(_PyShape *shape, PyObject *name, _PyLookupPlan *plan)
         }
     }
     int cacheable;
-    PyValue descr = lookup_plan_facts(shape, name, &cacheable);
+    unsigned int version;
+    PyValue descr = lookup_plan_facts(shape, name, &cacheable, &version);
     _PyShape_ResolveLoad(shape, name, descr, cacheable, plan);
     if (plan->flags & _Py_LOOKUP_CACHEABLE) {
         BEGIN_TYPE_LOCK();
-        if (type->tp_version_tag == plan->type_version) {
+        if (type->tp_version_tag == version
+            && shape->type_version == plan->type_version)
+        {
             _PyTypeCache_Insert(type, shape, name, plan);
         }
         END_TYPE_LOCK();
@@ -6021,12 +6030,28 @@ _PyShape_LookupPlan(_PyShape *shape, PyObject *name, _PyLookupPlan *plan)
 
 void
 _PyShape_LookupStorePlan(_PyShape *shape, PyObject *name, _PyStoreOp op,
-                         _PyStorePlan *plan)
+                         uint8_t value_kind, _PyStorePlan *plan)
 {
     assert(_PyType_IsReady(shape->type));
     int cacheable;
-    PyValue descr = lookup_plan_facts(shape, name, &cacheable);
-    _PyShape_ResolveStore(shape, name, descr, cacheable, op, plan);
+    unsigned int version;
+    PyValue descr = lookup_plan_facts(shape, name, &cacheable, &version);
+    _PyShape_ResolveStore(shape, name, descr, cacheable, op, value_kind, plan);
+}
+
+uint32_t
+_PyType_NewShapeVersion(PyTypeObject *type)
+{
+    // Heap-type tags: unique within the interpreter, never reused.
+    assert(type->tp_flags & Py_TPFLAGS_HEAPTYPE);
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    uint32_t version = 0;
+    BEGIN_TYPE_LOCK();
+    if (type->tp_version_tag != 0 && NEXT_VERSION_TAG(interp) != 0) {
+        version = NEXT_VERSION_TAG(interp)++;
+    }
+    END_TYPE_LOCK();
+    return version;
 }
 
 /* Internal API to look for a name through the MRO.

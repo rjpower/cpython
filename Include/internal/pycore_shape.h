@@ -43,9 +43,17 @@ extern "C" {
 // for S the distinct names of __static_attributes__ over the MRO.
 #define _Py_SHAPE_MIN_SLOTS 6
 
+/* Slot kinds (note 09 section 5): a promise about the values a field
+ * holds, not a layout, since every slot holds a PyValue.  The first store
+ * of a name picks its field's kind from the value; a store of a value of
+ * another kind generalises the field to BOXED in place
+ * (_PyShape_Generalise()).  Kinds never narrow. */
 typedef enum {
-    _Py_SLOT_BOXED = 0,     // any value; the only kind written so far
+    _Py_SLOT_BOXED = 0,     // any value
+    _Py_SLOT_I32 = 1,       // inline ints only
+    _Py_SLOT_F64 = 2,       // inline floats only; a NaN is boxed
 } _PySlotKind;
+#define _Py_SLOT_NKINDS 3
 
 typedef enum {
     _Py_SHAPE_ROOT = 0,     // the type's root shape
@@ -66,6 +74,14 @@ typedef struct _PyTypeShapes {
     _PyShape dict_shape;            // the type's dictionary-mode shape
     _PyShape *shapes[_Py_SHAPE_MAX_PER_TYPE];  // shapes[0] is the root
 } _PyTypeShapes;
+
+/* The values of a kind are one range of encodings: V is of KIND when
+   V.bits - lo <= span, one unsigned compare (_PyValue_FitsKind()). */
+typedef struct {
+    uint64_t lo;
+    uint64_t span;
+} _PySlotKindRange;
+extern const _PySlotKindRange _PySlotKind_Ranges[_Py_SLOT_NKINDS];
 
 /* The index of a dictionary-mode shape for _testinternalcapi. */
 #define _Py_SHAPE_INDEX_DICT 0xFF
@@ -187,6 +203,28 @@ _PyValue_Shape(PyValue v)
     return _PyObject_SHAPE(PyValue_ObjectBorrow(v));
 }
 
+// The narrowest slot kind that V, a value that is not NULL, satisfies.
+static inline uint8_t
+_PyValue_SlotKind(PyValue v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        return _Py_SLOT_I32;
+    }
+    if (PyValue_IsInlineFloat(v)) {
+        return _Py_SLOT_F64;
+    }
+    return _Py_SLOT_BOXED;
+}
+
+// Whether a field of KIND may hold V.
+static inline int
+_PyValue_FitsKind(PyValue v, unsigned int kind)
+{
+    assert(kind < _Py_SLOT_NKINDS);
+    const _PySlotKindRange *r = &_PySlotKind_Ranges[kind];
+    return (uint64_t)v.bits - r->lo <= r->span;
+}
+
 // Fill TYPE's root shape from the type: type, flags and version.  Called
 // for the static builtin types at runtime start and by PyType_Ready().
 extern void _PyShape_InitRoot(PyTypeObject *type);
@@ -205,6 +243,10 @@ extern size_t _PyShape_TypeShapesSize(PyHeapTypeObject *type);
 extern int _PyShape_TraverseTypeShapes(PyHeapTypeObject *type,
                                        visitproc visit, void *arg);
 
+// A fresh version for shapes of TYPE that a generalisation renews: a new
+// heap-type tag, or 0 if TYPE has no version or the tags are exhausted.
+extern uint32_t _PyType_NewShapeVersion(PyTypeObject *type);
+
 // Write the type's version or flags into each of its shapes.
 extern void _PyShape_SetTypeVersion(PyTypeObject *type, uint32_t version);
 extern void _PyShape_SetTypeFlags(PyTypeObject *type, unsigned long flags);
@@ -212,21 +254,36 @@ extern void _PyShape_SetTypeFlags(PyTypeObject *type, unsigned long flags);
 // The dictionary-mode shape of TYPE, or its root if it has no table.
 extern _PyShape *_PyType_DictModeShape(PyTypeObject *type);
 
+// Whether ADDR, which is not dereferenced, is the address of one of the
+// shapes of TYPE, a live type.
+extern int _PyType_HasShapeAt(PyTypeObject *type, const void *addr);
+
 // The slot of NAME, an exact str, in SHAPE, or -1.  Runs no code.
 PyAPI_FUNC(Py_ssize_t) _PyShape_SlotOf(_PyShape *shape, PyObject *name);
 
 // Preparation, the only steps that make shapes: the shape *TO reached from
 // FROM by appending NAME (an interned exact str), or by deleting slot IX.
+// A new ADD edge gives its field KIND, the kind of the first value stored;
+// an existing edge is returned whatever its field's kind.
 // Exported for the specialiser and _testinternalcapi.
 // The shape an existing edge leads to, or NULL; these allocate nothing.
 // FindAdd: the (ADD, NAME) edge; FindDelete: deleting the field at IX.
 extern _PyShape *_PyShape_FindAdd(_PyShape *from, PyObject *name);
 extern _PyShape *_PyShape_FindDelete(_PyShape *from, Py_ssize_t ix);
 PyAPI_FUNC(_PyShapePrepare) _PyShape_PrepareAdd(_PyShape *from, PyObject *name,
-                                                _PyShape **to);
+                                                uint8_t kind, _PyShape **to);
 PyAPI_FUNC(_PyShapePrepare) _PyShape_PrepareDelete(_PyShape *from,
                                                    Py_ssize_t ix,
                                                    _PyShape **to);
+
+// Make the field at slot IX of SHAPE, of kind I32 or F64, BOXED in its
+// owner (the shape its ADD edge leads to) and every shape below the owner,
+// and give those shapes one fresh version (_PyType_NewShapeVersion()).
+// Allocates nothing and cannot fail; no value moves.
+extern void _PyShape_Generalise(_PyShape *shape, Py_ssize_t ix);
+// The generalisations so far, and the shapes they re-versioned.
+PyAPI_FUNC(void) _PyShape_GeneraliseCounts(uint64_t *generalisations,
+                                           uint64_t *reversioned);
 
 // The position of SHAPE in its type's table, _Py_SHAPE_INDEX_DICT for
 // dictionary mode; and the number of shapes of TYPE.

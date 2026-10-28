@@ -1065,6 +1065,31 @@ static PyType_Spec  HeapCTypeWithManagedDict_spec = {
     HeapCTypeWithManagedDict_slots
 };
 
+/* A managed-dict type whose traverse does not call
+ * PyObject_VisitManagedDict: the collector marks the storage itself. */
+static int
+heapmanaged_novisit_traverse(PyObject *self, visitproc visit, void *arg)
+{
+    Py_VISIT(Py_TYPE(self));
+    return 0;
+}
+
+static PyType_Slot HeapCTypeWithManagedDictNoVisit_slots[] = {
+    {Py_tp_traverse, heapmanaged_novisit_traverse},
+    {Py_tp_getset, heapctypewithdict_getsetlist},
+    {Py_tp_clear, heapmanaged_clear},
+    {Py_tp_dealloc, heapmanaged_dealloc},
+    {0, 0},
+};
+
+static PyType_Spec  HeapCTypeWithManagedDictNoVisit_spec = {
+    "_testcapi.HeapCTypeWithManagedDictNoVisit",
+    sizeof(PyObject),
+    0,
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_MANAGED_DICT,
+    HeapCTypeWithManagedDictNoVisit_slots
+};
+
 /* A variable-size type that asks for a managed dict: its instances get a
  * dict word after the items, which PyObject_GC_NewVar must initialise. */
 typedef struct {
@@ -1583,6 +1608,10 @@ _PyTestCapi_Init_Heaptype(PyObject *m) {
 
     PyObject *HeapCTypeWithManagedDict = PyType_FromSpec(&HeapCTypeWithManagedDict_spec);
     ADD("HeapCTypeWithManagedDict", HeapCTypeWithManagedDict);
+
+    PyObject *HeapCTypeWithManagedDictNoVisit =
+        PyType_FromSpec(&HeapCTypeWithManagedDictNoVisit_spec);
+    ADD("HeapCTypeWithManagedDictNoVisit", HeapCTypeWithManagedDictNoVisit);
 
     PyObject *HeapCVarWithManagedDict = PyType_FromSpec(&HeapCVarWithManagedDict_spec);
     ADD("HeapCVarWithManagedDict", HeapCVarWithManagedDict);

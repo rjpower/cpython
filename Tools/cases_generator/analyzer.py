@@ -669,6 +669,7 @@ NON_ESCAPING_FUNCTIONS = (
     "PyValue_IsInline",
     "PyValue_IsInlineInt",
     "PyValue_IsInlineFloat",
+    "_PyValue_FitsKind",
     "_PyValue_BothInlineInt",
     "PyValue_FromInt32",
     "_PyValue_FromBits",

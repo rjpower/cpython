@@ -337,6 +337,7 @@ typedef struct {
     uint32_t type_version;
     uint32_t aux;
     uint32_t index;
+    uint8_t slot_kind;
     const void *descr;
     _PyShape *shape;
 } fb_row;
@@ -369,6 +370,7 @@ fb_row_of(_PyFbHeader *h)
             row.index = ((_PyFbAttr *)h)->index;
             row.descr = ((_PyFbAttr *)h)->descr;
             row.shape = ((_PyFbAttr *)h)->shape;
+            row.slot_kind = (uint8_t)((_PyFbAttr *)h)->slot_kind;
             break;
         case FB_CALL:
             row.type_version = ((_PyFbCall *)h)->func_version;
@@ -389,6 +391,12 @@ fb_put_row(_PyFbPoly *poly, int i, fb_row row, int opcode)
     poly->descr[i] = row.descr;
     poly->shape[i] = row.shape;
     poly->handler[i] = (uint16_t)opcode;
+    // slot_kind shares its entry field with dictoffset, so other rows
+    // record 0.
+    poly->slot_kind[i] = (opcode == LOAD_ATTR_SHAPE
+                          || opcode == STORE_ATTR_SHAPE
+                          || opcode == STORE_ATTR_SHAPE_TRANSITION)
+                         ? row.slot_kind : _Py_SLOT_BOXED;
 }
 
 /* Save the observation of a specialised MONO site in a new poly table.
@@ -500,7 +508,11 @@ fb_record(_PyInstr *instr, _PyFbHeader *h, int opcode)
     _PyFbPoly *poly = &fb_block(instr)->poly[h->poly - 1];
     fb_row row = fb_row_of(h);
     int i = 0;
+    /* A row of the same shape is replaced: the shape is live (it is the
+       owner's), so a row of it at another version is obsolete, and
+       keeping it would let invalidations fill the table. */
     while (i < FB_POLY_SIZE && poly->handler[i] != 0 &&
+           (row.shape == NULL || poly->shape[i] != row.shape) &&
            (poly->type_version[i] != row.type_version ||
             poly->aux[i] != row.aux || poly->shape[i] != row.shape ||
             poly->handler[i] != opcode)) {
@@ -681,10 +693,11 @@ lookup_hook_facts(PyTypeObject *type, hook_facts *facts)
 }
 
 /* Whether the poly table of INSTR has a row of a shape handler for another
- * shape: of the type with version TP_VERSION, or of any type if ANY_TYPE. */
+ * shape: of SHAPE's type, or of any type if ANY_TYPE.  A row's shape may
+ * be dead, so it is not read: it is of SHAPE's type if it is the address
+ * of one of that live type's shapes (see _PyFb_ShapeRow()). */
 static bool
-fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, _PyShape *shape,
-                   bool any_type)
+fb_saw_other_shape(_PyInstr *instr, _PyShape *shape, bool any_type)
 {
     _PyFbHeader *h = instr_fb(instr);
     if (h->poly == 0) {
@@ -696,8 +709,8 @@ fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, _PyShape *shape,
         if ((opcode == LOAD_ATTR_SHAPE || opcode == LOAD_ATTR_METHOD_SHAPE ||
              opcode == LOAD_ATTR_NONDESCRIPTOR_SHAPE ||
              opcode == STORE_ATTR_SHAPE || opcode == STORE_ATTR_SHAPE_TRANSITION) &&
-            (any_type || poly->type_version[i] == tp_version) &&
-            poly->shape[i] != shape)
+            poly->shape[i] != shape &&
+            (any_type || _PyType_HasShapeAt(shape->type, poly->shape[i])))
         {
             return true;
         }
@@ -753,7 +766,7 @@ set_shape_guard(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
     fb->shape = shape;
     fb->type_version = tp_version;
     bool poly_load = handler == LOAD_ATTR_SHAPE || handler == LOAD_ATTR_METHOD_SHAPE;
-    if (!fb_saw_other_shape(instr, tp_version, shape, poly_load)) {
+    if (!fb_saw_other_shape(instr, shape, poly_load)) {
         return SHAPE_GUARD_SET;
     }
     fb_record(instr, instr_fb(instr), handler);
@@ -938,7 +951,13 @@ specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name)
             if (func_version == 0) {
                 return -1;
             }
-            fb->type_version = tp_version;
+            // _GUARD_TYPE_VERSION: the type's version, not the shape's,
+            // which differs after a generalisation (note 09 section 5).
+            fb->type_version = FT_ATOMIC_LOAD_UINT_RELAXED(type->tp_version_tag);
+            if (fb->type_version == 0) {
+                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
+                return -1;
+            }
             fb->func_version = func_version;
             // The property, whose getter the handler reads and guards.
             fb->descr = descr;  /* borrowed */
@@ -952,6 +971,9 @@ specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name)
     // Instance storage first, then the class (precedence steps 2 to 5).
     if (plan.kind == _Py_LOOKUP_SLOT) {
         fb->offset = plan.offset;
+        // What the load returns, for a compiler: the shape is not read
+        // once the entry borrows it.
+        fb->slot_kind = plan.slot_kind;
         switch (set_shape_guard(owner, instr, fb, tp_version, LOAD_ATTR,
                                 LOAD_ATTR_SHAPE)) {
             case SHAPE_GUARD_DECLINED:
@@ -1051,7 +1073,8 @@ _Py_Specialize_LoadAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
 }
 
 Py_NO_INLINE void
-_Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
+_Py_Specialize_StoreAttr(PyValue owner_st, PyValue value, _PyInstr *instr,
+                         PyObject *name)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[STORE_ATTR] == INLINE_CACHE_ENTRIES_STORE_ATTR);
@@ -1079,7 +1102,8 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
         goto fail;
     }
     _PyStorePlan plan;
-    _PyShape_LookupStorePlan(_PyObject_SHAPE(owner), name, _Py_STORE_SET, &plan);
+    _PyShape_LookupStorePlan(_PyObject_SHAPE(owner), name, _Py_STORE_SET,
+                             _PyValue_SlotKind(value), &plan);
     unsigned int tp_version = plan.type_version;
     if (tp_version == 0) {
         goto fail;
@@ -1115,8 +1139,14 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
         goto fail;
     }
     switch (plan.outcome) {
+        case _Py_STORE_GENERALISE:
+            // The generic store generalises the field, which renews the
+            // shape's version; the next attempt finds it BOXED.
+            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
+            goto fail;
         case _Py_STORE_REPLACE:
             fb->offset = plan.offset;
+            fb->slot_kind = plan.slot_kind;
             if (set_shape_guard(owner, instr, fb, tp_version, STORE_ATTR,
                                 STORE_ATTR_SHAPE) != SHAPE_GUARD_SET) {
                 goto fail;
@@ -1139,7 +1169,8 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
                 PyObject *key = name;
                 _PyUnicode_InternMortal(_PyInterpreterState_GET(), &key);
                 _PyShapePrepare prep = PyUnicode_CHECK_INTERNED(key)
-                    ? _PyShape_PrepareAdd(_PyObject_SHAPE(owner), key, &shape_to)
+                    ? _PyShape_PrepareAdd(_PyObject_SHAPE(owner), key,
+                                          _PyValue_SlotKind(value), &shape_to)
                     : _Py_SHAPE_PREPARE_LIMIT;
                 if (prep != _Py_SHAPE_PREPARE_OK) {
                     if (prep == _Py_SHAPE_PREPARE_NOMEMORY) {
@@ -1149,6 +1180,14 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
                     goto fail;
                 }
             }
+            // An existing edge's field may have another kind; the generic
+            // store generalises it.
+            uint8_t kind = shape_to->slots[plan.slot].kind;
+            if (!_PyValue_FitsKind(value, kind)) {
+                SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
+                goto fail;
+            }
+            fb->slot_kind = kind;
             fb->shape_to = shape_to;
             specialize(instr, STORE_ATTR_SHAPE_TRANSITION);
             goto success;

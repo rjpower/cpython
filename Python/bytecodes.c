@@ -1929,7 +1929,7 @@ dummy_func(
                 if (!PyValue_IsNull(v)) {
                     PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                     next_instr = this_instr;
-                    _Py_Specialize_StoreAttr(owner, next_instr, name);
+                    _Py_Specialize_StoreAttr(owner, v, next_instr, name);
                     DISPATCH_SAME_OPARG();
                 }
             }
@@ -2856,6 +2856,13 @@ dummy_func(
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
+        // A store into an I32 or F64 field guards the value's kind (note 09
+        // section 5); a BOXED field's range admits every value.  A value of
+        // another kind exits to the generic path, which generalises.
+        op(_GUARD_SLOT_KIND, (slot_kind/0, value, owner -- value, owner)) {
+            EXIT_IF(!_PyValue_FitsKind(value, slot_kind));
+        }
+
         op(_STORE_ATTR_SHAPE, (offset/1, value, owner -- o)) {
             PyObject *owner_o = PyValue_ObjectBorrow(owner);
             PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
@@ -2871,6 +2878,7 @@ dummy_func(
             unused/1 +
             _GUARD_SHAPE +
             _GUARD_SHAPE_VERSION +
+            _GUARD_SLOT_KIND +
             _STORE_ATTR_SHAPE +
             POP_TOP;
 
@@ -2892,6 +2900,7 @@ dummy_func(
             unused/1 +
             _GUARD_SHAPE +
             _GUARD_SHAPE_VERSION +
+            _GUARD_SLOT_KIND +
             _STORE_ATTR_SHAPE_TRANSITION +
             POP_TOP;
 

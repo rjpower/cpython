@@ -200,6 +200,7 @@ BENCHMARKS = [
     micro("float_list_subscript", "empty_loop"),
     micro("str_join", "empty_loop"),
     micro("str_concat", "empty_loop"),
+    micro("str_concat_loop", "empty_loop"),
     micro("try_noraise", "empty_loop"),
     micro("try_raise", "empty_loop"),
 ]

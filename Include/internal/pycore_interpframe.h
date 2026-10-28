@@ -45,9 +45,16 @@ _PyFrame_FbPoly(_PyInterpreterFrame *f, _PyFbHeader *h)
 }
 
 /* The row of POLY for SHAPE at the shape's live version, or -1: the rows
- * that LOAD_ATTR_SHAPE_POLY reads.  Versions are never reused, so a row
- * whose shape has died, and whose address a new shape now has, does not
- * match it.  An unused row has no shape. */
+ * that LOAD_ATTR_SHAPE_POLY reads.  An unused row has no shape.
+ *
+ * A row's shape pointer is never dereferenced, since the row borrows it
+ * and its type may have died.  It is only compared: here with a live
+ * object's shape, where the row's version against the live shape's
+ * makes a reused address safe, and in the specialiser with the live
+ * type's shapes (_PyType_HasShapeAt()).  Versions are never reused within
+ * an interpreter, which owns the feedback: every non-zero shape version
+ * is a tag that the interpreter issued to the shape's type alone, and
+ * rows never hold 0. */
 static inline int
 _PyFb_ShapeRow(const _PyFbPoly *poly, _PyShape *shape)
 {

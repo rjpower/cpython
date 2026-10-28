@@ -16902,7 +16902,7 @@
                     if (!PyValue_IsNull(v)) {
                         PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                         next_instr = this_instr;
-                        _Py_Specialize_StoreAttr(owner, next_instr, name);
+                        _Py_Specialize_StoreAttr(owner, v, next_instr, name);
                         DISPATCH_SAME_OPARG();
                     }
                 }
@@ -16951,7 +16951,7 @@
                     if (!PyValue_IsNull(v)) {
                         PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                         next_instr = this_instr;
-                        _Py_Specialize_StoreAttr(owner, next_instr, name);
+                        _Py_Specialize_StoreAttr(owner, v, next_instr, name);
                         DISPATCH_SAME_OPARG();
                     }
                 }
@@ -17016,9 +17016,18 @@
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
             }
-            // _STORE_ATTR_SHAPE
+            // _GUARD_SLOT_KIND
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
+                uint32_t slot_kind = fb->slot_kind;
+                if (!_PyValue_FitsKind(value, slot_kind)) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
+            // _STORE_ATTR_SHAPE
+            {
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = PyValue_ObjectBorrow(owner);
                 PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
@@ -17079,9 +17088,18 @@
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
             }
-            // _STORE_ATTR_SHAPE_TRANSITION
+            // _GUARD_SLOT_KIND
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
+                uint32_t slot_kind = fb->slot_kind;
+                if (!_PyValue_FitsKind(value, slot_kind)) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
+            // _STORE_ATTR_SHAPE_TRANSITION
+            {
                 _PyShape *shape_to = fb->shape_to;
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = PyValue_ObjectBorrow(owner);

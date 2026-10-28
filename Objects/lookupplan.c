@@ -113,7 +113,8 @@ _PyShape_ResolveLoad(_PyShape *shape, PyObject *name, PyValue descr,
 
 void
 _PyShape_ResolveStore(_PyShape *shape, PyObject *name, PyValue descr,
-                      int cacheable, _PyStoreOp op, _PyStorePlan *plan)
+                      int cacheable, _PyStoreOp op, uint8_t value_kind,
+                      _PyStorePlan *plan)
 {
     PyTypeObject *type = shape->type;
     *plan = (_PyStorePlan){
@@ -146,9 +147,12 @@ _PyShape_ResolveStore(_PyShape *shape, PyObject *name, PyValue descr,
         Py_ssize_t ix = _PyShape_SlotOf(shape, name);
         if (ix >= 0) {
             plan->slot = (uint8_t)ix;
+            plan->slot_kind = shape->slots[ix].kind;
             plan->offset = _PyType_SlotOffset(type, ix);
             if (op == _Py_STORE_SET) {
-                plan->outcome = _Py_STORE_REPLACE;
+                int fits = plan->slot_kind == _Py_SLOT_BOXED
+                           || plan->slot_kind == value_kind;
+                plan->outcome = fits ? _Py_STORE_REPLACE : _Py_STORE_GENERALISE;
             }
             else {
                 plan->outcome = _Py_STORE_REMOVE;
@@ -165,6 +169,9 @@ _PyShape_ResolveStore(_PyShape *shape, PyObject *name, PyValue descr,
         plan->slot = (uint8_t)shape->nslots;
         plan->offset = _PyType_SlotOffset(type, shape->nslots);
         plan->shape_to = _PyShape_FindAdd(shape, name);
+        plan->slot_kind = plan->shape_to != NULL
+                          ? plan->shape_to->slots[shape->nslots].kind
+                          : value_kind;
         return;
     }
     plan->outcome = has_dict_storage(type) ? _Py_STORE_DICT
@@ -193,6 +200,7 @@ _PyLookup_OutcomeName(int outcome)
 {
     switch (outcome) {
         case _Py_STORE_REPLACE: return "REPLACE";
+        case _Py_STORE_GENERALISE: return "GENERALISE";
         case _Py_STORE_ADD: return "ADD";
         case _Py_STORE_REMOVE: return "REMOVE";
         case _Py_STORE_DICT: return "DICT";

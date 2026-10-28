@@ -2207,3 +2207,50 @@ keeping the option; and test_import's SinglephaseInitTests is finding B's
 second creator path (a shared-queue weakref callback drained in a legacy
 subinterpreter's half-initialised thread state), with a new tool,
 boil/tools/cstack.sh, for a C stack without gdb.
+
+## 2026-10-28 09:35 PDT: 6d rung 3 landed (tp_call, wrapperfunc and the call layer on values); gate of the merged head
+
+Landed as 7ad194aa883, the merge of boil/6d-rung3 at 555a63c59b3: rung 3's
+four commits (callfunc, wrapperfunc and wrapperfunc_kwds return PyValue;
+PyObject_CallValue and _PyObject_CallValue take the callable as a value;
+PyVectorcall_Call and _PyObject_Call_PrependValue return values; all 27
+tp_call functions converted; CALL_FUNCTION_EX calls the value form with
+the monitored result rooted across C_RETURN; PyObject_LengthHint reads a
+value; lru_cache keys and results as values with known-hash dict value
+forms; the hand-through helper removed once 10a's call_effects change
+landed), its landing review (reviews/6d-3-landing.md, codex: fix first,
+four findings) and the fixes: the prepend allocation-failure test now
+proves which allocation fails (a three-call argument through
+_testcapi.call_with_nomemory) and requires MemoryError; the lifetime
+cases collect in the callee and read every argument and keyword value;
+float-result rows in the box audit with before and after budgets against
+the a3206a397d9 control; the C-mode record extended by 61 functions.
+
+The agent's lines at 0457f2a3c2c: gate 2 default 51,025 tests, 58,559
+collections, 0 fallbacks; gate 3 debug 51,025 tests, 60,573 collections,
+0 fallbacks, test_cext, regen and the audit; test_gc under kill and under
+ASan (detect_stack_use_after_return=0); stress N=1000 on the stress set
+2,121 tests; the inline probe 20 of 20. The kill suite and the 8.2 ASan
+list stand from a725b9ab5f2 for every file but test_gc. Gate run here on a
+detached checkout of 7ad194aa883 with rebuilt trees: gate 0 both builds;
+gate 1 on test_gc, test_call, test_descr, test_capi, test_functools and
+test_iterlen, 2,169 tests on each build; gate 2 on default 556/564
+files, 51,025 tests, SUCCESS, 58,581 collections, 0 fallbacks; gate 3 on
+debug 51,025 tests, SUCCESS, 60,403 collections, 0 fallbacks, -u cpu
+test_cext 16 tests, regen and the traverse audit clean.
+
+Recorded, not acted on: object_setattr +25 instructions per call, in the
+wrapper value forms on the tp_call path (wrapperdescr_call +34,
+wrap_setattr +20) with layout noise elsewhere; pickle +3.3% because
+PyDict_Next stops inlining _PyDict_NextValue after the known-hash value
+functions joined dictobject.c; the perf-record period that matches perf
+stat (1,000,003; 20,000 throttles) is the measurement note of record.
+Residues with owners: the second starred-callee box (its parameter half
+removed by 10a rung 2b item 4 in d98f6dc8495, the generator's entry-box
+rule to step 8); int.__add__'s operand box (6e); super's receiver box
+(the minimum). Found while landing: the kill record's one-word limit
+(landed separately, 08:05 entry); ASan's fake stacks hiding escaped
+locals (10a rung 3); gate.sh's ignore list before the caller's -m made a
+probe run the whole file (fixed in 8a52226ee12); the unbuilt modules
+can be type-checked against borrowed headers (6d rung 4's tool,
+boil/tools/check_unbuilt.sh, now a gate 3 item in PROCESS.md).

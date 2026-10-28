@@ -1148,13 +1148,23 @@ class TestIRCases(unittest.TestCase):
             DEAD(left);
             DEAD(value);
         }
+        op(_PEEK_CALLS, (value -- value)) {
+            spam_call();
+        }
         macro(OP_LATE) = _CALLS + _TAKE;
         macro(OP_SPECIALIZED) = _SPECIALIZE + _TAKE;
+        macro(OP_PEEK) = _PEEK_CALLS + _TAKE;
     """
         formats = self.formats(input)
         # left is taken after _CALLS ran; value before
         self.assertEqual(formats["OP_LATE"].borrow_mask, 0b10)
         self.assertEqual(formats["OP_SPECIALIZED"].borrow_mask, 0b11)
+        # _PEEK_CALLS takes value without using it, so the handler reads
+        # value's field in _TAKE, after the call
+        self.assertEqual(formats["OP_PEEK"].borrow_mask, 0b00)
+        handler = self.handler(self.ir_output(input), "OP_PEEK")
+        self.assertLess(handler.index("spam_call()"),
+                        handler.index("value = IR_SLOT("))
 
     def test_runs_code_covers_every_handler(self):
         # Over the real instruction set, each instruction that may run

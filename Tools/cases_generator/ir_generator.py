@@ -421,31 +421,37 @@ def runs_code(inst: Instruction) -> bool:
 
 
 def inputs_read_after_code(inst: Instruction, n_inputs: int) -> set[int]:
-    """The inputs of inst, bottom first, that the first uop to take them
-    takes after a uop that may run Python code (uop_runs_code()).  The
-    handler reads an input's field where that uop takes it, so a local
-    folded into such a field would be read after the code ran."""
+    """The inputs of inst, bottom first, that the handler first reads after
+    a uop that may run Python code (uop_runs_code()).  The handler reads an
+    input's field where the first uop that uses it takes it; a uop that
+    takes it unused, as a peek that passes it through, reads nothing
+    (Stack.pop()).  A local folded into such a field would be read after
+    the code ran."""
     late: set[int] = set()
-    stack: list[int] = []   # external index (bottom first) or -1
+    # Per stack entry: the external index (bottom first) or -1, and
+    # whether the handler has read it
+    stack: list[tuple[int, bool]] = []
     depth = n_inputs        # external inputs not yet reached
     ran = False
     for part in inst.parts:
         if not isinstance(part, Uop):
             continue
-        popped: list[int] = []      # top first
+        popped: list[tuple[int, bool]] = []     # top first
         for item in reversed(part.stack.inputs):
             if stack:
-                ext = stack.pop()
+                ext, read = stack.pop()
             else:
                 depth -= 1
-                ext = depth
+                ext, read = depth, False
+            if ext >= 0 and item.used and not read:
+                read = True
                 if ran:
                     late.add(ext)
-            popped.append(ext)
+            popped.append((ext, read))
         popped.reverse()
         for j in range(len(part.stack.outputs)):
             i = passed_through(part, j)
-            stack.append(popped[i] if i is not None else -1)
+            stack.append(popped[i] if i is not None else (-1, True))
         ran = ran or uop_runs_code(part)
     return late
 

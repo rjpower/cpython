@@ -257,7 +257,7 @@ with 150,000 fields under `-u cpu` and is skipped. `test_compile`'s
 |---|---|
 | `co_ir` | the words, immutable, from the pyc |
 | `co_exec` | executing copy, allocated at first call; handler column rewritten by specialisation and instrumentation |
-| `co_feedback` | the feedback vector, allocated with `co_exec`; entry kinds as in note 01 |
+| `co_feedback` | the feedback vector, allocated with `co_exec`; entry kinds in section 2.5 |
 | `co_nslots`, `co_nlocalsplus` | frame size, static |
 | `co_linetable` | as today, keyed by word index |
 | `co_exceptiontable` | ranges over word indices; handler word, slot for the exception, slot for `lasti` or none; no depth |
@@ -273,7 +273,7 @@ to re-lower. `LINE` events use the line table.
 
 ### 2.5 Feedback
 
-The feedback vector is the one from note 01 (kinds COUNTER, BRANCH, UNARY,
+The feedback vector is Phase 1's (kinds COUNTER, BRANCH, UNARY,
 BINARY, ATTR, GLOBAL, CALL; 16 to 40 bytes; up to four shapes before
 megamorphic), with two additions: an entry carries its static operand
 (section 2.1), and CALL entries record the callee's function version so that
@@ -616,7 +616,7 @@ only lasting part, root enumeration, is step 4.
    only if a benchmark shows it.
 4. **The free-threaded build ends at step 5.** A parallel marker is the
    later path to multi-core, not a concurrent reference-counting scheme.
-5. **Skip deferred reference counting (note 03) entirely.** Its root scan is
+5. **Skip deferred reference counting (the Phase 1 proposal) entirely.** Its root scan is
    step 4; the rest would be deleted at step 5.
 6. **Generational collection is step 7, not part of step 5**, so that the
    first collector has no write barrier to get wrong.
@@ -776,7 +776,7 @@ runs the boxing forms instead in a build without inline values or under
 
 **Instrumentation.** Instrumentation rewrites handlers in the executing copy
 and restores them from the code object's words. The pristine words replace
-the `real[]` array of note 01: the handler to restore is that word's, or for
+Phase 1's `real[]` array of saved instructions: the handler to restore is that word's, or for
 a NOFB site the NOFB form of the instrumented instruction. A restored word is
 generic and warms up again. INSTRUCTION events fire once per word; the
 `IR_JUMP` words described below have none.

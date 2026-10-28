@@ -58,7 +58,7 @@ store, existing `attr_store`; attribute load, `__slots__` `slots_load`;
 attribute load and store after `__dict__` `attr_load_after_dict` and
 `attr_store_after_dict`; new instance, four attributes `new_instance`; new
 instance, empty `__init__` `new_instance_empty`. On baseline they reproduce
-note 02's values (skeleton 80.7 against 80, int add 164.0 against 164,
+the Phase 1 measurements (skeleton 80.7 against 80, int add 164.0 against 164,
 float add 130.1 against 130).
 
 **Memory and the collector** (`internal/memory/`). Fixed workloads, one

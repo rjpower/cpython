@@ -1956,6 +1956,11 @@ class TracingCollectorTests(unittest.TestCase):
         rc, out, err = assert_python_failure("-c", self.SPAN_BOX, "canonical",
                                              PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split(), [b"True", b"False", b"0"])
+        if support.check_sanitizer(address=True):
+            # ASan stops the read of the poisoned header before the trap
+            self.assertIn(b"AddressSanitizer: use-after-poison", err)
+            self.assertIn(b"in _Py_TYPE_impl", err)
+            return
         self.assertIn(b"gc verify kill: Py_TYPE of the int", err)
         self.assertIn(b"of a precise frame", err)
         self.assertIn(b"use of a killed object", err)

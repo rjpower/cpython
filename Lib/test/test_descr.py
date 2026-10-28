@@ -6405,6 +6405,70 @@ def _values():
             True, IntSub(5), 12345 * one, 2.5 * one]
 
 
+def _fail_each_allocation(_testcapi, action, check=None):
+    # Fail each allocation of action() in turn, from the first, with every
+    # one after it, after a collection; call check() after each failure,
+    # with the allocator restored.  Returns the number of allocations of the
+    # passing run and the exceptions of the failed ones.
+    errors = []
+    for n in range(1, 100):
+        gc.collect()
+        error = None
+        _testcapi.set_nomemory(n, 0)
+        try:
+            action()
+        except BaseException as exc:
+            error = exc
+        finally:
+            _testcapi.remove_mem_hooks()
+        if error is None:
+            return n - 1, errors
+        errors.append(error)
+        if check is not None:
+            check()
+    raise AssertionError("the action never passed")
+
+
+_DESCRIPTOR_MUTATION = """if 1:
+    import gc
+
+    class D:
+        def __get__(self, obj, owner):
+            del owner.d
+            gc.collect()
+            return self.base + len("ab")
+    class C:
+        pass
+    C.d = D()
+    vars(C)["d"].base = 100000
+    assert C().d == 100002
+    assert "d" not in vars(C)
+
+    def first(self):
+        vars(P)["p"].__init__(second)
+        gc.collect()
+        return 2.5 * len("ab")
+    def second(self):
+        return 7
+    class P:
+        p = property(first)
+    del first
+    assert P().p == 5.0
+    assert P().p == 7
+
+    def removing(self):
+        del Q.p
+        gc.collect()
+        return 100000 + len("abc")
+    class Q:
+        p = property(removing)
+    del removing
+    assert Q().p == 100003
+    assert "p" not in vars(Q)
+    print("ok")
+"""
+
+
 class ValueAttributeTests(unittest.TestCase):
     """6d rung 2: the attribute slots return and take values, so a value
     passes through each path unboxed, and comes back the same."""
@@ -6493,18 +6557,94 @@ class ValueAttributeTests(unittest.TestCase):
         self.assertEqual(float.__dict__["real"].__get__(2.5, float), 2.5)
 
     def test_wrapper_nomemory(self):
+        # The wrapper boxes its inline argument (rung 3 removes the box).
+        # The same call on a heap int makes no allocation and passes under
+        # the same injection, so each MemoryError arises at the box.
         _testcapi = import_helper.import_module("_testcapi")
-        x = 100000 + int("1")
         get = int.__dict__["real"].__get__
-        error = None
-        _testcapi.set_nomemory(0, 1)
-        try:
-            get(x, int)
-        except MemoryError as exc:
-            error = exc
-        finally:
-            _testcapi.remove_mem_hooks()
-        self.assertIsInstance(error, MemoryError)
+        inline = 100000 + int("1")
+        heap = 2**40 + int("1")
+        count, errors = _fail_each_allocation(_testcapi,
+                                              lambda: get(inline, int))
+        self.assertGreater(count, 0)
+        for error in errors:
+            self.assertIsInstance(error, MemoryError)
+        self.assertEqual(_fail_each_allocation(_testcapi,
+                                               lambda: get(heap, int)),
+                         (0, []))
+        self.assertEqual(get(inline, int), inline)
+
+    def test_nomemory_boxes(self):
+        # Test 6: the box of an inline value at the error path, at the
+        # compatibility forms' results and at a native object field.  Each
+        # allocation of the action fails in turn with every one after it;
+        # the same action on a heap value is the control, so the inline
+        # action's extra allocations are its box.  Each failure is a
+        # MemoryError, leaves the destination as it was, and the action
+        # passes once the roots have unwound.
+        _testcapi = import_helper.import_module("_testcapi")
+        _testlimitedcapi = import_helper.import_module("_testlimitedcapi")
+        pv = _testcapi.pyvalue
+        n = 100000 + int("2")
+        heap = 2**40 + int("2")
+        class O:
+            pass
+        def owner(v):
+            o = O()
+            o.a = v
+            return o
+        def miss(v):
+            try:
+                v.missing
+            except AttributeError as exc:
+                return exc
+        exc = AttributeError()
+        exc.obj = "previous"
+        def unchanged():
+            self.assertEqual(exc.obj, "previous")
+        cases = [
+            ("error path", miss, None),
+            ("PyObject_GetAttr",
+             lambda v: _testlimitedcapi.object_getattr(v, "a"), None),
+            ("PyObject_GetOptionalAttr",
+             lambda v: _testcapi.object_getoptionalattr(v, "a"), None),
+            ("_Py_T_OBJECT store",
+             lambda v: pv.MemberSetOneValue(exc, "obj", v), unchanged),
+        ]
+        for name, action, check in cases:
+            for inline in (n, 2.5 * n):
+                with self.subTest(name=name, inline=inline):
+                    if name.startswith("PyObject_Get"):
+                        args = owner(inline), owner(heap)
+                    else:
+                        args = inline, heap
+                    count, errors = _fail_each_allocation(
+                        _testcapi, lambda: action(args[0]), check)
+                    control, _ = _fail_each_allocation(
+                        _testcapi, lambda: action(args[1]), check)
+                    self.assertGreater(count, control)
+                    for error in errors:
+                        self.assertIsInstance(error, MemoryError)
+                    if check is not None:
+                        exc.obj = "previous"
+        self.assertEqual(miss(n).obj, n)
+        self.assertEqual(_testlimitedcapi.object_getattr(owner(n), "a"), n)
+        pv.MemberSetOneValue(exc, "obj", n)
+        self.assertEqual(exc.obj, n)
+
+    def test_descriptor_mutation_collecting(self):
+        # Test 5: a __get__ that deletes itself from its class, a getter
+        # that replaces its property's fget, and one that removes its
+        # property, each collecting before it returns.  The lookup's roots
+        # hold the descriptor and the function being run, the only holders
+        # once the class lets go; under kill on debug builds a missed root
+        # would abort.
+        rc, out, err = assert_python_ok("-c", _DESCRIPTOR_MUTATION)
+        self.assertEqual(out.split(), [b"ok"])
+        if support.Py_DEBUG:
+            rc, out, err = assert_python_ok("-c", _DESCRIPTOR_MUTATION,
+                                            PYTHON_GCVERIFY="kill")
+            self.assertEqual(out.split(), [b"ok"])
 
     def test_errors(self):
         n = 100000 + int("1")

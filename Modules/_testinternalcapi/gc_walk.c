@@ -54,7 +54,6 @@ walk_from_here(void)
         .scan = owners_scan,
         .arg = current_owners,
         .top = ts->c_stack_top,
-        .activations = ts->gc_trace.activation,
     };
     // Not in this frame, whose words the walk scans
     static _Py_thread_local _PyGCContext ctx;

@@ -25,7 +25,7 @@ NON_COLLECTING = frozenset({
     "Py_INCREF", "Py_DECREF", "Py_XINCREF", "Py_XDECREF", "Py_CLEAR",
     "Py_SETREF", "Py_XSETREF", "Py_NewRef", "Py_XNewRef", "_Py_NewRef",
     "Py_REFCNT", "_Py_IsImmortal", "_Py_TryIncrefCompare",
-    "_PyObject_IsUniquelyReferenced", "_PyGC_CLEAR_ARRAY",
+    "_PyObject_IsUniquelyReferenced",
     # header, type and tracking predicates, and the shape
     "Py_TYPE", "Py_SIZE", "Py_IS_TYPE", "Py_SET_TYPE", "Py_SET_SIZE",
     "Py_Is", "Py_IsNone", "Py_IsTrue", "Py_IsFalse",
@@ -52,9 +52,6 @@ NON_COLLECTING = frozenset({
     "_PyValue_FloatOperandValues", "_PyValue_UnrootObject",
     # an empty asm that hides a pointer's origin from the optimizer
     "_PyValue_HIDE_ORIGIN",
-    # zero the stack below the caller's frame: inline assembly that stores
-    # below the stack pointer and touches no object (pycore_gc_trace.h)
-    "_PyGC_ClearStackBelow", "_PyGC_ClearStackBuffer",
     # A new object's header (10a-1b.md item 3).  The reference tracer runs
     # with collection deferred (_PyReftracerTrack(), pycore_object.h); the
     # object map's chunks are mapped with mmap(); the root shape's fields

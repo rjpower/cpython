@@ -1062,6 +1062,60 @@ class VariableSizeTests(unittest.TestCase):
             self.check(b, n)
             self.assertEqual(b, b"x" * n)
 
+    def test_sibling_layouts(self):
+        # Subclasses that each add the dict word share one layout: they
+        # exchange __class__ and __bases__, and combine as bases.
+        cases = ((int, (5,)), (int, (2**100,)), (tuple, ((1, 2),)),
+                 (bytes, (b"ab",)), (_testcapi.HeapCCollection, ([1], [2])))
+        for base, args in cases:
+            with self.subTest(base=base.__name__):
+                class A(base):
+                    pass
+                class B(base):
+                    pass
+                o = A(*args)
+                o.attr = [1]
+                o.__class__ = B
+                self.assertIs(type(o), B)
+                gc.collect()
+                self.assertEqual(vars(o), {"attr": [1]})
+                if base is _testcapi.HeapCCollection:
+                    self.assertEqual(tuple(o), args)
+                else:
+                    self.assertEqual(o, base(*args))
+                class C(A, B):
+                    pass
+                c = C(*args)
+                c.attr = "c"
+                gc.collect()
+                self.assertEqual(vars(c), {"attr": "c"})
+                class D(A):
+                    pass
+                D.__bases__ = (B,)
+                self.assertIs(D.__base__, B)
+
+    def test_c_type_dict_word_starts_empty(self):
+        # A variable-size C type that asks for a managed dict gets a dict
+        # word after its items; PyObject_GC_NewVar clears it.
+        T = _testcapi.HeapCVarWithManagedDict
+        self.assertFalse(T.__flags__ & (1 << 4))  # no MANAGED_DICT
+        self.assertLess(T.__dictoffset__, 0)
+        for n in (0, 1, 7):
+            # Reused memory is not zeroed.
+            garbage = [T(*[object()] * n) for _ in range(100)]
+            del garbage
+            gc.collect()
+            objects = [T(*([i] for i in range(n))) for _ in range(100)]
+            for o in objects:
+                self.assertEqual(vars(o), {})
+                o.a = n
+            gc.collect()
+            for o in objects:
+                self.assertEqual(o.a, n)
+                self.assertEqual([o[i] for i in range(n)], [[i] for i in range(n)])
+            _testcapi.clear_managed_dict(objects[0])
+            self.assertFalse(hasattr(objects[0], "a"))
+
     def test_items_at_end_subclass(self):
         # The items follow tp_basicsize, so the dict word is before them.
         class H(_testcapi.HeapCCollection):

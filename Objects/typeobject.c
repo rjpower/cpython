@@ -3561,11 +3561,30 @@ find_best_base(PyObject *bases)
     return base;
 }
 
+/* The bytes of the dict word that a heap type T adds to BASE, which has no
+ * dict, when T has a variable size (type_ready_managed_dict): before the
+ * items for an ITEMS_AT_END base, or after them.  Two such types have the
+ * same layout, so the word does not make T a solid base, and siblings
+ * that add it may exchange __class__ and be combined as bases. */
+static Py_ssize_t
+dict_word_added(PyTypeObject *t, PyTypeObject *base)
+{
+    if (!(t->tp_flags & Py_TPFLAGS_HEAPTYPE) || t->tp_itemsize == 0 ||
+        base->tp_dictoffset != 0) {
+        return 0;
+    }
+    if (t->tp_dictoffset == -(Py_ssize_t)sizeof(PyObject *) ||
+        t->tp_dictoffset == base->tp_basicsize) {
+        return sizeof(PyObject *);
+    }
+    return 0;
+}
+
 static int
 shape_differs(PyTypeObject *t1, PyTypeObject *t2)
 {
     return (
-        t1->tp_basicsize != t2->tp_basicsize ||
+        t1->tp_basicsize - dict_word_added(t1, t2) != t2->tp_basicsize ||
         t1->tp_itemsize != t2->tp_itemsize
     );
 }
@@ -7206,7 +7225,9 @@ same_slots_added(PyTypeObject *a, PyTypeObject *b)
 
     assert(base == b->tp_base);
     size = base->tp_basicsize;
-    if (a->tp_dictoffset == size && b->tp_dictoffset == size)
+    if (a->tp_dictoffset == b->tp_dictoffset && dict_word_added(a, base))
+        size += sizeof(PyObject *);
+    else if (a->tp_dictoffset == size && b->tp_dictoffset == size)
         size += sizeof(PyObject *);
     if (a->tp_weaklistoffset == size && b->tp_weaklistoffset == size)
         size += sizeof(PyObject *);

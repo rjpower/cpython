@@ -1744,6 +1744,11 @@ _PyObject_GC_NewVar(PyTypeObject *tp, Py_ssize_t nitems)
         return NULL;
     }
     _PyObject_InitVar(op, tp, nitems);
+    if (tp->tp_dictoffset != 0 && !(tp->tp_flags & Py_TPFLAGS_MANAGED_DICT)) {
+        // The dict word of a variable-size type with a managed dict
+        // (type_ready_managed_dict), which its C code may not initialise.
+        *_PyObject_ComputedDictPointer((PyObject *)op) = NULL;
+    }
     return op;
 }
 
@@ -1768,12 +1773,19 @@ _PyObject_GC_Resize(PyVarObject *op, Py_ssize_t nitems)
     if (basicsize > (size_t)PY_SSIZE_T_MAX) {
         return (PyVarObject *)PyErr_NoMemory();
     }
+    // A dict word found from the end moves with it.
+    int moves = Py_TYPE(op)->tp_dictoffset < 0
+                && !(Py_TYPE(op)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
+    PyObject *dict = moves ? *_PyObject_ComputedDictPointer((PyObject *)op) : NULL;
     char *mem = (char *)_PyObject_ReallocWithType(Py_TYPE(op), op, basicsize);
     if (mem == NULL) {
         return (PyVarObject *)PyErr_NoMemory();
     }
     op = (PyVarObject *)mem;
     Py_SET_SIZE(op, nitems);
+    if (moves) {
+        *_PyObject_ComputedDictPointer((PyObject *)op) = dict;
+    }
     return op;
 }
 

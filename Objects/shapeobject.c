@@ -9,6 +9,7 @@
 
 #include "Python.h"
 #include "pycore_dict.h"          // _PyDict_SetItemValue()
+#include "pycore_gc_trace.h"      // _PyGC_LiveCollectHere()
 #include "pycore_object.h"        // _PyObject_ComputedDictPointer()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_shape.h"
@@ -479,7 +480,9 @@ convert_to_dict(PyObject *obj, PyObject *name, PyValue value)
         }
     }
     if (_PyShape_ConversionCollect) {
-        PyGC_Collect();
+        // The collection that an allocation here could start: it scans C
+        // locals and runs no finalizer, so the object cannot change.
+        (void)_PyGC_LiveCollectHere(tstate);
     }
     publish_dict(obj, (PyDictObject *)dict);
     res = 0;

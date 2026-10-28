@@ -1326,18 +1326,6 @@ and :c:data:`PyType_Type` effectively act as defaults.)
       :c:member:`~PyTypeObject.tp_weaklistoffset` field is set in a superclass.
 
 
-   .. c:macro:: Py_TPFLAGS_PREHEADER
-
-      These bits indicate that the VM will manage some fields by storing them
-      before the object. Currently, this macro is equivalent to
-      :c:expr:`Py_TPFLAGS_MANAGED_DICT | Py_TPFLAGS_MANAGED_WEAKREF`.
-
-      This macro value relies on the implementation of the VM, so its value is not
-      stable and may change in a future version. Prefer using individual
-      flags instead.
-
-      .. versionadded:: 3.12
-
 
    .. c:macro:: Py_TPFLAGS_ITEMS_AT_END
 

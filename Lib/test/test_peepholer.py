@@ -1190,6 +1190,264 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         attr = [i for i in dis.get_instructions(f) if i.opname == 'LOAD_ATTR'][0]
         self.assertEqual(attr.srcs, (0,))
 
+def _rebind_caller_x(depth=2):
+    # Rebinds the local x of the frame `depth` levels above this one, as a
+    # debugger would through frame.f_locals.
+    sys._getframe(depth).f_locals["x"] = 2
+
+
+class CopyPropagationAcrossCodeTests(BytecodeTestCase):
+    """A borrowed load folded into its reader reads the local when the
+    reader runs.  An op in between that runs Python code can rebind the
+    local through frame.f_locals, so the fold must not cross it: the reader
+    sees the value the load saw (boil/design/work/compiler-copyprop-1.md).
+    Each function returns the reader's result, computed at the event, and
+    the local after the line, which shows that the rebinding happened."""
+
+    def setUp(self):
+        self.addCleanup(sys.settrace, sys.gettrace())
+        sys.settrace(None)
+
+    def check(self, f, *args):
+        # Run past specialisation, so that the specialised members, which
+        # may push a frame, are exercised too.
+        for _ in range(100):
+            self.assertEqual(f(*args), (1, 2))
+
+    def test_call(self):
+        def change():
+            _rebind_caller_x()
+            return 0
+        def f():
+            x = 1
+            return x + change(), x
+        self.check(f)
+
+    def test_property(self):
+        class O:
+            @property
+            def attr(self):
+                _rebind_caller_x()
+                return 0
+        def f(o):
+            x = 1
+            return x + o.attr, x
+        self.check(f, O())
+
+    def test_getattr(self):
+        class O:
+            def __getattr__(self, name):
+                _rebind_caller_x()
+                return 0
+        def f(o):
+            x = 1
+            return x + o.attr, x
+        self.check(f, O())
+
+    def test_subscript(self):
+        class O:
+            def __getitem__(self, i):
+                _rebind_caller_x()
+                return 0
+        def f(o):
+            x = 1
+            return x + o[0], x
+        self.check(f, O())
+
+    def test_reflected_binary_op(self):
+        class O:
+            def __radd__(self, other):
+                _rebind_caller_x()
+                return 0
+        def f(o):
+            x = 1
+            y = 0
+            return x + (y + o), x
+        self.check(f, O())
+
+    def test_comparison(self):
+        class O:
+            def __lt__(self, other):
+                _rebind_caller_x()
+                return 0
+        def f(o):
+            x = 1
+            return x + (o < 0), x
+        self.check(f, O())
+
+    def test_global_in_dict_subclass(self):
+        # A generic LOAD_GLOBAL calls __getitem__ of globals that are not
+        # an exact dict.
+        class Globals(dict):
+            def __getitem__(self, key):
+                if key == "G":
+                    _rebind_caller_x()
+                return dict.__getitem__(self, key)
+        ns = Globals(G=0, _rebind_caller_x=_rebind_caller_x)
+        exec("def f():\n    x = 1\n    return x + G, x\n", ns)
+        self.check(ns["f"])
+
+    def test_global_colliding_key(self):
+        # The lookup of a builtin in an exact module dict compares with a
+        # key of the same hash, whose __eq__ runs.
+        class Key(str):
+            def __hash__(self):
+                return hash("copyprop_builtin")
+            def __eq__(self, other):
+                if other == "copyprop_builtin":
+                    _rebind_caller_x()
+                return False
+        import builtins
+        builtins.copyprop_builtin = 0
+        self.addCleanup(delattr, builtins, "copyprop_builtin")
+        ns = {"_rebind_caller_x": _rebind_caller_x, Key("other"): 0}
+        exec("def f():\n    x = 1\n    return x + copyprop_builtin, x\n", ns)
+        self.check(ns["f"])
+
+    def test_under_settrace(self):
+        events = []
+        def trace(frame, event, arg):
+            if frame.f_code.co_name == "change":
+                events.append(event)
+            return trace
+        def change():
+            _rebind_caller_x()
+            return 0
+        class O:
+            @property
+            def attr(self):
+                _rebind_caller_x()
+                return 0
+        def f():
+            x = 1
+            return x + change(), x
+        def g(o):
+            x = 1
+            return x + o.attr, x
+        sys.settrace(trace)
+        try:
+            r1 = f()
+            r2 = g(O())
+        finally:
+            sys.settrace(None)
+        self.assertEqual((r1, r2), ((1, 2), (1, 2)))
+        # The tracer saw the call that rebinds x
+        self.assertIn("call", events)
+
+    def test_under_monitoring(self):
+        mon = sys.monitoring
+        tool = mon.DEBUGGER_ID
+        mon.use_tool_id(tool, "copyprop")
+        self.addCleanup(mon.free_tool_id, tool)
+        self.addCleanup(mon.set_events, tool, 0)
+        seen = []
+        def on_call(code, offset, callable, arg0):
+            if callable is len:
+                seen.append(code.co_name)
+                # The callback's caller is the function that calls len
+                _rebind_caller_x()
+        mon.register_callback(tool, mon.events.CALL, on_call)
+        self.addCleanup(mon.register_callback, tool, mon.events.CALL, None)
+        class O:
+            @property
+            def attr(self):
+                _rebind_caller_x()
+                return 0
+        def f(s):
+            x = 1
+            return x + len(s), x
+        def g(o):
+            x = 1
+            return x + o.attr, x
+        mon.set_events(tool, mon.events.CALL | mon.events.PY_START
+                       | mon.events.LINE)
+        try:
+            r1 = f("")
+            r2 = g(O())
+        finally:
+            mon.set_events(tool, 0)
+        self.assertEqual((r1, r2), ((1, 2), (1, 2)))
+        self.assertIn("f", seen)
+
+    def test_folded_operand_outlives_rebinding(self):
+        # The reader's own callee rebinds the folded local and collects;
+        # the reader still hands the original operand to __radd__.  Today
+        # the C frames below the eval loop retain it conservatively; the
+        # PROCESS.md 0.3 row "a reader's folded operand needs an anchor
+        # across the reader's own collecting calls" (10a rung 3) makes this
+        # test its oracle under PYTHON_GCVERIFY=kill with precise frames.
+        seen = []
+        class X:
+            def __init__(self, tag):
+                self.tag = tag
+            def __add__(self, other):
+                _rebind_caller_x(2)
+                gc.collect()
+                return NotImplemented
+        class O:
+            def __radd__(self, other):
+                seen.append(other.tag)
+                return 0
+        def f(o, i):
+            x = X(f"tag{i}")
+            return x + o, x
+        self.assertReadsLocal(f, 'BINARY_OP', 'x')
+        for i in range(20):
+            self.assertEqual(f(O(), i), (0, 2))
+        self.assertEqual(seen, [f"tag{i}" for i in range(20)])
+
+    # The folds that stay: nothing between the load and its reader runs
+    # code.  Instruction.srcs lists the slots the reader reads, bottom
+    # first, so the reader names x's own slot.
+
+    def assertReadsLocal(self, f, opname, name, folded=True):
+        code = f.__code__
+        reader = [i for i in dis.get_instructions(f) if i.opname == opname][0]
+        x = code.co_varnames.index(name)
+        if folded:
+            self.assertEqual(reader.srcs[0], x)
+        else:
+            # The reader takes the value of a load into a temporary
+            self.assertNotEqual(reader.srcs[0], x)
+            self.assertInBytecode(f, 'LOAD_FAST_BORROW', name)
+
+    def test_fold_under_constant(self):
+        def f(x):
+            return x + 1000
+        self.assertReadsLocal(f, 'BINARY_OP', 'x')
+
+    def test_fold_under_local(self):
+        def f(x, y):
+            return x + y
+        self.assertReadsLocal(f, 'BINARY_OP', 'x')
+
+    def test_fold_under_cell(self):
+        def f(x):
+            c = 1
+            def g():
+                return c
+            return x + c
+        self.assertReadsLocal(f, 'BINARY_OP', 'x')
+
+    def test_fold_under_tuple_and_is(self):
+        def f(x, a, b):
+            return x == (a, b)
+        def g(x, a, b):
+            return x + (a is b)
+        self.assertReadsLocal(f, 'COMPARE_OP', 'x')
+        self.assertReadsLocal(g, 'BINARY_OP', 'x')
+
+    def test_no_fold_under_global(self):
+        def f(x):
+            return x + G
+        self.assertReadsLocal(f, 'BINARY_OP', 'x', folded=False)
+
+    def test_no_fold_under_attribute(self):
+        def f(x, o):
+            return x + o.a
+        self.assertReadsLocal(f, 'BINARY_OP', 'x', folded=False)
+
+
 class DirectCfgOptimizerTests(CfgOptimizationTestCase):
 
     def test_optimize_cfg_const_index_out_of_range(self):

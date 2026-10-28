@@ -29,9 +29,15 @@ pointers to module, thread and interpreter states are taken as borrowed.
 Report 2 reads member names from Py_DECREF/Py_XDECREF/Py_CLEAR/Py_XSETREF/
 Py_SETREF (and a Py_buffer's obj from PyBuffer_Release) in the dealloc and
 clear functions, and the members the traverse function names, each with the
-functions and function-like macros of the same file that it calls, two calls
-deep; a traverse that delegates to a helper in another file is listed and
-needs a look.
+functions and function-like macros that it calls, two calls deep, looked up
+in the same file, then in the headers of its directory, then in Include/
+(accessors such as PyInstanceMethod_GET_FUNCTION); a function of the same
+file that the body names without calling it (a visit callback handed to an
+enumerator) is read as a callee.  A traverse that calls another type's
+tp_traverse (PyDict_Type.tp_traverse(op, ...)) visits that type's members
+when its struct is the type's own or a base; that traverse is audited as its
+own type's.  A traverse that delegates to a helper in another .c file is
+listed and needs a look.
 
 With --check the tool is a gate (boil/tools/gate.sh, level 3): it prints
 nothing else and exits 1 when a type with references and no traverse, or
@@ -227,7 +233,7 @@ def split_top(body: str, sep: str) -> list[str]:
 
 DECL_RE = re.compile(r"^(?:(?:const|volatile|struct|union|enum)\s+)*([A-Za-z_]\w*)\s*(.*)$")
 DECLARATOR_RE = re.compile(
-    r"^((?:\*\s*(?:const\s*)?)*)([A-Za-z_]\w*)\s*((?:\[[^\]]*\]\s*)*)(?::\s*\w+)?$")
+    r"^((?:\*\s*(?:const\b\s*)?)*)([A-Za-z_]\w*)\s*((?:\[[^\]]*\]\s*)*)(?::\s*\w+)?$")
 
 
 @dataclass
@@ -493,14 +499,41 @@ def brace_body_paren(text: str, start: int) -> str:
     return text[start:i - 1]
 
 
+# The start of a function definition at column 0: an optional macro such as
+# Py_LOCAL_INLINE(int), an optional return type on the same line, and the
+# name with its opening parenthesis.  Whether it is a definition is decided
+# by the brace after the balanced parameter list, so that a return-type
+# macro alone on the line before (LOCAL(void)) is not taken as the function.
+DEF_RE = re.compile(r"^(?:[A-Za-z_]\w*\([^()\n]*\)[ \t]+)?"
+                    r"(?:[A-Za-z_][\w \t*]*?[ \t*])?([A-Za-z_]\w*)\s*\(", re.M)
+KEYWORDS = {"if", "for", "while", "switch", "return", "sizeof", "do", "else"}
+
+
 def functions(text: str) -> dict[str, str]:
     """The bodies of a file's functions and function-like macros."""
     out = {}
     for m in re.finditer(r"^#define\s+([A-Za-z_]\w*)\([^)]*\)(.*)$", text, flags=re.M):
         out[m.group(1)] = m.group(2)
-    for m in re.finditer(r"^([A-Za-z_]\w*)\s*\([^;{]*\)\s*\{", text, flags=re.M):
-        out[m.group(1)] = brace_body(text, m.end())
+    for m in DEF_RE.finditer(text):
+        if m.group(1) in KEYWORDS:
+            continue
+        end = paren_end(text, m.end())
+        b = re.compile(r"\s*\{").match(text, end)
+        if b:
+            out[m.group(1)] = brace_body(text, b.end())
     return out
+
+
+def paren_end(text: str, start: int) -> int:
+    """The index after the parenthesis that closes the one before start."""
+    depth, i = 1, start
+    while i < len(text) and depth:
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+        i += 1
+    return i
 
 
 # Members that hold no reference: weak reference lists.
@@ -519,21 +552,60 @@ def all_refs(name: str, structs: dict[str, Struct]) -> list[str]:
 
 
 CALL_RE = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
+IDENT_RE = re.compile(r"\b([A-Za-z_]\w*)\b")
 
 
-def with_callees(name: str, fs: dict[str, str], depth: int = 2) -> str:
-    """The body of the function name and of the functions in the same file
-    that it calls, to depth calls."""
+def with_callees(name: str, fs: dict[str, str],
+                 headers: tuple[dict[str, str], ...] = (),
+                 depth: int = 2) -> str:
+    """The body of the function name and of the functions it calls, to
+    depth calls.  A callee is looked up in the same file, then in headers
+    (the file's directory, then Include/), which hold the accessors such as
+    PyInstanceMethod_GET_FUNCTION() and helpers such as sre_lib.h's.  A
+    function of the same file that the body names without calling it, such
+    as a visit callback handed to an enumerator, is read as a callee."""
+    scopes = (fs, *headers)
     bodies, seen, todo = [], set(), [(name, 0)]
     while todo:
         f, d = todo.pop()
-        if f in seen or f not in fs:
+        if f in seen:
+            continue
+        body = next((s[f] for s in scopes if f in s), None)
+        if body is None:
             continue
         seen.add(f)
-        bodies.append(fs[f])
+        bodies.append(body)
         if d < depth:
-            todo.extend((c, d + 1) for c in CALL_RE.findall(fs[f]))
+            callees = set(CALL_RE.findall(body))
+            callees |= {w for w in IDENT_RE.findall(body) if w in fs}
+            todo.extend((c, d + 1) for c in callees)
     return "\n".join(bodies)
+
+
+# A traverse that hands the object to another type's traverse:
+# "PyDict_Type.tp_traverse(op, ...)", "((PyTypeObject *)PyExc_BaseException)->
+# tp_traverse(...)", "Py_TYPE(op)->tp_base->tp_traverse(...)".
+DELEGATE_RE = re.compile(r"\b([A-Za-z_]\w*)\s*\)?\s*(?:\.|->)\s*tp_traverse\s*\(")
+
+
+def delegated_refs(code: str, t: TypeDef, by_var: dict[str, TypeDef],
+                   structs: dict[str, Struct]) -> set[str]:
+    """The members visited by the traverse of another type that code calls,
+    when that type's struct is t's struct or one of its bases.  That traverse
+    is audited as its own type's, so its struct's members count as visited
+    here; a delegate the tool cannot resolve credits nothing."""
+    chain, name = set(), t.struct
+    while name in structs and name not in chain:
+        chain.add(name)
+        name = structs[name].base or ""
+    out = set()
+    for x in DELEGATE_RE.findall(code):
+        if x == "tp_base":
+            x = t.base or ""
+        d = by_var.get(x) or by_var.get("_" + x)
+        if d is not None and d.struct in chain:
+            out |= {last_member(r) for r in all_refs(d.struct, structs)}
+    return out
 
 
 def last_member(ref: str) -> str:
@@ -581,10 +653,17 @@ def main() -> int:
         s.refs = member_refs(s.members, structs, plain)
     types: list[TypeDef] = []
     funcs: dict[Path, dict[str, str]] = {}
+    # The functions of the headers, by directory; Include/'s as one.
+    include = args.root / "Include"
+    header_funcs: dict[Path, dict[str, str]] = {}
     for p, t in texts.items():
         if p.suffix == ".c":
             parse_types(p, t, types)
             funcs[p] = functions(t)
+        else:
+            key = include if include in p.parents else p.parent
+            header_funcs.setdefault(key, {}).update(functions(t))
+    by_var = {t.var: t for t in types}
 
     rel = lambda p: p.relative_to(args.root)
     missing = []
@@ -615,6 +694,8 @@ def main() -> int:
         if args.missing_only:
             continue
         fs = funcs.get(t.path, {})
+        headers = (header_funcs.get(t.path.parent, {}),
+                   header_funcs.get(include, {}))
         body = fs.get(t.traverse)
         if t.traverse == "_PyObject_VisitType":
             # The generic traverse function visits only the type.
@@ -622,15 +703,17 @@ def main() -> int:
             continue
         if body is None:
             continue
-        # Any member the traverse function, or a function in the same file
-        # that it calls, names counts as visited, which also covers casts
-        # and helper functions taking the member.  Releases are read the
-        # same way, as a list's nodes are often freed by a helper.
-        visited = set(MEMBER_RE.findall(with_callees(t.traverse, fs)))
+        # Any member the traverse function, or a function that it calls,
+        # names counts as visited, which also covers casts and helper
+        # functions taking the member.  Releases are read the same way, as
+        # a list's nodes are often freed by a helper.
+        code = with_callees(t.traverse, fs, headers)
+        visited = set(MEMBER_RE.findall(code))
+        visited |= delegated_refs(code, t, by_var, structs)
         released = set()
         for f in (t.dealloc, t.clear):
             if f:
-                code = with_callees(f, fs)
+                code = with_callees(f, fs, headers)
                 released |= set(RELEASE_RE.findall(code))
                 # Releasing a Py_buffer releases its obj.
                 if re.search(r"\bPyBuffer_Release\s*\(", code):

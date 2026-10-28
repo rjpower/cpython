@@ -23,7 +23,31 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     Py_ssize_t ma_used;
+    PyDictKeysObject *ma_keys;
 } PyDictObject;
+"""
+
+# An accessor of the kind Include/cpython/classobject.h defines.
+ACCESSOR_HEADER = """\
+typedef struct {
+    PyObject_HEAD
+    PyObject *func;
+    PyObject *forgotten;
+} AccessorObject;
+
+static inline PyObject* Fixture_GET_FUNC(PyObject *op) {
+    return ((AccessorObject *)op)->func;
+}
+#define Fixture_GET_FUNC(op) Fixture_GET_FUNC(_PyObject_CAST(op))
+"""
+
+# A helper in a header of the module's directory, as sre_lib.h's.
+LIB_HEADER = """\
+static void
+lib_fini(LibObject *self)
+{
+    Py_XDECREF(self->held);
+}
 """
 
 # The shape of _testbuffer's ndarray: the object reaches a PyMem-allocated
@@ -239,6 +263,184 @@ static PyTypeObject Owner_Type = {
     .tp_basicsize = sizeof(OwnerObject),
     .tp_traverse = owner_traverse,
 };
+
+/* Report 3.  "const" begins the name of a member, not its type. */
+typedef struct {
+    PyObject_HEAD
+    PyObject *constraints;
+    PyObject *unnamed;
+} ConstObject;
+
+static int
+const_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(((ConstObject *)op)->constraints);
+    return 0;
+}
+
+static PyTypeObject Const_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.const",
+    .tp_basicsize = sizeof(ConstObject),
+    .tp_traverse = const_traverse,
+};
+
+/* A release in a function whose return type is a macro on the line
+   before, as _sre's LOCAL(void) state_fini. */
+typedef struct {
+    PyObject_HEAD
+    PyObject *string;
+} StateObject;
+
+#define LOCAL(type) static inline type
+
+LOCAL(void)
+state_fini(StateObject *self)
+{
+    Py_XDECREF(self->string);
+}
+
+static int
+state_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    return 0;
+}
+
+static void
+state_dealloc(PyObject *op)
+{
+    state_fini((StateObject *)op);
+}
+
+static PyTypeObject State_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.state",
+    .tp_basicsize = sizeof(StateObject),
+    .tp_dealloc = state_dealloc,
+    .tp_traverse = state_traverse,
+};
+
+/* An accessor defined in Include/, and a release in a helper defined in
+   a header of this directory. */
+static int
+accessor_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(Fixture_GET_FUNC(op));
+    return 0;
+}
+
+static PyTypeObject Accessor_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.accessor",
+    .tp_basicsize = sizeof(AccessorObject),
+    .tp_traverse = accessor_traverse,
+};
+
+typedef struct {
+    PyObject_HEAD
+    PyObject *held;
+} LibObject;
+
+static int
+lib_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    return 0;
+}
+
+static void
+lib_dealloc(PyObject *op)
+{
+    lib_fini((LibObject *)op);
+}
+
+static PyTypeObject Lib_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.lib",
+    .tp_basicsize = sizeof(LibObject),
+    .tp_dealloc = lib_dealloc,
+    .tp_traverse = lib_traverse,
+};
+
+/* A visit callback handed to an enumerator, as _lsprof's visit_entry. */
+struct entry {
+    PyObject *payload;
+};
+
+typedef struct {
+    PyObject_HEAD
+    struct entry *current;
+    PyObject *loose;
+} TreeObject;
+
+static int
+visit_entry(struct entry *e, void *arg)
+{
+    return ((visitproc)arg)(e->payload, NULL);
+}
+
+static int
+tree_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    return Enumerate(((TreeObject *)op)->current, visit_entry, visit);
+}
+
+static PyTypeObject Tree_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.tree",
+    .tp_basicsize = sizeof(TreeObject),
+    .tp_traverse = tree_traverse,
+};
+
+/* Delegation to the base's traverse, as defaultdict's; a delegate the
+   tool cannot resolve credits nothing. */
+static int
+dict_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(((PyDictObject *)op)->ma_keys);
+    return 0;
+}
+
+PyTypeObject PyDict_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "dict",
+    .tp_basicsize = sizeof(PyDictObject),
+    .tp_traverse = dict_traverse,
+};
+
+typedef struct {
+    PyDictObject dict;
+    PyObject *factory;
+    PyObject *forgotten;
+} DefDictObject;
+
+static int
+defdict_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(((DefDictObject *)op)->factory);
+    return PyDict_Type.tp_traverse(op, visit, arg);
+}
+
+static PyTypeObject DefDict_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.defdict",
+    .tp_basicsize = sizeof(DefDictObject),
+    .tp_traverse = defdict_traverse,
+};
+
+static int
+otherdict_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(((DefDictObject *)op)->factory);
+    Py_VISIT(((DefDictObject *)op)->forgotten);
+    return ((PyTypeObject *)Unknown)->tp_traverse(op, visit, arg);
+}
+
+static PyTypeObject OtherDict_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.otherdict",
+    .tp_basicsize = sizeof(DefDictObject),
+    .tp_traverse = otherdict_traverse,
+};
 """
 
 OTHER = """\
@@ -287,6 +489,10 @@ class TraverseAuditTests(unittest.TestCase):
         os.mkdir(os.path.join(root, "Modules"))
         with open(os.path.join(root, "Include", "pybuffer.h"), "w") as f:
             f.write(textwrap.dedent(HEADER))
+        with open(os.path.join(root, "Include", "accessor.h"), "w") as f:
+            f.write(ACCESSOR_HEADER)
+        with open(os.path.join(root, "Modules", "fixture_lib.h"), "w") as f:
+            f.write(LIB_HEADER)
         with open(os.path.join(root, "Modules", "fixture.c"), "w") as f:
             f.write(textwrap.dedent(SOURCE))
         with open(os.path.join(root, "Modules", "other.c"), "w") as f:
@@ -294,7 +500,8 @@ class TraverseAuditTests(unittest.TestCase):
         cls.output = run_audit(root).stdout
         missing, _, partial = cls.output.partition("misses members")
         cls.missing, _, cls.inherited = missing.partition("probably inherited")
-        cls.partial = partial
+        cls.partial, _, cls.unvisited = partial.partition(
+            "does not name a member")
 
     def test_pointer_to_struct_is_followed(self):
         line = report_line(self.missing, "fixture.ndarray")
@@ -351,6 +558,8 @@ class TraverseAuditTests(unittest.TestCase):
         "Modules/fixture.c Chain_Type: reason",
         "Modules/fixture.c Helper_Type: reason",
         "Modules/fixture.c Xxo_Type: reason",
+        "Modules/fixture.c State_Type: reason",
+        "Modules/fixture.c Lib_Type: reason",
     ]
 
     def test_check_passes_when_all_listed(self):
@@ -373,6 +582,39 @@ class TraverseAuditTests(unittest.TestCase):
         proc = self.check(*self.LISTED, "Modules/fixture.c Owner_Type")
         self.assertEqual(proc.returncode, 1, proc.stdout)
         self.assertIn("not \"path variable: reason\"", proc.stdout)
+
+    def test_const_inside_a_name(self):
+        line = report_line(self.unvisited, "fixture.const")
+        self.assertIsNotNone(line, self.output)
+        self.assertTrue(line.endswith(": unnamed"), line)
+
+    def test_return_type_macro_on_the_line_before(self):
+        line = report_line(self.partial, "fixture.state")
+        self.assertIsNotNone(line, self.output)
+        self.assertTrue(line.endswith(": string"), line)
+        self.assertIsNone(report_line(self.unvisited, "fixture.state"),
+                          self.output)
+
+    def test_header_accessors_and_helpers(self):
+        line = report_line(self.unvisited, "fixture.accessor")
+        self.assertIsNotNone(line, self.output)
+        self.assertTrue(line.endswith(": forgotten"), line)
+        line = report_line(self.partial, "fixture.lib")
+        self.assertIsNotNone(line, self.output)
+        self.assertTrue(line.endswith(": held"), line)
+
+    def test_function_reference(self):
+        line = report_line(self.unvisited, "fixture.tree")
+        self.assertIsNotNone(line, self.output)
+        self.assertTrue(line.endswith(": loose"), line)
+
+    def test_delegation_to_base_traverse(self):
+        line = report_line(self.unvisited, "fixture.defdict")
+        self.assertIsNotNone(line, self.output)
+        self.assertTrue(line.endswith(": forgotten"), line)
+        line = report_line(self.unvisited, "fixture.otherdict")
+        self.assertIsNotNone(line, self.output)
+        self.assertTrue(line.endswith(": ma_keys"), line)
 
     def test_pointer_to_object_struct(self):
         self.assertIsNone(report_line(self.output, "fixture.owner"),

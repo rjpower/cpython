@@ -223,6 +223,27 @@ _PyType_DictModeShape(PyTypeObject *type)
     return &shapes->dict_shape;
 }
 
+int
+_PyType_HasShapeAt(PyTypeObject *type, const void *addr)
+{
+    if (addr == (const void *)_Py_TYPE_ROOT_SHAPE(type)) {
+        return 1;
+    }
+    _PyTypeShapes *shapes = type_shapes(type);
+    if (shapes == NULL) {
+        return 0;
+    }
+    if (addr == (const void *)&shapes->dict_shape) {
+        return 1;
+    }
+    for (int i = 1; i < shapes->nshapes; i++) {
+        if (addr == (const void *)shapes->shapes[i]) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 Py_ssize_t
 _PyShape_SlotOf(_PyShape *shape, PyObject *name)
 {

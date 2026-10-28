@@ -182,6 +182,20 @@ shape(PyObject *Py_UNUSED(self), PyObject *obj)
     return Py_BuildValue("(OiN)", (PyObject *)sh->type, index, slots);
 }
 
+// shape_address(obj) -> the address of obj's shape, and shape_version(obj)
+// -> its version (note 09 section 5: a generalisation renews it)
+static PyObject *
+shape_address(PyObject *Py_UNUSED(self), PyObject *obj)
+{
+    return PyLong_FromVoidPtr(_PyObject_SHAPE(obj));
+}
+
+static PyObject *
+shape_version(PyObject *Py_UNUSED(self), PyObject *obj)
+{
+    return PyLong_FromUnsignedLong(_PyObject_SHAPE(obj)->type_version);
+}
+
 // type_slot_capacity(type) -> the slots of each instance, or None for a type
 // without inline values
 static PyObject *
@@ -267,6 +281,8 @@ static PyMethodDef test_methods[] = {
     {"lookup_plan", lookup_plan, METH_VARARGS},
     {"lookup_store_plan", lookup_store_plan, METH_VARARGS},
     {"shape", shape, METH_O},
+    {"shape_address", shape_address, METH_O},
+    {"shape_version", shape_version, METH_O},
     {"type_cache_size", type_cache_size, METH_O},
     {"type_slot_capacity", type_slot_capacity, METH_O},
     {"object_slots", object_slots, METH_O},

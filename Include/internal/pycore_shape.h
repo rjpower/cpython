@@ -212,6 +212,10 @@ extern void _PyShape_SetTypeFlags(PyTypeObject *type, unsigned long flags);
 // The dictionary-mode shape of TYPE, or its root if it has no table.
 extern _PyShape *_PyType_DictModeShape(PyTypeObject *type);
 
+// Whether ADDR, which is not dereferenced, is the address of one of the
+// shapes of TYPE, a live type.
+extern int _PyType_HasShapeAt(PyTypeObject *type, const void *addr);
+
 // The slot of NAME, an exact str, in SHAPE, or -1.  Runs no code.
 PyAPI_FUNC(Py_ssize_t) _PyShape_SlotOf(_PyShape *shape, PyObject *name);
 

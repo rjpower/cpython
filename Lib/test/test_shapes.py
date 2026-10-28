@@ -444,6 +444,100 @@ class SpecializationTests(unittest.TestCase):
         self.assertEqual(get(D()), "class")
 
 
+    def test_poly_site_survives_invalidations(self):
+        # Each class mutation renews the version of every shape; the rows of
+        # the old versions are replaced, not kept, so they do not fill the
+        # table and turn a two-shape site megamorphic.
+        class C:
+            pass
+        a = C(); a.x = 1; a.y = 2
+        b = C(); b.y = 3; b.x = 4
+        @reset_code
+        def get(o):
+            return o.x
+        def warm():
+            for _ in range(4 * (THRESHOLD + COOLDOWN)):
+                self.assertEqual(get(a), 1)
+                self.assertEqual(get(b), 4)
+        warm()
+        self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(get))
+        for i in range(4):
+            setattr(C, f"m{i}", i)
+            warm()
+            self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(get))
+
+    def test_poly_row_shape_address_reused(self):
+        # A row borrows its shape, so the shape can die and a new one take
+        # its address.  The row's version is not the new shape's, so the
+        # site does not apply the old row's offset to it.
+        @reset_code
+        def get(o):
+            return o.x
+        def make_old():
+            class A:
+                pass
+            p = A(); p.x = 1; p.y = 2
+            q = A(); q.y = 3; q.x = 4
+            for _ in range(4 * (THRESHOLD + COOLDOWN)):
+                self.assertEqual(get(p), 1)
+                self.assertEqual(get(q), 4)
+            self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(get))
+            addrs = {_testinternalcapi.shape_address(p),
+                     _testinternalcapi.shape_address(q)}
+            return weakref.ref(A), addrs
+        ref, addrs = make_old()
+        gc.collect()
+        self.assertIsNone(ref())
+        for attempt in range(2000):
+            class B:
+                pass
+            # x at slot 1 or 2, where neither old row has it at slot 0
+            # alone: a stale offset would read another attribute.
+            o = B(); o.q = "q"; o.x = "x"
+            o2 = B(); o2.y = "y"; o2.q = "q"; o2.x = "x"
+            for obj in (o, o2):
+                if _testinternalcapi.shape_address(obj) in addrs:
+                    for _ in range(4 * (THRESHOLD + COOLDOWN)):
+                        self.assertEqual(get(obj), "x")
+                    return
+            del B, o, o2
+            if attempt % 50 == 49:
+                gc.collect()
+        self.skipTest("no new shape took a dead shape's address")
+
+    def test_lookup_that_changes_the_class(self):
+        # A key comparison during the MRO lookup replaces the class's bases,
+        # leaving every dict on the new MRO str-keyed.  The result found
+        # under the old version is not cached under the new one.
+        armed = []
+        class Key:
+            def __hash__(self):
+                return hash("attr")
+            def __eq__(self, other):
+                if armed:
+                    armed.pop()
+                    C.__bases__ = (Base2,)
+                return False
+        # Key first, so that a lookup of "attr" compares it.
+        with self.assertWarns(RuntimeWarning):
+            Base1 = type("Base1", (), {Key(): None, "attr": "old"})
+        class Base2:
+            attr = "new"
+        class C(Base1):
+            pass
+        o = C()
+        @reset_code
+        def get(o):
+            return o.attr
+        # Armed before the first lookup, which the type cache would
+        # otherwise answer.
+        armed.append(True)
+        self.assertIn(get(o), ("old", "new"))
+        self.assertEqual(C.__bases__, (Base2,))
+        for _ in range(4 * (THRESHOLD + COOLDOWN)):
+            self.assertEqual(get(o), "new")
+            self.assertEqual(o.attr, "new")
+
 class StrName(str):
     pass
 

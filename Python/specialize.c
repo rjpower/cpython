@@ -500,7 +500,11 @@ fb_record(_PyInstr *instr, _PyFbHeader *h, int opcode)
     _PyFbPoly *poly = &fb_block(instr)->poly[h->poly - 1];
     fb_row row = fb_row_of(h);
     int i = 0;
+    /* A row of the same shape is replaced: the shape is live (it is the
+       owner's), so a row of it at another version is obsolete, and
+       keeping it would let invalidations fill the table. */
     while (i < FB_POLY_SIZE && poly->handler[i] != 0 &&
+           (row.shape == NULL || poly->shape[i] != row.shape) &&
            (poly->type_version[i] != row.type_version ||
             poly->aux[i] != row.aux || poly->shape[i] != row.shape ||
             poly->handler[i] != opcode)) {
@@ -681,10 +685,11 @@ lookup_hook_facts(PyTypeObject *type, hook_facts *facts)
 }
 
 /* Whether the poly table of INSTR has a row of a shape handler for another
- * shape: of the type with version TP_VERSION, or of any type if ANY_TYPE. */
+ * shape: of SHAPE's type, or of any type if ANY_TYPE.  A row's shape may
+ * be dead, so it is not read: it is of SHAPE's type if it is the address
+ * of one of that live type's shapes (see _PyFb_ShapeRow()). */
 static bool
-fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, _PyShape *shape,
-                   bool any_type)
+fb_saw_other_shape(_PyInstr *instr, _PyShape *shape, bool any_type)
 {
     _PyFbHeader *h = instr_fb(instr);
     if (h->poly == 0) {
@@ -696,8 +701,8 @@ fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, _PyShape *shape,
         if ((opcode == LOAD_ATTR_SHAPE || opcode == LOAD_ATTR_METHOD_SHAPE ||
              opcode == LOAD_ATTR_NONDESCRIPTOR_SHAPE ||
              opcode == STORE_ATTR_SHAPE || opcode == STORE_ATTR_SHAPE_TRANSITION) &&
-            (any_type || poly->type_version[i] == tp_version) &&
-            poly->shape[i] != shape)
+            poly->shape[i] != shape &&
+            (any_type || _PyType_HasShapeAt(shape->type, poly->shape[i])))
         {
             return true;
         }
@@ -753,7 +758,7 @@ set_shape_guard(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
     fb->shape = shape;
     fb->type_version = tp_version;
     bool poly_load = handler == LOAD_ATTR_SHAPE || handler == LOAD_ATTR_METHOD_SHAPE;
-    if (!fb_saw_other_shape(instr, tp_version, shape, poly_load)) {
+    if (!fb_saw_other_shape(instr, shape, poly_load)) {
         return SHAPE_GUARD_SET;
     }
     fb_record(instr, instr_fb(instr), handler);
@@ -938,7 +943,13 @@ specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name)
             if (func_version == 0) {
                 return -1;
             }
-            fb->type_version = tp_version;
+            // _GUARD_TYPE_VERSION: the type's version, not the shape's,
+            // which differs after a generalisation (note 09 section 5).
+            fb->type_version = FT_ATOMIC_LOAD_UINT_RELAXED(type->tp_version_tag);
+            if (fb->type_version == 0) {
+                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
+                return -1;
+            }
             fb->func_version = func_version;
             // The property, whose getter the handler reads and guards.
             fb->descr = descr;  /* borrowed */

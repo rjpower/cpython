@@ -316,6 +316,15 @@ done:
     _PyThreadState_PopValueRoot(tstate, &span);
 }
 
+/* An inline int or float is never callable: the error names its type
+   without a box. */
+static void
+inline_is_not_callable(PyThreadState *tstate, PyValue callable)
+{
+    _PyErr_Format(tstate, PyExc_TypeError, "'%.200s' object is not callable",
+                  PyValue_Type(callable)->tp_name);
+}
+
 
 Py_GC_PRECISE PyValue
 _PyObject_MakeTpCall(PyThreadState *tstate, PyValue callable,
@@ -336,17 +345,16 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyValue callable,
     PyValue res = PyValue_NULL;
     PyObject *argstuple;
     PyObject *kwdict;
-    PyObject *result = NULL;
 
-    // A box of an inline callable, which is never callable, for the error.
-    PyObject *callable_o = PyValue_Object(callable);
-    if (callable_o == NULL) {
+    if (PyValue_IsInline(callable)) {
+        inline_is_not_callable(tstate, callable);
         goto done;
     }
+    PyObject *callable_o = PyValue_ObjectBorrow(callable);
     _PyValueSpan_AppendObject(&span, callable_o);
     /* Slow path: build a temporary tuple for positional arguments and a
      * temporary dictionary for keyword arguments (if any) */
-    ternaryfunc call = Py_TYPE(callable_o)->tp_call;
+    callfunc call = Py_TYPE(callable_o)->tp_call;
     if (call == NULL) {
         object_is_not_callable(tstate, callable_o);
         goto done;
@@ -375,15 +383,12 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyValue callable,
 
     if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object") == 0)
     {
-        result = _PyCFunctionWithKeywords_TrampolineCall(
-            (PyCFunctionWithKeywords)call, callable_o, argstuple, kwdict);
+        res = _PyCallFunc_TrampolineCall(call, callable_o, argstuple, kwdict);
         _Py_LeaveRecursiveCallTstate(tstate);
+        _PyValue_CheckSlotResult(res, Py_TYPE(callable_o), "tp_call");
     }
 
-    result = _Py_CheckFunctionResult(tstate, callable_o, result, NULL);
-    if (result != NULL) {
-        res = PyValue_FromObject(result);
-    }
+    res = _Py_CheckFunctionResultValue(tstate, callable_o, res, NULL);
 done:
     _PyThreadState_PopValueRoot(tstate, &span);
     return res;
@@ -442,7 +447,7 @@ _PyVectorcall_Call(PyThreadState *tstate, vectorcallfunc func,
 }
 
 
-Py_GC_PRECISE PyObject *
+Py_GC_PRECISE PyValue
 PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *kwargs)
 {
     PyThreadState *tstate = _PyThreadState_GET();
@@ -454,7 +459,7 @@ PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *kwargs)
         _PyErr_Format(tstate, PyExc_TypeError,
                       "'%.200s' object does not support vectorcall",
                       Py_TYPE(callable)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
     assert(PyCallable_Check(callable));
 
@@ -464,11 +469,10 @@ PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *kwargs)
         _PyErr_Format(tstate, PyExc_TypeError,
                       "'%.200s' object does not support vectorcall",
                       Py_TYPE(callable)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyValue_Object(
-        _PyVectorcall_Call(tstate, func, callable, tuple, kwargs));
+    return _PyVectorcall_Call(tstate, func, callable, tuple, kwargs);
 }
 
 
@@ -492,12 +496,12 @@ PyObject_VectorcallValue(PyValue callable, const PyValue *args,
 }
 
 
-Py_GC_PRECISE PyObject *
-_PyObject_Call(PyThreadState *tstate, PyObject *callable,
-               PyObject *args, PyObject *kwargs)
+Py_GC_PRECISE PyValue
+_PyObject_CallValue(PyThreadState *tstate, PyValue callable,
+                    PyObject *args, PyObject *kwargs)
 {
-    ternaryfunc call;
-    PyObject *result;
+    callfunc call;
+    PyValue result;
     PyValue slots[3];
     _PyValueRoot span;
 
@@ -507,46 +511,58 @@ _PyObject_Call(PyThreadState *tstate, PyObject *callable,
     assert(!_PyErr_Occurred(tstate));
     assert(PyTuple_Check(args));
     assert(kwargs == NULL || PyDict_Check(kwargs));
-    EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API, callable);
-    vectorcallfunc vector_func = PyVectorcall_Function(callable);
+    if (PyValue_IsInline(callable)) {
+        inline_is_not_callable(tstate, callable);
+        return PyValue_NULL;
+    }
+    PyObject *callable_o = PyValue_ObjectBorrow(callable);
+    EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API, callable_o);
+    vectorcallfunc vector_func = PyVectorcall_Function(callable_o);
     if (vector_func != NULL) {
-        return PyValue_Object(
-            _PyVectorcall_Call(tstate, vector_func, callable, args, kwargs));
+        return _PyVectorcall_Call(tstate, vector_func, callable_o, args,
+                                  kwargs);
     }
-    else {
-        call = Py_TYPE(callable)->tp_call;
-        if (call == NULL) {
-            object_is_not_callable(tstate, callable);
-            return NULL;
-        }
+    call = Py_TYPE(callable_o)->tp_call;
+    if (call == NULL) {
+        object_is_not_callable(tstate, callable_o);
+        return PyValue_NULL;
+    }
 
-        /* This frame's span anchors the parameters across the recursion
-           check, and callable across the call for the result check
-           (10a-2.md, rule 1). */
-        _PyThreadState_PushValueSpan(tstate, &span, slots);
-        _PyValueSpan_AppendObject(&span, callable);
-        _PyValueSpan_AppendObject(&span, args);
-        _PyValueSpan_AppendObject(&span, kwargs);
-        if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object")) {
-            _PyThreadState_PopValueRoot(tstate, &span);
-            return NULL;
-        }
-
-        result = (*call)(callable, args, kwargs);
-
-        _Py_LeaveRecursiveCallTstate(tstate);
-
-        result = _Py_CheckFunctionResult(tstate, callable, result, NULL);
+    /* This frame's span anchors the parameters across the recursion
+       check, and callable across the call for the result check
+       (10a-2.md, rule 1). */
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, callable_o);
+    _PyValueSpan_AppendObject(&span, args);
+    _PyValueSpan_AppendObject(&span, kwargs);
+    if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object")) {
         _PyThreadState_PopValueRoot(tstate, &span);
-        return result;
+        return PyValue_NULL;
     }
+
+    result = (*call)(callable_o, args, kwargs);
+
+    _Py_LeaveRecursiveCallTstate(tstate);
+    _PyValue_CheckSlotResult(result, Py_TYPE(callable_o), "tp_call");
+
+    result = _Py_CheckFunctionResultValue(tstate, callable_o, result, NULL);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return result;
+}
+
+Py_GC_PRECISE PyValue
+PyObject_CallValue(PyValue callable, PyObject *args, PyObject *kwargs)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    return _PyObject_CallValue(tstate, callable, args, kwargs);
 }
 
 Py_GC_PRECISE PyObject *
 PyObject_Call(PyObject *callable, PyObject *args, PyObject *kwargs)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    return _PyObject_Call(tstate, callable, args, kwargs);
+    return PyValue_Object(_PyObject_CallValue(
+        tstate, PyValue_FromObject(callable), args, kwargs));
 }
 
 
@@ -635,7 +651,8 @@ PyEval_CallObjectWithKeywords(PyObject *callable,
                                               NULL, 0, kwargs);
     }
     else {
-        return _PyObject_Call(tstate, callable, args, kwargs);
+        return PyValue_Object(_PyObject_CallValue(
+            tstate, PyValue_FromObject(callable), args, kwargs));
     }
 }
 
@@ -653,14 +670,15 @@ PyObject_CallObject(PyObject *callable, PyObject *args)
                          "argument list must be a tuple");
         return NULL;
     }
-    return _PyObject_Call(tstate, callable, args, NULL);
+    return PyValue_Object(_PyObject_CallValue(
+        tstate, PyValue_FromObject(callable), args, NULL));
 }
 
 
-/* Call callable(obj, *args, **kwargs). */
-Py_GC_PRECISE PyObject *
-_PyObject_Call_Prepend(PyThreadState *tstate, PyObject *callable,
-                       PyObject *obj, PyObject *args, PyObject *kwargs)
+/* Call callable(self, *args, **kwargs). */
+Py_GC_PRECISE PyValue
+_PyObject_Call_PrependValue(PyThreadState *tstate, PyValue callable,
+                            PyValue self, PyObject *args, PyObject *kwargs)
 {
     assert(PyTuple_Check(args));
 
@@ -674,27 +692,28 @@ _PyObject_Call_Prepend(PyThreadState *tstate, PyObject *callable,
     else {
         stack = PyMem_Malloc((argcount + 1) * sizeof(PyValue));
         if (stack == NULL) {
-            return PyErr_NoMemory();
+            PyErr_NoMemory();
+            return PyValue_NULL;
         }
     }
 
     /* This frame creates the argument array, so the array is its span:
-       obj, then the tuple's items (10a-2.md, rule 2). */
+       self, then the tuple's items (10a-2.md, rule 2). */
     _PyValueRoot span;
     _PyThreadState_PushValueSpan(tstate, &span, stack);
-    _PyValueSpan_Append(&span, PyValue_FromObject(obj));
+    _PyValueSpan_Append(&span, self);
     const PyValue *items = _PyTuple_ITEMS(args);
     for (Py_ssize_t i = 0; i < argcount; i++) {
         _PyValueSpan_Append(&span, items[i]);
     }
 
     PyValue result = _PyObject_VectorcallDictValueTstate(
-        tstate, PyValue_FromObject(callable), stack, argcount + 1, kwargs);
+        tstate, callable, stack, argcount + 1, kwargs);
     _PyThreadState_PopValueRoot(tstate, &span);
     if (stack != small_stack) {
         PyMem_Free(stack);
     }
-    return PyValue_Object(result);
+    return result;
 }
 
 

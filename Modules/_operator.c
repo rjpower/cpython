@@ -1109,16 +1109,16 @@ itemgetter_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 itemgetter_call(PyObject *op, PyObject *args, PyObject *kw)
 {
     assert(PyTuple_CheckExact(args));
     if (!_PyArg_NoKeywords("itemgetter", kw))
-        return NULL;
+        return PyValue_NULL;
     if (!_PyArg_CheckPositional("itemgetter", PyTuple_GET_SIZE(args), 1, 1))
-        return NULL;
+        return PyValue_NULL;
     itemgetterobject *ig = itemgetterobject_CAST(op);
-    return PyValue_Object(itemgetter_call_impl(ig, PyTuple_GET_VALUE(args, 0)));
+    return itemgetter_call_impl(ig, PyTuple_GET_VALUE(args, 0));
 }
 
 static PyValue
@@ -1417,15 +1417,15 @@ dotted_getattr(PyValue obj, PyObject *attr)
     return PyObject_GetAttrValue(obj, attr);
 }
 
-static PyObject *
+static PyValue
 attrgetter_call(PyObject *op, PyObject *args, PyObject *kw)
 {
     if (!_PyArg_NoKeywords("attrgetter", kw))
-        return NULL;
+        return PyValue_NULL;
     if (!_PyArg_CheckPositional("attrgetter", PyTuple_GET_SIZE(args), 1, 1))
-        return NULL;
+        return PyValue_NULL;
     attrgetterobject *ag = attrgetterobject_CAST(op);
-    return PyValue_Object(attrgetter_call_impl(ag, PyTuple_GET_VALUE(args, 0)));
+    return attrgetter_call_impl(ag, PyTuple_GET_VALUE(args, 0));
 }
 
 static PyValue
@@ -1773,22 +1773,23 @@ methodcaller_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 methodcaller_call(PyObject *op, PyObject *args, PyObject *kw)
 {
-    PyObject *method, *obj, *result;
+    PyObject *method, *obj;
     methodcallerobject *mc = methodcallerobject_CAST(op);
 
     if (!_PyArg_NoKeywords("methodcaller", kw))
-        return NULL;
+        return PyValue_NULL;
     if (!_PyArg_CheckPositional("methodcaller", PyTuple_GET_SIZE(args), 1, 1))
-        return NULL;
+        return PyValue_NULL;
     obj = PyTuple_GET_ITEM(args, 0);
     method = PyObject_GetAttr(obj, mc->name);
     if (method == NULL)
-        return NULL;
+        return PyValue_NULL;
 
-    result = PyObject_Call(method, mc->args, mc->kwds);
+    PyValue result = PyObject_CallValue(PyValue_FromObject(method), mc->args,
+                                        mc->kwds);
     Py_DECREF(method);
     return result;
 }

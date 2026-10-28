@@ -5159,14 +5159,21 @@ dummy_func(
 
         op(_DO_CALL_FUNCTION_EX, (func_st, null, callargs_st, kwargs_st -- result)) {
             (void)null;
-            PyObject *func = PyValue_ObjectBorrow(func_st);
-
             // DICT_MERGE is called before this opcode if there are kwargs.
             // It converts all dict subtypes in kwargs into regular dicts.
-            EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_FUNCTION_EX, func);
-            PyObject *result_o;
+            // The call dispatches on the callable's value, and
+            // _PyObject_CallValue() rejects an inline one as not callable.
+            // An inline callable is still boxed twice, eagerly at op entry:
+            // here and in _MAKE_CALLARGS_A_TUPLE, by the generator's rule
+            // for an input that the op converts anywhere.
+            if (PyValue_Type(func_st) == &PyFunction_Type) {
+                EVAL_CALL_STAT_INC(EVAL_CALL_FUNCTION_EX);
+            }
+            PyValue result_v;
             assert(!_PyErr_Occurred(tstate));
             if (opcode == INSTRUMENTED_CALL_FUNCTION_EX) {
+                // The monitoring callbacks take the callable as an object.
+                PyObject *func = PyValue_ObjectBorrow(func_st);
                 PyObject *callargs = PyValue_ObjectBorrow(callargs_st);
                 PyObject *kwargs = PyValue_ObjectBorrow(kwargs_st);
                 assert(kwargs == NULL || PyDict_CheckExact(kwargs));
@@ -5188,10 +5195,15 @@ dummy_func(
                     _PyThreadState_PopValueRoot(tstate, &arg0_root);
                     ERROR_NO_POP();
                 }
-                result_o = PyObject_Call(func, callargs, kwargs);
+                // The result, held in a root across the C_RETURN callback,
+                // which can run Python code and collect.
+                _PyValueRoot result_root;
+                _PyThreadState_PushValueRoot(tstate, &result_root);
+                result_root.value = _PyObject_CallValue(tstate, func_st,
+                                                        callargs, kwargs);
 
                 if (!PyFunction_Check(func) && !PyMethod_Check(func)) {
-                    if (result_o == NULL) {
+                    if (PyValue_IsNull(result_root.value)) {
                         _Py_call_instrumentation_exc2(
                             tstate, PY_MONITORING_EVENT_C_RAISE,
                             frame, this_instr, func, arg0_root.object);
@@ -5201,16 +5213,19 @@ dummy_func(
                             tstate, PY_MONITORING_EVENT_C_RETURN,
                             frame, this_instr, func, arg0_root.object);
                         if (err < 0) {
-                            Py_CLEAR(result_o);
+                            result_root.value = PyValue_NULL;
                         }
                     }
                 }
+                result_v = result_root.value;
+                _PyThreadState_PopValueRoot(tstate, &result_root);
                 _PyThreadState_PopValueRoot(tstate, &arg0_root);
             }
             else {
-                if (Py_TYPE(func) == &PyFunction_Type &&
+                if (PyValue_Type(func_st) == &PyFunction_Type &&
                     !IS_PEP523_HOOKED(tstate) &&
-                    ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
+                    ((PyFunctionObject *)PyValue_ObjectBorrow(func_st))->vectorcall == _PyFunction_Vectorcall) {
+                    PyObject *func = PyValue_ObjectBorrow(func_st);
                     PyObject *callargs = PyValue_ObjectBorrow(callargs_st);
                     DEAD(callargs_st);
                     assert(PyTuple_CheckExact(callargs));
@@ -5238,14 +5253,14 @@ dummy_func(
                 assert(PyTuple_CheckExact(callargs));
                 PyObject *kwargs = PyValue_ObjectBorrow(kwargs_st);
                 assert(kwargs == NULL || PyDict_CheckExact(kwargs));
-                result_o = PyObject_Call(func, callargs, kwargs);
+                result_v = _PyObject_CallValue(tstate, func_st, callargs, kwargs);
             }
             DEAD(kwargs_st);
             DEAD(callargs_st);
             DEAD(null);
             DEAD(func_st);
-            ERROR_IF(result_o == NULL);
-            result = PyValue_FromObject(result_o);
+            ERROR_IF(PyValue_IsNull(result_v));
+            result = result_v;
         }
 
         specializing op(_SPECIALIZE_CALL_FUNCTION_EX, (func, unused, unused, unused -- func, unused, unused, unused)) {
@@ -5313,19 +5328,19 @@ dummy_func(
         }
 
         op(_CALL_FUNCTION_EX_NON_PY_GENERAL, (func_st, null, callargs_st, kwargs_st -- result)) {
-            PyObject *func = PyValue_ObjectBorrow(func_st);
             PyObject *callargs = PyValue_ObjectBorrow(callargs_st);
             (void)null;
             assert(PyTuple_CheckExact(callargs));
             PyObject *kwargs = PyValue_ObjectBorrow(kwargs_st);
             assert(kwargs == NULL || PyDict_CheckExact(kwargs));
-            PyObject *result_o = PyObject_Call(func, callargs, kwargs);
+            PyValue result_v = _PyObject_CallValue(tstate, func_st, callargs,
+                                                   kwargs);
             DEAD(kwargs_st);
             DEAD(callargs_st);
             DEAD(null);
             DEAD(func_st);
-            ERROR_IF(result_o == NULL);
-            result = PyValue_FromObject(result_o);
+            ERROR_IF(PyValue_IsNull(result_v));
+            result = result_v;
         }
 
         macro(CALL_EX_NON_PY_GENERAL) =

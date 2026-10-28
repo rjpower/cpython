@@ -37,7 +37,8 @@ for s in slots:
 # check's placement, 6d-2.md F).
 if "--calls" in sys.argv:
     typedefs = {"tp_getattro": "getattrofunc", "tp_setattro": "setattrofunc",
-                "tp_descr_get": "descrgetfunc", "tp_descr_set": "descrsetfunc"}
+                "tp_descr_get": "descrgetfunc", "tp_descr_set": "descrsetfunc",
+                "tp_call": "callfunc"}
     names = set()
     for s in slots:
         names |= set(res[s])

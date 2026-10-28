@@ -14,7 +14,13 @@ The *tp_call* Protocol
 Instances of classes that set :c:member:`~PyTypeObject.tp_call` are callable.
 The signature of the slot is::
 
-    PyObject *tp_call(PyObject *callable, PyObject *args, PyObject *kwargs);
+    PyValue tp_call(PyObject *callable, PyObject *args, PyObject *kwargs);
+
+The slot returns the result as a canonical value: an int that fits in 32
+bits or a float other than NaN is returned inline, not boxed (use
+:c:func:`!PyValue_FromResult` to return an object), and ``PyValue_NULL``
+with an exception set on error.  Debug builds stop with a fatal error
+naming the slot if the result is a box that should have been inline.
 
 A call is made using a tuple for the positional arguments
 and a dict for the keyword arguments, similarly to
@@ -156,10 +162,12 @@ Vectorcall Support API
 
    .. versionadded:: 3.9
 
-.. c:function:: PyObject* PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *dict)
+.. c:function:: PyValue PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *dict)
 
    Call *callable*'s :c:type:`vectorcallfunc` with positional and keyword
-   arguments given in a tuple and dict, respectively.
+   arguments given in a tuple and dict, respectively.  The result is
+   returned as a value, the return type of
+   :c:member:`~PyTypeObject.tp_call`, or ``PyValue_NULL`` on error.
 
    This is a specialized function, intended to be put in the
    :c:member:`~PyTypeObject.tp_call` slot or be used in an implementation of ``tp_call``.
@@ -227,6 +235,14 @@ please see individual documentation for details.
 
    This is the equivalent of the Python expression:
    ``callable(*args, **kwargs)``.
+
+
+.. c:function:: PyValue PyObject_CallValue(PyValue callable, PyObject *args, PyObject *kwargs)
+
+   As :c:func:`PyObject_Call`, with the callable and the result as values:
+   an int or float result is not boxed.  Return ``PyValue_NULL`` with an
+   exception set on failure.  An inline *callable* (an int or a float) is
+   not callable and raises :exc:`TypeError`.
 
 
 .. c:function:: PyObject* PyObject_CallNoArgs(PyObject *callable)

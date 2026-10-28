@@ -1,0 +1,1150 @@
+{
+ "schema": "boil-bench/1",
+ "build": {
+  "label": "6d-rung3-control-a3206a397d9-pystats",
+  "path": "/home/power/code/cpython/.worktrees/boil-6d-base/build/pystats/python",
+  "version": "3.16.0a1+dev (heads/weaver/python-boil-the-ocean:a3206a397d9, Oct 28 2026, 07:01:34) [GCC 15.2.0]",
+  "git": [
+   "CPython",
+   "heads/weaver/python-boil-the-ocean",
+   "a3206a397d9"
+  ],
+  "hash_seed": 0
+ },
+ "machine": {
+  "hostname": "bento-cat",
+  "kernel": "7.0.0-29-generic",
+  "cpus": 16,
+  "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+  "memory": "65726156 kB"
+ },
+ "results": {
+  "boxes": {
+   "empty_loop": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 2.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "empty_list_loop": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 2.006,
+    "allocations": 0.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.0
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "attr_load_poly": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 3.006,
+    "allocations": 0.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.0
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "attr_store": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "attr_store_poly": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 4.005999999999999,
+    "allocations": 0.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.0
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "slots_load": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "property_load": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 5.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "method_call": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 6.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_len": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 5.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_abs": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 5.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_math_sin": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 7.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_py_1": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 6.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_py_3": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 8.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_py_kw": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 9.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_closure": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 11.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "getattr_property": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 9.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "getattr_property_float": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 9.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "getattribute_hook": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 9.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "getattr_hook": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 6.027229999999999,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "setattr_hook": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 6.00812,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "descr_get_py": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 6.00812,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "descr_set_py": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 6.00812,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "property_store": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 7.00812,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "property_store_float": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 7.00812,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_instance": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 1.001,
+    "int_boxes": 1.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 1.001
+    },
+    "by_instruction": {},
+    "dispatches": 8.008,
+    "allocations": 1.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     1.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "namedtuple_field": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.00812,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "member_double": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.00812,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "object_setattr": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 9.008,
+    "allocations": 2.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "class_attr_store": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 4.00812,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "method_lazy_dict": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 6.008,
+    "allocations": 0.002,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   }
+  }
+ },
+ "runs": {
+  "boxes": {
+   "timestamp": "2026-10-28T07:05:57-07:00",
+   "commit": {
+    "sha": "a3206a397d97dfdb520b109f1d9358c1691b06bc",
+    "dirty": false
+   },
+   "load_1min": {
+    "max": 19.95751953125,
+    "samples": [
+     19.95751953125,
+     19.95751953125,
+     19.95751953125,
+     19.95751953125,
+     19.95751953125,
+     19.95751953125,
+     19.95751953125,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375,
+     18.91943359375
+    ]
+   }
+  }
+ }
+}

@@ -69,7 +69,7 @@ Quick Reference
    +------------------------------------------------+-----------------------------------+-------------------+---+---+---+---+
    | :c:member:`~PyTypeObject.tp_hash`              | :c:type:`hashfunc`                | __hash__          | X |   |   | G |
    +------------------------------------------------+-----------------------------------+-------------------+---+---+---+---+
-   | :c:member:`~PyTypeObject.tp_call`              | :c:type:`ternaryfunc`             | __call__          |   | X |   | X |
+   | :c:member:`~PyTypeObject.tp_call`              | :c:type:`callfunc`                | __call__          |   | X |   | X |
    +------------------------------------------------+-----------------------------------+-------------------+---+---+---+---+
    | :c:member:`~PyTypeObject.tp_str`               | :c:type:`reprfunc`                | __str__           | X |   |   | X |
    +------------------------------------------------+-----------------------------------+-------------------+---+---+---+---+
@@ -1031,15 +1031,20 @@ and :c:data:`PyType_Type` effectively act as defaults.)
    :c:data:`PyBaseObject_Type` uses :c:func:`PyObject_GenericHash`.
 
 
-.. c:member:: ternaryfunc PyTypeObject.tp_call
+.. c:member:: callfunc PyTypeObject.tp_call
 
    .. corresponding-type-slot:: Py_tp_call
 
    An optional pointer to a function that implements calling the object.  This
-   should be ``NULL`` if the object is not callable.  The signature is the same as
-   for :c:func:`PyObject_Call`::
+   should be ``NULL`` if the object is not callable.  The arguments are those
+   of :c:func:`PyObject_Call`; the result is a canonical value, as for
+   :c:func:`PyObject_CallValue`, or ``PyValue_NULL`` with an exception set::
 
-      PyObject *tp_call(PyObject *self, PyObject *args, PyObject *kwargs);
+      PyValue tp_call(PyObject *self, PyObject *args, PyObject *kwargs);
+
+   A function of the earlier form, returning ``PyObject *``, does not match
+   this type; a ``Py_tp_call`` slot of that form is caught on debug builds
+   when it returns a box of an int or float that should have been inline.
 
    **Inheritance:**
 
@@ -3276,6 +3281,10 @@ Slot Type typedefs
    See :c:member:`~PyAsyncMethods.am_send`.
 
 .. c:type:: PyObject *(*ternaryfunc)(PyObject *, PyObject *, PyObject *)
+
+.. c:type:: PyValue (*callfunc)(PyObject *, PyObject *, PyObject *)
+
+   See :c:member:`~PyTypeObject.tp_call`.
 
 .. c:type:: PyObject *(*ssizeargfunc)(PyObject *, Py_ssize_t)
 

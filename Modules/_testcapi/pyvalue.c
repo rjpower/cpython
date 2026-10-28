@@ -130,6 +130,54 @@ object_getattr(PyObject *Py_UNUSED(module), PyObject *args)
     return value_result(PyObject_GetAttrValue(PyValue_FromObject(o), name));
 }
 
+/* The call forms (rung 3 of 6d).  The callable is taken from the argument
+   tuple as its canonical value, so that an inline int or float arrives
+   inline; kwargs None is NULL. */
+static PyObject *
+object_callvalue(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *o, *callargs, *kwargs = Py_None;
+    if (!PyArg_ParseTuple(args, "OO!|O", &o, &PyTuple_Type, &callargs,
+                          &kwargs)) {
+        return NULL;
+    }
+    NULLABLE(kwargs);
+    return value_result(PyObject_CallValue(PyTuple_GET_VALUE(args, 0),
+                                           callargs, kwargs));
+}
+
+static PyObject *
+object_vectorcallvalue(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *o, *callargs;
+    if (!PyArg_ParseTuple(args, "OO!", &o, &PyTuple_Type, &callargs)) {
+        return NULL;
+    }
+    PyValue items[8];
+    Py_ssize_t n = PyTuple_GET_SIZE(callargs);
+    if (n > (Py_ssize_t)Py_ARRAY_LENGTH(items)) {
+        PyErr_SetString(PyExc_ValueError, "too many arguments");
+        return NULL;
+    }
+    for (Py_ssize_t i = 0; i < n; i++) {
+        items[i] = PyTuple_GET_VALUE(callargs, i);
+    }
+    return value_result(PyObject_VectorcallValue(PyTuple_GET_VALUE(args, 0),
+                                                 items, n, NULL));
+}
+
+static PyObject *
+vectorcall_call(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *o, *callargs, *kwargs = Py_None;
+    if (!PyArg_ParseTuple(args, "OO!|O", &o, &PyTuple_Type, &callargs,
+                          &kwargs)) {
+        return NULL;
+    }
+    NULLABLE(kwargs);
+    return value_result(PyVectorcall_Call(o, callargs, kwargs));
+}
+
 // v None deletes the attribute.
 static PyObject *
 object_setattr(PyObject *Py_UNUSED(module), PyObject *args)
@@ -560,6 +608,27 @@ baddescrget_descr_get(PyObject *self, PyObject *obj, PyObject *type)
     return bad_box();
 }
 
+/* A tp_call in the old form, returning a PyObject *, through an unchecked
+   PyType_Slot entry: its box of 5 arrives as a value whose encoding is not
+   canonical. */
+static PyObject *
+oldform_call(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    return PyLong_FromLong(5);
+}
+
+static PyType_Slot oldform_call_slots[] = {
+    {Py_tp_call, oldform_call},
+    {0, 0},
+};
+
+static PyType_Spec oldform_call_spec = {
+    .name = "_testcapi.pyvalue.OldFormCall",
+    .basicsize = sizeof(PyObject),
+    .flags = Py_TPFLAGS_DEFAULT,
+    .slots = oldform_call_slots,
+};
+
 static PyTypeObject BadDescrGet_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "_testcapi.pyvalue.BadDescrGet",
@@ -641,6 +710,9 @@ static PyMethodDef test_methods[] = {
     {"LongValue", _PyCFunction_CAST(Number_Long), METH_O},
     {"FloatValue", _PyCFunction_CAST(Number_Float), METH_O},
     {"GetAttrValue", object_getattr, METH_VARARGS},
+    {"CallValue", object_callvalue, METH_VARARGS},
+    {"VectorcallValue", object_vectorcallvalue, METH_VARARGS},
+    {"VectorcallCall", vectorcall_call, METH_VARARGS},
     {"SetAttrValue", object_setattr, METH_VARARGS},
     {"GetOptionalAttrValue", object_getoptionalattr, METH_VARARGS},
     {"MemberGetOneValue", member_getonevalue, METH_VARARGS},
@@ -683,7 +755,8 @@ _PyTestCapi_Init_PyValue(PyObject *m)
             return -1;
         }
     }
-    PyType_Spec *specs[] = {&valueslots_heap_spec, &generic_heap_spec};
+    PyType_Spec *specs[] = {&valueslots_heap_spec, &generic_heap_spec,
+                            &oldform_call_spec};
     for (size_t i = 0; i < Py_ARRAY_LENGTH(specs); i++) {
         PyObject *tp = PyType_FromSpec(specs[i]);
         if (tp == NULL || PyModule_AddType(mod, (PyTypeObject *)tp) < 0) {

@@ -11,6 +11,7 @@
 #include "pycore_dict.h"          // _PyDict_SetItemValue()
 #include "pycore_gc_trace.h"      // _PyGC_LiveCollectHere()
 #include "pycore_object.h"        // _PyObject_ComputedDictPointer()
+#include "pycore_pymem.h"         // _PyMem_SizeClass()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_shape.h"
 #include "pycore_stats.h"         // OBJECT_STAT_INC()
@@ -113,7 +114,14 @@ _PyType_SlotCapacity(PyTypeObject *type)
         }
     }
     Py_ssize_t s = PySet_GET_SIZE(set);
-    return (int)Py_MIN(_Py_SHAPE_MAX_SLOTS, Py_MAX(_Py_SHAPE_MIN_SLOTS, s + 2));
+    // The block holds the slots its size class has room for: the bytes
+    // past B + 8w would be allocated anyway.
+    size_t want = s > 0 ? (size_t)Py_MIN(s + 2, _Py_SHAPE_MAX_SLOTS)
+                        : _Py_SHAPE_MIN_SLOTS;
+    size_t basic = (size_t)type->tp_basicsize;
+    size_t room = (_PyMem_SizeClass(basic + 8 * want) - basic) / 8;
+    assert(room >= want);
+    return (int)Py_MIN(room, (size_t)_Py_SHAPE_MAX_SLOTS);
 }
 
 /* TYPE's dict has a new __static_attributes__, or lost it.  Until TYPE has
@@ -521,10 +529,17 @@ dict_from_slots(PyObject *obj)
     _PyShape *shape = _PyObject_SHAPE(obj);
     assert(!_PyShape_IsDictMode(shape));
     PyValue *slots = _PyObject_Slots(obj);
-    PyObject *dict = PyDict_New();
+    // Room for the fields and the store that converts, in a table of str
+    // keys, which the attribute handlers take.
+    PyObject *dict = _PyDict_NewPresizedUnicode(shape->nslots + 1);
     if (dict == NULL) {
         return NULL;
     }
+#ifndef NDEBUG
+    // The table is made at most once: here, or at the first insertion when
+    // the dict starts with the shared empty table.
+    PyDictKeysObject *keys = NULL;
+#endif
     for (Py_ssize_t i = 0; i < shape->nslots; i++) {
         PyObject *name = shape->slots[i].name;
         if (name == NULL) {
@@ -534,7 +549,14 @@ dict_from_slots(PyObject *obj)
                                  PyValue_FromObject(name), slots[i]) < 0) {
             return NULL;
         }
+#ifndef NDEBUG
+        if (keys == NULL) {
+            keys = ((PyDictObject *)dict)->ma_keys;
+        }
+        assert(((PyDictObject *)dict)->ma_keys == keys);
+#endif
     }
+    assert(keys == NULL || (DK_IS_UNICODE(keys) && keys->dk_usable > 0));
     return dict;
 }
 

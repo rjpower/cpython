@@ -1928,16 +1928,16 @@ class SizeofTest(unittest.TestCase):
         # the dictionary-mode shape and room for 64
         shapes = calcsize('BB' + shape + '64P')
         check(newstyleclass, s + shapes)
-        # An instance has its type's capacity of slots: no static
-        # attributes give the minimum, 6
-        check(newstyleclass(), size('6P'))
+        # An instance has its type's capacity of slots: without static
+        # attributes, the 7 that fill the 64-byte size class
+        check(newstyleclass(), size('7P'))
         # The dict of a fresh instance is an ordinary empty dict
         check(newstyleclass().__dict__, sys.getsizeof({}))
         o = newstyleclass()
         o.a = o.b = o.c = o.d = o.e = o.f = o.g = o.h = 1
-        # Six more shapes, with 1 to 6 slots of (name, kind); the seventh
+        # Seven more shapes, with 1 to 7 slots of (name, kind); the eighth
         # attribute sends o to dictionary mode
-        shapes += 6*calcsize(shape) + 21*calcsize('PB0P')
+        shapes += 7*calcsize(shape) + 28*calcsize('PB0P')
         check(newstyleclass, s + shapes)
         # unicode
         # each tuple contains a string and its expected character size

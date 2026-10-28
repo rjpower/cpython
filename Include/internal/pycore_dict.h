@@ -300,6 +300,11 @@ PyAPI_FUNC(PyObject *)_PyDict_FromItems(
         const PyValue *values, Py_ssize_t values_offset,
         Py_ssize_t length);
 
+// A dict with room for MINUSED str keys, whose table is the str-keyed kind
+// that the attribute handlers take (_PyDict_NewPresized() makes the general
+// kind above five).
+extern PyObject *_PyDict_NewPresizedUnicode(Py_ssize_t minused);
+
 
 // Enables per-thread ref counting on this dict in the free threading build
 extern void _PyDict_EnablePerThreadRefcounting(PyObject *op);

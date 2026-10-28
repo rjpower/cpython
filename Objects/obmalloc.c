@@ -305,6 +305,17 @@ _PyMem_MiRawFree(void *ctx, void *ptr)
 {
     mi_free(ptr);
 }
+
+size_t
+_PyMem_SizeClass(size_t n)
+{
+    // mi_good_size() would add MI_PADDING_SIZE, which debug and ASan builds
+    // set, and so make the size depend on the build.
+    if (n == 0 || n > MI_MEDIUM_OBJ_SIZE_MAX) {
+        return n;
+    }
+    return _mi_bin_size(_mi_bin(n));
+}
 #endif // WITH_MIMALLOC
 
 

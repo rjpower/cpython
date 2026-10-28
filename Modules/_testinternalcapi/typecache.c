@@ -7,6 +7,7 @@
 #include "parts.h"
 
 #include "pycore_critical_section.h"
+#include "pycore_pymem.h"         // _PyMem_SizeClass()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_value.h"         // PyValue_ObjectBorrow()
 #include "pycore_typecache.h"     // _PyTypeCache_Lookup()
@@ -285,6 +286,26 @@ type_slot_capacity(PyObject *Py_UNUSED(self), PyObject *type)
     return PyLong_FromLong(_PyType_Shapes(tp)->capacity);
 }
 
+// mem_size_class(n) -> the bytes of the block a request of n bytes gets,
+// as the capacity rule counts them (_PyMem_SizeClass())
+static PyValue
+mem_size_class(PyObject *Py_UNUSED(self), PyValue arg)
+{
+    // METH_O passes the value: a small int is inline.
+    PyObject *arg_o = PyValue_Object(arg);
+    if (arg_o == NULL) {
+        return PyValue_NULL;
+    }
+    Py_ssize_t n = PyLong_AsSsize_t(arg_o);
+    if (n < 0) {
+        if (!PyErr_Occurred()) {
+            PyErr_SetString(PyExc_ValueError, "negative size");
+        }
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(PyLong_FromSize_t(_PyMem_SizeClass((size_t)n)));
+}
+
 // object_slots(obj) -> the values of obj's attribute slots, NULL as None:
 // all of them in shape mode, slot 0 alone in dictionary mode, whose other
 // slots may lie outside the object after a __class__ assignment
@@ -362,6 +383,7 @@ static PyMethodDef test_methods[] = {
     {"set_next_type_version", _PyCFunction_CAST(set_next_type_version), METH_O},
     {"type_cache_size", type_cache_size, METH_O},
     {"type_slot_capacity", type_slot_capacity, METH_O},
+    {"mem_size_class", _PyCFunction_CAST(mem_size_class), METH_O},
     {"object_slots", object_slots, METH_O},
     {"set_conversion_collect", set_conversion_collect, METH_O},
     {"object_dict_ptr", object_dict_ptr, METH_O},

@@ -29,6 +29,7 @@ COOLDOWN = _testinternalcapi.SPECIALIZATION_COOLDOWN
 MIN_SLOTS = _testinternalcapi.SHAPE_MIN_SLOTS
 MAX_SLOTS = _testinternalcapi.SHAPE_MAX_SLOTS
 capacity = _testinternalcapi.type_slot_capacity
+size_class = _testinternalcapi.mem_size_class
 slots_of = _testinternalcapi.object_slots
 BOXED = _testinternalcapi.SLOT_BOXED
 I32 = _testinternalcapi.SLOT_I32
@@ -908,6 +909,32 @@ class LookupPlanTests(unittest.TestCase):
         self.assertGreater(failures, 0)
 
 
+def model_size_class(n):
+    """mimalloc's size classes on x86-64 (MI_ALIGN2W): 8 bytes, 16-byte
+    steps to 64 bytes, then four per power of two, and past the medium
+    classes the request itself; capacity_rule.py's good()."""
+    if n > 65536:
+        return n
+    if n <= 8:
+        return 8
+    if n <= 64:
+        return (n + 15) & ~15
+    step = 1 << ((n - 1).bit_length() - 3)
+    return (n + step - 1) // step * step
+
+
+def capacity_rule(basicsize, s):
+    """The capacity of a type with s static attributes (note 12 section
+    6.4): the slots that fit in the size class of basicsize + 8w bytes."""
+    want = min(s + 2, MAX_SLOTS) if s else MIN_SLOTS
+    return min(MAX_SLOTS, (size_class(basicsize + 8 * want) - basicsize) // 8)
+
+
+# The capacity of a class without static attributes, whose basic size is
+# the header's.
+EMPTY_CAPACITY = capacity_rule(8, 0)
+
+
 def make_static(n, base=object, prefix="a"):
     """A class whose __init__ assigns n attributes, so that its
     __static_attributes__ has n names."""
@@ -923,26 +950,58 @@ class LayoutTests(unittest.TestCase):
     """The slots after tp_basicsize, as many as the type's capacity."""
 
     def test_capacity_from_static_attributes(self):
-        self.assertEqual(capacity(make_static(0)), MIN_SLOTS)
-        self.assertEqual(capacity(make_static(3)), MIN_SLOTS)
-        self.assertEqual(capacity(make_static(10)), 12)
-        self.assertEqual(capacity(make_static(40)), MAX_SLOTS)
+        self.assertEqual(make_static(0).__basicsize__, 8)
+        # S + 2 slots, rounded up to the size class of the block.
+        expected = {0: 7, 1: 3, 2: 5, 3: 5, 4: 7, 5: 7, 6: 9, 7: 9, 8: 11,
+                    10: 13, 14: 19, 22: 27, 26: 30, 40: MAX_SLOTS}
+        for s, cap in expected.items():
+            with self.subTest(s=s):
+                self.assertEqual(capacity(make_static(s)), cap)
+                self.assertEqual(capacity_rule(8, s), cap)
+        self.assertEqual(EMPTY_CAPACITY, 7)
         # The names of every class on the MRO, each once.
         B = make_static(5)
-        self.assertEqual(capacity(make_static(5, B, "b")), 12)
+        self.assertEqual(capacity(make_static(5, B, "b")), 13)
         self.assertEqual(capacity(make_static(5, B)), 7)
         self.assertIsNone(capacity(int))
+
+    def test_capacity_of_other_basic_sizes(self):
+        for base in (list, dict):
+            class L(base):
+                pass
+            with self.subTest(base=base):
+                self.assertNotEqual(L.__basicsize__, 8)
+                self.assertEqual(capacity(L), capacity_rule(L.__basicsize__, 0))
+
+    def test_size_classes(self):
+        # The rule counts the release build's classes on every build: the
+        # padding of a debug build is not counted.
+        for n in itertools.chain(range(1, 2049), range(65500, 65600)):
+            self.assertEqual(size_class(n), model_size_class(n), n)
+
+    def test_capacity_past_the_medium_classes(self):
+        # The request is its own block, so the capacity is the slots wanted.
+        names = tuple(f"s{i}" for i in range(8192))
+        C = type("C", (), {"__slots__": names + ("__dict__",)})
+        self.assertEqual(C.__basicsize__, 8 + 8 * 8192)
+        self.assertEqual(capacity(C), MIN_SLOTS)
+        o = C()
+        o.s8191 = 1
+        for i in range(MIN_SLOTS + 1):
+            setattr(o, f"a{i}", i)
+        self.assertEqual(vars(o), {f"a{i}": i for i in range(MIN_SLOTS + 1)})
+        self.assertEqual(o.s8191, 1)
 
     def test_static_attributes_set_before_instances(self):
         # A class decorator may declare the attributes until the first
         # instance exists (dataclasses does).
         names = tuple(f"n{i}" for i in range(8))
         C = make_static(0)
-        self.assertEqual(capacity(C), MIN_SLOTS)
+        self.assertEqual(capacity(C), EMPTY_CAPACITY)
         C.__static_attributes__ = names
-        self.assertEqual(capacity(C), 10)
+        self.assertEqual(capacity(C), 11)
         del C.__static_attributes__
-        self.assertEqual(capacity(C), MIN_SLOTS)
+        self.assertEqual(capacity(C), EMPTY_CAPACITY)
         C.__static_attributes__ = names
         o = C()
         for name in names:
@@ -955,7 +1014,7 @@ class LayoutTests(unittest.TestCase):
         C.__new__(C)
         C.__static_attributes__ = names
         self.assertEqual(C.__static_attributes__, names)
-        self.assertEqual(capacity(C), MIN_SLOTS)
+        self.assertEqual(capacity(C), EMPTY_CAPACITY)
 
     def test_static_attributes_set_with_a_subclass(self):
         names = tuple(f"n{i}" for i in range(8))
@@ -963,13 +1022,13 @@ class LayoutTests(unittest.TestCase):
         class S(C):
             pass
         C.__static_attributes__ = names
-        self.assertEqual(capacity(C), MIN_SLOTS)
-        self.assertEqual(capacity(S), MIN_SLOTS)
+        self.assertEqual(capacity(C), EMPTY_CAPACITY)
+        self.assertEqual(capacity(S), EMPTY_CAPACITY)
 
     def test_dataclass_capacity(self):
         fields = [f"f{i}" for i in range(8)]
         D = dataclasses.make_dataclass("D", fields)
-        self.assertEqual(capacity(D), 10)
+        self.assertEqual(capacity(D), 11)
         o = D(*range(8))
         self.assertIsNotNone(shape_of(o))
         self.assertEqual(slots_of(o)[:8], tuple(range(8)))
@@ -979,7 +1038,7 @@ class LayoutTests(unittest.TestCase):
         C.__annotations__ = dict.fromkeys(fields, int)
         C()
         D = dataclasses.dataclass(C)
-        self.assertEqual(capacity(D), MIN_SLOTS)
+        self.assertEqual(capacity(D), EMPTY_CAPACITY)
         self.assertEqual(vars(D(*range(8))), dict(zip(fields, range(8))))
 
     def test_slots_are_positions(self):
@@ -987,14 +1046,15 @@ class LayoutTests(unittest.TestCase):
         o = C()
         self.assertEqual(plan(o, "x").offset, C.__basicsize__)
         self.assertEqual(plan(o, "y").offset, C.__basicsize__ + 8)
-        self.assertEqual(slots_of(o), (1, 2) + (None,) * (MIN_SLOTS - 2))
+        self.assertEqual(slots_of(o), (1, 2) + (None,) * (capacity(C) - 2))
 
     def test_sizeof_counts_slots(self):
         C = make_static(10)
-        self.assertEqual(sys.getsizeof(C()), C.__basicsize__ + 12 * 8)
+        self.assertEqual(sys.getsizeof(C()), C.__basicsize__ + 13 * 8)
         class L(list):
             pass
-        self.assertEqual(sys.getsizeof(L()), sys.getsizeof([]) + MIN_SLOTS * 8)
+        self.assertEqual(sys.getsizeof(L()),
+                         sys.getsizeof([]) + capacity_rule(L.__basicsize__, 0) * 8)
 
     def test_slots_match_shape(self):
         C = make_class()
@@ -1010,7 +1070,7 @@ class LayoutTests(unittest.TestCase):
         class C:
             pass
         o = C()
-        names = [f"a{i}" for i in range(MIN_SLOTS)]
+        names = [f"a{i}" for i in range(capacity(C))]
         for name in names:
             setattr(o, name, name)
         del o.a1
@@ -1129,10 +1189,10 @@ class DictionaryModeTests(unittest.TestCase):
         Small = make_static(0)
         Big = make_static(40, prefix="b")
         self.assertEqual((capacity(Small), capacity(Big)),
-                         (MIN_SLOTS, MAX_SLOTS))
+                         (EMPTY_CAPACITY, MAX_SLOTS))
         o = Small()
         o.a, o.b = 1, 2
-        # o keeps Small's six slots: only slot 0 may be used from now on.
+        # o keeps Small's slots: only slot 0 may be used from now on.
         for cls in (Big, Small, Big, Small):
             o.__class__ = cls
             self.assertIsNone(shape_of(o))
@@ -1214,7 +1274,7 @@ class DictionaryModeReasonTests(unittest.TestCase):
         class C:
             pass
         o = C()
-        for i in range(MIN_SLOTS):
+        for i in range(capacity(C)):
             setattr(o, f"a{i}", i)
         self.assertEntersOnce("capacity", o, setattr, "z", 0)
 
@@ -1240,7 +1300,7 @@ class DictionaryModeReasonTests(unittest.TestCase):
         full = []
         for _ in range(2):
             o = C()
-            for i in range(MIN_SLOTS):
+            for i in range(capacity(C)):
                 setattr(o, f"a{i}", i)
             full.append(o)
         self.exhaust_shapes(C)
@@ -1493,6 +1553,71 @@ class NonExactNameTests(unittest.TestCase):
             else:
                 self.assertEqual(value, 1)
         self.assertGreater(failures, 0)
+
+
+@cpython_only
+class PresizedConversionTests(unittest.TestCase):
+    """The conversion's dict has room for the fields and the store that
+    converts, in a table of str keys (note 12 section 6.3).  A debug build
+    asserts that the fill resizes nothing."""
+
+    def test_fields_and_holes(self):
+        for n in (0, 1, 4, 5, 7):
+            with self.subTest(n=n):
+                class C:
+                    pass
+                o = C()
+                for i in range(n):
+                    setattr(o, f"a{i}", i)
+                expected = {f"a{i}": i for i in range(n)}
+                if n > 1:
+                    del o.a1, expected["a1"]
+                self.assertEqual(vars(o), expected)
+                self.assertIsNone(shape_of(o))
+                o.z = "z"
+                self.assertEqual(vars(o), expected | {"z": "z"})
+
+    def test_store_past_capacity(self):
+        C = make_static(1)
+        self.assertEqual(capacity(C), 3)
+        o = C()
+        o.b = 1; o.c = 2
+        del o.b
+        o.d = 3
+        self.assertIsNone(shape_of(o))
+        self.assertEqual(vars(o), {"a0": 0, "c": 2, "d": 3})
+        class D:
+            pass
+        p = D()
+        for i in range(capacity(D)):
+            setattr(p, f"a{i}", i)
+        p.z = "z"
+        self.assertIsNone(shape_of(p))
+        self.assertEqual(vars(p), {f"a{i}": i for i in range(capacity(D))}
+                                  | {"z": "z"})
+
+    @requires_specialization
+    def test_hint_handlers_after_conversion(self):
+        # _PyDict_NewPresized() would give a table of general keys, which
+        # both WITH_HINT handlers refuse.
+        class C:
+            pass
+        o = C()
+        for i in range(7):
+            setattr(o, f"a{i}", i)
+        vars(o)
+        self.assertIsNone(shape_of(o))
+        @reset_code
+        def get(o):
+            return o.a6
+        @reset_code
+        def put(o, v):
+            o.a5 = v
+        for _ in range(4 * (THRESHOLD + COOLDOWN)):
+            get(o), put(o, 1)
+        self.assertIn("LOAD_ATTR_WITH_HINT", opnames(get))
+        self.assertIn("STORE_ATTR_WITH_HINT", opnames(put))
+        self.assertEqual((get(o), o.a5), (6, 1))
 
 
 @cpython_only

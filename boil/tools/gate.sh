@@ -35,7 +35,7 @@ LIMIT=${GATE_LIMIT:-$LIMIT}
 # The pyc prefix stays on TMPDIR's filesystem (test_import renames a cached
 # pyc into TMPDIR, which fails across devices); stale prefixes from runs
 # whose shell was killed before the trap ran are pruned here after two hours.
-gatetmp="${TMPDIR:-/tmp}/boilgate"
+gatetmp="${TMPDIR:-/tmp}/boilgate-pyc"
 mkdir -p "$gatetmp"
 find "$gatetmp" -mindepth 1 -maxdepth 1 -mmin +120 -exec rm -rf {} + 2>/dev/null
 tmp=$(mktemp -d "$gatetmp/run-XXXXXX")

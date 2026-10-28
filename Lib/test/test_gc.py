@@ -1704,6 +1704,85 @@ class StackWalkTests(unittest.TestCase):
         self.assertEqual(roots & (self.ROOT_DATA | self.ROOT_STRUCTS), 0,
                          roots)
 
+    @unittest.skipUnless(sys.platform == "linux", "reads /proc/self/maps")
+    def test_loader_generation(self):
+        # An object unloaded and another loaded at its address: the cache
+        # is flushed, and the walk attributes the new object's frames.
+        import ctypes
+        import _ctypes
+        import os
+        import shutil
+        import subprocess
+        import sysconfig
+        cc = (sysconfig.get_config_var("CC") or "").split()
+        if not cc or shutil.which(cc[0]) is None:
+            self.skipTest("requires the configured C compiler")
+        sources = [
+            "typedef void (*cb_t)(void);\n"
+            "__attribute__((noinline)) void call_cb(cb_t cb)\n"
+            "{ volatile int pad = 1; cb(); (void)pad; }\n",
+            "typedef void (*cb_t)(void);\n"
+            "__attribute__((noinline)) static void inner(cb_t cb)\n"
+            "{ volatile char buf[200]; buf[0] = 1; cb(); (void)buf[0]; }\n"
+            "__attribute__((noinline)) void call_cb(cb_t cb)\n"
+            "{ volatile long a = 1, b = 2; inner(cb); (void)(a + b); }\n",
+        ]
+        with temp_dir() as tmp:
+            libs = []
+            for i, src in enumerate(sources):
+                c = os.path.join(tmp, f"lib{i}.c")
+                with open(c, "w") as f:
+                    f.write(src)
+                so = os.path.join(tmp, f"lib{i}.so")
+                subprocess.run([*cc, "-O2", "-shared", "-fPIC", "-o", so, c],
+                               check=True)
+                libs.append(so)
+            path = os.path.join(tmp, "lib.so")
+
+            def mapping():
+                with open("/proc/self/maps") as f:
+                    lines = [l.split() for l in f if l.rstrip().endswith(path)]
+                if not lines:
+                    return None
+                ranges = [tuple(int(x, 16) for x in l[0].split("-"))
+                          for l in lines]
+                return min(r[0] for r in ranges), max(r[1] for r in ranges)
+
+            results = []
+            for so in libs:
+                shutil.copy(so, path)
+                lib = ctypes.CDLL(path)
+                out = {}
+
+                @ctypes.CFUNCTYPE(None)
+                def cb():
+                    gc.collect()
+                    out["stats"] = _testinternalcapi.gc_root_stats()
+                    out["walk"] = _testinternalcapi.gc_walk_here()
+
+                lib.call_cb(cb)
+                where = mapping()
+                handle = lib._handle
+                del lib, cb
+                _ctypes.dlclose(handle)
+                self.assertIsNone(mapping())  # unloaded
+                results.append((where, out))
+            (lo1, _), first = results[0]
+            (lo2, hi2), second = results[1]
+            if lo1 != lo2:
+                self.skipTest("the second object mapped elsewhere")
+            # The unload flushed the cache before the second collection
+            # walked; an automatic collection between may have counted it.
+            flushes = (second["stats"]["total"]["cache_flushes"]
+                       - first["stats"]["total"]["cache_flushes"])
+            self.assertGreaterEqual(flushes, 1)
+            self.assertEqual(second["stats"]["last"]["fallbacks"], 0)
+            frames, fell_back, _ = second["walk"]
+            self.assertFalse(fell_back)
+            ours = [f for f in frames if lo2 <= f[0] < hi2]
+            self.assertEqual(len(ours), 2)  # inner and call_cb
+            self.assertTrue(all(f[3] == 3 for f in ours))  # extension opaque
+
     def test_counters(self):
         gc.collect()
         last = _testinternalcapi.gc_root_stats()["last"]

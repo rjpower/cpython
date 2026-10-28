@@ -603,14 +603,18 @@ _PyGC_WalkCacheCheck(_PyGCWalkCache *cache, struct _PyGCRootStats *stats)
     unsigned long long subs = 0;
     (void)dl_iterate_phdr(generation_cb, &subs);
     if (subs != cache->subs) {
-        if (cache->used > 0 && stats != NULL) {
-            stats->cache_flushes++;
+        if (cache->used > 0) {
+            cache->flushes++;
         }
         if (cache->slots != NULL) {
             memset(cache->slots, 0, (cache->mask + 1) * sizeof(*cache->slots));
         }
         cache->used = 0;
         cache->subs = subs;
+    }
+    if (stats != NULL) {
+        stats->cache_flushes += cache->flushes;
+        cache->flushes = 0;
     }
 }
 

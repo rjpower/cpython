@@ -124,6 +124,7 @@ typedef struct _PyGCWalkCache {
     size_t mask;
     size_t used;
     unsigned long long subs;
+    int64_t flushes;            /* flushes not yet counted in a mark's stats */
 } _PyGCWalkCache;
 
 /* Decode the descriptor for lookup_pc, uncached.  0, or -1 if there is
@@ -157,7 +158,8 @@ typedef struct {
  * conservative scan of the rest. */
 PyAPI_FUNC(int) _PyGC_WalkStack(_PyGCWalk *w, const _PyGCContext *ctx);
 
-/* Flush the cache if the loader generation changed; once per root phase. */
+/* Flush the cache if the loader generation changed: in each root phase,
+ * which counts the flushes since the last into stats, and on detach. */
 extern void _PyGC_WalkCacheCheck(_PyGCWalkCache *cache,
                                  struct _PyGCRootStats *stats);
 extern void _PyGC_WalkCacheFini(_PyGCWalkCache *cache);

@@ -877,6 +877,34 @@ subset, the functions whose frames held the only root of a live object;
     the committed probe treats these readers as collecting, and it counts
     a value from the end of the statement that assigns it, which the
     uncommitted probe's description does not settle (rung 0's work doc).
+13. **Stack-passed arguments to opaque callees.** Question 11's parameter
+    rule assumes the callee's frame scan covers its parameters. An opaque
+    callee's scan covers its own extent, but an argument the platform ABI
+    passes on the stack (position 7 or later on x86-64, variadic arguments
+    included) lies in the caller's extent, which is precise and not
+    scanned. Ruling in rung 1 (coordinator, 2026-10-27): the call is not
+    rejected; in a precise function, an object or `PyValue` passed at
+    position 7 or later to a callee that is not precise must be anchored in
+    the caller at the call, by a slot, a span or a borrow. The C mode
+    reports the unanchored case with its own error naming the position.
+    It checks collecting calls only, since a call that cannot collect has
+    no safepoint at which the argument is read, and it counts from 7 on
+    AArch64 too, which checks a superset of that ABI's eight registers.
+    Precise callees are unchanged: 2.1 has them span a parameter they use
+    after a collecting call. The eval loop keeps the transitional scan of
+    `[sp, lo)` in its activation frames until it is promoted.
+14. **A saved register its saver has not changed.** Section 3.1 gives a
+    pending register value to the first frame outward that saves the
+    register. A frame that has saved a register and not yet written it
+    holds the caller's value in it, so the walk counts a pending value
+    equal to the one the saver saved as the caller's. Accepted in rung 1
+    (coordinator, 2026-10-27) as the reading of the CFI and of 3.1 that
+    the walk implements.
+15. **`DW_CFA_register`.** The walk treats a register saved in another
+    register as an unsupported rule and falls back for that walk. Accepted
+    in rung 1 (coordinator, 2026-10-27) on the condition that the suite
+    never reaches it: a fallback blocks a landing (section 10), so if a
+    gate shows one, the walk implements the rule.
 
 ## 14. Sources
 

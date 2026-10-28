@@ -1218,6 +1218,12 @@ Py_GC_PRECISE Py_GC_ARGS_ANCHORED void callee(PyValue v) {
     use_v(v);
 }
 """, "'callee' is Py_GC_ARGS_ANCHORED but not static"),
+        "stack_arg_unanchored": ("""
+Py_GC_PRECISE static void f(void) {
+    PyValue x = PyLong_FromLong(1);
+    collect7(0, 0, 0, 0, 0, 0, x);
+}
+""", "argument 7 of 'collect7', which is not precise, is passed on the stack and is not anchored"),
         "unsupported_setjmp": ("""
 Py_GC_PRECISE static void f(void) {
     jmp_buf b;
@@ -1345,6 +1351,16 @@ Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *d) {
         use_v(v);
         use(n);
     }
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""",
+        "stack_arg_in_span": """
+Py_GC_PRECISE static void f(PyThreadState *tstate) {
+    _PyValueRoot r;
+    _PyThreadState_PushValueRoot(tstate, &r);
+    PyValue x = PyLong_FromLong(1);
+    r.value = x;
+    collect7(0, 0, 0, 0, 0, x, x);
     _PyThreadState_PopValueRoot(tstate, &r);
 }
 """,

@@ -228,6 +228,10 @@ RETURN_MACROS = {"Py_RETURN_NONE", "Py_RETURN_TRUE", "Py_RETURN_FALSE",
 # Declarations that mark functions and parameters.
 PRECISE = "Py_GC_PRECISE"
 ARGS_ANCHORED = "Py_GC_ARGS_ANCHORED"
+# The first argument position passed on the stack: x86-64 SysV passes six
+# integer-class arguments in registers (AArch64 passes eight; counting from
+# seven there checks a superset).  Variadic arguments count the same way.
+FIRST_STACK_ARG = 7
 SLOTS = "Py_GC_SLOTS"
 
 C_KEYWORDS = {
@@ -2340,6 +2344,12 @@ class FunctionChecker:
             if name is not None and name in self.args_anchored_names:
                 for a, s in zip(e.args, arg_srcs):
                     self.check_arg_anchored(e, a, s, st)
+            elif name is None or name not in self.precise_names:
+                # Question 13: an opaque callee's frame scan does not reach
+                # the caller's extent, where its stack-passed arguments are.
+                for i, (a, s) in enumerate(zip(e.args, arg_srcs)):
+                    if i + 1 >= FIRST_STACK_ARG:
+                        self.check_arg_anchored(e, a, s, st, i + 1)
         if name in OUT_PARAMS:
             base = self.base_name(e.args[0]) if e.args else None
             for a in e.args[1:]:
@@ -2462,7 +2472,7 @@ class FunctionChecker:
                        f"temporary held across the collecting call to '{what}'")
 
     def check_arg_anchored(self, call: Call, a: Expr, srcs: frozenset,
-                           st: State) -> None:
+                           st: State, stack_position: int = 0) -> None:
         if not self.checking:
             return
         base = self.base_name(a)
@@ -2474,7 +2484,12 @@ class FunctionChecker:
                 ok, why = self.source_anchored(s, st, "reentrant", frozenset())
                 if not ok:
                     break
-        if not ok:
+        if not ok and stack_position:
+            self.error(call.line, f"argument {stack_position} of "
+                       f"'{call.name or 'a function pointer'}', which is not "
+                       f"precise, is passed on the stack and is not anchored "
+                       f"({why})")
+        elif not ok:
             self.error(call.line, f"an argument of '{call.name}', which is "
                        f"{ARGS_ANCHORED}, is not anchored ({why})")
 

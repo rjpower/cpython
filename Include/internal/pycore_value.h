@@ -381,6 +381,22 @@ _PyValueSpan_AppendObject(_PyValueRoot *root, PyObject *o)
     _PyValueSpan_Append(root, _PyValue_FromBits((uintptr_t)o));
 }
 
+/* Append a raw NULL slot to the span and return its address as an object
+   out-parameter: what a callee stores there is the object's own pointer, a
+   raw anchor, as _PyValueSpan_AppendObject() stores one.  The C mode
+   accepts the address as an out-parameter into the span, and an object
+   loaded from it as anchored while the span is pushed and no other call is
+   given the address; it accepts no other cast of a span slot to
+   PyObject **. */
+static inline PyObject **
+_PyValueSpan_ObjectSlot(_PyValueRoot *root)
+{
+    PyValue *slot = &root->base[root->n];
+    *slot = PyValue_NULL;
+    root->n++;
+    return (PyObject **)slot;
+}
+
 /* The span's buffer moved to base, which holds the values appended so far,
    as PyMem_Realloc() leaves them.  Call it before any other collecting
    call. */

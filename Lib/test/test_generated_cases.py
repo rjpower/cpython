@@ -1405,9 +1405,122 @@ Py_GC_PRECISE static void f(void) {
     }
 }
 """, "setjmp is outside the C mode's subset"),
+        # Object out-parameters (10a-2b.md section 2): the accessor's slot
+        # is the one checked form.  get_out() is unknown, so collecting.
+        "object_slot_local_address": ("""
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *o) {
+    PyValue buf[3];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    _PyValueSpan_AppendObject(&r, o);
+    PyObject *x;
+    if (get_out(o, &x) > 0) {
+        collect();
+        use(x);
+    }
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""", "the address of object local 'x' escapes to 'get_out'"),
+        "object_slot_after_pop": ("""
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *o) {
+    PyValue buf[2];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    _PyValueSpan_AppendObject(&r, o);
+    PyObject **xp = _PyValueSpan_ObjectSlot(&r);
+    if (get_out(o, xp) <= 0) {
+        _PyThreadState_PopValueRoot(tstate, &r);
+        return;
+    }
+    PyObject *x = *xp;
+    _PyThreadState_PopValueRoot(tstate, &r);
+    collect();
+    use(x);
+}
+""", "'x' is held only in a C local across the collecting call to 'collect' (span 'r', popped)"),
+        "object_slot_reused": ("""
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *o) {
+    PyValue buf[3];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    _PyValueSpan_AppendObject(&r, o);
+    PyObject **xp = _PyValueSpan_ObjectSlot(&r);
+    if (get_out(o, xp) > 0) {
+        PyObject *x = *xp;
+        if (get_out(o, xp) > 0) {
+            collect();
+            use(x);
+        }
+    }
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""", "object slot 'xp', which 'get_out' may store into again"),
+        "object_slot_cast": ("""
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *o) {
+    PyValue buf[3];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    _PyValueSpan_AppendObject(&r, o);
+    buf[1] = PyValue_NULL;
+    if (get_out(o, (PyObject **)&buf[1]) > 0) {
+        collect();
+    }
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""", "a slot of span-backed 'buf' cast to an object out-parameter: use _PyValueSpan_ObjectSlot()"),
+        "object_slot_not_pushed": ("""
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *o) {
+    _PyValueRoot r;
+    PyObject **xp = _PyValueSpan_ObjectSlot(&r);
+    (void)get_out(o, xp);
+}
+""", "an object slot of span 'r', which is not pushed"),
     }
 
     POSITIVE = {
+        "object_slot": """
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *o) {
+    PyValue buf[3];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    _PyValueSpan_AppendObject(&r, o);
+    PyObject **xp = _PyValueSpan_ObjectSlot(&r);
+    if (get_out(o, xp) > 0) {
+        PyObject *x = *xp;
+        collect();
+        use(x);
+    }
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""",
+        # The slot is raw: a box stored there is anchored as itself.
+        "object_slot_box": """
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *o) {
+    PyValue buf[3];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    _PyValueSpan_AppendObject(&r, o);
+    PyObject **xp = _PyValueSpan_ObjectSlot(&r);
+    *xp = PyFloat_FromDouble(1.5);
+    PyObject *x = *xp;
+    collect();
+    use(x);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""",
+        # An array of objects to read is not an out-parameter.
+        "object_array_cast": """
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *o) {
+    PyValue buf[3];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    _PyValueSpan_AppendObject(&r, o);
+    _PyValueSpan_AppendObject(&r, o);
+    collect_arr((PyObject *const *)buf, 2);
+    use(o);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""",
         "value_in_span": """
 Py_GC_PRECISE static void f(PyThreadState *tstate) {
     _PyValueRoot r;

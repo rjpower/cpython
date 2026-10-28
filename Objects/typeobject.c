@@ -983,7 +983,9 @@ set_version_unlocked(PyTypeObject *tp, unsigned int version)
     }
 }
 
-void
+/* Opaque, and Py_NO_INLINE so that no precise caller takes it in: the walk
+   over the subclasses and the watchers' callbacks are not precise. */
+Py_NO_INLINE void
 _PyType_Modified_Unlocked(PyTypeObject *type)
 {
     /* Invalidate any cached data for the specified type and all
@@ -1538,7 +1540,7 @@ type_abstractmethods(PyObject *tp, void *Py_UNUSED(closure))
     return res;
 }
 
-static int
+Py_GC_PRECISE static int
 type_set_abstractmethods(PyObject *tp, PyValue value, void *Py_UNUSED(closure))
 {
     PyTypeObject *type = PyTypeObject_CAST(tp);
@@ -1547,24 +1549,33 @@ type_set_abstractmethods(PyObject *tp, PyValue value, void *Py_UNUSED(closure))
        special to update subclasses.
     */
     int abstract, res;
-    PyObject *dict = lookup_tp_dict(type);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)type);
+    _PyValueSpan_Append(&span, value);
+    int rc = -1;
     if (!PyValue_IsNull(value)) {
         abstract = PyObject_IsTrueValue(value);
-        if (abstract < 0)
-            return -1;
-        res = _PyDict_SetItemValue((PyDictObject *)dict,
+        if (abstract < 0) {
+            goto done;
+        }
+        // The dict is read after the call: __bool__ may have replaced it.
+        res = _PyDict_SetItemValue((PyDictObject *)lookup_tp_dict(type),
             PyValue_FromObject(&_Py_ID(__abstractmethods__)), value);
     }
     else {
         abstract = 0;
-        res = PyDict_Pop(dict, &_Py_ID(__abstractmethods__), NULL);
+        res = PyDict_Pop(lookup_tp_dict(type), &_Py_ID(__abstractmethods__),
+                         NULL);
         if (res == 0) {
             PyErr_SetObject(PyExc_AttributeError, &_Py_ID(__abstractmethods__));
-            return -1;
+            goto done;
         }
     }
     if (res < 0) {
-        return -1;
+        goto done;
     }
 
     pinned_mutexes_t pinned;
@@ -1580,8 +1591,10 @@ type_set_abstractmethods(PyObject *tp, PyValue value, void *Py_UNUSED(closure))
     type_lock_allow_release(&pinned);
     ASSERT_TYPE_LOCK_HELD();
     END_TYPE_LOCK();
-
-    return 0;
+    rc = 0;
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return rc;
 }
 
 static PyValue
@@ -1895,7 +1908,7 @@ descr_get_object(descrgetfunc f, PyObject *descr, PyObject *obj,
 
 /* V, an entry of TYPE's dict, through its descriptor's __get__ when it has
    one, as the class attribute reads it.  An inline value has no __get__. */
-static PyValue
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static PyValue
 type_dict_entry_get(PyValue v, PyTypeObject *type)
 {
     if (!PyValue_IsObject(v)) {
@@ -1911,7 +1924,7 @@ type_dict_entry_get(PyValue v, PyTypeObject *type)
     return res;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 type_get_doc(PyObject *tp, void *Py_UNUSED(closure))
 {
     PyTypeObject *type = PyTypeObject_CAST(tp);
@@ -1919,16 +1932,23 @@ type_get_doc(PyObject *tp, void *Py_UNUSED(closure))
         return PyValue_FromResult(
             _PyType_GetDocFromInternalDoc(type->tp_name, type->tp_doc));
     }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)type);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    PyValue res = PyValue_NULL;
     PyObject *dict = lookup_tp_dict(type);
-    PyValue result;
-    int found = PyDict_GetItemRefValue(dict, &_Py_ID(__doc__), &result);
+    int found = PyDict_GetItemRefValue(dict, &_Py_ID(__doc__), &slots[1]);
     if (found == 0) {
-        return PyValue_FromObject(Py_None);
+        res = PyValue_FromObject(Py_None);
     }
-    if (found < 0) {
-        return PyValue_NULL;
+    else if (found > 0) {
+        res = type_dict_entry_get(slots[1], type);
     }
-    return type_dict_entry_get(result, type);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 static PyValue
@@ -1953,7 +1973,7 @@ type_set_doc(PyObject *tp, PyValue value_v, void *Py_UNUSED(closure))
     return PyDict_SetItem(dict, &_Py_ID(__doc__), value);
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 type_get_annotate(PyObject *tp, void *Py_UNUSED(closure))
 {
     PyTypeObject *type = PyTypeObject_CAST(tp);
@@ -1962,30 +1982,37 @@ type_get_annotate(PyObject *tp, void *Py_UNUSED(closure))
         return PyValue_NULL;
     }
 
-    PyValue annotate;
+    // The span: the type, its dict and the entry found.
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)type);
     PyObject *dict = PyType_GetDict(type);
+    _PyValueSpan_AppendObject(&span, dict);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    PyValue res = PyValue_NULL;
     // First try __annotate__, in case that's been set explicitly
-    if (PyDict_GetItemRefValue(dict, &_Py_ID(__annotate__), &annotate) < 0) {
-        Py_DECREF(dict);
-        return PyValue_NULL;
+    if (PyDict_GetItemRefValue(dict, &_Py_ID(__annotate__), &slots[2]) < 0) {
+        goto done;
     }
-    if (PyValue_IsNull(annotate)) {
+    if (PyValue_IsNull(slots[2])) {
         if (PyDict_GetItemRefValue(dict, &_Py_ID(__annotate_func__),
-                                   &annotate) < 0) {
-            Py_DECREF(dict);
-            return PyValue_NULL;
+                                   &slots[2]) < 0) {
+            goto done;
         }
     }
-    if (!PyValue_IsNull(annotate)) {
-        Py_DECREF(dict);
-        return type_dict_entry_get(annotate, type);
+    if (!PyValue_IsNull(slots[2])) {
+        res = type_dict_entry_get(slots[2], type);
+        goto done;
     }
-    int result = PyDict_SetItem(dict, &_Py_ID(__annotate_func__), Py_None);
-    Py_DECREF(dict);
-    if (result < 0) {
-        return PyValue_NULL;
+    if (PyDict_SetItem(dict, &_Py_ID(__annotate_func__), Py_None) < 0) {
+        goto done;
     }
-    return PyValue_FromObject(Py_None);
+    res = PyValue_FromObject(Py_None);
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 static int
@@ -2031,7 +2058,7 @@ type_set_annotate(PyObject *tp, PyValue value_v, void *Py_UNUSED(closure))
     return 0;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 type_get_annotations(PyObject *tp, void *Py_UNUSED(closure))
 {
     PyTypeObject *type = PyTypeObject_CAST(tp);
@@ -2040,68 +2067,68 @@ type_get_annotations(PyObject *tp, void *Py_UNUSED(closure))
         return PyValue_NULL;
     }
 
-    PyObject *annotations;
-    PyValue stored;
+    // The span: the type, its dict, the entry found, then the slots of
+    // __annotate__ and of the annotations it makes.
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[5];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)type);
     PyObject *dict = PyType_GetDict(type);
+    _PyValueSpan_AppendObject(&span, dict);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    PyObject **annotatep = _PyValueSpan_ObjectSlot(&span);
+    PyObject **annotationsp = _PyValueSpan_ObjectSlot(&span);
+    PyValue res = PyValue_NULL;
     // First try __annotations__ (e.g. for "from __future__ import annotations")
-    if (PyDict_GetItemRefValue(dict, &_Py_ID(__annotations__), &stored) < 0) {
-        Py_DECREF(dict);
-        return PyValue_NULL;
+    if (PyDict_GetItemRefValue(dict, &_Py_ID(__annotations__), &slots[2]) < 0) {
+        goto done;
     }
-    if (PyValue_IsNull(stored)) {
+    if (PyValue_IsNull(slots[2])) {
         if (PyDict_GetItemRefValue(dict, &_Py_ID(__annotations_cache__),
-                                   &stored) < 0) {
-            Py_DECREF(dict);
-            return PyValue_NULL;
+                                   &slots[2]) < 0) {
+            goto done;
         }
     }
-    if (!PyValue_IsNull(stored)) {
-        Py_DECREF(dict);
-        return type_dict_entry_get(stored, type);
+    if (!PyValue_IsNull(slots[2])) {
+        res = type_dict_entry_get(slots[2], type);
+        goto done;
+    }
+    *annotatep = PyObject_GetAttrString((PyObject *)type, "__annotate__");
+    if (*annotatep == NULL) {
+        goto done;
+    }
+    if (PyCallable_Check(*annotatep)) {
+        PyObject *one = _PyLong_GetOne();
+        *annotationsp = _PyObject_CallOneArg(*annotatep, one);
+        if (*annotationsp == NULL) {
+            goto done;
+        }
+        if (!PyDict_Check(*annotationsp)) {
+            PyErr_Format(PyExc_TypeError,
+                         "__annotate__() must return a dict, not %T",
+                         *annotationsp);
+            goto done;
+        }
     }
     else {
-        PyObject *annotate = PyObject_GetAttrString((PyObject *)type, "__annotate__");
-        if (annotate == NULL) {
-            Py_DECREF(dict);
-            return PyValue_NULL;
-        }
-        if (PyCallable_Check(annotate)) {
-            PyObject *one = _PyLong_GetOne();
-            annotations = _PyObject_CallOneArg(annotate, one);
-            if (annotations == NULL) {
-                Py_DECREF(dict);
-                Py_DECREF(annotate);
-                return PyValue_NULL;
-            }
-            if (!PyDict_Check(annotations)) {
-                PyErr_Format(PyExc_TypeError,
-                             "__annotate__() must return a dict, not %T",
-                             annotations);
-                Py_DECREF(annotations);
-                Py_DECREF(annotate);
-                Py_DECREF(dict);
-                return PyValue_NULL;
-            }
-        }
-        else {
-            annotations = PyDict_New();
-        }
-        Py_DECREF(annotate);
-        if (annotations) {
-            int result = PyDict_SetItem(
-                    dict, &_Py_ID(__annotations_cache__), annotations);
-            if (result) {
-                Py_CLEAR(annotations);
-            } else {
-                PyType_Modified(type);
-            }
+        *annotationsp = PyDict_New();
+        if (*annotationsp == NULL) {
+            goto done;
         }
     }
-    Py_DECREF(dict);
-    return PyValue_FromResult(annotations);
+    if (PyDict_SetItem(dict, &_Py_ID(__annotations_cache__),
+                       *annotationsp) < 0) {
+        goto done;
+    }
+    PyType_Modified(type);
+    res = PyValue_FromObject(*annotationsp);
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
-static int
+Py_GC_PRECISE static int
 type_set_annotations(PyObject *tp, PyValue value, void *Py_UNUSED(closure))
 {
     PyTypeObject *type = PyTypeObject_CAST(tp);
@@ -2112,11 +2139,18 @@ type_set_annotations(PyObject *tp, PyValue value, void *Py_UNUSED(closure))
         return -1;
     }
 
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)type);
+    _PyValueSpan_Append(&span, value);
     PyObject *dict = PyType_GetDict(type);
+    _PyValueSpan_AppendObject(&span, dict);
+    int rc = -1;
     int result = PyDict_ContainsString(dict, "__annotations__");
     if (result < 0) {
-        Py_DECREF(dict);
-        return -1;
+        goto done;
     }
     if (result) {
         // If __annotations__ is currently in the dict, we update it,
@@ -2128,13 +2162,11 @@ type_set_annotations(PyObject *tp, PyValue value, void *Py_UNUSED(closure))
             if (result == 0) {
                 // Somebody else just deleted it?
                 PyErr_SetString(PyExc_AttributeError, "__annotations__");
-                Py_DECREF(dict);
-                return -1;
+                goto done;
             }
         }
         if (result < 0) {
-            Py_DECREF(dict);
-            return -1;
+            goto done;
         }
         // Also clear __annotations_cache__ just in case.
         result = PyDict_Pop(dict, &_Py_ID(__annotations_cache__), NULL);
@@ -2150,29 +2182,27 @@ type_set_annotations(PyObject *tp, PyValue value, void *Py_UNUSED(closure))
             result = PyDict_Pop(dict, &_Py_ID(__annotations_cache__), NULL);
             if (result == 0) {
                 PyErr_SetString(PyExc_AttributeError, "__annotations__");
-                Py_DECREF(dict);
-                return -1;
+                goto done;
             }
         }
     }
     if (result < 0) {
-        Py_DECREF(dict);
-        return -1;
+        goto done;
     } else {  // result can be 0 or 1
         if (PyDict_Pop(dict, &_Py_ID(__annotate_func__), NULL) < 0) {
             PyType_Modified(type);
-            Py_DECREF(dict);
-            return -1;
+            goto done;
         }
         if (PyDict_Pop(dict, &_Py_ID(__annotate__), NULL) < 0) {
             PyType_Modified(type);
-            Py_DECREF(dict);
-            return -1;
+            goto done;
         }
     }
     PyType_Modified(type);
-    Py_DECREF(dict);
-    return 0;
+    rc = 0;
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return rc;
 }
 
 static PyValue
@@ -2731,7 +2761,7 @@ type_is_subtype_base_chain(PyTypeObject *a, PyTypeObject *b)
     return (b == &PyBaseObject_Type);
 }
 
-static int
+Py_GC_PRECISE static int
 is_subtype_with_mro(PyObject *a_mro, PyTypeObject *a, PyTypeObject *b)
 {
     int res;
@@ -2743,7 +2773,10 @@ is_subtype_with_mro(PyObject *a_mro, PyTypeObject *a, PyTypeObject *b)
         n = PyTuple_GET_SIZE(a_mro);
         res = 0;
         for (i = 0; i < n; i++) {
-            if (PyTuple_GET_ITEM(a_mro, i) == (PyObject *)b) {
+            // An MRO holds only types, so its items are read unboxed.  B
+            // may be a type still being made ready.
+            if (PyValue_ObjectBorrow(PyTuple_GET_VALUE(a_mro, i))
+                == (PyObject *)b) {
                 res = 1;
                 break;
             }
@@ -2836,27 +2869,41 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
     return 1;
 }
 
-static int
-lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
+/* OUT is a slot the collector visits (every caller passes a value root).
+   The span holds self, the name and the type, whose __get__ the lookup's
+   descriptor gets. */
+Py_GC_PRECISE static int
+lookup_method_ex(PyObject *self, PyObject *attr, PyValue *Py_GC_SLOTS out,
                  int raise_attribute_error)
 {
-    _PyType_LookupValueAndVersion(Py_TYPE(self), attr, out);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
+    _PyValueSpan_AppendObject(&span, attr);
+    PyTypeObject *tp = Py_TYPE(self);
+    _PyValueSpan_AppendObject(&span, (PyObject *)tp);
+    int rc = -1;
+    _PyType_LookupValueAndVersion(tp, attr, out);
     if (PyValue_IsNull(*out)) {
         if (raise_attribute_error) {
             PyErr_SetObject(PyExc_AttributeError, attr);
         }
-        return -1;
+        goto done;
     }
 
     PyObject *value = PyValue_ObjectBorrow(*out);
     if (_PyType_HasFeature(Py_TYPE(value), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
         /* Avoid temporary PyMethodObject */
-        return 1;
+        rc = 1;
+        goto done;
     }
 
     descrgetfunc f = Py_TYPE(value)->tp_descr_get;
+    rc = 0;
     if (f != NULL) {
-        PyValue res = f(value, self, (PyObject *)(Py_TYPE(self)));
+        PyValue res = f(value, self, (PyObject *)tp);
         _PyValue_CheckSlotResult(res, Py_TYPE(value), "tp_descr_get");
         *out = res;
         if (PyValue_IsNull(res)) {
@@ -2865,20 +2912,22 @@ lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
             {
                 PyErr_Clear();
             }
-            return -1;
+            rc = -1;
         }
     }
-    return 0;
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return rc;
 }
 
-static int
-lookup_maybe_method(PyObject *self, PyObject *attr, PyValue *out)
+Py_GC_PRECISE static int
+lookup_maybe_method(PyObject *self, PyObject *attr, PyValue *Py_GC_SLOTS out)
 {
     return lookup_method_ex(self, attr, out, 0);
 }
 
-static int
-lookup_method(PyObject *self, PyObject *attr, PyValue *out)
+Py_GC_PRECISE static int
+lookup_method(PyObject *self, PyObject *attr, PyValue *Py_GC_SLOTS out)
 {
     return lookup_method_ex(self, attr, out, 1);
 }
@@ -2977,7 +3026,7 @@ vectorcall_method(PyObject *name, PyObject *const *args, Py_ssize_t nargs)
 
 /* vectorcall_method() on values: args[0] is the object self, and an inline
    int or float argument or result is not boxed.  nargs is at most 3. */
-static PyValue
+Py_GC_PRECISE static PyValue
 vectorcall_method_value(PyObject *name, const PyValue *args, Py_ssize_t nargs)
 {
     assert(1 <= nargs && nargs <= 3);
@@ -3719,7 +3768,7 @@ get_builtin_base_with_dict(PyTypeObject *type)
     return NULL;
 }
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 get_dict_descriptor(PyTypeObject *type)
 {
     PyObject *descr;
@@ -3731,7 +3780,7 @@ get_dict_descriptor(PyTypeObject *type)
     return descr;
 }
 
-static void
+Py_GC_PRECISE static void
 raise_dict_descr_error(PyObject *obj)
 {
     PyErr_Format(PyExc_TypeError,
@@ -3739,34 +3788,43 @@ raise_dict_descr_error(PyObject *obj)
                  "'%.200s' objects", Py_TYPE(obj)->tp_name);
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 subtype_dict(PyObject *obj, void *context)
 {
     PyTypeObject *base;
 
     base = get_builtin_base_with_dict(Py_TYPE(obj));
-    if (base != NULL) {
-        descrgetfunc func;
-        PyObject *descr = get_dict_descriptor(base);
-        if (descr == NULL) {
-            raise_dict_descr_error(obj);
-            return PyValue_NULL;
-        }
-        func = Py_TYPE(descr)->tp_descr_get;
-        if (func == NULL) {
-            raise_dict_descr_error(obj);
-            return PyValue_NULL;
-        }
-        PyValue res = func(descr, obj, (PyObject *)(Py_TYPE(obj)));
-        _PyValue_CheckSlotResult(res, Py_TYPE(descr), "tp_descr_get");
-        return res;
+    if (base == NULL) {
+        return PyObject_GenericGetDict(obj, context);
     }
-    return PyObject_GenericGetDict(obj, context);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, obj);
+    PyValue res = PyValue_NULL;
+    descrgetfunc func;
+    PyObject *descr = get_dict_descriptor(base);
+    _PyValueSpan_AppendObject(&span, descr);
+    if (descr == NULL) {
+        raise_dict_descr_error(obj);
+        goto done;
+    }
+    func = Py_TYPE(descr)->tp_descr_get;
+    if (func == NULL) {
+        raise_dict_descr_error(obj);
+        goto done;
+    }
+    res = func(descr, obj, (PyObject *)(Py_TYPE(obj)));
+    _PyValue_CheckSlotResult(res, Py_TYPE(descr), "tp_descr_get");
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 /* VALUE, a dict or PyValue_NULL, as OBJ's __dict__.  Any other value is
    refused, an inline one by its type, without a box. */
-int
+Py_GC_PRECISE int
 _PyObject_SetDict(PyObject *obj, PyValue value_v)
 {
     if (!PyValue_IsNull(value_v)
@@ -3778,6 +3836,13 @@ _PyObject_SetDict(PyObject *obj, PyValue value_v)
                      "not a '%.200s'", PyValue_Type(value_v)->tp_name);
         return -1;
     }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, obj);
+    _PyValueSpan_Append(&span, value_v);
+    int rc = 0;
     PyObject *value = PyValue_IsNull(value_v)
                       ? NULL : PyValue_ObjectBorrow(value_v);
     if (Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
@@ -3785,43 +3850,57 @@ _PyObject_SetDict(PyObject *obj, PyValue value_v)
         Py_BEGIN_CRITICAL_SECTION(obj);
         _PyObject_SetSlotDict(obj, (PyDictObject *)value);
         Py_END_CRITICAL_SECTION();
-        return 0;
+        goto done;
     }
     PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
     if (dictptr == NULL) {
         PyErr_SetString(PyExc_AttributeError,
                         "This object has no __dict__");
-        return -1;
+        rc = -1;
+        goto done;
     }
     Py_BEGIN_CRITICAL_SECTION(obj);
     // gh-133980: To prevent use-after-free from other threads that reference
     // the __dict__
     *dictptr = Py_NewRef(value);
     Py_END_CRITICAL_SECTION();
-    return 0;
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return rc;
 }
 
-static int
+Py_GC_PRECISE static int
 subtype_setdict(PyObject *obj, PyValue value, void *context)
 {
     PyTypeObject *base;
 
     base = get_builtin_base_with_dict(Py_TYPE(obj));
-    if (base != NULL) {
-        descrsetfunc func;
-        PyObject *descr = get_dict_descriptor(base);
-        if (descr == NULL) {
-            raise_dict_descr_error(obj);
-            return -1;
-        }
-        func = Py_TYPE(descr)->tp_descr_set;
-        if (func == NULL) {
-            raise_dict_descr_error(obj);
-            return -1;
-        }
-        return func(descr, obj, value);
+    if (base == NULL) {
+        return _PyObject_SetDict(obj, value);
     }
-    return _PyObject_SetDict(obj, value);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, obj);
+    _PyValueSpan_Append(&span, value);
+    int rc = -1;
+    descrsetfunc func;
+    PyObject *descr = get_dict_descriptor(base);
+    _PyValueSpan_AppendObject(&span, descr);
+    if (descr == NULL) {
+        raise_dict_descr_error(obj);
+        goto done;
+    }
+    func = Py_TYPE(descr)->tp_descr_set;
+    if (func == NULL) {
+        raise_dict_descr_error(obj);
+        goto done;
+    }
+    rc = func(descr, obj, value);
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return rc;
 }
 
 static PyValue
@@ -5958,17 +6037,24 @@ is_dunder_name(PyObject *name)
    If nonzero, version is set to the value of type->tp_version at the time of
    the lookup.
 */
-PyObject *
+Py_GC_PRECISE PyObject *
 _PyType_LookupRefAndVersion(PyTypeObject *type, PyObject *name, unsigned int *version)
 {
-    PyValue out;
-    unsigned int ver = _PyType_LookupValueAndVersion(type, name, &out);
+    // The span's slot is the lookup's out-parameter.
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    unsigned int ver = _PyType_LookupValueAndVersion(type, name, &slots[0]);
     if (version) {
         *version = ver;
     }
     // A box of an inline value.  NULL means missing, without an exception,
     // so a box that cannot be made aborts.
-    return _PyValue_ObjectOrAbort(out, "_PyType_Lookup");
+    PyObject *res = _PyValue_ObjectOrAbort(slots[0], "_PyType_Lookup");
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 static int
@@ -6285,7 +6371,7 @@ _PyType_SetFlagsRecursive(PyTypeObject *self, unsigned long mask, unsigned long 
      are not suppressed)
 
    */
-PyValue
+Py_GC_PRECISE PyValue
 _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
                        int *suppress_missing_attribute)
 {
@@ -6299,15 +6385,26 @@ _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
         return PyValue_NULL;
     }
 
+    /* The span: the type, the name and the metatype, which a reentrant
+       descriptor may replace; the value roots below hold the lookups. */
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)type);
+    _PyValueSpan_AppendObject(&span, name);
+    _PyValueSpan_AppendObject(&span, (PyObject *)metatype);
+
     /* Initialize this type (we'll assume the metatype is initialized) */
     if (!_PyType_IsReady(type)) {
-        if (PyType_Ready(type) < 0)
+        if (PyType_Ready(type) < 0) {
+            _PyThreadState_PopValueRoot(tstate, &span);
             return PyValue_NULL;
+        }
     }
 
     /* Set up GC-visible value roots */
     _PyValueRoot result_ref, meta_attribute_ref, attribute_ref;
-    PyThreadState *tstate = _PyThreadState_GET();
     _PyThreadState_PushValueRoot(tstate, &result_ref);
     _PyThreadState_PushValueRoot(tstate, &meta_attribute_ref);
     _PyThreadState_PushValueRoot(tstate, &attribute_ref);
@@ -6405,10 +6502,12 @@ _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
 done:
     _PyThreadState_PopValueRoot(tstate, &attribute_ref);
     _PyThreadState_PopValueRoot(tstate, &meta_attribute_ref);
-    return _PyThreadState_PopValueRoot(tstate, &result_ref);
+    PyValue result = _PyThreadState_PopValueRoot(tstate, &result_ref);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return result;
 }
 
-PyValue
+Py_GC_PRECISE PyValue
 _Py_type_getattro(PyObject *tp, PyObject *name)
 {
     return _Py_type_getattro_impl(PyTypeObject_CAST(tp), name, NULL);
@@ -6416,7 +6515,8 @@ _Py_type_getattro(PyObject *tp, PyObject *name)
 
 // Called by type_setattro().  Updates both the type dict and
 // the type versions.  VALUE is stored as it is; PyValue_NULL deletes.
-static int
+// The caller anchors the type, the dict, the name and the value.
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static int
 type_update_dict(PyTypeObject *type, PyDictObject *dict, PyObject *name,
                  PyValue value)
 {
@@ -6444,14 +6544,20 @@ type_update_dict(PyTypeObject *type, PyDictObject *dict, PyObject *name,
     return 0;
 }
 
-static int
+/* Opaque, and Py_NO_INLINE so that type_setattro()'s precise frame does not
+   take it in: the walk over the subclasses (update_subclasses() and its
+   callback) is not precise.  The caller's span holds the type and the
+   name. */
+Py_NO_INLINE static int
 update_slot_after_setattr(PyTypeObject *type, PyObject *name)
 {
     update_slot(type, name, NULL);
     return 0;
 }
 
-static int
+/* The span: the type, the value, the interned name's object slot, the
+   metatype, the metatype's descriptor and the type's dict. */
+Py_GC_PRECISE static int
 type_setattro(PyObject *self, PyObject *name, PyValue value)
 {
     PyTypeObject *type = PyTypeObject_CAST(self);
@@ -6470,36 +6576,46 @@ type_setattro(PyObject *self, PyObject *name, PyValue value)
         return -1;
     }
 
-    if (PyUnicode_CheckExact(name)) {
-        Py_INCREF(name);
-    }
-    else {
-        name = _PyUnicode_Copy(name);
-        if (name == NULL)
-            return -1;
-    }
-    if (!PyUnicode_CHECK_INTERNED(name)) {
-        PyInterpreterState *interp = _PyInterpreterState_GET();
-        _PyUnicode_InternMortal(interp, &name);
-        if (!PyUnicode_CHECK_INTERNED(name)) {
-            PyErr_SetString(PyExc_MemoryError,
-                            "Out of memory interning an attribute name");
-            Py_DECREF(name);
-            return -1;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[6];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)type);
+    _PyValueSpan_Append(&span, value);
+    PyObject **namep = _PyValueSpan_ObjectSlot(&span);
+    *namep = name;
+    if (!PyUnicode_CheckExact(name)) {
+        *namep = _PyUnicode_Copy(name);
+        if (*namep == NULL) {
+            res = -1;
+            goto exit;
         }
     }
+    if (!PyUnicode_CHECK_INTERNED(*namep)) {
+        PyInterpreterState *interp = _PyInterpreterState_GET();
+        _PyUnicode_InternMortal(interp, namep);
+        if (!PyUnicode_CHECK_INTERNED(*namep)) {
+            PyErr_SetString(PyExc_MemoryError,
+                            "Out of memory interning an attribute name");
+            res = -1;
+            goto exit;
+        }
+    }
+    name = *namep;
 
     PyTypeObject *metatype = Py_TYPE(type);
+    _PyValueSpan_AppendObject(&span, (PyObject *)metatype);
     assert(!_PyType_HasFeature(metatype, Py_TPFLAGS_INLINE_VALUES));
     assert(!_PyType_HasFeature(metatype, Py_TPFLAGS_MANAGED_DICT));
 
 
     PyObject *descr = _PyType_LookupRef(metatype, name);
+    _PyValueSpan_AppendObject(&span, descr);
     if (descr != NULL) {
         descrsetfunc f = Py_TYPE(descr)->tp_descr_set;
         if (f != NULL) {
             res = f(descr, (PyObject *)type, value);
-            goto done;
+            goto exit;
         }
     }
 
@@ -6516,9 +6632,10 @@ type_setattro(PyObject *self, PyObject *name, PyValue value)
         END_TYPE_LOCK();
         if (dict == NULL) {
             res = -1;
-            goto done;
+            goto exit;
         }
     }
+    _PyValueSpan_AppendObject(&span, dict);
 
     BEGIN_TYPE_DICT_LOCK(dict);
     res = type_update_dict(type, (PyDictObject *)dict, name, value);
@@ -6534,9 +6651,8 @@ type_setattro(PyObject *self, PyObject *name, PyValue value)
         res = _PyType_StaticAttributesChanged(type);
     }
 
-done:
-    Py_DECREF(name);
-    Py_XDECREF(descr);
+exit:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
@@ -7413,7 +7529,11 @@ differs:
 
 
 
-static int
+/* Opaque, and Py_NO_INLINE so that object_set_class()'s precise frame does
+   not take it in: the layout checks (compatible_for_assignment() and
+   same_slots_added()) and the entry into dict mode are not precise.  The
+   caller's span holds the object and both classes. */
+Py_NO_INLINE static int
 object_set_class_world_stopped(PyObject *self, PyTypeObject *newto)
 {
     PyTypeObject *oldto = Py_TYPE(self);
@@ -7508,35 +7628,44 @@ object_set_class_world_stopped(PyObject *self, PyTypeObject *newto)
     }
 }
 
-static int
+/* The span: the object, the class (a box when VALUE_V is inline, refused
+   below) and the old class. */
+Py_GC_PRECISE static int
 object_set_class(PyObject *self, PyValue value_v, void *closure)
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
-
-    if (value == NULL) {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
+    int res = -1;
+    if (PyValue_IsNull(value_v)) {
         PyErr_SetString(PyExc_TypeError,
                         "can't delete __class__ attribute");
-        return -1;
+        goto done;
+    }
+    PyObject *value = PyValue_Object(value_v);
+    _PyValueSpan_AppendObject(&span, value);
+    if (value == NULL) {
+        goto done;
     }
     if (!PyType_Check(value)) {
         PyErr_Format(PyExc_TypeError,
           "__class__ must be set to a class, not '%s' object",
           Py_TYPE(value)->tp_name);
-        return -1;
+        goto done;
     }
     PyTypeObject *newto = (PyTypeObject *)value;
 
     if (PySys_Audit("object.__setattr__", "OsO",
                     self, "__class__", value) < 0) {
-        return -1;
+        goto done;
     }
 
     types_stop_world();
     PyTypeObject *oldto = Py_TYPE(self);
-    int res = object_set_class_world_stopped(self, newto);
+    _PyValueSpan_AppendObject(&span, (PyObject *)oldto);
+    res = object_set_class_world_stopped(self, newto);
     types_start_world();
     if (res == 0) {
         if (oldto->tp_flags & Py_TPFLAGS_HEAPTYPE) {
@@ -7544,8 +7673,9 @@ object_set_class(PyObject *self, PyValue value_v, void *closure)
         }
 
         RARE_EVENT_INC(set_class);
-        return 0;
     }
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
@@ -7563,7 +7693,7 @@ static PyGetSetDef object_getsets[] = {
    - the __newobj__ function (which is used as a token but never called)
 */
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 import_copyreg(void)
 {
     /* Try to fetch cached copy of copyreg from sys.modules first in an
@@ -7581,61 +7711,70 @@ import_copyreg(void)
     return PyImport_Import(&_Py_ID(copyreg));
 }
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 _PyType_GetSlotNames(PyTypeObject *cls)
 {
     PyObject *copyreg;
-    PyObject *slotnames;
 
     assert(PyType_Check(cls));
 
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)cls);
+    PyObject **slotnamesp = _PyValueSpan_ObjectSlot(&span);
+    PyObject *res = NULL;
+
     /* Get the slot names from the cache in the class if possible. */
     PyObject *dict = lookup_tp_dict(cls);
-    if (PyDict_GetItemRef(dict, &_Py_ID(__slotnames__), &slotnames) < 0) {
-        return NULL;
+    if (PyDict_GetItemRef(dict, &_Py_ID(__slotnames__), slotnamesp) < 0) {
+        goto done;
     }
-    if (slotnames != NULL) {
-        if (slotnames != Py_None && !PyList_Check(slotnames)) {
+    if (*slotnamesp != NULL) {
+        if (*slotnamesp != Py_None && !PyList_Check(*slotnamesp)) {
             PyErr_Format(PyExc_TypeError,
                          "%.200s.__slotnames__ should be a list or None, "
                          "not %.200s",
-                         cls->tp_name, Py_TYPE(slotnames)->tp_name);
-            Py_DECREF(slotnames);
-            return NULL;
+                         cls->tp_name, Py_TYPE(*slotnamesp)->tp_name);
+            goto done;
         }
-        return slotnames;
+        res = *slotnamesp;
+        goto done;
     }
 
     /* The class does not have the slot names cached yet. */
     copyreg = import_copyreg();
     if (copyreg == NULL)
-        return NULL;
+        goto done;
 
     /* Use _slotnames function from the copyreg module to find the slots
        by this class and its bases. This function will cache the result
-       in __slotnames__. */
-    slotnames = PyObject_CallMethodOneArg(
-            copyreg, &_Py_ID(_slotnames), (PyObject *)cls);
-    Py_DECREF(copyreg);
-    if (slotnames == NULL)
-        return NULL;
+       in __slotnames__.  The arguments are the span's slots: the module,
+       then the class. */
+    _PyValueSpan_AppendObject(&span, copyreg);
+    _PyValueSpan_AppendObject(&span, (PyObject *)cls);
+    *slotnamesp = PyObject_VectorcallMethod(
+            &_Py_ID(_slotnames), (PyObject *const *)&slots[2], 2, NULL);
+    if (*slotnamesp == NULL)
+        goto done;
 
-    if (slotnames != Py_None && !PyList_Check(slotnames)) {
+    if (*slotnamesp != Py_None && !PyList_Check(*slotnamesp)) {
         PyErr_SetString(PyExc_TypeError,
                         "copyreg._slotnames didn't return a list or None");
-        Py_DECREF(slotnames);
-        return NULL;
+        goto done;
     }
-
-    return slotnames;
+    res = *slotnamesp;
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
-static PyObject *
+/* The span: the object, then the slots of the state, the slot names, the
+   dict of slot values, and each name and value read. */
+Py_GC_PRECISE static PyObject *
 object_getstate_default(PyObject *obj, int required)
 {
-    PyObject *state;
-    PyObject *slotnames;
-
     if (required && Py_TYPE(obj)->tp_itemsize) {
         PyErr_Format(PyExc_TypeError,
                      "cannot pickle %.200s objects",
@@ -7643,22 +7782,34 @@ object_getstate_default(PyObject *obj, int required)
         return NULL;
     }
 
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue roots[6];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, roots);
+    _PyValueSpan_AppendObject(&span, obj);
+    PyObject **statep = _PyValueSpan_ObjectSlot(&span);
+    PyObject **slotnamesp = _PyValueSpan_ObjectSlot(&span);
+    PyObject **slotsp = _PyValueSpan_ObjectSlot(&span);
+    PyObject **namep = _PyValueSpan_ObjectSlot(&span);
+    PyObject **valuep = _PyValueSpan_ObjectSlot(&span);
+    PyObject *res = NULL;
+
     if (_PyObject_IsInstanceDictEmpty(obj)) {
-        state = Py_NewRef(Py_None);
+        *statep = Py_None;
     }
     else {
         PyValue dict = PyObject_GenericGetDict(obj, NULL);
         if (PyValue_IsNull(dict)) {
-            return NULL;
+            goto done;
         }
-        state = PyValue_ObjectBorrow(dict);
+        *statep = PyValue_ObjectBorrow(dict);
     }
 
-    slotnames = _PyType_GetSlotNames(Py_TYPE(obj));
-    if (slotnames == NULL) {
-        Py_DECREF(state);
-        return NULL;
+    *slotnamesp = _PyType_GetSlotNames(Py_TYPE(obj));
+    if (*slotnamesp == NULL) {
+        goto done;
     }
+    PyObject *slotnames = *slotnamesp;
 
     assert(slotnames == Py_None || PyList_Check(slotnames));
     if (required) {
@@ -7675,85 +7826,57 @@ object_getstate_default(PyObject *obj, int required)
             basicsize += sizeof(PyObject *) * PyList_GET_SIZE(slotnames);
         }
         if (Py_TYPE(obj)->tp_basicsize > basicsize) {
-            Py_DECREF(slotnames);
-            Py_DECREF(state);
             PyErr_Format(PyExc_TypeError,
                          "cannot pickle '%.200s' object",
                          Py_TYPE(obj)->tp_name);
-            return NULL;
+            goto done;
         }
     }
 
     if (slotnames != Py_None && PyList_GET_SIZE(slotnames) > 0) {
-        PyObject *slots;
         Py_ssize_t slotnames_size, i;
 
-        slots = PyDict_New();
-        if (slots == NULL) {
-            Py_DECREF(slotnames);
-            Py_DECREF(state);
-            return NULL;
+        *slotsp = PyDict_New();
+        if (*slotsp == NULL) {
+            goto done;
         }
 
-        slotnames_size = PyList_GET_SIZE(slotnames);
+        slotnames_size = PyList_GET_SIZE(*slotnamesp);
         for (i = 0; i < slotnames_size; i++) {
-            PyObject *name, *value;
-
-            name = Py_NewRef(PyList_GET_ITEM(slotnames, i));
-            if (PyObject_GetOptionalAttr(obj, name, &value) < 0) {
-                Py_DECREF(name);
-                goto error;
+            *namep = PyList_GET_ITEM(*slotnamesp, i);
+            if (PyObject_GetOptionalAttr(obj, *namep, valuep) < 0) {
+                goto done;
             }
-            if (value == NULL) {
-                Py_DECREF(name);
-                /* It is not an error if the attribute is not present. */
-            }
-            else {
-                int err = PyDict_SetItem(slots, name, value);
-                Py_DECREF(name);
-                Py_DECREF(value);
-                if (err) {
-                    goto error;
+            if (*valuep != NULL) {
+                if (PyDict_SetItem(*slotsp, *namep, *valuep)) {
+                    goto done;
                 }
             }
+            /* It is not an error if the attribute is not present. */
 
             /* The list is stored on the class so it may mutate while we
                iterate over it */
-            if (slotnames_size != PyList_GET_SIZE(slotnames)) {
+            if (slotnames_size != PyList_GET_SIZE(*slotnamesp)) {
                 PyErr_Format(PyExc_RuntimeError,
                              "__slotnames__ changed size during iteration");
-                goto error;
-            }
-
-            /* We handle errors within the loop here. */
-            if (0) {
-              error:
-                Py_DECREF(slotnames);
-                Py_DECREF(slots);
-                Py_DECREF(state);
-                return NULL;
+                goto done;
             }
         }
 
         /* If we found some slot attributes, pack them in a tuple along
            the original attribute dictionary. */
-        if (PyDict_GET_SIZE(slots) > 0) {
-            PyObject *state2;
-
-            state2 = _PyTuple_FromPair(state, slots);
-            Py_DECREF(state);
+        if (PyDict_GET_SIZE(*slotsp) > 0) {
+            PyObject *state2 = _PyTuple_FromPair(*statep, *slotsp);
             if (state2 == NULL) {
-                Py_DECREF(slotnames);
-                Py_DECREF(slots);
-                return NULL;
+                goto done;
             }
-            state = state2;
+            *statep = state2;
         }
-        Py_DECREF(slots);
     }
-    Py_DECREF(slotnames);
-
-    return state;
+    res = *statep;
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 static PyObject *
@@ -9389,7 +9512,10 @@ type_ready_publish(PyTypeObject *type, int fix_slots)
     return res;
 }
 
-int
+/* Opaque, and Py_NO_INLINE so that no precise caller takes it in: a type's
+   readiness (type_ready(): the slot inheritance and the dict's fill) is not
+   precise.  It runs once per type. */
+Py_NO_INLINE int
 PyType_Ready(PyTypeObject *type)
 {
     if (type->tp_flags & Py_TPFLAGS_READY) {
@@ -10833,7 +10959,7 @@ slot_tp_call(PyObject *self, PyObject *args, PyObject *kwds)
    this detects the absence of __getattr__ and then installs the simpler
    slot if necessary. */
 
-PyValue
+Py_GC_PRECISE PyValue
 _Py_slot_tp_getattro(PyObject *self, PyObject *name)
 {
     PyValue stack[2] = {PyValue_FromObject(self), PyValue_FromObject(name)};
@@ -10841,41 +10967,57 @@ _Py_slot_tp_getattro(PyObject *self, PyObject *name)
 }
 
 /* Call ATTR, the type's __getattribute__ or __getattr__, for NAME on SELF,
-   and return its result as a value. */
-static inline PyValue
+   and return its result as a value.  The callers anchor self, attr and
+   name.  The span: the call's arguments, self and name, then the bound
+   attribute. */
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static inline PyValue
 call_attribute(PyObject *self, PyObject *attr, PyObject *name)
 {
-    PyValue arg = PyValue_FromObject(name);
-
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
+    _PyValueSpan_AppendObject(&span, name);
+    PyValue res = PyValue_NULL;
     if (_PyType_HasFeature(Py_TYPE(attr), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
-        PyValue args[] = { PyValue_FromObject(self), arg };
-        return PyObject_VectorcallValue(PyValue_FromObject(attr), args, 2, NULL);
+        res = PyObject_VectorcallValue(PyValue_FromObject(attr), slots, 2,
+                                       NULL);
+        goto done;
     }
 
     descrgetfunc f = Py_TYPE(attr)->tp_descr_get;
     if (f == NULL) {
-        return PyObject_VectorcallValue(PyValue_FromObject(attr), &arg, 1, NULL);
+        res = PyObject_VectorcallValue(PyValue_FromObject(attr), &slots[1], 1,
+                                       NULL);
+        goto done;
     }
-    // The bound result is held in a root while the call runs.
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyValueRoot bound;
-    _PyThreadState_PushValueRoot(tstate, &bound);
-    bound.value = f(attr, self, (PyObject *)(Py_TYPE(self)));
-    _PyValue_CheckSlotResult(bound.value, Py_TYPE(attr), "tp_descr_get");
-    PyValue res = PyValue_NULL;
-    if (!PyValue_IsNull(bound.value)) {
-        res = PyObject_VectorcallValue(bound.value, &arg, 1, NULL);
+    PyValue bound = f(attr, self, (PyObject *)(Py_TYPE(self)));
+    _PyValueSpan_Append(&span, bound);
+    _PyValue_CheckSlotResult(bound, Py_TYPE(attr), "tp_descr_get");
+    if (!PyValue_IsNull(bound)) {
+        res = PyObject_VectorcallValue(bound, &slots[1], 1, NULL);
     }
-    _PyThreadState_PopValueRoot(tstate, &bound);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-PyValue
+/* The span: self, the name, self's type, which a reentrant lookup may
+   replace, and the type's __getattr__ and __getattribute__. */
+Py_GC_PRECISE PyValue
 _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
     PyTypeObject *tp = Py_TYPE(self);
     PyObject *getattr, *getattribute;
     PyValue res;
+    PyValue slots[5];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
+    _PyValueSpan_AppendObject(&span, name);
+    _PyValueSpan_AppendObject(&span, (PyObject *)tp);
 
     /* speed hack: we could use lookup_maybe, but that would resolve the
        method fully for each attribute lookup for classes with
@@ -10883,11 +11025,13 @@ _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name)
        _PyType_LookupRef and create the method only when needed, with
        call_attribute. */
     getattr = _PyType_LookupRef(tp, &_Py_ID(__getattr__));
+    _PyValueSpan_AppendObject(&span, getattr);
     if (getattr == NULL) {
         /* No __getattr__ hook: use a simpler dispatcher */
         // Replacing the slot is only thread-safe if there is a GIL.
         tp->tp_getattro = _Py_slot_tp_getattro;
-        return _Py_slot_tp_getattro(self, name);
+        res = _Py_slot_tp_getattro(self, name);
+        goto done;
     }
     /* speed hack: we could use lookup_maybe, but that would resolve the
        method fully for each attribute lookup for classes with
@@ -10895,11 +11039,11 @@ _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name)
        method. So we use _PyType_LookupRef and create the method only when
        needed, with call_attribute. */
     getattribute = _PyType_LookupRef(tp, &_Py_ID(__getattribute__));
+    _PyValueSpan_AppendObject(&span, getattribute);
     if (getattribute == NULL ||
         (Py_IS_TYPE(getattribute, &PyWrapperDescr_Type) &&
          ((PyWrapperDescrObject *)getattribute)->d_wrapped ==
              (void *)PyObject_GenericGetAttr)) {
-        Py_XDECREF(getattribute);
         res = _PyObject_GenericGetAttrWithDict(self, name, NULL, 1);
         /* if res is NULL with no exception set, then it must be an
            AttributeError suppressed by us. */
@@ -10909,18 +11053,19 @@ _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name)
     }
     else {
         res = call_attribute(self, getattribute, name);
-        Py_DECREF(getattribute);
-        if (PyValue_IsNull(res) && PyErr_ExceptionMatches(PyExc_AttributeError)) {
-            PyErr_Clear();
-            res = call_attribute(self, getattr, name);
+        if (PyValue_IsNull(res)) {
+            if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
+                PyErr_Clear();
+                res = call_attribute(self, getattr, name);
+            }
         }
     }
-
-    Py_DECREF(getattr);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-static int
+Py_GC_PRECISE static int
 slot_tp_setattro(PyObject *self, PyObject *name, PyValue value)
 {
     PyValue stack[3] = {PyValue_FromObject(self), PyValue_FromObject(name),
@@ -11003,33 +11148,41 @@ _PyType_HasSlotTpIternext(PyTypeObject *type)
     return type->tp_iternext == slot_tp_iternext;
 }
 
-static PyValue
+/* The span: the call's arguments (self, obj and type), then __get__ and
+   self's type, whose slot a missing __get__ clears. */
+Py_GC_PRECISE static PyValue
 slot_tp_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyTypeObject *tp = Py_TYPE(self);
     PyThreadState *tstate = _PyThreadState_GET();
-    _PyValueRoot cref;
-    _PyThreadState_PushValueRoot(tstate, &cref);
-    _PyType_LookupValueAndVersion(tp, &_Py_ID(__get__), &cref.value);
-    if (PyValue_IsNull(cref.value)) {
-        _PyThreadState_PopValueRoot(tstate, &cref);
-        /* Avoid further slowdowns */
-        if (tp->tp_descr_get == slot_tp_descr_get)
-            tp->tp_descr_get = NULL;
-        return PyValue_FromObject(self);
-    }
     if (obj == NULL)
         obj = Py_None;
     if (type == NULL)
         type = Py_None;
-    PyValue stack[3] = {PyValue_FromObject(self), PyValue_FromObject(obj),
-                        PyValue_FromObject(type)};
-    PyValue res = PyObject_VectorcallValue(cref.value, stack, 3, NULL);
-    _PyThreadState_PopValueRoot(tstate, &cref);
+    PyValue slots[5];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
+    _PyValueSpan_AppendObject(&span, obj);
+    _PyValueSpan_AppendObject(&span, type);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    _PyValueSpan_AppendObject(&span, (PyObject *)tp);
+    PyValue res;
+    _PyType_LookupValueAndVersion(tp, &_Py_ID(__get__), &slots[3]);
+    if (PyValue_IsNull(slots[3])) {
+        /* Avoid further slowdowns */
+        if (tp->tp_descr_get == slot_tp_descr_get)
+            tp->tp_descr_get = NULL;
+        res = PyValue_FromObject(self);
+    }
+    else {
+        res = PyObject_VectorcallValue(slots[3], slots, 3, NULL);
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-static int
+Py_GC_PRECISE static int
 slot_tp_descr_set(PyObject *self, PyObject *target, PyValue value)
 {
     PyValue stack[3] = {PyValue_FromObject(self), PyValue_FromObject(target),
@@ -12503,26 +12656,29 @@ _PySuper_LookupDescr(PyTypeObject *su_type, PyTypeObject *su_obj_type, PyObject 
 // if `method` is non-NULL, we are looking for a method descriptor,
 // and setting `*method = 1` means we found one.  The attribute is returned
 // as a value.
-static PyValue
+//
+// The callers anchor the arguments.  The span: the descriptor found, held
+// while its __get__ runs, then the arguments of a temporary super object.
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static PyValue
 do_super_lookup(superobject *su, PyTypeObject *su_type, PyObject *su_obj,
                 PyTypeObject *su_obj_type, PyObject *name, int *method)
 {
-    PyValue res;
-    int temp_su = 0;
-
-    if (su_obj_type == NULL) {
-        goto skip;
-    }
-
-    // The descriptor is held in a root while its __get__ runs.
     PyThreadState *tstate = _PyThreadState_GET();
-    _PyValueRoot found;
-    _PyThreadState_PushValueRoot(tstate, &found);
-    found.value = _PySuper_LookupDescr(su_type, su_obj_type, name);
-    if (!PyValue_IsNull(found.value)) {
+    PyValue res = PyValue_NULL;
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+
+    PyValue found = PyValue_NULL;
+    if (su_obj_type != NULL) {
+        found = _PySuper_LookupDescr(su_type, su_obj_type, name);
+    }
+    _PyValueSpan_Append(&span, found);
+    if (!PyValue_IsNull(slots[0])) {
         // An inline value is not a descriptor.
-        PyObject *descr = PyValue_IsObject(found.value)
-                          ? PyValue_ObjectBorrow(found.value) : NULL;
+        PyObject *descr = PyValue_IsObject(slots[0])
+                          ? PyValue_ObjectBorrow(slots[0]) : NULL;
+        res = slots[0];
         if (descr != NULL && method
             && _PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR))
         {
@@ -12531,39 +12687,38 @@ do_super_lookup(superobject *su, PyTypeObject *su_type, PyObject *su_obj,
         else if (descr != NULL) {
             descrgetfunc f = Py_TYPE(descr)->tp_descr_get;
             if (f != NULL) {
-                PyValue bound = f(descr,
+                res = f(descr,
                     /* Only pass 'obj' param if this is instance-mode super
                     (See SF ID #743627)  */
                     (su_obj == (PyObject *)su_obj_type) ? NULL : su_obj,
                     (PyObject *)su_obj_type);
-                _PyValue_CheckSlotResult(bound, Py_TYPE(descr), "tp_descr_get");
-                found.value = bound;
+                _PyValue_CheckSlotResult(res, Py_TYPE(descr), "tp_descr_get");
             }
         }
-        return _PyThreadState_PopValueRoot(tstate, &found);
+        goto done;
     }
-    _PyThreadState_PopValueRoot(tstate, &found);
-    if (PyErr_Occurred()) {
-        return PyValue_NULL;
+    if (su_obj_type != NULL && PyErr_Occurred()) {
+        goto done;
     }
 
-  skip:
     if (su == NULL) {
-        PyObject *args[] = {(PyObject *)su_type, su_obj};
-        su = (superobject *)PyObject_Vectorcall((PyObject *)&PySuper_Type, args, 2, NULL);
+        _PyValueSpan_AppendObject(&span, (PyObject *)su_type);
+        _PyValueSpan_AppendObject(&span, su_obj);
+        su = (superobject *)PyObject_Vectorcall(
+            (PyObject *)&PySuper_Type, (PyObject *const *)&slots[1], 2, NULL);
         if (su == NULL) {
-            return PyValue_NULL;
+            goto done;
         }
-        temp_su = 1;
     }
     res = PyObject_GenericGetAttr((PyObject *)su, name);
-    if (temp_su) {
-        Py_DECREF(su);
-    }
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-static PyValue
+/* The span: the super object, the name, and the super object's fields,
+   which a reentrant __init__ may replace. */
+Py_GC_PRECISE static PyValue
 super_getattro(PyObject *self, PyObject *name)
 {
     superobject *su = superobject_CAST(self);
@@ -12575,10 +12730,25 @@ super_getattro(PyObject *self, PyObject *name)
         _PyUnicode_Equal(name, &_Py_ID(__class__)))
         return PyObject_GenericGetAttr(self, name);
 
-    return do_super_lookup(su, su->type, su->obj, su->obj_type, name, NULL);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyTypeObject *type = su->type;
+    PyObject *obj = su->obj;
+    PyTypeObject *obj_type = su->obj_type;
+    PyValue slots[5];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
+    _PyValueSpan_AppendObject(&span, name);
+    _PyValueSpan_AppendObject(&span, (PyObject *)type);
+    _PyValueSpan_AppendObject(&span, obj);
+    _PyValueSpan_AppendObject(&span, (PyObject *)obj_type);
+    PyValue res = do_super_lookup(su, type, obj, obj_type, name, NULL);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
-static PyTypeObject *
+/* The span: type, obj and the object slot of obj.__class__ */
+Py_GC_PRECISE static PyTypeObject *
 supercheck(PyTypeObject *type, PyObject *obj)
 {
     /* Check that a super() call makes sense.  Return a type object.
@@ -12605,24 +12775,27 @@ supercheck(PyTypeObject *type, PyObject *obj)
     if (PyType_IsSubtype(Py_TYPE(obj), type)) {
         return (PyTypeObject*)Py_NewRef(Py_TYPE(obj));
     }
-    else {
-        /* Try the slow way */
-        PyObject *class_attr;
 
-        if (PyObject_GetOptionalAttr(obj, &_Py_ID(__class__), &class_attr) < 0) {
-            return NULL;
-        }
-        if (class_attr != NULL &&
-            PyType_Check(class_attr) &&
-            (PyTypeObject *)class_attr != Py_TYPE(obj))
-        {
-            int ok = PyType_IsSubtype(
-                (PyTypeObject *)class_attr, type);
-            if (ok) {
-                return (PyTypeObject *)class_attr;
-            }
-        }
-        Py_XDECREF(class_attr);
+    /* Try the slow way */
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)type);
+    _PyValueSpan_AppendObject(&span, obj);
+    PyObject **class_attrp = _PyValueSpan_ObjectSlot(&span);
+    PyTypeObject *found = NULL;
+    if (PyObject_GetOptionalAttr(obj, &_Py_ID(__class__), class_attrp) < 0) {
+        goto done;
+    }
+    PyObject *class_attr = *class_attrp;
+    if (class_attr != NULL &&
+        PyType_Check(class_attr) &&
+        (PyTypeObject *)class_attr != Py_TYPE(obj) &&
+        PyType_IsSubtype((PyTypeObject *)class_attr, type))
+    {
+        found = (PyTypeObject *)class_attr;
+        goto done;
     }
 
     const char *type_or_instance, *obj_str;
@@ -12640,23 +12813,35 @@ supercheck(PyTypeObject *type, PyObject *obj)
                 "super(type, obj): obj (%s %.200s) is not "
                 "an instance or subtype of type (%.200s).",
                 type_or_instance, obj_str, type->tp_name);
-
-    return NULL;
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return found;
 }
 
-PyValue
+/* The span: the arguments, then su_obj's type that supercheck() found */
+Py_GC_PRECISE PyValue
 _PySuper_Lookup(PyTypeObject *su_type, PyObject *su_obj, PyObject *name, int *method)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)su_type);
+    _PyValueSpan_AppendObject(&span, su_obj);
+    _PyValueSpan_AppendObject(&span, name);
+    PyValue res = PyValue_NULL;
     PyTypeObject *su_obj_type = supercheck(su_type, su_obj);
-    if (su_obj_type == NULL) {
-        return PyValue_NULL;
+    _PyValueSpan_AppendObject(&span, (PyObject *)su_obj_type);
+    if (su_obj_type != NULL) {
+        res = do_super_lookup(NULL, su_type, su_obj, su_obj_type, name,
+                              method);
     }
-    PyValue res = do_super_lookup(NULL, su_type, su_obj, su_obj_type, name, method);
-    Py_DECREF(su_obj_type);
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-static PyValue
+/* The span: the super object, obj and the type that supercheck() found */
+Py_GC_PRECISE static PyValue
 super_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     superobject *su = superobject_CAST(self);
@@ -12666,27 +12851,36 @@ super_descr_get(PyObject *self, PyObject *obj, PyObject *type)
         /* Not binding to an object, or already bound */
         return PyValue_FromObject(self);
     }
-    if (!Py_IS_TYPE(su, &PySuper_Type))
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
+    _PyValueSpan_AppendObject(&span, obj);
+    PyValue res = PyValue_NULL;
+    if (!Py_IS_TYPE(su, &PySuper_Type)) {
         /* If su is an instance of a (strict) subclass of super,
            call its type */
-        return PyValue_FromResult(PyObject_CallFunctionObjArgs(
+        res = PyValue_FromResult(PyObject_CallFunctionObjArgs(
             (PyObject *)Py_TYPE(su), su->type, obj, NULL));
+    }
     else {
         /* Inline the common case */
         PyTypeObject *obj_type = supercheck(su->type, obj);
-        if (obj_type == NULL)
-            return PyValue_NULL;
-        newobj = (superobject *)PySuper_Type.tp_new(&PySuper_Type,
-                                                 NULL, NULL);
-        if (newobj == NULL) {
-            Py_DECREF(obj_type);
-            return PyValue_NULL;
+        _PyValueSpan_AppendObject(&span, (PyObject *)obj_type);
+        if (obj_type != NULL) {
+            newobj = (superobject *)PySuper_Type.tp_new(&PySuper_Type,
+                                                        NULL, NULL);
+            if (newobj != NULL) {
+                newobj->type = (PyTypeObject*)Py_NewRef(su->type);
+                newobj->obj = Py_NewRef(obj);
+                newobj->obj_type = obj_type;
+                res = PyValue_FromObject(newobj);
+            }
         }
-        newobj->type = (PyTypeObject*)Py_NewRef(su->type);
-        newobj->obj = Py_NewRef(obj);
-        newobj->obj_type = obj_type;
-        return PyValue_FromObject(newobj);
     }
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 static int

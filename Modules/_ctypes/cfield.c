@@ -243,7 +243,8 @@ _pack_legacy_size(CFieldObject *field)
     return field->byte_size;
 }
 
-static int
+/* The caller anchors the field, the instance and the value. */
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static int
 PyCField_set_lock_held(PyObject *op, PyObject *inst, PyObject *value)
 {
     CDataObject *dst;
@@ -262,40 +263,44 @@ PyCField_set_lock_held(PyObject *op, PyObject *inst, PyObject *value)
                         "can't delete attribute");
         return -1;
     }
+    // The stack-passed arguments as integer locals, which the C mode
+    // does not take for objects.
+    Py_ssize_t size = _pack_legacy_size(self);
+    Py_ssize_t byte_size = self->byte_size;
     return PyCData_set(st, inst, self->proto, self->setfunc, value,
-                       self->index, _pack_legacy_size(self),
-                       self->byte_size, ptr);
+                       self->index, size, byte_size, ptr);
 }
 
 /* The converters (setfunc, getfunc) are object forms and not getsets;
    converting them is a ctypes change for the ports phase.  So the field
    setter boxes an inline value at its top, as a setter that passes on an
-   object does, and anchors the box while the converter runs; a failed box
-   returns at once. */
-static int
+   object does; a failed box returns at once.  The span holds the field,
+   the instance and the object set while the converter runs. */
+Py_GC_PRECISE static int
 PyCField_set(PyObject *op, PyObject *inst, PyValue value)
 {
-    int res;
-    if (!PyValue_IsInline(value)) {
-        PyObject *obj = PyValue_IsNull(value) ? NULL
-                                              : PyValue_ObjectBorrow(value);
-        Py_BEGIN_CRITICAL_SECTION(inst);
-        res = PyCField_set_lock_held(op, inst, obj);
-        Py_END_CRITICAL_SECTION();
-        return res;
-    }
-    PyObject *box = _PyValue_BoxInline(value);
-    if (box == NULL) {
-        return -1;
-    }
     PyThreadState *tstate = _PyThreadState_GET();
-    PyValue held[1];
+    PyValue held[3];
     _PyValueRoot span;
     _PyThreadState_PushValueSpan(tstate, &span, held);
-    _PyValueSpan_AppendObject(&span, box);
+    _PyValueSpan_AppendObject(&span, op);
+    _PyValueSpan_AppendObject(&span, inst);
+    int res = -1;
+    PyObject *obj;
+    if (!PyValue_IsInline(value)) {
+        obj = PyValue_IsNull(value) ? NULL : PyValue_ObjectBorrow(value);
+    }
+    else {
+        obj = _PyValue_BoxInline(value);
+        if (obj == NULL) {
+            goto done;
+        }
+    }
+    _PyValueSpan_AppendObject(&span, obj);
     Py_BEGIN_CRITICAL_SECTION(inst);
-    res = PyCField_set_lock_held(op, inst, box);
+    res = PyCField_set_lock_held(op, inst, obj);
     Py_END_CRITICAL_SECTION();
+  done:
     _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }

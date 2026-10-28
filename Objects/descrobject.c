@@ -78,7 +78,7 @@ wrapperdescr_repr(PyObject *descr)
     return descr_repr((PyDescrObject *)descr, "slot wrapper");
 }
 
-static int
+Py_GC_PRECISE static int
 descr_check(PyDescrObject *descr, PyObject *obj)
 {
     if (!PyObject_TypeCheck(obj, descr->d_type)) {
@@ -183,27 +183,36 @@ member_get(PyObject *self, PyObject *obj, PyObject *type)
     return PyMember_GetOneValue((char *)obj, descr->d_member);
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 getset_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyGetSetDescrObject *descr = (PyGetSetDescrObject *)self;
     if (obj == NULL) {
         return PyValue_FromObject((PyObject *)descr);
     }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)descr);
+    _PyValueSpan_AppendObject(&span, obj);
+    PyValue res = PyValue_NULL;
     if (descr_check((PyDescrObject *)descr, obj) < 0) {
-        return PyValue_NULL;
+        goto done;
     }
     if (descr->d_getset->get != NULL) {
-        PyValue res = descr_get_trampoline_call(
+        res = descr_get_trampoline_call(
             descr->d_getset->get, obj, descr->d_getset->closure);
         _PyValue_CheckSlotResult(res, Py_TYPE(obj), "getter");
-        return res;
+        goto done;
     }
     PyErr_Format(PyExc_AttributeError,
                  "attribute '%V' of '%.100s' objects is not readable",
                  descr_name((PyDescrObject *)descr), "?",
                  PyDescr_TYPE(descr)->tp_name);
-    return PyValue_NULL;
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 static PyValue
@@ -219,7 +228,7 @@ wrapperdescr_get(PyObject *self, PyObject *obj, PyObject *type)
     return PyValue_FromResult(PyWrapper_New((PyObject *)descr, obj));
 }
 
-static int
+Py_GC_PRECISE static int
 descr_setcheck(PyDescrObject *descr, PyObject *obj)
 {
     assert(obj != NULL);
@@ -245,22 +254,33 @@ member_set(PyObject *self, PyObject *obj, PyValue value)
     return PyMember_SetOneValue((char *)obj, descr->d_member, value);
 }
 
-static int
+Py_GC_PRECISE static int
 getset_set(PyObject *self, PyObject *obj, PyValue value)
 {
     PyGetSetDescrObject *descr = (PyGetSetDescrObject *)self;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)descr);
+    _PyValueSpan_AppendObject(&span, obj);
+    _PyValueSpan_Append(&span, value);
+    int res = -1;
     if (descr_setcheck((PyDescrObject *)descr, obj) < 0) {
-        return -1;
+        goto done;
     }
     if (descr->d_getset->set != NULL) {
-        return descr_set_trampoline_call(
+        res = descr_set_trampoline_call(
             descr->d_getset->set, obj, value, descr->d_getset->closure);
+        goto done;
     }
     PyErr_Format(PyExc_AttributeError,
                  "attribute '%V' of '%.100s' objects is not writable",
                  descr_name((PyDescrObject *)descr), "?",
                  PyDescr_TYPE(descr)->tp_name);
-    return -1;
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 

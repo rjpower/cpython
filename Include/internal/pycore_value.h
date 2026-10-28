@@ -424,7 +424,7 @@ _PyThreadState_PopValueRoot(PyThreadState *tstate, _PyValueRoot *root)
    inline value is boxed in place, and root holds the box (its object field)
    from then on, so root's value must not be used as a PyValue afterwards.
    NULL if root holds NULL, or with an exception set if boxing fails. */
-static inline PyObject *
+Py_GC_PRECISE static inline PyObject *
 _PyValueRoot_Object(_PyValueRoot *root)
 {
     if (PyValue_IsInline(root->value)) {

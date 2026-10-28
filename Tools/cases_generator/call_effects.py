@@ -65,6 +65,12 @@ NON_COLLECTING = frozenset({
     "_PyGC_TrapUse",
     # arithmetic on the indices it is given
     "PySlice_AdjustIndices",
+    # reads of a type's slot and of an object's layout: a data descriptor
+    # test, and the address of a dict pointer (its assertions abort)
+    "PyDescr_IsData", "_PyObject_ComputedDictPointer",
+    # the dict's assertion (Objects/dictobject.c), which only reads the
+    # dict; its hash check runs only under DEBUG_PYDICT, which no gate builds
+    "ASSERT_CONSISTENT",
     # an unpacked call's size, and its fill, which only stores into the
     # caller's span (Include/internal/pycore_call.h, 10a-2b.md section 1)
     "_PyStack_UnpackDictSlots", "_PyStack_UnpackDict",

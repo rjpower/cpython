@@ -3009,6 +3009,27 @@ class ReTests(unittest.TestCase):
                 p._fail_after(-1, None)
 
     @unittest.skipUnless(hasattr(re.Pattern, '_fail_after'), 'requires debug build')
+    def test_scanner_keeps_fail_after_exception(self):
+        # A scanner copies the pattern's _fail_after() exception without a
+        # reference.  Once the pattern holds another, only the scanner's
+        # traverse keeps the first alive across a collection.
+        p = re.compile(r"(a)+b")
+        def arm():
+            class Interrupt(Exception):
+                pass
+            p._fail_after(0, Interrupt)
+        arm()
+        scanner = p.scanner("aaab")
+        p._fail_after(-1, None)
+        gc_collect()
+        # Reuse the memory a freed class would have left.
+        junk = [type(f"Junk{i}", (Exception,), {}) for i in range(50)]
+        with self.assertRaises(Exception) as cm:
+            scanner.search()
+        del junk
+        self.assertEqual(type(cm.exception).__name__, "Interrupt")
+
+    @unittest.skipUnless(hasattr(re.Pattern, '_fail_after'), 'requires debug build')
     def test_memory_leaks(self):
         self.check_interrupt(r'(.)*:', 'abc:', 100)
         self.check_interrupt(r'([^:])*?:', 'abc:', 100)

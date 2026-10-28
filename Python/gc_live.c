@@ -1334,10 +1334,12 @@ static struct {
     PyInterpreterState *deleting;  // stopped at the barrier
     PyEvent go;
     int pin_waited;   // the deletion was seen blocked on the pin
+    int timed_out;    // ... or was not, within BARRIER_WAIT_NS
     int64_t seq;
     int64_t routed;   // the seq of the routing of a closed owner's calls
     int64_t unpinned; // the seq of the deletion's passing of its pin wait
     Py_ssize_t remapped;  // the calls routed from a closed owner to main
+    Py_ssize_t remapped_other;  // ... from an owner not at the barrier
 } barrier;
 
 void
@@ -1360,6 +1362,8 @@ barrier_at_delete(PyInterpreterState *interp)
     HEAD_LOCK(&_PyRuntime);
 }
 
+#define BARRIER_WAIT_NS ((PyTime_t)10 * 1000 * 1000 * 1000)
+
 static void
 barrier_after_mark(PyThreadState *tstate, const _PyGCMarkResult *res)
 {
@@ -1378,13 +1382,22 @@ barrier_after_mark(PyThreadState *tstate, const _PyGCMarkResult *res)
     }
     _PyEvent_Notify(&barrier.go);
     // The deletion is now in its pin wait or on its way there; this
-    // collection holds the pin, so it gets there.
+    // collection holds the pin, so it gets there, unless its thread died
+    // or hung: then the test fails on "timed_out" instead of hanging.
+    PyTime_t until, now;
+    (void)PyTime_MonotonicRaw(&until);
+    until += BARRIER_WAIT_NS;
     for (;;) {
         HEAD_LOCK(&_PyRuntime);
         int waiting = deleting->gc.queue_unpinned != NULL;
         HEAD_UNLOCK(&_PyRuntime);
         if (waiting) {
             barrier.pin_waited = 1;
+            return;
+        }
+        (void)PyTime_MonotonicRaw(&now);
+        if (now >= until) {
+            barrier.timed_out = 1;
             return;
         }
     }
@@ -1415,6 +1428,8 @@ route_calls(PyThreadState *tstate, const _PyGCMarkResult *res,
             owner = here;
         }
         if (owner->gc.queue_phase == QUEUE_CLOSED) {
+            barrier.remapped_other +=
+                owner != _Py_atomic_load_ptr(&barrier.deleting);
             owner = main;
             barrier.remapped++;
             barrier.routed = _Py_atomic_add_int64(&barrier.seq, 1) + 1;
@@ -2277,16 +2292,18 @@ _PyGC_LiveQueueInfo(PyInterpreterState *interp)
     }
     static const char *const phases[] = {"initialising", "open", "closed"};
     GCState *gc = &interp->gc;
-    return Py_BuildValue("{snsssis{sisisLsLsn}s{snsnsnsn}}",
+    return Py_BuildValue("{snsssis{sisisisLsLsnsn}s{snsnsnsn}}",
         "length", length,
         "phase", phases[gc->queue_phase],
         "ready", _Py_atomic_load_int_relaxed(&gc->queue_ready),
         "barrier",
         "deleting", _Py_atomic_load_ptr(&barrier.deleting) != NULL,
         "pin_waited", barrier.pin_waited,
+        "timed_out", barrier.timed_out,
         "routed", (long long)barrier.routed,
         "unpinned", (long long)barrier.unpinned,
         "remapped", barrier.remapped,
+        "remapped_other", barrier.remapped_other,
         "discarded",
         "callback", gc->queue_discarded[CALL_CALLBACK],
         "finalize", gc->queue_discarded[CALL_FINALIZE],

@@ -3292,6 +3292,7 @@ class InterpreterQueueTests(unittest.TestCase):
         # marked, the collection waits until the deletion blocks on its
         # pin, and the calls, remapped to the main interpreter (the owner
         # is closed), are routed before the deletion passes its pin wait.
+        # Each runs once, on the main interpreter.
         out = _queue_child("""
             import threading
             gc.disable()
@@ -3337,12 +3338,17 @@ class InterpreterQueueTests(unittest.TestCase):
                 gc.collect()
             b = _testinternalcapi.gc_queue_info()["barrier"]
             _testinternalcapi.gc_delete_barrier(False)
-            print(b["pin_waited"], b["remapped"] == 10,
-                  0 < b["routed"] < b["unpinned"], sorted(log))
+            # Other objects of the closing interpreter can die with calls of
+            # their own: its _testinternalcapi module's destroy call is
+            # sometimes remapped in the explicit collection's second pass.
+            print(b["timed_out"], b["pin_waited"], b["remapped"] >= 10,
+                  b["remapped_other"], 0 < b["routed"] < b["unpinned"],
+                  sorted(log))
         """)
         self.assertEqual(
             out.strip(),
-            "1 True True " + str(sorted([("cb", 0)] * 5 + [("del", 0)] * 5)))
+            "0 1 True 0 True "
+            + str(sorted([("cb", 0)] * 5 + [("del", 0)] * 5)))
 
     def test_every_kind_routed(self):
         # 9.17: each kind of call, in each direction separately, waits for

@@ -45,6 +45,22 @@ test_ssl, `_decimal`, `_uuid` and `_sqlite3` do not build on this machine
 and gdb is absent (user action); `PYTHONMALLOC=malloc` is not honoured
 (hack register, owner 10a rung 2).
 
+### 0.1 Cleanup inputs from the 2026-10-28 architecture review
+
+`boil/ARCHITECTURE_REVIEW.md` (a source and architecture review of the
+branch at 4bb672e0bf4, no builds run) and its shortlist `boil/CLEANUP.md`
+are inputs to the plan, not gates. Owners, as of 2026-10-28:
+
+| Item | Owner | When |
+|---|---|---|
+| C identity agrees with value identity (`Py_Is`, the identity contract in `pyvalue.h`) | 6e | with the remaining slot families |
+| native ABI identity (wheel tags, untagged `.so` acceptance, an ABI-generation check at module init) | phase P's design, before the first port | after 10b |
+| the below-2^48 pointer bound enforced where addresses enter a value or header; the supported platform, compiler and unwind matrix published | 10a rung 4 (the matrix, with the precise/opaque/unsupported inventory); 6e (the bound) | this week |
+| one verification manifest (modes, exclusions, reasons, owners, removal conditions) that `gate.sh` executes, and landing summaries tied to commit and build | coordinator (`gate.sh`) with 10a rung 2b item 7 (the manifest's content from note 11 section 8.2) | after 10a rung 2b |
+| compatibility accessors that allocate and abort on failure (`_PyValue_ObjectOrAbort`): migrate core callers, document the residual contract | 6e | with the remaining slot families |
+| documentation: `boil/PR.md` marked historical, note 06's opening reconciled with its as-built record, the 4,095-slot limit documented, wall-time, RSS and pause measurements against upstream | coordinator at each step end; the measurements at 10a rung 4 and step 7 | ongoing |
+| 7a ahead of further collector features; `str +=` linear path with its own acceptance criterion (step 9); handle discipline before movement (10b) | as planned | as planned |
+
 ## 1. The loop
 
 Design, review, implement and test, landing review, commit, integrate,

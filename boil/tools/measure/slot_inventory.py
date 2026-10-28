@@ -48,19 +48,50 @@ if "--calls" in sys.argv:
     direct = re.compile(r'(?<![\w.>])(%s)\s*\(' % "|".join(sorted(names, key=len, reverse=True)))
     func_start = re.compile(r'^(\w+)\s*\(')
     init_like = [pat_pos, pat_des, pat_spec]
+    def code_of(text):
+        # The text with comments and string literals blanked, line for line,
+        # so that a line opening with "*" is code unless a comment holds it.
+        out, i, n = [], 0, len(text)
+        while i < n:
+            c = text[i]
+            if text.startswith("/*", i):
+                j = text.find("*/", i + 2)
+                j = n if j < 0 else j + 2
+                out.append("".join(ch if ch == "\n" else " " for ch in text[i:j]))
+                i = j
+            elif text.startswith("//", i):
+                j = text.find("\n", i)
+                j = n if j < 0 else j
+                out.append(" " * (j - i))
+                i = j
+            elif c in "\"'":
+                j = i + 1
+                while j < n and text[j] != c and text[j] != "\n":
+                    j += 2 if text[j] == "\\" else 1
+                j = min(j + 1, n)
+                out.append(c + " " * (j - i - 2) + c if j - i >= 2 else c)
+                i = j
+            else:
+                out.append(c)
+                i += 1
+        return "".join(out)
+
     for d in ("Objects", "Modules", "Python", "PC", "Include"):
         for p in sorted(pathlib.Path(d).rglob("*.[ch]")):
             func = None
-            for lineno, line in enumerate(p.read_text(errors="replace").splitlines(), 1):
-                m = func_start.match(line)
+            text = p.read_text(errors="replace")
+            for lineno, (line, code) in enumerate(
+                    zip(text.splitlines(), code_of(text).splitlines()), 1):
+                m = func_start.match(code)
                 if m:
                     func = m.group(1)
-                    if direct.match(line):
+                    if direct.match(code):
                         continue  # the definition itself
                 if any(pat[s].search(line) for pat in init_like for s in slots):
                     continue
-                if line.lstrip().startswith(("#", "*", "/*", "//")):
+                if code.lstrip().startswith("#"):
                     continue
+                line = code
                 kinds = []
                 if field.search(line):
                     kinds.append("field")

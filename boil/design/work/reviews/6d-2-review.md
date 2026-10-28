@@ -1,69 +1,54 @@
 ## Summary
 
-The in-place slot conversion fits the architecture, and wrapper/getset bridges have named retirement steps.  
-The revision addresses the first review’s deletion, error-context and compatibility concerns.  
-Rooting validation and several dispatch conversions remain incomplete.
+The in-place slot conversion fits the architecture and gives the main compatibility bridges retirement steps.  
+Dispatch coverage, remaining forwarding paths, and the root-test proof still need correction.  
+Reviewed revision `ea58963eed4`; concurrent implementation edits were excluded.
 
 ## Blocking issues
 
-1. **The proposed precise-root fixture will still be scanned conservatively.**
+1. **The dispatch inventory skips a real call, and §F omits its check.**
 
-   **Where:** Tests 5. In [Python/gc_walk.c](/home/power/code/cpython/.worktrees/boil-6d/Python/gc_walk.c:784), section-based precision explicitly excludes extension frames. `_testinternalcapi` is a shared extension in both configured builds, so adding `Py_GC_PRECISE` there does not establish the claimed “span is the only root” condition. Conservative roots can still conceal the bug. Moreover, the canonical-root negative control should fail the C checker when it retains the box across collection.
+   **Where:** §§A/B/F. [slot_inventory.py:62](/home/power/code/cpython/.worktrees/boil-6d/boil/tools/measure/slot_inventory.py:62) treats every line beginning with `*` as a comment. This excludes [the optional-attribute dispatch](/home/power/code/cpython/.worktrees/boil-6d/Objects/object.c:1137):
+   ```c
+   *result = (*tp->tp_getattro)(v, name);
+   ```
+   §B carries that dispatch into `PyObject_GetOptionalAttrValue`, but §F lists only `getattr_object_value`. A malformed slot can therefore escape the promised immediate check through optional lookup, including `getattr` with a default and `hasattr`.
 
-   **Fix:** place the checked positive fixture in the core, or explicitly register its range as precise. Use the existing test-range registration mechanism for the deliberately invalid negative fixture, as [missed_root does](/home/power/code/cpython/.worktrees/boil-6d/Modules/_testinternalcapi/gc_walk.c:391). Assert precise classification, no walk fallback, positive survival and negative failure.
+   **Fix:** distinguish comment continuations from dereference assignments, regenerate the inventory, and explicitly check this dispatch before conversion or suppression. Extend the malformed-getattro subprocess cases to both optional APIs and both builtins.
 
-2. **The shared injection helper does not test the receiver box consumed by a direct method call.**
+2. **§C’s blanket conversion rule preserves boxes in remaining forwarding slots.**
 
-   **Where:** §§B/F and Tests 5. [get_method_value](/home/power/code/cpython/.worktrees/boil-6d/Objects/object.c:1482) returns an unbound descriptor for METHOD; it does not invoke `tp_descr_get`. `_PyObject_GetMethodValue` leaves the original inline receiver in `*self`. The actual C-method receiver is boxed later by [method_check_args](/home/power/code/cpython/.worktrees/boil-6d/Objects/descrobject.c:281).
+   **Where:** §C’s final bullet and Tests 9/11. [Example_getattro](/home/power/code/cpython/.worktrees/boil-6d/Modules/_testmultiphase.c:79) and the `Xxo_getattro` implementations read through `PyDict_GetItemWithError`; they do not merely return objects they build. Wrapping those results in `PyValue_FromResult` preserves the temporary numeric boxes.
 
-   An injection during lookup therefore either disappears when the unnecessary lookup box is removed, or protects a different box from the one the method dereferences.
+   Similarly, boxing at the top of [Pickler_setattr](/home/power/code/cpython/.worktrees/boil-6d/Modules/_pickle.c:5697) also boxes ordinary attributes forwarded to the generic setter. The native field requires boxing only in the `persistent_id` branch.
 
-   **Fix:** resolve METHOD on the value without boxing. Inject collection after the call layer anchors its actual receiver box. Keep descriptor-binding injection separately. Specify that `box_owner_for_descr` appends to a caller-owned span whose lifetime covers the call; it must not return with a root pointing into its own expired frame. Assert both site execution and box counts.
+   **Fix:** specify value dictionary reads and writes for these implementations. Box inside branches that actually retain a `PyObject *`. Explicitly convert [proxy_setattr](/home/power/code/cpython/.worktrees/boil-6d/Objects/weakrefobject.c:734) to value forwarding too. Add enforcing cases for these dictionary and generic-fallback paths; the current forwarding test list misses them.
 
-3. **The promised dispatch audit still omits calls that can hide malformed results.**
+3. **The lifetime fixture’s stated fallback assertion does not observe test-range fallbacks.**
 
-   **Where:** §§A/F. The committed inventory contains initialisers, not the “locals” and “calls” lists §F relies on. Its placement list omits descriptor calls in `type_get_doc`, `type_get_annotate`, `type_get_annotations`, `_PyObject_LookupSpecial`, `_PyObject_LookupSpecialMethod`, `lookup_method_ex` and `subtype_dict`.
+   **Where:** Test 5. [gc_walk.c’s fallback handler](/home/power/code/cpython/.worktrees/boil-6d/Python/gc_walk.c:845) increments `w->test_fallbacks` for `_PyGC_RANGE_TEST`, rather than the normal statistics counter. [scan_from](/home/power/code/cpython/.worktrees/boil-6d/Python/gc_trace.c:1179) discards both the walk’s return status and this separate counter.
 
-   For example, [type_get_doc](/home/power/code/cpython/.worktrees/boil-6d/Objects/typeobject.c:1879) calls a descriptor inside an object-form getter. `getset_get` then canonicalises that getter’s result, hiding a noncanonical box before the outer check can inspect it.
+   Thus “zero fallbacks from the walk’s statistics” does not establish that the registered fixture escaped conservative scanning. Separate positive and negative functions can have different unwind behaviour.
 
-   **Fix:** commit an inventory of actual dispatches and direct calls to converted implementations. Specify each result conversion and place the check immediately after dispatch. Include the direct `classmethod_get` call in the already-precise `classmethoddescr_call`. Name retirement steps for necessary object bridges, and add malformed-result subprocess cases through nested getsets and explicit wrappers.
-
-4. **The super conversion covers only specialised outputs and leaves inline inputs undefined.**
-
-   **Where:** §C and Tests 8. The generic [_LOAD_SUPER_ATTR](/home/power/code/cpython/.worktrees/boil-6d/Python/bytecodes.c:2435), also used by the instrumented form, still calls `PyObject_GetAttr` and canonicalises its boxed result. Changing the two specialised handlers leaves that boundary intact; warmed measurements can miss it.
-
-   The handlers also use `PyValue_ObjectBorrow(self_st)` without establishing an object receiver. Valid expressions such as `super(float, 2.5).__repr__()` can receive this opcode: [codegen accepts arbitrary two-argument super calls](/home/power/code/cpython/.worktrees/boil-6d/Python/codegen.c:3944). A result-only rewrite leaves this assertion/crash path unresolved.
-
-   **Fix:** cover generic, instrumented and specialised paths. Carry lookup results as values, and define where an inline `su_obj` is boxed and rooted for object-form consumers. Test cold and warmed execution, monitoring, inline receivers and boxing failure.
-
-5. **Forwarding slots can retain the very boxes this rung claims to remove.**
-
-   **Where:** §§C/D and Measurements. “Return `PyValue_FromResult` of what they build” is insufficient for forwarding reads. Existing examples include:
-
-   - [proxy_getattr](/home/power/code/cpython/.worktrees/boil-6d/Objects/weakrefobject.c:709), generated around `PyObject_GetAttr`;
-   - [ga_getattro](/home/power/code/cpython/.worktrees/boil-6d/Objects/genericaliasobject.c:725), forwarding to the origin;
-   - [local_getattro](/home/power/code/cpython/.worktrees/boil-6d/Modules/_threadmodule.c:1847), reading through `PyDict_GetItemRef`;
-   - [_Py_module_getattro_impl](/home/power/code/cpython/.worktrees/boil-6d/Objects/moduleobject.c:1321), calling module `__getattr__` through `PyObject_CallOneArg`.
-
-   Wrapping these object results restores canonical form while preserving transient boxes and allocations. Identity tests will pass.
-
-   **Fix:** specify value-to-value forwarding through attribute, dictionary and vectorcall APIs. Add enforcing box/allocation cases for weak proxies, generic aliases, thread locals and module `__getattr__`, including optional lookup and suppressed errors.
+   **Fix:** expose and assert test-range fallbacks, or otherwise observe the actual collection walk through each fixture. Require precise classification and no fallback for both controls, alongside raw-box survival and canonical-control death.
 
 ## Non-blocking issues
 
-- **Error-context boxing is duplicated.** §B boxes the owner before `_PyObject_SetAttributeErrorContext`, but that helper calls `PyObject_SetAttr`, which canonicalises it before the native member setter boxes it again. Make the context helper value-aware and let the native field store perform the required box.
-- **Retire the redundant type helper.** Once `_Py_type_getattro_impl` returns `PyValue`, its existing object-wrapper role around `_Py_type_getattro_value` disappears. Consolidate them and update callers.
-- **Strengthen numeric tests.** Require `assertIs(result, original_nan)` for identity-preserving paths; inequality with another NaN cannot detect replacement. Include below-`INT32_MIN`, negative infinity, and collecting or raising `__index__`/`__float__` callbacks. Preserve truncation stores and warning-as-error behaviour.
-- **Preserve the C API deletion guard.** Moving dispatch must retain [object_setattr’s rejection of NULL with an active exception](/home/power/code/cpython/.worktrees/boil-6d/Objects/object.c:1214), including exception chaining and absence of mutation.
+- **Two proposed object bridges already have value outputs.** §F groups `_PyObject_LookupSpecialMethod` and `lookup_method_ex` with `_PyObject_LookupSpecial`. The first two already write `PyValue` outputs in [typeobject.c](/home/power/code/cpython/.worktrees/boil-6d/Objects/typeobject.c:2744). Assign checked descriptor results directly into those outputs. Keep boxing at consumers that actually require objects.
+
+- **The fatal-error classification is inaccurate.** §F calls the fatal reporter non-collecting. [fatal_error](/home/power/code/cpython/.worktrees/boil-6d/Python/pylifecycle.c:3588) can display exceptions and flush Python streams, invoking Python and collection. Use a reporter that cannot invoke Python, or a checked opaque reporting path; a reviewed comment does not establish this effect.
+
+- **Specify allocation assertions.** Tests 9/11 promise enforced allocation counts, but [box_audit.py](/home/power/code/cpython/.worktrees/boil-6d/boil/tools/measure/box_audit.py:198) currently gates only boxing counters. Define expected allocations per case, including intentional bound-method allocations and rung-4 residue.
+
+- **Isolate audit statistics.** Passing an interpreter path does not fix `box_audit.py`’s shared `/tmp/py_stats` directory and deletion of newly discovered files. Use a task-owned `PYTHON_STATS_DIR`, as `slot_boxes.py` already does.
 
 ## Questions
 
-- Which integration SHA supplies the reviewed call layer and injection-site numbering?
-- Do `_ctypes`’ object-form `getfunc`/`setfunc` callbacks remain? If so, where are their temporary boxes rooted, and which step retires that boundary?
-- How will unsigned member conversions work? The available value accessors lack unsigned counterparts; specify the inline and object branches while preserving negative-value warnings and overflow rules.
+- At the named base, `method_vectorcall_*` and `classmethoddescr_call` are still unmarked, despite note 12 §7’s precision claims. Who owns their promotion, and will `method_check_args` append its receiver box to a caller-owned span or rely on conservative scanning until that promotion?
+- Which step retires the inline `super` receiver box? §C assigns it to open question 1, whose proposed method-receiver conversion does not change `superobject.obj`’s `PyObject *` storage.
 
 ## Verdict
 
 revise
 ---
-Reviewer: codex, 2026-10-28 01:52 PDT
+Reviewer: codex, 2026-10-28 02:15 PDT

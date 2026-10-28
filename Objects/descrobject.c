@@ -93,7 +93,7 @@ descr_check(PyDescrObject *descr, PyObject *obj)
     return 0;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 classmethod_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyMethodDescrObject *descr = (PyMethodDescrObject *)self;
@@ -284,50 +284,74 @@ getset_set(PyObject *self, PyObject *obj, PyValue value)
 
 /* Vectorcall functions for each of the PyMethodDescr calling conventions.
  *
+ * They are precise (10a-2.md, rule 1).  Each pushes a span that anchors the
+ * descriptor, the keyword names where the method reads them after a
+ * collecting call, and the receiver in an object slot: an inline receiver
+ * (a method of int or float) is boxed into the slot, which anchors the box
+ * for the call.  The errors are precise functions called last.
+ *
  * First, common helpers
  */
-static inline int
+Py_GC_PRECISE static Py_NO_INLINE int
+method_error(PyObject *func, const char *format, Py_ssize_t nargs)
+{
+    PyObject *funcstr = _PyObject_FunctionStr(func);
+    if (funcstr != NULL) {
+        PyErr_Format(PyExc_TypeError, format, funcstr, nargs);
+        Py_DECREF(funcstr);
+    }
+    return -1;
+}
+
+Py_GC_PRECISE static Py_NO_INLINE int
+method_receiver_error(PyDescrObject *descr, PyTypeObject *type)
+{
+    PyErr_Format(PyExc_TypeError,
+                 "descriptor '%V' for '%.100s' objects "
+                 "doesn't apply to a '%.100s' object",
+                 descr_name(descr), "?", descr->d_type->tp_name,
+                 type->tp_name);
+    return -1;
+}
+
+/* The receiver is args[0].  Its type is checked before anything is boxed,
+   so that the common path makes no collecting call; an inline receiver is
+   boxed last, into *pself, the caller's object slot.  kwargs_given is
+   nonzero for a method that takes no keywords called with some. */
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static inline int
 method_check_args(PyObject *func, const PyValue *args, Py_ssize_t nargs,
-                  PyObject *kwnames, PyObject **pself)
+                  int kwargs_given, PyObject **pself)
 {
     assert(!PyErr_Occurred());
     if (nargs < 1) {
-        PyObject *funcstr = _PyObject_FunctionStr(func);
-        if (funcstr != NULL) {
-            PyErr_Format(PyExc_TypeError,
-                         "unbound method %U needs an argument", funcstr);
-            Py_DECREF(funcstr);
-        }
+        return method_error(func, "unbound method %U needs an argument", 0);
+    }
+    PyValue self_v = args[0];
+    PyTypeObject *type = PyValue_Type(self_v);
+    PyTypeObject *expected = PyDescr_TYPE(func);
+    if (type != expected && !PyType_IsSubtype(type, expected)) {
+        return method_receiver_error((PyDescrObject *)func, type);
+    }
+    if (kwargs_given) {
+        return method_error(func, "%U takes no keyword arguments", 0);
+    }
+    if (!PyValue_IsInline(self_v)) {
+        *pself = PyValue_ObjectBorrow(self_v);
+        return 0;
+    }
+    *pself = _PyValue_BoxInline(self_v);
+    if (*pself == NULL) {
         return -1;
     }
-    // A box of an inline self, for a method of int or float.  The caller's
-    // frame holds it for the call until 10a's call layer anchors it.
-    PyObject *self = PyValue_Object(args[0]);
-    if (self == NULL) {
-        return -1;
-    }
-    if (PyValue_IsInline(args[0])) {
-        _PyGC_INJECT(_PyThreadState_GET(), _PyGC_SITE_RECEIVER_BOX);
-    }
-    if (descr_check((PyDescrObject *)func, self) < 0) {
-        return -1;
-    }
-    *pself = self;
-    if (kwnames && PyTuple_GET_SIZE(kwnames)) {
-        PyObject *funcstr = _PyObject_FunctionStr(func);
-        if (funcstr != NULL) {
-            PyErr_Format(PyExc_TypeError,
-                         "%U takes no keyword arguments", funcstr);
-            Py_DECREF(funcstr);
-        }
-        return -1;
-    }
+    _PyGC_INJECT(_PyThreadState_GET(), _PyGC_SITE_RECEIVER_BOX);
     return 0;
 }
 
+#define HAS_KWARGS(kwnames) ((kwnames) != NULL && PyTuple_GET_SIZE(kwnames))
+
 typedef void (*funcptr)(void);
 
-static inline funcptr
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static inline funcptr
 method_enter_call(PyThreadState *tstate, PyObject *func)
 {
     if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object")) {
@@ -337,191 +361,232 @@ method_enter_call(PyThreadState *tstate, PyObject *func)
 }
 
 /* Now the actual vectorcall functions */
-static PyValue
+Py_GC_PRECISE static PyValue
 method_vectorcall_VARARGS(
     PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     PyObject *func = PyValue_ObjectBorrow(func_v);
-    PyObject *self;
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    if (method_check_args(func, args, nargs, kwnames, &self)) {
-        return PyValue_NULL;
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, func);
+    PyObject **selfp = _PyValueSpan_ObjectSlot(&span);
+    int kwargs_given = HAS_KWARGS(kwnames);
+    PyObject *result = NULL;
+    if (method_check_args(func, args, nargs, kwargs_given, selfp)) {
+        goto done;
     }
     PyObject *argstuple = _PyTuple_FromValues(args+1, nargs-1);
     if (argstuple == NULL) {
-        return PyValue_NULL;
+        goto done;
     }
+    _PyValueSpan_AppendObject(&span, argstuple);
     PyCFunction meth = (PyCFunction)method_enter_call(tstate, func);
     if (meth == NULL) {
-        Py_DECREF(argstuple);
-        return PyValue_NULL;
+        goto done;
     }
-    PyObject *result = _PyCFunction_TrampolineCall(
-        meth, self, argstuple);
-    Py_DECREF(argstuple);
+    result = _PyCFunction_TrampolineCall(meth, *selfp, argstuple);
     _Py_LeaveRecursiveCallTstate(tstate);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return PyValue_FromResult(result);
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 method_vectorcall_VARARGS_KEYWORDS(
     PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     PyObject *func = PyValue_ObjectBorrow(func_v);
-    PyObject *self;
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    if (method_check_args(func, args, nargs, NULL, &self)) {
-        return PyValue_NULL;
+    PyValue slots[5];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, func);
+    _PyValueSpan_AppendObject(&span, kwnames);
+    PyObject **selfp = _PyValueSpan_ObjectSlot(&span);
+    PyObject *result = NULL;
+    if (method_check_args(func, args, nargs, 0, selfp)) {
+        goto done;
     }
     PyObject *argstuple = _PyTuple_FromValues(args+1, nargs-1);
     if (argstuple == NULL) {
-        return PyValue_NULL;
+        goto done;
     }
-    PyObject *result = NULL;
+    _PyValueSpan_AppendObject(&span, argstuple);
     /* Create a temporary dict for keyword arguments */
     PyObject *kwdict = NULL;
     if (kwnames != NULL && PyTuple_GET_SIZE(kwnames) > 0) {
         kwdict = _PyStack_AsDict(args + nargs, kwnames);
         if (kwdict == NULL) {
-            goto exit;
+            goto done;
         }
     }
+    _PyValueSpan_AppendObject(&span, kwdict);
     PyCFunctionWithKeywords meth = (PyCFunctionWithKeywords)
                                    method_enter_call(tstate, func);
     if (meth == NULL) {
-        goto exit;
+        goto done;
     }
     result = _PyCFunctionWithKeywords_TrampolineCall(
-        meth, self, argstuple, kwdict);
+        meth, *selfp, argstuple, kwdict);
     _Py_LeaveRecursiveCallTstate(tstate);
-exit:
-    Py_DECREF(argstuple);
-    Py_XDECREF(kwdict);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return PyValue_FromResult(result);
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 method_vectorcall_FASTCALL_KEYWORDS_METHOD(
     PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     PyObject *func = PyValue_ObjectBorrow(func_v);
-    PyObject *self;
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    if (method_check_args(func, args, nargs, NULL, &self)) {
-        return PyValue_NULL;
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, func);
+    _PyValueSpan_AppendObject(&span, kwnames);
+    PyObject **selfp = _PyValueSpan_ObjectSlot(&span);
+    PyValue result = PyValue_NULL;
+    if (method_check_args(func, args, nargs, 0, selfp)) {
+        goto done;
     }
     PyCMethod meth = (PyCMethod) method_enter_call(tstate, func);
     if (meth == NULL) {
-        return PyValue_NULL;
+        goto done;
     }
-    PyValue result = meth(self,
-                          ((PyMethodDescrObject *)func)->d_common.d_type,
-                          args+1, nargs-1, kwnames);
-    _Py_LeaveRecursiveCall();
+    result = meth(*selfp, ((PyMethodDescrObject *)func)->d_common.d_type,
+                  args+1, nargs-1, kwnames);
+    _Py_LeaveRecursiveCallTstate(tstate);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 method_vectorcall_FASTCALL(
     PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     PyObject *func = PyValue_ObjectBorrow(func_v);
-    PyObject *self;
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    if (method_check_args(func, args, nargs, kwnames, &self)) {
-        return PyValue_NULL;
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, func);
+    PyObject **selfp = _PyValueSpan_ObjectSlot(&span);
+    int kwargs_given = HAS_KWARGS(kwnames);
+    PyValue result = PyValue_NULL;
+    if (method_check_args(func, args, nargs, kwargs_given, selfp)) {
+        goto done;
     }
     PyCFunctionFast meth = (PyCFunctionFast)
                             method_enter_call(tstate, func);
     if (meth == NULL) {
-        return PyValue_NULL;
+        goto done;
     }
-    PyValue result = meth(self, args+1, nargs-1);
+    result = meth(*selfp, args+1, nargs-1);
     _Py_LeaveRecursiveCallTstate(tstate);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 method_vectorcall_FASTCALL_KEYWORDS(
     PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     PyObject *func = PyValue_ObjectBorrow(func_v);
-    PyObject *self;
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    if (method_check_args(func, args, nargs, NULL, &self)) {
-        return PyValue_NULL;
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, func);
+    _PyValueSpan_AppendObject(&span, kwnames);
+    PyObject **selfp = _PyValueSpan_ObjectSlot(&span);
+    PyValue result = PyValue_NULL;
+    if (method_check_args(func, args, nargs, 0, selfp)) {
+        goto done;
     }
     PyCFunctionFastWithKeywords meth = (PyCFunctionFastWithKeywords)
                                         method_enter_call(tstate, func);
     if (meth == NULL) {
-        return PyValue_NULL;
+        goto done;
     }
-    PyValue result = meth(self, args+1, nargs-1, kwnames);
+    result = meth(*selfp, args+1, nargs-1, kwnames);
     _Py_LeaveRecursiveCallTstate(tstate);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 method_vectorcall_NOARGS(
     PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     PyObject *func = PyValue_ObjectBorrow(func_v);
-    PyObject *self;
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    if (method_check_args(func, args, nargs, kwnames, &self)) {
-        return PyValue_NULL;
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, func);
+    PyObject **selfp = _PyValueSpan_ObjectSlot(&span);
+    int kwargs_given = HAS_KWARGS(kwnames);
+    PyObject *result = NULL;
+    if (method_check_args(func, args, nargs, kwargs_given, selfp)) {
+        goto done;
     }
     if (nargs != 1) {
-        PyObject *funcstr = _PyObject_FunctionStr(func);
-        if (funcstr != NULL) {
-            PyErr_Format(PyExc_TypeError,
-                "%U takes no arguments (%zd given)", funcstr, nargs-1);
-            Py_DECREF(funcstr);
-        }
-        return PyValue_NULL;
+        method_error(func, "%U takes no arguments (%zd given)", nargs-1);
+        goto done;
     }
     PyCFunction meth = (PyCFunction)method_enter_call(tstate, func);
     if (meth == NULL) {
-        return PyValue_NULL;
+        goto done;
     }
-    PyObject *result = _PyCFunction_TrampolineCall(meth, self, NULL);
+    result = _PyCFunction_TrampolineCall(meth, *selfp, NULL);
     _Py_LeaveRecursiveCallTstate(tstate);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return PyValue_FromResult(result);
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 method_vectorcall_O(
     PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     PyObject *func = PyValue_ObjectBorrow(func_v);
-    PyObject *self;
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    if (method_check_args(func, args, nargs, kwnames, &self)) {
-        return PyValue_NULL;
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, func);
+    PyObject **selfp = _PyValueSpan_ObjectSlot(&span);
+    int kwargs_given = HAS_KWARGS(kwnames);
+    PyValue result = PyValue_NULL;
+    if (method_check_args(func, args, nargs, kwargs_given, selfp)) {
+        goto done;
     }
     if (nargs != 2) {
-        PyObject *funcstr = _PyObject_FunctionStr(func);
-        if (funcstr != NULL) {
-            PyErr_Format(PyExc_TypeError,
-                "%U takes exactly one argument (%zd given)",
-                funcstr, nargs-1);
-            Py_DECREF(funcstr);
-        }
-        return PyValue_NULL;
+        method_error(func, "%U takes exactly one argument (%zd given)",
+                     nargs-1);
+        goto done;
     }
     PyCFunctionO meth = (PyCFunctionO)method_enter_call(tstate, func);
     if (meth == NULL) {
-        return PyValue_NULL;
+        goto done;
     }
-    PyValue result = meth(self, args[1]);
+    result = meth(*selfp, args[1]);
     _Py_LeaveRecursiveCallTstate(tstate);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
@@ -534,7 +599,7 @@ method_vectorcall_O(
    This is just an excuse to say that this doesn't need to be optimized:
    we implement this simply by calling __get__ and then calling the result.
 */
-static PyValue
+Py_GC_PRECISE static PyValue
 classmethoddescr_call(PyObject *_descr, PyObject *args,
                       PyObject *kwds)
 {
@@ -548,24 +613,29 @@ classmethoddescr_call(PyObject *_descr, PyObject *args,
                      PyDescr_TYPE(descr)->tp_name);
         return PyValue_NULL;
     }
-    PyObject *self = PyTuple_GET_ITEM(args, 0);
     PyThreadState *tstate = _PyThreadState_GET();
-    // The bound method, held in a root for the call.
-    _PyValueRoot bound;
-    _PyThreadState_PushValueRoot(tstate, &bound);
-    bound.value = classmethod_get((PyObject *)descr, NULL, self);
-    _PyValue_CheckSlotResult(bound.value, Py_TYPE(descr), "tp_descr_get");
+    /* The span anchors the descriptor, the argument tuple, which owns the
+       argument array, the keywords and the bound method. */
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)descr);
+    _PyValueSpan_AppendObject(&span, args);
+    _PyValueSpan_AppendObject(&span, kwds);
+    PyValue bound = classmethod_get((PyObject *)descr, NULL,
+                                    PyTuple_GET_ITEM(args, 0));
+    _PyValueSpan_Append(&span, bound);
+    _PyValue_CheckSlotResult(bound, Py_TYPE(descr), "tp_descr_get");
     PyValue res = PyValue_NULL;
-    if (!PyValue_IsNull(bound.value)) {
-        // The caller's tuple owns the argument array.
+    if (!PyValue_IsNull(bound)) {
         res = _PyObject_VectorcallDictValueTstate(
-            tstate, bound.value, _PyTuple_ITEMS(args) + 1, argc - 1, kwds);
+            tstate, bound, _PyTuple_ITEMS(args) + 1, argc - 1, kwds);
     }
-    _PyThreadState_PopValueRoot(tstate, &bound);
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-Py_LOCAL_INLINE(PyValue)
+Py_GC_PRECISE static inline PyValue
 wrapperdescr_raw_call(PyWrapperDescrObject *descr, PyObject *self,
                       PyObject *args, PyObject *kwds)
 {
@@ -585,7 +655,7 @@ wrapperdescr_raw_call(PyWrapperDescrObject *descr, PyObject *self,
     return (*wrapper)(self, args, descr->d_wrapped);
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
 {
     PyWrapperDescrObject *descr = (PyWrapperDescrObject *)_descr;
@@ -603,11 +673,16 @@ wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
         return PyValue_NULL;
     }
     /* A wrapper's self is an object: an inline receiver (int.__add__(5, 3))
-       is boxed, and the frame's span holds the box and the sliced tuple. */
+       is boxed.  The frame's span holds the descriptor, the argument tuple
+       (which owns an object receiver), the keywords, the box and the
+       sliced tuple. */
     PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[2];
+    PyValue slots[5];
     _PyValueRoot span;
     _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)descr);
+    _PyValueSpan_AppendObject(&span, args);
+    _PyValueSpan_AppendObject(&span, kwds);
     PyValue result = PyValue_NULL;
     PyValue self_v = PyTuple_GET_VALUE(args, 0);
     PyObject *self;

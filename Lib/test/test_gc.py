@@ -2184,6 +2184,42 @@ class TracingCollectorTests(unittest.TestCase):
                     PYTHON_GCVERIFY="kill")
                 self.assertEqual(out.decode().split("\n")[:2], [want, "1"])
 
+    RECEIVER_BOX = textwrap.dedent("""
+        import _testinternalcapi
+        RECEIVER_BOX = 9
+        collect_at = _testinternalcapi.gc_collect_at
+        # Made at run time, so that no constant holds a box.
+        x = 2.5 * (100000 + int("1"))
+        n = 100000 + int("1")
+        calls = [
+            lambda: x.hex(),                          # METH_NOARGS
+            lambda: x.__format__(".1f"),              # METH_O
+            lambda: x.__round__(1),                   # METH_FASTCALL
+            lambda: n.to_bytes(4, byteorder="little"),  # FASTCALL_KEYWORDS
+            lambda: float.hex(x),                     # the descriptor itself
+        ]
+        for call in calls:
+            before = collect_at(RECEIVER_BOX)
+            print(repr(call()), collect_at(0) - before)
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_receiver_box_in_span(self):
+        # 10a rung 2b: a method of float or int called on an inline
+        # receiver gets a box that only the object slot of its
+        # method_vectorcall_*() span holds; a collection right after the
+        # box, under kill, finds it only there, and the method then reads
+        # it.  One call per calling convention that the receivers have.
+        rc, out, err = assert_python_ok(
+            "-X", "faulthandler", "-c", self.RECEIVER_BOX,
+            PYTHON_GCVERIFY="kill")
+        x = 2.5 * 100001
+        want = [f"{x.hex()!r} 1", f"{format(x, '.1f')!r} 1",
+                f"{round(x, 1)!r} 1",
+                f"{(100001).to_bytes(4, 'little')!r} 1", f"{x.hex()!r} 1"]
+        self.assertEqual(out.decode().splitlines(), want)
+
     SPAN_BOX = textwrap.dedent("""
         import gc, sys, _testinternalcapi
         raw = sys.argv[1] == "raw"

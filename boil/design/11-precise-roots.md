@@ -646,8 +646,20 @@ Known exclusions, which are not 10a's:
     callback, which returns NULL with no exception set in the new
     interpreter's thread state, and the debug result check aborts. Not in
     the gate of record, whose stress set does not run test_import; extra
-    stress runs exclude `-i '*SinglephaseInitTests*'` under this class.
+    stress runs exclude the class patterns under this class (below).
     7a's test covers the case.
+  - A third creator path, found by rung 2b's stress run of groups c and d
+    (`PYTHON_GCSTRESS=50` on build/debug) and reproduced 2 of 2 on the
+    base before 4c (938c5a5501a): test_import
+    `SubinterpImportTests.test_builtin_compat`, in its class's order (it
+    passes alone, 3 of 3). Its `_testinternalcapi` creator calls
+    `Py_NewInterpreterFromConfig`, and the C stack from `pycore_init_types`
+    down to the `run_queue` abort is the second path's, with
+    `meth_get__qualname__` reached through `functools_copy_attr`; no import
+    helper is on the stack. 10a-2b.md's record has the stack.
+  - Extra stress runs exclude `-i '*SinglephaseInitTests*' -i
+    '*SubinterpImportTests*'` under this class. Neither is in the gate of
+    record.
 
   Also excluded under stress: test_capi.test_bytes's `*test_resize*`, the
   Also excluded under stress: test_capi.test_bytes's `*test_resize*`, the

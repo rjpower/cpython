@@ -441,6 +441,117 @@ static PyTypeObject OtherDict_Type = {
     .tp_basicsize = sizeof(DefDictObject),
     .tp_traverse = otherdict_traverse,
 };
+
+/* Delegation credits what the base's traverse visits, by exact path, and
+   only for a call on the object itself. */
+typedef struct {
+    PyObject_HEAD
+    PyObject *a;
+    PyObject *b;
+} PartBaseObject;
+
+static int
+partbase_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(((PartBaseObject *)op)->a);
+    return 0;
+}
+
+static PyTypeObject PartBase_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.partbase",
+    .tp_basicsize = sizeof(PartBaseObject),
+    .tp_traverse = partbase_traverse,
+};
+
+typedef struct {
+    PartBaseObject base;
+    PyObject *c;
+} PartDerivedObject;
+
+static int
+partderived_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PartDerivedObject *self = (PartDerivedObject *)op;
+    Py_VISIT(self->c);
+    return PartBase_Type.tp_traverse((PyObject *)self, visit, arg);
+}
+
+static PyTypeObject PartDerived_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.partderived",
+    .tp_basicsize = sizeof(PartDerivedObject),
+    .tp_traverse = partderived_traverse,
+};
+
+struct side {
+    PyObject *ma_keys;
+};
+
+typedef struct {
+    PyDictObject dict;
+    struct side *side;
+    PyObject *other;
+} SideDictObject;
+
+static int
+sidedict_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    return PyDict_Type.tp_traverse(op, visit, arg);
+}
+
+static PyTypeObject SideDict_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.sidedict",
+    .tp_basicsize = sizeof(SideDictObject),
+    .tp_traverse = sidedict_traverse,
+};
+
+static int
+elsewhere_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    SideDictObject *self = (SideDictObject *)op;
+    return PyDict_Type.tp_traverse(self->other, visit, arg);
+}
+
+static PyTypeObject Elsewhere_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.elsewhere",
+    .tp_basicsize = sizeof(SideDictObject),
+    .tp_traverse = elsewhere_traverse,
+};
+
+/* Values hold references; a traverse defined in no parsed file. */
+typedef struct {
+    PyObject_HEAD
+    PyValue slot;
+    PyValue *items;
+} ValueObject;
+
+static int
+value_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    _Py_VISIT_VALUE(((ValueObject *)op)->slot);
+    return 0;
+}
+
+static PyTypeObject Value_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.value",
+    .tp_basicsize = sizeof(ValueObject),
+    .tp_traverse = value_traverse,
+};
+
+static PyType_Slot extern_slots[] = {
+    {Py_tp_traverse, (void *)extern_traverse},
+    {0, NULL},
+};
+
+static PyType_Spec extern_spec = {
+    .name = "fixture.extern",
+    .basicsize = sizeof(ValueObject),
+    .slots = extern_slots,
+};
 """
 
 OTHER = """\
@@ -500,8 +611,10 @@ class TraverseAuditTests(unittest.TestCase):
         cls.output = run_audit(root).stdout
         missing, _, partial = cls.output.partition("misses members")
         cls.missing, _, cls.inherited = missing.partition("probably inherited")
-        cls.partial, _, cls.unvisited = partial.partition(
+        cls.partial, _, unvisited = partial.partition(
             "does not name a member")
+        cls.unvisited, _, cls.unresolved = unvisited.partition(
+            "cannot find")
 
     def test_pointer_to_struct_is_followed(self):
         line = report_line(self.missing, "fixture.ndarray")
@@ -551,15 +664,28 @@ class TraverseAuditTests(unittest.TestCase):
             f.write("# comment\n" + "".join(e + "\n" for e in entries))
         return run_audit(self.root, "--check", "--allow", allow, check=False)
 
-    # Every type the fixture reports with no traverse or a partial one.
+    # Every type the fixture reports, with its member paths.
     LISTED = [
-        "Modules/fixture.c NDArray_Type: reason",
-        "Modules/fixture.c Table_Type: reason",
-        "Modules/fixture.c Chain_Type: reason",
-        "Modules/fixture.c Helper_Type: reason",
-        "Modules/fixture.c Xxo_Type: reason",
-        "Modules/fixture.c State_Type: reason",
-        "Modules/fixture.c Lib_Type: reason",
+        "Modules/fixture.c NDArray_Type head->base.obj: reason",
+        "Modules/fixture.c Table_Type items[]->value items[]->inner->payload "
+        "inline_items[].value inline_items[].inner->payload "
+        "inline_items[].inner->deep->too_deep: reason",
+        "Modules/fixture.c Chain_Type first->value: reason",
+        "Modules/fixture.c Helper_Type other: reason",
+        "Modules/fixture.c Xxo_Type x_attr: reason",
+        "Modules/fixture.c State_Type string: reason",
+        "Modules/fixture.c Lib_Type held: reason",
+        "Modules/fixture.c Const_Type unnamed: reason",
+        "Modules/fixture.c Accessor_Type forgotten: reason",
+        "Modules/fixture.c Tree_Type loose: reason",
+        "Modules/fixture.c DefDict_Type forgotten: reason",
+        "Modules/fixture.c OtherDict_Type ma_keys: reason",
+        "Modules/fixture.c PartBase_Type b: reason",
+        "Modules/fixture.c PartDerived_Type b: reason",
+        "Modules/fixture.c SideDict_Type other side->ma_keys: reason",
+        "Modules/fixture.c Elsewhere_Type ma_keys side->ma_keys: reason",
+        "Modules/fixture.c Value_Type items: reason",
+        "Modules/fixture.c extern_spec items slot: reason",
     ]
 
     def test_check_passes_when_all_listed(self):
@@ -575,13 +701,32 @@ class TraverseAuditTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 1, proc.stdout)
         self.assertIn("fixture.chain has a partial tp_traverse", proc.stdout)
 
+    def test_check_fails_on_unlisted_silent_member(self):
+        listed = [e for e in self.LISTED if "Tree_Type" not in e]
+        proc = self.check(*listed)
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("fixture.tree has a tp_traverse that names neither",
+                      proc.stdout)
+
+    def test_check_fails_on_unlisted_or_stale_member(self):
+        listed = [e for e in self.LISTED if "SideDict_Type" not in e]
+        proc = self.check(*listed, "Modules/fixture.c SideDict_Type other: r")
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("does not list: side->ma_keys", proc.stdout)
+        proc = self.check(*listed, "Modules/fixture.c SideDict_Type other "
+                          "side->ma_keys gone: reason")
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("SideDict_Type: gone not reported any more",
+                      proc.stdout)
+
     def test_check_fails_on_stale_or_malformed_entry(self):
-        proc = self.check(*self.LISTED, "Modules/fixture.c Owner_Type: reason")
+        proc = self.check(*self.LISTED,
+                          "Modules/fixture.c Owner_Type owner: reason")
         self.assertEqual(proc.returncode, 1, proc.stdout)
         self.assertIn("Owner_Type is not reported any more", proc.stdout)
-        proc = self.check(*self.LISTED, "Modules/fixture.c Owner_Type")
+        proc = self.check(*self.LISTED, "Modules/fixture.c Owner_Type: reason")
         self.assertEqual(proc.returncode, 1, proc.stdout)
-        self.assertIn("not \"path variable: reason\"", proc.stdout)
+        self.assertIn("not \"path variable member...: reason\"", proc.stdout)
 
     def test_const_inside_a_name(self):
         line = report_line(self.unvisited, "fixture.const")
@@ -615,6 +760,27 @@ class TraverseAuditTests(unittest.TestCase):
         line = report_line(self.unvisited, "fixture.otherdict")
         self.assertIsNotNone(line, self.output)
         self.assertTrue(line.endswith(": ma_keys"), line)
+
+    def test_delegation_credits_what_the_delegate_visits(self):
+        line = report_line(self.unvisited, "fixture.partderived")
+        self.assertIsNotNone(line, self.output)
+        self.assertTrue(line.endswith(": b"), line)
+        # A member of the same name behind a pointer is not the base's.
+        line = report_line(self.unvisited, "fixture.sidedict")
+        self.assertIsNotNone(line, self.output)
+        self.assertTrue(line.endswith(": other, side->ma_keys"), line)
+        # A call on another object credits nothing.
+        line = report_line(self.unvisited, "fixture.elsewhere")
+        self.assertIsNotNone(line, self.output)
+        self.assertTrue(line.endswith(": ma_keys, side->ma_keys"), line)
+
+    def test_values_and_unresolved_traverse(self):
+        line = report_line(self.unvisited, "fixture.value")
+        self.assertIsNotNone(line, self.output)
+        self.assertTrue(line.endswith(": items"), line)
+        line = report_line(self.unresolved, "fixture.extern")
+        self.assertIsNotNone(line, self.output)
+        self.assertIn("(extern_traverse): items, slot", line)
 
     def test_pointer_to_object_struct(self):
         self.assertIsNone(report_line(self.output, "fixture.owner"),

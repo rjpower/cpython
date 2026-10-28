@@ -13,8 +13,7 @@ instance owns.  This tool parses the C sources and reports:
    nor, in dealloc or clear, its release (upstream leaked such members
    under reference counting; under the tracing collector they are freed
    under the object: the multibyte codec stream writer's pending, found
-   by 6d rung 4).  Report 3 is informational until its triage
-   (boil/design/work/audit-2.md) makes it part of --check.
+   by 6d rung 4; triage: boil/design/work/audit-2.md).
 
 The parse is heuristic: struct definitions that begin with PyObject_HEAD,
 PyObject_VAR_HEAD, another object struct or a macro that expands to one;
@@ -40,11 +39,12 @@ own type's.  A traverse that delegates to a helper in another .c file is
 listed and needs a look.
 
 With --check the tool is a gate (boil/tools/gate.sh, level 3): it prints
-nothing else and exits 1 when a type with references and no traverse, or
-with a partial traverse, is not in the allowlist (Tools/boil/
-traverse_allow.txt), or when an allowlist entry no longer matches a
-reported type.  An entry is "path variable: reason", where variable is the
-type's PyTypeObject or PyType_Spec.
+nothing else and exits 1 when a type of the three reports, or one whose
+traverse function it cannot find, has a member path that the allowlist
+(Tools/boil/traverse_allow.txt) does not list for it, or when an entry
+lists a type or a path that is no longer reported.  An entry is "path
+variable member...: reason", where variable is the type's PyTypeObject or
+PyType_Spec and the members are the paths as the report prints them.
 
 Usage: python Tools/boil/traverse_audit.py [--root DIR] [--missing-only]
        python Tools/boil/traverse_audit.py --check [--root DIR] [--allow FILE]
@@ -281,6 +281,10 @@ def member_refs(members: list[str], structs: dict[str, Struct], plain: Plain,
                 continue
             stars = m.group(1).count("*")
             name, array = m.group(2), bool(m.group(3))
+            if typ == "PyValue":
+                # A value holds a reference unless it is an inline number.
+                refs.append(name + ("[]" if array or stars else ""))
+                continue
             if obj:
                 if stars:
                     refs.append(name + ("[]" if array or stars > 1 else ""))
@@ -369,7 +373,7 @@ def parse_structs(path: Path, text: str, macros: dict[str, str],
 
 
 def is_object_type(typ: str, structs: dict[str, Struct]) -> bool:
-    if typ in ("PyObject", "PyTypeObject", "PyVarObject"):
+    if typ in ("PyObject", "PyTypeObject", "PyVarObject", "PyValue"):
         return True
     if typ in structs:
         return True
@@ -406,7 +410,7 @@ def parse_types(path: Path, text: str, types: list[TypeDef]) -> None:
         body = brace_body(text, m.end())
         d = {}
         for s in re.finditer(r"\{\s*(Py_tp_\w+)\s*,\s*([^}]*)\}", body):
-            d[s.group(1)] = re.sub(r"^\(\w+\s*\)\s*", "", s.group(2).strip())
+            d[s.group(1)] = re.sub(r"^\(\s*\w+[\s*]*\)\s*", "", s.group(2).strip())
         slots[m.group(1)] = d
     for m in re.finditer(r"\bPyType_Spec\s+([A-Za-z_]\w*)\s*=\s*\{", text):
         body = brace_body(text, m.end())
@@ -448,7 +452,7 @@ def brace_body(text: str, start: int) -> str:
 def func_name(expr: str | None) -> str | None:
     if not expr:
         return None
-    expr = re.sub(r"\(\s*\w+\s*\)", "", expr).strip()
+    expr = re.sub(r"\(\s*\w+[\s*]*\)", "", expr).strip()
     if expr in ("0", "NULL", ""):
         return None
     m = re.match(r"([A-Za-z_]\w*)$", expr)
@@ -511,17 +515,35 @@ KEYWORDS = {"if", "for", "while", "switch", "return", "sizeof", "do", "else"}
 
 def functions(text: str) -> dict[str, str]:
     """The bodies of a file's functions and function-like macros."""
-    out = {}
-    for m in re.finditer(r"^#define\s+([A-Za-z_]\w*)\([^)]*\)(.*)$", text, flags=re.M):
-        out[m.group(1)] = m.group(2)
+    return {name: body for name, _, body in definitions(text)}
+
+
+def definitions(text: str):
+    """(name, parameter list, body) of a file's functions and function-like
+    macros."""
+    for m in re.finditer(r"^#define\s+([A-Za-z_]\w*)\(([^)]*)\)(.*)$", text, flags=re.M):
+        yield m.group(1), m.group(2), m.group(3)
     for m in DEF_RE.finditer(text):
         if m.group(1) in KEYWORDS:
             continue
         end = paren_end(text, m.end())
         b = re.compile(r"\s*\{").match(text, end)
         if b:
-            out[m.group(1)] = brace_body(text, b.end())
-    return out
+            yield m.group(1), text[m.end():end - 1], brace_body(text, b.end())
+
+
+def receivers(params: str, body: str) -> set[str]:
+    """The names a traverse function has for the object it visits: its
+    first parameter and the locals initialised from it."""
+    first = split_top(params, ",")[:1]
+    m = re.search(r"([A-Za-z_]\w*)\s*$", first[0]) if first else None
+    if not m:
+        return set()
+    names = {m.group(1)}
+    for d in re.finditer(r"\b([A-Za-z_]\w*)\s*=\s*([^;=]*);", body):
+        if re.search(rf"\b{m.group(1)}\b", d.group(2)):
+            names.add(d.group(1))
+    return names
 
 
 def paren_end(text: str, start: int) -> int:
@@ -584,27 +606,69 @@ def with_callees(name: str, fs: dict[str, str],
 
 # A traverse that hands the object to another type's traverse:
 # "PyDict_Type.tp_traverse(op, ...)", "((PyTypeObject *)PyExc_BaseException)->
-# tp_traverse(...)", "Py_TYPE(op)->tp_base->tp_traverse(...)".
-DELEGATE_RE = re.compile(r"\b([A-Za-z_]\w*)\s*\)?\s*(?:\.|->)\s*tp_traverse\s*\(")
+# tp_traverse(self, ...)", "Py_TYPE(op)->tp_base->tp_traverse(op, ...)".
+DELEGATE_RE = re.compile(
+    r"\b([A-Za-z_]\w*)\s*\)?\s*(?:\.|->)\s*tp_traverse\s*\(\s*([^,]*),")
 
 
-def delegated_refs(code: str, t: TypeDef, by_var: dict[str, TypeDef],
-                   structs: dict[str, Struct]) -> set[str]:
-    """The members visited by the traverse of another type that code calls,
-    when that type's struct is t's struct or one of its bases.  That traverse
-    is audited as its own type's, so its struct's members count as visited
-    here; a delegate the tool cannot resolve credits nothing."""
+@dataclass
+class Sources:
+    """The functions of the parsed files, by file and by header directory."""
+    funcs: dict[Path, dict[str, str]]
+    params: dict[Path, dict[str, str]]
+    headers: dict[Path, dict[str, str]]
+    include: Path
+
+    def scopes(self, path: Path) -> tuple[dict[str, str], ...]:
+        return (self.headers.get(path.parent, {}),
+                self.headers.get(self.include, {}))
+
+
+def traverse_names(t: TypeDef, src: Sources, by_var: dict[str, TypeDef],
+                   structs: dict[str, Struct],
+                   seen: frozenset[str] = frozenset()) -> tuple[str, set[str]] | None:
+    """The code of t's traverse with its callees, and the exact member paths
+    that it visits by delegating to another type's traverse; None when the
+    traverse is not found."""
+    fs = src.funcs.get(t.path, {})
+    if t.traverse not in fs:
+        return None
+    code = with_callees(t.traverse, fs, src.scopes(t.path))
+    return code, delegated_paths(t, code, src, by_var, structs,
+                                 seen | {t.var})
+
+
+def delegated_paths(t: TypeDef, code: str, src: Sources,
+                    by_var: dict[str, TypeDef], structs: dict[str, Struct],
+                    seen: frozenset[str]) -> set[str]:
+    """The member paths visited by the traverse of another type that code
+    calls on t's own object, when that type's struct is t's struct or one of
+    its bases: the paths of the delegate's struct that the delegate's
+    traverse names (and those it delegates in turn).  A delegate that cannot
+    be resolved, or a call on another object, credits nothing."""
     chain, name = set(), t.struct
     while name in structs and name not in chain:
         chain.add(name)
         name = structs[name].base or ""
+    own = receivers(src.params.get(t.path, {}).get(t.traverse, ""),
+                    src.funcs.get(t.path, {}).get(t.traverse, ""))
     out = set()
-    for x in DELEGATE_RE.findall(code):
+    for x, arg in DELEGATE_RE.findall(code):
+        arg = re.sub(r"\(\s*\w+[\s*]*\)", "", arg).strip("() \t\n")
+        if arg not in own:
+            continue
         if x == "tp_base":
             x = t.base or ""
         d = by_var.get(x) or by_var.get("_" + x)
-        if d is not None and d.struct in chain:
-            out |= {last_member(r) for r in all_refs(d.struct, structs)}
+        if d is None or d.var in seen or d.struct not in chain:
+            continue
+        found = traverse_names(d, src, by_var, structs, seen)
+        if found is None:
+            continue
+        dcode, dpaths = found
+        names = set(MEMBER_RE.findall(dcode))
+        out |= dpaths | {r.rstrip("[]") for r in all_refs(d.struct, structs)
+                         if last_member(r) in names}
     return out
 
 
@@ -619,8 +683,8 @@ def main() -> int:
     ap.add_argument("--missing-only", action="store_true",
                     help="only report types with references and no tp_traverse")
     ap.add_argument("--check", action="store_true",
-                    help="exit 1 on a missing or partial traverse that the "
-                         "allowlist does not name")
+                    help="exit 1 on a missing, partial or silent traverse "
+                         "that the allowlist does not name")
     ap.add_argument("--allow", type=Path,
                     default=Path(__file__).with_name("traverse_allow.txt"),
                     help="the allowlist for --check")
@@ -652,17 +716,19 @@ def main() -> int:
     for s in structs.values():
         s.refs = member_refs(s.members, structs, plain)
     types: list[TypeDef] = []
-    funcs: dict[Path, dict[str, str]] = {}
-    # The functions of the headers, by directory; Include/'s as one.
-    include = args.root / "Include"
-    header_funcs: dict[Path, dict[str, str]] = {}
+    # The functions of the .c files, and of the headers by directory, with
+    # Include/'s as one.
+    src = Sources({}, {}, {}, args.root / "Include")
     for p, t in texts.items():
+        defs = list(definitions(t))
         if p.suffix == ".c":
             parse_types(p, t, types)
-            funcs[p] = functions(t)
+            src.funcs[p] = {name: body for name, _, body in defs}
+            src.params[p] = {name: params for name, params, _ in defs}
         else:
-            key = include if include in p.parents else p.parent
-            header_funcs.setdefault(key, {}).update(functions(t))
+            key = src.include if src.include in p.parents else p.parent
+            src.headers.setdefault(key, {}).update(
+                (name, body) for name, _, body in defs)
     by_var = {t.var: t for t in types}
 
     rel = lambda p: p.relative_to(args.root)
@@ -670,6 +736,7 @@ def main() -> int:
     inherited = []
     partial = []
     unvisited = []
+    unresolved = []
     # A type without tp_traverse that has a base, or whose struct another
     # type with a tp_traverse uses, most likely inherits one.  A struct
     # defined in a .c file is shared only within it: several example modules
@@ -693,31 +760,30 @@ def main() -> int:
             continue
         if args.missing_only:
             continue
-        fs = funcs.get(t.path, {})
-        headers = (header_funcs.get(t.path.parent, {}),
-                   header_funcs.get(include, {}))
-        body = fs.get(t.traverse)
         if t.traverse == "_PyObject_VisitType":
             # The generic traverse function visits only the type.
             partial.append((t, sorted(r.rstrip("[]") for r in refs)))
             continue
-        if body is None:
+        found = traverse_names(t, src, by_var, structs)
+        if found is None:
+            unresolved.append((t, sorted(r.rstrip("[]") for r in refs)))
             continue
+        code, delegated = found
         # Any member the traverse function, or a function that it calls,
         # names counts as visited, which also covers casts and helper
         # functions taking the member.  Releases are read the same way, as
         # a list's nodes are often freed by a helper.
-        code = with_callees(t.traverse, fs, headers)
         visited = set(MEMBER_RE.findall(code))
-        visited |= delegated_refs(code, t, by_var, structs)
         released = set()
         for f in (t.dealloc, t.clear):
             if f:
-                code = with_callees(f, fs, headers)
+                code = with_callees(f, src.funcs.get(t.path, {}),
+                                    src.scopes(t.path))
                 released |= set(RELEASE_RE.findall(code))
                 # Releasing a Py_buffer releases its obj.
                 if re.search(r"\bPyBuffer_Release\s*\(", code):
                     released.add("obj")
+        refs = [r for r in refs if r.rstrip("[]") not in delegated]
         miss = sorted(r.rstrip("[]") for r in refs
                       if last_member(r) in released - visited)
         if miss:
@@ -732,7 +798,7 @@ def main() -> int:
             unvisited.append((t, silent))
 
     if args.check:
-        return check(args.allow, rel, missing, partial)
+        return check(args.allow, rel, missing, partial, unvisited, unresolved)
     print(f"{len(missing)} types with object references and no tp_traverse:")
     for t, refs in sorted(missing, key=lambda x: (str(x[0].path), x[0].line)):
         print(f"  {rel(t.path)}:{t.line}: {t.name} ({t.struct}): {', '.join(refs)}")
@@ -749,39 +815,58 @@ def main() -> int:
               f"that holds references and that no release names either:")
         for t, miss in sorted(unvisited, key=lambda x: (str(x[0].path), x[0].line)):
             print(f"  {rel(t.path)}:{t.line}: {t.name} ({t.traverse}): {', '.join(miss)}")
+        print(f"\n{len(unresolved)} types whose tp_traverse the tool cannot find:")
+        for t, refs in sorted(unresolved, key=lambda x: (str(x[0].path), x[0].line)):
+            print(f"  {rel(t.path)}:{t.line}: {t.name} ({t.traverse}): {', '.join(refs)}")
     return 0
 
 
-def read_allowlist(path: Path) -> tuple[dict[str, str], list[str]]:
-    """The allowlist's entries, by "path variable", and its malformed
-    lines."""
+def read_allowlist(path: Path) -> tuple[dict[str, tuple[set[str], str]], list[str]]:
+    """The allowlist's entries, by "path variable", each with the member
+    paths it allows and its reason, and its malformed lines."""
     allowed, bad = {}, []
     for n, line in enumerate(path.read_text().splitlines(), 1):
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        m = re.match(r"(\S+)\s+([A-Za-z_]\w*)\s*:\s*(\S.*)$", line)
+        m = re.match(r"(\S+)\s+([A-Za-z_]\w*)((?:\s+[^\s:]+)+)\s*:\s*(\S.*)$", line)
         if m:
-            allowed[f"{m.group(1)} {m.group(2)}"] = m.group(3)
+            allowed[f"{m.group(1)} {m.group(2)}"] = (
+                {r.rstrip("[]") for r in m.group(3).split()}, m.group(4))
         else:
-            bad.append(f"{path.name}:{n}: not \"path variable: reason\": {line}")
+            bad.append(f"{path.name}:{n}: not \"path variable member...: "
+                       f"reason\": {line}")
     return allowed, bad
 
 
-def check(allow: Path, rel, missing, partial) -> int:
+def check(allow: Path, rel, missing, partial, unvisited, unresolved) -> int:
     allowed, errors = read_allowlist(allow) if allow.exists() else ({}, [])
-    seen = set()
+    reported: dict[str, set[str]] = {}
     for what, found in (("no tp_traverse", missing),
-                        ("a partial tp_traverse", partial)):
+                        ("a partial tp_traverse", partial),
+                        ("a tp_traverse that names neither these members "
+                         "nor their release", unvisited),
+                        ("a tp_traverse the tool cannot find", unresolved)):
         for t, refs in sorted(found, key=lambda x: (str(x[0].path), x[0].line)):
             key = f"{rel(t.path)} {t.var}"
-            seen.add(key)
-            if key not in allowed:
+            paths = [r.rstrip("[]") for r in refs]
+            reported.setdefault(key, set()).update(paths)
+            # An entry allows the member paths it lists, so that a member
+            # added to the type later is reported again.
+            listed = allowed[key][0] if key in allowed else set()
+            unlisted = [r for r in paths if r not in listed]
+            if unlisted:
                 errors.append(f"{rel(t.path)}:{t.line}: {t.name} has {what} "
-                              f"and is not in {allow.name}: {', '.join(refs)}")
-    for key in sorted(set(allowed) - seen):
-        errors.append(f"{allow.name}: {key} is not reported any more; "
-                      f"remove the entry")
+                              f"and {allow.name} does not list: "
+                              f"{', '.join(unlisted)}")
+    for key in sorted(allowed):
+        stale = sorted(allowed[key][0] - reported.get(key, set()))
+        if key not in reported:
+            errors.append(f"{allow.name}: {key} is not reported any more; "
+                          f"remove the entry")
+        elif stale:
+            errors.append(f"{allow.name}: {key}: {', '.join(stale)} not "
+                          f"reported any more; remove them from the entry")
     for e in errors:
         print(e)
     if errors:

@@ -2820,6 +2820,7 @@ push_chunk(PyThreadState *tstate, int nslots)
     tstate->datastack_chunk = new;
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(chunk_frames_end(new) - FRAME_SPECIALS_SIZE);
+    frame->f_executable = PyValue_NULL;  // uninitialized, for the collector
     frame->base = (PyValue *)&new->data[0];
     frame->saved_top = saved_top;
     tstate->datastack_limit = (PyObject **)frame;

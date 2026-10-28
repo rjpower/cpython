@@ -1250,16 +1250,67 @@ scan_structs(trace_t *t)
 
 /* --- precise roots ------------------------------------------------------- */
 
+static int
+visit_frame(_PyInterpreterFrame *f, visitproc visit, void *arg)
+{
+    Py_VISIT(f->f_globals);
+    Py_VISIT(f->f_builtins);
+    return _PyFrame_Traverse(f, visit, arg);
+}
+
+/* The frame headers of a chunk of the data stack, from limit, the
+   innermost, to the chunk's first, which ends one word before the chunk
+   does (pystate.c's chunk_frames_end()). */
+static int
+visit_chunk_frames(_PyStackChunk *chunk, PyObject **limit, visitproc visit,
+                   void *arg)
+{
+    PyObject **end = (PyObject **)((char *)chunk + chunk->size) - 1;
+    for (PyObject **h = limit; h + FRAME_SPECIALS_SIZE <= end;
+         h += FRAME_SPECIALS_SIZE)
+    {
+        _PyInterpreterFrame *f = (_PyInterpreterFrame *)h;
+        // Pushed and not yet initialized (_PyThreadState_PushFrame())
+        if (PyValue_IsNull(f->f_executable)) {
+            continue;
+        }
+        assert(f->owner == FRAME_OWNED_BY_THREAD);
+        int err = visit_frame(f, visit, arg);
+        if (err) {
+            return err;
+        }
+    }
+    return 0;
+}
+
+/* p's interpreter frames (note 11 section 4.4): every frame on its data
+   stack, from push to pop, linked into the chain or not, and then the
+   chain's frames that are not on the data stack, the running generator
+   and coroutine frames among them. */
 int
 _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
 {
+    _PyStackChunk *chunk = p->datastack_chunk;
+    if (chunk != NULL) {
+        int err = visit_chunk_frames(chunk, p->datastack_limit, visit, arg);
+        if (err) {
+            return err;
+        }
+        for (chunk = chunk->previous; chunk != NULL; chunk = chunk->previous) {
+            err = visit_chunk_frames(chunk, &chunk->data[chunk->top], visit,
+                                     arg);
+            if (err) {
+                return err;
+            }
+        }
+    }
     for (_PyInterpreterFrame *f = p->current_frame; f != NULL; f = f->previous) {
-        if (f->owner >= FRAME_OWNED_BY_INTERPRETER) {
+        if (f->owner == FRAME_OWNED_BY_THREAD
+            || f->owner >= FRAME_OWNED_BY_INTERPRETER)
+        {
             continue;
         }
-        Py_VISIT(f->f_globals);
-        Py_VISIT(f->f_builtins);
-        int err = _PyFrame_Traverse(f, visit, arg);
+        int err = visit_frame(f, visit, arg);
         if (err) {
             return err;
         }

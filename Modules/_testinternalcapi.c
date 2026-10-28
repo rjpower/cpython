@@ -3704,6 +3704,65 @@ gc_walk_here(PyObject *self, PyObject *Py_UNUSED(ignored))
     return Py_BuildValue("(NiN)", r.frames, fell_back, acts);
 }
 
+/* Push a frame for func that is never linked into the chain, with [None]
+   in its first slot, and report whether the frame roots reach the list,
+   with the frame holding it and with the slot cleared.  With cross, frames
+   pushed and never initialized follow it until the data stack moves to a
+   new chunk, so that the frame is in an earlier chunk under frames that
+   the collector must skip (note 11 section 4.4). */
+static PyObject *
+gc_frames_off_chain(PyObject *self, PyObject *args)
+{
+    PyObject *func;
+    int cross;
+    if (!PyArg_ParseTuple(args, "O!p", &PyFunction_Type, &func, &cross)) {
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyCodeObject *code = (PyCodeObject *)((PyFunctionObject *)func)->func_code;
+    PyObject *obj = PyList_New(0);
+    if (obj == NULL || PyList_Append(obj, Py_None) < 0) {
+        Py_XDECREF(obj);
+        return NULL;
+    }
+    _PyInterpreterFrame *frame =
+        _PyThreadState_PushFrame(tstate, code->co_framesize);
+    if (frame == NULL) {
+        Py_DECREF(obj);
+        return PyErr_NoMemory();
+    }
+    _PyFrame_Initialize(tstate, frame, PyValue_FromObject(Py_NewRef(func)),
+                        NULL, code, frame->base, 0, NULL);
+    frame->base[0] = PyValue_FromObject(obj);
+    _PyInterpreterFrame *fillers[64];
+    int nfillers = 0;
+    _PyStackChunk *chunk = tstate->datastack_chunk;
+    while (cross && tstate->datastack_chunk == chunk
+           && nfillers < (int)Py_ARRAY_LENGTH(fillers))
+    {
+        _PyInterpreterFrame *f = _PyThreadState_PushFrame(tstate, 1024);
+        if (f == NULL) {
+            break;
+        }
+        fillers[nfillers++] = f;
+    }
+    int crossed = tstate->datastack_chunk != chunk;
+    int with = _PyGC_TraceLiveRootsOf(tstate, (uintptr_t)obj);
+    frame->base[0] = PyValue_NULL;
+    int without = _PyGC_TraceLiveRootsOf(tstate, (uintptr_t)obj);
+    while (nfillers > 0) {
+        _PyThreadState_PopFrame(tstate, fillers[--nfillers]);
+    }
+    Py_DECREF(func);
+    _PyThreadState_PopFrame(tstate, frame);
+    Py_DECREF(obj);
+    if (with < 0 || without < 0) {
+        return NULL;
+    }
+    return Py_BuildValue("(iii)", (with & _PyGC_TRACE_ROOT_FRAMES) != 0,
+                         (without & _PyGC_TRACE_ROOT_FRAMES) != 0, crossed);
+}
+
 /* Is op reached from the thread states' roots, which hold the value
    roots and spans?  -1 on error. */
 static int
@@ -4002,6 +4061,7 @@ static PyMethodDef module_functions[] = {
     {"gc_walk_here", gc_walk_here, METH_NOARGS},
     {"gc_root_stats", gc_root_stats, METH_NOARGS},
     {"gc_collect_with_signal", _PyCFunction_CAST(gc_collect_with_signal), METH_O},
+    {"gc_frames_off_chain", gc_frames_off_chain, METH_VARARGS},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
     {"gc_raw_block_is_object", _PyCFunction_CAST(gc_raw_block_is_object), METH_O},
     {"gc_segment_of", _PyCFunction_CAST(gc_segment_of), METH_O},

@@ -1560,6 +1560,23 @@ class TracingCollectorTests(unittest.TestCase):
         _testinternalcapi.test_value_spans()
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_frames_off_the_chain(self):
+        # Note 11 section 4.4: a frame on the data stack is a root from push
+        # to pop, linked into the chain or not, in an earlier chunk too, and
+        # frames pushed but not initialized are skipped.
+        def f(a, b):
+            c = a
+            return c
+        f(1, 2)  # the code's IR exists once it has run
+        for cross in (False, True):
+            with self.subTest(cross=cross):
+                held, cleared, crossed = (
+                    _testinternalcapi.gc_frames_off_chain(f, cross))
+                self.assertTrue(held)
+                self.assertFalse(cleared)
+                self.assertEqual(crossed, cross)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_root_stats(self):
         # The root phase's counters: one schema for the total and the last
         # collection, which a collection moves.

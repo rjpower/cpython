@@ -1893,3 +1893,23 @@ on every micro (gcc spilling the register-file base in FOR_ITER_RANGE),
 logging +11 to +14% (dictionary-mode conversion). Wall time not measured
 (other agents' gates on the machine). gdb is not installed, so the
 libpython.py change is parse-checked only.
+
+## 2026-10-27 22:10 PDT: 6c rung 4 gate (slot kinds)
+
+Rung 4 landed as 57b7ed315fe (work doc), 0c0ae6f6fcb (shape and type
+versions paired by consumer, magic 3725), e35552a3343 (slot kinds I32, F64
+and BOXED as promises, generalised in place with a fresh version, one
+_GUARD_SLOT_KIND uop, magic 3726) and 371c9c93078 ("As built"). The
+agent's gate 3 passed on default; on debug it failed test_import and
+test_compileall because of the coordinator's gate.sh change 42274a6aee8
+(pyc prefix moved off TMPDIR's filesystem; test_import renames a pyc
+across devices), reverted in 3ac12dd5a6e, which also makes gate.sh parse
+whole before running so an edit during a run cannot break it. Gate run
+here on a detached checkout of 3ac12dd5a6e (rung 4's code plus that fix)
+with fresh builds: gate 2 on default 556/564 files, 50,876 tests, SUCCESS;
+gate 3 on debug 50,876 tests, SUCCESS, -u cpu test_cext 16 tests, regen
+and the traverse audit clean. The test_io.test_signals hang did not
+recur this run. A row's shape pointer is never dereferenced, only
+compared (stated at _PyFb_ShapeRow), and shape versions come from the
+per-interpreter type-version counter and are never reused; the
+address-reuse test reached a real reuse.

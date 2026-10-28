@@ -600,6 +600,50 @@ class TestIRCases(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, "OP switches frames"):
             self.formats(input)
 
+    def test_stores_early(self):
+        # A stores_early instruction stores its output in the frame it
+        # returns to before it clears its own (note 11 section 4.4), so the
+        # output is written only by the body, through IR_RETURN_EARLY().
+        input = """
+        window inst(OP, (value -- res)) {
+            PyValue temp = value;
+            INPUTS_DEAD();
+            SAVE_STACK();
+            frame = SPAM(temp);
+            RELOAD_STACK();
+            res = temp;
+        }
+        window stores_early inst(OP_EARLY, (value -- res)) {
+            IR_RETURN_EARLY(frame->previous, value);
+            PyValue temp = value;
+            INPUTS_DEAD();
+            SAVE_STACK();
+            frame = SPAM(temp);
+            RELOAD_STACK();
+            res = temp;
+        }
+    """
+        output = self.ir_output(input)
+        late = self.handler(output, "OP")
+        self.assertIn("IR_STORE_RETURN(res);", late)
+        early = self.handler(output, "OP_EARLY")
+        self.assertNotIn("IR_STORE_RETURN", early)
+        self.assertIn("(void)res;", early)
+
+    def test_stores_early_needs_early_store(self):
+        input = """
+        window stores_early inst(OP, (value -- res)) {
+            PyValue temp = value;
+            INPUTS_DEAD();
+            SAVE_STACK();
+            frame = SPAM(temp);
+            RELOAD_STACK();
+            res = temp;
+        }
+    """
+        with self.assertRaisesRegex(SyntaxError, "IR_RETURN_EARLY"):
+            self.ir_output(input)
+
     def test_feedback_mapping(self):
         # A family shares one format. A name index, which may not fit in a
         # field, moves into the entry's arg field, and cache effects read the

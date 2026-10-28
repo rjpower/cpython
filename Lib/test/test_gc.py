@@ -1694,6 +1694,7 @@ class TracingCollectorTests(unittest.TestCase):
         # collection at a transition that allocation intervals do not hit;
         # what the transition holds survives it.
         DETACH, PUSH_FRAME, SPAN_REBASE, MKSTACK = 1, 2, 3, 4
+        INIT_LOCALS, RETURN, TAKE_OWNERSHIP = 5, 6, 7
         collect_at = _testinternalcapi.gc_collect_at
 
         def fired(site, action):
@@ -1716,8 +1717,82 @@ class TracingCollectorTests(unittest.TestCase):
             fired(MKSTACK, lambda: _testinternalcapi.gc_call_built(
                 lambda *a: a)),
             ("first", "second", 3))
+        def star(*args, **kwargs):
+            return args, kwargs
+        self.assertEqual(fired(INIT_LOCALS, lambda: star([1], [2], k=[3])),
+                         (([1], [2]), {"k": [3]}))
+        def returns_fresh():
+            sys._getframe()     # a frame object, so the clear takes it
+            return [object(), "fresh"]
+        self.assertEqual(fired(RETURN, returns_fresh)[1], "fresh")
+        self.assertEqual(fired(TAKE_OWNERSHIP, returns_fresh)[1], "fresh")
+        # The callback's result lands in the entry frame of the eval loop
+        # that map() runs it in (note 11 section 4.3).
+        self.assertEqual(
+            fired(RETURN, lambda: list(map(lambda x: [x, "entry"], [1]))),
+            [[1, "entry"]])
         with self.assertRaises(ValueError):
             collect_at(99)
+
+    # Note 11 section 4.4: a returning or yielding frame stores the value in
+    # its destination before it is unlinked and cleared.  The children run
+    # under stress, and under kill in debug builds, where a value held only
+    # in the eval loop's C frame across the clear would be killed.
+    RETURN_ORDER = textwrap.dedent("""
+        import _testinternalcapi
+        RETURN = 6
+        collect_at = _testinternalcapi.gc_collect_at
+        def gen(n):
+            for i in range(n):
+                yield [i]
+            collect_at(RETURN)
+            return ["done"]
+        def loop():
+            # The last value yielded is not the value returned: the loop
+            # variable keeps the one and FOR_ITER's exit drops the other.
+            for x in gen(3):
+                pass
+            return x
+        for _ in range(200):
+            assert loop() == [2], loop()
+        def outer():
+            r = yield from gen(2)
+            return r + ["outer"]
+        def drive(g):
+            got = []
+            try:
+                while True:
+                    got.append(next(g))
+            except StopIteration as e:
+                return got, e.value
+        assert drive(outer()) == ([[0], [1]], ["done", "outer"])
+        def adder():
+            total = [0]
+            while True:
+                total = [total[0] + (yield total)]
+        g = adder()
+        next(g)
+        for i in range(1, 50):
+            assert g.send(i) == [i * (i + 1) // 2]
+        async def coro():
+            return [1, "coro"]
+        c = coro()
+        try:
+            c.send(None)
+        except StopIteration as e:
+            assert e.value == [1, "coro"]
+        fired = collect_at(0)
+        assert fired == 201, fired      # one per loop() and one for outer()
+        print("ok")
+    """)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_return_order(self):
+        env = {"PYTHON_GCSTRESS": "50"}
+        if support.Py_DEBUG:
+            env["PYTHON_GCVERIFY"] = "kill"
+        rc, out, err = assert_python_ok("-c", self.RETURN_ORDER, **env)
+        self.assertEqual(out.strip(), b"ok")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_stress(self):

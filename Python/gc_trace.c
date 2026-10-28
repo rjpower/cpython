@@ -1382,7 +1382,11 @@ visit_chunk_frames(_PyStackChunk *chunk, PyObject **limit, visitproc visit,
 /* p's interpreter frames (note 11 section 4.4): every frame on its data
    stack, from push to pop, linked into the chain or not, and then the
    chain's frames that are not on the data stack, the running generator
-   and coroutine frames among them. */
+   and coroutine frames among them.  Of a frame the interpreter owns (an
+   entry frame of the eval loop, in its C frame, or the thread's base
+   frame) only the return slot is visited: what a returning or yielding
+   frame stores there and INTERPRETER_EXIT returns (4.3).  Its other fields
+   are poisoned in debug builds. */
 int
 _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
 {
@@ -1401,9 +1405,11 @@ _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
         }
     }
     for (_PyInterpreterFrame *f = p->current_frame; f != NULL; f = f->previous) {
-        if (f->owner == FRAME_OWNED_BY_THREAD
-            || f->owner >= FRAME_OWNED_BY_INTERPRETER)
-        {
+        if (f->owner == FRAME_OWNED_BY_THREAD) {
+            continue;
+        }
+        if (f->owner >= FRAME_OWNED_BY_INTERPRETER) {
+            _Py_VISIT_VALUE(f->base[f->return_slot]);
             continue;
         }
         int err = visit_frame(f, visit, arg);

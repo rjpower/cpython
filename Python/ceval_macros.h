@@ -658,6 +658,11 @@ _PyValue_Truth(PyValue ref)
  * back to (frame->return_slot). */
 #define IR_STORE_RETURN(V) _PyFrame_SetReturnValue(frame, (V))
 
+/* A `stores_early` handler's store of V in the slot that CALLER named for
+ * it, made before the handler unlinks or clears the frame that held V, so
+ * that a collection there finds V in a frame (note 11 section 4.4). */
+#define IR_RETURN_EARLY(CALLER, V) _PyFrame_SetReturnValue((CALLER), (V))
+
 /* The oparg and feedback entry of another instruction of the frame. */
 #define _PyIR_Oparg(FRAME, INSTR) \
     _PyCode_InstrOparg(_PyFrame_GetCode(FRAME), \

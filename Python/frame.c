@@ -66,6 +66,7 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
     if (prev) {
         assert(prev->owner < FRAME_OWNED_BY_INTERPRETER);
         PyObject *exc = PyErr_GetRaisedException();
+        _PyGC_INJECT(_PyThreadState_GET(), _PyGC_SITE_TAKE_OWNERSHIP);
         /* Link PyFrameObjects.f_back and remove link through _PyInterpreterFrame.previous */
         PyFrameObject *back = _PyFrame_GetFrameObject(prev);
         if (back == NULL) {

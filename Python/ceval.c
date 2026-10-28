@@ -1681,6 +1681,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func,
         for (j = n; j < argcount; j++) {
         }
     }
+    _PyGC_INJECT(tstate, _PyGC_SITE_INIT_LOCALS);
 
     /* Handle keyword arguments */
     if (kwnames != NULL) {

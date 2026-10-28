@@ -11797,12 +11797,18 @@
                 DTRACE_FUNCTION_RETURN();
                 _Py_LeaveRecursiveCallPy(tstate);
                 _PyInterpreterFrame *dying = frame;
-                int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
-                frame = tstate->current_frame = dying->previous;
+                _PyInterpreterFrame *caller = dying->previous;
+                _PyInstr *resume = NULL;
+                if (dying->owner == FRAME_OWNED_BY_GENERATOR) {
+                    resume = _PyEval_GeneratorReturnTarget(caller);
+                }
+                IR_RETURN_EARLY(caller, temp);
+                frame = tstate->current_frame = caller;
+                _PyGC_INJECT(tstate, _PyGC_SITE_RETURN);
                 _PyEval_FrameClearAndPop(tstate, dying);
                 slots = _PyFrame_Slots(frame);
-                if (generator_return) {
-                    next_instr = _PyEval_GeneratorReturnTarget(frame);
+                if (resume != NULL) {
+                    next_instr = resume;
                 }
                 else {
                     LOAD_IP(1);
@@ -11810,7 +11816,7 @@
                 res = temp;
                 LLTRACE_RESUME_FRAME();
             }
-            IR_STORE_RETURN(res);
+            (void)res;
             DISPATCH();
         }
 
@@ -11880,6 +11886,7 @@
                 assert(oparg == 0 || oparg == 1);
                 PyValue temp = retval;
                 window[0] = PyValue_NULL;
+                IR_RETURN_EARLY(frame->previous, temp);
                 DTRACE_FUNCTION_RETURN();
                 tstate->exc_info = gen->gi_exc_state.previous_item;
                 gen->gi_exc_state.previous_item = NULL;
@@ -11905,7 +11912,7 @@
                 value = temp;
                 LLTRACE_RESUME_FRAME();
             }
-            IR_STORE_RETURN(value);
+            (void)value;
             DISPATCH();
         }
 
@@ -16285,6 +16292,7 @@
             gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
             _Py_LeaveRecursiveCallPy(tstate);
             _PyInterpreterFrame *prev = frame->previous;
+            IR_RETURN_EARLY(prev, PyValue_FromObject((PyObject *)gen));
             _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);
             _PyThreadState_PopFrame(tstate, frame);
             frame = tstate->current_frame = prev;
@@ -16292,7 +16300,7 @@
             slots = _PyFrame_Slots(frame);
             res = PyValue_FromObject((PyObject *)gen);
             LLTRACE_RESUME_FRAME();
-            IR_STORE_RETURN(res);
+            (void)res;
             DISPATCH();
         }
 
@@ -16317,19 +16325,25 @@
             DTRACE_FUNCTION_RETURN();
             _Py_LeaveRecursiveCallPy(tstate);
             _PyInterpreterFrame *dying = frame;
-            int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
-            frame = tstate->current_frame = dying->previous;
+            _PyInterpreterFrame *caller = dying->previous;
+            _PyInstr *resume = NULL;
+            if (dying->owner == FRAME_OWNED_BY_GENERATOR) {
+                resume = _PyEval_GeneratorReturnTarget(caller);
+            }
+            IR_RETURN_EARLY(caller, temp);
+            frame = tstate->current_frame = caller;
+            _PyGC_INJECT(tstate, _PyGC_SITE_RETURN);
             _PyEval_FrameClearAndPop(tstate, dying);
             slots = _PyFrame_Slots(frame);
-            if (generator_return) {
-                next_instr = _PyEval_GeneratorReturnTarget(frame);
+            if (resume != NULL) {
+                next_instr = resume;
             }
             else {
                 LOAD_IP(1);
             }
             res = temp;
             LLTRACE_RESUME_FRAME();
-            IR_STORE_RETURN(res);
+            (void)res;
             DISPATCH();
         }
 
@@ -18533,6 +18547,7 @@
             assert(oparg == 0 || oparg == 1);
             PyValue temp = retval;
             window[0] = PyValue_NULL;
+            IR_RETURN_EARLY(frame->previous, temp);
             DTRACE_FUNCTION_RETURN();
             tstate->exc_info = gen->gi_exc_state.previous_item;
             gen->gi_exc_state.previous_item = NULL;
@@ -18557,7 +18572,7 @@
             LOAD_IP(1);
             value = temp;
             LLTRACE_RESUME_FRAME();
-            IR_STORE_RETURN(value);
+            (void)value;
             DISPATCH();
         }
 

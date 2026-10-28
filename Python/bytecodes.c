@@ -1416,7 +1416,7 @@ dummy_func(
         // The stack effect here is a bit misleading.
         // retval is popped from the stack, but res
         // is pushed to a different frame, the callers' frame.
-        returns op(_RETURN_VALUE, (retval -- res)) {
+        returns stores_early op(_RETURN_VALUE, (retval -- res)) {
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
             PyValue temp = retval;
             DEAD(retval);
@@ -1424,17 +1424,26 @@ dummy_func(
             _PyFrame_AssertTemporariesClear(frame);
             DTRACE_FUNCTION_RETURN();
             _Py_LeaveRecursiveCallPy(tstate);
-            // GH-99729: We need to unlink the frame *before* clearing it:
             _PyInterpreterFrame *dying = frame;
-            int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
-            frame = tstate->current_frame = dying->previous;
-            _PyEval_FrameClearAndPop(tstate, dying);
-            RELOAD_STACK();
+            _PyInterpreterFrame *caller = dying->previous;
             // A frame resumes at the word after the one that made the call,
             // except after a generator's return, when a SEND or FOR_ITER
-            // goes on to its exit.
-            if (generator_return) {
-                next_instr = _PyEval_GeneratorReturnTarget(frame);
+            // goes on to its exit.  The target also picks the slot that
+            // takes the value: FOR_ITER's cleanup slot, not its loop target.
+            _PyInstr *resume = NULL;
+            if (dying->owner == FRAME_OWNED_BY_GENERATOR) {
+                resume = _PyEval_GeneratorReturnTarget(caller);
+            }
+            // The caller's slot holds the value before the frame is
+            // unlinked and cleared, which may collect.
+            IR_RETURN_EARLY(caller, temp);
+            // GH-99729: We need to unlink the frame *before* clearing it:
+            frame = tstate->current_frame = caller;
+            _PyGC_INJECT(tstate, _PyGC_SITE_RETURN);
+            _PyEval_FrameClearAndPop(tstate, dying);
+            RELOAD_STACK();
+            if (resume != NULL) {
+                next_instr = resume;
             }
             else {
                 LOAD_IP(1);
@@ -1661,7 +1670,7 @@ dummy_func(
             _GUARD_3OS_ASYNC_GEN_ASEND +
             _SEND_ASYNC_GEN;
 
-        window op(_YIELD_VALUE, (retval -- value)) {
+        window stores_early op(_YIELD_VALUE, (retval -- value)) {
             // NOTE: It's important that YIELD_VALUE never raises an exception!
             // The compiler treats any exception raised here as a failed close()
             // or throw() call.
@@ -1673,6 +1682,9 @@ dummy_func(
             PyValue temp = retval;
             DEAD(retval);
             SAVE_STACK();
+            // The caller's slot holds the value before the generator's
+            // frame is unlinked.
+            IR_RETURN_EARLY(frame->previous, temp);
             DTRACE_FUNCTION_RETURN();
             tstate->exc_info = gen->gi_exc_state.previous_item;
             gen->gi_exc_state.previous_item = NULL;
@@ -5331,7 +5343,7 @@ dummy_func(
             *ptr = attr;
         }
 
-        window inst(RETURN_GENERATOR, (-- res)) {
+        window stores_early inst(RETURN_GENERATOR, (-- res)) {
             assert(PyValue_Type(frame->f_funcobj) == &PyFunction_Type);
             PyFunctionObject *func = (PyFunctionObject *)PyValue_ObjectBorrow(frame->f_funcobj);
             PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func);
@@ -5347,6 +5359,9 @@ dummy_func(
             gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
             _Py_LeaveRecursiveCallPy(tstate);
             _PyInterpreterFrame *prev = frame->previous;
+            // The caller's slot holds the generator before its frame is
+            // popped.
+            IR_RETURN_EARLY(prev, PyValue_FromObject((PyObject *)gen));
             _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);
             _PyThreadState_PopFrame(tstate, frame);
             frame = tstate->current_frame = prev;

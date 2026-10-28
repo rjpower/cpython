@@ -44,6 +44,12 @@ class Properties:
     # Annotated `returns`: pops its frame, and pushes its outputs to the
     # caller's.
     returns: bool = False
+    # Annotated `stores_early`: the body stores the output that goes to the
+    # caller's frame with IR_RETURN_EARLY() before the frame switch, so the
+    # caller's slot holds it while the source frame is unlinked and cleared
+    # (boil/design/11-precise-roots.md section 4.4).  The output stays
+    # declared for the stack effects; no store is generated for it.
+    stores_early: bool = False
 
     def dump(self, indent: str) -> None:
         simple_properties = self.__dict__.copy()
@@ -84,6 +90,7 @@ class Properties:
             window=any(p.window for p in properties),
             switches_frame=any(p.switches_frame for p in properties),
             returns=any(p.returns for p in properties),
+            stores_early=any(p.stores_early for p in properties),
         )
 
     @property
@@ -940,6 +947,12 @@ def compute_properties(op: parser.CodeDef) -> Properties:
     inline_ok = False if isinstance(op, parser.LabelDef) else "inline_ok" in op.annotations
     window = False if isinstance(op, parser.LabelDef) else "window" in op.annotations
     returns = False if isinstance(op, parser.LabelDef) else "returns" in op.annotations
+    stores_early = (not isinstance(op, parser.LabelDef)
+                    and "stores_early" in op.annotations)
+    if stores_early and not variable_used(op, "IR_RETURN_EARLY"):
+        raise analysis_error(
+            f"{op.name} is `stores_early` but its body has no IR_RETURN_EARLY()",
+            op.tokens[0])
     return Properties(
         escaping_calls=escaping_calls,
         escapes=escapes,
@@ -968,6 +981,7 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         window=window,
         switches_frame=switches_frame(op),
         returns=returns,
+        stores_early=stores_early,
     )
 
 VALUE_TO_OBJECT = (

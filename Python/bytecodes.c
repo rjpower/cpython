@@ -5161,8 +5161,11 @@ dummy_func(
             (void)null;
             // DICT_MERGE is called before this opcode if there are kwargs.
             // It converts all dict subtypes in kwargs into regular dicts.
-            // The callable stays a value: an inline one is rejected as not
-            // callable by _PyObject_CallValue(), without a box.
+            // The call dispatches on the callable's value, and
+            // _PyObject_CallValue() rejects an inline one as not callable.
+            // An inline callable is still boxed twice, eagerly at op entry:
+            // here and in _MAKE_CALLARGS_A_TUPLE, by the generator's rule
+            // for an input that the op converts anywhere.
             if (PyValue_Type(func_st) == &PyFunction_Type) {
                 EVAL_CALL_STAT_INC(EVAL_CALL_FUNCTION_EX);
             }

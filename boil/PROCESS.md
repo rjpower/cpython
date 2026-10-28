@@ -168,6 +168,14 @@ quick-test. Each rung goes through all of it.
 | 3 | the full suite on the debug build, `-u cpu test_cext`, `make regen-cases clinic` leaving the tree unchanged, `Tools/boil/traverse_audit.py --check` (every type with references and no or a partial traverse is in `Tools/boil/traverse_allow.txt` with a reason), the root counters with no fallback; and for a rung that touches the collector, the roots, the object layout or the eval loop, the verification set: the full suite on debug under `PYTHON_GCVERIFY=kill`, the ASan build on the hazard list of note 11 section 8.2 under kill, `PYTHON_GCSTRESS=1000` on the stress set, and twenty runs of each eval-loop probe | at the rung end, before the landing review |
 | 4 | the internal benchmark set recorded (`boil/bench/run.py`, label = the step) and the measurement section written with attribution | at the step end |
 
+Modules this machine does not build (`_ssl`, `_hashopenssl`, `_decimal`,
+`_sqlite3`, `_bz2`, `_zstd`, `_uuid`) are type-checked against borrowed
+headers with `boil/tools/check_unbuilt.sh` (`gcc -fsyntax-only`; 6d rung
+4 found a PyValue assigned to a `PyObject *` in `_hashopenssl.c` this
+way) at gate 3 of every rung that edits `Modules/` or a slot typedef;
+`_tkinter` stays unchecked for want of Tcl headers and its callers are
+read by hand.
+
 The verification set's exclusions (a test that cannot run under kill,
 ASan or stress) live with their reasons and owners in note 11 section 8.2
 until 10a rung 2 moves them into a file under `boil/tools/` that `gate.sh`

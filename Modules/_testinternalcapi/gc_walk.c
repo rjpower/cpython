@@ -4,11 +4,13 @@
  * detach with a value only in a register. */
 
 #include "parts.h"
+#include "pycore_call.h"          // _PyStack_UnpackDictSlots()
 #include "pycore_gc_trace.h"      // _PyGC_TraceLiveRootsOfHidden()
 #include "pycore_gc_walk.h"
 #include "pycore_lock.h"          // PyEvent
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tstate.h"        // _PyThreadStateImpl
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_value.h"         // _PyThreadState_PushValueSpan()
 
 #if defined(_PyGC_WALK) && defined(__x86_64__)
@@ -753,6 +755,114 @@ gc_walk_reset(PyObject *self, PyObject *Py_UNUSED(ignored))
     Py_RETURN_NONE;
 }
 
+/* 10a rung 2b item 3 (10a-2b.md section 1): an unpacked call's arguments
+   in its caller's span.  gc_unpack_consumer(d, collect, k=obj), called
+   with kwargs d through gc_unpack_call(), registers its frame precise,
+   clears d, collects and reads obj's type: only the caller's span, which
+   the keyword values were unpacked into, holds obj then.  Under
+   PYTHON_GCVERIFY=kill a missing anchor aborts at the read.  Returns (the
+   type's name, its frame was classed precise, the walk fell back,
+   test-range fallbacks). */
+static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
+PyObject *
+gc_unpack_consumer(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
+                   PyObject *kwnames)
+{
+    if (nargs != 2 || !PyDict_Check(args[0]) || kwnames == NULL
+        || PyTuple_GET_SIZE(kwnames) != 1)
+    {
+        PyErr_SetString(PyExc_TypeError, "takes (dict, collect, k=obj)");
+        return NULL;
+    }
+    _PyGCFrameDesc d;
+    if (_PyGC_DecodeDescriptor((uintptr_t)&gc_unpack_consumer, &d) < 0
+        || _PyGC_RegisterCodeRange(d.func_start, d.func_end,
+                                   _PyGC_FRAME_PRECISE, _PyGC_RANGE_TEST,
+                                   NULL) < 0)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "no stack walk");
+        return NULL;
+    }
+    PyObject *result = NULL;
+    struct span_walk f = {.start = d.func_start, .end = d.func_end, .cls = -1};
+    span_walk_here(&f);
+    PyDict_Clear(args[0]);
+    PyObject *r = PyObject_CallNoArgs(args[1]);
+    if (r == NULL) {
+        goto done;
+    }
+    // The use: a dead value aborts here under kill, with its record.
+    const char *name = Py_TYPE(args[2])->tp_name;
+    result = Py_BuildValue("(sOOL)", name,
+                           f.cls == _PyGC_FRAME_PRECISE ? Py_True : Py_False,
+                           f.fell_back ? Py_True : Py_False,
+                           (long long)f.test_fallbacks);
+done:
+    _PyGC_UnregisterCodeRange(d.func_start);
+    return result;
+}
+
+/* f(*args, **kwargs) from C: PyObject_Call(), whose keyword form is
+   _PyVectorcall_Call()'s, or, with dict_form, PyObject_VectorcallDict().
+   args' items are objects. */
+static PyObject *
+gc_unpack_call(PyObject *self, PyObject *a)
+{
+    PyObject *f, *args, *kwargs;
+    int dict_form;
+    if (!PyArg_ParseTuple(a, "OO!O!p", &f, &PyTuple_Type, &args,
+                          &PyDict_Type, &kwargs, &dict_form)) {
+        return NULL;
+    }
+    Py_ssize_t n = PyTuple_GET_SIZE(args);
+    for (Py_ssize_t i = 0; i < n; i++) {
+        if (PyValue_IsInline(PyTuple_GET_VALUE(args, i))) {
+            PyErr_SetString(PyExc_ValueError, "args' items are objects");
+            return NULL;
+        }
+    }
+    if (!dict_form) {
+        return PyObject_Call(f, args, kwargs);
+    }
+    return PyObject_VectorcallDict(
+        f, (PyObject *const *)_PyTuple_ITEMS(args), n, kwargs);
+}
+
+/* A callee that allocates nothing, so that a test that fails allocations
+   counts only the unpacked call's own: the buffer and the names. */
+static PyObject *
+gc_unpack_sink(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
+               PyObject *kwnames)
+{
+    Py_RETURN_NONE;
+}
+
+/* _PyStack_UnpackDictSlots(prefix, nargs, nkwargs): the buffer's size, or
+   -1 on overflow. */
+static PyObject *
+gc_unpack_dict_slots(PyObject *self, PyObject *a)
+{
+    Py_ssize_t prefix, nargs, nkwargs;
+    if (!PyArg_ParseTuple(a, "nnn", &prefix, &nargs, &nkwargs)) {
+        return NULL;
+    }
+    return PyLong_FromSsize_t(
+        _PyStack_UnpackDictSlots(prefix, nargs, nkwargs));
+}
+
+/* The number of value roots this thread has pushed, so that a test can
+   check that an error path pops what it pushed. */
+static PyObject *
+gc_value_roots_depth(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
+    Py_ssize_t n = 0;
+    for (_PyValueRoot *r = ts->gc_trace.value_roots; r != NULL; r = r->next) {
+        n++;
+    }
+    return PyLong_FromSsize_t(n);
+}
+
 static PyMethodDef test_methods[] = {
     {"gc_walk_owners", _PyCFunction_CAST(gc_walk_owners), METH_O},
     {"gc_walk_fallback", gc_walk_fallback, METH_NOARGS},
@@ -763,6 +873,13 @@ static PyMethodDef test_methods[] = {
     {"gc_span_box", gc_span_box, METH_VARARGS},
     {"gc_span_box_walk", gc_span_box_walk, METH_NOARGS},
     {"gc_vectorcall_method", gc_vectorcall_method, METH_VARARGS},
+    {"gc_unpack_consumer", _PyCFunction_CAST(gc_unpack_consumer),
+     METH_FASTCALL | METH_KEYWORDS},
+    {"gc_unpack_call", gc_unpack_call, METH_VARARGS},
+    {"gc_unpack_sink", _PyCFunction_CAST(gc_unpack_sink),
+     METH_FASTCALL | METH_KEYWORDS},
+    {"gc_unpack_dict_slots", gc_unpack_dict_slots, METH_VARARGS},
+    {"gc_value_roots_depth", gc_value_roots_depth, METH_NOARGS},
     {"gc_walk_detached_roots", gc_walk_detached_roots, METH_NOARGS},
     {"gc_walk_detach_holding", _PyCFunction_CAST(gc_walk_detach_holding), METH_O},
     {"gc_walk_release", gc_walk_release, METH_NOARGS},

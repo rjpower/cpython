@@ -203,21 +203,61 @@ _PyObject_CallNoArgs(PyObject *func) {
 }
 
 
-/* Convert (args, nargs, kwargs: dict) into (stack, nargs, kwnames: tuple):
-   a new argument array, with a free slot before it for
-   PY_VECTORCALL_ARGUMENTS_OFFSET, holding the positional arguments and then
-   the keyword values.  NULL with an exception set on error, such as a key
-   that is not a str.  Free the array with _PyStack_UnpackDict_Free(). */
-PyAPI_FUNC(const PyValue *)
-_PyStack_UnpackDict(PyThreadState *tstate,
-    const PyValue *args, Py_ssize_t nargs,
-    PyObject *kwargs, PyObject **p_kwnames);
+/* Convert (args, nargs, kwargs: dict) into (stack, nargs, kwnames: tuple)
+   in the caller's span (10a-2b.md section 1).  The caller:
+   1. pushes a span over a local array and appends its own anchors, the
+      prefix;
+   2. sizes the buffer with _PyStack_UnpackDictBuffer(), which moves the
+      span to PyMem past the local array;
+   3. appends _PyStack_KwNames()'s tuple raw;
+   4. calls _PyStack_UnpackDict(), then the callee;
+   5. pops before it frees the buffer, and reads nothing from the buffer
+      after the pop. */
 
-// Exported for external JIT support
-PyAPI_FUNC(void) _PyStack_UnpackDict_Free(
-    const PyValue *stack,
-    Py_ssize_t nargs,
-    PyObject *kwnames);
+/* kwargs' keys as a new tuple in the dict's order, or NULL with an
+   exception set: TypeError for a key that is not a str, raised before the
+   allocation.  The tuple's allocation may collect; an inline collection
+   defers Python callbacks to the next safepoint (Python/gc_live.c), so no
+   Python code runs inside it and kwargs does not change during it. */
+extern PyObject *_PyStack_KwNames(PyThreadState *tstate, PyObject *kwargs);
+
+/* The size of the caller's buffer: prefix (the caller's own anchors) + 1
+   (the names) + 1 (the free slot for PY_VECTORCALL_ARGUMENTS_OFFSET) +
+   nargs + nkwargs; -1, with nothing raised, if it overflows. */
+static inline Py_ssize_t
+_PyStack_UnpackDictSlots(Py_ssize_t prefix, Py_ssize_t nargs,
+                         Py_ssize_t nkwargs)
+{
+    assert(prefix >= 0 && nargs >= 0 && nkwargs >= 0);
+    /* No subtraction can overflow: every term is non-negative. */
+    Py_ssize_t max = PY_SSIZE_T_MAX / (Py_ssize_t)sizeof(PyValue) - 2;
+    if (prefix > max || nargs > max - prefix
+        || nkwargs > max - prefix - nargs)
+    {
+        return -1;
+    }
+    return prefix + 2 + nargs + nkwargs;
+}
+
+/* Size span's buffer for an unpacked call: its slots so far (the caller's
+   prefix) and the rest that _PyStack_UnpackDictSlots() counts for kwargs.
+   The span stays on its local buffer of nsmall slots if that is enough;
+   otherwise this moves it to a PyMem buffer, stored in *heap, which the
+   caller frees after the pop.  Returns the buffer's end, or NULL with
+   MemoryError set. */
+extern const PyValue *_PyStack_UnpackDictBuffer(
+    PyThreadState *tstate, _PyValueRoot *span, Py_ssize_t nsmall,
+    Py_ssize_t nargs, PyObject *kwargs, PyValue **heap);
+
+/* Append to span the free slot (PyValue_NULL), args[0..nargs), then
+   kwargs' values in the dict's order, which is the order of
+   _PyStack_KwNames()'s tuple, and return the address of the first
+   argument in the span's buffer.  Stores only, so nothing that collects
+   runs between _PyStack_KwNames() and this call, and kwargs is as the
+   names were read from it.  end is the buffer's end. */
+extern const PyValue *_PyStack_UnpackDict(
+    const PyValue *args, Py_ssize_t nargs, PyObject *kwargs,
+    _PyValueRoot *span, const PyValue *end);
 
 #ifdef __cplusplus
 }

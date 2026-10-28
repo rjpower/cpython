@@ -2132,6 +2132,25 @@ class TracingCollectorTests(unittest.TestCase):
                 case Point(a, b):
                     return a, b
         self.assertEqual(fired(MATCH_ARGS, lambda: match(Point())), (1, 2))
+        # 10a rung 2b item 3: an unpacked call's names, made by
+        # _PyStack_KwNames(), through each of its three callers: a Python
+        # function's frame push (CALL_FUNCTION_EX), PyObject_Call() of a
+        # vectorcall callable, and the dict form under a classmethod
+        # descriptor's call.  The positional arguments are made at run
+        # time, so that only the call's tuple holds them.
+        UNPACK_DICT = 11
+        def names(*a, **k):
+            return [type(x).__name__ for x in a], sorted(k)
+        self.assertEqual(
+            fired(UNPACK_DICT, lambda: names(*[Point()], **{"k": 1})),
+            (["Point"], ["k"]))
+        self.assertEqual(
+            fired(UNPACK_DICT, lambda: dict(*[[("p", Point())]], **{"k": 1})
+                  ["p"].x), 1)
+        from_bytes = int.__dict__["from_bytes"]
+        self.assertEqual(
+            fired(UNPACK_DICT, lambda: from_bytes(
+                int, bytes([1, int("2")]), **{"byteorder": "big"})), 258)
         with self.assertRaises(ValueError):
             collect_at(99)
 
@@ -2219,6 +2238,112 @@ class TracingCollectorTests(unittest.TestCase):
                 f"{round(x, 1)!r} 1",
                 f"{(100001).to_bytes(4, 'little')!r} 1", f"{x.hex()!r} 1"]
         self.assertEqual(out.decode().splitlines(), want)
+
+    UNPACK_HAZARD = textwrap.dedent("""
+        import gc, sys, _testinternalcapi as t
+        class A:
+            pass
+        def make():
+            # The keyword value is held by the dict alone.
+            return {"k": A()}
+        d = make()
+        print(*t.gc_unpack_call(t.gc_unpack_consumer, (d, gc.collect), d,
+                                sys.argv[1] == "dict"))
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipUnless(hasattr(_testinternalcapi, "gc_unpack_consumer"),
+                         "requires the stack walk")
+    def test_unpack_dict_hazard(self):
+        # 10a rung 2b item 3: the consumer, a frame registered precise,
+        # clears the dict that its keyword value came from and collects;
+        # the value then lives only in its caller's span, the unpacked
+        # call's buffer, and survives kill.  Through PyObject_Call()
+        # (_PyVectorcall_Call()) and PyObject_VectorcallDict().
+        for form in ("call", "dict"):
+            with self.subTest(form=form):
+                rc, out, err = assert_python_ok(
+                    "-X", "faulthandler", "-c", self.UNPACK_HAZARD, form,
+                    PYTHON_GCVERIFY="kill")
+                self.assertEqual(out.split(), [b"A", b"True", b"False", b"0"])
+
+    @unittest.skipUnless(hasattr(_testinternalcapi, "gc_unpack_call"),
+                         "requires the stack walk")
+    def test_unpack_dict_sizes(self):
+        # Each caller of _PyStack_UnpackDict() with its local buffer filled
+        # exactly (five arguments and keywords past its own anchors), one
+        # past it (a PyMem buffer), and an empty dict; and the size's
+        # overflow check.
+        call = _testinternalcapi.gc_unpack_call
+        def f(*a, **k):
+            return a, k
+        callers = {
+            "frame push": lambda a, k: f(*a, **k),
+            "PyObject_Call": lambda a, k: call(f, a, k, False),
+            "PyObject_VectorcallDict": lambda a, k: call(f, a, k, True),
+        }
+        shapes = [(2, 3), (0, 5), (3, 3), (0, 6), (6, 0), (1, 1)]
+        for name, caller in callers.items():
+            for nargs, nkw in shapes:
+                with self.subTest(caller=name, nargs=nargs, nkw=nkw):
+                    a = tuple([i] for i in range(nargs))
+                    k = {f"k{i}": [i] for i in range(nkw)}
+                    self.assertEqual(caller(a, k), (a, k))
+        slots = _testinternalcapi.gc_unpack_dict_slots
+        self.assertEqual(slots(3, 2, 3), 10)
+        self.assertEqual(slots(0, sys.maxsize, 1), -1)
+        self.assertEqual(slots(2, 0, sys.maxsize // 8 - 3), -1)
+
+    @unittest.skipUnless(hasattr(_testinternalcapi, "gc_unpack_call"),
+                         "requires the stack walk")
+    def test_unpack_dict_errors(self):
+        # A key that is not a str, through each caller, and the names'
+        # allocation failing: TypeError or MemoryError, and the thread's
+        # value roots as they were.
+        call = _testinternalcapi.gc_unpack_call
+        depth = _testinternalcapi.gc_value_roots_depth
+        def f(*a, **k):
+            return a, k
+        bad = {1: 2}
+        callers = {
+            "PyObject_Call": lambda: call(f, ([1],), bad, False),
+            "PyObject_VectorcallDict": lambda: call(f, ([1],), bad, True),
+            "classmethod descriptor": lambda: int.__dict__["from_bytes"](
+                int, b"\x01", **bad),
+        }
+        for name, caller in callers.items():
+            with self.subTest(caller=name):
+                before = depth()
+                with self.assertRaisesRegex(TypeError, "must be strings"):
+                    caller()
+                self.assertEqual(depth(), before)
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    @unittest.skipUnless(hasattr(_testinternalcapi, "gc_unpack_sink"),
+                         "requires the stack walk")
+    def test_unpack_dict_nomemory(self):
+        # The unpacked call's allocations fail one at a time, with a callee
+        # that allocates nothing: past the local buffer, the first is the
+        # PyMem buffer that the span moves to and the second the names; in
+        # it, the names only.  Each failure raises MemoryError and pops what
+        # it pushed; the next count succeeds.
+        nomem = _testcapi.call_with_nomemory
+        call = _testinternalcapi.gc_unpack_call
+        sink = _testinternalcapi.gc_unpack_sink
+        depth = _testinternalcapi.gc_value_roots_depth
+        for nargs, allocations in ((1, 1), (4, 2)):
+            a = tuple([i] for i in range(nargs))
+            k = {f"k{i}": [i] for i in range(nargs)}
+            for dict_form in (False, True):
+                with self.subTest(nargs=nargs, dict_form=dict_form):
+                    for start in range(allocations):
+                        before = depth()
+                        with self.assertRaises(MemoryError):
+                            nomem(start, start + 1, call, sink, a, k,
+                                  dict_form)
+                        self.assertEqual(depth(), before)
+                    self.assertIsNone(nomem(allocations, allocations + 1,
+                                            call, sink, a, k, dict_form))
 
     SPAN_BOX = textwrap.dedent("""
         import gc, sys, _testinternalcapi

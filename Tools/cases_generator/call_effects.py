@@ -65,6 +65,9 @@ NON_COLLECTING = frozenset({
     "_PyGC_TrapUse",
     # arithmetic on the indices it is given
     "PySlice_AdjustIndices",
+    # an unpacked call's size, and its fill, which only stores into the
+    # caller's span (Include/internal/pycore_call.h, 10a-2b.md section 1)
+    "_PyStack_UnpackDictSlots", "_PyStack_UnpackDict",
     # pointer comparisons with the interpreter's import functions
     # (Python/import.c)
     "_PyImport_IsDefaultImportFunc", "_PyImport_IsDefaultLazyImportFunc",

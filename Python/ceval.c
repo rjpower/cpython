@@ -1998,39 +1998,52 @@ fail:
 }
 
 /* Same as _PyEvalFramePushAndInit but takes an args tuple and kwargs dict.
-   Steals references to func, callargs and kwargs.
-   Opaque, and so scanned, until _PyStack_UnpackDict() returns its names in
-   a span, like vectorcall_call_dict() in Objects/call.c (10a-2.md). */
-Py_NO_INLINE _PyInterpreterFrame *
+   Steals references to func, callargs and kwargs.  The span anchors func
+   and locals, which the frame's initialization reads, callargs, which owns
+   the positional array, and kwargs; with keywords, then the names and the
+   unpacked arguments (_PyStack_UnpackDict()). */
+Py_GC_PRECISE _PyInterpreterFrame *
 _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
     PyObject *locals, Py_ssize_t nargs, PyObject *callargs, PyObject *kwargs, _PyInterpreterFrame *previous)
 {
-    bool has_dict = (kwargs != NULL && PyDict_GET_SIZE(kwargs) > 0);
+    // The prefix (4), the names and the free slot, then the arguments.
+    PyValue small[4 + 2 + _PY_FASTCALL_SMALL_STACK];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, small);
+    _PyValueSpan_Append(&span, func);
+    _PyValueSpan_AppendObject(&span, locals);
+    _PyValueSpan_AppendObject(&span, callargs);
+    _PyValueSpan_AppendObject(&span, kwargs);
+    PyValue *heap = NULL;
     PyObject *kwnames = NULL;
-    const PyValue *newargs = _PyTuple_ITEMS(callargs);
-    if (has_dict) {
-        newargs = _PyStack_UnpackDict(tstate, newargs, nargs, kwargs, &kwnames);
-        if (newargs == NULL) {
-            goto error;
+    _PyInterpreterFrame *new_frame = NULL;
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        new_frame = _PyEvalFramePushAndInit(
+            tstate, func, locals, _PyTuple_ITEMS(callargs), nargs, NULL,
+            previous);
+    }
+    else {
+        const PyValue *end = _PyStack_UnpackDictBuffer(
+            tstate, &span, Py_ARRAY_LENGTH(small), nargs, kwargs, &heap);
+        if (end != NULL) {
+            kwnames = _PyStack_KwNames(tstate, kwargs);
+        }
+        if (kwnames != NULL) {
+            _PyValueSpan_AppendObject(&span, kwnames);
+            const PyValue *newargs = _PyStack_UnpackDict(
+                _PyTuple_ITEMS(callargs), nargs, kwargs, &span, end);
+            new_frame = _PyEvalFramePushAndInit(
+                tstate, func, locals, newargs, nargs, kwnames, previous);
         }
     }
-    _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit(
-        tstate, func, locals,
-        newargs, nargs, kwnames, previous
-    );
-    if (has_dict) {
-        _PyStack_UnpackDict_Free(newargs, nargs, kwnames);
-    }
+    _PyThreadState_PopValueRoot(tstate, &span);
+    PyMem_Free(heap);
     /* No need to decref func here because the reference has been stolen by
        _PyEvalFramePushAndInit.
     */
     Py_DECREF(callargs);
     Py_XDECREF(kwargs);
     return new_frame;
-error:
-    Py_DECREF(callargs);
-    Py_XDECREF(kwargs);
-    return NULL;
 }
 
 PyValue

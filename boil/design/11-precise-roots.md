@@ -752,11 +752,24 @@ allocation through the inline path. It runs test_gc, test_weakref,
 test_generators, test_coroutines, test_asyncgen, test_descr, test_capi,
 test_sort, test_functools and test_context at N = 1,000 at each rung end,
 and the full suite at N = 100,000 once. *Injection*:
-`_testinternalcapi.gc_collect_at(site)` arms a collection at a named site
-(push before initialize, inside `initialize_locals`, return before the
-store, `take_ownership`, span rebase, inside `do_mkstack()`, between a
-weakref load and its use, detach capture), because allocation
-intervals do not ensure those transitions are hit.
+`_testinternalcapi.gc_collect_at(site)` arms a collection at a named site,
+because allocation intervals do not ensure those transitions are hit. The
+sites (`_PyGC_SITE_*`, Include/internal/pycore_tstate.h; 0 is none, and
+`_PyGC_SITE_COUNT` is 12):
+
+| Site | Name | Where |
+|---|---|---|
+| 1 | DETACH | a detach entry, before the record |
+| 2 | PUSH_FRAME | `_PyThreadState_PushFrame()`, before the frame is initialized |
+| 3 | SPAN_REBASE | `_PyValueSpan_Rebase()`, after it |
+| 4 | MKSTACK | `do_mkstack()`, after each value |
+| 5 | INIT_LOCALS | `initialize_locals()`, after `*args` and `**kwargs` are stored |
+| 6 | RETURN | `_RETURN_VALUE`, after the caller's slot takes the value, before the clear |
+| 7 | TAKE_OWNERSHIP | `take_ownership()`, before the caller's frame object is made |
+| 8 | SLOT_BOX | `box_owner_for_descr()`, after an inline owner's box is in the caller's span |
+| 9 | RECEIVER_BOX | `method_check_args()` and `wrapperdescr_call()`, after an inline receiver's box is in the caller's span |
+| 10 | MATCH_ARGS | `_PyEval_MatchClass()`, after the `__match_args__` lookup |
+| 11 | UNPACK_DICT | `_PyStack_KwNames()`, after the names' allocation |
 
 ### 8.4 New tests
 

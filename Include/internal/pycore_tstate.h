@@ -109,11 +109,15 @@ typedef struct _PyThreadStateImpl {
                                         frame object of the caller is made */
 #define _PyGC_SITE_SLOT_BOX     8  /* box_owner_for_descr(), after an inline
                                       owner's box is in the caller's span */
-#define _PyGC_SITE_RECEIVER_BOX 9  /* method_check_args(), after an inline
-                                      receiver's box is made */
+#define _PyGC_SITE_RECEIVER_BOX 9  /* method_check_args() and
+                                      wrapperdescr_call(), after an inline
+                                      receiver's box is in the caller's
+                                      span */
 #define _PyGC_SITE_MATCH_ARGS  10  /* _PyEval_MatchClass(), after the
                                       __match_args__ lookup */
-#define _PyGC_SITE_COUNT        11
+#define _PyGC_SITE_UNPACK_DICT 11  /* _PyStack_KwNames(), after the names'
+                                      allocation */
+#define _PyGC_SITE_COUNT        12
 
 PyAPI_FUNC(void) _PyGC_InjectCollect(PyThreadState *tstate);
 // PYTHON_GCSTRESS=every from now on; 0 turns it off

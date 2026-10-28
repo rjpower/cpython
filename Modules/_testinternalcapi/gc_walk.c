@@ -487,7 +487,7 @@ gc_verify_missed_root(PyObject *self, PyObject *args)
    registered precise boxes an uncached inline int, holds the box only in
    a span, raw, or, as the control, canonical (the inline value, which
    holds no box), collects, and reads the box's type.  Under
-   PYTHON_GCVERIFY=kill the control's box dies and the read faults.  At its
+   PYTHON_GCVERIFY=kill the control's box dies and the read aborts.  At its
    collection point the fixture walks the stack itself: the collection's
    walk does not report fallbacks in a test range.  Returns (the box is
    still an int, its frame was classed precise, the walk fell back,
@@ -567,7 +567,7 @@ span_box(int raw, int32_t value, PyObject *collect)
     if (r == NULL) {
         goto done;
     }
-    // The use: a dead box faults here under kill, as missed_root's field.
+    // The use: a dead box aborts here under kill, with its record.
     int is_int = Py_TYPE(box) == &PyLong_Type;
     result = Py_BuildValue("(OOOL)", is_int ? Py_True : Py_False,
                            f.cls == _PyGC_FRAME_PRECISE ? Py_True : Py_False,

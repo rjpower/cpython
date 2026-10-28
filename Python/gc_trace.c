@@ -2630,14 +2630,14 @@ trap_repr(PyObject *op)
     _PyGC_TrapUse(op, "tp_repr");
 }
 
-static PyObject *
+static PyValue
 trap_getattro(PyObject *op, PyObject *name)
 {
     _PyGC_TrapUse(op, "tp_getattro");
 }
 
 static int
-trap_setattro(PyObject *op, PyObject *name, PyObject *value)
+trap_setattro(PyObject *op, PyObject *name, PyValue value)
 {
     _PyGC_TrapUse(op, "tp_setattro");
 }

@@ -1909,16 +1909,17 @@ class TracingCollectorTests(unittest.TestCase):
         # 6d rung 2: a box appended raw to a span, as box_owner_for_descr()
         # does, is its only root in a frame registered precise, and survives
         # kill; the control, the canonical (inline) value, holds no box, so
-        # the box dies and its use faults.  The fixture walks the stack at
+        # the box dies and its use aborts with its record.  The fixture walks the stack at
         # its collection point: its frame is precise, with no fallback.
         rc, out, err = assert_python_ok("-c", self.SPAN_BOX, "raw",
                                         PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split(), [b"True", b"False", b"0", b"True"])
-        rc, out, err = assert_python_failure("-X", "faulthandler", "-c",
-                                             self.SPAN_BOX, "canonical",
+        rc, out, err = assert_python_failure("-c", self.SPAN_BOX, "canonical",
                                              PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split(), [b"True", b"False", b"0"])
-        self.assertIn(b"Segmentation fault", err)
+        self.assertIn(b"gc verify kill: Py_TYPE of the int", err)
+        self.assertIn(b"of a precise frame", err)
+        self.assertIn(b"use of a killed object", err)
 
     # Note 11 section 4.4: a returning or yielding frame stores the value in
     # its destination before it is unlinked and cleared.  The children run

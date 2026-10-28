@@ -1,7 +1,7 @@
 # Audit 2: members that neither the traverse nor a release names
 
-Status: done; as-built record below. Branch `boil/audit2` from
-72bed4aa822, head 518e342d255 plus this record.
+Status: done; as-built record below, landing review addressed. Branch
+`boil/audit2` from 72bed4aa822, code head d1cc246ad89 plus this record.
 Trigger: 6d rung 4's gate 3 found the CJK stream writer's `pending`
 freed under the live writer (fixed on boil/6d at 46bd95ee72c). Report 3
 of `Tools/boil/traverse_audit.py` (72bed4aa822) lists the class: a member
@@ -171,6 +171,38 @@ pattern. Carried: header lookup by directory then Include/ takes the
 last definition of a duplicated name (no conflict on the tree);
 symtable's PyMem roots are 10a rung 3's (hand-off 2).
 
+## Landing review
+
+Round 1: codex, 11:12 (`reviews/audit-2-landing.md`), verdict fix first,
+over 72bed4aa822..a4b24326ed9. Coordinator's rulings, 11:13.
+
+1. **Delegation credited another object.** Fixed in 756197812b4. A
+   receiver is the traverse's first parameter or a local assigned a cast
+   of it (a pointer cast, `_Py_CAST`, or a macro or function returning
+   its one parameter cast, such as `_PyObject_CAST`), dropped when the
+   local is assigned anything else; only delegations in the traverse
+   function itself count. Fixtures: a cast-macro receiver (credited); a
+   member-derived alias, a function result and a reassigned alias (not
+   credited; `--check` fails on the base member).
+2. **Helper coverage depended on set order.** Fixed in 756197812b4: the
+   walk is breadth first over sorted callees. The diamond fixture runs
+   under six hash seeds with identical output; it and the cast fixture
+   fail on the previous tool.
+3. **Gates 2 and 3 before landing.** Run at d1cc246ad89 (Gates below).
+4. **Measurements.** The audit's runtime is recorded below, with gate 2's
+   root counters. Instruction, allocation and box measurements are not
+   recorded: a coordinator-ruled exception (the coordinator, 2026-10-28
+   11:13 PDT), since the change adds traverse edges to two types and
+   touches no handler, layout or eval-loop code.
+
+Non-blocking: the Element entry states `children == _children`
+(756197812b4); test_re's `test_scanner_keeps_fail_after_exception`
+(debug only) replaces the pattern's exception, collects and runs the
+scanner, and fails with the visit removed (`'Junk0' != 'Interrupt'`,
+three of three and under kill) (d1cc246ad89); hand-off 3 has its owner.
+The buffer-release acceptance test (exactly once, a retained exporter,
+an allocating callback) goes to 10a rung 3 with hand-off 1.
+
 ## As built
 
 Commits on `boil/audit2`:
@@ -182,6 +214,9 @@ Commits on `boil/audit2`:
 | 0b4153d8f37 | review round 1: allow entries by exact member path, report 3 and unresolved traverses in `--check`, delegation by what the delegate visits, `PyValue` members; the nine allow entries |
 | 3e96c4e46a7 | `mbstreamwriter_traverse` visits `pending` (6d's 46bd95ee72c verbatim, with its test) |
 | 518e342d255 | `scanner_traverse` visits `state.string`, `state.buffer.obj`, `state.fail_after_exc`; test_re's `test_scanner_keeps_its_string` |
+| a4b24326ed9, c132a8b0421 | this record; the scanner test's comment points at hand-off 1 |
+| 756197812b4 | landing review 1 and 2: receivers by identity, breadth-first helper walk; the Element entry; the landing review file |
+| d1cc246ad89 | test_re's `test_scanner_keeps_fail_after_exception` (debug only) |
 
 Deviations from the design, each with its reason: the allow-entry format
 became `path variable member...: reason` (review point 4; the
@@ -212,7 +247,8 @@ sweep`, the freed wrapper having been released from the sweep).
 | 15 | TypeVar | tool (B1) | `constraints` visited by `typevar_traverse` |
 | 16 | symtable entry | allow (`ste_parent`, seven `ste_table->` paths, borrowed) | `ste_table` dangles after `_PySymtable_Free`; `ste_parent` held by `st_blocks` while read |
 
-After the fixes the tool reports, at 518e342d255: 5 types with no
+After the fixes the tool reports, at 518e342d255 and unchanged at
+d1cc246ad89: 5 types with no
 traverse (audit-1's allow entries), 6 probably inherited, 0 partial, 9
 silent (all allow-listed), 0 unresolved; `--check` exits 0. The tool's
 own fixtures fail on the previous tool: the five B fixtures and both
@@ -221,8 +257,31 @@ fixtures at 6ab5283f07f's.
 
 ### Gates
 
-All at the tree of 518e342d255 (the commits after it change only this
-record), 2026-10-28:
+The rung's gate ladder ran at d1cc246ad89, the code head, 2026-10-28:
+
+- Gate 2, build/default (11:21 to 11:24): 556 of 564 files, 51,039
+  tests, 3,447 skipped, 94 files skipped, 8 resource-denied, 0
+  failures; roots: 5,016 processes, 58,755 collections, 0 fallbacks,
+  881 unpinned (0.01 per collection).
+- Gate 3, build/debug (11:24 to 11:39): 556 of 564 files, 51,039 tests,
+  3,401 skipped, 94 files skipped, 8 resource-denied, 0 failures; roots:
+  5,041 processes, 60,647 collections, 0 fallbacks, 886 unpinned (0.01
+  per collection); `-u cpu test_cext` 16 tests, 7 skipped; `make
+  regen-cases clinic` left the tree unchanged; `traverse_audit.py
+  --check` exit 0.
+- `check_unbuilt.sh`: not on this branch's base (it came with 6d rung
+  4); 6d's copy, run as `check_unbuilt.sh --src <this tree>
+  build/debug`, checked 19 files of `_ssl`, `_hashopenssl`, `_decimal`,
+  `_sqlite3`, `_bz2`, `_zstd` and `_uuid`, all ok, exit 0; `_tkinter`,
+  `_dbm`, `_gdbm` and readline unchecked (no headers). This rung edits
+  none of them.
+- Gate 1 at d1cc246ad89, test_tools and test_re: build/default 284
+  tests, 6 skipped; build/debug 284, 4 skipped; build/debug under
+  `PYTHON_GCVERIFY=kill` 284, 4 skipped; 0 failures.
+
+Earlier lines, at the tree of 518e342d255 (the C fixes; 756197812b4 and
+d1cc246ad89 change only the tool, its fixtures and test_re, which the
+lines above rerun):
 
 - Gate 1, build/default: test_tools, test_re, test_functools,
   test_collections, test_xml_etree, test_ctypes, test_sqlite3,
@@ -237,19 +296,18 @@ record), 2026-10-28:
   test_multibytecodec, test_codecencodings_jp, test_tools: 458 tests, 5
   skipped, 0 failures; `test_scanner_keeps_its_string` alone under kill
   ten times: 10/10.
-- `Tools/boil/traverse_audit.py --check`: exit 0.
-- test_tools at 0b4153d8f37 on both builds: 110 tests, 1 skipped.
-- After the landing review began (11:06), the scanner test's comment
-  gained a pointer to hand-off 1: the exporter is to gain a
-  `__release_buffer__` when 10a rung 3 lands. The change is a comment in
-  test_re only. Gate 1 on test_re reran at that commit: build/default 171
-  tests, 4 skipped; build/debug 171, 3 skipped; build/debug under kill
-  171, 3 skipped; 0 failures. The other lines stand, since no code
-  changed.
 
-Not run: gates 2 and 3 (the coordinator's quick-test at landing); the
-change touches two traverse functions and tooling, not the collector,
-roots or layout.
+### Measurements
+
+The audit tool over the whole tree (`python3 Tools/boil/traverse_audit.py
+--root .`, python3 3.14.4, three runs, `/usr/bin/time`): 72bed4aa822's
+tool 4.43 to 4.52 s and 53 MB peak; d1cc246ad89's 4.98 to 5.08 s and 60
+MB. The +0.5 s and +7 MB are attributed to the header function index
+(every header's functions parsed and kept) and the wider helper walk
+(callbacks and header callees, read breadth first); recorded, not tuned.
+Gate 2's root counters are above. Instruction, allocation and box counts
+are not measured: the coordinator's exception of 2026-10-28 11:13 PDT
+(Landing review, 4).
 
 ### Hazards
 
@@ -298,7 +356,11 @@ roots or layout.
    references are held from the C stack through the transitive PyMem
    scan; the entry must not visit them (they dangle after
    `_PySymtable_Free`).
-3. **Tool coverage limits (owner: whoever next extends the audit).**
-   Name matching by last component for direct visits; references in
-   `_Py_hashtable_t` keys and values (audit-1 hand-off 2); call depth 2
-   without a cut-off report.
+3. **Tool coverage limits: the coordinator, in an audit-3 pass after
+   7a rung 2 lands** (which changes the destroy-hook set). Closes when
+   each is fixed with a fixture or recorded as a measured limit: name
+   matching by last component for direct visits; a duplicated header
+   function name (last definition wins), with a conflicting-helper
+   fixture; a function named but not called as a callback, with a
+   negative fixture; call depth 2 without a cut-off report; references
+   in `_Py_hashtable_t` keys and values (audit-1 hand-off 2).

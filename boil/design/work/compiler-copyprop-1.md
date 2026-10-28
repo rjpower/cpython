@@ -316,3 +316,17 @@ Round 1 (codex, `reviews/compiler-copyprop-1-review-1.md`, verdict revise):
 | Documentation of the break | Proposed above; awaiting approval. |
 | Flag bits | Stated. |
 | Questions: the anchor; landing with a bounded claim; the closing check for the contract | Each goes to a 0.3 row (above). The rung lands with the bounded claim. |
+
+Round 2 (codex, `reviews/compiler-copyprop-1-review-2.md`, verdict revise;
+the last round, so the coordinator rules on what stays open):
+
+| Finding | Disposition |
+|---|---|
+| B1: the specializers' MRO lookups can reach `__eq__` on a type-cache miss; `mro_dicts_unicode()` runs after the lookup | Open, for a coordinator ruling: a second `specialize.c` guard (check the MRO dicts before each specializer type lookup, with a fixture that forces a miss) or a 0.3 row. |
+| B2: the reader analysis took stack effects for reads; an unused peek emits no load | Fixed in 9a0281115b1: `inputs_read_after_code()` follows `Stack.pop()`'s `used` rule. Test 14 gains an unused peek that runs code, and checks the emitted order of the call and the load. The control (the previous analysis) fails. The tables do not change. |
+| B3: test 10 cannot be the anchor row's oracle | Accepted. Test 10 stays as a semantic regression; its comment names the row and says why it passes. The row's oracle must inject a collection where only the reader's precise frame holds the operand, and must fail with that root omitted. The coordinator writes this into the row. |
+| Witness the execution forms; witness the monitoring callbacks | e7cdcac58d0: every rebinding records its frame and the handler executing there. Tests 1, 2 and 3 assert the generic and the specialised handler, and the monitoring test asserts its CALL, PY_START and LINE callbacks. |
+| Test 8's barrier was `LOAD_GLOBAL len` | The callee is a cell, so the CALL is the barrier. The control (the kill removed) fails. |
+| The measurement split is lexical | Labelled as such in the record. The aggregate counts are exact. |
+| An immediate before/after benchmark | Gate 4 runs on the head and on 5ec05e7116b's build, which produces the same code as 41c716c5947; machine time permitting. |
+| Ledger rows and documentation | For the coordinator (PROCESS.md 0.3); the documentation awaits approval. |

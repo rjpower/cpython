@@ -1397,10 +1397,18 @@ every op between the two is on the same line. Line events and
 assignment pops slots by stack depth (`mark_stacks`), and a value that
 is pending across a line start would be in no slot it knows of.
 
-**A fold across a call reads the local after the call.** `return x +
-g()` reads x when the add runs. If g rebinds x through `f_locals` of
-its caller, the add sees the new value, where 3a's stack machine pushed
-x first. Python code cannot rebind a caller's local any other way.
+**No fold across code that can rebind the local** (revised 2026-10-28,
+compiler-copyprop, review 2 §5.1). As built in 3b, `return x + g()`
+read x when the add ran, so a g that rebound x through its caller's
+`f_locals` changed an operand already evaluated. A pending load now dies
+at any op whose handler family may run Python code: the generator's
+`_PyIR_RUNS_CODE` (an escaping call, the eval breaker, a frame switch, or
+an instrumented twin). That includes a generic `LOAD_GLOBAL`, which calls
+a globals subclass's `__getitem__` or a colliding key's `__eq__`. A
+specializer runs no Python code, because the word it rewrites is
+dispatched again and reads its fields anew. Per-instruction events see
+the local where the reader reads it, which is an intentional
+compatibility break. See `boil/design/work/compiler-copyprop-1.md`.
 
 **The verifier runs after every pass in debug builds.** It checks:
 - every input is defined on every path;
@@ -1422,8 +1430,9 @@ POP_TOP removal and truth folding, in that order, once each.
 
 - **Copy propagation** keeps the pending borrowed loads of a region and
   folds one into its only reader if the reader takes it in a borrowable
-  field. A write to the local, or a line change, kills the pending load
-  (`y = x; x = x + 1; return y`).
+  field. A write to the local, a line change, or an op that may run
+  Python code kills the pending load (`y = x; x = x + 1; return y`;
+  `x + g()`).
 - **Store elimination** looks back from a STORE_FAST to the producer of
   its value. The producer must have the STORE_DST format and be on the
   same line. Nothing in between may raise, escape, jump, have a dst,

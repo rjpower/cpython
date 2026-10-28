@@ -26,7 +26,11 @@ py="$build/python"
 J=${GATE_JOBS:-16}
 case $level in 0) LIMIT=1200 ;; 1) LIMIT=2400 ;; 2) LIMIT=3600 ;; 3) LIMIT=5400 ;; *) LIMIT=7200 ;; esac
 LIMIT=${GATE_LIMIT:-$LIMIT}
-tmp=$(mktemp -d /tmp/boilgate-XXXXXX)
+# The pyc prefix lives under the build directory, and stale ones from runs
+# whose shell was killed before the trap ran are pruned here after two hours.
+mkdir -p "$build/gate-tmp"
+find "$build/gate-tmp" -mindepth 1 -maxdepth 1 -mmin +120 -exec rm -rf {} + 2>/dev/null
+tmp=$(mktemp -d "$build/gate-tmp/run-XXXXXX")
 child=
 cleanup() { [ -n "$child" ] && kill -TERM -- -"$child" 2>/dev/null; rm -rf "$tmp"; }
 trap cleanup EXIT

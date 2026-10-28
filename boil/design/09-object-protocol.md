@@ -23,7 +23,7 @@ and to have them share one description of "where attribute `x` lives".
 | Job | Mechanism | Where it lives |
 |---|---|---|
 | Layout | the shape (hidden class): one word per object that says which type the object has, which attributes it has, in which slots, with which kinds | the object header (section 2) |
-| Observation | the feedback entry: the per-instruction side cache. The IR has no cache bytes in the instruction stream; the entry in the code object's feedback vector is the one cache, read by the interpreter, tier 0 and tier 1 | `_PyFbAttr`, `_PyFbCall`, `_PyFbPoly` (note 01, note 06 section 2.5) |
+| Observation | the feedback entry: the per-instruction side cache. The IR has no cache bytes in the instruction stream; the entry in the code object's feedback vector is the one cache, read by the interpreter, tier 0 and tier 1 | `_PyFbAttr`, `_PyFbCall`, `_PyFbPoly` (note 06 section 2.5) |
 | Resolution | the lookup plan: a pure function from (shape, name) to "where the attribute is and what guard makes that true" | section 4 |
 | Speculation | tier 1 reads feedback entries and plans, hoists guards, inlines monomorphic callees | note 06 section 5 |
 

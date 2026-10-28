@@ -81,6 +81,9 @@
 #ifdef HAVE_DLFCN_H
 #  include <dlfcn.h>              // dladdr()
 #endif
+#ifdef _Py_ADDRESS_SANITIZER
+#  include <sanitizer/asan_interface.h>  // ASAN_POISON_MEMORY_REGION()
+#endif
 #include <stdlib.h>
 #include <string.h>
 #ifdef HAVE_DL_ITERATE_PHDR
@@ -328,6 +331,11 @@ struct _gc_trace_state {
     int64_t live_collections;
     verify_entry *q;
     size_t nq;
+    // Kill's quarantine: blocks freed for the objects it killed, and the
+    // collection that killed them
+    struct { void *block; int64_t collection; } *quarantine;
+    size_t nquarantine;
+    size_t quarantine_cap;
     // The static types passed to PyType_Ready() in this interpreter.
     PyTypeObject **static_types;
     Py_ssize_t n_static_types;
@@ -423,6 +431,7 @@ typedef struct {
     verify_entry *newq;
     size_t nnewq;
     size_t newq_cap;
+    addrset killed;       // kill: the objects that B listed, which die
 } trace_t;
 
 static int mark_visit(PyObject *op, void *arg);
@@ -2038,7 +2047,9 @@ live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
            ? _PyGC_DEAD_FIRST : 0)
         | (PyType_Check(op) ? _PyGC_DEAD_TYPE : 0)
         | (_PyObject_IS_GC(op) ? _PyGC_DEAD_GC : 0)
-        | (live_has_destroy_hook(w, t->interp, op, tp) ? _PyGC_DEAD_HOOK : 0);
+        | (live_has_destroy_hook(w, t->interp, op, tp) ? _PyGC_DEAD_HOOK : 0)
+        | (t->killed.keys != NULL && addrset_has(&t->killed, (uintptr_t)op)
+           ? _PyGC_DEAD_KILLED : 0);
     res->kinds |= kinds;
     res->dead[res->ndead++] = (_PyGCDeadObject){
         op, (uint32_t)block_size, (uint16_t)w->presize, kinds};
@@ -2253,6 +2264,7 @@ live_fini(trace_t *t)
 {
     free(t->deferred);
     free(t->newq);
+    addrset_fini(&t->killed);
     addrset_fini(&t->mem_scanned);
     free(t->mem_stack);
     rangelist_fini(&t->pages);
@@ -2399,6 +2411,57 @@ verify_report(const verify_entry *e, int64_t now)
     }
 }
 
+#ifdef Py_DEBUG
+/* A quarantined block is freed this many collections after its object died */
+#define QUARANTINE_COLLECTIONS 16
+
+PyThreadState *_PyGC_quarantine_tstate = NULL;
+
+void
+_PyGC_Quarantine(void *ptr)
+{
+    struct _gc_trace_state *ts = _PyGC_quarantine_tstate->interp->gc.trace;
+    size_t size = mi_usable_size(ptr);
+    if (ts->nquarantine == ts->quarantine_cap) {
+        size_t cap = ts->quarantine_cap ? 2 * ts->quarantine_cap : 256;
+        void *q = realloc(ts->quarantine, cap * sizeof(*ts->quarantine));
+        if (q == NULL) {
+            mi_free(ptr);  // freed at once, as without the quarantine
+            return;
+        }
+        ts->quarantine = q;
+        ts->quarantine_cap = cap;
+    }
+    memset(ptr, PYMEM_DEADBYTE, size);
+#ifdef _Py_ADDRESS_SANITIZER
+    ASAN_POISON_MEMORY_REGION(ptr, size);
+#endif
+    ts->quarantine[ts->nquarantine].block = ptr;
+    ts->quarantine[ts->nquarantine].collection = ts->live_collections;
+    ts->nquarantine++;
+}
+
+/* Free the blocks quarantined in collection upto or before */
+static void
+quarantine_release(struct _gc_trace_state *ts, int64_t upto)
+{
+    size_t kept = 0;
+    for (size_t i = 0; i < ts->nquarantine; i++) {
+        void *block = ts->quarantine[i].block;
+        if (ts->quarantine[i].collection <= upto) {
+#ifdef _Py_ADDRESS_SANITIZER
+            ASAN_UNPOISON_MEMORY_REGION(block, mi_usable_size(block));
+#endif
+            mi_free(block);
+        }
+        else {
+            ts->quarantine[kept++] = ts->quarantine[i];
+        }
+    }
+    ts->nquarantine = kept;
+}
+#endif
+
 /* After A: report the listed objects that A reached, mark B from what A
    left out, and list what B marked, keeping each object's first record. */
 static void
@@ -2407,6 +2470,9 @@ verify_mark_b(trace_t *t, PyThreadState *tstate)
     struct _gc_trace_state *ts = t->ts;
     int64_t now = ++ts->live_collections;
     _PyGCRootStats *stats = t->stats;
+#ifdef Py_DEBUG
+    quarantine_release(ts, now - QUARANTINE_COLLECTIONS);
+#endif
     size_t kept = 0;
     for (size_t i = 0; i < ts->nq; i++) {
         verify_entry *e = &ts->q[i];
@@ -2443,12 +2509,29 @@ verify_mark_b(trace_t *t, PyThreadState *tstate)
         stats->verify_q += (int64_t)t->nnewq;
     }
 
-    /* The list is what B marked now, with the older record of an object
-       that an earlier collection listed.  What neither marked dies, and
-       drops out. */
     if (t->oom) {
         return;
     }
+    if (t->verify == VERIFY_KILL) {
+        /* What B alone marked dies, as it would with A for the roots; the
+           walk tells the sweep which, so that its frees are quarantined. */
+        if (addrset_init(&t->killed, t->nnewq * 2 + 16) < 0) {
+            t->oom = 1;
+            return;
+        }
+        for (size_t i = 0; i < t->nnewq; i++) {
+            PyObject *op = t->newq[i].op;
+            op->ob_flags &= ~(_Py_GC_MARKED_FLAG | _Py_GC_SHALLOW_FLAG);
+            if (addrset_add(&t->killed, (uintptr_t)op) < 0) {
+                t->oom = 1;
+                return;
+            }
+        }
+        return;
+    }
+    /* The list is what B marked now, with the older record of an object
+       that an earlier collection listed.  What neither marked dies, and
+       drops out. */
     qsort(t->newq, t->nnewq, sizeof(verify_entry), verify_entry_cmp);
     size_t j = 0;
     for (size_t i = 0; i < t->nnewq; i++) {
@@ -3466,6 +3549,12 @@ _PyGC_TraceInit(PyInterpreterState *interp)
         if (env != NULL && strcmp(env, "retain") == 0) {
             live_verify = VERIFY_RETAIN;
         }
+        else if (env != NULL && strcmp(env, "kill") == 0) {
+#ifndef Py_DEBUG
+            return _PyStatus_ERR("PYTHON_GCVERIFY=kill needs a debug build");
+#endif
+            live_verify = VERIFY_KILL;
+        }
         else if (env != NULL && *env != '\0') {
             mode = strcmp(env, "auto") == 0 ? _PyGC_TRACE_AUTO
                  : strcmp(env, "0") == 0 ? _PyGC_TRACE_OFF
@@ -3513,6 +3602,10 @@ _PyGC_TraceFini(PyInterpreterState *interp)
     }
     interp->gc.trace = NULL;
     free(ts->q);
+#ifdef Py_DEBUG
+    quarantine_release(ts, INT64_MAX);
+    free(ts->quarantine);
+#endif
     free(ts->static_types);
     addrset_fini(&ts->static_type_set);
     free(ts->holes);

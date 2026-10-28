@@ -248,6 +248,8 @@ _PyGC_ObjectMapClear(PyObject *op)
                                           destructor, or release a buffer to
                                           Python code: the collector does
                                           that before the sweep */
+#define _PyGC_DEAD_KILLED    (1 << 7)  /* PYTHON_GCVERIFY=kill killed it: its
+                                          frees are quarantined */
 
 /* An unreachable object found by the mark: its address, the size and
  * pre-header size of its block, and its _PyGC_DEAD_* kinds. */
@@ -313,6 +315,18 @@ extern int _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res);
 /* The interpreter's descriptor cache for the stack walk (Python/gc_walk.c),
  * or NULL if the collector's state cannot be allocated. */
 extern struct _PyGCWalkCache *_PyGC_LiveWalkCache(PyInterpreterState *interp);
+
+#ifdef Py_DEBUG
+/* The verifier's kill mode: while it is set, the frees of that thread state
+ * (PyObject_Free(), PyMem_Free() and the free in a moving realloc) put the
+ * block in quarantine (_PyGC_Quarantine()) instead of freeing it.  The sweep
+ * sets it around the dealloc and the free of each object that kill killed;
+ * the GIL protects it. */
+extern PyThreadState *_PyGC_quarantine_tstate;
+/* Quarantine the mimalloc block at ptr: fill it with PYMEM_DEADBYTE, poison
+ * it under ASan, and free it 16 collections later. */
+extern void _PyGC_Quarantine(void *ptr);
+#endif
 
 /* For the test of the verifier's retain mode: create [None], hold it only in
  * a PyMem block that this core frame points to, call callable, and return

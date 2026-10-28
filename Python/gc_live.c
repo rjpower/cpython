@@ -1036,7 +1036,15 @@ sweep_one(PyThreadState *tstate, GCState *gc, _PyGCDeadObject *d,
     // The sweep stands in for _Py_Dealloc(), which reports each
     // destruction to the reference tracer.
     _PyReftracerTrack(op, PyRefTracer_DESTROY);
+#ifdef Py_DEBUG
+    if (d->kinds & _PyGC_DEAD_KILLED) {
+        _PyGC_quarantine_tstate = tstate;
+    }
+#endif
     Py_TYPE(op)->tp_dealloc(op);
+#ifdef Py_DEBUG
+    _PyGC_quarantine_tstate = NULL;
+#endif
     op->ob_flags |= _Py_GC_SWEPT_FLAG;
     if (_PyErr_Occurred(tstate)) {
         _PyErr_Clear(tstate);
@@ -1096,7 +1104,15 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
             continue;
         }
         freed += d->block_size;
+#ifdef Py_DEBUG
+        if (d->kinds & _PyGC_DEAD_KILLED) {
+            _PyGC_quarantine_tstate = tstate;
+        }
+#endif
         _PyGC_FreeDeadBlock(d->op, (char *)d->op - d->presize);
+#ifdef Py_DEBUG
+        _PyGC_quarantine_tstate = NULL;
+#endif
     }
     *bytes_freed = freed;
     return ncollected;

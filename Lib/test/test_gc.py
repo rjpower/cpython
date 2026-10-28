@@ -5,7 +5,8 @@ from test.support import (verbose,
                           cpython_only, requires_subprocess,
                           Py_GIL_DISABLED)
 from test.support.os_helper import temp_dir, TESTFN, unlink
-from test.support.script_helper import assert_python_ok, make_script
+from test.support.script_helper import (assert_python_ok,
+                                        assert_python_failure, make_script)
 from test.support import threading_helper, gc_threshold
 
 import gc
@@ -1606,6 +1607,31 @@ class TracingCollectorTests(unittest.TestCase):
                 else:
                     self.assertEqual(name, "NoneType")
                     self.assertEqual(found, [])
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_verify_kill(self):
+        # PYTHON_GCVERIFY=kill (debug builds): what only the verifier's
+        # second mark reaches dies, and its blocks are quarantined and
+        # filled, so the core frame that reads the list back after the
+        # collection crashes; one that drops it does not.
+        code = textwrap.dedent("""
+            import gc, sys, _testinternalcapi
+            obj = _testinternalcapi.gc_hold_in_core_mem(
+                gc.collect, sys.argv[1] == "1")
+            print(type(obj).__name__)
+        """)
+        if not support.Py_DEBUG:
+            rc, out, err = assert_python_failure("-c", code, "0",
+                                                 PYTHON_GCVERIFY="kill")
+            self.assertIn(b"PYTHON_GCVERIFY=kill needs a debug build", err)
+            return
+        rc, out, err = assert_python_ok("-c", code, "0",
+                                        PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.strip(), b"NoneType")
+        rc, out, err = assert_python_failure("-X", "faulthandler", "-c", code,
+                                             "1", PYTHON_GCVERIFY="kill")
+        self.assertEqual(out, b"")
+        self.assertIn(b"Segmentation fault", err)
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_root_stats(self):

@@ -1,5 +1,7 @@
 import unittest
-from ctypes import (Structure, POINTER, pointer, c_char_p, c_int)
+from ctypes import (Structure, POINTER, pointer, c_char_p, c_int, py_object)
+from test import support
+from test.support.script_helper import assert_python_ok
 
 
 class SimpleTestCase(unittest.TestCase):
@@ -113,6 +115,48 @@ class PointerToStructure(unittest.TestCase):
 
         r.a[0].x = 42
         r.a[0].y = 99
+
+
+class PyObjectFieldBoxes(unittest.TestCase):
+    # A py_object field or array item holds the PyObject * of a box of an
+    # inline int or float in native memory; the box must outlive the store
+    # and collections, though a dict would keep only the inline value.
+    CODE = """if 1:
+        import gc
+        from ctypes import Structure, py_object
+        class S(Structure):
+            _fields_ = [("o", py_object), ("p", py_object)]
+        A = py_object * 2
+        def store(s, a, n):
+            # Values made here, so that no constant or local holds them.
+            s.o = 100000 + n
+            s.p = 2.5 * n
+            a[0] = -300000 - n
+            a[1] = -0.5 * n
+        s = S()
+        a = A()
+        store(s, a, 1)
+        for _ in range(3):
+            junk = [object() for _ in range(10000)]
+            del junk
+            gc.collect()
+        print(s.o, s.p, a[0], a[1])
+    """
+
+    def test_collect(self):
+        rc, out, err = assert_python_ok("-c", self.CODE)
+        self.assertEqual(out.split(), [b"100001", b"2.5", b"-300001", b"-0.5"])
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    def test_stress_kill(self):
+        rc, out, err = assert_python_ok("-c", self.CODE, PYTHON_GCSTRESS="100",
+                                        PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.split(), [b"100001", b"2.5", b"-300001", b"-0.5"])
+
+    def test_simple_value(self):
+        x = py_object()
+        x.value = 100000 + len("ab")
+        self.assertEqual(x.value, 100002)
 
 
 if __name__ == "__main__":

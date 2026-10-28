@@ -215,6 +215,83 @@ static PyType_Spec dictremover_spec = {
     .slots = dictremover_slots,
 };
 
+/****************************************************************/
+
+/* A py_object field or array item keeps the PyObject * it was given in
+   native memory, which the collector does not scan; the object it keeps
+   for it (KeepRef) is its edge.  A dict canonicalises a box of an int that
+   fits int32, or of a non-NaN float, to the inline value, which leaves the
+   box in native memory with no edge.  Such a box is kept in a BoxKeeper,
+   whose field holds the exact pointer. */
+typedef struct {
+    PyObject_HEAD
+    PyObject *box;
+} BoxKeeperObject;
+
+#define _BoxKeeperObject_CAST(op)     ((BoxKeeperObject *)(op))
+
+static int
+_BoxKeeper_traverse(PyObject *myself, visitproc visit, void *arg)
+{
+    BoxKeeperObject *self = _BoxKeeperObject_CAST(myself);
+    Py_VISIT(Py_TYPE(self));
+    Py_VISIT(self->box);
+    return 0;
+}
+
+static int
+_BoxKeeper_clear(PyObject *myself)
+{
+    BoxKeeperObject *self = _BoxKeeperObject_CAST(myself);
+    Py_CLEAR(self->box);
+    return 0;
+}
+
+static void
+_BoxKeeper_dealloc(PyObject *myself)
+{
+    PyTypeObject *tp = Py_TYPE(myself);
+    PyObject_GC_UnTrack(myself);
+    (void)_BoxKeeper_clear(myself);
+    tp->tp_free(myself);
+    Py_DECREF(tp);
+}
+
+static PyType_Slot boxkeeper_slots[] = {
+    {Py_tp_dealloc, _BoxKeeper_dealloc},
+    {Py_tp_traverse, _BoxKeeper_traverse},
+    {Py_tp_clear, _BoxKeeper_clear},
+    {Py_tp_doc, (void *)PyDoc_STR("keeps a box that native memory points to")},
+    {0, NULL},
+};
+
+static PyType_Spec boxkeeper_spec = {
+    .name = "_ctypes.BoxKeeper",
+    .basicsize = sizeof(BoxKeeperObject),
+    .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_DISALLOW_INSTANTIATION),
+    .slots = boxkeeper_slots,
+};
+
+/* KEEP, or a BoxKeeper of it if a dict would not keep KEEP itself. */
+static PyObject *
+keep_exact(ctypes_state *st, PyObject *keep)
+{
+    if (!PyValue_IsInline(PyValue_FromObject(keep))) {
+        return keep;
+    }
+    BoxKeeperObject *keeper = PyObject_GC_New(BoxKeeperObject,
+                                              st->BoxKeeper_Type);
+    if (keeper == NULL) {
+        return NULL;
+    }
+    keeper->box = keep;
+    PyObject_GC_Track(keeper);
+    return (PyObject *)keeper;
+}
+
+/****************************************************************/
+
 int
 PyDict_SetItemProxy(ctypes_state *st, PyObject *dict, PyObject *key, PyObject *item)
 {
@@ -3568,6 +3645,9 @@ PyCData_set(ctypes_state *st,
                         size, ptr);
     if (result == NULL)
         return -1;
+    result = keep_exact(st, result);
+    if (result == NULL)
+        return -1;
 
     /* KeepRef steals a refcount from it's last argument */
     /* If KeepRef fails, we are stumped.  The dst memory block has already
@@ -5439,6 +5519,9 @@ _ctypes_Simple_value_set_impl(CDataObject *self, PyObject *value)
     result = info->setfunc(self->b_ptr, value, info->size);
     if (!result)
         return -1;
+    result = keep_exact(st, result);
+    if (!result)
+        return -1;
 
     /* consumes the refcount the setfunc returns */
     return KeepRef(self, 0, result);
@@ -6361,6 +6444,7 @@ _ctypes_add_types(PyObject *mod)
      */
 
     CREATE_TYPE(st->DictRemover_Type, &dictremover_spec, NULL, NULL);
+    CREATE_TYPE(st->BoxKeeper_Type, &boxkeeper_spec, NULL, NULL);
     CREATE_TYPE(st->StructParam_Type, &structparam_spec, NULL, NULL);
 
 #ifdef MS_WIN32
@@ -6579,6 +6663,7 @@ module_traverse(PyObject *module, visitproc visit, void *arg) {
     Py_VISIT(st->swapped_suffix);
 
     Py_VISIT(st->DictRemover_Type);
+    Py_VISIT(st->BoxKeeper_Type);
     Py_VISIT(st->PyCArg_Type);
     Py_VISIT(st->PyCField_Type);
     Py_VISIT(st->PyCThunk_Type);
@@ -6613,6 +6698,7 @@ module_clear(PyObject *module) {
     Py_CLEAR(st->swapped_suffix);
 
     Py_CLEAR(st->DictRemover_Type);
+    Py_CLEAR(st->BoxKeeper_Type);
     Py_CLEAR(st->PyCArg_Type);
     Py_CLEAR(st->PyCField_Type);
     Py_CLEAR(st->PyCThunk_Type);

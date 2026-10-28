@@ -73,6 +73,7 @@
 
 typedef struct {
     PyTypeObject *DictRemover_Type;
+    PyTypeObject *BoxKeeper_Type;
     PyTypeObject *PyCArg_Type;
     PyTypeObject *PyCField_Type;
     PyTypeObject *PyCThunk_Type;

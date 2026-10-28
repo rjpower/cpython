@@ -155,7 +155,9 @@ class Call:
 callme = Call()
 def add(u, v): return u + v
 part = functools.partial(add, big)
+partf = functools.partial(add, 2.5)
 ig, ag = operator.itemgetter(0), operator.attrgetter("x")
+agf = operator.attrgetter("f")
 c0 = functools.lru_cache(maxsize=0)(callme)
 cn = functools.lru_cache(maxsize=None)(callme)
 c128 = functools.lru_cache(maxsize=128)(callme)
@@ -231,6 +233,14 @@ SLOT_CASES = {
     "itemgetter (tp_call)": ("r = type(ig).__call__(ig, (i, 2.5))", 0, 3,
                              None),
     "attrgetter (tp_call)": ("r = type(ag).__call__(ag, p)", 0, 2, None),
+    # The float results through the same paths: a float made and then
+    # canonicalised would count an allocation.
+    "partial float (tp_call)": ("r = type(partf).__call__(partf, i)", 0, 3,
+                                None),
+    "itemgetter float (tp_call)": (
+        "r = type(ig).__call__(ig, (i + 0.5, 2.5))", 0, 3, None),
+    "attrgetter float (tp_call)": ("r = type(agf).__call__(agf, p)", 0, 2,
+                                   None),
     # lru_cache has no vectorcall: the argument tuple, and a dict entry on
     # an unbounded miss.  The bounded cache's link keeps the key and the
     # result as objects: one box of each on a miss, and the link.
@@ -239,6 +249,15 @@ SLOT_CASES = {
     "lru_cache None miss": ("cn.cache_clear(); r = cn(i)", 0, 2, None),
     "lru_cache 128 hit": ("r = c128(1)", 0, 1, None),
     "lru_cache 128 miss": ("c128.cache_clear(); r = c128(i)", 2, 5, None),
+    "lru_cache 0 float": ("r = c0(i + 0.5)", 0, 1, None),
+    "lru_cache None hit float": ("r = cn(1.5)", 0, 1, None),
+    "lru_cache None miss float": ("cn.cache_clear(); r = cn(i + 0.5)", 0, 2,
+                                  None),
+    "lru_cache 128 hit float": ("r = c128(1.5)", 0, 1, None),
+    # The key of a float argument is the argument tuple itself
+    # (lru_cache_make_key), an object, so the link boxes the result only.
+    "lru_cache 128 miss float": ("c128.cache_clear(); r = c128(i + 0.5)", 1,
+                                 4, None),
     "generic alias of int": ("r = aint(i)", 0, 0, None),
     # The getters (6d rung 4) return values.  Discriminating: the number is
     # not a cached small int, or the owner is a heap float.

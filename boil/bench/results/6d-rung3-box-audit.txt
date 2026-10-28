@@ -1,5 +1,5 @@
-box audit of /home/power/code/cpython/.worktrees/boil-6d/build/pystats/python at a725b9ab5f2
-built: 3.16.0a1+dev (heads/boil/6d:a725b9ab5f2, Oct 28 2026, 07:01:49) [GCC 15.2.0]
+box audit of /home/power/code/cpython/.worktrees/boil-6d/build/pystats/python at 0457f2a3c2c
+built: 3.16.0a1+dev (heads/boil/6d-rung3:0457f2a3c2c, Oct 28 2026, 08:41:12) [GCC 15.2.0]
 ok       binary int               int 0.004/iter, float 0/iter
 ok       binary float             int 0.004/iter, float 0/iter
 ok       binary mixed             int 0.004/iter, float 0/iter
@@ -56,10 +56,18 @@ ok       int.__add__              boxes 2.004/iter, allocations 4.976/iter (budg
 ok       partial (tp_call)        boxes 0.004/iter, allocations 3.001/iter (budget 0 and 3)
 ok       itemgetter (tp_call)     boxes 0.004/iter, allocations 3.001/iter (budget 0 and 3)
 ok       attrgetter (tp_call)     boxes 0.004/iter, allocations 2.001/iter (budget 0 and 2)
+ok       partial float (tp_call)  boxes 0.004/iter, allocations 3.001/iter (budget 0 and 3)
+ok       itemgetter float (tp_call) boxes 0.004/iter, allocations 3.001/iter (budget 0 and 3)
+ok       attrgetter float (tp_call) boxes 0.004/iter, allocations 2.001/iter (budget 0 and 2)
 ok       lru_cache 0              boxes 0.004/iter, allocations 1.001/iter (budget 0 and 1)
 ok       lru_cache None hit       boxes 0.004/iter, allocations 1.001/iter (budget 0 and 1)
 ok       lru_cache None miss      boxes 0.004/iter, allocations 2.001/iter (budget 0 and 2)
 ok       lru_cache 128 hit        boxes 0.004/iter, allocations 1.001/iter (budget 0 and 1)
 ok       lru_cache 128 miss       boxes 2.004/iter, allocations 4.976/iter (budget 2 and 5)
+ok       lru_cache 0 float        boxes 0.004/iter, allocations 1.001/iter (budget 0 and 1)
+ok       lru_cache None hit float boxes 0.004/iter, allocations 1.001/iter (budget 0 and 1)
+ok       lru_cache None miss float boxes 0.004/iter, allocations 2.001/iter (budget 0 and 2)
+ok       lru_cache 128 hit float  boxes 0.004/iter, allocations 1.001/iter (budget 0 and 1)
+ok       lru_cache 128 miss float boxes 1.004/iter, allocations 4.001/iter (budget 1 and 4)
 ok       generic alias of int     boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
 residue  starred inline callee    boxes 2.004/iter, allocations 7.001/iter

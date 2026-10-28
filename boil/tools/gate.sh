@@ -3,7 +3,8 @@
 #
 # usage: boil/tools/gate.sh LEVEL BUILDDIR [targeted test files...]
 #   0  build, python -c pass, smoke test set
-#   1  the targeted test files given on the command line
+#   1  the targeted test files given on the command line (regrtest options
+#      such as -m PATTERN may follow them)
 #   2  full suite (release build)
 #   3  full suite (debug build), -u cpu test_cext, regen leaves the tree unchanged,
 #      Tools/boil/traverse_audit.py --check
@@ -74,7 +75,10 @@ case $level in
         test_dict test_list test_tuple test_class test_generators test_capi ;;
 1)
     [ $# -gt 0 ] || { echo "gate 1 needs test files" >&2; exit 2; }
-    run "$py" -m test -q --timeout 600 -j"$J" -i "$IGNORE" "$@" ;;
+    # The caller's arguments go before -i: regrtest's default verdict for a
+    # test no pattern names is the negation of the first pattern's kind, so
+    # an -i before a -m makes every unmatched test run (filter.py match_test).
+    run "$py" -m test -q --timeout 600 -j"$J" "$@" -i "$IGNORE" ;;
 2)
     run "$py" -m test -q --timeout 900 -j"$J" -i "$IGNORE"
     roots ;;

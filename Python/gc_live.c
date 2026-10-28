@@ -350,6 +350,19 @@ run_queue(PyThreadState *tstate)
     if (ls == NULL || ts->gc_trace.running_queue || ls->qhead == ls->qtail) {
         return 0;
     }
+    /* A signal that arrived while the collection marked is handled first,
+       as the eval breaker handles signals before a scheduled collection: a
+       handler run in a callback here would have its exception reported as
+       unraisable instead of raised in the code the collection interrupted.
+       The queue waits for the breaker, which handles the signal and then
+       runs it (_Py_RunGC()). */
+    if (_Py_eval_breaker_bit_is_set(tstate, _PY_SIGNALS_PENDING_BIT)
+        && _Py_ThreadCanHandleSignals(tstate->interp)
+        && _PyInterpreterState_GetFinalizing(tstate->interp) == NULL)
+    {
+        _Py_ScheduleGC(tstate);
+        return 0;
+    }
     int nfinalized = 0;
     ts->gc_trace.running_queue = 1;
     ls->running_queue++;

@@ -1217,6 +1217,45 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertLess(gc.get_count()[0], 1000 * 1000)
         del junk
 
+    @unittest.skipUnless(_testinternalcapi is not None
+                         and hasattr(__import__("signal"), "SIGUSR1"),
+                         "requires _testinternalcapi and SIGUSR1")
+    def test_signal_before_callbacks(self):
+        # A signal that arrives while a collection marks is handled before
+        # the collection's weak reference callbacks run, so the handler's
+        # exception reaches the code the collection interrupted rather than
+        # being reported as unraisable in a callback.
+        if threading.current_thread() is not threading.main_thread():
+            self.skipTest("signal handlers run in the main thread")
+        import signal
+        class Interrupt(Exception):
+            pass
+        def handler(*args):
+            raise Interrupt
+        old = signal.signal(signal.SIGUSR1, handler)
+        self.addCleanup(signal.signal, signal.SIGUSR1, old)
+        called = []
+        refs = []
+        class A:
+            pass
+        def make():
+            for _ in range(100):
+                a = A()
+                a.cycle = a
+                refs.append(weakref.ref(a, lambda r: called.append(
+                    sum(i for i in range(10)))))
+        make()
+        with support.catch_unraisable_exception() as cm:
+            with self.assertRaises(Interrupt):
+                _testinternalcapi.gc_collect_with_signal(
+                    int(signal.SIGUSR1))
+                for i in range(10):
+                    pass
+            for i in range(10):
+                pass
+            self.assertIsNone(cm.unraisable)
+        self.assertGreater(len(called), 0)  # the callbacks ran after
+
     def collections_while_allocating(self, nbytes):
         starts = []
         def callback(phase, info):

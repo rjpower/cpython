@@ -3550,6 +3550,25 @@ root_stats_dict(const _PyGCRootStats *s)
     return d;
 }
 
+/* Simulate the signal's arrival, then collect, as a signal that arrives
+   while a collection marks: the collection's queue of weak reference
+   callbacks and finalizers waits for the eval breaker, which handles the
+   signal first. */
+static PyValue
+gc_collect_with_signal(PyObject *self, PyValue arg)
+{
+    if (!PyValue_IsInlineInt(arg)) {
+        PyErr_SetString(PyExc_TypeError, "a signal number");
+        return PyValue_NULL;
+    }
+    if (PyErr_SetInterruptEx(PyValue_Int32(arg)) < 0) {
+        PyErr_SetString(PyExc_ValueError, "not a signal Python handles");
+        return PyValue_NULL;
+    }
+    (void)PyGC_Collect();
+    return PyValue_FromObject(Py_None);
+}
+
 /* The live collector's root-phase counters (note 11 section 9): a dict
    with "total", summed over this interpreter's collections, and "last",
    its last collection. */
@@ -3982,6 +4001,7 @@ static PyMethodDef module_functions[] = {
     {"gc_frame_descriptor", _PyCFunction_CAST(gc_frame_descriptor), METH_O},
     {"gc_walk_here", gc_walk_here, METH_NOARGS},
     {"gc_root_stats", gc_root_stats, METH_NOARGS},
+    {"gc_collect_with_signal", _PyCFunction_CAST(gc_collect_with_signal), METH_O},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
     {"gc_raw_block_is_object", _PyCFunction_CAST(gc_raw_block_is_object), METH_O},
     {"gc_segment_of", _PyCFunction_CAST(gc_segment_of), METH_O},

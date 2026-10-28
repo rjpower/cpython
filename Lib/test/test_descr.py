@@ -1,4 +1,5 @@
 import builtins
+import collections
 import copyreg
 import gc
 import itertools
@@ -16,6 +17,7 @@ import weakref
 from copy import deepcopy
 from contextlib import redirect_stdout
 from test import support
+from test.support import import_helper
 from test.support.script_helper import assert_python_ok
 
 try:
@@ -6386,6 +6388,224 @@ class TestGenericDescriptors(unittest.TestCase):
             weakref_descriptor.__get__(SlotClass(), SlotClass)
         with self.assertRaises(AttributeError):
             weakref_descriptor.__get__(IntSubclass(), IntSubclass)
+
+
+class IntSub(int):
+    pass
+
+
+def _values():
+    # Values made at run time: the int32 bounds and one past each, the
+    # special floats, True and an int subclass instance.  Each is read back
+    # by identity, which an inline value has by its bits and a heap value
+    # (2**31, NaN, the subclass instance) by its object.
+    one = int("1")
+    return [2**31 - one, -2**31 * one, 2**31 * one, -2**31 - one,
+            -0.0 * one, math.inf * one, -math.inf * one, math.nan * one,
+            True, IntSub(5), 12345 * one, 2.5 * one]
+
+
+class ValueAttributeTests(unittest.TestCase):
+    """6d rung 2: the attribute slots return and take values, so a value
+    passes through each path unboxed, and comes back the same."""
+
+    def test_identity(self):
+        class C:
+            @property
+            def p(self):
+                return 12345
+        class G:
+            def __getattribute__(self, name):
+                return 12345
+        self.assertIs(C().p, 12345)
+        self.assertIs(G().anything, 12345)
+
+    def test_paths(self):
+        for v in _values():
+            with self.subTest(v=v):
+                class P:
+                    @property
+                    def p(self):
+                        return v
+                    @p.setter
+                    def p(self, value):
+                        self.stored = value
+                class GA:
+                    def __getattribute__(self, name):
+                        return v
+                class GH:
+                    def __getattr__(self, name):
+                        return v
+                class D:
+                    def __get__(self, obj, owner=None):
+                        return v
+                    def __set__(self, obj, value):
+                        obj.__dict__["set"] = value
+                class H:
+                    d = D()
+                    def __setattr__(self, name, value):
+                        object.__setattr__(self, name, value)
+                class S:
+                    __slots__ = ("s",)
+                NT = collections.namedtuple("NT", "a b")
+
+                o = P()
+                self.assertIs(o.p, v)
+                o.p = v
+                self.assertIs(o.stored, v)
+                self.assertIs(GA().x, v)
+                self.assertIs(GH().x, v)
+                h = H()
+                self.assertIs(h.d, v)
+                h.d = v
+                self.assertIs(h.set, v)
+                h.x = v
+                self.assertIs(h.x, v)
+                self.assertIs(getattr(h, "x", None), v)
+                s = S()
+                s.s = v
+                self.assertIs(s.s, v)
+                self.assertIs(NT(v, 1).a, v)
+                P.cls = v
+                self.assertIs(P.cls, v)
+                self.assertIs(P().cls, v)
+                setattr(o, "y", v)
+                self.assertIs(o.y, v)
+
+    def test_wrappers(self):
+        # The explicit wrapper calls box only what a PyObject * parameter
+        # takes.
+        self.assertEqual(property(lambda s: s + 1).__get__(3, int), 4)
+        calls = []
+        p = property(lambda s: 0, lambda s, v: calls.append(("set", s, v)),
+                     lambda s: calls.append(("del", s)))
+        self.assertIs(p.__get__(None, 3), p)
+        p.__set__(3, 2.5)
+        p.__delete__(3)
+        self.assertEqual(calls, [("set", 3, 2.5), ("del", 3)])
+        with self.assertRaisesRegex(TypeError, "not 'int'"):
+            object.__getattribute__(object(), 3)
+        with self.assertRaisesRegex(TypeError, "not 'int'"):
+            object.__setattr__(object(), 3, 1)
+        with self.assertRaisesRegex(TypeError, "not 'float'"):
+            object.__delattr__(object(), 2.5)
+        self.assertEqual(int.__dict__["real"].__get__(100000, int), 100000)
+        self.assertEqual(float.__dict__["real"].__get__(2.5, float), 2.5)
+
+    def test_wrapper_nomemory(self):
+        _testcapi = import_helper.import_module("_testcapi")
+        x = 100000 + int("1")
+        get = int.__dict__["real"].__get__
+        error = None
+        _testcapi.set_nomemory(0, 1)
+        try:
+            get(x, int)
+        except MemoryError as exc:
+            error = exc
+        finally:
+            _testcapi.remove_mem_hooks()
+        self.assertIsInstance(error, MemoryError)
+
+    def test_errors(self):
+        n = 100000 + int("1")
+        for owner in (n, 2.5 * n):
+            with self.subTest(owner=owner):
+                with self.assertRaises(AttributeError) as cm:
+                    owner.missing
+                self.assertEqual(cm.exception.name, "missing")
+                self.assertIs(cm.exception.obj, owner)
+                with self.assertRaises(AttributeError) as cm:
+                    owner.missing = 1
+                self.assertEqual(cm.exception.name, "missing")
+                self.assertIs(cm.exception.obj, owner)
+                with self.assertRaises(AttributeError):
+                    del owner.missing
+                with self.assertRaisesRegex(AttributeError, "not writable"):
+                    owner.real = 1
+                self.assertIsNone(getattr(owner, "missing", None))
+                self.assertFalse(hasattr(owner, "missing"))
+                self.assertTrue(hasattr(owner, "real"))
+
+    def test_type_dict_stores(self):
+        class C:
+            x = 1
+        class D(C):
+            pass
+        def read(cls):
+            return cls.x
+        def read_instance(cls):
+            return cls().x
+        for _ in range(100):    # warm the caches and the specialised sites
+            self.assertEqual(read(C), 1)
+            self.assertEqual(read(D), 1)
+            self.assertEqual(read_instance(D), 1)
+        C.x = 2.5
+        self.assertEqual(read(C), 2.5)
+        self.assertEqual(read(D), 2.5)
+        self.assertEqual(read_instance(D), 2.5)
+        D.x = 12345
+        self.assertIs(read(D), 12345)
+        self.assertEqual(read(C), 2.5)
+        del D.x
+        self.assertEqual(read(D), 2.5)
+        del C.x
+        for cls in (C, D):
+            with self.assertRaises(AttributeError):
+                read(cls)
+            with self.assertRaises(AttributeError):
+                read_instance(cls)
+
+    def test_forwarding(self):
+        import threading
+        v = 12345 * int("1")
+        class C:
+            pass
+        c = C()
+        c.x = v
+        proxy = weakref.proxy(c)
+        local = threading.local()
+        local.x = v
+        module = types.ModuleType("m")
+        module.__getattr__ = lambda name: v if name == "x" else (
+            (_ for _ in ()).throw(AttributeError(name)))
+        class G:
+            x = v
+            def __class_getitem__(cls, item):
+                return types.GenericAlias(cls, item)
+        owners = [proxy, local, module, G[int]]
+        try:
+            import _testmultiphase
+        except ImportError:
+            pass
+        else:
+            e = _testmultiphase.Example()
+            e.x = v
+            owners.append(e)
+        try:
+            import xxlimited
+        except ImportError:
+            pass
+        else:
+            o = xxlimited.Xxo()
+            o.x = v
+            owners.append(o)
+        for owner in owners:
+            with self.subTest(owner=type(owner)):
+                self.assertIs(owner.x, v)
+                self.assertIs(getattr(owner, "x", None), v)
+                self.assertTrue(hasattr(owner, "x"))
+                self.assertFalse(hasattr(owner, "missing"))
+                self.assertIsNone(getattr(owner, "missing", None))
+        proxy.y = 2.5
+        self.assertEqual(c.y, 2.5)
+        import io
+        class Pickler(pickle.Pickler):
+            pass
+        pickler = Pickler(io.BytesIO())
+        pickler.persistent_id = v
+        self.assertIs(pickler.persistent_id, v)
+        pickler.attr = v
+        self.assertIs(pickler.attr, v)
 
 
 if __name__ == "__main__":

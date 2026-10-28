@@ -15,9 +15,12 @@ import sys
 import unittest
 import warnings
 
+from test import support
 from test.support import import_helper
+from test.support.script_helper import assert_python_failure
 
 _testcapi = import_helper.import_module('_testcapi')
+_testlimitedcapi = import_helper.import_module('_testlimitedcapi')
 pv = _testcapi.pyvalue
 
 INT32_MAX = 2**31 - 1
@@ -694,6 +697,136 @@ class MemberTests(ValueTestCase):
                          12345)
         with self.assertRaises(AttributeError):
             pv.MemberSetOneValue(slice(1), 'start', 2)
+
+
+class SlotTests(ValueTestCase):
+    """Types whose four attribute slots return and take values, static
+    and heap, used from Python and through both forms of each function."""
+
+    TYPES = [pv.ValueSlots, pv.HeapValueSlots]
+
+    def test_getattro(self):
+        for tp in self.TYPES:
+            with self.subTest(tp=tp):
+                o = tp()
+                self.assertIs(o.i, 12345)
+                self.assertEqual(o.f, 2.5)
+                self.assertIs(getattr(o, 'i', None), 12345)
+                self.assertTrue(hasattr(o, 'f'))
+                self.assertFalse(hasattr(o, 'missing'))
+                self.assertIsNone(getattr(o, 'missing', None))
+                self.assertValue(pv.GetAttrValue(o, 'i'), 12345)
+                self.assertValue(pv.GetAttrValue(o, 'f'), 2.5)
+                self.assertEqual(_testlimitedcapi.object_getattr(o, 'i'), 12345)
+                self.assertEqual(pv.GetOptionalAttrValue(o, 'f'),
+                                 (1, 2.5, 'float'))
+                self.assertEqual(pv.GetOptionalAttrValue(o, 'missing'),
+                                 (0, None, None))
+                self.assertEqual(_testcapi.object_getoptionalattr(o, 'i'),
+                                 12345)
+                self.assertIs(_testcapi.object_getoptionalattr(o, 'missing'),
+                              AttributeError)
+
+    def test_setattro(self):
+        values = [12345, 2.5, INT32_MAX, INT32_MIN, BIG, -0.0, math.inf,
+                  True, 'str']
+        for tp in self.TYPES:
+            for v in values:
+                with self.subTest(tp=tp, v=v):
+                    o = tp()
+                    o.x = v
+                    self.assertValue(pv.GetAttrValue(o, 'x'), v)
+                    del o.x
+                    self.assertFalse(hasattr(o, 'x'))
+                    self.assertEqual(pv.SetAttrValue(o, 'y', v), 0)
+                    self.assertValue(pv.GetAttrValue(o, 'y'), v)
+                    _testlimitedcapi.object_setattr(o, 'z', v)
+                    self.assertEqual(o.z, v)
+                    self.assertEqual(pv.SetAttrValue(o, 'z', NULL), 0)
+                    self.assertFalse(hasattr(o, 'z'))
+
+    def test_descriptor(self):
+        for tp in self.TYPES:
+            with self.subTest(tp=tp):
+                d = tp()
+                C = type('C', (), {'d': d})
+                c = C()
+                self.assertIs(c.d, 12345)
+                self.assertIs(C.d, d)
+                self.assertValue(pv.GetAttrValue(c, 'd'), 12345)
+                c.d = 2.5
+                self.assertEqual(d.set, 2.5)
+                self.assertEqual(pv.SetAttrValue(c, 'd', 100), 0)
+                self.assertIs(d.set, 100)
+                del c.d
+                self.assertFalse(hasattr(d, 'set'))
+                self.assertIs(type(d).__get__(d, c, C), 12345)
+                type(d).__set__(d, c, 7)
+                self.assertIs(d.set, 7)
+
+    def test_generic_spec(self):
+        tp = pv.HeapGeneric
+        C = type('C', (tp,), {})
+        c = C()
+        c.x = 12345
+        self.assertIs(c.x, 12345)
+        self.assertValue(pv.GetAttrValue(c, 'x'), 12345)
+        tp.__setattr__(c, 'y', 2.5)
+        self.assertEqual(tp.__getattribute__(c, 'y'), 2.5)
+        self.assertValue(pv.GetAttrValue(c, 'y'), 2.5)
+
+
+NULL = None
+
+
+@unittest.skipUnless(support.Py_DEBUG, "the checks are on debug builds")
+class DebugCheckTests(unittest.TestCase):
+    """A slot result that is a non-canonical box, or a value's bits in a
+    PyObject * field, stops a debug build with the slot named."""
+
+    PRELUDE = ("import gc, _testcapi\n"
+               "pv = _testcapi.pyvalue\n")
+
+    def assertStops(self, code, message):
+        rc, out, err = assert_python_failure("-c", self.PRELUDE + code)
+        self.assertIn(message.encode(), err)
+
+    def test_getattro(self):
+        message = ("Fatal Python error: tp_getattro of type "
+                   "'_testcapi.pyvalue.BadGetattro' returned a non-canonical "
+                   "int box")
+        for code in ["pv.BadGetattro().x",
+                     "getattr(pv.BadGetattro(), 'x', None)",
+                     "hasattr(pv.BadGetattro(), 'x')",
+                     "_testcapi.object_getoptionalattr(pv.BadGetattro(), 'x')",
+                     "pv.GetOptionalAttrValue(pv.BadGetattro(), 'x')"]:
+            with self.subTest(code=code):
+                self.assertStops(code, message)
+
+    def test_descr_get(self):
+        message = ("Fatal Python error: tp_descr_get of type "
+                   "'_testcapi.pyvalue.BadDescrGet' returned a non-canonical "
+                   "int box")
+        for code in [
+                # directly
+                "class C: d = pv.BadDescrGet()\nC().d",
+                # a nested getset: type_get_doc
+                "class C: __doc__ = pv.BadDescrGet()\nC.__doc__",
+                # the explicit wrapper
+                "d = pv.BadDescrGet()\ntype(d).__get__(d, 1, int)",
+                # a special-method lookup
+                "class C:\n __enter__ = pv.BadDescrGet()\n"
+                " __exit__ = pv.BadDescrGet()\nwith C(): pass"]:
+            with self.subTest(code=code):
+                self.assertStops(code, message)
+
+    def test_tracer(self):
+        message = ("Fatal Python error: an inline value in a PyObject * "
+                   "field of a '_testcapi.pyvalue.RawKeep' object")
+        for v in ["5", "2.5"]:
+            with self.subTest(v=v):
+                self.assertStops(f"r = pv.RawKeep()\nr.a = {v}\ngc.collect()",
+                                 message)
 
 
 if __name__ == '__main__':

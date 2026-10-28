@@ -9,6 +9,7 @@
 #include "pycore_lock.h"          // PyEvent
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tstate.h"        // _PyThreadStateImpl
+#include "pycore_value.h"         // _PyThreadState_PushValueSpan()
 
 #if defined(_PyGC_WALK) && defined(__x86_64__)
 
@@ -462,6 +463,126 @@ gc_verify_missed_root(PyObject *self, PyObject *args)
     return missed_root(kind, make, collect, keep);
 }
 
+
+/* The span a slot binding boxes into (6d rung 2, test 5): a frame
+   registered precise boxes an uncached inline int, holds the box only in
+   a span, raw, or, as the control, canonical (the inline value, which
+   holds no box), collects, and reads the box's type.  Under
+   PYTHON_GCVERIFY=kill the control's box dies and the read faults.  At its
+   collection point the fixture walks the stack itself: the collection's
+   walk does not report fallbacks in a test range.  Returns (the box is
+   still an int, its frame was classed precise, the walk fell back,
+   test-range fallbacks). */
+struct span_walk {
+    uintptr_t start, end;
+    int cls;
+    int fell_back;
+    int64_t test_fallbacks;
+};
+
+static void
+span_walk_scan(void *arg, uintptr_t start, uintptr_t end)
+{
+}
+
+static void
+span_walk_frame(void *arg, uintptr_t pc, uintptr_t sp, uintptr_t cfa,
+                int cls)
+{
+    struct span_walk *f = arg;
+    if (f->start <= pc && pc < f->end) {
+        f->cls = cls;
+    }
+}
+
+static struct span_walk last_span_walk;
+
+static Py_NO_INLINE void
+span_walk_here(struct span_walk *f)
+{
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
+    _PyGCWalk w = {
+        .scan = span_walk_scan,
+        .frame = span_walk_frame,
+        .arg = f,
+        .top = ts->c_stack_top,
+    };
+    static _Py_thread_local _PyGCContext ctx;
+    _PyGC_CaptureCaller(&ctx);
+    f->fell_back = _PyGC_WalkStack(&w, &ctx);
+    f->test_fallbacks = w.test_fallbacks;
+}
+
+static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
+PyObject *
+span_box(int raw, int32_t value, PyObject *collect)
+{
+    _PyGCFrameDesc d;
+    if (_PyGC_DecodeDescriptor((uintptr_t)&span_box, &d) < 0
+        || _PyGC_RegisterCodeRange(d.func_start, d.func_end,
+                                   _PyGC_FRAME_PRECISE, _PyGC_RANGE_TEST,
+                                   NULL) < 0)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "no stack walk");
+        return NULL;
+    }
+    PyObject *result = NULL;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue held[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, held);
+    PyObject *box = _PyValue_BoxInline(PyValue_FromInt32(value));
+    if (box == NULL) {
+        goto done;
+    }
+    if (raw) {
+        _PyValueSpan_AppendObject(&span, box);
+    }
+    else {
+        _PyValueSpan_Append(&span, PyValue_FromObject(box));
+    }
+    struct span_walk f = {.start = d.func_start, .end = d.func_end, .cls = -1};
+    span_walk_here(&f);
+    last_span_walk = f;
+    PyObject *r = PyObject_CallNoArgs(collect);
+    if (r == NULL) {
+        goto done;
+    }
+    // The use: a dead box faults here under kill, as missed_root's field.
+    int is_int = Py_TYPE(box) == &PyLong_Type;
+    result = Py_BuildValue("(OOOL)", is_int ? Py_True : Py_False,
+                           f.cls == _PyGC_FRAME_PRECISE ? Py_True : Py_False,
+                           f.fell_back ? Py_True : Py_False,
+                           (long long)f.test_fallbacks);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    _PyGC_UnregisterCodeRange(d.func_start);
+    return result;
+}
+
+/* The walk of the last gc_span_box(), for its collect callable to report
+   before the use, which faults in the control. */
+static PyObject *
+gc_span_box_walk(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    struct span_walk *f = &last_span_walk;
+    return Py_BuildValue("(OOL)",
+                         f->cls == _PyGC_FRAME_PRECISE ? Py_True : Py_False,
+                         f->fell_back ? Py_True : Py_False,
+                         (long long)f->test_fallbacks);
+}
+
+static PyObject *
+gc_span_box(PyObject *self, PyObject *args)
+{
+    int raw, value;
+    PyObject *collect;
+    if (!PyArg_ParseTuple(args, "piO", &raw, &value, &collect)) {
+        return NULL;
+    }
+    return span_box(raw, value, collect);
+}
+
 static PyObject *
 gc_walk_release(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
@@ -484,6 +605,8 @@ static PyMethodDef test_methods[] = {
     {"gc_walk_fallback", gc_walk_fallback, METH_NOARGS},
     {"gc_walk_hold_detached", _PyCFunction_CAST(gc_walk_hold_detached), METH_O},
     {"gc_verify_missed_root", gc_verify_missed_root, METH_VARARGS},
+    {"gc_span_box", gc_span_box, METH_VARARGS},
+    {"gc_span_box_walk", gc_span_box_walk, METH_NOARGS},
     {"gc_walk_detached_roots", gc_walk_detached_roots, METH_NOARGS},
     {"gc_walk_detach_holding", _PyCFunction_CAST(gc_walk_detach_holding), METH_O},
     {"gc_walk_release", gc_walk_release, METH_NOARGS},

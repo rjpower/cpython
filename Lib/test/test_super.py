@@ -610,5 +610,73 @@ class TestSuper(unittest.TestCase):
         self.assertIs(u.__self_class__, E)
 
 
+class SuperValueTests(unittest.TestCase):
+    # 6d rung 2: the super lookups return values, through the generic
+    # handler (cold), the specialised ones (warmed) and the instrumented
+    # one (under sys.monitoring).
+
+    def make(self):
+        class Base:
+            x = 12345
+            def m(self):
+                return 2.5
+        class Derived(Base):
+            def zero_arg(self):
+                return super().x
+            def two_arg(self):
+                return super(Derived, self).x
+            def method(self):
+                return super().m()
+        return Derived()
+
+    def check(self, d):
+        self.assertIs(d.zero_arg(), 12345)
+        self.assertIs(d.two_arg(), 12345)
+        self.assertEqual(d.method(), 2.5)
+
+    def test_cold_and_warm(self):
+        d = self.make()
+        self.check(d)
+        for _ in range(100):
+            self.check(d)
+
+    def test_monitored(self):
+        import sys
+        mon = sys.monitoring
+        tool = mon.DEBUGGER_ID
+        calls = []
+        mon.use_tool_id(tool, "test_super")
+        try:
+            mon.register_callback(tool, mon.events.CALL,
+                                  lambda *args: calls.append(1))
+            mon.set_events(tool, mon.events.CALL)
+            d = self.make()
+            self.check(d)
+            self.check(d)
+        finally:
+            mon.set_events(tool, 0)
+            mon.register_callback(tool, mon.events.CALL, None)
+            mon.free_tool_id(tool)
+        self.assertTrue(calls)
+
+    def test_inline_receiver(self):
+        for x in (2.5 * int("1"), 100000 + int("1")):
+            with self.subTest(x=x):
+                for _ in range(3):
+                    # Each box is fresh, so the address is not compared.
+                    self.assertRegex(super(type(x), x).__repr__(),
+                                     f"^<{type(x).__name__} object at 0x")
+                    self.assertEqual(super(type(x), x).__repr__.__self__, x)
+        class C:
+            def __getattribute__(self, name):
+                return object.__getattribute__(self, name)
+            def m(self):
+                return 12345
+        class D(C):
+            def m(self):
+                return super().m()
+        self.assertIs(D().m(), 12345)
+
+
 if __name__ == "__main__":
     unittest.main()

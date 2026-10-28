@@ -1871,6 +1871,19 @@ static int
 live_visit(PyObject *op, void *arg)
 {
     trace_t *t = arg;
+#ifdef Py_DEBUG
+    // _Py_VISIT_VALUE() drops inline values, so an inline encoding here
+    // came from a PyObject * field that was given a value's bits.  It is
+    // reported with stdio: the collector cannot run Python code.
+    if (op != NULL && PyValue_IsInline(_PyValue_FromBits((uintptr_t)op))) {
+        fprintf(stderr, "Fatal Python error: an inline value in a "
+                "PyObject * field of a '%.100s' object\n",
+                t->current != NULL ? Py_TYPE(t->current)->tp_name
+                                   : "(root)");
+        fflush(stderr);
+        abort();
+    }
+#endif
     PyObject *o = live_lookup(t, (uintptr_t)op, 0);
     if (o != NULL) {
         live_mark(t, o, 0);

@@ -8,7 +8,13 @@ instance owns.  This tool parses the C sources and reports:
 1. types whose instance struct has PyObject* (or other object pointer)
    members and that have no tp_traverse;
 2. types with a tp_traverse that does not visit a member that their
-   tp_dealloc or tp_clear releases.
+   tp_dealloc or tp_clear releases;
+3. types with a tp_traverse that names neither a member with references
+   nor, in dealloc or clear, its release (upstream leaked such members
+   under reference counting; under the tracing collector they are freed
+   under the object: the multibyte codec stream writer's pending, found
+   by 6d rung 4).  Report 3 is informational until its triage
+   (boil/design/work/audit-2.md) makes it part of --check.
 
 The parse is heuristic: struct definitions that begin with PyObject_HEAD,
 PyObject_VAR_HEAD, another object struct or a macro that expands to one;
@@ -584,6 +590,7 @@ def main() -> int:
     missing = []
     inherited = []
     partial = []
+    unvisited = []
     # A type without tp_traverse that has a base, or whose struct another
     # type with a tp_traverse uses, most likely inherits one.  A struct
     # defined in a .c file is shared only within it: several example modules
@@ -632,6 +639,14 @@ def main() -> int:
                       if last_member(r) in released - visited)
         if miss:
             partial.append((t, miss))
+        # Report 3: a member that neither the traverse nor any release names.
+        # Under a tracing collector a reference the traverse does not visit
+        # is freed under the object whether or not the dealloc released it
+        # (upstream leaked such members; mbstreamwriter's pending, 6d rung 4).
+        silent = sorted(r.rstrip("[]") for r in refs
+                        if last_member(r) not in visited | released)
+        if silent:
+            unvisited.append((t, silent))
 
     if args.check:
         return check(args.allow, rel, missing, partial)
@@ -646,6 +661,10 @@ def main() -> int:
         print(f"\n{len(partial)} types whose tp_traverse misses members that "
               f"dealloc or clear releases:")
         for t, miss in sorted(partial, key=lambda x: (str(x[0].path), x[0].line)):
+            print(f"  {rel(t.path)}:{t.line}: {t.name} ({t.traverse}): {', '.join(miss)}")
+        print(f"\n{len(unvisited)} types whose tp_traverse does not name a member "
+              f"that holds references and that no release names either:")
+        for t, miss in sorted(unvisited, key=lambda x: (str(x[0].path), x[0].line)):
             print(f"  {rel(t.path)}:{t.line}: {t.name} ({t.traverse}): {', '.join(miss)}")
     return 0
 

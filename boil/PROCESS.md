@@ -27,7 +27,8 @@ record and is updated at every landing.
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; hand-offs: FOR_ITER_RANGE spill and nbody +5.3% to step 8, `str +=` to step 9 |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | rungs 1, 2 and 3 landed (c66c69d55cf, 7ad194aa883; both landing reviews returned fix first and were fixed); rung 4 (getsets) design adopted 2026-10-28, getter family committed and gated (a legal cut), setter family in gate 1; cut to 6e unless the conversion commits pass gate 1 by 2026-10-30 18:00 PDT; hard stop 2026-10-31 12:00 PDT, cut order getsets then the lazy-dict handler |
 | 10a | precise roots (note 11): the attributed DWARF walk, the C-mode checker, kill and retain verification, the stack-hits tool | rungs 0, 1, 1b landed (29a358b492d, 4bb672e0bf4; gated clean), the kill record keeps every word (de6f193f905); rung 2b (ceval helpers precise, object-slot accessor, outlined-callee audit) in progress; items on typeobject.c, call.c and dictobject.c wait for 6d rung 4; rungs 3 (PyMem spans, kill with pymem and structs) and 4 (gate 4, write-up) open; hard stop 2026-11-02 15:30 PDT |
-| 7a | the per-interpreter callback and finalizer queue (finding B of note 08; note 11 question 18): callbacks and `__del__` run on the interpreter that owns the object, never during another interpreter's init | moved up from step 7 on 2026-10-28: a collection during a shared-obmalloc subinterpreter's init runs the main interpreter's finalizers on it and the process dies; design note next, after 10a rung 2 |
+| 7a | the per-interpreter callback and finalizer queue (note 13; finding B of note 08; note 11 question 18): a call runs on the interpreter that owns the object, never while that interpreter cannot run Python code; a shared-heap interpreter's heap passes to the main interpreter at its close; one GIL per domain | moved up from step 7 on 2026-10-28; design adopted 2026-10-28 10:50 PDT after two review rounds, with three rulings (no fallback forms, section 0.2's two compatibility breaks, two rungs): rung 1 (node queue, owner routing, the pin, delivery at execution, the opening and close, one GIL per domain) due 2026-10-29 13:00 PDT; rung 2 (order across owners, metadata by owner and the registration refusal, retirement, adoption and absorption, the fork child, the latency tool) gate 3 by 2026-10-30 12:00 PDT, hard stop 2026-10-30 18:00 PDT |
+| audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged: upstream leaks fixed, release-named members recorded, the parser's `const` defect fixed, report 3 made part of `--check` | in progress since 2026-10-28 10:00 PDT (opened by 6d rung 4's `MultibyteStreamWriter.pending` crash, a traverse the audit did not flag); hard stop 2026-10-28 18:00 PDT; lands through a landing review |
 | 6e | the remaining slot families on values; inline int and float receivers | open, after 6d |
 | 7 | generational collection over the precise root set | open; decides header flag bits and side bitmaps |
 | 8 | tier 0 over the IR, x86-64; first frees the specialised-handler space | open |
@@ -44,6 +45,33 @@ single eval-loop function and are recorded, not acted on, until step 8;
 test_ssl, `_decimal`, `_uuid` and `_sqlite3` do not build on this machine
 and gdb is absent (user action); `PYTHONMALLOC=malloc` is not honoured
 (hack register, owner 10a rung 2).
+
+### 0.1 Cleanup inputs from the 2026-10-28 architecture review
+
+`boil/ARCHITECTURE_REVIEW.md` (a source and architecture review of the
+branch at 4bb672e0bf4, no builds run) and its shortlist `boil/CLEANUP.md`
+are inputs to the plan, not gates. Owners, as of 2026-10-28:
+
+| Item | Owner | When |
+|---|---|---|
+| C identity agrees with value identity (`Py_Is`, the identity contract in `pyvalue.h`) | 6e | with the remaining slot families |
+| native ABI identity (wheel tags, untagged `.so` acceptance, an ABI-generation check at module init) | phase P's design, before the first port | after 10b |
+| the below-2^48 pointer bound enforced where addresses enter a value or header; the supported platform, compiler and unwind matrix published | 10a rung 4 (the matrix, with the precise/opaque/unsupported inventory); 6e (the bound) | this week |
+| one verification manifest (modes, exclusions, reasons, owners, removal conditions) that `gate.sh` executes, and landing summaries tied to commit and build | coordinator (`gate.sh`) with 10a rung 2b item 7 (the manifest's content from note 11 section 8.2) | after 10a rung 2b |
+| compatibility accessors that allocate and abort on failure (`_PyValue_ObjectOrAbort`): migrate core callers, document the residual contract | 6e | with the remaining slot families |
+| documentation: `boil/PR.md` marked historical, note 06's opening reconciled with its as-built record, the 4,095-slot limit documented, wall-time, RSS and pause measurements against upstream | coordinator at each step end; the measurements at 10a rung 4 and step 7 | ongoing |
+| 7a ahead of further collector features; `str +=` linear path with its own acceptance criterion (step 9); handle discipline before movement (10b) | as planned | as planned |
+
+### 0.2 Intentional compatibility breaks
+
+Each break is ruled before its rung starts, recorded here with its
+reason and the alternative that was rejected, and documented in the
+C API or library reference by the rung that makes it.
+
+| Break | Rung | Reason | Alternative rejected |
+|---|---|---|---|
+| `PyInterpreterConfig` with `use_main_obmalloc` and `PyInterpreterConfig_OWN_GIL` is refused with `InterpreterError` (note 13 section 7.2) | 7a rung 1 | a shared heap is one collection domain; a domain with two GILs would need a stop-the-world across them, which belongs to step 7's collector policy, not to a queue fix | one GIL per domain by stopping the other GIL's threads at each mark (step 7's problem) |
+| `PyDict_Watch()`, `PyType_Watch()` and `PyUnstable_Code_SetExtra()` refuse an object another interpreter owns (`ValueError`, `ValueError`, `SystemError`); `PyUnstable_Code_GetExtra()` on a foreign code object reports no extra; the reserved dict watcher ids are exempt (note 13 section 3.4) | 7a rung 2 | a watcher bit or extra slot is an index into one interpreter's table; set by another interpreter, it names a different watcher or free function in the owner's table | the registering interpreter kept beside each bit or slot: a field per watched object, and no answer to which interpreter runs a foreign watcher when the object dies on its owner |
 
 ## 1. The loop
 

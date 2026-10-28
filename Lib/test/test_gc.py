@@ -11,6 +11,7 @@ from test.support import threading_helper, gc_threshold
 
 import gc
 import os
+import re
 import sys
 import textwrap
 import threading
@@ -1740,7 +1741,8 @@ class TracingCollectorTests(unittest.TestCase):
         # PYTHON_GCVERIFY=kill:pymem (debug builds): what only the
         # verifier's second mark reaches dies, and its blocks are
         # quarantined and filled, so the core frame that reads the list
-        # back after the collection crashes; one that drops it does not, and
+        # back after the collection traps, with the record of the PyMem
+        # block that held it; one that drops it does not, and
         # neither does one under plain kill, whose first mark follows PyMem
         # from core frames.
         code = self.HOLD_IN_CORE_MEM
@@ -1758,7 +1760,9 @@ class TracingCollectorTests(unittest.TestCase):
         rc, out, err = assert_python_failure("-X", "faulthandler", "-c", code,
                                              "1", PYTHON_GCVERIFY="kill:pymem")
         self.assertEqual(out, b"")
-        self.assertIn(b"Segmentation fault", err)
+        self.assertIn(b"gc verify kill: Py_TYPE of the list at ", err)
+        self.assertIn(b"reached only through a PyMem block that the word at ",
+                      err)
 
     MISSED_ROOT = textwrap.dedent("""
         import gc, sys, _testinternalcapi
@@ -1800,6 +1804,24 @@ class TracingCollectorTests(unittest.TestCase):
         rc, out, err = run("weakref", "kill")
         self.assertEqual(out.split(), [b"weakref", b"NoneType"])
         self.assertNotIn(b"candidate", err)
+        # A use by the object's type traps, and the abort names the word
+        # that held it, in missed_root()'s frame, and the collection that
+        # killed it, also after a later collection.
+        since = {}
+        for kind in "slot_call", "store", "late":
+            with self.subTest(kind=kind):
+                rc, out, err = run(kind, "kill", ok=False)
+                self.assertEqual(out, b"")
+                m = re.search(rb"gc verify kill: Py_TYPE of the W at 0x\w+, "
+                              rb"which collection (\d+) killed: it was "
+                              rb"reached only through the word at 0x\w+ of "
+                              rb"a precise frame at \S*_testinternalcapi\S*; "
+                              rb"the last collection was (\d+)", err)
+                self.assertIsNotNone(m, err)
+                since[kind] = int(m[2]) - int(m[1])
+                self.assertIn(b"use of a killed object", err)
+        self.assertEqual(since["store"], since["slot_call"])
+        self.assertGreater(since["late"], since["slot_call"])
 
         rc, out, err = run("field", "retain")
         self.assertEqual(out.split(), [b"field", b"0x1"])
@@ -1807,6 +1829,9 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertEqual(out.split(), [b"weakref", b"W"])
         self.assertIn(b"candidate W at", err)
         self.assertIn(b"of a precise frame", err)
+        rc, out, err = run("store", "retain")
+        self.assertEqual(out.split(), [b"store", b"str"])
+        self.assertIn(b"candidate W at", err)
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_injection_sites(self):

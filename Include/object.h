@@ -239,6 +239,14 @@ PyAPI_FUNC(void) Py_SET_SIZE(PyVarObject *ob, Py_ssize_t size);
 // Limited API 3.15+: use function calls
 #endif
 
+#if defined(Py_DEBUG) && !defined(Py_LIMITED_API)
+/* The verifier's kill mode gives the header of an object it killed the
+   trap type, whose slots abort, as Py_TYPE() does, with the object's
+   record (Python/gc_trace.c). */
+PyAPI_DATA(PyTypeObject) _PyGC_TrapType;
+PyAPI_FUNC(void) _Py_NO_RETURN _PyGC_TrapUse(PyObject *op, const char *use);
+#endif
+
 static inline
 PyTypeObject* _Py_TYPE_impl(PyObject *ob)
 {
@@ -247,6 +255,11 @@ PyTypeObject* _Py_TYPE_impl(PyObject *ob)
     // never filled (a static type outside the early pass, never readied,
     // whose objects were not made by _PyObject_Init).
     assert(_PyObject_SHAPE(ob) != NULL && _PyObject_SHAPE(ob)->type != NULL);
+#  ifndef Py_LIMITED_API
+    if (_PyObject_SHAPE(ob)->type == &_PyGC_TrapType) {
+        _PyGC_TrapUse(ob, "Py_TYPE");
+    }
+#  endif
 #endif
     return _PyObject_SHAPE(ob)->type;
 }

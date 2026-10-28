@@ -61,6 +61,8 @@ NON_COLLECTING = frozenset({
     "_PyObject_CheckObjectHeap",
     # a compiler intrinsic, and inline assembly that reads the stack pointer
     "__builtin_return_address", "_PyGC_StackAddress",
+    # the verifier's trap in Py_TYPE() (debug builds): it reports and aborts
+    "_PyGC_TrapUse",
     # the value of an exact int that is not compact: PyLong_AsLongAndOverflow()
     # on an exact int calls no __index__ and allocates nothing
     # (Python/pyvalue.c)

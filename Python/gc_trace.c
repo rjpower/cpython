@@ -58,6 +58,7 @@
 #include "pycore_gc_trace.h"
 #include "pycore_initconfig.h"    // _PyStatus_ERR()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
+#include "pycore_shape.h"         // _PyShape_InitRoot()
 
 #if defined(WITH_MIMALLOC)
 
@@ -331,6 +332,14 @@ typedef struct {
     verify_rec rec;
 } verify_entry;
 
+/* What kill keeps of an object it killed, for the trap's report: the
+   object's type name is copied, since the type may die with it. */
+typedef struct {
+    PyObject *op;
+    verify_rec rec;
+    char type[48];
+} verify_killed;
+
 struct _gc_trace_state {
     // The live verifier: its mode, the live collections it has seen, and
     // the objects that only the roots outside A reached, which retain
@@ -340,9 +349,19 @@ struct _gc_trace_state {
     int64_t live_collections;
     verify_entry *q;
     size_t nq;
+    // The objects that the last collection's kill killed, sorted by
+    // address, with their records
+    verify_killed *killed;
+    size_t nkilled;
     // Kill's quarantine: blocks freed for the objects it killed, and the
-    // collection that killed them
-    struct { void *block; int64_t collection; } *quarantine;
+    // collection that killed them.  An object's own block keeps the
+    // object's record until it is freed.
+    struct {
+        void *block;
+        int64_t collection;
+        int has_rec;
+        verify_killed rec;
+    } *quarantine;
     size_t nquarantine;
     size_t quarantine_cap;
     // The static types passed to PyType_Ready() in this interpreter.
@@ -2457,31 +2476,38 @@ verify_owner(char *buf, size_t size, uintptr_t addr)
     PyOS_snprintf(buf, size, "heap");
 }
 
+/* Where the record's word was, for a report */
 static void
-verify_report_to(FILE *out, const verify_entry *e, int64_t now)
+verify_where(char *where, size_t size, const verify_rec *r)
 {
-    char where[600];
-    const verify_rec *r = &e->rec;
     if (r->kind == VERIFY_FROM_PRECISE) {
         char owner[512];
         verify_owner(owner, sizeof(owner), r->owner);
-        PyOS_snprintf(where, sizeof(where),
+        PyOS_snprintf(where, size,
                       "the word at %p of a precise frame at %s",
                       (void *)r->word, owner);
     }
     else if (r->kind == VERIFY_FROM_CORE_MEM) {
         char owner[512];
         verify_owner(owner, sizeof(owner), r->owner);
-        PyOS_snprintf(where, sizeof(where),
+        PyOS_snprintf(where, size,
                       "a PyMem block that the word at %p of a core frame "
                       "at %s points to", (void *)r->word, owner);
     }
     else {
         char owner[512];
         verify_owner(owner, sizeof(owner), r->word);
-        PyOS_snprintf(where, sizeof(where), "the struct word at %p (%s)",
+        PyOS_snprintf(where, size, "the struct word at %p (%s)",
                       (void *)r->word, owner);
     }
+}
+
+static void
+verify_report_to(FILE *out, const verify_entry *e, int64_t now)
+{
+    char where[600];
+    const verify_rec *r = &e->rec;
+    verify_where(where, sizeof(where), r);
     fprintf(out, "gc verify retain: candidate %s at %p: collection %lld "
             "reached it only through %s; collection %lld reached it from "
             "the roots\n", Py_TYPE(e->op)->tp_name, (void *)e->op,
@@ -2510,11 +2536,36 @@ verify_report(const verify_entry *e, int64_t now)
 
 _Py_thread_local PyThreadState *_PyGC_quarantine_tstate = NULL;
 
+/* The record of the object kill killed in the block [block, block + size),
+   or NULL.  The object need not start the block: the debug allocator's
+   hooks put their header before it. */
+static const verify_killed *
+killed_record(struct _gc_trace_state *ts, const void *block, size_t size)
+{
+    size_t lo = 0, hi = ts->nkilled;
+    while (lo < hi) {
+        size_t mid = lo + (hi - lo) / 2;
+        if ((uintptr_t)ts->killed[mid].op < (uintptr_t)block) {
+            lo = mid + 1;
+        }
+        else {
+            hi = mid;
+        }
+    }
+    if (lo < ts->nkilled
+        && (uintptr_t)ts->killed[lo].op < (uintptr_t)block + size)
+    {
+        return &ts->killed[lo];
+    }
+    return NULL;
+}
+
 void
 _PyGC_Quarantine(void *ptr)
 {
     struct _gc_trace_state *ts = _PyGC_quarantine_tstate->interp->gc.trace;
     size_t size = mi_usable_size(ptr);
+    const verify_killed *rec = killed_record(ts, ptr, size);
     if (ts->nquarantine == ts->quarantine_cap) {
         size_t cap = ts->quarantine_cap ? 2 * ts->quarantine_cap : 256;
         void *q = realloc(ts->quarantine, cap * sizeof(*ts->quarantine));
@@ -2526,13 +2577,122 @@ _PyGC_Quarantine(void *ptr)
         ts->quarantine_cap = cap;
     }
     memset(ptr, PYMEM_DEADBYTE, size);
+    if (rec != NULL) {
+        // An object's block: its header names the trap type, whose slots
+        // and Py_TYPE() abort with the record.
+        _PyShape *trap = _Py_TYPE_ROOT_SHAPE(&_PyGC_TrapType);
+        if (trap->type == NULL) {
+            _PyShape_InitRoot(&_PyGC_TrapType);
+        }
+        rec->op->ob_header = (uintptr_t)trap;
+    }
 #ifdef _Py_ADDRESS_SANITIZER
     ASAN_POISON_MEMORY_REGION(ptr, size);
 #endif
     ts->quarantine[ts->nquarantine].block = ptr;
     ts->quarantine[ts->nquarantine].collection = ts->live_collections;
+    ts->quarantine[ts->nquarantine].has_rec = rec != NULL;
+    if (rec != NULL) {
+        ts->quarantine[ts->nquarantine].rec = *rec;
+    }
     ts->nquarantine++;
 }
+
+void
+_PyGC_TrapUse(PyObject *op, const char *use)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyInterpreterState *interp = tstate != NULL ? tstate->interp
+                                                : _PyInterpreterState_Main();
+    struct _gc_trace_state *ts = interp->gc.trace;
+    for (size_t i = ts != NULL ? ts->nquarantine : 0; i-- > 0;) {
+        if (!ts->quarantine[i].has_rec || ts->quarantine[i].rec.op != op) {
+            continue;
+        }
+        const verify_killed *k = &ts->quarantine[i].rec;
+        char where[600];
+        verify_where(where, sizeof(where), &k->rec);
+        fprintf(stderr, "gc verify kill: %s of the %s at %p, which "
+                "collection %lld killed: it was reached only through %s; "
+                "the last collection was %lld\n", use, k->type, (void *)op,
+                (long long)k->rec.collection, where,
+                (long long)ts->live_collections);
+        fflush(stderr);
+        break;
+    }
+    Py_FatalError("gc verify kill: use of a killed object");
+}
+
+/* The slots of the trap type, which a quarantined object's header names */
+static PyObject *
+trap_repr(PyObject *op)
+{
+    _PyGC_TrapUse(op, "tp_repr");
+}
+
+static PyObject *
+trap_getattro(PyObject *op, PyObject *name)
+{
+    _PyGC_TrapUse(op, "tp_getattro");
+}
+
+static int
+trap_setattro(PyObject *op, PyObject *name, PyObject *value)
+{
+    _PyGC_TrapUse(op, "tp_setattro");
+}
+
+static PyObject *
+trap_call(PyObject *op, PyObject *args, PyObject *kwargs)
+{
+    _PyGC_TrapUse(op, "tp_call");
+}
+
+static Py_hash_t
+trap_hash(PyObject *op)
+{
+    _PyGC_TrapUse(op, "tp_hash");
+}
+
+static PyObject *
+trap_richcompare(PyObject *op, PyObject *other, int cmp)
+{
+    _PyGC_TrapUse(op, "tp_richcompare");
+}
+
+static int
+trap_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    _PyGC_TrapUse(op, "tp_traverse");
+}
+
+static void
+trap_dealloc(PyObject *op)
+{
+    _PyGC_TrapUse(op, "tp_dealloc");
+}
+
+static PyObject *
+trap_iter(PyObject *op)
+{
+    _PyGC_TrapUse(op, "tp_iter");
+}
+
+PyTypeObject _PyGC_TrapType = {
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
+    .tp_name = "gc_verify_trap",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_repr = trap_repr,
+    .tp_getattro = trap_getattro,
+    .tp_setattro = trap_setattro,
+    .tp_call = trap_call,
+    .tp_hash = trap_hash,
+    .tp_richcompare = trap_richcompare,
+    .tp_traverse = trap_traverse,
+    .tp_dealloc = trap_dealloc,
+    .tp_iter = trap_iter,
+};
 
 /* Free the blocks quarantined in collection upto or before */
 static void
@@ -2566,6 +2726,9 @@ verify_mark_b(trace_t *t, PyThreadState *tstate)
 #ifdef Py_DEBUG
     quarantine_release(ts, now - QUARANTINE_COLLECTIONS);
 #endif
+    free(ts->killed);
+    ts->killed = NULL;
+    ts->nkilled = 0;
     size_t kept = 0;
     for (size_t i = 0; i < ts->nq; i++) {
         verify_entry *e = &ts->q[i];
@@ -2630,6 +2793,21 @@ verify_mark_b(trace_t *t, PyThreadState *tstate)
                 t->oom = 1;
                 return;
             }
+        }
+        // The records, for the trap's report when a killed object is used
+        // (the quarantine copies each when it takes the object's block).
+        // Without memory for them, the trap reports no record.
+        qsort(t->newq, t->nnewq, sizeof(verify_entry), verify_entry_cmp);
+        ts->killed = malloc(t->nnewq * sizeof(verify_killed) + 1);
+        if (ts->killed != NULL) {
+            for (size_t i = 0; i < t->nnewq; i++) {
+                verify_killed *k = &ts->killed[i];
+                k->op = t->newq[i].op;
+                k->rec = t->newq[i].rec;
+                PyOS_snprintf(k->type, sizeof(k->type), "%s",
+                              Py_TYPE(k->op)->tp_name);
+            }
+            ts->nkilled = t->nnewq;
         }
         return;
     }
@@ -3815,6 +3993,7 @@ _PyGC_TraceFini(PyInterpreterState *interp)
     }
     interp->gc.trace = NULL;
     free(ts->q);
+    free(ts->killed);
 #ifdef Py_DEBUG
     quarantine_release(ts, INT64_MAX);
     free(ts->quarantine);

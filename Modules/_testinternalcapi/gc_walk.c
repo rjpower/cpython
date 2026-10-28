@@ -383,9 +383,14 @@ gc_walk_detach_holding(PyObject *self, PyValue arg)
      "field"      the list's ob_size, read after the collection;
      "interior"   its first item, read through ob_item cached before;
      "finalizer"  make()'s object, whose finalizer runs, read by its type;
+     "slot_call"  make()'s object, repr'd;
+     "late"       make()'s object, repr'd after a second collection;
+     "store"      make()'s object, appended to keep, which is repr'd;
      "weakref"    make()'s object, which keep holds a weak reference to:
                   the counterexample, which kill clears and retain hands
-                  back, a candidate that is no missed root. */
+                  back, a candidate that is no missed root.
+   In a debug build kill gives the dead object the trap type, so each use
+   by its type aborts with the object's record. */
 static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
 PyObject *
 missed_root(const char *kind, PyObject *make, PyObject *collect,
@@ -430,8 +435,22 @@ missed_root(const char *kind, PyObject *make, PyObject *collect,
     if (r == NULL) {
         goto done;
     }
+    if (strcmp(kind, "late") == 0) {
+        r = PyObject_CallNoArgs(collect);
+        if (r == NULL) {
+            goto done;
+        }
+    }
     if (field) {
         result = PyLong_FromSsize_t(Py_SIZE(obj));
+    }
+    else if (strcmp(kind, "slot_call") == 0 || strcmp(kind, "late") == 0) {
+        result = PyObject_Repr(obj);
+    }
+    else if (strcmp(kind, "store") == 0) {
+        if (PyList_Append(keep, obj) == 0) {
+            result = PyObject_Repr(keep);
+        }
     }
     else if (interior) {
         result = PyLong_FromVoidPtr((void *)items[0].bits);

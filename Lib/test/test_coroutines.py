@@ -2551,6 +2551,16 @@ class CAPITest(unittest.TestCase):
         future = at(iter([1]))
         self.assertEqual(next(future.__await__()), 1)
 
+    def test_tp_await_keeps_iterator(self):
+        # The awaitable holds the only reference to its iterator.
+        from _testcapi import awaitType as at
+        future = at(iter([object() for _ in range(3)]))
+        support.gc_collect()
+        # Reuse any freed memory, so a dangling reference shows.
+        junk = [bytes([0xa0]) * 64 for _ in range(10000)]
+        self.assertEqual(len(list(future.__await__())), 3)
+        del junk
+
     def test_tp_await_3(self):
         from _testcapi import awaitType as at
 

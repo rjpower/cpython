@@ -1424,30 +1424,35 @@ class TracingCollectorTests(unittest.TestCase):
         # An allocation that collects inline, under stress at every
         # allocation, does not scan the eval loop's C frame either: the
         # receiver that LOAD_SUPER_ATTR left in the frame's scratch array
-        # is freed by the collection that BUILD_LIST's allocation makes.
+        # is freed by the collection that the build's allocation makes.
+        # The allocator entry points that the builds call are precise,
+        # so no stale copy in their frames keeps it (10a-2b.md 2b).
         code = textwrap.dedent("""
-            import weakref, _testinternalcapi
+            import sys, weakref, _testinternalcapi
             class A:
                 def f(self):
                     return 1
             class B(A):
                 def f(self):
                     return super().f()
-            def dead_then_alloc():
+            def dead_then_alloc(n):
                 b = B()
                 b.self = b
                 b.f()
                 ref = weakref.ref(b)
                 del b
-                x = [None]
+                BUILD
                 return ref() is None
             _testinternalcapi.gc_set_stress(1)
-            freed = [dead_then_alloc() for _ in range(20)]
+            freed = [dead_then_alloc(None) for _ in range(20)]
             _testinternalcapi.gc_set_stress(0)
             print(freed.count(True))
         """)
-        rc, out, err = assert_python_ok("-c", code)
-        self.assertEqual(out.strip(), b"20")
+        for build in ("x = [n]", "x = (n, n)", "x = {n}", "x = {n: n}"):
+            with self.subTest(build=build):
+                rc, out, err = assert_python_ok(
+                    "-c", code.replace("BUILD", build))
+                self.assertEqual(out.strip(), b"20")
 
     def test_sweep_frees_exported_memoryview(self):
         # A struct iterator holds an export of its memoryview, and the sweep

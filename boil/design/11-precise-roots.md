@@ -122,6 +122,20 @@ clone (`.isra`, `.constprop`, `.part`) of a precise function not itself in
 the section fails the step; a test builds one file without `-g` and
 expects the failure.
 
+**Outlined callees** (10a-2b.md). The same step reads the image's code: a
+static function that the precise sections call or jump to, that the C mode
+classifies as collecting, and that the build left outlined outside the
+sections has a frame of its own between the precise caller's and the
+collector's. The walk scans it, so a stale word there keeps a dead object
+alive, on exactly the builds that do not inline (debug and ASan, at
+`-Og`). Each such callee is marked `Py_GC_PRECISE`, or is listed in the
+audit's `OUTLINED_OPAQUE` with the reason its frame may stay opaque; the
+step fails on any other. `Py_GC_PRECISE` is defined in Include/pyport.h,
+so that the static inline functions of the public headers can carry it;
+outside the core it is empty. A rung that marks functions builds
+build/default, build/debug, build/asan and build/tailcall at gate 3 (gate
+0 on each), and each build runs the step.
+
 ### 2.1 root_check's C mode
 
 The handler checker (note 06 section 17.2) assumes that a `PyValue *` local

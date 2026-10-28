@@ -6,7 +6,9 @@
 #   1  the targeted test files given on the command line
 #   2  full suite (release build)
 #   3  full suite (debug build), -u cpu test_cext, regen leaves the tree unchanged,
-#      Tools/boil/traverse_audit.py --check
+#      Tools/boil/traverse_audit.py --check; a rung that marks functions also
+#      runs level 0 on build/default, build/asan and build/tailcall, whose
+#      builds run the inline audit's outlined-callee check (note 11 section 2)
 #   4  internal benchmark set recorded as boil/bench/results/$GATE_LABEL.json
 # Levels 2 and 3 also sum the live collector's root counters over the suite
 # and fail on a stack-walk fallback (note 11 section 10).

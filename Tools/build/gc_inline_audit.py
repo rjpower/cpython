@@ -16,7 +16,15 @@ sources; the bodies checked are theirs.  It also fails on:
 - an image without .debug_info;
 - a function symbol in the section with no DWARF entry;
 - a .cold part of a precise function, or a clone of one (.isra,
-  .constprop, .part) outside the section.
+  .constprop, .part) outside the section;
+- in a linked image, a static function that code in the precise sections
+  calls or jumps to, that the C mode classifies as collecting, and that
+  this build left outlined outside the sections, unless OUTLINED_OPAQUE
+  gives the reason its frame may be opaque.  A build that does not inline
+  a static callee (debug and ASan, at -Og) gives it a frame of its own
+  between the precise caller's and the collector's, which the stack walk
+  scans; a stale word there keeps a dead object alive (10a-2b.md, the
+  outlined-callee audit).
 
 Usage: gc_inline_audit.py IMAGE [SOURCE...]
 With no SOURCE, the marked sources are the core .c files that contain
@@ -40,7 +48,34 @@ SECTION = "py_gc_precise"
 # The precise sections: the second is Py_GC_PRECISE_PRESERVE_NONE's
 SECTIONS = (SECTION, "py_gc_precise_pn")
 CORE_DIRS = ("Objects", "Python", "Modules", "Parser")
-HEADER_DIR = "Include/internal"
+HEADER_DIR = "Include"
+# Static callees of precise functions whose outlined frames may stay
+# opaque, and why.  Each other one is marked Py_GC_PRECISE.
+OUTLINED_OPAQUE = {
+    "_PyValue_ObjectRooted":
+        "a span primitive: it pushes the root that its caller pops, and "
+        "holds only the inline value across its box's allocation",
+    "collect":
+        "the collection, which runs below the collector's entry: the walk "
+        "of the collecting thread's stack starts above it "
+        "(collect_from_entry())",
+    "set_update_local":
+        "Py_NO_INLINE: its static callees, the merges, the resize and the "
+        "entry adds, are not precise, so it is opaque in every build",
+    "borrow_across_bare":
+        "a test fixture whose frame is opaque by design "
+        "(test_gc.test_borrow_across_collection)",
+    "lltrace_instruction":
+        "debug tracing, which runs only under PYTHON_LLTRACE",
+    "lltrace_resume_frame":
+        "debug tracing, which runs only under PYTHON_LLTRACE",
+    "run_queue":
+        "the collector's queue of callbacks and finalizers, step 7a's "
+        "(finding B, note 11 section 8.2)",
+    "vectorcall_call_dict":
+        "opaque until _PyStack_UnpackDict() returns its names in a span "
+        "(Objects/call.c)",
+}
 CLONE = re.compile(r"^(.*?)\.(cold|isra|constprop|part|lto_priv)(\.\d+)*$")
 DIE = re.compile(r"^\s*<(\d+)><([0-9a-f]+)>: Abbrev Number: (\d+)(?: \((\w+)\))?")
 ATTR = re.compile(r"^\s*<[0-9a-f]+>\s+(DW_AT_\w+)\s*:\s*(.*)$")
@@ -163,6 +198,7 @@ def read_dwarf(path: str, img: Image) -> tuple[dict[int, Die],
         elif key == "DW_AT_ranges":
             current.ranges = True
     finish(current, current_depth)
+    proc.stdout.close()
     if proc.wait() != 0:
         raise SystemExit(f"readelf failed on {path}")
     return subprograms, candidates
@@ -180,10 +216,11 @@ def name_of(d: Die, subprograms: dict[int, Die]) -> str | None:
 
 
 def marked_sources() -> list[Path]:
-    """The core .c files and internal headers that use the marker: a static
-    inline function marked in a header is precise wherever it is inlined."""
+    """The core .c files and the headers that use the marker: a static
+    inline function marked in a header is precise wherever it is inlined,
+    and so is its outlined copy."""
     files = []
-    dirs = ([(d, "*.c") for d in CORE_DIRS] + [(d, "*.c.h") for d in CORE_DIRS]
+    dirs = ([(d, "*.c") for d in CORE_DIRS] + [(d, "*.h") for d in CORE_DIRS]
             + [(HEADER_DIR, "*.h")])
     for d, pattern in dirs:
         for p in sorted((ROOT / d).rglob(pattern)):
@@ -259,6 +296,43 @@ def source_tables(sources: list[Path]) -> Tables:
                   typedefs, returns, args_anchored)
 
 
+CALL = re.compile(r"^\s*[0-9a-f]+:\s+(?:call|jmp)\w*\s+[0-9a-f]+ "
+                  r"<([^>+]+)>\s*$")
+FUNC_START = re.compile(r"^[0-9a-f]+ <([^>]+)>:$")
+
+
+def outlined_callees(path: str, img: Image) -> dict[str, set[str]]:
+    """The local functions outside the precise sections that code in them
+    calls or jumps to, by name, with their precise callers."""
+    local: dict[str, set[int]] = {}
+    for line in run(["readelf", "-sW", path]).splitlines():
+        parts = line.split()
+        if len(parts) >= 8 and parts[3] == "FUNC" and parts[4] == "LOCAL" \
+                and parts[6].isdigit():
+            local.setdefault(parts[7], set()).add(int(parts[6]))
+    present = set(re.findall(r"\]\s+(\S+)\s", run(["readelf", "-SW", path])))
+    found: dict[str, set[str]] = {}
+    for sec in SECTIONS:
+        if sec not in present:
+            continue
+        current = None
+        for line in run(["objdump", "-d", "--no-show-raw-insn", "-j", sec,
+                         path]).splitlines():
+            m = FUNC_START.match(line)
+            if m:
+                current = m.group(1)
+                continue
+            m = CALL.match(line)
+            if not m or current is None:
+                continue
+            target = m.group(1)
+            idxs = local.get(target)
+            if target == current or not idxs or idxs & img.sections.keys():
+                continue
+            found.setdefault(target, set()).add(current)
+    return found
+
+
 def audit(path: str, sources: list[Path]) -> list[str]:
     img = read_image(path)
     if not img.has_debug_info:
@@ -326,6 +400,20 @@ def audit(path: str, sources: list[Path]) -> list[str]:
         if not CLONE.match(name):
             errors.append(f"{path}: '{name}' is in section {SECTION} but has "
                           "no DWARF entry")
+    if img.relocatable:
+        return errors
+    for target, callers in sorted(outlined_callees(path, img).items()):
+        m = CLONE.match(target)
+        base = m.group(1) if m else target
+        fn = tables.functions.get(base)
+        if fn is None or not fn.static or base in OUTLINED_OPAQUE:
+            continue
+        if tables.classifier.kind(base) == "none":
+            continue
+        errors.append(f"{path}: static '{target}', which precise "
+                      f"{', '.join(repr(c) for c in sorted(callers))} "
+                      "calls, is outlined and collecting, and is not "
+                      "marked Py_GC_PRECISE or listed in OUTLINED_OPAQUE")
     return errors
 
 

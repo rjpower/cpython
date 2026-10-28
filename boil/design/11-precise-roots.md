@@ -661,9 +661,16 @@ Known exclusions, which are not 10a's:
     '*SubinterpImportTests*'` under this class. Neither is in the gate of
     record.
 
-  Also excluded under stress: test_capi.test_bytes's `*test_resize*`, the
-  Also excluded under stress: test_capi.test_bytes's `*test_resize*`, the
-  writer row of 6.2, owner rung 3.
+  Also excluded under stress: the writer row of 6.2, owner rung 3, as
+  `-i '*test_resize*' -i '*WriterTest*'`. The first is test_capi.test_bytes'
+  resize case. The second was added when step 7a's stress ladder (test_capi
+  under `PYTHON_GCSTRESS=1000`, only `*test_resize*` excluded) failed 3 of
+  3 runs in the same row: test_bytes `BytesWriterTest.test_singletons` (the
+  `byteswriter_check_consistency` assertion, and a segfault) and
+  test_unicode `PyUnicodeWriterTest.test_write_char` (a segfault). 7a
+  reproduced both without its changes on 10a's build/debug at 288a274f57c:
+  test_singletons 4 of 10, test_write_char 5 of 10. Both exclusions come
+  off when rung 3 roots the writer buffers.
 - ASan runs need `ASAN_OPTIONS=detect_stack_use_after_return=0`. With
   ASan's default, a local whose address escapes lives on ASan's
   heap-backed fake stack, which the conservative scan does not see, so

@@ -1653,6 +1653,10 @@ class Classifier:
     def summarize(self, body: list[Tok]) -> str:
         worst = "none"
         for i, t in enumerate(body[:-1]):
+            # A call through a pointer: (*fp)(...)
+            if t.text == ")" and body[i + 1].text == "(" and i >= 3 and \
+                    body[i - 2].text == "*" and body[i - 3].text == "(":
+                return "reentrant"
             if t.kind != "id" or body[i + 1].text != "(" or t.text in C_KEYWORDS:
                 continue
             if i > 0 and body[i - 1].text in (".", "->"):

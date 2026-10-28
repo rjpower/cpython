@@ -1395,6 +1395,19 @@ Py_GC_PRECISE static void f(Py_GC_SLOTS PyValue *slots) {
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(root_check_c.main([path]), 0)
 
+    def test_call_through_pointer_collects(self):
+        bodies = {
+            "direct": root_check_c.tokens_of("{ return fp(x); }"),
+            "deref": root_check_c.tokens_of("{ return (*fp)(x); }"),
+            "field": root_check_c.tokens_of("{ return o->call(x); }"),
+            "cast": root_check_c.tokens_of("{ return (int)(x); }"),
+        }
+        cls = root_check_c.Classifier(bodies)
+        self.assertEqual(cls.kind("direct"), "reentrant")
+        self.assertEqual(cls.kind("deref"), "reentrant")
+        self.assertEqual(cls.kind("field"), "reentrant")
+        self.assertEqual(cls.kind("cast"), "none")
+
     def test_char_literals_and_splices(self):
         src = root_check_c.prepare('x = \'"\'; s = "it\'s \\\nfine";')
         self.assertEqual(src.count("\n"), 1)

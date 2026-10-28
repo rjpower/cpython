@@ -792,7 +792,7 @@ list-targets:
 	@grep -E '^[A-Za-z][-A-Za-z0-9]+:' Makefile | awk -F : '{print $$1}'
 
 .PHONY: build_all
-build_all:	check-clean-src check-app-store-compliance $(BUILDPYTHON) platform sharedmods \
+build_all:	check-clean-src check-app-store-compliance $(BUILDPYTHON) Python/gc_inline.stamp platform sharedmods \
 		gdbhooks Programs/_testembed scripts checksharedmods rundsymutil $(BUILD_DETAILS)
 
 .PHONY: build_wasm
@@ -989,6 +989,24 @@ Python/gc_precise.stamp: $(LIBRARY_OBJS) $(srcdir)/$(GC_PRECISE_CHECK)
 		(cd $(srcdir) && $(PYTHON_FOR_REGEN) $(GC_PRECISE_CHECK) $$files) || exit 1; \
 	fi
 	@touch $@
+
+# The inline audit (Tools/build/gc_inline_audit.py) over the linked
+# interpreter image: nothing the C mode has not checked is inlined into a
+# precise function.  Without readelf (no ELF), there is no precise section
+# to audit.
+GC_INLINE_AUDIT=$(srcdir)/Tools/build/gc_inline_audit.py
+Python/gc_inline.stamp: $(BUILDPYTHON) $(GC_INLINE_AUDIT) $(srcdir)/$(GC_PRECISE_CHECK)
+	@$(MAKE) check-gc-inline
+	@touch $@
+
+.PHONY: check-gc-inline
+check-gc-inline: $(BUILDPYTHON)
+	@if test "$(PY_ENABLE_SHARED)" = 1; then image=$(INSTSONAME); else image=$(BUILDPYTHON); fi; \
+	if command -v readelf >/dev/null 2>&1; then \
+		$(PYTHON_FOR_REGEN) $(GC_INLINE_AUDIT) $$image; \
+	else \
+		echo "check-gc-inline: no readelf, not audited"; \
+	fi
 
 # Build the interpreter
 $(BUILDPYTHON):	Programs/python.o $(PLATFORM_MAIN_OBJS) $(LINK_PYTHON_DEPS) Python/gc_precise.stamp
@@ -3234,7 +3252,7 @@ docclean:
 .PHONY: clean-retain-profile
 clean-retain-profile: pycremoval
 	find . -name '*.[oa]' -exec rm -f {} ';'
-	rm -f Python/gc_precise.stamp
+	rm -f Python/gc_precise.stamp Python/gc_inline.stamp
 	find . -name '*.s[ol]' -exec rm -f {} ';'
 	find . -name '*.so.[0-9]*.[0-9]*' -exec rm -f {} ';'
 	find . -name '*.lto' -exec rm -f {} ';'

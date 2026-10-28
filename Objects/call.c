@@ -3,6 +3,7 @@
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
 #include "pycore_dict.h"          // _PyDict_FromItems()
 #include "pycore_function.h"      // _PyFunction_Vectorcall() definition
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_modsupport.h"    // _Py_VaBuildStack()
 #include "pycore_object.h"        // _PyCFunctionWithKeywords_TrampolineCall()
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
@@ -21,9 +22,18 @@ null_error(PyThreadState *tstate)
 }
 
 
-/* Check a call's result against the error indicator: 0 if they agree, or
-   -1 if they do not and a SystemError replaced the result. */
-static int
+/* Does a call's result agree with the error indicator?  It reads only,
+   so a precise caller holds nothing across it (10a-2.md, rule 1). */
+static inline int
+result_agrees(PyThreadState *tstate, int failed)
+{
+    return failed == (_PyErr_Occurred(tstate) != NULL);
+}
+
+/* Report a call's result that disagrees with the error indicator: a
+   SystemError replaces the result, and the return is -1.  Out of line and
+   opaque: it is the error path, and its frame is scanned. */
+static Py_NO_INLINE int
 check_function_result(PyThreadState *tstate, PyObject *callable,
                       int failed, const char *where)
 {
@@ -74,22 +84,24 @@ check_function_result(PyThreadState *tstate, PyObject *callable,
     return 0;
 }
 
-PyObject*
+Py_GC_PRECISE PyObject*
 _Py_CheckFunctionResult(PyThreadState *tstate, PyObject *callable,
                         PyObject *result, const char *where)
 {
-    if (check_function_result(tstate, callable, result == NULL, where) < 0) {
+    if (!result_agrees(tstate, result == NULL)) {
+        (void)check_function_result(tstate, callable, result == NULL, where);
         return NULL;
     }
     return result;
 }
 
-PyValue
+Py_GC_PRECISE PyValue
 _Py_CheckFunctionResultValue(PyThreadState *tstate, PyObject *callable,
                              PyValue result, const char *where)
 {
-    if (check_function_result(tstate, callable, PyValue_IsNull(result),
-                              where) < 0) {
+    if (!result_agrees(tstate, PyValue_IsNull(result))) {
+        (void)check_function_result(tstate, callable, PyValue_IsNull(result),
+                                    where);
         return PyValue_NULL;
     }
     return result;
@@ -123,7 +135,7 @@ _Py_CheckSlotResult(PyObject *obj, const char *slot_name, int success)
 /* --- Core PyObject call functions ------------------------------- */
 
 /* Call a callable Python object without any arguments */
-PyObject *
+Py_GC_PRECISE PyObject *
 PyObject_CallNoArgs(PyObject *func)
 {
     EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API, func);
@@ -134,10 +146,11 @@ PyObject_CallNoArgs(PyObject *func)
 
 /* The canonical values of args[0:n], in small if n + 1 values fit and
    otherwise in an array allocated with PyMem_Malloc(), with a free slot
-   before them for PY_VECTORCALL_ARGUMENTS_OFFSET.  NULL with MemoryError
-   set.  The caller holds args, which keep the objects among the values
-   alive.  Free with free_values(). */
-static PyValue *
+   before them for PY_VECTORCALL_ARGUMENTS_OFFSET.  NULL, with no
+   exception set, if the heap array cannot be allocated: it does not
+   collect.  The caller holds args, which keep the objects among the values
+   alive (10a-2.md, rule 3).  Free with free_values(). */
+Py_GC_PRECISE static PyValue *
 values_of(PyObject *const *args, Py_ssize_t n,
           PyValue *small, Py_ssize_t small_len)
 {
@@ -145,7 +158,6 @@ values_of(PyObject *const *args, Py_ssize_t n,
     if (n + 1 > small_len) {
         buf = PyMem_Malloc((n + 1) * sizeof(PyValue));
         if (buf == NULL) {
-            PyErr_NoMemory();
             return NULL;
         }
     }
@@ -156,7 +168,7 @@ values_of(PyObject *const *args, Py_ssize_t n,
     return buf + 1;
 }
 
-static void
+Py_GC_PRECISE static void
 free_values(PyValue *values, PyValue *small)
 {
     if (values - 1 != small) {
@@ -164,7 +176,7 @@ free_values(PyValue *values, PyValue *small)
     }
 }
 
-PyObject *
+Py_GC_PRECISE PyObject *
 _PyObject_VectorcallTstate(PyThreadState *tstate, PyObject *callable,
                            PyObject *const *args, size_t nargsf,
                            PyObject *kwnames)
@@ -176,7 +188,7 @@ _PyObject_VectorcallTstate(PyThreadState *tstate, PyObject *callable,
     PyValue small[_PY_FASTCALL_SMALL_STACK + 1];
     PyValue *values = values_of(args, total, small, Py_ARRAY_LENGTH(small));
     if (values == NULL) {
-        return NULL;
+        return PyErr_NoMemory();
     }
     PyValue res = _PyObject_VectorcallValueTstate(
         tstate, PyValue_FromObject(callable), values,
@@ -239,7 +251,7 @@ _PyObject_VectorcallDictTstate(PyThreadState *tstate, PyObject *callable,
     PyValue small[_PY_FASTCALL_SMALL_STACK + 1];
     PyValue *values = values_of(args, nargs, small, Py_ARRAY_LENGTH(small));
     if (values == NULL) {
-        return NULL;
+        return PyErr_NoMemory();
     }
     PyValue res = _PyObject_VectorcallDictValueTstate(
         tstate, PyValue_FromObject(callable), values,
@@ -294,7 +306,7 @@ basic_type_error:
 }
 
 
-PyValue
+Py_GC_PRECISE PyValue
 _PyObject_MakeTpCall(PyThreadState *tstate, PyValue callable,
                      const PyValue *args, Py_ssize_t nargs,
                      PyObject *keywords)
@@ -303,42 +315,53 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyValue callable,
     assert(nargs == 0 || args != NULL);
     assert(keywords == NULL || PyTuple_Check(keywords) || PyDict_Check(keywords));
 
+    /* This frame's span anchors keywords, the callable's object, the
+       argument tuple and the keyword dict, each from before the first
+       collecting call that it outlives (10a-2.md, rule 2). */
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, keywords);
+    PyValue res = PyValue_NULL;
+    PyObject *argstuple;
+    PyObject *kwdict;
+    PyObject *result = NULL;
+
     // A box of an inline callable, which is never callable, for the error.
     PyObject *callable_o = PyValue_Object(callable);
     if (callable_o == NULL) {
-        return PyValue_NULL;
+        goto done;
     }
+    _PyValueSpan_AppendObject(&span, callable_o);
     /* Slow path: build a temporary tuple for positional arguments and a
      * temporary dictionary for keyword arguments (if any) */
     ternaryfunc call = Py_TYPE(callable_o)->tp_call;
     if (call == NULL) {
         object_is_not_callable(tstate, callable_o);
-        return PyValue_NULL;
+        goto done;
     }
 
-    PyObject *argstuple = _PyTuple_FromValues(args, nargs);
+    argstuple = _PyTuple_FromValues(args, nargs);
     if (argstuple == NULL) {
-        return PyValue_NULL;
+        goto done;
     }
+    _PyValueSpan_AppendObject(&span, argstuple);
 
-    PyObject *kwdict;
     if (keywords == NULL || PyDict_Check(keywords)) {
         kwdict = keywords;
     }
+    else if (PyTuple_GET_SIZE(keywords)) {
+        assert(args != NULL);
+        kwdict = _PyStack_AsDict(args + nargs, keywords);
+        if (kwdict == NULL) {
+            goto done;
+        }
+        _PyValueSpan_AppendObject(&span, kwdict);
+    }
     else {
-        if (PyTuple_GET_SIZE(keywords)) {
-            assert(args != NULL);
-            kwdict = _PyStack_AsDict(args + nargs, keywords);
-            if (kwdict == NULL) {
-                return PyValue_NULL;
-            }
-        }
-        else {
-            keywords = kwdict = NULL;
-        }
+        kwdict = NULL;
     }
 
-    PyObject *result = NULL;
     if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object") == 0)
     {
         result = _PyCFunctionWithKeywords_TrampolineCall(
@@ -347,7 +370,12 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyValue callable,
     }
 
     result = _Py_CheckFunctionResult(tstate, callable_o, result, NULL);
-    return result == NULL ? PyValue_NULL : PyValue_FromObject(result);
+    if (result != NULL) {
+        res = PyValue_FromObject(result);
+    }
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 
@@ -418,7 +446,7 @@ PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *kwargs)
 }
 
 
-PyObject *
+Py_GC_PRECISE PyObject *
 PyObject_Vectorcall(PyObject *callable, PyObject *const *args,
                      size_t nargsf, PyObject *kwnames)
 {
@@ -428,7 +456,7 @@ PyObject_Vectorcall(PyObject *callable, PyObject *const *args,
 }
 
 
-PyValue
+Py_GC_PRECISE PyValue
 PyObject_VectorcallValue(PyValue callable, const PyValue *args,
                          size_t nargsf, PyObject *kwnames)
 {
@@ -492,24 +520,31 @@ PyCFunction_Call(PyObject *callable, PyObject *args, PyObject *kwargs)
 }
 
 
-PyObject *
+Py_GC_PRECISE PyObject *
 PyObject_CallOneArg(PyObject *func, PyObject *arg)
 {
     EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API, func);
     assert(arg != NULL);
-    PyValue _args[2];
-    PyValue *args = _args + 1;  // For PY_VECTORCALL_ARGUMENTS_OFFSET
-    args[0] = PyValue_FromObject(arg);
     PyThreadState *tstate = _PyThreadState_GET();
+    /* The argument array is this frame's, so its span anchors arg for the
+       call (10a-2.md, rule 2): the free slot for
+       PY_VECTORCALL_ARGUMENTS_OFFSET, then arg's value. */
+    PyValue _args[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, _args);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    _PyValueSpan_Append(&span, PyValue_FromObject(arg));
     size_t nargsf = 1 | PY_VECTORCALL_ARGUMENTS_OFFSET;
-    return PyValue_Object(_PyObject_VectorcallValueTstate(
-        tstate, PyValue_FromObject(func), args, nargsf, NULL));
+    PyValue res = _PyObject_VectorcallValueTstate(
+        tstate, PyValue_FromObject(func), _args + 1, nargsf, NULL);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return PyValue_Object(res);
 }
 
 
 /* --- PyFunction call functions ---------------------------------- */
 
-PyValue
+Py_GC_PRECISE PyValue
 _PyFunction_Vectorcall(PyValue func, const PyValue *stack,
                        size_t nargsf, PyObject *kwnames)
 {

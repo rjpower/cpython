@@ -9,6 +9,8 @@ extern "C" {
 #endif
 
 #include "pycore_code.h"          // EVAL_CALL_STAT_INC_IF_FUNCTION()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
+#include "pycore_value.h"         // _PyThreadState_PushValueRoot()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_stats.h"
 
@@ -102,7 +104,7 @@ PyAPI_FUNC(PyValue) _PyObject_MakeTpCall(
     PyObject *keywords);
 
 // Static inline variant of public PyVectorcall_Function().
-static inline vectorcallfunc
+Py_GC_PRECISE static inline vectorcallfunc
 _PyVectorcall_FunctionInline(PyObject *callable)
 {
     assert(callable != NULL);
@@ -139,8 +141,11 @@ _PyVectorcall_FunctionInline(PyObject *callable)
    keywords must only contain strings and all keys must be unique.
 
    Return the result on success. Raise an exception and return PyValue_NULL
-   on error. */
-static inline PyValue
+   on error.
+
+   Precise (boil/design/work/10a-2.md): the result check names callable_o
+   after the call, so the frame's span holds it across the call. */
+Py_GC_PRECISE static inline PyValue
 _PyObject_VectorcallValueTstate(PyThreadState *tstate, PyValue callable,
                                 const PyValue *args, size_t nargsf,
                                 PyObject *kwnames)
@@ -152,8 +157,14 @@ _PyObject_VectorcallValueTstate(PyThreadState *tstate, PyValue callable,
         PyObject *callable_o = PyValue_ObjectBorrow(callable);
         vectorcallfunc func = _PyVectorcall_FunctionInline(callable_o);
         if (func != NULL) {
+            _PyValueRoot root;
+            _PyThreadState_PushValueRoot(tstate, &root);
+            root.object = callable_o;
             PyValue res = func(callable, args, nargsf, kwnames);
-            return _Py_CheckFunctionResultValue(tstate, callable_o, res, NULL);
+            PyValue checked = _Py_CheckFunctionResultValue(
+                tstate, callable_o, res, NULL);
+            _PyThreadState_PopValueRoot(tstate, &root);
+            return checked;
         }
     }
     return _PyObject_MakeTpCall(tstate, callable, args,
@@ -174,7 +185,7 @@ extern PyValue _PyObject_VectorcallDictValueTstate(
     PyObject *kwargs);
 
 
-static inline PyObject *
+Py_GC_PRECISE static inline PyObject *
 _PyObject_CallNoArgsTstate(PyThreadState *tstate, PyObject *func) {
     return PyValue_Object(_PyObject_VectorcallValueTstate(
         tstate, PyValue_FromObject(func), NULL, 0, NULL));

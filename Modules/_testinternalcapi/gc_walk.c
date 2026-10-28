@@ -375,6 +375,94 @@ gc_walk_detach_holding(PyObject *self, PyValue arg)
     return PyValue_FromResult(PyBool_FromLong(detach_holding(obj)));
 }
 
+/* The missed-root demonstration (note 11 8.3): a function that registers
+   itself precise, so that the collector does not scan its frame, holds an
+   object only there across collect() and then uses it.  Under
+   PYTHON_GCVERIFY=kill the object dies and its blocks are quarantined, so
+   each use sees PYMEM_DEADBYTE, or traps under ASan:
+     "field"      the list's ob_size, read after the collection;
+     "interior"   its first item, read through ob_item cached before;
+     "finalizer"  make()'s object, whose finalizer runs, read by its type;
+     "weakref"    make()'s object, which keep holds a weak reference to:
+                  the counterexample, which kill clears and retain hands
+                  back, a candidate that is no missed root. */
+static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
+PyObject *
+missed_root(const char *kind, PyObject *make, PyObject *collect,
+            PyObject *keep)
+{
+    _PyGCFrameDesc d;
+    if (_PyGC_DecodeDescriptor((uintptr_t)&missed_root, &d) < 0
+        || _PyGC_RegisterCodeRange(d.func_start, d.func_end,
+                                   _PyGC_FRAME_PRECISE, _PyGC_RANGE_TEST,
+                                   NULL) < 0)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "no stack walk");
+        return NULL;
+    }
+    PyObject *result = NULL;
+    PyObject *obj = NULL;
+    PyValue *items = NULL;
+    PyObject *wr = NULL;
+    int field = strcmp(kind, "field") == 0;
+    int interior = strcmp(kind, "interior") == 0;
+    if (field || interior) {
+        obj = PyList_New(0);
+        PyObject *item = PyLong_FromLong(123456789);
+        if (obj == NULL || item == NULL || PyList_Append(obj, item) < 0) {
+            goto done;
+        }
+        items = ((PyListObject *)obj)->ob_item;
+    }
+    else {
+        obj = PyObject_CallNoArgs(make);
+        if (obj == NULL) {
+            goto done;
+        }
+        if (strcmp(kind, "weakref") == 0) {
+            wr = PyWeakref_NewRef(obj, NULL);
+            if (wr == NULL || PyList_Append(keep, wr) < 0) {
+                goto done;
+            }
+        }
+    }
+    PyObject *r = PyObject_CallNoArgs(collect);
+    if (r == NULL) {
+        goto done;
+    }
+    if (field) {
+        result = PyLong_FromSsize_t(Py_SIZE(obj));
+    }
+    else if (interior) {
+        result = PyLong_FromVoidPtr((void *)items[0].bits);
+    }
+    else if (wr != NULL) {
+        PyObject *ref;
+        if (PyWeakref_GetRef(wr, &ref) < 0) {
+            goto done;
+        }
+        result = ref != NULL ? ref : Py_None;
+    }
+    else {
+        result = PyLong_FromVoidPtr(Py_TYPE(obj));
+    }
+done:
+    _PyGC_UnregisterCodeRange(d.func_start);
+    return result;
+}
+
+static PyObject *
+gc_verify_missed_root(PyObject *self, PyObject *args)
+{
+    const char *kind;
+    PyObject *make, *collect, *keep;
+    if (!PyArg_ParseTuple(args, "sOOO!", &kind, &make, &collect,
+                          &PyList_Type, &keep)) {
+        return NULL;
+    }
+    return missed_root(kind, make, collect, keep);
+}
+
 static PyObject *
 gc_walk_release(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
@@ -396,6 +484,7 @@ static PyMethodDef test_methods[] = {
     {"gc_walk_owners", _PyCFunction_CAST(gc_walk_owners), METH_O},
     {"gc_walk_fallback", gc_walk_fallback, METH_NOARGS},
     {"gc_walk_hold_detached", _PyCFunction_CAST(gc_walk_hold_detached), METH_O},
+    {"gc_verify_missed_root", gc_verify_missed_root, METH_VARARGS},
     {"gc_walk_detached_roots", gc_walk_detached_roots, METH_NOARGS},
     {"gc_walk_detach_holding", _PyCFunction_CAST(gc_walk_detach_holding), METH_O},
     {"gc_walk_release", gc_walk_release, METH_NOARGS},

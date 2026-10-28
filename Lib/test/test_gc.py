@@ -1635,6 +1635,54 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertEqual(out, b"")
         self.assertIn(b"Segmentation fault", err)
 
+    MISSED_ROOT = textwrap.dedent("""
+        import gc, sys, _testinternalcapi
+        class Fin:
+            def __del__(self):
+                print("finalized", flush=True)
+        class W:
+            pass
+        kind = sys.argv[1]
+        keep = []
+        r = _testinternalcapi.gc_verify_missed_root(
+            kind, Fin if kind == "finalizer" else W, gc.collect, keep)
+        print(kind, hex(r) if isinstance(r, int) else type(r).__name__,
+              flush=True)
+        gc.collect()
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_verify_missed_root(self):
+        # Note 11 8.3's demonstration: a frame registered precise holds an
+        # object only in its own words across a collection, then uses it.
+        # Kill kills it, so a field read crashes, a cached interior
+        # pointer reads the freed pattern, and the finalizer runs before
+        # the use crashes.  The weakref case is the counterexample: kill
+        # clears the weak reference, while retain hands the object back
+        # and reports a candidate that is no missed root.
+        dead = hex(0xDDDDDDDDDDDDDDDD).encode()
+        def run(kind, mode, ok=True):
+            check = assert_python_ok if ok else assert_python_failure
+            return check("-X", "faulthandler", "-c", self.MISSED_ROOT, kind,
+                         PYTHON_GCVERIFY=mode)
+        rc, out, err = run("field", "kill", ok=False)
+        self.assertEqual(out, b"")
+        rc, out, err = run("interior", "kill")
+        self.assertEqual(out.split(), [b"interior", dead])
+        rc, out, err = run("finalizer", "kill", ok=False)
+        self.assertEqual(out.split(), [b"finalized"])
+        rc, out, err = run("weakref", "kill")
+        self.assertEqual(out.split(), [b"weakref", b"NoneType"])
+        self.assertNotIn(b"candidate", err)
+
+        rc, out, err = run("field", "retain")
+        self.assertEqual(out.split(), [b"field", b"0x1"])
+        rc, out, err = run("weakref", "retain")
+        self.assertEqual(out.split(), [b"weakref", b"W"])
+        self.assertIn(b"candidate W at", err)
+        self.assertIn(b"of a precise frame", err)
+
     def test_verify_mode_syntax(self):
         for bad in ("retain:", "retain:pymem,", "kill:heap", "retainer"):
             with self.subTest(bad=bad):

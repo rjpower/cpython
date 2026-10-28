@@ -1,0 +1,56 @@
+== tp_getattro: 163 entries, 16 functions
+  PyObject_GenericGetAttr 144; Xxo_getattro 4; proxy_getattr 2; _Py_module_getattro 1; _Py_type_getattro 1; super_getattro 1; union_getattro 1; method_getattro 1; instancemethod_getattro 1; lazy_import_getattro 1; ga_getattro 1; Example_getattro 1; local_getattro 1; Pickler_getattr 1; Unpickler_getattr 1; context_getattr 1
+    Xxo_getattro: Modules/xxmodule.c:129 Modules/xxlimited.c:468 Modules/xxlimited_3_13.c:303 Modules/xxlimited_35.c:122
+    proxy_getattr: Objects/weakrefobject.c:985 Objects/weakrefobject.c:1019
+    _Py_module_getattro: Objects/moduleobject.c:1736
+    _Py_type_getattro: Objects/typeobject.c:6965
+    super_getattro: Objects/typeobject.c:12767
+    union_getattro: Objects/unionobject.c:547
+    method_getattro: Objects/classobject.c:319
+    instancemethod_getattro: Objects/classobject.c:519
+    lazy_import_getattro: Objects/lazyimportobject.c:746
+    ga_getattro: Objects/genericaliasobject.c:1086
+    Example_getattro: Modules/_testmultiphase.c:118
+    local_getattro: Modules/_threadmodule.c:1800
+    Pickler_getattr: Modules/_pickle.c:5725
+    Unpickler_getattr: Modules/_pickle.c:8279
+    context_getattr: Modules/_decimal/_decimal.c:7632
+== tp_setattro: 28 entries, 12 functions
+  PyObject_GenericSetAttr 15; proxy_setattr 2; Xxo_setattro 2; type_setattro 1; local_setattro 1; Pickler_setattr 1; Unpickler_setattr 1; Uuid_setattr 1; context_setattr 1; heapctypesetattr_setattro 1; PyCStructType_setattro 1; UnionType_setattro 1
+    proxy_setattr: Objects/weakrefobject.c:986 Objects/weakrefobject.c:1020
+    Xxo_setattro: Modules/xxlimited.c:469 Modules/xxlimited_3_13.c:304
+    type_setattro: Objects/typeobject.c:6966
+    local_setattro: Modules/_threadmodule.c:1801
+    Pickler_setattr: Modules/_pickle.c:5726
+    Unpickler_setattr: Modules/_pickle.c:8280
+    Uuid_setattr: Modules/_uuidmodule.c:1737
+    context_setattr: Modules/_decimal/_decimal.c:7633
+    heapctypesetattr_setattro: Modules/_testcapi/heaptype.c:1351
+    PyCStructType_setattro: Modules/_ctypes/_ctypes.c:1180
+    UnionType_setattro: Modules/_ctypes/_ctypes.c:1195
+== tp_descr_get: 18 entries, 17 functions
+  func_descr_get 2; method_get 1; classmethod_get 1; member_get 1; getset_get 1; wrapperdescr_get 1; property_descr_get 1; cm_descr_get 1; sm_descr_get 1; super_descr_get 1; method_descr_get 1; instancemethod_descr_get 1; partial_descr_get 1; lru_cache_descr_get 1; tuplegetter_descr_get 1; nop_descr_get 1; PyCField_get 1
+    func_descr_get: Objects/funcobject.c:1278 Modules/_testcapi/vectorcall.c:335
+    method_get: Objects/descrobject.c:787
+    classmethod_get: Objects/descrobject.c:825
+    member_get: Objects/descrobject.c:862
+    getset_get: Objects/descrobject.c:899
+    wrapperdescr_get: Objects/descrobject.c:937
+    property_descr_get: Objects/descrobject.c:2134
+    cm_descr_get: Objects/funcobject.c:1685
+    sm_descr_get: Objects/funcobject.c:1951
+    super_descr_get: Objects/typeobject.c:12784
+    method_descr_get: Objects/classobject.c:329
+    instancemethod_descr_get: Objects/classobject.c:527
+    partial_descr_get: Modules/_functoolsmodule.c:885
+    lru_cache_descr_get: Modules/_functoolsmodule.c:1908
+    tuplegetter_descr_get: Modules/_collectionsmodule.c:2784
+    nop_descr_get: Modules/_testcapi/vectorcall.c:349
+    PyCField_get: Modules/_ctypes/cfield.c:468
+== tp_descr_set: 5 entries, 5 functions
+  member_set 1; getset_set 1; property_descr_set 1; tuplegetter_descr_set 1; PyCField_set 1
+    member_set: Objects/descrobject.c:863
+    getset_set: Objects/descrobject.c:900
+    property_descr_set: Objects/descrobject.c:2135
+    tuplegetter_descr_set: Modules/_collectionsmodule.c:2785
+    PyCField_set: Modules/_ctypes/cfield.c:469

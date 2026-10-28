@@ -1,0 +1,144 @@
+{
+ "schema": "boil-bench/1",
+ "build": {
+  "label": "6d-before",
+  "path": "/home/power/code/cpython/.worktrees/boil-6d-base/build/default/python",
+  "version": "3.16.0a1+dev (heads/weaver/python-boil-the-ocean:453798173f0, Oct 28 2026, 01:15:03) [GCC 15.2.0]",
+  "git": [
+   "CPython",
+   "heads/weaver/python-boil-the-ocean",
+   "453798173f0"
+  ],
+  "hash_seed": 0
+ },
+ "machine": {
+  "hostname": "bento-cat",
+  "kernel": "7.0.0-29-generic",
+  "cpus": 16,
+  "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+  "memory": "65726156 kB"
+ },
+ "results": {
+  "rss": {
+   "startup": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 13896,
+    "values": [
+     17376,
+     13896,
+     13772
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "imports": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 18584,
+    "values": [
+     29344,
+     18536,
+     18584
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "tuples_10m": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 746868,
+    "values": [
+     746864,
+     746868,
+     747108
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "instances_1m": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 118744,
+    "values": [
+     118888,
+     109032,
+     118744
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "dicts_200k": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 63244,
+    "values": [
+     63448,
+     63244,
+     63100
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "collector_live16": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 57016,
+    "values": [
+     57492,
+     56832,
+     57016
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "collector_live128": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 160480,
+    "values": [
+     160480,
+     160648,
+     160160
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "collector_live512": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 585996,
+    "values": [
+     586104,
+     585952,
+     585996
+    ],
+    "loops": 1,
+    "runs": 3
+   }
+  }
+ },
+ "runs": {
+  "rss": {
+   "timestamp": "2026-10-28T01:15:34-07:00",
+   "commit": {
+    "sha": "73e5daa8b2838034eab6e5a9f6e800fadaba1787",
+    "dirty": false
+   },
+   "load_1min": {
+    "max": 17.56005859375,
+    "samples": [
+     17.56005859375,
+     17.56005859375,
+     17.56005859375,
+     16.95458984375,
+     16.95458984375,
+     16.6376953125,
+     16.6376953125,
+     15.623046875,
+     14.59130859375
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,92 @@
+{
+ "schema": "boil-bench/1",
+ "build": {
+  "label": "6d-before",
+  "path": "/home/power/code/cpython/.worktrees/boil-6d-base/build/default/python",
+  "version": "3.16.0a1+dev (heads/weaver/python-boil-the-ocean:453798173f0, Oct 28 2026, 01:15:03) [GCC 15.2.0]",
+  "git": [
+   "CPython",
+   "heads/weaver/python-boil-the-ocean",
+   "453798173f0"
+  ],
+  "hash_seed": 0
+ },
+ "machine": {
+  "hostname": "bento-cat",
+  "kernel": "7.0.0-29-generic",
+  "cpus": 16,
+  "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+  "memory": "65726156 kB"
+ },
+ "results": {
+  "rss": {
+   "raytrace": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 52232,
+    "values": [
+     55388,
+     52152,
+     52232
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "deltablue": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 26472,
+    "values": [
+     29124,
+     26472,
+     26276
+    ],
+    "loops": 30,
+    "runs": 3
+   },
+   "chaos": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 52604,
+    "values": [
+     44396,
+     53092,
+     52604
+    ],
+    "loops": 2,
+    "runs": 3
+   },
+   "generators": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 66120,
+    "values": [
+     66284,
+     66088,
+     66120
+    ],
+    "loops": 2,
+    "runs": 3
+   }
+  }
+ },
+ "runs": {
+  "rss": {
+   "timestamp": "2026-10-28T01:16:07-07:00",
+   "commit": {
+    "sha": "73e5daa8b2838034eab6e5a9f6e800fadaba1787",
+    "dirty": true
+   },
+   "load_1min": {
+    "max": 14.59130859375,
+    "samples": [
+     14.59130859375,
+     14.59130859375,
+     14.59130859375,
+     13.9833984375,
+     13.9833984375
+    ]
+   }
+  }
+ }
+}

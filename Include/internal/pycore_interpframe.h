@@ -424,12 +424,15 @@ _PyThreadState_HasStackSpace(PyThreadState *tstate, int size)
 
 /* Push a frame header and nslots slots, the header onto the frame stack and
  * the slots onto the value stack.  Must be guarded by
- * _PyThreadState_HasStackSpace(), for nslots + FRAME_SPECIALS_SIZE. */
+ * _PyThreadState_HasStackSpace(), for nslots + FRAME_SPECIALS_SIZE.  The
+ * header's executable is NULL until the frame is initialized: the collector
+ * visits every frame on the data stack but those (note 11 section 4.4). */
 static inline _PyInterpreterFrame *
 _PyThreadState_PushFrameUnchecked(PyThreadState *tstate, int nslots)
 {
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(tstate->datastack_limit - FRAME_SPECIALS_SIZE);
+    frame->f_executable = PyValue_NULL;
     frame->base = (PyValue *)tstate->datastack_top;
     frame->saved_top = frame->base;
     tstate->datastack_limit = (PyObject **)frame;
@@ -501,6 +504,7 @@ _PyFrame_PushOverlapping(PyThreadState *tstate, PyValue func,
            base <= (PyValue *)tstate->datastack_top);
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(tstate->datastack_limit - FRAME_SPECIALS_SIZE);
+    frame->f_executable = PyValue_NULL;
     frame->saved_top = (PyValue *)tstate->datastack_top;
     tstate->datastack_limit = (PyObject **)frame;
     PyValue *end = base + _PyFrame_NumSlotsForCodeObject(code);
@@ -523,10 +527,9 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     frame->previous = previous;
     frame->f_funcobj = _PyValue_None;
     frame->f_executable = PyValue_FromObject(code);
-#ifdef Py_DEBUG
+    // The collector visits them (_PyGC_TraceVisitFrames())
     frame->f_builtins = NULL;
     frame->f_globals = NULL;
-#endif
     frame->f_locals = NULL;
     frame->frame_obj = NULL;
     _PyFrame_InitIRInstrPtr(frame, code);

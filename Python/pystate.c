@@ -10,7 +10,7 @@
 #include "pycore_codecs.h"        // _PyCodec_Fini()
 #include "pycore_critical_section.h" // _PyCriticalSection_Resume()
 #include "pycore_dtoa.h"          // _dtoa_state_INIT()
-#include "pycore_gc_trace.h"      // _PyGC_TRACE_CAPTURE_THREAD()
+#include "pycore_gc_walk.h"       // _PyGC_RecordDetach()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interpframe.h"   // _PyThreadState_HasStackSpace()
 #include "pycore_object.h"        // _PyObject_FiniState()
@@ -2097,11 +2097,8 @@ _PyThreadState_Attach(PyThreadState *tstate)
         break;
     }
 
-    // The registers recorded at the last detach are stale now.
-    ((_PyThreadStateImpl *)tstate)->gc_trace.valid = 0;
-    // The conservative scan of the thread state would take them for roots.
-    memset(((_PyThreadStateImpl *)tstate)->gc_trace.regs, 0,
-           sizeof(((_PyThreadStateImpl *)tstate)->gc_trace.regs));
+    // The record of the last detach is stale now.
+    ((_PyThreadStateImpl *)tstate)->gc_trace.detach.valid = 0;
 
     // Resume previous critical section. This acquires the lock(s) from the
     // top-most critical section.
@@ -2124,10 +2121,12 @@ detach_thread(PyThreadState *tstate, int detached_state)
     // XXX assert(tstate_is_alive(tstate) && tstate_is_bound(tstate));
     assert(_Py_atomic_load_int_relaxed(&tstate->state) == _Py_THREAD_ATTACHED);
     assert(tstate == current_fast_get());
-    if (!((_PyThreadStateImpl *)tstate)->gc_trace.valid) {
-        // Not detached through PyEval_SaveThread(), which records the
-        // registers before it changes any.
-        _PyGC_TRACE_CAPTURE_THREAD();
+    if (!((_PyThreadStateImpl *)tstate)->gc_trace.detach.valid) {
+        // Not detached through an entry that records its caller's context
+        // (PyEval_SaveThread() and the like): unpinned, from here.
+        _PyGCContext ctx;
+        _PyGC_CaptureCaller(&ctx);
+        _PyGC_RecordDetach(tstate, &ctx, 0);
     }
     if (tstate->critical_section != 0) {
         _PyCriticalSection_SuspendAll(tstate);
@@ -2143,6 +2142,23 @@ _PyThreadState_Detach(PyThreadState *tstate)
 {
     detach_thread(tstate, _Py_THREAD_DETACHED);
 }
+
+void
+_PyThreadState_DetachAt(PyThreadState *tstate, const _PyGCContext *ctx,
+                        int pinned)
+{
+    _PyGC_INJECT(tstate, _PyGC_SITE_DETACH);
+    _PyGC_RecordDetach(tstate, ctx, pinned);
+    detach_thread(tstate, _Py_THREAD_DETACHED);
+}
+
+#ifndef _PyGC_DETACH_ASM
+void
+_PyThreadState_DetachPinned(PyThreadState *tstate)
+{
+    _PyThreadState_Detach(tstate);
+}
+#endif
 
 void
 _PyThreadState_Suspend(PyThreadState *tstate)
@@ -2805,6 +2821,7 @@ push_chunk(PyThreadState *tstate, int nslots)
     tstate->datastack_chunk = new;
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(chunk_frames_end(new) - FRAME_SPECIALS_SIZE);
+    frame->f_executable = PyValue_NULL;  // uninitialized, for the collector
     frame->base = (PyValue *)&new->data[0];
     frame->saved_top = saved_top;
     tstate->datastack_limit = (PyObject **)frame;
@@ -2817,11 +2834,18 @@ _PyThreadState_PushFrame(PyThreadState *tstate, size_t size)
 {
     assert(size < INT_MAX/sizeof(PyObject *));
     assert(size >= (size_t)FRAME_SPECIALS_SIZE);
+    _PyInterpreterFrame *frame;
     if (_PyThreadState_HasStackSpace(tstate, (int)size)) {
-        return _PyThreadState_PushFrameUnchecked(
+        frame = _PyThreadState_PushFrameUnchecked(
             tstate, (int)size - FRAME_SPECIALS_SIZE);
     }
-    return push_chunk(tstate, (int)size - FRAME_SPECIALS_SIZE);
+    else {
+        frame = push_chunk(tstate, (int)size - FRAME_SPECIALS_SIZE);
+    }
+    if (frame != NULL) {
+        _PyGC_INJECT(tstate, _PyGC_SITE_PUSH_FRAME);
+    }
+    return frame;
 }
 
 void

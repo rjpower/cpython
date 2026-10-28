@@ -39,6 +39,8 @@
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
 #include "pycore_shape.h"         // _PyShape_Index()
 #include "pycore_unicodeobject.h" // _PyUnicode_TransformDecimalAndSpaceToASCII()
+#include "pycore_value.h"         // _PyThreadState_PushValueSpan()
+#include "pycore_gc_walk.h"       // _PyGC_WalkStack()
 
 #include "clinic/_testinternalcapi.c.h"
 
@@ -3458,6 +3460,433 @@ gc_verify_count(PyObject *self, PyObject *Py_UNUSED(args))
     return PyLong_FromSsize_t(_PyGC_TraceCount(_PyInterpreterState_GET()));
 }
 
+static PyObject *
+root_stats_dict(const _PyGCRootStats *s)
+{
+    static const char *const names[] = _PyGC_SCAN_CLASS_NAMES;
+    PyObject *d = PyDict_New();
+    if (d == NULL) {
+        return NULL;
+    }
+#define SET(key, value) \
+    do { \
+        PyObject *v = PyLong_FromLongLong(value); \
+        if (v == NULL || PyDict_SetItemString(d, (key), v) < 0) { \
+            return NULL; \
+        } \
+    } while (0)
+#define FIELD(name) SET(#name, s->name);
+    _PyGC_ROOT_STATS_FIELDS(FIELD)
+#undef FIELD
+    for (int i = 0; i < _PyGC_SCAN_CLASSES; i++) {
+        char key[32];
+        PyOS_snprintf(key, sizeof(key), "%s_words", names[i]);
+        SET(key, s->words[i]);
+        PyOS_snprintf(key, sizeof(key), "%s_hits", names[i]);
+        SET(key, s->hits[i]);
+    }
+#undef SET
+    return d;
+}
+
+/* Simulate the signal's arrival, then collect, as a signal that arrives
+   while a collection marks: the collection's queue of weak reference
+   callbacks and finalizers waits for the eval breaker, which handles the
+   signal first. */
+static PyValue
+gc_collect_with_signal(PyObject *self, PyValue arg)
+{
+    if (!PyValue_IsInlineInt(arg)) {
+        PyErr_SetString(PyExc_TypeError, "a signal number");
+        return PyValue_NULL;
+    }
+    if (PyErr_SetInterruptEx(PyValue_Int32(arg)) < 0) {
+        PyErr_SetString(PyExc_ValueError, "not a signal Python handles");
+        return PyValue_NULL;
+    }
+    (void)PyGC_Collect();
+    return PyValue_FromObject(Py_None);
+}
+
+/* The live collector's root-phase counters (note 11 section 9): a dict
+   with "total", summed over this interpreter's collections, and "last",
+   its last collection. */
+static PyObject *
+gc_root_stats(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    _PyGCRootStats total, last;
+    _PyGC_LiveGetRootStats(_PyInterpreterState_GET(), &total, &last);
+    PyObject *t = root_stats_dict(&total);
+    if (t == NULL) {
+        return NULL;
+    }
+    PyObject *l = root_stats_dict(&last);
+    if (l == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("{sNsN}", "total", t, "last", l);
+}
+
+/* The stack walk's descriptor for a lookup pc (an int), or None. */
+static PyObject *
+frame_descriptor(PyObject *arg)
+{
+    uintptr_t pc = (uintptr_t)PyLong_AsVoidPtr(arg);
+    if (pc == 0 && PyErr_Occurred()) {
+        return NULL;
+    }
+    _PyGCFrameDesc d;
+    if (_PyGC_DecodeDescriptor(pc, &d) < 0) {
+        Py_RETURN_NONE;
+    }
+    PyObject *rules = PyList_New(_PyGC_NSAVED);
+    if (rules == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i < _PyGC_NSAVED; i++) {
+        PyObject *r = d.rule[i] == _PyGC_RULE_OFFSET
+            ? PyLong_FromLong(d.off[i])
+            : PyUnicode_FromString(d.rule[i] == _PyGC_RULE_SAME
+                                   ? "same" : "undefined");
+        if (r == NULL) {
+            Py_DECREF(rules);
+            return NULL;
+        }
+        PyList_SET_ITEM(rules, i, r);
+    }
+    return Py_BuildValue("{sNsNsisisisNsi}",
+                         "start", PyLong_FromVoidPtr((void *)d.func_start),
+                         "end", PyLong_FromVoidPtr((void *)d.func_end),
+                         "cfa_reg", d.cfa_reg, "cfa_off", d.cfa_off,
+                         "ra_off", d.ra_off, "saved", rules,
+                         "extension", d.extension);
+}
+
+static PyValue
+gc_frame_descriptor(PyObject *self, PyValue arg)
+{
+    PyObject *op = PyValue_Object(arg);
+    if (op == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(frame_descriptor(op));
+}
+
+struct walk_record {
+    PyObject *frames;
+    int failed;
+};
+
+static void
+walk_record_scan(void *arg, uintptr_t start, uintptr_t end)
+{
+}
+
+static void
+walk_record_frame(void *arg, uintptr_t pc, uintptr_t sp, uintptr_t cfa,
+                  int cls)
+{
+    struct walk_record *r = arg;
+    if (r->failed) {
+        return;
+    }
+    PyObject *item = Py_BuildValue("(NNNi)", PyLong_FromVoidPtr((void *)pc),
+                                   PyLong_FromVoidPtr((void *)sp),
+                                   PyLong_FromVoidPtr((void *)cfa), cls);
+    if (item == NULL || PyList_Append(r->frames, item) < 0) {
+        r->failed = 1;
+    }
+    Py_XDECREF(item);
+}
+
+/* Walk this thread's stack from here: a list of (pc, sp, cfa, class) and
+   whether the walk fell back. */
+static PyObject *
+gc_walk_here(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    struct walk_record r = {PyList_New(0), 0};
+    if (r.frames == NULL) {
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    _PyGCWalk w = {
+        .scan = walk_record_scan,
+        .frame = walk_record_frame,
+        .arg = &r,
+        .top = ts->c_stack_top,
+        .activations = ts->gc_trace.activation,
+    };
+    _PyGCContext ctx;
+    _PyGC_CaptureCaller(&ctx);
+    int fell_back = _PyGC_WalkStack(&w, &ctx);
+    if (r.failed) {
+        Py_DECREF(r.frames);
+        return NULL;
+    }
+    PyObject *acts = PyList_New(0);
+    if (acts == NULL) {
+        Py_DECREF(r.frames);
+        return NULL;
+    }
+    for (_PyEvalActivation *a = ts->gc_trace.activation; a; a = a->prev) {
+        PyObject *item = Py_BuildValue("(NN)", PyLong_FromVoidPtr((void *)a->lo),
+                                       PyLong_FromVoidPtr((void *)a->hi));
+        if (item == NULL || PyList_Append(acts, item) < 0) {
+            Py_XDECREF(item);
+            Py_DECREF(acts);
+            Py_DECREF(r.frames);
+            return NULL;
+        }
+        Py_DECREF(item);
+    }
+    return Py_BuildValue("(NiN)", r.frames, fell_back, acts);
+}
+
+/* Arm one collection at site (_PyGC_SITE_*) on this thread; 0 disarms.
+   Returns the collections the sites have run on this thread. */
+static PyValue
+gc_collect_at(PyObject *self, PyValue arg)
+{
+    if (!PyValue_IsInlineInt(arg)) {
+        PyErr_SetString(PyExc_TypeError, "a site number");
+        return PyValue_NULL;
+    }
+    int site = PyValue_Int32(arg);
+    if (site < 0 || site >= _PyGC_SITE_COUNT) {
+        PyErr_SetString(PyExc_ValueError, "no such site");
+        return PyValue_NULL;
+    }
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
+    ts->gc_trace.inject_site = site;
+    return PyValue_FromResult(PyLong_FromLongLong(ts->gc_trace.injected));
+}
+
+/* callable("first", "second", 3), built by Py_VaBuildStack(), whose
+   do_mkstack() is an injection site */
+static PyValue
+gc_call_built(PyObject *self, PyValue arg)
+{
+    PyObject *callable = PyValue_Object(arg);
+    if (callable == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(
+        PyObject_CallFunction(callable, "ssi", "first", "second", 3));
+}
+
+/* Collect through the inline path, which queues callbacks for the eval
+   breaker, then return callable(arg) without reaching the eval loop in
+   between. */
+static PyObject *
+gc_collect_inline_then(PyObject *self, PyObject *args)
+{
+    PyObject *callable, *arg;
+    if (!PyArg_ParseTuple(args, "OO", &callable, &arg)) {
+        return NULL;
+    }
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
+    int64_t before = ts->gc_trace.injected;
+    _PyGC_InjectCollect((PyThreadState *)ts);
+    if (ts->gc_trace.injected == before) {
+        PyErr_SetString(PyExc_RuntimeError, "the collector cannot run here");
+        return NULL;
+    }
+    return PyObject_CallOneArg(callable, arg);
+}
+
+/* PYTHON_GCSTRESS=every from now on; 0 turns it off */
+static PyValue
+gc_set_stress(PyObject *self, PyValue arg)
+{
+    if (!PyValue_IsInlineInt(arg) || PyValue_Int32(arg) < 0) {
+        PyErr_SetString(PyExc_ValueError, "a count of allocations");
+        return PyValue_NULL;
+    }
+    _PyGC_LiveSetStress(_PyInterpreterState_GET(), PyValue_Int32(arg));
+    return PyValue_FromObject(Py_None);
+}
+
+/* A static type that only gc_ready_static_type() readies, as an extension
+   module readies its static types: the header leaves ob_type to
+   PyType_Ready(), which allocates before it sets it. */
+static PyTypeObject LateStatic_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi.LateStatic",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+};
+
+static PyObject *
+gc_ready_static_type(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    if (PyType_Ready(&LateStatic_Type) < 0) {
+        return NULL;
+    }
+    return Py_NewRef(&LateStatic_Type);
+}
+
+/* Call callable while a core frame holds [None] only in a PyMem block, and
+   return the list if give_back is set (_PyGC_TestHoldInCoreMem()). */
+static PyObject *
+gc_hold_in_core_mem(PyObject *self, PyObject *args)
+{
+    PyObject *callable;
+    int give_back;
+    if (!PyArg_ParseTuple(args, "Op", &callable, &give_back)) {
+        return NULL;
+    }
+    return _PyGC_TestHoldInCoreMem(callable, give_back);
+}
+
+/* Push a frame for func that is never linked into the chain, with [None]
+   in its first slot, and report whether the frame roots reach the list,
+   with the frame holding it and with the slot cleared.  With cross, frames
+   pushed and never initialized follow it until the data stack moves to a
+   new chunk, so that the frame is in an earlier chunk under frames that
+   the collector must skip (note 11 section 4.4). */
+static PyObject *
+gc_frames_off_chain(PyObject *self, PyObject *args)
+{
+    PyObject *func;
+    int cross;
+    if (!PyArg_ParseTuple(args, "O!p", &PyFunction_Type, &func, &cross)) {
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyCodeObject *code = (PyCodeObject *)((PyFunctionObject *)func)->func_code;
+    PyObject *obj = PyList_New(0);
+    if (obj == NULL || PyList_Append(obj, Py_None) < 0) {
+        Py_XDECREF(obj);
+        return NULL;
+    }
+    _PyInterpreterFrame *frame =
+        _PyThreadState_PushFrame(tstate, code->co_framesize);
+    if (frame == NULL) {
+        Py_DECREF(obj);
+        return PyErr_NoMemory();
+    }
+    _PyFrame_Initialize(tstate, frame, PyValue_FromObject(Py_NewRef(func)),
+                        NULL, code, frame->base, 0, NULL);
+    frame->base[0] = PyValue_FromObject(obj);
+    _PyInterpreterFrame *fillers[64];
+    int nfillers = 0;
+    _PyStackChunk *chunk = tstate->datastack_chunk;
+    while (cross && tstate->datastack_chunk == chunk
+           && nfillers < (int)Py_ARRAY_LENGTH(fillers))
+    {
+        _PyInterpreterFrame *f = _PyThreadState_PushFrame(tstate, 1024);
+        if (f == NULL) {
+            break;
+        }
+        fillers[nfillers++] = f;
+    }
+    int crossed = tstate->datastack_chunk != chunk;
+    int with = _PyGC_TraceLiveRootsOf(tstate, (uintptr_t)obj);
+    frame->base[0] = PyValue_NULL;
+    int without = _PyGC_TraceLiveRootsOf(tstate, (uintptr_t)obj);
+    while (nfillers > 0) {
+        _PyThreadState_PopFrame(tstate, fillers[--nfillers]);
+    }
+    Py_DECREF(func);
+    _PyThreadState_PopFrame(tstate, frame);
+    Py_DECREF(obj);
+    if (with < 0 || without < 0) {
+        return NULL;
+    }
+    return Py_BuildValue("(iii)", (with & _PyGC_TRACE_ROOT_FRAMES) != 0,
+                         (without & _PyGC_TRACE_ROOT_FRAMES) != 0, crossed);
+}
+
+/* Is op reached from the thread states' roots, which hold the value
+   roots and spans?  -1 on error. */
+static int
+in_value_roots(PyObject *op)
+{
+    int r = _PyGC_TraceLiveRootsOf(_PyThreadState_GET(), (uintptr_t)op);
+    return r < 0 ? -1 : (r & _PyGC_TRACE_ROOT_TSTATE) != 0;
+}
+
+#define SPAN_EXPECT(op, want, what) \
+    do { \
+        int _r = in_value_roots(op); \
+        if (_r < 0) { \
+            goto error; \
+        } \
+        if (_r != (want)) { \
+            PyErr_Format(PyExc_AssertionError, "%s: %s", (what), \
+                         (want) ? "not visited" : "still visited"); \
+            goto error; \
+        } \
+    } while (0)
+
+/* The collector visits a span's values from base[0] to base[n - 1]: only
+   appended values, NULL and inline ones skipped, a raw box as the box, a
+   rebased buffer, and nothing once popped; a one-value root is a span of
+   one. */
+static PyObject *
+test_value_spans(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyObject *a = NULL, *b = NULL, *c = NULL, *box = NULL;
+    _PyValueRoot span, one;
+    int pushed = 0;
+    PyValue *buf = PyMem_Malloc(4 * sizeof(PyValue));
+    if (buf == NULL) {
+        return PyErr_NoMemory();
+    }
+    a = PyList_New(0);
+    b = PyList_New(0);
+    c = PyList_New(0);
+    box = PyFloat_FromDouble(1.5);
+    if (a == NULL || b == NULL || c == NULL || box == NULL) {
+        goto error;
+    }
+    _PyThreadState_PushValueSpan(tstate, &span, buf);
+    pushed = 1;
+    _PyValueSpan_Append(&span, PyValue_FromObject(a));
+    // Stored past the prefix, not appended: not visited
+    buf[1] = PyValue_FromObject(b);
+    SPAN_EXPECT(a, 1, "an appended value");
+    SPAN_EXPECT(b, 0, "a value past the span");
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    _PyValueSpan_Append(&span, PyValue_FromInt32(7));
+    _PyValueSpan_Append(&span, _PyValue_FromBits((uintptr_t)box));
+    if (buf[3].bits != (uintptr_t)box) {
+        PyErr_SetString(PyExc_AssertionError, "a raw box was canonicalized");
+        goto error;
+    }
+    SPAN_EXPECT(box, 1, "a raw box");
+    PyValue *moved = PyMem_Realloc(buf, 64 * sizeof(PyValue));
+    if (moved == NULL) {
+        PyErr_NoMemory();
+        goto error;
+    }
+    buf = moved;
+    _PyValueSpan_Rebase(&span, buf);
+    SPAN_EXPECT(a, 1, "a value after a rebase");
+    _PyThreadState_PopValueRoot(tstate, &span);
+    pushed = 0;
+    SPAN_EXPECT(a, 0, "a popped span's value");
+
+    _PyThreadState_PushValueRoot(tstate, &one);
+    one.object = c;
+    SPAN_EXPECT(c, 1, "a one-value root");
+    _PyThreadState_PopValueRoot(tstate, &one);
+    SPAN_EXPECT(c, 0, "a popped one-value root");
+    PyMem_Free(buf);
+    Py_RETURN_NONE;
+
+error:
+    if (pushed) {
+        _PyThreadState_PopValueRoot(tstate, &span);
+    }
+    PyMem_Free(buf);
+    return NULL;
+}
+
+#undef SPAN_EXPECT
+
 /* The classes of roots that keep the object at an address (an int, so that
    the argument does not keep it), as a _PyGC_TRACE_ROOT_* mask. */
 static PyValue
@@ -3662,6 +4091,18 @@ static PyMethodDef module_functions[] = {
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
     {"gc_verify_count", gc_verify_count, METH_NOARGS},
     {"gc_live_roots_of", _PyCFunction_CAST(gc_live_roots_of), METH_O},
+    {"test_value_spans", test_value_spans, METH_NOARGS},
+    {"gc_frame_descriptor", _PyCFunction_CAST(gc_frame_descriptor), METH_O},
+    {"gc_walk_here", gc_walk_here, METH_NOARGS},
+    {"gc_root_stats", gc_root_stats, METH_NOARGS},
+    {"gc_collect_with_signal", _PyCFunction_CAST(gc_collect_with_signal), METH_O},
+    {"gc_frames_off_chain", gc_frames_off_chain, METH_VARARGS},
+    {"gc_hold_in_core_mem", gc_hold_in_core_mem, METH_VARARGS},
+    {"gc_collect_at", _PyCFunction_CAST(gc_collect_at), METH_O},
+    {"gc_call_built", _PyCFunction_CAST(gc_call_built), METH_O},
+    {"gc_set_stress", _PyCFunction_CAST(gc_set_stress), METH_O},
+    {"gc_collect_inline_then", gc_collect_inline_then, METH_VARARGS},
+    {"gc_ready_static_type", gc_ready_static_type, METH_NOARGS},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
     {"gc_raw_block_is_object", _PyCFunction_CAST(gc_raw_block_is_object), METH_O},
     {"gc_segment_of", _PyCFunction_CAST(gc_segment_of), METH_O},
@@ -3811,6 +4252,9 @@ module_exec(PyObject *module)
         return 1;
     }
     if (_PyTestInternalCapi_Init_Tuple(module) < 0) {
+        return 1;
+    }
+    if (_PyTestInternalCapi_Init_GCWalk(module) < 0) {
         return 1;
     }
     if (_PyTestInternalCapi_Init_TypeCache(module) < 0) {

@@ -40,6 +40,10 @@ typedef enum {
 #ifdef _Py_THREAD_SANITIZER
 #  define MI_TSAN 1
 #endif
+// ASan tracks mimalloc's blocks: a freed block is poisoned until reused.
+#ifdef _Py_ADDRESS_SANITIZER
+#  define MI_TRACK_ASAN 1
+#endif
 
 #ifdef __cplusplus
 extern "C++" {

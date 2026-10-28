@@ -180,6 +180,9 @@ extern PyObject *_PyGC_GetObjects(PyInterpreterState *interp, int generation);
 extern PyObject *_PyGC_GetReferrers(PyInterpreterState *interp, PyObject *objs);
 
 extern void _Py_RunGC(PyThreadState *tstate);
+/* Run the weak reference callbacks and finalizers that a collection left
+   queued, without collecting (gc_live.c). */
+extern void _PyGC_LiveRunQueue(PyThreadState *tstate);
 
 struct PyValue;
 

@@ -258,6 +258,8 @@ _PyGC_ObjectMapClear(PyObject *op)
                                           destructor, or release a buffer to
                                           Python code: the collector does
                                           that before the sweep */
+#define _PyGC_DEAD_KILLED    (1 << 7)  /* PYTHON_GCVERIFY=kill killed it: its
+                                          frees are quarantined */
 
 /* An unreachable object found by the mark: its address, the size of its
  * block, and its _PyGC_DEAD_* kinds.  The object starts its block. */
@@ -267,6 +269,41 @@ typedef struct {
     uint16_t kinds;
 } _PyGCDeadObject;
 
+/* The root phase's counters (note 11 section 9).  The conservative scans
+ * count the words they read by class, and the words of them that hit an
+ * object; the stack scan counts the eval-loop words it excludes.  Each time
+ * is in nanoseconds and includes the marking that its roots cause.  The
+ * walk's counters (frames, descriptor cache, fallbacks) are zero until the
+ * walk exists, so that every build reports one schema.  unpinned counts the
+ * other threads visited with an unpinned detach record, whose stacks are
+ * scanned conservatively (note 11 question 16).  Under PYTHON_GCVERIFY=retain
+ * or kill, verify_q counts the objects that only the roots outside A reach
+ * and verify_candidates the objects that such a collection listed and a
+ * later one reached from A (work/10a-1.md item 7). */
+#define _PyGC_SCAN_STACK    0  /* C stacks */
+#define _PyGC_SCAN_REGS     1  /* captured register arrays */
+#define _PyGC_SCAN_MEM      2  /* PyMem blocks the scans lead to */
+#define _PyGC_SCAN_SHALLOW  3  /* blocks of objects marked without traversal */
+#define _PyGC_SCAN_DATA     4  /* writable data segments */
+#define _PyGC_SCAN_STRUCTS  5  /* thread and interpreter structs, data stacks */
+#define _PyGC_SCAN_CLASSES  6
+#define _PyGC_SCAN_CLASS_NAMES \
+    {"stack", "regs", "mem", "shallow", "data", "structs"}
+
+#define _PyGC_ROOT_STATS_FIELDS(X) \
+    X(collections) X(threads) X(activations_skipped) X(eval_words_skipped) \
+    X(frames_walked) X(cache_hits) X(cache_misses) X(cache_flushes) \
+    X(fallbacks) X(unpinned) X(verify_q) X(verify_candidates) X(precise_ns) \
+    X(stack_ns) X(data_ns) X(structs_ns) X(roots_ns)
+
+typedef struct _PyGCRootStats {
+#define _PyGC_ROOT_STATS_FIELD(name) int64_t name;
+    _PyGC_ROOT_STATS_FIELDS(_PyGC_ROOT_STATS_FIELD)
+#undef _PyGC_ROOT_STATS_FIELD
+    int64_t words[_PyGC_SCAN_CLASSES];
+    int64_t hits[_PyGC_SCAN_CLASSES];
+} _PyGCRootStats;
+
 typedef struct {
     _PyGCDeadObject *dead;    // from malloc(); the caller frees it
     Py_ssize_t ndead;
@@ -275,6 +312,7 @@ typedef struct {
     Py_ssize_t live_bytes;    // the blocks of the reachable objects
     Py_ssize_t nmarked;
     Py_ssize_t nshallow;
+    _PyGCRootStats roots;     // this collection's root phase
 } _PyGCMarkResult;
 
 /* Mark everything reachable from the roots of the interpreters that share
@@ -283,15 +321,35 @@ typedef struct {
  * nothing listed or flagged, if the collector's own memory ran out. */
 extern int _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res);
 
-/* Record the caller's callee-saved registers and stack pointer as the place
- * the collection was entered: the mark scans the calling thread's stack from
- * there up, not from its own frame, below which lie stale words.  Call it
- * first; reset gc_trace.entry_sp to the value it had before when done. */
-extern void _PyGC_TraceCaptureEntry(void);
+/* The interpreter's descriptor cache for the stack walk (Python/gc_walk.c),
+ * or NULL if the collector's state cannot be allocated. */
+extern struct _PyGCWalkCache *_PyGC_LiveWalkCache(PyInterpreterState *interp);
+
+#ifdef Py_DEBUG
+/* The verifier's kill mode: while it is set, the frees of that thread state
+ * (PyObject_Free(), PyMem_Free() and the free in a moving realloc) put the
+ * block in quarantine (_PyGC_Quarantine()) instead of freeing it.  The sweep
+ * sets it around the dealloc and the free of each object that kill killed.
+ * It is per thread: interpreters with their own GIL sweep at once. */
+extern _Py_thread_local PyThreadState *_PyGC_quarantine_tstate;
+/* Quarantine the mimalloc block at ptr: fill it with PYMEM_DEADBYTE, poison
+ * it under ASan, and free it 16 collections later. */
+extern void _PyGC_Quarantine(void *ptr);
+#endif
+
+/* For the test of the verifier's retain mode: create [None], hold it only in
+ * a PyMem block that this core frame points to, call callable, and return
+ * the list if give_back is set, else None. */
+PyAPI_FUNC(PyObject *) _PyGC_TestHoldInCoreMem(PyObject *callable,
+                                               int give_back);
 
 /* The classes of roots (_PyGC_TRACE_ROOT_*) that each alone reach the object
  * at addr, or -1.  For debugging; export for _testinternalcapi. */
 PyAPI_FUNC(int) _PyGC_TraceLiveRootsOf(PyThreadState *tstate, uintptr_t addr);
+/* The same for the object at *hidden ^ mask, read after each mark, so that
+ * the caller's stack need not hold its address. */
+PyAPI_FUNC(int) _PyGC_TraceLiveRootsOfHidden(
+    PyThreadState *tstate, const volatile uintptr_t *hidden, uintptr_t mask);
 
 /* For tests of the segment map that the live mark looks objects up in: the
  * object found at addr (or containing it, if interior is set), or 0; four
@@ -410,6 +468,12 @@ _PyGC_LiveClearEvalStack(void)
     _PyGC_ClearStackBelow(1024);
 }
 
+/* The root phase's counters, summed over the collections of interp, and
+ * those of its last collection.  Export for _testinternalcapi. */
+PyAPI_FUNC(void) _PyGC_LiveGetRootStats(PyInterpreterState *interp,
+                                        _PyGCRootStats *total,
+                                        _PyGCRootStats *last);
+
 /* Totals for gc.get_stats(): the bytes the sweeps freed, the bytes the last
  * collection found live, and the longest pause in seconds. */
 extern void _PyGC_LiveGetStats(PyInterpreterState *interp,
@@ -417,16 +481,6 @@ extern void _PyGC_LiveGetStats(PyInterpreterState *interp,
                                double *pause_max);
 
 
-/* Record the calling thread's callee-saved registers and stack pointer in
- * its thread state, before it releases the GIL, so that a collection in
- * another thread can scan them.  It must be called before the caller
- * changes any callee-saved register, so call it first. */
-#if defined(WITH_MIMALLOC)
-PyAPI_FUNC(void) _PyGC_TraceCaptureThread(void);
-#  define _PyGC_TRACE_CAPTURE_THREAD() _PyGC_TraceCaptureThread()
-#else
-#  define _PyGC_TRACE_CAPTURE_THREAD() ((void)0)
-#endif
 
 #ifdef __cplusplus
 }

@@ -239,6 +239,7 @@ do_mkstack(PyObject **stack, const char **p_format, va_list *p_va,
             goto error;
         }
         stack[i] = w;
+        _PyGC_INJECT(_PyThreadState_GET(), _PyGC_SITE_MKSTACK);
     }
     if (!check_end(p_format, endchar)) {
         goto error;

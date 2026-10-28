@@ -1,5 +1,6 @@
 #include "Python.h"
 
+#include "pycore_gc_walk.h"       // _PyEval_ReleaseThreadPinned()
 #include "pycore_llist.h"
 #include "pycore_lock.h"          // _PyRawMutex
 #include "pycore_parking_lot.h"
@@ -344,8 +345,9 @@ _PyParkingLot_Park(const void *addr, const void *expected, size_t size,
     if (detach) {
         tstate = _PyThreadState_GET();
         if (tstate && _PyThreadState_IsAttached(tstate)) {
-            // Only detach if we are attached
-            PyEval_ReleaseThread(tstate);
+            // Only detach if we are attached; pinned, since this frame
+            // reattaches below
+            _PyEval_ReleaseThreadPinned(tstate);
         }
         else {
             tstate = NULL;

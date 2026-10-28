@@ -684,6 +684,9 @@
     <ClInclude Include="..\Include\internal\pycore_gc_trace.h">
       <Filter>Include\internal</Filter>
     </ClInclude>
+    <ClInclude Include="..\Include\internal\pycore_gc_walk.h">
+      <Filter>Include\internal</Filter>
+    </ClInclude>
     <ClInclude Include="..\Include\internal\pycore_genobject.h">
       <Filter>Include\internal</Filter>
     </ClInclude>
@@ -1473,6 +1476,9 @@
       <Filter>Python</Filter>
     </ClCompile>
     <ClCompile Include="..\Python\gc_trace.c">
+      <Filter>Python</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Python\gc_walk.c">
       <Filter>Python</Filter>
     </ClCompile>
     <ClCompile Include="..\Python\getargs.c">

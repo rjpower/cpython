@@ -110,15 +110,99 @@ struct _gc_live_state {
     Py_ssize_t bytes_freed;
     Py_ssize_t live_bytes;
     Py_ssize_t pause_max_ns;
+    // The root phase's counters (_PyGC_LiveGetRootStats()), and the
+    // process they were counted in: a forked child starts from zero.
+    _PyGCRootStats root_total;
+    _PyGCRootStats root_last;
+    long root_pid;
+    // The stack walk's frame descriptors (Python/gc_walk.c)
+    _PyGCWalkCache walk_cache;
 };
+
+static long
+current_pid(void)
+{
+#ifdef HAVE_GETPID
+    return (long)getpid();
+#else
+    return 0;
+#endif
+}
 
 static struct _gc_live_state *
 get_live(PyInterpreterState *interp)
 {
     if (interp->gc.live == NULL) {
         interp->gc.live = calloc(1, sizeof(struct _gc_live_state));
+        if (interp->gc.live != NULL) {
+            interp->gc.live->root_pid = current_pid();
+        }
     }
     return interp->gc.live;
+}
+
+/* The interpreter's descriptor cache for the stack walk, or NULL. */
+_PyGCWalkCache *
+_PyGC_LiveWalkCache(PyInterpreterState *interp)
+{
+    struct _gc_live_state *ls = get_live(interp);
+    return ls == NULL ? NULL : &ls->walk_cache;
+}
+
+/* Count one mark's root phase: each mark is charged once, to the
+   interpreter that ran it, whichever interpreters' heaps it covered. */
+static void
+add_root_stats(struct _gc_live_state *ls, _PyGCRootStats *s)
+{
+    long pid = current_pid();
+    if (pid != ls->root_pid) {
+        ls->root_total = (_PyGCRootStats){0};
+        ls->root_pid = pid;
+    }
+    s->collections = 1;
+    ls->root_last = *s;
+    _PyGCRootStats *total = &ls->root_total;
+#define ADD(name) total->name += s->name;
+    _PyGC_ROOT_STATS_FIELDS(ADD)
+#undef ADD
+    for (int i = 0; i < _PyGC_SCAN_CLASSES; i++) {
+        total->words[i] += s->words[i];
+        total->hits[i] += s->hits[i];
+    }
+}
+
+/* PYTHON_GCROOTSTATS=path appends an interpreter's root counters to path
+   when it is finalized, as one JSON line with the process and interpreter
+   ids, for summing over a test suite (boil/tools/measure/root_stats.py).
+   A forked child that has not collected writes nothing, so that its
+   parent's counts are not counted twice; a process that exits without
+   finalizing writes nothing.  A measurement switch: a file that cannot be
+   written is ignored. */
+static void
+dump_root_stats(PyInterpreterState *interp, struct _gc_live_state *ls)
+{
+    const char *path = getenv("PYTHON_GCROOTSTATS");
+    if (path == NULL || path[0] == '\0' || ls->root_pid != current_pid()) {
+        return;
+    }
+    FILE *out = fopen(path, "a");
+    if (out == NULL) {
+        return;
+    }
+    const _PyGCRootStats *s = &ls->root_total;
+    static const char *const names[] = _PyGC_SCAN_CLASS_NAMES;
+    fprintf(out, "{\"pid\": %ld, \"interp\": %lld", ls->root_pid,
+            (long long)interp->id);
+#define DUMP(name) fprintf(out, ", \"" #name "\": %lld", (long long)s->name);
+    _PyGC_ROOT_STATS_FIELDS(DUMP)
+#undef DUMP
+    for (int i = 0; i < _PyGC_SCAN_CLASSES; i++) {
+        fprintf(out, ", \"%s_words\": %lld, \"%s_hits\": %lld",
+                names[i], (long long)s->words[i],
+                names[i], (long long)s->hits[i]);
+    }
+    fprintf(out, "}\n");
+    fclose(out);
 }
 
 static GCState *
@@ -266,6 +350,19 @@ run_queue(PyThreadState *tstate)
     struct _gc_live_state *ls = tstate->interp->gc.live;
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
     if (ls == NULL || ts->gc_trace.running_queue || ls->qhead == ls->qtail) {
+        return 0;
+    }
+    /* A signal that arrived while the collection marked is handled first,
+       as the eval breaker handles signals before a scheduled collection: a
+       handler run in a callback here would have its exception reported as
+       unraisable instead of raised in the code the collection interrupted.
+       The queue waits for the breaker, which handles the signal and then
+       runs it (_Py_RunGC()). */
+    if (_Py_eval_breaker_bit_is_set(tstate, _PY_SIGNALS_PENDING_BIT)
+        && _Py_ThreadCanHandleSignals(tstate->interp)
+        && _PyInterpreterState_GetFinalizing(tstate->interp) == NULL)
+    {
+        _Py_ScheduleGC(tstate);
         return 0;
     }
     int nfinalized = 0;
@@ -941,7 +1038,15 @@ sweep_one(PyThreadState *tstate, GCState *gc, _PyGCDeadObject *d,
     // The sweep stands in for _Py_Dealloc(), which reports each
     // destruction to the reference tracer.
     _PyReftracerTrack(op, PyRefTracer_DESTROY);
+#ifdef Py_DEBUG
+    if (d->kinds & _PyGC_DEAD_KILLED) {
+        _PyGC_quarantine_tstate = tstate;
+    }
+#endif
     Py_TYPE(op)->tp_dealloc(op);
+#ifdef Py_DEBUG
+    _PyGC_quarantine_tstate = NULL;
+#endif
     op->ob_flags |= _Py_GC_SWEPT_FLAG;
     if (_PyErr_Occurred(tstate)) {
         _PyErr_Clear(tstate);
@@ -1001,7 +1106,15 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
             continue;
         }
         freed += d->block_size;
+#ifdef Py_DEBUG
+        if (d->kinds & _PyGC_DEAD_KILLED) {
+            _PyGC_quarantine_tstate = tstate;
+        }
+#endif
         _PyGC_FreeDeadBlock(d->op, (char *)d->op);
+#ifdef Py_DEBUG
+        _PyGC_quarantine_tstate = NULL;
+#endif
     }
     *bytes_freed = freed;
     return ncollected;
@@ -1057,6 +1170,11 @@ record_stats(GCState *gc, const struct gc_generation_stats *cur)
     _Py_atomic_store_uint32_release(&gs->update_seq, seq + 2);
 }
 
+/* PYTHON_GCSTRESS=N: every Nth object allocation of a thread collects
+   through the inline path, as an allocation past the threshold does.  The
+   limit stays at 0, so that each allocation reaches the count. */
+static int stress_every = 0;
+
 static Py_ssize_t
 collect(PyThreadState *tstate, _PyGC_Reason reason)
 {
@@ -1084,6 +1202,7 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
     if (_PyGC_TraceLiveMark(tstate, &res) < 0) {
         goto done;  // out of memory: nothing is freed
     }
+    add_root_stats(ls, &res.roots);
     if (clear_callback_weakrefs(ls, &res) < 0
         || handle_finalizers(gc, ls, &res, &garbage) < 0
         || queue_destroy_hooks(ls, &res) < 0)
@@ -1137,6 +1256,9 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
     gc->alloc_bytes = 0;
     gc->alloc_limit = gc->alloc_threshold > 0
         ? Py_MAX(gc->alloc_threshold, res.live_bytes) : PY_SSIZE_T_MAX;
+    if (stress_every > 0) {
+        gc->alloc_limit = 0;
+    }
     free(res.dead);
 
     if (gc->debug & _PyGC_DEBUG_STATS) {
@@ -1186,7 +1308,7 @@ collect_pass(PyThreadState *tstate, _PyGC_Reason reason, int *nfinalized)
     }
     Py_ssize_t n = collect(tstate, reason);
     // A collection that the queue's code triggers records its own entry.
-    ts->gc_trace.entry_sp = 0;
+    ts->gc_trace.entry.sp = 0;
     *nfinalized = get_live(tstate->interp)->no_python ? 0 : run_queue(tstate);
     if (heap != NULL) {
         m->current_object_heap = heap;
@@ -1206,9 +1328,9 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
     // Called again from a gc callback, inside a collection: the outer entry
     // stays, since the mark that may follow is the outer collection's.
-    uintptr_t outer_entry = ts->gc_trace.entry_sp;
-    if (outer_entry == 0) {
-        _PyGC_TraceCaptureEntry();
+    _PyGCContext outer_entry = ts->gc_trace.entry;
+    if (outer_entry.sp == 0) {
+        _PyGC_CaptureCaller(&ts->gc_trace.entry);
     }
     int nfinalized;
     Py_ssize_t n = collect_pass(tstate, reason, &nfinalized);
@@ -1222,20 +1344,15 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
     int later_follows = _PyInterpreterState_GetFinalizing(interp) != NULL
                         && interp->imports.modules != NULL;
     if (nfinalized > 0 && reason != _Py_GC_REASON_HEAP && !later_follows
-        && outer_entry == 0)
+        && outer_entry.sp == 0)
     {
         struct _gc_live_state *ls = get_live(tstate->interp);
-        _PyGC_TraceCaptureEntry();
+        _PyGC_CaptureCaller(&ts->gc_trace.entry);
         ls->skip_verify = 1;
         n += collect_pass(tstate, reason, &nfinalized);
         ls->skip_verify = 0;
     }
-    ts->gc_trace.entry_sp = outer_entry;
-    if (outer_entry == 0) {
-        // The conservative scan of the thread state would take them for
-        // roots.
-        memset(ts->gc_trace.entry_regs, 0, sizeof(ts->gc_trace.entry_regs));
-    }
+    ts->gc_trace.entry = outer_entry;
     return n;
 }
 
@@ -1294,9 +1411,36 @@ can_collect(PyThreadState *tstate)
 }
 
 void
+_PyGC_LiveSetStress(PyInterpreterState *interp, int every)
+{
+    GCState *gc = &interp->gc;
+    stress_every = every;
+    gc->alloc_limit = every > 0 ? 0 : gc->alloc_bytes + gc->alloc_threshold;
+}
+
+void
+_PyGC_InjectCollect(PyThreadState *tstate)
+{
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    ts->gc_trace.inject_site = 0;
+    if (_PyGC_LiveCollectHere(tstate)) {
+        ts->gc_trace.injected++;
+    }
+}
+
+void
 _PyGC_LiveOnThreshold(PyThreadState *tstate)
 {
     GCState *gc = &tstate->interp->gc;
+    if (stress_every > 0) {
+        _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+        if (++ts->gc_trace.stress_count >= stress_every) {
+            ts->gc_trace.stress_count = 0;
+            (void)_PyGC_LiveCollectHere(tstate);
+        }
+        gc->alloc_limit = 0;
+        return;
+    }
     /* Finalizers, weak reference callbacks and gc.callbacks run Python code,
        which is safe only where the eval loop checks its breaker: the
        collection waits for that, as the cycle collector's does.  Code that
@@ -1384,6 +1528,21 @@ _PyGC_Init(PyInterpreterState *interp)
         return _PyStatus_NO_MEMORY();
     }
     gcstate->alloc_limit = gcstate->alloc_bytes + gcstate->alloc_threshold;
+    if (_Py_IsMainInterpreter(interp) && interp->config.use_environment) {
+        const char *env = getenv("PYTHON_GCSTRESS");
+        if (env != NULL && *env != '\0') {
+            char *end;
+            long n = strtol(env, &end, 10);
+            if (*end != '\0' || n < 0 || n > INT_MAX) {
+                return _PyStatus_ERR("PYTHON_GCSTRESS must be a count of "
+                                     "allocations");
+            }
+            stress_every = (int)n;
+        }
+    }
+    if (stress_every > 0) {
+        gcstate->alloc_limit = 0;
+    }
     return _PyStatus_OK();
 }
 
@@ -1399,6 +1558,8 @@ _PyGC_Fini(PyInterpreterState *interp)
     _PyGC_TraceFini(interp);
     struct _gc_live_state *ls = gcstate->live;
     if (ls != NULL) {
+        dump_root_stats(interp, ls);
+        _PyGC_WalkCacheFini(&ls->walk_cache);
         gcstate->live = NULL;
         free(ls->immortal);
         free(ls->queue);
@@ -1689,6 +1850,17 @@ _Py_ScheduleGC(PyThreadState *tstate)
     }
 }
 
+/* sys.settrace(), sys.setprofile() and sys.monitoring call this before they
+   install a hook, so that the callbacks and finalizers of objects that died
+   before tracing began run untraced, as they would have run under reference
+   counting.  An inline collection leaves them queued for the eval breaker,
+   which could otherwise run them inside the first traced step. */
+void
+_PyGC_LiveRunQueue(PyThreadState *tstate)
+{
+    (void)run_queue(tstate);
+}
+
 /* The eval breaker's call, scheduled by _PyGC_LiveOnThreshold(). */
 void
 _Py_RunGC(PyThreadState *tstate)
@@ -1811,6 +1983,16 @@ int
 PyObject_GC_IsFinalized(PyObject *obj)
 {
     return _PyObject_IS_GC(obj) && _PyGC_FINALIZED(obj);
+}
+
+void
+_PyGC_LiveGetRootStats(PyInterpreterState *interp, _PyGCRootStats *total,
+                       _PyGCRootStats *last)
+{
+    struct _gc_live_state *ls = interp->gc.live;
+    int counted = ls != NULL && ls->root_pid == current_pid();
+    *total = counted ? ls->root_total : (_PyGCRootStats){0};
+    *last = counted ? ls->root_last : (_PyGCRootStats){0};
 }
 
 /* gc.get_stats(): totals since startup. */

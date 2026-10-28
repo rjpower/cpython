@@ -8,6 +8,8 @@
 #   3  full suite (debug build), -u cpu test_cext, regen leaves the tree unchanged,
 #      Tools/boil/traverse_audit.py --check
 #   4  internal benchmark set recorded as boil/bench/results/$GATE_LABEL.json
+# Levels 2 and 3 also sum the live collector's root counters over the suite
+# and fail on a stack-walk fallback (note 11 section 10).
 # Environment: GATE_JOBS (default 16), GATE_NO_BUILD=1 (level 0 skips make),
 # GATE_LABEL (level 4), GATE_LIMIT (seconds; the ceiling for one command of
 # the level, default by level below).  A lock per build directory serialises
@@ -42,6 +44,11 @@ cleanup() { [ -n "$child" ] && kill -TERM -- -"$child" 2>/dev/null; rm -rf "$tmp
 trap cleanup EXIT
 trap 'cleanup; exit 143' INT TERM HUP
 export PYTHONPYCACHEPREFIX="$tmp/pyc"
+# The suite's root counters, one line per process (root_stats.py), on the
+# branches that have the tool
+stats_tool="$REPO/boil/tools/measure/root_stats.py"
+export PYTHON_GCROOTSTATS="${PYTHON_GCROOTSTATS:-$tmp/roots.jsonl}"
+roots() { [ ! -f "$stats_tool" ] || python3 "$stats_tool" check "$PYTHON_GCROOTSTATS"; }
 lock="$build/.gate.lock"
 # test_sys's remote-exec test times out on this machine on every build since
 # before the fork (a machine-local failure); it is ignored unless GATE_IGNORE
@@ -69,9 +76,11 @@ case $level in
     [ $# -gt 0 ] || { echo "gate 1 needs test files" >&2; exit 2; }
     run "$py" -m test -q --timeout 600 -j"$J" -i "$IGNORE" "$@" ;;
 2)
-    run "$py" -m test -q --timeout 900 -j"$J" -i "$IGNORE" ;;
+    run "$py" -m test -q --timeout 900 -j"$J" -i "$IGNORE"
+    roots ;;
 3)
     run "$py" -m test -q --timeout 1200 -j"$J" -i "$IGNORE"
+    roots
     run "$py" -m test -q -u cpu test_cext
     before=$(git -C "$REPO" status --porcelain)
     run make -C "$build" -s regen-cases clinic

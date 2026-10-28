@@ -5,10 +5,12 @@ from test.support import (verbose,
                           cpython_only, requires_subprocess,
                           Py_GIL_DISABLED)
 from test.support.os_helper import temp_dir, TESTFN, unlink
-from test.support.script_helper import assert_python_ok, make_script
+from test.support.script_helper import (assert_python_ok,
+                                        assert_python_failure, make_script)
 from test.support import threading_helper, gc_threshold
 
 import gc
+import os
 import sys
 import textwrap
 import threading
@@ -1206,6 +1208,8 @@ class TracingCollectorTests(unittest.TestCase):
         gc.enable()
         self.addCleanup(gc.disable)
 
+    @unittest.skipIf(os.environ.get("PYTHON_GCSTRESS"),
+                     "PYTHON_GCSTRESS replaces the byte trigger")
     def test_threshold_is_bytes(self):
         self.assertEqual(gc.get_threshold()[0], 32 * 1024 * 1024)
         gc.collect()
@@ -1216,6 +1220,45 @@ class TracingCollectorTests(unittest.TestCase):
         gc.collect()
         self.assertLess(gc.get_count()[0], 1000 * 1000)
         del junk
+
+    @unittest.skipUnless(_testinternalcapi is not None
+                         and hasattr(__import__("signal"), "SIGUSR1"),
+                         "requires _testinternalcapi and SIGUSR1")
+    def test_signal_before_callbacks(self):
+        # A signal that arrives while a collection marks is handled before
+        # the collection's weak reference callbacks run, so the handler's
+        # exception reaches the code the collection interrupted rather than
+        # being reported as unraisable in a callback.
+        if threading.current_thread() is not threading.main_thread():
+            self.skipTest("signal handlers run in the main thread")
+        import signal
+        class Interrupt(Exception):
+            pass
+        def handler(*args):
+            raise Interrupt
+        old = signal.signal(signal.SIGUSR1, handler)
+        self.addCleanup(signal.signal, signal.SIGUSR1, old)
+        called = []
+        refs = []
+        class A:
+            pass
+        def make():
+            for _ in range(100):
+                a = A()
+                a.cycle = a
+                refs.append(weakref.ref(a, lambda r: called.append(
+                    sum(i for i in range(10)))))
+        make()
+        with support.catch_unraisable_exception() as cm:
+            with self.assertRaises(Interrupt):
+                _testinternalcapi.gc_collect_with_signal(
+                    int(signal.SIGUSR1))
+                for i in range(10):
+                    pass
+            for i in range(10):
+                pass
+            self.assertIsNone(cm.unraisable)
+        self.assertGreater(len(called), 0)  # the callbacks ran after
 
     def collections_while_allocating(self, nbytes):
         starts = []
@@ -1230,6 +1273,8 @@ class TracingCollectorTests(unittest.TestCase):
             gc.callbacks.remove(callback)
         return starts
 
+    @unittest.skipIf(os.environ.get("PYTHON_GCSTRESS"),
+                     "PYTHON_GCSTRESS replaces the byte trigger")
     @gc_threshold(1024 * 1024)
     def test_allocation_triggers_collection(self):
         # The garbage keeps the live heap below the allocated bytes.
@@ -1514,6 +1559,604 @@ class TracingCollectorTests(unittest.TestCase):
         if id(again) <= far < id(again) + size:
             self.assertEqual(lookup(far, True), id(again))
         self.assertEqual(lookup(id(again) + size - 64, True), id(again))
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_value_spans(self):
+        # Note 11 section 8.4: a span roots exactly its appended prefix.
+        _testinternalcapi.test_value_spans()
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_frames_off_the_chain(self):
+        # Note 11 section 4.4: a frame on the data stack is a root from push
+        # to pop, linked into the chain or not, in an earlier chunk too, and
+        # frames pushed but not initialized are skipped.
+        def f(a, b):
+            c = a
+            return c
+        f(1, 2)  # the code's IR exists once it has run
+        for cross in (False, True):
+            with self.subTest(cross=cross):
+                held, cleared, crossed = (
+                    _testinternalcapi.gc_frames_off_chain(f, cross))
+                self.assertTrue(held)
+                self.assertFalse(cleared)
+                self.assertEqual(crossed, cross)
+
+    HOLD_IN_CORE_MEM = textwrap.dedent("""
+        import gc, sys, _testinternalcapi
+        obj = _testinternalcapi.gc_hold_in_core_mem(
+            gc.collect, sys.argv[1] == "1")
+        gc.collect()
+        print(type(obj).__name__,
+              _testinternalcapi.gc_root_stats()["total"]["verify_q"])
+    """)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_verify_retain(self):
+        # PYTHON_GCVERIFY=retain:pymem (work/10a-1.md item 7): a core frame
+        # holds a list only in a PyMem block while it collects, which only
+        # the verifier's second mark reaches; a later collection that
+        # reaches the list from the roots reports it as a candidate missed
+        # root.  Plain retain follows PyMem from core frames in its first
+        # mark, as the collector does in rung 1, and reports nothing.
+        for mode, give_back, want in (("retain:pymem", True, 1),
+                                      ("retain:pymem", False, 0),
+                                      ("retain", True, 0)):
+            with self.subTest(mode=mode, give_back=give_back):
+                rc, out, err = assert_python_ok(
+                    "-c", self.HOLD_IN_CORE_MEM, str(int(give_back)),
+                    PYTHON_GCVERIFY=mode)
+                name, nq = out.decode().split()
+                self.assertEqual(name, "list" if give_back else "NoneType")
+                if want:
+                    self.assertGreater(int(nq), 0)
+                found = [line for line in err.decode().splitlines()
+                         if "candidate list at" in line
+                         and "of a core frame" in line]
+                self.assertEqual(len(found), want, err)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_verify_kill(self):
+        # PYTHON_GCVERIFY=kill:pymem (debug builds): what only the
+        # verifier's second mark reaches dies, and its blocks are
+        # quarantined and filled, so the core frame that reads the list
+        # back after the collection crashes; one that drops it does not, and
+        # neither does one under plain kill, whose first mark follows PyMem
+        # from core frames.
+        code = self.HOLD_IN_CORE_MEM
+        if not support.Py_DEBUG:
+            rc, out, err = assert_python_failure("-c", code, "0",
+                                                 PYTHON_GCVERIFY="kill")
+            self.assertIn(b"PYTHON_GCVERIFY=kill needs a debug build", err)
+            return
+        rc, out, err = assert_python_ok("-c", code, "0",
+                                        PYTHON_GCVERIFY="kill:pymem")
+        self.assertEqual(out.split()[0], b"NoneType")
+        rc, out, err = assert_python_ok("-c", code, "1",
+                                        PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.split()[0], b"list")
+        rc, out, err = assert_python_failure("-X", "faulthandler", "-c", code,
+                                             "1", PYTHON_GCVERIFY="kill:pymem")
+        self.assertEqual(out, b"")
+        self.assertIn(b"Segmentation fault", err)
+
+    MISSED_ROOT = textwrap.dedent("""
+        import gc, sys, _testinternalcapi
+        class Fin:
+            def __del__(self):
+                print("finalized", flush=True)
+        class W:
+            pass
+        kind = sys.argv[1]
+        keep = []
+        r = _testinternalcapi.gc_verify_missed_root(
+            kind, Fin if kind == "finalizer" else W, gc.collect, keep)
+        print(kind, hex(r) if isinstance(r, int) else type(r).__name__,
+              flush=True)
+        gc.collect()
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_verify_missed_root(self):
+        # Note 11 8.3's demonstration: a frame registered precise holds an
+        # object only in its own words across a collection, then uses it.
+        # Kill kills it, so a field read crashes, a cached interior
+        # pointer reads the freed pattern, and the finalizer runs before
+        # the use crashes.  The weakref case is the counterexample: kill
+        # clears the weak reference, while retain hands the object back
+        # and reports a candidate that is no missed root.
+        dead = hex(0xDDDDDDDDDDDDDDDD).encode()
+        def run(kind, mode, ok=True):
+            check = assert_python_ok if ok else assert_python_failure
+            return check("-X", "faulthandler", "-c", self.MISSED_ROOT, kind,
+                         PYTHON_GCVERIFY=mode)
+        rc, out, err = run("field", "kill", ok=False)
+        self.assertEqual(out, b"")
+        rc, out, err = run("interior", "kill")
+        self.assertEqual(out.split(), [b"interior", dead])
+        rc, out, err = run("finalizer", "kill", ok=False)
+        self.assertEqual(out.split(), [b"finalized"])
+        rc, out, err = run("weakref", "kill")
+        self.assertEqual(out.split(), [b"weakref", b"NoneType"])
+        self.assertNotIn(b"candidate", err)
+
+        rc, out, err = run("field", "retain")
+        self.assertEqual(out.split(), [b"field", b"0x1"])
+        rc, out, err = run("weakref", "retain")
+        self.assertEqual(out.split(), [b"weakref", b"W"])
+        self.assertIn(b"candidate W at", err)
+        self.assertIn(b"of a precise frame", err)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_injection_sites(self):
+        # Note 11 section 8.3: _testinternalcapi.gc_collect_at() arms one
+        # collection at a transition that allocation intervals do not hit;
+        # what the transition holds survives it.
+        DETACH, PUSH_FRAME, SPAN_REBASE, MKSTACK = 1, 2, 3, 4
+        collect_at = _testinternalcapi.gc_collect_at
+
+        def fired(site, action):
+            before = collect_at(site)
+            try:
+                result = action()
+            finally:
+                after = collect_at(0)
+            self.assertEqual(after, before + 1, f"site {site} did not run")
+            return result
+
+        fired(DETACH, lambda: time.sleep(0))
+        def f(a, b):
+            return [a, b]
+        args = (object(), object())
+        self.assertEqual(fired(PUSH_FRAME, lambda: list(map(f, *zip(args)))),
+                         [list(args)])
+        fired(SPAN_REBASE, _testinternalcapi.test_value_spans)
+        self.assertEqual(
+            fired(MKSTACK, lambda: _testinternalcapi.gc_call_built(
+                lambda *a: a)),
+            ("first", "second", 3))
+        with self.assertRaises(ValueError):
+            collect_at(99)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_stress(self):
+        # PYTHON_GCSTRESS=N collects at every Nth object allocation through
+        # the inline path.
+        code = textwrap.dedent("""
+            import gc, _testinternalcapi
+            before = _testinternalcapi.gc_root_stats()["total"]["collections"]
+            junk = [[i] for i in range(10_000)]
+            after = _testinternalcapi.gc_root_stats()["total"]["collections"]
+            print(after - before)
+        """)
+        rc, out, err = assert_python_ok("-c", code, PYTHON_GCSTRESS="1000")
+        self.assertGreaterEqual(int(out), 10)
+        rc, out, err = assert_python_ok("-c", code)
+        self.assertLess(int(out), 10)
+        rc, out, err = assert_python_failure("-c", "pass",
+                                             PYTHON_GCSTRESS="often")
+        self.assertIn(b"PYTHON_GCSTRESS must be a count", err)
+
+    @unittest.skip("step 7: a shared-heap subinterpreter runs the main "
+                   "interpreter's weakref callbacks (note 08 section 3)")
+    def test_stress_shared_heap_callbacks(self):
+        """A legacy subinterpreter shares the main interpreter's heap and is
+        collected with it, but must not run the main interpreter's weak
+        reference callbacks and finalizers.  Reproduction:
+
+            PYTHON_GCSTRESS=1000 ./python -c 'import _testcapi;
+                _testcapi.run_in_subinterp("x = 1")'
+
+        crashes in the subinterpreter's start-up.
+        """
+        code = textwrap.dedent("""
+            import _testcapi
+            for i in range(5):
+                _testcapi.run_in_subinterp("x = 1")
+        """)
+        assert_python_ok("-c", code, PYTHON_GCSTRESS="1000")
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_settrace_runs_queued_callbacks_first(self):
+        # An inline collection queues weak reference callbacks for the eval
+        # breaker.  sys.settrace() runs the queue before it installs the
+        # trace function, so the callback of an object that died before
+        # tracing began is not traced, as under reference counting.  In a
+        # child: an audit hook such as regrtest's would run the queue first.
+        code = textwrap.dedent("""
+            import gc, sys, weakref, _testinternalcapi
+            gc.enable()
+            ran = []
+            def cb(ref):
+                ran.append(ref)
+            class A:
+                pass
+            def make():
+                return [weakref.ref(A(), cb) for _ in range(100)]
+            traced = []
+            def tracer(frame, event, arg):
+                traced.append(frame.f_code)
+                return tracer
+            def work():
+                return 1
+            for _ in range(5):
+                refs = make()
+                if ran:
+                    continue  # a collection ran the callbacks already
+                try:
+                    _testinternalcapi.gc_collect_inline_then(sys.settrace,
+                                                             tracer)
+                    work()
+                finally:
+                    sys.settrace(None)
+                if ran:
+                    break
+            print(bool(ran), work.__code__ in traced, cb.__code__ in traced)
+        """)
+        rc, out, err = assert_python_ok("-c", code)
+        self.assertEqual(out.split(), [b"True", b"True", b"False"])
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_stress_static_type_ready(self):
+        # PyType_Ready() registers a static type as a root before it sets
+        # the type's ob_type, and allocates in between; a collection there
+        # traverses the type without reading it.  In a child, since a static
+        # type is readied once per process.
+        code = textwrap.dedent("""
+            import _testinternalcapi
+            _testinternalcapi.gc_set_stress(1)
+            t = _testinternalcapi.gc_ready_static_type()
+            _testinternalcapi.gc_set_stress(0)
+            print(t.__name__)
+        """)
+        rc, out, err = assert_python_ok("-c", code)
+        self.assertEqual(out.strip(), b"LateStatic")
+
+    def test_verify_mode_syntax(self):
+        for bad in ("retain:", "retain:pymem,", "kill:heap", "retainer"):
+            with self.subTest(bad=bad):
+                rc, out, err = assert_python_failure("-c", "pass",
+                                                     PYTHON_GCVERIFY=bad)
+                self.assertIn(b"PYTHON_GCVERIFY must be retain or kill", err)
+        assert_python_ok("-c", "pass", PYTHON_GCVERIFY="retain:structs,pymem")
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_root_stats(self):
+        # The root phase's counters: one schema for the total and the last
+        # collection, which a collection moves.
+        before = _testinternalcapi.gc_root_stats()
+        self.assertEqual(before["total"].keys(), before["last"].keys())
+        gc.collect()
+        after = _testinternalcapi.gc_root_stats()
+        total, last = after["total"], after["last"]
+        self.assertGreater(total["collections"],
+                           before["total"]["collections"])
+        self.assertEqual(last["collections"], 1)
+        self.assertGreaterEqual(last["threads"], 1)
+        self.assertGreater(last["stack_words"], 0)
+        self.assertGreater(last["data_words"], 0)
+        self.assertGreater(last["roots_ns"], 0)
+        self.assertGreaterEqual(last["roots_ns"],
+                                last["precise_ns"] + last["stack_ns"])
+        for key, value in last.items():
+            self.assertGreaterEqual(total[key], value, key)
+        for cls in ("stack", "regs", "mem", "shallow", "data", "structs"):
+            self.assertLessEqual(last[f"{cls}_hits"], last[f"{cls}_words"])
+        # A diagnostic mark is not counted.
+        _testinternalcapi.gc_live_roots_of(id(after))
+        self.assertEqual(_testinternalcapi.gc_root_stats()["total"], total)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    @support.requires_fork()
+    def test_root_stats_dump(self):
+        # PYTHON_GCROOTSTATS appends one line per finalized interpreter; a
+        # forked child counts only its own collections.
+        import json
+        import os
+        code = textwrap.dedent("""
+            import gc, os, sys
+            import _interpreters
+            for _ in range(20):
+                gc.collect()
+            interp = _interpreters.create()
+            _interpreters.run_string(interp, "import gc; gc.collect()")
+            _interpreters.destroy(interp)
+            pid = os.fork()
+            if pid == 0:
+                gc.collect()
+                sys.exit(0)
+            os.waitpid(pid, 0)
+            print(pid)
+        """)
+        with temp_dir() as tmp:
+            path = os.path.join(tmp, "roots.jsonl")
+            rc, out, err = assert_python_ok("-c", code,
+                                            PYTHON_GCROOTSTATS=path)
+            with open(path) as f:
+                records = [json.loads(line) for line in f]
+        child = int(out.split()[-1])
+        by_pid = {}
+        for rec in records:
+            by_pid.setdefault(rec["pid"], []).append(rec)
+        self.assertEqual(len(by_pid), 2, records)
+        parent = [r for p, rs in by_pid.items() if p != child for r in rs]
+        self.assertEqual(sorted(r["interp"] != 0 for r in parent),
+                         [False, True])
+        main = next(r for r in parent if r["interp"] == 0)
+        sub = next(r for r in parent if r["interp"] != 0)
+        self.assertGreaterEqual(main["collections"], 20)
+        self.assertGreaterEqual(sub["collections"], 1)
+        [forked] = by_pid[child]
+        self.assertEqual(forked["interp"], 0)
+        self.assertGreaterEqual(forked["collections"], 1)
+        self.assertLess(forked["collections"], 20)
+
+
+@unittest.skipUnless(_testinternalcapi is not None
+                     and hasattr(_testinternalcapi, "gc_walk_owners"),
+                     "requires the stack walk (x86-64 ELF, glibc 2.35)")
+class StackWalkTests(unittest.TestCase):
+    # Note 11 section 3: the walk scans what opaque frames own and nothing
+    # that precise frames own.  The fixtures are in
+    # Modules/_testinternalcapi/gc_walk.c.
+
+    ROOT_STACKS = 1 << 5
+    ROOT_DATA = 1 << 6
+    ROOT_STRUCTS = 1 << 7
+
+    def test_fixture_cfi(self):
+        # The fixtures save the registers they keep their values in: the
+        # walk's results below rely on it.
+        import re
+        import shutil
+        import subprocess
+        if shutil.which("readelf") is None or shutil.which("nm") is None:
+            self.skipTest("requires readelf and nm")
+        path = getattr(_testinternalcapi, "__file__", sys.executable)
+        syms = {}
+        for line in subprocess.run(["nm", path], capture_output=True,
+                                   text=True, check=True).stdout.splitlines():
+            parts = line.split()
+            if len(parts) == 3 and re.fullmatch(r"level[0-4]", parts[2]):
+                syms[int(parts[0], 16)] = parts[2]
+        frames = subprocess.run(["readelf", "--debug-dump=frames-interp", path],
+                                capture_output=True, text=True,
+                                check=True).stdout
+        regs = {"level0": "rbx", "level1": "r12", "level2": "r13",
+                "level3": "r14", "level4": "r15"}
+        found = set()
+        for fde in re.split(r"\n(?=[0-9a-f]+ [0-9a-f]+ [0-9a-f]+ FDE)", frames):
+            m = re.search(r"FDE cie=[0-9a-f]+ pc=([0-9a-f]+)\.\.", fde)
+            if not m or int(m.group(1), 16) not in syms:
+                continue
+            name = syms[int(m.group(1), 16)]
+            lines = fde.splitlines()
+            header = next(l for l in lines if l.strip().startswith("LOC"))
+            cols = header.split()
+            self.assertIn(regs[name], cols, name)
+            col = cols.index(regs[name])
+            saved = [l.split()[col] for l in lines[lines.index(header) + 1:]
+                     if len(l.split()) == len(cols)]
+            self.assertTrue(any(v.startswith("c-") for v in saved), name)
+            found.add(name)
+        self.assertEqual(found, set(regs))
+
+    def test_owners(self):
+        # A chain of five frames, each with a sentinel in a different
+        # callee-saved register across the call to the next; the walk scans
+        # a frame's sentinel if and only if the frame is opaque.
+        for precise in ("00000", "01010", "10101", "11111"):
+            with self.subTest(precise=precise):
+                got = _testinternalcapi.gc_walk_owners(precise)
+                self.assertEqual(got[:5], tuple(c == "0" for c in precise))
+                self.assertFalse(got[5])  # no fallback
+
+    def test_fallback(self):
+        # A frame with no unwind information ends the walk: the rest of
+        # the stack and the pending registers are scanned conservatively,
+        # and the fallback counts against the test's range.
+        fell_back, test_fallbacks, found = _testinternalcapi.gc_walk_fallback()
+        self.assertTrue(fell_back)
+        self.assertEqual(test_fallbacks, 1)
+        self.assertTrue(found)
+
+    @threading_helper.requires_working_threading()
+    def test_detached_register(self):
+        # A thread that detaches with an object only in a callee-saved
+        # register (note 11 question 16): through Py_BEGIN_ALLOW_THREADS, a
+        # pinned record that the walk reads from the capture; through a
+        # helper that detaches and returns before the thread blocks, from a
+        # function registered precise; and through a swap to NULL in a
+        # function built -O0.  The last two are unpinned, and their stacks
+        # are scanned conservatively, the precise frame's object too.  The
+        # main thread's record is in _PyRuntime, which the data scan reads
+        # around, so each mode runs on the main thread as well.
+        def hold(mode, result):
+            result.append(_testinternalcapi.gc_walk_hold_detached(mode))
+
+        def check(result):
+            try:
+                result.append(_testinternalcapi.gc_walk_detached_roots())
+            finally:
+                _testinternalcapi.gc_walk_release()
+
+        for mode in (0, 1, 2):
+            for on_main in (False, True):
+                with self.subTest(mode=mode, on_main=on_main):
+                    _testinternalcapi.gc_walk_reset()
+                    held, checked = [], []
+                    if on_main:
+                        t = threading.Thread(target=check, args=(checked,))
+                        t.start()
+                        try:
+                            hold(mode, held)
+                        finally:
+                            t.join()
+                    else:
+                        t = threading.Thread(target=hold, args=(mode, held))
+                        t.start()
+                        try:
+                            check(checked)
+                        finally:
+                            t.join()
+                    roots, valid, pinned = checked[0]
+                    self.assertTrue(valid)
+                    self.assertEqual(pinned, mode == 0)
+                    self.assertTrue(roots & self.ROOT_STACKS, roots)
+                    self.assertEqual(held, [[None]])
+
+    @unittest.skipUnless(hasattr(sys, "activate_stack_trampoline"),
+                         "requires the perf trampoline")
+    def test_perf_trampoline(self):
+        # The perf trampolines have no unwind information; the walk reads
+        # their frames by the frame pointer, as registered code.
+        code = textwrap.dedent("""
+            import os, sys, _testinternalcapi
+            sys.activate_stack_trampoline("perf")
+            try:
+                def walk_through_trampoline():
+                    return _testinternalcapi.gc_walk_here()
+                frames, fell_back, _ = walk_through_trampoline()
+            finally:
+                sys.deactivate_stack_trampoline()
+            path = f"/tmp/perf-{os.getpid()}.map"
+            with open(path) as f:
+                entries = [l.split() for l in f]
+            os.unlink(path)
+            ours = [(int(a, 16), int(n, 16)) for a, n, name, *_ in entries
+                    if name.startswith("py::walk_through_trampoline:")]
+            hits = [f for f in frames
+                    if any(a <= f[0] < a + n for a, n in ours)]
+            print(fell_back, len(ours), [f[3] for f in hits])
+        """)
+        _, out, _ = assert_python_ok("-c", code)
+        # No fallback; one trampoline, whose frame is core opaque
+        self.assertEqual(out.decode().split(), ["0", "1", "[2]"])
+
+    def test_stale_record_not_a_root(self):
+        # The main thread's state is in _PyRuntime, which the data scan and
+        # the main interpreter's struct scan read; its detach record, stale
+        # once it attaches, holds an object only a register held.
+        if threading.current_thread() is not threading.main_thread():
+            self.skipTest("the initial thread state is the main thread's")
+        def garbage():
+            # An object that only the record holds once this returns (the
+            # struct scan reads the data stack's live slots).
+            obj = [None]
+            held = _testinternalcapi.gc_walk_detach_holding(obj)
+            return id(obj), held
+        addr, held = garbage()
+        self.assertTrue(held)
+        roots = _testinternalcapi.gc_live_roots_of(addr)
+        self.assertEqual(roots & (self.ROOT_DATA | self.ROOT_STRUCTS), 0,
+                         roots)
+
+    @unittest.skipUnless(sys.platform == "linux", "reads /proc/self/maps")
+    def test_loader_generation(self):
+        # An object unloaded and another loaded at its address: the cache
+        # is flushed, and the walk attributes the new object's frames.
+        import ctypes
+        import _ctypes
+        import os
+        import shutil
+        import subprocess
+        import sysconfig
+        cc = (sysconfig.get_config_var("CC") or "").split()
+        if not cc or shutil.which(cc[0]) is None:
+            self.skipTest("requires the configured C compiler")
+        sources = [
+            "typedef void (*cb_t)(void);\n"
+            "__attribute__((noinline)) void call_cb(cb_t cb)\n"
+            "{ volatile int pad = 1; cb(); (void)pad; }\n",
+            "typedef void (*cb_t)(void);\n"
+            "__attribute__((noinline)) static void inner(cb_t cb)\n"
+            "{ volatile char buf[200]; buf[0] = 1; cb(); (void)buf[0]; }\n"
+            "__attribute__((noinline)) void call_cb(cb_t cb)\n"
+            "{ volatile long a = 1, b = 2; inner(cb); (void)(a + b); }\n",
+        ]
+        with temp_dir() as tmp:
+            libs = []
+            for i, src in enumerate(sources):
+                c = os.path.join(tmp, f"lib{i}.c")
+                with open(c, "w") as f:
+                    f.write(src)
+                so = os.path.join(tmp, f"lib{i}.so")
+                subprocess.run([*cc, "-O2", "-shared", "-fPIC", "-o", so, c],
+                               check=True)
+                libs.append(so)
+            path = os.path.join(tmp, "lib.so")
+
+            def mapping():
+                with open("/proc/self/maps") as f:
+                    lines = [l.split() for l in f if l.rstrip().endswith(path)]
+                if not lines:
+                    return None
+                ranges = [tuple(int(x, 16) for x in l[0].split("-"))
+                          for l in lines]
+                return min(r[0] for r in ranges), max(r[1] for r in ranges)
+
+            results = []
+            for so in libs:
+                shutil.copy(so, path)
+                lib = ctypes.CDLL(path)
+                out = {}
+
+                @ctypes.CFUNCTYPE(None)
+                def cb():
+                    gc.collect()
+                    out["stats"] = _testinternalcapi.gc_root_stats()
+                    out["walk"] = _testinternalcapi.gc_walk_here()
+
+                lib.call_cb(cb)
+                where = mapping()
+                handle = lib._handle
+                del lib, cb
+                _ctypes.dlclose(handle)
+                self.assertIsNone(mapping())  # unloaded
+                results.append((where, out))
+            (lo1, _), first = results[0]
+            (lo2, hi2), second = results[1]
+            if lo1 != lo2:
+                self.skipTest("the second object mapped elsewhere")
+            # The unload flushed the cache before the second collection
+            # walked; an automatic collection between may have counted it.
+            flushes = (second["stats"]["total"]["cache_flushes"]
+                       - first["stats"]["total"]["cache_flushes"])
+            self.assertGreaterEqual(flushes, 1)
+            self.assertEqual(second["stats"]["last"]["fallbacks"], 0)
+            frames, fell_back, _ = second["walk"]
+            self.assertFalse(fell_back)
+            ours = [f for f in frames if lo2 <= f[0] < hi2]
+            self.assertEqual(len(ours), 2)  # inner and call_cb
+            self.assertTrue(all(f[3] == 3 for f in ours))  # extension opaque
+
+    @threading_helper.requires_working_threading()
+    def test_unpinned_counter(self):
+        # A root phase counts the unpinned records it visits: a thread that
+        # detached through a direct PyEval_SaveThread() (mode 1), not one
+        # in Py_BEGIN_ALLOW_THREADS (mode 0).
+        counts = {}
+        for mode in (0, 1):
+            _testinternalcapi.gc_walk_reset()
+            t = threading.Thread(
+                target=_testinternalcapi.gc_walk_hold_detached, args=(mode,))
+            t.start()
+            try:
+                _testinternalcapi.gc_walk_detached_roots()  # published
+                gc.collect()
+                counts[mode] = _testinternalcapi.gc_root_stats()["last"][
+                    "unpinned"]
+            finally:
+                _testinternalcapi.gc_walk_release()
+                t.join()
+        self.assertEqual(counts[1], counts[0] + 1, counts)
+
+    def test_counters(self):
+        gc.collect()
+        last = _testinternalcapi.gc_root_stats()["last"]
+        self.assertGreater(last["frames_walked"], 0)
+        self.assertEqual(last["fallbacks"], 0)
 
 
 class PythonFinalizationTests(unittest.TestCase):

@@ -55,10 +55,13 @@ typedef struct {
 
 #include "pycore_context.h"       // _PyContextTokenMissing
 
-// A value that a C local holds, linked into the thread state so that the
-// collector visits it: the way a handler of the eval loop, whose own C frame
-// the collector does not scan (_PyEvalActivation), holds a value across an
-// escaping call.  Used with _PyThreadState_PushValueRoot().
+// Values that a C frame holds, linked into the thread state so that the
+// collector visits them: the way a function whose own C frame the collector
+// does not scan (_PyEvalActivation, Py_GC_PRECISE) holds values across a
+// collecting call.  The collector visits base[0] to base[n - 1].  A
+// one-value root (_PyThreadState_PushValueRoot()) is a span of one over its
+// own value; a span (_PyThreadState_PushValueSpan()) is over a buffer of
+// the caller's and is filled only by _PyValueSpan_Append().
 typedef struct _PyValueRoot {
     union {
         PyValue value;
@@ -66,6 +69,8 @@ typedef struct _PyValueRoot {
         // would be the inline value again.
         PyObject *object;
     };
+    PyValue *base;
+    Py_ssize_t n;
     struct _PyValueRoot *next;
 } _PyValueRoot;
 

@@ -160,15 +160,48 @@ _PyMem_MiCalloc(void *ctx, size_t nelem, size_t elsize)
     return mi_heap_calloc(_PyMem_MiHeap(), nelem, elsize);
 }
 
+#ifdef Py_DEBUG
+/* The verifier's kill mode (_PyGC_quarantine_tstate): a free of this
+   thread state's quarantines the block, and a realloc that would free it
+   copies it to a new block instead. */
+static inline int
+quarantining(void *ptr)
+{
+    return _PyGC_quarantine_tstate != NULL && ptr != NULL;
+}
+
+static void *
+quarantine_realloc(mi_heap_t *heap, void *ptr, size_t size)
+{
+    void *p = mi_heap_malloc(heap, size);
+    if (p != NULL) {
+        memcpy(p, ptr, Py_MIN(mi_usable_size(ptr), size));
+        _PyGC_Quarantine(ptr);
+    }
+    return p;
+}
+#endif
+
 void *
 _PyMem_MiRealloc(void *ctx, void *ptr, size_t size)
 {
+#ifdef Py_DEBUG
+    if (quarantining(ptr)) {
+        return quarantine_realloc(_PyMem_MiHeap(), ptr, size);
+    }
+#endif
     return mi_heap_realloc(_PyMem_MiHeap(), ptr, size);
 }
 
 void
 _PyMem_MiFree(void *ctx, void *ptr)
 {
+#ifdef Py_DEBUG
+    if (quarantining(ptr)) {
+        _PyGC_Quarantine(ptr);
+        return;
+    }
+#endif
     mi_free(ptr);
 }
 
@@ -229,12 +262,23 @@ _PyObject_MiCalloc(void *ctx, size_t nelem, size_t elsize)
 void *
 _PyObject_MiRealloc(void *ctx, void *ptr, size_t nbytes)
 {
+#ifdef Py_DEBUG
+    if (quarantining(ptr)) {
+        return quarantine_realloc(_PyObject_MiHeap(), ptr, nbytes);
+    }
+#endif
     return mi_heap_realloc(_PyObject_MiHeap(), ptr, nbytes);
 }
 
 void
 _PyObject_MiFree(void *ctx, void *ptr)
 {
+#ifdef Py_DEBUG
+    if (quarantining(ptr)) {
+        _PyGC_Quarantine(ptr);
+        return;
+    }
+#endif
     mi_free(ptr);
 }
 
@@ -285,8 +329,10 @@ void* _PyObject_Realloc(void *ctx, void *ptr, size_t size);
 #  define PYMALLOC_ALLOC {NULL, _PyObject_Malloc, _PyObject_Calloc, _PyObject_Realloc, _PyObject_Free}
 #endif  // WITH_PYMALLOC
 
-#if defined(_Py_ADDRESS_SANITIZER) || defined(_Py_MEMORY_SANITIZER)
+#if defined(_Py_MEMORY_SANITIZER) \
+    || (defined(_Py_ADDRESS_SANITIZER) && !defined(WITH_MIMALLOC))
 // ASan and MSan do not track pymalloc blocks, so use malloc by default.
+// ASan tracks mimalloc's (MI_TRACK_ASAN), which the collector needs.
 // pymalloc can still be selected at runtime.
 #  define PYRAW_ALLOC MALLOC_ALLOC
 #  define PYMEM_ALLOC MALLOC_ALLOC

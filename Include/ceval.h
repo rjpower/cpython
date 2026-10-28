@@ -114,11 +114,16 @@ PyAPI_FUNC(void) PyEval_RestoreThread(PyThreadState *);
 PyAPI_FUNC(void) PyEval_AcquireThread(PyThreadState *tstate);
 PyAPI_FUNC(void) PyEval_ReleaseThread(PyThreadState *tstate);
 
+/* PyEval_SaveThread() for a caller that does not return before it calls
+   PyEval_RestoreThread(): the collector's stack walk reads the caller's
+   frames, which persist, while the thread is detached. */
+PyAPI_FUNC(PyThreadState *) _PyEval_SaveThreadPinned(void);
+
 #define Py_BEGIN_ALLOW_THREADS { \
                         PyThreadState *_save; \
-                        _save = PyEval_SaveThread();
+                        _save = _PyEval_SaveThreadPinned();
 #define Py_BLOCK_THREADS        PyEval_RestoreThread(_save);
-#define Py_UNBLOCK_THREADS      _save = PyEval_SaveThread();
+#define Py_UNBLOCK_THREADS      _save = _PyEval_SaveThreadPinned();
 #define Py_END_ALLOW_THREADS    PyEval_RestoreThread(_save); \
                  }
 

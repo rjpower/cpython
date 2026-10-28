@@ -2010,3 +2010,28 @@ mode's subset; the handler-space cleanup goes to step 8's design (row
 updated); the capacity rule is accepted with the stated fallback;
 tp_getattr and tp_setattr stay object slots until phase P. The design
 agent continues as 6d's implementation agent in its worktree.
+
+## 2026-10-28 02:40 PDT: 6d rung 1 gate (the hand-offs and the boil2 mark)
+
+Rung 1 of 6d landed as the merge fc926ebe3aa of 6b5d93bc95b (commits
+92ce784a6a4 class_version on shapes and the member-site guard, SOABI
+boil2, magic 3727; 42406f734b5 capacity by unpadded size class and the
+presized conversion; 73e5daa8b28 the _NO_DICT loads folded into the shape
+handlers, STORE_ATTR_SHAPE_POLY and LOAD_ATTR_METHOD_LAZY_DICT on the
+freed opcodes, magic 3728; c0e0607ee35 test_frozenmain.h regenerated;
+6b5d93bc95b "As built"). The agent's gates: gate 2 on default 50,957
+tests, 0 fallbacks; gate 3 on debug 50,957 tests, SUCCESS. Gate run here
+on a detached checkout of fc926ebe3aa with fresh builds: gate 2 on default
+556/564 files, 50,957 tests, SUCCESS, 52,249 collections, 0 fallbacks;
+gate 3 on debug 50,957 tests, SUCCESS, 53,128 collections, 0 fallbacks,
+-u cpu test_cext 16 tests, regen and the traverse audit clean. Recorded by
+the agent against the rung's before records: attr_store_poly 0.306,
+method_lazy_dict 0.516, go 0.863 (441k poly stores per loop), richards
+0.941, logging 0.95, kernel geomean 0.989; boxes unchanged; logging
+allocations -30 per loop from the presize; capacity dictionary-mode
+entries over the Py_STATS suite 26,080 against the fallback threshold of
+53,084, so the size-class capacity rule stands. One hazard recorded: a
+first-run hang in test_concurrent_futures test_shutdown_deadlock_pickle
+(the forked child never exited; 3/3 passes alone under load). 6d's branch
+now contains boil/10a through item 4, so its later rungs land after 10a's
+rung 1b.

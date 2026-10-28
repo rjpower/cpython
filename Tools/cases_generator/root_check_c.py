@@ -2524,6 +2524,61 @@ StmtParser.block_from_body = _block_from_body  # type: ignore[attr-defined]
 # --- the static inline functions of the headers -----------------------------
 
 _INLINE_CACHE: dict[str, tuple[dict[str, list[Tok]], dict[str, str]]] = {}
+_TYPEDEF_CACHE: dict[str, set[str]] = {}
+
+
+def typedef_names(toks: list[Tok]) -> set[str]:
+    """The names that the typedefs among toks declare: the identifier in
+    `(*NAME)` of a function pointer type, otherwise the last identifier
+    before the closing `;`, outside braces and brackets."""
+    names: set[str] = set()
+    i = 0
+    while i < len(toks):
+        if toks[i].text != "typedef":
+            i += 1
+            continue
+        depth = 0
+        last = None
+        pointer_name = None
+        j = i + 1
+        while j < len(toks):
+            t = toks[j].text
+            if t in ("{", "["):
+                depth += 1
+            elif t in ("}", "]"):
+                depth -= 1
+            elif t == ";" and depth == 0:
+                break
+            elif depth == 0 and toks[j].kind == "id":
+                last = t
+                if (pointer_name is None and j >= 2
+                        and toks[j - 1].text == "*"
+                        and toks[j - 2].text == "("):
+                    pointer_name = t
+            j += 1
+        name = pointer_name or last
+        if name is not None:
+            names.add(name)
+        i = j + 1
+    return names
+
+
+def header_typedefs(include_dirs: Iterable[Path]) -> set[str]:
+    """The typedef names of every header under include_dirs."""
+    key = "|".join(str(d) for d in include_dirs)
+    if key in _TYPEDEF_CACHE:
+        return _TYPEDEF_CACHE[key]
+    names: set[str] = set()
+    for d in include_dirs:
+        for path in sorted(Path(d).rglob("*.h")):
+            if "mimalloc" in path.parts:
+                continue
+            try:
+                names |= typedef_names(tokens_of(path.read_text(errors="replace")))
+            except CheckError:
+                continue
+    _TYPEDEF_CACHE[key] = names
+    return names
 
 
 MACRO_DEF = re.compile(r"#\s*define\s+(\w+)\(([^)]*)\)\s*(.*)$", re.S)
@@ -2611,7 +2666,12 @@ def check_source(src: str, function: str | None = None, check_all: bool = False,
     classifier = Classifier(bodies)
     args_anchored = {fn.name for fn in funcs if fn.args_anchored}
     errors: list[Error] = []
-    typedefs: set[str] = set()
+    # A cast to a type the parser does not know as one ends the parse
+    typedefs = typedef_names(toks)
+    if include_dirs:
+        typedefs |= header_typedefs(include_dirs)
+    if function is not None and all(fn.name != function for fn in funcs):
+        errors.append(Error(1, f"no function '{function}' in the file"))
     for fn in funcs:
         if function is not None and fn.name != function:
             continue

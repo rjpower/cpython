@@ -1411,6 +1411,31 @@ Py_GC_PRECISE static void f(Py_GC_SLOTS PyValue *slots) {
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(root_check_c.main([path]), 0)
 
+    def test_unknown_function_fails(self):
+        errors = root_check_c.check_source(self.PRELUDE, function="missing")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("no function 'missing'", str(errors[0]))
+
+    def test_cast_to_local_typedef(self):
+        # A function pointer typedef of the file, and a struct typedef of
+        # the headers, are types to the parser.
+        src = """
+typedef PyObject *(*getter_fn)(PyObject *);
+static inline getter_fn get_getter(PyObject *o) { (void)o; return NULL; }
+Py_GC_PRECISE static int f(PyObject *o) {
+    getter_fn g = (getter_fn)
+        get_getter(o);
+    PyThreadState *ts = (PyThreadState *)
+        get_getter(o);
+    (void)g;
+    (void)ts;
+    return 0;
+}
+"""
+        self.assertEqual(self.check(src), [])
+        self.assertIn("getter_fn",
+                      root_check_c.typedef_names(root_check_c.tokens_of(src)))
+
     def test_call_through_pointer_collects(self):
         bodies = {
             "direct": root_check_c.tokens_of("{ return fp(x); }"),

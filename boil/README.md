@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-28 at integration head 41c716c5947.
+revised 2026-10-28 at integration head 88152aee44d.
 
 ## 1. The design in one page
 
@@ -88,15 +88,14 @@ costs; that is a plan, not evidence.
 | `boil/PROCESS.md` | the plan of record and position (§0), cleanup inputs from the reviews with owners (§0.1), intentional compatibility breaks (§0.2), the hand-off ledger (§0.3), the loop (§1), worktrees and branches (§2), the gate ladder (§3), reporting and tracing (§4) |
 | `boil/design/06-architecture-v2.md` | the architecture (sections 1 to 5), the step plan as first written (section 6), and one decision section per landed step (sections 9 to 21): what was built, what deviated, measurements |
 | `boil/design/07` to `13` | step design notes: 07 compiler passes, 08 the review at 6a and the hack register (section 3: every expedient kept, with its owner), 09 the object protocol, 10 the internal benchmark set and the ports deferral, 11 precise roots, 12 object slots on values, 13 per-interpreter queues (lands with 7a rung 1) |
-| `boil/design/01` to `05` | Phase 1 notes. Note 06 supersedes 01's encoding, 02's ownership bits and all of 03; 04 (shapes) and 05 (tier 0) stand with 06's amendments |
+| `boil/design/04`, `05` | shapes and tier 0, the two Phase 1 notes still in force with note 06's amendments (note 09 took the slot limits from 04; step 8 starts from 05's assembler) |
 | `boil/design/reviews/` | peer reviews of the design notes; the whole-project review prompt |
 | `boil/design/work/<step>-<rung>.md` | one work doc per rung: design, review response, as-built record, gate lines with commits, hazards traced, hand-offs |
 | `boil/design/work/reviews/` | each rung's design review (`-review.md`) and landing review (`-landing.md`), kept per round |
 | `boil/WORKLOG.md` | the gate entry of every landing, chronological, with the test counts, collections and fallbacks |
-| `boil/ARCHITECTURE_REVIEW.md`, `boil/ARCHITECTURE_REVIEW_2.md`, `boil/CLEANUP.md` | the whole-project reviews (2026-10-28, at 4bb672e0bf4 and 5f74a991472) and the first one's shortlist; inputs to the plan through PROCESS.md §0.1, never gates |
-| `boil/PR.md` | historical: the Phase 1 description of 2026-10-24 and its results table. Its present tense describes the branch at that date |
+| `boil/ARCHITECTURE_REVIEW_2.md` | the current whole-project review (2026-10-28 at 5f74a991472); an input to the plan through PROCESS.md §0.1, never a gate. Each step-end review replaces it; the previous one's open items live on as §0.1 rows |
 | `boil/bench/` | the internal benchmark set (`run.py`, `compare.py`, `results/<step>.json`), gate 4 of every step |
-| `boil/tools/` | `gate.sh` (the ladder), `gate_run.sh` (the lock and the two machine-wide test slots), `review.sh` and `landing_review.sh` (the codex reviewers), `worktree.sh` (new, push, land, drop), `check_unbuilt.sh`, `measure/` |
+| `boil/tools/` | `gate.sh` (the ladder), `gate_run.sh` (the lock and the two machine-wide test slots), `review.sh` and `landing_review.sh` (the codex reviewers), `worktree.sh` (new, push, land, drop), `check_unbuilt.sh`, `code_stats.py`, `measure/` |
 | `Tools/boil/traverse_audit.py`, `Tools/cases_generator/root_check_c.py` and `call_effects.py`, `Tools/build/gc_inline_audit.py` | the checkers the gate runs: traverse completeness, precise-frame roots, inlining of precise functions |
 | Loom artifacts `goal`, `plan`, `architecture`, `status-2026-10-28`, `architecture-review-2` | the user's goal, the first plan, the architecture summary, the latest readout, the latest whole-project review |
 

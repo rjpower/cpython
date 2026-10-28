@@ -42,13 +42,13 @@ class attribute; global and builtin load; `len`, `abs` and `math.sin`;
 Python calls with one and three positional arguments and with keywords;
 closure call; generator resume; list, tuple and dict subscript; `str` by
 join and by `+=`; `try` with and without a raise; `isinstance`; int and
-float chains; compare and branch. It also holds the 16 loops of the former
-`boil/tools/micro_loops.py` with their bodies unchanged (the rows of notes
-02 and 04). The empty range loop and the empty list loop are the skeletons:
-every other row subtracts one, as note 02 does; the polymorphic rows loop
-over a list of instances and subtract the list skeleton.
+float chains; compare and branch. It also holds the 16 loops of the Phase 1
+micro set with their bodies unchanged. The empty range loop and the empty
+list loop are the skeletons: every other row subtracts one; the
+polymorphic rows loop over a list of instances and subtract the list
+skeleton.
 
-The former `micro_loops.py` rows, as notes 02, 04 and 05 name them, are:
+The Phase 1 micro rows are:
 empty loop skeleton `empty_loop`; empty loop, i >= 1025 `empty_loop_large_i`;
 int add, result not cached `int_add`; int add, cached small result
 `int_add_small`; float add `float_add`; int compare `int_compare`; float
@@ -164,25 +164,7 @@ step5c against baseline, the rows that carry these numbers:
   comprehensions 6.99, consistent with garbage accumulating between the
   collector's runs (note 08 section 7.1).
 
-## Earlier records in this directory
-
-Recorded with pyperformance and the former `boil/tools` scripts before this
-set existed; kept as history.
-
-- Phase 1 baselines, 2026-10-23 at 321925c92c9 (16 cores, 62 GiB, gcc
-  15.2.0, no PGO or LTO): `default.json`, `jit.json` and `ft.json` from
-  `pyperformance run --rigorous=no` on the 22-kernel subset; geomean
-  against default: jit 0.834, ft 1.144. `compare-default-vs-*.txt` are
-  their tables; `rss-*.json` the peak RSS of the former `rss.py`;
-  `sanity-test.txt` the sanity tests. The existing JIT's 16.6 percent is
-  the bar the fork's own tier 0 must clear.
-- Step records: `step1-delete-tier2*.json`, `tagged-*.json`, `ir-only.json`,
-  `final.json` and their `compare-*.txt`.
-- Step 6a, 2026-10-27: `step6a.json` and `compare-default-vs-step6a.txt`,
-  the subset on `build/dev-default` at a7ff5d45e28: geomean 1.46x slower,
-  nbody 1.47x faster, coroutines 2.75x and generators 2.55x slower
-  (note 08 section 7.1). pyperf's psutil was built from source; the
-  prebuilt abi3 wheel segfaulted at import.
+## Former tools
 
 The former tools are folded into `run.py`: `micro_loops.py` is the micro
 set (same loop bodies, same 200 and 600 repeat counts, same skeleton

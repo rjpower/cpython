@@ -4,7 +4,9 @@ Status: in force from 2026-10-27 (user ruling); revised 2026-10-28 on the
 user's direction (landing review, single branching point, standing
 verification gates, the rerun rule, file ownership). This file is the
 working record of the plan and the procedure; `boil/README.md` is the
-starting point for a successor and maps the documents. Note 06
+starting point for a successor and maps the documents. Documents that
+no longer describe what is being built are deleted, not kept as history;
+the worklog and the commits are the history. Note 06
 (`boil/design/06-architecture-v2.md`) holds the design and the per-step
 decision sections; the work docs under `boil/design/work/` hold each
 rung's design, review and as-built record; `boil/WORKLOG.md` holds the
@@ -49,11 +51,11 @@ and gdb is absent (user action); `PYTHONMALLOC=malloc` is not honoured
 
 ### 0.1 Cleanup inputs from the architecture reviews
 
-`boil/ARCHITECTURE_REVIEW.md` (a source and architecture review of the
-branch at 4bb672e0bf4, no builds run), its shortlist `boil/CLEANUP.md`,
-and `boil/ARCHITECTURE_REVIEW_2.md` (the whole-project review of
-5f74a991472 on 2026-10-28, "review 2" below; its prompt is in
-`boil/design/reviews/`) are inputs to the plan, not gates. A review's
+The whole-project reviews are inputs to the plan, not gates. The first
+(2026-10-28 at 4bb672e0bf4, no builds run) supplied the rows below
+without a label and is deleted; its disposition is review 2's section 2.
+`boil/ARCHITECTURE_REVIEW_2.md` (5f74a991472, 2026-10-28, "review 2"
+below; its prompt is in `boil/design/reviews/`) is the current one. A review's
 confirmed finding becomes a row here with an owner and a time; a
 suspected hazard becomes a probe owned by the rung nearest the code.
 Owners, as of 2026-10-28:
@@ -65,7 +67,7 @@ Owners, as of 2026-10-28:
 | the below-2^48 pointer bound enforced where addresses enter a value or header; the supported platform, compiler and unwind matrix published | 10a rung 4 (the matrix, with the precise/opaque/unsupported inventory); 6e (the bound) | this week |
 | one verification manifest (modes, exclusions, reasons, owners, removal conditions) that `gate.sh` executes, and landing summaries tied to commit and build | coordinator, `boil/tools/verify.manifest` read by `gate.sh`, content from note 11 section 8.2 (10a rung 2b item 7 supplies the rows) | by 2026-10-30; moved up on 2026-10-28 because each agent re-derives its stress and ASan lists from prose and two landings today needed the lists restated |
 | compatibility accessors that allocate and abort on failure (`_PyValue_ObjectOrAbort`): migrate core callers, document the residual contract | 6e | with the remaining slot families |
-| documentation: `boil/PR.md` marked historical, note 06's opening reconciled with its as-built record, the 4,095-slot limit documented, wall-time, RSS and pause measurements against upstream | coordinator at each step end; the measurements at 10a rung 4 and step 7 | ongoing |
+| documentation: the Phase 1 description and notes 01 to 03 deleted (2026-10-28), note 06's opening reconciled with its as-built record, the 4,095-slot limit documented, wall-time, RSS and pause measurements against upstream | coordinator at each step end; the measurements at 10a rung 4 and step 7 | ongoing |
 | 7a ahead of further collector features; `str +=` linear path with its own acceptance criterion (step 9); handle discipline before movement (10b) | as planned | as planned |
 | review 2 §5.1, confirmed and reproduced (`f` returns 2 on the fork, 1 upstream): `_PyRegPass_CopyProp` folds a local's load into a reader past a call on the same line, so a call that rebinds the local through `frame.f_locals` changes an operand already evaluated | coordinator, a bounded compiler-fix agent (`boil/compiler-copyprop`) from integration 40cfac6fe3a: a pending load does not survive an op that can run Python code; same-line tests for calls, descriptors and instrumentation; the folding counts recorded before and after | started 2026-10-28; lands before 7a rung 2, independent of both running rungs (compiler files only) |
 | review 2 §5.2, confirmed: `order_dead_first()` returns NULL when its table fails to allocate and `sweep()` then frees in heap order, abandoning the referent-reading order | 7a rung 2, its first commit (same file as the queue; same rule as its node table: one failure path, undo the dead, free nothing); test fails the ordering allocation and then collects | 2026-10-29 |

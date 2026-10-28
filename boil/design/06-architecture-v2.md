@@ -3,10 +3,10 @@
 Status: approved 2026-10-25 with two review amendments (sections 3.2 and 3.4, step 10).
 The plan of record and the position are in `boil/PROCESS.md` section 0,
 which revises section 6 below (7a moved before 7, 10 split into 10a and 10b,
-the ports deferred); sections 9 to 21 are the per-step decision records. Supersedes the encoding in note 01,
-the ownership bits of note 02, and note 03 (deferred reference counting),
-which is dropped. Notes 04 (shapes) and 05 (tier 0) stand, with the changes in
-sections 3.5 and 5.
+the ports deferred); sections 9 to 21 are the per-step decision records. Supersedes the Phase 1 notes 01 to 03
+(the first IR encoding, the tagged `_PyStackRef`, deferred reference
+counting), which are deleted; this note is the design. Notes 04 (shapes)
+and 05 (tier 0) stand, with the changes in sections 3.5 and 5.
 
 ## 0. What Phase 1 got wrong, and the correction
 

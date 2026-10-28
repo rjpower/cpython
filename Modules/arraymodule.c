@@ -2580,19 +2580,19 @@ array_array___reduce_ex___impl(arrayobject *self, PyTypeObject *cls,
     return result;
 }
 
-static PyObject *
+static PyValue
 array_get_typecode(PyObject *op, void *Py_UNUSED(closure))
 {
     arrayobject *a = arrayobject_CAST(op);
     const char *typecode = a->ob_descr->typecode;
-    return PyUnicode_FromString(typecode);
+    return PyValue_FromResult(PyUnicode_FromString(typecode));
 }
 
-static PyObject *
+static PyValue
 array_get_itemsize(PyObject *op, void *Py_UNUSED(closure))
 {
     arrayobject *a = arrayobject_CAST(op);
-    return PyLong_FromLong((long)a->ob_descr->itemsize);
+    return PyValue_FromLongLong((long)a->ob_descr->itemsize);
 }
 
 static PyGetSetDef array_getsets [] = {

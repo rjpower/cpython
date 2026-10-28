@@ -81,7 +81,9 @@ PyAPI_FUNC(int) PyDict_SetDefaultRef(PyObject *mp, PyObject *key, PyObject *defa
 #endif
 
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x030A0000
-PyAPI_FUNC(PyObject *) PyObject_GenericGetDict(PyObject *, void *);
+/* The __dict__ getter: the dict as a value, or PyValue_NULL with an
+   exception set. */
+PyAPI_FUNC(PyValue) PyObject_GenericGetDict(PyObject *, void *);
 #endif
 
 /* Dictionary (keys, values, items) views */

@@ -337,17 +337,19 @@ _io__Buffered_simple_flush(PyObject *self, PyObject *Py_UNUSED(ignored))
     return return_value;
 }
 
-static PyObject *
+static PyValue
 _io__Buffered_closed_get_impl(buffered *self);
 
-static PyObject *
+static PyValue
 _io__Buffered_closed_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValue _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io__Buffered_closed_get_impl((buffered *)self);
+    _return_value = _io__Buffered_closed_get_impl((buffered *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = _return_value;
 
     return return_value;
 }
@@ -467,32 +469,36 @@ _io__Buffered_writable(PyObject *self, PyObject *Py_UNUSED(ignored))
     return return_value;
 }
 
-static PyObject *
+static PyValue
 _io__Buffered_name_get_impl(buffered *self);
 
-static PyObject *
+static PyValue
 _io__Buffered_name_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValue _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io__Buffered_name_get_impl((buffered *)self);
+    _return_value = _io__Buffered_name_get_impl((buffered *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = _return_value;
 
     return return_value;
 }
 
-static PyObject *
+static PyValue
 _io__Buffered_mode_get_impl(buffered *self);
 
-static PyObject *
+static PyValue
 _io__Buffered_mode_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValue _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io__Buffered_mode_get_impl((buffered *)self);
+    _return_value = _io__Buffered_mode_get_impl((buffered *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = _return_value;
 
     return return_value;
 }
@@ -1476,13 +1482,19 @@ _io_BufferedRWPair_isatty(PyObject *self, PyObject *Py_UNUSED(ignored))
     return _io_BufferedRWPair_isatty_impl((rwpair *)self);
 }
 
-static PyObject *
+static PyValue
 _io_BufferedRWPair_closed_get_impl(rwpair *self);
 
-static PyObject *
+static PyValue
 _io_BufferedRWPair_closed_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _io_BufferedRWPair_closed_get_impl((rwpair *)self);
+    PyValue return_value = PyValue_NULL;
+    PyValue _return_value;
+
+    _return_value = _io_BufferedRWPair_closed_get_impl((rwpair *)self);
+    return_value = _return_value;
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_io_BufferedRandom___init____doc__,
@@ -1565,12 +1577,12 @@ skip_optional_pos:
 exit:
     return return_value;
 }
-#define _IO__BUFFERED_CLOSED_GETSETDEF {"closed", (getter)_io__Buffered_closed_get, (setter)NULL, NULL},
+#define _IO__BUFFERED_CLOSED_GETSETDEF {"closed", _io__Buffered_closed_get, NULL, NULL},
 
-#define _IO__BUFFERED_NAME_GETSETDEF {"name", (getter)_io__Buffered_name_get, (setter)NULL, NULL},
+#define _IO__BUFFERED_NAME_GETSETDEF {"name", _io__Buffered_name_get, NULL, NULL},
 
-#define _IO__BUFFERED_MODE_GETSETDEF {"mode", (getter)_io__Buffered_mode_get, (setter)NULL, NULL},
+#define _IO__BUFFERED_MODE_GETSETDEF {"mode", _io__Buffered_mode_get, NULL, NULL},
 
-#define _IO_BUFFEREDRWPAIR_CLOSED_GETSETDEF {"closed", (getter)_io_BufferedRWPair_closed_get, (setter)NULL, NULL},
+#define _IO_BUFFEREDRWPAIR_CLOSED_GETSETDEF {"closed", _io_BufferedRWPair_closed_get, NULL, NULL},
 
-/*[clinic end generated code: output=2286847697b605b7 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=68ee8708b1a30832 input=a9049054013a1b77]*/

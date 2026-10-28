@@ -929,18 +929,24 @@ Defining Getters and Setters
 
       Optional user data pointer, providing additional data for getter and setter.
 
-.. c:type:: PyObject *(*getter)(PyObject *, void *)
+.. c:type:: PyValue (*getter)(PyObject *, void *)
 
    The ``get`` function takes one :c:expr:`PyObject*` parameter (the
-   instance) and a user data pointer (the associated ``closure``):
+   instance) and a user data pointer (the associated ``closure``).
 
-   It should return a new reference on success or ``NULL`` with a set exception
-   on failure.
+   It returns the attribute as a canonical value, so an int or float that
+   fits inline is returned without making an object, or ``PyValue_NULL``
+   with an exception set on failure.  A getter of the earlier form,
+   returning ``PyObject *``, does not match this type; one cast to it is
+   caught on debug builds when it returns a box of an int or float that
+   should have been inline.
 
-.. c:type:: int (*setter)(PyObject *, PyObject *, void *)
+.. c:type:: int (*setter)(PyObject *, PyValue, void *)
 
-   ``set`` functions take two :c:expr:`PyObject*` parameters (the instance and
-   the value to be set) and a user data pointer (the associated ``closure``):
+   ``set`` functions take the instance, the value to be set and a user data
+   pointer (the associated ``closure``).
 
-   In case the attribute should be deleted the second parameter is ``NULL``.
-   Should return ``0`` on success or ``-1`` with a set exception on failure.
+   In case the attribute should be deleted the value is ``PyValue_NULL``.
+   A setter that stores the value in a :c:expr:`PyObject *` field boxes it
+   with :c:func:`!PyValue_Object`.  Should return ``0`` on success or ``-1``
+   with a set exception on failure.

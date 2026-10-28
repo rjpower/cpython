@@ -31,26 +31,30 @@ _ctypes_CType_Type___sizeof__(PyObject *self, PyTypeObject *cls, const PyValue *
 static PyObject *
 _ctypes_CType_Type___pointer_type___get_impl(PyObject *self);
 
-static PyObject *
+static PyValue
 _ctypes_CType_Type___pointer_type___get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _ctypes_CType_Type___pointer_type___get_impl(self);
+    return PyValue_FromResult(_ctypes_CType_Type___pointer_type___get_impl(self));
 }
 
 static int
 _ctypes_CType_Type___pointer_type___set_impl(PyObject *self, PyObject *value);
 
 static int
-_ctypes_CType_Type___pointer_type___set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+_ctypes_CType_Type___pointer_type___set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value = NULL;
 
-    if (arg != NULL) {
-        value = arg;
+    if (!PyValue_IsNull(arg)) {
+        value = PyValue_Object(arg);
+        if (value == NULL) {
+            goto exit;
+        }
     }
     return_value = _ctypes_CType_Type___pointer_type___set_impl(self, value);
 
+exit:
     return return_value;
 }
 
@@ -390,19 +394,25 @@ static int
 _ctypes_PyCArrayType_Type_raw_set_impl(CDataObject *self, Py_buffer *value);
 
 static int
-_ctypes_PyCArrayType_Type_raw_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+_ctypes_PyCArrayType_Type_raw_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     Py_buffer value = {NULL, NULL};
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute 'raw' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    if (PyObject_GetBuffer(arg, &value, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &value, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = _ctypes_PyCArrayType_Type_raw_set_impl((CDataObject *)self, &value);
@@ -420,14 +430,16 @@ exit:
 static PyObject *
 _ctypes_PyCArrayType_Type_raw_get_impl(CDataObject *self);
 
-static PyObject *
+static PyValue
 _ctypes_PyCArrayType_Type_raw_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ctypes_PyCArrayType_Type_raw_get_impl((CDataObject *)self);
+    _return_value = _ctypes_PyCArrayType_Type_raw_get_impl((CDataObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -435,14 +447,16 @@ _ctypes_PyCArrayType_Type_raw_get(PyObject *self, void *Py_UNUSED(context))
 static PyObject *
 _ctypes_PyCArrayType_Type_value_get_impl(CDataObject *self);
 
-static PyObject *
+static PyValue
 _ctypes_PyCArrayType_Type_value_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ctypes_PyCArrayType_Type_value_get_impl((CDataObject *)self);
+    _return_value = _ctypes_PyCArrayType_Type_value_get_impl((CDataObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -452,22 +466,28 @@ _ctypes_PyCArrayType_Type_value_set_impl(CDataObject *self,
                                          PyBytesObject *value);
 
 static int
-_ctypes_PyCArrayType_Type_value_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+_ctypes_PyCArrayType_Type_value_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyBytesObject *value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute 'value' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    if (!PyBytes_Check(arg)) {
-        PyErr_Format(PyExc_TypeError, "attribute 'value' must be bytes, not %T", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyBytes_Check(_arg)) {
+            PyErr_Format(PyExc_TypeError, "attribute 'value' must be bytes, not %T", _arg);
+            goto exit;
+        }
+        value = (PyBytesObject *)_arg;
     }
-    value = (PyBytesObject *)arg;
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = _ctypes_PyCArrayType_Type_value_set_impl((CDataObject *)self, value);
     Py_END_CRITICAL_SECTION();
@@ -704,18 +724,22 @@ static int
 _ctypes_CFuncPtr_errcheck_set_impl(PyCFuncPtrObject *self, PyObject *value);
 
 static int
-_ctypes_CFuncPtr_errcheck_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+_ctypes_CFuncPtr_errcheck_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value = NULL;
 
-    if (arg != NULL) {
-        value = arg;
+    if (!PyValue_IsNull(arg)) {
+        value = PyValue_Object(arg);
+        if (value == NULL) {
+            goto exit;
+        }
     }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = _ctypes_CFuncPtr_errcheck_set_impl((PyCFuncPtrObject *)self, value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -725,14 +749,16 @@ PyDoc_STRVAR(_ctypes_CFuncPtr_errcheck__doc__,
 static PyObject *
 _ctypes_CFuncPtr_errcheck_get_impl(PyCFuncPtrObject *self);
 
-static PyObject *
+static PyValue
 _ctypes_CFuncPtr_errcheck_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ctypes_CFuncPtr_errcheck_get_impl((PyCFuncPtrObject *)self);
+    _return_value = _ctypes_CFuncPtr_errcheck_get_impl((PyCFuncPtrObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -741,18 +767,22 @@ static int
 _ctypes_CFuncPtr_restype_set_impl(PyCFuncPtrObject *self, PyObject *value);
 
 static int
-_ctypes_CFuncPtr_restype_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+_ctypes_CFuncPtr_restype_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value = NULL;
 
-    if (arg != NULL) {
-        value = arg;
+    if (!PyValue_IsNull(arg)) {
+        value = PyValue_Object(arg);
+        if (value == NULL) {
+            goto exit;
+        }
     }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = _ctypes_CFuncPtr_restype_set_impl((PyCFuncPtrObject *)self, value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -762,14 +792,16 @@ PyDoc_STRVAR(_ctypes_CFuncPtr_restype__doc__,
 static PyObject *
 _ctypes_CFuncPtr_restype_get_impl(PyCFuncPtrObject *self);
 
-static PyObject *
+static PyValue
 _ctypes_CFuncPtr_restype_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ctypes_CFuncPtr_restype_get_impl((PyCFuncPtrObject *)self);
+    _return_value = _ctypes_CFuncPtr_restype_get_impl((PyCFuncPtrObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -778,18 +810,22 @@ static int
 _ctypes_CFuncPtr_argtypes_set_impl(PyCFuncPtrObject *self, PyObject *value);
 
 static int
-_ctypes_CFuncPtr_argtypes_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+_ctypes_CFuncPtr_argtypes_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value = NULL;
 
-    if (arg != NULL) {
-        value = arg;
+    if (!PyValue_IsNull(arg)) {
+        value = PyValue_Object(arg);
+        if (value == NULL) {
+            goto exit;
+        }
     }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = _ctypes_CFuncPtr_argtypes_set_impl((PyCFuncPtrObject *)self, value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -799,14 +835,16 @@ PyDoc_STRVAR(_ctypes_CFuncPtr_argtypes__doc__,
 static PyObject *
 _ctypes_CFuncPtr_argtypes_get_impl(PyCFuncPtrObject *self);
 
-static PyObject *
+static PyValue
 _ctypes_CFuncPtr_argtypes_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ctypes_CFuncPtr_argtypes_get_impl((PyCFuncPtrObject *)self);
+    _return_value = _ctypes_CFuncPtr_argtypes_get_impl((PyCFuncPtrObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -875,36 +913,42 @@ static int
 _ctypes_Simple_value_set_impl(CDataObject *self, PyObject *value);
 
 static int
-_ctypes_Simple_value_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+_ctypes_Simple_value_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute 'value' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = arg;
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = _ctypes_Simple_value_set_impl((CDataObject *)self, value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
 static PyObject *
 _ctypes_Simple_value_get_impl(CDataObject *self);
 
-static PyObject *
+static PyValue
 _ctypes_Simple_value_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ctypes_Simple_value_get_impl((CDataObject *)self);
+    _return_value = _ctypes_Simple_value_get_impl((CDataObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -989,18 +1033,18 @@ Pointer_bool(PyObject *self)
 
     return return_value;
 }
-#define _CTYPES_CTYPE_TYPE___POINTER_TYPE___GETSETDEF {"__pointer_type__", (getter)_ctypes_CType_Type___pointer_type___get, (setter)_ctypes_CType_Type___pointer_type___set, NULL},
+#define _CTYPES_CTYPE_TYPE___POINTER_TYPE___GETSETDEF {"__pointer_type__", _ctypes_CType_Type___pointer_type___get, _ctypes_CType_Type___pointer_type___set, NULL},
 
-#define _CTYPES_PYCARRAYTYPE_TYPE_RAW_GETSETDEF {"raw", (getter)_ctypes_PyCArrayType_Type_raw_get, (setter)_ctypes_PyCArrayType_Type_raw_set, NULL},
+#define _CTYPES_PYCARRAYTYPE_TYPE_RAW_GETSETDEF {"raw", _ctypes_PyCArrayType_Type_raw_get, _ctypes_PyCArrayType_Type_raw_set, NULL},
 
-#define _CTYPES_PYCARRAYTYPE_TYPE_VALUE_GETSETDEF {"value", (getter)_ctypes_PyCArrayType_Type_value_get, (setter)_ctypes_PyCArrayType_Type_value_set, NULL},
+#define _CTYPES_PYCARRAYTYPE_TYPE_VALUE_GETSETDEF {"value", _ctypes_PyCArrayType_Type_value_get, _ctypes_PyCArrayType_Type_value_set, NULL},
 
-#define _CTYPES_CFUNCPTR_ERRCHECK_GETSETDEF {"errcheck", (getter)_ctypes_CFuncPtr_errcheck_get, (setter)_ctypes_CFuncPtr_errcheck_set, _ctypes_CFuncPtr_errcheck__doc__},
+#define _CTYPES_CFUNCPTR_ERRCHECK_GETSETDEF {"errcheck", _ctypes_CFuncPtr_errcheck_get, _ctypes_CFuncPtr_errcheck_set, _ctypes_CFuncPtr_errcheck__doc__},
 
-#define _CTYPES_CFUNCPTR_RESTYPE_GETSETDEF {"restype", (getter)_ctypes_CFuncPtr_restype_get, (setter)_ctypes_CFuncPtr_restype_set, _ctypes_CFuncPtr_restype__doc__},
+#define _CTYPES_CFUNCPTR_RESTYPE_GETSETDEF {"restype", _ctypes_CFuncPtr_restype_get, _ctypes_CFuncPtr_restype_set, _ctypes_CFuncPtr_restype__doc__},
 
-#define _CTYPES_CFUNCPTR_ARGTYPES_GETSETDEF {"argtypes", (getter)_ctypes_CFuncPtr_argtypes_get, (setter)_ctypes_CFuncPtr_argtypes_set, _ctypes_CFuncPtr_argtypes__doc__},
+#define _CTYPES_CFUNCPTR_ARGTYPES_GETSETDEF {"argtypes", _ctypes_CFuncPtr_argtypes_get, _ctypes_CFuncPtr_argtypes_set, _ctypes_CFuncPtr_argtypes__doc__},
 
-#define _CTYPES_SIMPLE_VALUE_GETSETDEF {"value", (getter)_ctypes_Simple_value_get, (setter)_ctypes_Simple_value_set, NULL},
+#define _CTYPES_SIMPLE_VALUE_GETSETDEF {"value", _ctypes_Simple_value_get, _ctypes_Simple_value_set, NULL},
 
-/*[clinic end generated code: output=f989f1d092f2986d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=751e2c96cc624858 input=a9049054013a1b77]*/

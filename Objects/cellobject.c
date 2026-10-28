@@ -134,21 +134,21 @@ cell_clear(PyObject *self)
     return 0;
 }
 
-static PyObject *
+static PyValue
 cell_get_contents(PyObject *self, void *closure)
 {
     PyValue value = _PyCell_GetValue(_PyCell_CAST(self));
     if (PyValue_IsNull(value)) {
         PyErr_SetString(PyExc_ValueError, "Cell is empty");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyValue_Object(value);
+    return value;
 }
 
 static int
-cell_set_contents(PyObject *self, PyObject *obj, void *Py_UNUSED(ignored))
+cell_set_contents(PyObject *self, PyValue value, void *Py_UNUSED(ignored))
 {
-    PyCell_SET(self, obj);
+    PyCell_SET_VALUE(self, value);
     return 0;
 }
 

@@ -127,8 +127,12 @@ entries stay `void *`: 97 for the five slots, 38 naming a function other
 than the generic ones. Each rung's work doc lists its slots' entries
 (an `rg`, with the count) and the converted function each names, and its
 review checks the list. The tree has about 100 implementations of the
-five slots besides the generic ones, and 388 getset entries, 135 of
-them Argument Clinic's.
+five slots besides the generic ones, and 459 getset entries, 105 of
+them Argument Clinic's (amended at 6d rung 4 from 388 and 135: the 135
+counted Clinic's directives, a getter and a setter of one attribute
+being two, and the 388 could not be reproduced; 459 is
+`boil/tools/measure/getset_inventory.py` at the rung's base, whose
+method is 6d-4.md's Inventory).
 
 ### 2.2 The generic functions are slots
 
@@ -630,7 +634,7 @@ work doc (`boil/design/work/6d-<n>.md`) and ends at gate level 3.
 | 1 | 0.5 | The hand-offs: `class_version` and the member guard (6.5); presize (6.3); the capacity rule (6.4); the `_NO_DICT` fold, `STORE_ATTR_SHAPE_POLY` and `LOAD_ATTR_METHOD_LAZY_DICT` (6.1, 6.2), magic bump; the `SOABI` mark and abi_id (2.1); the micro rows of section 10 with their before values. Touches no file of 10a's | `python -c pass`; a two-shape store site in a script; the suffix test; test_sysconfig, test_shapes, test_opcache, test_dis; test_class, test_descr, test_sys, test_dataclasses, test_capi; both suites; the Py_STATS suite for 6.4's counts |
 | 2 | 0.75 | Attribute and descriptor slots: the four typedefs; the generic functions in place; the executor on a value owner; `PyObject_GetOptionalAttrValue`; the hooks and `slot_tp_descr_*`; type, module, super, `method_getattro`, `instancemethod_getattro` and the custom slots, with 2.1's `PyType_Slot` list; the descriptors of section 4 and `PyMember_*Value` with the native-field boxes; `getset_get` and `getset_set` canonicalising and boxing around the object-form getters and setters; both debug checks and `_PyGC_SITE_SLOT_BOX`; docs (typeobj.rst, object.rst). `wrapperfunc` stays an object form, since its consumers are `tp_call` functions: `wrap_getattro` (new) and `wrap_descr_get` box their slot's value at return, a box rung 3 removes; `wrap_setattr`, `wrap_delattr`, `wrap_descr_set` and `wrap_descr_delete` read the tuple's items as values | one property and one `__getattribute__` case by identity; test_descr, test_class, test_property, test_module, test_super, test_structseq, test_collections, test_capi; test_pickle, test_decimal, test_ctypes, test_typing, test_dataclasses; the attribute lifetime cases under stress; box audit; both suites |
 | 3 | 0.5 | Calls and wrappers, one dependency: `callfunc`; `wrapperfunc` and `wrapperfunc_kwds` with every `wrap_*` (rung 2's boxes go), `wrapperdescr_raw_call`, `wrapperdescr_call`, `wrapper_call`; `slot_tp_call`; the call layer of section 5 with the C mode clean; `CALL_FUNCTION_EX`; the module types' `tp_call`; the wasm trampolines | a callable instance and `object.__getattribute__` by identity; the C mode on call.c and descrobject.c; test_call, test_descr, test_functools, test_capi, test_ctypes, test_asyncio, test_sqlite3, test_monitoring; the call lifetime cases under stress and kill mode; box audit; both suites |
-| 4 | 0.25 | Getsets: `getter` and `setter`, Clinic's `@getter` and `@setter`, the 388 entries (mechanical, by subagent, reviewed and committed by the step agent; number-returning getters return values; setters read values with the value accessors or box at their top, or at a kept field as section 4 says); `PyObject_GenericGetDict` and `PyObject_GenericSetDict` (2.2); rung 2's getset conversions go; docs (structures.rst); gate 4 and the write-up (note 06 section 21, note 08's register, note 09's handler table) | a `complex.real`-style getset by identity; test_clinic; test_capi, test_datetime, test_memoryview, test_re, test_io, test_descr; `make clinic` clean; both suites; gate 4 |
+| 4 | 0.25 | Getsets: `getter` and `setter`, Clinic's `@getter` and `@setter`, the 459 entries (section 2.1; mechanical, by subagent, reviewed and committed by the step agent; number-returning getters return values; setters read values with the value accessors or box at their top, or at a kept field as section 4 says); `PyObject_GenericGetDict` and `PyObject_GenericSetDict` (2.2); rung 2's getset conversions go; docs (structures.rst); gate 4 and the write-up (note 06 section 21, note 08's register, note 09's handler table) | a `complex.real`-style getset by identity; test_clinic; test_capi, test_datetime, test_memoryview, test_re, test_io, test_descr; `make clinic` clean; both suites; gate 4 |
 
 **Each rung's tree** builds and passes level 3 alone: each changes its
 typedefs with every function of their types, and is pushed whole.

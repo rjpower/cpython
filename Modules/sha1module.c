@@ -213,22 +213,22 @@ static PyMethodDef SHA1_methods[] = {
     {NULL,        NULL}         /* sentinel */
 };
 
-static PyObject *
+static PyValue
 SHA1_get_block_size(PyObject *Py_UNUSED(self), void *Py_UNUSED(closure))
 {
-    return PyLong_FromLong(SHA1_BLOCKSIZE);
+    return PyValue_FromLongLong(SHA1_BLOCKSIZE);
 }
 
-static PyObject *
+static PyValue
 SHA1_get_name(PyObject *Py_UNUSED(self), void *Py_UNUSED(closure))
 {
-    return PyUnicode_FromStringAndSize("sha1", 4);
+    return PyValue_FromResult(PyUnicode_FromStringAndSize("sha1", 4));
 }
 
-static PyObject *
+static PyValue
 sha1_get_digest_size(PyObject *Py_UNUSED(self), void *Py_UNUSED(closure))
 {
-    return PyLong_FromLong(SHA1_DIGESTSIZE);
+    return PyValue_FromLongLong(SHA1_DIGESTSIZE);
 }
 
 static PyGetSetDef SHA1_getseters[] = {

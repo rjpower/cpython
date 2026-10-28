@@ -879,17 +879,21 @@ gen_repr(PyObject *self)
                                 gen->gi_qualname, gen);
 }
 
-static PyObject *
+static PyValue
 gen_get_name(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *op = _PyGen_CAST(self);
     PyObject *name = FT_ATOMIC_LOAD_PTR_ACQUIRE(op->gi_name);
-    return Py_NewRef(name);
+    return PyValue_FromObject(name);
 }
 
 static int
-gen_set_name(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+gen_set_name(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyGenObject *op = _PyGen_CAST(self);
     /* Not legal to del gen.gi_name or to set it to anything
      * other than a string object. */
@@ -906,17 +910,21 @@ gen_set_name(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     return 0;
 }
 
-static PyObject *
+static PyValue
 gen_get_qualname(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *op = _PyGen_CAST(self);
     PyObject *qualname = FT_ATOMIC_LOAD_PTR_ACQUIRE(op->gi_qualname);
-    return Py_NewRef(qualname);
+    return PyValue_FromObject(qualname);
 }
 
 static int
-gen_set_qualname(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+gen_set_qualname(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyGenObject *op = _PyGen_CAST(self);
     /* Not legal to del gen.__qualname__ or to set it to anything
      * other than a string object. */
@@ -933,35 +941,35 @@ gen_set_qualname(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     return 0;
 }
 
-static PyObject *
+static PyValue
 gen_getyieldfrom(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
     int8_t frame_state = gen->gi_frame_state;
     if (frame_state != FRAME_SUSPENDED_YIELD_FROM) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return PyValue_ObjectBorrow(_PyGen_YieldFromRef(&gen->gi_iframe));
+    return _PyGen_YieldFromRef(&gen->gi_iframe);
 }
 
 
-static PyObject *
+static PyValue
 gen_getrunning(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
     int8_t frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
-    return frame_state == FRAME_EXECUTING ? Py_True : Py_False;
+    return PyValue_FromResult(frame_state == FRAME_EXECUTING ? Py_True : Py_False);
 }
 
-static PyObject *
+static PyValue
 gen_getsuspended(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
     int8_t frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
-    return FRAME_STATE_SUSPENDED(frame_state) ? Py_True : Py_False;
+    return PyValue_FromResult(FRAME_STATE_SUSPENDED(frame_state) ? Py_True : Py_False);
 }
 
-static PyObject *
+static PyValue
 gen_getstate(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
@@ -978,7 +986,7 @@ gen_getstate(PyObject *self, void *Py_UNUSED(ignored))
 
     assert(frame_state >= 0 &&
            (size_t)frame_state < Py_ARRAY_LENGTH(state_strings));
-    return state_strings[frame_state];
+    return PyValue_FromResult(state_strings[frame_state]);
 }
 
 static PyObject *
@@ -1004,11 +1012,11 @@ _gen_getframe(PyGenObject *gen, const char *const name)
     return frame;
 }
 
-static PyObject *
+static PyValue
 gen_getframe(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
-    return _gen_getframe(gen, "gi_frame");
+    return PyValue_FromResult(_gen_getframe(gen, "gi_frame"));
 }
 
 static PyObject *
@@ -1020,11 +1028,11 @@ _gen_getcode(PyGenObject *gen, const char *const name)
     return Py_NewRef(_PyGen_GetCode(gen));
 }
 
-static PyObject *
+static PyValue
 gen_getcode(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
-    return _gen_getcode(gen, "gi_code");
+    return PyValue_FromResult(_gen_getcode(gen, "gi_code"));
 }
 
 static PyGetSetDef gen_getsetlist[] = {
@@ -1344,19 +1352,19 @@ coro_await(PyObject *coro)
     return (PyObject *)cw;
 }
 
-static PyObject *
+static PyValue
 cr_getframe(PyObject *coro, void *Py_UNUSED(ignored))
 {
-    return _gen_getframe(_PyGen_CAST(coro), "cr_frame");
+    return PyValue_FromResult(_gen_getframe(_PyGen_CAST(coro), "cr_frame"));
 }
 
-static PyObject *
+static PyValue
 cr_getcode(PyObject *coro, void *Py_UNUSED(ignored))
 {
-    return _gen_getcode(_PyGen_CAST(coro), "cr_code");
+    return PyValue_FromResult(_gen_getcode(_PyGen_CAST(coro), "cr_code"));
 }
 
-static PyObject *
+static PyValue
 cr_getstate(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
@@ -1373,7 +1381,7 @@ cr_getstate(PyObject *self, void *Py_UNUSED(ignored))
 
     assert(frame_state >= 0 &&
            (size_t)frame_state < Py_ARRAY_LENGTH(state_strings));
-    return state_strings[frame_state];
+    return PyValue_FromResult(state_strings[frame_state]);
 }
 
 static PyGetSetDef coro_getsetlist[] = {
@@ -1823,19 +1831,19 @@ async_gen_athrow(PyObject *op, PyObject *args)
     return async_gen_athrow_new(o, args);
 }
 
-static PyObject *
+static PyValue
 ag_getframe(PyObject *ag, void *Py_UNUSED(ignored))
 {
-    return _gen_getframe((PyGenObject *)ag, "ag_frame");
+    return PyValue_FromResult(_gen_getframe((PyGenObject *)ag, "ag_frame"));
 }
 
-static PyObject *
+static PyValue
 ag_getcode(PyObject *gen, void *Py_UNUSED(ignored))
 {
-    return _gen_getcode((PyGenObject*)gen, "ag_code");
+    return PyValue_FromResult(_gen_getcode((PyGenObject*)gen, "ag_code"));
 }
 
-static PyObject *
+static PyValue
 ag_getstate(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
@@ -1852,7 +1860,7 @@ ag_getstate(PyObject *self, void *Py_UNUSED(ignored))
 
     assert(frame_state >= 0 &&
            (size_t)frame_state < Py_ARRAY_LENGTH(state_strings));
-    return state_strings[frame_state];
+    return PyValue_FromResult(state_strings[frame_state]);
 }
 
 static PyGetSetDef async_gen_getsetlist[] = {

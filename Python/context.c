@@ -1252,22 +1252,22 @@ error:
     return NULL;
 }
 
-static PyObject *
+static PyValue
 token_get_var(PyObject *op, void *Py_UNUSED(ignored))
 {
     PyContextToken *self = _PyContextToken_CAST(op);
-    return Py_NewRef(self->tok_var);;
+    return PyValue_FromObject(self->tok_var);;
 }
 
-static PyObject *
+static PyValue
 token_get_old_value(PyObject *op, void *Py_UNUSED(ignored))
 {
     PyContextToken *self = _PyContextToken_CAST(op);
     if (self->tok_oldval == NULL) {
-        return get_token_missing();
+        return PyValue_FromResult(get_token_missing());
     }
 
-    return Py_NewRef(self->tok_oldval);
+    return PyValue_FromObject(self->tok_oldval);
 }
 
 static PyGetSetDef PyContextTokenType_getsetlist[] = {

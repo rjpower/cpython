@@ -2103,39 +2103,39 @@ element_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
     }
 }
 
-static PyObject*
+static PyValue
 element_tag_getter(PyObject *op, void *closure)
 {
     ElementObject *self = _Element_CAST(op);
     PyObject *res = self->tag;
-    return Py_NewRef(res);
+    return PyValue_FromObject(res);
 }
 
-static PyObject*
+static PyValue
 element_text_getter(PyObject *op, void *closure)
 {
     ElementObject *self = _Element_CAST(op);
-    return element_get_text(self);
+    return PyValue_FromResult(element_get_text(self));
 }
 
-static PyObject*
+static PyValue
 element_tail_getter(PyObject *op, void *closure)
 {
     ElementObject *self = _Element_CAST(op);
-    return element_get_tail(self);
+    return PyValue_FromResult(element_get_tail(self));
 }
 
-static PyObject*
+static PyValue
 element_attrib_getter(PyObject *op, void *closure)
 {
     PyObject *res;
     ElementObject *self = _Element_CAST(op);
     if (!self->extra) {
         if (create_extra(self, NULL) < 0)
-            return NULL;
+            return PyValue_NULL;
     }
     res = element_get_attrib(self);
-    return Py_XNewRef(res);
+    return PyValue_FromResult(Py_XNewRef(res));
 }
 
 /* macro for setter validation */
@@ -2148,8 +2148,12 @@ element_attrib_getter(PyObject *op, void *closure)
     }
 
 static int
-element_tag_setter(PyObject *op, PyObject *value, void *closure)
+element_tag_setter(PyObject *op, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     _VALIDATE_ATTR_VALUE(value);
     ElementObject *self = _Element_CAST(op);
     Py_SETREF(self->tag, Py_NewRef(value));
@@ -2157,8 +2161,12 @@ element_tag_setter(PyObject *op, PyObject *value, void *closure)
 }
 
 static int
-element_text_setter(PyObject *op, PyObject *value, void *closure)
+element_text_setter(PyObject *op, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     _VALIDATE_ATTR_VALUE(value);
     ElementObject *self = _Element_CAST(op);
     _set_joined_ptr(&self->text, Py_NewRef(value));
@@ -2166,8 +2174,12 @@ element_text_setter(PyObject *op, PyObject *value, void *closure)
 }
 
 static int
-element_tail_setter(PyObject *op, PyObject *value, void *closure)
+element_tail_setter(PyObject *op, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     _VALIDATE_ATTR_VALUE(value);
     ElementObject *self = _Element_CAST(op);
     _set_joined_ptr(&self->tail, Py_NewRef(value));
@@ -2175,8 +2187,12 @@ element_tail_setter(PyObject *op, PyObject *value, void *closure)
 }
 
 static int
-element_attrib_setter(PyObject *op, PyObject *value, void *closure)
+element_attrib_setter(PyObject *op, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     _VALIDATE_ATTR_VALUE(value);
     if (!PyAnyDict_Check(value)) {
         PyErr_Format(PyExc_TypeError,
@@ -4344,12 +4360,12 @@ static PyMemberDef xmlparser_members[] = {
     {NULL}
 };
 
-static PyObject*
+static PyValue
 xmlparser_version_getter(PyObject *op, void *closure)
 {
-    return PyUnicode_FromFormat(
+    return PyValue_FromResult(PyUnicode_FromFormat(
         "Expat %d.%d.%d", XML_MAJOR_VERSION,
-        XML_MINOR_VERSION, XML_MICRO_VERSION);
+        XML_MINOR_VERSION, XML_MICRO_VERSION));
 }
 
 static PyGetSetDef xmlparser_getsetlist[] = {

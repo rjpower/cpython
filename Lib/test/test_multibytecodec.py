@@ -5,6 +5,7 @@
 
 import _multibytecodec
 import codecs
+import gc
 import io
 import sys
 import textwrap
@@ -414,6 +415,22 @@ class Test_StreamWriter(unittest.TestCase):
         wr = codecs.getwriter('gb18030')(s)
         wr.write('abcd')
         self.assertEqual(s.getvalue(), b'abcd')
+
+    def test_pending_survives_collection(self):
+        # A writer keeps the text it cannot encode yet (a kana that a
+        # following combining mark may join) in its pending field, a
+        # fresh substring that only the writer holds; the collector must
+        # see it there.
+        s = io.BytesIO()
+        wr = codecs.getwriter('euc_jis_2004')(s)
+        text = []
+        for k in range(20):
+            for part in ('xy' + chr(0x304b) * (k % 3 + 1),
+                         '\u309a' if k % 2 else 'x'):
+                wr.write(part)
+                text.append(part)
+                gc.collect()
+        self.assertEqual(s.getvalue(), ''.join(text).encode('euc_jis_2004'))
 
 class Test_ISO2022(unittest.TestCase):
     def test_g2(self):

@@ -1569,21 +1569,21 @@ module_load_dict(PyModuleObject *m)
     return dict;
 }
 
-static PyObject *
+static PyValue
 module_get_annotate(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyModuleObject *m = _PyModule_CAST(self);
 
     PyObject *dict = module_load_dict(m);
     if (dict == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *annotate;
-    if (PyDict_GetItemRef(dict, &_Py_ID(__annotate__), &annotate) == 0) {
-        annotate = Py_None;
-        if (PyDict_SetItem(dict, &_Py_ID(__annotate__), annotate) == -1) {
-            Py_CLEAR(annotate);
+    PyValue annotate;
+    if (PyDict_GetItemRefValue(dict, &_Py_ID(__annotate__), &annotate) == 0) {
+        annotate = PyValue_FromObject(Py_None);
+        if (PyDict_SetItem(dict, &_Py_ID(__annotate__), Py_None) == -1) {
+            annotate = PyValue_NULL;
         }
     }
     Py_DECREF(dict);
@@ -1591,8 +1591,12 @@ module_get_annotate(PyObject *self, void *Py_UNUSED(ignored))
 }
 
 static int
-module_set_annotate(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+module_set_annotate(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyModuleObject *m = _PyModule_CAST(self);
     if (value == NULL) {
         PyErr_SetString(PyExc_TypeError, "cannot delete __annotate__ attribute");
@@ -1624,22 +1628,28 @@ module_set_annotate(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     return 0;
 }
 
-static PyObject *
+static PyValue
 module_get_annotations(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyModuleObject *m = _PyModule_CAST(self);
 
     PyObject *dict = module_load_dict(m);
     if (dict == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *annotations;
-    if (PyDict_GetItemRef(dict, &_Py_ID(__annotations__), &annotations) == 0) {
+    PyValue stored;
+    if (PyDict_GetItemRefValue(dict, &_Py_ID(__annotations__), &stored) != 0) {
+        // The stored value, or PyValue_NULL with the lookup's error.
+        Py_DECREF(dict);
+        return stored;
+    }
+    else {
         PyObject *spec;
         if (PyDict_GetItemRef(m->md_dict, &_Py_ID(__spec__), &spec) < 0) {
             Py_DECREF(dict);
-            return NULL;
+            return PyValue_NULL;
         }
         bool is_initializing = false;
         if (spec != NULL) {
@@ -1647,7 +1657,7 @@ module_get_annotations(PyObject *self, void *Py_UNUSED(ignored))
             if (rc < 0) {
                 Py_DECREF(spec);
                 Py_DECREF(dict);
-                return NULL;
+                return PyValue_NULL;
             }
             Py_DECREF(spec);
             if (rc) {
@@ -1659,7 +1669,7 @@ module_get_annotations(PyObject *self, void *Py_UNUSED(ignored))
         int annotate_result = PyDict_GetItemRef(dict, &_Py_ID(__annotate__), &annotate);
         if (annotate_result < 0) {
             Py_DECREF(dict);
-            return NULL;
+            return PyValue_NULL;
         }
         if (annotate_result == 1 && PyCallable_Check(annotate)) {
             PyObject *one = _PyLong_GetOne();
@@ -1667,7 +1677,7 @@ module_get_annotations(PyObject *self, void *Py_UNUSED(ignored))
             if (annotations == NULL) {
                 Py_DECREF(annotate);
                 Py_DECREF(dict);
-                return NULL;
+                return PyValue_NULL;
             }
             if (!PyDict_Check(annotations)) {
                 PyErr_Format(PyExc_TypeError,
@@ -1676,7 +1686,7 @@ module_get_annotations(PyObject *self, void *Py_UNUSED(ignored))
                 Py_DECREF(annotate);
                 Py_DECREF(annotations);
                 Py_DECREF(dict);
-                return NULL;
+                return PyValue_NULL;
             }
         }
         else {
@@ -1693,11 +1703,11 @@ module_get_annotations(PyObject *self, void *Py_UNUSED(ignored))
         }
     }
     Py_DECREF(dict);
-    return annotations;
+    return PyValue_FromResult(annotations);
 }
 
 static int
-module_set_annotations(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+module_set_annotations(PyObject *self, PyValue value, void *Py_UNUSED(ignored))
 {
     PyModuleObject *m = _PyModule_CAST(self);
 
@@ -1707,9 +1717,10 @@ module_set_annotations(PyObject *self, PyObject *value, void *Py_UNUSED(ignored)
     }
 
     int ret = -1;
-    if (value != NULL) {
+    if (!PyValue_IsNull(value)) {
         /* set */
-        ret = PyDict_SetItem(dict, &_Py_ID(__annotations__), value);
+        ret = _PyDict_SetItemValue((PyDictObject *)dict,
+            PyValue_FromObject(&_Py_ID(__annotations__)), value);
     }
     else {
         /* delete */

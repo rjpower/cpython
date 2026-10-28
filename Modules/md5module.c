@@ -215,22 +215,22 @@ static PyMethodDef MD5_methods[] = {
     {NULL,        NULL}         /* sentinel */
 };
 
-static PyObject *
+static PyValue
 MD5_get_block_size(PyObject *Py_UNUSED(self), void *Py_UNUSED(closure))
 {
-    return PyLong_FromLong(MD5_BLOCKSIZE);
+    return PyValue_FromLongLong(MD5_BLOCKSIZE);
 }
 
-static PyObject *
+static PyValue
 MD5_get_name(PyObject *Py_UNUSED(self), void *Py_UNUSED(closure))
 {
-    return PyUnicode_FromStringAndSize("md5", 3);
+    return PyValue_FromResult(PyUnicode_FromStringAndSize("md5", 3));
 }
 
-static PyObject *
+static PyValue
 md5_get_digest_size(PyObject *Py_UNUSED(self), void *Py_UNUSED(closure))
 {
-    return PyLong_FromLong(MD5_DIGESTSIZE);
+    return PyValue_FromLongLong(MD5_DIGESTSIZE);
 }
 
 static PyGetSetDef MD5_getseters[] = {

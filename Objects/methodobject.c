@@ -195,30 +195,30 @@ static PyMethodDef meth_methods[] = {
     {NULL, NULL}
 };
 
-static PyObject *
+static PyValue
 meth_get__text_signature__(PyObject *self, void *closure)
 {
     PyCFunctionObject *m = _PyCFunctionObject_CAST(self);
-    return _PyType_GetTextSignatureFromInternalDoc(m->m_ml->ml_name,
+    return PyValue_FromResult(_PyType_GetTextSignatureFromInternalDoc(m->m_ml->ml_name,
                                                    m->m_ml->ml_doc,
-                                                   m->m_ml->ml_flags);
+                                                   m->m_ml->ml_flags));
 }
 
-static PyObject *
+static PyValue
 meth_get__doc__(PyObject *self, void *closure)
 {
     PyCFunctionObject *m = _PyCFunctionObject_CAST(self);
-    return _PyType_GetDocFromInternalDoc(m->m_ml->ml_name, m->m_ml->ml_doc);
+    return PyValue_FromResult(_PyType_GetDocFromInternalDoc(m->m_ml->ml_name, m->m_ml->ml_doc));
 }
 
-static PyObject *
+static PyValue
 meth_get__name__(PyObject *self, void *closure)
 {
     PyCFunctionObject *m = _PyCFunctionObject_CAST(self);
-    return PyUnicode_FromString(m->m_ml->ml_name);
+    return PyValue_FromResult(PyUnicode_FromString(m->m_ml->ml_name));
 }
 
-static PyObject *
+static PyValue
 meth_get__qualname__(PyObject *self, void *closure)
 {
     /* If __self__ is a module or NULL, return m.__name__
@@ -232,25 +232,25 @@ meth_get__qualname__(PyObject *self, void *closure)
 
     PyCFunctionObject *m = _PyCFunctionObject_CAST(self);
     if (m->m_self == NULL || PyModule_Check(m->m_self)) {
-        return PyUnicode_FromString(m->m_ml->ml_name);
+        return PyValue_FromResult(PyUnicode_FromString(m->m_ml->ml_name));
     }
 
     PyObject *type = PyType_Check(m->m_self) ? m->m_self : (PyObject*)Py_TYPE(m->m_self);
 
     PyObject *type_qualname = PyObject_GetAttr(type, &_Py_ID(__qualname__));
     if (type_qualname == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (!PyUnicode_Check(type_qualname)) {
         PyErr_SetString(PyExc_TypeError, "<method>.__class__."
                         "__qualname__ is not a unicode object");
         Py_XDECREF(type_qualname);
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *res = PyUnicode_FromFormat("%S.%s", type_qualname, m->m_ml->ml_name);
     Py_DECREF(type_qualname);
-    return res;
+    return PyValue_FromResult(res);
 }
 
 static int
@@ -263,7 +263,7 @@ meth_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 meth_get__self__(PyObject *meth, void *closure)
 {
     PyCFunctionObject *m = _PyCFunctionObject_CAST(meth);
@@ -271,7 +271,7 @@ meth_get__self__(PyObject *meth, void *closure)
     if (self == NULL) {
         self = Py_None;
     }
-    return Py_NewRef(self);
+    return PyValue_FromObject(self);
 }
 
 static PyGetSetDef meth_getsets[] = {

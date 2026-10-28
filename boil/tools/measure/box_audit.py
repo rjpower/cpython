@@ -104,7 +104,8 @@ CASES = {
 # iteration, residue).  The bodies run with SLOT_SETUP's locals; i is an inline int,
 # and the setup must not bind n, the loop's count.
 SLOT_SETUP = """
-import functools, io, operator, pickle, threading, types, weakref
+import datetime, functools, hashlib, io, operator, pickle, socket, threading
+import types, weakref
 big = 100000
 class P:
     def __init__(self): self._x = 1; self._f = 2.5
@@ -161,6 +162,35 @@ c0 = functools.lru_cache(maxsize=0)(callme)
 cn = functools.lru_cache(maxsize=None)(callme)
 c128 = functools.lru_cache(maxsize=128)(callme)
 aint = types.GenericAlias(int, (int,))
+mv = memoryview(bytearray(big))
+tm = datetime.time(microsecond=999999)
+dt = datetime.date(2020, 1, 2)
+nan = float("nan")
+def cells():
+    a = big + 1; b = 2.5 * big
+    return (lambda: (a, b)).__closure__
+ci, cf = cells()
+sha = hashlib.sha256()
+class Raw(io.RawIOBase):
+    name = big + 1
+    def readable(self): return True
+br = io.BufferedReader(Raw())
+tw = io.TextIOWrapper(br, encoding="ascii")
+sk = socket.socket()
+sk.settimeout(2.5 * big)
+oe = OSError()
+def fn(): pass
+class Dict: pass
+dobj = Dict()
+cmi, cmf = classmethod(add), classmethod(add)
+smi, smf = staticmethod(add), staticmethod(add)
+for o, v in ((cmi, big + 1), (cmf, 2.5 * big), (smi, big + 1), (smf, 2.5 * big)):
+    o.__annotations__ = v
+    o.__annotate__ = v
+class ACI: pass
+class ACF: pass
+ACI.__abstractmethods__ = big + 1
+ACF.__abstractmethods__ = 2.5 * big
 """
 
 SLOT_CASES = {
@@ -193,7 +223,8 @@ SLOT_CASES = {
     "pickler persistent_id": ("pk.persistent_id = big", 1, 1, None),
     "getset int.real": (
         "r = getattr(big, 'real')", None, None,
-        "a getset of an inline owner: the binding box (rung 4)"),
+        "a getset of an inline owner boxes the owner, since self is an object "
+        "(note 12 open question 1)"),
     # The argument tuple and the sliced tuple of the wrapper call.
     "object.__getattribute__": ("r = object.__getattribute__(p, NAME)",
                                 0, 2, None),
@@ -242,6 +273,62 @@ SLOT_CASES = {
     "lru_cache 128 miss float": ("c128.cache_clear(); r = c128(i + 0.5)", 1,
                                  4, None),
     "generic alias of int": ("r = aint(i)", 0, 0, None),
+    # The getters (6d rung 4) return values.  Discriminating: the number is
+    # not a cached small int, or the owner is a heap float.
+    "getset memoryview.nbytes": ("r = mv.nbytes", 0, 0, None),
+    "getset time.microsecond": ("r = tm.microsecond", 0, 0, None),
+    "getset NaN.imag": ("r = nan.imag", 0, 0, None),
+    "cell_contents int": ("r = ci.cell_contents", 0, 0, None),
+    "cell_contents float": ("r = cf.cell_contents", 0, 0, None),
+    # The forwarding getters: an attribute of the raw stream or buffer,
+    # and the socket's timeout.
+    "BufferedReader.name": ("r = br.name", 0, 0, None),
+    "TextIOWrapper.name": ("r = tw.name", 0, 0, None),
+    "socket.timeout": ("r = sk.timeout", 0, 0, None),
+    # Controls: the number is a cached small int.  The hash object's
+    # module (_hashlib or _sha2) is printed with the run.
+    "getset memoryview.ndim": ("r = mv.ndim", 0, 0, None),
+    "getset date.day": ("r = dt.day", 0, 0, None),
+    "getset sha256.digest_size": ("r = sha.digest_size", 0, 0, None),
+    # The setters (6d rung 4) take values.  A cell stores the value; a
+    # number setter reads it with a value form.
+    "cell_contents store int": ("ci.cell_contents = i", 0, 0, None),
+    "cell_contents store float": ("cf.cell_contents = i + 0.5", 0, 0, None),
+    "OSError.characters_written store": ("oe.characters_written = i", 0, 0,
+                                         None),
+    "TextIOWrapper._CHUNK_SIZE store": ("tw._CHUNK_SIZE = i + 1", 0, 0,
+                                        None),
+    # A setter that stores into a PyObject * field keeps a box.
+    "function.__doc__ store": ("fn.__doc__ = i", 1, 1, None),
+    # __dict__ refuses an inline value by its type, without a box; the
+    # four allocations are the error's.
+    "__dict__ store refused": (
+        "try: dobj.__dict__ = i\nexcept TypeError: pass", 0, 4, None),
+    # The dict-backed accessors of classmethod, staticmethod and
+    # __abstractmethods__ keep the attribute in a dict as a value
+    # (landing review): reads and stores of an uncached int or a float.
+    "classmethod __annotations__ int": ("r = cmi.__annotations__", 0, 0, None),
+    "classmethod __annotations__ float": ("r = cmf.__annotations__", 0, 0, None),
+    "classmethod __annotations__ store int": ("cmi.__annotations__ = i", 0, 0, None),
+    "classmethod __annotations__ store float": ("cmf.__annotations__ = i + 0.5", 0, 0, None),
+    "classmethod __annotate__ int": ("r = cmi.__annotate__", 0, 0, None),
+    "classmethod __annotate__ float": ("r = cmf.__annotate__", 0, 0, None),
+    "classmethod __annotate__ store int": ("cmi.__annotate__ = i", 0, 0, None),
+    "classmethod __annotate__ store float": ("cmf.__annotate__ = i + 0.5", 0, 0, None),
+    "staticmethod __annotations__ int": ("r = smi.__annotations__", 0, 0, None),
+    "staticmethod __annotations__ float": ("r = smf.__annotations__", 0, 0, None),
+    "staticmethod __annotations__ store int": ("smi.__annotations__ = i", 0, 0, None),
+    "staticmethod __annotations__ store float": ("smf.__annotations__ = i + 0.5", 0, 0, None),
+    "staticmethod __annotate__ int": ("r = smi.__annotate__", 0, 0, None),
+    "staticmethod __annotate__ float": ("r = smf.__annotate__", 0, 0, None),
+    "staticmethod __annotate__ store int": ("smi.__annotate__ = i", 0, 0, None),
+    "staticmethod __annotate__ store float": ("smf.__annotate__ = i + 0.5", 0, 0, None),
+    "__abstractmethods__ int": ("r = ACI.__abstractmethods__", 0, 0, None),
+    "__abstractmethods__ float": ("r = ACF.__abstractmethods__", 0, 0, None),
+    "__abstractmethods__ store int": ("ACI.__abstractmethods__ = i + 1", 0, 0,
+                                      None),
+    "__abstractmethods__ store float": ("ACF.__abstractmethods__ = i + 0.5",
+                                        0, 0, None),
     "starred inline callee": (
         "try: big(*(i,))\nexcept TypeError: pass", None, None,
         "the generator boxes the callee at the entry of _MAKE_CALLARGS_A_TUPLE "
@@ -403,6 +490,11 @@ def main():
                            capture_output=True, text=True).stdout.strip()
     print(f"box audit of {python} at {sha}{' (dirty)' if dirty else ''}")
     print(f"built: {built}")
+    hashmod = subprocess.run(
+        [python, "-c", "import hashlib; "
+         "print(type(hashlib.sha256()).__module__)"],
+        check=True, capture_output=True, text=True).stdout.strip()
+    print(f"sha256 from {hashmod}")
     failed = []
     with tempfile.TemporaryDirectory(prefix="box_audit-") as pyc, \
          tempfile.TemporaryDirectory(prefix="box_audit-stats-") as stats:

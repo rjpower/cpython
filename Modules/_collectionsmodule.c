@@ -1797,13 +1797,13 @@ deque___sizeof___impl(dequeobject *deque)
     return PyLong_FromSize_t(res);
 }
 
-static PyObject *
+static PyValue
 deque_get_maxlen(PyObject *self, void *Py_UNUSED(closure))
 {
     dequeobject *deque = dequeobject_CAST(self);
     if (deque->maxlen < 0)
-        Py_RETURN_NONE;
-    return PyLong_FromSsize_t(deque->maxlen);
+        return PyValue_FromObject(Py_None);
+    return PyValue_FromLongLong(deque->maxlen);
 }
 
 static PyObject *deque_reviter(dequeobject *deque);

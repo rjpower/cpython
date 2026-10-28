@@ -1004,10 +1004,10 @@ static struct PyMethodDef operator_methods[] = {
 };
 
 
-static PyObject *
+static PyValue
 text_signature(PyObject *Py_UNUSED(self), void *Py_UNUSED(closure))
 {
-    return PyUnicode_FromString("(obj, /)");
+    return PyValue_FromResult(PyUnicode_FromString("(obj, /)"));
 }
 
 static PyGetSetDef common_getset[] = {

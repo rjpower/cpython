@@ -4395,6 +4395,39 @@ gc_queue_never_open_for_test(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+/* gc_collect_after_close(code) -> tuple: run code in a legacy
+   subinterpreter, close its collector as _PyGC_Fini() does, enter the
+   collector by each entry there (_PyGC_LiveCollectAfterCloseForTest()), and
+   end the interpreter.  Returns the hook's six results. */
+static PyObject *
+gc_collect_after_close(PyObject *self, PyObject *args)
+{
+    const char *code;
+    if (!PyArg_ParseTuple(args, "s", &code)) {
+        return NULL;
+    }
+    PyThreadState *save = PyThreadState_Get();
+    PyThreadState *sub = Py_NewInterpreter();
+    if (sub == NULL) {
+        PyThreadState_Swap(save);
+        PyErr_SetString(PyExc_RuntimeError, "Py_NewInterpreter failed");
+        return NULL;
+    }
+    Py_ssize_t out[6] = {0};
+    int r = PyRun_SimpleString(code);
+    if (r == 0) {
+        _PyGC_LiveCollectAfterCloseForTest(sub, out);
+    }
+    Py_EndInterpreter(sub);
+    PyThreadState_Swap(save);
+    if (r < 0) {
+        PyErr_SetString(PyExc_RuntimeError, "the code raised");
+        return NULL;
+    }
+    return Py_BuildValue("nnnnnn", out[0], out[1], out[2], out[3], out[4],
+                         out[5]);
+}
+
 /* check_signals_loop(n[, code]) -> list: run code in a legacy
    subinterpreter, if given, and return to this interpreter, then call
    PyErr_CheckSignals() n times without releasing the GIL; returns this
@@ -4538,6 +4571,7 @@ static PyMethodDef module_functions[] = {
     {"gc_queue_info", gc_queue_info, METH_VARARGS},
     {"gc_queue_fail_alloc", gc_queue_fail_alloc, METH_VARARGS},
     {"gc_queue_never_open_for_test", gc_queue_never_open_for_test, METH_VARARGS},
+    {"gc_collect_after_close", gc_collect_after_close, METH_VARARGS},
     {"check_signals_loop", check_signals_loop, METH_VARARGS},
     {"gc_pause_after_mark", gc_pause_after_mark, METH_VARARGS},
     {"gc_hold_on_stack", gc_hold_on_stack, METH_VARARGS},

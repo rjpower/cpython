@@ -3185,6 +3185,68 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.split(), ["True", "True", "[0]", "20", "20"])
 
+    def test_ready_for_every_thread(self):
+        # Invariant 6: the calls an inline collection queues are drained by
+        # whichever of the owner's threads next takes the GIL, while the
+        # collecting thread is blocked (the rung 1 landing review's
+        # finding 1).  No automatic collection runs on either thread, so
+        # only the queue's ready flag can bring the calls to the main thread.
+        out = _queue_child("""
+            import threading, time
+            gc.set_threshold(1 << 30)
+            class A:
+                pass
+            ran = []
+            refs = []
+            def make():
+                for i in range(50):
+                    a = A()
+                    a.self = a
+                    refs.append(weakref.ref(
+                        a, lambda r: ran.append(threading.get_ident())))
+            lock = threading.Lock()
+            lock.acquire()
+            def collector():
+                make()
+                _testinternalcapi.gc_collect_inline_then(lock.acquire, True)
+                lock.release()
+            t = threading.Thread(target=collector)
+            t.start()
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                dead = sum(r() is None for r in refs)
+                if dead and len(ran) == dead:
+                    break
+                time.sleep(0.01)
+            # The collecting thread is still blocked on the lock.
+            print(dead > 0, len(ran) == dead,
+                  set(ran) == {threading.get_ident()})
+            lock.release()
+            t.join()
+        """)
+        self.assertEqual(out.split(), ["True", "True", "True"])
+
+    def test_collect_after_close(self):
+        # After the close (_PyGC_Fini()) every entry to the collector does
+        # nothing: no collection, no live state allocated again, nothing
+        # queued or delivered (the rung 1 landing review's finding 2).
+        out = _queue_child("""
+            gc.disable()
+            r, w = os.pipe()
+            res = _testinternalcapi.gc_collect_after_close(f'''if 1:
+                import os, weakref
+                class A:
+                    pass
+                def make():
+                    a = A()
+                    a.self = a
+                    return weakref.ref(a, lambda r: os.write({w}, b"cb "))
+                ref = make()
+            ''')
+            print(res, drain_pipe(r))
+        """)
+        self.assertEqual(out.strip(), "(0, 0, 0, 0, 0, 0) []")
+
     def test_legacy_delivery_marker(self):
         # 9.15: a legacy tp_del waiting in an idle queue runs once.
         out = _queue_child("""

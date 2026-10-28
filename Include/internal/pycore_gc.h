@@ -203,6 +203,12 @@ PyAPI_FUNC(void) _PyGC_LivePauseAfterMark(int ms);
 PyAPI_FUNC(void) _PyGC_LiveFailOpenForTest(PyObject *referent,
                                            PyObject *callback);
 PyAPI_FUNC(void) _PyGC_LiveFailAlloc(int n);
+/* Test hook: close tstate's interpreter as _PyGC_Fini() does, then enter
+   the collector by each of its entries.  out[]: what _PyGC_Collect() and
+   PyGC_Collect() returned, whether the inline entry collected, whether a
+   live state exists again, and the queue's length and ready flag. */
+PyAPI_FUNC(void) _PyGC_LiveCollectAfterCloseForTest(PyThreadState *tstate,
+                                                    Py_ssize_t out[6]);
 
 struct PyValue;
 

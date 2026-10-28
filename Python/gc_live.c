@@ -348,7 +348,11 @@ queue_push(call_batch *b, PyObject *op, PyObject *callback,
     return 0;
 }
 
-/* Move every node of b to the tail of gc's queue. */
+/* Move every node of b to the tail of gc's queue.  queue_ready is set
+   exactly while an open queue is non-empty (run_queue_ex() clears it as it
+   takes the last node), so that whichever of the owner's threads next takes
+   the GIL drains it (note 13 invariant 6), not only the thread whose
+   collection queued the calls. */
 static void
 queue_splice(GCState *gc, call_batch *b)
 {
@@ -363,6 +367,9 @@ queue_splice(GCState *gc, call_batch *b)
     }
     gc->queue_tail = b->tail;
     b->head = b->tail = NULL;
+    if (gc->queue_phase == QUEUE_OPEN) {
+        _Py_atomic_store_int_relaxed(&gc->queue_ready, 1);
+    }
 }
 
 /* What op's dealloc would call under reference counting, besides freeing:
@@ -1342,9 +1349,6 @@ route_calls(PyThreadState *tstate, const _PyGCMarkResult *res,
         call_batch one = {c, c};
         c->next = NULL;
         queue_splice(&owner->gc, &one);
-        if (owner != here) {
-            _Py_atomic_store_int_relaxed(&owner->gc.queue_ready, 1);
-        }
     }
     b->head = b->tail = NULL;
 }
@@ -1427,16 +1431,16 @@ pause_after_mark(PyThreadState *tstate, const _PyGCMarkResult *res)
 static int stress_every = 0;
 
 static Py_ssize_t
-collect(PyThreadState *tstate, _PyGC_Reason reason)
+collect(PyThreadState *tstate, struct _gc_live_state *ls,
+        _PyGC_Reason reason)
 {
     PyInterpreterState *interp = tstate->interp;
     GCState *gc = &interp->gc;
     if (gc->collecting || gc->sweeping) {
         return 0;
     }
-    struct _gc_live_state *ls = get_live(interp);
-    if (ls == NULL || gc->generation_stats == NULL) {
-        return 0;  // before _PyGC_Init() or after _PyGC_Fini()
+    if (gc->generation_stats == NULL) {
+        return 0;  // before _PyGC_Init()
     }
     gc->collecting = 1;
     // The frame that a sampling profiler shows a "<GC>" frame above
@@ -1556,7 +1560,8 @@ done:
    (_PyObject_MallocWithType()).  Returns the number of finalizers and
    tp_dels that ran in *nfinalized. */
 static Py_NO_INLINE Py_ssize_t
-collect_pass(PyThreadState *tstate, _PyGC_Reason reason, int *nfinalized)
+collect_pass(PyThreadState *tstate, struct _gc_live_state *ls,
+             _PyGC_Reason reason, int *nfinalized)
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
     struct _mimalloc_thread_state *m = &ts->mimalloc;
@@ -1564,10 +1569,10 @@ collect_pass(PyThreadState *tstate, _PyGC_Reason reason, int *nfinalized)
     if (heap != NULL) {
         m->current_object_heap = &m->heaps[_Py_MIMALLOC_HEAP_OBJECT];
     }
-    Py_ssize_t n = collect(tstate, reason);
+    Py_ssize_t n = collect(tstate, ls, reason);
     // A collection that the queue's code triggers records its own entry.
     ts->gc_trace.entry.sp = 0;
-    *nfinalized = get_live(tstate->interp)->no_python ? 0 : run_queue(tstate);
+    *nfinalized = ls->no_python ? 0 : run_queue(tstate);
     if (heap != NULL) {
         m->current_object_heap = heap;
     }
@@ -1583,6 +1588,12 @@ Py_GC_PRECISE static Py_NO_INLINE Py_ssize_t
 collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    // After the close (_PyGC_Fini()) there is no live state and nothing
+    // collects; nor without memory for one.
+    struct _gc_live_state *ls = get_live(tstate->interp);
+    if (ls == NULL) {
+        return 0;
+    }
     // Called again from a gc callback, inside a collection: the outer entry
     // stays, since the mark that may follow is the outer collection's.
     _PyGCContext outer_entry = ts->gc_trace.entry;
@@ -1590,7 +1601,7 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
         _PyGC_CaptureCaller(&ts->gc_trace.entry);
     }
     int nfinalized;
-    Py_ssize_t n = collect_pass(tstate, reason, &nfinalized);
+    Py_ssize_t n = collect_pass(tstate, ls, reason, &nfinalized);
     /* The objects that finalizers did not resurrect are garbage again.  An
        explicit collection frees them, as the reference counting build
        does within one collection; an automatic one leaves them to the
@@ -1603,10 +1614,9 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
     if (nfinalized > 0 && reason != _Py_GC_REASON_HEAP && !later_follows
         && outer_entry.sp == 0)
     {
-        struct _gc_live_state *ls = get_live(tstate->interp);
         _PyGC_CaptureCaller(&ts->gc_trace.entry);
         ls->skip_verify = 1;
-        n += collect_pass(tstate, reason, &nfinalized);
+        n += collect_pass(tstate, ls, reason, &nfinalized);
         ls->skip_verify = 0;
     }
     ts->gc_trace.entry = outer_entry;
@@ -1693,6 +1703,9 @@ _PyGC_LiveCollectHere(PyThreadState *tstate)
         return 0;
     }
     struct _gc_live_state *ls = get_live(tstate->interp);
+    if (ls == NULL) {
+        return 0;  // closed, or no memory: as in collect_from_entry()
+    }
     ls->no_python = 1;
     (void)collect_from_entry(tstate, _Py_GC_REASON_HEAP);
     ls->no_python = 0;
@@ -1870,7 +1883,6 @@ live_close(PyInterpreterState *interp)
         {
             call_batch b = {gc->queue_head, gc->queue_tail};
             queue_splice(mgc, &b);
-            _Py_atomic_store_int_relaxed(&mgc->queue_ready, 1);
         }
         else {
             live_call *next;
@@ -1885,6 +1897,7 @@ live_close(PyInterpreterState *interp)
         gc->queue_head = gc->queue_tail = NULL;
     }
     gc->queue_phase = QUEUE_CLOSED;
+    _Py_atomic_store_int_relaxed(&gc->queue_ready, 0);
     HEAD_UNLOCK(runtime);
 }
 
@@ -1907,6 +1920,27 @@ _PyGC_Fini(PyInterpreterState *interp)
         free(ls->immortal);
         free(ls);
     }
+}
+
+void
+_PyGC_LiveCollectAfterCloseForTest(PyThreadState *tstate, Py_ssize_t out[6])
+{
+    PyInterpreterState *interp = tstate->interp;
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    _PyGC_Fini(interp);
+    _PyGC_CollectNoFail(tstate);
+    out[0] = _PyGC_Collect(tstate, NUM_GENERATIONS - 1, _Py_GC_REASON_MANUAL);
+    out[1] = PyGC_Collect();
+    int64_t injected = ts->gc_trace.injected;
+    _PyGC_InjectCollect(tstate);
+    out[2] = ts->gc_trace.injected != injected;
+    _Py_RunGC(tstate);
+    out[3] = interp->gc.live != NULL;
+    out[4] = 0;
+    for (live_call *c = interp->gc.queue_head; c != NULL; c = c->next) {
+        out[4]++;
+    }
+    out[5] = _Py_atomic_load_int_relaxed(&interp->gc.queue_ready);
 }
 
 int

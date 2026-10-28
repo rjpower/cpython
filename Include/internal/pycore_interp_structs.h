@@ -264,8 +264,8 @@ struct _gc_runtime_state {
     /* The main interpreter's count, by call kind, of the calls of
        never-opened isolated interpreters that their close discarded. */
     Py_ssize_t queue_discarded[4];
-    /* Set when another interpreter's collection put calls on the queue;
-       the interpreter's threads see it when they take the GIL. */
+    /* Set while the queue is open and non-empty; the interpreter's threads
+       see it when they take the GIL. */
     int queue_ready;
     /* The collections between their mark and the routing of their calls
        whose domain includes this interpreter, under the head lock; its

@@ -2601,10 +2601,13 @@ dummy_func(
             unused/8 +
             _LOAD_ATTR;
 
+        /* The class guard: every shape's class_version is its type's
+         * tp_version_tag (note 12 section 6.5), so the header gives it
+         * without loading the type. */
         op(_GUARD_TYPE_VERSION, (type_version/2, owner -- owner)) {
-            PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
+            _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
             assert(type_version != 0);
-            EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version);
+            EXIT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version);
         }
 
         /* The shape handlers (see pycore_shape.h).  The shape is the
@@ -2621,8 +2624,8 @@ dummy_func(
         }
 
         op(_GUARD_SHAPE_VERSION, (type_version/2, owner -- owner)) {
-            // Two dependent loads, the header and the shape's version,
-            // where _GUARD_TYPE_VERSION has three.
+            // The version of the live shape, which a generalisation renews,
+            // where _GUARD_TYPE_VERSION reads the class's.
             _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
             assert(type_version != 0);
             EXIT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version);
@@ -2765,9 +2768,11 @@ dummy_func(
             DEAD(owner);
         }
 
+        // A member is a data descriptor, which nothing in the instance
+        // shadows, so the class version is enough.
         macro(LOAD_ATTR_SLOT) =
             unused/1 +
-            _GUARD_SHAPE_VERSION +
+            _GUARD_TYPE_VERSION +
             _LOAD_ATTR_SLOT +  // NOTE: This action may also deopt
             POP_TOP +
             unused/5 +
@@ -2957,7 +2962,7 @@ dummy_func(
 
         macro(STORE_ATTR_SLOT) =
             unused/1 +
-            _GUARD_SHAPE_VERSION +
+            _GUARD_TYPE_VERSION +
             _STORE_ATTR_SLOT +
             POP_TOP;
 

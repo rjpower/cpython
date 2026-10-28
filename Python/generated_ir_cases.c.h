@@ -12377,9 +12377,9 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
+                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12445,9 +12445,9 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
+                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12538,9 +12538,9 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
+                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12773,9 +12773,9 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
+                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12876,9 +12876,9 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
+                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13095,7 +13095,7 @@
             PyValue o;
             PyValue value;
             PyValue *null;
-            // _GUARD_SHAPE_VERSION
+            // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
@@ -13104,9 +13104,9 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -15213,9 +15213,9 @@
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
+                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
@@ -15709,9 +15709,9 @@
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
+                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
@@ -17135,7 +17135,7 @@
             PyValue owner;
             PyValue value;
             PyValue o;
-            // _GUARD_SHAPE_VERSION
+            // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
                 uint32_t type_version = fb->type_version;
@@ -17144,9 +17144,9 @@
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
@@ -17805,9 +17805,9 @@
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                     JUMP_TO_PREDICTED(TO_BOOL);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
+                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
                     UPDATE_MISS_STATS(TO_BOOL);
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                     JUMP_TO_PREDICTED(TO_BOOL);

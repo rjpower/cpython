@@ -2253,6 +2253,42 @@ class SlotKindSpecializationTests(unittest.TestCase):
         self.assertIn("LOAD_ATTR_PROPERTY", opnames(get))
         self.assertEqual(get(o), "s")
 
+    def test_member_sites_across_generalisation(self):
+        # A member site guards the class's version, which every shape
+        # carries and a generalisation leaves alone (note 12 section 6.5):
+        # the site neither misses nor records the renewed shape version.
+        class K:
+            __slots__ = ("v", "__dict__")
+        @reset_code
+        def get(o):
+            return o.v
+        @reset_code
+        def put(o, v):
+            o.v = v
+        def recorded(f):
+            [fb] = [_testinternalcapi.get_feedback(f.__code__, i.offset)
+                    for i in dis.get_instructions(f)
+                    if i.opname in ("LOAD_ATTR", "STORE_ATTR")]
+            return fb[2]
+        o = K(); o.v = 1; o.x = 1
+        self.warm(get, o)
+        self.warm(put, o, 2)
+        self.assertIn("LOAD_ATTR_SLOT", opnames(get))
+        self.assertIn("STORE_ATTR_SLOT", opnames(put))
+        version = _testcapi.type_get_version(K)
+        self.assertEqual(recorded(get), version)
+        self.assertEqual(recorded(put), version)
+        o.x = "s"
+        self.assertNotEqual(shape_version(o), version)
+        self.assertEqual(_testcapi.type_get_version(K), version)
+        self.warm(get, o)
+        self.warm(put, o, 3)
+        self.assertIn("LOAD_ATTR_SLOT", opnames(get))
+        self.assertIn("STORE_ATTR_SLOT", opnames(put))
+        self.assertEqual(recorded(get), version)
+        self.assertEqual(recorded(put), version)
+        self.assertEqual(get(o), 3)
+
     def test_slot_load_on_generalised_shape(self):
         class C:
             pass

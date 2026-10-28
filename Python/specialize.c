@@ -907,8 +907,14 @@ specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name)
         case _Py_LOOKUP_DATA_DESCR:
             if (plan.flags & _Py_LOOKUP_MEMBER) {
                 // An unbound member deopts, so a __getattr__ is still called.
+                // _GUARD_TYPE_VERSION: the class's version, which a
+                // generalisation of the owner's shape leaves alone.
                 fb->index = plan.offset;
-                fb->type_version = tp_version;
+                fb->type_version = FT_ATOMIC_LOAD_UINT_RELAXED(type->tp_version_tag);
+                if (fb->type_version == 0) {
+                    SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
+                    return -1;
+                }
                 specialize(instr, LOAD_ATTR_SLOT);
                 return 0;
             }
@@ -1117,8 +1123,13 @@ _Py_Specialize_StoreAttr(PyValue owner_st, PyValue value, _PyInstr *instr,
     (void)d;  // read only by SPECIALIZATION_FAIL
     if (plan.outcome == _Py_STORE_DATA_DESCR) {
         if (plan.flags & _Py_LOOKUP_MEMBER) {
+            // _GUARD_TYPE_VERSION, as for LOAD_ATTR_SLOT.
             fb->index = plan.offset;
-            fb->type_version = tp_version;
+            fb->type_version = FT_ATOMIC_LOAD_UINT_RELAXED(type->tp_version_tag);
+            if (fb->type_version == 0) {
+                SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
+                goto fail;
+            }
             specialize(instr, STORE_ATTR_SLOT);
             goto success;
         }

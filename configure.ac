@@ -1422,14 +1422,17 @@ dnl This interpreter's ABI is not upstream's: values are PyValue, not
 dnl PyObject * (boil/design/06-architecture-v2.md, section 19.4).  An ABI flag
 dnl would change the wheel tag, which packaging rejects, so the platform part
 dnl of SOABI carries the mark instead: x86_64-linux-gnu becomes
-dnl x86_64-boil-linux-gnu.  An extension built by upstream CPython then has a
+dnl x86_64-boil2-linux-gnu.  An extension built by upstream CPython then has a
 dnl suffix this interpreter does not load, while the wheel ABI tag (cp316),
 dnl PLATFORM_TRIPLET, MULTIARCH and sysconfig.get_platform() are unchanged.
+dnl The number is the value ABI's generation: boil2 since the shape's
+dnl class_version, which grew PyTypeObject (boil/design/12-object-slots-on-values.md,
+dnl section 2.1), so that an extension built for an earlier one is not loaded.
 AS_CASE([$ac_sys_system],
   [iOS|tvOS|visionOS|watchOS], [SOABI_PLATFORM=`echo "$PLATFORM_TRIPLET" | cut -d '-' -f2`],
   [SOABI_PLATFORM=$PLATFORM_TRIPLET]
 )
-SOABI_PLATFORM=`echo "$SOABI_PLATFORM" | sed 's/-/-boil-/'`
+SOABI_PLATFORM=`echo "$SOABI_PLATFORM" | sed 's/-/-boil2-/'`
 
 if test x$SOABI_PLATFORM != x; then
     AC_DEFINE_UNQUOTED([SOABI_PLATFORM], ["${SOABI_PLATFORM}"], [Platform tag, used in binary module extension filenames.])

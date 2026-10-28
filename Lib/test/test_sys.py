@@ -1907,7 +1907,7 @@ class SizeofTest(unittest.TestCase):
         check((1,2,3), vsize('') + self.P + 3*self.P)
         # type
         # static type: PyTypeObject, its root shape last
-        shape = 'PlIHBB5P'
+        shape = 'PlIIHBB5P'
         fmt = 'P2nPI13Pl4Pn9Pn12PI2PcP' + shape
         s = vsize(fmt)
         check(int, s)

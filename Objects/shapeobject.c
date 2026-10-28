@@ -40,6 +40,7 @@ _PyShape_InitRoot(PyTypeObject *type)
     root->type = type;
     root->flags = type->tp_flags;
     root->type_version = type->tp_version_tag;
+    root->class_version = type->tp_version_tag;
     root->shape_kind = _Py_SHAPE_ROOT;
 }
 
@@ -62,6 +63,7 @@ _PyShape_InitTypeShapes(PyHeapTypeObject *ht, int capacity)
         .type = type,
         .flags = type->tp_flags,
         .type_version = type->tp_version_tag,
+        .class_version = type->tp_version_tag,
         .shape_kind = _Py_SHAPE_DICT,
     };
     ht->ht_shapes = shapes;
@@ -200,13 +202,20 @@ type_shapes(PyTypeObject *type)
 void
 _PyShape_SetTypeVersion(PyTypeObject *type, uint32_t version)
 {
-    _Py_TYPE_ROOT_SHAPE(type)->type_version = version;
+    // The class guards read class_version from the header in place of
+    // tp_version_tag, so every shape must hold the type's version.
+    assert(type->tp_version_tag == version);
+    _PyShape *root = _Py_TYPE_ROOT_SHAPE(type);
+    root->type_version = version;
+    root->class_version = version;
     _PyTypeShapes *shapes = type_shapes(type);
     if (shapes != NULL) {
         for (int i = 1; i < shapes->nshapes; i++) {
             shapes->shapes[i]->type_version = version;
+            shapes->shapes[i]->class_version = version;
         }
         shapes->dict_shape.type_version = version;
+        shapes->dict_shape.class_version = version;
     }
 }
 
@@ -313,6 +322,7 @@ new_shape(_PyTypeShapes *shapes, _PyShape *from, int kind, PyObject *name,
         .type = from->type,
         .flags = from->flags,
         .type_version = from->type_version,
+        .class_version = from->class_version,
         .nslots = nslots,
         .shape_kind = (uint8_t)kind,
         .edge_slot = (uint8_t)ix,

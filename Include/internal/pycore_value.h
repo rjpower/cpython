@@ -345,6 +345,17 @@ _PyValueSpan_Append(_PyValueRoot *root, PyValue v)
     root->n++;
 }
 
+/* Store the object o itself at the end of the span, as a raw pointer, and
+   extend the span over it.  This anchors o: a box (an exact finite float, a
+   small int) stays the box, where _PyValueSpan_Append(root,
+   PyValue_FromObject(o)) would store its immediate and leave the box
+   unanchored. */
+static inline void
+_PyValueSpan_AppendObject(_PyValueRoot *root, PyObject *o)
+{
+    _PyValueSpan_Append(root, _PyValue_FromBits((uintptr_t)o));
+}
+
 /* The span's buffer moved to base, which holds the values appended so far,
    as PyMem_Realloc() leaves them.  Call it before any other collecting
    call. */

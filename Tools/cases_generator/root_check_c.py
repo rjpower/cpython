@@ -89,7 +89,7 @@ NON_COLLECTING = {
     # value roots and spans
     "_PyThreadState_PushValueRoot", "_PyThreadState_PopValueRoot",
     "_PyThreadState_PushValueSpan", "_PyValueSpan_Append",
-    "_PyValueSpan_Rebase",
+    "_PyValueSpan_AppendObject", "_PyValueSpan_Rebase",
     # The mem domain counts its bytes for the trigger but never collects
     # (Objects/obmalloc.c, gc_count_alloc()): its callers do not expect a
     # collection.
@@ -204,6 +204,12 @@ MUTATING = {"memset", "memcpy", "memmove", "PyTuple_SET_ITEM",
 # A span is filled only by this call, which stores at the end of the
 # prefix and raises its length in one step.
 SPAN_APPEND = "_PyValueSpan_Append"
+# ... or by this one, which stores an object's own pointer, so that it
+# anchors the object (a box included).
+SPAN_APPEND_OBJECT = "_PyValueSpan_AppendObject"
+# Calls whose result is the canonical value of an object: an immediate for
+# a box, so storing it anchors the value and not the object.
+CANONICAL = {"PyValue_FromObject"}
 
 # Functions that may return while their thread stays detached: never
 # precise, so that the detach unwind (note 11 section 3.3) always stops at
@@ -2281,6 +2287,18 @@ class FunctionChecker:
             root = self.span_arg(e, 1 if name in SPAN_PUSH else SPAN_PUSH_OBJECT[name])
             if root is not None:
                 st.spans = st.spans + (root,)
+            if name == "_PyThreadState_PushValueSpan" and root is not None:
+                # The buffer's elements are the span's while it is pushed:
+                # what is appended, and what a callee stores through an
+                # out-parameter into it (10a-2.md, 0e).  That such a store
+                # lands inside the prefix is the code's obligation; the C
+                # mode does not see indices.
+                for a in e.args[:1]:
+                    self.eval(a, st, n, live_after, held)
+                buf = self.base_name(e.args[2]) if len(e.args) > 2 else None
+                if buf is not None and self.kinds.get(buf) == "array":
+                    st.sources[buf] = frozenset([("span", root)])
+                return frozenset([("const",)])
             if name in SPAN_PUSH_OBJECT and root is not None:
                 # The root keeps the box it returns
                 for a in e.args:
@@ -2325,9 +2343,16 @@ class FunctionChecker:
                 inner_held.append((self.callee_of(a), a.line))
         if not isinstance(e.func, Name):
             self.eval(e.func, st, n, live_after, held)
-        if name == SPAN_APPEND and len(e.args) == 2:
+        if name in (SPAN_APPEND, SPAN_APPEND_OBJECT) and len(e.args) == 2:
             root = self.span_arg(e, 0)
-            var = self.base_name(e.args[1])
+            stored = e.args[1]
+            while isinstance(stored, Cast):
+                stored = stored.operand
+            if name == SPAN_APPEND and isinstance(stored, Call) \
+                    and stored.name in CANONICAL:
+                var = None  # the canonical value, not the object (10a-2.md, 0d)
+            else:
+                var = self.base_name(stored)
             if root is None or root not in st.spans:
                 self.error(e.line, f"an append to span '{root}', which is not "
                            "pushed")
@@ -2342,9 +2367,16 @@ class FunctionChecker:
                 self.invalidate_field(fld, st)
         elif self.passes_writable_slots(e, st):
             self.invalidate_slots(None, st, None)
+        if name == "_PyValueSpan_Rebase" and len(e.args) == 2:
+            root = self.span_arg(e, 0)
+            b = self.base_name(e.args[1])
+            if root is not None and b is not None and self.kinds.get(b) == "array":
+                st.sources[b] = frozenset([("span", root)])
+            return frozenset([("const",)])
         for a in e.args:
             b = self.base_name(a)
-            if b is not None and self.kinds.get(b) == "array":
+            if b is not None and self.kinds.get(b) == "array" \
+                    and not self.span_backed(b, st):
                 st.sources[b] = st.sources.get(b, frozenset()) | {
                     ("fresh", f"an element that '{name or 'a call'}' stored")}
         kind = self.cls.kind(name)
@@ -2397,6 +2429,13 @@ class FunctionChecker:
             if b is not None and st.slots.get(b, False):
                 return True
         return False
+
+    def span_backed(self, buf: str, st: State) -> bool:
+        """Is buf the buffer of a pushed span?  A callee's stores into it
+        are stores of values into covered slots."""
+        srcs = st.sources.get(buf, frozenset())
+        return bool(srcs) and all(s[0] == "span" and s[1] in st.spans
+                                  for s in srcs)
 
     def span_arg(self, e: Call, idx: int) -> str | None:
         if len(e.args) > idx:

@@ -1426,6 +1426,61 @@ Py_GC_PRECISE static void f(Py_GC_SLOTS PyValue *slots) {
                 self.assertEqual(root_check_c.main([path]), 1)
             self.assertIn("is held only in a C local", out.getvalue())
 
+    def test_canonical_append_does_not_anchor_a_box(self):
+        # The canonical value of an exact float box is an immediate: the
+        # span holds the value and the box is free to go (10a-2.md, 0d).
+        src = """
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *x) {
+    PyValue buf[1];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    _PyValueSpan_Append(&r, PyValue_FromObject(x));
+    collect();
+    use(x);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+"""
+        errors = self.check(src)
+        self.assertTrue(any("'x' is held only in a C local" in e
+                            for e in errors), errors)
+        self.assertEqual(self.check(src.replace(
+            "_PyValueSpan_Append(&r, PyValue_FromObject(x))",
+            "_PyValueSpan_AppendObject(&r, x)")), [])
+
+    def test_out_parameter_into_span(self):
+        # A callee's result stored through a pointer into a pushed span's
+        # buffer is anchored there; through a local's address it escapes
+        # (10a-2.md, 0e).
+        src = """
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *g) {
+    PyValue buf[1];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    _PyValueSpan_Append(&r, PyValue_NULL);
+    send(g, &buf[0]);
+    collect();
+    use_v(buf[0]);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+"""
+        self.assertEqual(self.check(src), [])
+        after_pop = src.replace("""    use_v(buf[0]);
+    _PyThreadState_PopValueRoot(tstate, &r);""", """    _PyThreadState_PopValueRoot(tstate, &r);
+    collect();
+    use_v(buf[0]);""")
+        self.assertTrue(any("'buf' is held only in a C local" in e
+                            for e in self.check(after_pop)))
+        local = """
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *g) {
+    PyValue res;
+    send(g, &res);
+    collect();
+    use_v(res);
+}
+"""
+        self.assertTrue(any("the address of object local 'res' escapes" in e
+                            for e in self.check(local)))
+
     def test_variadic_cannot_be_precise(self):
         src = """
 Py_GC_PRECISE static int f(int n, ...) {

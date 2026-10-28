@@ -2133,3 +2133,10 @@ e03ab939a4a, returned "fix first" with four findings (reviews/
 per-interpreter callback and finalizer queue) moved up from step 7 after
 finding B killed the process under stress in a shared-obmalloc
 subinterpreter's start-up.
+
+Correction (06:30 PDT, from the 10a agent's register commit 6124ebafd70):
+the saved-register clears were retired in 10a rung 1 (ce81b2828cd), not
+1b; Py_NO_INLINE stays on the helpers by design, since the inline audit
+relies on it; and the "inline-fallback collection scans everything" row
+was also retired in a3c01b61e52. The release-build test skips go to 10a
+rung 2b item 7, or rung 3 where a PyMem or struct root holds the object.

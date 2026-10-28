@@ -2122,9 +2122,11 @@ detach_thread(PyThreadState *tstate, int detached_state)
     assert(_Py_atomic_load_int_relaxed(&tstate->state) == _Py_THREAD_ATTACHED);
     assert(tstate == current_fast_get());
     if (!((_PyThreadStateImpl *)tstate)->gc_trace.detach.valid) {
-        // Not detached through PyEval_SaveThread() or
-        // PyEval_ReleaseThread(), which record it further out.
-        _PyGC_RecordDetach();
+        // Not detached through an entry that records its caller's context
+        // (PyEval_SaveThread() and the like): unpinned, from here.
+        _PyGCContext ctx;
+        _PyGC_CaptureCaller(&ctx);
+        _PyGC_RecordDetach(tstate, &ctx, 0);
     }
     if (tstate->critical_section != 0) {
         _PyCriticalSection_SuspendAll(tstate);
@@ -2140,6 +2142,22 @@ _PyThreadState_Detach(PyThreadState *tstate)
 {
     detach_thread(tstate, _Py_THREAD_DETACHED);
 }
+
+void
+_PyThreadState_DetachAt(PyThreadState *tstate, const _PyGCContext *ctx,
+                        int pinned)
+{
+    _PyGC_RecordDetach(tstate, ctx, pinned);
+    detach_thread(tstate, _Py_THREAD_DETACHED);
+}
+
+#ifndef _PyGC_DETACH_ASM
+void
+_PyThreadState_DetachPinned(PyThreadState *tstate)
+{
+    _PyThreadState_Detach(tstate);
+}
+#endif
 
 void
 _PyThreadState_Suspend(PyThreadState *tstate)

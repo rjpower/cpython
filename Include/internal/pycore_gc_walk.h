@@ -46,6 +46,12 @@ extern "C" {
     && (defined(__x86_64__) || defined(__aarch64__))
 #  define _PyGC_CAPTURE_ASM 1
 #endif
+/* The detach entries capture their caller's context in assembly too
+ * (Python/gc_capture.S): PyEval_SaveThread(), PyEval_ReleaseThread() and
+ * their pinned forms (note 11 section 13, question 16). */
+#if defined(_PyGC_CAPTURE_ASM) && defined(__x86_64__)
+#  define _PyGC_DETACH_ASM 1
+#endif
 #if defined(_PyGC_CAPTURE_ASM) && defined(__x86_64__) && defined(__GLIBC__) \
     && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 35))
 #  define _PyGC_WALK 1
@@ -70,15 +76,16 @@ typedef struct {
 /* Fill ctx with the caller's context at the call to this function. */
 PyAPI_FUNC(void) _PyGC_CaptureCaller(_PyGCContext *ctx);
 
-/* A thread's record of where it detached (3.3): the capture's context, and
- * the innermost precise frame P outward of it with the values of the
- * registers pending there.  A collection scans the registers and
- * [cap.sp, p.sp) conservatively and walks from P; with no P, it scans
- * from cap.sp up conservatively. */
+/* A thread's record of where it detached (3.3, question 16): its caller's
+ * context at the detach entry.  A pinned record's caller does not return
+ * before the thread reattaches (Py_BEGIN_ALLOW_THREADS and the internal
+ * pinned entries), so every frame outward of the capture persists, and a
+ * collection walks from the capture.  Of an unpinned one (a direct
+ * PyEval_SaveThread(), which may return detached), a collection scans the
+ * registers and the stack from cap.sp up conservatively. */
 typedef struct {
     _PyGCContext cap;
-    _PyGCContext p;
-    int has_p;
+    int pinned;
     int valid;
 } _PyGCDetachRecord;
 
@@ -167,15 +174,30 @@ typedef struct {
  * conservative scan of the rest. */
 PyAPI_FUNC(int) _PyGC_WalkStack(_PyGCWalk *w, const _PyGCContext *ctx);
 
-/* Flush the cache if the loader generation changed: in each root phase,
- * which counts the flushes since the last into stats, and on detach. */
+/* Flush the cache if the loader generation or the range table changed: in
+ * each root phase, which counts the flushes since the last into stats, and
+ * before a miss is decoded. */
 extern void _PyGC_WalkCacheCheck(_PyGCWalkCache *cache,
                                  struct _PyGCRootStats *stats);
 extern void _PyGC_WalkCacheFini(_PyGCWalkCache *cache);
 
-/* Record, on detach, the calling thread's capture and its innermost precise
- * frame (3.3).  Call it first in a detach entry. */
-PyAPI_FUNC(void) _PyGC_RecordDetach(void);
+/* Record that tstate detaches with its caller's context ctx (3.3). */
+extern void _PyGC_RecordDetach(PyThreadState *tstate,
+                               const _PyGCContext *ctx, int pinned);
+
+/* The pinned detach entries for the core: the caller does not return
+ * before the thread reattaches.  _PyEval_SaveThreadPinned() is in
+ * Include/ceval.h, for Py_BEGIN_ALLOW_THREADS.  The *At functions are the
+ * entries' bodies, called with the caller's context. */
+PyAPI_FUNC(void) _PyEval_ReleaseThreadPinned(PyThreadState *tstate);
+PyAPI_FUNC(void) _PyThreadState_DetachPinned(PyThreadState *tstate);
+extern PyThreadState *_PyEval_SaveThreadAt(void *unused,
+                                           const _PyGCContext *ctx,
+                                           int pinned);
+extern void _PyEval_ReleaseThreadAt(PyThreadState *tstate,
+                                    const _PyGCContext *ctx, int pinned);
+extern void _PyThreadState_DetachAt(PyThreadState *tstate,
+                                    const _PyGCContext *ctx, int pinned);
 
 #ifdef __cplusplus
 }

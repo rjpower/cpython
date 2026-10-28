@@ -30,6 +30,48 @@ _PyGC_CaptureCaller:
     .cfi_endproc
     .size   _PyGC_CaptureCaller, .-_PyGC_CaptureCaller
 
+/* The detach entries (note 11 section 13, question 16): NAME(arg) captures
+ * its caller's context into a _PyGCContext in its own frame, before
+ * anything can change a callee-saved register, and returns
+ * TARGET(arg, &ctx, PINNED), which records it and detaches.  The frame is
+ * 72 bytes, the context and the alignment to 16 at the call. */
+.macro DETACH_ENTRY name, target, pinned
+    .globl  \name
+    .type   \name, @function
+    .p2align 4
+\name:
+    .cfi_startproc
+#if defined(__CET__) && (__CET__ & 1)
+    endbr64
+#endif
+    subq    $72, %rsp
+    .cfi_adjust_cfa_offset 72
+    movq    72(%rsp), %rax      /* pc: the return address */
+    movq    %rax, 0(%rsp)
+    leaq    80(%rsp), %rax      /* sp: the caller's, at the call */
+    movq    %rax, 8(%rsp)
+    movq    %rbx, 16(%rsp)
+    movq    %rbp, 24(%rsp)
+    movq    %r12, 32(%rsp)
+    movq    %r13, 40(%rsp)
+    movq    %r14, 48(%rsp)
+    movq    %r15, 56(%rsp)
+    movq    %rsp, %rsi
+    movl    $\pinned, %edx
+    call    \target@PLT
+    addq    $72, %rsp
+    .cfi_adjust_cfa_offset -72
+    ret
+    .cfi_endproc
+    .size   \name, .-\name
+.endm
+
+    DETACH_ENTRY PyEval_SaveThread, _PyEval_SaveThreadAt, 0
+    DETACH_ENTRY _PyEval_SaveThreadPinned, _PyEval_SaveThreadAt, 1
+    DETACH_ENTRY PyEval_ReleaseThread, _PyEval_ReleaseThreadAt, 0
+    DETACH_ENTRY _PyEval_ReleaseThreadPinned, _PyEval_ReleaseThreadAt, 1
+    DETACH_ENTRY _PyThreadState_DetachPinned, _PyThreadState_DetachAt, 1
+
 #elif defined(__ELF__) && defined(__aarch64__)
     .text
     .globl  _PyGC_CaptureCaller

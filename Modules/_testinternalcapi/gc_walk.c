@@ -4,7 +4,7 @@
  * detach with a value only in a register. */
 
 #include "parts.h"
-#include "pycore_gc_trace.h"      // _PyGC_TraceLiveRootsOf()
+#include "pycore_gc_trace.h"      // _PyGC_TraceLiveRootsOfHidden()
 #include "pycore_gc_walk.h"
 #include "pycore_lock.h"          // PyEvent
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -231,15 +231,16 @@ gc_walk_fallback(PyObject *self, PyObject *Py_UNUSED(ignored))
 
 /* --- detached threads -------------------------------------------------- */
 
-static uintptr_t hidden_addr;    // the object's address, XOR a mask
+static volatile uintptr_t hidden_addr;  // the object's address, XOR a mask
 static PyThreadState *holder;    // the thread that holds it
 #define HIDE 0x5555555555555555ull
 static PyEvent published, release;
 
 /* Detach with obj only in a callee-saved register, and block until
-   released: how the thread detaches is mode's (0: Py_BEGIN_ALLOW_THREADS;
-   1: a helper that detaches and returns before this blocks; 2: a swap to
-   NULL in a function built -O0). */
+   released: how the thread detaches is mode's (0: Py_BEGIN_ALLOW_THREADS,
+   pinned; 1: a helper that detaches and returns before this blocks, with
+   this function registered precise, unpinned; 2: a swap to NULL in a
+   function built -O0, unpinned). */
 static Py_NO_INLINE PyThreadState *
 detach_and_return(void)
 {
@@ -254,14 +255,20 @@ swap_out_O0(void)
 
 static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
 uintptr_t
-hold_detached(PyObject *obj, int mode)
+hold_detached(int mode)
 {
-    register uintptr_t v __asm__("r14") = (uintptr_t)obj;
-    __asm__ volatile("" : "+r"(v));
-    obj = NULL;
-    hidden_addr = v ^ HIDE;
+    // Unmask the address in r14 itself, so that no other register or
+    // stack slot of this thread holds it.
+    register uintptr_t v __asm__("r14") = hidden_addr;
+    __asm__ volatile("xor %1, %0" : "+r"(v) : "r"((uintptr_t)HIDE));
     holder = _PyThreadState_GET();
     PyThreadState *saved = NULL;
+    _PyGCFrameDesc d;
+    int precise = mode == 1
+        && _PyGC_DecodeDescriptor((uintptr_t)&hold_detached, &d) == 0
+        && _PyGC_RegisterCodeRange(d.func_start, d.func_end,
+                                   _PyGC_FRAME_PRECISE, _PyGC_RANGE_TEST,
+                                   NULL) == 0;
     if (mode == 0) {
         Py_BEGIN_ALLOW_THREADS
         __asm__ volatile("" : "+r"(v));
@@ -283,8 +290,25 @@ hold_detached(PyObject *obj, int mode)
             PyThreadState_Swap(saved);
         }
     }
+    if (precise) {
+        _PyGC_UnregisterCodeRange(d.func_start);
+    }
     __asm__ volatile("" : "+r"(v));
     return v;
+}
+
+/* Create [None] and publish its masked address in hidden_addr.  A
+   function of its own, so that its caller's registers never hold it. */
+static Py_NO_INLINE int
+make_hidden(void)
+{
+    PyObject *obj = PyList_New(0);
+    if (obj == NULL || PyList_Append(obj, Py_None) < 0) {
+        Py_XDECREF(obj);
+        return -1;
+    }
+    hidden_addr = (uintptr_t)obj ^ HIDE;
+    return 0;
 }
 
 /* In a thread: create an object, hold it only in a register while
@@ -297,11 +321,10 @@ gc_walk_hold_detached(PyObject *self, PyValue arg)
         return PyValue_NULL;
     }
     int mode = PyValue_Int32(arg);
-    PyObject *obj = PyList_New(0);
-    if (obj == NULL || PyList_Append(obj, Py_None) < 0) {
+    if (make_hidden() < 0) {
         return PyValue_NULL;
     }
-    return PyValue_FromObject((PyObject *)hold_detached(obj, mode));
+    return PyValue_FromObject((PyObject *)hold_detached(mode));
 }
 
 /* From another thread: wait until the object is published and return the
@@ -312,14 +335,10 @@ gc_walk_detached_roots(PyObject *self, PyObject *Py_UNUSED(ignored))
     Py_BEGIN_ALLOW_THREADS
     PyEvent_Wait(&published);
     Py_END_ALLOW_THREADS
-    int roots = _PyGC_TraceLiveRootsOf(_PyThreadState_GET(),
-                                       (uintptr_t)(hidden_addr ^ HIDE));
+    int roots = _PyGC_TraceLiveRootsOfHidden(_PyThreadState_GET(),
+                                             &hidden_addr, HIDE);
     _PyGCDetachRecord *rec = &((_PyThreadStateImpl *)holder)->gc_trace.detach;
-    // The capture is the caller's of _PyGC_RecordDetach(), not its own
-    _PyGCFrameDesc d;
-    int in_record = _PyGC_DecodeDescriptor(rec->cap.pc - 1, &d) == 0
-        && d.func_start == (uintptr_t)&_PyGC_RecordDetach;
-    return Py_BuildValue("(iiii)", roots, rec->valid, rec->has_p, in_record);
+    return Py_BuildValue("(iii)", roots, rec->valid, rec->pinned);
 }
 
 /* Detach and reattach on this thread with obj only in a callee-saved

@@ -579,13 +579,37 @@ PyEval_AcquireThread(PyThreadState *tstate)
     _PyThreadState_Attach(tstate);
 }
 
+/* The detach entries record their caller's context for the collector
+   (Python/gc_walk.c, note 11 question 16).  With _PyGC_DETACH_ASM the
+   entries are in Python/gc_capture.S, which captures the context before
+   anything changes a callee-saved register and calls the *At functions;
+   elsewhere they are here, and the record is never pinned, so that the
+   collector scans the thread's stack conservatively. */
+
+void
+_PyEval_ReleaseThreadAt(PyThreadState *tstate, const _PyGCContext *ctx,
+                        int pinned)
+{
+    assert(_PyThreadState_CheckConsistency(tstate));
+    _PyGC_RecordDetach(tstate, ctx, pinned);
+    _PyThreadState_Detach(tstate);
+}
+
+#ifndef _PyGC_DETACH_ASM
 void
 PyEval_ReleaseThread(PyThreadState *tstate)
 {
-    _PyGC_RecordDetach();
-    assert(_PyThreadState_CheckConsistency(tstate));
-    _PyThreadState_Detach(tstate);
+    _PyGCContext ctx;
+    _PyGC_CaptureCaller(&ctx);
+    _PyEval_ReleaseThreadAt(tstate, &ctx, 0);
 }
+
+void
+_PyEval_ReleaseThreadPinned(PyThreadState *tstate)
+{
+    PyEval_ReleaseThread(tstate);
+}
+#endif
 
 #ifdef HAVE_FORK
 /* This function is called from PyOS_AfterFork_Child to re-initialize the
@@ -611,15 +635,29 @@ _PyEval_ReInitThreads(PyThreadState *tstate)
 #endif
 
 PyThreadState *
-PyEval_SaveThread(void)
+_PyEval_SaveThreadAt(void *unused, const _PyGCContext *ctx, int pinned)
 {
-    // The collector walks this thread's stack from its innermost precise
-    // frame while it is detached (Python/gc_walk.c).
-    _PyGC_RecordDetach();
     PyThreadState *tstate = _PyThreadState_GET();
+    _PyGC_RecordDetach(tstate, ctx, pinned);
     _PyThreadState_Detach(tstate);
     return tstate;
 }
+
+#ifndef _PyGC_DETACH_ASM
+PyThreadState *
+PyEval_SaveThread(void)
+{
+    _PyGCContext ctx;
+    _PyGC_CaptureCaller(&ctx);
+    return _PyEval_SaveThreadAt(NULL, &ctx, 0);
+}
+
+PyThreadState *
+_PyEval_SaveThreadPinned(void)
+{
+    return PyEval_SaveThread();
+}
+#endif
 
 void
 PyEval_RestoreThread(PyThreadState *tstate)
@@ -1235,8 +1273,9 @@ _Py_HandlePending(PyThreadState *tstate)
 
     /* GIL drop request */
     if ((breaker & _PY_GIL_DROP_REQUEST_BIT) != 0) {
-        /* Give another thread a chance */
-        _PyThreadState_Detach(tstate);
+        /* Give another thread a chance.  This frame persists until the
+           thread reattaches below. */
+        _PyThreadState_DetachPinned(tstate);
 
         /* Other threads may run now */
 

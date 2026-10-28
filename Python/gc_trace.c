@@ -1029,6 +1029,18 @@ walk_scan(void *arg, uintptr_t start, uintptr_t end)
 }
 #endif
 
+/* The registers that ctx captured, conservatively.  Scans a copy: the
+   main thread's records are in _PyRuntime, in a range that the data scan
+   skips (live_skip_caches()), and scan_range() would skip them here too. */
+static void
+scan_regs(trace_t *t, const _PyGCContext *ctx)
+{
+    uintptr_t regs[_PyGC_NSAVED];
+    memcpy(regs, ctx->regs, sizeof(regs));
+    t->scan_class = _PyGC_SCAN_REGS;
+    scan_range(t, (uintptr_t)regs, (uintptr_t)(regs + _PyGC_NSAVED));
+}
+
 /* Scan p's stack outward from ctx up to top: walked where the walk is on
    (Python/gc_walk.c), so that only what opaque frames own is scanned;
    elsewhere the registers and the whole stack conservatively, the eval
@@ -1055,9 +1067,7 @@ scan_from(trace_t *t, PyThreadState *p, const _PyGCContext *ctx,
     };
     (void)_PyGC_WalkStack(&w, ctx);
 #else
-    t->scan_class = _PyGC_SCAN_REGS;
-    scan_range(t, (uintptr_t)ctx->regs,
-               (uintptr_t)(ctx->regs + _PyGC_NSAVED));
+    scan_regs(t, ctx);
     scan_stack(t, p, ctx->sp, top);
 #endif
 }
@@ -1105,10 +1115,13 @@ scan_threads(trace_t *t, PyThreadState *current)
 }
 
 /* The stack and registers of another thread, as it recorded them when it
-   detached (_PyGC_RecordDetach()): the capture's registers and the stack
-   up to its innermost precise frame P conservatively, then the walk from
-   P.  The stack of a thread that has exited, or of one with no P, is
-   scanned conservatively, clipped to the readable mappings. */
+   detached (_PyGC_RecordDetach(), note 11 question 16).  A pinned record's
+   frames from the capture outward persist while the thread is detached:
+   the walk from the capture.  Of an unpinned one, which may have returned
+   since, of a thread that has exited, or without the walk: the registers
+   and the stack from the capture up, conservatively, clipped to the
+   readable mappings.  Frames pushed below the capture after the detach
+   are not scanned: what the thread holds it obtained attached. */
 static void
 scan_other_thread(trace_t *t, PyThreadState *p, int alive)
 {
@@ -1118,20 +1131,19 @@ scan_other_thread(trace_t *t, PyThreadState *p, int alive)
         return;  // never attached
     }
     uintptr_t top = stack_top(p);
-    t->scan_class = _PyGC_SCAN_REGS;
-    scan_range(t, (uintptr_t)rec->cap.regs,
-               (uintptr_t)(rec->cap.regs + _PyGC_NSAVED));
 #ifdef _PyGC_WALK
-    if (alive && rec->has_p && rec->cap.sp <= rec->p.sp && rec->p.sp < top
+    if (alive && rec->pinned && rec->cap.sp < top
         && (t->readable.n == 0
             || is_readable(t, rec->cap.sp, top - rec->cap.sp)))
     {
-        t->scan_class = _PyGC_SCAN_STACK;
-        scan_range(t, rec->cap.sp, rec->p.sp);
-        scan_from(t, p, &rec->p, top);
+        scan_from(t, p, &rec->cap, top);
         return;
     }
 #endif
+    if (t->stats != NULL && !rec->pinned) {
+        t->stats->unpinned++;
+    }
+    scan_regs(t, &rec->cap);
     scan_stack(t, p, rec->cap.sp, top);
 }
 
@@ -2280,6 +2292,16 @@ _PyGC_TraceSegmentProbes(PyObject *op, uintptr_t probes[4])
 int
 _PyGC_TraceLiveRootsOf(PyThreadState *tstate, uintptr_t addr)
 {
+    volatile uintptr_t hidden = addr;
+    return _PyGC_TraceLiveRootsOfHidden(tstate, &hidden, 0);
+}
+
+/* The same for the object at *hidden ^ mask, which is read only after each
+   mark: the caller's own stack and registers then need not hold it. */
+int
+_PyGC_TraceLiveRootsOfHidden(PyThreadState *tstate,
+                             const volatile uintptr_t *hidden, uintptr_t mask)
+{
     int found = 0;
     for (int bit = 0; bit < 8; bit++) {
         trace_t t = {
@@ -2302,7 +2324,7 @@ _PyGC_TraceLiveRootsOf(PyThreadState *tstate, uintptr_t addr)
             return -1;
         }
         live_mark_roots(&t, tstate);
-        PyObject *op = live_lookup(&t, addr, 0);
+        PyObject *op = live_lookup(&t, *hidden ^ mask, 0);
         if (op != NULL && (op->ob_flags & _Py_GC_MARKED_FLAG)) {
             found |= 1 << bit;
         }

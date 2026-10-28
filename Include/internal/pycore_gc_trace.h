@@ -263,7 +263,9 @@ typedef struct {
  * object; the stack scan counts the eval-loop words it excludes.  Each time
  * is in nanoseconds and includes the marking that its roots cause.  The
  * walk's counters (frames, descriptor cache, fallbacks) are zero until the
- * walk exists, so that every build reports one schema. */
+ * walk exists, so that every build reports one schema.  unpinned counts the
+ * other threads visited with an unpinned detach record, whose stacks are
+ * scanned conservatively (note 11 question 16). */
 #define _PyGC_SCAN_STACK    0  /* C stacks */
 #define _PyGC_SCAN_REGS     1  /* captured register arrays */
 #define _PyGC_SCAN_MEM      2  /* PyMem blocks the scans lead to */
@@ -277,7 +279,7 @@ typedef struct {
 #define _PyGC_ROOT_STATS_FIELDS(X) \
     X(collections) X(threads) X(activations_skipped) X(eval_words_skipped) \
     X(frames_walked) X(cache_hits) X(cache_misses) X(cache_flushes) \
-    X(fallbacks) X(precise_ns) X(stack_ns) X(data_ns) X(structs_ns) \
+    X(fallbacks) X(unpinned) X(precise_ns) X(stack_ns) X(data_ns) X(structs_ns) \
     X(roots_ns)
 
 typedef struct _PyGCRootStats {
@@ -312,6 +314,10 @@ extern struct _PyGCWalkCache *_PyGC_LiveWalkCache(PyInterpreterState *interp);
 /* The classes of roots (_PyGC_TRACE_ROOT_*) that each alone reach the object
  * at addr, or -1.  For debugging; export for _testinternalcapi. */
 PyAPI_FUNC(int) _PyGC_TraceLiveRootsOf(PyThreadState *tstate, uintptr_t addr);
+/* The same for the object at *hidden ^ mask, read after each mark, so that
+ * the caller's stack need not hold its address. */
+PyAPI_FUNC(int) _PyGC_TraceLiveRootsOfHidden(
+    PyThreadState *tstate, const volatile uintptr_t *hidden, uintptr_t mask);
 
 /* For tests of the segment map that the live mark looks objects up in: the
  * object found at addr (or containing it, if interior is set), or 0; four

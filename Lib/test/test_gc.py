@@ -1702,28 +1702,47 @@ class StackWalkTests(unittest.TestCase):
     @threading_helper.requires_working_threading()
     def test_detached_register(self):
         # A thread that detaches with an object only in a callee-saved
-        # register: through Py_BEGIN_ALLOW_THREADS, through a helper that
-        # detaches and returns before the thread blocks, and through a swap
-        # to NULL in a function built -O0.  The capture and the stack up to
-        # the innermost precise frame are scanned conservatively.
+        # register (note 11 question 16): through Py_BEGIN_ALLOW_THREADS, a
+        # pinned record that the walk reads from the capture; through a
+        # helper that detaches and returns before the thread blocks, from a
+        # function registered precise; and through a swap to NULL in a
+        # function built -O0.  The last two are unpinned, and their stacks
+        # are scanned conservatively, the precise frame's object too.  The
+        # main thread's record is in _PyRuntime, which the data scan reads
+        # around, so each mode runs on the main thread as well.
+        def hold(mode, result):
+            result.append(_testinternalcapi.gc_walk_hold_detached(mode))
+
+        def check(result):
+            try:
+                result.append(_testinternalcapi.gc_walk_detached_roots())
+            finally:
+                _testinternalcapi.gc_walk_release()
+
         for mode in (0, 1, 2):
-            with self.subTest(mode=mode):
-                _testinternalcapi.gc_walk_reset()
-                result = []
-                t = threading.Thread(target=lambda: result.append(
-                    _testinternalcapi.gc_walk_hold_detached(mode)))
-                t.start()
-                try:
-                    roots, valid, has_p, in_record = (
-                        _testinternalcapi.gc_walk_detached_roots())
-                finally:
-                    _testinternalcapi.gc_walk_release()
-                    t.join()
-                self.assertTrue(valid)
-                self.assertFalse(in_record)
-                self.assertTrue(has_p)  # the eval loop's frame, for now
-                self.assertTrue(roots & self.ROOT_STACKS, roots)
-                self.assertEqual(result, [[None]])
+            for on_main in (False, True):
+                with self.subTest(mode=mode, on_main=on_main):
+                    _testinternalcapi.gc_walk_reset()
+                    held, checked = [], []
+                    if on_main:
+                        t = threading.Thread(target=check, args=(checked,))
+                        t.start()
+                        try:
+                            hold(mode, held)
+                        finally:
+                            t.join()
+                    else:
+                        t = threading.Thread(target=hold, args=(mode, held))
+                        t.start()
+                        try:
+                            check(checked)
+                        finally:
+                            t.join()
+                    roots, valid, pinned = checked[0]
+                    self.assertTrue(valid)
+                    self.assertEqual(pinned, mode == 0)
+                    self.assertTrue(roots & self.ROOT_STACKS, roots)
+                    self.assertEqual(held, [[None]])
 
     @unittest.skipUnless(hasattr(sys, "activate_stack_trampoline"),
                          "requires the perf trampoline")
@@ -1849,6 +1868,27 @@ class StackWalkTests(unittest.TestCase):
             ours = [f for f in frames if lo2 <= f[0] < hi2]
             self.assertEqual(len(ours), 2)  # inner and call_cb
             self.assertTrue(all(f[3] == 3 for f in ours))  # extension opaque
+
+    @threading_helper.requires_working_threading()
+    def test_unpinned_counter(self):
+        # A root phase counts the unpinned records it visits: a thread that
+        # detached through a direct PyEval_SaveThread() (mode 1), not one
+        # in Py_BEGIN_ALLOW_THREADS (mode 0).
+        counts = {}
+        for mode in (0, 1):
+            _testinternalcapi.gc_walk_reset()
+            t = threading.Thread(
+                target=_testinternalcapi.gc_walk_hold_detached, args=(mode,))
+            t.start()
+            try:
+                _testinternalcapi.gc_walk_detached_roots()  # published
+                gc.collect()
+                counts[mode] = _testinternalcapi.gc_root_stats()["last"][
+                    "unpinned"]
+            finally:
+                _testinternalcapi.gc_walk_release()
+                t.join()
+        self.assertEqual(counts[1], counts[0] + 1, counts)
 
     def test_counters(self):
         gc.collect()

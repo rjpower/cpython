@@ -743,6 +743,9 @@ find_desc(_PyGCWalk *w, uintptr_t lookup_pc, _PyGCFrameDesc *scratch)
     if (w->stats != NULL) {
         w->stats->cache_misses++;
     }
+    // An object unloaded since the root phase began could have left
+    // entries for addresses that another now occupies.
+    _PyGC_WalkCacheCheck(cache, w->stats);
     (void)_PyGC_DecodeDescriptor(lookup_pc, scratch);
     if ((cache->used + 1) * 2 > (cache->slots ? cache->mask + 1 : 0)
         && cache_grow(cache) < 0)
@@ -972,106 +975,6 @@ _PyGC_WalkStack(_PyGCWalk *w, const _PyGCContext *ctx)
     return 0;
 }
 
-/* --- the detach record ---------------------------------------------------------- */
-
-static void
-no_scan(void *arg, uintptr_t start, uintptr_t end)
-{
-}
-
-/* Unwind from the capture to the innermost precise frame, without
-   scanning, and record it with the values pending there.  The capture is
-   in _PyGC_RecordDetach()'s own frame, whose words are stale for its
-   caller: the first unwound context, its caller's, replaces it. */
-static int
-find_precise(_PyGCWalk *w, _PyGCContext *ctx, _PyGCContext *p)
-{
-    uintptr_t regs[_PyGC_NSAVED];
-    memcpy(regs, ctx->regs, sizeof(regs));
-    uintptr_t *loc[_PyGC_NSAVED];
-    for (int i = 0; i < _PyGC_NSAVED; i++) {
-        loc[i] = &regs[i];
-    }
-    uintptr_t pc = ctx->pc, sp = ctx->sp, prev_cfa = 0;
-    int first = 1;
-    _PyGCFrameDesc scratch;
-    while (sp < w->top && pc != 0) {
-        const _PyGCFrameDesc *d = find_desc(w, pc - 1, &scratch);
-        if (!d->ok) {
-            return 0;
-        }
-        uintptr_t base = d->cfa_reg == _PyGC_CFA_SP ? sp
-            : loc[d->cfa_reg] != NULL ? *loc[d->cfa_reg] : 0;
-        uintptr_t cfa = base + d->cfa_off;
-        if (base == 0 || cfa <= sp || cfa <= prev_cfa || cfa > w->top
-            || d->ra_undefined)
-        {
-            return 0;
-        }
-        int flags;
-        uintptr_t precise_lo;
-        if (frame_class(w, d, pc, sp, cfa, &flags, &precise_lo)
-            == _PyGC_FRAME_PRECISE)
-        {
-            p->pc = pc;
-            p->sp = sp;
-            for (int i = 0; i < _PyGC_NSAVED; i++) {
-                p->regs[i] = loc[i] != NULL ? *loc[i] : 0;
-            }
-            return 1;
-        }
-        for (int i = 0; i < _PyGC_NSAVED; i++) {
-            if (d->rule[i] == _PyGC_RULE_OFFSET) {
-                loc[i] = (uintptr_t *)(cfa + d->off[i]);
-            }
-            else if (d->rule[i] == _PyGC_RULE_UNDEFINED
-                     || (flags & _PyGC_RANGE_PRESERVES_NOTHING)) {
-                loc[i] = NULL;
-            }
-        }
-        pc = *(uintptr_t *)(cfa + d->ra_off);
-        prev_cfa = cfa;
-        sp = cfa;
-        if (first) {
-            first = 0;
-            ctx->pc = pc;
-            ctx->sp = sp;
-            for (int i = 0; i < _PyGC_NSAVED; i++) {
-                ctx->regs[i] = loc[i] != NULL ? *loc[i] : 0;
-            }
-        }
-    }
-    return 0;
-}
-
-void
-_PyGC_RecordDetach(void)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    if (tstate == NULL) {
-        return;
-    }
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
-    _PyGCDetachRecord *rec = &ts->gc_trace.detach;
-    _PyGC_CaptureCaller(&rec->cap);
-    // The thread still holds the GIL, under which the interpreter's cache
-    // is read and filled.  The loader generation is checked first: an
-    // object unloaded since the last check could have left entries for
-    // addresses that another now occupies.
-    _PyGCWalkCache *cache = _PyGC_LiveWalkCache(tstate->interp);
-    if (cache != NULL) {
-        _PyGC_WalkCacheCheck(cache, NULL);
-    }
-    _PyGCWalk w = {
-        .scan = no_scan,
-        .cache = cache,
-        .top = ts->c_stack_top,
-        .activations = ts->gc_trace.activation,
-    };
-    rec->has_p = w.top != 0 && find_precise(&w, &rec->cap, &rec->p);
-    rec->valid = 1;
-}
-
 #else  /* !_PyGC_WALK */
 
 int
@@ -1120,18 +1023,19 @@ _PyGC_WalkStack(_PyGCWalk *w, const _PyGCContext *ctx)
     return 0;
 }
 
+#endif  /* _PyGC_WALK */
+
+
+/* --- the detach record ------------------------------------------------------ */
+
+/* No walk here: the collector unwinds a pinned record lazily, under the
+   GIL, when it visits the thread (question 16). */
 void
-_PyGC_RecordDetach(void)
+_PyGC_RecordDetach(PyThreadState *tstate, const _PyGCContext *ctx,
+                   int pinned)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
-    if (tstate == NULL) {
-        return;
-    }
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
-    _PyGCDetachRecord *rec = &ts->gc_trace.detach;
-    _PyGC_CaptureCaller(&rec->cap);
-    rec->has_p = 0;
+    _PyGCDetachRecord *rec = &((_PyThreadStateImpl *)tstate)->gc_trace.detach;
+    rec->cap = *ctx;
+    rec->pinned = pinned;
     rec->valid = 1;
 }
-
-#endif  /* _PyGC_WALK */

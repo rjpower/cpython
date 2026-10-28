@@ -46,8 +46,9 @@
 /* Redefined below for Windows debug builds after important #includes */
 #define _PySSL_FIX_ERRNO
 
+/* Pinned: every use reattaches in the same frame (Include/ceval.h) */
 #define PySSL_BEGIN_ALLOW_THREADS_S(save) \
-    do { (save) = PyEval_SaveThread(); } while(0)
+    do { (save) = _PyEval_SaveThreadPinned(); } while(0)
 #define PySSL_END_ALLOW_THREADS_S(save) \
     do { PyEval_RestoreThread(save); _PySSL_FIX_ERRNO; } while(0)
 #define PySSL_BEGIN_ALLOW_THREADS(self) { \

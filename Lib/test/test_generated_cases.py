@@ -2002,6 +2002,38 @@ fail:
             with self.subTest(name):
                 self.assertEqual(self.check(src), [])
 
+    # A checker defect, for 10a rung 3 (10a-2b.md, hand-offs): an object
+    # local declared in one branch is reported as held across a call in
+    # the other when the calls' results go to an _PyInterpreterFrame *.
+    # Found by item 3's _PyEvalFramePushAndInit_Ex(), which declares its
+    # names at function scope instead.
+    BLOCK_LOCAL_FRAME_RESULT = """
+Py_GC_PRECISE static _PyInterpreterFrame *f(PyThreadState *tstate,
+                                            PyObject *o, int c) {
+    PyValue buf[2];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    _PyValueSpan_AppendObject(&r, o);
+    _PyInterpreterFrame *res = NULL;
+    if (c) {
+        res = push(o, NULL);
+    }
+    else {
+        PyObject *n = make(o);
+        if (n != NULL) {
+            _PyValueSpan_AppendObject(&r, n);
+            res = push(o, n);
+        }
+    }
+    _PyThreadState_PopValueRoot(tstate, &r);
+    return res;
+}
+"""
+
+    @unittest.expectedFailure
+    def test_block_local_beside_frame_result(self):
+        self.assertEqual(self.check(self.BLOCK_LOCAL_FRAME_RESULT), [])
+
     def test_unmarked_not_checked(self):
         src = self.NEGATIVE["no_span"][0].replace("Py_GC_PRECISE ", "")
         self.assertEqual(self.check(src), [])

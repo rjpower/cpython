@@ -1715,10 +1715,13 @@ class State:
     stored: dict[str, frozenset]            # object var -> anchors holding it
     slots: dict[str, bool]                  # PyValue * var -> slot provenance
     spans: tuple[str, ...]                  # pushed spans, innermost last
+    # (pointer, span): a borrowed args[-1] slot whose value is in the span
+    saved: frozenset = frozenset()
+    loads: dict[str, str] = field(default_factory=dict)  # var -> pointer it read
 
     def copy(self) -> "State":
         return State(dict(self.sources), dict(self.stored), dict(self.slots),
-                     self.spans)
+                     self.spans, self.saved, dict(self.loads))
 
 
 @dataclass
@@ -1760,7 +1763,9 @@ def merge(a: State | None, b: State) -> tuple[State, list[str]]:
     if a.spans != b.spans:
         problems.append(f"spans {list(a.spans)} and {list(b.spans)} meet")
     spans = a.spans if len(a.spans) <= len(b.spans) else b.spans
-    return State(sources, stored, slots, spans), problems
+    loads = {k: v for k, v in a.loads.items() if b.loads.get(k) == v}
+    return State(sources, stored, slots, spans, a.saved & b.saved,
+                 loads), problems
 
 
 class FunctionChecker:
@@ -1775,6 +1780,7 @@ class FunctionChecker:
         self.args_anchored_names = args_anchored_names
         self.errors: list[Error] = []
         self.kinds: dict[str, str] = {}
+        self.borrowed: set[str] = set()
         for p in fn.params:
             self.kinds[p.name] = p.kind
 
@@ -1797,10 +1803,46 @@ class FunctionChecker:
 
     def collect_kinds(self, s: Stmt) -> None:
         if isinstance(s, Decl):
-            for name, kind, _ in s.vars:
+            for name, kind, init in s.vars:
                 self.kinds[name] = kind
+                if init is not None and self.is_slot_before(init):
+                    self.borrowed.add(name)
         for c in stmt_children(s):
             self.collect_kinds(c)
+
+    def is_slot_before(self, e: Expr) -> bool:
+        """Is e `(T *)args - 1`, a pointer to the slot before a received
+        array, which PY_VECTORCALL_ARGUMENTS_OFFSET lends the callee?"""
+        while isinstance(e, Cast):
+            e = e.operand
+        return isinstance(e, Binary) and e.op == "-" and \
+            isinstance(e.right, Const) and e.right.text == "1" and \
+            self.base_name(e.left) in self.received_arrays()
+
+    def borrowed_slot(self, e: Expr) -> str | None:
+        """The pointer whose borrowed slot e is: `p[0]` or `*p` for a p
+        from is_slot_before(), or `args[-1]`."""
+        if isinstance(e, Index) and isinstance(e.base, Name):
+            i = e.index
+            if e.base.id in self.borrowed and isinstance(i, Const) and i.text == "0":
+                return e.base.id
+            if e.base.id in self.received_arrays() and isinstance(i, Unary) \
+                    and i.op == "-" and isinstance(i.operand, Const) \
+                    and i.operand.text == "1":
+                return e.base.id
+        if isinstance(e, Unary) and e.op == "*" and isinstance(e.operand, Name) \
+                and e.operand.id in self.borrowed:
+            return e.operand.id
+        return None
+
+    def note_load(self, name: str, value: Expr, st: State) -> None:
+        while isinstance(value, Cast):
+            value = value.operand
+        ptr = self.borrowed_slot(value)
+        if ptr is not None:
+            st.loads[name] = ptr
+        else:
+            st.loads.pop(name, None)
 
     def is_obj(self, name: str) -> bool:
         return self.kinds.get(name) in ("object", "array")
@@ -2064,6 +2106,7 @@ class FunctionChecker:
         for name, kind, init in n.decls:
             if init is not None:
                 srcs = self.eval(init, st, n, live_after, [])
+                self.note_load(name, init, st)
                 if kind in ("object", "array"):
                     self.assign_var(name, srcs, st)
                     self.copy_anchors(name, init, st)
@@ -2260,6 +2303,7 @@ class FunctionChecker:
         while isinstance(t, Cast):
             t = t.operand
         if isinstance(t, Name):
+            self.note_load(t.id, e.value, st)
             if self.is_obj(t.id) and e.op == "=":
                 self.assign_var(t.id, srcs, st)
                 self.copy_anchors(t.id, e.value, st)
@@ -2291,6 +2335,14 @@ class FunctionChecker:
             self.invalidate_field(t.field, st)
             return srcs
         if isinstance(t, (Index, Unary)):
+            lent = self.borrowed_slot(t)
+            if lent is not None and self.checking and not any(
+                    (lent, r) in st.saved for r in st.spans):
+                # Its creator's anchor of the old value ends with the store
+                # (10a-2.md, rule 4).
+                self.error(e.line, "a slot that PY_VECTORCALL_ARGUMENTS_OFFSET "
+                           f"lends (through '{lent}') is overwritten while "
+                           "no pushed span holds its value")
             ptr = t.base if isinstance(t, Index) else t.operand
             if isinstance(t, Index):
                 self.eval(t.index, st, n, live_after, held)
@@ -2353,6 +2405,7 @@ class FunctionChecker:
                     else:
                         self.error(e.line, f"span '{root}' is popped but not pushed")
                 st.spans = tuple(s for s in st.spans if s != root)
+                st.saved = frozenset(x for x in st.saved if x[1] != root)
                 for k, v in list(st.stored.items()):
                     st.stored[k] = frozenset(a for a in v if a != ("span", root))
                 for k, v in list(st.sources.items()):
@@ -2392,6 +2445,12 @@ class FunctionChecker:
                 var = None  # the canonical value, not the object (10a-2.md, 0d)
             else:
                 var = self.base_name(stored)
+            if root is not None and root in st.spans:
+                lent = self.borrowed_slot(stored)
+                if lent is None and isinstance(stored, Name):
+                    lent = st.loads.get(stored.id)
+                if lent is not None:
+                    st.saved = st.saved | {(lent, root)}
             if root is None or root not in st.spans:
                 self.error(e.line, f"an append to span '{root}', which is not "
                            "pushed")

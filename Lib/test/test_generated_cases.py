@@ -1477,6 +1477,47 @@ Py_GC_PRECISE static void f(PyObject *const *args, Py_ssize_t n) {
 """, "'small' is held only in a C local across the collecting call to 'collect'"),
     }
 
+    # 10a-2.md, rule 4: the slot before a received argument array holds
+    # its creator's value, which the slot alone anchors.
+    LENT_SLOT = """
+Py_GC_PRECISE static PyValue f(PyThreadState *tstate, PyValue arg,
+                               const PyValue *args, size_t n) {
+    PyValue *shifted = (PyValue *)args - 1;
+    PyValue saved[2];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, saved);
+    _PyValueSpan_Append(&r, shifted[0]);
+    _PyValueSpan_Append(&r, arg);
+    shifted[0] = arg;
+    PyValue res = call_v(shifted, n + 1);
+    shifted[0] = saved[0];
+    _PyThreadState_PopValueRoot(tstate, &r);
+    return res;
+}
+"""
+
+    def test_lent_slot(self):
+        want = "a slot that PY_VECTORCALL_ARGUMENTS_OFFSET lends"
+        self.assertEqual(self.check(self.LENT_SLOT), [])
+        # Saved through a local that read the slot, and the object form
+        through_local = self.LENT_SLOT.replace(
+            "_PyValueSpan_Append(&r, shifted[0]);",
+            "PyValue tmp = shifted[0];\n    _PyValueSpan_Append(&r, tmp);")
+        self.assertEqual(self.check(through_local), [])
+        unsaved = self.LENT_SLOT.replace(
+            "_PyValueSpan_Append(&r, shifted[0]);", "")
+        self.assertTrue(any(want in e for e in self.check(unsaved)))
+        restored_after_pop = self.LENT_SLOT.replace("""    shifted[0] = saved[0];
+    _PyThreadState_PopValueRoot(tstate, &r);""", """    _PyThreadState_PopValueRoot(tstate, &r);
+    shifted[0] = saved[0];""")
+        self.assertTrue(any(want in e for e in self.check(restored_after_pop)))
+        direct = """
+Py_GC_PRECISE static void f(PyValue arg, PyValue *args) {
+    args[-1] = arg;
+}
+"""
+        self.assertTrue(any(want in e for e in self.check(direct)))
+
     def test_negative_more(self):
         for name, (src, want) in self.NEGATIVE_MORE.items():
             with self.subTest(name):

@@ -269,7 +269,10 @@ PyObject_VectorcallDict(PyObject *callable, PyObject *const *args,
     return _PyObject_VectorcallDictTstate(tstate, callable, args, nargsf, kwargs);
 }
 
-static void
+/* Out of line and opaque: it is the error path, and its frame is scanned.
+   PyObject_GetOptionalAttr() returns through an object pointer, which a
+   precise frame could not hold (10a-2.md, rule 6). */
+static Py_NO_INLINE void
 object_is_not_callable(PyThreadState *tstate, PyObject *callable)
 {
     if (Py_IS_TYPE(callable, &PyModule_Type)) {
@@ -386,22 +389,16 @@ PyVectorcall_Function(PyObject *callable)
 }
 
 
-static PyValue
-_PyVectorcall_Call(PyThreadState *tstate, vectorcallfunc func,
-                   PyObject *callable, PyObject *tuple, PyObject *kwargs)
+/* The keyword form of _PyVectorcall_Call().  Opaque until
+   _PyStack_UnpackDict() returns its names in a span rather than through
+   an object pointer (10a-2.md, "Waits for 1b"). */
+static Py_NO_INLINE PyValue
+vectorcall_call_dict(PyThreadState *tstate, vectorcallfunc func,
+                     PyObject *callable, PyObject *tuple, PyObject *kwargs)
 {
-    assert(func != NULL);
-
     Py_ssize_t nargs = PyTuple_GET_SIZE(tuple);
     const PyValue *items = _PyTuple_ITEMS(tuple);
     PyValue callable_v = PyValue_FromObject(callable);
-
-    /* Fast path for no keywords */
-    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
-        return func(callable_v, items, nargs, NULL);
-    }
-
-    /* Convert arguments & call */
     PyObject *kwnames;
     const PyValue *args = _PyStack_UnpackDict(tstate, items, nargs,
                                               kwargs, &kwnames);
@@ -415,8 +412,29 @@ _PyVectorcall_Call(PyThreadState *tstate, vectorcallfunc func,
     return _Py_CheckFunctionResultValue(tstate, callable, result, NULL);
 }
 
+Py_GC_PRECISE static PyValue
+_PyVectorcall_Call(PyThreadState *tstate, vectorcallfunc func,
+                   PyObject *callable, PyObject *tuple, PyObject *kwargs)
+{
+    assert(func != NULL);
 
-PyObject *
+    if (kwargs != NULL && PyDict_GET_SIZE(kwargs) != 0) {
+        return vectorcall_call_dict(tstate, func, callable, tuple, kwargs);
+    }
+    /* The tuple owns the argument array, so this frame's span anchors it
+       for the call (10a-2.md, rule 3). */
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, tuple);
+    PyValue res = func(PyValue_FromObject(callable), _PyTuple_ITEMS(tuple),
+                       PyTuple_GET_SIZE(tuple), NULL);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
+}
+
+
+Py_GC_PRECISE PyObject *
 PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *kwargs)
 {
     PyThreadState *tstate = _PyThreadState_GET();
@@ -466,12 +484,14 @@ PyObject_VectorcallValue(PyValue callable, const PyValue *args,
 }
 
 
-PyObject *
+Py_GC_PRECISE PyObject *
 _PyObject_Call(PyThreadState *tstate, PyObject *callable,
                PyObject *args, PyObject *kwargs)
 {
     ternaryfunc call;
     PyObject *result;
+    PyValue slots[3];
+    _PyValueRoot span;
 
     /* PyObject_Call() must not be called with an exception set,
        because it can clear it (directly or indirectly) and so the
@@ -492,7 +512,15 @@ _PyObject_Call(PyThreadState *tstate, PyObject *callable,
             return NULL;
         }
 
+        /* This frame's span anchors the parameters across the recursion
+           check, and callable across the call for the result check
+           (10a-2.md, rule 1). */
+        _PyThreadState_PushValueSpan(tstate, &span, slots);
+        _PyValueSpan_AppendObject(&span, callable);
+        _PyValueSpan_AppendObject(&span, args);
+        _PyValueSpan_AppendObject(&span, kwargs);
         if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object")) {
+            _PyThreadState_PopValueRoot(tstate, &span);
             return NULL;
         }
 
@@ -500,11 +528,13 @@ _PyObject_Call(PyThreadState *tstate, PyObject *callable,
 
         _Py_LeaveRecursiveCallTstate(tstate);
 
-        return _Py_CheckFunctionResult(tstate, callable, result, NULL);
+        result = _Py_CheckFunctionResult(tstate, callable, result, NULL);
+        _PyThreadState_PopValueRoot(tstate, &span);
+        return result;
     }
 }
 
-PyObject *
+Py_GC_PRECISE PyObject *
 PyObject_Call(PyObject *callable, PyObject *args, PyObject *kwargs)
 {
     PyThreadState *tstate = _PyThreadState_GET();
@@ -568,7 +598,7 @@ _PyFunction_Vectorcall(PyValue func, const PyValue *stack,
 /* External interface to call any callable object.
    The args must be a tuple or NULL.  The kwargs must be a dict or NULL.
    Function removed in Python 3.13 API but kept in the stable ABI. */
-PyAPI_FUNC(PyObject*)
+Py_GC_PRECISE PyAPI_FUNC(PyObject*)
 PyEval_CallObjectWithKeywords(PyObject *callable,
                               PyObject *args, PyObject *kwargs)
 {
@@ -620,7 +650,7 @@ PyObject_CallObject(PyObject *callable, PyObject *args)
 
 
 /* Call callable(obj, *args, **kwargs). */
-PyObject *
+Py_GC_PRECISE PyObject *
 _PyObject_Call_Prepend(PyThreadState *tstate, PyObject *callable,
                        PyObject *obj, PyObject *args, PyObject *kwargs)
 {
@@ -636,16 +666,23 @@ _PyObject_Call_Prepend(PyThreadState *tstate, PyObject *callable,
     else {
         stack = PyMem_Malloc((argcount + 1) * sizeof(PyValue));
         if (stack == NULL) {
-            PyErr_NoMemory();
-            return NULL;
+            return PyErr_NoMemory();
         }
     }
 
-    stack[0] = PyValue_FromObject(obj);
-    memcpy(&stack[1], _PyTuple_ITEMS(args), argcount * sizeof(PyValue));
+    /* This frame creates the argument array, so the array is its span:
+       obj, then the tuple's items (10a-2.md, rule 2). */
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, stack);
+    _PyValueSpan_Append(&span, PyValue_FromObject(obj));
+    const PyValue *items = _PyTuple_ITEMS(args);
+    for (Py_ssize_t i = 0; i < argcount; i++) {
+        _PyValueSpan_Append(&span, items[i]);
+    }
 
     PyValue result = _PyObject_VectorcallDictValueTstate(
         tstate, PyValue_FromObject(callable), stack, argcount + 1, kwargs);
+    _PyThreadState_PopValueRoot(tstate, &span);
     if (stack != small_stack) {
         PyMem_Free(stack);
     }
@@ -1007,31 +1044,35 @@ object_vacall(PyThreadState *tstate, PyObject *base,
     return result;
 }
 
-PyValue
+Py_GC_PRECISE PyValue
 _PyObject_VectorcallPrependValue(PyThreadState *tstate, PyValue callable,
                                  PyValue arg, const PyValue *args,
                                  size_t nargsf, PyObject *kwnames)
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    PyValue result;
+    _PyValueRoot span;
 
     if (nargsf & PY_VECTORCALL_ARGUMENTS_OFFSET) {
         /* PY_VECTORCALL_ARGUMENTS_OFFSET is set, so we are allowed to
-           mutate the vector */
-        PyValue *newargs = (PyValue *)args - 1;
-        PyValue tmp = newargs[0];
-        newargs[0] = arg;
-        PyValue result = _PyObject_VectorcallValueTstate(
-            tstate, callable, newargs, nargs + 1, kwnames);
-        newargs[0] = tmp;
+           mutate the vector.  The slot is borrowed and may hold a live
+           value of its creator, so this frame's span holds the saved
+           value, and arg, while the slot holds arg (10a-2.md, rule 4). */
+        PyValue *shifted = (PyValue *)args - 1;
+        PyValue saved[2];
+        _PyThreadState_PushValueSpan(tstate, &span, saved);
+        _PyValueSpan_Append(&span, shifted[0]);
+        _PyValueSpan_Append(&span, arg);
+        shifted[0] = arg;
+        result = _PyObject_VectorcallValueTstate(
+            tstate, callable, shifted, nargs + 1, kwnames);
+        shifted[0] = saved[0];
+        _PyThreadState_PopValueRoot(tstate, &span);
         return result;
     }
 
     Py_ssize_t nkwargs = (kwnames == NULL) ? 0 : PyTuple_GET_SIZE(kwnames);
     Py_ssize_t totalargs = nargs + nkwargs;
-    if (totalargs == 0) {
-        return _PyObject_VectorcallValueTstate(tstate, callable, &arg, 1, NULL);
-    }
-
     PyValue newargs_stack[_PY_FASTCALL_SMALL_STACK];
     PyValue *newargs;
     if (totalargs <= (Py_ssize_t)Py_ARRAY_LENGTH(newargs_stack) - 1) {
@@ -1044,70 +1085,82 @@ _PyObject_VectorcallPrependValue(PyThreadState *tstate, PyValue callable,
             return PyValue_NULL;
         }
     }
-    newargs[0] = arg;
-    assert(args != NULL);
-    memcpy(newargs + 1, args, totalargs * sizeof(PyValue));
-    PyValue result = _PyObject_VectorcallValueTstate(
-        tstate, callable, newargs, nargs + 1, kwnames);
+    /* This frame creates the argument array, so the array is its span:
+       arg, then the copies of args (10a-2.md, rule 2). */
+    _PyThreadState_PushValueSpan(tstate, &span, newargs);
+    _PyValueSpan_Append(&span, arg);
+    for (Py_ssize_t i = 0; i < totalargs; i++) {
+        _PyValueSpan_Append(&span, args[i]);
+    }
+    result = _PyObject_VectorcallValueTstate(
+        tstate, callable, newargs, nargs + 1,
+        totalargs == 0 ? NULL : kwnames);
+    _PyThreadState_PopValueRoot(tstate, &span);
     if (newargs != newargs_stack) {
         PyMem_Free(newargs);
     }
     return result;
 }
 
-PyObject *
+Py_GC_PRECISE PyObject *
 _PyObject_VectorcallPrepend(PyThreadState *tstate, PyObject *callable,
                             PyObject *arg, PyObject *const *args,
                             size_t nargsf, PyObject *kwnames)
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     assert(nargs == 0 || args[nargs-1]);
+    _PyValueRoot span;
 
-    PyObject *result;
     if (nargsf & PY_VECTORCALL_ARGUMENTS_OFFSET) {
-        /* PY_VECTORCALL_ARGUMENTS_OFFSET is set, so we are allowed to mutate the vector */
-        PyObject **newargs = (PyObject**)args - 1;
-        nargs += 1;
-        PyObject *tmp = newargs[0];
-        newargs[0] = arg;
-        assert(newargs[nargs-1]);
-        result = _PyObject_VectorcallTstate(tstate, callable, newargs,
-                                            nargs, kwnames);
-        newargs[0] = tmp;
+        /* PY_VECTORCALL_ARGUMENTS_OFFSET is set, so we are allowed to
+           mutate the vector.  As in _PyObject_VectorcallPrependValue(), the
+           span holds the saved object and arg while the slot holds arg. */
+        PyObject **shifted = (PyObject **)args - 1;
+        PyValue saved[2];
+        _PyThreadState_PushValueSpan(tstate, &span, saved);
+        PyObject *tmp = shifted[0];
+        _PyValueSpan_AppendObject(&span, tmp);
+        _PyValueSpan_AppendObject(&span, arg);
+        shifted[0] = arg;
+        assert(shifted[nargs]);
+        PyObject *result = _PyObject_VectorcallTstate(tstate, callable,
+                                                      shifted, nargs + 1,
+                                                      kwnames);
+        shifted[0] = tmp;
+        _PyThreadState_PopValueRoot(tstate, &span);
+        return result;
+    }
+
+    Py_ssize_t nkwargs = (kwnames == NULL) ? 0 : PyTuple_GET_SIZE(kwnames);
+    Py_ssize_t totalargs = nargs + nkwargs;
+    PyValue newargs_stack[_PY_FASTCALL_SMALL_STACK];
+    PyValue *newargs;
+    if (totalargs <= (Py_ssize_t)Py_ARRAY_LENGTH(newargs_stack) - 1) {
+        newargs = newargs_stack;
     }
     else {
-        Py_ssize_t nkwargs = (kwnames == NULL) ? 0 : PyTuple_GET_SIZE(kwnames);
-        Py_ssize_t totalargs = nargs + nkwargs;
-        if (totalargs == 0) {
-            return _PyObject_VectorcallTstate(tstate, callable, &arg, 1, NULL);
-        }
-
-        PyObject *newargs_stack[_PY_FASTCALL_SMALL_STACK];
-        PyObject **newargs;
-        if (totalargs <= (Py_ssize_t)Py_ARRAY_LENGTH(newargs_stack) - 1) {
-            newargs = newargs_stack;
-        }
-        else {
-            newargs = PyMem_Malloc((totalargs+1) * sizeof(PyObject *));
-            if (newargs == NULL) {
-                _PyErr_NoMemory(tstate);
-                return NULL;
-            }
-        }
-        /* use borrowed references */
-        newargs[0] = arg;
-        /* bpo-37138: since totalargs > 0, it's impossible that args is NULL.
-         * We need this, since calling memcpy() with a NULL pointer is
-         * undefined behaviour. */
-        assert(args != NULL);
-        memcpy(newargs + 1, args, totalargs * sizeof(PyObject *));
-        result = _PyObject_VectorcallTstate(tstate, callable,
-                                            newargs, nargs+1, kwnames);
-        if (newargs != newargs_stack) {
-            PyMem_Free(newargs);
+        newargs = PyMem_Malloc((totalargs + 1) * sizeof(PyValue));
+        if (newargs == NULL) {
+            _PyErr_NoMemory(tstate);
+            return NULL;
         }
     }
-    return result;
+    /* This frame creates the argument array, of canonical values, so the
+       array is its span: arg, then args (10a-2.md, rule 2).  bpo-37138:
+       args is not NULL when totalargs > 0. */
+    _PyThreadState_PushValueSpan(tstate, &span, newargs);
+    _PyValueSpan_Append(&span, PyValue_FromObject(arg));
+    for (Py_ssize_t i = 0; i < totalargs; i++) {
+        _PyValueSpan_Append(&span, PyValue_FromObject(args[i]));
+    }
+    PyValue res = _PyObject_VectorcallValueTstate(
+        tstate, PyValue_FromObject(callable), newargs, nargs + 1,
+        totalargs == 0 ? NULL : kwnames);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    if (newargs != newargs_stack) {
+        PyMem_Free(newargs);
+    }
+    return PyValue_Object(res);
 }
 
 PyObject *

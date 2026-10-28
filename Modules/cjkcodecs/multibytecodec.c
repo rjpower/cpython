@@ -149,7 +149,7 @@ call_error_callback(PyObject *errors, PyObject *exc)
     return r;
 }
 
-static PyObject *
+static PyValue
 codecctx_errors_get(PyObject *op, void *Py_UNUSED(closure))
 {
     const char *errors;
@@ -162,10 +162,10 @@ codecctx_errors_get(PyObject *op, void *Py_UNUSED(closure))
     else if (self->errors == ERROR_REPLACE)
         errors = "replace";
     else {
-        return Py_NewRef(self->errors);
+        return PyValue_FromObject(self->errors);
     }
 
-    return PyUnicode_FromString(errors);
+    return PyValue_FromResult(PyUnicode_FromString(errors));
 }
 
 static int

@@ -86,14 +86,14 @@ _PySSL_msg_callback(int write_p, int version, int content_type,
 }
 
 
-static PyObject *
+static PyValue
 _PySSLContext_get_msg_callback(PyObject *op, void *Py_UNUSED(closure))
 {
     PySSLContext *self = PySSLContext_CAST(op);
     if (self->msg_cb != NULL) {
-        return Py_NewRef(self->msg_cb);
+        return PyValue_FromObject(self->msg_cb);
     } else {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
 }
 
@@ -175,14 +175,14 @@ done:
     PyGILState_Release(threadstate);
 }
 
-static PyObject *
+static PyValue
 _PySSLContext_get_keylog_filename(PyObject *op, void *Py_UNUSED(closure))
 {
     PySSLContext *self = PySSLContext_CAST(op);
     if (self->keylog_filename != NULL) {
-        return Py_NewRef(self->keylog_filename);
+        return PyValue_FromObject(self->keylog_filename);
     } else {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
 }
 

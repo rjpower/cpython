@@ -104,10 +104,10 @@ PyDoc_STRVAR(_zstd_ZstdDict_dict_content__doc__,
 static PyObject *
 _zstd_ZstdDict_dict_content_get_impl(ZstdDict *self);
 
-static PyObject *
+static PyValue
 _zstd_ZstdDict_dict_content_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _zstd_ZstdDict_dict_content_get_impl((ZstdDict *)self);
+    return PyValue_FromResult(_zstd_ZstdDict_dict_content_get_impl((ZstdDict *)self));
 }
 
 PyDoc_STRVAR(_zstd_ZstdDict_as_digested_dict__doc__,
@@ -126,10 +126,10 @@ PyDoc_STRVAR(_zstd_ZstdDict_as_digested_dict__doc__,
 static PyObject *
 _zstd_ZstdDict_as_digested_dict_get_impl(ZstdDict *self);
 
-static PyObject *
+static PyValue
 _zstd_ZstdDict_as_digested_dict_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _zstd_ZstdDict_as_digested_dict_get_impl((ZstdDict *)self);
+    return PyValue_FromResult(_zstd_ZstdDict_as_digested_dict_get_impl((ZstdDict *)self));
 }
 
 PyDoc_STRVAR(_zstd_ZstdDict_as_undigested_dict__doc__,
@@ -147,10 +147,10 @@ PyDoc_STRVAR(_zstd_ZstdDict_as_undigested_dict__doc__,
 static PyObject *
 _zstd_ZstdDict_as_undigested_dict_get_impl(ZstdDict *self);
 
-static PyObject *
+static PyValue
 _zstd_ZstdDict_as_undigested_dict_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _zstd_ZstdDict_as_undigested_dict_get_impl((ZstdDict *)self);
+    return PyValue_FromResult(_zstd_ZstdDict_as_undigested_dict_get_impl((ZstdDict *)self));
 }
 
 PyDoc_STRVAR(_zstd_ZstdDict_as_prefix__doc__,
@@ -168,17 +168,17 @@ PyDoc_STRVAR(_zstd_ZstdDict_as_prefix__doc__,
 static PyObject *
 _zstd_ZstdDict_as_prefix_get_impl(ZstdDict *self);
 
-static PyObject *
+static PyValue
 _zstd_ZstdDict_as_prefix_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _zstd_ZstdDict_as_prefix_get_impl((ZstdDict *)self);
+    return PyValue_FromResult(_zstd_ZstdDict_as_prefix_get_impl((ZstdDict *)self));
 }
-#define _ZSTD_ZSTDDICT_DICT_CONTENT_GETSETDEF {"dict_content", (getter)_zstd_ZstdDict_dict_content_get, (setter)NULL, _zstd_ZstdDict_dict_content__doc__},
+#define _ZSTD_ZSTDDICT_DICT_CONTENT_GETSETDEF {"dict_content", _zstd_ZstdDict_dict_content_get, (setter)NULL, _zstd_ZstdDict_dict_content__doc__},
 
-#define _ZSTD_ZSTDDICT_AS_DIGESTED_DICT_GETSETDEF {"as_digested_dict", (getter)_zstd_ZstdDict_as_digested_dict_get, (setter)NULL, _zstd_ZstdDict_as_digested_dict__doc__},
+#define _ZSTD_ZSTDDICT_AS_DIGESTED_DICT_GETSETDEF {"as_digested_dict", _zstd_ZstdDict_as_digested_dict_get, (setter)NULL, _zstd_ZstdDict_as_digested_dict__doc__},
 
-#define _ZSTD_ZSTDDICT_AS_UNDIGESTED_DICT_GETSETDEF {"as_undigested_dict", (getter)_zstd_ZstdDict_as_undigested_dict_get, (setter)NULL, _zstd_ZstdDict_as_undigested_dict__doc__},
+#define _ZSTD_ZSTDDICT_AS_UNDIGESTED_DICT_GETSETDEF {"as_undigested_dict", _zstd_ZstdDict_as_undigested_dict_get, (setter)NULL, _zstd_ZstdDict_as_undigested_dict__doc__},
 
-#define _ZSTD_ZSTDDICT_AS_PREFIX_GETSETDEF {"as_prefix", (getter)_zstd_ZstdDict_as_prefix_get, (setter)NULL, _zstd_ZstdDict_as_prefix__doc__},
+#define _ZSTD_ZSTDDICT_AS_PREFIX_GETSETDEF {"as_prefix", _zstd_ZstdDict_as_prefix_get, (setter)NULL, _zstd_ZstdDict_as_prefix__doc__},
 
-/*[clinic end generated code: output=4629ac6d0d8d5a25 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=655f605701e5f6f3 input=a9049054013a1b77]*/

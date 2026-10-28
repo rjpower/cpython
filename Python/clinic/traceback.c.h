@@ -94,14 +94,16 @@ exit:
 static PyObject *
 traceback_tb_next_get_impl(PyTracebackObject *self);
 
-static PyObject *
+static PyValue
 traceback_tb_next_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = traceback_tb_next_get_impl((PyTracebackObject *)self);
+    _return_value = traceback_tb_next_get_impl((PyTracebackObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -128,6 +130,6 @@ traceback_tb_next_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
 
     return return_value;
 }
-#define TRACEBACK_TB_NEXT_GETSETDEF {"tb_next", (getter)traceback_tb_next_get, (setter)traceback_tb_next_set, NULL},
+#define TRACEBACK_TB_NEXT_GETSETDEF {"tb_next", traceback_tb_next_get, (setter)traceback_tb_next_set, NULL},
 
-/*[clinic end generated code: output=cbb8167d029bd717 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=9e1aa6103d33f61a input=a9049054013a1b77]*/

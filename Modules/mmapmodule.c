@@ -1206,7 +1206,7 @@ mmap_mmap_move_impl(mmap_object *self, Py_ssize_t dest, Py_ssize_t src,
     }
 }
 
-static PyObject *
+static PyValue
 mmap_closed_get(PyObject *op, void *Py_UNUSED(closure))
 {
     mmap_object *self = mmap_object_CAST(op);
@@ -1218,7 +1218,7 @@ mmap_closed_get(PyObject *op, void *Py_UNUSED(closure))
     result = PyBool_FromLong(self->data == NULL ? 1 : 0);
 #endif
     Py_END_CRITICAL_SECTION();
-    return result;
+    return PyValue_FromResult(result);
 }
 
 /*[clinic input]

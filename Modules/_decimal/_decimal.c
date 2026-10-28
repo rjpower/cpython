@@ -866,17 +866,17 @@ static PyType_Spec signaldict_spec = {
 /******************************************************************************/
 
 #define Dec_CONTEXT_GET_SSIZE(mem)                          \
-static PyObject *                                           \
+static PyValue                                              \
 context_get##mem(PyObject *self, void *Py_UNUSED(closure))  \
 {                                                           \
-    return PyLong_FromSsize_t(mpd_get##mem(CTX(self)));     \
+    return PyValue_FromLongLong(mpd_get##mem(CTX(self)));   \
 }
 
-#define Dec_CONTEXT_GET_ULONG(mem)                              \
-static PyObject *                                               \
-context_get##mem(PyObject *self, void *Py_UNUSED(closure))      \
-{                                                               \
-    return PyLong_FromUnsignedLong(mpd_get##mem(CTX(self)));    \
+#define Dec_CONTEXT_GET_ULONG(mem)                                  \
+static PyValue                                                      \
+context_get##mem(PyObject *self, void *Py_UNUSED(closure))          \
+{                                                                   \
+    return PyValue_FromUnsignedLongLong(mpd_get##mem(CTX(self)));   \
 }
 
 Dec_CONTEXT_GET_SSIZE(prec)
@@ -889,26 +889,26 @@ Dec_CONTEXT_GET_ULONG(traps)
 Dec_CONTEXT_GET_ULONG(status)
 #endif
 
-static PyObject *
+static PyValue
 context_getround(PyObject *self, void *Py_UNUSED(closure))
 {
     int i = mpd_getround(CTX(self));
     decimal_state *state = get_module_state_from_ctx(self);
 
-    return Py_NewRef(state->round_map[i]);
+    return PyValue_FromObject(state->round_map[i]);
 }
 
-static PyObject *
+static PyValue
 context_getcapitals(PyObject *self, void *Py_UNUSED(closure))
 {
-    return PyLong_FromLong(CtxCaps(self));
+    return PyValue_FromLongLong(CtxCaps(self));
 }
 
 #ifdef EXTRA_FUNCTIONALITY
-static PyObject *
+static PyValue
 context_getallcr(PyObject *self, void *Py_UNUSED(closure))
 {
-    return PyLong_FromLong(mpd_getcr(CTX(self)));
+    return PyValue_FromLongLong(mpd_getcr(CTX(self)));
 }
 #endif
 
@@ -6060,13 +6060,13 @@ _decimal_Decimal___trunc___impl(PyObject *self, PyTypeObject *cls)
 }
 
 /* real and imag */
-static PyObject *
+static PyValue
 dec_real(PyObject *self, void *Py_UNUSED(closure))
 {
-    return Py_NewRef(self);
+    return PyValue_FromObject(self);
 }
 
-static PyObject *
+static PyValue
 dec_imag(PyObject *self, void *Py_UNUSED(closure))
 {
     PyObject *result;
@@ -6074,11 +6074,11 @@ dec_imag(PyObject *self, void *Py_UNUSED(closure))
     decimal_state *state = get_module_state_by_def(Py_TYPE(self));
     result = dec_alloc(state);
     if (result == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     _dec_settriple(result, MPD_POS, 0, 0);
-    return result;
+    return PyValue_FromResult(result);
 }
 
 

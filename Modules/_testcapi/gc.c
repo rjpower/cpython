@@ -82,7 +82,7 @@ without_gc(PyObject *Py_UNUSED(self), PyValue obj_value)
         tp->tp_clear = NULL;
     }
     assert(!PyType_IS_GC(tp));
-    return PyValue_FromResult(Py_NewRef(obj));
+    return PyValue_FromObject(obj);
 }
 
 static void
@@ -278,15 +278,15 @@ obj_extra_data_get_extra_storage(PyObject *self)
     return (PyObject **)((char *)self + Py_TYPE(self)->tp_basicsize);
 }
 
-static PyObject *
+static PyValue
 obj_extra_data_get(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyObject **extra_storage = obj_extra_data_get_extra_storage(self);
     PyObject *value = *extra_storage;
     if (!value) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return Py_NewRef(value);
+    return PyValue_FromObject(value);
 }
 
 static int

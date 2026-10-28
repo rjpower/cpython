@@ -1062,7 +1062,7 @@ class ClinicWholeFileTest(TestCase):
                       "|| defined(FOO_PROPERTY_SETTER)",
                       generated)
         self.assertIn('#  define FOO_PROPERTY_GETSETDEF {"property", '
-                      '(getter)FOO_PROPERTY_GETTER, '
+                      'FOO_PROPERTY_GETTER, '
                       '(setter)FOO_PROPERTY_SETTER, FOO_PROPERTY_DOCSTR},',
                       generated)
 
@@ -1211,8 +1211,52 @@ class ClinicWholeFileTest(TestCase):
         # C basename.
         generated = self.clinic.parse(dedent(block))
         self.assertIn('#define FOO_PROPERTY_GETSETDEF {"property", '
-                      '(getter)foo_get_get, (setter)foo_set_set, NULL},',
+                      'foo_get_get, (setter)foo_set_set, NULL},',
                       generated)
+
+    def test_getter_returns_value(self):
+        # A getter returns a value: an object from the impl is converted,
+        # a return converter builds the number as a value, and a "value"
+        # return converter passes the impl's value through.
+        block = """
+            /*[clinic input]
+            output everything block
+            output methoddef_ifndef buffer
+            class Foo "FooObject *" "&Foo_Type"
+            [clinic start generated code]*/
+            /*[clinic input]
+            @getter
+            Foo.obj
+            [clinic start generated code]*/
+            /*[clinic input]
+            @getter
+            Foo.num -> int
+            [clinic start generated code]*/
+            /*[clinic input]
+            @getter
+            Foo.val -> value
+            [clinic start generated code]*/
+            /*[clinic input]
+            dump buffer
+            [clinic start generated code]*/
+        """
+        generated = self.clinic.parse(dedent(block))
+        self.assertIn("static PyValue\n"
+                      "Foo_obj_get(PyObject *self, void *Py_UNUSED(context))\n"
+                      "{\n"
+                      "    return PyValue_FromResult("
+                      "Foo_obj_get_impl((FooObject *)self));\n"
+                      "}\n",
+                      generated)
+        self.assertIn("return_value = PyValue_FromLongLong("
+                      "(long long)_return_value);", generated)
+        self.assertNotIn("PyLong_FromLong", generated)
+        self.assertIn("static PyValue\nFoo_val_get_impl(FooObject *self)",
+                      generated)
+        self.assertIn("return_value = Foo_val_get_impl((FooObject *)self);",
+                      generated)
+        self.assertIn('#define FOO_OBJ_GETSETDEF {"obj", Foo_obj_get, '
+                      '(setter)NULL, NULL},', generated)
 
 
 class ParseFileUnitTest(TestCase):

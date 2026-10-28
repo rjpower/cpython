@@ -101,10 +101,10 @@ PyDoc_STRVAR(_zstd_ZstdDecompressor_unused_data__doc__,
 static PyObject *
 _zstd_ZstdDecompressor_unused_data_get_impl(ZstdDecompressor *self);
 
-static PyObject *
+static PyValue
 _zstd_ZstdDecompressor_unused_data_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _zstd_ZstdDecompressor_unused_data_get_impl((ZstdDecompressor *)self);
+    return PyValue_FromResult(_zstd_ZstdDecompressor_unused_data_get_impl((ZstdDecompressor *)self));
 }
 
 PyDoc_STRVAR(_zstd_ZstdDecompressor_decompress__doc__,
@@ -218,6 +218,6 @@ exit:
 
     return return_value;
 }
-#define _ZSTD_ZSTDDECOMPRESSOR_UNUSED_DATA_GETSETDEF {"unused_data", (getter)_zstd_ZstdDecompressor_unused_data_get, (setter)NULL, _zstd_ZstdDecompressor_unused_data__doc__},
+#define _ZSTD_ZSTDDECOMPRESSOR_UNUSED_DATA_GETSETDEF {"unused_data", _zstd_ZstdDecompressor_unused_data_get, (setter)NULL, _zstd_ZstdDecompressor_unused_data__doc__},
 
-/*[clinic end generated code: output=a5bb686658ca041b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4a5a6570341c7c4b input=a9049054013a1b77]*/

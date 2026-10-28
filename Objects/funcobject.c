@@ -631,15 +631,15 @@ class function "PyFunctionObject *" "&PyFunction_Type"
 
 #include "clinic/funcobject.c.h"
 
-static PyObject *
+static PyValue
 func_get_code(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
     if (PySys_Audit("object.__getattr__", "Os", op, "__code__") < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return Py_NewRef(op->func_code);
+    return PyValue_FromObject(op->func_code);
 }
 
 static int
@@ -696,12 +696,12 @@ func_set_code(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     return 0;
 }
 
-static PyObject *
+static PyValue
 func_get_name(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
     PyObject *name = FT_ATOMIC_LOAD_PTR_ACQUIRE(op->func_name);
-    return Py_NewRef(name);
+    return PyValue_FromObject(name);
 }
 
 static int
@@ -721,12 +721,12 @@ func_set_name(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     return 0;
 }
 
-static PyObject *
+static PyValue
 func_get_qualname(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
     PyObject *qualname = FT_ATOMIC_LOAD_PTR_ACQUIRE(op->func_qualname);
-    return Py_NewRef(qualname);
+    return PyValue_FromObject(qualname);
 }
 
 static int
@@ -747,7 +747,7 @@ func_set_qualname(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     return 0;
 }
 
-static PyObject *
+static PyValue
 func_get_doc(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
@@ -755,7 +755,7 @@ func_get_doc(PyObject *self, void *Py_UNUSED(ignored))
     if (doc == NULL) {
         doc = Py_None;
     }
-    return Py_NewRef(doc);
+    return PyValue_FromObject(doc);
 }
 
 static int
@@ -769,7 +769,7 @@ func_set_doc(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     return 0;
 }
 
-static PyObject *
+static PyValue
 func_get_module(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
@@ -777,7 +777,7 @@ func_get_module(PyObject *self, void *Py_UNUSED(ignored))
     if (module == NULL) {
         module = Py_None;
     }
-    return Py_NewRef(module);
+    return PyValue_FromObject(module);
 }
 
 static int
@@ -791,17 +791,17 @@ func_set_module(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     return 0;
 }
 
-static PyObject *
+static PyValue
 func_get_defaults(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
     if (PySys_Audit("object.__getattr__", "Os", op, "__defaults__") < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (op->func_defaults == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return Py_NewRef(op->func_defaults);
+    return PyValue_FromObject(op->func_defaults);
 }
 
 static int
@@ -838,18 +838,18 @@ func_set_defaults(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     return 0;
 }
 
-static PyObject *
+static PyValue
 func_get_kwdefaults(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
     if (PySys_Audit("object.__getattr__", "Os",
                     op, "__kwdefaults__") < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (op->func_kwdefaults == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return Py_NewRef(op->func_kwdefaults);
+    return PyValue_FromObject(op->func_kwdefaults);
 }
 
 static int
@@ -1379,10 +1379,11 @@ functools_wraps(PyObject *wrapper, PyObject *wrapped)
 static PyObject *
 descriptor_get_wrapped_attribute(PyObject *wrapped, PyObject *obj, PyObject *name)
 {
-    PyObject *dict = PyObject_GenericGetDict(obj, NULL);
-    if (dict == NULL) {
+    PyValue dict_value = PyObject_GenericGetDict(obj, NULL);
+    if (PyValue_IsNull(dict_value)) {
         return NULL;
     }
+    PyObject *dict = PyValue_ObjectBorrow(dict_value);
     PyObject *res;
     if (PyDict_GetItemRef(dict, name, &res) < 0) {
         Py_DECREF(dict);
@@ -1410,10 +1411,11 @@ static int
 descriptor_set_wrapped_attribute(PyObject *oobj, PyObject *name, PyObject *value,
                                  char *type_name)
 {
-    PyObject *dict = PyObject_GenericGetDict(oobj, NULL);
-    if (dict == NULL) {
+    PyValue dict_value = PyObject_GenericGetDict(oobj, NULL);
+    if (PyValue_IsNull(dict_value)) {
         return -1;
     }
+    PyObject *dict = PyValue_ObjectBorrow(dict_value);
     if (value == NULL) {
         if (PyDict_DelItem(dict, name) < 0) {
             if (PyErr_ExceptionMatches(PyExc_KeyError)) {
@@ -1565,25 +1567,25 @@ static PyMemberDef cm_memberlist[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyObject *
+static PyValue
 cm_get___isabstractmethod__(PyObject *self, void *closure)
 {
     classmethod *cm = _PyClassMethod_CAST(self);
     int res = _PyObject_IsAbstract(cm->cm_callable);
     if (res == -1) {
-        return NULL;
+        return PyValue_NULL;
     }
     else if (res) {
-        Py_RETURN_TRUE;
+        return PyValue_FromObject(Py_True);
     }
-    Py_RETURN_FALSE;
+    return PyValue_FromObject(Py_False);
 }
 
-static PyObject *
+static PyValue
 cm_get___annotations__(PyObject *self, void *closure)
 {
     classmethod *cm = _PyClassMethod_CAST(self);
-    return descriptor_get_wrapped_attribute(cm->cm_callable, self, &_Py_ID(__annotations__));
+    return PyValue_FromResult(descriptor_get_wrapped_attribute(cm->cm_callable, self, &_Py_ID(__annotations__)));
 }
 
 static int
@@ -1592,11 +1594,11 @@ cm_set___annotations__(PyObject *self, PyObject *value, void *closure)
     return descriptor_set_wrapped_attribute(self, &_Py_ID(__annotations__), value, "classmethod");
 }
 
-static PyObject *
+static PyValue
 cm_get___annotate__(PyObject *self, void *closure)
 {
     classmethod *cm = _PyClassMethod_CAST(self);
-    return descriptor_get_wrapped_attribute(cm->cm_callable, self, &_Py_ID(__annotate__));
+    return PyValue_FromResult(descriptor_get_wrapped_attribute(cm->cm_callable, self, &_Py_ID(__annotate__)));
 }
 
 static int
@@ -1835,25 +1837,25 @@ static PyMemberDef sm_memberlist[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyObject *
+static PyValue
 sm_get___isabstractmethod__(PyObject *self, void *closure)
 {
     staticmethod *sm = _PyStaticMethod_CAST(self);
     int res = _PyObject_IsAbstract(sm->sm_callable);
     if (res == -1) {
-        return NULL;
+        return PyValue_NULL;
     }
     else if (res) {
-        Py_RETURN_TRUE;
+        return PyValue_FromObject(Py_True);
     }
-    Py_RETURN_FALSE;
+    return PyValue_FromObject(Py_False);
 }
 
-static PyObject *
+static PyValue
 sm_get___annotations__(PyObject *self, void *closure)
 {
     staticmethod *sm = _PyStaticMethod_CAST(self);
-    return descriptor_get_wrapped_attribute(sm->sm_callable, self, &_Py_ID(__annotations__));
+    return PyValue_FromResult(descriptor_get_wrapped_attribute(sm->sm_callable, self, &_Py_ID(__annotations__)));
 }
 
 static int
@@ -1862,11 +1864,11 @@ sm_set___annotations__(PyObject *self, PyObject *value, void *closure)
     return descriptor_set_wrapped_attribute(self, &_Py_ID(__annotations__), value, "staticmethod");
 }
 
-static PyObject *
+static PyValue
 sm_get___annotate__(PyObject *self, void *closure)
 {
     staticmethod *sm = _PyStaticMethod_CAST(self);
-    return descriptor_get_wrapped_attribute(sm->sm_callable, self, &_Py_ID(__annotate__));
+    return PyValue_FromResult(descriptor_get_wrapped_attribute(sm->sm_callable, self, &_Py_ID(__annotate__)));
 }
 
 static int

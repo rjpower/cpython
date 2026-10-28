@@ -804,6 +804,19 @@ class SlotTests(ValueTestCase):
         self.assertEqual(tp.__getattribute__(c, 'y'), 2.5)
         self.assertValue(pv.GetAttrValue(c, 'y'), 2.5)
 
+    def test_getset(self):
+        # 6d rung 4: getters in the value form, read from Python and as
+        # values from C.
+        o = pv.ValueGetset()
+        self.assertIs(o.int, 12345)
+        self.assertIs(o.float, 2.5)
+        self.assertEqual(o.below, INT32_MIN - 1)
+        self.assertTrue(math.isnan(o.nan))
+        self.assertValue(pv.GetAttrValue(o, 'int'), 12345)
+        self.assertValue(pv.GetAttrValue(o, 'float'), 2.5)
+        self.assertValue(pv.GetAttrValue(o, 'below'), INT32_MIN - 1)
+        self.assertValue(pv.GetAttrValue(o, 'nan'), math.nan)
+
 
 NULL = None
 
@@ -875,6 +888,18 @@ class DebugCheckTests(unittest.TestCase):
                      "hasattr(pv.BadGetattro(), 'x')",
                      "_testcapi.object_getoptionalattr(pv.BadGetattro(), 'x')",
                      "pv.GetOptionalAttrValue(pv.BadGetattro(), 'x')"]:
+            with self.subTest(code=code):
+                self.assertStops(code, message)
+
+    def test_getter(self):
+        # A getter of the old form cast to getter, read through the
+        # descriptor from the eval loop and from C.
+        message = ("Fatal Python error: getter of type "
+                   "'_testcapi.pyvalue.OldFormGetter' returned a "
+                   "non-canonical int box")
+        for code in ["pv.OldFormGetter().x",
+                     "getattr(pv.OldFormGetter(), 'x', None)",
+                     "pv.GetAttrValue(pv.OldFormGetter(), 'x')"]:
             with self.subTest(code=code):
                 self.assertStops(code, message)
 

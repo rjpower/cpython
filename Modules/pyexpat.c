@@ -1795,7 +1795,7 @@ xmlparse_dealloc(PyObject *op)
 }
 
 
-static PyObject *
+static PyValue
 xmlparse_handler_getter(PyObject *op, void *closure)
 {
     xmlparseobject *self = xmlparseobject_CAST(op);
@@ -1806,7 +1806,7 @@ xmlparse_handler_getter(PyObject *op, void *closure)
     if (result == NULL) {
         result = Py_None;
     }
-    return Py_NewRef(result);
+    return PyValue_FromObject(result);
 }
 
 static int
@@ -1858,11 +1858,11 @@ xmlparse_handler_setter(PyObject *op, PyObject *v, void *closure)
 }
 
 #define INT_GETTER(name, func)                                          \
-    static PyObject *                                                   \
+    static PyValue                                                      \
     xmlparse_##name##_getter(PyObject *op, void *Py_UNUSED(closure))    \
     {                                                                   \
         xmlparseobject *self = xmlparseobject_CAST(op);                 \
-        return PyLong_FromLongLong((long long)func(self->itself));      \
+        return PyValue_FromLongLong((long long)func(self->itself));     \
     }
 INT_GETTER(ErrorCode, XML_GetErrorCode)
 INT_GETTER(ErrorLineNumber, EXPAT_GetCurrentLineNumber)
@@ -1874,11 +1874,11 @@ INT_GETTER(CurrentByteIndex, EXPAT_GetCurrentByteIndex)
 
 #undef INT_GETTER
 
-static PyObject *
+static PyValue
 xmlparse_buffer_text_getter(PyObject *op, void *Py_UNUSED(closure))
 {
     xmlparseobject *self = xmlparseobject_CAST(op);
-    return PyBool_FromLong(self->buffer != NULL);
+    return PyValue_FromObject((self->buffer != NULL) ? Py_True : Py_False);
 }
 
 static int
@@ -1913,11 +1913,11 @@ xmlparse_buffer_text_setter(PyObject *op, PyObject *v, void *Py_UNUSED(closure))
     return 0;
 }
 
-static PyObject *
+static PyValue
 xmlparse_buffer_size_getter(PyObject *op, void *Py_UNUSED(closure))
 {
     xmlparseobject *self = xmlparseobject_CAST(op);
-    return PyLong_FromLong(self->buffer_size);
+    return PyValue_FromLongLong(self->buffer_size);
 }
 
 static int
@@ -1972,18 +1972,18 @@ xmlparse_buffer_size_setter(PyObject *op, PyObject *v, void *Py_UNUSED(closure))
     return 0;
 }
 
-static PyObject *
+static PyValue
 xmlparse_buffer_used_getter(PyObject *op, void *Py_UNUSED(closure))
 {
     xmlparseobject *self = xmlparseobject_CAST(op);
-    return PyLong_FromLong(self->buffer_used);
+    return PyValue_FromLongLong(self->buffer_used);
 }
 
-static PyObject *
+static PyValue
 xmlparse_namespace_prefixes_getter(PyObject *op, void *Py_UNUSED(closure))
 {
     xmlparseobject *self = xmlparseobject_CAST(op);
-    return PyBool_FromLong(self->ns_prefixes);
+    return PyValue_FromObject((self->ns_prefixes) ? Py_True : Py_False);
 }
 
 static int
@@ -2003,11 +2003,11 @@ xmlparse_namespace_prefixes_setter(PyObject *op, PyObject *v, void *Py_UNUSED(cl
     return 0;
 }
 
-static PyObject *
+static PyValue
 xmlparse_ordered_attributes_getter(PyObject *op, void *Py_UNUSED(closure))
 {
     xmlparseobject *self = xmlparseobject_CAST(op);
-    return PyBool_FromLong(self->ordered_attributes);
+    return PyValue_FromObject((self->ordered_attributes) ? Py_True : Py_False);
 }
 
 static int
@@ -2026,11 +2026,11 @@ xmlparse_ordered_attributes_setter(PyObject *op, PyObject *v, void *Py_UNUSED(cl
     return 0;
 }
 
-static PyObject *
+static PyValue
 xmlparse_specified_attributes_getter(PyObject *op, void *Py_UNUSED(closure))
 {
     xmlparseobject *self = xmlparseobject_CAST(op);
-    return PyBool_FromLong(self->specified_attributes);
+    return PyValue_FromObject((self->specified_attributes) ? Py_True : Py_False);
 }
 
 static int

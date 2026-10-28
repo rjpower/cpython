@@ -182,10 +182,10 @@ PyDoc_STRVAR(_io__TextIOBase_encoding__doc__,
 static PyObject *
 _io__TextIOBase_encoding_get_impl(PyObject *self);
 
-static PyObject *
+static PyValue
 _io__TextIOBase_encoding_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _io__TextIOBase_encoding_get_impl(self);
+    return PyValue_FromResult(_io__TextIOBase_encoding_get_impl(self));
 }
 
 PyDoc_STRVAR(_io__TextIOBase_newlines__doc__,
@@ -198,10 +198,10 @@ PyDoc_STRVAR(_io__TextIOBase_newlines__doc__,
 static PyObject *
 _io__TextIOBase_newlines_get_impl(PyObject *self);
 
-static PyObject *
+static PyValue
 _io__TextIOBase_newlines_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _io__TextIOBase_newlines_get_impl(self);
+    return PyValue_FromResult(_io__TextIOBase_newlines_get_impl(self));
 }
 
 PyDoc_STRVAR(_io__TextIOBase_errors__doc__,
@@ -212,10 +212,10 @@ PyDoc_STRVAR(_io__TextIOBase_errors__doc__,
 static PyObject *
 _io__TextIOBase_errors_get_impl(PyObject *self);
 
-static PyObject *
+static PyValue
 _io__TextIOBase_errors_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _io__TextIOBase_errors_get_impl(self);
+    return PyValue_FromResult(_io__TextIOBase_errors_get_impl(self));
 }
 
 PyDoc_STRVAR(_io_IncrementalNewlineDecoder___init____doc__,
@@ -456,10 +456,10 @@ _io_IncrementalNewlineDecoder_reset(PyObject *self, PyObject *Py_UNUSED(ignored)
 static PyObject *
 _io_IncrementalNewlineDecoder_newlines_get_impl(nldecoder_object *self);
 
-static PyObject *
+static PyValue
 _io_IncrementalNewlineDecoder_newlines_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _io_IncrementalNewlineDecoder_newlines_get_impl((nldecoder_object *)self);
+    return PyValue_FromResult(_io_IncrementalNewlineDecoder_newlines_get_impl((nldecoder_object *)self));
 }
 
 PyDoc_STRVAR(_io_TextIOWrapper___init____doc__,
@@ -1200,32 +1200,36 @@ textiowrapper_iternext(PyObject *self)
     return return_value;
 }
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_name_get_impl(textio *self);
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_name_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValue _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_name_get_impl((textio *)self);
+    _return_value = _io_TextIOWrapper_name_get_impl((textio *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = _return_value;
 
     return return_value;
 }
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_closed_get_impl(textio *self);
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_closed_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValue _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_closed_get_impl((textio *)self);
+    _return_value = _io_TextIOWrapper_closed_get_impl((textio *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = _return_value;
 
     return return_value;
 }
@@ -1233,14 +1237,16 @@ _io_TextIOWrapper_closed_get(PyObject *self, void *Py_UNUSED(context))
 static PyObject *
 _io_TextIOWrapper_newlines_get_impl(textio *self);
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_newlines_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_newlines_get_impl((textio *)self);
+    _return_value = _io_TextIOWrapper_newlines_get_impl((textio *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -1248,14 +1254,16 @@ _io_TextIOWrapper_newlines_get(PyObject *self, void *Py_UNUSED(context))
 static PyObject *
 _io_TextIOWrapper_errors_get_impl(textio *self);
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_errors_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_errors_get_impl((textio *)self);
+    _return_value = _io_TextIOWrapper_errors_get_impl((textio *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -1263,10 +1271,10 @@ _io_TextIOWrapper_errors_get(PyObject *self, void *Py_UNUSED(context))
 static Py_ssize_t
 _io_TextIOWrapper__CHUNK_SIZE_get_impl(textio *self);
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper__CHUNK_SIZE_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -1275,7 +1283,7 @@ _io_TextIOWrapper__CHUNK_SIZE_get(PyObject *self, void *Py_UNUSED(context))
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -1319,35 +1327,37 @@ exit:
 static PyObject *
 _io_TextIOWrapper_buffer_get_impl(textio *self);
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_buffer_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_buffer_get_impl((textio *)self);
+    _return_value = _io_TextIOWrapper_buffer_get_impl((textio *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
-#define _IO__TEXTIOBASE_ENCODING_GETSETDEF {"encoding", (getter)_io__TextIOBase_encoding_get, (setter)NULL, _io__TextIOBase_encoding__doc__},
+#define _IO__TEXTIOBASE_ENCODING_GETSETDEF {"encoding", _io__TextIOBase_encoding_get, (setter)NULL, _io__TextIOBase_encoding__doc__},
 
-#define _IO__TEXTIOBASE_NEWLINES_GETSETDEF {"newlines", (getter)_io__TextIOBase_newlines_get, (setter)NULL, _io__TextIOBase_newlines__doc__},
+#define _IO__TEXTIOBASE_NEWLINES_GETSETDEF {"newlines", _io__TextIOBase_newlines_get, (setter)NULL, _io__TextIOBase_newlines__doc__},
 
-#define _IO__TEXTIOBASE_ERRORS_GETSETDEF {"errors", (getter)_io__TextIOBase_errors_get, (setter)NULL, _io__TextIOBase_errors__doc__},
+#define _IO__TEXTIOBASE_ERRORS_GETSETDEF {"errors", _io__TextIOBase_errors_get, (setter)NULL, _io__TextIOBase_errors__doc__},
 
-#define _IO_INCREMENTALNEWLINEDECODER_NEWLINES_GETSETDEF {"newlines", (getter)_io_IncrementalNewlineDecoder_newlines_get, (setter)NULL, NULL},
+#define _IO_INCREMENTALNEWLINEDECODER_NEWLINES_GETSETDEF {"newlines", _io_IncrementalNewlineDecoder_newlines_get, (setter)NULL, NULL},
 
-#define _IO_TEXTIOWRAPPER_NAME_GETSETDEF {"name", (getter)_io_TextIOWrapper_name_get, (setter)NULL, NULL},
+#define _IO_TEXTIOWRAPPER_NAME_GETSETDEF {"name", _io_TextIOWrapper_name_get, (setter)NULL, NULL},
 
-#define _IO_TEXTIOWRAPPER_CLOSED_GETSETDEF {"closed", (getter)_io_TextIOWrapper_closed_get, (setter)NULL, NULL},
+#define _IO_TEXTIOWRAPPER_CLOSED_GETSETDEF {"closed", _io_TextIOWrapper_closed_get, (setter)NULL, NULL},
 
-#define _IO_TEXTIOWRAPPER_NEWLINES_GETSETDEF {"newlines", (getter)_io_TextIOWrapper_newlines_get, (setter)NULL, NULL},
+#define _IO_TEXTIOWRAPPER_NEWLINES_GETSETDEF {"newlines", _io_TextIOWrapper_newlines_get, (setter)NULL, NULL},
 
-#define _IO_TEXTIOWRAPPER_ERRORS_GETSETDEF {"errors", (getter)_io_TextIOWrapper_errors_get, (setter)NULL, NULL},
+#define _IO_TEXTIOWRAPPER_ERRORS_GETSETDEF {"errors", _io_TextIOWrapper_errors_get, (setter)NULL, NULL},
 
-#define _IO_TEXTIOWRAPPER__CHUNK_SIZE_GETSETDEF {"_CHUNK_SIZE", (getter)_io_TextIOWrapper__CHUNK_SIZE_get, (setter)_io_TextIOWrapper__CHUNK_SIZE_set, NULL},
+#define _IO_TEXTIOWRAPPER__CHUNK_SIZE_GETSETDEF {"_CHUNK_SIZE", _io_TextIOWrapper__CHUNK_SIZE_get, (setter)_io_TextIOWrapper__CHUNK_SIZE_set, NULL},
 
-#define _IO_TEXTIOWRAPPER_BUFFER_GETSETDEF {"buffer", (getter)_io_TextIOWrapper_buffer_get, (setter)NULL, NULL},
+#define _IO_TEXTIOWRAPPER_BUFFER_GETSETDEF {"buffer", _io_TextIOWrapper_buffer_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=1fb31b89c6c51840 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=301ffa5f306ea2b2 input=a9049054013a1b77]*/

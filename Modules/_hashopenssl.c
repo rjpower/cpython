@@ -1014,36 +1014,36 @@ static PyMethodDef HASH_methods[] = {
     {NULL, NULL}  /* sentinel */
 };
 
-static PyObject *
+static PyValue
 _hashlib_HASH_get_blocksize(PyObject *op, void *Py_UNUSED(closure))
 {
     HASHobject *self = HASHobject_CAST(op);
     long block_size = EVP_MD_CTX_block_size(self->ctx);
     assert(block_size > 0);
-    return PyLong_FromLong(block_size);
+    return PyValue_FromLongLong(block_size);
 }
 
-static PyObject *
+static PyValue
 _hashlib_HASH_get_digestsize(PyObject *op, void *Py_UNUSED(closure))
 {
     HASHobject *self = HASHobject_CAST(op);
     long size = EVP_MD_CTX_size(self->ctx);
     assert(size > 0);
-    return PyLong_FromLong(size);
+    return PyValue_FromLongLong(size);
 }
 
-static PyObject *
+static PyValue
 _hashlib_HASH_get_name(PyObject *op, void *Py_UNUSED(closure))
 {
     HASHobject *self = HASHobject_CAST(op);
     const EVP_MD *md = PY_EVP_MD_CTX_md(self->ctx);
     if (md == NULL) {
         notify_ssl_error_occurred("missing EVP_MD for HASH context");
-        return NULL;
+        return PyValue_NULL;
     }
     const char *name = get_hashlib_utf8name_by_evp_md(md);
     assert(name != NULL || PyErr_Occurred());
-    return name == NULL ? NULL : PyUnicode_FromString(name);
+    return PyValue_FromResult(name == NULL ? NULL : PyUnicode_FromString(name));
 }
 
 static PyGetSetDef HASH_getsets[] = {
@@ -1217,11 +1217,11 @@ static PyMethodDef HASHXOFobject_methods[] = {
 };
 
 
-static PyObject *
+static PyValue
 _hashlib_HASHXOF_digest_size(PyObject *Py_UNUSED(self),
                              void *Py_UNUSED(closure))
 {
-    return PyLong_FromLong(0);
+    return PyValue_FromLongLong(0);
 }
 
 static PyGetSetDef HASHXOFobject_getsets[] = {
@@ -2394,37 +2394,43 @@ _hashlib_HMAC_hexdigest_impl(HMACobject *self)
     return n < 0 ? NULL : _Py_strhex((const char *)buf, n);
 }
 
-static PyObject *
+static PyValue
 _hashlib_hmac_get_digest_size(PyObject *op, void *Py_UNUSED(closure))
 {
     HMACobject *self = HMACobject_CAST(op);
     int size = _hashlib_hmac_digest_size(self);
-    return size == BAD_DIGEST_SIZE ? NULL : PyLong_FromLong(size);
+    if (size == BAD_DIGEST_SIZE) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromLongLong(size);
 }
 
-static PyObject *
+static PyValue
 _hashlib_hmac_get_block_size(PyObject *op, void *Py_UNUSED(closure))
 {
     HMACobject *self = HMACobject_CAST(op);
 #ifdef Py_HAS_OPENSSL3_SUPPORT
     assert(self->ctx != NULL);
-    return PyLong_FromSize_t(EVP_MAC_CTX_get_block_size(self->ctx));
+    return PyValue_FromUnsignedLongLong(EVP_MAC_CTX_get_block_size(self->ctx));
 #else
     const EVP_MD *md = _hashlib_hmac_get_md(self);
-    return md == NULL ? NULL : PyLong_FromLong(EVP_MD_block_size(md));
+    if (md == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromLongLong(EVP_MD_block_size(md));
 #endif
 }
 
-static PyObject *
+static PyValue
 _hashlib_hmac_get_name(PyObject *op, void *Py_UNUSED(closure))
 {
     HMACobject *self = HMACobject_CAST(op);
     const char *digest_name = hashlib_HMAC_get_hashlib_digest_name(self);
     if (digest_name == NULL) {
         assert(PyErr_Occurred());
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyUnicode_FromFormat("hmac-%s", digest_name);
+    return PyValue_FromResult(PyUnicode_FromFormat("hmac-%s", digest_name));
 }
 
 static PyMethodDef HMAC_methods[] = {

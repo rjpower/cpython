@@ -1691,14 +1691,14 @@ WCharArray_get_value_lock_held(PyObject *op)
     return res;
 }
 
-static PyObject *
+static PyValue
 WCharArray_get_value(PyObject *op, void *Py_UNUSED(ignored))
 {
     PyObject *res;
     Py_BEGIN_CRITICAL_SECTION(op);
     res = WCharArray_get_value_lock_held(op);
     Py_END_CRITICAL_SECTION();
-    return res;
+    return PyValue_FromResult(res);
 }
 
 static int
@@ -5648,7 +5648,7 @@ Simple_from_outparm_impl(PyObject *self, PyTypeObject *cls)
         return Py_NewRef(self);
     }
     /* call stginfo->getfunc */
-    return _ctypes_Simple_value_get(self, NULL);
+    return PyValue_Object(_ctypes_Simple_value_get(self, NULL));
 }
 
 static PyMethodDef Simple_methods[] = {
@@ -5680,7 +5680,7 @@ Simple_repr(PyObject *self)
                                    Py_TYPE(self)->tp_name, self);
     }
 
-    val = _ctypes_Simple_value_get(self, NULL);
+    val = PyValue_Object(_ctypes_Simple_value_get(self, NULL));
     if (val == NULL)
         return NULL;
 
@@ -5851,14 +5851,14 @@ Pointer_get_contents_lock_held(PyObject *self, void *closure)
     return PyCData_FromBaseObj(st, stginfo->proto, self, 0, deref);
 }
 
-static PyObject *
+static PyValue
 Pointer_get_contents(PyObject *self, void *closure)
 {
     PyObject *res;
     Py_BEGIN_CRITICAL_SECTION(self);
     res = Pointer_get_contents_lock_held(self, closure);
     Py_END_CRITICAL_SECTION();
-    return res;
+    return PyValue_FromResult(res);
 }
 
 static int

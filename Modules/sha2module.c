@@ -450,50 +450,50 @@ static PyMethodDef SHA512_methods[] = {
     {NULL,        NULL}         /* sentinel */
 };
 
-static PyObject *
+static PyValue
 SHA256_get_block_size(PyObject *Py_UNUSED(self), void *Py_UNUSED(closure))
 {
-    return PyLong_FromLong(SHA256_BLOCKSIZE);
+    return PyValue_FromLongLong(SHA256_BLOCKSIZE);
 }
 
-static PyObject *
+static PyValue
 SHA512_get_block_size(PyObject *Py_UNUSED(self), void *Py_UNUSED(closure))
 {
-    return PyLong_FromLong(SHA512_BLOCKSIZE);
+    return PyValue_FromLongLong(SHA512_BLOCKSIZE);
 }
 
-static PyObject *
+static PyValue
 SHA256_get_digest_size(PyObject *op, void *Py_UNUSED(closure))
 {
     SHA256object *self = _SHA256object_CAST(op);
-    return PyLong_FromLong(self->digestsize);
+    return PyValue_FromLongLong(self->digestsize);
 }
 
-static PyObject *
+static PyValue
 SHA512_get_digest_size(PyObject *op, void *Py_UNUSED(closure))
 {
     SHA512object *self = _SHA512object_CAST(op);
-    return PyLong_FromLong(self->digestsize);
+    return PyValue_FromLongLong(self->digestsize);
 }
 
-static PyObject *
+static PyValue
 SHA256_get_name(PyObject *op, void *Py_UNUSED(closure))
 {
     SHA256object *self = _SHA256object_CAST(op);
     if (self->digestsize == 28) {
-        return PyUnicode_FromStringAndSize("sha224", 6);
+        return PyValue_FromResult(PyUnicode_FromStringAndSize("sha224", 6));
     }
-    return PyUnicode_FromStringAndSize("sha256", 6);
+    return PyValue_FromResult(PyUnicode_FromStringAndSize("sha256", 6));
 }
 
-static PyObject *
+static PyValue
 SHA512_get_name(PyObject *op, void *Py_UNUSED(closure))
 {
     SHA512object *self = _SHA512object_CAST(op);
     if (self->digestsize == 64) {
-        return PyUnicode_FromStringAndSize("sha512", 6);
+        return PyValue_FromResult(PyUnicode_FromStringAndSize("sha512", 6));
     }
-    return PyUnicode_FromStringAndSize("sha384", 6);
+    return PyValue_FromResult(PyUnicode_FromStringAndSize("sha384", 6));
 }
 
 static PyGetSetDef SHA256_getseters[] = {

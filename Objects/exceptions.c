@@ -2405,15 +2405,15 @@ OSError_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
     return res;
 }
 
-static PyObject *
+static PyValue
 OSError_written_get(PyObject *op, void *context)
 {
     PyOSErrorObject *self = PyOSErrorObject_CAST(op);
     if (self->written == -1) {
         PyErr_SetString(PyExc_AttributeError, "characters_written");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromSsize_t(self->written);
+    return PyValue_FromLongLong(self->written);
 }
 
 static int

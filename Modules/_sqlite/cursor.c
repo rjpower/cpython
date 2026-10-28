@@ -1415,11 +1415,11 @@ static struct PyMemberDef cursor_members[] =
     {NULL}
 };
 
-static PyObject *
+static PyValue
 cursor_get_row_factory(PyObject *op, void *Py_UNUSED(closure))
 {
     pysqlite_Cursor *self = _pysqlite_Cursor_CAST(op);
-    return Py_NewRef(self->row_factory);
+    return PyValue_FromObject(self->row_factory);
 }
 
 static int

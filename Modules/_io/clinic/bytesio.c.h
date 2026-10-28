@@ -16,10 +16,10 @@ PyDoc_STRVAR(_io_BytesIO_closed__doc__,
 static int
 _io_BytesIO_closed_get_impl(bytesio *self);
 
-static PyObject *
+static PyValue
 _io_BytesIO_closed_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -28,7 +28,7 @@ _io_BytesIO_closed_get(PyObject *self, void *Py_UNUSED(context))
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -865,6 +865,6 @@ _io_BytesIO___sizeof__(PyObject *self, PyObject *Py_UNUSED(ignored))
 
     return return_value;
 }
-#define _IO_BYTESIO_CLOSED_GETSETDEF {"closed", (getter)_io_BytesIO_closed_get, (setter)NULL, _io_BytesIO_closed__doc__},
+#define _IO_BYTESIO_CLOSED_GETSETDEF {"closed", _io_BytesIO_closed_get, (setter)NULL, _io_BytesIO_closed__doc__},
 
-/*[clinic end generated code: output=44f2511a6d8b9518 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=83d7e5859c3f5053 input=a9049054013a1b77]*/

@@ -134,15 +134,15 @@ cell_clear(PyObject *self)
     return 0;
 }
 
-static PyObject *
+static PyValue
 cell_get_contents(PyObject *self, void *closure)
 {
     PyValue value = _PyCell_GetValue(_PyCell_CAST(self));
     if (PyValue_IsNull(value)) {
         PyErr_SetString(PyExc_ValueError, "Cell is empty");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyValue_Object(value);
+    return value;
 }
 
 static int

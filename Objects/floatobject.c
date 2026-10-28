@@ -1732,16 +1732,16 @@ float___getformat___impl(PyTypeObject *type, const char *typestr)
                                 "IEEE, little-endian" : "IEEE, big-endian");
 }
 
-static PyObject *
+static PyValue
 float_getreal(PyObject *v, void *Py_UNUSED(closure))
 {
-    return float_float(v);
+    return PyValue_FromResult(float_float(v));
 }
 
-static PyObject *
+static PyValue
 float_getimag(PyObject *Py_UNUSED(v), void *Py_UNUSED(closure))
 {
-    return PyFloat_FromDouble(0.0);
+    return PyValue_FromDouble(0.0);
 }
 
 /*[clinic input]

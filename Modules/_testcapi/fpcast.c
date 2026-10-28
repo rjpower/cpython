@@ -42,7 +42,7 @@ four(PyObject *self, PyObject *a, PyObject *b, PyObject *c)
 }
 
 /* tp_call returns a value, so the callable fixtures are separate from the
-   PyCFunction and getter ones above. */
+   PyCFunction ones above. */
 static PyValue
 call_zero(void)
 {
@@ -70,6 +70,32 @@ call_three(PyObject *self, PyObject *args, PyObject *kwargs)
 // Using this as a handler should raise a SystemError.
 static PyValue
 call_four(PyObject *self, PyObject *a, PyObject *b, PyObject *c)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+/* A getter returns a value, so the getter fixtures are separate too. */
+static PyValue
+get_zero(void)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+static PyValue
+get_one(PyObject *self)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+static PyValue
+get_two(PyObject *self, void *closure)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+// Using this as a getter should raise a SystemError.
+static PyValue
+get_four(PyObject *self, PyObject *a, PyObject *b, PyObject *c)
 {
     return PyValue_FromObject(Py_None);
 }
@@ -136,12 +162,12 @@ static PyMethodDef type_methods[] = {
 };
 
 static PyGetSetDef type_getset[] = {
-    {"getset0", .get = _Py_FUNC_CAST(getter, zero)},
-    {"getset1", .get = _Py_FUNC_CAST(getter, one),
+    {"getset0", .get = _Py_FUNC_CAST(getter, get_zero)},
+    {"getset1", .get = _Py_FUNC_CAST(getter, get_one),
                 .set = _Py_FUNC_CAST(setter, set_two)},
-    {"getset2", .get = _Py_FUNC_CAST(getter, two),
+    {"getset2", .get = _Py_FUNC_CAST(getter, get_two),
                 .set = _Py_FUNC_CAST(setter, set_three)},
-    {"getset4", .get = _Py_FUNC_CAST(getter, four),
+    {"getset4", .get = _Py_FUNC_CAST(getter, get_four),
                 .set = _Py_FUNC_CAST(setter, four)},
     {NULL},
 };

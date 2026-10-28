@@ -156,17 +156,17 @@ PyDoc_STRVAR(_io__IOBase_closed__doc__,
 static int
 _io__IOBase_closed_get_impl(PyObject *self);
 
-static PyObject *
+static PyValue
 _io__IOBase_closed_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     _return_value = _io__IOBase_closed_get_impl(self);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -661,6 +661,6 @@ _io__RawIOBase_write(PyObject *self, PyValue arg)
 exit:
     return return_value;
 }
-#define _IO__IOBASE_CLOSED_GETSETDEF {"closed", (getter)_io__IOBase_closed_get, (setter)NULL, _io__IOBase_closed__doc__},
+#define _IO__IOBASE_CLOSED_GETSETDEF {"closed", _io__IOBase_closed_get, (setter)NULL, _io__IOBase_closed__doc__},
 
-/*[clinic end generated code: output=73d06efbfae4471c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=aa4709d50a9e1fc5 input=a9049054013a1b77]*/

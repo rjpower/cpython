@@ -2104,14 +2104,14 @@ TaskStepMethWrapper_traverse(PyObject *op,
     return 0;
 }
 
-static PyObject *
+static PyValue
 TaskStepMethWrapper_get___self__(PyObject *op, void *Py_UNUSED(closure))
 {
     TaskStepMethWrapper *o = (TaskStepMethWrapper*)op;
     if (o->sw_task) {
-        return Py_NewRef(o->sw_task);
+        return PyValue_FromObject(o->sw_task);
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 static PyGetSetDef TaskStepMethWrapper_getsetlist[] = {

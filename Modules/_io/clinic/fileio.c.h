@@ -591,17 +591,17 @@ PyDoc_STRVAR(_io_FileIO_closed__doc__,
 static int
 _io_FileIO_closed_get_impl(fileio *self);
 
-static PyObject *
+static PyValue
 _io_FileIO_closed_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     _return_value = _io_FileIO_closed_get_impl((fileio *)self);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -613,17 +613,17 @@ PyDoc_STRVAR(_io_FileIO_closefd__doc__,
 static int
 _io_FileIO_closefd_get_impl(fileio *self);
 
-static PyObject *
+static PyValue
 _io_FileIO_closefd_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     _return_value = _io_FileIO_closefd_get_impl((fileio *)self);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -635,10 +635,10 @@ PyDoc_STRVAR(_io_FileIO_mode__doc__,
 static PyObject *
 _io_FileIO_mode_get_impl(fileio *self);
 
-static PyObject *
+static PyValue
 _io_FileIO_mode_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _io_FileIO_mode_get_impl((fileio *)self);
+    return PyValue_FromResult(_io_FileIO_mode_get_impl((fileio *)self));
 }
 
 PyDoc_STRVAR(_io_FileIO__blksize__doc__,
@@ -647,17 +647,17 @@ PyDoc_STRVAR(_io_FileIO__blksize__doc__,
 static long
 _io_FileIO__blksize_get_impl(fileio *self);
 
-static PyObject *
+static PyValue
 _io_FileIO__blksize_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     long _return_value;
 
     _return_value = _io_FileIO__blksize_get_impl((fileio *)self);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong(_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -666,12 +666,12 @@ exit:
 #ifndef _IO_FILEIO_TRUNCATE_METHODDEF
     #define _IO_FILEIO_TRUNCATE_METHODDEF
 #endif /* !defined(_IO_FILEIO_TRUNCATE_METHODDEF) */
-#define _IO_FILEIO_CLOSED_GETSETDEF {"closed", (getter)_io_FileIO_closed_get, (setter)NULL, _io_FileIO_closed__doc__},
+#define _IO_FILEIO_CLOSED_GETSETDEF {"closed", _io_FileIO_closed_get, (setter)NULL, _io_FileIO_closed__doc__},
 
-#define _IO_FILEIO_CLOSEFD_GETSETDEF {"closefd", (getter)_io_FileIO_closefd_get, (setter)NULL, _io_FileIO_closefd__doc__},
+#define _IO_FILEIO_CLOSEFD_GETSETDEF {"closefd", _io_FileIO_closefd_get, (setter)NULL, _io_FileIO_closefd__doc__},
 
-#define _IO_FILEIO_MODE_GETSETDEF {"mode", (getter)_io_FileIO_mode_get, (setter)NULL, _io_FileIO_mode__doc__},
+#define _IO_FILEIO_MODE_GETSETDEF {"mode", _io_FileIO_mode_get, (setter)NULL, _io_FileIO_mode__doc__},
 
-#define _IO_FILEIO__BLKSIZE_GETSETDEF {"_blksize", (getter)_io_FileIO__blksize_get, (setter)NULL, _io_FileIO__blksize__doc__},
+#define _IO_FILEIO__BLKSIZE_GETSETDEF {"_blksize", _io_FileIO__blksize_get, (setter)NULL, _io_FileIO__blksize__doc__},
 
-/*[clinic end generated code: output=8cb75dde6baeed83 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=278feaf2a7fe8b77 input=a9049054013a1b77]*/

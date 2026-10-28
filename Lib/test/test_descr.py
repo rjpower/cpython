@@ -6873,5 +6873,71 @@ class ValueCallTests(unittest.TestCase):
                     C()
 
 
+class ValueGetsetTests(unittest.TestCase):
+    """6d rung 4: a getset getter returns a value, so a number getter makes
+    no object, and a stored value comes back the same."""
+
+    def test_identity(self):
+        import datetime
+        n = int("1")
+        self.assertIs(memoryview(b"ab").ndim, 1)
+        self.assertIs(memoryview(b"ab").itemsize, 1)
+        self.assertIs(datetime.date(2020, 1, 2).day, 2)
+        self.assertIs(memoryview(bytearray(100000 + n)).nbytes, 100001)
+        self.assertIs(datetime.time(microsecond=999999).microsecond, 999999)
+        self.assertIs((2.5 * n).imag, 0.0)
+        self.assertIs((-2.5 * n).real, -2.5)
+        big = 2**70 * n
+        self.assertIs(big.imag, 0)
+        self.assertIs(big.denominator, 1)
+        self.assertIs(big.real, big)
+        nan = math.nan * n
+        self.assertIs(nan.real, nan)
+        def f():
+            pass
+        self.assertEqual(f.__name__, "f")
+        self.assertIs(f.__name__, f.__name__)
+        for v in (100000 + n, 2.5 * n, 2**31 * n, nan):
+            with self.subTest(v=v):
+                cell = types.CellType(v)
+                self.assertIs(cell.cell_contents, v)
+
+    def test_dict_entries(self):
+        # The type's and the module's dict-backed getters return the value
+        # stored, through its descriptor's __get__ when it has one.
+        n = int("1")
+        class C:
+            __doc__ = 100000 + n
+        self.assertIs(C.__doc__, 100001)
+        class D:
+            pass
+        D.__doc__ = 2.5 * n
+        self.assertIs(D.__doc__, 2.5)
+        class Get:
+            def __get__(self, obj, owner):
+                return 12345 * n
+        class E:
+            __doc__ = Get()
+        self.assertIs(E.__doc__, 12345)
+        m = types.ModuleType("m")
+        m.__annotations__ = {"x": int}
+        self.assertEqual(m.__annotations__, {"x": int})
+        self.assertIsNone(types.ModuleType("m2").__annotate__)
+
+    def test_dict(self):
+        # PyObject_GenericGetDict() returns the dict as a value; its identity
+        # is unchanged.
+        class C:
+            pass
+        c = C()
+        c.x = 100000 + int("1")
+        d = c.__dict__
+        self.assertIs(c.__dict__, d)
+        self.assertIs(d["x"], 100001)
+        def f():
+            pass
+        self.assertIs(f.__dict__, f.__dict__)
+
+
 if __name__ == "__main__":
     unittest.main()

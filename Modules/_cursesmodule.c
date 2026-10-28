@@ -1230,7 +1230,7 @@ complexchar_repr(PyObject *self)
     return res;
 }
 
-static PyObject *
+static PyValue
 complexchar_get_attr(PyObject *self, void *Py_UNUSED(closure))
 {
     cursesmodule_state *state = get_cursesmodule_state_by_cls(Py_TYPE(self));
@@ -1238,12 +1238,12 @@ complexchar_get_attr(PyObject *self, void *Py_UNUSED(closure))
     int pair;
     if (curses_cell_attr_pair(state,
             &_PyCursesComplexCharObject_CAST(self)->cval, &attrs, &pair) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromUnsignedLongLong((unsigned long long)attrs);
+    return PyValue_FromUnsignedLongLong((unsigned long long)attrs);
 }
 
-static PyObject *
+static PyValue
 complexchar_get_pair(PyObject *self, void *Py_UNUSED(closure))
 {
     cursesmodule_state *state = get_cursesmodule_state_by_cls(Py_TYPE(self));
@@ -1251,9 +1251,9 @@ complexchar_get_pair(PyObject *self, void *Py_UNUSED(closure))
     int pair;
     if (curses_cell_attr_pair(state,
             &_PyCursesComplexCharObject_CAST(self)->cval, &attrs, &pair) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromLong(pair);
+    return PyValue_FromLongLong(pair);
 }
 
 static PyObject *
@@ -4943,11 +4943,11 @@ _curses_window_vline_impl(PyCursesWindowObject *self, int group_left_1,
     return curses_window_check_err(self, rtn, "wvline", "vline");
 }
 
-static PyObject *
+static PyValue
 PyCursesWindow_get_encoding(PyObject *op, void *closure)
 {
     PyCursesWindowObject *self = _PyCursesWindowObject_CAST(op);
-    return PyUnicode_FromString(self->encoding);
+    return PyValue_FromResult(PyUnicode_FromString(self->encoding));
 }
 
 static int
@@ -5425,14 +5425,14 @@ curses_screen_close(PyCursesScreenObject *so)
     }
 }
 
-static PyObject *
+static PyValue
 PyCursesScreen_get_stdscr(PyObject *self, void *Py_UNUSED(closure))
 {
     PyCursesScreenObject *so = _PyCursesScreenObject_CAST(self);
     if (so->stdscr_win == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return Py_NewRef(so->stdscr_win);
+    return PyValue_FromObject(so->stdscr_win);
 }
 
 static int

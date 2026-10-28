@@ -353,14 +353,16 @@ PyDoc_STRVAR(_ssl__SSLSocket_context__doc__,
 static PyObject *
 _ssl__SSLSocket_context_get_impl(PySSLSocket *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_context_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_context_get_impl((PySSLSocket *)self);
+    _return_value = _ssl__SSLSocket_context_get_impl((PySSLSocket *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -394,14 +396,16 @@ PyDoc_STRVAR(_ssl__SSLSocket_server_side__doc__,
 static PyObject *
 _ssl__SSLSocket_server_side_get_impl(PySSLSocket *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_server_side_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_server_side_get_impl((PySSLSocket *)self);
+    _return_value = _ssl__SSLSocket_server_side_get_impl((PySSLSocket *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -412,14 +416,16 @@ PyDoc_STRVAR(_ssl__SSLSocket_server_hostname__doc__,
 static PyObject *
 _ssl__SSLSocket_server_hostname_get_impl(PySSLSocket *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_server_hostname_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_server_hostname_get_impl((PySSLSocket *)self);
+    _return_value = _ssl__SSLSocket_server_hostname_get_impl((PySSLSocket *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -432,14 +438,16 @@ PyDoc_STRVAR(_ssl__SSLSocket_owner__doc__,
 static PyObject *
 _ssl__SSLSocket_owner_get_impl(PySSLSocket *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_owner_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_owner_get_impl((PySSLSocket *)self);
+    _return_value = _ssl__SSLSocket_owner_get_impl((PySSLSocket *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -859,14 +867,16 @@ PyDoc_STRVAR(_ssl__SSLSocket_session__doc__,
 static PyObject *
 _ssl__SSLSocket_session_get_impl(PySSLSocket *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_session_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_session_get_impl((PySSLSocket *)self);
+    _return_value = _ssl__SSLSocket_session_get_impl((PySSLSocket *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -900,14 +910,16 @@ PyDoc_STRVAR(_ssl__SSLSocket_session_reused__doc__,
 static PyObject *
 _ssl__SSLSocket_session_reused_get_impl(PySSLSocket *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_session_reused_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_session_reused_get_impl((PySSLSocket *)self);
+    _return_value = _ssl__SSLSocket_session_reused_get_impl((PySSLSocket *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -1285,10 +1297,10 @@ exit:
 static int
 _ssl__SSLContext_verify_mode_get_impl(PySSLContext *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_verify_mode_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -1297,7 +1309,7 @@ _ssl__SSLContext_verify_mode_get(PyObject *self, void *Py_UNUSED(context))
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -1333,10 +1345,10 @@ exit:
 static unsigned long
 _ssl__SSLContext_verify_flags_get_impl(PySSLContext *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_verify_flags_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     unsigned long _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -1345,7 +1357,7 @@ _ssl__SSLContext_verify_flags_get(PyObject *self, void *Py_UNUSED(context))
     if ((_return_value == (unsigned long)-1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromUnsignedLong(_return_value);
+    return_value = PyValue_FromUnsignedLongLong((unsigned long long)_return_value);
 
 exit:
     return return_value;
@@ -1398,14 +1410,16 @@ exit:
 static PyObject *
 _ssl__SSLContext_minimum_version_get_impl(PySSLContext *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_minimum_version_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_minimum_version_get_impl((PySSLContext *)self);
+    _return_value = _ssl__SSLContext_minimum_version_get_impl((PySSLContext *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -1437,14 +1451,16 @@ _ssl__SSLContext_minimum_version_set(PyObject *self, PyObject *arg, void *Py_UNU
 static PyObject *
 _ssl__SSLContext_maximum_version_get_impl(PySSLContext *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_maximum_version_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_maximum_version_get_impl((PySSLContext *)self);
+    _return_value = _ssl__SSLContext_maximum_version_get_impl((PySSLContext *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -1479,14 +1495,16 @@ PyDoc_STRVAR(_ssl__SSLContext_num_tickets__doc__,
 static PyObject *
 _ssl__SSLContext_num_tickets_get_impl(PySSLContext *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_num_tickets_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_num_tickets_get_impl((PySSLContext *)self);
+    _return_value = _ssl__SSLContext_num_tickets_get_impl((PySSLContext *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -1524,14 +1542,16 @@ PyDoc_STRVAR(_ssl__SSLContext_security_level__doc__,
 static PyObject *
 _ssl__SSLContext_security_level_get_impl(PySSLContext *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_security_level_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_security_level_get_impl((PySSLContext *)self);
+    _return_value = _ssl__SSLContext_security_level_get_impl((PySSLContext *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -1539,14 +1559,16 @@ _ssl__SSLContext_security_level_get(PyObject *self, void *Py_UNUSED(context))
 static PyObject *
 _ssl__SSLContext_options_get_impl(PySSLContext *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_options_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_options_get_impl((PySSLContext *)self);
+    _return_value = _ssl__SSLContext_options_get_impl((PySSLContext *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -1581,10 +1603,10 @@ exit:
 static unsigned int
 _ssl__SSLContext__host_flags_get_impl(PySSLContext *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLContext__host_flags_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     unsigned int _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -1593,7 +1615,7 @@ _ssl__SSLContext__host_flags_get(PyObject *self, void *Py_UNUSED(context))
     if ((_return_value == (unsigned int)-1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromUnsignedLong((unsigned long)_return_value);
+    return_value = PyValue_FromUnsignedLongLong((unsigned long long)_return_value);
 
 exit:
     return return_value;
@@ -1641,10 +1663,10 @@ exit:
 static int
 _ssl__SSLContext_check_hostname_get_impl(PySSLContext *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_check_hostname_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -1653,7 +1675,7 @@ _ssl__SSLContext_check_hostname_get(PyObject *self, void *Py_UNUSED(context))
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -1689,14 +1711,16 @@ exit:
 static PyObject *
 _ssl__SSLContext_protocol_get_impl(PySSLContext *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_protocol_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_protocol_get_impl((PySSLContext *)self);
+    _return_value = _ssl__SSLContext_protocol_get_impl((PySSLContext *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -2231,14 +2255,16 @@ PyDoc_STRVAR(_ssl__SSLContext_sni_callback__doc__,
 static PyObject *
 _ssl__SSLContext_sni_callback_get_impl(PySSLContext *self);
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_sni_callback_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_sni_callback_get_impl((PySSLContext *)self);
+    _return_value = _ssl__SSLContext_sni_callback_get_impl((PySSLContext *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -2556,14 +2582,16 @@ PyDoc_STRVAR(_ssl_MemoryBIO_pending__doc__,
 static PyObject *
 _ssl_MemoryBIO_pending_get_impl(PySSLMemoryBIO *self);
 
-static PyObject *
+static PyValue
 _ssl_MemoryBIO_pending_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl_MemoryBIO_pending_get_impl((PySSLMemoryBIO *)self);
+    _return_value = _ssl_MemoryBIO_pending_get_impl((PySSLMemoryBIO *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -2574,14 +2602,16 @@ PyDoc_STRVAR(_ssl_MemoryBIO_eof__doc__,
 static PyObject *
 _ssl_MemoryBIO_eof_get_impl(PySSLMemoryBIO *self);
 
-static PyObject *
+static PyValue
 _ssl_MemoryBIO_eof_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl_MemoryBIO_eof_get_impl((PySSLMemoryBIO *)self);
+    _return_value = _ssl_MemoryBIO_eof_get_impl((PySSLMemoryBIO *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -2706,14 +2736,16 @@ PyDoc_STRVAR(_ssl_SSLSession_time__doc__,
 static PyObject *
 _ssl_SSLSession_time_get_impl(PySSLSession *self);
 
-static PyObject *
+static PyValue
 _ssl_SSLSession_time_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl_SSLSession_time_get_impl((PySSLSession *)self);
+    _return_value = _ssl_SSLSession_time_get_impl((PySSLSession *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -2724,14 +2756,16 @@ PyDoc_STRVAR(_ssl_SSLSession_timeout__doc__,
 static PyObject *
 _ssl_SSLSession_timeout_get_impl(PySSLSession *self);
 
-static PyObject *
+static PyValue
 _ssl_SSLSession_timeout_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl_SSLSession_timeout_get_impl((PySSLSession *)self);
+    _return_value = _ssl_SSLSession_timeout_get_impl((PySSLSession *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -2742,14 +2776,16 @@ PyDoc_STRVAR(_ssl_SSLSession_ticket_lifetime_hint__doc__,
 static PyObject *
 _ssl_SSLSession_ticket_lifetime_hint_get_impl(PySSLSession *self);
 
-static PyObject *
+static PyValue
 _ssl_SSLSession_ticket_lifetime_hint_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl_SSLSession_ticket_lifetime_hint_get_impl((PySSLSession *)self);
+    _return_value = _ssl_SSLSession_ticket_lifetime_hint_get_impl((PySSLSession *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -2760,14 +2796,16 @@ PyDoc_STRVAR(_ssl_SSLSession_id__doc__,
 static PyObject *
 _ssl_SSLSession_id_get_impl(PySSLSession *self);
 
-static PyObject *
+static PyValue
 _ssl_SSLSession_id_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl_SSLSession_id_get_impl((PySSLSession *)self);
+    _return_value = _ssl_SSLSession_id_get_impl((PySSLSession *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -2778,14 +2816,16 @@ PyDoc_STRVAR(_ssl_SSLSession_has_ticket__doc__,
 static PyObject *
 _ssl_SSLSession_has_ticket_get_impl(PySSLSession *self);
 
-static PyObject *
+static PyValue
 _ssl_SSLSession_has_ticket_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl_SSLSession_has_ticket_get_impl((PySSLSession *)self);
+    _return_value = _ssl_SSLSession_has_ticket_get_impl((PySSLSession *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -3254,52 +3294,52 @@ exit:
 #ifndef _SSL_ENUM_CRLS_METHODDEF
     #define _SSL_ENUM_CRLS_METHODDEF
 #endif /* !defined(_SSL_ENUM_CRLS_METHODDEF) */
-#define _SSL__SSLSOCKET_CONTEXT_GETSETDEF {"context", (getter)_ssl__SSLSocket_context_get, (setter)_ssl__SSLSocket_context_set, _ssl__SSLSocket_context__doc__},
+#define _SSL__SSLSOCKET_CONTEXT_GETSETDEF {"context", _ssl__SSLSocket_context_get, (setter)_ssl__SSLSocket_context_set, _ssl__SSLSocket_context__doc__},
 
-#define _SSL__SSLSOCKET_SERVER_SIDE_GETSETDEF {"server_side", (getter)_ssl__SSLSocket_server_side_get, (setter)NULL, _ssl__SSLSocket_server_side__doc__},
+#define _SSL__SSLSOCKET_SERVER_SIDE_GETSETDEF {"server_side", _ssl__SSLSocket_server_side_get, (setter)NULL, _ssl__SSLSocket_server_side__doc__},
 
-#define _SSL__SSLSOCKET_SERVER_HOSTNAME_GETSETDEF {"server_hostname", (getter)_ssl__SSLSocket_server_hostname_get, (setter)NULL, _ssl__SSLSocket_server_hostname__doc__},
+#define _SSL__SSLSOCKET_SERVER_HOSTNAME_GETSETDEF {"server_hostname", _ssl__SSLSocket_server_hostname_get, (setter)NULL, _ssl__SSLSocket_server_hostname__doc__},
 
-#define _SSL__SSLSOCKET_OWNER_GETSETDEF {"owner", (getter)_ssl__SSLSocket_owner_get, (setter)_ssl__SSLSocket_owner_set, _ssl__SSLSocket_owner__doc__},
+#define _SSL__SSLSOCKET_OWNER_GETSETDEF {"owner", _ssl__SSLSocket_owner_get, (setter)_ssl__SSLSocket_owner_set, _ssl__SSLSocket_owner__doc__},
 
-#define _SSL__SSLSOCKET_SESSION_GETSETDEF {"session", (getter)_ssl__SSLSocket_session_get, (setter)_ssl__SSLSocket_session_set, _ssl__SSLSocket_session__doc__},
+#define _SSL__SSLSOCKET_SESSION_GETSETDEF {"session", _ssl__SSLSocket_session_get, (setter)_ssl__SSLSocket_session_set, _ssl__SSLSocket_session__doc__},
 
-#define _SSL__SSLSOCKET_SESSION_REUSED_GETSETDEF {"session_reused", (getter)_ssl__SSLSocket_session_reused_get, (setter)NULL, _ssl__SSLSocket_session_reused__doc__},
+#define _SSL__SSLSOCKET_SESSION_REUSED_GETSETDEF {"session_reused", _ssl__SSLSocket_session_reused_get, (setter)NULL, _ssl__SSLSocket_session_reused__doc__},
 
-#define _SSL__SSLCONTEXT_VERIFY_MODE_GETSETDEF {"verify_mode", (getter)_ssl__SSLContext_verify_mode_get, (setter)_ssl__SSLContext_verify_mode_set, NULL},
+#define _SSL__SSLCONTEXT_VERIFY_MODE_GETSETDEF {"verify_mode", _ssl__SSLContext_verify_mode_get, (setter)_ssl__SSLContext_verify_mode_set, NULL},
 
-#define _SSL__SSLCONTEXT_VERIFY_FLAGS_GETSETDEF {"verify_flags", (getter)_ssl__SSLContext_verify_flags_get, (setter)_ssl__SSLContext_verify_flags_set, NULL},
+#define _SSL__SSLCONTEXT_VERIFY_FLAGS_GETSETDEF {"verify_flags", _ssl__SSLContext_verify_flags_get, (setter)_ssl__SSLContext_verify_flags_set, NULL},
 
-#define _SSL__SSLCONTEXT_MINIMUM_VERSION_GETSETDEF {"minimum_version", (getter)_ssl__SSLContext_minimum_version_get, (setter)_ssl__SSLContext_minimum_version_set, NULL},
+#define _SSL__SSLCONTEXT_MINIMUM_VERSION_GETSETDEF {"minimum_version", _ssl__SSLContext_minimum_version_get, (setter)_ssl__SSLContext_minimum_version_set, NULL},
 
-#define _SSL__SSLCONTEXT_MAXIMUM_VERSION_GETSETDEF {"maximum_version", (getter)_ssl__SSLContext_maximum_version_get, (setter)_ssl__SSLContext_maximum_version_set, NULL},
+#define _SSL__SSLCONTEXT_MAXIMUM_VERSION_GETSETDEF {"maximum_version", _ssl__SSLContext_maximum_version_get, (setter)_ssl__SSLContext_maximum_version_set, NULL},
 
-#define _SSL__SSLCONTEXT_NUM_TICKETS_GETSETDEF {"num_tickets", (getter)_ssl__SSLContext_num_tickets_get, (setter)_ssl__SSLContext_num_tickets_set, _ssl__SSLContext_num_tickets__doc__},
+#define _SSL__SSLCONTEXT_NUM_TICKETS_GETSETDEF {"num_tickets", _ssl__SSLContext_num_tickets_get, (setter)_ssl__SSLContext_num_tickets_set, _ssl__SSLContext_num_tickets__doc__},
 
-#define _SSL__SSLCONTEXT_SECURITY_LEVEL_GETSETDEF {"security_level", (getter)_ssl__SSLContext_security_level_get, (setter)NULL, _ssl__SSLContext_security_level__doc__},
+#define _SSL__SSLCONTEXT_SECURITY_LEVEL_GETSETDEF {"security_level", _ssl__SSLContext_security_level_get, (setter)NULL, _ssl__SSLContext_security_level__doc__},
 
-#define _SSL__SSLCONTEXT_OPTIONS_GETSETDEF {"options", (getter)_ssl__SSLContext_options_get, (setter)_ssl__SSLContext_options_set, NULL},
+#define _SSL__SSLCONTEXT_OPTIONS_GETSETDEF {"options", _ssl__SSLContext_options_get, (setter)_ssl__SSLContext_options_set, NULL},
 
-#define _SSL__SSLCONTEXT__HOST_FLAGS_GETSETDEF {"_host_flags", (getter)_ssl__SSLContext__host_flags_get, (setter)_ssl__SSLContext__host_flags_set, NULL},
+#define _SSL__SSLCONTEXT__HOST_FLAGS_GETSETDEF {"_host_flags", _ssl__SSLContext__host_flags_get, (setter)_ssl__SSLContext__host_flags_set, NULL},
 
-#define _SSL__SSLCONTEXT_CHECK_HOSTNAME_GETSETDEF {"check_hostname", (getter)_ssl__SSLContext_check_hostname_get, (setter)_ssl__SSLContext_check_hostname_set, NULL},
+#define _SSL__SSLCONTEXT_CHECK_HOSTNAME_GETSETDEF {"check_hostname", _ssl__SSLContext_check_hostname_get, (setter)_ssl__SSLContext_check_hostname_set, NULL},
 
-#define _SSL__SSLCONTEXT_PROTOCOL_GETSETDEF {"protocol", (getter)_ssl__SSLContext_protocol_get, (setter)NULL, NULL},
+#define _SSL__SSLCONTEXT_PROTOCOL_GETSETDEF {"protocol", _ssl__SSLContext_protocol_get, (setter)NULL, NULL},
 
-#define _SSL__SSLCONTEXT_SNI_CALLBACK_GETSETDEF {"sni_callback", (getter)_ssl__SSLContext_sni_callback_get, (setter)_ssl__SSLContext_sni_callback_set, _ssl__SSLContext_sni_callback__doc__},
+#define _SSL__SSLCONTEXT_SNI_CALLBACK_GETSETDEF {"sni_callback", _ssl__SSLContext_sni_callback_get, (setter)_ssl__SSLContext_sni_callback_set, _ssl__SSLContext_sni_callback__doc__},
 
-#define _SSL_MEMORYBIO_PENDING_GETSETDEF {"pending", (getter)_ssl_MemoryBIO_pending_get, (setter)NULL, _ssl_MemoryBIO_pending__doc__},
+#define _SSL_MEMORYBIO_PENDING_GETSETDEF {"pending", _ssl_MemoryBIO_pending_get, (setter)NULL, _ssl_MemoryBIO_pending__doc__},
 
-#define _SSL_MEMORYBIO_EOF_GETSETDEF {"eof", (getter)_ssl_MemoryBIO_eof_get, (setter)NULL, _ssl_MemoryBIO_eof__doc__},
+#define _SSL_MEMORYBIO_EOF_GETSETDEF {"eof", _ssl_MemoryBIO_eof_get, (setter)NULL, _ssl_MemoryBIO_eof__doc__},
 
-#define _SSL_SSLSESSION_TIME_GETSETDEF {"time", (getter)_ssl_SSLSession_time_get, (setter)NULL, _ssl_SSLSession_time__doc__},
+#define _SSL_SSLSESSION_TIME_GETSETDEF {"time", _ssl_SSLSession_time_get, (setter)NULL, _ssl_SSLSession_time__doc__},
 
-#define _SSL_SSLSESSION_TIMEOUT_GETSETDEF {"timeout", (getter)_ssl_SSLSession_timeout_get, (setter)NULL, _ssl_SSLSession_timeout__doc__},
+#define _SSL_SSLSESSION_TIMEOUT_GETSETDEF {"timeout", _ssl_SSLSession_timeout_get, (setter)NULL, _ssl_SSLSession_timeout__doc__},
 
-#define _SSL_SSLSESSION_TICKET_LIFETIME_HINT_GETSETDEF {"ticket_lifetime_hint", (getter)_ssl_SSLSession_ticket_lifetime_hint_get, (setter)NULL, _ssl_SSLSession_ticket_lifetime_hint__doc__},
+#define _SSL_SSLSESSION_TICKET_LIFETIME_HINT_GETSETDEF {"ticket_lifetime_hint", _ssl_SSLSession_ticket_lifetime_hint_get, (setter)NULL, _ssl_SSLSession_ticket_lifetime_hint__doc__},
 
-#define _SSL_SSLSESSION_ID_GETSETDEF {"id", (getter)_ssl_SSLSession_id_get, (setter)NULL, _ssl_SSLSession_id__doc__},
+#define _SSL_SSLSESSION_ID_GETSETDEF {"id", _ssl_SSLSession_id_get, (setter)NULL, _ssl_SSLSession_id__doc__},
 
-#define _SSL_SSLSESSION_HAS_TICKET_GETSETDEF {"has_ticket", (getter)_ssl_SSLSession_has_ticket_get, (setter)NULL, _ssl_SSLSession_has_ticket__doc__},
+#define _SSL_SSLSESSION_HAS_TICKET_GETSETDEF {"has_ticket", _ssl_SSLSession_has_ticket_get, (setter)NULL, _ssl_SSLSession_has_ticket__doc__},
 
-/*[clinic end generated code: output=1e32b82c61e15054 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=8bfd42406bb46ad9 input=a9049054013a1b77]*/

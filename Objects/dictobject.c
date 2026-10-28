@@ -5264,14 +5264,14 @@ _PyDictView_New(PyObject *dict, PyTypeObject *type)
     return (PyObject *)dv;
 }
 
-static PyObject *
+static PyValue
 dictview_mapping(PyObject *view, void *Py_UNUSED(ignored)) {
     assert(view != NULL);
     assert(PyDictKeys_Check(view)
            || PyDictValues_Check(view)
            || PyDictItems_Check(view));
     PyObject *mapping = (PyObject *)((_PyDictViewObject *)view)->dv_dict;
-    return PyDictProxy_New(mapping);
+    return PyValue_FromResult(PyDictProxy_New(mapping));
 }
 
 static PyGetSetDef dictview_getset[] = {
@@ -6097,22 +6097,22 @@ ensure_nonmanaged_dict(PyObject *obj, PyObject **dictptr)
     return dict;
 }
 
-PyObject *
+PyValue
 PyObject_GenericGetDict(PyObject *obj, void *context)
 {
     PyTypeObject *tp = Py_TYPE(obj);
     if (_PyType_HasFeature(tp, Py_TPFLAGS_INLINE_VALUES)) {
         // Reading __dict__ enters dictionary mode (note 09 section 6).
-        return Py_XNewRef((PyObject *)_PyObject_EnterDictMode(
+        return PyValue_FromResult((PyObject *)_PyObject_EnterDictMode(
             obj, _Py_DICT_MODE_ON_REQUEST));
     }
     PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
     if (dictptr == NULL) {
         PyErr_SetString(PyExc_AttributeError,
                         "This object has no __dict__");
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_XNewRef(ensure_nonmanaged_dict(obj, dictptr));
+    return PyValue_FromResult(ensure_nonmanaged_dict(obj, dictptr));
 }
 
 int

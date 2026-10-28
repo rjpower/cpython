@@ -322,22 +322,22 @@ PyCField_get(PyObject *op, PyObject *inst, PyObject *type)
     return PyValue_FromResult(res);
 }
 
-static PyObject *
+static PyValue
 PyCField_get_legacy_size(PyObject *self, void *Py_UNUSED(closure))
 {
     CFieldObject *field = _CFieldObject_CAST(self);
-    return PyLong_FromSsize_t(_pack_legacy_size(field));
+    return PyValue_FromLongLong(_pack_legacy_size(field));
 }
 
-static PyObject *
+static PyValue
 PyCField_get_bit_size(PyObject *self, void *Py_UNUSED(closure))
 {
     CFieldObject *field = _CFieldObject_CAST(self);
     if (field->bitfield_size) {
-        return PyLong_FromSsize_t(field->bitfield_size);
+        return PyValue_FromLongLong(field->bitfield_size);
     }
     if (field->byte_size < PY_SSIZE_T_MAX / 8) {
-        return PyLong_FromSsize_t(field->byte_size * 8);
+        return PyValue_FromLongLong(field->byte_size * 8);
     }
 
     // If the bit size overflows Py_ssize_t, we don't try fitting it in
@@ -358,19 +358,19 @@ PyCField_get_bit_size(PyObject *self, void *Py_UNUSED(closure))
 finally:
     Py_XDECREF(byte_size_obj);
     Py_XDECREF(eight);
-    return result;
+    return PyValue_FromResult(result);
 }
 
-static PyObject *
+static PyValue
 PyCField_is_bitfield(PyObject *self, void *Py_UNUSED(closure))
 {
-    return PyBool_FromLong(_CFieldObject_CAST(self)->bitfield_size);
+    return PyValue_FromObject((_CFieldObject_CAST(self)->bitfield_size) ? Py_True : Py_False);
 }
 
-static PyObject *
+static PyValue
 PyCField_is_anonymous(PyObject *self, void *Py_UNUSED(closure))
 {
-    return PyBool_FromLong(_CFieldObject_CAST(self)->anonymous);
+    return PyValue_FromObject((_CFieldObject_CAST(self)->anonymous) ? Py_True : Py_False);
 }
 
 static PyGetSetDef PyCField_getset[] = {

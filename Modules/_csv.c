@@ -186,39 +186,39 @@ get_char_or_None(Py_UCS4 c)
         return PyUnicode_FromOrdinal(c);
 }
 
-static PyObject *
+static PyValue
 Dialect_get_lineterminator(PyObject *op, void *Py_UNUSED(ignored))
 {
     DialectObj *self = _DialectObj_CAST(op);
-    return Py_XNewRef(self->lineterminator);
+    return PyValue_FromResult(Py_XNewRef(self->lineterminator));
 }
 
-static PyObject *
+static PyValue
 Dialect_get_delimiter(PyObject *op, void *Py_UNUSED(ignored))
 {
     DialectObj *self = _DialectObj_CAST(op);
-    return get_char_or_None(self->delimiter);
+    return PyValue_FromResult(get_char_or_None(self->delimiter));
 }
 
-static PyObject *
+static PyValue
 Dialect_get_escapechar(PyObject *op, void *Py_UNUSED(ignored))
 {
     DialectObj *self = _DialectObj_CAST(op);
-    return get_char_or_None(self->escapechar);
+    return PyValue_FromResult(get_char_or_None(self->escapechar));
 }
 
-static PyObject *
+static PyValue
 Dialect_get_quotechar(PyObject *op, void *Py_UNUSED(ignored))
 {
     DialectObj *self = _DialectObj_CAST(op);
-    return get_char_or_None(self->quotechar);
+    return PyValue_FromResult(get_char_or_None(self->quotechar));
 }
 
-static PyObject *
+static PyValue
 Dialect_get_quoting(PyObject *op, void *Py_UNUSED(ignored))
 {
     DialectObj *self = _DialectObj_CAST(op);
-    return PyLong_FromLong(self->quoting);
+    return PyValue_FromLongLong(self->quoting);
 }
 
 static int

@@ -538,10 +538,10 @@ exit:
 static int
 _io_StringIO_closed_get_impl(stringio *self);
 
-static PyObject *
+static PyValue
 _io_StringIO_closed_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -550,7 +550,7 @@ _io_StringIO_closed_get(PyObject *self, void *Py_UNUSED(context))
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -559,10 +559,10 @@ exit:
 static int
 _io_StringIO_line_buffering_get_impl(stringio *self);
 
-static PyObject *
+static PyValue
 _io_StringIO_line_buffering_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -571,7 +571,7 @@ _io_StringIO_line_buffering_get(PyObject *self, void *Py_UNUSED(context))
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -580,21 +580,23 @@ exit:
 static PyObject *
 _io_StringIO_newlines_get_impl(stringio *self);
 
-static PyObject *
+static PyValue
 _io_StringIO_newlines_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_StringIO_newlines_get_impl((stringio *)self);
+    _return_value = _io_StringIO_newlines_get_impl((stringio *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
-#define _IO_STRINGIO_CLOSED_GETSETDEF {"closed", (getter)_io_StringIO_closed_get, (setter)NULL, NULL},
+#define _IO_STRINGIO_CLOSED_GETSETDEF {"closed", _io_StringIO_closed_get, (setter)NULL, NULL},
 
-#define _IO_STRINGIO_LINE_BUFFERING_GETSETDEF {"line_buffering", (getter)_io_StringIO_line_buffering_get, (setter)NULL, NULL},
+#define _IO_STRINGIO_LINE_BUFFERING_GETSETDEF {"line_buffering", _io_StringIO_line_buffering_get, (setter)NULL, NULL},
 
-#define _IO_STRINGIO_NEWLINES_GETSETDEF {"newlines", (getter)_io_StringIO_newlines_get, (setter)NULL, NULL},
+#define _IO_STRINGIO_NEWLINES_GETSETDEF {"newlines", _io_StringIO_newlines_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=e37e4acd4d291519 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=00e1af80ac6375bf input=a9049054013a1b77]*/

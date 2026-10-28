@@ -387,10 +387,10 @@ pysqlite_cursor_close(PyObject *self, PyObject *Py_UNUSED(ignored))
 static PyObject *
 _sqlite3_Cursor_arraysize_get_impl(pysqlite_Cursor *self);
 
-static PyObject *
+static PyValue
 _sqlite3_Cursor_arraysize_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _sqlite3_Cursor_arraysize_get_impl((pysqlite_Cursor *)self);
+    return PyValue_FromResult(_sqlite3_Cursor_arraysize_get_impl((pysqlite_Cursor *)self));
 }
 
 static int
@@ -416,6 +416,6 @@ _sqlite3_Cursor_arraysize_set(PyObject *self, PyObject *arg, void *Py_UNUSED(con
 exit:
     return return_value;
 }
-#define _SQLITE3_CURSOR_ARRAYSIZE_GETSETDEF {"arraysize", (getter)_sqlite3_Cursor_arraysize_get, (setter)_sqlite3_Cursor_arraysize_set, NULL},
+#define _SQLITE3_CURSOR_ARRAYSIZE_GETSETDEF {"arraysize", _sqlite3_Cursor_arraysize_get, (setter)_sqlite3_Cursor_arraysize_set, NULL},
 
-/*[clinic end generated code: output=44183fe5b5ce8222 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4c3d57dbb9edf51d input=a9049054013a1b77]*/

@@ -512,14 +512,16 @@ exit:
 static PyObject *
 _asyncio_Future__asyncio_awaited_by_get_impl(FutureObj *self);
 
-static PyObject *
+static PyValue
 _asyncio_Future__asyncio_awaited_by_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _asyncio_Future__asyncio_awaited_by_get_impl((FutureObj *)self);
+    _return_value = _asyncio_Future__asyncio_awaited_by_get_impl((FutureObj *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -527,10 +529,10 @@ _asyncio_Future__asyncio_awaited_by_get(PyObject *self, void *Py_UNUSED(context)
 static int
 _asyncio_Future__asyncio_future_blocking_get_impl(FutureObj *self);
 
-static PyObject *
+static PyValue
 _asyncio_Future__asyncio_future_blocking_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -539,7 +541,7 @@ _asyncio_Future__asyncio_future_blocking_get(PyObject *self, void *Py_UNUSED(con
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -575,10 +577,10 @@ exit:
 static int
 _asyncio_Future__log_traceback_get_impl(FutureObj *self);
 
-static PyObject *
+static PyValue
 _asyncio_Future__log_traceback_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -587,7 +589,7 @@ _asyncio_Future__log_traceback_get(PyObject *self, void *Py_UNUSED(context))
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -623,14 +625,16 @@ exit:
 static PyObject *
 _asyncio_Future__loop_get_impl(FutureObj *self);
 
-static PyObject *
+static PyValue
 _asyncio_Future__loop_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _asyncio_Future__loop_get_impl((FutureObj *)self);
+    _return_value = _asyncio_Future__loop_get_impl((FutureObj *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -638,14 +642,16 @@ _asyncio_Future__loop_get(PyObject *self, void *Py_UNUSED(context))
 static PyObject *
 _asyncio_Future__callbacks_get_impl(FutureObj *self);
 
-static PyObject *
+static PyValue
 _asyncio_Future__callbacks_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _asyncio_Future__callbacks_get_impl((FutureObj *)self);
+    _return_value = _asyncio_Future__callbacks_get_impl((FutureObj *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -653,14 +659,16 @@ _asyncio_Future__callbacks_get(PyObject *self, void *Py_UNUSED(context))
 static PyObject *
 _asyncio_Future__result_get_impl(FutureObj *self);
 
-static PyObject *
+static PyValue
 _asyncio_Future__result_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _asyncio_Future__result_get_impl((FutureObj *)self);
+    _return_value = _asyncio_Future__result_get_impl((FutureObj *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -668,14 +676,16 @@ _asyncio_Future__result_get(PyObject *self, void *Py_UNUSED(context))
 static PyObject *
 _asyncio_Future__exception_get_impl(FutureObj *self);
 
-static PyObject *
+static PyValue
 _asyncio_Future__exception_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _asyncio_Future__exception_get_impl((FutureObj *)self);
+    _return_value = _asyncio_Future__exception_get_impl((FutureObj *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -683,14 +693,16 @@ _asyncio_Future__exception_get(PyObject *self, void *Py_UNUSED(context))
 static PyObject *
 _asyncio_Future__source_traceback_get_impl(FutureObj *self);
 
-static PyObject *
+static PyValue
 _asyncio_Future__source_traceback_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _asyncio_Future__source_traceback_get_impl((FutureObj *)self);
+    _return_value = _asyncio_Future__source_traceback_get_impl((FutureObj *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -698,14 +710,16 @@ _asyncio_Future__source_traceback_get(PyObject *self, void *Py_UNUSED(context))
 static PyObject *
 _asyncio_Future__cancel_message_get_impl(FutureObj *self);
 
-static PyObject *
+static PyValue
 _asyncio_Future__cancel_message_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _asyncio_Future__cancel_message_get_impl((FutureObj *)self);
+    _return_value = _asyncio_Future__cancel_message_get_impl((FutureObj *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -736,14 +750,16 @@ _asyncio_Future__cancel_message_set(PyObject *self, PyObject *arg, void *Py_UNUS
 static PyObject *
 _asyncio_Future__state_get_impl(FutureObj *self);
 
-static PyObject *
+static PyValue
 _asyncio_Future__state_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _asyncio_Future__state_get_impl((FutureObj *)self);
+    _return_value = _asyncio_Future__state_get_impl((FutureObj *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -879,10 +895,10 @@ exit:
 static int
 _asyncio_Task__log_destroy_pending_get_impl(TaskObj *self);
 
-static PyObject *
+static PyValue
 _asyncio_Task__log_destroy_pending_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -891,7 +907,7 @@ _asyncio_Task__log_destroy_pending_get(PyObject *self, void *Py_UNUSED(context))
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -927,14 +943,16 @@ exit:
 static PyObject *
 _asyncio_Task__must_cancel_get_impl(TaskObj *self);
 
-static PyObject *
+static PyValue
 _asyncio_Task__must_cancel_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _asyncio_Task__must_cancel_get_impl((TaskObj *)self);
+    _return_value = _asyncio_Task__must_cancel_get_impl((TaskObj *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -942,14 +960,16 @@ _asyncio_Task__must_cancel_get(PyObject *self, void *Py_UNUSED(context))
 static PyObject *
 _asyncio_Task__coro_get_impl(TaskObj *self);
 
-static PyObject *
+static PyValue
 _asyncio_Task__coro_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _asyncio_Task__coro_get_impl((TaskObj *)self);
+    _return_value = _asyncio_Task__coro_get_impl((TaskObj *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -957,14 +977,16 @@ _asyncio_Task__coro_get(PyObject *self, void *Py_UNUSED(context))
 static PyObject *
 _asyncio_Task__fut_waiter_get_impl(TaskObj *self);
 
-static PyObject *
+static PyValue
 _asyncio_Task__fut_waiter_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _asyncio_Task__fut_waiter_get_impl((TaskObj *)self);
+    _return_value = _asyncio_Task__fut_waiter_get_impl((TaskObj *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -2240,32 +2262,32 @@ _asyncio_future_discard_from_awaited_by(PyObject *module, const PyValue *args, P
 exit:
     return return_value;
 }
-#define _ASYNCIO_FUTURE__ASYNCIO_AWAITED_BY_GETSETDEF {"_asyncio_awaited_by", (getter)_asyncio_Future__asyncio_awaited_by_get, (setter)NULL, NULL},
+#define _ASYNCIO_FUTURE__ASYNCIO_AWAITED_BY_GETSETDEF {"_asyncio_awaited_by", _asyncio_Future__asyncio_awaited_by_get, (setter)NULL, NULL},
 
-#define _ASYNCIO_FUTURE__ASYNCIO_FUTURE_BLOCKING_GETSETDEF {"_asyncio_future_blocking", (getter)_asyncio_Future__asyncio_future_blocking_get, (setter)_asyncio_Future__asyncio_future_blocking_set, NULL},
+#define _ASYNCIO_FUTURE__ASYNCIO_FUTURE_BLOCKING_GETSETDEF {"_asyncio_future_blocking", _asyncio_Future__asyncio_future_blocking_get, (setter)_asyncio_Future__asyncio_future_blocking_set, NULL},
 
-#define _ASYNCIO_FUTURE__LOG_TRACEBACK_GETSETDEF {"_log_traceback", (getter)_asyncio_Future__log_traceback_get, (setter)_asyncio_Future__log_traceback_set, NULL},
+#define _ASYNCIO_FUTURE__LOG_TRACEBACK_GETSETDEF {"_log_traceback", _asyncio_Future__log_traceback_get, (setter)_asyncio_Future__log_traceback_set, NULL},
 
-#define _ASYNCIO_FUTURE__LOOP_GETSETDEF {"_loop", (getter)_asyncio_Future__loop_get, (setter)NULL, NULL},
+#define _ASYNCIO_FUTURE__LOOP_GETSETDEF {"_loop", _asyncio_Future__loop_get, (setter)NULL, NULL},
 
-#define _ASYNCIO_FUTURE__CALLBACKS_GETSETDEF {"_callbacks", (getter)_asyncio_Future__callbacks_get, (setter)NULL, NULL},
+#define _ASYNCIO_FUTURE__CALLBACKS_GETSETDEF {"_callbacks", _asyncio_Future__callbacks_get, (setter)NULL, NULL},
 
-#define _ASYNCIO_FUTURE__RESULT_GETSETDEF {"_result", (getter)_asyncio_Future__result_get, (setter)NULL, NULL},
+#define _ASYNCIO_FUTURE__RESULT_GETSETDEF {"_result", _asyncio_Future__result_get, (setter)NULL, NULL},
 
-#define _ASYNCIO_FUTURE__EXCEPTION_GETSETDEF {"_exception", (getter)_asyncio_Future__exception_get, (setter)NULL, NULL},
+#define _ASYNCIO_FUTURE__EXCEPTION_GETSETDEF {"_exception", _asyncio_Future__exception_get, (setter)NULL, NULL},
 
-#define _ASYNCIO_FUTURE__SOURCE_TRACEBACK_GETSETDEF {"_source_traceback", (getter)_asyncio_Future__source_traceback_get, (setter)NULL, NULL},
+#define _ASYNCIO_FUTURE__SOURCE_TRACEBACK_GETSETDEF {"_source_traceback", _asyncio_Future__source_traceback_get, (setter)NULL, NULL},
 
-#define _ASYNCIO_FUTURE__CANCEL_MESSAGE_GETSETDEF {"_cancel_message", (getter)_asyncio_Future__cancel_message_get, (setter)_asyncio_Future__cancel_message_set, NULL},
+#define _ASYNCIO_FUTURE__CANCEL_MESSAGE_GETSETDEF {"_cancel_message", _asyncio_Future__cancel_message_get, (setter)_asyncio_Future__cancel_message_set, NULL},
 
-#define _ASYNCIO_FUTURE__STATE_GETSETDEF {"_state", (getter)_asyncio_Future__state_get, (setter)NULL, NULL},
+#define _ASYNCIO_FUTURE__STATE_GETSETDEF {"_state", _asyncio_Future__state_get, (setter)NULL, NULL},
 
-#define _ASYNCIO_TASK__LOG_DESTROY_PENDING_GETSETDEF {"_log_destroy_pending", (getter)_asyncio_Task__log_destroy_pending_get, (setter)_asyncio_Task__log_destroy_pending_set, NULL},
+#define _ASYNCIO_TASK__LOG_DESTROY_PENDING_GETSETDEF {"_log_destroy_pending", _asyncio_Task__log_destroy_pending_get, (setter)_asyncio_Task__log_destroy_pending_set, NULL},
 
-#define _ASYNCIO_TASK__MUST_CANCEL_GETSETDEF {"_must_cancel", (getter)_asyncio_Task__must_cancel_get, (setter)NULL, NULL},
+#define _ASYNCIO_TASK__MUST_CANCEL_GETSETDEF {"_must_cancel", _asyncio_Task__must_cancel_get, (setter)NULL, NULL},
 
-#define _ASYNCIO_TASK__CORO_GETSETDEF {"_coro", (getter)_asyncio_Task__coro_get, (setter)NULL, NULL},
+#define _ASYNCIO_TASK__CORO_GETSETDEF {"_coro", _asyncio_Task__coro_get, (setter)NULL, NULL},
 
-#define _ASYNCIO_TASK__FUT_WAITER_GETSETDEF {"_fut_waiter", (getter)_asyncio_Task__fut_waiter_get, (setter)NULL, NULL},
+#define _ASYNCIO_TASK__FUT_WAITER_GETSETDEF {"_fut_waiter", _asyncio_Task__fut_waiter_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=560786a3b5115bae input=a9049054013a1b77]*/
+/*[clinic end generated code: output=68c19085cf9b7ed7 input=a9049054013a1b77]*/

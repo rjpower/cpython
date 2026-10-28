@@ -183,7 +183,6 @@ member_get(PyObject *self, PyObject *obj, PyObject *type)
     return PyMember_GetOneValue((char *)obj, descr->d_member);
 }
 
-/* The getter is an object form until rung 4 converts the getsets. */
 static PyValue
 getset_get(PyObject *self, PyObject *obj, PyObject *type)
 {
@@ -194,9 +193,12 @@ getset_get(PyObject *self, PyObject *obj, PyObject *type)
     if (descr_check((PyDescrObject *)descr, obj) < 0) {
         return PyValue_NULL;
     }
-    if (descr->d_getset->get != NULL)
-        return PyValue_FromResult(descr_get_trampoline_call(
-            descr->d_getset->get, obj, descr->d_getset->closure));
+    if (descr->d_getset->get != NULL) {
+        PyValue res = descr_get_trampoline_call(
+            descr->d_getset->get, obj, descr->d_getset->closure);
+        _PyValue_CheckSlotResult(res, Py_TYPE(obj), "getter");
+        return res;
+    }
     PyErr_Format(PyExc_AttributeError,
                  "attribute '%V' of '%.100s' objects is not readable",
                  descr_name((PyDescrObject *)descr), "?",
@@ -646,20 +648,20 @@ done:
 }
 
 
-static PyObject *
+static PyValue
 method_get_doc(PyObject *_descr, void *closure)
 {
     PyMethodDescrObject *descr = (PyMethodDescrObject *)_descr;
-    return _PyType_GetDocFromInternalDoc(descr->d_method->ml_name, descr->d_method->ml_doc);
+    return PyValue_FromResult(_PyType_GetDocFromInternalDoc(descr->d_method->ml_name, descr->d_method->ml_doc));
 }
 
-static PyObject *
+static PyValue
 method_get_text_signature(PyObject *_descr, void *closure)
 {
     PyMethodDescrObject *descr = (PyMethodDescrObject *)_descr;
-    return _PyType_GetTextSignatureFromInternalDoc(descr->d_method->ml_name,
+    return PyValue_FromResult(_PyType_GetTextSignatureFromInternalDoc(descr->d_method->ml_name,
                                                    descr->d_method->ml_doc,
-                                                   descr->d_method->ml_flags);
+                                                   descr->d_method->ml_flags));
 }
 
 static PyObject *
@@ -690,7 +692,7 @@ calculate_qualname(PyDescrObject *descr)
     return res;
 }
 
-static PyObject *
+static PyValue
 descr_get_qualname(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyDescrObject *descr = (PyDescrObject *)self;
@@ -704,7 +706,7 @@ descr_get_qualname(PyObject *self, void *Py_UNUSED(ignored))
     }
     qualname = Py_XNewRef(descr->d_qualname);
     Py_END_CRITICAL_SECTION();
-    return qualname;
+    return PyValue_FromResult(qualname);
 }
 
 static PyObject *
@@ -733,14 +735,14 @@ static PyGetSetDef method_getset[] = {
     {0}
 };
 
-static PyObject *
+static PyValue
 member_get_doc(PyObject *_descr, void *closure)
 {
     PyMemberDescrObject *descr = (PyMemberDescrObject *)_descr;
     if (descr->d_member->doc == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return PyUnicode_FromString(descr->d_member->doc);
+    return PyValue_FromResult(PyUnicode_FromString(descr->d_member->doc));
 }
 
 static PyGetSetDef member_getset[] = {
@@ -749,14 +751,14 @@ static PyGetSetDef member_getset[] = {
     {0}
 };
 
-static PyObject *
+static PyValue
 getset_get_doc(PyObject *self, void *closure)
 {
     PyGetSetDescrObject *descr = (PyGetSetDescrObject *)self;
     if (descr->d_getset->doc == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return PyUnicode_FromString(descr->d_getset->doc);
+    return PyValue_FromResult(PyUnicode_FromString(descr->d_getset->doc));
 }
 
 static PyGetSetDef getset_getset[] = {
@@ -765,19 +767,19 @@ static PyGetSetDef getset_getset[] = {
     {0}
 };
 
-static PyObject *
+static PyValue
 wrapperdescr_get_doc(PyObject *self, void *closure)
 {
     PyWrapperDescrObject *descr = (PyWrapperDescrObject *)self;
-    return _PyType_GetDocFromInternalDoc(descr->d_base->name, descr->d_base->doc);
+    return PyValue_FromResult(_PyType_GetDocFromInternalDoc(descr->d_base->name, descr->d_base->doc));
 }
 
-static PyObject *
+static PyValue
 wrapperdescr_get_text_signature(PyObject *self, void *closure)
 {
     PyWrapperDescrObject *descr = (PyWrapperDescrObject *)self;
-    return _PyType_GetTextSignatureFromInternalDoc(descr->d_base->name,
-                                                   descr->d_base->doc, 0);
+    return PyValue_FromResult(_PyType_GetTextSignatureFromInternalDoc(descr->d_base->name,
+                                                   descr->d_base->doc, 0));
 }
 
 static PyGetSetDef wrapperdescr_getset[] = {
@@ -1479,38 +1481,38 @@ static PyMemberDef wrapper_members[] = {
     {0}
 };
 
-static PyObject *
+static PyValue
 wrapper_objclass(PyObject *wp, void *Py_UNUSED(ignored))
 {
     PyObject *c = (PyObject *)PyDescr_TYPE(((wrapperobject *)wp)->descr);
 
-    return Py_NewRef(c);
+    return PyValue_FromObject(c);
 }
 
-static PyObject *
+static PyValue
 wrapper_name(PyObject *wp, void *Py_UNUSED(ignored))
 {
     const char *s = ((wrapperobject *)wp)->descr->d_base->name;
 
-    return PyUnicode_FromString(s);
+    return PyValue_FromResult(PyUnicode_FromString(s));
 }
 
-static PyObject *
+static PyValue
 wrapper_doc(PyObject *self, void *Py_UNUSED(ignored))
 {
     wrapperobject *wp = (wrapperobject *)self;
-    return _PyType_GetDocFromInternalDoc(wp->descr->d_base->name, wp->descr->d_base->doc);
+    return PyValue_FromResult(_PyType_GetDocFromInternalDoc(wp->descr->d_base->name, wp->descr->d_base->doc));
 }
 
-static PyObject *
+static PyValue
 wrapper_text_signature(PyObject *self, void *Py_UNUSED(ignored))
 {
     wrapperobject *wp = (wrapperobject *)self;
-    return _PyType_GetTextSignatureFromInternalDoc(wp->descr->d_base->name,
-                                                   wp->descr->d_base->doc, 0);
+    return PyValue_FromResult(_PyType_GetTextSignatureFromInternalDoc(wp->descr->d_base->name,
+                                                   wp->descr->d_base->doc, 0));
 }
 
-static PyObject *
+static PyValue
 wrapper_qualname(PyObject *self, void *Py_UNUSED(ignored))
 {
     wrapperobject *wp = (wrapperobject *)self;
@@ -2016,19 +2018,19 @@ property_init_impl(propertyobject *self, PyObject *fget, PyObject *fset,
     return 0;
 }
 
-static PyObject *
+static PyValue
 property_get__name__(PyObject *op, void *Py_UNUSED(ignored))
 {
     propertyobject *prop = _propertyobject_CAST(op);
     PyObject *name;
     if (property_name(prop, &name) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (name == NULL) {
         PyErr_SetString(PyExc_AttributeError,
                         "'property' object has no attribute '__name__'");
     }
-    return name;
+    return PyValue_FromResult(name);
 }
 
 static int
@@ -2039,34 +2041,34 @@ property_set__name__(PyObject *op, PyObject *value, void *Py_UNUSED(ignored))
     return 0;
 }
 
-static PyObject *
+static PyValue
 property_get___isabstractmethod__(PyObject *op, void *closure)
 {
     propertyobject *prop = _propertyobject_CAST(op);
     int res = _PyObject_IsAbstract(prop->prop_get);
     if (res == -1) {
-        return NULL;
+        return PyValue_NULL;
     }
     else if (res) {
-        Py_RETURN_TRUE;
+        return PyValue_FromObject(Py_True);
     }
 
     res = _PyObject_IsAbstract(prop->prop_set);
     if (res == -1) {
-        return NULL;
+        return PyValue_NULL;
     }
     else if (res) {
-        Py_RETURN_TRUE;
+        return PyValue_FromObject(Py_True);
     }
 
     res = _PyObject_IsAbstract(prop->prop_del);
     if (res == -1) {
-        return NULL;
+        return PyValue_NULL;
     }
     else if (res) {
-        Py_RETURN_TRUE;
+        return PyValue_FromObject(Py_True);
     }
-    Py_RETURN_FALSE;
+    return PyValue_FromObject(Py_False);
 }
 
 static PyGetSetDef property_getsetlist[] = {

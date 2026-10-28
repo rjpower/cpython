@@ -163,14 +163,16 @@ exit:
 static PyObject *
 BaseException_args_get_impl(PyBaseExceptionObject *self);
 
-static PyObject *
+static PyValue
 BaseException_args_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = BaseException_args_get_impl((PyBaseExceptionObject *)self);
+    _return_value = BaseException_args_get_impl((PyBaseExceptionObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -201,14 +203,16 @@ BaseException_args_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
 static PyObject *
 BaseException___traceback___get_impl(PyBaseExceptionObject *self);
 
-static PyObject *
+static PyValue
 BaseException___traceback___get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = BaseException___traceback___get_impl((PyBaseExceptionObject *)self);
+    _return_value = BaseException___traceback___get_impl((PyBaseExceptionObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -240,14 +244,16 @@ BaseException___traceback___set(PyObject *self, PyObject *arg, void *Py_UNUSED(c
 static PyObject *
 BaseException___context___get_impl(PyBaseExceptionObject *self);
 
-static PyObject *
+static PyValue
 BaseException___context___get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = BaseException___context___get_impl((PyBaseExceptionObject *)self);
+    _return_value = BaseException___context___get_impl((PyBaseExceptionObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -279,14 +285,16 @@ BaseException___context___set(PyObject *self, PyObject *arg, void *Py_UNUSED(con
 static PyObject *
 BaseException___cause___get_impl(PyBaseExceptionObject *self);
 
-static PyObject *
+static PyValue
 BaseException___cause___get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = BaseException___cause___get_impl((PyBaseExceptionObject *)self);
+    _return_value = BaseException___cause___get_impl((PyBaseExceptionObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -410,12 +418,12 @@ BaseExceptionGroup_subgroup(PyObject *self, PyValue arg)
 exit:
     return return_value;
 }
-#define BASEEXCEPTION_ARGS_GETSETDEF {"args", (getter)BaseException_args_get, (setter)BaseException_args_set, NULL},
+#define BASEEXCEPTION_ARGS_GETSETDEF {"args", BaseException_args_get, (setter)BaseException_args_set, NULL},
 
-#define BASEEXCEPTION___TRACEBACK___GETSETDEF {"__traceback__", (getter)BaseException___traceback___get, (setter)BaseException___traceback___set, NULL},
+#define BASEEXCEPTION___TRACEBACK___GETSETDEF {"__traceback__", BaseException___traceback___get, (setter)BaseException___traceback___set, NULL},
 
-#define BASEEXCEPTION___CONTEXT___GETSETDEF {"__context__", (getter)BaseException___context___get, (setter)BaseException___context___set, NULL},
+#define BASEEXCEPTION___CONTEXT___GETSETDEF {"__context__", BaseException___context___get, (setter)BaseException___context___set, NULL},
 
-#define BASEEXCEPTION___CAUSE___GETSETDEF {"__cause__", (getter)BaseException___cause___get, (setter)BaseException___cause___set, NULL},
+#define BASEEXCEPTION___CAUSE___GETSETDEF {"__cause__", BaseException___cause___get, (setter)BaseException___cause___set, NULL},
 
-/*[clinic end generated code: output=5133242dd370d319 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4bcebc0a500c3b29 input=a9049054013a1b77]*/

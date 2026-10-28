@@ -1334,18 +1334,18 @@ PyDoc_STRVAR(Decompressor_needs_input_doc,
 PyDoc_STRVAR(Decompressor_unused_data_doc,
 "Data found after the end of the compressed stream.");
 
-static PyObject *
+static PyValue
 Decompressor_unused_data_get(PyObject *op, void *Py_UNUSED(closure))
 {
     Decompressor *self = Decompressor_CAST(op);
     if (!FT_ATOMIC_LOAD_CHAR_RELAXED(self->eof)) {
-        return Py_GetConstant(Py_CONSTANT_EMPTY_BYTES);
+        return PyValue_FromResult(Py_GetConstant(Py_CONSTANT_EMPTY_BYTES));
     }
     PyMutex_Lock(&self->mutex);
     assert(self->unused_data != NULL);
     PyObject *result = Py_NewRef(self->unused_data);
     PyMutex_Unlock(&self->mutex);
-    return result;
+    return PyValue_FromResult(result);
 }
 
 static PyGetSetDef Decompressor_getset[] = {

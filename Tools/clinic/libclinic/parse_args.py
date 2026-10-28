@@ -132,7 +132,7 @@ PARSER_PROTOTYPE_NOARGS: Final[str] = libclinic.normalize_snippet("""
     {c_basename}({self_type}{self_name}, PyObject *Py_UNUSED(ignored))
 """)
 PARSER_PROTOTYPE_GETTER: Final[str] = libclinic.normalize_snippet("""
-    static PyObject *
+    static PyValue
     {c_basename}({self_type}{self_name}, void *Py_UNUSED(context))
 """)
 PARSER_PROTOTYPE_SETTER: Final[str] = libclinic.normalize_snippet("""
@@ -206,7 +206,7 @@ METHODDEF_PROTOTYPE_IFNDEF: Final[str] = libclinic.normalize_snippet("""
 """)
 # The entry of an attribute whose accessors are all compiled unconditionally.
 GETSETDEF_PROTOTYPE_DEFINE: Final[str] = libclinic.normalize_snippet("""
-    #define {getset_name}_GETSETDEF {{"{name}", (getter){getter}, (setter){setter}, {docstr}}},
+    #define {getset_name}_GETSETDEF {{"{name}", {getter}, (setter){setter}, {docstr}}},
 """)
 # Composes the PyGetSetDef entry of an attribute.  It must be rendered after
 # all accessors of that attribute, so it is written to the same destination as
@@ -222,7 +222,7 @@ GETSETDEF_PROTOTYPE_COMBINE: Final[str] = libclinic.normalize_snippet("""
     #  if !defined({getset_name}_DOCSTR)
     #    define {getset_name}_DOCSTR NULL
     #  endif
-    #  define {getset_name}_GETSETDEF {{"{name}", (getter){getset_name}_GETTER, (setter){getset_name}_SETTER, {getset_name}_DOCSTR}},
+    #  define {getset_name}_GETSETDEF {{"{name}", {getset_name}_GETTER, (setter){getset_name}_SETTER, {getset_name}_DOCSTR}},
     #else
     #  define {getset_name}_GETSETDEF
     #endif
@@ -416,9 +416,12 @@ class ParseArgsCodeGen:
     def returns_value(self) -> bool:
         """Does the parser return a PyValue?
 
-        METH_O and METH_FASTCALL functions return a value, so that a
-        return converter builds an inline int or float without allocating.
+        METH_O and METH_FASTCALL functions and getters return a value, so
+        that a return converter builds an inline int or float without
+        allocating.
         """
+        if self.func.kind is GETTER:
+            return True
         if (self.limited_capi or self.is_new_or_init()
                 or self.func.kind in ACCESSORS or self.func.kind is SLOT):
             return False

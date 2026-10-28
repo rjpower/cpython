@@ -698,18 +698,18 @@ PyDoc_STRVAR(BZ2Decompressor_unused_data__doc__,
 PyDoc_STRVAR(BZ2Decompressor_needs_input_doc,
 "True if more input is needed before more decompressed data can be produced.");
 
-static PyObject *
+static PyValue
 BZ2Decompressor_unused_data_get(PyObject *op, void *Py_UNUSED(ignored))
 {
     BZ2Decompressor *self = _BZ2Decompressor_CAST(op);
     if (!FT_ATOMIC_LOAD_CHAR_RELAXED(self->eof)) {
-        return Py_GetConstant(Py_CONSTANT_EMPTY_BYTES);
+        return PyValue_FromResult(Py_GetConstant(Py_CONSTANT_EMPTY_BYTES));
     }
     PyMutex_Lock(&self->mutex);
     assert(self->unused_data != NULL);
     PyObject *result = Py_NewRef(self->unused_data);
     PyMutex_Unlock(&self->mutex);
-    return result;
+    return PyValue_FromResult(result);
 }
 
 static PyGetSetDef BZ2Decompressor_getset[] = {

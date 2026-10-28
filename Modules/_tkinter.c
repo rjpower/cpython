@@ -894,16 +894,16 @@ PyTclObject_dealloc(PyObject *_self)
 PyDoc_STRVAR(PyTclObject_string__doc__,
 "the string representation of this object, either as str or bytes");
 
-static PyObject *
+static PyValue
 PyTclObject_string(PyObject *_self, void *Py_UNUSED(closure))
 {
     PyTclObject *self = PyTclObject_CAST(_self);
     if (!self->string) {
         self->string = unicodeFromTclObj(NULL, self->value);
         if (!self->string)
-            return NULL;
+            return PyValue_NULL;
     }
-    return Py_NewRef(self->string);
+    return PyValue_FromObject(self->string);
 }
 
 static PyObject *
@@ -961,11 +961,11 @@ PyTclObject_richcompare(PyObject *self, PyObject *other, int op)
 
 PyDoc_STRVAR(get_typename__doc__, "name of the Tcl type");
 
-static PyObject*
+static PyValue
 get_typename(PyObject *self, void *Py_UNUSED(closure))
 {
     PyTclObject *obj = PyTclObject_CAST(self);
-    return unicodeFromTclString(obj->value->typePtr->name);
+    return PyValue_FromResult(unicodeFromTclString(obj->value->typePtr->name));
 }
 
 

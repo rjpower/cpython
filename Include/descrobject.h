@@ -5,7 +5,9 @@
 extern "C" {
 #endif
 
-typedef PyObject *(*getter)(PyObject *, void *);
+/* A getter returns the attribute as a value, or PyValue_NULL with an
+   exception set. */
+typedef PyValue (*getter)(PyObject *, void *);
 typedef int (*setter)(PyObject *, PyObject *, void *);
 
 struct PyGetSetDef {

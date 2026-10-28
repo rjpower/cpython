@@ -104,7 +104,8 @@ CASES = {
 # iteration, residue).  The bodies run with SLOT_SETUP's locals; i is an inline int,
 # and the setup must not bind n, the loop's count.
 SLOT_SETUP = """
-import functools, io, operator, pickle, threading, types, weakref
+import datetime, functools, hashlib, io, operator, pickle, socket, threading
+import types, weakref
 big = 100000
 class P:
     def __init__(self): self._x = 1; self._f = 2.5
@@ -159,6 +160,22 @@ c0 = functools.lru_cache(maxsize=0)(callme)
 cn = functools.lru_cache(maxsize=None)(callme)
 c128 = functools.lru_cache(maxsize=128)(callme)
 aint = types.GenericAlias(int, (int,))
+mv = memoryview(bytearray(big))
+tm = datetime.time(microsecond=999999)
+dt = datetime.date(2020, 1, 2)
+nan = float("nan")
+def cells():
+    a = big + 1; b = 2.5 * big
+    return (lambda: (a, b)).__closure__
+ci, cf = cells()
+sha = hashlib.sha256()
+class Raw(io.RawIOBase):
+    name = big + 1
+    def readable(self): return True
+br = io.BufferedReader(Raw())
+tw = io.TextIOWrapper(br, encoding="ascii")
+sk = socket.socket()
+sk.settimeout(2.5 * big)
 """
 
 SLOT_CASES = {
@@ -223,6 +240,23 @@ SLOT_CASES = {
     "lru_cache 128 hit": ("r = c128(1)", 0, 1, None),
     "lru_cache 128 miss": ("c128.cache_clear(); r = c128(i)", 2, 5, None),
     "generic alias of int": ("r = aint(i)", 0, 0, None),
+    # The getters (6d rung 4) return values.  Discriminating: the number is
+    # not a cached small int, or the owner is a heap float.
+    "getset memoryview.nbytes": ("r = mv.nbytes", 0, 0, None),
+    "getset time.microsecond": ("r = tm.microsecond", 0, 0, None),
+    "getset NaN.imag": ("r = nan.imag", 0, 0, None),
+    "cell_contents int": ("r = ci.cell_contents", 0, 0, None),
+    "cell_contents float": ("r = cf.cell_contents", 0, 0, None),
+    # The forwarding getters: an attribute of the raw stream or buffer,
+    # and the socket's timeout.
+    "BufferedReader.name": ("r = br.name", 0, 0, None),
+    "TextIOWrapper.name": ("r = tw.name", 0, 0, None),
+    "socket.timeout": ("r = sk.timeout", 0, 0, None),
+    # Controls: the number is a cached small int.  The hash object's
+    # module (_hashlib or _sha2) is printed with the run.
+    "getset memoryview.ndim": ("r = mv.ndim", 0, 0, None),
+    "getset date.day": ("r = dt.day", 0, 0, None),
+    "getset sha256.digest_size": ("r = sha.digest_size", 0, 0, None),
     "starred inline callee": (
         "try: big(*(i,))\nexcept TypeError: pass", None, None,
         "the generator boxes the callee at the entry of _MAKE_CALLARGS_A_TUPLE "
@@ -384,6 +418,11 @@ def main():
                            capture_output=True, text=True).stdout.strip()
     print(f"box audit of {python} at {sha}{' (dirty)' if dirty else ''}")
     print(f"built: {built}")
+    hashmod = subprocess.run(
+        [python, "-c", "import hashlib; "
+         "print(type(hashlib.sha256()).__module__)"],
+        check=True, capture_output=True, text=True).stdout.strip()
+    print(f"sha256 from {hashmod}")
     failed = []
     with tempfile.TemporaryDirectory(prefix="box_audit-") as pyc, \
          tempfile.TemporaryDirectory(prefix="box_audit-stats-") as stats:

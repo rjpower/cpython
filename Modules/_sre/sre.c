@@ -1737,13 +1737,13 @@ done:
 PyDoc_STRVAR(pattern_doc, "Compiled regular expression object.");
 
 /* PatternObject's 'groupindex' method. */
-static PyObject *
+static PyValue
 pattern_groupindex(PyObject *op, void *Py_UNUSED(ignored))
 {
     PatternObject *self = _PatternObject_CAST(op);
     if (self->groupindex == NULL)
-        return PyDict_New();
-    return PyDictProxy_New(self->groupindex);
+        return PyValue_FromResult(PyDict_New());
+    return PyValue_FromResult(PyDictProxy_New(self->groupindex));
 }
 
 static int _validate(PatternObject *self); /* Forward */
@@ -2884,16 +2884,16 @@ PyDoc_STRVAR(match_doc,
 "The result of re.search(), re.prefixmatch(), and re.fullmatch().\n\
 Match objects always have a boolean value of True.");
 
-static PyObject *
+static PyValue
 match_lastindex_get(PyObject *op, void *Py_UNUSED(ignored))
 {
     MatchObject *self = _MatchObject_CAST(op);
     if (self->lastindex >= 0)
-        return PyLong_FromSsize_t(self->lastindex);
-    Py_RETURN_NONE;
+        return PyValue_FromLongLong(self->lastindex);
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
+static PyValue
 match_lastgroup_get(PyObject *op, void *Py_UNUSED(ignored))
 {
     MatchObject *self = _MatchObject_CAST(op);
@@ -2903,19 +2903,19 @@ match_lastgroup_get(PyObject *op, void *Py_UNUSED(ignored))
     {
         PyObject *result = PyTuple_GET_ITEM(self->pattern->indexgroup,
                                             self->lastindex);
-        return Py_NewRef(result);
+        return PyValue_FromObject(result);
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
+static PyValue
 match_regs_get(PyObject *op, void *Py_UNUSED(ignored))
 {
     MatchObject *self = _MatchObject_CAST(op);
     if (self->regs) {
-        return Py_NewRef(self->regs);
+        return PyValue_FromObject(self->regs);
     } else
-        return match_regs(self);
+        return PyValue_FromResult(match_regs(self));
 }
 
 static PyObject *

@@ -10,10 +10,10 @@ preserve
 static PyObject *
 _thread__ThreadHandle_ident_get_impl(PyObject *self);
 
-static PyObject *
+static PyValue
 _thread__ThreadHandle_ident_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _thread__ThreadHandle_ident_get_impl(self);
+    return PyValue_FromResult(_thread__ThreadHandle_ident_get_impl(self));
 }
 
 PyDoc_STRVAR(_thread__ThreadHandle_join__doc__,
@@ -1391,6 +1391,6 @@ exit:
 #ifndef _THREAD_SET_NAME_METHODDEF
     #define _THREAD_SET_NAME_METHODDEF
 #endif /* !defined(_THREAD_SET_NAME_METHODDEF) */
-#define _THREAD__THREADHANDLE_IDENT_GETSETDEF {"ident", (getter)_thread__ThreadHandle_ident_get, (setter)NULL, NULL},
+#define _THREAD__THREADHANDLE_IDENT_GETSETDEF {"ident", _thread__ThreadHandle_ident_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=c7560f6372e3bb2b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4366e064273cc485 input=a9049054013a1b77]*/

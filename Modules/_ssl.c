@@ -4400,14 +4400,14 @@ _ssl__SSLContext_check_hostname_set_impl(PySSLContext *self, int value)
     return 0;
 }
 
-static PyObject *
+static PyValue
 get_post_handshake_auth(PyObject *op, void *Py_UNUSED(closure))
 {
     PySSLContext *self = PySSLContext_CAST(op);
 #if defined(PySSL_HAVE_POST_HS_AUTH)
-    return PyBool_FromLong(self->post_handshake_auth);
+    return PyValue_FromObject((self->post_handshake_auth) ? Py_True : Py_False);
 #else
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 #endif
 }
 

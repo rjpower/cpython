@@ -6164,17 +6164,17 @@ Test.int_property -> int
 static int
 Test_int_property_get_impl(TestObj *self);
 
-static PyObject *
+static PyValue
 Test_int_property_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     _return_value = Test_int_property_get_impl((TestObj *)self);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -6182,7 +6182,7 @@ exit:
 
 static int
 Test_int_property_get_impl(TestObj *self)
-/*[clinic end generated code: output=0d0b1028eefad645 input=d9617980a2010b06]*/
+/*[clinic end generated code: output=b97fcf7101b5aa3e input=d9617980a2010b06]*/
 
 /*[clinic input]
 @setter
@@ -6227,15 +6227,15 @@ Test.property
 static PyObject *
 Test_property_get_impl(TestObj *self);
 
-static PyObject *
+static PyValue
 Test_property_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return Test_property_get_impl((TestObj *)self);
+    return PyValue_FromResult(Test_property_get_impl((TestObj *)self));
 }
 
 static PyObject *
 Test_property_get_impl(TestObj *self)
-/*[clinic end generated code: output=2b6f95ae685a9efc input=2d92b3449fbc7d2b]*/
+/*[clinic end generated code: output=20db58b96e750a80 input=2d92b3449fbc7d2b]*/
 
 /*[clinic input]
 @setter
@@ -6310,28 +6310,28 @@ PyDoc_STRVAR(Test_setter_first_with_docstr__doc__,
 static PyObject *
 Test_setter_first_with_docstr_get_impl(TestObj *self);
 
-static PyObject *
+static PyValue
 Test_setter_first_with_docstr_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return Test_setter_first_with_docstr_get_impl((TestObj *)self);
+    return PyValue_FromResult(Test_setter_first_with_docstr_get_impl((TestObj *)self));
 }
 
 static PyObject *
 Test_setter_first_with_docstr_get_impl(TestObj *self)
-/*[clinic end generated code: output=e93e3e68b0473d74 input=10af4e43b3cb34dc]*/
+/*[clinic end generated code: output=6d77804629e1d6bf input=10af4e43b3cb34dc]*/
 
 /*[clinic input]
 dump buffer
 [clinic start generated code]*/
-#define TEST_SETTABLE_GETSETDEF {"settable", (getter)NULL, (setter)Test_settable_set, NULL},
+#define TEST_SETTABLE_GETSETDEF {"settable", NULL, (setter)Test_settable_set, NULL},
 
-#define TEST_INT_PROPERTY_GETSETDEF {"int_property", (getter)Test_int_property_get, (setter)Test_int_property_set, NULL},
+#define TEST_INT_PROPERTY_GETSETDEF {"int_property", Test_int_property_get, (setter)Test_int_property_set, NULL},
 
-#define TEST_PROPERTY_GETSETDEF {"property", (getter)Test_property_get, (setter)Test_property_set, NULL},
+#define TEST_PROPERTY_GETSETDEF {"property", Test_property_get, (setter)Test_property_set, NULL},
 
-#define TEST_SETTER_FIRST_WITH_DOCSTR_GETSETDEF {"setter_first_with_docstr", (getter)Test_setter_first_with_docstr_get, (setter)Test_setter_first_with_docstr_set, Test_setter_first_with_docstr__doc__},
+#define TEST_SETTER_FIRST_WITH_DOCSTR_GETSETDEF {"setter_first_with_docstr", Test_setter_first_with_docstr_get, (setter)Test_setter_first_with_docstr_set, Test_setter_first_with_docstr__doc__},
 
-/*[clinic end generated code: output=011497a4f5a2e835 input=524ce2e021e4eba6]*/
+/*[clinic end generated code: output=0fd219ba43903c77 input=524ce2e021e4eba6]*/
 
 /*[clinic input]
 output push

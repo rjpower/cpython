@@ -210,6 +210,8 @@ class IRFormat:
     imm_kind: str | None = None
     store_dst: bool = False         # dst may name a local, see
                                     # stores_to_dst()
+    runs_code: bool = False         # a member may run Python code, see
+                                    # runs_code()
 
     def field_of(self, role: str) -> str | None:
         for name, r in zip(FIELDS, self.roles):
@@ -393,6 +395,59 @@ def classify_inputs(inst: Instruction, n_inputs: int) -> list[str]:
             i = passed_through(part, j)
             stack.append(popped[i] if i is not None else -1)
     return result
+
+
+def uop_runs_code(uop: Uop) -> bool:
+    """Whether uop may run Python code: an escaping call, which
+    call_effects.py defines as the reentrant kind, the eval breaker, or a
+    frame switch, which pushes a frame or goes back to one.  A specializer
+    (annotation `specializing`) inspects types and rewrites the handler
+    and runs none; when it specialises, it dispatches the same word again,
+    which reads every field anew."""
+    if "specializing" in uop.annotations:
+        return False
+    p = uop.properties
+    return p.escapes or p.eval_breaker or p.switches_frame or p.returns
+
+
+def runs_code(inst: Instruction) -> bool:
+    """Whether inst may run Python code (uop_runs_code()), or is an
+    instrumented twin, which fires a monitoring event and so calls a Python
+    callback: INSTRUMENTED_JUMP() hides that call from the escape analysis."""
+    if inst.name.startswith("INSTRUMENTED_"):
+        return True
+    return any(uop_runs_code(part) for part in inst.parts
+               if isinstance(part, Uop))
+
+
+def inputs_read_after_code(inst: Instruction, n_inputs: int) -> set[int]:
+    """The inputs of inst, bottom first, that the first uop to take them
+    takes after a uop that may run Python code (uop_runs_code()).  The
+    handler reads an input's field where that uop takes it, so a local
+    folded into such a field would be read after the code ran."""
+    late: set[int] = set()
+    stack: list[int] = []   # external index (bottom first) or -1
+    depth = n_inputs        # external inputs not yet reached
+    ran = False
+    for part in inst.parts:
+        if not isinstance(part, Uop):
+            continue
+        popped: list[int] = []      # top first
+        for item in reversed(part.stack.inputs):
+            if stack:
+                ext = stack.pop()
+            else:
+                depth -= 1
+                ext = depth
+                if ran:
+                    late.add(ext)
+            popped.append(ext)
+        popped.reverse()
+        for j in range(len(part.stack.outputs)):
+            i = passed_through(part, j)
+            stack.append(popped[i] if i is not None else -1)
+        ran = ran or uop_runs_code(part)
+    return late
 
 
 def group_name(inst: Instruction, analysis: Analysis) -> str:
@@ -644,16 +699,20 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         names = [item.name for item in inputs]
         uses: list[list[str]] = []
         passthrough: set[int] = set()
+        late: set[int] = set()
         for m in members:
             m_inputs, m_outputs = io[m.name]
             shift = n_inputs - len(m_inputs)
             uses.append(["unused"] * shift + classify_inputs(m, len(m_inputs)))
             passthrough |= {e.external + shift for e in m_outputs if e.external >= 0}
+            late |= {k + shift for k in inputs_read_after_code(m, len(m_inputs))}
         for k in range(n_inputs):
-            if k in passthrough:
+            if k in passthrough or k in late:
                 continue
             # Every member reads the input, so that its canonical slot
-            # holds a value whenever code that reads the stack runs.
+            # holds a value whenever code that reads the stack runs, and
+            # reads it before any code runs, so that a folded local is
+            # read when its load would have run.
             if all(u[k] in ("object", "raw") for u in uses):
                 borrow_mask |= 1 << k
     store_dst = stores_to_dst(members, io, dst_offset, window)
@@ -662,7 +721,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
         imm=imm, fb=fb, jumps=jumps and not forward, forward=forward,
         slot_roles=slot_roles, imm_kind=imm_kind,
-        store_dst=store_dst,
+        store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
     )
 
 

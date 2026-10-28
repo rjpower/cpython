@@ -18,6 +18,10 @@
 # and when the shell that started this script is killed (the timeout process
 # survives it and fires at the ceiling).  Orphaned regrtest workers held
 # build directories for hours before this.
+# The body is one function so that the shell parses the whole file before
+# running anything; editing this file while a gate runs then cannot break
+# the running gate.
+main() {
 set -eu
 level=$1; build=$2; shift 2
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
@@ -26,11 +30,13 @@ py="$build/python"
 J=${GATE_JOBS:-16}
 case $level in 0) LIMIT=1200 ;; 1) LIMIT=2400 ;; 2) LIMIT=3600 ;; 3) LIMIT=5400 ;; *) LIMIT=7200 ;; esac
 LIMIT=${GATE_LIMIT:-$LIMIT}
-# The pyc prefix lives under the build directory, and stale ones from runs
+# The pyc prefix stays on TMPDIR's filesystem (test_import renames a cached
+# pyc into TMPDIR, which fails across devices); stale prefixes from runs
 # whose shell was killed before the trap ran are pruned here after two hours.
-mkdir -p "$build/gate-tmp"
-find "$build/gate-tmp" -mindepth 1 -maxdepth 1 -mmin +120 -exec rm -rf {} + 2>/dev/null
-tmp=$(mktemp -d "$build/gate-tmp/run-XXXXXX")
+gatetmp="${TMPDIR:-/tmp}/boilgate"
+mkdir -p "$gatetmp"
+find "$gatetmp" -mindepth 1 -maxdepth 1 -mmin +120 -exec rm -rf {} + 2>/dev/null
+tmp=$(mktemp -d "$gatetmp/run-XXXXXX")
 child=
 cleanup() { [ -n "$child" ] && kill -TERM -- -"$child" 2>/dev/null; rm -rf "$tmp"; }
 trap cleanup EXIT
@@ -81,3 +87,5 @@ case $level in
 *)  echo "unknown level $level" >&2; exit 2 ;;
 esac
 echo "gate $level passed on $build"
+}
+main "$@"; exit $?

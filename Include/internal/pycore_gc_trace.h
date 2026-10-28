@@ -319,9 +319,9 @@ extern struct _PyGCWalkCache *_PyGC_LiveWalkCache(PyInterpreterState *interp);
 /* The verifier's kill mode: while it is set, the frees of that thread state
  * (PyObject_Free(), PyMem_Free() and the free in a moving realloc) put the
  * block in quarantine (_PyGC_Quarantine()) instead of freeing it.  The sweep
- * sets it around the dealloc and the free of each object that kill killed;
- * the GIL protects it. */
-extern PyThreadState *_PyGC_quarantine_tstate;
+ * sets it around the dealloc and the free of each object that kill killed.
+ * It is per thread: interpreters with their own GIL sweep at once. */
+extern _Py_thread_local PyThreadState *_PyGC_quarantine_tstate;
 /* Quarantine the mimalloc block at ptr: fill it with PYMEM_DEADBYTE, poison
  * it under ASan, and free it 16 collections later. */
 extern void _PyGC_Quarantine(void *ptr);

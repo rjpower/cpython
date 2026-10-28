@@ -167,8 +167,7 @@ _PyMem_MiCalloc(void *ctx, size_t nelem, size_t elsize)
 static inline int
 quarantining(void *ptr)
 {
-    return _PyGC_quarantine_tstate != NULL && ptr != NULL
-           && _PyThreadState_GET() == _PyGC_quarantine_tstate;
+    return _PyGC_quarantine_tstate != NULL && ptr != NULL;
 }
 
 static void *

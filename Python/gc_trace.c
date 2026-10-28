@@ -2451,7 +2451,7 @@ verify_report(const verify_entry *e, int64_t now)
 /* A quarantined block is freed this many collections after its object died */
 #define QUARANTINE_COLLECTIONS 16
 
-PyThreadState *_PyGC_quarantine_tstate = NULL;
+_Py_thread_local PyThreadState *_PyGC_quarantine_tstate = NULL;
 
 void
 _PyGC_Quarantine(void *ptr)

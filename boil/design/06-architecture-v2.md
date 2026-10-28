@@ -4322,7 +4322,7 @@ integration branch, after a landing review. Outside `boil/` and
 | 1 | fc926ebe3aa | 25 | +1,008, −320 |
 | 2 | c66c69d55cf | 60 | +2,786, −839 |
 | 3 | 7ad194aa883 | 43 | +1,210, −425 |
-| 4 | boil/6d at 5db4aeaff81, against 3c4e421c83f | 104 | +2,854, −1,652 |
+| 4 | boil/6d at 5db4aeaff81, against 3c4e421c83f (46bd95ee72c adds the stream writer's traverse fix) | 104 | +2,854, −1,652 |
 
 The rulings, all of 2026-10-28 (the capacity rule's acceptance is a
 measurement, 21.1):
@@ -4412,8 +4412,10 @@ well inside the cut. `getset_number` falls from 824 to 391 instructions
 an iteration and `cell_contents` from 842 to 378. Every getset and setter
 case of the box audit is at 0 boxes and 0 allocations, apart from
 `function.__doc__`, a `PyObject *` field, and `int.real`, an inline
-owner. Other micro rows and the kernels are unchanged within 1%. The
-record is work/6d-4.md, "As built".
+owner. Other micro rows and the kernels are unchanged within 1%. Gate 4
+(`results/6d.json`, 46bd95ee72c) against 6c, which spans 10a's rungs
+too: kernels' instructions 1.018, micro 0.993, memory RSS 1.024. The
+record is work/6d-4.md, "As built" and "End gates".
 
 ### 21.5 Hazards found
 
@@ -4444,6 +4446,10 @@ record is work/6d-4.md, "As built".
   tests depended on that, and now compare against their heap controls.
 - **A gate flag order** (rung 3's landing). `gate.sh 1` put `-i` before
   the caller's `-m`, so the probe ran whole files; fixed in 8a52226ee12.
+- **A traverse that missed a field** (rung 4's end gate). The CJK stream
+  writer did not visit its `pending` text, so a collection between two
+  writes freed it: a crash on debug, `SystemError` on release, at the
+  control too. Upstream omits the field as well, and leaks it.
 - **test_concurrent_futures.test_deadlock hung once** (rung 1, gate 2,
   under load). A forked worker never exited. The test has not hung
   again; the trace to follow if it does is in work/6d-1.md, "Hazards".
@@ -4505,6 +4511,16 @@ record is work/6d-4.md, "As built".
     `_Py_T_OBJECT` members, the Pickler's `persistent_id`).
 12. The super inline receiver: the method-wrapper keeps the receiver in
     its `self` field, so its box is the minimum.
+
+**The coordinator.**
+
+13. traverse_audit.py inferred an object's members from what its dealloc
+    and clear release, so a field that neither releases was invisible to
+    it. The rung's end gate met one such field by chance, the CJK stream
+    writer's `pending` (fixed in 46bd95ee72c; work/6d-4.md, "End gates").
+    The coordinator's third report (72bed4aa822) lists the members that
+    no traverse and no release names; the audit-2 agent triages its 16
+    types on boil/audit2.
 
 Note 08's register carries items 7 to 11 as rows. The "object slots box"
 row is retired, with the box audit as its proof.

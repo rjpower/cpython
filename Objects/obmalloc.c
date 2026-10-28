@@ -1219,8 +1219,11 @@ void PyMem_RawFree(void *ptr)
 /* The live collector's trigger (Python/gc_live.c): the object and mem
    domains count the bytes they allocate, and an object allocation collects
    first when the count passes the limit.  The mem domain does not collect:
-   its callers do not expect a collection, but objects own its blocks. */
-static inline void
+   its callers do not expect a collection, but objects own its blocks.
+   Precise: builds that do not inline it (debug, ASan) give it a frame of
+   its own between PyObject_Malloc()'s and the collector's, and a stale
+   word there kept a dead object (10a-2b.md, the ASan probe). */
+Py_GC_PRECISE static inline void
 gc_count_alloc(size_t size, int collect)
 {
     PyThreadState *tstate = _PyThreadState_GET();

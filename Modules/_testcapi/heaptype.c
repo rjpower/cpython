@@ -608,7 +608,10 @@ create_heapctype_with_none_bases_slot(PyObject *self, PyObject *Py_UNUSED(ignore
 }
 
 
+static PyObject *heapvarmanaged_resize(PyObject *, PyObject *);
+
 static PyMethodDef TestMethods[] = {
+    {"heapvarmanaged_resize", heapvarmanaged_resize, METH_VARARGS},
     {"pytype_fromspec_meta",    _PyCFunction_CAST(pytype_fromspec_meta), METH_O},
     {"test_type_from_ephemeral_spec", test_type_from_ephemeral_spec, METH_NOARGS},
     {"create_type_from_repeated_slots",
@@ -1081,6 +1084,43 @@ heapvarmanaged_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     for (Py_ssize_t i = 0; i < n; i++) {
         self->items[i] = Py_NewRef(PyTuple_GET_ITEM(args, i));
     }
+    PyObject_GC_Track(self);
+    return (PyObject *)self;
+}
+
+// heapvarmanaged_resize(type, before, after, value): an instance of type,
+// a HeapCVarWithManagedDict, built with `before` items and the attribute
+// `a` set to value, then resized to `after` items before it is tracked,
+// which moves its dict word.
+static PyObject *
+heapvarmanaged_resize(PyObject *module, PyObject *args)
+{
+    PyTypeObject *type;
+    Py_ssize_t before, after;
+    PyObject *value;
+    if (!PyArg_ParseTuple(args, "O!nnO", &PyType_Type, &type,
+                          &before, &after, &value)) {
+        return NULL;
+    }
+    HeapCVarWithManagedDictObject *self =
+        PyObject_GC_NewVar(HeapCVarWithManagedDictObject, type, before);
+    if (self == NULL) {
+        return NULL;
+    }
+    for (Py_ssize_t i = 0; i < before; i++) {
+        self->items[i] = Py_None;
+    }
+    if (PyObject_SetAttrString((PyObject *)self, "a", value) < 0) {
+        return NULL;
+    }
+    self = PyObject_GC_Resize(HeapCVarWithManagedDictObject, self, after);
+    if (self == NULL) {
+        return NULL;
+    }
+    for (Py_ssize_t i = before; i < after; i++) {
+        self->items[i] = Py_None;
+    }
+    PyObject_GC_Track(self);
     return (PyObject *)self;
 }
 

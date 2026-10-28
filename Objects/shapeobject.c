@@ -104,6 +104,32 @@ _PyType_SlotCapacity(PyTypeObject *type)
     return (int)Py_MIN(_Py_SHAPE_MAX_SLOTS, Py_MAX(_Py_SHAPE_MIN_SLOTS, s + 2));
 }
 
+/* TYPE's dict has a new __static_attributes__, or lost it.  Until TYPE has
+ * allocated an instance or gained a subclass, whose capacity counts TYPE's
+ * names, the capacity follows the names, so that a class decorator that
+ * generates __init__ (dataclasses) can declare what it assigns.  After
+ * that the capacity is fixed and the assignment has no effect on it. */
+int
+_PyType_StaticAttributesChanged(PyTypeObject *type)
+{
+    if (!(type->tp_flags & Py_TPFLAGS_INLINE_VALUES)) {
+        return 0;
+    }
+    _PyTypeShapes *shapes = _PyType_Shapes(type);
+    if (shapes->allocated || _PyType_HasSubclasses(type)) {
+        return 0;
+    }
+    // Only an instance adds shapes; an object given TYPE by a __class__
+    // assignment is in dictionary mode and uses slot 0 alone.
+    assert(shapes->nshapes == 1);
+    int capacity = _PyType_SlotCapacity(type);
+    if (capacity < 0) {
+        return -1;
+    }
+    shapes->capacity = (uint8_t)capacity;
+    return 0;
+}
+
 void
 _PyShape_FreeTypeShapes(PyHeapTypeObject *ht)
 {

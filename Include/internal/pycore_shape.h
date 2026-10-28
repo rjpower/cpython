@@ -62,6 +62,7 @@ struct _PyShapeSlot {
 typedef struct _PyTypeShapes {
     uint8_t nshapes;                // shapes in use, the root included
     uint8_t capacity;               // the slots of every instance
+    uint8_t allocated;              // an instance was allocated: capacity is fixed
     _PyShape dict_shape;            // the type's dictionary-mode shape
     _PyShape *shapes[_Py_SHAPE_MAX_PER_TYPE];  // shapes[0] is the root
 } _PyTypeShapes;
@@ -105,6 +106,20 @@ _PyType_SlotsSize(PyTypeObject *type)
         return 0;
     }
     return _PyType_Shapes(type)->capacity * sizeof(PyValue);
+}
+
+/* The bytes of attribute slots for a new instance of TYPE.  From the first
+ * allocation on, the type's capacity is fixed
+ * (_PyType_StaticAttributesChanged()). */
+static inline size_t
+_PyType_AllocSlotsSize(PyTypeObject *type)
+{
+    if (!(type->tp_flags & Py_TPFLAGS_INLINE_VALUES)) {
+        return 0;
+    }
+    _PyTypeShapes *shapes = _PyType_Shapes(type);
+    shapes->allocated = 1;
+    return shapes->capacity * sizeof(PyValue);
 }
 
 extern PyObject **_PyObject_ComputedDictPointer(PyObject *);  // pycore_object.h
@@ -184,6 +199,7 @@ extern int _PyShape_InitTypeShapes(PyHeapTypeObject *type, int capacity);
 extern void _PyShape_FreeTypeShapes(PyHeapTypeObject *type);
 // The capacity of a heap type being readied, from its MRO.
 extern int _PyType_SlotCapacity(PyTypeObject *type);
+extern int _PyType_StaticAttributesChanged(PyTypeObject *type);
 // The bytes of the table and of the shapes after the root, for __sizeof__.
 extern size_t _PyShape_TypeShapesSize(PyHeapTypeObject *type);
 extern int _PyShape_TraverseTypeShapes(PyHeapTypeObject *type,

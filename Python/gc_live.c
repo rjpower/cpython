@@ -1720,7 +1720,7 @@ PyObject *
 _PyObject_GC_New(PyTypeObject *tp)
 {
     size_t size = _PyObject_SIZE(tp);
-    size_t slots = _PyType_SlotsSize(tp);
+    size_t slots = _PyType_AllocSlotsSize(tp);
     PyObject *op = gc_alloc(tp, size + slots);
     if (op == NULL) {
         return NULL;

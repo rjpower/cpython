@@ -175,6 +175,8 @@ BENCHMARKS = [
     micro("attr_store_poly", "empty_list_loop"),
     micro("attr_load_after_dict", "empty_loop"),
     micro("attr_store_after_dict", "empty_loop"),
+    micro("attr_load_dataclass", "empty_loop"),
+    micro("attr_store_dataclass", "empty_loop"),
     micro("slots_load", "empty_loop"),
     micro("property_load", "empty_loop"),
     micro("class_attr_load", "empty_loop"),

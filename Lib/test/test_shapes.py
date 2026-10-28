@@ -5,6 +5,7 @@ See boil/design/09-object-protocol.md and 04-shapes.md.
 """
 
 import collections
+import dataclasses
 import dis
 import gc
 import itertools
@@ -834,6 +835,55 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual(capacity(make_static(5, B)), 7)
         self.assertIsNone(capacity(int))
 
+    def test_static_attributes_set_before_instances(self):
+        # A class decorator may declare the attributes until the first
+        # instance exists (dataclasses does).
+        names = tuple(f"n{i}" for i in range(8))
+        C = make_static(0)
+        self.assertEqual(capacity(C), MIN_SLOTS)
+        C.__static_attributes__ = names
+        self.assertEqual(capacity(C), 10)
+        del C.__static_attributes__
+        self.assertEqual(capacity(C), MIN_SLOTS)
+        C.__static_attributes__ = names
+        o = C()
+        for name in names:
+            setattr(o, name, name)
+        self.assertIsNotNone(shape_of(o))
+
+    def test_static_attributes_set_after_an_instance(self):
+        names = tuple(f"n{i}" for i in range(8))
+        C = make_static(0)
+        C.__new__(C)
+        C.__static_attributes__ = names
+        self.assertEqual(C.__static_attributes__, names)
+        self.assertEqual(capacity(C), MIN_SLOTS)
+
+    def test_static_attributes_set_with_a_subclass(self):
+        names = tuple(f"n{i}" for i in range(8))
+        C = make_static(0)
+        class S(C):
+            pass
+        C.__static_attributes__ = names
+        self.assertEqual(capacity(C), MIN_SLOTS)
+        self.assertEqual(capacity(S), MIN_SLOTS)
+
+    def test_dataclass_capacity(self):
+        fields = [f"f{i}" for i in range(8)]
+        D = dataclasses.make_dataclass("D", fields)
+        self.assertEqual(capacity(D), 10)
+        o = D(*range(8))
+        self.assertIsNotNone(shape_of(o))
+        self.assertEqual(slots_of(o)[:8], tuple(range(8)))
+        # Instantiated before the decorator: the capacity stays.
+        class C:
+            pass
+        C.__annotations__ = dict.fromkeys(fields, int)
+        C()
+        D = dataclasses.dataclass(C)
+        self.assertEqual(capacity(D), MIN_SLOTS)
+        self.assertEqual(vars(D(*range(8))), dict(zip(fields, range(8))))
+
     def test_slots_are_positions(self):
         C = make_class()
         o = C()
@@ -1115,6 +1165,18 @@ class VariableSizeTests(unittest.TestCase):
                 self.assertEqual([o[i] for i in range(n)], [[i] for i in range(n)])
             _testcapi.clear_managed_dict(objects[0])
             self.assertFalse(hasattr(objects[0], "a"))
+
+    def test_c_type_resize_moves_dict_word(self):
+        # The dict word follows the items, so a resize moves it.
+        T = _testcapi.HeapCVarWithManagedDict
+        for before, after in ((0, 5), (5, 0), (3, 3), (2, 40), (40, 1)):
+            with self.subTest(before=before, after=after):
+                value = [object()]
+                o = _testcapi.heapvarmanaged_resize(T, before, after, value)
+                gc.collect()
+                self.assertEqual(len(o), after)
+                self.assertEqual(vars(o), {"a": value})
+                self.assertIs(o.a, value)
 
     def test_items_at_end_subclass(self):
         # The items follow tp_basicsize, so the dict word is before them.

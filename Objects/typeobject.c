@@ -2324,7 +2324,7 @@ _PyType_AllocNoTrack(PyTypeObject *type, Py_ssize_t nitems)
 
     // The attribute slots follow at tp_basicsize; zeroed, they are NULL.
     assert(type->tp_itemsize == 0 || _PyType_SlotsSize(type) == 0);
-    size += _PyType_SlotsSize(type);
+    size += _PyType_AllocSlotsSize(type);
     obj = (PyObject *)_PyObject_MallocWithType(type, size);
     if (obj == NULL) {
         return PyErr_NoMemory();
@@ -6450,6 +6450,9 @@ type_setattro(PyObject *self, PyObject *name, PyObject *value)
         }
     }
     END_TYPE_DICT_LOCK();
+    if (res == 0 && name == &_Py_ID(__static_attributes__)) {
+        res = _PyType_StaticAttributesChanged(type);
+    }
 
 done:
     Py_DECREF(name);

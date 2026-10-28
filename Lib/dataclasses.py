@@ -1122,6 +1122,15 @@ def _process_class(cls, init, repr, eq, order, unsafe_hash, frozen,
     # also marks this class as being a dataclass.
     setattr(cls, _FIELDS, fields)
 
+    # Declare the attributes that the generated __init__ will assign, which
+    # it cannot add to __static_attributes__ itself, being compiled outside
+    # the class body.  The interpreter sizes instances from these names
+    # until the first instance exists.
+    static = cls.__dict__.get('__static_attributes__', ())
+    if isinstance(static, tuple):
+        names = [f.name for f in fields.values() if f._field_type is _FIELD]
+        cls.__static_attributes__ = tuple(dict.fromkeys((*static, *names)))
+
     # Was this class defined with an explicit __hash__?  Note that if
     # __eq__ is defined in this class, then python will automatically
     # set __hash__ to None.  This is a heuristic, as it's possible

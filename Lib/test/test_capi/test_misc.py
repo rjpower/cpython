@@ -622,6 +622,52 @@ class CAPITest(unittest.TestCase):
         inst = _testcapi.HeapCTypeWithNegativeDict()
         self.assertEqual({}, inst.__dict__)
 
+    def test_heaptype_dict_survives_collection(self):
+        # These types have no tp_traverse, so only the collector's own
+        # visit of the dict word keeps the instance dict alive.
+        class Payload:
+            pass
+        for cls in (
+            _testcapi.HeapCTypeWithDict,
+            _testcapi.HeapCTypeWithDict2,
+            _testcapi.HeapCTypeWithNegativeDict,
+        ):
+            with self.subTest(cls=cls):
+                inst = cls()
+                payload = Payload()
+                ref = weakref.ref(payload)
+                inst.foo = payload
+                del payload
+                support.gc_collect()
+                junk = [{"x": i} for i in range(1000)]
+                self.assertIs(inst.foo, ref())
+                self.assertIsNotNone(ref())
+                self.assertEqual(list(inst.__dict__), ["foo"])
+                del junk
+
+    def test_heaptype_managed_dict_survives_collection(self):
+        # The type's traverse does not call PyObject_VisitManagedDict, so
+        # only the collector's own visit keeps the attributes alive, in the
+        # shape slots and in dictionary mode.
+        class Payload:
+            pass
+        cls = _testcapi.HeapCTypeWithManagedDictNoVisit
+        for dict_mode in (False, True):
+            with self.subTest(dict_mode=dict_mode):
+                inst = cls()
+                if dict_mode:
+                    inst.__dict__
+                payload = Payload()
+                ref = weakref.ref(payload)
+                inst.foo = payload
+                del payload
+                support.gc_collect()
+                junk = [{"x": i} for i in range(1000)]
+                self.assertIs(inst.foo, ref())
+                self.assertIsNotNone(ref())
+                self.assertEqual(inst.__dict__, {"foo": ref()})
+                del junk
+
     def test_heaptype_with_weakref(self):
         for cls in (
             _testcapi.HeapCTypeWithWeakref,

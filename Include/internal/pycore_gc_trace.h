@@ -91,8 +91,18 @@ extern int _PyGC_TraceVisitInterp(PyInterpreterState *interp, visitproc visit,
 extern PyTypeObject **_PyGC_TraceStaticTypes(PyInterpreterState *interp,
                                              Py_ssize_t *n);
 /* Visit what op refers to: tp_traverse, _PyType_TraverseStatic() for a
- * static type, and the heap type of a non-GC instance. */
+ * static type, the heap type of a non-GC instance, and the instance's
+ * attribute storage (PyObject_VisitManagedDict()). */
 extern int _PyGC_TraceTraverse(PyObject *op, visitproc visit, void *arg);
+
+/* Does an instance of TP hold its dict at tp_dictoffset?  The collector
+ * visits that word whatever tp_traverse does (note 09 section 6). */
+static inline int
+_PyGC_HasDictWord(PyTypeObject *tp)
+{
+    return tp->tp_dictoffset != 0
+           && !(tp->tp_flags & Py_TPFLAGS_MANAGED_DICT);
+}
 
 /* Store the callee-saved registers in regs[24].  regs is passed in a
  * register that is not callee-saved, so that computing it cannot overwrite

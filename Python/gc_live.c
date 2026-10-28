@@ -138,7 +138,9 @@ _PyGC_LiveAddImmortal(PyObject *op)
         return;  // a static object
     }
     PyTypeObject *tp = Py_TYPE(op);
-    if (tp->tp_traverse == NULL && !(tp->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
+    if (tp->tp_traverse == NULL && !(tp->tp_flags & Py_TPFLAGS_HEAPTYPE)
+        && !_PyGC_HasDictWord(tp))
+    {
         return;  // refers to nothing
     }
     PyThreadState *tstate = _PyThreadState_GET();

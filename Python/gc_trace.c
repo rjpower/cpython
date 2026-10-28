@@ -20,8 +20,9 @@
    set of object addresses on the side; the header is not touched.  An
    object is traversed with tp_traverse when its type has one (a type need
    not be GC to have one; such a traverse function is never called by the
-   cycle collector) and is a leaf otherwise.  A static type is traversed
-   with _PyType_TraverseStatic().
+   cycle collector), its attribute storage (shape slots or dict word) is
+   visited when its type has one, and it is a leaf otherwise.  A static type is traversed with
+   _PyType_TraverseStatic().
 
    Roots:
 
@@ -828,6 +829,17 @@ _PyGC_TraceTraverse(PyObject *op, visitproc visit, void *arg)
     if ((tp->tp_flags & Py_TPFLAGS_HEAPTYPE) && !_PyType_IS_GC(tp)) {
         Py_VISIT(tp);
     }
+    /* The runtime lays out an instance's attribute storage, the shape slots
+       or the dict word, so the collector marks it; a type's traverse covers
+       only what the type lays out.  Under reference counting a traverse that
+       omitted the storage only missed cycles; here it would free live
+       attributes.  A traverse that also visits it is harmless. */
+    if ((tp->tp_flags & Py_TPFLAGS_INLINE_VALUES) || _PyGC_HasDictWord(tp)) {
+        int err = PyObject_VisitManagedDict(op, visit, arg);
+        if (err) {
+            return err;
+        }
+    }
     if (tp->tp_traverse != NULL) {
         return tp->tp_traverse(op, visit, arg);
     }
@@ -1505,12 +1517,13 @@ live_lookup(const trace_t *t, uintptr_t addr, int interior)
 
 /* Can an object that only a conservative root reached be traversed?  An
    untracked GC object other than a tuple may be under construction, and a
-   non-GC type with a traverse function has no flag to say that it is not. */
+   non-GC type with a traverse function or a dict word has no flag to say
+   that it is not. */
 static inline int
 live_safe_to_traverse(PyObject *op)
 {
     PyTypeObject *tp = Py_TYPE(op);
-    if (tp->tp_traverse == NULL) {
+    if (tp->tp_traverse == NULL && !_PyGC_HasDictWord(tp)) {
         return 1;
     }
     if (!_PyObject_IS_GC(op)) {
@@ -1548,7 +1561,9 @@ live_mark(trace_t *t, PyObject *op, int conservative)
     }
     op->ob_flags = flags | _Py_GC_MARKED_FLAG;
     PyTypeObject *tp = Py_TYPE(op);
-    if (tp->tp_traverse == NULL && !(tp->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
+    if (tp->tp_traverse == NULL && !(tp->tp_flags & Py_TPFLAGS_HEAPTYPE)
+        && !_PyGC_HasDictWord(tp))
+    {
         return;  // a leaf
     }
     push(t, op);

@@ -502,6 +502,24 @@ their plans are DICT:
   before 3.12. Creation, allocation, traversal, clearing and
   `_PyObject_GetDictPtr` change together in rung 3.
 
+*Amendment, 2026-10-27.* The collector marks an instance's attribute
+storage itself, whatever the type's `tp_traverse` does. Before
+`tp_traverse`, `_PyGC_TraceTraverse` visits the shape slots of every
+`Py_TPFLAGS_INLINE_VALUES` instance (slot 0 in dictionary mode). It also
+visits the dict word of every instance whose type has a nonzero
+`tp_dictoffset` without `Py_TPFLAGS_MANAGED_DICT`, computed (negative)
+offsets included (`_PyGC_HasDictWord`); this is `PyObject_VisitManagedDict`
+called on the type's behalf. The runtime lays that storage out, so the
+runtime marks it; a type's traverse covers only the fields the type lays
+out itself. Under reference counting, a traverse that omitted the storage
+only missed cycles. Under this collector it frees live attributes, and
+extension types commonly omit the visit. A traverse that also visits the
+storage is harmless, since marking is idempotent, so
+`PyObject_VisitManagedDict` stays a documented call, and
+`PyObject_ClearManagedDict` keeps its meaning. A type with a dict word is
+never a leaf. A non-GC instance with one, reached only conservatively, is
+marked shallow, like a non-GC instance with a traverse.
+
 **Capacity is a type constant.** At type creation, `capacity = min(30,
 max(6, S + 2))`, where S is the number of distinct names in
 `__static_attributes__` over the MRO (0 for a type made by

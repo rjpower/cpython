@@ -302,18 +302,25 @@ typedef struct {
     size_t block_size;
 } trace_hole;
 
-/* The live verifier's modes (PYTHON_GCVERIFY=retain|kill), and where the
-   roots outside A reached an object: a word of a PyMem block that a core
+/* The live verifier's modes (PYTHON_GCVERIFY=retain|kill[:pymem,structs]).
+   A leaves out the words of precise frames, which the collector no longer
+   scans (rung 1's claim), and with pymem and structs also the PyMem blocks
+   that words of core opaque frames point to and the struct scan (rung 3's,
+   note 11 decision 5).  An object B reached comes from a word of a precise
+   frame (or an eval loop activation), a word of a PyMem block that a core
    opaque frame points to, or a word of a thread or interpreter struct. */
 #define VERIFY_OFF      0
 #define VERIFY_RETAIN   1
 #define VERIFY_KILL     2
-#define VERIFY_FROM_CORE_MEM  1
-#define VERIFY_FROM_STRUCT    2
+#define VERIFY_EX_PYMEM   1
+#define VERIFY_EX_STRUCTS 2
+#define VERIFY_FROM_PRECISE   1
+#define VERIFY_FROM_CORE_MEM  2
+#define VERIFY_FROM_STRUCT    3
 
 typedef struct {
     uintptr_t word;       // the root word's address
-    uintptr_t owner;      // a core frame's pc, or 0 for a struct word
+    uintptr_t owner;      // its frame's pc, or 0
     int kind;             // VERIFY_FROM_*
     int64_t collection;   // the live collection that listed it
 } verify_rec;
@@ -328,6 +335,7 @@ struct _gc_trace_state {
     // the objects that only the roots outside A reached, which retain
     // keeps (sorted by address).
     int live_verify;
+    int live_verify_ex;   // VERIFY_EX_*
     int64_t live_collections;
     verify_entry *q;
     size_t nq;
@@ -420,12 +428,13 @@ typedef struct {
        core opaque frames point to, which it lists in deferred; B marks from
        them after A, and lists each object it marks in newq. */
     int verify;
+    int verify_ex;
     int phase_b;
     int frame_core;       // the walk is in a core opaque frame
     uintptr_t frame_pc;   // and its pc
     int in_queue;         // scan_queued() is draining
     verify_rec rec;       // B's root word
-    struct { uintptr_t word, value, pc; } *deferred;
+    struct { uintptr_t word, value, pc; int kind; } *deferred;
     size_t ndeferred;
     size_t deferred_cap;
     verify_entry *newq;
@@ -438,7 +447,10 @@ static int mark_visit(PyObject *op, void *arg);
 static int live_visit(PyObject *op, void *arg);
 static void live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop);
 static void verify_list(trace_t *t, PyObject *op);
-static void verify_defer(trace_t *t, uintptr_t word, uintptr_t value);
+static void verify_defer(trace_t *t, uintptr_t word, uintptr_t value,
+                         int kind);
+static void verify_defer_range(trace_t *t, uintptr_t start, uintptr_t end,
+                               int kind);
 static void scan_threads_only(trace_t *t, PyThreadState *current);
 
 
@@ -1067,6 +1079,11 @@ scan_stack(trace_t *t, PyThreadState *p, uintptr_t start, uintptr_t top)
         if (act->lo > start) {
             scan_range(t, start, Py_MIN(act->lo, top));
         }
+        if (t->verify) {
+            t->frame_pc = 0;
+            verify_defer_range(t, Py_MAX(act->lo, start), Py_MIN(act->hi, top),
+                               VERIFY_FROM_PRECISE);
+        }
         if (t->stats != NULL) {
             uintptr_t lo = Py_MAX(act->lo, start);
             uintptr_t hi = Py_MIN(act->hi, top);
@@ -1093,8 +1110,15 @@ static void
 walk_frame(void *arg, uintptr_t pc, uintptr_t sp, uintptr_t cfa, int cls)
 {
     trace_t *t = arg;
-    t->frame_core = t->verify && cls == _PyGC_FRAME_CORE;
+    t->frame_core = (t->verify_ex & VERIFY_EX_PYMEM) && cls == _PyGC_FRAME_CORE;
     t->frame_pc = pc;
+}
+
+/* The words of a precise frame, which A leaves out */
+static void
+walk_precise(void *arg, uintptr_t start, uintptr_t end)
+{
+    verify_defer_range((trace_t *)arg, start, end, VERIFY_FROM_PRECISE);
 }
 #endif
 
@@ -1127,6 +1151,7 @@ scan_from(trace_t *t, PyThreadState *p, const _PyGCContext *ctx,
     _PyGCWalk w = {
         .scan = walk_scan,
         .frame = walk_frame,
+        .precise = t->verify ? walk_precise : NULL,
         .arg = t,
         .cache = t->walk_cache,
         .top = top,
@@ -1883,7 +1908,7 @@ live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop)
         }
         else if (t->scan_mem && w >= t->mem_lo && w < t->mem_hi) {
             if (t->frame_core && !t->phase_b) {
-                verify_defer(t, (uintptr_t)p, w);
+                verify_defer(t, (uintptr_t)p, w, VERIFY_FROM_CORE_MEM);
             }
             else {
                 queue_mem_block(t, w);
@@ -2308,10 +2333,10 @@ live_clear_weak_caches(trace_t *t)
 
 /* --- the live verifier: retain (work/10a-1.md item 7) --------------------- */
 
-/* A lists a word of a core opaque frame that points into a PyMem block, for
-   B, instead of following it. */
+/* A lists a word that it leaves out, for B, with its value, since a
+   register's copy does not outlive the walk */
 static void
-verify_defer(trace_t *t, uintptr_t word, uintptr_t value)
+verify_defer(trace_t *t, uintptr_t word, uintptr_t value, int kind)
 {
     if (t->ndeferred == t->deferred_cap) {
         size_t cap = t->deferred_cap ? 2 * t->deferred_cap : 64;
@@ -2326,7 +2351,25 @@ verify_defer(trace_t *t, uintptr_t word, uintptr_t value)
     t->deferred[t->ndeferred].word = word;
     t->deferred[t->ndeferred].value = value;
     t->deferred[t->ndeferred].pc = t->frame_pc;
+    t->deferred[t->ndeferred].kind = kind;
     t->ndeferred++;
+}
+
+/* The words of [start, end) that may refer to an object or a PyMem block */
+static void _Py_NO_SANITIZE_ADDRESS
+verify_defer_range(trace_t *t, uintptr_t start, uintptr_t end, int kind)
+{
+    start = _Py_SIZE_ROUND_UP(start, sizeof(uintptr_t));
+    for (uintptr_t *p = (uintptr_t *)start;
+         (uintptr_t)p + sizeof(uintptr_t) <= end; p++)
+    {
+        uintptr_t w = *p;
+        if (live_lookup(t, w, 1) != NULL
+            || (w >= t->mem_lo && w < t->mem_hi))
+        {
+            verify_defer(t, (uintptr_t)p, w, kind);
+        }
+    }
 }
 
 /* B marks op, which A did not reach */
@@ -2376,7 +2419,19 @@ verify_report_to(FILE *out, const verify_entry *e, int64_t now)
 {
     char where[600];
     const verify_rec *r = &e->rec;
-    if (r->kind == VERIFY_FROM_CORE_MEM) {
+    if (r->kind == VERIFY_FROM_PRECISE && r->owner == 0) {
+        PyOS_snprintf(where, sizeof(where),
+                      "the word at %p of an eval loop activation",
+                      (void *)r->word);
+    }
+    else if (r->kind == VERIFY_FROM_PRECISE) {
+        char owner[512];
+        verify_owner(owner, sizeof(owner), r->owner);
+        PyOS_snprintf(where, sizeof(where),
+                      "the word at %p of a precise frame at %s",
+                      (void *)r->word, owner);
+    }
+    else if (r->kind == VERIFY_FROM_CORE_MEM) {
         char owner[512];
         verify_owner(owner, sizeof(owner), r->owner);
         PyOS_snprintf(where, sizeof(where),
@@ -2489,21 +2544,32 @@ verify_mark_b(trace_t *t, PyThreadState *tstate)
     ts->nq = kept;
 
     t->phase_b = 1;
-    t->rec = (verify_rec){.kind = VERIFY_FROM_CORE_MEM, .collection = now};
     for (size_t i = 0; i < t->ndeferred && !t->oom; i++) {
-        t->rec.word = t->deferred[i].word;
-        t->rec.owner = t->deferred[i].pc;
-        queue_mem_block(t, t->deferred[i].value);
+        uintptr_t w = t->deferred[i].value;
+        t->rec = (verify_rec){.word = t->deferred[i].word,
+                              .owner = t->deferred[i].pc,
+                              .kind = t->deferred[i].kind,
+                              .collection = now};
+        PyObject *op = live_lookup(t, w, 1);
+        if (op != NULL) {
+            live_mark(t, op, 1);
+            live_drain(t);
+        }
+        else {
+            queue_mem_block(t, w);
+        }
         scan_queued(t);
     }
-    t->rec = (verify_rec){.kind = VERIFY_FROM_STRUCT, .collection = now};
-    for (int d = 0; d < t->ndomain && !t->oom; d++) {
-        t->interp = t->domain[d];
-        t->scan_class = _PyGC_SCAN_STRUCTS;
-        scan_structs(t);
-        scan_queued(t);
+    if (t->verify_ex & VERIFY_EX_STRUCTS) {
+        t->rec = (verify_rec){.kind = VERIFY_FROM_STRUCT, .collection = now};
+        for (int d = 0; d < t->ndomain && !t->oom; d++) {
+            t->interp = t->domain[d];
+            t->scan_class = _PyGC_SCAN_STRUCTS;
+            scan_structs(t);
+            scan_queued(t);
+        }
+        t->interp = tstate->interp;
     }
-    t->interp = tstate->interp;
     t->phase_b = 0;
     if (stats != NULL) {
         stats->verify_q += (int64_t)t->nnewq;
@@ -2599,17 +2665,20 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
     *res = (_PyGCMarkResult){0};
     struct _gc_trace_state *ts = tstate->interp->gc.trace;
     int verify = ts != NULL ? ts->live_verify : VERIFY_OFF;
+    int verify_ex = verify ? ts->live_verify_ex : 0;
     trace_t t = {
         .interp = tstate->interp,
         .ts = ts,
         .live = 1,
-        // The struct scan is B's under the verifier
-        .roots = verify ? _PyGC_TRACE_ROOT_ALL & ~_PyGC_TRACE_ROOT_STRUCTS
-                        : _PyGC_TRACE_ROOT_ALL,
+        // kill:structs and retain:structs make the struct scan B's
+        .roots = (verify_ex & VERIFY_EX_STRUCTS)
+                 ? _PyGC_TRACE_ROOT_ALL & ~_PyGC_TRACE_ROOT_STRUCTS
+                 : _PyGC_TRACE_ROOT_ALL,
         .debug_offset = _PyMem_DebugEnabled() ? 2 * sizeof(size_t) : 0,
         .stats = &res->roots,
         .walk_cache = _PyGC_LiveWalkCache(tstate->interp),
         .verify = verify,
+        .verify_ex = verify_ex,
     };
     int rc = -1;
     if (addrset_init(&t.mem_scanned, 256) < 0) {
@@ -3518,6 +3587,44 @@ _PyGC_TraceRegisterStaticType(PyInterpreterState *interp, PyTypeObject *type)
     ts->static_types[ts->n_static_types++] = type;
 }
 
+/* "retain" or "kill", then optionally ":" and a comma-separated list of
+   "pymem" and "structs" */
+static int
+parse_live_verify(const char *env, int *mode, int *ex)
+{
+    size_t n = strcspn(env, ":");
+    if (n == 6 && strncmp(env, "retain", 6) == 0) {
+        *mode = VERIFY_RETAIN;
+    }
+    else if (n == 4 && strncmp(env, "kill", 4) == 0) {
+        *mode = VERIFY_KILL;
+    }
+    else {
+        return -1;
+    }
+    *ex = 0;
+    if (env[n] == '\0') {
+        return 0;
+    }
+    const char *p = env + n + 1;
+    for (;;) {
+        size_t m = strcspn(p, ",");
+        if (m == 5 && strncmp(p, "pymem", 5) == 0) {
+            *ex |= VERIFY_EX_PYMEM;
+        }
+        else if (m == 7 && strncmp(p, "structs", 7) == 0) {
+            *ex |= VERIFY_EX_STRUCTS;
+        }
+        else {
+            return -1;
+        }
+        if (p[m] == '\0') {
+            return 0;
+        }
+        p += m + 1;
+    }
+}
+
 static int
 parse_mode(const wchar_t *value)
 {
@@ -3544,16 +3651,24 @@ _PyGC_TraceInit(PyInterpreterState *interp)
     int requested = 0;
     const PyConfig *config = &interp->config;
     int live_verify = VERIFY_OFF;
+    int live_verify_ex = 0;
     if (config->use_environment) {
         const char *env = getenv("PYTHON_GCVERIFY");
-        if (env != NULL && strcmp(env, "retain") == 0) {
-            live_verify = VERIFY_RETAIN;
-        }
-        else if (env != NULL && strcmp(env, "kill") == 0) {
+        if (env != NULL && (strncmp(env, "retain", 6) == 0
+                            || strncmp(env, "kill", 4) == 0))
+        {
+            if (parse_live_verify(env, &live_verify, &live_verify_ex) < 0) {
+                return _PyStatus_ERR("PYTHON_GCVERIFY must be retain or "
+                                     "kill, then optionally a colon and a "
+                                     "comma-separated list of pymem and "
+                                     "structs");
+            }
 #ifndef Py_DEBUG
-            return _PyStatus_ERR("PYTHON_GCVERIFY=kill needs a debug build");
+            if (live_verify == VERIFY_KILL) {
+                return _PyStatus_ERR("PYTHON_GCVERIFY=kill needs a debug "
+                                     "build");
+            }
 #endif
-            live_verify = VERIFY_KILL;
         }
         else if (env != NULL && *env != '\0') {
             mode = strcmp(env, "auto") == 0 ? _PyGC_TRACE_AUTO
@@ -3589,6 +3704,7 @@ _PyGC_TraceInit(PyInterpreterState *interp)
             return _PyStatus_NO_MEMORY();
         }
         ts->live_verify = live_verify;
+        ts->live_verify_ex = live_verify_ex;
     }
     return _PyStatus_OK();
 }

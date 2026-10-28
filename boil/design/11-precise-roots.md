@@ -501,6 +501,7 @@ core C for PyMem arrays of `PyObject *` or `PyValue`, and the review:
 | `mro_implementation_unlocked()` | `to_merge` | `[0, n)` |
 | `_Py_VaBuildStack()` and `do_mkstack()` (Python/modsupport.c), with their callers in Objects/call.c (`PyObject_CallFunction`, `PyObject_CallMethod` and the `_SizeT` forms) | the built argument stack | `[0, i)` in `do_mkstack()` as values are built; the caller's span over `[0, n)` through the call and cleanup |
 | `PyUnicodeWriter`, `PyBytesWriter` | their buffer objects | `_PyGCRoot`, creation to finish or discard |
+| the compiler's units (`struct compiler_unit` and its `u_metadata` dicts, held in PyMem across collections by Python/compile.c, Python/flowgraph.c and Python/assemble.c) | the unit's dicts and lists | `_PyGCRoot` per unit, from its creation to its free (rung 3's first core site; found by the verifier's kill mode, 10a rung 1: `PYTHON_GCVERIFY=kill:pymem` crashes at start-up in `dict_keys_inorder()`, assemble.c) |
 
 Heap-owned arrays (a list's `ob_item`, the unpickler's `data`) are visited
 through their objects and are not on the list. The first grep missed

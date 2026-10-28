@@ -1577,61 +1577,71 @@ class TracingCollectorTests(unittest.TestCase):
                 self.assertFalse(cleared)
                 self.assertEqual(crossed, cross)
 
+    HOLD_IN_CORE_MEM = textwrap.dedent("""
+        import gc, sys, _testinternalcapi
+        obj = _testinternalcapi.gc_hold_in_core_mem(
+            gc.collect, sys.argv[1] == "1")
+        gc.collect()
+        print(type(obj).__name__,
+              _testinternalcapi.gc_root_stats()["total"]["verify_q"])
+    """)
+
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_verify_retain(self):
-        # PYTHON_GCVERIFY=retain (work/10a-1.md item 7): a core frame holds
-        # a list only in a PyMem block while it collects, which only the
-        # verifier's second mark reaches; a later collection that reaches
-        # the list from the roots reports it as a candidate missed root.
-        code = textwrap.dedent("""
-            import gc, sys, _testinternalcapi
-            obj = _testinternalcapi.gc_hold_in_core_mem(
-                gc.collect, sys.argv[1] == "1")
-            gc.collect()
-            print(type(obj).__name__,
-                  _testinternalcapi.gc_root_stats()["total"]["verify_q"])
-        """)
-        for give_back in (True, False):
-            with self.subTest(give_back=give_back):
+        # PYTHON_GCVERIFY=retain:pymem (work/10a-1.md item 7): a core frame
+        # holds a list only in a PyMem block while it collects, which only
+        # the verifier's second mark reaches; a later collection that
+        # reaches the list from the roots reports it as a candidate missed
+        # root.  Plain retain follows PyMem from core frames in its first
+        # mark, as the collector does in rung 1, and reports nothing.
+        for mode, give_back, want in (("retain:pymem", True, 1),
+                                      ("retain:pymem", False, 0),
+                                      ("retain", True, 0)):
+            with self.subTest(mode=mode, give_back=give_back):
                 rc, out, err = assert_python_ok(
-                    "-c", code, str(int(give_back)),
-                    PYTHON_GCVERIFY="retain")
+                    "-c", self.HOLD_IN_CORE_MEM, str(int(give_back)),
+                    PYTHON_GCVERIFY=mode)
                 name, nq = out.decode().split()
-                self.assertGreater(int(nq), 0)
+                self.assertEqual(name, "list" if give_back else "NoneType")
+                if want:
+                    self.assertGreater(int(nq), 0)
                 found = [line for line in err.decode().splitlines()
                          if "candidate list at" in line
                          and "of a core frame" in line]
-                if give_back:
-                    self.assertEqual(name, "list")
-                    self.assertEqual(len(found), 1, err)
-                else:
-                    self.assertEqual(name, "NoneType")
-                    self.assertEqual(found, [])
+                self.assertEqual(len(found), want, err)
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_verify_kill(self):
-        # PYTHON_GCVERIFY=kill (debug builds): what only the verifier's
-        # second mark reaches dies, and its blocks are quarantined and
-        # filled, so the core frame that reads the list back after the
-        # collection crashes; one that drops it does not.
-        code = textwrap.dedent("""
-            import gc, sys, _testinternalcapi
-            obj = _testinternalcapi.gc_hold_in_core_mem(
-                gc.collect, sys.argv[1] == "1")
-            print(type(obj).__name__)
-        """)
+        # PYTHON_GCVERIFY=kill:pymem (debug builds): what only the
+        # verifier's second mark reaches dies, and its blocks are
+        # quarantined and filled, so the core frame that reads the list
+        # back after the collection crashes; one that drops it does not, and
+        # neither does one under plain kill, whose first mark follows PyMem
+        # from core frames.
+        code = self.HOLD_IN_CORE_MEM
         if not support.Py_DEBUG:
             rc, out, err = assert_python_failure("-c", code, "0",
                                                  PYTHON_GCVERIFY="kill")
             self.assertIn(b"PYTHON_GCVERIFY=kill needs a debug build", err)
             return
         rc, out, err = assert_python_ok("-c", code, "0",
+                                        PYTHON_GCVERIFY="kill:pymem")
+        self.assertEqual(out.split()[0], b"NoneType")
+        rc, out, err = assert_python_ok("-c", code, "1",
                                         PYTHON_GCVERIFY="kill")
-        self.assertEqual(out.strip(), b"NoneType")
+        self.assertEqual(out.split()[0], b"list")
         rc, out, err = assert_python_failure("-X", "faulthandler", "-c", code,
-                                             "1", PYTHON_GCVERIFY="kill")
+                                             "1", PYTHON_GCVERIFY="kill:pymem")
         self.assertEqual(out, b"")
         self.assertIn(b"Segmentation fault", err)
+
+    def test_verify_mode_syntax(self):
+        for bad in ("retain:", "retain:pymem,", "kill:heap", "retainer"):
+            with self.subTest(bad=bad):
+                rc, out, err = assert_python_failure("-c", "pass",
+                                                     PYTHON_GCVERIFY=bad)
+                self.assertIn(b"PYTHON_GCVERIFY must be retain or kill", err)
+        assert_python_ok("-c", "pass", PYTHON_GCVERIFY="retain:structs,pymem")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_root_stats(self):

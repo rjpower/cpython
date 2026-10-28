@@ -153,9 +153,12 @@ struct _PyGCRootStats;
 
 /* One walk of a stack.  The walk calls scan for each range of words it
  * finds opaque, conservatively; frame, if set, for each frame, before the
- * scans of the words the frame owns. */
+ * scans of the words the frame owns; precise, if set, for each range of
+ * words that a precise frame owns, which the walk does not scan (the live
+ * verifier's, work/10a-1.md item 7). */
 typedef struct {
     void (*scan)(void *arg, uintptr_t start, uintptr_t end);
+    void (*precise)(void *arg, uintptr_t start, uintptr_t end);
     void (*frame)(void *arg, uintptr_t pc, uintptr_t sp, uintptr_t cfa,
                   int cls);
     void *arg;

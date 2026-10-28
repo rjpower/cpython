@@ -809,10 +809,11 @@ scan_word(_PyGCWalk *w, uintptr_t *loc)
     w->scan(w->arg, (uintptr_t)loc, (uintptr_t)(loc + 1));
 }
 
-/* Scan [sp, cfa) except the save slots, which are their owners'. */
+/* Scan [sp, cfa) except the save slots, which are their owners', with
+   scan: the walk's, or for a precise frame the verifier's. */
 static void
-scan_extent(_PyGCWalk *w, const _PyGCFrameDesc *d, uintptr_t sp,
-            uintptr_t cfa)
+scan_extent(_PyGCWalk *w, void (*scan)(void *, uintptr_t, uintptr_t),
+            const _PyGCFrameDesc *d, uintptr_t sp, uintptr_t cfa)
 {
     uintptr_t slots[_PyGC_NSAVED];
     int n = 0;
@@ -830,12 +831,12 @@ scan_extent(_PyGCWalk *w, const _PyGCFrameDesc *d, uintptr_t sp,
     uintptr_t start = sp;
     for (int k = 0; k < n; k++) {
         if (slots[k] > start) {
-            w->scan(w->arg, start, slots[k]);
+            scan(w->arg, start, slots[k]);
         }
         start = slots[k] + sizeof(uintptr_t);
     }
     if (cfa > start) {
-        w->scan(w->arg, start, cfa);
+        scan(w->arg, start, cfa);
     }
 }
 
@@ -949,15 +950,22 @@ _PyGC_WalkStack(_PyGCWalk *w, const _PyGCContext *ctx)
             // it, and then it is the caller's owner's to scan or anchor.
             uintptr_t *slot = rule == _PyGC_RULE_OFFSET
                 ? (uintptr_t *)(cfa + d->off[i]) : NULL;
-            if (loc[i] != NULL && opaque
-                && (slot == NULL || *loc[i] != *slot))
-            {
-                scan_word(w, loc[i]);
+            if (loc[i] != NULL && (slot == NULL || *loc[i] != *slot)) {
+                if (opaque) {
+                    scan_word(w, loc[i]);
+                }
+                else if (w->precise != NULL) {
+                    w->precise(w->arg, (uintptr_t)loc[i],
+                               (uintptr_t)(loc[i] + 1));
+                }
             }
             loc[i] = slot;
         }
         if (opaque) {
-            scan_extent(w, d, sp, cfa);
+            scan_extent(w, w->scan, d, sp, cfa);
+        }
+        else if (w->precise != NULL) {
+            scan_extent(w, w->precise, d, sp, cfa);
         }
         last_opaque = opaque;
         if (d->ra_undefined) {
@@ -971,6 +979,9 @@ _PyGC_WalkStack(_PyGCWalk *w, const _PyGCContext *ctx)
     for (int i = 0; i < _PyGC_NSAVED; i++) {
         if (loc[i] != NULL && last_opaque) {
             scan_word(w, loc[i]);
+        }
+        else if (loc[i] != NULL && w->precise != NULL) {
+            w->precise(w->arg, (uintptr_t)loc[i], (uintptr_t)(loc[i] + 1));
         }
     }
     return 0;

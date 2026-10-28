@@ -2035,3 +2035,51 @@ first-run hang in test_concurrent_futures test_shutdown_deadlock_pickle
 (the forked child never exited; 3/3 passes alone under load). 6d's branch
 now contains boil/10a through item 4, so its later rungs land after 10a's
 rung 1b.
+
+## 2026-10-28 05:12 PDT: 10a rung 1b (the eval loop precise) closed
+
+Branch boil/10a at 3d90f6ac9af; the record is boil/design/work/10a-1b.md.
+All six items landed:
+- the return order, with the entry frame's visitor and injection sites;
+- allocations as safepoints in the handlers;
+- the entry paths precise;
+- the eval loop marked, with the tail-call handlers;
+- the deletions: the eval loop's activations, its stack clears and the
+  value-root clear;
+- the trap type, which turns a use of a killed object into an abort that
+  names the word and the collection that killed it.
+
+The eval loop's frame is no longer a root: test_gc's probe frees a dead
+super() receiver 20 times in 20 on both builds, where the unmarked loop
+kept it.
+
+The first end gates, at d5d83aad9f7, failed three lines:
+- the kill suite: a verifier ordering defect exposed by the eval loop
+  going precise, not a collector defect. The quarantine was released
+  after the page lists were built. Fixed in 349cd951673, with a
+  regression test proven against the old order in 70ac80bf3f3. The other
+  kill-suite failure, test_manager's barrier timeout, was load-induced at
+  a load average of about 20.
+- ASan: two test helpers whose redzones the scan or the scrub must not
+  see, and the verify tests' ASan branches;
+- stress: finding B, a shared-heap subinterpreter running main-interpreter
+  callbacks and finalizers during its own start-up. It is step 7's, and
+  test_capi.test_misc is excluded from stress until then.
+
+Reruns at 349cd951673:
+- gate 3 debug: 55,179 collections, 0 fallbacks;
+- the suite under kill: 556 files, 0 fallbacks;
+- ASan test_gc;
+- stress test_capi.
+
+All pass, as does gate 1 test_gc under kill at 70ac80bf3f3.
+
+Measured, not gated:
+- kernels: instructions geomean 1.014, memory 1.017;
+- the allocation fast path: +3.0% and +4.5%;
+- stack words per collection: 204 down to 150;
+- micro geomean: 1.043.
+
+The micro regression bisects to item 2's handler changes, which the
+benchmarks do not run. The reading is code generation in the single
+eval-loop function.

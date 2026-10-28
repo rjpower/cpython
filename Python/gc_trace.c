@@ -2723,9 +2723,6 @@ verify_mark_b(trace_t *t, PyThreadState *tstate)
     struct _gc_trace_state *ts = t->ts;
     int64_t now = ++ts->live_collections;
     _PyGCRootStats *stats = t->stats;
-#ifdef Py_DEBUG
-    quarantine_release(ts, now - QUARANTINE_COLLECTIONS);
-#endif
     free(ts->killed);
     ts->killed = NULL;
     ts->nkilled = 0;
@@ -2844,8 +2841,9 @@ make_list_in(PyObject **slot)
     return 0;
 }
 
-/* Overwrite the stack below the caller, where make_list_in() left copies */
-static Py_NO_INLINE void
+/* Overwrite the stack below the caller, where make_list_in() left copies.
+   Not instrumented under ASan, whose redzones around buf would keep them. */
+static Py_NO_INLINE void _Py_NO_SANITIZE_ADDRESS
 scrub_stack(void)
 {
     volatile char buf[16384];
@@ -2901,6 +2899,15 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
         goto done;
     }
     HEAD_LOCK(&_PyRuntime);
+#ifdef Py_DEBUG
+    /* Before the page lists are built: a release can free a whole page,
+       and B's lookups would read it through a stale range.  The blocks of
+       the collection QUARANTINE_COLLECTIONS before this one go. */
+    if (verify == VERIFY_KILL) {
+        quarantine_release(ts, ts->live_collections + 1
+                               - QUARANTINE_COLLECTIONS);
+    }
+#endif
     if (live_domain(&t, tstate->interp) < 0
         || live_build_pages(&t) < 0
         || (live_other_threads(&t, tstate) && read_mappings(&t) < 0))

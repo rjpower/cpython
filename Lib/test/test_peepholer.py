@@ -5,6 +5,7 @@ from itertools import combinations, product
 import opcode
 import sys
 import textwrap
+import types
 import unittest
 try:
     import _testinternalcapi
@@ -1408,6 +1409,48 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
         self.assertIn(("PY_START", "attr"), events)
         self.assertIn(("LINE", "attr"), events)
         self.assertEqual([name for name, _ in _rebinds], ["f", "g"])
+
+    def test_specializer_runs_no_code(self):
+        # The word a specializer rewrites is dispatched again and reads its
+        # fields anew, so a specializer must run no Python code.  Looking
+        # up the attribute's hint in an instance dict whose keys are not all
+        # exact str compares a colliding key, whose __eq__ rebinds x; the
+        # word dispatched again would then load from or store to the other
+        # object.
+        witnessed = []
+        other = types.SimpleNamespace(a="other")
+        class Key(str):
+            def __hash__(self):
+                return hash("a")
+            def __eq__(self, name):
+                caller = sys._getframe(1)
+                if name == "a" and caller.f_code in (load.__code__,
+                                                     store.__code__):
+                    witnessed.append(caller.f_code.co_name)
+                    caller.f_locals["x"] = other
+                return False
+        class A:
+            pass
+        def make():
+            o = A()
+            o.__dict__[Key("k")] = 0
+            o.a = "first"
+            return o
+        def load(o):
+            x = o
+            return x.a
+        def store(o):
+            x = o
+            x.a = "stored"
+        results = [load(make()) for _ in range(300)]
+        self.assertEqual(set(results), {"first"})
+        receivers = [make() for _ in range(300)]
+        for o in receivers:
+            store(o)
+        self.assertEqual({o.a for o in receivers}, {"stored"})
+        self.assertEqual(other.a, "other")
+        # The lookups compared the colliding key while both functions ran
+        self.assertEqual(set(witnessed), {"load", "store"})
 
     def test_folded_operand_outlives_rebinding(self):
         # The reader's own callee rebinds the folded local and collects;

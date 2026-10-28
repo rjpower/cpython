@@ -811,6 +811,13 @@ specialize_dict_hint(PyObject *owner, _PyInstr *instr, PyObject *name,
         SPECIALIZATION_FAIL(base_op, SPEC_FAIL_NO_DICT);
         return -1;
     }
+    // A specializer runs no Python code: the lookup in a dict with keys
+    // other than exact str compares them, which may call __eq__, and the
+    // word dispatched again would read a local that the call rebound.
+    if (dict->ma_keys->dk_kind != DICT_KEYS_UNICODE) {
+        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_NON_STRING);
+        return -1;
+    }
     int res;
     Py_BEGIN_CRITICAL_SECTION(dict);
     PyValue value;

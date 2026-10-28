@@ -29,6 +29,7 @@ COOLDOWN = _testinternalcapi.SPECIALIZATION_COOLDOWN
 MIN_SLOTS = _testinternalcapi.SHAPE_MIN_SLOTS
 MAX_SLOTS = _testinternalcapi.SHAPE_MAX_SLOTS
 capacity = _testinternalcapi.type_slot_capacity
+size_class = _testinternalcapi.mem_size_class
 slots_of = _testinternalcapi.object_slots
 BOXED = _testinternalcapi.SLOT_BOXED
 I32 = _testinternalcapi.SLOT_I32
@@ -908,6 +909,32 @@ class LookupPlanTests(unittest.TestCase):
         self.assertGreater(failures, 0)
 
 
+def model_size_class(n):
+    """mimalloc's size classes on x86-64 (MI_ALIGN2W): 8 bytes, 16-byte
+    steps to 64 bytes, then four per power of two, and past the medium
+    classes the request itself; capacity_rule.py's good()."""
+    if n > 65536:
+        return n
+    if n <= 8:
+        return 8
+    if n <= 64:
+        return (n + 15) & ~15
+    step = 1 << ((n - 1).bit_length() - 3)
+    return (n + step - 1) // step * step
+
+
+def capacity_rule(basicsize, s):
+    """The capacity of a type with s static attributes (note 12 section
+    6.4): the slots that fit in the size class of basicsize + 8w bytes."""
+    want = min(s + 2, MAX_SLOTS) if s else MIN_SLOTS
+    return min(MAX_SLOTS, (size_class(basicsize + 8 * want) - basicsize) // 8)
+
+
+# The capacity of a class without static attributes, whose basic size is
+# the header's.
+EMPTY_CAPACITY = capacity_rule(8, 0)
+
+
 def make_static(n, base=object, prefix="a"):
     """A class whose __init__ assigns n attributes, so that its
     __static_attributes__ has n names."""
@@ -923,26 +950,58 @@ class LayoutTests(unittest.TestCase):
     """The slots after tp_basicsize, as many as the type's capacity."""
 
     def test_capacity_from_static_attributes(self):
-        self.assertEqual(capacity(make_static(0)), MIN_SLOTS)
-        self.assertEqual(capacity(make_static(3)), MIN_SLOTS)
-        self.assertEqual(capacity(make_static(10)), 12)
-        self.assertEqual(capacity(make_static(40)), MAX_SLOTS)
+        self.assertEqual(make_static(0).__basicsize__, 8)
+        # S + 2 slots, rounded up to the size class of the block.
+        expected = {0: 7, 1: 3, 2: 5, 3: 5, 4: 7, 5: 7, 6: 9, 7: 9, 8: 11,
+                    10: 13, 14: 19, 22: 27, 26: 30, 40: MAX_SLOTS}
+        for s, cap in expected.items():
+            with self.subTest(s=s):
+                self.assertEqual(capacity(make_static(s)), cap)
+                self.assertEqual(capacity_rule(8, s), cap)
+        self.assertEqual(EMPTY_CAPACITY, 7)
         # The names of every class on the MRO, each once.
         B = make_static(5)
-        self.assertEqual(capacity(make_static(5, B, "b")), 12)
+        self.assertEqual(capacity(make_static(5, B, "b")), 13)
         self.assertEqual(capacity(make_static(5, B)), 7)
         self.assertIsNone(capacity(int))
+
+    def test_capacity_of_other_basic_sizes(self):
+        for base in (list, dict):
+            class L(base):
+                pass
+            with self.subTest(base=base):
+                self.assertNotEqual(L.__basicsize__, 8)
+                self.assertEqual(capacity(L), capacity_rule(L.__basicsize__, 0))
+
+    def test_size_classes(self):
+        # The rule counts the release build's classes on every build: the
+        # padding of a debug build is not counted.
+        for n in itertools.chain(range(1, 2049), range(65500, 65600)):
+            self.assertEqual(size_class(n), model_size_class(n), n)
+
+    def test_capacity_past_the_medium_classes(self):
+        # The request is its own block, so the capacity is the slots wanted.
+        names = tuple(f"s{i}" for i in range(8192))
+        C = type("C", (), {"__slots__": names + ("__dict__",)})
+        self.assertEqual(C.__basicsize__, 8 + 8 * 8192)
+        self.assertEqual(capacity(C), MIN_SLOTS)
+        o = C()
+        o.s8191 = 1
+        for i in range(MIN_SLOTS + 1):
+            setattr(o, f"a{i}", i)
+        self.assertEqual(vars(o), {f"a{i}": i for i in range(MIN_SLOTS + 1)})
+        self.assertEqual(o.s8191, 1)
 
     def test_static_attributes_set_before_instances(self):
         # A class decorator may declare the attributes until the first
         # instance exists (dataclasses does).
         names = tuple(f"n{i}" for i in range(8))
         C = make_static(0)
-        self.assertEqual(capacity(C), MIN_SLOTS)
+        self.assertEqual(capacity(C), EMPTY_CAPACITY)
         C.__static_attributes__ = names
-        self.assertEqual(capacity(C), 10)
+        self.assertEqual(capacity(C), 11)
         del C.__static_attributes__
-        self.assertEqual(capacity(C), MIN_SLOTS)
+        self.assertEqual(capacity(C), EMPTY_CAPACITY)
         C.__static_attributes__ = names
         o = C()
         for name in names:
@@ -955,7 +1014,7 @@ class LayoutTests(unittest.TestCase):
         C.__new__(C)
         C.__static_attributes__ = names
         self.assertEqual(C.__static_attributes__, names)
-        self.assertEqual(capacity(C), MIN_SLOTS)
+        self.assertEqual(capacity(C), EMPTY_CAPACITY)
 
     def test_static_attributes_set_with_a_subclass(self):
         names = tuple(f"n{i}" for i in range(8))
@@ -963,13 +1022,13 @@ class LayoutTests(unittest.TestCase):
         class S(C):
             pass
         C.__static_attributes__ = names
-        self.assertEqual(capacity(C), MIN_SLOTS)
-        self.assertEqual(capacity(S), MIN_SLOTS)
+        self.assertEqual(capacity(C), EMPTY_CAPACITY)
+        self.assertEqual(capacity(S), EMPTY_CAPACITY)
 
     def test_dataclass_capacity(self):
         fields = [f"f{i}" for i in range(8)]
         D = dataclasses.make_dataclass("D", fields)
-        self.assertEqual(capacity(D), 10)
+        self.assertEqual(capacity(D), 11)
         o = D(*range(8))
         self.assertIsNotNone(shape_of(o))
         self.assertEqual(slots_of(o)[:8], tuple(range(8)))
@@ -979,7 +1038,7 @@ class LayoutTests(unittest.TestCase):
         C.__annotations__ = dict.fromkeys(fields, int)
         C()
         D = dataclasses.dataclass(C)
-        self.assertEqual(capacity(D), MIN_SLOTS)
+        self.assertEqual(capacity(D), EMPTY_CAPACITY)
         self.assertEqual(vars(D(*range(8))), dict(zip(fields, range(8))))
 
     def test_slots_are_positions(self):
@@ -987,14 +1046,15 @@ class LayoutTests(unittest.TestCase):
         o = C()
         self.assertEqual(plan(o, "x").offset, C.__basicsize__)
         self.assertEqual(plan(o, "y").offset, C.__basicsize__ + 8)
-        self.assertEqual(slots_of(o), (1, 2) + (None,) * (MIN_SLOTS - 2))
+        self.assertEqual(slots_of(o), (1, 2) + (None,) * (capacity(C) - 2))
 
     def test_sizeof_counts_slots(self):
         C = make_static(10)
-        self.assertEqual(sys.getsizeof(C()), C.__basicsize__ + 12 * 8)
+        self.assertEqual(sys.getsizeof(C()), C.__basicsize__ + 13 * 8)
         class L(list):
             pass
-        self.assertEqual(sys.getsizeof(L()), sys.getsizeof([]) + MIN_SLOTS * 8)
+        self.assertEqual(sys.getsizeof(L()),
+                         sys.getsizeof([]) + capacity_rule(L.__basicsize__, 0) * 8)
 
     def test_slots_match_shape(self):
         C = make_class()
@@ -1010,7 +1070,7 @@ class LayoutTests(unittest.TestCase):
         class C:
             pass
         o = C()
-        names = [f"a{i}" for i in range(MIN_SLOTS)]
+        names = [f"a{i}" for i in range(capacity(C))]
         for name in names:
             setattr(o, name, name)
         del o.a1
@@ -1129,10 +1189,10 @@ class DictionaryModeTests(unittest.TestCase):
         Small = make_static(0)
         Big = make_static(40, prefix="b")
         self.assertEqual((capacity(Small), capacity(Big)),
-                         (MIN_SLOTS, MAX_SLOTS))
+                         (EMPTY_CAPACITY, MAX_SLOTS))
         o = Small()
         o.a, o.b = 1, 2
-        # o keeps Small's six slots: only slot 0 may be used from now on.
+        # o keeps Small's slots: only slot 0 may be used from now on.
         for cls in (Big, Small, Big, Small):
             o.__class__ = cls
             self.assertIsNone(shape_of(o))
@@ -1214,7 +1274,7 @@ class DictionaryModeReasonTests(unittest.TestCase):
         class C:
             pass
         o = C()
-        for i in range(MIN_SLOTS):
+        for i in range(capacity(C)):
             setattr(o, f"a{i}", i)
         self.assertEntersOnce("capacity", o, setattr, "z", 0)
 
@@ -1240,7 +1300,7 @@ class DictionaryModeReasonTests(unittest.TestCase):
         full = []
         for _ in range(2):
             o = C()
-            for i in range(MIN_SLOTS):
+            for i in range(capacity(C)):
                 setattr(o, f"a{i}", i)
             full.append(o)
         self.exhaust_shapes(C)
@@ -1493,6 +1553,71 @@ class NonExactNameTests(unittest.TestCase):
             else:
                 self.assertEqual(value, 1)
         self.assertGreater(failures, 0)
+
+
+@cpython_only
+class PresizedConversionTests(unittest.TestCase):
+    """The conversion's dict has room for the fields and the store that
+    converts, in a table of str keys (note 12 section 6.3).  A debug build
+    asserts that the fill resizes nothing."""
+
+    def test_fields_and_holes(self):
+        for n in (0, 1, 4, 5, 7):
+            with self.subTest(n=n):
+                class C:
+                    pass
+                o = C()
+                for i in range(n):
+                    setattr(o, f"a{i}", i)
+                expected = {f"a{i}": i for i in range(n)}
+                if n > 1:
+                    del o.a1, expected["a1"]
+                self.assertEqual(vars(o), expected)
+                self.assertIsNone(shape_of(o))
+                o.z = "z"
+                self.assertEqual(vars(o), expected | {"z": "z"})
+
+    def test_store_past_capacity(self):
+        C = make_static(1)
+        self.assertEqual(capacity(C), 3)
+        o = C()
+        o.b = 1; o.c = 2
+        del o.b
+        o.d = 3
+        self.assertIsNone(shape_of(o))
+        self.assertEqual(vars(o), {"a0": 0, "c": 2, "d": 3})
+        class D:
+            pass
+        p = D()
+        for i in range(capacity(D)):
+            setattr(p, f"a{i}", i)
+        p.z = "z"
+        self.assertIsNone(shape_of(p))
+        self.assertEqual(vars(p), {f"a{i}": i for i in range(capacity(D))}
+                                  | {"z": "z"})
+
+    @requires_specialization
+    def test_hint_handlers_after_conversion(self):
+        # _PyDict_NewPresized() would give a table of general keys, which
+        # both WITH_HINT handlers refuse.
+        class C:
+            pass
+        o = C()
+        for i in range(7):
+            setattr(o, f"a{i}", i)
+        vars(o)
+        self.assertIsNone(shape_of(o))
+        @reset_code
+        def get(o):
+            return o.a6
+        @reset_code
+        def put(o, v):
+            o.a5 = v
+        for _ in range(4 * (THRESHOLD + COOLDOWN)):
+            get(o), put(o, 1)
+        self.assertIn("LOAD_ATTR_WITH_HINT", opnames(get))
+        self.assertIn("STORE_ATTR_WITH_HINT", opnames(put))
+        self.assertEqual((get(o), o.a5), (6, 1))
 
 
 @cpython_only
@@ -1877,6 +2002,310 @@ class ShapePolyTests(unittest.TestCase):
             gc.collect()
         self.assertEqual([r() for r in refs], [None] * len(refs))
 
+    def test_method_rows_of_types_without_a_dict(self):
+        # Their objects have the root shape, so their method rows are shape
+        # rows (note 12 section 6.1).
+        @reset_code
+        def call(o):
+            return o.__len__()
+        objects = [[1], collections.deque([1, 2]), (1, 2, 3), "abcd"]
+        self.warm(call, objects, [1, 2, 3, 4])
+        self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(call))
+
+    def test_class_value_on_a_type_without_a_dict(self):
+        class S:
+            __slots__ = ()
+            m = lambda self: "method"
+            v = "class"
+        @reset_code
+        def call(o):
+            return o.m()
+        @reset_code
+        def get(o):
+            return o.v
+        self.warm(call, [S()], ["method"])
+        self.warm(get, [S()], ["class"])
+        self.assertIn("LOAD_ATTR_METHOD_SHAPE", opnames(call))
+        self.assertIn("LOAD_ATTR_NONDESCRIPTOR_SHAPE", opnames(get))
+        S.v = "new"
+        S.m = lambda self: "new method"
+        self.assertEqual((call(S()), get(S())), ("new method", "new"))
+
+
+def stored(classes):
+    """Factories of fresh objects of each class, the first with x already,
+    the others without: a REPLACE row, then ADD rows."""
+    def made(cls, i):
+        def make():
+            o = cls()
+            if i == 0:
+                o.x = 0
+            return o
+        return make
+    return [made(cls, i) for i, cls in enumerate(classes)]
+
+
+def store_classes(n):
+    return [type(f"P{i}", (), {}) for i in range(n)]
+
+
+@cpython_only
+@requires_specialization
+class StorePolyTests(unittest.TestCase):
+    """STORE_ATTR_SHAPE_POLY: a store at two to four shapes, of one type or
+    several, each a REPLACE or an ADD (note 12 section 6.1)."""
+
+    def warm(self, put, factories, values, rounds=2 * COOLDOWN):
+        out = []
+        for _ in range(rounds):
+            out = []
+            for make, v in zip(factories, values):
+                o = make()
+                put(o, v)
+                self.assertEqual(o.x, v)
+                out.append(o)
+        return out
+
+    def test_replace_rows(self):
+        for n in (2, 3, 4):
+            with self.subTest(shapes=n):
+                @reset_code
+                def put(o, v):
+                    o.x = v
+                P, objects = shaped(n)
+                for _ in range(2 * COOLDOWN):
+                    for i, o in enumerate(objects):
+                        put(o, i + 10)
+                        self.assertEqual(o.x, i + 10)
+                self.assertIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+
+    def test_add_rows(self):
+        for n in (2, 4):
+            with self.subTest(shapes=n):
+                @reset_code
+                def put(o, v):
+                    o.x = v
+                classes = store_classes(n)
+                factories = [lambda c=c: c() for c in classes]
+                objects = self.warm(put, factories, range(n))
+                self.assertIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+                for i, o in enumerate(objects):
+                    self.assertIsNotNone(shape_of(o))
+                    self.assertEqual(vars(o), {"x": i})
+
+    def test_mixed_rows(self):
+        @reset_code
+        def put(o, v):
+            o.x = v
+        factories = stored(store_classes(3))
+        self.warm(put, factories, [1, 2.5, "s"])
+        self.assertIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+
+    def test_five_shapes_are_megamorphic(self):
+        @reset_code
+        def put(o, v):
+            o.x = v
+        factories = stored(store_classes(5))
+        self.warm(put, factories, range(5), rounds=8 * COOLDOWN)
+        self.assertNotIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+        self.assertNotIn("STORE_ATTR_SHAPE", opnames(put))
+        self.assertNotIn("STORE_ATTR_SHAPE_TRANSITION", opnames(put))
+
+    def test_kind_misfit(self):
+        @reset_code
+        def put(o, v):
+            o.x = v
+        classes = store_classes(3)
+        factories = stored(classes)
+        self.warm(put, factories, [1, 2, 3])
+        self.assertIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+        # An I32 field takes a str: the site exits, the generic store
+        # generalises, and the site specialises again.
+        o = factories[1]()
+        before = generalisations()
+        put(o, "s")
+        self.assertEqual(o.x, "s")
+        self.assertEqual(kinds(o), (BOXED,))
+        self.assertGreater(generalisations(), before)
+        self.warm(put, factories, ["a", "b", "c"])
+        self.assertIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+
+    def test_target_only_generalisation(self):
+        # Generalising the field an ADD row adds renews its target, not the
+        # row's shape: the row's kind is narrower than the field's, and
+        # admits only values the field takes.
+        @reset_code
+        def put(o, v):
+            o.x = v
+        classes = store_classes(2)
+        factories = [lambda c=c: c() for c in classes]
+        self.warm(put, factories, [1, 2])
+        self.assertIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+        o = classes[0]()
+        o.x = 1
+        o.x = "s"
+        self.assertEqual(kinds(o), (BOXED,))
+        p = classes[0]()
+        put(p, 5)
+        self.assertEqual((p.x, kinds(p)), (5, (BOXED,)))
+        q = classes[0]()
+        put(q, "t")
+        self.assertEqual((q.x, kinds(q)), ("t", (BOXED,)))
+
+    def test_one_row_renewed(self):
+        @reset_code
+        def put(o, v):
+            o.x = v
+        classes = store_classes(3)
+        factories = stored(classes)
+        self.warm(put, factories, [1, 2, 3])
+        classes[1].y = "class"
+        objects = self.warm(put, factories, [4, 5, 6], rounds=1)
+        self.assertEqual([o.x for o in objects], [4, 5, 6])
+
+    def test_data_descriptor_installed(self):
+        @reset_code
+        def put(o, v):
+            o.x = v
+        classes = store_classes(3)
+        factories = stored(classes)
+        self.warm(put, factories, [1, 2, 3])
+        seen = []
+        classes[2].x = property(lambda self: "prop",
+                                lambda self, v: seen.append(v))
+        o = classes[2]()
+        put(o, 7)
+        self.assertEqual((seen, o.x), ([7], "prop"))
+        p = factories[0]()
+        put(p, 8)
+        self.assertEqual(p.x, 8)
+
+    def test_setattr_added(self):
+        @reset_code
+        def put(o, v):
+            o.x = v
+        classes = store_classes(3)
+        factories = stored(classes)
+        self.warm(put, factories, [1, 2, 3])
+        seen = []
+        def setattr_hook(self, name, v):
+            seen.append((name, v))
+            object.__setattr__(self, name, v * 2)
+        classes[1].__setattr__ = setattr_hook
+        o = classes[1]()
+        put(o, 4)
+        self.assertEqual((seen, o.x), ([("x", 4)], 8))
+
+    def test_dead_row_types(self):
+        # Rows borrow shapes; a dead type's shapes may be reused at the same
+        # addresses by new types, whose versions differ.
+        @reset_code
+        def put(o, v):
+            o.x = v
+        refs = []
+        for round in range(10):
+            classes = store_classes(2)
+            factories = stored(classes)
+            self.warm(put, factories, [round, -round], rounds=THRESHOLD + 1)
+            refs.extend(weakref.ref(c) for c in classes)
+            del classes, factories
+            gc.collect()
+        self.assertEqual([r() for r in refs], [None] * len(refs))
+
+    def test_collector_sees_stored_values(self):
+        class V:
+            pass
+        @reset_code
+        def put(o, v):
+            o.x = v
+        classes = store_classes(3)
+        factories = stored(classes)
+        self.warm(put, factories, [V(), V(), V()])
+        self.assertIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+        replace = factories[0]()
+        old = V()
+        put(replace, old)
+        dead = weakref.ref(old)
+        del old
+        added = factories[1]()
+        put(added, V())
+        put(replace, V())
+        values = [weakref.ref(replace.x), weakref.ref(added.x)]
+        gc.collect()
+        self.assertIsNone(dead())
+        self.assertIsInstance(replace.x, V)
+        self.assertIsInstance(added.x, V)
+        self.assertEqual([r() is not None for r in values], [True, True])
+
+
+@cpython_only
+@requires_specialization
+class LazyDictMethodTests(unittest.TestCase):
+    """LOAD_ATTR_METHOD_LAZY_DICT: a method of an object whose instance dict
+    is not made yet (note 12 section 6.2)."""
+
+    def receivers(self):
+        class E(Exception):
+            def m(self):
+                return "method"
+        class I(int):
+            def m(self):
+                return "method"
+        class T(tuple):
+            def m(self):
+                return "method"
+        return [E(), I(5), I(2**100), T(), T(range(10))]
+
+    def warm(self, call, o):
+        for _ in range(4 * (THRESHOLD + COOLDOWN)):
+            self.assertEqual(call(o), "method")
+
+    def check(self, make_dict, expected):
+        for o in self.receivers():
+            with self.subTest(receiver=type(o).__mro__[1], o=o):
+                @reset_code
+                def call(o):
+                    return o.m()
+                self.warm(call, o)
+                self.assertIn("LOAD_ATTR_METHOD_LAZY_DICT", opnames(call))
+                make_dict(o)
+                self.assertEqual(call(o), expected)
+                # Another object of the type, still without a dict
+                self.assertEqual(call(type(o)()), "method")
+
+    def test_empty_dict(self):
+        self.check(lambda o: o.__dict__, "method")
+
+    def test_unrelated_attribute(self):
+        def make(o):
+            o.other = 1
+        self.check(make, "method")
+
+    def test_shadowing_attribute(self):
+        def make(o):
+            o.m = lambda: "instance"
+        self.check(make, "instance")
+
+    def test_dict_assigned(self):
+        def make(o):
+            o.__dict__ = {"m": lambda: "assigned"}
+        self.check(make, "assigned")
+
+    def test_dict_from_the_c_api(self):
+        setattr_c = import_module("_testlimitedcapi").object_setattr
+        def make(o):
+            setattr_c(o, "m", lambda: "c api")
+        self.check(make, "c api")
+
+    def test_attribute_read_does_not_specialise(self):
+        @reset_code
+        def get(o):
+            return o.m
+        o = self.receivers()[0]
+        for _ in range(4 * (THRESHOLD + COOLDOWN)):
+            get(o)
+        self.assertNotIn("LOAD_ATTR_METHOD_LAZY_DICT", opnames(get))
+
 
 @cpython_only
 class DebugAllocatorTests(unittest.TestCase):
@@ -1893,6 +2322,8 @@ class DebugAllocatorTests(unittest.TestCase):
             "test.test_shapes.NonExactNameTests",
             "test.test_shapes.InstanceLayoutSpecializationTests",
             "test.test_shapes.ShapePolyTests",
+            "test.test_shapes.StorePolyTests",
+            "test.test_shapes.LazyDictMethodTests",
             PYTHONMALLOC="mimalloc_debug")
 
 
@@ -2252,6 +2683,42 @@ class SlotKindSpecializationTests(unittest.TestCase):
         self.warm(get, o)
         self.assertIn("LOAD_ATTR_PROPERTY", opnames(get))
         self.assertEqual(get(o), "s")
+
+    def test_member_sites_across_generalisation(self):
+        # A member site guards the class's version, which every shape
+        # carries and a generalisation leaves alone (note 12 section 6.5):
+        # the site neither misses nor records the renewed shape version.
+        class K:
+            __slots__ = ("v", "__dict__")
+        @reset_code
+        def get(o):
+            return o.v
+        @reset_code
+        def put(o, v):
+            o.v = v
+        def recorded(f):
+            [fb] = [_testinternalcapi.get_feedback(f.__code__, i.offset)
+                    for i in dis.get_instructions(f)
+                    if i.opname in ("LOAD_ATTR", "STORE_ATTR")]
+            return fb[2]
+        o = K(); o.v = 1; o.x = 1
+        self.warm(get, o)
+        self.warm(put, o, 2)
+        self.assertIn("LOAD_ATTR_SLOT", opnames(get))
+        self.assertIn("STORE_ATTR_SLOT", opnames(put))
+        version = _testcapi.type_get_version(K)
+        self.assertEqual(recorded(get), version)
+        self.assertEqual(recorded(put), version)
+        o.x = "s"
+        self.assertNotEqual(shape_version(o), version)
+        self.assertEqual(_testcapi.type_get_version(K), version)
+        self.warm(get, o)
+        self.warm(put, o, 3)
+        self.assertIn("LOAD_ATTR_SLOT", opnames(get))
+        self.assertIn("STORE_ATTR_SLOT", opnames(put))
+        self.assertEqual(recorded(get), version)
+        self.assertEqual(recorded(put), version)
+        self.assertEqual(get(o), 3)
 
     def test_slot_load_on_generalised_shape(self):
         class C:

@@ -123,6 +123,10 @@ extern void _PyMem_NoScanFree(void *ptr);
 #if defined(WITH_MIMALLOC)
 // True if the object domain allocates from mimalloc.
 extern int _PyMem_MimallocEnabled(void);
+
+// The block size of mimalloc's size class for N bytes, without the padding
+// of a debug build: the same on every build.  N itself above the classes.
+PyAPI_FUNC(size_t) _PyMem_SizeClass(size_t n);
 #endif
 #if defined(WITH_MIMALLOC)
 // The number of object allocations that could not use a thread state's

@@ -1,0 +1,26 @@
+{
+ "label": "6d-rung1",
+ "commit": "73e5daa8b28",
+ "build": "build/pystats",
+ "gate": "gate 2, PYTHONSTATS=1, own PYTHON_STATS_DIR, GATE_JOBS=8",
+ "processes": 2601,
+ "dict_mode": {
+  "str name": 30,
+  "capacity": 26080,
+  "shape limit": 3150,
+  "class assigned": 245,
+  "dict assigned": 114,
+  "dict deleted": 3,
+  "on request": 80561
+ },
+ "6c": {
+  "capacity": 26542,
+  "shape limit": 3148,
+  "on request": 79096,
+  "class assigned": 245,
+  "dict assigned": 114,
+  "str name": 30,
+  "dict deleted": 3
+ },
+ "fallback_criterion": "capacity > 53084: not met"
+}

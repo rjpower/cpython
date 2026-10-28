@@ -1,6 +1,6 @@
 {
   "interpreter": "build/dev-default/python",
-  "abi_id": "cpython-3.16-value-v1",
+  "abi_id": "cpython-3.16-value-v2",
   "compiler": "gcc",
   "cflags": "-O2"
 }

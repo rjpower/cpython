@@ -14,8 +14,13 @@ MAX_SLOTS = 30
 
 
 def good(n):
-    """mi_good_size(n) with MI_ALIGN2W: 16-byte steps to 64 bytes, then four
-    size classes per power of two."""
+    """_PyMem_SizeClass(n), mimalloc's classes with MI_ALIGN2W and no debug
+    padding: 8 bytes, 16-byte steps to 64 bytes, then four size classes per
+    power of two; past the medium classes (64 KiB), n itself."""
+    if n > 65536:
+        return n
+    if n <= 8:
+        return 8
     if n <= 64:
         return (n + 15) & ~15
     step = 1 << ((n - 1).bit_length() - 3)
@@ -23,7 +28,7 @@ def good(n):
 
 
 def capacity_6d(basicsize, s, spare=2):
-    w = s + spare if s > 0 else 6
+    w = min(s + spare, MAX_SLOTS) if s > 0 else 6
     return min(MAX_SLOTS, (good(basicsize + 8 * w) - basicsize) // 8)
 
 

@@ -1422,6 +1422,12 @@ _PyDict_NewPresized(Py_ssize_t minused)
 }
 
 PyObject *
+_PyDict_NewPresizedUnicode(Py_ssize_t minused)
+{
+    return dict_new_presized(minused, true);
+}
+
+PyObject *
 _PyDict_FromItems(PyObject *const *keys, Py_ssize_t keys_offset,
                   const PyValue *values, Py_ssize_t values_offset,
                   Py_ssize_t length)

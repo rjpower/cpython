@@ -342,7 +342,15 @@ abandoned segment left, it deletes it (`mi_subproc_delete()`). No thread
 reclaims a retired segment, since no thread has that sub-process, so
 the blocks are freed by the sweep and the segment's memory returns when
 it is empty; a partly used retired segment stays mapped, which is
-recorded as the cost. An interpreter with its own heap is not retired:
+recorded as the cost. The heap walk already visits the abandoned
+segments of live interpreters' exited threads, with mimalloc collecting
+each page's cross-thread frees before the visit (Objects/mimalloc/heap.c),
+so a retired segment is walked by the same path. A fork child deletes
+the other interpreters without finalising them
+(`_PyInterpreterState_DeleteExceptMain()`, which calls
+`free_interpreter()` under the head lock): their shared heaps are retired
+the same way, so `_PyGC_LiveRetireHeap()` takes no lock of its own, and
+their queues are dropped with the record of 5.2. An interpreter with its own heap is not retired:
 no reference into its heap can exist after its last collection, and its
 remaining blocks are those of dropped calls, which leak as they do
 today.

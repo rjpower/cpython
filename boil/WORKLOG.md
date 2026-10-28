@@ -2254,3 +2254,11 @@ locals (10a rung 3); gate.sh's ignore list before the caller's -m made a
 probe run the whole file (fixed in 8a52226ee12); the unbuilt modules
 can be type-checked against borrowed headers (6d rung 4's tool,
 boil/tools/check_unbuilt.sh, now a gate 3 item in PROCESS.md).
+
+Addendum (09:50 PDT): the unbuilt modules type-check clean at the landed
+rung 3 head 555a63c59b3 with 6d's check_unbuilt.sh (gcc -fsyntax-only
+against borrowed headers): _decimal plain and EXTRA_FUNCTIONALITY, _ssl
+with its included files, _hashopenssl, all nine _sqlite files including
+connection.c's tp_call adapter, _bz2, the four _zstd files and _uuid; 0
+errors, 0 warnings. Unchecked for want of headers: _tkinter, _dbm, _gdbm,
+readline. The tool lands with 6d rung 4's docs commit.

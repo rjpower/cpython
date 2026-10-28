@@ -1633,14 +1633,14 @@ _PyDict_GetItemRef_KnownHash(PyDictObject *op, PyObject *key, Py_hash_t hash, Py
     return dict_getitem_result(op, key, hash, result);
 }
 
-/* _PyDict_GetItemRef_KnownHash() on values, so that no box is made: 1 and
-   the item, 0 and PyValue_NULL if the key is missing, or -1 and PyValue_NULL
-   with an exception set. */
+/* _PyDict_GetItemRef_KnownHash() on values, so that no box is made: the key
+   is a canonical value; 1 and the item, 0 and PyValue_NULL if the key is
+   missing, or -1 and PyValue_NULL with an exception set. */
 int
-_PyDict_GetItemValue_KnownHash(PyDictObject *op, PyObject *key, Py_hash_t hash,
+_PyDict_GetItemValue_KnownHash(PyDictObject *op, PyValue key, Py_hash_t hash,
                                PyValue *result)
 {
-    Py_ssize_t ix = dict_lookup_object(op, key, hash, result);
+    Py_ssize_t ix = _Py_dict_lookup(op, key, hash, result);
     if (ix == DKIX_ERROR) {
         *result = PyValue_NULL;
         return -1;
@@ -1939,13 +1939,13 @@ _PyDict_SetItem_KnownHash(PyObject *op, PyObject *key, PyObject *value,
     return res;
 }
 
-/* _PyDict_SetItem_KnownHash() for a canonical value, which is stored
-   without a box. */
+/* _PyDict_SetItem_KnownHash() for a canonical key and value, which are
+   stored without a box. */
 int
-_PyDict_SetItemValue_KnownHash(PyObject *op, PyObject *key, PyValue value,
+_PyDict_SetItemValue_KnownHash(PyObject *op, PyValue key, PyValue value,
                                Py_hash_t hash)
 {
-    assert(key);
+    assert(!PyValue_IsNull(key));
     assert(!PyValue_IsNull(value));
     assert(hash != -1);
 
@@ -1961,8 +1961,7 @@ _PyDict_SetItemValue_KnownHash(PyObject *op, PyObject *key, PyValue value,
 
     int res;
     Py_BEGIN_CRITICAL_SECTION(op);
-    res = setitem_value_lock_held_known_hash((PyDictObject *)op,
-                                             PyValue_FromObject(key), value,
+    res = setitem_value_lock_held_known_hash((PyDictObject *)op, key, value,
                                              hash);
     Py_END_CRITICAL_SECTION();
     return res;

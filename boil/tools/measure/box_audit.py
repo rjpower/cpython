@@ -87,10 +87,7 @@ CASES = {
                        "r = obj.v + obj.w + sobj.v", None),
     "build": ("", "r = ([a, y], (a, y), {a, y}, {a: y}, {y: a}, "
                   "lst[a:b:1], [*lst], (*tup,), {**d})", None),
-    "unpack": ("", "p, q = a, y; p, q, *rest = lst; p, q = [a, y]",
-               "the star target's list takes the iterator's __length_hint__, "
-               "whose int result _PyObject_CallNoArgs boxes (the call of a "
-               "looked-up special method, rung 3); seen at c4344d6bf46"),
+    "unpack": ("", "p, q = a, y; p, q, *rest = lst; p, q = [a, y]", None),
     "comprehensions": ("", "r = ([v * 2 for v in tup], {v for v in tup},"
                            " {v: v for v in tup})", None),
     "generator": ("", "for v in (w for w in tup): pass\n"
@@ -107,7 +104,7 @@ CASES = {
 # iteration, residue).  The bodies run with SLOT_SETUP's locals; i is an inline int,
 # and the setup must not bind n, the loop's count.
 SLOT_SETUP = """
-import io, pickle, threading, types, weakref
+import functools, io, operator, pickle, threading, types, weakref
 big = 100000
 class P:
     def __init__(self): self._x = 1; self._f = 2.5
@@ -152,6 +149,16 @@ mod.__getattr__ = lambda name: 12345
 alias = G[int]
 pk = Pk(io.BytesIO())
 NAME = "x"
+class Call:
+    def __call__(self, v): return v + big
+callme = Call()
+def add(u, v): return u + v
+part = functools.partial(add, big)
+ig, ag = operator.itemgetter(0), operator.attrgetter("x")
+c0 = functools.lru_cache(maxsize=0)(callme)
+cn = functools.lru_cache(maxsize=None)(callme)
+c128 = functools.lru_cache(maxsize=128)(callme)
+aint = types.GenericAlias(int, (int,))
 """
 
 SLOT_CASES = {
@@ -185,12 +192,43 @@ SLOT_CASES = {
     "getset int.real": (
         "r = getattr(big, 'real')", None, None,
         "a getset of an inline owner: the binding box (rung 4)"),
-    "object.__getattribute__": (
-        "r = object.__getattribute__(p, NAME)", None, None,
-        "the wrapper's result box (rung 3)"),
+    # The argument tuple and the sliced tuple of the wrapper call.
+    "object.__getattribute__": ("r = object.__getattribute__(p, NAME)",
+                                0, 2, None),
     "super inline receiver": (
         "r = super(int, big).__repr__", None, None,
-        "super's receiver box (rung 3)"),
+        "the method-wrapper keeps the receiver in its self field, so its box "
+        "is the minimum; no step owns it"),
+    # The call results (6d rung 3): tp_call returns a value.  A Python
+    # class has no vectorcall, so _PyObject_MakeTpCall() builds the
+    # argument tuple: one object.
+    "call instance": ("r = callme(i)", 0, 1, None),
+    "call instance float": ("r = callme(i + 0.5)", 0, 1, None),
+    "starred call": ("r = callme(*(i,))", 0, 1, None),
+    # Two boxes: the receiver, since a wrapper's self is an object (the
+    # minimum), and the operand, since nb_add takes objects (the number
+    # slots' step).  The tuples of the wrapper call are the rest.
+    "int.__add__": ("r = int.__add__(big, i)", 2, 5, None),
+    # The wrapper's two tuples and partial's merged arguments.
+    "partial (tp_call)": ("r = type(part).__call__(part, i)", 0, 3, None),
+    "itemgetter (tp_call)": ("r = type(ig).__call__(ig, (i, 2.5))", 0, 3,
+                             None),
+    "attrgetter (tp_call)": ("r = type(ag).__call__(ag, p)", 0, 2, None),
+    # lru_cache has no vectorcall: the argument tuple, and a dict entry on
+    # an unbounded miss.  The bounded cache's link keeps the key and the
+    # result as objects: one box of each on a miss, and the link.
+    "lru_cache 0": ("r = c0(i)", 0, 1, None),
+    "lru_cache None hit": ("r = cn(1)", 0, 1, None),
+    "lru_cache None miss": ("cn.cache_clear(); r = cn(i)", 0, 2, None),
+    "lru_cache 128 hit": ("r = c128(1)", 0, 1, None),
+    "lru_cache 128 miss": ("c128.cache_clear(); r = c128(i)", 2, 5, None),
+    "generic alias of int": ("r = aint(i)", 0, 0, None),
+    "starred inline callee": (
+        "try: big(*(i,))\nexcept TypeError: pass", None, None,
+        "the generator boxes the callee at the entry of _MAKE_CALLARGS_A_TUPLE "
+        "(_Py_Check_ArgsIterable's unused parameter, the ceval.c hand-off) "
+        "and of _DO_CALL_FUNCTION_EX, which convert it on other paths; the "
+        "callee always raises (6d-3.md, as built)"),
 }
 
 # Module-level code for LOAD_NAME, STORE_NAME and DELETE_NAME.

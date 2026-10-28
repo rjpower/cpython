@@ -1227,7 +1227,9 @@ typedef struct lru_cache_object {
 
 #define lru_cache_object_CAST(op)   ((lru_cache_object *)(op))
 
-static PyObject *
+/* The cache key, as a value: an int argument is the key as it is, without a
+   box.  PyValue_NULL with an exception set on error. */
+static PyValue
 lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
                    PyObject *kwds, int typed)
 {
@@ -1240,14 +1242,15 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
     /* short path, key will match args anyway, which is a tuple */
     if (!typed && !kwds_size) {
         if (PyTuple_GET_SIZE(args) == 1) {
-            key = PyTuple_GET_ITEM(args, 0);
-            if (PyUnicode_CheckExact(key) || PyLong_CheckExact(key)) {
+            PyValue item = PyTuple_GET_VALUE(args, 0);
+            PyTypeObject *tp = PyValue_Type(item);
+            if (tp == &PyUnicode_Type || tp == &PyLong_Type) {
                 /* For common scalar keys, save space by
                    dropping the enclosing args tuple  */
-                return Py_NewRef(key);
+                return item;
             }
         }
-        return Py_NewRef(args);
+        return PyValue_FromObject(args);
     }
 
     key_size = PyTuple_GET_SIZE(args);
@@ -1258,7 +1261,7 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
 
     key = PyTuple_New(key_size);
     if (key == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     key_pos = 0;
     for (pos = 0; pos < PyTuple_GET_SIZE(args); ++pos) {
@@ -1285,7 +1288,7 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
         }
     }
     assert(key_pos == key_size);
-    return key;
+    return PyValue_FromObject(key);
 }
 
 static PyValue
@@ -1295,43 +1298,37 @@ uncached_lru_cache_wrapper(lru_cache_object *self, PyObject *args, PyObject *kwd
     return PyObject_CallValue(PyValue_FromObject(self->func), args, kwds);
 }
 
-/* The unbounded cache stores the result as a value, so that an int or
-   float result is neither boxed on a miss nor on a hit. */
+/* The unbounded cache keeps its keys and results as values, so that an int
+   or float is boxed neither on a miss nor on a hit. */
 static PyValue
 infinite_lru_cache_wrapper(lru_cache_object *self, PyObject *args, PyObject *kwds)
 {
     PyValue result;
     Py_hash_t hash;
-    PyObject *key = lru_cache_make_key(self->kwd_mark, args, kwds, self->typed);
-    if (!key)
+    PyValue key = lru_cache_make_key(self->kwd_mark, args, kwds, self->typed);
+    if (PyValue_IsNull(key))
         return PyValue_NULL;
-    hash = PyObject_Hash(key);
+    hash = PyObject_HashValue(key);
     if (hash == -1) {
-        Py_DECREF(key);
         return PyValue_NULL;
     }
     int res = _PyDict_GetItemValue_KnownHash((PyDictObject *)self->cache, key,
                                              hash, &result);
     if (res > 0) {
         FT_ATOMIC_ADD_SSIZE(self->hits, 1);
-        Py_DECREF(key);
         return result;
     }
     if (res < 0) {
-        Py_DECREF(key);
         return PyValue_NULL;
     }
     FT_ATOMIC_ADD_SSIZE(self->misses, 1);
     result = PyObject_CallValue(PyValue_FromObject(self->func), args, kwds);
     if (PyValue_IsNull(result)) {
-        Py_DECREF(key);
         return PyValue_NULL;
     }
     if (_PyDict_SetItemValue_KnownHash(self->cache, key, result, hash) < 0) {
-        Py_DECREF(key);
         return PyValue_NULL;
     }
-    Py_DECREF(key);
     return result;
 }
 
@@ -1402,28 +1399,35 @@ bounded_lru_cache_get_lock_held(lru_cache_object *self, PyObject *args, PyObject
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(self);
     lru_list_elem *link;
 
-    PyObject *key_ = *key = lru_cache_make_key(self->kwd_mark, args, kwds, self->typed);
-    if (!key_)
+    PyValue key_v = lru_cache_make_key(self->kwd_mark, args, kwds,
+                                       self->typed);
+    if (PyValue_IsNull(key_v))
         return -1;
-    Py_hash_t hash_ = *hash = PyObject_Hash(key_);
+    Py_hash_t hash_ = *hash = PyObject_HashValue(key_v);
     if (hash_ == -1) {
-        Py_DECREF(key_);  /* dead reference left in *key, is not used */
         return -1;
     }
-    int res = _PyDict_GetItemRef_KnownHash_LockHeld((PyDictObject *)self->cache, key_, hash_,
-                                                    (PyObject **)&link);
+    /* The lookup takes the key as a value; the cache's values are links. */
+    PyValue link_v;
+    int res = _PyDict_GetItemValue_KnownHash((PyDictObject *)self->cache,
+                                             key_v, hash_, &link_v);
     if (res > 0) {
+        link = (lru_list_elem *)PyValue_ObjectBorrow(link_v);
         lru_cache_extract_link(link);
         lru_cache_append_link(self, link);
         *result = link->result;
         FT_ATOMIC_ADD_SSIZE(self->hits, 1);
         Py_INCREF(link->result);
         Py_DECREF(link);
-        Py_DECREF(key_);
         return 1;
     }
     if (res < 0) {
-        Py_DECREF(key_);
+        return -1;
+    }
+    /* A miss: link->key is an object, so an inline key is boxed for the
+       link that the update makes. */
+    *key = PyValue_Object(key_v);
+    if (*key == NULL) {
         return -1;
     }
     FT_ATOMIC_ADD_SSIZE(self->misses, 1);

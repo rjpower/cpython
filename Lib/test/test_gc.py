@@ -1873,11 +1873,15 @@ class TracingCollectorTests(unittest.TestCase):
                     continue
                 m = re.search(rb"gc verify kill: Py_TYPE of the W at 0x\w+, "
                               rb"which collection (\d+) killed: it was "
-                              rb"reached only through the word at 0x\w+ of "
-                              rb"a precise frame at \S*_testinternalcapi\S*; "
+                              rb"reached only through (.*); "
                               rb"the last collection was (\d+)", err)
                 self.assertIsNotNone(m, err)
-                since[kind] = int(m[2]) - int(m[1])
+                # The record names every word that reached W, in whatever
+                # order the stack's layout gives them; missed_root()'s own
+                # is among them.
+                self.assertRegex(m[2], rb"the word at 0x\w+ of a precise "
+                                       rb"frame at [^ ,;]*_testinternalcapi")
+                since[kind] = int(m[3]) - int(m[1])
                 self.assertIn(b"use of a killed object", err)
         if not asan:
             self.assertEqual(since["store"], since["slot_call"])

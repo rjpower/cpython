@@ -6,6 +6,7 @@
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
 #include "pycore_critical_section.h"  // _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED()
 #include "pycore_dict.h"          // _PyDictViewObject
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_interp.h"        // PyInterpreterState.list
 #include "pycore_list.h"          // struct _Py_list_freelist, _PyListIterObject
 #include "pycore_long.h"          // _PyLong_DigitCount
@@ -154,7 +155,11 @@ list_preallocate_exact(PyListObject *self, Py_ssize_t size)
     return 0;
 }
 
-PyObject *
+/* Precise, as BUILD_LIST's path to the allocator is (note 11 section 2):
+   an opaque frame here is scanned whole by the collection its allocation
+   runs, and a stale word in it kept a dead object (10a-2b.md, the record
+   of the integration merge). */
+Py_GC_PRECISE PyObject *
 PyList_New(Py_ssize_t size)
 {
     if (size < 0) {
@@ -3036,7 +3041,8 @@ _PyList_AsTupleAndClear(PyListObject *self)
     return ret;
 }
 
-PyObject *
+/* Precise, as PyList_New(): the values are the caller's to anchor. */
+Py_GC_PRECISE PyObject *
 _PyList_FromValues(const PyValue *src, Py_ssize_t n)
 {
     if (n == 0) {

@@ -205,6 +205,22 @@ BENCHMARKS = [
     micro("str_concat_loop", "empty_loop"),
     micro("try_noraise", "empty_loop"),
     micro("try_raise", "empty_loop"),
+    # The slot boundaries of note 12 section 10 (step 6d)
+    micro("getattr_property", "empty_loop"),
+    micro("getattr_property_float", "empty_loop"),
+    micro("getattribute_hook", "empty_loop"),
+    micro("getattr_hook", "empty_loop"),
+    micro("setattr_hook", "empty_loop"),
+    micro("descr_get_py", "empty_loop"),
+    micro("descr_set_py", "empty_loop"),
+    micro("property_store", "empty_loop"),
+    micro("property_store_float", "empty_loop"),
+    micro("call_instance", "empty_loop"),
+    micro("namedtuple_field", "empty_loop"),
+    micro("member_double", "empty_loop"),
+    micro("object_setattr", "empty_loop"),
+    micro("class_attr_store", "empty_loop"),
+    micro("method_lazy_dict", "empty_loop"),
 ]
 
 # The memory and collector group: fixed workloads, one loop each; each

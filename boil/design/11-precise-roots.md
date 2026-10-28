@@ -619,9 +619,35 @@ Known exclusions, which are not 10a's:
     run;
   - test_getargs `test_gh_119213`: its interpreter has its own obmalloc,
     so it is outside the class; it stays in the stress run.
+  - A second creator path, found by 10a rung 2b's extra stress run
+    (`PYTHON_GCSTRESS=50` on build/debug, reproduced on the rung 1b base):
+    test_import `SinglephaseInitTests.test_basic_multiple_interpreters_main_no_reset`,
+    whose `_interpreters.create('legacy')` shares the main allocator.
+    The C stack (boil/tools/cstack.sh): `Py_NewInterpreterFromConfig`,
+    `pycore_init_types`, `_PyStaticType_InitBuiltin`, `type_add_method`,
+    `PyStaticMethod_New`, `functools_wraps`, `PyObject_GetOptionalAttr`,
+    `meth_get__qualname__`, `PyUnicode_FromFormat`, `object_str`,
+    `PyErr_CheckSignals`, `_Py_RunGC`, `collect_pass`, `run_queue`
+    (gc_live.c), `PyObject_CallOneArg` of a queued weak reference
+    callback, which returns NULL with no exception set in the new
+    interpreter's thread state, and the debug result check aborts. Not in
+    the gate of record, whose stress set does not run test_import; extra
+    stress runs exclude `-i '*SinglephaseInitTests*'` under this class.
+    7a's test covers the case.
 
   Also excluded under stress: test_capi.test_bytes's `*test_resize*`, the
+  Also excluded under stress: test_capi.test_bytes's `*test_resize*`, the
   writer row of 6.2, owner rung 3.
+- ASan runs need `ASAN_OPTIONS=detect_stack_use_after_return=0`. With
+  ASan's default, a local whose address escapes lives on ASan's
+  heap-backed fake stack, which the conservative scan does not see, so
+  its referents are killed. 6d's rung 3 ASan run showed it twice, both
+  passing with the option: test_gc `test_injection_sites` at the MKSTACK
+  site (`values_of` reading the first argument from
+  `_PyObject_CallFunctionVa`'s `small_stack` after `do_mkstack`'s
+  injected collection), and test_ctypes' `__pointer_type__` getter, whose
+  `%R` read a killed str. Rung 3 decides between scanning the fake frames
+  (section 10) and keeping the option as the recorded condition.
 - Under ASan, test_capi `test_mem.AddressSanitizerTests.test_buffer_overflow`.
   The test sets `PYTHONMALLOC=malloc` so that ASan sees the overflow. The
   fork's mem domain does not honour the variable, so mimalloc's check fires
@@ -663,6 +689,12 @@ one for detection.
   return off, the scan functions unsanitized) the held blocks are poisoned
   too, so every read traps, a field or a cached interior pointer included,
   and the report's address finds its record.
+
+A process that aborts, a kill trap included, gives its C stack without
+gdb through `boil/tools/cstack.sh BUILDDIR/python ARGS`: it preloads
+`boil/tools/abortbt.c`, which prints `backtrace()` on SIGABRT after
+faulthandler's report, and resolves the interpreter's frames with
+addr2line.
 
 **Demonstration.** Before the gate counts on either mode,
 `_testinternalcapi.gc_verify_missed_root(kind)` hides an object in a
@@ -769,7 +801,7 @@ reviewed work doc (`boil/design/work/10a-<n>.md`) and ends at gate level 3
 | 0 | 0.5 | Baseline counters (9); c_roots committed as `boil/tools/measure/c_roots.py`; measurements at ac59664de47; the ASan build tried | `python -c pass`; counters on collector_live16 |
 | 1 | 2.5 | The C mode (2.1) and its negative tests, first; the walk (3.1 to 3.4), the capture stub and detach unwind, classification, the loader generation; the data-stack and chain visits, the entry visitor and the return order (4.3, 4.4); the inline audit; kill and retain modes, injection and stress; then `Py_GC_PRECISE` on the eval loop, the handlers and the entry paths, each passing the C mode; allocations as safepoints; activations, clears, `_PyGC_CLEAR_ARRAY` and the inline full scan deleted | the negative tests; the C mode on the eval loop's hand-written parts; the inline audit; the compiled-stack walk tests; the injection tests; the probe; test_gc; test_weakref, test_generators, test_coroutines, test_asyncgen, test_capi, test_ctypes; the loader test; both suites; stress on the rung's set |
 | 2 | 1 | The ceval.c helpers and the call layer precise, with spans and `Py_GC_ARGS_ANCHORED`; the 8.2 skips removed | the C mode on call.c alone; the borrowing test; the probe's call-layer cases; test_call, test_capi, test_descr, test_context, test_asyncgen, test_weakref, multiprocessing; both suites; 8.2 at 20/20 |
-| 3 | 1 | PyMem: the spans of 6.2, `_PyList_AsTupleAndClear` reordered, the writers' `_PyGCRoot`, the PyMem mode; kill mode and its demonstration; transitive scan off for core frames once the mode is clean; `-ftrivial-auto-var-init=zero` removed; the struct scan deleted | test_sort, test_functools, test_descr's mro tests, test_json, test_unicode; the demonstration; both suites; the verifier gate; 8.2 at 20/20 without the flag |
+| 3 | 1 | PyMem: the spans of 6.2, `_PyList_AsTupleAndClear` reordered, the writers' `_PyGCRoot`, the PyMem mode; kill mode and its demonstration; transitive scan off for core frames once the mode is clean; `-ftrivial-auto-var-init=zero` removed; the struct scan deleted; the raw-buffer owners (the bytes constructors' `const char *`, 10a-2b.md 2b); the stack scan follows words into ASan's fake frames (`__asan_addr_is_in_fake_stack`) and scans them, or `detect_stack_use_after_return=0` stays the recorded condition of ASan runs (8.2), decided in the rung's work doc | test_sort, test_functools, test_descr's mro tests, test_json, test_unicode; the demonstration; both suites; the verifier gate; 8.2 at 20/20 without the flag |
 | 4 | 0.5 | Gate level 4: `step10a` recorded, note 06 section 20 with measurements and attribution, the hack register updated | `boil/bench/run.py --set all --metric instr,rss` and the memory group's time on an idle machine |
 
 **What blocks a rung from landing**, at any time and at the hard stop: a

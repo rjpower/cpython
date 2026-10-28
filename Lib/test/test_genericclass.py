@@ -292,6 +292,18 @@ class CAPITest(unittest.TestCase):
         self.assertEqual(C.__orig_bases__, (IntGeneric,))
         self.assertEqual(C.__mro__, (C, int, object))
 
+    def test_c_class_keeps_item(self):
+        # The alias holds the only reference to its item.
+        _testcapi = import_module("_testcapi")
+        alias = _testcapi.Generic[type("Item", (), {"marker": 42})]
+        support.gc_collect()
+        # Reuse any freed memory, so a dangling reference shows.
+        junk = [bytes([0xa0]) * 64 for _ in range(10000)]
+        (item,) = alias.__mro_entries__(())
+        self.assertEqual(item.__name__, "Item")
+        self.assertEqual(item.marker, 42)
+        del junk
+
 
 if __name__ == "__main__":
     unittest.main()

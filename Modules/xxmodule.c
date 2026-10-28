@@ -48,6 +48,13 @@ Xxo_dealloc(PyObject *op)
     PyObject_Free(self);
 }
 
+static int
+Xxo_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(XxoObject_CAST(op)->x_attr);
+    return 0;
+}
+
 static PyObject *
 Xxo_demo(PyObject *Py_UNUSED(op), PyObject *args)
 {
@@ -124,7 +131,7 @@ static PyTypeObject Xxo_Type = {
     0,                          /*tp_as_buffer*/
     Py_TPFLAGS_DEFAULT,         /*tp_flags*/
     0,                          /*tp_doc*/
-    0,                          /*tp_traverse*/
+    Xxo_traverse,               /*tp_traverse*/
     0,                          /*tp_clear*/
     0,                          /*tp_richcompare*/
     0,                          /*tp_weaklistoffset*/

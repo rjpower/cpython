@@ -1781,6 +1781,14 @@ reference. A type with a base, or one sharing a struct that some other
 type traverses, is listed separately as probably inheriting. The first
 run found 31 types without a traverse and 7 partial traverse functions.
 
+Audit 1 (`boil/design/work/audit-1.md`) extended it to pointers to plain
+structs (`member->field`, two pointers deep) and to the helpers that
+traverse, dealloc and clear call, and made it a gate: `--check` fails
+level 3 on any type with no or a partial traverse that
+`Tools/boil/traverse_allow.txt` does not list with a reason. The old
+tool had listed `_testbuffer`'s ndarray before it failed in the suite;
+nobody read the output.
+
 The first version took an include guard's `#ifndef` as false, which hid
 every struct that a header defines; it did not expand a head macro that
 starts with another (`_PyDateTime_DATETIMEHEAD`). The full suite found

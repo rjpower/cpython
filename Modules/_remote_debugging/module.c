@@ -1760,6 +1760,9 @@ _remote_debugging_BinaryWriter___init___impl(BinaryWriterObject *self,
     }
     if (self->writer) {
         binary_writer_destroy(self->writer);
+        /* Creating the next one allocates, and a collection may run the
+           traverse function. */
+        self->writer = NULL;
     }
 
     self->writer = binary_writer_create(
@@ -2039,11 +2042,36 @@ BinaryWriter_dealloc(PyObject *op)
     Py_DECREF(tp);
 }
 
+static int
+visit_string_key(_Py_hashtable_t *ht, const void *key, const void *value,
+                 void *data)
+{
+    struct unwinder_visit *v = (struct unwinder_visit *)data;
+    visitproc visit = v->visit;
+    void *arg = v->arg;
+    Py_VISIT((PyObject *)key);
+    return 0;
+}
+
+/* The writer's string table owns its keys, in memory it allocates. */
+static int
+BinaryWriter_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    BinaryWriterObject *self = BinaryWriter_CAST(op);
+    if (self->writer != NULL && self->writer->string_hash != NULL) {
+        struct unwinder_visit v = {visit, arg};
+        return _Py_hashtable_foreach(self->writer->string_hash,
+                                     visit_string_key, &v);
+    }
+    return 0;
+}
+
 static PyType_Slot BinaryWriter_slots[] = {
     {Py_tp_getset, BinaryWriter_getset},
     {Py_tp_methods, BinaryWriter_methods},
     {Py_tp_init, _remote_debugging_BinaryWriter___init__},
     {Py_tp_dealloc, BinaryWriter_dealloc},
+    {Py_tp_traverse, BinaryWriter_traverse},
     {0, NULL}
 };
 
@@ -2087,6 +2115,9 @@ _remote_debugging_BinaryReader___init___impl(BinaryReaderObject *self,
 {
     if (self->reader) {
         binary_reader_close(self->reader);
+        /* Opening the next one allocates, and a collection may run the
+           traverse function. */
+        self->reader = NULL;
     }
 
     self->reader = binary_reader_open(filename);
@@ -2272,11 +2303,26 @@ BinaryReader_dealloc(PyObject *op)
     Py_DECREF(tp);
 }
 
+/* The reader's string table, decoded when the file is opened, is used by
+   every replay. */
+static int
+BinaryReader_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    BinaryReaderObject *self = BinaryReader_CAST(op);
+    if (self->reader != NULL && self->reader->strings != NULL) {
+        for (uint32_t i = 0; i < self->reader->strings_count; i++) {
+            Py_VISIT(self->reader->strings[i]);
+        }
+    }
+    return 0;
+}
+
 static PyType_Slot BinaryReader_slots[] = {
     {Py_tp_getset, BinaryReader_getset},
     {Py_tp_methods, BinaryReader_methods},
     {Py_tp_init, _remote_debugging_BinaryReader___init__},
     {Py_tp_dealloc, BinaryReader_dealloc},
+    {Py_tp_traverse, BinaryReader_traverse},
     {0, NULL}
 };
 

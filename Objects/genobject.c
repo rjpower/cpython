@@ -343,18 +343,6 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyValue *presult, int exc)
     return PYGEN_RETURN;
 }
 
-/* The result of a send for the protocols that speak objects: a yielded or
-   returned inline value is boxed here, and a failed box is an error. */
-static PySendResult
-send_result_object(PySendResult status, PyValue result, PyObject **presult)
-{
-    *presult = PyValue_Object(result);
-    if (*presult == NULL && !PyValue_IsNull(result)) {
-        return PYGEN_ERROR;
-    }
-    return status;
-}
-
 // Set the generator 'gen' to the executing state and send 'arg' into it.
 // See gen_send_ex2() for details.
 Py_GC_PRECISE static PySendResult
@@ -405,13 +393,29 @@ gen_send_ex(PyGenObject *gen, PyObject *arg, PyValue *presult)
     return gen_send_ex2(gen, arg, presult, 0);
 }
 
-static PySendResult
+/* Precise, as gen_send() is: the send's result is a span's slot.  The
+   C tasks step their coroutines through this frame, which the release
+   build makes of gen_send_ex() and gen_send_ex2() inlined, and opaque it
+   kept a finished task alive through a stale word (test_futures2's
+   test_task_exc_handler_correct_context).  The protocol speaks objects:
+   a yielded or returned inline value is boxed here, and a failed box is
+   an error. */
+Py_GC_PRECISE static PySendResult
 PyGen_am_send(PyObject *self, PyObject *arg, PyObject **result)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
     PyGenObject *gen = _PyGen_CAST(self);
-    PyValue value;
-    PySendResult status = gen_send_ex(gen, arg, &value);
-    return send_result_object(status, value, result);
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    PySendResult status = gen_send_ex(gen, arg, &slots[0]);
+    *result = PyValue_Object(slots[0]);
+    if (*result == NULL && !PyValue_IsNull(slots[0])) {
+        status = PYGEN_ERROR;
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return status;
 }
 
 Py_GC_PRECISE static PyObject *

@@ -1,0 +1,26 @@
+_PyObject_MakeTpCall|0|
+_PyObject_CallValue|0|
+PyObject_CallValue|0|
+PyObject_Call|0|
+PyVectorcall_Call|0|
+_PyVectorcall_Call|0|
+_PyObject_Call_PrependValue|0|
+PyEval_CallObjectWithKeywords|0|
+PyObject_CallObject|0|
+call_method_value|3|'args' is held only in a C local across the collecting call to 'lookup_method' (parameter 'args', which no spa
+slot_tp_call|0|
+slot_tp_init|0|
+slot_tp_new|3|'args' is held only in a C local across the collecting call to 'PyObject_GetAttrValue' (parameter 'args', whic
+wrap_call|1|'self' is held only in a C local across the collecting call to 'a function pointer' (parameter 'self', which n
+wrap_binaryfunc_l|3|'args' is held only in a C local across the collecting call to 'check_num_args' (parameter 'args', which no sp
+wrap_lenfunc|1|'self' is held only in a C local across the collecting call to 'check_num_args' (parameter 'self', which no sp
+wrap_next|0|
+wrap_descr_get|7|'args' is held only in a C local across the collecting call to 'wrapper_nargs' (parameter 'args', which no spa
+wrap_getattro|4|'args' is held only in a C local across the collecting call to 'check_num_args' (parameter 'args', which no sp
+type_call|0|
+classmethoddescr_call|6|'args' is held only in a C local across the collecting call to 'PyTuple_GET_ITEM' (parameter 'args', which no 
+wrapperdescr_call|13|'args' is held only in a C local across the collecting call to '_PyValue_BoxInline' (parameter 'args', which n
+wrapperdescr_raw_call|0|
+wrapper_call|2|an object is stored in 'wp', which is not object-typed
+cfunction_call|2|'func' is held only in a C local across the collecting call to '_PyCFunctionWithKeywords_TrampolineCall' (para
+PyObject_LengthHint|4|'o' is held only in a C local across the collecting call to 'PyObject_Length' (parameter 'o', which no span co

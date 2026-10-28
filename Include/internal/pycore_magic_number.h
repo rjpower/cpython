@@ -326,6 +326,8 @@ Known values:
                         method, class-value, member and hint handlers, the
                         entry's own dictoffset; the instance-value handlers
                         are deleted)
+    Python 3.16a1 3724 (LOAD_ATTR_SHAPE_POLY: two to four shapes from the
+                        site's poly table)
 
     Python 3.17 will start with 3750
 
@@ -335,7 +337,7 @@ Known values:
 
 */
 
-#define PYC_MAGIC_NUMBER 3723
+#define PYC_MAGIC_NUMBER 3724
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

@@ -13015,6 +13015,67 @@
             DISPATCH();
         }
 
+        TARGET(LOAD_ATTR_SHAPE_POLY) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = LOAD_ATTR_SHAPE_POLY;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_ATTR_SHAPE_POLY);
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            (void)oparg;
+            PyValue owner;
+            PyValue attr;
+            PyValue *self_or_null;
+            // _GUARD_SHAPE_POLY
+            {
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                _PyFbPoly *poly = _PyFrame_FbPoly(frame, ((_PyFbHeader *)fb));
+                if (_PyFb_ShapeRow(poly, _PyObject_SHAPE(PyValue_ObjectBorrow(owner))) < 0) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _LOAD_ATTR_SHAPE_POLY
+            {
+                self_or_null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
+                PyObject *owner_o = PyValue_ObjectBorrow(owner);
+                _PyFbPoly *poly = _PyFrame_FbPoly(frame, ((_PyFbHeader *)fb));
+                int row = _PyFb_ShapeRow(poly, _PyObject_SHAPE(owner_o));
+                assert(row >= 0);
+                STAT_INC(LOAD_ATTR, hit);
+                if (poly->handler[row] == LOAD_ATTR_SHAPE) {
+                    attr = *(PyValue *)((char *)owner_o + poly->index[row]);
+                    assert(!PyValue_IsNull(attr));
+                    if (oparg & 1) {
+                        self_or_null[0] = PyValue_NULL;
+                    }
+                }
+                else {
+                    assert(poly->handler[row] == LOAD_ATTR_METHOD_SHAPE);
+                    assert(oparg & 1);
+                    PyObject *descr = (PyObject *)poly->descr[row];
+                    assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
+                    attr = PyValue_FromObject(descr);
+                    self_or_null[0] = owner;
+                }
+            }
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            IR_STORE_DST(IR_FIELD_A(this_instr), attr);
+            DISPATCH();
+        }
+
         TARGET(LOAD_ATTR_SLOT) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_SLOT;

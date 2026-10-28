@@ -342,6 +342,8 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
             return 1;
         case LOAD_ATTR_SHAPE:
             return 1;
+        case LOAD_ATTR_SHAPE_POLY:
+            return 1;
         case LOAD_ATTR_SLOT:
             return 1;
         case LOAD_ATTR_WITH_HINT:
@@ -879,6 +881,8 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
             return 0;
         case LOAD_ATTR_SHAPE:
             return 1 + (oparg & 1);
+        case LOAD_ATTR_SHAPE_POLY:
+            return 1 + (oparg & 1);
         case LOAD_ATTR_SLOT:
             return 1 + (oparg & 1);
         case LOAD_ATTR_WITH_HINT:
@@ -1324,6 +1328,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [LOAD_ATTR_NONDESCRIPTOR_SHAPE] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_EXIT_FLAG },
     [LOAD_ATTR_PROPERTY] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_DEOPT_FLAG | HAS_EXIT_FLAG | HAS_SYNC_SP_FLAG },
     [LOAD_ATTR_SHAPE] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_EXIT_FLAG },
+    [LOAD_ATTR_SHAPE_POLY] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_EXIT_FLAG },
     [LOAD_ATTR_SLOT] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_EXIT_FLAG },
     [LOAD_ATTR_WITH_HINT] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_NAME_FLAG | HAS_EXIT_FLAG },
     [LOAD_BUILD_CLASS] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
@@ -1825,6 +1830,7 @@ const char *_PyOpcode_OpName[267] = {
     [LOAD_ATTR_NONDESCRIPTOR_SHAPE] = "LOAD_ATTR_NONDESCRIPTOR_SHAPE",
     [LOAD_ATTR_PROPERTY] = "LOAD_ATTR_PROPERTY",
     [LOAD_ATTR_SHAPE] = "LOAD_ATTR_SHAPE",
+    [LOAD_ATTR_SHAPE_POLY] = "LOAD_ATTR_SHAPE_POLY",
     [LOAD_ATTR_SLOT] = "LOAD_ATTR_SLOT",
     [LOAD_ATTR_WITH_HINT] = "LOAD_ATTR_WITH_HINT",
     [LOAD_BUILD_CLASS] = "LOAD_BUILD_CLASS",
@@ -2015,7 +2021,6 @@ const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
 PyAPI_DATA(const uint8_t) _PyOpcode_Deopt[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Deopt[256] = {
-    [124] = 124,
     [125] = 125,
     [126] = 126,
     [127] = 127,
@@ -2167,6 +2172,7 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [LOAD_ATTR_NONDESCRIPTOR_SHAPE] = LOAD_ATTR,
     [LOAD_ATTR_PROPERTY] = LOAD_ATTR,
     [LOAD_ATTR_SHAPE] = LOAD_ATTR,
+    [LOAD_ATTR_SHAPE_POLY] = LOAD_ATTR,
     [LOAD_ATTR_SLOT] = LOAD_ATTR,
     [LOAD_ATTR_WITH_HINT] = LOAD_ATTR,
     [LOAD_BUILD_CLASS] = LOAD_BUILD_CLASS,
@@ -2276,7 +2282,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
 #endif // NEED_OPCODE_METADATA
 
 #define EXTRA_CASES \
-    case 124: \
     case 125: \
     case 126: \
     case 127: \

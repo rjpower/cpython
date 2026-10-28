@@ -681,10 +681,11 @@ lookup_hook_facts(PyTypeObject *type, hook_facts *facts)
     Py_XDECREF(getattribute);
 }
 
-/* Whether the site specialised for another shape of the same type before,
- * which the poly table that fb_begin() filled records. */
+/* Whether the poly table of INSTR has a row of a shape handler for another
+ * shape: of the type with version TP_VERSION, or of any type if ANY_TYPE. */
 static bool
-fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, _PyShape *shape)
+fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, _PyShape *shape,
+                   bool any_type)
 {
     _PyFbHeader *h = instr_fb(instr);
     if (h->poly == 0) {
@@ -696,7 +697,8 @@ fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, _PyShape *shape)
         if ((opcode == LOAD_ATTR_SHAPE || opcode == LOAD_ATTR_METHOD_SHAPE ||
              opcode == LOAD_ATTR_NONDESCRIPTOR_SHAPE ||
              opcode == STORE_ATTR_SHAPE || opcode == STORE_ATTR_SHAPE_TRANSITION) &&
-            poly->type_version[i] == tp_version && poly->shape[i] != shape)
+            (any_type || poly->type_version[i] == tp_version) &&
+            poly->shape[i] != shape)
         {
             return true;
         }
@@ -704,24 +706,63 @@ fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, _PyShape *shape)
     return false;
 }
 
-/* The shape fields of FB for HANDLER, guarded by OWNER's shape, or 0 if
- * the site saw another shape of the type.  Until a polymorphic handler
- * takes such sites, they stay generic; the declined observation is
- * recorded, with the fields the caller set, so that the next
- * specialisation on the first shape sees the second as well. */
+/* Rewrite INSTR, a LOAD_ATTR site whose poly table has just recorded a
+ * second to fourth row, as LOAD_ATTR_SHAPE_POLY if every row is one that
+ * handler reads.  1 if done. */
 static int
+specialize_shape_poly(_PyInstr *instr)
+{
+    _PyFbHeader *h = instr_fb(instr);
+    if (h->state != FB_POLY) {
+        // MEGA: a fifth row was not recorded
+        return 0;
+    }
+    _PyFbPoly *poly = &fb_block(instr)->poly[h->poly - 1];
+    for (int i = 0; i < FB_POLY_SIZE && poly->handler[i] != 0; i++) {
+        if (poly->handler[i] != LOAD_ATTR_SHAPE &&
+            poly->handler[i] != LOAD_ATTR_METHOD_SHAPE) {
+            return 0;
+        }
+        assert(poly->type_version[i] != 0 && poly->shape[i] != NULL);
+    }
+    if (!set_opcode(instr, LOAD_ATTR_SHAPE_POLY)) {
+        return 0;
+    }
+    STAT_INC(LOAD_ATTR, success);
+    set_counter(h, adaptive_counter_cooldown());
+    return 1;
+}
+
+typedef enum {
+    SHAPE_GUARD_DECLINED,   // the site stays generic
+    SHAPE_GUARD_SET,        // the caller specialises HANDLER
+    SHAPE_GUARD_POLY,       // the site is LOAD_ATTR_SHAPE_POLY
+} shape_guard;
+
+/* The shape fields of FB for HANDLER, guarded by OWNER's shape, unless the
+ * site saw another shape.  The observation is then recorded, with the
+ * fields the caller set, so that later specialisations see every shape.
+ * A load of a slot or a method, at a site that saw other shapes of any
+ * type, becomes LOAD_ATTR_SHAPE_POLY if all the site's rows are of that
+ * kind.  Other sites that saw another shape of the type stay generic:
+ * there is no polymorphic store (note 09 section 7). */
+static shape_guard
 set_shape_guard(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
                 unsigned int tp_version, int base_op, int handler)
 {
     _PyShape *shape = _PyObject_SHAPE(owner);
     fb->shape = shape;
     fb->type_version = tp_version;
-    if (fb_saw_other_shape(instr, tp_version, shape)) {
-        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_OTHER_SHAPE);
-        fb_record(instr, instr_fb(instr), handler);
-        return 0;
+    bool poly_load = handler == LOAD_ATTR_SHAPE || handler == LOAD_ATTR_METHOD_SHAPE;
+    if (!fb_saw_other_shape(instr, tp_version, shape, poly_load)) {
+        return SHAPE_GUARD_SET;
     }
-    return 1;
+    fb_record(instr, instr_fb(instr), handler);
+    if (poly_load && specialize_shape_poly(instr)) {
+        return SHAPE_GUARD_POLY;
+    }
+    SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_OTHER_SHAPE);
+    return SHAPE_GUARD_DECLINED;
 }
 
 /* A DICT plan: WITH_HINT if OWNER's instance dict holds NAME.  1 if
@@ -918,9 +959,14 @@ specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name)
     // Instance storage first, then the class (precedence steps 2 to 5).
     if (plan.kind == _Py_LOOKUP_SLOT) {
         fb->offset = plan.offset;
-        if (!set_shape_guard(owner, instr, fb, tp_version, LOAD_ATTR,
-                             LOAD_ATTR_SHAPE)) {
-            return -1;
+        switch (set_shape_guard(owner, instr, fb, tp_version, LOAD_ATTR,
+                                LOAD_ATTR_SHAPE)) {
+            case SHAPE_GUARD_DECLINED:
+                return -1;
+            case SHAPE_GUARD_POLY:
+                return 0;
+            case SHAPE_GUARD_SET:
+                break;
         }
         specialize(instr, LOAD_ATTR_SHAPE);
         return 0;
@@ -1078,8 +1124,8 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
     switch (plan.outcome) {
         case _Py_STORE_REPLACE:
             fb->offset = plan.offset;
-            if (!set_shape_guard(owner, instr, fb, tp_version, STORE_ATTR,
-                                 STORE_ATTR_SHAPE)) {
+            if (set_shape_guard(owner, instr, fb, tp_version, STORE_ATTR,
+                                STORE_ATTR_SHAPE) != SHAPE_GUARD_SET) {
                 goto fail;
             }
             specialize(instr, STORE_ATTR_SHAPE);
@@ -1087,8 +1133,8 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
         case _Py_STORE_ADD:
         {
             fb->offset = plan.offset;
-            if (!set_shape_guard(owner, instr, fb, tp_version, STORE_ATTR,
-                                 STORE_ATTR_SHAPE_TRANSITION)) {
+            if (set_shape_guard(owner, instr, fb, tp_version, STORE_ATTR,
+                                STORE_ATTR_SHAPE_TRANSITION) != SHAPE_GUARD_SET) {
                 goto fail;
             }
             _PyShape *shape_to = plan.shape_to;
@@ -1284,8 +1330,13 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
         assert(!_PyShape_IsDictMode(_PyObject_SHAPE(owner)));
         assert(_PyShape_SlotOf(_PyObject_SHAPE(owner), name) < 0);
         opcode = is_method ? LOAD_ATTR_METHOD_SHAPE : LOAD_ATTR_NONDESCRIPTOR_SHAPE;
-        if (!set_shape_guard(owner, instr, fb, tp_version, LOAD_ATTR, opcode)) {
-            return 0;
+        switch (set_shape_guard(owner, instr, fb, tp_version, LOAD_ATTR, opcode)) {
+            case SHAPE_GUARD_DECLINED:
+                return 0;
+            case SHAPE_GUARD_POLY:
+                return 1;
+            case SHAPE_GUARD_SET:
+                break;
         }
     }
     else if (owner_cls->tp_dictoffset == 0) {

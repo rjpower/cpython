@@ -333,7 +333,8 @@ class SpecializationTests(unittest.TestCase):
         for t in tokens:
             self.assertEqual(get(t), 0)
             mark(t)
-        # Two shapes of one type at a site: no handler of one shape stays.
+        # Two shapes of one type: the load reads both, the store is generic.
+        self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(get))
         self.assertNotIn("LOAD_ATTR_SHAPE", opnames(get))
         self.assertNotIn("STORE_ATTR_SHAPE_TRANSITION", opnames(mark))
         # The generic path follows the same edges.
@@ -1392,6 +1393,148 @@ class InstanceLayoutSpecializationTests(unittest.TestCase):
         self.assertEqual(K.v, "class")
 
 
+def shaped(n):
+    """n objects of one type, each of its own shape, all with x."""
+    class P:
+        def m(self):
+            return "method"
+    objects = []
+    for i in range(n):
+        o = P()
+        setattr(o, f"pad{i}", i)
+        o.x = i
+        objects.append(o)
+    return P, objects
+
+
+@cpython_only
+@requires_specialization
+class ShapePolyTests(unittest.TestCase):
+    """LOAD_ATTR_SHAPE_POLY: a site's two to four shapes, of one type or
+    several, each with a slot or a method."""
+
+    def warm(self, f, objects, expected, rounds=2 * COOLDOWN):
+        for _ in range(rounds):
+            for o, want in zip(objects, expected):
+                self.assertEqual(f(o), want)
+
+    def test_slot_rows(self):
+        for n in (2, 4):
+            with self.subTest(shapes=n):
+                @reset_code
+                def get(o):
+                    return o.x
+                P, objects = shaped(n)
+                self.warm(get, objects, range(n))
+                self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(get))
+
+    def test_five_shapes_are_megamorphic(self):
+        @reset_code
+        def get(o):
+            return o.x
+        P, objects = shaped(5)
+        # Only the shape without a row misses, so the fifth row is seen late.
+        self.warm(get, objects, range(5), rounds=8 * COOLDOWN)
+        self.assertNotIn("LOAD_ATTR_SHAPE_POLY", opnames(get))
+        self.assertNotIn("LOAD_ATTR_SHAPE", opnames(get))
+
+    def test_method_rows(self):
+        @reset_code
+        def call(o):
+            return o.m()
+        P, objects = shaped(3)
+        class Q:
+            def m(self):
+                return "other"
+        objects.append(Q())
+        self.warm(call, objects, ["method"] * 3 + ["other"])
+        self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(call))
+
+    def test_slot_and_method_rows(self):
+        # At a call-pair site a slot row pushes NULL, a method row the receiver.
+        @reset_code
+        def call(o):
+            return o.m()
+        P, objects = shaped(2)
+        shadowed = P()
+        shadowed.m = lambda: "instance"
+        objects.append(shadowed)
+        self.warm(call, objects, ["method", "method", "instance"])
+        self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(call))
+
+    def test_types_with_slot_and_class_attribute_rows(self):
+        # A class attribute that is not a method has its own handler, so the
+        # site does not take the polymorphic one.
+        class C:
+            x = "class"
+        @reset_code
+        def get(o):
+            return o.x
+        P, objects = shaped(2)
+        objects.append(C())
+        self.warm(get, objects, [0, 1, "class"])
+        self.assertNotIn("LOAD_ATTR_SHAPE_POLY", opnames(get))
+
+    def test_new_shape_after_warming(self):
+        @reset_code
+        def get(o):
+            return o.x
+        P, objects = shaped(2)
+        self.warm(get, objects, range(2))
+        late = P()
+        late.x = "late"
+        self.assertEqual(get(late), "late")
+        self.assertEqual([get(o) for o in objects], [0, 1])
+
+    def test_class_mutation_after_warming(self):
+        @reset_code
+        def get(o):
+            return o.x
+        @reset_code
+        def call(o):
+            return o.m()
+        P, objects = shaped(3)
+        self.warm(get, objects, range(3))
+        self.warm(call, objects, ["method"] * 3)
+        self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(get))
+        self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(call))
+        P.m = lambda self: "new"
+        P.x = property(lambda self: "prop")
+        self.assertEqual([get(o) for o in objects], ["prop"] * 3)
+        self.assertEqual([call(o) for o in objects], ["new"] * 3)
+
+    def test_version_exhaustion_after_warming(self):
+        @reset_code
+        def call(o):
+            return o.m()
+        P, objects = shaped(2)
+        self.warm(call, objects, ["method"] * 2)
+        self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(call))
+        for i in range(1001):
+            P.m = lambda self, i=i: i
+            _testcapi.type_assign_version(P)
+            if i % 100 == 0:
+                self.assertEqual([call(o) for o in objects], [i, i])
+        self.assertEqual(_testcapi.type_get_version(P), 0)
+        self.assertEqual([call(o) for o in objects], [1000, 1000])
+
+    def test_rows_of_dead_types(self):
+        # Rows borrow shapes; a dead type's shapes may be reused at the same
+        # addresses by new types, whose versions differ.
+        @reset_code
+        def get(o):
+            return o.x
+        refs = []
+        for round in range(10):
+            P, objects = shaped(2)
+            for _ in range(THRESHOLD + 1):
+                self.assertEqual([get(o) for o in objects], [0, 1])
+            refs.append(weakref.ref(P))
+            del P, objects
+            gc.collect()
+        self.assertEqual([r() for r in refs], [None] * len(refs))
+
+
 @cpython_only
 class DebugAllocatorTests(unittest.TestCase):
 
@@ -1406,6 +1549,7 @@ class DebugAllocatorTests(unittest.TestCase):
             "test.test_shapes.ConversionTests",
             "test.test_shapes.NonExactNameTests",
             "test.test_shapes.InstanceLayoutSpecializationTests",
+            "test.test_shapes.ShapePolyTests",
             PYTHONMALLOC="mimalloc_debug")
 
 

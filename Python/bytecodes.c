@@ -2563,6 +2563,7 @@ dummy_func(
             LOAD_ATTR_NONDESCRIPTOR_SHAPE,
             LOAD_ATTR_NONDESCRIPTOR_NO_DICT,
             LOAD_ATTR_SHAPE,
+            LOAD_ATTR_SHAPE_POLY,
         };
 
         specializing op(_SPECIALIZE_LOAD_ATTR, (owner -- owner)) {
@@ -2645,6 +2646,50 @@ dummy_func(
             POP_TOP +
             unused/5 +
             _PUSH_NULL_CONDITIONAL;
+
+        /* Two to four shapes, of one type or several: each is a row of the
+         * site's poly table, matched by the owner's shape and the live
+         * shape's version.  A row's handler says what it holds: for
+         * LOAD_ATTR_SHAPE, the slot's offset in index; for
+         * LOAD_ATTR_METHOD_SHAPE, at a call-pair site, the method in descr,
+         * borrowed while the version matches.  The guard finds the row and
+         * the load finds it again. */
+        op(_GUARD_SHAPE_POLY, (owner -- owner)) {
+            _PyFbPoly *poly = _PyFrame_FbPoly(frame, FB_COUNTER());
+            EXIT_IF(_PyFb_ShapeRow(poly, _PyObject_SHAPE(PyValue_ObjectBorrow(owner))) < 0);
+        }
+
+        op(_LOAD_ATTR_SHAPE_POLY, (owner -- attr, self_or_null[oparg & 1])) {
+            PyObject *owner_o = PyValue_ObjectBorrow(owner);
+            _PyFbPoly *poly = _PyFrame_FbPoly(frame, FB_COUNTER());
+            int row = _PyFb_ShapeRow(poly, _PyObject_SHAPE(owner_o));
+            assert(row >= 0);
+            STAT_INC(LOAD_ATTR, hit);
+            if (poly->handler[row] == LOAD_ATTR_SHAPE) {
+                attr = *(PyValue *)((char *)owner_o + poly->index[row]);
+                // The shape proves the slot filled.
+                assert(!PyValue_IsNull(attr));
+                if (oparg & 1) {
+                    self_or_null[0] = PyValue_NULL;
+                }
+                DEAD(owner);
+            }
+            else {
+                assert(poly->handler[row] == LOAD_ATTR_METHOD_SHAPE);
+                assert(oparg & 1);
+                PyObject *descr = (PyObject *)poly->descr[row];
+                assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
+                attr = PyValue_FromObject(descr);
+                self_or_null[0] = owner;
+                DEAD(owner);
+            }
+        }
+
+        macro(LOAD_ATTR_SHAPE_POLY) =
+            unused/1 +
+            _GUARD_SHAPE_POLY +
+            unused/8 +
+            _LOAD_ATTR_SHAPE_POLY;
 
         op(_LOAD_ATTR_MODULE, (dict_version/2, index/1, owner -- attr, o)) {
             EXIT_IF(PyValue_Type(owner) != &PyModule_Type);

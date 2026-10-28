@@ -608,7 +608,10 @@ create_heapctype_with_none_bases_slot(PyObject *self, PyObject *Py_UNUSED(ignore
 }
 
 
+static PyObject *heapvarmanaged_resize(PyObject *, PyObject *);
+
 static PyMethodDef TestMethods[] = {
+    {"heapvarmanaged_resize", heapvarmanaged_resize, METH_VARARGS},
     {"pytype_fromspec_meta",    _PyCFunction_CAST(pytype_fromspec_meta), METH_O},
     {"test_type_from_ephemeral_spec", test_type_from_ephemeral_spec, METH_NOARGS},
     {"create_type_from_repeated_slots",
@@ -1062,6 +1065,109 @@ static PyType_Spec  HeapCTypeWithManagedDict_spec = {
     HeapCTypeWithManagedDict_slots
 };
 
+/* A variable-size type that asks for a managed dict: its instances get a
+ * dict word after the items, which PyObject_GC_NewVar must initialise. */
+typedef struct {
+    PyObject_VAR_HEAD
+    PyObject *items[1];
+} HeapCVarWithManagedDictObject;
+
+static PyObject *
+heapvarmanaged_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    Py_ssize_t n = PyTuple_GET_SIZE(args);
+    HeapCVarWithManagedDictObject *self =
+        PyObject_GC_NewVar(HeapCVarWithManagedDictObject, type, n);
+    if (self == NULL) {
+        return NULL;
+    }
+    for (Py_ssize_t i = 0; i < n; i++) {
+        self->items[i] = Py_NewRef(PyTuple_GET_ITEM(args, i));
+    }
+    PyObject_GC_Track(self);
+    return (PyObject *)self;
+}
+
+// heapvarmanaged_resize(type, before, after, value): an instance of type,
+// a HeapCVarWithManagedDict, built with `before` items and the attribute
+// `a` set to value, then resized to `after` items before it is tracked,
+// which moves its dict word.
+static PyObject *
+heapvarmanaged_resize(PyObject *module, PyObject *args)
+{
+    PyTypeObject *type;
+    Py_ssize_t before, after;
+    PyObject *value;
+    if (!PyArg_ParseTuple(args, "O!nnO", &PyType_Type, &type,
+                          &before, &after, &value)) {
+        return NULL;
+    }
+    HeapCVarWithManagedDictObject *self =
+        PyObject_GC_NewVar(HeapCVarWithManagedDictObject, type, before);
+    if (self == NULL) {
+        return NULL;
+    }
+    for (Py_ssize_t i = 0; i < before; i++) {
+        self->items[i] = Py_None;
+    }
+    if (PyObject_SetAttrString((PyObject *)self, "a", value) < 0) {
+        return NULL;
+    }
+    self = PyObject_GC_Resize(HeapCVarWithManagedDictObject, self, after);
+    if (self == NULL) {
+        return NULL;
+    }
+    for (Py_ssize_t i = before; i < after; i++) {
+        self->items[i] = Py_None;
+    }
+    PyObject_GC_Track(self);
+    return (PyObject *)self;
+}
+
+static Py_ssize_t
+heapvarmanaged_length(PyObject *self)
+{
+    return Py_SIZE(self);
+}
+
+static PyObject *
+heapvarmanaged_item(PyObject *self, Py_ssize_t i)
+{
+    if (i < 0 || i >= Py_SIZE(self)) {
+        PyErr_SetString(PyExc_IndexError, "index out of range");
+        return NULL;
+    }
+    return Py_NewRef(((HeapCVarWithManagedDictObject *)self)->items[i]);
+}
+
+static int
+heapvarmanaged_traverse(PyObject *self, visitproc visit, void *arg)
+{
+    for (Py_ssize_t i = 0; i < Py_SIZE(self); i++) {
+        Py_VISIT(((HeapCVarWithManagedDictObject *)self)->items[i]);
+    }
+    return heapmanaged_traverse(self, visit, arg);
+}
+
+static PyType_Slot HeapCVarWithManagedDict_slots[] = {
+    {Py_tp_new, heapvarmanaged_new},
+    {Py_sq_length, heapvarmanaged_length},
+    {Py_sq_item, heapvarmanaged_item},
+    {Py_tp_traverse, heapvarmanaged_traverse},
+    {Py_tp_getset, heapctypewithdict_getsetlist},
+    {Py_tp_clear, heapmanaged_clear},
+    {Py_tp_dealloc, heapmanaged_dealloc},
+    {0, 0},
+};
+
+static PyType_Spec HeapCVarWithManagedDict_spec = {
+    "_testcapi.HeapCVarWithManagedDict",
+    offsetof(HeapCVarWithManagedDictObject, items),
+    sizeof(PyObject *),
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_MANAGED_DICT,
+    HeapCVarWithManagedDict_slots
+};
+
 static void
 heapctypewithmanagedweakref_dealloc(PyObject* self)
 {
@@ -1477,6 +1583,9 @@ _PyTestCapi_Init_Heaptype(PyObject *m) {
 
     PyObject *HeapCTypeWithManagedDict = PyType_FromSpec(&HeapCTypeWithManagedDict_spec);
     ADD("HeapCTypeWithManagedDict", HeapCTypeWithManagedDict);
+
+    PyObject *HeapCVarWithManagedDict = PyType_FromSpec(&HeapCVarWithManagedDict_spec);
+    ADD("HeapCVarWithManagedDict", HeapCVarWithManagedDict);
 
     PyObject *HeapCTypeWithManagedWeakref = PyType_FromSpec(&HeapCTypeWithManagedWeakref_spec);
     ADD("HeapCTypeWithManagedWeakref", HeapCTypeWithManagedWeakref);

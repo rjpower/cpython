@@ -4147,6 +4147,19 @@ class TestBufferProtocol(unittest.TestCase):
         m = get_contiguous(nd, PyBUF_READ, 'C')
         self.assertTrue(m.c_contiguous)
 
+    def test_ndarray_view_keeps_exporter(self):
+        # The view holds the only reference to the array it was sliced
+        # from; a collection must not free that array's buffer.
+        nd = ndarray([1, 2, 3], shape=[2], strides=[2], flags=ND_WRITABLE)
+        nd = nd[::-1]
+        support.gc_collect()
+        # Reuse any freed memory, so a dangling format string shows.
+        junk = [bytes([0xa0]) * 64 for _ in range(1000)]
+        self.assertEqual(nd.format, 'B')
+        self.assertEqual(nd[1], 1)
+        self.assertEqual(nd.tolist(), [3, 1])
+        del junk
+
     def test_memoryview_serializing(self):
 
         # C-contiguous

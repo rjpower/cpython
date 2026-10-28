@@ -10,7 +10,7 @@ import unittest
 from unittest import mock
 from collections import defaultdict
 
-from test.support import captured_stderr
+from test.support import captured_stderr, gc_collect
 
 try:
     import _remote_debugging
@@ -945,6 +945,43 @@ class TestBinaryEdgeCases(BinaryFormatTestBase):
         # Empty-stack samples are recorded as STACK_REPEAT records with
         # depth-0 stacks; the file must replay all three samples.
         self.assertEqual(count, 3)
+
+    def test_string_tables_survive_collection(self):
+        """The writer's and the reader's string tables hold the only
+        references to their strings; a collection must not free them."""
+        with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
+            filename = f.name
+        self.temp_files.append(filename)
+
+        def sample():
+            # New string objects, equal to those of the previous sample.
+            name = "".join(["collected_", "file.py"])
+            func = "".join(["collected_", "func"])
+            return [make_interpreter(
+                0, [make_thread(1, [make_frame(name, 1, func)])])]
+
+        writer = _remote_debugging.BinaryWriter(filename, 1000, 0,
+                                                compression=0)
+        writer.write_sample(sample(), 1000)
+        gc_collect()
+        # Reuse any freed memory, so a dangling reference shows.
+        junk = [bytes([0xa0]) * 64 for _ in range(10000)]
+        writer.write_sample(sample(), 2000)
+        writer.finalize()
+        del junk
+
+        reader = _remote_debugging.BinaryReader(filename)
+        gc_collect()
+        junk = [bytes([0xa0]) * 64 for _ in range(10000)]
+        collector = RawCollector()
+        self.assertEqual(reader.replay(collector), 2)
+        reader.close()
+        del junk
+        frames = [s["frames"] for s in collector.by_thread[(0, 1)]]
+        self.assertEqual(len(frames), 2)
+        for (frame,) in frames:
+            self.assertEqual(frame["filename"], "collected_file.py")
+            self.assertEqual(frame["funcname"], "collected_func")
 
     def test_writer_handles_mixed_empty_and_real_first_sample(self):
         """First sample with one empty + one real thread roundtrips through C."""

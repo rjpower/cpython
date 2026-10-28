@@ -18,10 +18,7 @@ static inline mi_heap_t *
 _PyObject_GetAllocationHeap(_PyThreadStateImpl *tstate, PyTypeObject *tp)
 {
     struct _mimalloc_thread_state *m = &tstate->mimalloc;
-    if (_PyType_HasFeature(tp, Py_TPFLAGS_PREHEADER)) {
-        return &m->heaps[_Py_MIMALLOC_HEAP_GC_PRE];
-    }
-    else if (_PyType_IS_GC(tp)) {
+    if (_PyType_IS_GC(tp)) {
         return &m->heaps[_Py_MIMALLOC_HEAP_GC];
     }
     else {

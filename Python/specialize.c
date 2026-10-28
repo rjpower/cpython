@@ -90,13 +90,12 @@ do { \
 #define SPEC_FAIL_ATTR_INSTANCE_ATTRIBUTE 26
 #define SPEC_FAIL_ATTR_METACLASS_ATTRIBUTE 27
 #define SPEC_FAIL_ATTR_PROPERTY_NOT_PY_FUNCTION 28
-#define SPEC_FAIL_ATTR_NOT_IN_KEYS 29
+#define SPEC_FAIL_ATTR_OTHER_SHAPE 29
 #define SPEC_FAIL_ATTR_NOT_IN_DICT 30
 #define SPEC_FAIL_ATTR_CLASS_ATTR_SIMPLE 31
 #define SPEC_FAIL_ATTR_CLASS_ATTR_DESCRIPTOR 32
 #define SPEC_FAIL_ATTR_BUILTIN_CLASS_METHOD_OBJ 33
 #define SPEC_FAIL_ATTR_METACLASS_OVERRIDDEN 34
-#define SPEC_FAIL_ATTR_SPLIT_DICT 35
 #define SPEC_FAIL_ATTR_DESCR_NOT_DEFERRED 36
 #define SPEC_FAIL_ATTR_SLOT_AFTER_ITEMS 37
 
@@ -681,10 +680,11 @@ lookup_hook_facts(PyTypeObject *type, hook_facts *facts)
     Py_XDECREF(getattribute);
 }
 
-/* Whether the site specialised for another shape of the same type before,
- * which the poly table that fb_begin() filled records. */
+/* Whether the poly table of INSTR has a row of a shape handler for another
+ * shape: of the type with version TP_VERSION, or of any type if ANY_TYPE. */
 static bool
-fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, _PyShape *shape)
+fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, _PyShape *shape,
+                   bool any_type)
 {
     _PyFbHeader *h = instr_fb(instr);
     if (h->poly == 0) {
@@ -693,9 +693,11 @@ fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, _PyShape *shape)
     _PyFbPoly *poly = &fb_block(instr)->poly[h->poly - 1];
     for (int i = 0; i < FB_POLY_SIZE && poly->handler[i] != 0; i++) {
         int opcode = poly->handler[i];
-        if ((opcode == LOAD_ATTR_SHAPE || opcode == STORE_ATTR_SHAPE ||
-             opcode == STORE_ATTR_SHAPE_ADD) &&
-            poly->type_version[i] == tp_version && poly->shape[i] != shape)
+        if ((opcode == LOAD_ATTR_SHAPE || opcode == LOAD_ATTR_METHOD_SHAPE ||
+             opcode == LOAD_ATTR_NONDESCRIPTOR_SHAPE ||
+             opcode == STORE_ATTR_SHAPE || opcode == STORE_ATTR_SHAPE_TRANSITION) &&
+            (any_type || poly->type_version[i] == tp_version) &&
+            poly->shape[i] != shape)
         {
             return true;
         }
@@ -703,195 +705,120 @@ fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, _PyShape *shape)
     return false;
 }
 
-/* Fill in the shape fields of FB for an access to slot INDEX of OWNER, and
- * return the shape opcode to use, or 0 if OWNER is in dictionary mode or,
- * for a load, lacks the slot.  A site that sees several shapes of one type,
- * as with attributes that only some instances set, keeps to the instance
- * value handlers, which check presence instead of the shape. */
+/* Rewrite INSTR, a LOAD_ATTR site whose poly table has just recorded a
+ * second to fourth row, as LOAD_ATTR_SHAPE_POLY if every row is one that
+ * handler reads.  1 if done. */
 static int
-specialize_shape_access(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
-                        unsigned int tp_version, Py_ssize_t index, int base_op)
+specialize_shape_poly(_PyInstr *instr)
+{
+    _PyFbHeader *h = instr_fb(instr);
+    if (h->state != FB_POLY) {
+        // MEGA: a fifth row was not recorded
+        return 0;
+    }
+    _PyFbPoly *poly = &fb_block(instr)->poly[h->poly - 1];
+    for (int i = 0; i < FB_POLY_SIZE && poly->handler[i] != 0; i++) {
+        if (poly->handler[i] != LOAD_ATTR_SHAPE &&
+            poly->handler[i] != LOAD_ATTR_METHOD_SHAPE) {
+            return 0;
+        }
+        assert(poly->type_version[i] != 0 && poly->shape[i] != NULL);
+    }
+    if (!set_opcode(instr, LOAD_ATTR_SHAPE_POLY)) {
+        return 0;
+    }
+    STAT_INC(LOAD_ATTR, success);
+    set_counter(h, adaptive_counter_cooldown());
+    return 1;
+}
+
+typedef enum {
+    SHAPE_GUARD_DECLINED,   // the site stays generic
+    SHAPE_GUARD_SET,        // the caller specialises HANDLER
+    SHAPE_GUARD_POLY,       // the site is LOAD_ATTR_SHAPE_POLY
+} shape_guard;
+
+/* The shape fields of FB for HANDLER, guarded by OWNER's shape, unless the
+ * site saw another shape.  The observation is then recorded, with the
+ * fields the caller set, so that later specialisations see every shape.
+ * A load of a slot or a method, at a site that saw other shapes of any
+ * type, becomes LOAD_ATTR_SHAPE_POLY if all the site's rows are of that
+ * kind.  Other sites that saw another shape of the type stay generic:
+ * there is no polymorphic store (note 09 section 7). */
+static shape_guard
+set_shape_guard(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
+                unsigned int tp_version, int base_op, int handler)
 {
     _PyShape *shape = _PyObject_SHAPE(owner);
-    if (_PyShape_IsDictMode(shape) || fb_saw_other_shape(instr, tp_version, shape)) {
-        return 0;
+    fb->shape = shape;
+    fb->type_version = tp_version;
+    bool poly_load = handler == LOAD_ATTR_SHAPE || handler == LOAD_ATTR_METHOD_SHAPE;
+    if (!fb_saw_other_shape(instr, tp_version, shape, poly_load)) {
+        return SHAPE_GUARD_SET;
     }
-    int opcode;
-    if (_PyShape_HasSlot(shape, index)) {
-        opcode = base_op == LOAD_ATTR ? LOAD_ATTR_SHAPE : STORE_ATTR_SHAPE;
+    fb_record(instr, instr_fb(instr), handler);
+    if (poly_load && specialize_shape_poly(instr)) {
+        return SHAPE_GUARD_POLY;
     }
-    else if (base_op == LOAD_ATTR) {
-        return 0;
+    SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_OTHER_SHAPE);
+    return SHAPE_GUARD_DECLINED;
+}
+
+/* A DICT plan: WITH_HINT if OWNER's instance dict holds NAME.  1 if
+ * specialised; 0 if the dict lacks NAME, so that the class attribute
+ * (steps 3 to 5) is the result; -1 to fail. */
+static int
+specialize_dict_hint(PyObject *owner, _PyInstr *instr, PyObject *name,
+                     unsigned int tp_version, int base_op, int hint_op)
+{
+    _PyFbAttr *fb = instr_entry(instr);
+    PyTypeObject *type = Py_TYPE(owner);
+    Py_ssize_t dictoffset;
+    if (type->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
+        // Slot 0 in dictionary mode.
+        assert(_PyShape_IsDictMode(_PyObject_SHAPE(owner)));
+        dictoffset = type->tp_basicsize;
     }
     else {
-        _PyShape *shape_to = _PyShape_Add(shape, index);
-        if (shape_to == NULL) {
-            return 0;
-        }
-        fb->shape_to = shape_to;
-        opcode = STORE_ATTR_SHAPE_ADD;
+        dictoffset = type->tp_dictoffset;
     }
-    fb->shape = shape;
-    return opcode;
-}
-
-static int
-specialize_dict_access_inline(
-    PyObject *owner, _PyInstr *instr, PyTypeObject *type,
-    PyObject *name, unsigned int tp_version,
-    int base_op, int values_op)
-{
-    _PyFbAttr *fb = instr_entry(instr);
-    PyDictKeysObject *keys = ((PyHeapTypeObject *)type)->ht_cached_keys;
-    assert(PyUnicode_CheckExact(name));
-    _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(owner);
-    Py_ssize_t index = _PyDictKeys_StringLookupSplit(keys, name);
-    assert (index != DKIX_ERROR);
-    if (index == DKIX_EMPTY) {
-        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_NOT_IN_KEYS);
-        return 0;
+    if (dictoffset == 0 || dictoffset > INT32_MAX || dictoffset < INT32_MIN) {
+        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_OUT_OF_RANGE);
+        return -1;
     }
-    assert(index >= 0);
-    // Once a dict exists, its lock (not the owner's) guards the values, so
-    // they may be invalidated concurrently. The instruction rechecks them.
-    assert(_PyObject_GetManagedDict(owner) != NULL ||
-           _PyObject_InlineValues(owner)->valid);
-    char *value_addr = (char *)&_PyObject_InlineValues(owner)->values[index];
-    fb->offset = (uint32_t)(value_addr - (char *)owner);
-    fb->type_version = tp_version;
-    int shape_op = specialize_shape_access(owner, instr, fb, tp_version,
-                                           index, base_op);
-    if (shape_op != 0) {
-        specialize(instr, shape_op);
-        return 1;
+    PyDictObject *dict = (PyDictObject *)_PyObject_DictAt(owner, (int32_t)dictoffset);
+    if (dict == NULL || !PyDict_CheckExact(dict)) {
+        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_NO_DICT);
+        return -1;
     }
-    specialize(instr, values_op);
-    return 1;
-}
-
-static int
-specialize_dict_access_hint(
-    PyDictObject *dict, _PyInstr *instr, PyTypeObject *type,
-    PyObject *name, unsigned int tp_version,
-    int base_op, int hint_op)
-{
-    _PyFbAttr *fb = instr_entry(instr);
-
-    _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(dict);
-
-    // We found an instance with a __dict__.
-    // STORE_ATTR_WITH_HINT can write the values of a split table, such as a
-    // materialized dict that shares the inline values; LOAD_ATTR_WITH_HINT
-    // reads combined tables only.
-    if (base_op == LOAD_ATTR && _PyDict_HasSplitTable(dict)) {
-        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_SPLIT_DICT);
-        return 0;
-    }
+    int res;
+    Py_BEGIN_CRITICAL_SECTION(dict);
     PyValue value;
     Py_ssize_t index = _PyDict_LookupIndexAndValue(dict, name, &value);
-    if (PyValue_IsNull(value) && index >= 0) {
-        // A split table's shared keys can hold names this dict lacks.
-        index = DKIX_EMPTY;
-    }
-    if (index < 0) {
-        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_NOT_IN_DICT);
-        return 0;
-    }
-    fb->hint = (uint32_t)index;
-    fb->type_version = tp_version;
-    specialize(instr, hint_op);
-    return 1;
-}
-
-
-static int
-specialize_dict_access(
-    PyObject *owner, _PyInstr *instr, PyTypeObject *type,
-    PyObject *name, unsigned int tp_version,
-    int base_op, int values_op, int hint_op)
-{
-    // No descriptor, or non overriding.
-    if ((type->tp_flags & Py_TPFLAGS_MANAGED_DICT) == 0) {
-        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_NOT_MANAGED_DICT);
-        return 0;
-    }
-    if (type->tp_flags & Py_TPFLAGS_INLINE_VALUES &&
-        FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner)->valid) &&
-        !(base_op == STORE_ATTR && _PyObject_GetManagedDict(owner) != NULL))
-    {
-        int res;
-        Py_BEGIN_CRITICAL_SECTION(owner);
-        PyDictObject *dict = _PyObject_GetManagedDict(owner);
-        // A materialized dict shares the inline values, so loads can still
-        // read them directly. Stores must go through the dict.
-        if (dict == NULL || base_op == LOAD_ATTR) {
-            res = specialize_dict_access_inline(owner, instr, type, name,
-                                                tp_version, base_op, values_op);
-        }
-        else {
-            // lost race and dict was created, fail specialization
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
-            res = 0;
-        }
-        Py_END_CRITICAL_SECTION();
-        return res;
+    if (index < 0 || PyValue_IsNull(value)) {
+        res = 0;
     }
     else {
-        PyDictObject *dict = _PyObject_GetManagedDict(owner);
-        if (dict == NULL || !PyDict_CheckExact(dict)) {
-            SPECIALIZATION_FAIL(base_op, SPEC_FAIL_NO_DICT);
-            return 0;
-        }
-        int res;
-        Py_BEGIN_CRITICAL_SECTION(dict);
-        // materialized managed dict
-        res = specialize_dict_access_hint(dict, instr, type, name,
-                                          tp_version, base_op, hint_op);
-        Py_END_CRITICAL_SECTION();
+        fb->hint = (uint32_t)index;
+        res = 1;
+    }
+    Py_END_CRITICAL_SECTION();
+    if (res <= 0) {
         return res;
     }
+    // The shape guard: the dictionary-mode shape, or a root shape.
+    fb->shape = _PyObject_SHAPE(owner);
+    fb->type_version = tp_version;
+    fb->dictoffset = (int32_t)dictoffset;
+    specialize(instr, hint_op);
+    return 1;
 }
 
 static int
 specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
                               PyObject *name, PyValue value,
-                              unsigned int tp_version, bool is_method,
-                              uint32_t shared_keys_version);
+                              unsigned int tp_version, bool is_method);
 static int specialize_class_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name);
-
-/* Returns true if instances of obj's class are
- * likely to have `name` in their __dict__.
- * For objects with inline values, we check in the shared keys.
- * For other objects, we check their actual dictionary.
- */
-static bool
-instance_has_key(PyObject *obj, PyObject *name, uint32_t *shared_keys_version)
-{
-    PyTypeObject *cls = Py_TYPE(obj);
-    if ((cls->tp_flags & Py_TPFLAGS_MANAGED_DICT) == 0) {
-        return false;
-    }
-    if (cls->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-        PyDictKeysObject *keys = ((PyHeapTypeObject *)cls)->ht_cached_keys;
-        Py_ssize_t index =
-            _PyDictKeys_StringLookupAndVersion(keys, name, shared_keys_version);
-        return index >= 0;
-    }
-    PyDictObject *dict = _PyObject_GetManagedDict(obj);
-    if (dict == NULL || !PyDict_CheckExact(dict)) {
-        return false;
-    }
-    bool result;
-    Py_BEGIN_CRITICAL_SECTION(dict);
-    if (dict->ma_values) {
-        result = false;
-    }
-    else {
-        result = (_PyDict_LookupIndex(dict, name) >= 0);
-    }
-    Py_END_CRITICAL_SECTION();
-    return result;
-}
 
 static int
 specialize_getattribute_overridden(_PyInstr *instr, PyObject *getattribute,
@@ -1023,20 +950,41 @@ specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name)
     }
 
     // Instance storage first, then the class (precedence steps 2 to 5).
-    // The rung-2 storage adapter: a name that any instance keeps in the
-    // shared keys, or that this one keeps in a combined dict, goes to the
-    // presence-checking instance handlers.
-    uint32_t shared_keys_version = 0;
-    bool shadow = instance_has_key(owner, name, &shared_keys_version);
-    if (plan.kind == _Py_LOOKUP_SLOT || shadow) {
-        goto try_instance;
+    if (plan.kind == _Py_LOOKUP_SLOT) {
+        fb->offset = plan.offset;
+        switch (set_shape_guard(owner, instr, fb, tp_version, LOAD_ATTR,
+                                LOAD_ATTR_SHAPE)) {
+            case SHAPE_GUARD_DECLINED:
+                return -1;
+            case SHAPE_GUARD_POLY:
+                return 0;
+            case SHAPE_GUARD_SET:
+                break;
+        }
+        specialize(instr, LOAD_ATTR_SHAPE);
+        return 0;
     }
-    switch (plan.fallback) {
+    int kind = plan.kind;
+    if (kind == _Py_LOOKUP_DICT) {
+        int res = specialize_dict_hint(owner, instr, name, tp_version,
+                                       LOAD_ATTR, LOAD_ATTR_WITH_HINT);
+        if (res != 0) {
+            return res > 0 ? 0 : -1;
+        }
+        // The dict lacks the name, but nothing guards against its gaining
+        // it, so a class attribute is not specialised through a dict.
+        if (plan.fallback != _Py_LOOKUP_ABSENT) {
+            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NOT_MANAGED_DICT);
+            return -1;
+        }
+        kind = _Py_LOOKUP_ABSENT;
+    }
+    switch (kind) {
         case _Py_LOOKUP_METHOD:
             if (oparg & 1) {
                 return specialize_attr_loadclassattr(owner, instr, name,
                                                      plan.value, tp_version,
-                                                     true, shared_keys_version)
+                                                     true)
                        ? 0 : -1;
             }
             SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_METHOD);
@@ -1051,26 +999,19 @@ specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name)
             if ((oparg & 1) == 0) {
                 if (specialize_attr_loadclassattr(owner, instr, name,
                                                   plan.value, tp_version,
-                                                  false, shared_keys_version)) {
+                                                  false)) {
                     return 0;
                 }
             }
             return -1;
         default:
-            assert(plan.fallback == _Py_LOOKUP_ABSENT);
+            assert(kind == _Py_LOOKUP_ABSENT);
             // Retry after the cooldown.  A specialised opcode in memory
             // would read the entry that fb_begin() cleared.
             set_opcode(instr, LOAD_ATTR);
             set_counter(&fb->h, adaptive_counter_cooldown());
             return 0;
     }
-try_instance:
-    if (specialize_dict_access(owner, instr, type, name, tp_version,
-                               LOAD_ATTR, LOAD_ATTR_INSTANCE_VALUE, LOAD_ATTR_WITH_HINT))
-    {
-        return 0;
-    }
-    return -1;
 }
 
 Py_NO_INLINE void
@@ -1173,14 +1114,55 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
             : SPEC_FAIL_ATTR_CLASS_ATTR_SIMPLE);
         goto fail;
     }
-    if (plan.outcome == _Py_STORE_REPLACE || plan.outcome == _Py_STORE_ADD ||
-        plan.outcome == _Py_STORE_DICT)
-    {
-        if (specialize_dict_access(owner, instr, type, name, tp_version,
-                                   STORE_ATTR, STORE_ATTR_INSTANCE_VALUE,
-                                   STORE_ATTR_WITH_HINT)) {
+    switch (plan.outcome) {
+        case _Py_STORE_REPLACE:
+            fb->offset = plan.offset;
+            if (set_shape_guard(owner, instr, fb, tp_version, STORE_ATTR,
+                                STORE_ATTR_SHAPE) != SHAPE_GUARD_SET) {
+                goto fail;
+            }
+            specialize(instr, STORE_ATTR_SHAPE);
+            goto success;
+        case _Py_STORE_ADD:
+        {
+            fb->offset = plan.offset;
+            if (set_shape_guard(owner, instr, fb, tp_version, STORE_ATTR,
+                                STORE_ATTR_SHAPE_TRANSITION) != SHAPE_GUARD_SET) {
+                goto fail;
+            }
+            _PyShape *shape_to = plan.shape_to;
+            if (shape_to == NULL) {
+                /* Prepare the edge now, so that the first instance through
+                   a new transition can be specialised.  The generic store
+                   that follows prepares again and reports a failure, so a
+                   MemoryError here is the specialiser's own. */
+                PyObject *key = name;
+                _PyUnicode_InternMortal(_PyInterpreterState_GET(), &key);
+                _PyShapePrepare prep = PyUnicode_CHECK_INTERNED(key)
+                    ? _PyShape_PrepareAdd(_PyObject_SHAPE(owner), key, &shape_to)
+                    : _Py_SHAPE_PREPARE_LIMIT;
+                if (prep != _Py_SHAPE_PREPARE_OK) {
+                    if (prep == _Py_SHAPE_PREPARE_NOMEMORY) {
+                        PyErr_Clear();
+                    }
+                    SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OUT_OF_RANGE);
+                    goto fail;
+                }
+            }
+            fb->shape_to = shape_to;
+            specialize(instr, STORE_ATTR_SHAPE_TRANSITION);
             goto success;
         }
+        case _Py_STORE_DICT:
+            if (specialize_dict_hint(owner, instr, name, tp_version,
+                                     STORE_ATTR, STORE_ATTR_WITH_HINT) > 0) {
+                goto success;
+            }
+            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_NOT_IN_DICT);
+            goto fail;
+        default:
+            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
+            goto fail;
     }
 fail:
     unspecialize(instr);
@@ -1305,59 +1287,13 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
 static int
 specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
                               PyObject *name, PyValue value,
-                              unsigned int tp_version, bool is_method,
-                              uint32_t shared_keys_version)
+                              unsigned int tp_version, bool is_method)
 {
     _PyFbAttr *fb = instr_entry(instr);
     PyTypeObject *owner_cls = Py_TYPE(owner);
 
     assert(!PyValue_IsNull(value));
 
-
-    int opcode;
-    unsigned long tp_flags = PyType_GetFlags(owner_cls);
-    if (tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-        assert(_PyDictKeys_StringLookup(
-                   ((PyHeapTypeObject *)owner_cls)->ht_cached_keys, name) < 0);
-        if (shared_keys_version == 0) {
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
-            return 0;
-        }
-        opcode = is_method ? LOAD_ATTR_METHOD_WITH_VALUES : LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
-    }
-    else {
-        Py_ssize_t dictoffset;
-        if (tp_flags & Py_TPFLAGS_MANAGED_DICT) {
-            dictoffset = MANAGED_DICT_OFFSET;
-        }
-        else {
-            dictoffset = owner_cls->tp_dictoffset;
-            if (dictoffset < 0 || dictoffset > INT32_MAX) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_RANGE);
-                return 0;
-            }
-        }
-        if (dictoffset == 0) {
-            opcode = is_method ? LOAD_ATTR_METHOD_NO_DICT : LOAD_ATTR_NONDESCRIPTOR_NO_DICT;
-        }
-        else if (is_method) {
-            PyObject **addr = (PyObject **)((char *)owner + dictoffset);
-            PyObject *dict = FT_ATOMIC_LOAD_PTR_ACQUIRE(*addr);
-            if (dict) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NOT_MANAGED_DICT);
-                return 0;
-            }
-            /* Feedback fields are unsigned, so we offset the dictoffset by
-             * MANAGED_DICT_OFFSET.
-             * We do the reverse offset in LOAD_ATTR_METHOD_LAZY_DICT */
-            fb->dictoffset = (uint32_t)(dictoffset - MANAGED_DICT_OFFSET);
-            opcode = LOAD_ATTR_METHOD_LAZY_DICT;
-        }
-        else {
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_CLASS_ATTR_SIMPLE);
-            return 0;
-        }
-    }
     /* `descr` is borrowed. This is safe for methods (even inherited ones from
     *  super classes!) as long as tp_version_tag is validated for two main reasons:
     *
@@ -1379,6 +1315,29 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
     else {
         // As for LOAD_ATTR_CLASS, the value rather than a box of it
         fb->attr_value = value;
+    }
+    int opcode;
+    if (owner_cls->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
+        // A DICT plan does not reach here, so the object is in shape mode,
+        // and its shape proves that no slot shadows the class attribute.
+        assert(!_PyShape_IsDictMode(_PyObject_SHAPE(owner)));
+        assert(_PyShape_SlotOf(_PyObject_SHAPE(owner), name) < 0);
+        opcode = is_method ? LOAD_ATTR_METHOD_SHAPE : LOAD_ATTR_NONDESCRIPTOR_SHAPE;
+        switch (set_shape_guard(owner, instr, fb, tp_version, LOAD_ATTR, opcode)) {
+            case SHAPE_GUARD_DECLINED:
+                return 0;
+            case SHAPE_GUARD_POLY:
+                return 1;
+            case SHAPE_GUARD_SET:
+                break;
+        }
+    }
+    else if (owner_cls->tp_dictoffset == 0) {
+        opcode = is_method ? LOAD_ATTR_METHOD_NO_DICT : LOAD_ATTR_NONDESCRIPTOR_NO_DICT;
+    }
+    else {
+        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NOT_MANAGED_DICT);
+        return 0;
     }
     specialize(instr, opcode);
     return 1;

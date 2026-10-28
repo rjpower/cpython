@@ -5,7 +5,8 @@
 #   0  build, python -c pass, smoke test set
 #   1  the targeted test files given on the command line
 #   2  full suite (release build)
-#   3  full suite (debug build), -u cpu test_cext, regen leaves the tree unchanged
+#   3  full suite (debug build), -u cpu test_cext, regen leaves the tree unchanged,
+#      Tools/boil/traverse_audit.py --check
 #   4  internal benchmark set recorded as boil/bench/results/$GATE_LABEL.json
 # Levels 2 and 3 also sum the live collector's root counters over the suite
 # and fail on a stack-walk fallback (note 11 section 10).
@@ -74,7 +75,8 @@ case $level in
     before=$(git -C "$REPO" status --porcelain)
     run make -C "$build" -s regen-cases clinic
     after=$(git -C "$REPO" status --porcelain)
-    [ "$before" = "$after" ] || { echo "regen changed the tree:"; git -C "$REPO" status --short; exit 1; } ;;
+    [ "$before" = "$after" ] || { echo "regen changed the tree:"; git -C "$REPO" status --short; exit 1; }
+    [ ! -f "$REPO/Tools/boil/traverse_audit.py" ] || python3 "$REPO/Tools/boil/traverse_audit.py" --check ;;
 4)
     [ -n "${GATE_LABEL:-}" ] || { echo "gate 4 needs GATE_LABEL" >&2; exit 2; }
     [ -x "$REPO/boil/bench/run.py" ] || [ -f "$REPO/boil/bench/run.py" ] || { echo "boil/bench/run.py missing (step B)" >&2; exit 2; }

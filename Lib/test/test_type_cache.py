@@ -487,8 +487,9 @@ class PlanCacheTests(unittest.TestCase):
         self.assertEqual([p[0] for p in plans], ["SLOT", "SLOT", "ABSENT"])
         shape_of = _testinternalcapi.get_object_shape
         self.assertNotEqual(shape_of(a), shape_of(b))
-        # In this rung a slot's offset is its index in the shared keys.
-        self.assertEqual(plans[0][6], plans[1][6])
+        # A slot is the field's position in its shape: x is a's first
+        # field and b's second.
+        self.assertEqual(plans[1][6] - plans[0][6], 8)
         self.assertEqual((a.x, b.x), (1, 4))
         with self.assertRaises(AttributeError):
             c.x

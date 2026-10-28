@@ -7,7 +7,6 @@
 
 #include "Python.h"
 #include "pycore_descrobject.h"   // PyMemberDescrObject
-#include "pycore_dict.h"          // _PyDictKeys_StringLookupSplit()
 #include "pycore_lookup.h"
 #include "pycore_object.h"        // _PyObject_InlineValues()
 
@@ -62,26 +61,6 @@ member_offset(PyTypeObject *type, PyObject *descr, int is_store)
     return (uint32_t)def->offset;
 }
 
-/* The index of NAME in TYPE's shared keys, or -1. */
-static Py_ssize_t
-shared_index(PyTypeObject *type, PyObject *name)
-{
-    PyDictKeysObject *keys = ((PyHeapTypeObject *)type)->ht_cached_keys;
-    if (keys == NULL) {
-        return -1;
-    }
-    Py_ssize_t ix = _PyDictKeys_StringLookupSplit(keys, name);
-    return ix < 0 ? -1 : ix;
-}
-
-/* The byte offset of inline value IX in an object of TYPE. */
-static uint32_t
-slot_offset(PyTypeObject *type, Py_ssize_t ix)
-{
-    return (uint32_t)(type->tp_basicsize + offsetof(PyDictValues, values)
-                      + ix * sizeof(PyValue));
-}
-
 static int
 has_dict_storage(PyTypeObject *type)
 {
@@ -118,13 +97,12 @@ _PyShape_ResolveLoad(_PyShape *shape, PyObject *name, PyValue descr,
             plan->kind = _Py_LOOKUP_DICT;
             return;
         }
-        // A shape-mode object has valid inline values and no dict, and the
-        // shape says which names they hold.
-        Py_ssize_t ix = shared_index(type, name);
-        if (ix >= 0 && _PyShape_HasSlot(shape, ix)) {
+        // In shape mode the shape says which names the slots hold.
+        Py_ssize_t ix = _PyShape_SlotOf(shape, name);
+        if (ix >= 0) {
             plan->kind = _Py_LOOKUP_SLOT;
             plan->slot_kind = shape->slots[ix].kind;
-            plan->offset = slot_offset(type, ix);
+            plan->offset = _PyType_SlotOffset(type, ix);
             return;
         }
         plan->kind = (uint8_t)kind;
@@ -165,29 +143,28 @@ _PyShape_ResolveStore(_PyShape *shape, PyObject *name, PyValue descr,
             plan->outcome = _Py_STORE_DICT;
             return;
         }
-        Py_ssize_t ix = shared_index(type, name);
-        if (ix >= 0 && _PyShape_HasSlot(shape, ix)) {
-            plan->offset = slot_offset(type, ix);
-            plan->outcome = op == _Py_STORE_SET ? _Py_STORE_REPLACE
-                                                : _Py_STORE_REMOVE;
+        Py_ssize_t ix = _PyShape_SlotOf(shape, name);
+        if (ix >= 0) {
+            plan->slot = (uint8_t)ix;
+            plan->offset = _PyType_SlotOffset(type, ix);
+            if (op == _Py_STORE_SET) {
+                plan->outcome = _Py_STORE_REPLACE;
+            }
+            else {
+                plan->outcome = _Py_STORE_REMOVE;
+                plan->shape_to = _PyShape_FindDelete(shape, ix);
+            }
             return;
         }
         if (op == _Py_STORE_DELETE) {
             plan->outcome = _Py_STORE_MISSING;
             return;
         }
+        // The new field is appended; preparation may refuse it (LIMIT).
         plan->outcome = _Py_STORE_ADD;
-        if (ix >= 0) {
-            plan->slot = (uint8_t)ix;
-            plan->known_slot = 1;
-            plan->offset = slot_offset(type, ix);
-            for (_PyShape *c = shape->children; c != NULL; c = c->sibling) {
-                if (c->edge_slot == ix) {
-                    plan->shape_to = c;
-                    break;
-                }
-            }
-        }
+        plan->slot = (uint8_t)shape->nslots;
+        plan->offset = _PyType_SlotOffset(type, shape->nslots);
+        plan->shape_to = _PyShape_FindAdd(shape, name);
         return;
     }
     plan->outcome = has_dict_storage(type) ? _Py_STORE_DICT

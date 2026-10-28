@@ -251,12 +251,11 @@ _PyGC_ObjectMapClear(PyObject *op)
 #define _PyGC_DEAD_KILLED    (1 << 7)  /* PYTHON_GCVERIFY=kill killed it: its
                                           frees are quarantined */
 
-/* An unreachable object found by the mark: its address, the size and
- * pre-header size of its block, and its _PyGC_DEAD_* kinds. */
+/* An unreachable object found by the mark: its address, the size of its
+ * block, and its _PyGC_DEAD_* kinds.  The object starts its block. */
 typedef struct {
     PyObject *op;
     uint32_t block_size;
-    uint16_t presize;
     uint16_t kinds;
 } _PyGCDeadObject;
 

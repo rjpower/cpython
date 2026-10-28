@@ -517,6 +517,23 @@ are set from outside its methods (`setattr` in a loop, `class NS: pass`)
 gets six slots, then dictionary mode. Rung 3 counts dictionary-mode
 entries by reason over the benchmark set and the suite.
 
+*Amendment, 2026-10-27.* A class decorator that generates `__init__`
+cannot add to `__static_attributes__` from the class body, so an 8-field
+dataclass got six slots and every instance converted. Capacity stays a
+type constant computed from `__static_attributes__`, with one addition:
+assigning or deleting `__static_attributes__` on a type that has never
+allocated an instance and has no subclasses recomputes the capacity. The
+allocation path sets the type's `allocated` flag (`_PyTypeShapes`, one
+byte store per allocation); after it, or once a subclass exists (whose
+capacity counted the old names), the assignment is an ordinary attribute
+store with no effect on capacity. The invariant holds because no object
+has the type's shapes before its first allocation; an object given the
+type by `__class__` assignment is in dictionary mode and uses slot 0
+alone. `dataclasses._process_class` assigns the existing names plus the
+field names before anything can instantiate the class; attrs and pydantic
+can use the same path. The micro benchmarks `attr_load_dataclass` and
+`attr_store_dataclass` measure the case.
+
 **Dictionary mode** is the type's dictionary-mode shape, whose slot 0
 holds the instance dict or NULL (empty, created on demand); the other
 slots are cleared. It is terminal for the object in 6c. Its loads and

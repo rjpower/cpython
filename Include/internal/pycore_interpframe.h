@@ -35,6 +35,31 @@ _PyFrame_Exec(_PyInterpreterFrame *f)
     return exec;
 }
 
+/* The poly table of the feedback entry H of f's code, which has one. */
+static inline _PyFbPoly *
+_PyFrame_FbPoly(_PyInterpreterFrame *f, _PyFbHeader *h)
+{
+    _PyFbBlock *block = _PyFrame_Exec(f)->feedback;
+    assert(h->poly != 0 && h->poly <= block->npoly);
+    return &block->poly[h->poly - 1];
+}
+
+/* The row of POLY for SHAPE at the shape's live version, or -1: the rows
+ * that LOAD_ATTR_SHAPE_POLY reads.  Versions are never reused, so a row
+ * whose shape has died, and whose address a new shape now has, does not
+ * match it.  An unused row has no shape. */
+static inline int
+_PyFb_ShapeRow(const _PyFbPoly *poly, _PyShape *shape)
+{
+    uint32_t version = FT_ATOMIC_LOAD_UINT32_RELAXED(shape->type_version);
+    for (int i = 0; i < FB_POLY_SIZE; i++) {
+        if (poly->shape[i] == shape && poly->type_version[i] == version) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 /* The word index of the instruction at instr, which is f_lasti for
  * frame->instr_ptr.  The word before the first, which the unwinding of a
  * frame that has not finished an instruction reads, is at -1. */

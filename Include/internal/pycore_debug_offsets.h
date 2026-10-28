@@ -175,7 +175,6 @@ typedef struct _Py_DebugOffsets {
     // PyHeapTypeObject offset;
     struct _heap_type_object {
         uint64_t size;
-        uint64_t ht_cached_keys;
     } heap_type_object;
 
     // PyTuple object offset;
@@ -204,7 +203,6 @@ typedef struct _Py_DebugOffsets {
     struct _dict_object {
         uint64_t size;
         uint64_t ma_keys;
-        uint64_t ma_values;
     } dict_object;
 
     // PyFloat object offset;
@@ -359,7 +357,6 @@ typedef struct _Py_DebugOffsets {
     }, \
     .heap_type_object = { \
         .size = sizeof(PyHeapTypeObject), \
-        .ht_cached_keys = offsetof(PyHeapTypeObject, ht_cached_keys), \
     }, \
     .tuple_object = { \
         .size = sizeof(PyTupleObject), \
@@ -380,7 +377,6 @@ typedef struct _Py_DebugOffsets {
     .dict_object = { \
         .size = sizeof(PyDictObject), \
         .ma_keys = offsetof(PyDictObject, ma_keys), \
-        .ma_values = offsetof(PyDictObject, ma_values), \
     }, \
     .float_object = { \
         .size = sizeof(PyFloatObject), \

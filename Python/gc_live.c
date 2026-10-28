@@ -41,7 +41,7 @@
 #include "pycore_capsule.h"       // _PyCapsule_Destroy()
 #include "pycore_ceval.h"         // _Py_set_eval_breaker_bit()
 #include "pycore_code.h"          // _PyCode_Destroy()
-#include "pycore_dict.h"          // _PyInlineValuesSize()
+#include "pycore_dict.h"          // _PyDict_SendEvent()
 #include "pycore_function.h"      // _PyFunction_NotifyDestroy()
 #include "pycore_genobject.h"     // _PyGen_FinalizerIsNoop()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
@@ -1032,7 +1032,7 @@ sweep_one(PyThreadState *tstate, GCState *gc, _PyGCDeadObject *d,
 #ifdef Py_DEBUG
     gc->sweep_op = op;
 #endif
-    gc->sweep_block = (char *)op - d->presize;
+    gc->sweep_block = (char *)op;
     // The sweep stands in for _Py_Dealloc(), which reports each
     // destruction to the reference tracer.
     _PyReftracerTrack(op, PyRefTracer_DESTROY);
@@ -1109,7 +1109,7 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
             _PyGC_quarantine_tstate = tstate;
         }
 #endif
-        _PyGC_FreeDeadBlock(d->op, (char *)d->op - d->presize);
+        _PyGC_FreeDeadBlock(d->op, (char *)d->op);
 #ifdef Py_DEBUG
         _PyGC_quarantine_tstate = NULL;
 #endif
@@ -1814,41 +1814,31 @@ _Py_RunGC(PyThreadState *tstate)
 }
 
 static PyObject *
-gc_alloc(PyTypeObject *tp, size_t basicsize, size_t presize)
+gc_alloc(PyTypeObject *tp, size_t basicsize)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    if (basicsize > PY_SSIZE_T_MAX - presize) {
+    if (basicsize > PY_SSIZE_T_MAX) {
         return _PyErr_NoMemory(tstate);
     }
-    size_t size = presize + basicsize;
-    char *mem = _PyObject_MallocWithType(tp, size);
+    char *mem = _PyObject_MallocWithType(tp, basicsize);
     if (mem == NULL) {
         return _PyErr_NoMemory(tstate);
     }
-    if (presize) {
-        // The managed-dict pre-header: the dict and the padding word
-        ((PyObject **)mem)[0] = NULL;
-        ((PyObject **)mem)[1] = NULL;
-    }
-    return (PyObject *)(mem + presize);
+    return (PyObject *)mem;
 }
 
 PyObject *
 _PyObject_GC_New(PyTypeObject *tp)
 {
-    size_t presize = _PyType_PreHeaderSize(tp);
     size_t size = _PyObject_SIZE(tp);
-    if (_PyType_HasFeature(tp, Py_TPFLAGS_INLINE_VALUES)) {
-        size += _PyInlineValuesSize(tp);
-    }
-    PyObject *op = gc_alloc(tp, size, presize);
+    size_t slots = _PyType_AllocSlotsSize(tp);
+    PyObject *op = gc_alloc(tp, size + slots);
     if (op == NULL) {
         return NULL;
     }
+    // The shape slots start empty (pycore_shape.h).
+    memset((char *)op + size, 0, slots);
     _PyObject_Init(op, tp);
-    if (tp->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-        _PyObject_InitInlineValues(op, tp);
-    }
     return op;
 }
 
@@ -1859,22 +1849,25 @@ _PyObject_GC_NewVar(PyTypeObject *tp, Py_ssize_t nitems)
         PyErr_BadInternalCall();
         return NULL;
     }
-    size_t presize = _PyType_PreHeaderSize(tp);
     size_t size = _PyObject_VAR_SIZE(tp, nitems);
-    PyVarObject *op = (PyVarObject *)gc_alloc(tp, size, presize);
+    PyVarObject *op = (PyVarObject *)gc_alloc(tp, size);
     if (op == NULL) {
         return NULL;
     }
     _PyObject_InitVar(op, tp, nitems);
+    if (tp->tp_dictoffset != 0 && !(tp->tp_flags & Py_TPFLAGS_MANAGED_DICT)) {
+        // The dict word of a variable-size type with a managed dict
+        // (type_ready_managed_dict), which its C code may not initialise.
+        *_PyObject_ComputedDictPointer((PyObject *)op) = NULL;
+    }
     return op;
 }
 
 PyObject *
 PyUnstable_Object_GC_NewWithExtraData(PyTypeObject *tp, size_t extra_size)
 {
-    size_t presize = _PyType_PreHeaderSize(tp);
     size_t size = _PyObject_SIZE(tp) + extra_size;
-    PyObject *op = gc_alloc(tp, size, presize);
+    PyObject *op = gc_alloc(tp, size);
     if (op == NULL) {
         return NULL;
     }
@@ -1887,18 +1880,23 @@ PyVarObject *
 _PyObject_GC_Resize(PyVarObject *op, Py_ssize_t nitems)
 {
     const size_t basicsize = _PyObject_VAR_SIZE(Py_TYPE(op), nitems);
-    const size_t presize = _PyType_PreHeaderSize(Py_TYPE(op));
     _PyObject_ASSERT((PyObject *)op, !_PyObject_GC_IS_TRACKED(op));
-    if (basicsize > (size_t)PY_SSIZE_T_MAX - presize) {
+    if (basicsize > (size_t)PY_SSIZE_T_MAX) {
         return (PyVarObject *)PyErr_NoMemory();
     }
-    char *mem = (char *)op - presize;
-    mem = (char *)_PyObject_ReallocWithType(Py_TYPE(op), mem, presize + basicsize);
+    // A dict word found from the end moves with it.
+    int moves = Py_TYPE(op)->tp_dictoffset < 0
+                && !(Py_TYPE(op)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
+    PyObject *dict = moves ? *_PyObject_ComputedDictPointer((PyObject *)op) : NULL;
+    char *mem = (char *)_PyObject_ReallocWithType(Py_TYPE(op), op, basicsize);
     if (mem == NULL) {
         return (PyVarObject *)PyErr_NoMemory();
     }
-    op = (PyVarObject *) (mem + presize);
+    op = (PyVarObject *)mem;
     Py_SET_SIZE(op, nitems);
+    if (moves) {
+        *_PyObject_ComputedDictPointer((PyObject *)op) = dict;
+    }
     return op;
 }
 
@@ -1907,8 +1905,7 @@ _PyObject_GC_Resize(PyVarObject *op, Py_ssize_t nitems)
 void
 PyObject_GC_Del(void *op)
 {
-    size_t presize = _PyType_PreHeaderSize(Py_TYPE(op));
-    PyObject_Free(((char *)op)-presize);
+    PyObject_Free(op);
 }
 
 /* Every object of a GC type is traced: there is no untracked state that

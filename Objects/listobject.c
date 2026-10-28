@@ -1,6 +1,7 @@
 /* List object implementation */
 
 #include "Python.h"
+#include "pycore_shape.h"         // _PyObject_InstanceSize()
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
 #include "pycore_critical_section.h"  // _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED()
@@ -3297,7 +3298,7 @@ static PyObject *
 list___sizeof___impl(PyListObject *self)
 /*[clinic end generated code: output=3417541f95f9a53e input=b8030a5d5ce8a187]*/
 {
-    size_t res = _PyObject_SIZE(Py_TYPE(self));
+    size_t res = _PyObject_InstanceSize((PyObject *)self);
     res += (size_t)self->allocated * sizeof(PyValue);
     return PyLong_FromSize_t(res);
 }

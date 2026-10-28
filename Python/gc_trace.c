@@ -71,7 +71,7 @@
 #include "pycore_interpframe.h"   // _PyFrame_Traverse()
 #include "pycore_mimalloc.h"      // mi_heap_visit_blocks()
 #include "pycore_memoryobject.h"  // _PyManagedBuffer_Type
-#include "pycore_object.h"        // _PyType_PreHeaderSize()
+#include "pycore_object.h"
 #include "pycore_pymem.h"         // _PyMem_DebugEnabled()
 #include "pycore_tstate.h"        // _PyThreadStateImpl
 #include "pycore_typeobject.h"    // _PyType_TraverseStatic()
@@ -495,18 +495,6 @@ walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
     return true;
 }
 
-static size_t
-heap_offset(trace_t *t, int tag)
-{
-    switch (tag) {
-    case _Py_MIMALLOC_HEAP_GC:
-        return t->debug_offset;
-    case _Py_MIMALLOC_HEAP_GC_PRE:
-        return t->debug_offset + _PyObject_MANAGED_PRE_HEADER_SIZE;
-    default:
-        return t->debug_offset;
-    }
-}
 
 /* Visit the object heaps of every thread state and of the exited threads,
    and the mem heaps' pages.  The other threads cannot allocate: they do not
@@ -515,7 +503,7 @@ static int
 walk_heaps(trace_t *t)
 {
     static const int tags[] = {
-        _Py_MIMALLOC_HEAP_OBJECT, _Py_MIMALLOC_HEAP_GC, _Py_MIMALLOC_HEAP_GC_PRE,
+        _Py_MIMALLOC_HEAP_OBJECT, _Py_MIMALLOC_HEAP_GC,
     };
     PyInterpreterState *interp = t->interp;
     struct walk_args a = {.t = t};
@@ -527,7 +515,7 @@ walk_heaps(trace_t *t)
             continue;  // not bound yet
         }
         for (size_t i = 0; ok && i < Py_ARRAY_LENGTH(tags); i++) {
-            a.offset = heap_offset(t, tags[i]);
+            a.offset = t->debug_offset;
             a.pages = &t->pages;
             a.objects = &t->objects;
             ok = mi_heap_visit_blocks(&m->heaps[tags[i]], true, walk_block, &a);
@@ -542,7 +530,7 @@ walk_heaps(trace_t *t)
     }
     mi_subproc_t *subproc = interp->mimalloc.subproc;
     for (size_t i = 0; ok && i < Py_ARRAY_LENGTH(tags); i++) {
-        a.offset = heap_offset(t, tags[i]);
+        a.offset = t->debug_offset;
         a.pages = &t->pages;
         a.objects = &t->objects;
         ok = mi_abandoned_visit_blocks(subproc, tags[i], true, walk_block, &a);
@@ -1659,11 +1647,8 @@ live_domain(trace_t *t, PyInterpreterState *interp)
     t->seg_span = hi > t->seg_lo ? hi - t->seg_lo : 0;
     t->tag_offset[_Py_MIMALLOC_HEAP_MEM] = -1;
     t->tag_offset[_Py_MIMALLOC_HEAP_NOSCAN] = -1;
-    t->tag_offset[_Py_MIMALLOC_HEAP_OBJECT] =
-        heap_offset(t, _Py_MIMALLOC_HEAP_OBJECT);
-    t->tag_offset[_Py_MIMALLOC_HEAP_GC] = heap_offset(t, _Py_MIMALLOC_HEAP_GC);
-    t->tag_offset[_Py_MIMALLOC_HEAP_GC_PRE] =
-        heap_offset(t, _Py_MIMALLOC_HEAP_GC_PRE);
+    t->tag_offset[_Py_MIMALLOC_HEAP_OBJECT] = t->debug_offset;
+    t->tag_offset[_Py_MIMALLOC_HEAP_GC] = t->debug_offset;
     live_skip_caches(t);
     return 0;
 }
@@ -1920,7 +1905,6 @@ live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop)
 struct live_walk {
     trace_t *t;
     size_t offset;
-    size_t presize;
     int pages;            // record the mem heaps' pages, not the blocks
     _PyGCMarkResult *res;
     size_t dead_cap;
@@ -2077,7 +2061,7 @@ live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
            ? _PyGC_DEAD_KILLED : 0);
     res->kinds |= kinds;
     res->dead[res->ndead++] = (_PyGCDeadObject){
-        op, (uint32_t)block_size, (uint16_t)w->presize, kinds};
+        op, (uint32_t)block_size, kinds};
     return true;
 }
 
@@ -2089,7 +2073,7 @@ static int
 live_walk_heaps(trace_t *t, struct live_walk *w)
 {
     static const int tags[] = {
-        _Py_MIMALLOC_HEAP_OBJECT, _Py_MIMALLOC_HEAP_GC, _Py_MIMALLOC_HEAP_GC_PRE,
+        _Py_MIMALLOC_HEAP_OBJECT, _Py_MIMALLOC_HEAP_GC,
     };
     bool all = !w->pages;
     int ok = 1;
@@ -2102,8 +2086,7 @@ live_walk_heaps(trace_t *t, struct live_walk *w)
                 continue;  // not bound yet
             }
             for (size_t i = 0; ok && all && i < Py_ARRAY_LENGTH(tags); i++) {
-                w->offset = heap_offset(t, tags[i]);
-                w->presize = w->offset - t->debug_offset;
+                w->offset = t->debug_offset;
                 ok = mi_heap_visit_blocks(&m->heaps[tags[i]], all,
                                           live_walk_block, w);
             }
@@ -2118,8 +2101,7 @@ live_walk_heaps(trace_t *t, struct live_walk *w)
         }
         mi_subproc_t *subproc = interp->mimalloc.subproc;
         for (size_t i = 0; ok && all && i < Py_ARRAY_LENGTH(tags); i++) {
-            w->offset = heap_offset(t, tags[i]);
-            w->presize = w->offset - t->debug_offset;
+            w->offset = t->debug_offset;
             ok = mi_abandoned_visit_blocks(subproc, tags[i], all,
                                            live_walk_block, w);
         }

@@ -63,8 +63,6 @@ PyAPI_FUNC(Py_ssize_t) _PyDict_SizeOf(PyDictObject *);
 
 extern Py_ssize_t _PyDict_SizeOf_LockHeld(PyDictObject *);
 
-#define _PyDict_HasSplitTable(d) ((d)->ma_values != NULL)
-
 /* Like PyDict_Merge, but override can be 0, 1 or 2.  If override is 0,
    the first occurrence of a key wins, if override is 1, the last occurrence
    of a key wins, if override is 2, a KeyError with conflicting key as
@@ -100,9 +98,6 @@ typedef struct {
     PyValue me_value;   /* This field is only meaningful for combined tables */
 } PyDictUnicodeEntry;
 
-extern PyDictKeysObject *_PyDict_NewKeysForClass(PyHeapTypeObject *);
-extern void _PyDict_RemoveKeysForClass(PyHeapTypeObject *);
-extern int _PyDict_TraverseKeysForClass(PyHeapTypeObject *, visitproc, void *);
 extern PyObject *_PyDict_FromKeys(PyObject *, PyObject *, PyObject *);
 
 /* Implementations of the `|` and `|=` operators for dict, used by the
@@ -156,7 +151,6 @@ PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookup(PyDictKeysObject* dictkeys, PyOb
  * Exported for external JIT support
  */
 PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookupAndVersion(PyDictKeysObject* dictkeys, PyObject *key, uint32_t *version);
-PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookupSplit(PyDictKeysObject* dictkeys, PyObject *key);
 // Return the borrowed source dictionary, or NULL if absent or on error.
 PyAPI_FUNC(PyObject *) _PyDict_LoadGlobalValue(PyDictObject *, PyDictObject *, PyObject *, PyValue *);
 
@@ -201,7 +195,6 @@ PyAPI_FUNC(PyObject*) _PyDict_CopyAsDict(PyObject *op);
 typedef enum {
     DICT_KEYS_GENERAL = 0,
     DICT_KEYS_UNICODE = 1,
-    DICT_KEYS_SPLIT = 2
 } DictKeysKind;
 
 /* See dictobject.c for actual layout of DictKeysObject */
@@ -245,35 +238,6 @@ struct _dictkeysobject {
 
     /* "PyDictKeyEntry or PyDictUnicodeEntry dk_entries[USABLE_FRACTION(DK_SIZE(dk))];" array follows:
        see the DK_ENTRIES() / DK_UNICODE_ENTRIES() functions below */
-};
-
-struct _instancekeysobject {
-    PyTypeObject* dsk_owning_type;
-    struct _dictkeysobject dsk_keys;
-};
-
-static inline struct _instancekeysobject *_PyDictKeys_AsSharedKeys(struct _dictkeysobject *keys)
-{
-    assert(keys->dk_kind == DICT_KEYS_SPLIT);
-    return _Py_CONTAINER_OF(keys, struct _instancekeysobject, dsk_keys);
-}
-
-/* This must be no more than 250, for the prefix size to fit in one byte. */
-#define SHARED_KEYS_MAX_SIZE 30
-#define NEXT_LOG2_SHARED_KEYS_MAX_SIZE 6
-
-/* Layout of dict values:
- *
- * The PyObject *values are preceded by an array of bytes holding
- * the insertion order and size.
- * [-1] = prefix size. [-2] = used size. size[-2-n...] = insertion order.
- */
-struct _dictvalues {
-    uint8_t capacity;
-    uint8_t size;
-    uint8_t embedded;
-    uint8_t valid;
-    PyValue values[1];
 };
 
 #define DK_LOG_SIZE(dk)  _Py_RVALUE((dk)->dk_log2_size)
@@ -330,63 +294,12 @@ _PyDict_NotifyEvent(PyDict_WatchEvent event,
     }
 }
 
-extern PyDictObject *_PyObject_MaterializeManagedDict(PyObject *obj);
 
 PyAPI_FUNC(PyObject *)_PyDict_FromItems(
         PyObject *const *keys, Py_ssize_t keys_offset,
         const PyValue *values, Py_ssize_t values_offset,
         Py_ssize_t length);
 
-static inline uint8_t *
-get_insertion_order_array(PyDictValues *values)
-{
-    return (uint8_t *)&values->values[values->capacity];
-}
-
-static inline void
-_PyDictValues_AddToInsertionOrder(PyDictValues *values, Py_ssize_t ix)
-{
-    assert(ix < SHARED_KEYS_MAX_SIZE);
-    int size = values->size;
-    uint8_t *array = get_insertion_order_array(values);
-    assert(size < values->capacity);
-    assert(((uint8_t)ix) == ix);
-    FT_ATOMIC_STORE_UINT8_RELAXED(array[size], (uint8_t)ix);
-    FT_ATOMIC_STORE_UINT8_RELEASE(values->size, size+1);
-}
-
-// Exported for external JIT support
-PyAPI_FUNC(void)
-_PyDict_InsertSplitValue(PyDictObject *mp, PyObject *key, PyValue value, Py_ssize_t ix);
-
-static inline size_t
-shared_keys_usable_size(PyDictKeysObject *keys)
-{
-    // dk_usable will decrease for each instance that is created and each
-    // value that is added.  dk_nentries will increase for each value that
-    // is added.  We want to always return the right value or larger.
-    // We therefore increase dk_nentries first and we decrease dk_usable
-    // second, and conversely here we read dk_usable first and dk_entries
-    // second (to avoid the case where we read entries before the increment
-    // and read usable after the decrement)
-    Py_ssize_t dk_usable = FT_ATOMIC_LOAD_SSIZE_ACQUIRE(keys->dk_usable);
-    Py_ssize_t dk_nentries = FT_ATOMIC_LOAD_SSIZE_ACQUIRE(keys->dk_nentries);
-    return dk_nentries + dk_usable;
-}
-
-static inline size_t
-_PyInlineValuesSize(PyTypeObject *tp)
-{
-    PyDictKeysObject *keys = ((PyHeapTypeObject*)tp)->ht_cached_keys;
-    assert(keys != NULL);
-    size_t size = shared_keys_usable_size(keys);
-    size_t prefix_size = _Py_SIZE_ROUND_UP(size, sizeof(PyValue));
-    assert(prefix_size < 256);
-    return prefix_size + offsetof(PyDictValues, values) + size * sizeof(PyValue);
-}
-
-int
-_PyDict_DetachFromObject(PyDictObject *dict, PyObject *obj);
 
 // Enables per-thread ref counting on this dict in the free threading build
 extern void _PyDict_EnablePerThreadRefcounting(PyObject *op);

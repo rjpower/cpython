@@ -1916,11 +1916,10 @@ dummy_func(
         }
 
         family(STORE_ATTR, INLINE_CACHE_ENTRIES_STORE_ATTR) = {
-            STORE_ATTR_INSTANCE_VALUE,
             STORE_ATTR_SLOT,
             STORE_ATTR_WITH_HINT,
             STORE_ATTR_SHAPE,
-            STORE_ATTR_SHAPE_ADD,
+            STORE_ATTR_SHAPE_TRANSITION,
         };
 
         specializing op(_SPECIALIZE_STORE_ATTR, (v, owner -- v, owner)) {
@@ -2552,7 +2551,6 @@ dummy_func(
         }
 
         family(LOAD_ATTR, INLINE_CACHE_ENTRIES_LOAD_ATTR) = {
-            LOAD_ATTR_INSTANCE_VALUE,
             LOAD_ATTR_MODULE,
             LOAD_ATTR_WITH_HINT,
             LOAD_ATTR_SLOT,
@@ -2560,12 +2558,12 @@ dummy_func(
             LOAD_ATTR_CLASS_WITH_METACLASS_CHECK,
             LOAD_ATTR_PROPERTY,
             LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN,
-            LOAD_ATTR_METHOD_WITH_VALUES,
+            LOAD_ATTR_METHOD_SHAPE,
             LOAD_ATTR_METHOD_NO_DICT,
-            LOAD_ATTR_METHOD_LAZY_DICT,
-            LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES,
+            LOAD_ATTR_NONDESCRIPTOR_SHAPE,
             LOAD_ATTR_NONDESCRIPTOR_NO_DICT,
             LOAD_ATTR_SHAPE,
+            LOAD_ATTR_SHAPE_POLY,
         };
 
         specializing op(_SPECIALIZE_LOAD_ATTR, (owner -- owner)) {
@@ -2609,51 +2607,25 @@ dummy_func(
             EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version);
         }
 
-        op(_GUARD_TYPE_VERSION_LOCKED, (type_version/2, owner -- owner)) {
-            PyObject *owner_o = PyValue_ObjectBorrow(owner);
-            assert(type_version != 0);
-            PyTypeObject *tp = Py_TYPE(owner_o);
-            if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                UNLOCK_OBJECT(owner_o);
-                EXIT_IF(true);
-            }
-        }
-
-        op(_CHECK_MANAGED_OBJECT_HAS_VALUES, (owner -- owner)) {
-            PyObject *owner_o = PyValue_ObjectBorrow(owner);
-            assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
-            assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-            EXIT_IF(!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid));
-        }
-
-        op(_LOAD_ATTR_INSTANCE_VALUE, (offset/1, owner -- attr, o)) {
-            PyObject *owner_o = PyValue_ObjectBorrow(owner);
-            attr = *(PyValue *)(((char *)owner_o) + offset);
-            DEOPT_IF(PyValue_IsNull(attr));
-            STAT_INC(LOAD_ATTR, hit);
-            o = owner;
-            DEAD(owner);
-        }
-
-        macro(LOAD_ATTR_INSTANCE_VALUE) =
-            unused/1 + // Skip over the entry distance
-            _GUARD_TYPE_VERSION +
-            _CHECK_MANAGED_OBJECT_HAS_VALUES +
-            _LOAD_ATTR_INSTANCE_VALUE +
-            POP_TOP +
-            unused/5 +
-            _PUSH_NULL_CONDITIONAL;
-
         /* The shape handlers (see pycore_shape.h).  The shape is the
-         * owner's header; the type version guard before it lets descriptors
-         * added to the class win.  The shape fields take no inline cache
-         * units.  The stores take no object lock and need not check for a
-         * dict: an instance with a dict is in dictionary mode. */
+         * owner's header; the version guard after it, the version of the
+         * live shape (note 09 section 2), lets descriptors added to the
+         * class win.  The shape fields take no inline cache units.  The
+         * stores take no object lock and need not check for a dict: an
+         * instance with a dict is in dictionary mode. */
         op(_GUARD_SHAPE, (shape/0, owner -- owner)) {
             // The one form of a shape guard: the masked header compared with
             // the shape, a constant to the JIT.
             EXIT_IF((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
                     != (uintptr_t)shape);
+        }
+
+        op(_GUARD_SHAPE_VERSION, (type_version/2, owner -- owner)) {
+            // Two dependent loads, the header and the shape's version,
+            // where _GUARD_TYPE_VERSION has three.
+            _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+            assert(type_version != 0);
+            EXIT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version);
         }
 
         op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr, o)) {
@@ -2668,12 +2640,56 @@ dummy_func(
 
         macro(LOAD_ATTR_SHAPE) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
             _GUARD_SHAPE +
+            _GUARD_SHAPE_VERSION +
             _LOAD_ATTR_SHAPE +
             POP_TOP +
             unused/5 +
             _PUSH_NULL_CONDITIONAL;
+
+        /* Two to four shapes, of one type or several: each is a row of the
+         * site's poly table, matched by the owner's shape and the live
+         * shape's version.  A row's handler says what it holds: for
+         * LOAD_ATTR_SHAPE, the slot's offset in index; for
+         * LOAD_ATTR_METHOD_SHAPE, at a call-pair site, the method in descr,
+         * borrowed while the version matches.  The guard finds the row and
+         * the load finds it again. */
+        op(_GUARD_SHAPE_POLY, (owner -- owner)) {
+            _PyFbPoly *poly = _PyFrame_FbPoly(frame, FB_COUNTER());
+            EXIT_IF(_PyFb_ShapeRow(poly, _PyObject_SHAPE(PyValue_ObjectBorrow(owner))) < 0);
+        }
+
+        op(_LOAD_ATTR_SHAPE_POLY, (owner -- attr, self_or_null[oparg & 1])) {
+            PyObject *owner_o = PyValue_ObjectBorrow(owner);
+            _PyFbPoly *poly = _PyFrame_FbPoly(frame, FB_COUNTER());
+            int row = _PyFb_ShapeRow(poly, _PyObject_SHAPE(owner_o));
+            assert(row >= 0);
+            STAT_INC(LOAD_ATTR, hit);
+            if (poly->handler[row] == LOAD_ATTR_SHAPE) {
+                attr = *(PyValue *)((char *)owner_o + poly->index[row]);
+                // The shape proves the slot filled.
+                assert(!PyValue_IsNull(attr));
+                if (oparg & 1) {
+                    self_or_null[0] = PyValue_NULL;
+                }
+                DEAD(owner);
+            }
+            else {
+                assert(poly->handler[row] == LOAD_ATTR_METHOD_SHAPE);
+                assert(oparg & 1);
+                PyObject *descr = (PyObject *)poly->descr[row];
+                assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
+                attr = PyValue_FromObject(descr);
+                self_or_null[0] = owner;
+                DEAD(owner);
+            }
+        }
+
+        macro(LOAD_ATTR_SHAPE_POLY) =
+            unused/1 +
+            _GUARD_SHAPE_POLY +
+            unused/8 +
+            _LOAD_ATTR_SHAPE_POLY;
 
         op(_LOAD_ATTR_MODULE, (dict_version/2, index/1, owner -- attr, o)) {
             EXIT_IF(PyValue_Type(owner) != &PyModule_Type);
@@ -2700,13 +2716,15 @@ dummy_func(
             unused/5 +
             _PUSH_NULL_CONDITIONAL;
 
-        op(_LOAD_ATTR_WITH_HINT, (hint/1, owner -- attr, o)) {
+        /* DICT plans.  The dict word is at dictoffset (_PyObject_DictAt()):
+         * slot 0 of a dictionary-mode object, or the type's dict word.  The
+         * shape guard is the dictionary-mode shape or a root shape. */
+        op(_LOAD_ATTR_WITH_HINT, (dictoffset/0, hint/1, owner -- attr, o)) {
             PyObject *owner_o = PyValue_ObjectBorrow(owner);
-            assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
-            PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
+            PyDictObject *dict = (PyDictObject *)_PyObject_DictAt(owner_o, (int32_t)dictoffset);
             EXIT_IF(dict == NULL);
+            EXIT_IF(!PyDict_CheckExact((PyObject *)dict));
             PyDictKeysObject *dk = FT_ATOMIC_LOAD_PTR(dict->ma_keys);
-            assert(PyDict_CheckExact((PyObject *)dict));
             if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries)) {
                 EXIT_IF(true);
             }
@@ -2730,7 +2748,8 @@ dummy_func(
 
         macro(LOAD_ATTR_WITH_HINT) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
+            _GUARD_SHAPE +
+            _GUARD_SHAPE_VERSION +
             _LOAD_ATTR_WITH_HINT +
             POP_TOP +
             unused/5 +
@@ -2748,7 +2767,7 @@ dummy_func(
 
         macro(LOAD_ATTR_SLOT) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
+            _GUARD_SHAPE_VERSION +
             _LOAD_ATTR_SLOT +  // NOTE: This action may also deopt
             POP_TOP +
             unused/5 +
@@ -2837,50 +2856,6 @@ dummy_func(
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
-        op(_GUARD_DORV_NO_DICT, (owner -- owner)) {
-            PyObject *owner_o = PyValue_ObjectBorrow(owner);
-
-            assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
-            assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-            if (_PyObject_GetManagedDict(owner_o) ||
-                    !FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
-                UNLOCK_OBJECT(owner_o);
-                EXIT_IF(true);
-            }
-        }
-
-        op(_STORE_ATTR_INSTANCE_VALUE, (offset/1, value, owner -- o)) {
-            PyObject *owner_o = PyValue_ObjectBorrow(owner);
-
-            STAT_INC(STORE_ATTR, hit);
-            assert(_PyObject_GetManagedDict(owner_o) == NULL);
-            PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
-            PyValue old_value = *value_ptr;
-            *value_ptr = value;
-            DEAD(value);
-            if (PyValue_IsNull(old_value)) {
-                PyDictValues *values = _PyObject_InlineValues(owner_o);
-                Py_ssize_t index = value_ptr - values->values;
-                _PyDictValues_AddToInsertionOrder(values, index);
-                _PyObject_ShapeAfterAdd(owner_o, index);
-            }
-            UNLOCK_OBJECT(owner_o);
-            o = owner;
-            DEAD(owner);
-        }
-
-        op(_LOCK_OBJECT, (value -- value)) {
-            DEOPT_IF(!LOCK_OBJECT(PyValue_ObjectBorrow(value)));
-        }
-
-        macro(STORE_ATTR_INSTANCE_VALUE) =
-            unused/1 +
-            _LOCK_OBJECT +
-            _GUARD_TYPE_VERSION_LOCKED +
-            _GUARD_DORV_NO_DICT +
-            _STORE_ATTR_INSTANCE_VALUE +
-            POP_TOP;
-
         op(_STORE_ATTR_SHAPE, (offset/1, value, owner -- o)) {
             PyObject *owner_o = PyValue_ObjectBorrow(owner);
             PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
@@ -2894,43 +2869,40 @@ dummy_func(
 
         macro(STORE_ATTR_SHAPE) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
             _GUARD_SHAPE +
+            _GUARD_SHAPE_VERSION +
             _STORE_ATTR_SHAPE +
             POP_TOP;
 
-        op(_STORE_ATTR_SHAPE_ADD, (shape_to/0, offset/1, value, owner -- o)) {
+        op(_STORE_ATTR_SHAPE_TRANSITION, (shape_to/0, offset/1, value, owner -- o)) {
+            // The new field's slot, then the header: shape_to's slots are
+            // within the type's capacity, so no check is needed.
             PyObject *owner_o = PyValue_ObjectBorrow(owner);
             PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
             assert(PyValue_IsNull(*value_ptr));
             *value_ptr = value;
             DEAD(value);
-            PyDictValues *values = _PyObject_InlineValues(owner_o);
-            _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
             _PyObject_SetShape(owner_o, shape_to);
             STAT_INC(STORE_ATTR, hit);
             o = owner;
             DEAD(owner);
         }
 
-        macro(STORE_ATTR_SHAPE_ADD) =
+        macro(STORE_ATTR_SHAPE_TRANSITION) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
             _GUARD_SHAPE +
-            _STORE_ATTR_SHAPE_ADD +
+            _GUARD_SHAPE_VERSION +
+            _STORE_ATTR_SHAPE_TRANSITION +
             POP_TOP;
 
-        op(_STORE_ATTR_WITH_HINT, (hint/1, value, owner -- o)) {
+        op(_STORE_ATTR_WITH_HINT, (dictoffset/0, hint/1, value, owner -- o)) {
             PyObject *owner_o = PyValue_ObjectBorrow(owner);
-            assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
-            PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
+            PyDictObject *dict = (PyDictObject *)_PyObject_DictAt(owner_o, (int32_t)dictoffset);
             DEOPT_IF(dict == NULL);
+            DEOPT_IF(!PyDict_CheckExact((PyObject *)dict));
             DEOPT_IF(!LOCK_OBJECT(dict));
-            assert(PyDict_CheckExact((PyObject *)dict));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyDictKeysObject *dk = dict->ma_keys;
-            // Split keys are shared with other dicts, which append to them
-            // under the keys lock rather than this dict's lock.
             if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries) ||
                     dk->dk_kind == DICT_KEYS_GENERAL) {
                 UNLOCK_OBJECT(dict);
@@ -2941,17 +2913,13 @@ dummy_func(
                 UNLOCK_OBJECT(dict);
                 DEOPT_IF(true);
             }
-            // A split table keeps its values, such as an object's inline
-            // values, apart from its keys.
-            PyValue *value_ptr = dict->ma_values == NULL ?
-                &ep->me_value : &dict->ma_values->values[hint];
-            if (PyValue_IsNull(*value_ptr)) {
+            if (PyValue_IsNull(ep->me_value)) {
                 UNLOCK_OBJECT(dict);
                 DEOPT_IF(true);
             }
             _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, dict,
                                 PyValue_FromObject(name), value);
-            *value_ptr = value;
+            ep->me_value = value;
             DEAD(value);
             UNLOCK_OBJECT(dict);
             STAT_INC(STORE_ATTR, hit);
@@ -2961,7 +2929,8 @@ dummy_func(
 
         macro(STORE_ATTR_WITH_HINT) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
+            _GUARD_SHAPE +
+            _GUARD_SHAPE_VERSION +
             _STORE_ATTR_WITH_HINT +
             POP_TOP;
 
@@ -2979,7 +2948,7 @@ dummy_func(
 
         macro(STORE_ATTR_SLOT) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
+            _GUARD_SHAPE_VERSION +
             _STORE_ATTR_SLOT +
             POP_TOP;
 
@@ -3836,7 +3805,10 @@ dummy_func(
             DEAD(exc);
         }
 
-        op(_LOAD_ATTR_METHOD_WITH_VALUES, (descr/4, owner -- attr, self)) {
+        /* METHOD and CLASS_VALUE plans on an inline-values type: the
+         * shape, in shape mode, proves that no field shadows the class
+         * attribute, and the version guards the class attribute. */
+        op(_LOAD_ATTR_METHOD_SHAPE, (descr/4, owner -- attr, self)) {
             assert(oparg & 1);
             /* Cached method object */
             STAT_INC(LOAD_ATTR, hit);
@@ -3847,12 +3819,12 @@ dummy_func(
             DEAD(owner);
         }
 
-        macro(LOAD_ATTR_METHOD_WITH_VALUES) =
+        macro(LOAD_ATTR_METHOD_SHAPE) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
-            _CHECK_MANAGED_OBJECT_HAS_VALUES +
+            _GUARD_SHAPE +
+            _GUARD_SHAPE_VERSION +
             unused/2 +
-            _LOAD_ATTR_METHOD_WITH_VALUES;
+            _LOAD_ATTR_METHOD_SHAPE;
 
         op(_LOAD_ATTR_METHOD_NO_DICT, (descr/4, owner -- attr, self)) {
             assert(oparg & 1);
@@ -3871,7 +3843,7 @@ dummy_func(
             unused/2 +
             _LOAD_ATTR_METHOD_NO_DICT;
 
-        op(_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES, (attr_value/4, owner -- attr)) {
+        op(_LOAD_ATTR_NONDESCRIPTOR_SHAPE, (attr_value/4, owner -- attr)) {
             assert((oparg & 1) == 0);
             STAT_INC(LOAD_ATTR, hit);
             assert(!PyValue_IsNull(attr_value));
@@ -3879,12 +3851,12 @@ dummy_func(
             attr = attr_value;
         }
 
-        macro(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES) =
+        macro(LOAD_ATTR_NONDESCRIPTOR_SHAPE) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
-            _CHECK_MANAGED_OBJECT_HAS_VALUES +
+            _GUARD_SHAPE +
+            _GUARD_SHAPE_VERSION +
             unused/2 +
-            _LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
+            _LOAD_ATTR_NONDESCRIPTOR_SHAPE;
 
         op(_LOAD_ATTR_NONDESCRIPTOR_NO_DICT, (attr_value/4, owner -- attr)) {
             assert((oparg & 1) == 0);
@@ -3900,30 +3872,6 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             unused/2 +
             _LOAD_ATTR_NONDESCRIPTOR_NO_DICT;
-
-        op(_CHECK_ATTR_METHOD_LAZY_DICT, (dictoffset/1, owner -- owner)) {
-            char *ptr = ((char *)PyValue_ObjectBorrow(owner)) + MANAGED_DICT_OFFSET + dictoffset;
-            PyObject *dict = FT_ATOMIC_LOAD_PTR_ACQUIRE(*(PyObject **)ptr);
-            /* This object has a __dict__, just not yet created */
-            EXIT_IF(dict != NULL);
-        }
-
-        op(_LOAD_ATTR_METHOD_LAZY_DICT, (descr/4, owner -- attr, self)) {
-            assert(oparg & 1);
-            STAT_INC(LOAD_ATTR, hit);
-            assert(descr != NULL);
-            assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-            attr = PyValue_FromObject(descr);
-            self = owner;
-            DEAD(owner);
-        }
-
-        macro(LOAD_ATTR_METHOD_LAZY_DICT) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            _CHECK_ATTR_METHOD_LAZY_DICT +
-            unused/1 +
-            _LOAD_ATTR_METHOD_LAZY_DICT;
 
         // Feedback: func_version
         // CALL_INTRINSIC_1/2, CALL_KW, and CALL_FUNCTION_EX aren't members!

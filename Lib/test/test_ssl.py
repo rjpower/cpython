@@ -2238,6 +2238,22 @@ class SSLObjectTests(unittest.TestCase):
         server_context.wrap_bio(ssl.MemoryBIO(), ssl.MemoryBIO(),
                                 server_side=True)
 
+    def test_sslobject_keeps_its_references(self):
+        # Only the _ssl object refers to its context, its server hostname
+        # and the weak reference to its owner; a collection must not free
+        # them.
+        hostname = "".join(["local", "host"])
+        obj = make_test_context().wrap_bio(ssl.MemoryBIO(), ssl.MemoryBIO(),
+                                           server_hostname=hostname)
+        del hostname
+        support.gc_collect()
+        # Reuse any freed memory, so a dangling reference shows.
+        junk = [bytes([0xa0]) * 64 for _ in range(10000)]
+        self.assertIsInstance(obj.context, ssl.SSLContext)
+        self.assertEqual(obj.server_hostname, "localhost")
+        self.assertIs(obj._sslobj.owner, obj)
+        del junk
+
     def test_unwrap(self):
         client_ctx, server_ctx, hostname = testing_context()
         c_in = ssl.MemoryBIO()

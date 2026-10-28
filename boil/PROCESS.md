@@ -72,7 +72,7 @@ branch.
 | 0 | build the tree, `python -c pass`, a smoke set of test files (grammar, opcodes, builtin, dict, list, tuple, class, generators, capi) | after every change that builds; a minute |
 | 1 | the rung's targeted test files (`gate.sh 1 BUILD test_a test_b ...`) | before every commit |
 | 2 | the full suite on the release build | at each milestone within a rung |
-| 3 | the full suite on the debug build, `-u cpu test_cext`, and `make regen-cases clinic` leaving the tree unchanged | at the rung end, before landing |
+| 3 | the full suite on the debug build, `-u cpu test_cext`, `make regen-cases clinic` leaving the tree unchanged, and `Tools/boil/traverse_audit.py --check` (every type with references and no or a partial traverse is in `Tools/boil/traverse_allow.txt` with a reason) | at the rung end, before landing |
 | 4 | the internal benchmark set recorded (`boil/bench/run.py`, label = the step) and the measurement section written with attribution | at the step end |
 
 Every level uses a fresh `PYTHONPYCACHEPREFIX`. Any change to compiler or

@@ -239,6 +239,19 @@ ndarray_dealloc(PyObject *op)
     PyObject_Free(self);
 }
 
+/* A consumer holds its exporter in the base buffer.  Under the tracing
+   collector that reference must be visited, or a view such as nd[::-1]
+   outlives the array whose memory it reads. */
+static int
+ndarray_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    NDArrayObject *self = (NDArrayObject *)op;
+    if (self->head && ND_IS_CONSUMER(self)) {
+        Py_VISIT(self->head->base.obj);
+    }
+    return 0;
+}
+
 static int
 ndarray_init_staticbuf(PyObject *exporter, NDArrayObject *nd, int flags)
 {
@@ -2672,7 +2685,7 @@ static PyTypeObject NDArray_Type = {
     &ndarray_as_buffer,          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,          /* tp_flags */
     0,                           /* tp_doc */
-    0,                           /* tp_traverse */
+    ndarray_traverse,            /* tp_traverse */
     0,                           /* tp_clear */
     0,                           /* tp_richcompare */
     0,                           /* tp_weaklistoffset */

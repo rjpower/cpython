@@ -1,6 +1,7 @@
 /* PyByteArray (bytearray) implementation */
 
 #include "Python.h"
+#include "pycore_shape.h"         // _PyObject_InstanceSize()
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_bytes_methods.h"
 #include "pycore_bytesobject.h"
@@ -2849,7 +2850,7 @@ static PyObject *
 bytearray_sizeof_impl(PyByteArrayObject *self)
 /*[clinic end generated code: output=738abdd17951c427 input=e27320fd98a4bc5a]*/
 {
-    Py_ssize_t res = _PyObject_SIZE(Py_TYPE(self));
+    Py_ssize_t res = _PyObject_InstanceSize((PyObject *)self);
     Py_ssize_t alloc = FT_ATOMIC_LOAD_SSIZE_RELAXED(self->ob_alloc);
     if (alloc > 0) {
         res += _PyBytesObject_SIZE + alloc;

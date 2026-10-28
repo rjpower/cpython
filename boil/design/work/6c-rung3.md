@@ -477,6 +477,23 @@ level 3 runs at the end.
   methods gets six slots. Rung 5 records slots allocated against slots
   used.
 
+## Hazards found
+
+- **test_buffer, `test_memoryview_get_contiguous`** (gate 2 on release
+  for 798977ee556). Line 4115, `self.assertEqual(nd[1], 1)`, raised
+  `UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa0 in position
+  1: invalid start byte`. Afterwards, test_buffer alone passed 10 of 10
+  times on release and once on debug, under `gate.sh 1`. The failure was
+  real, not timing. `_testbuffer`'s ndarray had no `tp_traverse`, so the
+  collector took it to refer to nothing. A view such as `nd[::-1]` holds
+  its source array only in its base buffer's `obj`, so after
+  `nd = nd[::-1]` a collection freed the source, and the view read a
+  freed format string. With a `gc.collect()` between the slice and the
+  read, the failure reproduced 200 times in 200. The ndarray now visits
+  its exporter. `test_ndarray_view_keeps_exporter` covers the case. The
+  ports README already lists the general rule: a C type that holds
+  references must traverse them.
+
 ## Tests
 
 - **test_shapes** gains:

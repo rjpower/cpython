@@ -51,19 +51,11 @@ dk_size == 256.
 
 
 /*
-The DictObject can be in one of two forms.
+A dict's keys object holds its keys and values together (dk_refcnt == 1,
+except for the immortal Py_EMPTY_KEYS).  Values are stored in the me_value
+field of the entry.
 
-Either:
-  A combined table:
-    ma_values == NULL, dk_refcnt == 1.
-    Values are stored in the me_value field of the PyDictKeyEntry.
-Or:
-  A split table:
-    ma_values != NULL, dk_refcnt >= 1
-    Values are stored in the ma_values array.
-    Only string (unicode) keys are allowed.
-
-There are four kinds of slots in the table (slot is index, and
+There are three kinds of slots in the table (slot is index, and
 DK_ENTRIES(keys)[index] if index >= 0):
 
 1. Unused.  index == DKIX_EMPTY
@@ -71,11 +63,10 @@ DK_ENTRIES(keys)[index] if index >= 0):
    transition to Active upon key insertion.  This is each slot's initial state.
 
 2. Active.  index >= 0, me_key != NULL and me_value != NULL
-   Holds an active (key, value) pair.  Active can transition to Dummy or
-   Pending upon key deletion (for combined and split tables respectively).
-   This is the only case in which me_value != NULL.
+   Holds an active (key, value) pair.  Active can transition to Dummy
+   upon key deletion.  This is the only case in which me_value != NULL.
 
-3. Dummy.  index == DKIX_DUMMY  (combined only)
+3. Dummy.  index == DKIX_DUMMY
    Previously held an active (key, value) pair, but that was deleted and an
    active pair has not yet overwritten the slot.  Dummy can transition to
    Active upon key insertion.  Dummy slots cannot be made Unused again
@@ -83,26 +74,18 @@ DK_ENTRIES(keys)[index] if index >= 0):
    they were once active.
    In free-threaded builds dummy slots are not re-used to allow lock-free
    lookups to proceed safely.
-
-4. Pending. index >= 0, key != NULL, and value == NULL  (split only)
-   Not yet inserted in split-table.
 */
 
 /*
 Preserving insertion order
 
-It's simple for combined table.  Since dk_entries is mostly append only, we can
-get insertion order by just iterating dk_entries.
+Since dk_entries is mostly append only, we can get insertion order by just
+iterating dk_entries.
 
 One exception is .popitem().  It removes last item in dk_entries and decrement
 dk_nentries to achieve amortized O(1).  Since there are DKIX_DUMMY remains in
 dk_indices, we can't increment dk_usable even though dk_nentries is
 decremented.
-
-To preserve the order in a split table, a bit vector is used to record the
-insertion order. When a key is inserted the bit vector is shifted up by 4 bits
-and the index of the key is stored in the low 4 bits.
-As a consequence of this, split keys have a maximum size of 16.
 */
 
 /* PyDict_MINSIZE is the starting size for any new dict.
@@ -167,25 +150,11 @@ it's USABLE_FRACTION (currently two-thirds) full.
 #define LOCK_KEYS(keys)
 #define UNLOCK_KEYS(keys)
 #define ASSERT_KEYS_LOCKED(keys)
-#define LOAD_SHARED_KEY(key) key
-#define STORE_SHARED_KEY(key, value) key = value
 #define INCREF_KEYS(dk)  dk->dk_refcnt++
 #define DECREF_KEYS(dk)  dk->dk_refcnt--
 #define LOAD_KEYS_NENTRIES(keys) keys->dk_nentries
-#define INCREF_KEYS_FT(dk)
-#define DECREF_KEYS_FT(dk, shared)
-#define LOCK_KEYS_IF_SPLIT(keys, kind)
-#define UNLOCK_KEYS_IF_SPLIT(keys, kind)
-#define IS_DICT_SHARED(mp) (false)
-#define SET_DICT_SHARED(mp)
 #define LOAD_INDEX(keys, size, idx) ((const int##size##_t*)(keys->dk_indices))[idx]
 #define STORE_INDEX(keys, size, idx, value) ((int##size##_t*)(keys->dk_indices))[idx] = (int##size##_t)value
-
-static inline void split_keys_entry_added(PyDictKeysObject *keys)
-{
-    keys->dk_usable--;
-    keys->dk_nentries++;
-}
 
 static inline void
 set_keys(PyDictObject *mp, PyDictKeysObject *keys)
@@ -193,11 +162,6 @@ set_keys(PyDictObject *mp, PyDictKeysObject *keys)
     mp->ma_keys = keys;
 }
 
-static inline void
-set_values(PyDictObject *mp, PyDictValues *values)
-{
-    mp->ma_values = values;
-}
 
 static inline Py_ssize_t
 load_keys_nentries(PyDictObject *mp)
@@ -237,7 +201,6 @@ can_modify_dict(PyDictObject *mp)
 
 #define STORE_KEY(ep, key) FT_ATOMIC_STORE_PTR_RELEASE((ep)->me_key, key)
 #define STORE_VALUE(ep, value) FT_ATOMIC_STORE_PTR_RELEASE((ep)->me_value, value)
-#define STORE_SPLIT_VALUE(mp, idx, value) FT_ATOMIC_STORE_PTR_RELEASE(mp->ma_values->values[idx], value)
 #define STORE_HASH(ep, hash) FT_ATOMIC_STORE_SSIZE_RELAXED((ep)->me_hash, hash)
 #define STORE_KEYS_USABLE(keys, usable) FT_ATOMIC_STORE_SSIZE_RELAXED(keys->dk_usable, usable)
 #define STORE_KEYS_NENTRIES(keys, nentries) FT_ATOMIC_STORE_SSIZE_RELAXED(keys->dk_nentries, nentries)
@@ -357,7 +320,6 @@ dict_setdefault_value_lock_held(PyObject *d, PyValue key, PyValue default_value,
                                 PyValue *result);
 
 #ifndef NDEBUG
-static int _PyObject_InlineValuesConsistencyCheck(PyObject *obj);
 #endif
 
 #include "clinic/dictobject.c.h"
@@ -548,15 +510,6 @@ static PyDictKeysObject empty_keys_struct = {
 #  define ASSERT_CONSISTENT(op) assert(_PyDict_CheckConsistency((PyObject *)(op), 0))
 #endif
 
-static inline int
-get_index_from_order(PyDictObject *mp, Py_ssize_t i)
-{
-    assert(mp->ma_used <= SHARED_KEYS_MAX_SIZE);
-    assert(i < mp->ma_values->size);
-    uint8_t *array = get_insertion_order_array(mp->ma_values);
-    return array[i];
-}
-
 #ifdef DEBUG_PYDICT
 static void
 dump_entries(PyDictKeysObject *dk)
@@ -588,11 +541,8 @@ _PyDict_CheckConsistency(PyObject *op, int check_content)
     PyDictObject *mp = (PyDictObject *)op;
 
     PyDictKeysObject *keys = mp->ma_keys;
-    int splitted = _PyDict_HasSplitTable(mp);
     Py_ssize_t usable = USABLE_FRACTION(DK_SIZE(keys));
 
-    // In the free-threaded build, shared keys may be concurrently modified,
-    // so use atomic loads.
     Py_ssize_t dk_usable = FT_ATOMIC_LOAD_SSIZE_ACQUIRE(keys->dk_usable);
     Py_ssize_t dk_nentries = FT_ATOMIC_LOAD_SSIZE_ACQUIRE(keys->dk_nentries);
 
@@ -601,22 +551,9 @@ _PyDict_CheckConsistency(PyObject *op, int check_content)
     CHECK(0 <= dk_nentries && dk_nentries <= usable);
     CHECK(dk_usable + dk_nentries <= usable);
 
-    if (!splitted) {
-        /* combined table */
-        CHECK(keys->dk_kind != DICT_KEYS_SPLIT);
-        CHECK(keys->dk_refcnt == 1 || keys == Py_EMPTY_KEYS);
-    }
-    else {
-        CHECK(keys->dk_kind == DICT_KEYS_SPLIT);
-        CHECK(mp->ma_used <= SHARED_KEYS_MAX_SIZE);
-        if (mp->ma_values->embedded) {
-            CHECK(mp->ma_values->embedded == 1);
-            CHECK(mp->ma_values->valid == 1);
-        }
-    }
+    CHECK(keys->dk_refcnt == 1 || keys == Py_EMPTY_KEYS);
 
     if (check_content) {
-        LOCK_KEYS_IF_SPLIT(keys, keys->dk_kind);
         for (Py_ssize_t i=0; i < DK_SIZE(keys); i++) {
             Py_ssize_t ix = dictkeys_get_index(keys, i);
             CHECK(DKIX_DUMMY <= ix && ix <= usable);
@@ -653,29 +590,10 @@ _PyDict_CheckConsistency(PyObject *op, int check_content)
                     CHECK(PyUnicode_CheckExact(key));
                     Py_hash_t hash = unicode_get_hash(key);
                     CHECK(hash != -1);
-                    if (!splitted) {
-                        CHECK(!PyValue_IsNull(entry->me_value));
-                    }
-                }
-
-                if (splitted) {
-                    CHECK(PyValue_IsNull(entry->me_value));
+                    CHECK(!PyValue_IsNull(entry->me_value));
                 }
             }
         }
-
-        if (splitted) {
-            CHECK(mp->ma_used <= SHARED_KEYS_MAX_SIZE);
-            /* splitted table */
-            int duplicate_check = 0;
-            for (Py_ssize_t i=0; i < mp->ma_used; i++) {
-                int index = get_index_from_order(mp, i);
-                CHECK((duplicate_check & (1<<index)) == 0);
-                duplicate_check |= (1<<index);
-                CHECK(!PyValue_IsNull(mp->ma_values->values[index]));
-            }
-        }
-        UNLOCK_KEYS_IF_SPLIT(keys, keys->dk_kind);
     }
     return 1;
 
@@ -746,63 +664,20 @@ new_keys_object(uint8_t log2_size, bool unicode)
 static void
 free_keys_object(PyDictKeysObject *keys, bool use_qsbr)
 {
-    void *ptr = keys;
-    if (keys->dk_kind == DICT_KEYS_SPLIT) {
-        ptr = _PyDictKeys_AsSharedKeys(keys);
-    }
-    PyMem_Free(ptr);
-}
-
-static size_t
-values_size_from_count(size_t count)
-{
-    assert(count >= 1);
-    size_t suffix_size = _Py_SIZE_ROUND_UP(count, sizeof(PyValue));
-    assert(suffix_size < 128);
-    assert(suffix_size % sizeof(PyValue) == 0);
-    return offsetof(PyDictValues, values) + count * sizeof(PyValue) + suffix_size;
-}
-
-#define CACHED_KEYS(tp) (((PyHeapTypeObject*)tp)->ht_cached_keys)
-
-static inline PyDictValues*
-new_values(size_t size)
-{
-    size_t n = values_size_from_count(size);
-    PyDictValues *res = (PyDictValues *)PyMem_Malloc(n);
-    if (res == NULL) {
-        return NULL;
-    }
-    res->embedded = 0;
-    res->size = 0;
-    assert(size < 256);
-    res->capacity = (uint8_t)size;
-    return res;
-}
-
-static inline void
-free_values(PyDictValues *values, bool use_qsbr)
-{
-    assert(values->embedded == 0);
-    PyMem_Free(values);
+    PyMem_Free(keys);
 }
 
 static inline PyObject *
-new_dict_impl(PyDictObject *mp, PyDictKeysObject *keys,
-              PyDictValues *values, Py_ssize_t used,
-              int free_values_on_failure, int frozendict, int gc_track)
+new_dict_impl(PyDictObject *mp, PyDictKeysObject *keys, Py_ssize_t used,
+              int frozendict, int gc_track)
 {
     assert(keys != NULL);
     if (mp == NULL) {
         dictkeys_decref(keys, false);
-        if (free_values_on_failure) {
-            free_values(values, false);
-        }
         return NULL;
     }
 
     mp->ma_keys = keys;
-    mp->ma_values = values;
     mp->ma_used = used;
     mp->_ma_watcher_tag = 0;
     if (frozendict) {
@@ -817,49 +692,32 @@ new_dict_impl(PyDictObject *mp, PyDictKeysObject *keys,
 
 /* Consumes a reference to the keys object */
 static PyObject*
-new_dict(PyDictKeysObject *keys, PyDictValues *values,
-         Py_ssize_t used, int free_values_on_failure)
+new_dict(PyDictKeysObject *keys, Py_ssize_t used)
 {
     PyDictObject *mp = PyObject_GC_New(PyDictObject, &PyDict_Type);
     assert(mp == NULL || Py_IS_TYPE(mp, &PyDict_Type));
 
-    return new_dict_impl(mp, keys, values, used, free_values_on_failure, 0, 1);
+    return new_dict_impl(mp, keys, used, 0, 1);
 }
 
 /* Consumes a reference to the keys object */
 static PyObject*
-new_dict_untracked(PyDictKeysObject *keys, PyDictValues *values,
-                   Py_ssize_t used, int free_values_on_failure)
+new_dict_untracked(PyDictKeysObject *keys, Py_ssize_t used)
 {
     PyDictObject *mp = PyObject_GC_New(PyDictObject, &PyDict_Type);
     assert(mp == NULL || Py_IS_TYPE(mp, &PyDict_Type));
 
-    return new_dict_impl(mp, keys, values, used, free_values_on_failure, 0, 0);
+    return new_dict_impl(mp, keys, used, 0, 0);
 }
 
 /* Consumes a reference to the keys object */
 static PyObject*
-new_frozendict_untracked(PyDictKeysObject *keys, PyDictValues *values,
-                         Py_ssize_t used, int free_values_on_failure)
+new_frozendict_untracked(PyDictKeysObject *keys, Py_ssize_t used)
 {
     PyDictObject *mp = PyObject_GC_New(PyDictObject, &PyFrozenDict_Type);
-    return new_dict_impl(mp, keys, values, used, free_values_on_failure, 1, 0);
+    return new_dict_impl(mp, keys, used, 1, 0);
 }
 
-static PyObject *
-new_dict_with_shared_keys(PyDictKeysObject *keys)
-{
-    size_t size = shared_keys_usable_size(keys);
-    PyDictValues *values = new_values(size);
-    if (values == NULL) {
-        return PyErr_NoMemory();
-    }
-    dictkeys_incref(keys);
-    for (size_t i = 0; i < size; i++) {
-        values->values[i] = PyValue_NULL;
-    }
-    return new_dict(keys, values, 0, 1);
-}
 
 
 static PyDictKeysObject *
@@ -867,7 +725,6 @@ clone_combined_dict_keys(PyDictObject *orig)
 {
     assert(PyAnyDict_Check(orig));
     assert(Py_TYPE(orig)->tp_iter == dict_iter);
-    assert(orig->ma_values == NULL);
     assert(orig->ma_keys != Py_EMPTY_KEYS);
     assert(orig->ma_keys->dk_refcnt == 1);
 
@@ -894,7 +751,7 @@ PyObject *
 PyDict_New(void)
 {
     /* We don't incref Py_EMPTY_KEYS here because it is immortal. */
-    return new_dict(Py_EMPTY_KEYS, NULL, 0, 0);
+    return new_dict(Py_EMPTY_KEYS, 0);
 }
 
 /* Search index of hash table from offset of entry table */
@@ -1069,17 +926,6 @@ hash_unicode_key(PyObject *key)
 }
 
 
-static Py_ssize_t
-unicodekeys_lookup_split(PyDictKeysObject* dk, PyObject *key, Py_hash_t hash)
-{
-    Py_ssize_t ix;
-    assert(dk->dk_kind == DICT_KEYS_SPLIT);
-    assert(PyUnicode_CheckExact(key));
-
-    ix = unicodekeys_lookup_unicode(dk, key, hash);
-    return ix;
-}
-
 /* Lookup a string in a (all unicode) dict keys.
  * Returns DKIX_ERROR if key is not a string,
  * or if the dict keys is not all strings.
@@ -1109,25 +955,6 @@ _PyDictKeys_StringLookupAndVersion(PyDictKeysObject *dk, PyObject *key, uint32_t
     *version = _PyDictKeys_GetVersionForCurrentState(_PyInterpreterState_GET(), dk);
     UNLOCK_KEYS(dk);
     return ix;
-}
-
-/* Like _PyDictKeys_StringLookup() but only works on split keys.  Note
- * that in free-threaded builds this locks the keys object as required.
- */
-Py_ssize_t
-_PyDictKeys_StringLookupSplit(PyDictKeysObject* dk, PyObject *key)
-{
-    assert(dk->dk_kind == DICT_KEYS_SPLIT);
-    assert(PyUnicode_CheckExact(key));
-    Py_hash_t hash = unicode_get_hash(key);
-    if (hash == -1) {
-        hash = PyUnicode_Type.tp_hash(key);
-        if (hash == -1) {
-            PyErr_Clear();
-            return DKIX_ERROR;
-        }
-    }
-    return unicodekeys_lookup_split(dk, key, hash);
 }
 
 /*
@@ -1162,25 +989,14 @@ start:
             ix = do_lookup(NULL, dk, key, hash, compare_unicode_unicode);
         }
         else {
-            INCREF_KEYS_FT(dk);
-            LOCK_KEYS_IF_SPLIT(dk, kind);
-
             ix = unicodekeys_lookup_generic(mp, dk, key, hash);
-
-            UNLOCK_KEYS_IF_SPLIT(dk, kind);
-            DECREF_KEYS_FT(dk, IS_DICT_SHARED(mp));
             if (ix == DKIX_KEY_CHANGED) {
                 goto start;
             }
         }
 
         if (ix >= 0) {
-            if (kind == DICT_KEYS_SPLIT) {
-                *value_addr = mp->ma_values->values[ix];
-            }
-            else {
-                *value_addr = DK_UNICODE_ENTRIES(dk)[ix].me_value;
-            }
+            *value_addr = DK_UNICODE_ENTRIES(dk)[ix].me_value;
         }
         else {
             *value_addr = PyValue_NULL;
@@ -1209,17 +1025,6 @@ dict_lookup_object(PyDictObject *mp, PyObject *key, Py_hash_t hash, PyValue *val
     return _Py_dict_lookup(mp, PyValue_FromObject(key), hash, value_addr);
 }
 
-
-static inline void
-ensure_shared_on_resize(PyDictObject *mp)
-{
-}
-
-static inline void
-ensure_shared_on_keys_version_assignment(PyDictObject *mp)
-{
-    ASSERT_DICT_LOCKED((PyObject *) mp);
-}
 
 
 
@@ -1341,58 +1146,6 @@ insert_combined_dict(PyDictObject *mp,
     return 0;
 }
 
-static Py_ssize_t
-insert_split_key(PyDictKeysObject *keys, PyObject *key, Py_hash_t hash)
-{
-    assert(PyUnicode_CheckExact(key));
-    Py_ssize_t ix;
-
-
-
-    LOCK_KEYS(keys);
-    ix = unicodekeys_lookup_unicode(keys, key, hash);
-    if (ix == DKIX_EMPTY && keys->dk_usable > 0) {
-        // Insert into new slot
-        FT_ATOMIC_STORE_UINT32_RELAXED(keys->dk_version, 0);
-        struct _instancekeysobject *shared_keys = _PyDictKeys_AsSharedKeys(keys);
-        PyTypeObject *type = FT_ATOMIC_LOAD_PTR_ACQUIRE(shared_keys->dsk_owning_type);
-        if (type) {
-            // we acquired the type lock above
-            _PyType_Modified_Unlocked(type);
-        }
-        Py_ssize_t hashpos = find_empty_slot(keys, hash);
-        ix = keys->dk_nentries;
-        dictkeys_set_index(keys, hashpos, ix);
-        PyDictUnicodeEntry *ep = &DK_UNICODE_ENTRIES(keys)[ix];
-        STORE_SHARED_KEY(ep->me_key, Py_NewRef(key));
-        split_keys_entry_added(keys);
-    }
-    assert (ix < SHARED_KEYS_MAX_SIZE);
-    UNLOCK_KEYS(keys);
-
-    return ix;
-}
-
-void
-_PyDict_InsertSplitValue(PyDictObject *mp, PyObject *key, PyValue value, Py_ssize_t ix)
-{
-    assert(can_modify_dict(mp));
-    assert(PyUnicode_CheckExact(key));
-
-    PyValue old_value = mp->ma_values->values[ix];
-    if (PyValue_IsNull(old_value)) {
-        _PyDict_NotifyEvent(PyDict_EVENT_ADDED, mp, PyValue_FromObject(key), value);
-        STORE_SPLIT_VALUE(mp, ix, value);
-        _PyDictValues_AddToInsertionOrder(mp->ma_values, ix);
-        STORE_USED(mp, mp->ma_used + 1);
-    }
-    else {
-        _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, mp, PyValue_FromObject(key), value);
-        STORE_SPLIT_VALUE(mp, ix, value);
-    }
-    ASSERT_CONSISTENT(mp);
-}
-
 // Replace a value at an existing entry.
 static void
 replace_value(PyDictObject *mp, PyValue key, Py_ssize_t ix,
@@ -1404,13 +1157,8 @@ replace_value(PyDictObject *mp, PyValue key, Py_ssize_t ix,
     if (!PyValue_Is(old_value, value)) {
         _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, mp, key, value);
         if (DK_IS_UNICODE(mp->ma_keys)) {
-            if (_PyDict_HasSplitTable(mp)) {
-                STORE_SPLIT_VALUE(mp, ix, value);
-            }
-            else {
-                PyDictUnicodeEntry *ep = &DK_UNICODE_ENTRIES(mp->ma_keys)[ix];
-                STORE_VALUE(ep, value);
-            }
+            PyDictUnicodeEntry *ep = &DK_UNICODE_ENTRIES(mp->ma_keys)[ix];
+            STORE_VALUE(ep, value);
         }
         else {
             PyDictKeyEntry *ep = &DK_ENTRIES(mp->ma_keys)[ix];
@@ -1433,32 +1181,16 @@ insertdict(PyDictObject *mp,
 {
     assert(can_modify_dict(mp));
 
-    PyValue old_value = PyValue_NULL;
-    Py_ssize_t ix;
-
-    if (_PyDict_HasSplitTable(mp) && value_is_exact_unicode(key)) {
-        PyObject *key_o = PyValue_ObjectBorrow(key);
-        ix = insert_split_key(mp->ma_keys, key_o, hash);
-        if (ix != DKIX_EMPTY) {
-            _PyDict_InsertSplitValue(mp, key_o, value, ix);
-            return 0;
-        }
-        // No space in shared keys. Go to insert_combined_dict() below.
-    }
-    else {
-        ix = _Py_dict_lookup(mp, key, hash, &old_value);
-        if (ix == DKIX_ERROR)
-            return -1;
-    }
+    PyValue old_value;
+    Py_ssize_t ix = _Py_dict_lookup(mp, key, hash, &old_value);
+    if (ix == DKIX_ERROR)
+        return -1;
 
     if (PyValue_IsNull(old_value)) {
         // insert_combined_dict() will convert from non DICT_KEYS_GENERAL table
         // into DICT_KEYS_GENERAL table if key is not Unicode.
         // We don't convert it before _Py_dict_lookup because non-Unicode key
         // may change generic table into Unicode table.
-        //
-        // NOTE: ix may not be DKIX_EMPTY because split table may have key
-        // without value.
         if (insert_combined_dict(mp, hash, key, value) < 0) {
             return -1;
         }
@@ -1487,7 +1219,6 @@ insert_to_emptydict(PyDictObject *mp,
     _PyDict_NotifyEvent(PyDict_EVENT_ADDED, mp, key, value);
 
     /* We don't decref Py_EMPTY_KEYS here because it is immortal. */
-    assert(mp->ma_values == NULL);
 
     size_t hashpos = (size_t)hash & (PyDict_MINSIZE-1);
     dictkeys_set_index(newkeys, hashpos, 0);
@@ -1548,30 +1279,14 @@ build_indices_unicode(PyDictKeysObject *keys, PyDictUnicodeEntry *ep, Py_ssize_t
     }
 }
 
-static void
-invalidate_and_clear_inline_values(PyDictValues *values)
-{
-    assert(values->embedded);
-    // The owner's shape is already dictionary mode: a dict aliases the
-    // values, or the caller set it.
-    FT_ATOMIC_STORE_UINT8(values->valid, 0);
-    for (int i = 0; i < values->capacity; i++) {
-        values->values[i] = PyValue_NULL;
-    }
-}
 
 /*
 Restructure the table by allocating a new table and reinserting all
 items again.  When entries have been deleted, the new table may
 actually be smaller than the old one.
-If a table is split (its keys and hashes are shared, its values are not),
-then the values are temporarily copied into the table, it is resized as
-a combined table, then the me_value slots in the old table are NULLed out.
-After resizing, a table is always combined.
 
 This function supports:
- - Unicode split -> Unicode combined or Generic
- - Unicode combined -> Unicode combined or Generic
+ - Unicode -> Unicode or Generic
  - Generic -> Generic
 */
 static int
@@ -1581,7 +1296,6 @@ dictresize(PyDictObject *mp,
     assert(can_modify_dict(mp));
 
     PyDictKeysObject *oldkeys, *newkeys;
-    PyDictValues *oldvalues;
 
     if (log2_newsize >= SIZEOF_SIZE_T*8) {
         PyErr_NoMemory();
@@ -1590,13 +1304,11 @@ dictresize(PyDictObject *mp,
     assert(log2_newsize >= PyDict_LOG_MINSIZE);
 
     oldkeys = mp->ma_keys;
-    oldvalues = mp->ma_values;
 
     if (!DK_IS_UNICODE(oldkeys)) {
         unicode = 0;
     }
 
-    ensure_shared_on_resize(mp);
     /* NOTE: Current odict checks mp->ma_keys to detect resize happen.
      * So we can't reuse oldkeys even if oldkeys->dk_size == newsize.
      * TODO: Try reusing oldkeys when reimplement odict.
@@ -1612,109 +1324,61 @@ dictresize(PyDictObject *mp,
 
     Py_ssize_t numentries = mp->ma_used;
 
-    if (oldvalues != NULL) {
-        LOCK_KEYS(oldkeys);
-        PyDictUnicodeEntry *oldentries = DK_UNICODE_ENTRIES(oldkeys);
-        /* Convert split table into new combined table.
-         * We must incref keys; we can transfer values.
-         */
-        if (newkeys->dk_kind == DICT_KEYS_GENERAL) {
-            // split -> generic
-            PyDictKeyEntry *newentries = DK_ENTRIES(newkeys);
-
-            for (Py_ssize_t i = 0; i < numentries; i++) {
-                int index = get_index_from_order(mp, i);
-                PyDictUnicodeEntry *ep = &oldentries[index];
-                assert(!PyValue_IsNull(oldvalues->values[index]));
-                newentries[i].me_key = PyValue_FromObject(ep->me_key);
-                newentries[i].me_hash = unicode_get_hash(ep->me_key);
-                newentries[i].me_value = oldvalues->values[index];
-            }
-            build_indices_generic(newkeys, newentries, numentries);
-        }
-        else { // split -> combined unicode
-            PyDictUnicodeEntry *newentries = DK_UNICODE_ENTRIES(newkeys);
-
-            for (Py_ssize_t i = 0; i < numentries; i++) {
-                int index = get_index_from_order(mp, i);
-                PyDictUnicodeEntry *ep = &oldentries[index];
-                assert(!PyValue_IsNull(oldvalues->values[index]));
-                newentries[i].me_key = ep->me_key;
-                newentries[i].me_value = oldvalues->values[index];
-            }
-            build_indices_unicode(newkeys, newentries, numentries);
-        }
-        UNLOCK_KEYS(oldkeys);
-        set_keys(mp, newkeys);
-        dictkeys_decref(oldkeys, IS_DICT_SHARED(mp));
-        if (oldvalues->embedded) {
-            assert(oldvalues->embedded == 1);
-            assert(oldvalues->valid == 1);
-            invalidate_and_clear_inline_values(oldvalues);
+    if (oldkeys->dk_kind == DICT_KEYS_GENERAL) {
+        // generic -> generic
+        assert(newkeys->dk_kind == DICT_KEYS_GENERAL);
+        PyDictKeyEntry *oldentries = DK_ENTRIES(oldkeys);
+        PyDictKeyEntry *newentries = DK_ENTRIES(newkeys);
+        if (oldkeys->dk_nentries == numentries) {
+            memcpy(newentries, oldentries, numentries * sizeof(PyDictKeyEntry));
         }
         else {
-            free_values(oldvalues, IS_DICT_SHARED(mp));
+            PyDictKeyEntry *ep = oldentries;
+            for (Py_ssize_t i = 0; i < numentries; i++) {
+                while (PyValue_IsNull(ep->me_value))
+                    ep++;
+                newentries[i] = *ep++;
+            }
         }
-        set_values(mp, NULL);
+        build_indices_generic(newkeys, newentries, numentries);
     }
-    else {  // oldkeys is combined.
-        if (oldkeys->dk_kind == DICT_KEYS_GENERAL) {
-            // generic -> generic
-            assert(newkeys->dk_kind == DICT_KEYS_GENERAL);
-            PyDictKeyEntry *oldentries = DK_ENTRIES(oldkeys);
-            PyDictKeyEntry *newentries = DK_ENTRIES(newkeys);
-            if (oldkeys->dk_nentries == numentries) {
-                memcpy(newentries, oldentries, numentries * sizeof(PyDictKeyEntry));
+    else {  // oldkeys is combined unicode
+        PyDictUnicodeEntry *oldentries = DK_UNICODE_ENTRIES(oldkeys);
+        if (unicode) { // combined unicode -> combined unicode
+            PyDictUnicodeEntry *newentries = DK_UNICODE_ENTRIES(newkeys);
+            if (oldkeys->dk_nentries == numentries && mp->ma_keys->dk_kind == DICT_KEYS_UNICODE) {
+                memcpy(newentries, oldentries, numentries * sizeof(PyDictUnicodeEntry));
             }
             else {
-                PyDictKeyEntry *ep = oldentries;
+                PyDictUnicodeEntry *ep = oldentries;
                 for (Py_ssize_t i = 0; i < numentries; i++) {
                     while (PyValue_IsNull(ep->me_value))
                         ep++;
                     newentries[i] = *ep++;
                 }
             }
+            build_indices_unicode(newkeys, newentries, numentries);
+        }
+        else { // combined unicode -> generic
+            PyDictKeyEntry *newentries = DK_ENTRIES(newkeys);
+            PyDictUnicodeEntry *ep = oldentries;
+            for (Py_ssize_t i = 0; i < numentries; i++) {
+                while (PyValue_IsNull(ep->me_value))
+                    ep++;
+                newentries[i].me_key = PyValue_FromObject(ep->me_key);
+                newentries[i].me_hash = unicode_get_hash(ep->me_key);
+                newentries[i].me_value = ep->me_value;
+                ep++;
+            }
             build_indices_generic(newkeys, newentries, numentries);
         }
-        else {  // oldkeys is combined unicode
-            PyDictUnicodeEntry *oldentries = DK_UNICODE_ENTRIES(oldkeys);
-            if (unicode) { // combined unicode -> combined unicode
-                PyDictUnicodeEntry *newentries = DK_UNICODE_ENTRIES(newkeys);
-                if (oldkeys->dk_nentries == numentries && mp->ma_keys->dk_kind == DICT_KEYS_UNICODE) {
-                    memcpy(newentries, oldentries, numentries * sizeof(PyDictUnicodeEntry));
-                }
-                else {
-                    PyDictUnicodeEntry *ep = oldentries;
-                    for (Py_ssize_t i = 0; i < numentries; i++) {
-                        while (PyValue_IsNull(ep->me_value))
-                            ep++;
-                        newentries[i] = *ep++;
-                    }
-                }
-                build_indices_unicode(newkeys, newentries, numentries);
-            }
-            else { // combined unicode -> generic
-                PyDictKeyEntry *newentries = DK_ENTRIES(newkeys);
-                PyDictUnicodeEntry *ep = oldentries;
-                for (Py_ssize_t i = 0; i < numentries; i++) {
-                    while (PyValue_IsNull(ep->me_value))
-                        ep++;
-                    newentries[i].me_key = PyValue_FromObject(ep->me_key);
-                    newentries[i].me_hash = unicode_get_hash(ep->me_key);
-                    newentries[i].me_value = ep->me_value;
-                    ep++;
-                }
-                build_indices_generic(newkeys, newentries, numentries);
-            }
-        }
+    }
 
-        set_keys(mp, newkeys);
+    set_keys(mp, newkeys);
 
-        if (oldkeys != Py_EMPTY_KEYS) {
-            assert(oldkeys->dk_kind != DICT_KEYS_SPLIT);
-            assert(oldkeys->dk_refcnt == 1);
-            free_keys_object(oldkeys, IS_DICT_SHARED(mp));
-        }
+    if (oldkeys != Py_EMPTY_KEYS) {
+        assert(oldkeys->dk_refcnt == 1);
+        free_keys_object(oldkeys, false);
     }
 
     STORE_KEYS_USABLE(mp->ma_keys, mp->ma_keys->dk_usable - numentries);
@@ -1748,7 +1412,7 @@ dict_new_presized(Py_ssize_t minused, bool unicode)
     new_keys = new_keys_object(log2_newsize, unicode);
     if (new_keys == NULL)
         return NULL;
-    return new_dict(new_keys, NULL, 0, 0);
+    return new_dict(new_keys, 0);
 }
 
 PyObject *
@@ -2249,24 +1913,6 @@ _PyDict_SetItem_KnownHash(PyObject *op, PyObject *key, PyObject *value,
 }
 
 static void
-delete_index_from_values(PyDictValues *values, Py_ssize_t ix)
-{
-    uint8_t *array = get_insertion_order_array(values);
-    int size = values->size;
-    assert(size <= values->capacity);
-    int i;
-    for (i = 0; array[i] != ix; i++) {
-        assert(i < size);
-    }
-    assert(i < size);
-    size--;
-    for (; i < size; i++) {
-        FT_ATOMIC_STORE_UINT8_RELAXED(array[i], array[i+1]);
-    }
-    FT_ATOMIC_STORE_UINT8_RELEASE(values->size, size);
-}
-
-static void
 delitem_common(PyDictObject *mp, Py_hash_t hash, Py_ssize_t ix,
                PyValue old_value)
 {
@@ -2274,31 +1920,21 @@ delitem_common(PyDictObject *mp, Py_hash_t hash, Py_ssize_t ix,
     (void)old_value;
 
     STORE_USED(mp, mp->ma_used - 1);
-    if (_PyDict_HasSplitTable(mp)) {
-        assert(PyValue_Is(old_value, mp->ma_values->values[ix]));
-        STORE_SPLIT_VALUE(mp, ix, PyValue_NULL);
-        assert(ix < SHARED_KEYS_MAX_SIZE);
-        /* Update order */
-        delete_index_from_values(mp->ma_values, ix);
-        ASSERT_CONSISTENT(mp);
+    Py_ssize_t hashpos = lookdict_index(mp->ma_keys, hash, ix);
+    assert(hashpos >= 0);
+
+    FT_ATOMIC_STORE_UINT32_RELAXED(mp->ma_keys->dk_version, 0);
+    dictkeys_set_index(mp->ma_keys, hashpos, DKIX_DUMMY);
+    if (DK_IS_UNICODE(mp->ma_keys)) {
+        PyDictUnicodeEntry *ep = &DK_UNICODE_ENTRIES(mp->ma_keys)[ix];
+        STORE_KEY(ep, NULL);
+        STORE_VALUE(ep, PyValue_NULL);
     }
     else {
-        Py_ssize_t hashpos = lookdict_index(mp->ma_keys, hash, ix);
-        assert(hashpos >= 0);
-
-        FT_ATOMIC_STORE_UINT32_RELAXED(mp->ma_keys->dk_version, 0);
-        dictkeys_set_index(mp->ma_keys, hashpos, DKIX_DUMMY);
-        if (DK_IS_UNICODE(mp->ma_keys)) {
-            PyDictUnicodeEntry *ep = &DK_UNICODE_ENTRIES(mp->ma_keys)[ix];
-            STORE_KEY(ep, NULL);
-            STORE_VALUE(ep, PyValue_NULL);
-        }
-        else {
-            PyDictKeyEntry *ep = &DK_ENTRIES(mp->ma_keys)[ix];
-            STORE_KEY(ep, PyValue_NULL);
-            STORE_VALUE(ep, PyValue_NULL);
-            STORE_HASH(ep, 0);
-        }
+        PyDictKeyEntry *ep = &DK_ENTRIES(mp->ma_keys)[ix];
+        STORE_KEY(ep, PyValue_NULL);
+        STORE_VALUE(ep, PyValue_NULL);
+        STORE_HASH(ep, 0);
     }
 
     ASSERT_CONSISTENT(mp);
@@ -2490,16 +2126,6 @@ _PyDict_ReplaceItemIf(PyObject *op, PyObject *key,
 }
 
 static void
-clear_embedded_values(PyDictValues *values, Py_ssize_t nentries)
-{
-    assert(nentries <= SHARED_KEYS_MAX_SIZE);
-    for (Py_ssize_t i = 0; i < nentries; i++) {
-        values->values[i] = PyValue_NULL;
-    }
-    FT_ATOMIC_STORE_UINT8_RELEASE(values->size, 0);
-}
-
-static void
 clear_lock_held(PyObject *op)
 {
     if (!PyDict_Check(op)) {
@@ -2508,38 +2134,17 @@ clear_lock_held(PyObject *op)
     PyDictObject *mp = (PyDictObject *)op;
     assert(can_modify_dict(mp));
 
-    PyDictKeysObject *oldkeys;
-    PyDictValues *oldvalues;
-    Py_ssize_t i, n;
-
-    oldkeys = mp->ma_keys;
-    oldvalues = mp->ma_values;
+    PyDictKeysObject *oldkeys = mp->ma_keys;
     if (oldkeys == Py_EMPTY_KEYS) {
         return;
     }
     /* Empty the dict... */
     _PyDict_NotifyEvent(PyDict_EVENT_CLEARED, mp, PyValue_NULL, PyValue_NULL);
     // We don't inc ref empty keys because they're immortal
-    ensure_shared_on_resize(mp);
     STORE_USED(mp, 0);
-    if (oldvalues == NULL) {
-        set_keys(mp, Py_EMPTY_KEYS);
-        assert(oldkeys->dk_refcnt == 1);
-        dictkeys_decref(oldkeys, IS_DICT_SHARED(mp));
-    }
-    else if (oldvalues->embedded) {
-        clear_embedded_values(oldvalues, oldkeys->dk_nentries);
-    }
-    else {
-        set_values(mp, NULL);
-        set_keys(mp, Py_EMPTY_KEYS);
-        n = oldkeys->dk_nentries;
-        for (i = 0; i < n; i++) {
-            oldvalues->values[i] = PyValue_NULL;
-        }
-        free_values(oldvalues, IS_DICT_SHARED(mp));
-        dictkeys_decref(oldkeys, IS_DICT_SHARED(mp));
-    }
+    set_keys(mp, Py_EMPTY_KEYS);
+    assert(oldkeys->dk_refcnt == 1);
+    dictkeys_decref(oldkeys, false);
     ASSERT_CONSISTENT(mp);
 }
 
@@ -2575,45 +2180,32 @@ _PyDict_NextValue(PyObject *op, Py_ssize_t *ppos, PyValue *pkey,
 
     mp = (PyDictObject *)op;
     i = *ppos;
-    if (_PyDict_HasSplitTable(mp)) {
-        assert(mp->ma_used <= SHARED_KEYS_MAX_SIZE);
-        if (i < 0 || i >= mp->ma_used)
+    Py_ssize_t n = mp->ma_keys->dk_nentries;
+    if (i < 0 || i >= n)
+        return 0;
+    if (DK_IS_UNICODE(mp->ma_keys)) {
+        PyDictUnicodeEntry *entry_ptr = &DK_UNICODE_ENTRIES(mp->ma_keys)[i];
+        while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
+            entry_ptr++;
+            i++;
+        }
+        if (i >= n)
             return 0;
-        int index = get_index_from_order(mp, i);
-        value = mp->ma_values->values[index];
-        PyObject *key_o = LOAD_SHARED_KEY(DK_UNICODE_ENTRIES(mp->ma_keys)[index].me_key);
-        key = PyValue_FromObject(key_o);
-        hash = unicode_get_hash(key_o);
-        assert(!PyValue_IsNull(value));
+        key = PyValue_FromObject(entry_ptr->me_key);
+        hash = unicode_get_hash(entry_ptr->me_key);
+        value = entry_ptr->me_value;
     }
     else {
-        Py_ssize_t n = mp->ma_keys->dk_nentries;
-        if (i < 0 || i >= n)
+        PyDictKeyEntry *entry_ptr = &DK_ENTRIES(mp->ma_keys)[i];
+        while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
+            entry_ptr++;
+            i++;
+        }
+        if (i >= n)
             return 0;
-        if (DK_IS_UNICODE(mp->ma_keys)) {
-            PyDictUnicodeEntry *entry_ptr = &DK_UNICODE_ENTRIES(mp->ma_keys)[i];
-            while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
-                entry_ptr++;
-                i++;
-            }
-            if (i >= n)
-                return 0;
-            key = PyValue_FromObject(entry_ptr->me_key);
-            hash = unicode_get_hash(entry_ptr->me_key);
-            value = entry_ptr->me_value;
-        }
-        else {
-            PyDictKeyEntry *entry_ptr = &DK_ENTRIES(mp->ma_keys)[i];
-            while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
-                entry_ptr++;
-                i++;
-            }
-            if (i >= n)
-                return 0;
-            key = entry_ptr->me_key;
-            hash = entry_ptr->me_hash;
-            value = entry_ptr->me_value;
-        }
+        key = entry_ptr->me_key;
+        hash = entry_ptr->me_hash;
+        value = entry_ptr->me_value;
     }
     *ppos = i+1;
     if (pkey)
@@ -3116,18 +2708,11 @@ dict_dealloc(PyObject *self)
     if (reserved) {
         _PyDict_SendEvent(reserved, PyDict_EVENT_DEALLOCATED, mp, PyValue_NULL, PyValue_NULL);
     }
-    PyDictValues *values = mp->ma_values;
     PyDictKeysObject *keys = mp->ma_keys;
 
     /* bpo-31095: UnTrack is needed before calling any callbacks */
     PyObject_GC_UnTrack(mp);
-    if (values != NULL) {
-        if (values->embedded == 0) {
-            free_values(values, false);
-        }
-        dictkeys_decref(keys, false);
-    }
-    else if (keys != NULL) {
+    if (keys != NULL) {
         assert(keys->dk_refcnt == 1 || keys == Py_EMPTY_KEYS);
         dictkeys_decref(keys, false);
     }
@@ -3706,10 +3291,8 @@ dict_dict_merge(PyDictObject *mp, PyDictObject *other, int override, PyObject **
         override = 1;
         PyDictKeysObject *okeys = other->ma_keys;
 
-        // If other is clean, combined, and just allocated, just clone it.
-        if (mp->ma_values == NULL &&
-            other->ma_values == NULL &&
-            other->ma_used == okeys->dk_nentries &&
+        // If other is clean and just allocated, just clone it.
+        if (other->ma_used == okeys->dk_nentries &&
             (DK_LOG_SIZE(okeys) == PyDict_LOG_MINSIZE ||
              USABLE_FRACTION(DK_SIZE(okeys)/2) < other->ma_used)
         ) {
@@ -3719,8 +3302,7 @@ dict_dict_merge(PyDictObject *mp, PyDictObject *other, int override, PyObject **
             if (keys == NULL)
                 return -1;
 
-            ensure_shared_on_resize(mp);
-            dictkeys_decref(mp->ma_keys, IS_DICT_SHARED(mp));
+            dictkeys_decref(mp->ma_keys, false);
             set_keys(mp, keys);
             STORE_USED(mp, other->ma_used);
             ASSERT_CONSISTENT(mp);
@@ -3927,27 +3509,6 @@ dict_copy_impl(PyDictObject *self)
     return PyDict_Copy((PyObject *)self);
 }
 
-/* Copies the values, but does not change the reference
- * counts of the objects in the array.
- * Return NULL, but does *not* set an exception on failure  */
-static PyDictValues *
-copy_values(PyDictValues *values)
-{
-    PyDictValues *newvalues = new_values(values->capacity);
-    if (newvalues == NULL) {
-        return NULL;
-    }
-    newvalues->size = values->size;
-    uint8_t *values_order = get_insertion_order_array(values);
-    uint8_t *new_values_order = get_insertion_order_array(newvalues);
-    memcpy(new_values_order, values_order, values->capacity);
-    for (int i = 0; i < values->capacity; i++) {
-        newvalues->values[i] = values->values[i];
-    }
-    assert(newvalues->embedded == 0);
-    return newvalues;
-}
-
 static PyObject *
 copy_lock_held_untracked(PyObject *o, int as_frozendict)
 {
@@ -3973,50 +3534,17 @@ copy_lock_held_untracked(PyObject *o, int as_frozendict)
         return d;
     }
 
-    if (_PyDict_HasSplitTable(mp)) {
-        PyDictObject *split_copy;
-        PyDictValues *newvalues = copy_values(mp->ma_values);
-        if (newvalues == NULL) {
-            return PyErr_NoMemory();
-        }
-        if (as_frozendict) {
-            split_copy = (PyDictObject *)PyObject_GC_New(PyFrozenDictObject,
-                                                         &PyFrozenDict_Type);
-        }
-        else {
-            split_copy = PyObject_GC_New(PyDictObject, &PyDict_Type);
-        }
-        if (split_copy == NULL) {
-            free_values(newvalues, false);
-            return NULL;
-        }
-        split_copy->ma_values = newvalues;
-        split_copy->ma_keys = mp->ma_keys;
-        split_copy->ma_used = mp->ma_used;
-        split_copy->_ma_watcher_tag = 0;
-        dictkeys_incref(mp->ma_keys);
-        if (as_frozendict) {
-            PyFrozenDictObject *frozen = (PyFrozenDictObject *)split_copy;
-            frozen->ma_hash = -1;
-        }
-        assert(!_PyObject_GC_IS_TRACKED(split_copy));
-        return (PyObject *)split_copy;
-    }
-
     if (Py_TYPE(mp)->tp_iter == dict_iter &&
-            mp->ma_values == NULL &&
             (mp->ma_used >= (mp->ma_keys->dk_nentries * 2) / 3))
     {
         /* Use fast-copy if:
 
            (1) type(mp) doesn't override tp_iter; and
 
-           (2) 'mp' is not a split-dict; and
-
-           (3) if 'mp' is non-compact ('del' operation does not resize dicts),
+           (2) if 'mp' is non-compact ('del' operation does not resize dicts),
                do fast-copy only if it has at most 1/3 non-used keys.
 
-           The last condition (3) is important to guard against a pathological
+           The last condition (2) is important to guard against a pathological
            case when a large dict is almost emptied with multiple del/pop
            operations and copied after that.  In cases like this, we defer to
            PyDict_Merge, which produces a compacted copy.
@@ -4027,10 +3555,10 @@ copy_lock_held_untracked(PyObject *o, int as_frozendict)
         }
         PyDictObject *new;
         if (as_frozendict) {
-            new = (PyDictObject *)new_frozendict_untracked(keys, NULL, 0, 0);
+            new = (PyDictObject *)new_frozendict_untracked(keys, 0);
         }
         else {
-            new = (PyDictObject *)new_dict_untracked(keys, NULL, 0, 0);
+            new = (PyDictObject *)new_dict_untracked(keys, 0);
         }
         if (new == NULL) {
             /* In case of an error, new_dict()/new_frozendict() takes care of
@@ -4156,10 +3684,7 @@ dict_equal_lock_held(PyDictObject *a, PyDictObject *b)
             }
             key = PyValue_FromObject(ep->me_key);
             hash = unicode_get_hash(ep->me_key);
-            if (_PyDict_HasSplitTable(a))
-                aval = a->ma_values->values[i];
-            else
-                aval = ep->me_value;
+            aval = ep->me_value;
         }
         else {
             PyDictKeyEntry *ep = &DK_ENTRIES(a->ma_keys)[i];
@@ -4321,28 +3846,12 @@ dict_setdefault_value_lock_held(PyObject *d, PyValue key, PyValue default_value,
         return 0;
     }
 
-    if (_PyDict_HasSplitTable(mp) && PyValue_Type(key) == &PyUnicode_Type) {
-        PyObject *key_o = PyValue_ObjectBorrow(key);
-        ix = insert_split_key(mp->ma_keys, key_o, hash);
-        if (ix != DKIX_EMPTY) {
-            value = mp->ma_values->values[ix];
-            found = !PyValue_IsNull(value);
-            if (!found) {
-                _PyDict_InsertSplitValue(mp, key_o, default_v, ix);
-                value = default_v;
-            }
-            goto done;
+    ix = _Py_dict_lookup(mp, key_value, hash, &value);
+    if (ix == DKIX_ERROR) {
+        if (result) {
+            *result = PyValue_NULL;
         }
-        // No space in shared keys. Go to insert_combined_dict() below.
-    }
-    else {
-        ix = _Py_dict_lookup(mp, key_value, hash, &value);
-        if (ix == DKIX_ERROR) {
-            if (result) {
-                *result = PyValue_NULL;
-            }
-            return -1;
-        }
+        return -1;
     }
 
     if (ix == DKIX_EMPTY) {
@@ -4365,7 +3874,6 @@ dict_setdefault_value_lock_held(PyObject *d, PyValue key, PyValue default_value,
 
     assert(!PyValue_IsNull(value));
     found = 1;
-done:
     ASSERT_CONSISTENT(mp);
     if (result) {
         *result = value;
@@ -4514,13 +4022,6 @@ dict_popitem_impl(PyDictObject *self)
         PyErr_SetString(PyExc_KeyError, "popitem(): dictionary is empty");
         return NULL;
     }
-    /* Convert split table to combined table */
-    if (_PyDict_HasSplitTable(self)) {
-        if (dictresize(self, DK_LOG_SIZE(self->ma_keys), 1) < 0) {
-            Py_DECREF(res);
-            return NULL;
-        }
-    }
     FT_ATOMIC_STORE_UINT32_RELAXED(self->ma_keys->dk_version, 0);
 
     /* Pop last item */
@@ -4580,22 +4081,12 @@ dict_traverse(PyObject *op, visitproc visit, void *arg)
     Py_ssize_t i, n = keys->dk_nentries;
 
     /* The keys of a unicode-keyed table are strings, which the cycle
-       collector ignores, but the tracing collector must see them.  A split
-       table's keys are shared and owned by the keys object; visiting them
-       from each dict is harmless for both collectors. */
+       collector ignores, but the tracing collector must see them. */
     if (DK_IS_UNICODE(keys)) {
         PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-        if (_PyDict_HasSplitTable(mp)) {
-            for (i = 0; i < n; i++) {
-                _Py_VISIT_ATOMIC(entries[i].me_key);
-                _Py_VISIT_VALUE(mp->ma_values->values[i]);
-            }
-        }
-        else {
-            for (i = 0; i < n; i++) {
-                _Py_VISIT_ATOMIC(entries[i].me_key);
-                _Py_VISIT_VALUE(entries[i].me_value);
-            }
+        for (i = 0; i < n; i++) {
+            _Py_VISIT_ATOMIC(entries[i].me_key);
+            _Py_VISIT_VALUE(entries[i].me_value);
         }
     }
     else {
@@ -4624,12 +4115,7 @@ _PyDict_SizeOf_LockHeld(PyDictObject *mp)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(mp);
 
-    size_t res = _PyObject_SIZE(Py_TYPE(mp));
-    if (_PyDict_HasSplitTable(mp)) {
-        res += shared_keys_usable_size(mp->ma_keys) * sizeof(PyValue);
-    }
-    /* If the dictionary is split, the keys portion is accounted-for
-       in the type object. */
+    size_t res = _PyObject_InstanceSize((PyObject *)mp);
     if (mp->ma_keys->dk_refcnt == 1) {
         res += _PyDict_KeysSize(mp->ma_keys);
     }
@@ -4866,7 +4352,6 @@ anydict_new_untracked(PyTypeObject *type)
     // We don't inc ref empty keys because they're immortal
     assert((Py_EMPTY_KEYS)->dk_refcnt == _Py_DICT_IMMORTAL_INITIAL_REFCNT);
     d->ma_keys = Py_EMPTY_KEYS;
-    d->ma_values = NULL;
     ASSERT_CONSISTENT(d);
     return self;
 }
@@ -5127,12 +4612,7 @@ dictiter_new(PyDictObject *dict, PyTypeObject *itertype)
     if (itertype == &PyDictRevIterKey_Type ||
          itertype == &PyDictRevIterItem_Type ||
          itertype == &PyDictRevIterValue_Type) {
-        if (_PyDict_HasSplitTable(dict)) {
-            di->di_pos = used - 1;
-        }
-        else {
-            di->di_pos = load_keys_nentries(dict) - 1;
-        }
+        di->di_pos = load_keys_nentries(dict) - 1;
     }
     else {
         di->di_pos = 0;
@@ -5208,35 +4688,26 @@ dictiter_iternextkey_lock_held(PyDictObject *d, PyObject *self)
     i = di->di_pos;
     k = d->ma_keys;
     assert(i >= 0);
-    if (_PyDict_HasSplitTable(d)) {
-        if (i >= d->ma_used)
+    Py_ssize_t n = k->dk_nentries;
+    if (DK_IS_UNICODE(k)) {
+        PyDictUnicodeEntry *entry_ptr = &DK_UNICODE_ENTRIES(k)[i];
+        while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
+            entry_ptr++;
+            i++;
+        }
+        if (i >= n)
             goto fail;
-        int index = get_index_from_order(d, i);
-        key = PyValue_FromObject(LOAD_SHARED_KEY(DK_UNICODE_ENTRIES(k)[index].me_key));
-        assert(!PyValue_IsNull(d->ma_values->values[index]));
+        key = PyValue_FromObject(entry_ptr->me_key);
     }
     else {
-        Py_ssize_t n = k->dk_nentries;
-        if (DK_IS_UNICODE(k)) {
-            PyDictUnicodeEntry *entry_ptr = &DK_UNICODE_ENTRIES(k)[i];
-            while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
-                entry_ptr++;
-                i++;
-            }
-            if (i >= n)
-                goto fail;
-            key = PyValue_FromObject(entry_ptr->me_key);
+        PyDictKeyEntry *entry_ptr = &DK_ENTRIES(k)[i];
+        while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
+            entry_ptr++;
+            i++;
         }
-        else {
-            PyDictKeyEntry *entry_ptr = &DK_ENTRIES(k)[i];
-            while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
-                entry_ptr++;
-                i++;
-            }
-            if (i >= n)
-                goto fail;
-            key = entry_ptr->me_key;
-        }
+        if (i >= n)
+            goto fail;
+        key = entry_ptr->me_key;
     }
     // We found an element (key), but did not expect it
     if (di->len == 0) {
@@ -5321,35 +4792,26 @@ dictiter_iternextvalue_lock_held(PyDictObject *d, PyObject *self)
 
     i = di->di_pos;
     assert(i >= 0);
-    if (_PyDict_HasSplitTable(d)) {
-        if (i >= d->ma_used)
+    Py_ssize_t n = d->ma_keys->dk_nentries;
+    if (DK_IS_UNICODE(d->ma_keys)) {
+        PyDictUnicodeEntry *entry_ptr = &DK_UNICODE_ENTRIES(d->ma_keys)[i];
+        while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
+            entry_ptr++;
+            i++;
+        }
+        if (i >= n)
             goto fail;
-        int index = get_index_from_order(d, i);
-        value = d->ma_values->values[index];
-        assert(!PyValue_IsNull(value));
+        value = entry_ptr->me_value;
     }
     else {
-        Py_ssize_t n = d->ma_keys->dk_nentries;
-        if (DK_IS_UNICODE(d->ma_keys)) {
-            PyDictUnicodeEntry *entry_ptr = &DK_UNICODE_ENTRIES(d->ma_keys)[i];
-            while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
-                entry_ptr++;
-                i++;
-            }
-            if (i >= n)
-                goto fail;
-            value = entry_ptr->me_value;
+        PyDictKeyEntry *entry_ptr = &DK_ENTRIES(d->ma_keys)[i];
+        while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
+            entry_ptr++;
+            i++;
         }
-        else {
-            PyDictKeyEntry *entry_ptr = &DK_ENTRIES(d->ma_keys)[i];
-            while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
-                entry_ptr++;
-                i++;
-            }
-            if (i >= n)
-                goto fail;
-            value = entry_ptr->me_value;
-        }
+        if (i >= n)
+            goto fail;
+        value = entry_ptr->me_value;
     }
     // We found an element, but did not expect it
     if (di->len == 0) {
@@ -5434,38 +4896,28 @@ dictiter_iternextitem_lock_held(PyDictObject *d, PyObject *self,
     i = FT_ATOMIC_LOAD_SSIZE_RELAXED(di->di_pos);
 
     assert(i >= 0);
-    if (_PyDict_HasSplitTable(d)) {
-        if (i >= d->ma_used)
+    Py_ssize_t n = d->ma_keys->dk_nentries;
+    if (DK_IS_UNICODE(d->ma_keys)) {
+        PyDictUnicodeEntry *entry_ptr = &DK_UNICODE_ENTRIES(d->ma_keys)[i];
+        while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
+            entry_ptr++;
+            i++;
+        }
+        if (i >= n)
             goto fail;
-        int index = get_index_from_order(d, i);
-        key = PyValue_FromObject(LOAD_SHARED_KEY(DK_UNICODE_ENTRIES(d->ma_keys)[index].me_key));
-        value = d->ma_values->values[index];
-        assert(!PyValue_IsNull(value));
+        key = PyValue_FromObject(entry_ptr->me_key);
+        value = entry_ptr->me_value;
     }
     else {
-        Py_ssize_t n = d->ma_keys->dk_nentries;
-        if (DK_IS_UNICODE(d->ma_keys)) {
-            PyDictUnicodeEntry *entry_ptr = &DK_UNICODE_ENTRIES(d->ma_keys)[i];
-            while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
-                entry_ptr++;
-                i++;
-            }
-            if (i >= n)
-                goto fail;
-            key = PyValue_FromObject(entry_ptr->me_key);
-            value = entry_ptr->me_value;
+        PyDictKeyEntry *entry_ptr = &DK_ENTRIES(d->ma_keys)[i];
+        while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
+            entry_ptr++;
+            i++;
         }
-        else {
-            PyDictKeyEntry *entry_ptr = &DK_ENTRIES(d->ma_keys)[i];
-            while (i < n && PyValue_IsNull(entry_ptr->me_value)) {
-                entry_ptr++;
-                i++;
-            }
-            if (i >= n)
-                goto fail;
-            key = entry_ptr->me_key;
-            value = entry_ptr->me_value;
-        }
+        if (i >= n)
+            goto fail;
+        key = entry_ptr->me_key;
+        value = entry_ptr->me_value;
     }
     // We found an element, but did not expect it
     if (di->len == 0) {
@@ -5564,38 +5016,30 @@ dictreviter_iter_lock_held(PyDictObject *d, PyObject *self)
     if (i < 0) {
         goto fail;
     }
-    if (_PyDict_HasSplitTable(d)) {
-        int index = get_index_from_order(d, i);
-        key = PyValue_FromObject(LOAD_SHARED_KEY(DK_UNICODE_ENTRIES(k)[index].me_key));
-        value = d->ma_values->values[index];
-        assert(!PyValue_IsNull(value));
+    if (i >= k->dk_nentries) {
+        goto fail;
+    }
+    if (DK_IS_UNICODE(k)) {
+        PyDictUnicodeEntry *entry_ptr = &DK_UNICODE_ENTRIES(k)[i];
+        while (PyValue_IsNull(entry_ptr->me_value)) {
+            if (--i < 0) {
+                goto fail;
+            }
+            entry_ptr--;
+        }
+        key = PyValue_FromObject(entry_ptr->me_key);
+        value = entry_ptr->me_value;
     }
     else {
-        if (i >= k->dk_nentries) {
-            goto fail;
-        }
-        if (DK_IS_UNICODE(k)) {
-            PyDictUnicodeEntry *entry_ptr = &DK_UNICODE_ENTRIES(k)[i];
-            while (PyValue_IsNull(entry_ptr->me_value)) {
-                if (--i < 0) {
-                    goto fail;
-                }
-                entry_ptr--;
+        PyDictKeyEntry *entry_ptr = &DK_ENTRIES(k)[i];
+        while (PyValue_IsNull(entry_ptr->me_value)) {
+            if (--i < 0) {
+                goto fail;
             }
-            key = PyValue_FromObject(entry_ptr->me_key);
-            value = entry_ptr->me_value;
+            entry_ptr--;
         }
-        else {
-            PyDictKeyEntry *entry_ptr = &DK_ENTRIES(k)[i];
-            while (PyValue_IsNull(entry_ptr->me_value)) {
-                if (--i < 0) {
-                    goto fail;
-                }
-                entry_ptr--;
-            }
-            key = entry_ptr->me_key;
-            value = entry_ptr->me_value;
-        }
+        key = entry_ptr->me_key;
+        value = entry_ptr->me_value;
     }
     // We found an element, but did not expect it
     if (di->len == 0) {
@@ -6553,195 +5997,6 @@ dictvalues_reversed(PyObject *self, PyObject *Py_UNUSED(ignored))
 }
 
 
-#ifndef NDEBUG
-/* The shape of an object with valid inline values and no dict is the path of
-   its insertion order from the root. */
-static int
-shape_matches_order(PyObject *obj, PyDictValues *values)
-{
-    _PyShape *shape = _PyObject_SHAPE(obj);
-    if (_PyShape_IsDictMode(shape)) {
-        return 1;
-    }
-    uint8_t *order = get_insertion_order_array(values);
-    for (int i = values->size - 1; i >= 0; i--) {
-        if (shape->shape_kind != _Py_SHAPE_ADD || shape->edge_slot != order[i]) {
-            return 0;
-        }
-        shape = shape->parent;
-    }
-    return shape == _Py_TYPE_ROOT_SHAPE(Py_TYPE(obj));
-}
-#endif
-
-static void
-shape_after_delete(PyObject *obj, PyDictValues *values)
-{
-    if (_PyShape_IsDictMode(_PyObject_SHAPE(obj))) {
-        return;
-    }
-    // The attributes left, in their insertion order, are the path of the
-    // new shape from the root.
-    _PyShape *shape = _Py_TYPE_ROOT_SHAPE(Py_TYPE(obj));
-    uint8_t *order = get_insertion_order_array(values);
-    for (int i = 0; i < values->size && shape != NULL; i++) {
-        shape = _PyShape_Add(shape, order[i]);
-    }
-    if (shape == NULL) {
-        _PyObject_SetDictModeShape(obj);
-    }
-    else {
-        _PyObject_SetShape(obj, shape);
-    }
-    assert(shape_matches_order(obj, values));
-}
-
-/* Returns NULL if cannot allocate a new PyDictKeysObject,
-   but does not set an error */
-PyDictKeysObject *
-_PyDict_NewKeysForClass(PyHeapTypeObject *cls)
-{
-    int log2_bytes = get_log2_bytes(NEXT_LOG2_SHARED_KEYS_MAX_SIZE);
-    Py_ssize_t usable = USABLE_FRACTION((size_t)1<<NEXT_LOG2_SHARED_KEYS_MAX_SIZE);
-
-    struct _instancekeysobject *shared_keys =
-                          PyMem_Malloc(sizeof(struct _instancekeysobject)
-                          + ((size_t)1 << log2_bytes)
-                          + sizeof(PyDictUnicodeEntry) * usable);
-    if (shared_keys == NULL) {
-        PyErr_Clear();
-        return NULL;
-    }
-
-    shared_keys->dsk_owning_type = (PyTypeObject *)cls;
-    PyDictKeysObject* keys = &shared_keys->dsk_keys;
-    init_keys_object(keys, NEXT_LOG2_SHARED_KEYS_MAX_SIZE, log2_bytes, DICT_KEYS_SPLIT,
-                     SHARED_KEYS_MAX_SIZE, sizeof(PyDictUnicodeEntry));
-    assert(keys->dk_nentries == 0);
-    /* Set to max size+1 as it will shrink by one before each new object */
-    if (cls->ht_type.tp_dict) {
-        PyObject *attrs = PyDict_GetItem(cls->ht_type.tp_dict, &_Py_ID(__static_attributes__));
-        if (attrs != NULL && PyTuple_Check(attrs)) {
-            for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(attrs); i++) {
-                PyObject *key = PyTuple_GET_ITEM(attrs, i);
-                Py_hash_t hash;
-                if (PyUnicode_CheckExact(key) && (hash = unicode_get_hash(key)) != -1) {
-                    if (insert_split_key(keys, key, hash) == DKIX_EMPTY) {
-                        break;
-                    }
-                }
-            }
-        }
-    }
-    return keys;
-}
-
-/* Visit the keys of a class's shared keys object, which instances with
-   inline values use without a dict; for the tracing collector. */
-int
-_PyDict_TraverseKeysForClass(PyHeapTypeObject *cls, visitproc visit, void *arg)
-{
-    PyDictKeysObject *keys = cls->ht_cached_keys;
-    if (keys == NULL) {
-        return 0;
-    }
-    assert(DK_IS_UNICODE(keys));
-    PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-    Py_ssize_t n = keys->dk_nentries;
-    for (Py_ssize_t i = 0; i < n; i++) {
-        _Py_VISIT_ATOMIC(entries[i].me_key);
-    }
-    return 0;
-}
-
-void
-_PyDict_RemoveKeysForClass(PyHeapTypeObject *cls)
-{
-    struct _instancekeysobject *shared_keys = _PyDictKeys_AsSharedKeys(cls->ht_cached_keys);
-    FT_ATOMIC_STORE_PTR_RELEASE(shared_keys->dsk_owning_type, NULL);
-
-    _PyDictKeys_DecRef(cls->ht_cached_keys);
-}
-
-void
-_PyObject_InitInlineValues(PyObject *obj, PyTypeObject *tp)
-{
-    assert(tp->tp_flags & Py_TPFLAGS_HEAPTYPE);
-    assert(tp->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-    assert(tp->tp_flags & Py_TPFLAGS_MANAGED_DICT);
-    PyDictKeysObject *keys = CACHED_KEYS(tp);
-    assert(keys != NULL);
-    OBJECT_STAT_INC(inline_values);
-    if (keys->dk_usable > 1) {
-        keys->dk_usable--;
-    }
-    size_t size = shared_keys_usable_size(keys);
-    PyDictValues *values = _PyObject_InlineValues(obj);
-    assert(size < 256);
-    values->capacity = (uint8_t)size;
-    values->size = 0;
-    values->embedded = 1;
-    values->valid = 1;
-    _PyObject_SetShape(obj, _Py_TYPE_ROOT_SHAPE(tp));
-    for (size_t i = 0; i < size; i++) {
-        values->values[i] = PyValue_NULL;
-    }
-    _PyObject_ManagedDictPointer(obj)->dict = NULL;
-}
-
-static PyDictObject *
-make_dict_from_instance_attributes(PyDictKeysObject *keys, PyDictValues *values)
-{
-    dictkeys_incref(keys);
-    Py_ssize_t used = 0;
-    size_t size = shared_keys_usable_size(keys);
-    for (size_t i = 0; i < size; i++) {
-        if (!PyValue_IsNull(values->values[i])) {
-            used += 1;
-        }
-    }
-    PyDictObject *res = (PyDictObject *)new_dict(keys, values, used, 0);
-    return res;
-}
-
-PyDictObject *
-_PyObject_MaterializeManagedDict_LockHeld(PyObject *obj)
-{
-    ASSERT_WORLD_STOPPED_OR_OBJ_LOCKED(obj);
-
-    OBJECT_STAT_INC(dict_materialized_on_request);
-
-    PyDictValues *values = _PyObject_InlineValues(obj);
-    PyDictObject *dict;
-    if (values->valid) {
-        PyDictKeysObject *keys = CACHED_KEYS(Py_TYPE(obj));
-        dict = make_dict_from_instance_attributes(keys, values);
-        // The dict can change the values behind the shape's back.
-        _PyObject_SetDictModeShape(obj);
-    }
-    else {
-        dict = (PyDictObject *)PyDict_New();
-    }
-    FT_ATOMIC_STORE_PTR_RELEASE(_PyObject_ManagedDictPointer(obj)->dict,
-                                dict);
-    return dict;
-}
-
-PyDictObject *
-_PyObject_MaterializeManagedDict(PyObject *obj)
-{
-    PyDictObject *dict = _PyObject_GetManagedDict(obj);
-    if (dict != NULL) {
-        return dict;
-    }
-
-    Py_BEGIN_CRITICAL_SECTION(obj);
-
-    dict = _PyObject_MaterializeManagedDict_LockHeld(obj);
-
-    Py_END_CRITICAL_SECTION();
-    return dict;
-}
 
 int
 _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyValue value)
@@ -6773,465 +6028,15 @@ _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyValue value)
     }
 }
 
-// Called with either the object's lock or the dict's lock held
-// depending on whether or not a dict has been materialized for
-// the object.
-static int
-store_instance_attr_lock_held(PyObject *obj, PyDictValues *values,
-                              PyObject *name, PyValue value)
-{
-    PyDictKeysObject *keys = CACHED_KEYS(Py_TYPE(obj));
-    assert(keys != NULL);
-    assert(values != NULL);
-    assert(Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-    Py_ssize_t ix = DKIX_EMPTY;
-    PyDictObject *dict = _PyObject_GetManagedDict(obj);
-    assert(dict == NULL || ((PyDictObject *)dict)->ma_values == values);
-    if (PyUnicode_CheckExact(name)) {
-        Py_hash_t hash = unicode_get_hash(name);
-        if (hash == -1) {
-            hash = PyUnicode_Type.tp_hash(name);
-            assert(hash != -1);
-        }
-
-        ix = insert_split_key(keys, name, hash);
-
-#ifdef Py_STATS
-        if (ix == DKIX_EMPTY) {
-            if (PyUnicode_CheckExact(name)) {
-                if (shared_keys_usable_size(keys) == SHARED_KEYS_MAX_SIZE) {
-                    OBJECT_STAT_INC(dict_materialized_too_big);
-                }
-                else {
-                    OBJECT_STAT_INC(dict_materialized_new_key);
-                }
-            }
-            else {
-                OBJECT_STAT_INC(dict_materialized_str_subclass);
-            }
-        }
-#endif
-    }
-
-    if (ix == DKIX_EMPTY) {
-        int res;
-        if (dict == NULL) {
-            // Make the dict but don't publish it in the object
-            // so that no one else will see it.
-            dict = make_dict_from_instance_attributes(keys, values);
-            if (dict == NULL ||
-                _PyDict_SetItem_LockHeld(dict, name, value) < 0) {
-                Py_XDECREF(dict);
-                return -1;
-            }
-
-            FT_ATOMIC_STORE_PTR_RELEASE(_PyObject_ManagedDictPointer(obj)->dict,
-                                        (PyDictObject *)dict);
-            _PyObject_SetDictModeShape(obj);
-            return 0;
-        }
-
-        _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(dict);
-
-        res = _PyDict_SetItem_LockHeld(dict, name, value);
-        return res;
-    }
-
-    PyValue old_value = values->values[ix];
-    if (PyValue_IsNull(old_value) && PyValue_IsNull(value)) {
-        PyErr_Format(PyExc_AttributeError,
-                        "'%.100s' object has no attribute '%U'",
-                        Py_TYPE(obj)->tp_name, name);
-        (void)_PyObject_SetAttributeErrorContext(obj, name);
-        return -1;
-    }
-
-    if (dict) {
-        PyDict_WatchEvent event = (PyValue_IsNull(old_value) ? PyDict_EVENT_ADDED :
-                                   PyValue_IsNull(value) ? PyDict_EVENT_DELETED :
-                                   PyDict_EVENT_MODIFIED);
-        _PyDict_NotifyEvent(event, dict, PyValue_FromObject(name),
-                            value);
-    }
-
-    values->values[ix] = value;
-
-    if (PyValue_IsNull(old_value)) {
-        _PyDictValues_AddToInsertionOrder(values, ix);
-        _PyObject_ShapeAfterAdd(obj, ix);
-        assert(dict != NULL || shape_matches_order(obj, values));
-        if (dict) {
-            assert(dict->ma_values == values);
-            STORE_USED(dict, dict->ma_used + 1);
-        }
-    }
-    else {
-        if (PyValue_IsNull(value)) {
-            delete_index_from_values(values, ix);
-            shape_after_delete(obj, values);
-            if (dict) {
-                assert(dict->ma_values == values);
-                STORE_USED(dict, dict->ma_used - 1);
-            }
-        }
-    }
-    return 0;
-}
-
-static inline int
-store_instance_attr_dict(PyObject *obj, PyDictObject *dict, PyObject *name, PyValue value)
-{
-    PyDictValues *values = _PyObject_InlineValues(obj);
-    int res;
-    Py_BEGIN_CRITICAL_SECTION(dict);
-    if (dict->ma_values == values) {
-        res = store_instance_attr_lock_held(obj, values, name, value);
-    }
-    else {
-        res = _PyDict_SetItem_LockHeld(dict, name, value);
-    }
-    Py_END_CRITICAL_SECTION();
-    return res;
-}
-
-int
-_PyObject_StoreInstanceAttribute(PyObject *obj, PyObject *name, PyValue value)
-{
-    PyDictValues *values = _PyObject_InlineValues(obj);
-    if (!FT_ATOMIC_LOAD_UINT8(values->valid)) {
-        PyDictObject *dict;
-        int res;
-        dict = _PyObject_GetManagedDict(obj);
-        Py_XINCREF(dict);
-        if (dict == NULL) {
-            dict = (PyDictObject *)PyObject_GenericGetDict(obj, NULL);
-            if (dict == NULL) {
-                return -1;
-            }
-        }
-        res = store_instance_attr_dict(obj, dict, name, value);
-        Py_DECREF(dict);
-        return res;
-    }
-
-    return store_instance_attr_lock_held(obj, values, name, value);
-}
-
-/* Sanity check for managed dicts */
-#if 0
-#define CHECK(val) assert(val); if (!(val)) { return 0; }
-
-int
-_PyObject_ManagedDictValidityCheck(PyObject *obj)
-{
-    PyTypeObject *tp = Py_TYPE(obj);
-    CHECK(tp->tp_flags & Py_TPFLAGS_MANAGED_DICT);
-    PyManagedDictPointer *managed_dict = _PyObject_ManagedDictPointer(obj);
-    if (_PyManagedDictPointer_IsValues(*managed_dict)) {
-        PyDictValues *values = _PyManagedDictPointer_GetValues(*managed_dict);
-        int size = ((uint8_t *)values)[-2];
-        int count = 0;
-        PyDictKeysObject *keys = CACHED_KEYS(tp);
-        for (Py_ssize_t i = 0; i < keys->dk_nentries; i++) {
-            if (!PyValue_IsNull(values->values[i])) {
-                count++;
-            }
-        }
-        CHECK(size == count);
-    }
-    else {
-        if (managed_dict->dict != NULL) {
-            CHECK(PyDict_Check(managed_dict->dict));
-        }
-    }
-    return 1;
-}
-#endif
-
-// Attempts to get an instance attribute from the inline values. Returns true
-// if successful, or false if the caller needs to lookup in the dictionary.
-bool
-_PyObject_TryGetInstanceAttributeValue(PyObject *obj, PyObject *name,
-                                       PyValue *attr)
-{
-    assert(PyUnicode_CheckExact(name));
-    PyDictValues *values = _PyObject_InlineValues(obj);
-    if (!FT_ATOMIC_LOAD_UINT8(values->valid)) {
-        return false;
-    }
-
-    PyDictKeysObject *keys = CACHED_KEYS(Py_TYPE(obj));
-    assert(keys != NULL);
-    Py_ssize_t ix = _PyDictKeys_StringLookupSplit(keys, name);
-    *attr = ix == DKIX_EMPTY ? PyValue_NULL : values->values[ix];
-    return true;
-}
-
-bool
-_PyObject_TryGetInstanceAttribute(PyObject *obj, PyObject *name, PyObject **attr)
-{
-    PyValue value;
-    if (!_PyObject_TryGetInstanceAttributeValue(obj, name, &value)) {
-        return false;
-    }
-    // NULL means missing, so a box that cannot be made aborts.
-    *attr = _PyValue_ObjectOrAbort(value, "_PyObject_TryGetInstanceAttribute");
-    return true;
-}
-
-int
-_PyObject_IsInstanceDictEmpty(PyObject *obj)
-{
-    PyTypeObject *tp = Py_TYPE(obj);
-    if (tp->tp_dictoffset == 0) {
-        return 1;
-    }
-    PyDictObject *dict;
-    if (tp->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-        PyDictValues *values = _PyObject_InlineValues(obj);
-        if (FT_ATOMIC_LOAD_UINT8(values->valid)) {
-            PyDictKeysObject *keys = CACHED_KEYS(tp);
-            for (Py_ssize_t i = 0; i < LOAD_KEYS_NENTRIES(keys); i++) {
-                if (!PyValue_IsNull(values->values[i])) {
-                    return 0;
-                }
-            }
-            return 1;
-        }
-        dict = _PyObject_GetManagedDict(obj);
-    }
-    else if (tp->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
-        dict = _PyObject_GetManagedDict(obj);
-    }
-    else {
-        PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
-        dict = (PyDictObject *)*dictptr;
-    }
-    if (dict == NULL) {
-        return 1;
-    }
-    return GET_USED((PyDictObject *)dict) == 0;
-}
-
-int
-PyObject_VisitManagedDict(PyObject *obj, visitproc visit, void *arg)
-{
-    PyTypeObject *tp = Py_TYPE(obj);
-    if((tp->tp_flags & Py_TPFLAGS_MANAGED_DICT) == 0) {
-        return 0;
-    }
-    PyDictObject *dict = _PyObject_ManagedDictPointer(obj)->dict;
-    if (dict != NULL) {
-        // GH-130327: If there's a managed dictionary available, we should
-        // *always* traverse it. The dict is responsible for traversing the
-        // inline values if it points to them.
-        Py_VISIT(dict);
-    }
-    else if (tp->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-        PyDictValues *values = _PyObject_InlineValues(obj);
-        if (values->valid) {
-            for (Py_ssize_t i = 0; i < values->capacity; i++) {
-                _Py_VISIT_VALUE(values->values[i]);
-            }
-        }
-    }
-    return 0;
-}
-
-static void
-clear_inline_values(PyObject *obj)
-{
-    PyDictValues *values = _PyObject_InlineValues(obj);
-    if (values->valid) {
-        FT_ATOMIC_STORE_UINT8(values->valid, 0);
-        _PyObject_SetDictModeShape(obj);
-        _PyValue_ClearArray(values->values, values->capacity);
-    }
-}
-
-static void
-set_dict_inline_values(PyObject *obj, PyDictObject *new_dict)
-{
-    _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(obj);
-
-    Py_XINCREF(new_dict);
-    FT_ATOMIC_STORE_PTR(_PyObject_ManagedDictPointer(obj)->dict, new_dict);
-
-    clear_inline_values(obj);
-}
-
-
-static void
-decref_maybe_delay(PyObject *obj, bool delay)
-{
-    if (!delay) {
-        Py_XDECREF(obj);
-    }
-}
-
-int
-_PyObject_SetManagedDict(PyObject *obj, PyObject *new_dict)
-{
-    assert(Py_TYPE(obj)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
-#ifndef NDEBUG
-    Py_BEGIN_CRITICAL_SECTION(obj);
-    assert(_PyObject_InlineValuesConsistencyCheck(obj));
-    Py_END_CRITICAL_SECTION();
-#endif
-    int err = 0;
-    PyTypeObject *tp = Py_TYPE(obj);
-    if (tp->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-        PyDictObject *dict = _PyObject_GetManagedDict(obj);
-        if (dict == NULL) {
-            set_dict_inline_values(obj, (PyDictObject *)new_dict);
-            return 0;
-        }
-        if (_PyDict_DetachFromObject(dict, obj) == 0) {
-            _PyObject_ManagedDictPointer(obj)->dict = (PyDictObject *)Py_XNewRef(new_dict);
-            Py_DECREF(dict);
-            return 0;
-        }
-        assert(new_dict == NULL);
-        return -1;
-    }
-    else {
-        PyDictObject *dict;
-
-        Py_BEGIN_CRITICAL_SECTION(obj);
-
-        dict = _PyObject_ManagedDictPointer(obj)->dict;
-
-        FT_ATOMIC_STORE_PTR(_PyObject_ManagedDictPointer(obj)->dict,
-                            (PyDictObject *)Py_XNewRef(new_dict));
-
-        Py_END_CRITICAL_SECTION();
-        decref_maybe_delay((PyObject *)dict, true);
-    }
-    assert(_PyObject_InlineValuesConsistencyCheck(obj));
-    return err;
-}
-
-static int
-detach_dict_from_object(PyDictObject *mp, PyObject *obj)
-{
-    assert(_PyObject_ManagedDictPointer(obj)->dict == mp);
-    assert(_PyObject_InlineValuesConsistencyCheck(obj));
-
-    if (FT_ATOMIC_LOAD_PTR_RELAXED(mp->ma_values) != _PyObject_InlineValues(obj)) {
-        return 0;
-    }
-
-    // We could be called with an unlocked dict when the caller knows the
-    // values are already detached, so we assert after inline values check.
-    ASSERT_WORLD_STOPPED_OR_OBJ_LOCKED(mp);
-    assert(mp->ma_values->embedded == 1);
-    assert(mp->ma_values->valid == 1);
-    assert(Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-
-    PyDictValues *values = copy_values(mp->ma_values);
-
-    if (values == NULL) {
-        PyErr_NoMemory();
-        return -1;
-    }
-    mp->ma_values = values;
-
-    assert(_PyShape_IsDictMode(_PyObject_SHAPE(obj)));
-    invalidate_and_clear_inline_values(_PyObject_InlineValues(obj));
-
-    assert(_PyObject_InlineValuesConsistencyCheck(obj));
-    ASSERT_CONSISTENT(mp);
-    return 0;
-}
-
-
-void
-PyObject_ClearManagedDict(PyObject *obj)
-{
-    // This is called when the object is being freed or cleared
-    // by the GC and therefore known to have no references.
-    if (Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-        PyDictObject *dict = _PyObject_GetManagedDict(obj);
-        if (dict == NULL) {
-            // We have no materialized dictionary and inline values
-            // that just need to be cleared.
-            // No dict to clear, we're done
-            clear_inline_values(obj);
-            return;
-        }
-        if (FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_values) ==
-                    _PyObject_InlineValues(obj)) {
-            // We have a materialized object which points at the inline
-            // values. We need to materialize the keys. Nothing can modify
-            // this object, but we need to lock the dictionary.
-            int err;
-            Py_BEGIN_CRITICAL_SECTION(dict);
-            err = detach_dict_from_object(dict, obj);
-            Py_END_CRITICAL_SECTION();
-
-            if (err) {
-                /* Must be out of memory */
-                assert(PyErr_Occurred() == PyExc_MemoryError);
-                PyErr_FormatUnraisable("Exception ignored while "
-                                       "clearing an object managed dict");
-                /* Clear the dict */
-                Py_BEGIN_CRITICAL_SECTION(dict);
-                PyDictKeysObject *oldkeys = dict->ma_keys;
-                set_keys(dict, Py_EMPTY_KEYS);
-                dict->ma_values = NULL;
-                dictkeys_decref(oldkeys, IS_DICT_SHARED(dict));
-                STORE_USED(dict, 0);
-                clear_inline_values(obj);
-                Py_END_CRITICAL_SECTION();
-            }
-        }
-    }
-    Py_CLEAR(_PyObject_ManagedDictPointer(obj)->dict);
-}
-
-int
-_PyDict_DetachFromObject(PyDictObject *mp, PyObject *obj)
-{
-    ASSERT_WORLD_STOPPED_OR_OBJ_LOCKED(obj);
-
-    return detach_dict_from_object(mp, obj);
-}
-
-static inline PyObject *
-ensure_managed_dict(PyObject *obj)
-{
-    PyDictObject *dict = _PyObject_GetManagedDict(obj);
-    if (dict == NULL) {
-        PyTypeObject *tp = Py_TYPE(obj);
-        if ((tp->tp_flags & Py_TPFLAGS_INLINE_VALUES) &&
-            FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(obj)->valid)) {
-            dict = _PyObject_MaterializeManagedDict(obj);
-        }
-        else {
-            dict = (PyDictObject *)new_dict_with_shared_keys(CACHED_KEYS(tp));
-            FT_ATOMIC_STORE_PTR_RELEASE(_PyObject_ManagedDictPointer(obj)->dict,
-                                        (PyDictObject *)dict);
-
-        }
-    }
-    return (PyObject *)dict;
-}
-
+/* The dict at DICTPTR, a computed dict word (tp_dictoffset), made if it is
+   NULL.  The instance dicts of inline-values types are their slot 0
+   (Objects/shapeobject.c). */
 static inline PyObject *
 ensure_nonmanaged_dict(PyObject *obj, PyObject **dictptr)
 {
-    PyDictKeysObject *cached;
-
     PyObject *dict = FT_ATOMIC_LOAD_PTR_ACQUIRE(*dictptr);
     if (dict == NULL) {
-        PyTypeObject *tp = Py_TYPE(obj);
-        if (_PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE) && (cached = CACHED_KEYS(tp))) {
-            assert(!_PyType_HasFeature(tp, Py_TPFLAGS_INLINE_VALUES));
-            dict = new_dict_with_shared_keys(cached);
-        }
-        else {
-            dict = PyDict_New();
-        }
+        dict = PyDict_New();
         FT_ATOMIC_STORE_PTR_RELEASE(*dictptr, dict);
     }
     return dict;
@@ -7241,19 +6046,17 @@ PyObject *
 PyObject_GenericGetDict(PyObject *obj, void *context)
 {
     PyTypeObject *tp = Py_TYPE(obj);
-    if (_PyType_HasFeature(tp, Py_TPFLAGS_MANAGED_DICT)) {
-        return Py_XNewRef(ensure_managed_dict(obj));
+    if (_PyType_HasFeature(tp, Py_TPFLAGS_INLINE_VALUES)) {
+        // Reading __dict__ enters dictionary mode (note 09 section 6).
+        return Py_XNewRef((PyObject *)_PyObject_EnterDictMode(obj));
     }
-    else {
-        PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
-        if (dictptr == NULL) {
-            PyErr_SetString(PyExc_AttributeError,
-                            "This object has no __dict__");
-            return NULL;
-        }
-
-        return Py_XNewRef(ensure_nonmanaged_dict(obj, dictptr));
+    PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
+    if (dictptr == NULL) {
+        PyErr_SetString(PyExc_AttributeError,
+                        "This object has no __dict__");
+        return NULL;
     }
+    return Py_XNewRef(ensure_nonmanaged_dict(obj, dictptr));
 }
 
 int
@@ -7314,7 +6117,6 @@ _PyDict_GetKeysVersionForCurrentState(PyInterpreterState *interp,
     ASSERT_DICT_LOCKED((PyObject *) dict);
     uint32_t dk_version =
         _PyDictKeys_GetVersionForCurrentState(interp, dict->ma_keys);
-    ensure_shared_on_keys_version_assignment(dict);
     return dk_version;
 }
 
@@ -7486,26 +6288,6 @@ _PyDict_SendEvent(int watcher_bits,
     }
 }
 
-#ifndef NDEBUG
-static int
-_PyObject_InlineValuesConsistencyCheck(PyObject *obj)
-{
-    if ((Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES) == 0) {
-        return 1;
-    }
-    assert(Py_TYPE(obj)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
-    PyDictObject *dict = _PyObject_GetManagedDict(obj);
-    if (dict == NULL) {
-        return 1;
-    }
-    if (dict->ma_values == _PyObject_InlineValues(obj) ||
-        _PyObject_InlineValues(obj)->valid == 0) {
-        return 1;
-    }
-    assert(0);
-    return 0;
-}
-#endif
 
 // --- frozendict implementation ---------------------------------------------
 

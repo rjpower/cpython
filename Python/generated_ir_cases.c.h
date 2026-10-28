@@ -12511,145 +12511,6 @@
             DISPATCH();
         }
 
-        TARGET(LOAD_ATTR_INSTANCE_VALUE) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = LOAD_ATTR_INSTANCE_VALUE;
-            (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
-            #endif
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_ATTR_INSTANCE_VALUE);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
-            (void)oparg;
-            PyValue owner;
-            PyValue attr;
-            PyValue o;
-            PyValue value;
-            PyValue *null;
-            // _GUARD_TYPE_VERSION
-            {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
-                uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
-                assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-            }
-            // _CHECK_MANAGED_OBJECT_HAS_VALUES
-            {
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
-                assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-                if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-            }
-            // _LOAD_ATTR_INSTANCE_VALUE
-            {
-                uint32_t offset = fb->offset;
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                attr = *(PyValue *)(((char *)owner_o) + offset);
-                if (PyValue_IsNull(attr)) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                STAT_INC(LOAD_ATTR, hit);
-                o = owner;
-            }
-            // _POP_TOP
-            {
-                value = o;
-                (void)value;
-            }
-            // _PUSH_NULL_CONDITIONAL
-            {
-                null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
-                if (oparg & 1) {
-                    null[0] = PyValue_NULL;
-                }
-            }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_DST(IR_FIELD_A(this_instr), attr);
-            DISPATCH();
-        }
-
-        TARGET(LOAD_ATTR_METHOD_LAZY_DICT) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = LOAD_ATTR_METHOD_LAZY_DICT;
-            (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
-            #endif
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_ATTR_METHOD_LAZY_DICT);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
-            (void)oparg;
-            assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            PyValue owner;
-            PyValue attr;
-            PyValue self;
-            // _GUARD_TYPE_VERSION
-            {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
-                uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
-                assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-            }
-            // _CHECK_ATTR_METHOD_LAZY_DICT
-            {
-                uint32_t dictoffset = fb->dictoffset;
-                char *ptr = ((char *)PyValue_ObjectBorrow(owner)) + MANAGED_DICT_OFFSET + dictoffset;
-                PyObject *dict = FT_ATOMIC_LOAD_PTR_ACQUIRE(*(PyObject **)ptr);
-                if (dict != NULL) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-            }
-            // _LOAD_ATTR_METHOD_LAZY_DICT
-            {
-                PyObject *descr = (PyObject *)fb->descr;
-                assert(oparg & 1);
-                STAT_INC(LOAD_ATTR, hit);
-                assert(descr != NULL);
-                assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_FromObject(descr);
-                self = owner;
-            }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), attr);
-            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), self);
-            DISPATCH();
-        }
-
         TARGET(LOAD_ATTR_METHOD_NO_DICT) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_METHOD_NO_DICT;
@@ -12702,9 +12563,9 @@
             DISPATCH();
         }
 
-        TARGET(LOAD_ATTR_METHOD_WITH_VALUES) {
+        TARGET(LOAD_ATTR_METHOD_SHAPE) {
             #if _Py_TAIL_CALL_INTERP
-            int opcode = LOAD_ATTR_METHOD_WITH_VALUES;
+            int opcode = LOAD_ATTR_METHOD_SHAPE;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
             #endif
@@ -12712,7 +12573,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_ATTR_METHOD_WITH_VALUES);
+            INSTRUCTION_STATS(LOAD_ATTR_METHOD_SHAPE);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
@@ -12720,35 +12581,34 @@
             PyValue owner;
             PyValue attr;
             PyValue self;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_SHAPE
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
-                uint32_t type_version = fb->type_version;
+                _PyShape *shape = fb->shape;
                 if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
-                assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
+                    != (uintptr_t)shape) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
             }
-            // _CHECK_MANAGED_OBJECT_HAS_VALUES
+            // _GUARD_SHAPE_VERSION
             {
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
-                assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-                if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
+                uint32_t type_version = fb->type_version;
+                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
             }
-            // _LOAD_ATTR_METHOD_WITH_VALUES
+            // _LOAD_ATTR_METHOD_SHAPE
             {
                 PyObject *descr = (PyObject *)fb->descr;
                 assert(oparg & 1);
@@ -12935,9 +12795,9 @@
             DISPATCH();
         }
 
-        TARGET(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES) {
+        TARGET(LOAD_ATTR_NONDESCRIPTOR_SHAPE) {
             #if _Py_TAIL_CALL_INTERP
-            int opcode = LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
+            int opcode = LOAD_ATTR_NONDESCRIPTOR_SHAPE;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
             #endif
@@ -12945,41 +12805,40 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES);
+            INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_SHAPE);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
             PyValue owner;
             PyValue attr;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_SHAPE
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
-                uint32_t type_version = fb->type_version;
+                _PyShape *shape = fb->shape;
                 if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
-                assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
+                    != (uintptr_t)shape) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
             }
-            // _CHECK_MANAGED_OBJECT_HAS_VALUES
+            // _GUARD_SHAPE_VERSION
             {
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
-                assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-                if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
+                uint32_t type_version = fb->type_version;
+                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
             }
-            // _LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES
+            // _LOAD_ATTR_NONDESCRIPTOR_SHAPE
             {
                 PyValue attr_value = fb->attr_value;
                 assert((oparg & 1) == 0);
@@ -13103,28 +12962,28 @@
             PyValue o;
             PyValue value;
             PyValue *null;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_SHAPE
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
-                uint32_t type_version = fb->type_version;
+                _PyShape *shape = fb->shape;
                 if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
-                assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
+                    != (uintptr_t)shape) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
             }
-            // _GUARD_SHAPE
+            // _GUARD_SHAPE_VERSION
             {
-                _PyShape *shape = fb->shape;
-                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
-                    != (uintptr_t)shape) {
+                uint32_t type_version = fb->type_version;
+                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13156,6 +13015,67 @@
             DISPATCH();
         }
 
+        TARGET(LOAD_ATTR_SHAPE_POLY) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = LOAD_ATTR_SHAPE_POLY;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_ATTR_SHAPE_POLY);
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            (void)oparg;
+            PyValue owner;
+            PyValue attr;
+            PyValue *self_or_null;
+            // _GUARD_SHAPE_POLY
+            {
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                _PyFbPoly *poly = _PyFrame_FbPoly(frame, ((_PyFbHeader *)fb));
+                if (_PyFb_ShapeRow(poly, _PyObject_SHAPE(PyValue_ObjectBorrow(owner))) < 0) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _LOAD_ATTR_SHAPE_POLY
+            {
+                self_or_null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
+                PyObject *owner_o = PyValue_ObjectBorrow(owner);
+                _PyFbPoly *poly = _PyFrame_FbPoly(frame, ((_PyFbHeader *)fb));
+                int row = _PyFb_ShapeRow(poly, _PyObject_SHAPE(owner_o));
+                assert(row >= 0);
+                STAT_INC(LOAD_ATTR, hit);
+                if (poly->handler[row] == LOAD_ATTR_SHAPE) {
+                    attr = *(PyValue *)((char *)owner_o + poly->index[row]);
+                    assert(!PyValue_IsNull(attr));
+                    if (oparg & 1) {
+                        self_or_null[0] = PyValue_NULL;
+                    }
+                }
+                else {
+                    assert(poly->handler[row] == LOAD_ATTR_METHOD_SHAPE);
+                    assert(oparg & 1);
+                    PyObject *descr = (PyObject *)poly->descr[row];
+                    assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
+                    attr = PyValue_FromObject(descr);
+                    self_or_null[0] = owner;
+                }
+            }
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            IR_STORE_DST(IR_FIELD_A(this_instr), attr);
+            DISPATCH();
+        }
+
         TARGET(LOAD_ATTR_SLOT) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_SLOT;
@@ -13175,7 +13095,7 @@
             PyValue o;
             PyValue value;
             PyValue *null;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_SHAPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
@@ -13184,9 +13104,9 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
+                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13241,18 +13161,28 @@
             PyValue o;
             PyValue value;
             PyValue *null;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_SHAPE
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
-                uint32_t type_version = fb->type_version;
+                _PyShape *shape = fb->shape;
                 if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
+                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
+                    != (uintptr_t)shape) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _GUARD_SHAPE_VERSION
+            {
+                uint32_t type_version = fb->type_version;
+                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13260,17 +13190,21 @@
             }
             // _LOAD_ATTR_WITH_HINT
             {
+                uint32_t dictoffset = fb->dictoffset;
                 uint32_t hint = fb->hint;
                 PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
-                PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
+                PyDictObject *dict = (PyDictObject *)_PyObject_DictAt(owner_o, (int32_t)dictoffset);
                 if (dict == NULL) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
+                if (!PyDict_CheckExact((PyObject *)dict)) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
                 PyDictKeysObject *dk = FT_ATOMIC_LOAD_PTR(dict->ma_keys);
-                assert(PyDict_CheckExact((PyObject *)dict));
                 if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries)) {
                     if (true) {
                         UPDATE_MISS_STATS(LOAD_ATTR);
@@ -16991,95 +16925,6 @@
             DISPATCH();
         }
 
-        TARGET(STORE_ATTR_INSTANCE_VALUE) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = STORE_ATTR_INSTANCE_VALUE;
-            (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
-            #endif
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(STORE_ATTR_INSTANCE_VALUE);
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
-            PyValue value;
-            PyValue owner;
-            PyValue o;
-            // _LOCK_OBJECT
-            {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(value))) {
-                    UPDATE_MISS_STATS(STORE_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                    JUMP_TO_PREDICTED(STORE_ATTR);
-                }
-                if (!LOCK_OBJECT(PyValue_ObjectBorrow(value))) {
-                    UPDATE_MISS_STATS(STORE_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                    JUMP_TO_PREDICTED(STORE_ATTR);
-                }
-            }
-            // _GUARD_TYPE_VERSION_LOCKED
-            {
-                owner = value;
-                uint32_t type_version = fb->type_version;
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                assert(type_version != 0);
-                PyTypeObject *tp = Py_TYPE(owner_o);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    UNLOCK_OBJECT(owner_o);
-                    if (true) {
-                        UPDATE_MISS_STATS(STORE_ATTR);
-                        assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                        JUMP_TO_PREDICTED(STORE_ATTR);
-                    }
-                }
-            }
-            // _GUARD_DORV_NO_DICT
-            {
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
-                assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-                if (_PyObject_GetManagedDict(owner_o) ||
-                    !FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
-                    UNLOCK_OBJECT(owner_o);
-                    if (true) {
-                        UPDATE_MISS_STATS(STORE_ATTR);
-                        assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                        JUMP_TO_PREDICTED(STORE_ATTR);
-                    }
-                }
-            }
-            // _STORE_ATTR_INSTANCE_VALUE
-            {
-                value = IR_SLOT(IR_FIELD_B(this_instr));
-                uint32_t offset = fb->offset;
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                STAT_INC(STORE_ATTR, hit);
-                assert(_PyObject_GetManagedDict(owner_o) == NULL);
-                PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
-                PyValue old_value = *value_ptr;
-                *value_ptr = value;
-                if (PyValue_IsNull(old_value)) {
-                    PyDictValues *values = _PyObject_InlineValues(owner_o);
-                    Py_ssize_t index = value_ptr - values->values;
-                    _PyDictValues_AddToInsertionOrder(values, index);
-                    _PyObject_ShapeAfterAdd(owner_o, index);
-                }
-                UNLOCK_OBJECT(owner_o);
-                o = owner;
-            }
-            // _POP_TOP
-            {
-                value = o;
-                (void)value;
-            }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            DISPATCH();
-        }
-
         TARGET(STORE_ATTR_NOFB) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_ATTR_NOFB;
@@ -17144,28 +16989,28 @@
             PyValue owner;
             PyValue value;
             PyValue o;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_SHAPE
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
-                uint32_t type_version = fb->type_version;
+                _PyShape *shape = fb->shape;
                 if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
-                assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
+                    != (uintptr_t)shape) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
             }
-            // _GUARD_SHAPE
+            // _GUARD_SHAPE_VERSION
             {
-                _PyShape *shape = fb->shape;
-                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
-                    != (uintptr_t)shape) {
+                uint32_t type_version = fb->type_version;
+                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
@@ -17192,9 +17037,9 @@
             DISPATCH();
         }
 
-        TARGET(STORE_ATTR_SHAPE_ADD) {
+        TARGET(STORE_ATTR_SHAPE_TRANSITION) {
             #if _Py_TAIL_CALL_INTERP
-            int opcode = STORE_ATTR_SHAPE_ADD;
+            int opcode = STORE_ATTR_SHAPE_TRANSITION;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
             #endif
@@ -17202,31 +17047,20 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(STORE_ATTR_SHAPE_ADD);
+            INSTRUCTION_STATS(STORE_ATTR_SHAPE_TRANSITION);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             PyValue owner;
             PyValue value;
             PyValue o;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_SHAPE
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
-                uint32_t type_version = fb->type_version;
+                _PyShape *shape = fb->shape;
                 if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
-                assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    UPDATE_MISS_STATS(STORE_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                    JUMP_TO_PREDICTED(STORE_ATTR);
-                }
-            }
-            // _GUARD_SHAPE
-            {
-                _PyShape *shape = fb->shape;
                 if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
                     != (uintptr_t)shape) {
                     UPDATE_MISS_STATS(STORE_ATTR);
@@ -17234,7 +17068,18 @@
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
             }
-            // _STORE_ATTR_SHAPE_ADD
+            // _GUARD_SHAPE_VERSION
+            {
+                uint32_t type_version = fb->type_version;
+                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
+            // _STORE_ATTR_SHAPE_TRANSITION
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
                 _PyShape *shape_to = fb->shape_to;
@@ -17243,8 +17088,6 @@
                 PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
                 assert(PyValue_IsNull(*value_ptr));
                 *value_ptr = value;
-                PyDictValues *values = _PyObject_InlineValues(owner_o);
-                _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
                 _PyObject_SetShape(owner_o, shape_to);
                 STAT_INC(STORE_ATTR, hit);
                 o = owner;
@@ -17274,7 +17117,7 @@
             PyValue owner;
             PyValue value;
             PyValue o;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_SHAPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
                 uint32_t type_version = fb->type_version;
@@ -17283,9 +17126,9 @@
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
+                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
@@ -17333,18 +17176,28 @@
             PyValue owner;
             PyValue value;
             PyValue o;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_SHAPE
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
-                uint32_t type_version = fb->type_version;
+                _PyShape *shape = fb->shape;
                 if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(owner));
+                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
+                    != (uintptr_t)shape) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
+            // _GUARD_SHAPE_VERSION
+            {
+                uint32_t type_version = fb->type_version;
+                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
@@ -17353,11 +17206,16 @@
             // _STORE_ATTR_WITH_HINT
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
+                uint32_t dictoffset = fb->dictoffset;
                 uint32_t hint = fb->hint;
                 PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
-                PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
+                PyDictObject *dict = (PyDictObject *)_PyObject_DictAt(owner_o, (int32_t)dictoffset);
                 if (dict == NULL) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+                if (!PyDict_CheckExact((PyObject *)dict)) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
@@ -17367,7 +17225,6 @@
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                assert(PyDict_CheckExact((PyObject *)dict));
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                 PyDictKeysObject *dk = dict->ma_keys;
                 if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries) ||
@@ -17388,9 +17245,7 @@
                         JUMP_TO_PREDICTED(STORE_ATTR);
                     }
                 }
-                PyValue *value_ptr = dict->ma_values == NULL ?
-                &ep->me_value : &dict->ma_values->values[hint];
-                if (PyValue_IsNull(*value_ptr)) {
+                if (PyValue_IsNull(ep->me_value)) {
                     UNLOCK_OBJECT(dict);
                     if (true) {
                         UPDATE_MISS_STATS(STORE_ATTR);
@@ -17400,7 +17255,7 @@
                 }
                 _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, dict,
                                 PyValue_FromObject(name), value);
-                *value_ptr = value;
+                ep->me_value = value;
                 UNLOCK_OBJECT(dict);
                 STAT_INC(STORE_ATTR, hit);
                 o = owner;

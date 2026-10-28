@@ -3058,6 +3058,13 @@ awaitObject_dealloc(PyObject *op)
 }
 
 
+static int
+awaitObject_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(awaitObject_CAST(op)->ao_iterator);
+    return 0;
+}
+
 static PyObject *
 awaitObject_await(PyObject *op)
 {
@@ -3095,7 +3102,7 @@ static PyTypeObject awaitType = {
     0,                                  /* tp_as_buffer */
     0,                                  /* tp_flags */
     "C level type with tp_as_async",
-    0,                                  /* traverseproc tp_traverse */
+    awaitObject_traverse,               /* traverseproc tp_traverse */
     0,                                  /* tp_clear */
     0,                                  /* tp_richcompare */
     0,                                  /* tp_weaklistoffset */
@@ -3201,6 +3208,13 @@ generic_alias_dealloc(PyObject *op)
     Py_TYPE(self)->tp_free(self);
 }
 
+static int
+generic_alias_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(((PyGenericAliasObject *)op)->item);
+    return 0;
+}
+
 static PyValue
 generic_alias_mro_entries(PyObject *op, PyValue Py_UNUSED(bases))
 {
@@ -3220,6 +3234,7 @@ static PyTypeObject GenericAlias_Type = {
     0,
     .tp_dealloc = generic_alias_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_traverse = generic_alias_traverse,
     .tp_methods = generic_alias_methods,
 };
 

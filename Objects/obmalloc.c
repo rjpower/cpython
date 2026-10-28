@@ -980,7 +980,6 @@ _PyObject_CheckObjectHeap(PyObject *op, PyTypeObject *tp)
         switch (page->heap_tag) {
         case _Py_MIMALLOC_HEAP_OBJECT:
         case _Py_MIMALLOC_HEAP_GC:
-        case _Py_MIMALLOC_HEAP_GC_PRE:
             return;
         }
     }
@@ -1281,21 +1280,11 @@ static inline PyObject *
 gc_block_object(void *ptr)
 {
     mi_page_t *page = _mi_ptr_page(ptr);
-    size_t presize;
-    switch (page->heap_tag) {
-    case _Py_MIMALLOC_HEAP_OBJECT:
-        presize = 0;
-        break;
-    case _Py_MIMALLOC_HEAP_GC:
-        presize = 0;
-        break;
-    case _Py_MIMALLOC_HEAP_GC_PRE:
-        presize = _PyObject_MANAGED_PRE_HEADER_SIZE;
-        break;
-    default:
+    if (page->heap_tag != _Py_MIMALLOC_HEAP_OBJECT &&
+        page->heap_tag != _Py_MIMALLOC_HEAP_GC) {
         return NULL;
     }
-    PyObject *op = (PyObject *)((char *)ptr + presize);
+    PyObject *op = (PyObject *)ptr;
     return _PyGC_IsHeapObject(op) ? op : NULL;
 }
 

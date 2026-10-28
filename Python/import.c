@@ -4,6 +4,7 @@
 #include "pycore_audit.h"         // _PySys_Audit()
 #include "pycore_ceval.h"
 #include "pycore_critical_section.h"  // Py_BEGIN_CRITICAL_SECTION()
+#include "pycore_shape.h"         // _PyShape_SlotOf()
 #include "pycore_dict.h"          // _PyDict_Contains_KnownHash()
 #include "pycore_hashtable.h"     // _Py_hashtable_new_full()
 #include "pycore_import.h"        // _PyImport_BootstrapImp()
@@ -4061,14 +4062,18 @@ lazy_modules_add(PyThreadState *tstate, PyObject *name,
         }
         loaded = spec == NULL || spec == Py_None;
         if (!loaded) {
-            // Read the usual flag without callbacks or dictionary allocation.
-            // Unsupported spec representations stay conservatively tracked.
-            PyObject *initializing = NULL;
-            if ((Py_TYPE(spec)->tp_flags & Py_TPFLAGS_INLINE_VALUES) &&
-                _PyObject_TryGetInstanceAttribute(spec, &_Py_ID(_initializing), &initializing)) {
-                loaded = initializing == NULL || initializing == Py_False;
+            // Read the usual flag without callbacks or dictionary allocation:
+            // from the spec's shape slots.  Unsupported spec representations
+            // stay conservatively tracked.
+            if (Py_TYPE(spec)->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
+                _PyShape *shape = _PyObject_SHAPE(spec);
+                if (!_PyShape_IsDictMode(shape)) {
+                    Py_ssize_t ix = _PyShape_SlotOf(shape, &_Py_ID(_initializing));
+                    PyValue v = ix < 0 ? PyValue_NULL : _PyObject_Slots(spec)[ix];
+                    loaded = PyValue_IsNull(v)
+                             || PyValue_Is(v, PyValue_FromObject(Py_False));
+                }
             }
-            Py_XDECREF(initializing);
         }
         Py_XDECREF(spec);
     }

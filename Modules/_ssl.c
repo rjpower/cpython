@@ -2461,7 +2461,14 @@ _ssl__SSLSocket_owner_set_impl(PySSLSocket *self, PyObject *value)
 static int
 PySSL_traverse(PyObject *op, visitproc visit, void *arg)
 {
+    PySSLSocket *self = PySSLSocket_CAST(op);
     Py_VISIT(Py_TYPE(op));
+    /* The tracing collector frees what no traverse reaches: the weakref
+       objects and the context are owned here and nowhere else. */
+    Py_VISIT(self->Socket);
+    Py_VISIT(self->ctx);
+    Py_VISIT(self->owner);
+    Py_VISIT(self->server_hostname);
     return 0;
 }
 

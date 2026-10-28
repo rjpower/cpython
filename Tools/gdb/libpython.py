@@ -72,14 +72,6 @@ def _type_unsigned_int_ptr():
 def _sizeof_void_p():
     return gdb.lookup_type('void').pointer().sizeof
 
-def _managed_dict_offset():
-    # See pycore_object.h
-    pyobj = gdb.lookup_type("PyObject")
-    if any(field.name == "ob_ref_local" for field in pyobj.fields()):
-        return -1 * _sizeof_void_p()
-    else:
-        return -1 * _sizeof_void_p()
-
 Py_TPFLAGS_INLINE_VALUES     = (1 << 2)
 Py_TPFLAGS_MANAGED_DICT      = (1 << 4)
 Py_TPFLAGS_HEAPTYPE          = (1 << 9)
@@ -99,6 +91,8 @@ MAX_OUTPUT_LEN=1024
 
 # Include/object.h: the type pointer is the header word's bits 0-47.
 HEADER_SHAPE_MASK = (1 << 48) - 1
+# _Py_SHAPE_DICT in pycore_shape.h: the attributes are in the dict in slot 0
+SHAPE_KIND_DICT = 2
 
 hexdigits = "0123456789abcdef"
 
@@ -471,7 +465,7 @@ def _write_instance_repr(out, visited, name, pyop_attrdict, address):
     out.write(name)
 
     # Write dictionary of instance attributes:
-    if isinstance(pyop_attrdict, (PyKeysValuesPair, PyDictObjectPtr)):
+    if isinstance(pyop_attrdict, (PyShapeSlots, PyDictObjectPtr)):
         out.write('(')
         first = True
         items = pyop_attrdict.iteritems()
@@ -514,8 +508,28 @@ def _PyObject_VAR_SIZE(typeobj, nitems):
            ).cast(_PyObject_VAR_SIZE._type_size_t)
 _PyObject_VAR_SIZE._type_size_t = None
 
+def _object_shape(gdbval):
+    '''The struct _PyShape * in the header of the object at gdbval'''
+    header = int(gdbval.cast(PyObjectPtr.get_gdb_type()).dereference()['ob_header'])
+    return gdb.Value(header & HEADER_SHAPE_MASK).cast(
+        gdb.lookup_type('struct _PyShape').pointer())
+
+def _var_item_count(pyop):
+    '''The items that a computed tp_dictoffset counts, as
+    var_item_count() in Objects/object.c does: an int's digits, at least
+    one, or the absolute ob_size'''
+    if int_from_int(pyop.type().field('tp_flags')) & Py_TPFLAGS_LONG_SUBCLASS:
+        long_ptr = pyop._gdbval.cast(gdb.lookup_type('PyLongObject').pointer())
+        return max(int(long_ptr.dereference()['long_value']['lv_tag']) >> 3, 1)
+    return abs(int_from_int(pyop.field('ob_size')))
+
 class HeapTypeObjectPtr(PyObjectPtr):
     _typename = 'PyObject'
+
+    def _slots(self):
+        typeobj = self.type()
+        char_ptr = self._gdbval.cast(_type_char_ptr()) + typeobj.field('tp_basicsize')
+        return char_ptr.cast(gdb.lookup_type('PyValue').pointer())
 
     def get_attr_dict(self):
         '''
@@ -524,20 +538,18 @@ class HeapTypeObjectPtr(PyObjectPtr):
         '''
         try:
             typeobj = self.type()
+            if int_from_int(typeobj.field('tp_flags')) & Py_TPFLAGS_INLINE_VALUES:
+                # Dictionary mode keeps the dict, or NULL, in slot 0.
+                if int(_object_shape(self._gdbval)['shape_kind']) != SHAPE_KIND_DICT:
+                    return None
+                pyop_dict = PyObjectPtr.from_pyobject_ptr(self._slots()[0])
+                return None if pyop_dict.is_null() else pyop_dict
             dictoffset = int_from_int(typeobj.field('tp_dictoffset'))
             if dictoffset != 0:
                 if dictoffset < 0:
-                    if int_from_int(typeobj.field('tp_flags')) & Py_TPFLAGS_MANAGED_DICT:
-                        assert dictoffset == -1
-                        dictoffset = _managed_dict_offset()
-                    else:
-                        type_PyVarObject_ptr = gdb.lookup_type('PyVarObject').pointer()
-                        tsize = int_from_int(self._gdbval.cast(type_PyVarObject_ptr)['ob_size'])
-                        if tsize < 0:
-                            tsize = -tsize
-                        size = _PyObject_VAR_SIZE(typeobj, tsize)
-                        dictoffset += size
-                        assert dictoffset % _sizeof_void_p() == 0
+                    size = _PyObject_VAR_SIZE(typeobj, _var_item_count(self))
+                    dictoffset += int(size)
+                    assert dictoffset % _sizeof_void_p() == 0
 
                 dictptr = self._gdbval.cast(_type_char_ptr()) + dictoffset
                 PyObjectPtrPtr = PyObjectPtr.get_gdb_type().pointer()
@@ -552,25 +564,16 @@ class HeapTypeObjectPtr(PyObjectPtr):
         # Not found, or some kind of error:
         return None
 
-    def get_keys_values(self):
+    def get_shape_slots(self):
+        '''The attributes in slots, or None in dictionary mode or for a
+        type without slots'''
         typeobj = self.type()
-        has_values =  int_from_int(typeobj.field('tp_flags')) & Py_TPFLAGS_MANAGED_DICT
-        if not has_values:
+        if not int_from_int(typeobj.field('tp_flags')) & Py_TPFLAGS_INLINE_VALUES:
             return None
-        obj_ptr = self._gdbval.cast(_type_char_ptr())
-        dict_ptr_ptr = obj_ptr + _managed_dict_offset()
-        dict_ptr = dict_ptr_ptr.cast(_type_char_ptr().pointer()).dereference()
-        if int(dict_ptr):
+        shape = _object_shape(self._gdbval)
+        if int(shape['shape_kind']) == SHAPE_KIND_DICT:
             return None
-        char_ptr = obj_ptr + typeobj.field('tp_basicsize')
-        values_ptr = char_ptr.cast(gdb.lookup_type("PyDictValues").pointer())
-        values = values_ptr['values']
-        return PyKeysValuesPair(self.get_cached_keys(), values)
-
-    def get_cached_keys(self):
-        typeobj = self.type()
-        HeapTypePtr = gdb.lookup_type("PyHeapTypeObject").pointer()
-        return typeobj._gdbval.cast(HeapTypePtr)['ht_cached_keys']
+        return PyShapeSlots(shape, self._slots())
 
     def proxyval(self, visited):
         '''
@@ -584,9 +587,9 @@ class HeapTypeObjectPtr(PyObjectPtr):
             return ProxyAlreadyVisited('<...>')
         visited.add(self.as_address())
 
-        keys_values = self.get_keys_values()
-        if keys_values:
-            attr_dict = keys_values.proxyval(visited)
+        shape_slots = self.get_shape_slots()
+        if shape_slots:
+            attr_dict = shape_slots.proxyval(visited)
         else:
             pyop_attr_dict = self.get_attr_dict()
             if pyop_attr_dict:
@@ -605,7 +608,7 @@ class HeapTypeObjectPtr(PyObjectPtr):
             return
         visited.add(self.as_address())
 
-        pyop_attrs = self.get_keys_values()
+        pyop_attrs = self.get_shape_slots()
         if not pyop_attrs:
             pyop_attrs = self.get_attr_dict()
         _write_instance_repr(out, visited,
@@ -780,23 +783,23 @@ class PyCodeObjectPtr(PyObjectPtr):
         assert False, "Unreachable"
 
 
-def items_from_keys_and_values(keys, values):
-    entries, nentries = PyDictObjectPtr._get_entries(keys)
-    for i in safe_range(nentries):
-        ep = entries[i]
-        pyop_value = PyObjectPtr.from_pyobject_ptr(values[i])
-        if not pyop_value.is_null():
-            pyop_key = PyObjectPtr.from_pyobject_ptr(ep['me_key'])
-            yield (pyop_key, pyop_value)
+class PyShapeSlots:
+    '''An object's slots, named by its shape: slot i holds the attribute
+    that the shape names at i, and a hole has no name'''
 
-class PyKeysValuesPair:
-
-    def __init__(self, keys, values):
-        self.keys = keys
-        self.values = values
+    def __init__(self, shape, slots):
+        self.shape = shape
+        self.slots = slots
 
     def iteritems(self):
-        return items_from_keys_and_values(self.keys, self.values)
+        names = self.shape['slots']
+        for i in safe_range(int(self.shape['nslots'])):
+            name = names[i]['name']
+            if int(name) == 0:
+                continue
+            pyop_value = PyObjectPtr.from_pyobject_ptr(self.slots[i])
+            if not pyop_value.is_null():
+                yield (PyObjectPtr.from_pyobject_ptr(name), pyop_value)
 
     def proxyval(self, visited):
         result = {}
@@ -819,14 +822,6 @@ class PyDictObjectPtr(PyObjectPtr):
         analogous to dict.iteritems()
         '''
         keys = self.field('ma_keys')
-        values = self.field('ma_values')
-        has_values = int(values)
-        if has_values:
-            values = values['values']
-        if has_values:
-            for item in items_from_keys_and_values(keys, values):
-                yield item
-            return
         entries, nentries = self._get_entries(keys)
         for i in safe_range(nentries):
             ep = entries[i]

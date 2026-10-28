@@ -3904,6 +3904,65 @@ gc_live_roots_of(PyObject *self, PyValue arg)
         _PyGC_TraceLiveRootsOf(_PyThreadState_GET(), (uintptr_t)p)));
 }
 
+/* gc_stack_hits([addr]) -> (hits, dropped): the stack hits listed since
+   the last call (PYTHON_GCSTACKHITS=1), those of the object at addr if it
+   is given, and clears them.  Each hit is (object address, type name, word
+   address or 0 for a register, word value, frame owner, the word's offset
+   from the frame's sp, the frame's size, "stack" or "regs", collection). */
+static PyObject *
+gc_stack_hits(PyObject *self, PyObject *args)
+{
+    PyObject *addr_obj = NULL;
+    if (!PyArg_ParseTuple(args, "|O", &addr_obj)) {
+        return NULL;
+    }
+    uintptr_t addr = 0;
+    if (addr_obj != NULL) {
+        addr = (uintptr_t)PyLong_AsVoidPtr(addr_obj);
+        if (addr == 0 && PyErr_Occurred()) {
+            return NULL;
+        }
+    }
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    size_t n;
+    int64_t dropped;
+    const _PyGCStackHit *hits = _PyGC_TraceStackHits(interp, &n, &dropped);
+    PyObject *list = PyList_New(0);
+    if (list == NULL) {
+        return NULL;
+    }
+    // Building the list allocates, so a collection may list more hits and
+    // move the array: each hit is copied first, the array read again, and
+    // the hits listed meanwhile are not reported.
+    size_t count = n;
+    for (size_t i = 0; i < count; i++) {
+        _PyGCStackHit h = hits[i];
+        if (addr != 0 && h.op != addr) {
+            continue;
+        }
+        char owner[600];
+        _PyGC_TraceOwnerOf(h.pc, owner, sizeof(owner));
+        long long offset = h.word != 0 && h.pc != 0
+                           ? (long long)(h.word - h.sp) : -1;
+        long long size = h.pc != 0 ? (long long)(h.cfa - h.sp) : -1;
+        PyObject *item = Py_BuildValue(
+            "(KsKKsLLsL)", (unsigned long long)h.op, h.type_name,
+            (unsigned long long)h.word, (unsigned long long)h.value,
+            owner, offset, size,
+            h.scan_class == _PyGC_SCAN_STACK ? "stack" : "regs",
+            (long long)h.collection);
+        if (item == NULL || PyList_Append(list, item) < 0) {
+            Py_XDECREF(item);
+            Py_DECREF(list);
+            return NULL;
+        }
+        Py_DECREF(item);
+        hits = _PyGC_TraceStackHits(interp, &n, &dropped);
+    }
+    _PyGC_TraceClearStackHits(interp);
+    return Py_BuildValue("(NL)", list, (long long)dropped);
+}
+
 /* The address of the object that the live mark finds at an address, or 0. */
 static PyObject *
 gc_live_lookup(PyObject *self, PyObject *args)
@@ -4091,6 +4150,7 @@ static PyMethodDef module_functions[] = {
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
     {"gc_verify_count", gc_verify_count, METH_NOARGS},
     {"gc_live_roots_of", _PyCFunction_CAST(gc_live_roots_of), METH_O},
+    {"gc_stack_hits", gc_stack_hits, METH_VARARGS},
     {"test_value_spans", test_value_spans, METH_NOARGS},
     {"gc_frame_descriptor", _PyCFunction_CAST(gc_frame_descriptor), METH_O},
     {"gc_walk_here", gc_walk_here, METH_NOARGS},

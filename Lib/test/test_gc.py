@@ -1615,6 +1615,45 @@ class TracingCollectorTests(unittest.TestCase):
                          and "of a core frame" in line]
                 self.assertEqual(len(found), want, err)
 
+    STACK_HITS = textwrap.dedent("""
+        import gc, _testinternalcapi
+        class Probe:
+            pass
+        def func(addr):
+            gc.collect()
+            return _testinternalcapi.gc_stack_hits(addr)
+        hits, dropped = _testinternalcapi.call_with_c_local(Probe, func)
+        print(dropped, len(hits))
+        for h in hits:
+            print(*h, sep="|")
+    """)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_stack_hits(self):
+        # PYTHON_GCSTACKHITS=1 (work/10a-1.md, next to retain mode): an
+        # object held only in an opaque C frame across a collection is
+        # listed with the word that reached it and the word's frame.
+        rc, out, err = assert_python_ok("-c", self.STACK_HITS,
+                                        PYTHON_GCSTACKHITS="1")
+        lines = out.decode().splitlines()
+        dropped, n = map(int, lines[0].split())
+        self.assertEqual(dropped, 0)
+        self.assertGreater(n, 0, out)
+        for line in lines[1:]:
+            (op, type_name, word, value, owner, offset, size, kind,
+             collection) = line.split("|")
+            self.assertEqual(type_name, "Probe")
+            self.assertIn(kind, ("stack", "regs"))
+            self.assertGreater(int(collection), 0)
+            self.assertNotEqual(owner, "")
+            if kind == "stack":
+                self.assertNotEqual(int(word), 0)
+                if owner != "no frame":
+                    self.assertTrue(0 <= int(offset) < int(size), line)
+        # Off by default
+        rc, out, err = assert_python_ok("-c", self.STACK_HITS)
+        self.assertEqual(out.decode().split(), ["0", "0"])
+
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_verify_kill(self):
         # PYTHON_GCVERIFY=kill:pymem (debug builds): what only the

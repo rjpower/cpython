@@ -351,6 +351,32 @@ PyAPI_FUNC(int) _PyGC_TraceLiveRootsOf(PyThreadState *tstate, uintptr_t addr);
 PyAPI_FUNC(int) _PyGC_TraceLiveRootsOfHidden(
     PyThreadState *tstate, const volatile uintptr_t *hidden, uintptr_t mask);
 
+/* PYTHON_GCSTACKHITS=1 (work/10a-1.md, next to retain mode): which frame
+ * holds an object.  Each live mark lists every object that it reaches first
+ * from a conservatively scanned C stack or register word, the word's
+ * object first and then what the mark reaches through it, with the word
+ * and the frame that the stack walk gives the word to.  What a word reaches
+ * through a PyMem block it points to is scanned later and not listed. */
+typedef struct {
+    uintptr_t op;           // the object
+    uintptr_t word;         // the root word's address, or 0 for a register
+    uintptr_t value;        // the word: op, or the object op was reached from
+    uintptr_t pc, sp, cfa;  // the word's frame, by the walk; pc 0 if none
+    int scan_class;         // _PyGC_SCAN_STACK or _PyGC_SCAN_REGS
+    int64_t collection;     // the live mark's number, from 1
+    char type_name[48];     // op's type when it was listed
+} _PyGCStackHit;
+
+/* The hits listed since the last clear, and the number dropped for want
+ * of memory; NULL and 0 unless PYTHON_GCSTACKHITS is set.  Export for
+ * _testinternalcapi. */
+PyAPI_FUNC(const _PyGCStackHit *) _PyGC_TraceStackHits(
+    PyInterpreterState *interp, size_t *n, int64_t *dropped);
+PyAPI_FUNC(void) _PyGC_TraceClearStackHits(PyInterpreterState *interp);
+/* "image+offset (function+offset)" for pc, through dladdr(), the function
+ * where the image exports it.  Export for _testinternalcapi. */
+PyAPI_FUNC(void) _PyGC_TraceOwnerOf(uintptr_t pc, char *buf, size_t size);
+
 /* For tests of the segment map that the live mark looks objects up in: the
  * object found at addr (or containing it, if interior is set), or 0; four
  * addresses in op's segment that hold no block, or 0 where there is no such

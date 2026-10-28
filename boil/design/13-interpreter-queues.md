@@ -1,8 +1,8 @@
 # 13: Callbacks and finalizers run on the interpreter that owns them
 
-Status: design, 2026-10-28, revised after review rounds 1 and 2 (both
-revise; Review below; two rounds are the cap and the coordinator rules
-on what round 2's revisions leave open), for step 7a (boil/PROCESS.md section 0, moved ahead of step 7
+Status: adopted 2026-10-28 10:50 PDT after review rounds 1 and 2 (both
+revise; Review below) and three coordinator rulings (the last
+subsection of Review), for step 7a (boil/PROCESS.md section 0, moved ahead of step 7
 on 2026-10-28). It retires finding B of note 08 (the hack register's
 shared-heap row) and note 11 question 18, and closes the collector holes
 found while reading for it: a shared-heap interpreter with its own GIL
@@ -211,10 +211,14 @@ each node of the batch onto its owner's tail, in batch order. Nothing
 runs between the batch and the splice: it precedes the sweep, the
 "stop" gc.callbacks and the drain.
 
-**Failure.** Node allocation is the only allocation, and its failure
-takes today's path in `collect()`: the dead are undone and nothing is
-freed. What was batched is still routed, by splicing, so every queued
-call reaches its owner and no call runs on another interpreter.
+**Failure.** Node allocation and the order table of 3.5 are the only
+allocations, and they share one failure path, today's in `collect()`:
+the dead are undone, nothing is freed, and the pin is released. The
+table is allocated before the first node: **no batch exists when the
+table's allocation can fail**, so that failure routes nothing. A node's failure leaves the calls batched before it, which
+are ordered with the table already held (3.5) and routed by splicing,
+so every queued call reaches its owner, in order, and no call runs on
+another interpreter.
 
 The domain is the mark's: `_PyGC_TraceLiveMark()` copies the domain's
 interpreters and sub-processes into the mark result. **The pin.** The
@@ -298,7 +302,8 @@ exempt: every interpreter registers the same callbacks under them, so
 they mean the same in every table, and the collector already leaves them
 to `dict_dealloc()`. This is a compatibility
 break confined to shared heaps (an isolated interpreter cannot reach a
-foreign object), listed with 7.2's in PROCESS.md 0.1. Keeping the
+foreign object), recorded with 7.2's in PROCESS.md section 0.2
+(ruled). Keeping the
 registering interpreter beside each bit or slot was the alternative;
 it costs a field per watched object and still leaves the question of
 which interpreter runs the foreign watcher when the object dies on its
@@ -343,11 +348,14 @@ A call R of another owner whose object carries a position before R's
 own waits for the last A call before R (A's queue runs its calls in
 order, so that covers every A predecessor). The cost is one traversal
 of the reachable dead objects per owner present, `O(K·D)`, against the
-collection's `O(D)` sweep; the positions are kept in a C `malloc`
-address table for the duration. If that table cannot be allocated, the
-batch's calls are chained in plain batch order across owners instead
-(each call waits for the previous call of another owner): correct, and
-slower to drain; the counter `order_fallbacks` records it.
+collection's `O(D)` sweep. The positions and the traversal's stack
+live in one C `malloc` table bounded by the dead count (a stamp per dead
+object, and a stack that holds each dead object at most once per
+traversal), so the traversal allocates nothing. The table is allocated
+once per collection, before `clear_callback_weakrefs()` batches the
+first node, whenever the mark's dead set holds call-bearing objects of
+more than one owner; its failure takes 3.2's one failure path with an
+empty batch.
 
 **What waiting costs.** A main-interpreter call that waits for an idle
 subinterpreter's finalizer waits until that interpreter runs or closes
@@ -495,30 +503,38 @@ surviving objects, on its own thread, with its tables:
   `PyUnstable_Code_SetExtra()` and the non-reserved `PyDict_Watch()` and
   `PyType_Watch()` on an object this interpreter owns are refused like a
   foreign object's (3.4), so no new index appears during the step.
-- *Snapshot.* The objects of the interpreter's own heaps and abandoned
-  segments that carry an extra or a non-reserved watcher bit are listed
-  (the walk of `_PyGC_TraceLiveHeapObjects()`, restricted to one
-  sub-process and filtered) into a C `malloc` array registered as a
-  `_PyGCRoot` for the step, so a collection that a free function runs
-  keeps them alive and their addresses valid.
-- *Retire.* For each, the watcher bits are cleared, then
-  `_PyCode_ClearExtras(co, 1)` runs the free functions, as the object's
-  dealloc would have, and empties the extras. A free function may
-  allocate, collect, release the GIL or queue calls; step 3 of the close
-  drains what it queued, and an object it creates cannot carry an index,
-  since the freeze holds.
-- *Failure.* If the snapshot cannot be allocated, the step clears the
-  same state without calls, in a second walk that allocates nothing
-  (`_PyCode_ClearExtras(co, 0)` frees the extras array and leaks what
-  its slots point to), and counts `retire_fallbacks`.
+- *Watcher bits.* One walk of the interpreter's own heaps and abandoned
+  segments (the walk of `_PyGC_TraceLiveHeapObjects()`, restricted to one
+  sub-process) clears every non-reserved watcher bit. No code runs
+  during it, so one pass is enough.
+- *Extras.* Then a loop: each iteration is a walk of the same heaps that
+  stops at the first code object carrying extras and retires it with
+  `_PyCode_ClearExtras(co, 1)`, which detaches the extras array from the
+  code object before it calls any free function, then frees the array.
+  The loop ends when a walk finds no code object with extras. No walk is
+  in progress while a free function runs, so the function may allocate,
+  collect, release the GIL or queue calls; step 3 of the close drains
+  what it queued. A collection it runs cannot free the extras twice:
+  they are no longer on the code object, so its destroy hook finds none,
+  and the free function receives only the extra, never the code object.
+  An object it creates cannot carry an index, since the freeze holds, so
+  each iteration removes one code object's extras for good and the loop
+  ends. The iterations are counted in `gc_queue_info()["retired"]`. The
+  cost is O(heap × code objects with extras); the second factor is the
+  count of code objects a tool has tagged, and section 11 measures it.
+
+This step allocates nothing and has no failure path.
 
 These are C calls into the interpreter's own extensions, made where
 reference counting would have made them for objects that die at the end
 of `interpreter_clear()`. A surviving code object loses its extras, a
 cache whose owner is gone; a surviving dict stops being watched by
 watchers that no longer exist. A never-opened interpreter (5.4) and the
-fork child (5.5) run no free function: the step is the allocation-free
-clear. An isolated interpreter skips it: nothing outlives it that
+fork child (5.5) run no free function: their clear is the
+watcher-bit walk with `_PyCode_ClearExtras(co, 0)` applied in the same
+walk (no code runs, so one pass), which frees each extras array and
+leaks what its slots point to. That is a different situation, an
+interpreter whose code may not run, not a second form of this step. An isolated interpreter skips it: nothing outlives it that
 another interpreter can reach.
 
 ### 5.3 Adoption at deletion (ruled)
@@ -762,7 +778,7 @@ which `new_interpreter()` reports as `InterpreterError` through the
 `_interpreters` module. The all-true row of `InterpreterConfigTests`
 moves to the expected failures, `Doc/c-api/subinterpreters.rst` says so
 under `use_main_obmalloc`, and the break is a row of PROCESS.md section
-0.1's contract list (the coordinator's, at adoption). With it, every
+0.2, the intentional compatibility breaks (ruled). With it, every
 queue operation runs under the domain's one GIL and the queues need no
 lock.
 
@@ -814,7 +830,9 @@ Each with the test of section 9 that proves it.
    immortals' referents kept, its roots valid**, also after its
    interpreter's deletion. Test 9.7 under kill and ASan.
 9. **Destruction metadata is read only through its owner's tables**,
-   and every index on an object is its owner's. Tests 9.9 and 9.5 (c).
+   every index on an object is its owner's, and each extra is freed
+   exactly once (`_PyCode_ClearExtras()` detaches before it frees).
+   Tests 9.9 and 9.5 (c).
 10. **No interpreter a batch names is freed before the splice** (the
     pin, 3.2). Test 9.16.
 11. **A legacy `tp_del` runs once per death**, however long its call
@@ -879,11 +897,10 @@ dead weak reference's callback does not run.
    closing interpreter calls `gc.collect()`, releases the GIL to a
    main-interpreter thread that collects, queues a weak reference
    callback, and tries to set a new extra (refused, `SystemError`
-   reported unraisable); the close ends with an empty queue and every
-   snapshot object's extras freed once. (d) With the snapshot's
-   allocation failing (`gc_queue_fail_alloc()` aimed at it), the close
-   takes the allocation-free clear, `retire_fallbacks` is 1, and a
-   surviving code object has no extras.
+   reported unraisable); the close ends with an empty queue, every
+   tagged code object's extras freed exactly once, and
+   `gc_queue_info()["retired"]` equal to the number of tagged code
+   objects.
 6. **Reentrancy.** A main-interpreter weak reference callback that
    creates a legacy subinterpreter (`_testcapi.run_in_subinterp("x =
    1")`), and another that calls `gc.collect()`, under
@@ -927,7 +944,11 @@ dead weak reference's callback does not run.
    and heap type raise `ValueError`, its `PyUnstable_Code_SetExtra()` on
    a main-interpreter code object raises `SystemError`, and the reserved
    module watcher still watches a main-interpreter globals dict that the
-   subinterpreter's specializer reaches.
+   subinterpreter's specializer reaches. (d) Retirement while garbage:
+   a tagged code object of the closing interpreter that is garbage when
+   the restart loop reaches it, whose free function runs `gc.collect()`:
+   the free function runs exactly once, no destroy hook runs for the
+   object's extras, and the close ends normally (under kill and ASan).
 10. **Mixed-owner ordering.** A batch of referrer-first finalizer pairs
     from two interpreters with entries already queued on both, grown
     past a thousand nodes, with a finalizer that releases the GIL
@@ -1011,7 +1032,7 @@ Deleted:
 - the skip of test_gc `test_stress_shared_heap_callbacks`;
 - the B class of note 11 section 8.2 and its stress exclusion of
   test_capi.test_misc (in the verification manifest once PROCESS.md
-  section 0.1's manifest exists), 10a-2.md's accepted shared-heap
+  section 0.1's manifest exists; the coordinator's), 10a-2.md's accepted shared-heap
   failures, and the hack register's shared-heap row of note 08, each
   with this note as the retirement;
 - the acceptance of `use_main_obmalloc` with `OWN_GIL`, and of
@@ -1068,7 +1089,14 @@ Recorded, not gated (note 06 plan revision of 2026-10-27).
   array queue.
 - **Waiting across owners.** In 9.14's shape with 10^4 writer and file
   pairs: how many calls wait (`waiting`), the dependency pass's
-  instructions per collection, and `order_fallbacks`.
+  instructions per collection, and the order table's size.
+- **Retirement.** The close of a legacy interpreter with 10, 10^3 and
+  10^4 tagged code objects (extras set through ctypes, as 9.9 (b)); the
+  10^4 case is dynamo-shaped, a tool that tags every code object it
+  compiles, over a heap of 10^6 objects. Recorded: `retired`, the walks'
+  instructions, and the close's time. This is the measured limit of the
+  restart loop, O(heap × extras); if it is bad, the remedy is a later
+  rung's single form, not a second path.
 - **Teardown.** The time and instructions of the close of a legacy
   interpreter (the drains, the metadata walk) and of its deletion
   (adoption), separately, over 9.7 (e)'s cycles; and the time of the
@@ -1082,15 +1110,27 @@ Recorded, not gated (note 06 plan revision of 2026-10-27).
 
 ## 12. Rungs
 
-One rung (7a-1) carries the design: the node queue and the batch, the
-owner lookup and the splice, the pin, the order across owners, the
-delivery markers, the opening and the close, the drain permission, the
-take_gil check, the adoption and absorption, the metadata retirement,
-the per-owner discovery and the registration refusal, the fork-child
-disposal, the configuration rejection, and the tests of section 9. If it passes
-its deadline the measurement tool is cut first, then 9.7 (e)'s RSS
-record; nothing that an invariant of section 8 rests on is cut. The
-work doc lists the files.
+Two rungs (ruled).
+
+**Rung 1 (7a-1)**: the node queue and the batch, the owner lookup, the
+phases and the drain permission, the opening and the close's drain,
+routing, the pin, `queue_ready` and the `take_gil()` check, delivery at
+execution, and the configuration rejection. It ends finding B and lifts
+the stress exclusion of test_capi.test_misc. At its landing invariants
+1, 2, 3, 4, 6, 7, 10 and 11 hold. Until rung 2, the close's publish
+maps a closed shared-heap interpreter's calls to the main interpreter,
+whose tables then read the closed interpreter's destruction metadata,
+as every collection does today; and order holds within each owner only.
+
+**Rung 2 (7a-2)**: order across owners (3.5), metadata by owner with
+the registration refusal (3.4), the close's retirement and publish
+(5.1, 5.2), adoption and absorption (5.3, 5.4), the fork child (5.5),
+and the latency tool. At its landing invariants 5 (across owners), 8, 9
+and 12 hold as well.
+
+Cut order, either rung: the measurement tool first, then 9.7 (e)'s RSS
+record; nothing that an invariant of section 8 rests on is cut. The work
+docs (7a-1.md, 7a-2.md) list the files.
 
 ## 13. Open questions
 
@@ -1101,16 +1141,11 @@ work doc lists the files.
    path is known (7.3). Recommendation: none until a test shows one;
    then the fix is that test's.
 3. **The registration refusal (3.4) is a second compatibility break.**
-   It is round 2's answer to foreign registration and was not ruled with
-   7.2. Recommendation: accept, with a row beside 7.2's in PROCESS.md
-   0.1. The alternative, keeping the registering interpreter with each
-   index, is recorded in 3.4.
-4. **File ownership for the refusal.** It edits `PyDict_Watch()`
-   (Objects/dictobject.c), `PyType_Watch()` (Objects/typeobject.c, 6d's
-   and 10a's file) and `PyUnstable_Code_SetExtra()`
-   (Objects/codeobject.c, shared under the append-only rule): three
-   guards of a few lines at the top of existing functions. Needs a
-   ruling or hand-offs.
+   Ruled: accepted, recorded in PROCESS.md section 0.2 with 7.2's.
+4. **File ownership for the refusal.** Ruled: Objects/dictobject.c and
+   Objects/typeobject.c shared append-only (one guard hunk each under a
+   7a comment); Include/internal/pycore_code.h, Doc/c-api/type.rst and
+   Doc/c-api/code.rst are 7a's; Objects/codeobject.c stays shared.
 
 ## Review
 
@@ -1243,3 +1278,22 @@ Questions: the discard counters live in the main interpreter's state
 releases their kept threads, every `Py_FinalizeEx()` cycle (5.3); the
 fork child's leak is permanent and accepted, the isolated heap's is
 handed to step 7 with its condition (10).
+
+### Coordinator rulings (2026-10-28 10:50 PDT)
+
+1. *No fallback forms.* The chain fallback of 3.5 and its counter are
+   deleted: the order table is allocated before the first node and
+   shares collect()'s one failure path with node allocation (3.2). The
+   snapshot, its root and its failure path in 5.2 are deleted: one walk
+   clears the watcher bits, then a restart loop retires one code
+   object's extras per walk, so no walk is in progress while a free
+   function runs; `gc_queue_info()["retired"]` counts the iterations.
+   Two precisions kept each form single: the table is allocated before
+   any node, since routing a partial batch unordered would lose a
+   flush; `_PyCode_ClearExtras()` detaches the extras before calling
+   any free function, so a collection inside one cannot free them
+   twice.
+2. *Compatibility breaks.* Both are accepted and recorded in PROCESS.md
+   section 0.2.
+3. *Two rungs* (section 12), each record naming the invariants that
+   hold at its landing.

@@ -324,9 +324,12 @@ typedef int (*traverseproc)(PyObject *, visitproc, void *);
 typedef void (*freefunc)(void *);
 typedef void (*destructor)(PyObject *);
 typedef PyObject *(*getattrfunc)(PyObject *, char *);
-typedef PyObject *(*getattrofunc)(PyObject *, PyObject *);
+/* The attribute slots on values (6d rung 2): a getter returns the
+   attribute as a value, or PyValue_NULL with an exception set, and a
+   setter takes the value, PyValue_NULL to delete. */
+typedef PyValue (*getattrofunc)(PyObject *, PyObject *);
 typedef int (*setattrfunc)(PyObject *, char *, PyObject *);
-typedef int (*setattrofunc)(PyObject *, PyObject *, PyObject *);
+typedef int (*setattrofunc)(PyObject *, PyObject *, PyValue);
 typedef PyObject *(*reprfunc)(PyObject *);
 typedef Py_hash_t (*hashfunc)(PyObject *);
 typedef PyObject *(*richcmpfunc) (PyObject *, PyObject *, int);
@@ -343,8 +346,10 @@ typedef struct {
     Py_ssize_t index;
 } _PyValueIndexPair;
 typedef _PyValueIndexPair (*_Py_iteritemfunc) (PyObject *, Py_ssize_t index);
-typedef PyObject *(*descrgetfunc) (PyObject *, PyObject *, PyObject *);
-typedef int (*descrsetfunc) (PyObject *, PyObject *, PyObject *);
+/* A descriptor's __get__ (descr, obj or NULL, type) as a value, and its
+   __set__ (descr, obj, value), whose PyValue_NULL is __delete__. */
+typedef PyValue (*descrgetfunc) (PyObject *, PyObject *, PyObject *);
+typedef int (*descrsetfunc) (PyObject *, PyObject *, PyValue);
 typedef int (*initproc)(PyObject *, PyObject *, PyObject *);
 typedef PyObject *(*newfunc)(PyTypeObject *, PyObject *, PyObject *);
 typedef PyObject *(*allocfunc)(PyTypeObject *, Py_ssize_t);
@@ -451,8 +456,8 @@ PyAPI_FUNC(int) PyObject_HasAttrWithError(PyObject *, PyObject *);
 PyAPI_FUNC(int) PyObject_HasAttrStringWithError(PyObject *, const char *);
 #endif
 PyAPI_FUNC(PyObject *) PyObject_SelfIter(PyObject *);
-PyAPI_FUNC(PyObject *) PyObject_GenericGetAttr(PyObject *, PyObject *);
-PyAPI_FUNC(int) PyObject_GenericSetAttr(PyObject *, PyObject *, PyObject *);
+PyAPI_FUNC(PyValue) PyObject_GenericGetAttr(PyObject *, PyObject *);
+PyAPI_FUNC(int) PyObject_GenericSetAttr(PyObject *, PyObject *, PyValue);
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x03030000
 PyAPI_FUNC(int) PyObject_GenericSetDict(PyObject *, PyObject *, void *);
 #endif

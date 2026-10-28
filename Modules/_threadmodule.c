@@ -2,6 +2,7 @@
 /* Interface to Sjoerd's portable C thread library */
 
 #include "Python.h"
+#include "pycore_dict.h"          // _PyDict_GetItemValue()
 #include "pycore_fileutils.h"     // _PyFile_Flush
 #include "pycore_gc_trace.h"      // _PyGC_AddRoot()
 #include "pycore_interp.h"        // _PyInterpreterState.threads.count
@@ -1761,7 +1762,7 @@ _ldict(localobject *self, thread_module_state *state)
 }
 
 static int
-local_setattro(PyObject *op, PyObject *name, PyObject *v)
+local_setattro(PyObject *op, PyObject *name, PyValue v)
 {
     localobject *self = localobject_CAST(op);
     PyObject *module = PyType_GetModuleByDef(Py_TYPE(self), &thread_module);
@@ -1793,7 +1794,7 @@ err:
     return -1;
 }
 
-static PyObject *local_getattro(PyObject *, PyObject *);
+static PyValue local_getattro(PyObject *, PyObject *);
 
 static PyType_Slot local_type_slots[] = {
     {Py_tp_dealloc, local_dealloc},
@@ -1814,7 +1815,9 @@ static PyType_Spec local_type_spec = {
     .slots = local_type_slots,
 };
 
-static PyObject *
+/* The attribute as a value: an inline value in the local dict is not
+   boxed. */
+static PyValue
 local_getattro(PyObject *op, PyObject *name)
 {
     localobject *self = localobject_CAST(op);
@@ -1824,34 +1827,37 @@ local_getattro(PyObject *op, PyObject *name)
 
     PyObject *ldict = _ldict(self, state);
     if (ldict == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     int r = PyObject_RichCompareBool(name, &_Py_ID(__dict__), Py_EQ);
     if (r == 1) {
-        return ldict;
+        return PyValue_FromObject(ldict);
     }
     if (r == -1) {
         Py_DECREF(ldict);
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (!Py_IS_TYPE(self, state->local_type)) {
         /* use generic lookup for subtypes */
-        PyObject *res = _PyObject_GenericGetAttrWithDict(op, name, ldict, 0);
+        PyValue res = _PyObject_GenericGetAttrWithDict(op, name, ldict, 0);
         Py_DECREF(ldict);
         return res;
     }
 
     /* Optimization: just look in dict ourselves */
-    PyObject *value;
-    if (PyDict_GetItemRef(ldict, name, &value) != 0) {
-        // found or error
+    PyValue value;
+    if (_PyDict_GetItemValue(ldict, PyValue_FromObject(name), &value) < 0) {
+        Py_DECREF(ldict);
+        return PyValue_NULL;
+    }
+    if (!PyValue_IsNull(value)) {
         Py_DECREF(ldict);
         return value;
     }
 
     /* Fall back on generic to get __class__ and __dict__ */
-    PyObject *res = _PyObject_GenericGetAttrWithDict(op, name, ldict, 0);
+    PyValue res = _PyObject_GenericGetAttrWithDict(op, name, ldict, 0);
     Py_DECREF(ldict);
     return res;
 }

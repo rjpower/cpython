@@ -86,7 +86,7 @@ static PyObject *
 slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds);
 
 static int
-slot_tp_setattro(PyObject *self, PyObject *name, PyObject *value);
+slot_tp_setattro(PyObject *self, PyObject *name, PyValue value);
 
 static PyObject *
 slot_tp_call(PyObject *self, PyObject *args, PyObject *kwds);
@@ -1864,6 +1864,18 @@ type_dict(PyObject *tp, void *Py_UNUSED(closure))
     return PyDictProxy_New(dict);
 }
 
+/* A descriptor's __get__ result as an object, for code whose callers take
+   one: getset getters (rung 4 converts them) and _PyObject_LookupSpecial()
+   (rung 3).  The result is checked before it is boxed. */
+static PyObject *
+descr_get_object(descrgetfunc f, PyObject *descr, PyObject *obj,
+                 PyObject *type)
+{
+    PyValue res = f(descr, obj, type);
+    _PyValue_CheckSlotResult(res, Py_TYPE(descr), "tp_descr_get");
+    return PyValue_Object(res);
+}
+
 static PyObject *
 type_get_doc(PyObject *tp, void *Py_UNUSED(closure))
 {
@@ -1879,7 +1891,8 @@ type_get_doc(PyObject *tp, void *Py_UNUSED(closure))
     else if (result) {
         descrgetfunc descr_get = Py_TYPE(result)->tp_descr_get;
         if (descr_get) {
-            Py_SETREF(result, descr_get(result, NULL, (PyObject *)type));
+            Py_SETREF(result, descr_get_object(descr_get, result, NULL,
+                                               (PyObject *)type));
         }
     }
     return result;
@@ -1928,7 +1941,8 @@ type_get_annotate(PyObject *tp, void *Py_UNUSED(closure))
     if (annotate) {
         descrgetfunc get = Py_TYPE(annotate)->tp_descr_get;
         if (get) {
-            Py_SETREF(annotate, get(annotate, NULL, (PyObject *)type));
+            Py_SETREF(annotate, descr_get_object(get, annotate, NULL,
+                                                 (PyObject *)type));
         }
     }
     else {
@@ -2008,7 +2022,8 @@ type_get_annotations(PyObject *tp, void *Py_UNUSED(closure))
     if (annotations) {
         descrgetfunc get = Py_TYPE(annotations)->tp_descr_get;
         if (get) {
-            Py_SETREF(annotations, get(annotations, NULL, tp));
+            Py_SETREF(annotations, descr_get_object(get, annotations, NULL,
+                                                    tp));
         }
     }
     else {
@@ -2725,7 +2740,8 @@ _PyObject_LookupSpecial(PyObject *self, PyObject *attr)
     if (res != NULL) {
         descrgetfunc f;
         if ((f = Py_TYPE(res)->tp_descr_get) != NULL) {
-            Py_SETREF(res, f(res, self, (PyObject *)(Py_TYPE(self))));
+            Py_SETREF(res, descr_get_object(f, res, self,
+                                            (PyObject *)(Py_TYPE(self))));
         }
     }
     return res;
@@ -2763,12 +2779,12 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
         if (self_o == NULL) {
             return -1;
         }
-        PyObject *func = f(method_o, self_o, (PyObject *)tp);
-        if (func == NULL) {
+        PyValue func = f(method_o, self_o, (PyObject *)tp);
+        _PyValue_CheckSlotResult(func, Py_TYPE(method_o), "tp_descr_get");
+        if (PyValue_IsNull(func)) {
             return -1;
         }
-        *method = PyValue_NULL; // clear method
-        *method = PyValue_FromObject(func);
+        *method = func;
     }
     *self = PyValue_NULL; // clear self
     return 1;
@@ -2794,9 +2810,10 @@ lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
 
     descrgetfunc f = Py_TYPE(value)->tp_descr_get;
     if (f != NULL) {
-        value = f(value, self, (PyObject *)(Py_TYPE(self)));
-        *out = PyValue_NULL;
-        if (value == NULL) {
+        PyValue res = f(value, self, (PyObject *)(Py_TYPE(self)));
+        _PyValue_CheckSlotResult(res, Py_TYPE(value), "tp_descr_get");
+        *out = res;
+        if (PyValue_IsNull(res)) {
             if (!raise_attribute_error &&
                 PyErr_ExceptionMatches(PyExc_AttributeError))
             {
@@ -2804,7 +2821,6 @@ lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
             }
             return -1;
         }
-        *out = PyValue_FromObject(value);
     }
     return 0;
 }
@@ -3693,7 +3709,7 @@ subtype_dict(PyObject *obj, void *context)
             raise_dict_descr_error(obj);
             return NULL;
         }
-        return func(descr, obj, (PyObject *)(Py_TYPE(obj)));
+        return descr_get_object(func, descr, obj, (PyObject *)(Py_TYPE(obj)));
     }
     return PyObject_GenericGetDict(obj, context);
 }
@@ -3746,7 +3762,7 @@ subtype_setdict(PyObject *obj, PyObject *value, void *context)
             raise_dict_descr_error(obj);
             return -1;
         }
-        return func(descr, obj, value);
+        return func(descr, obj, PyValue_FromResult(value));
     }
     return _PyObject_SetDict(obj, value);
 }
@@ -6200,45 +6216,21 @@ _PyType_SetFlagsRecursive(PyTypeObject *self, unsigned long mask, unsigned long 
 
 /* This is similar to PyObject_GenericGetAttr(),
    but uses _PyType_LookupRef() instead of just looking in type->tp_dict.
+   The attribute is returned as a value.
 
    The argument suppress_missing_attribute is used to provide a
    fast path for hasattr. The possible values are:
 
    * NULL: do not suppress the exception
    * Non-zero pointer: suppress the PyExc_AttributeError and
-     set *suppress_missing_attribute to 1 to signal we are returning NULL while
-     having suppressed the exception (other exceptions are not suppressed)
+     set *suppress_missing_attribute to 1 to signal we are returning
+     PyValue_NULL while having suppressed the exception (other exceptions
+     are not suppressed)
 
    */
-PyObject *
-_Py_type_getattro_impl(PyTypeObject *type, PyObject *name, int *suppress_missing_attribute)
-{
-    PyValue ref = _Py_type_getattro_value(type, name, suppress_missing_attribute);
-    return PyValue_Object(ref);
-}
-
-/* This is similar to PyObject_GenericGetAttr(),
-   but uses _PyType_LookupRef() instead of just looking in type->tp_dict. */
-PyObject *
-_Py_type_getattro(PyObject *tp, PyObject *name)
-{
-    PyTypeObject *type = PyTypeObject_CAST(tp);
-    return _Py_type_getattro_impl(type, name, NULL);
-}
-
-/* Like _Py_type_getattro but returns a PyValue.
-   This can return a deferred reference in the free-threaded build
-   when the attribute is found without going through a descriptor.
-
-   suppress_missing_attribute (optional):
-   * NULL: do not suppress the exception
-   * Non-zero pointer: suppress the PyExc_AttributeError and
-     set *suppress_missing_attribute to 1 to signal we are returning NULL while
-     having suppressed the exception (other exceptions are not suppressed)
-*/
 PyValue
-_Py_type_getattro_value(PyTypeObject *type, PyObject *name,
-                           int *suppress_missing_attribute)
+_Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
+                       int *suppress_missing_attribute)
 {
     PyTypeObject *metatype = Py_TYPE(type);
     descrgetfunc meta_get = NULL;
@@ -6276,11 +6268,10 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
              * writes. Assume the attribute is not overridden in
              * type's tp_dict (and bases): call the descriptor now.
              */
-            PyObject *res = meta_get(meta_attr_obj, (PyObject *)type,
-                                     (PyObject *)metatype);
-            if (res != NULL) {
-                result_ref.value = PyValue_FromObject(res);
-            }
+            result_ref.value = meta_get(meta_attr_obj, (PyObject *)type,
+                                        (PyObject *)metatype);
+            _PyValue_CheckSlotResult(result_ref.value, Py_TYPE(meta_attr_obj),
+                                     "tp_descr_get");
             goto done;
         }
     }
@@ -6312,11 +6303,10 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
             }
             /* NULL 2nd argument indicates the descriptor was
              * found on the target object itself (or a base)  */
-            PyObject *res = local_get(attr_obj, (PyObject *)NULL,
-                                      (PyObject *)type);
-            if (res != NULL) {
-                result_ref.value = PyValue_FromObject(res);
-            }
+            result_ref.value = local_get(attr_obj, (PyObject *)NULL,
+                                         (PyObject *)type);
+            _PyValue_CheckSlotResult(result_ref.value, Py_TYPE(attr_obj),
+                                     "tp_descr_get");
             goto done;
         }
 
@@ -6330,11 +6320,10 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
      * descriptor from the metatype, if any */
     if (meta_get != NULL) {
         PyObject *meta_attr_obj = PyValue_ObjectBorrow(meta_attribute_ref.value);
-        PyObject *res = meta_get(meta_attr_obj, (PyObject *)type,
-                                 (PyObject *)metatype);
-        if (res != NULL) {
-            result_ref.value = PyValue_FromObject(res);
-        }
+        result_ref.value = meta_get(meta_attr_obj, (PyObject *)type,
+                                    (PyObject *)metatype);
+        _PyValue_CheckSlotResult(result_ref.value, Py_TYPE(meta_attr_obj),
+                                 "tp_descr_get");
         goto done;
     }
 
@@ -6362,21 +6351,23 @@ done:
     return _PyThreadState_PopValueRoot(tstate, &result_ref);
 }
 
+PyValue
+_Py_type_getattro(PyObject *tp, PyObject *name)
+{
+    return _Py_type_getattro_impl(PyTypeObject_CAST(tp), name, NULL);
+}
+
 // Called by type_setattro().  Updates both the type dict and
-// the type versions.
+// the type versions.  VALUE is stored as it is; PyValue_NULL deletes.
 static int
 type_update_dict(PyTypeObject *type, PyDictObject *dict, PyObject *name,
-                 PyObject *value, PyObject **old_value)
+                 PyValue value)
 {
     // We don't want any re-entrancy between when we update the dict
-    // and call _PyType_Modified_Unlocked, including running the destructor
-    // of the current value as it can observe the cache in an inconsistent
-    // state.  Because we have an exact unicode and our dict has exact
-    // unicodes we know that this will all complete without releasing
-    // the locks.
-    if (_PyDict_GetItemRef_Unicode_LockHeld(dict, name, old_value) < 0) {
-        return -1;
-    }
+    // and call _PyType_Modified_Unlocked.  Because we have an exact unicode
+    // and our dict has exact unicodes we know that this will all complete
+    // without releasing the locks.  The old value is not looked up: the
+    // tracing collector runs no destructor at its removal.
 
     /* Clear the VALID_VERSION flag of 'type' and all its
         subclasses.  This could possibly be unified with the
@@ -6385,11 +6376,11 @@ type_update_dict(PyTypeObject *type, PyDictObject *dict, PyObject *name,
         recursing into subclasses. */
     _PyType_Modified_Unlocked(type);
 
-    if (_PyDict_SetItem_LockHeld(dict, name, value == NULL ? PyValue_NULL : PyValue_FromObject(value)) < 0) {
+    if (_PyDict_SetItem_LockHeld(dict, name, value) < 0) {
         PyErr_Format(PyExc_AttributeError,
                      "type object '%.50s' has no attribute '%U'",
                      ((PyTypeObject*)type)->tp_name, name);
-        _PyObject_SetAttributeErrorContext((PyObject *)type, name);
+        _PyObject_SetAttributeErrorContext(PyValue_FromObject(type), name);
         return -1;
     }
 
@@ -6404,7 +6395,7 @@ update_slot_after_setattr(PyTypeObject *type, PyObject *name)
 }
 
 static int
-type_setattro(PyObject *self, PyObject *name, PyObject *value)
+type_setattro(PyObject *self, PyObject *name, PyValue value)
 {
     PyTypeObject *type = PyTypeObject_CAST(self);
     int res;
@@ -6446,7 +6437,6 @@ type_setattro(PyObject *self, PyObject *name, PyObject *value)
     assert(!_PyType_HasFeature(metatype, Py_TPFLAGS_MANAGED_DICT));
 
 
-    PyObject *old_value = NULL;
     PyObject *descr = _PyType_LookupRef(metatype, name);
     if (descr != NULL) {
         descrsetfunc f = Py_TYPE(descr)->tp_descr_set;
@@ -6474,7 +6464,7 @@ type_setattro(PyObject *self, PyObject *name, PyObject *value)
     }
 
     BEGIN_TYPE_DICT_LOCK(dict);
-    res = type_update_dict(type, (PyDictObject *)dict, name, value, &old_value);
+    res = type_update_dict(type, (PyDictObject *)dict, name, value);
     assert(_PyType_CheckConsistency(type));
     if (res == 0) {
         if (is_dunder_name(name) && has_slotdef(name)) {
@@ -9904,18 +9894,53 @@ hackcheck(PyObject *self, setattrofunc func, const char *what)
     return res;
 }
 
+/* The wrappers of the attribute and descriptor slots read the argument
+   tuple's items as values, where PyArg_UnpackTuple() would box them.  An
+   inline item bound for a PyObject * parameter of the slot (a name, the
+   instance or the owner type) is boxed, and the box appended raw to SPAN,
+   which the wrapper pops after the slot returns; the slot validates it as
+   before.  NULL with an exception set if the box cannot be made. */
+static PyObject *
+wrapper_arg_object(_PyValueRoot *span, PyValue v)
+{
+    if (!PyValue_IsInline(v)) {
+        return PyValue_ObjectBorrow(v);
+    }
+    PyObject *box = _PyValue_BoxInline(v);
+    if (box != NULL) {
+        _PyValueSpan_AppendObject(span, box);
+    }
+    return box;
+}
+
+static int
+wrapper_nargs(PyObject *args, const char *name, Py_ssize_t min, Py_ssize_t max)
+{
+    if (!PyTuple_CheckExact(args)) {
+        PyErr_SetString(PyExc_SystemError,
+            "PyArg_UnpackTuple() argument list is not a tuple");
+        return 0;
+    }
+    return _PyArg_CheckPositional(name, PyTuple_GET_SIZE(args), min, max);
+}
+
 static PyObject *
 wrap_setattr(PyObject *self, PyObject *args, void *wrapped)
 {
     setattrofunc func = (setattrofunc)wrapped;
-    int res;
-    PyObject *name, *value;
+    int res = -1;
 
-    if (!PyArg_UnpackTuple(args, "__setattr__", 2, 2, &name, &value))
+    if (!wrapper_nargs(args, "__setattr__", 2, 2))
         return NULL;
-    if (!hackcheck(self, func, "__setattr__"))
-        return NULL;
-    res = (*func)(self, name, value);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue held[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, held);
+    PyObject *name = wrapper_arg_object(&span, PyTuple_GET_VALUE(args, 0));
+    if (name != NULL && hackcheck(self, func, "__setattr__")) {
+        res = (*func)(self, name, PyTuple_GET_VALUE(args, 1));
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
     if (res < 0)
         return NULL;
     Py_RETURN_NONE;
@@ -9925,18 +9950,44 @@ static PyObject *
 wrap_delattr(PyObject *self, PyObject *args, void *wrapped)
 {
     setattrofunc func = (setattrofunc)wrapped;
-    int res;
-    PyObject *name;
+    int res = -1;
 
     if (!check_num_args(args, 1))
         return NULL;
-    name = PyTuple_GET_ITEM(args, 0);
-    if (!hackcheck(self, func, "__delattr__"))
-        return NULL;
-    res = (*func)(self, name, NULL);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue held[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, held);
+    PyObject *name = wrapper_arg_object(&span, PyTuple_GET_VALUE(args, 0));
+    if (name != NULL && hackcheck(self, func, "__delattr__")) {
+        res = (*func)(self, name, PyValue_NULL);
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
     if (res < 0)
         return NULL;
     Py_RETURN_NONE;
+}
+
+/* __getattribute__ of a C getattro.  Rung 3 removes the result's box. */
+static PyObject *
+wrap_getattro(PyObject *self, PyObject *args, void *wrapped)
+{
+    getattrofunc func = (getattrofunc)wrapped;
+    PyValue res = PyValue_NULL;
+
+    if (!check_num_args(args, 1))
+        return NULL;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue held[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, held);
+    PyObject *name = wrapper_arg_object(&span, PyTuple_GET_VALUE(args, 0));
+    if (name != NULL) {
+        res = (*func)(self, name);
+        _PyValue_CheckSlotResult(res, Py_TYPE(self), "tp_getattro");
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return PyValue_Object(res);
 }
 
 static PyObject *
@@ -10015,15 +10066,30 @@ wrap_next(PyObject *self, PyObject *args, void *wrapped)
     return PyValue_Object(res);
 }
 
+/* __get__ of a C tp_descr_get.  Rung 3 removes the result's box. */
 static PyObject *
 wrap_descr_get(PyObject *self, PyObject *args, void *wrapped)
 {
     descrgetfunc func = (descrgetfunc)wrapped;
-    PyObject *obj;
-    PyObject *type = NULL;
+    PyValue res = PyValue_NULL;
 
-    if (!PyArg_UnpackTuple(args, "__get__", 1, 2, &obj, &type))
+    if (!wrapper_nargs(args, "__get__", 1, 2))
         return NULL;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue held[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, held);
+    PyObject *obj = wrapper_arg_object(&span, PyTuple_GET_VALUE(args, 0));
+    PyObject *type = NULL;
+    if (obj != NULL && PyTuple_GET_SIZE(args) == 2) {
+        type = wrapper_arg_object(&span, PyTuple_GET_VALUE(args, 1));
+        if (type == NULL) {
+            goto done;
+        }
+    }
+    if (obj == NULL) {
+        goto done;
+    }
     if (obj == Py_None)
         obj = NULL;
     if (type == Py_None)
@@ -10031,21 +10097,32 @@ wrap_descr_get(PyObject *self, PyObject *args, void *wrapped)
     if (type == NULL && obj == NULL) {
         PyErr_SetString(PyExc_TypeError,
                         "__get__(None, None) is invalid");
-        return NULL;
+        goto done;
     }
-    return (*func)(self, obj, type);
+    res = (*func)(self, obj, type);
+    _PyValue_CheckSlotResult(res, Py_TYPE(self), "tp_descr_get");
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return PyValue_Object(res);
 }
 
 static PyObject *
 wrap_descr_set(PyObject *self, PyObject *args, void *wrapped)
 {
     descrsetfunc func = (descrsetfunc)wrapped;
-    PyObject *obj, *value;
-    int ret;
+    int ret = -1;
 
-    if (!PyArg_UnpackTuple(args, "__set__", 2, 2, &obj, &value))
+    if (!wrapper_nargs(args, "__set__", 2, 2))
         return NULL;
-    ret = (*func)(self, obj, value);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue held[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, held);
+    PyObject *obj = wrapper_arg_object(&span, PyTuple_GET_VALUE(args, 0));
+    if (obj != NULL) {
+        ret = (*func)(self, obj, PyTuple_GET_VALUE(args, 1));
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
     if (ret < 0)
         return NULL;
     Py_RETURN_NONE;
@@ -10055,13 +10132,19 @@ static PyObject *
 wrap_descr_delete(PyObject *self, PyObject *args, void *wrapped)
 {
     descrsetfunc func = (descrsetfunc)wrapped;
-    PyObject *obj;
-    int ret;
+    int ret = -1;
 
     if (!check_num_args(args, 1))
         return NULL;
-    obj = PyTuple_GET_ITEM(args, 0);
-    ret = (*func)(self, obj, NULL);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue held[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, held);
+    PyObject *obj = wrapper_arg_object(&span, PyTuple_GET_VALUE(args, 0));
+    if (obj != NULL) {
+        ret = (*func)(self, obj, PyValue_NULL);
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
     if (ret < 0)
         return NULL;
     Py_RETURN_NONE;
@@ -10687,43 +10770,49 @@ slot_tp_call(PyObject *self, PyObject *args, PyObject *kwds)
    this detects the absence of __getattr__ and then installs the simpler
    slot if necessary. */
 
-PyObject *
+PyValue
 _Py_slot_tp_getattro(PyObject *self, PyObject *name)
 {
-    PyObject *stack[2] = {self, name};
-    return vectorcall_method(&_Py_ID(__getattribute__), stack, 2);
+    PyValue stack[2] = {PyValue_FromObject(self), PyValue_FromObject(name)};
+    return vectorcall_method_value(&_Py_ID(__getattribute__), stack, 2);
 }
 
-static inline PyObject *
+/* Call ATTR, the type's __getattribute__ or __getattr__, for NAME on SELF,
+   and return its result as a value. */
+static inline PyValue
 call_attribute(PyObject *self, PyObject *attr, PyObject *name)
 {
-    PyObject *res, *descr = NULL;
+    PyValue arg = PyValue_FromObject(name);
 
     if (_PyType_HasFeature(Py_TYPE(attr), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
-        PyObject *args[] = { self, name };
-        res = PyObject_Vectorcall(attr, args, 2, NULL);
-        return res;
+        PyValue args[] = { PyValue_FromObject(self), arg };
+        return PyObject_VectorcallValue(PyValue_FromObject(attr), args, 2, NULL);
     }
 
     descrgetfunc f = Py_TYPE(attr)->tp_descr_get;
-
-    if (f != NULL) {
-        descr = f(attr, self, (PyObject *)(Py_TYPE(self)));
-        if (descr == NULL)
-            return NULL;
-        else
-            attr = descr;
+    if (f == NULL) {
+        return PyObject_VectorcallValue(PyValue_FromObject(attr), &arg, 1, NULL);
     }
-    res = PyObject_CallOneArg(attr, name);
-    Py_XDECREF(descr);
+    // The bound result is held in a root while the call runs.
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot bound;
+    _PyThreadState_PushValueRoot(tstate, &bound);
+    bound.value = f(attr, self, (PyObject *)(Py_TYPE(self)));
+    _PyValue_CheckSlotResult(bound.value, Py_TYPE(attr), "tp_descr_get");
+    PyValue res = PyValue_NULL;
+    if (!PyValue_IsNull(bound.value)) {
+        res = PyObject_VectorcallValue(bound.value, &arg, 1, NULL);
+    }
+    _PyThreadState_PopValueRoot(tstate, &bound);
     return res;
 }
 
-PyObject *
+PyValue
 _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name)
 {
     PyTypeObject *tp = Py_TYPE(self);
-    PyObject *getattr, *getattribute, *res;
+    PyObject *getattr, *getattribute;
+    PyValue res;
 
     /* speed hack: we could use lookup_maybe, but that would resolve the
        method fully for each attribute lookup for classes with
@@ -10749,16 +10838,16 @@ _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name)
              (void *)PyObject_GenericGetAttr)) {
         Py_XDECREF(getattribute);
         res = _PyObject_GenericGetAttrWithDict(self, name, NULL, 1);
-        /* if res == NULL with no exception set, then it must be an
+        /* if res is NULL with no exception set, then it must be an
            AttributeError suppressed by us. */
-        if (res == NULL && !PyErr_Occurred()) {
+        if (PyValue_IsNull(res) && !PyErr_Occurred()) {
             res = call_attribute(self, getattr, name);
         }
     }
     else {
         res = call_attribute(self, getattribute, name);
         Py_DECREF(getattribute);
-        if (res == NULL && PyErr_ExceptionMatches(PyExc_AttributeError)) {
+        if (PyValue_IsNull(res) && PyErr_ExceptionMatches(PyExc_AttributeError)) {
             PyErr_Clear();
             res = call_attribute(self, getattr, name);
         }
@@ -10769,24 +10858,18 @@ _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name)
 }
 
 static int
-slot_tp_setattro(PyObject *self, PyObject *name, PyObject *value)
+slot_tp_setattro(PyObject *self, PyObject *name, PyValue value)
 {
-    PyObject *stack[3];
-    PyObject *res;
-
-    stack[0] = self;
-    stack[1] = name;
-    if (value == NULL) {
-        res = vectorcall_method(&_Py_ID(__delattr__), stack, 2);
+    PyValue stack[3] = {PyValue_FromObject(self), PyValue_FromObject(name),
+                        value};
+    PyValue res;
+    if (PyValue_IsNull(value)) {
+        res = vectorcall_method_value(&_Py_ID(__delattr__), stack, 2);
     }
     else {
-        stack[2] = value;
-        res = vectorcall_method(&_Py_ID(__setattr__), stack, 3);
+        res = vectorcall_method_value(&_Py_ID(__setattr__), stack, 3);
     }
-    if (res == NULL)
-        return -1;
-    Py_DECREF(res);
-    return 0;
+    return PyValue_IsNull(res) ? -1 : 0;
 }
 
 static PyObject *name_op[] = {
@@ -10857,7 +10940,7 @@ _PyType_HasSlotTpIternext(PyTypeObject *type)
     return type->tp_iternext == slot_tp_iternext;
 }
 
-static PyObject *
+static PyValue
 slot_tp_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyTypeObject *tp = Py_TYPE(self);
@@ -10870,38 +10953,32 @@ slot_tp_descr_get(PyObject *self, PyObject *obj, PyObject *type)
         /* Avoid further slowdowns */
         if (tp->tp_descr_get == slot_tp_descr_get)
             tp->tp_descr_get = NULL;
-        return Py_NewRef(self);
+        return PyValue_FromObject(self);
     }
     if (obj == NULL)
         obj = Py_None;
     if (type == NULL)
         type = Py_None;
-    PyObject *get = _PyValueRoot_Object(&cref);
-    PyObject *stack[3] = {self, obj, type};
-    PyObject *res = PyObject_Vectorcall(get, stack, 3, NULL);
+    PyValue stack[3] = {PyValue_FromObject(self), PyValue_FromObject(obj),
+                        PyValue_FromObject(type)};
+    PyValue res = PyObject_VectorcallValue(cref.value, stack, 3, NULL);
     _PyThreadState_PopValueRoot(tstate, &cref);
     return res;
 }
 
 static int
-slot_tp_descr_set(PyObject *self, PyObject *target, PyObject *value)
+slot_tp_descr_set(PyObject *self, PyObject *target, PyValue value)
 {
-    PyObject* stack[3];
-    PyObject *res;
-
-    stack[0] = self;
-    stack[1] = target;
-    if (value == NULL) {
-        res = vectorcall_method(&_Py_ID(__delete__), stack, 2);
+    PyValue stack[3] = {PyValue_FromObject(self), PyValue_FromObject(target),
+                        value};
+    PyValue res;
+    if (PyValue_IsNull(value)) {
+        res = vectorcall_method_value(&_Py_ID(__delete__), stack, 2);
     }
     else {
-        stack[2] = value;
-        res = vectorcall_method(&_Py_ID(__set__), stack, 3);
+        res = vectorcall_method_value(&_Py_ID(__set__), stack, 3);
     }
-    if (res == NULL)
-        return -1;
-    Py_DECREF(res);
-    return 0;
+    return PyValue_IsNull(res) ? -1 : 0;
 }
 
 static int
@@ -11335,7 +11412,7 @@ static pytype_slotdef slotdefs[] = {
     TPSLOT(__str__, tp_str, slot_tp_str, wrap_unaryfunc,
            "__str__($self, /)\n--\n\nReturn str(self)."),
     TPSLOT(__getattribute__, tp_getattro, _Py_slot_tp_getattr_hook,
-           wrap_binaryfunc,
+           wrap_getattro,
            "__getattribute__($self, name, /)\n--\n\nReturn getattr(self, name)."),
     TPSLOT(__getattr__, tp_getattro, _Py_slot_tp_getattr_hook, NULL,
            "__getattr__($self, name, /)\n--\n\nImplement getattr(self, name)."),
@@ -12308,15 +12385,18 @@ super_repr(PyObject *self)
 on the super object itself.
 
 May return NULL with or without an exception set, like PyDict_GetItemWithError. */
-PyObject *
+/* The attribute NAME of the first class after SU_TYPE in SU_OBJ_TYPE's MRO,
+   as a value: PyValue_NULL if there is none, or with an exception set. */
+PyValue
 _PySuper_LookupDescr(PyTypeObject *su_type, PyTypeObject *su_obj_type, PyObject *name)
 {
-    PyObject *mro, *res;
+    PyObject *mro;
+    PyValue res;
     Py_ssize_t i, n;
 
     mro = lookup_tp_mro(su_obj_type);
     if (mro == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     /* Keep a strong reference to mro because su_obj_type->tp_mro can be
        replaced during PyDict_GetItemRef(dict, name, &res). */
@@ -12336,7 +12416,7 @@ _PySuper_LookupDescr(PyTypeObject *su_type, PyTypeObject *su_obj_type, PyObject 
     i++;  /* skip su->type (if any)  */
     if (i >= n) {
         _PyThreadState_PopValueRoot(tstate, &mro_ref);
-        return NULL;
+        return PyValue_NULL;
     }
 
     do {
@@ -12344,7 +12424,7 @@ _PySuper_LookupDescr(PyTypeObject *su_type, PyTypeObject *su_obj_type, PyObject 
         PyObject *dict = lookup_tp_dict(_PyType_CAST(obj));
         assert(dict != NULL && PyDict_Check(dict));
 
-        if (PyDict_GetItemRef(dict, name, &res) != 0) {
+        if (_PyDict_GetItemValue(dict, PyValue_FromObject(name), &res) != 0) {
             // found or error
             _PyThreadState_PopValueRoot(tstate, &mro_ref);
             return res;
@@ -12353,44 +12433,54 @@ _PySuper_LookupDescr(PyTypeObject *su_type, PyTypeObject *su_obj_type, PyObject 
         i++;
     } while (i < n);
     _PyThreadState_PopValueRoot(tstate, &mro_ref);
-    return NULL;
+    return PyValue_NULL;
 }
 
 // if `method` is non-NULL, we are looking for a method descriptor,
-// and setting `*method = 1` means we found one.
-static PyObject *
+// and setting `*method = 1` means we found one.  The attribute is returned
+// as a value.
+static PyValue
 do_super_lookup(superobject *su, PyTypeObject *su_type, PyObject *su_obj,
                 PyTypeObject *su_obj_type, PyObject *name, int *method)
 {
-    PyObject *res;
+    PyValue res;
     int temp_su = 0;
 
     if (su_obj_type == NULL) {
         goto skip;
     }
 
-    res = _PySuper_LookupDescr(su_type, su_obj_type, name);
-    if (res != NULL) {
-        if (method && _PyType_HasFeature(Py_TYPE(res), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
+    // The descriptor is held in a root while its __get__ runs.
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot found;
+    _PyThreadState_PushValueRoot(tstate, &found);
+    found.value = _PySuper_LookupDescr(su_type, su_obj_type, name);
+    if (!PyValue_IsNull(found.value)) {
+        // An inline value is not a descriptor.
+        PyObject *descr = PyValue_IsObject(found.value)
+                          ? PyValue_ObjectBorrow(found.value) : NULL;
+        if (descr != NULL && method
+            && _PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR))
+        {
             *method = 1;
         }
-        else {
-            descrgetfunc f = Py_TYPE(res)->tp_descr_get;
+        else if (descr != NULL) {
+            descrgetfunc f = Py_TYPE(descr)->tp_descr_get;
             if (f != NULL) {
-                PyObject *res2;
-                res2 = f(res,
+                PyValue bound = f(descr,
                     /* Only pass 'obj' param if this is instance-mode super
                     (See SF ID #743627)  */
                     (su_obj == (PyObject *)su_obj_type) ? NULL : su_obj,
                     (PyObject *)su_obj_type);
-                Py_SETREF(res, res2);
+                _PyValue_CheckSlotResult(bound, Py_TYPE(descr), "tp_descr_get");
+                found.value = bound;
             }
         }
-
-        return res;
+        return _PyThreadState_PopValueRoot(tstate, &found);
     }
-    else if (PyErr_Occurred()) {
-        return NULL;
+    _PyThreadState_PopValueRoot(tstate, &found);
+    if (PyErr_Occurred()) {
+        return PyValue_NULL;
     }
 
   skip:
@@ -12398,7 +12488,7 @@ do_super_lookup(superobject *su, PyTypeObject *su_type, PyObject *su_obj,
         PyObject *args[] = {(PyObject *)su_type, su_obj};
         su = (superobject *)PyObject_Vectorcall((PyObject *)&PySuper_Type, args, 2, NULL);
         if (su == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         temp_su = 1;
     }
@@ -12409,7 +12499,7 @@ do_super_lookup(superobject *su, PyTypeObject *su_type, PyObject *su_obj,
     return res;
 }
 
-static PyObject *
+static PyValue
 super_getattro(PyObject *self, PyObject *name)
 {
     superobject *su = superobject_CAST(self);
@@ -12490,19 +12580,19 @@ supercheck(PyTypeObject *type, PyObject *obj)
     return NULL;
 }
 
-PyObject *
+PyValue
 _PySuper_Lookup(PyTypeObject *su_type, PyObject *su_obj, PyObject *name, int *method)
 {
     PyTypeObject *su_obj_type = supercheck(su_type, su_obj);
     if (su_obj_type == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    PyObject *res = do_super_lookup(NULL, su_type, su_obj, su_obj_type, name, method);
+    PyValue res = do_super_lookup(NULL, su_type, su_obj, su_obj_type, name, method);
     Py_DECREF(su_obj_type);
     return res;
 }
 
-static PyObject *
+static PyValue
 super_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     superobject *su = superobject_CAST(self);
@@ -12510,28 +12600,28 @@ super_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 
     if (obj == NULL || obj == Py_None || su->obj != NULL) {
         /* Not binding to an object, or already bound */
-        return Py_NewRef(self);
+        return PyValue_FromObject(self);
     }
     if (!Py_IS_TYPE(su, &PySuper_Type))
         /* If su is an instance of a (strict) subclass of super,
            call its type */
-        return PyObject_CallFunctionObjArgs((PyObject *)Py_TYPE(su),
-                                            su->type, obj, NULL);
+        return PyValue_FromResult(PyObject_CallFunctionObjArgs(
+            (PyObject *)Py_TYPE(su), su->type, obj, NULL));
     else {
         /* Inline the common case */
         PyTypeObject *obj_type = supercheck(su->type, obj);
         if (obj_type == NULL)
-            return NULL;
+            return PyValue_NULL;
         newobj = (superobject *)PySuper_Type.tp_new(&PySuper_Type,
                                                  NULL, NULL);
         if (newobj == NULL) {
             Py_DECREF(obj_type);
-            return NULL;
+            return PyValue_NULL;
         }
         newobj->type = (PyTypeObject*)Py_NewRef(su->type);
         newobj->obj = Py_NewRef(obj);
         newobj->obj_type = obj_type;
-        return (PyObject *)newobj;
+        return PyValue_FromObject(newobj);
     }
 }
 

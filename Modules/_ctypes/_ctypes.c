@@ -215,6 +215,83 @@ static PyType_Spec dictremover_spec = {
     .slots = dictremover_slots,
 };
 
+/****************************************************************/
+
+/* A py_object field or array item keeps the PyObject * it was given in
+   native memory, which the collector does not scan; the object it keeps
+   for it (KeepRef) is its edge.  A dict canonicalises a box of an int that
+   fits int32, or of a non-NaN float, to the inline value, which leaves the
+   box in native memory with no edge.  Such a box is kept in a BoxKeeper,
+   whose field holds the exact pointer. */
+typedef struct {
+    PyObject_HEAD
+    PyObject *box;
+} BoxKeeperObject;
+
+#define _BoxKeeperObject_CAST(op)     ((BoxKeeperObject *)(op))
+
+static int
+_BoxKeeper_traverse(PyObject *myself, visitproc visit, void *arg)
+{
+    BoxKeeperObject *self = _BoxKeeperObject_CAST(myself);
+    Py_VISIT(Py_TYPE(self));
+    Py_VISIT(self->box);
+    return 0;
+}
+
+static int
+_BoxKeeper_clear(PyObject *myself)
+{
+    BoxKeeperObject *self = _BoxKeeperObject_CAST(myself);
+    Py_CLEAR(self->box);
+    return 0;
+}
+
+static void
+_BoxKeeper_dealloc(PyObject *myself)
+{
+    PyTypeObject *tp = Py_TYPE(myself);
+    PyObject_GC_UnTrack(myself);
+    (void)_BoxKeeper_clear(myself);
+    tp->tp_free(myself);
+    Py_DECREF(tp);
+}
+
+static PyType_Slot boxkeeper_slots[] = {
+    {Py_tp_dealloc, _BoxKeeper_dealloc},
+    {Py_tp_traverse, _BoxKeeper_traverse},
+    {Py_tp_clear, _BoxKeeper_clear},
+    {Py_tp_doc, (void *)PyDoc_STR("keeps a box that native memory points to")},
+    {0, NULL},
+};
+
+static PyType_Spec boxkeeper_spec = {
+    .name = "_ctypes.BoxKeeper",
+    .basicsize = sizeof(BoxKeeperObject),
+    .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_DISALLOW_INSTANTIATION),
+    .slots = boxkeeper_slots,
+};
+
+/* KEEP, or a BoxKeeper of it if a dict would not keep KEEP itself. */
+static PyObject *
+keep_exact(ctypes_state *st, PyObject *keep)
+{
+    if (!PyValue_IsInline(PyValue_FromObject(keep))) {
+        return keep;
+    }
+    BoxKeeperObject *keeper = PyObject_GC_New(BoxKeeperObject,
+                                              st->BoxKeeper_Type);
+    if (keeper == NULL) {
+        return NULL;
+    }
+    keeper->box = keep;
+    PyObject_GC_Track(keeper);
+    return (PyObject *)keeper;
+}
+
+/****************************************************************/
+
 int
 PyDict_SetItemProxy(ctypes_state *st, PyObject *dict, PyObject *key, PyObject *item)
 {
@@ -1150,13 +1227,31 @@ CType_Type_repeat(PyObject *self, Py_ssize_t length)
 }
 
 static int
-_structunion_setattro(PyObject *self, PyObject *key, PyObject *value, int is_struct)
+_structunion_setattro(PyObject *self, PyObject *key, PyValue value, int is_struct)
 {
     /* XXX Should we disallow deleting _fields_? */
     if (PyUnicode_Check(key)
             && _PyUnicode_EqualToASCIIString(key, "_fields_"))
     {
-        if (PyCStructUnionType_update_stginfo(self, value, is_struct) < 0) {
+        // update_stginfo is an object form, which rejects an inline value:
+        // the box is made for its error, and anchored while it runs.
+        // Deletion passes NULL, as before.
+        PyObject *fields = NULL;
+        PyValue held[1];
+        _PyValueRoot span;
+        PyThreadState *tstate = _PyThreadState_GET();
+        _PyThreadState_PushValueSpan(tstate, &span, held);
+        if (!PyValue_IsNull(value)) {
+            fields = PyValue_Object(value);
+            if (fields == NULL) {
+                _PyThreadState_PopValueRoot(tstate, &span);
+                return -1;
+            }
+            _PyValueSpan_AppendObject(&span, fields);
+        }
+        int rc = PyCStructUnionType_update_stginfo(self, fields, is_struct);
+        _PyThreadState_PopValueRoot(tstate, &span);
+        if (rc < 0) {
             return -1;
         }
     }
@@ -1165,13 +1260,13 @@ _structunion_setattro(PyObject *self, PyObject *key, PyObject *value, int is_str
 }
 
 static int
-PyCStructType_setattro(PyObject *self, PyObject *key, PyObject *value)
+PyCStructType_setattro(PyObject *self, PyObject *key, PyValue value)
 {
     return _structunion_setattro(self, key, value, 1);
 }
 
 static int
-UnionType_setattro(PyObject *self, PyObject *key, PyObject *value)
+UnionType_setattro(PyObject *self, PyObject *key, PyValue value)
 {
     return _structunion_setattro(self, key, value, 0);
 }
@@ -3470,9 +3565,12 @@ _PyCData_set(ctypes_state *st,
     if (err == -1)
         return NULL;
     if (err) {
+        /* The keep first: a failure must not leave the copy unkept. */
         Py_BEGIN_CRITICAL_SECTION(src);
-        memcpy(ptr, src->b_ptr, size);
         value = GetKeepedObjects(src);
+        if (value != NULL) {
+            memcpy(ptr, src->b_ptr, size);
+        }
         Py_END_CRITICAL_SECTION();
         if (value == NULL)
             return NULL;
@@ -3502,9 +3600,10 @@ _PyCData_set(ctypes_state *st,
             return NULL;
         }
         Py_BEGIN_CRITICAL_SECTION(src);
-        *(void **)ptr = src->b_ptr;
-
         keep = GetKeepedObjects(src);
+        if (keep != NULL) {
+            *(void **)ptr = src->b_ptr;
+        }
         Py_END_CRITICAL_SECTION();
         if (keep == NULL)
             return NULL;
@@ -3526,14 +3625,69 @@ _PyCData_set(ctypes_state *st,
     return NULL;
 }
 
+/* The NBYTES at PTR before a store, so that a failure to keep what the new
+   bytes refer to can put the previous bytes back.  The previous bytes' objects
+   are still kept under the same key; the new bytes' objects (a box made for
+   the store, say) are kept by nothing once the storing frame returns, and a
+   later collection would free them under the native pointer. */
+typedef struct {
+    char *ptr;
+    Py_ssize_t nbytes;
+    char *saved;
+    char small[64];
+} SavedBytes;
+
+static int
+save_bytes(SavedBytes *s, char *ptr, Py_ssize_t nbytes)
+{
+    s->ptr = ptr;
+    s->nbytes = nbytes;
+    s->saved = s->small;
+    if (nbytes > (Py_ssize_t)sizeof(s->small)) {
+        s->saved = PyMem_Malloc(nbytes);
+        if (s->saved == NULL) {
+            PyErr_NoMemory();
+            return -1;
+        }
+    }
+    memcpy(s->saved, ptr, nbytes);
+    return 0;
+}
+
+/* Keep RESULT, what a store returned, for the contents at INDEX of TARGET,
+   and on failure put SAVED back.  RESULT is consumed, as by KeepRef.  A NULL
+   RESULT is a failed store, which changed nothing (and Python code it ran
+   may have stored and kept since SAVED was taken), so nothing is put back. */
+static int
+keep_or_restore(ctypes_state *st, CDataObject *target, Py_ssize_t index,
+                PyObject *result, SavedBytes *saved)
+{
+    int res = -1;
+    if (result != NULL) {
+        result = keep_exact(st, result);
+        if (result != NULL) {
+            res = KeepRef(target, index, result);
+        }
+        if (res < 0) {
+            memcpy(saved->ptr, saved->saved, saved->nbytes);
+        }
+    }
+    if (saved->saved != saved->small) {
+        PyMem_Free(saved->saved);
+    }
+    return res;
+}
+
 /*
  * Set a slice in object 'dst', which has the type 'type',
- * to the value 'value'.
+ * to the value 'value'.  'size' is what the setfunc takes (the legacy packed
+ * form for a bit field); 'nbytes' is the number of bytes at 'ptr' the store
+ * may change.
  */
 int
 PyCData_set(ctypes_state *st,
           PyObject *dst, PyObject *type, SETFUNC setfunc, PyObject *value,
-          Py_ssize_t index, Py_ssize_t size, char *ptr)
+          Py_ssize_t index, Py_ssize_t size, Py_ssize_t nbytes, char *ptr)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(dst);
 
@@ -3546,15 +3700,14 @@ PyCData_set(ctypes_state *st,
         return -1;
     }
 
+    SavedBytes saved;
+    if (save_bytes(&saved, ptr, nbytes) < 0) {
+        return -1;
+    }
+    /* _PyCData_set fails only before it stores. */
     result = _PyCData_set(st, mem, type, setfunc, value,
                         size, ptr);
-    if (result == NULL)
-        return -1;
-
-    /* KeepRef steals a refcount from it's last argument */
-    /* If KeepRef fails, we are stumped.  The dst memory block has already
-       been changed */
-    return KeepRef(mem, index, result);
+    return keep_or_restore(st, mem, index, result, &saved);
 }
 
 
@@ -5214,7 +5367,7 @@ Array_ass_item_impl(PyObject *myself, Py_ssize_t index, PyObject *value)
     ptr = self->b_ptr + offset;
 
     return PyCData_set(st, myself, stginfo->proto, stginfo->setfunc, value,
-                       index, size, ptr);
+                       index, size, size, ptr);
 }
 
 /*[clinic input]
@@ -5418,12 +5571,12 @@ _ctypes_Simple_value_set_impl(CDataObject *self, PyObject *value)
     assert(info); /* Cannot be NULL for CDataObject instances */
     assert(info->setfunc);
 
-    result = info->setfunc(self->b_ptr, value, info->size);
-    if (!result)
+    SavedBytes saved;
+    if (save_bytes(&saved, self->b_ptr, info->size) < 0) {
         return -1;
-
-    /* consumes the refcount the setfunc returns */
-    return KeepRef(self, 0, result);
+    }
+    result = info->setfunc(self->b_ptr, value, info->size);
+    return keep_or_restore(st, self, 0, result, &saved);
 }
 
 
@@ -5662,7 +5815,7 @@ Pointer_ass_item_impl(PyObject *myself, Py_ssize_t index, PyObject *value)
     offset = index * iteminfo->size;
 
     return PyCData_set(st, myself, proto, stginfo->setfunc, value,
-                       index, size, ((char *)deref + offset));
+                       index, size, size, ((char *)deref + offset));
 }
 
 static PyObject *
@@ -6343,6 +6496,7 @@ _ctypes_add_types(PyObject *mod)
      */
 
     CREATE_TYPE(st->DictRemover_Type, &dictremover_spec, NULL, NULL);
+    CREATE_TYPE(st->BoxKeeper_Type, &boxkeeper_spec, NULL, NULL);
     CREATE_TYPE(st->StructParam_Type, &structparam_spec, NULL, NULL);
 
 #ifdef MS_WIN32
@@ -6561,6 +6715,7 @@ module_traverse(PyObject *module, visitproc visit, void *arg) {
     Py_VISIT(st->swapped_suffix);
 
     Py_VISIT(st->DictRemover_Type);
+    Py_VISIT(st->BoxKeeper_Type);
     Py_VISIT(st->PyCArg_Type);
     Py_VISIT(st->PyCField_Type);
     Py_VISIT(st->PyCThunk_Type);
@@ -6595,6 +6750,7 @@ module_clear(PyObject *module) {
     Py_CLEAR(st->swapped_suffix);
 
     Py_CLEAR(st->DictRemover_Type);
+    Py_CLEAR(st->BoxKeeper_Type);
     Py_CLEAR(st->PyCArg_Type);
     Py_CLEAR(st->PyCField_Type);
     Py_CLEAR(st->PyCThunk_Type);

@@ -1287,7 +1287,7 @@ context_setallcr(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
 }
 #endif
 
-static PyObject *
+static PyValue
 context_getattr(PyObject *self, PyObject *name)
 {
     PyObject *retval;
@@ -1295,11 +1295,11 @@ context_getattr(PyObject *self, PyObject *name)
     if (PyUnicode_Check(name)) {
         if (PyUnicode_CompareWithASCIIString(name, "traps") == 0) {
             retval = ((PyDecContextObject *)self)->traps;
-            return Py_NewRef(retval);
+            return PyValue_FromObject(retval);
         }
         if (PyUnicode_CompareWithASCIIString(name, "flags") == 0) {
             retval = ((PyDecContextObject *)self)->flags;
-            return Py_NewRef(retval);
+            return PyValue_FromObject(retval);
         }
     }
 
@@ -1307,20 +1307,25 @@ context_getattr(PyObject *self, PyObject *name)
 }
 
 static int
-context_setattr(PyObject *self, PyObject *name, PyObject *value)
+context_setattr(PyObject *self, PyObject *name, PyValue value)
 {
-    if (value == NULL) {
+    if (PyValue_IsNull(value)) {
         PyErr_SetString(PyExc_AttributeError,
             "context attributes cannot be deleted");
         return -1;
     }
 
     if (PyUnicode_Check(name)) {
-        if (PyUnicode_CompareWithASCIIString(name, "traps") == 0) {
-            return context_settraps_dict(self, value);
-        }
-        if (PyUnicode_CompareWithASCIIString(name, "flags") == 0) {
-            return context_setstatus_dict(self, value);
+        // These read the value as a dict, so an inline value is boxed for
+        // their error.
+        int traps = PyUnicode_CompareWithASCIIString(name, "traps") == 0;
+        if (traps || PyUnicode_CompareWithASCIIString(name, "flags") == 0) {
+            PyObject *obj = PyValue_Object(value);
+            if (obj == NULL) {
+                return -1;
+            }
+            return traps ? context_settraps_dict(self, obj)
+                         : context_setstatus_dict(self, obj);
         }
     }
 

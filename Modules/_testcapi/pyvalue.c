@@ -143,6 +143,79 @@ object_setattr(PyObject *Py_UNUSED(module), PyObject *args)
     RETURN_INT(PyObject_SetAttrValue(PyValue_FromObject(o), name, value));
 }
 
+// (found, value or None, kind or None); an error propagates.
+static PyObject *
+object_getoptionalattr(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *o, *name;
+    if (!PyArg_ParseTuple(args, "OO", &o, &name)) {
+        return NULL;
+    }
+    PyValue result;
+    int rc = PyObject_GetOptionalAttrValue(PyValue_FromObject(o), name,
+                                           &result);
+    if (rc < 0) {
+        assert(PyValue_IsNull(result));
+        return NULL;
+    }
+    if (rc == 0) {
+        assert(PyValue_IsNull(result) && !PyErr_Occurred());
+        return Py_BuildValue("(iOO)", 0, Py_None, Py_None);
+    }
+    PyObject *pair = value_result(result);
+    if (pair == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("(iOO)", 1, PyTuple_GET_ITEM(pair, 0),
+                         PyTuple_GET_ITEM(pair, 1));
+}
+
+// The PyMemberDef of type(o) named name, or NULL with an exception.
+static PyMemberDef *
+find_member(PyObject *o, const char *name)
+{
+    for (PyMemberDef *m = Py_TYPE(o)->tp_members; m && m->name; m++) {
+        if (strcmp(m->name, name) == 0) {
+            return m;
+        }
+    }
+    PyErr_Format(PyExc_LookupError, "no member %s", name);
+    return NULL;
+}
+
+static PyObject *
+member_getonevalue(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *o;
+    const char *name;
+    if (!PyArg_ParseTuple(args, "Os", &o, &name)) {
+        return NULL;
+    }
+    PyMemberDef *m = find_member(o, name);
+    if (m == NULL) {
+        return NULL;
+    }
+    return value_result(PyMember_GetOneValue((const char *)o, m));
+}
+
+// v None deletes the member.
+static PyObject *
+member_setonevalue(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *o, *v;
+    const char *name;
+    if (!PyArg_ParseTuple(args, "OsO", &o, &name, &v)) {
+        return NULL;
+    }
+    PyMemberDef *m = find_member(o, name);
+    if (m == NULL) {
+        return NULL;
+    }
+    NULLABLE(v);
+    PyValue value = v == NULL ? PyValue_NULL : PyValue_FromObject(v);
+    RETURN_INT(PyMember_SetOneValue((char *)o, m, value));
+}
+
 static PyObject *
 object_richcompare(PyObject *Py_UNUSED(module), PyObject *args)
 {
@@ -296,6 +369,236 @@ number_as_ssize_t(PyObject *Py_UNUSED(module), PyObject *args)
     return PyLong_FromSsize_t(r);
 }
 
+
+/* Types whose attribute slots return and take values (rung 2 of 6d).
+
+   ValueSlots: tp_getattro returns 12345 for "i" and 2.5 for "f", inline,
+   then the item of its dict, then the generic lookup; tp_setattro stores
+   the value in its dict as it is.  As a descriptor, __get__ returns 12345
+   for an instance and __set__ stores the value under "set" in its own
+   dict.  It is defined static and, from the same functions, as a heap
+   type.
+
+   BadGetattro and BadDescrGet return a non-canonical box of 5 (the raw
+   bits of a box), which the debug check stops; RawKeep's setattro stores
+   a value's bits in a PyObject * field, which the tracer check stops. */
+
+typedef struct {
+    PyObject_HEAD
+    PyObject *dict;
+} ValueSlotsObject;
+
+static PyObject *
+valueslots_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    ValueSlotsObject *self = (ValueSlotsObject *)type->tp_alloc(type, 0);
+    if (self == NULL) {
+        return NULL;
+    }
+    self->dict = PyDict_New();
+    if (self->dict == NULL) {
+        Py_DECREF(self);
+        return NULL;
+    }
+    return (PyObject *)self;
+}
+
+static int
+valueslots_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(Py_TYPE(op));
+    Py_VISIT(((ValueSlotsObject *)op)->dict);
+    return 0;
+}
+
+static int
+valueslots_clear(PyObject *op)
+{
+    Py_CLEAR(((ValueSlotsObject *)op)->dict);
+    return 0;
+}
+
+static void
+valueslots_dealloc(PyObject *op)
+{
+    PyTypeObject *tp = Py_TYPE(op);
+    PyObject_GC_UnTrack(op);
+    (void)valueslots_clear(op);
+    tp->tp_free(op);
+    if (tp->tp_flags & Py_TPFLAGS_HEAPTYPE) {
+        Py_DECREF(tp);
+    }
+}
+
+static PyValue
+valueslots_getattro(PyObject *op, PyObject *name)
+{
+    if (PyUnicode_EqualToUTF8(name, "i")) {
+        return PyValue_FromInt32(12345);
+    }
+    if (PyUnicode_EqualToUTF8(name, "f")) {
+        return PyValue_FromDouble(2.5);
+    }
+    PyValue v;
+    if (PyDict_GetItemRefValue(((ValueSlotsObject *)op)->dict, name, &v)) {
+        return v;
+    }
+    return PyObject_GenericGetAttr(op, name);
+}
+
+static int
+valueslots_setattro(PyObject *op, PyObject *name, PyValue value)
+{
+    PyValue dict = PyValue_FromObject(((ValueSlotsObject *)op)->dict);
+    if (PyValue_IsNull(value)) {
+        return PyObject_DelItemValue(dict, PyValue_FromObject(name));
+    }
+    return PyObject_SetItemValue(dict, PyValue_FromObject(name), value);
+}
+
+static PyValue
+valueslots_descr_get(PyObject *self, PyObject *obj, PyObject *type)
+{
+    if (obj == NULL) {
+        return PyValue_FromObject(self);
+    }
+    return PyValue_FromInt32(12345);
+}
+
+static int
+valueslots_descr_set(PyObject *self, PyObject *obj, PyValue value)
+{
+    PyObject *key = PyUnicode_FromString("set");
+    if (key == NULL) {
+        return -1;
+    }
+    int rc = valueslots_setattro(self, key, value);
+    Py_DECREF(key);
+    return rc;
+}
+
+static PyTypeObject ValueSlots_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testcapi.pyvalue.ValueSlots",
+    .tp_basicsize = sizeof(ValueSlotsObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .tp_new = valueslots_new,
+    .tp_dealloc = valueslots_dealloc,
+    .tp_traverse = valueslots_traverse,
+    .tp_clear = valueslots_clear,
+    .tp_getattro = valueslots_getattro,
+    .tp_setattro = valueslots_setattro,
+    .tp_descr_get = valueslots_descr_get,
+    .tp_descr_set = valueslots_descr_set,
+};
+
+static PyType_Slot valueslots_heap_slots[] = {
+    {Py_tp_new, valueslots_new},
+    {Py_tp_dealloc, valueslots_dealloc},
+    {Py_tp_traverse, valueslots_traverse},
+    {Py_tp_clear, valueslots_clear},
+    {Py_tp_getattro, valueslots_getattro},
+    {Py_tp_setattro, valueslots_setattro},
+    {Py_tp_descr_get, valueslots_descr_get},
+    {Py_tp_descr_set, valueslots_descr_set},
+    {0, NULL},
+};
+
+static PyType_Spec valueslots_heap_spec = {
+    .name = "_testcapi.pyvalue.HeapValueSlots",
+    .basicsize = sizeof(ValueSlotsObject),
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .slots = valueslots_heap_slots,
+};
+
+/* A spec type naming the generic functions. */
+static PyType_Slot generic_heap_slots[] = {
+    {Py_tp_getattro, PyObject_GenericGetAttr},
+    {Py_tp_setattro, PyObject_GenericSetAttr},
+    {0, NULL},
+};
+
+static PyType_Spec generic_heap_spec = {
+    .name = "_testcapi.pyvalue.HeapGeneric",
+    .basicsize = sizeof(PyObject),
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .slots = generic_heap_slots,
+};
+
+// The raw bits of a box of 5: a heap encoding that is not canonical.
+static PyValue
+bad_box(void)
+{
+    PyObject *box = PyValue_Object(PyValue_FromInt32(5));
+    if (box == NULL) {
+        return PyValue_NULL;
+    }
+    return _PyValue_FromBits((uintptr_t)box);
+}
+
+static PyValue
+badgetattro_getattro(PyObject *op, PyObject *name)
+{
+    if (PyUnicode_EqualToUTF8(name, "x")) {
+        return bad_box();
+    }
+    return PyObject_GenericGetAttr(op, name);
+}
+
+static PyTypeObject BadGetattro_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testcapi.pyvalue.BadGetattro",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = PyType_GenericNew,
+    .tp_getattro = badgetattro_getattro,
+};
+
+static PyValue
+baddescrget_descr_get(PyObject *self, PyObject *obj, PyObject *type)
+{
+    return bad_box();
+}
+
+static PyTypeObject BadDescrGet_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testcapi.pyvalue.BadDescrGet",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = PyType_GenericNew,
+    .tp_descr_get = baddescrget_descr_get,
+};
+
+typedef struct {
+    PyObject_HEAD
+    PyObject *raw;
+} RawKeepObject;
+
+static int
+rawkeep_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(((RawKeepObject *)op)->raw);
+    return 0;
+}
+
+static int
+rawkeep_setattro(PyObject *op, PyObject *name, PyValue value)
+{
+    // Wrong on purpose: an inline value's bits are not a PyObject *.
+    ((RawKeepObject *)op)->raw = (PyObject *)(uintptr_t)value.bits;
+    return 0;
+}
+
+static PyTypeObject RawKeep_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testcapi.pyvalue.RawKeep",
+    .tp_basicsize = sizeof(RawKeepObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .tp_new = PyType_GenericNew,
+    .tp_traverse = rawkeep_traverse,
+    .tp_setattro = rawkeep_setattro,
+};
+
 static PyMethodDef test_methods[] = {
     {"AsLongValue", _PyCFunction_CAST(as_c_PyLong_AsLong), METH_O},
     {"AsIntValue", _PyCFunction_CAST(as_c_PyLong_AsInt), METH_O},
@@ -339,6 +642,9 @@ static PyMethodDef test_methods[] = {
     {"FloatValue", _PyCFunction_CAST(Number_Float), METH_O},
     {"GetAttrValue", object_getattr, METH_VARARGS},
     {"SetAttrValue", object_setattr, METH_VARARGS},
+    {"GetOptionalAttrValue", object_getoptionalattr, METH_VARARGS},
+    {"MemberGetOneValue", member_getonevalue, METH_VARARGS},
+    {"MemberSetOneValue", member_setonevalue, METH_VARARGS},
     {"RichCompareValue", object_richcompare, METH_VARARGS},
     {"RichCompareBoolValue", object_richcomparebool, METH_VARARGS},
     {"IsTrueValue", _PyCFunction_CAST(object_istrue), METH_O},
@@ -365,10 +671,27 @@ _PyTestCapi_Init_PyValue(PyObject *m)
     if (mod == NULL) {
         return -1;
     }
-    if (PyModule_AddFunctions(mod, test_methods) < 0
-        || PyModule_Add(m, "pyvalue", mod) < 0)
-    {
+    if (PyModule_AddFunctions(mod, test_methods) < 0) {
+        Py_DECREF(mod);
         return -1;
     }
-    return 0;
+    PyTypeObject *types[] = {&ValueSlots_Type, &BadGetattro_Type,
+                             &BadDescrGet_Type, &RawKeep_Type};
+    for (size_t i = 0; i < Py_ARRAY_LENGTH(types); i++) {
+        if (PyModule_AddType(mod, types[i]) < 0) {
+            Py_DECREF(mod);
+            return -1;
+        }
+    }
+    PyType_Spec *specs[] = {&valueslots_heap_spec, &generic_heap_spec};
+    for (size_t i = 0; i < Py_ARRAY_LENGTH(specs); i++) {
+        PyObject *tp = PyType_FromSpec(specs[i]);
+        if (tp == NULL || PyModule_AddType(mod, (PyTypeObject *)tp) < 0) {
+            Py_XDECREF(tp);
+            Py_DECREF(mod);
+            return -1;
+        }
+        Py_DECREF(tp);
+    }
+    return PyModule_Add(m, "pyvalue", mod);
 }

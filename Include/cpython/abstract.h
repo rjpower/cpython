@@ -175,6 +175,11 @@ PyAPI_FUNC(Py_ssize_t) PyNumber_AsSsize_tValue(PyValue o, PyObject *exc);
 PyAPI_FUNC(double) PyFloat_AsDoubleValue(PyValue o);
 
 PyAPI_FUNC(PyValue) PyObject_GetAttrValue(PyValue o, PyObject *attr_name);
+/* PyObject_GetOptionalAttr() on a value: 1 and the attribute in *result, 0
+   and PyValue_NULL if there is none, or -1 and PyValue_NULL with an
+   exception. */
+PyAPI_FUNC(int) PyObject_GetOptionalAttrValue(PyValue o, PyObject *attr_name,
+                                              PyValue *result);
 /* Deletes the attribute if v is PyValue_NULL. */
 PyAPI_FUNC(int) PyObject_SetAttrValue(PyValue o, PyObject *attr_name, PyValue v);
 PyAPI_FUNC(PyValue) PyObject_RichCompareValue(PyValue o1, PyValue o2, int opid);

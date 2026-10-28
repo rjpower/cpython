@@ -3,8 +3,8 @@
     Xxo_getattro: Modules/xxmodule.c:129 Modules/xxlimited.c:468 Modules/xxlimited_3_13.c:303 Modules/xxlimited_35.c:122
     proxy_getattr: Objects/weakrefobject.c:985 Objects/weakrefobject.c:1019
     _Py_module_getattro: Objects/moduleobject.c:1736
-    _Py_type_getattro: Objects/typeobject.c:6965
-    super_getattro: Objects/typeobject.c:12767
+    _Py_type_getattro: Objects/typeobject.c:6973
+    super_getattro: Objects/typeobject.c:12775
     union_getattro: Objects/unionobject.c:547
     method_getattro: Objects/classobject.c:319
     instancemethod_getattro: Objects/classobject.c:519
@@ -19,7 +19,7 @@
   PyObject_GenericSetAttr 15; proxy_setattr 2; Xxo_setattro 2; type_setattro 1; local_setattro 1; Pickler_setattr 1; Unpickler_setattr 1; Uuid_setattr 1; context_setattr 1; heapctypesetattr_setattro 1; PyCStructType_setattro 1; UnionType_setattro 1
     proxy_setattr: Objects/weakrefobject.c:986 Objects/weakrefobject.c:1020
     Xxo_setattro: Modules/xxlimited.c:469 Modules/xxlimited_3_13.c:304
-    type_setattro: Objects/typeobject.c:6966
+    type_setattro: Objects/typeobject.c:6974
     local_setattro: Modules/_threadmodule.c:1801
     Pickler_setattr: Modules/_pickle.c:5726
     Unpickler_setattr: Modules/_pickle.c:8280
@@ -39,7 +39,7 @@
     property_descr_get: Objects/descrobject.c:2134
     cm_descr_get: Objects/funcobject.c:1685
     sm_descr_get: Objects/funcobject.c:1951
-    super_descr_get: Objects/typeobject.c:12784
+    super_descr_get: Objects/typeobject.c:12792
     method_descr_get: Objects/classobject.c:329
     instancemethod_descr_get: Objects/classobject.c:527
     partial_descr_get: Modules/_functoolsmodule.c:885
@@ -54,3 +54,120 @@
     property_descr_set: Objects/descrobject.c:2135
     tuplegetter_descr_set: Modules/_collectionsmodule.c:2785
     PyCField_set: Modules/_ctypes/cfield.c:469
+Objects/classobject.c:167: method_getattro: local: descrgetfunc f = TP_DESCR_GET(Py_TYPE(descr));
+Objects/classobject.c:396: instancemethod_getattro: local: descrgetfunc f = TP_DESCR_GET(Py_TYPE(descr));
+Objects/descrobject.c:527: classmethoddescr_call: call classmethod_get: PyObject *bound = classmethod_get((PyObject *)descr, NULL, self);
+Objects/descrobject.c:1065: PyDescr_IsData: field: return Py_TYPE(ob)->tp_descr_set != NULL;
+Objects/genericaliasobject.c:734: ga_getattro: call PyObject_GenericGetAttr: return PyObject_GenericGetAttr(self, name);
+Objects/lazyimportobject.c:186: lazy_import_getattro: call _PyObject_GenericGetAttrWithDict: PyObject *value = _PyObject_GenericGetAttrWithDict(
+Objects/lookupplan.c:29: _PyLookup_ClassifyLoad: field: if (t->tp_descr_get != NULL && t->tp_descr_set != NULL) {
+Objects/lookupplan.c:33: _PyLookup_ClassifyLoad: field: if (t->tp_descr_get != NULL) {
+Objects/lookupplan.c:128: _PyShape_ResolveStore: field: if (Py_TYPE(d)->tp_descr_set != NULL) {
+Objects/moduleobject.c:1264: _Py_module_getattro_impl: call _PyObject_GenericGetAttrWithDict: attr = _PyObject_GenericGetAttrWithDict((PyObject *)m, name, NULL, suppress);
+Objects/moduleobject.c:1453: _Py_module_getattro: call _Py_module_getattro_impl: return _Py_module_getattro_impl(m, name, 0);
+Objects/object.c:945: getattr_object_value: field: if (tp->tp_getattro != NULL) {
+Objects/object.c:946: getattr_object_value: field: result = (*tp->tp_getattro)(v, name);
+Objects/object.c:1108: PyObject_GetOptionalAttr: call _PyObject_GenericGetAttrWithDict: *result = _PyObject_GenericGetAttrWithDict(v, name, NULL, 1);
+Objects/object.c:1119: PyObject_GetOptionalAttr: call _Py_type_getattro_impl: *result = _Py_type_getattro_impl((PyTypeObject*)v, name, &suppress_missing_attribute_exception);
+Objects/object.c:1127: PyObject_GetOptionalAttr: call _Py_module_getattro_impl: *result = _Py_module_getattro_impl((PyModuleObject*)v, name, 1);
+Objects/object.c:1136: PyObject_GetOptionalAttr: field: else if (tp->tp_getattro != NULL) {
+Objects/object.c:1137: PyObject_GetOptionalAttr: field: *result = (*tp->tp_getattro)(v, name);
+Objects/object.c:1269: object_setattr: field: if (tp->tp_setattro != NULL) {
+Objects/object.c:1270: object_setattr: field: err = (*tp->tp_setattro)(v, name, value);
+Objects/object.c:1410: descr_get_value: local: descr_get_value(descrgetfunc f, PyObject *descr, PyObject *obj, int suppress)
+Objects/object.c:1506: get_method_value: field: *method = descr_get_value(Py_TYPE(descr)->tp_descr_get, descr, obj, 0);
+Objects/object.c:1527: get_method_value: field: *method = descr_get_value(Py_TYPE(descr)->tp_descr_get, descr, obj, 0);
+Objects/object.c:1561: _PyObject_GetMethod: field: if (tp->tp_getattro != PyObject_GenericGetAttr || !PyUnicode_CheckExact(name)) {
+Objects/object.c:1609: _PyObject_GetMethodValue: field: if (tp->tp_getattro != PyObject_GenericGetAttr || !PyUnicode_CheckExact(name)) {
+Objects/object.c:1701: generic_getattr_value: field: res = descr_get_value(Py_TYPE(descr)->tp_descr_get, descr, obj, suppress);
+Objects/object.c:1722: generic_getattr_value: field: res = descr_get_value(Py_TYPE(descr)->tp_descr_get, descr, obj, suppress);
+Objects/object.c:1750: PyObject_GenericGetAttr: call _PyObject_GenericGetAttrWithDict: return _PyObject_GenericGetAttrWithDict(obj, name, NULL, 0);
+Objects/object.c:1762: generic_setattr_value: local: descrsetfunc f;
+Objects/object.c:1808: generic_setattr_value: field: f = Py_TYPE(descr)->tp_descr_set;
+Objects/object.c:1907: PyObject_GenericSetAttr: call _PyObject_GenericSetAttrWithDict: return _PyObject_GenericSetAttrWithDict(obj, name, value, NULL);
+Objects/typeobject.c:1880: type_get_doc: field, local: descrgetfunc descr_get = Py_TYPE(result)->tp_descr_get;
+Objects/typeobject.c:1929: type_get_annotate: field, local: descrgetfunc get = Py_TYPE(annotate)->tp_descr_get;
+Objects/typeobject.c:2009: type_get_annotations: field, local: descrgetfunc get = Py_TYPE(annotations)->tp_descr_get;
+Objects/typeobject.c:2726: _PyObject_LookupSpecial: local: descrgetfunc f;
+Objects/typeobject.c:2727: _PyObject_LookupSpecial: field: if ((f = Py_TYPE(res)->tp_descr_get) != NULL) {
+Objects/typeobject.c:2759: _PyObject_LookupSpecialMethod: field, local: descrgetfunc f = Py_TYPE(method_o)->tp_descr_get;
+Objects/typeobject.c:2795: lookup_method_ex: field, local: descrgetfunc f = Py_TYPE(value)->tp_descr_get;
+Objects/typeobject.c:3684: subtype_dict: local: descrgetfunc func;
+Objects/typeobject.c:3690: subtype_dict: field: func = Py_TYPE(descr)->tp_descr_get;
+Objects/typeobject.c:3737: subtype_setdict: local: descrsetfunc func;
+Objects/typeobject.c:3743: subtype_setdict: field: func = Py_TYPE(descr)->tp_descr_set;
+Objects/typeobject.c:6225: _Py_type_getattro: call _Py_type_getattro_impl: return _Py_type_getattro_impl(type, name, NULL);
+Objects/typeobject.c:6243: _Py_type_getattro_value: local: descrgetfunc meta_get = NULL;
+Objects/typeobject.c:6271: _Py_type_getattro_value: field: meta_get = Py_TYPE(meta_attr_obj)->tp_descr_get;
+Objects/typeobject.c:6292: _Py_type_getattro_value: local: descrgetfunc local_get = NULL;
+Objects/typeobject.c:6296: _Py_type_getattro_value: field: local_get = Py_TYPE(attr_obj)->tp_descr_get;
+Objects/typeobject.c:6451: type_setattro: field, local: descrsetfunc f = Py_TYPE(descr)->tp_descr_set;
+Objects/typeobject.c:8600: inherit_slots: field: type->tp_getattro = base->tp_getattro;
+Objects/typeobject.c:8604: inherit_slots: field: type->tp_setattro = base->tp_setattro;
+Objects/typeobject.c:8644: inherit_slots: field: COPYSLOT(tp_descr_get);
+Objects/typeobject.c:8647: inherit_slots: field: if (base->tp_descr_get &&
+Objects/typeobject.c:8648: inherit_slots: field: type->tp_descr_get == base->tp_descr_get &&
+Objects/typeobject.c:8654: inherit_slots: field: COPYSLOT(tp_descr_set);
+Objects/typeobject.c:8697: type_ready_pre_checks: field: _PyObject_ASSERT((PyObject *)type, type->tp_descr_get != NULL);
+Objects/typeobject.c:9845: hackcheck_unlocked: local: hackcheck_unlocked(PyObject *self, setattrofunc func, const char *what)
+Objects/typeobject.c:9867: hackcheck_unlocked: field: else if (base->tp_setattro == type->tp_setattro) {
+Objects/typeobject.c:9879: hackcheck_unlocked: field: else if (base->tp_setattro != slot_tp_setattro) {
+Objects/typeobject.c:9893: hackcheck: local: hackcheck(PyObject *self, setattrofunc func, const char *what)
+Objects/typeobject.c:9909: wrap_setattr: local: setattrofunc func = (setattrofunc)wrapped;
+Objects/typeobject.c:9926: wrap_delattr: local: setattrofunc func = (setattrofunc)wrapped;
+Objects/typeobject.c:10020: wrap_descr_get: local: descrgetfunc func = (descrgetfunc)wrapped;
+Objects/typeobject.c:10041: wrap_descr_set: local: descrsetfunc func = (descrsetfunc)wrapped;
+Objects/typeobject.c:10056: wrap_descr_delete: local: descrsetfunc func = (descrsetfunc)wrapped;
+Objects/typeobject.c:10707: call_attribute: field, local: descrgetfunc f = Py_TYPE(attr)->tp_descr_get;
+Objects/typeobject.c:10750: _Py_slot_tp_getattr_hook: call _PyObject_GenericGetAttrWithDict: res = _PyObject_GenericGetAttrWithDict(self, name, NULL, 1);
+Objects/typeobject.c:11336: slot_am_anext: field: TPSLOT(__getattribute__, tp_getattro, _Py_slot_tp_getattr_hook,
+Objects/typeobject.c:11339: slot_am_anext: field: TPSLOT(__getattr__, tp_getattro, _Py_slot_tp_getattr_hook, NULL,
+Objects/typeobject.c:11341: slot_am_anext: field: TPSLOT(__setattr__, tp_setattro, slot_tp_setattro, wrap_setattr,
+Objects/typeobject.c:11343: slot_am_anext: field: TPSLOT(__delattr__, tp_setattro, slot_tp_setattro, wrap_delattr,
+Objects/typeobject.c:11361: slot_am_anext: field: TPSLOT(__get__, tp_descr_get, slot_tp_descr_get, wrap_descr_get,
+Objects/typeobject.c:11363: slot_am_anext: field: TPSLOT(__set__, tp_descr_set, slot_tp_descr_set, wrap_descr_set,
+Objects/typeobject.c:11365: slot_am_anext: field: TPSLOT(__delete__, tp_descr_set, slot_tp_descr_set,
+Objects/typeobject.c:12377: do_super_lookup: field, local: descrgetfunc f = Py_TYPE(res)->tp_descr_get;
+Objects/typeobject.c:12404: do_super_lookup: call PyObject_GenericGetAttr: res = PyObject_GenericGetAttr((PyObject *)su, name);
+Objects/typeobject.c:12421: super_getattro: call PyObject_GenericGetAttr: return PyObject_GenericGetAttr(self, name);
+Objects/unionobject.c:434: union_getattro: call PyObject_GenericGetAttr: return PyObject_GenericGetAttr(self, name);
+Modules/_ctypes/_ctypes.c:1164: _structunion_setattro: field: return PyType_Type.tp_setattro(self, key, value);
+Modules/_decimal/_decimal.c:1306: context_getattr: call PyObject_GenericGetAttr: return PyObject_GenericGetAttr(self, name);
+Modules/_decimal/_decimal.c:1327: context_setattr: call PyObject_GenericSetAttr: return PyObject_GenericSetAttr(self, name, value);
+Modules/_lsprof.c:705: _lsprof_Profiler__pyreturn_callback_impl: field: PyObject *meth = Py_TYPE(callable)->tp_descr_get(
+Modules/_pickle.c:5097: persistent_id: call Pickler_getattr: static PyObject *Pickler_getattr(PyObject *self, PyObject *name);
+Modules/_pickle.c:5106: pickler_get_optional_attr: call _PyObject_GenericGetAttrWithDict: *result = _PyObject_GenericGetAttrWithDict((PyObject *)self, name,
+Modules/_pickle.c:5693: Pickler_getattr: call PyObject_GenericGetAttr: return PyObject_GenericGetAttr(self, name);
+Modules/_pickle.c:5708: Pickler_setattr: call PyObject_GenericSetAttr: return PyObject_GenericSetAttr(self, name, value);
+Modules/_pickle.c:8253: Unpickler_getattr: call PyObject_GenericGetAttr: return PyObject_GenericGetAttr(self, name);
+Modules/_pickle.c:8268: Unpickler_setattr: call PyObject_GenericSetAttr: return PyObject_GenericSetAttr(self, name, value);
+Modules/_testcapi/heaptype.c:1331: heapctypesetattr_setattro: call PyObject_GenericSetAttr: return PyObject_GenericSetAttr((PyObject*) self, attr, value);
+Modules/_testmultiphase.c:91: Example_getattro: call PyObject_GenericGetAttr: return PyObject_GenericGetAttr((PyObject *)self, name);
+Modules/_threadmodule.c:1775: local_setattro: call _PyObject_GenericSetAttrWithDict: int st = _PyObject_GenericSetAttrWithDict(op, name, v, ldict);
+Modules/_threadmodule.c:1784: local_setattro: call local_getattro: static PyObject *local_getattro(PyObject *, PyObject *);
+Modules/_threadmodule.c:1828: local_getattro: call _PyObject_GenericGetAttrWithDict: PyObject *res = _PyObject_GenericGetAttrWithDict(op, name, ldict, 0);
+Modules/_threadmodule.c:1842: local_getattro: call _PyObject_GenericGetAttrWithDict: PyObject *res = _PyObject_GenericGetAttrWithDict(op, name, ldict, 0);
+Modules/xxlimited.c:309: Xxo_getattro: call PyObject_GenericGetAttr: return PyObject_GenericGetAttr(self, name);
+Modules/xxlimited_35.c:93: Xxo_getattro: call PyObject_GenericGetAttr: return PyObject_GenericGetAttr(op, name);
+Modules/xxlimited_3_13.c:182: Xxo_getattro: call PyObject_GenericGetAttr: return PyObject_GenericGetAttr(op, name);
+Modules/xxmodule.c:85: Xxo_getattro: call PyObject_GenericGetAttr: return PyObject_GenericGetAttr(op, name);
+Python/ceval.c:3800: type_has_special_method: field: return r != NULL && Py_TYPE(r)->tp_descr_get != NULL;
+Python/legacy_tracing.c:132: sys_profile_call_or_return: field: PyObject *meth = Py_TYPE(callable)->tp_descr_get(
+Python/specialize.c:665: lookup_hook_facts: field, local: getattrofunc getattro_slot = type->tp_getattro;
+Python/specialize.c:1137: _Py_Specialize_StoreAttr: field: if (type->tp_setattro != PyObject_GenericSetAttr) {
+Python/specialize.c:1179: _Py_Specialize_StoreAttr: field: : Py_TYPE(d)->tp_descr_get ? SPEC_FAIL_ATTR_CLASS_ATTR_DESCRIPTOR
+Python/specialize.c:1308: specialize_class_load_attr: field: if (Py_TYPE(cls)->tp_getattro != _Py_type_getattro) {
+Include/cpython/object.h:167: PyAPI_FUNC: field, local: getattrofunc tp_getattro;
+Include/cpython/object.h:168: PyAPI_FUNC: field, local: setattrofunc tp_setattro;
+Include/cpython/object.h:203: PyAPI_FUNC: field, local: descrgetfunc tp_descr_get;
+Include/cpython/object.h:204: PyAPI_FUNC: field, local: descrsetfunc tp_descr_set;
+Include/internal/pycore_moduleobject.h:80: None: call _Py_module_getattro_impl: PyObject* _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress);
+Include/internal/pycore_moduleobject.h:81: None: call _Py_module_getattro: PyObject* _Py_module_getattro(PyObject *m, PyObject *name);
+Include/internal/pycore_slots_generated.h:296: _PySlot_type_getslot: field: return (void*)tp->tp_descr_get;
+Include/internal/pycore_slots_generated.h:298: _PySlot_type_getslot: field: return (void*)tp->tp_descr_set;
+Include/internal/pycore_slots_generated.h:304: _PySlot_type_getslot: field: return (void*)tp->tp_getattro;
+Include/internal/pycore_slots_generated.h:326: _PySlot_type_getslot: field: return (void*)tp->tp_setattro;
+Include/internal/pycore_typeobject.h:124: _PyType_IsReady: call _Py_type_getattro_impl: extern PyObject* _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
+Include/internal/pycore_typeobject.h:126: _PyType_IsReady: call _Py_type_getattro: extern PyObject* _Py_type_getattro(PyObject *type, PyObject *name);
+Include/object.h:441: PyAPI_FUNC: call PyObject_GenericGetAttr: PyAPI_FUNC(PyObject *) PyObject_GenericGetAttr(PyObject *, PyObject *);
+Include/object.h:442: PyAPI_FUNC: call PyObject_GenericSetAttr: PyAPI_FUNC(int) PyObject_GenericSetAttr(PyObject *, PyObject *, PyObject *);

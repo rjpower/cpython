@@ -2133,3 +2133,49 @@ e03ab939a4a, returned "fix first" with four findings (reviews/
 per-interpreter callback and finalizer queue) moved up from step 7 after
 finding B killed the process under stress in a shared-obmalloc
 subinterpreter's start-up.
+
+Correction (06:30 PDT, from the 10a agent's register commit 6124ebafd70):
+the saved-register clears were retired in 10a rung 1 (ce81b2828cd), not
+1b; Py_NO_INLINE stays on the helpers by design, since the inline audit
+relies on it; and the "inline-fallback collection scans everything" row
+was also retired in a3c01b61e52. The release-build test skips go to 10a
+rung 2b item 7, or rung 3 where a PyMem or struct root holds the object.
+
+## 2026-10-28 06:58 PDT: 6d rung 2 landed (attribute and descriptor slots on values); gate of the merged head
+
+Landed as c66c69d55cf, the merge of boil/6d-rung2 at cc81ca59f1e: rung 2's
+five commits (tp_getattro, tp_setattro, tp_descr_get and tp_descr_set take
+and return PyValue; PyMember_GetOneValue/SetOneValue; the object-form
+protocol functions as the compatibility layer; gc.get_referrers precise
+after the test_taskgroups trace), then the first landing review of the
+new procedure (reviews/6d-2-landing.md, codex: fix first, four findings)
+and its fixes: ctypes stores save the previous native bytes and restore
+them when keeping the new value fails (upstream leaks there; we would
+have read freed memory), with a deterministic allocation-failure test
+over a struct field, an array item and py_object.value; the promised
+collecting-conversion and descriptor-mutation tests and failure
+injection at four boxes; measurements redone on clean source at
+bb59ea53031 with the integration head f89d8e9c4d3 as the control, build
+lines in the JSON; every gate line with its commit.
+
+The agent's quick-test at e03ab939a4a and bb59ea53031: gate 0 both
+builds, gate 1 on 31 files, 8,794 tests on each build. Gate run here on
+a detached checkout of c66c69d55cf with rebuilt trees: gate 0 both
+builds; gate 1 on test_gc, test_asyncio.test_taskgroups, test_descr,
+test_capi and test_ctypes, 2,363 tests on each build; gate 2 on default
+556/564 files, 51,013 tests, SUCCESS, 54,366 collections, 0 fallbacks;
+gate 3 on debug 51,013 tests, SUCCESS, 56,185 collections, 0 fallbacks,
+-u cpu test_cext 16 tests, regen and the traverse audit clean.
+
+Measured against the control (the landing's own base): every micro row
+lower, boxes per iteration 1 to 0 on the getattr, setattr, descriptor and
+property rows, kernels geomean 0.944 with no kernel above +0.3%; against
+rung 1 1.017, against the 6d before records 1.006. One attribution
+recorded, not acted on: the control spends 9 more instructions per
+empty-loop iteration than the branch with identical loop source; the eval
+function is 161,349 bytes on the control and 143,577 with the rung, so
+it is code generation in the single eval-loop function (step 8's input;
+10a's rung 4 write-up cites it). Residues with owners: the super
+receiver box (minimum), object.__getattribute__'s box and the
+__length_hint__ box (rung 3, done in 04ffa14a62b), the C-mode spans for
+the slot bridges (10a rung 2b, hand-off table in 6d-2.md).

@@ -93,7 +93,7 @@ descr_check(PyDescrObject *descr, PyObject *obj)
     return 0;
 }
 
-static PyObject *
+static PyValue
 classmethod_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyMethodDescrObject *descr = (PyMethodDescrObject *)self;
@@ -108,7 +108,7 @@ classmethod_get(PyObject *self, PyObject *obj, PyObject *type)
                          "needs either an object or a type",
                          descr_name((PyDescrObject *)descr), "?",
                          PyDescr_TYPE(descr)->tp_name);
-            return NULL;
+            return PyValue_NULL;
         }
     }
     if (!PyType_Check(type)) {
@@ -118,7 +118,7 @@ classmethod_get(PyObject *self, PyObject *obj, PyObject *type)
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name,
                      Py_TYPE(type)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
     if (!PyType_IsSubtype((PyTypeObject *)type, PyDescr_TYPE(descr))) {
         PyErr_Format(PyExc_TypeError,
@@ -127,96 +127,98 @@ classmethod_get(PyObject *self, PyObject *obj, PyObject *type)
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name,
                      ((PyTypeObject *)type)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
     PyTypeObject *cls = NULL;
     if (descr->d_method->ml_flags & METH_METHOD) {
         cls = descr->d_common.d_type;
     }
-    return PyCMethod_New(descr->d_method, type, NULL, cls);
+    return PyValue_FromResult(PyCMethod_New(descr->d_method, type, NULL, cls));
 }
 
-static PyObject *
+static PyValue
 method_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyMethodDescrObject *descr = (PyMethodDescrObject *)self;
     if (obj == NULL) {
-        return Py_NewRef(descr);
+        return PyValue_FromObject((PyObject *)descr);
     }
     if (descr_check((PyDescrObject *)descr, obj) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (descr->d_method->ml_flags & METH_METHOD) {
         if (type == NULL || PyType_Check(type)) {
-            return PyCMethod_New(descr->d_method, obj, NULL, descr->d_common.d_type);
+            return PyValue_FromResult(
+                PyCMethod_New(descr->d_method, obj, NULL, descr->d_common.d_type));
         } else {
             PyErr_Format(PyExc_TypeError,
                         "descriptor '%V' needs a type, not '%s', as arg 2",
                         descr_name((PyDescrObject *)descr), "?",
                         Py_TYPE(type)->tp_name);
-            return NULL;
+            return PyValue_NULL;
         }
     } else {
-        return PyCFunction_NewEx(descr->d_method, obj, NULL);
+        return PyValue_FromResult(PyCFunction_NewEx(descr->d_method, obj, NULL));
     }
 }
 
-static PyObject *
+static PyValue
 member_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyMemberDescrObject *descr = (PyMemberDescrObject *)self;
     if (obj == NULL) {
-        return Py_NewRef(descr);
+        return PyValue_FromObject((PyObject *)descr);
     }
     if (descr_check((PyDescrObject *)descr, obj) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (descr->d_member->flags & Py_AUDIT_READ) {
         if (PySys_Audit("object.__getattr__", "Os",
             obj ? obj : Py_None, descr->d_member->name) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
-    return PyMember_GetOne((char *)obj, descr->d_member);
+    return PyMember_GetOneValue((char *)obj, descr->d_member);
 }
 
-static PyObject *
+/* The getter is an object form until rung 4 converts the getsets. */
+static PyValue
 getset_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyGetSetDescrObject *descr = (PyGetSetDescrObject *)self;
     if (obj == NULL) {
-        return Py_NewRef(descr);
+        return PyValue_FromObject((PyObject *)descr);
     }
     if (descr_check((PyDescrObject *)descr, obj) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (descr->d_getset->get != NULL)
-        return descr_get_trampoline_call(
-            descr->d_getset->get, obj, descr->d_getset->closure);
+        return PyValue_FromResult(descr_get_trampoline_call(
+            descr->d_getset->get, obj, descr->d_getset->closure));
     PyErr_Format(PyExc_AttributeError,
                  "attribute '%V' of '%.100s' objects is not readable",
                  descr_name((PyDescrObject *)descr), "?",
                  PyDescr_TYPE(descr)->tp_name);
-    return NULL;
+    return PyValue_NULL;
 }
 
-static PyObject *
+static PyValue
 wrapperdescr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyWrapperDescrObject *descr = (PyWrapperDescrObject *)self;
     if (obj == NULL) {
-        return Py_NewRef(descr);
+        return PyValue_FromObject((PyObject *)descr);
     }
     if (descr_check((PyDescrObject *)descr, obj) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyWrapper_New((PyObject *)descr, obj);
+    return PyValue_FromResult(PyWrapper_New((PyObject *)descr, obj));
 }
 
 static int
-descr_setcheck(PyDescrObject *descr, PyObject *obj, PyObject *value)
+descr_setcheck(PyDescrObject *descr, PyObject *obj)
 {
     assert(obj != NULL);
     if (!PyObject_TypeCheck(obj, descr->d_type)) {
@@ -232,26 +234,45 @@ descr_setcheck(PyDescrObject *descr, PyObject *obj, PyObject *value)
 }
 
 static int
-member_set(PyObject *self, PyObject *obj, PyObject *value)
+member_set(PyObject *self, PyObject *obj, PyValue value)
 {
     PyMemberDescrObject *descr = (PyMemberDescrObject *)self;
-    if (descr_setcheck((PyDescrObject *)descr, obj, value) < 0) {
+    if (descr_setcheck((PyDescrObject *)descr, obj) < 0) {
         return -1;
     }
-    return PyMember_SetOne((char *)obj, descr->d_member, value);
+    return PyMember_SetOneValue((char *)obj, descr->d_member, value);
 }
 
+/* The setter is an object form until rung 4 converts the getsets: an inline
+   value is boxed and anchored while it runs.  A failed box returns at once,
+   since the setter takes NULL as a deletion. */
 static int
-getset_set(PyObject *self, PyObject *obj, PyObject *value)
+getset_set(PyObject *self, PyObject *obj, PyValue value)
 {
     PyGetSetDescrObject *descr = (PyGetSetDescrObject *)self;
-    if (descr_setcheck((PyDescrObject *)descr, obj, value) < 0) {
+    if (descr_setcheck((PyDescrObject *)descr, obj) < 0) {
         return -1;
     }
     if (descr->d_getset->set != NULL) {
-        return descr_set_trampoline_call(
-            descr->d_getset->set, obj, value,
-            descr->d_getset->closure);
+        if (!PyValue_IsInline(value)) {
+            return descr_set_trampoline_call(
+                descr->d_getset->set, obj,
+                PyValue_IsNull(value) ? NULL : PyValue_ObjectBorrow(value),
+                descr->d_getset->closure);
+        }
+        PyObject *box = _PyValue_BoxInline(value);
+        if (box == NULL) {
+            return -1;
+        }
+        PyThreadState *tstate = _PyThreadState_GET();
+        PyValue held[1];
+        _PyValueRoot span;
+        _PyThreadState_PushValueSpan(tstate, &span, held);
+        _PyValueSpan_AppendObject(&span, box);
+        int res = descr_set_trampoline_call(
+            descr->d_getset->set, obj, box, descr->d_getset->closure);
+        _PyThreadState_PopValueRoot(tstate, &span);
+        return res;
     }
     PyErr_Format(PyExc_AttributeError,
                  "attribute '%V' of '%.100s' objects is not writable",
@@ -279,10 +300,14 @@ method_check_args(PyObject *func, const PyValue *args, Py_ssize_t nargs,
         }
         return -1;
     }
-    // A box of an inline self, for a method of int or float.
+    // A box of an inline self, for a method of int or float.  The caller's
+    // frame holds it for the call until 10a's call layer anchors it.
     PyObject *self = PyValue_Object(args[0]);
     if (self == NULL) {
         return -1;
+    }
+    if (PyValue_IsInline(args[0])) {
+        _PyGC_INJECT(_PyThreadState_GET(), _PyGC_SITE_RECEIVER_BOX);
     }
     if (descr_check((PyDescrObject *)func, self) < 0) {
         return -1;
@@ -524,10 +549,13 @@ classmethoddescr_call(PyObject *_descr, PyObject *args,
         return NULL;
     }
     PyObject *self = PyTuple_GET_ITEM(args, 0);
-    PyObject *bound = classmethod_get((PyObject *)descr, NULL, self);
-    if (bound == NULL) {
+    PyValue bound_v = classmethod_get((PyObject *)descr, NULL, self);
+    _PyValue_CheckSlotResult(bound_v, Py_TYPE(descr), "tp_descr_get");
+    if (PyValue_IsNull(bound_v)) {
         return NULL;
     }
+    // A bound method, never inline.
+    PyObject *bound = PyValue_ObjectBorrow(bound_v);
     PyObject *const *items = _PyTuple_Objects(args);
     if (items == NULL) {
         return NULL;
@@ -1713,18 +1741,18 @@ property_name(propertyobject *prop, PyObject **name)
     return PyObject_GetOptionalAttr(prop->prop_get, &_Py_ID(__name__), name);
 }
 
-static PyObject *
+static PyValue
 property_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     if (obj == NULL || obj == Py_None) {
-        return Py_NewRef(self);
+        return PyValue_FromObject(self);
     }
 
     propertyobject *gs = (propertyobject *)self;
     if (gs->prop_get == NULL) {
         PyObject *propname;
         if (property_name(gs, &propname) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
         PyObject *qualname = PyType_GetQualName(Py_TYPE(obj));
         if (propname != NULL && qualname != NULL) {
@@ -1743,19 +1771,22 @@ property_descr_get(PyObject *self, PyObject *obj, PyObject *type)
         }
         Py_XDECREF(propname);
         Py_XDECREF(qualname);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyObject_CallOneArg(gs->prop_get, obj);
+    PyValue arg = PyValue_FromObject(obj);
+    return PyObject_VectorcallValue(PyValue_FromObject(gs->prop_get), &arg,
+                                    1, NULL);
 }
 
 static int
-property_descr_set(PyObject *self, PyObject *obj, PyObject *value)
+property_descr_set(PyObject *self, PyObject *obj, PyValue value)
 {
     propertyobject *gs = (propertyobject *)self;
-    PyObject *func, *res;
+    PyObject *func;
+    PyValue res;
 
-    if (value == NULL) {
+    if (PyValue_IsNull(value)) {
         func = gs->prop_del;
     }
     else {
@@ -1773,7 +1804,7 @@ property_descr_set(PyObject *self, PyObject *obj, PyObject *value)
         }
         if (propname != NULL && qualname != NULL) {
             PyErr_Format(PyExc_AttributeError,
-                        value == NULL ?
+                        PyValue_IsNull(value) ?
                         "property %R of %R object has no deleter" :
                         "property %R of %R object has no setter",
                         propname,
@@ -1781,14 +1812,14 @@ property_descr_set(PyObject *self, PyObject *obj, PyObject *value)
         }
         else if (qualname != NULL) {
             PyErr_Format(PyExc_AttributeError,
-                            value == NULL ?
+                            PyValue_IsNull(value) ?
                             "property of %R object has no deleter" :
                             "property of %R object has no setter",
                             qualname);
         }
         else {
             PyErr_SetString(PyExc_AttributeError,
-                         value == NULL ?
+                         PyValue_IsNull(value) ?
                          "property has no deleter" :
                          "property has no setter");
         }
@@ -1797,20 +1828,18 @@ property_descr_set(PyObject *self, PyObject *obj, PyObject *value)
         return -1;
     }
 
-    if (value == NULL) {
-        res = PyObject_CallOneArg(func, obj);
+    PyValue args[] = { PyValue_FromObject(obj), value };
+    if (PyValue_IsNull(value)) {
+        res = PyObject_VectorcallValue(PyValue_FromObject(func), args, 1, NULL);
     }
     else {
         EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API, func);
-        PyObject *args[] = { obj, value };
-        res = PyObject_Vectorcall(func, args, 2, NULL);
+        res = PyObject_VectorcallValue(PyValue_FromObject(func), args, 2, NULL);
     }
 
-    if (res == NULL) {
+    if (PyValue_IsNull(res)) {
         return -1;
     }
-
-    Py_DECREF(res);
     return 0;
 }
 

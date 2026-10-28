@@ -314,11 +314,11 @@ PyAPI_FUNC(void) PyUnstable_Object_ClearWeakRefsNoCallbacks(PyObject *);
 
 /* Same as PyObject_Generic{Get,Set}Attr, but passing the attributes
    dict as the last parameter. */
-PyAPI_FUNC(PyObject *)
+PyAPI_FUNC(PyValue)
 _PyObject_GenericGetAttrWithDict(PyObject *, PyObject *, PyObject *, int);
 PyAPI_FUNC(int)
 _PyObject_GenericSetAttrWithDict(PyObject *, PyObject *,
-                                 PyObject *, PyObject *);
+                                 PyValue, PyObject *);
 
 PyAPI_FUNC(PyObject *) _PyObject_FunctionStr(PyObject *);
 

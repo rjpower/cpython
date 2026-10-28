@@ -11494,7 +11494,7 @@
                     _PyThreadState_PushValueRoot(tstate, &self_st_root);
                     self_st_root.object = self_st_object;
                 }
-                PyObject *attr_o = PyObject_GetAttr(super, name);
+                PyValue attr_v = PyObject_GetAttrValue(PyValue_FromObject(super), name);
                 if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
                     _PyThreadState_PopValueRoot(tstate, &self_st_root);
                 }
@@ -11505,13 +11505,13 @@
                     _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
                 }
                 Py_DECREF(super);
-                if (attr_o == NULL) {
+                if (PyValue_IsNull(attr_v)) {
                     window[0] = PyValue_NULL;
                     window[1] = PyValue_NULL;
                     window[2] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
-                attr = PyValue_FromObject(attr_o);
+                attr = attr_v;
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -11753,7 +11753,7 @@
                     _PyThreadState_PushValueRoot(tstate, &self_st_root);
                     self_st_root.object = self_st_object;
                 }
-                PyObject *attr_o = PyObject_GetAttr(super, name);
+                PyValue attr_v = PyObject_GetAttrValue(PyValue_FromObject(super), name);
                 if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
                     _PyThreadState_PopValueRoot(tstate, &self_st_root);
                 }
@@ -11764,13 +11764,13 @@
                     _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
                 }
                 Py_DECREF(super);
-                if (attr_o == NULL) {
+                if (PyValue_IsNull(attr_v)) {
                     window[0] = PyValue_NULL;
                     window[1] = PyValue_NULL;
                     window[2] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
-                attr = PyValue_FromObject(attr_o);
+                attr = attr_v;
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -14493,7 +14493,7 @@
                     _PyThreadState_PushValueRoot(tstate, &self_st_root);
                     self_st_root.object = self_st_object;
                 }
-                PyObject *attr_o = PyObject_GetAttr(super, name);
+                PyValue attr_v = PyObject_GetAttrValue(PyValue_FromObject(super), name);
                 if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
                     _PyThreadState_PopValueRoot(tstate, &self_st_root);
                 }
@@ -14504,13 +14504,13 @@
                     _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
                 }
                 Py_DECREF(super);
-                if (attr_o == NULL) {
+                if (PyValue_IsNull(attr_v)) {
                     window[0] = PyValue_NULL;
                     window[1] = PyValue_NULL;
                     window[2] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
-                attr = PyValue_FromObject(attr_o);
+                attr = attr_v;
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -14633,7 +14633,7 @@
                 _PyThreadState_PushValueRoot(tstate, &self_st_root);
                 self_st_root.object = self_st_object;
             }
-            PyObject *attr = _PySuper_Lookup((PyTypeObject *)class, self, name, NULL);
+            PyValue attr = _PySuper_Lookup((PyTypeObject *)class, self, name, NULL);
             if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
                 _PyThreadState_PopValueRoot(tstate, &self_st_root);
             }
@@ -14643,13 +14643,13 @@
             if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
                 _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
             }
-            if (attr == NULL) {
+            if (PyValue_IsNull(attr)) {
                 window[0] = PyValue_NULL;
                 window[1] = PyValue_NULL;
                 window[2] = PyValue_NULL;
                 JUMP_TO_LABEL(error);
             }
-            attr_st = PyValue_FromObject(attr);
+            attr_st = attr;
             window[1] = PyValue_NULL;
             window[2] = PyValue_NULL;
             window[0] = attr_st;
@@ -14728,20 +14728,20 @@
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
                 PyTypeObject *cls = (PyTypeObject *)class;
                 int method_found = 0;
-                PyObject *attr_o;
+                PyValue attr_v;
                 {
                     int *method_found_ptr = &method_found;
                     if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
                         _PyThreadState_PushValueRoot(tstate, &self_st_root);
                         self_st_root.object = self_st_object;
                     }
-                    attr_o = _PySuper_Lookup(cls, self, name,
+                    attr_v = _PySuper_Lookup(cls, self, name,
                         Py_TYPE(self)->tp_getattro == PyObject_GenericGetAttr ? method_found_ptr : NULL);
                     if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
                         _PyThreadState_PopValueRoot(tstate, &self_st_root);
                     }
                 }
-                if (attr_o == NULL) {
+                if (PyValue_IsNull(attr_v)) {
                     JUMP_TO_LABEL(error);
                 }
                 if (method_found) {
@@ -14749,7 +14749,7 @@
                 } else {
                     self_or_null = PyValue_NULL;
                 }
-                attr = PyValue_FromObject(attr_o);
+                attr = attr_v;
             }
             window[2] = PyValue_NULL;
             window[0] = attr;
@@ -14999,7 +14999,7 @@
                     _PyThreadState_PushValueRoot(tstate, &self_st_root);
                     self_st_root.object = self_st_object;
                 }
-                PyObject *attr_o = PyObject_GetAttr(super, name);
+                PyValue attr_v = PyObject_GetAttrValue(PyValue_FromObject(super), name);
                 if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
                     _PyThreadState_PopValueRoot(tstate, &self_st_root);
                 }
@@ -15010,13 +15010,13 @@
                     _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
                 }
                 Py_DECREF(super);
-                if (attr_o == NULL) {
+                if (PyValue_IsNull(attr_v)) {
                     window[0] = PyValue_NULL;
                     window[1] = PyValue_NULL;
                     window[2] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
-                attr = PyValue_FromObject(attr_o);
+                attr = attr_v;
             }
             // _PUSH_NULL_CONDITIONAL
             {

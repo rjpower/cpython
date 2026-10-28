@@ -1657,6 +1657,12 @@ _PyDict_GetItemValue(PyObject *op, PyValue key, PyValue *result)
 }
 
 int
+PyDict_GetItemRefValue(PyObject *op, PyObject *key, PyValue *result)
+{
+    return _PyDict_GetItemValue(op, PyValue_FromObject(key), result);
+}
+
+int
 PyDict_GetItemRef(PyObject *op, PyObject *key, PyObject **result)
 {
     if (!PyAnyDict_Check(op)) {

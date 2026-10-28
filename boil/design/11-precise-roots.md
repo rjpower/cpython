@@ -830,7 +830,12 @@ subset, the functions whose frames held the only root of a live object;
    Recommendation: accept it if the pipe-read loop moves less than 1%;
    otherwise keep the detach frames on the stack until reattach (a
    capture in the caller's macro, `Py_BEGIN_ALLOW_THREADS`), a larger
-   change to the public macros.
+   change to the public macros. Measured in rung 1 (2026-10-27) on a loop
+   of 10^6 one-byte `os.write` and `os.read` pairs on a pipe, 2·10^6
+   detaches, instructions on build/default: 3.219G before the walk
+   (8abd6f7f185), 5.204G with the eager record that unwound to P at each
+   detach, about +1,000 instructions a detach against a 1% budget of about
+   16. The test failed; question 16 is the ruling. With it, 3.14G to 3.20G.
 8. **Tier 1's frames under inspection.** `f_locals`, `sys._getframe()` and
    reentrant callbacks need virtual frames and stale physical slots
    materialized. Recommendation: deoptimise on inspection from the same
@@ -905,6 +910,35 @@ subset, the functions whose frames held the only root of a live object;
     in rung 1 (coordinator, 2026-10-27) on the condition that the suite
     never reaches it: a fallback blocks a landing (section 10), so if a
     gate shows one, the walk implements the rule.
+16. **The detach record: pinned and unpinned, no walk at detach.** Ruling
+    in rung 1 (coordinator, 2026-10-27), after 13.7's measurement. Each
+    record kind has one mechanism. A pinned record comes from
+    `Py_BEGIN_ALLOW_THREADS`, `Py_UNBLOCK_THREADS` and the core's pinned
+    entries (`_PyEval_SaveThreadPinned()`, `_PyEval_ReleaseThreadPinned()`,
+    `_PyThreadState_DetachPinned()`): an entry in assembly captures its
+    caller's pc, stack pointer and callee-saved registers before anything
+    changes them, about 20 instructions. The caller does not return before
+    the matching reattach, so every frame outward of the capture persists,
+    and the collector walks from the capture lazily, under the GIL, when it
+    visits the thread. An unpinned record comes from a direct
+    `PyEval_SaveThread()`, `PyEval_ReleaseThread()`,
+    `PyThreadState_Swap(NULL)` or `_PyThreadState_Detach()`, whose caller
+    may return detached; the collector scans its registers and
+    `[cap.sp, stack top)` conservatively, PyMem followed, and never computes
+    P. Both rest on one argument: what a detached thread holds it obtained
+    attached, so it is in a frame that existed at the capture or in a
+    captured register; frames pushed below the capture after the detach are
+    not scanned. The loader generation is checked once per root phase and
+    before a cache miss is decoded; nothing runs `dl_iterate_phdr()` at a
+    detach. The counter `unpinned` reports the unpinned records a root phase
+    visits, in the gate output with `fallbacks`.
+17. **The code range table's limit.** `_PyGC_RegisterCodeRange()` keeps 64
+    ranges; registration past that fails, and a walk through unregistered
+    code with no FDE falls back, which `fallbacks` counts (debug builds
+    print the pc once). In rung 1 its users are the perf trampoline's
+    arenas, 64 KiB each (2,048 trampolines), and the walk tests. A fallback
+    blocks a landing (section 10), so the gate prints the suite's
+    `fallbacks` and fails when it is not zero.
 
 ## 14. Sources
 

@@ -248,6 +248,12 @@ SPAN_POP = {"_PyThreadState_PopValueRoot"}
 SPAN_PUSH_OBJECT = {"_PyValueRoot_PushObject": 1, "_PyValue_ObjectRooted": 2}
 SPAN_POP_OBJECT = {"_PyValue_UnrootObject": 2}
 
+# A pushed frame's slots past its arguments hold garbage until
+# _PyFrame_Initialize() sets them to NULL, so nothing between the two may
+# collect (10a-1b.md item 1).
+FRAME_PUSH = {"_PyThreadState_PushFrame", "_PyThreadState_PushFrameUnchecked"}
+FRAME_INIT = "_PyFrame_Initialize"
+
 # Statement macros without a semicolon of their own, and their meaning.
 DETACH_MACROS = {"Py_BEGIN_ALLOW_THREADS", "Py_BLOCK_THREADS"}
 ATTACH_MACROS = {"Py_END_ALLOW_THREADS", "Py_UNBLOCK_THREADS"}
@@ -1718,10 +1724,12 @@ class State:
     # (pointer, span): a borrowed args[-1] slot whose value is in the span
     saved: frozenset = frozenset()
     loads: dict[str, str] = field(default_factory=dict)  # var -> pointer it read
+    # (var, line): a frame pushed into var and not yet initialized
+    pushed: frozenset = frozenset()
 
     def copy(self) -> "State":
         return State(dict(self.sources), dict(self.stored), dict(self.slots),
-                     self.spans, self.saved, dict(self.loads))
+                     self.spans, self.saved, dict(self.loads), self.pushed)
 
 
 @dataclass
@@ -1765,7 +1773,7 @@ def merge(a: State | None, b: State) -> tuple[State, list[str]]:
     spans = a.spans if len(a.spans) <= len(b.spans) else b.spans
     loads = {k: v for k, v in a.loads.items() if b.loads.get(k) == v}
     return State(sources, stored, slots, spans, a.saved & b.saved,
-                 loads), problems
+                 loads, a.pushed | b.pushed), problems
 
 
 class FunctionChecker:
@@ -1843,6 +1851,9 @@ class FunctionChecker:
             st.loads[name] = ptr
         else:
             st.loads.pop(name, None)
+        st.pushed = frozenset(p for p in st.pushed if p[0] != name)
+        if isinstance(value, Call) and value.name in FRAME_PUSH:
+            st.pushed = st.pushed | {(name, value.line)}
 
     def is_obj(self, name: str) -> bool:
         return self.kinds.get(name) in ("object", "array")
@@ -2078,6 +2089,10 @@ class FunctionChecker:
                     var, is_null = n.edge_null[k]
                     if is_null and var in out.sources:
                         out.sources[var] = frozenset([("const",)])
+                    if is_null:
+                        # The push failed: no frame
+                        out.pushed = frozenset(
+                            p for p in out.pushed if p[0] != var)
                 old = states.get(id(s))
                 new, problems = merge(old, out)
                 if problems and id(s) not in reported_merge and old is not None:
@@ -2506,6 +2521,9 @@ class FunctionChecker:
                 for i, (a, s) in enumerate(zip(e.args, arg_srcs)):
                     if i + 1 >= FIRST_STACK_ARG:
                         self.check_arg_anchored(e, a, s, st, i + 1)
+        if name == FRAME_INIT and len(e.args) > 1:
+            f = self.base_name(e.args[1])
+            st.pushed = frozenset(p for p in st.pushed if p[0] != f)
         if name in OUT_PARAMS:
             base = self.base_name(e.args[0]) if e.args else None
             for a in e.args[1:]:
@@ -2640,6 +2658,10 @@ class FunctionChecker:
         for callee, tline in held:
             self.error(line, f"the result of '{callee}' (line {tline}) is a "
                        f"temporary held across the collecting call to '{what}'")
+        for frame_var, pline in sorted(st.pushed):
+            self.error(line, f"the collecting call to '{what}' comes between "
+                       f"the push of frame '{frame_var}' (line {pline}) and "
+                       f"its {FRAME_INIT}()")
 
     def check_arg_anchored(self, call: Call, a: Expr, srcs: frozenset,
                            st: State, stack_position: int = 0) -> None:

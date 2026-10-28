@@ -87,6 +87,13 @@ LEAVING = {
 # `F(x, v)` assigns v to x
 ASSIGNING = {"Py_SETREF", "Py_XSETREF"}
 
+# A pushed frame's slots past its arguments hold garbage until
+# _PyFrame_Initialize() sets them to NULL, so nothing between the two may
+# collect (10a-1b.md item 1).  _PyFrame_PushUnchecked() and the other
+# _PyFrame_Push* forms do both.
+FRAME_PUSH = {"_PyThreadState_PushFrame", "_PyThreadState_PushFrameUnchecked"}
+FRAME_INIT = "_PyFrame_Initialize"
+
 ANCHORED_NAMES = {
     "NULL", "frame", "tstate", "Py_None", "Py_True", "Py_False",
     "Py_NotImplemented", "Py_Ellipsis",
@@ -513,6 +520,27 @@ class Checker:
         return errors
 
 
+def push_before_initialize(
+    events: list[Event], escaping: dict[SimpleStmt, object]) -> list[tuple[lexer.Token, str]]:
+    "No escaping call between a frame push and the frame's initialize"
+    errors = []
+    pushed: lexer.Token | None = None
+    for ev in events:
+        names = {t.text for t in ev.tokens}
+        if pushed is not None and ev.stmt is not None and ev.stmt in escaping:
+            call = escaping[ev.stmt].call  # type: ignore[attr-defined]
+            if call.text not in FRAME_PUSH | {FRAME_INIT}:
+                errors.append((call, f"the escaping call to '{call.text}' "
+                               f"comes between the push of a frame (line "
+                               f"{pushed.line}) and its {FRAME_INIT}()"))
+        if FRAME_INIT in names:
+            pushed = None
+        for t in ev.tokens:
+            if t.text in FRAME_PUSH:
+                pushed = t
+    return errors
+
+
 def stack_item_names(uop: object) -> set[str]:
     stack = getattr(uop, "stack", None)
     if stack is None:
@@ -526,10 +554,11 @@ def check_uop(uop: object) -> list[tuple[lexer.Token, str]]:
     if not escaping:
         return []
     events = linearize(body)
+    errors = push_before_initialize(events, escaping)
     names = stack_item_names(uop)
     held: set[str] = set()
     variables = find_declarations(events, names, held)
     if not variables:
-        return []
+        return errors
     collect_uses(events, variables)
-    return Checker(events, variables, names, held).check(escaping)
+    return errors + Checker(events, variables, names, held).check(escaping)

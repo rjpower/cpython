@@ -222,6 +222,25 @@ class TestAnalysisErrors(unittest.TestCase):
         }
         """, "'r' is held only in a C local")
 
+    def test_frame_push_before_initialize(self):
+        # A pushed frame's slots hold garbage until it is initialized, so
+        # nothing between the two may escape.
+        self.check_error("""
+        inst(OP, ( -- )) {
+            _PyInterpreterFrame *f = _PyThreadState_PushFrameUnchecked(tstate, 4);
+            escaping_call();
+            _PyFrame_Initialize(tstate, f, PyValue_NULL, NULL, NULL, f->base, 0, frame);
+        }
+        """, "the escaping call to 'escaping_call' comes between the push "
+             "of a frame")
+        self.generate("""
+        inst(OP, ( -- )) {
+            _PyInterpreterFrame *f = _PyThreadState_PushFrameUnchecked(tstate, 4);
+            _PyFrame_Initialize(tstate, f, PyValue_NULL, NULL, NULL, f->base, 0, frame);
+            escaping_call();
+        }
+        """)
+
     def test_root_held_in_c_stack_ref(self):
         # A _PyValueRoot is a precise root, and a value that is dead before
         # the escaping call needs no root.
@@ -1561,6 +1580,51 @@ Py_GC_PRECISE static void f(PyValue arg, PyValue *args) {
 }
 """
         self.assertTrue(any(want in e for e in self.check(direct)))
+
+    PUSH_FRAME = """
+static inline void _PyFrame_Initialize(PyThreadState *tstate,
+    _PyInterpreterFrame *frame, PyValue func, PyObject *locals,
+    PyCodeObject *code, PyValue *base, int n, _PyInterpreterFrame *previous)
+{
+    frame->base = base;
+}
+Py_GC_PRECISE static int f(PyThreadState *tstate) {
+    _PyInterpreterFrame *frame = _PyThreadState_PushFrame(tstate, 16);
+    if (frame == NULL) {
+        goto fail;
+    }
+    _PyFrame_Initialize(tstate, frame, PyValue_NULL, NULL, NULL, frame->base,
+                        0, NULL);
+    collect();
+    return 0;
+fail:
+    collect();
+    return -1;
+}
+"""
+
+    def test_push_before_initialize(self):
+        # Nothing between a frame's push and its initialize may collect; a
+        # failed push pushed nothing.
+        want = "comes between the push of frame 'frame'"
+        self.assertEqual(self.check(self.PUSH_FRAME), [])
+        between = self.PUSH_FRAME.replace("""        goto fail;
+    }
+""", """        goto fail;
+    }
+    collect();
+""")
+        self.assertTrue(any(want in e for e in self.check(between)))
+        # On one path only
+        one_path = self.PUSH_FRAME.replace("""        goto fail;
+    }
+""", """        goto fail;
+    }
+    if (tstate->current_frame == NULL) {
+        collect();
+    }
+""")
+        self.assertTrue(any(want in e for e in self.check(one_path)))
 
     def test_negative_more(self):
         for name, (src, want) in self.NEGATIVE_MORE.items():

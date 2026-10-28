@@ -2,12 +2,12 @@
  "schema": "boil-bench/1",
  "build": {
   "label": "6d-rung2-pystats",
-  "path": "/home/power/code/cpython/.worktrees/boil-6d/build/pystats/python",
-  "version": "3.16.0a1+dev (heads/boil/6d-dirty:23845749a80, Oct 28 2026, 03:14:20) [GCC 15.2.0]",
+  "path": "/home/power/code/cpython/.worktrees/boil-6d-base/build/pystats/python",
+  "version": "3.16.0a1+dev (heads/boil/6d-rung2:bb59ea53031, Oct 28 2026, 06:16:10) [GCC 15.2.0]",
   "git": [
    "CPython",
-   "heads/boil/6d-dirty",
-   "23845749a80"
+   "heads/boil/6d-rung2",
+   "bb59ea53031"
   ],
   "hash_seed": 0
  },
@@ -70,7 +70,7 @@
      "other": 30409.0
     },
     "by_instruction": {},
-    "dispatches": 17936360.0,
+    "dispatches": 17936359.5,
     "allocations": 217059.0,
     "dict_mode": {
      "str name": 0.0,
@@ -280,7 +280,7 @@
      "other": 135290.0
     },
     "by_instruction": {},
-    "dispatches": 7051897.5,
+    "dispatches": 7051897.25,
     "allocations": 251037.0,
     "dict_mode": {
      "str name": 0.0,
@@ -420,7 +420,7 @@
      "other": 0.0
     },
     "by_instruction": {},
-    "dispatches": 2431.5053333333335,
+    "dispatches": 2431.50525,
     "allocations": 85.0,
     "dict_mode": {
      "str name": 0.0,
@@ -595,7 +595,7 @@
      "other": 0.0
     },
     "by_instruction": {},
-    "dispatches": 4661.0465,
+    "dispatches": 4661.046375,
     "allocations": 149.0,
     "dict_mode": {
      "str name": 0.0,
@@ -770,7 +770,7 @@
      "other": 643553.0
     },
     "by_instruction": {},
-    "dispatches": 17412525.5,
+    "dispatches": 17412526.0,
     "allocations": 1193839.0,
     "dict_mode": {
      "str name": 0.0,
@@ -793,8 +793,8 @@
    "logging_format": {
     "group": "kernels",
     "unit": "boxes per loop",
-    "value": 20.0,
-    "int_boxes": 10.0,
+    "value": 20.026,
+    "int_boxes": 10.026,
     "float_boxes": 10.0,
     "array_boxes": 0.0,
     "by_class": {
@@ -802,11 +802,11 @@
      "attribute store": 0.0,
      "call into C": 0.0,
      "return to C": 0.0,
-     "other": 20.0
+     "other": 20.026
     },
     "by_instruction": {},
-    "dispatches": 5782.4145,
-    "allocations": 330.001,
+    "dispatches": 5782.601,
+    "allocations": 330.079,
     "dict_mode": {
      "str name": 0.0,
      "capacity": 0.0,
@@ -817,7 +817,7 @@
      "on request": 10.0
     },
     "values": [
-     20.0
+     20.026
     ],
     "loops": [
      1000,
@@ -863,8 +863,8 @@
    "logging_simple": {
     "group": "kernels",
     "unit": "boxes per loop",
-    "value": 20.0,
-    "int_boxes": 10.0,
+    "value": 19.9595,
+    "int_boxes": 9.9595,
     "float_boxes": 10.0,
     "array_boxes": 0.0,
     "by_class": {
@@ -872,11 +872,11 @@
      "attribute store": 0.0,
      "call into C": 0.0,
      "return to C": 0.0,
-     "other": 20.0
+     "other": 19.9595
     },
     "by_instruction": {},
-    "dispatches": 5552.414,
-    "allocations": 310.001,
+    "dispatches": 5552.126,
+    "allocations": 309.8795,
     "dict_mode": {
      "str name": 0.0,
      "capacity": 0.0,
@@ -887,7 +887,7 @@
      "on request": 10.0
     },
     "values": [
-     20.0
+     19.9595
     ],
     "loops": [
      1000,
@@ -1039,44 +1039,44 @@
  },
  "runs": {
   "boxes": {
-   "timestamp": "2026-10-28T03:18:16-07:00",
+   "timestamp": "2026-10-28T06:16:53-07:00",
    "commit": {
-    "sha": "23845749a806a2f1fd7f84d0a7c529d72f57adc3",
-    "dirty": true
+    "sha": "7fdeef0401a86bfd3414acd7381dc55bee54fd9a",
+    "dirty": false
    },
    "load_1min": {
-    "max": 7.728515625,
+    "max": 13.3486328125,
     "samples": [
-     7.59130859375,
-     7.59130859375,
-     7.59130859375,
-     7.59130859375,
-     7.59130859375,
-     7.59130859375,
-     7.70458984375,
-     7.70458984375,
-     7.70458984375,
-     7.70458984375,
-     7.728515625,
-     7.728515625,
-     7.669921875,
-     7.669921875,
-     7.669921875,
-     7.669921875,
-     7.669921875,
-     7.6162109375,
-     7.6162109375,
-     7.6162109375,
-     7.6162109375,
-     7.56640625,
-     7.56640625,
-     7.56640625,
-     7.56640625,
-     7.56640625,
-     7.681640625,
-     7.681640625,
-     7.681640625,
-     7.681640625
+     5.0927734375,
+     5.0927734375,
+     5.0927734375,
+     5.0927734375,
+     6.36669921875,
+     6.36669921875,
+     7.69873046875,
+     7.69873046875,
+     7.69873046875,
+     8.76416015625,
+     8.76416015625,
+     10.064453125,
+     10.064453125,
+     11.1806640625,
+     11.1806640625,
+     11.1806640625,
+     12.44775390625,
+     12.44775390625,
+     12.97265625,
+     12.97265625,
+     12.97265625,
+     12.97265625,
+     13.13525390625,
+     13.13525390625,
+     13.20458984375,
+     13.20458984375,
+     13.20458984375,
+     13.20458984375,
+     13.3486328125,
+     13.3486328125
     ]
    }
   }

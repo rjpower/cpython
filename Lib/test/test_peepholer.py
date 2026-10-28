@@ -1190,10 +1190,19 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         attr = [i for i in dis.get_instructions(f) if i.opname == 'LOAD_ATTR'][0]
         self.assertEqual(attr.srcs, (0,))
 
+# The events of _rebind_caller_x(): the name of the frame whose x it
+# rebound and the handler that frame was executing.
+_rebinds = []
+
 def _rebind_caller_x(depth=2):
     # Rebinds the local x of the frame `depth` levels above this one, as a
-    # debugger would through frame.f_locals.
-    sys._getframe(depth).f_locals["x"] = 2
+    # debugger would through frame.f_locals, and records the frame and its
+    # executing handler at the event.
+    frame = sys._getframe(depth)
+    handler = [i.opname for i in dis.get_instructions(frame.f_code, adaptive=True)
+               if i.offset == frame.f_lasti]
+    _rebinds.append((frame.f_code.co_name, handler[0]))
+    frame.f_locals["x"] = 2
 
 
 class CopyPropagationAcrossCodeTests(BytecodeTestCase):
@@ -1201,18 +1210,27 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
     reader runs.  An op in between that runs Python code can rebind the
     local through frame.f_locals, so the fold must not cross it: the reader
     sees the value the load saw (boil/design/work/compiler-copyprop-1.md).
-    Each function returns the reader's result, computed at the event, and
-    the local after the line, which shows that the rebinding happened."""
+    Each function returns the reader's result, computed from the operand
+    it used, and the local after the line; _rebinds records each
+    rebinding with the frame and the handler running there."""
 
     def setUp(self):
         self.addCleanup(sys.settrace, sys.gettrace())
         sys.settrace(None)
+        _rebinds.clear()
 
     def check(self, f, *args):
-        # Run past specialisation, so that the specialised members, which
-        # may push a frame, are exercised too.
+        """Run f past specialisation; every call rebinds x in f and still
+        returns the saved operand.  Returns the handlers that the
+        rebinding ran under."""
+        handlers = set()
         for _ in range(100):
+            _rebinds.clear()
             self.assertEqual(f(*args), (1, 2))
+            self.assertGreater(len(_rebinds), 0)
+            self.assertEqual({name for name, _ in _rebinds}, {f.__name__})
+            handlers |= {handler for _, handler in _rebinds}
+        return handlers
 
     def test_call(self):
         def change():
@@ -1220,8 +1238,9 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
             return 0
         def f():
             x = 1
+            # change is a cell: the CALL is the first op that runs code
             return x + change(), x
-        self.check(f)
+        self.assertEqual(self.check(f), {"CALL", "CALL_PY_EXACT_ARGS"})
 
     def test_property(self):
         class O:
@@ -1232,7 +1251,7 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
         def f(o):
             x = 1
             return x + o.attr, x
-        self.check(f, O())
+        self.assertEqual(self.check(f, O()), {"LOAD_ATTR", "LOAD_ATTR_PROPERTY"})
 
     def test_getattr(self):
         class O:
@@ -1242,7 +1261,7 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
         def f(o):
             x = 1
             return x + o.attr, x
-        self.check(f, O())
+        self.assertIn("LOAD_ATTR", self.check(f, O()))
 
     def test_subscript(self):
         class O:
@@ -1252,7 +1271,8 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
         def f(o):
             x = 1
             return x + o[0], x
-        self.check(f, O())
+        self.assertEqual(self.check(f, O()),
+                         {"BINARY_OP", "BINARY_OP_SUBSCR_GETITEM"})
 
     def test_reflected_binary_op(self):
         class O:
@@ -1263,7 +1283,7 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
             x = 1
             y = 0
             return x + (y + o), x
-        self.check(f, O())
+        self.assertIn("BINARY_OP", self.check(f, O()))
 
     def test_comparison(self):
         class O:
@@ -1273,7 +1293,7 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
         def f(o):
             x = 1
             return x + (o < 0), x
-        self.check(f, O())
+        self.assertIn("COMPARE_OP", self.check(f, O()))
 
     def test_global_in_dict_subclass(self):
         # A generic LOAD_GLOBAL calls __getitem__ of globals that are not
@@ -1285,7 +1305,7 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
                 return dict.__getitem__(self, key)
         ns = Globals(G=0, _rebind_caller_x=_rebind_caller_x)
         exec("def f():\n    x = 1\n    return x + G, x\n", ns)
-        self.check(ns["f"])
+        self.assertEqual(self.check(ns["f"]), {"LOAD_GLOBAL"})
 
     def test_global_colliding_key(self):
         # The lookup of a builtin in an exact module dict compares with a
@@ -1302,13 +1322,17 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
         self.addCleanup(delattr, builtins, "copyprop_builtin")
         ns = {"_rebind_caller_x": _rebind_caller_x, Key("other"): 0}
         exec("def f():\n    x = 1\n    return x + copyprop_builtin, x\n", ns)
-        self.check(ns["f"])
+        self.assertEqual(self.check(ns["f"]), {"LOAD_GLOBAL"})
 
     def test_under_settrace(self):
+        # The instrumented forms run while a trace function is set; the
+        # tracer records the call of the rebinding function from f and
+        # the property's line events
         events = []
         def trace(frame, event, arg):
-            if frame.f_code.co_name == "change":
-                events.append(event)
+            if frame.f_code.co_name in ("change", "attr"):
+                events.append((frame.f_code.co_name, event,
+                               frame.f_back.f_code.co_name))
             return trace
         def change():
             _rebind_caller_x()
@@ -1331,8 +1355,9 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
         finally:
             sys.settrace(None)
         self.assertEqual((r1, r2), ((1, 2), (1, 2)))
-        # The tracer saw the call that rebinds x
-        self.assertIn("call", events)
+        self.assertIn(("change", "call", "f"), events)
+        self.assertIn(("attr", "line", "g"), events)
+        self.assertEqual([name for name, _ in _rebinds], ["f", "g"])
 
     def test_under_monitoring(self):
         mon = sys.monitoring
@@ -1340,22 +1365,34 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
         mon.use_tool_id(tool, "copyprop")
         self.addCleanup(mon.free_tool_id, tool)
         self.addCleanup(mon.set_events, tool, 0)
-        seen = []
+        events = []
         def on_call(code, offset, callable, arg0):
-            if callable is len:
-                seen.append(code.co_name)
+            if callable is length and code is f.__code__:
+                events.append(("CALL", code.co_name))
                 # The callback's caller is the function that calls len
                 _rebind_caller_x()
-        mon.register_callback(tool, mon.events.CALL, on_call)
-        self.addCleanup(mon.register_callback, tool, mon.events.CALL, None)
+        def on_start(code, offset):
+            if code.co_name == "attr":
+                events.append(("PY_START", code.co_name))
+        def on_line(code, line):
+            if code.co_name == "attr":
+                events.append(("LINE", code.co_name))
+        for event, callback in ((mon.events.CALL, on_call),
+                                (mon.events.PY_START, on_start),
+                                (mon.events.LINE, on_line)):
+            mon.register_callback(tool, event, callback)
+            self.addCleanup(mon.register_callback, tool, event, None)
         class O:
             @property
             def attr(self):
                 _rebind_caller_x()
                 return 0
+        # A cell, so that the CALL, not a LOAD_GLOBAL, is the first op
+        # after the load of x that runs code
+        length = len
         def f(s):
             x = 1
-            return x + len(s), x
+            return x + length(s), x
         def g(o):
             x = 1
             return x + o.attr, x
@@ -1367,15 +1404,20 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
         finally:
             mon.set_events(tool, 0)
         self.assertEqual((r1, r2), ((1, 2), (1, 2)))
-        self.assertIn("f", seen)
+        self.assertIn(("CALL", "f"), events)
+        self.assertIn(("PY_START", "attr"), events)
+        self.assertIn(("LINE", "attr"), events)
+        self.assertEqual([name for name, _ in _rebinds], ["f", "g"])
 
     def test_folded_operand_outlives_rebinding(self):
         # The reader's own callee rebinds the folded local and collects;
-        # the reader still hands the original operand to __radd__.  Today
-        # the C frames below the eval loop retain it conservatively; the
-        # PROCESS.md 0.3 row "a reader's folded operand needs an anchor
-        # across the reader's own collecting calls" (10a rung 3) makes this
-        # test its oracle under PYTHON_GCVERIFY=kill with precise frames.
+        # the reader still hands the original operand to __radd__.  A
+        # semantic regression for the PROCESS.md 0.3 row "a reader's folded
+        # operand needs an anchor across the reader's own collecting calls"
+        # (10a rung 3).  It passes today because self and the opaque C
+        # frames of the binary-op chain hold the operand; the row's oracle
+        # injects a collection where only the reader's precise frame holds
+        # it (compiler-copyprop-1.md, review round 2).
         seen = []
         class X:
             def __init__(self, tag):

@@ -1384,7 +1384,36 @@ class TracingCollectorTests(unittest.TestCase):
             del items
             gc.collect()
             return ref() is None
-        for func in dead_super, dead_local, dead_item:
+        # The call layer's cases (10a-2.md section 4): the dead object was
+        # held only by the call path's frames, now popped.
+        refs = []
+        class Callable:
+            def __call__(self, x):
+                refs.append(weakref.ref(x))
+        def dead_tp_call():
+            Callable()(A())
+            gc.collect()
+            return refs.pop()() is None
+        import contextvars
+        def store(x):
+            refs.append(weakref.ref(x))
+        def dead_context_run():
+            contextvars.copy_context().run(store, A())
+            gc.collect()
+            return refs.pop()() is None
+        def receiver():
+            while True:
+                x = yield
+                refs.append(weakref.ref(x))
+                del x
+        def dead_generator_send():
+            g = receiver()
+            next(g)
+            g.send(A())
+            gc.collect()
+            return refs.pop()() is None
+        for func in (dead_super, dead_local, dead_item, dead_tp_call,
+                     dead_context_run, dead_generator_send):
             with self.subTest(func=func.__name__):
                 freed = []
                 sorted(range(20), key=lambda i: freed.append(func()) or i)

@@ -7,6 +7,7 @@
 #include "pycore_ceval.h"         // _PyEval_EvalFrame()
 #include "pycore_frame.h"         // _PyInterpreterFrame
 #include "pycore_gc.h"            // _PyGC_CLEAR_FINALIZED()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_genobject.h"     // _PyGen_SetStopIterationValue()
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
 #include "pycore_lock.h"          // _Py_yield()
@@ -253,13 +254,15 @@ _PyGen_YieldFromRef(_PyInterpreterFrame *frame)
     return ref;
 }
 
-static PySendResult
+/* The span: the generator.  arg is read only before the frame runs. */
+Py_GC_PRECISE static PySendResult
 gen_send_ex2(PyGenObject *gen, PyObject *arg, PyValue *presult, int exc)
 {
     assert(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_EXECUTING);
 
     PyThreadState *tstate = _PyThreadState_GET();
     _PyInterpreterFrame *frame = &gen->gi_iframe;
+    int from_iternext = arg == NULL;
 
     /* arg goes to the slot of the yield that suspended the frame, or of
        the value that RETURN_GENERATOR returned.  Testing for None first
@@ -274,6 +277,10 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyValue *presult, int exc)
     /* A yield returns to the trampoline's second INTERPRETER_EXIT, one word
        past the entry frame's instr_ptr (Python/ceval.c). */
 
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)gen);
     if (exc) {
         assert(_PyErr_Occurred(tstate));
         _PyErr_ChainStackItem();
@@ -296,6 +303,7 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyValue *presult, int exc)
         assert(!PyValue_IsNull(result));
         assert(!_PyErr_Occurred(tstate));
         assert(FRAME_STATE_SUSPENDED(gen->gi_frame_state));
+        _PyThreadState_PopValueRoot(tstate, &span);
         *presult = result;
         return PYGEN_NEXT;
     }
@@ -306,22 +314,25 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyValue *presult, int exc)
 
     /* If the generator just returned (as opposed to yielding), signal
      * that the generator is exhausted. */
-    if (!PyValue_IsNull(result)) {
-        int is_none = PyValue_Is(result, _PyValue_None);
-        assert(is_none || !PyAsyncGen_CheckExact(gen));
-        if (is_none && !PyAsyncGen_CheckExact(gen) && !arg) {
-            /* Return NULL if called by gen_iternext() */
-            result = PyValue_NULL;
-        }
-    }
-    else {
+    if (PyValue_IsNull(result)) {
         assert(!PyErr_ExceptionMatches(PyExc_StopIteration));
         assert(!PyAsyncGen_CheckExact(gen) ||
             !PyErr_ExceptionMatches(PyExc_StopAsyncIteration));
+        _PyThreadState_PopValueRoot(tstate, &span);
+        *presult = PyValue_NULL;
+        return PYGEN_ERROR;
     }
-
+    int is_none = PyValue_Is(result, _PyValue_None);
+    assert(is_none || !PyAsyncGen_CheckExact(gen));
+    int is_async = PyAsyncGen_CheckExact(gen);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    if (is_none && !is_async && from_iternext) {
+        /* Return NULL if called by gen_iternext() */
+        *presult = PyValue_NULL;
+        return PYGEN_ERROR;
+    }
     *presult = result;
-    return PyValue_IsNull(result) ? PYGEN_ERROR : PYGEN_RETURN;
+    return PYGEN_RETURN;
 }
 
 /* The result of a send for the protocols that speak objects: a yielded or
@@ -338,7 +349,7 @@ send_result_object(PySendResult status, PyValue result, PyObject **presult)
 
 // Set the generator 'gen' to the executing state and send 'arg' into it.
 // See gen_send_ex2() for details.
-static PySendResult
+Py_GC_PRECISE static PySendResult
 gen_send_ex(PyGenObject *gen, PyObject *arg, PyValue *presult)
 {
     *presult = PyValue_NULL;
@@ -416,28 +427,44 @@ PyDoc_STRVAR(send_doc,
 "send(value) -> send 'value' into generator,\n\
 return next yielded value or raise StopIteration.");
 
-static PyObject *
+/* The span: the generator, then the slot of the send's result */
+Py_GC_PRECISE static PyObject *
 gen_send(PyObject *op, PyObject *arg)
 {
-    PyValue value;
-    PyObject *result;
+    PyThreadState *tstate = _PyThreadState_GET();
     PyGenObject *gen = _PyGen_CAST(op);
-    PySendResult status = gen_send_ex(gen, arg, &value);
-    if (send_result_object(status, value, &result) == PYGEN_RETURN) {
-        return gen_set_stop_iteration(gen, result);
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)gen);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    PySendResult status = gen_send_ex(gen, arg, &slots[1]);
+    PyObject *result = PyValue_Object(slots[1]);
+    if (result == NULL && !PyValue_IsNull(slots[1])) {
+        status = PYGEN_ERROR;
     }
+    if (status == PYGEN_RETURN) {
+        result = gen_set_stop_iteration(gen, result);
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
-/* gen_send() as a METH_O method. */
-static PyValue
+/* gen_send() as a METH_O method.  The span: the generator and the
+   argument's box. */
+Py_GC_PRECISE static PyValue
 gen_send_method(PyObject *op, PyValue arg)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, op);
     PyObject *arg_o = PyValue_Object(arg);
-    if (arg_o == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(gen_send(op, arg_o));
+    _PyValueSpan_AppendObject(&span, arg_o);
+    PyObject *result = arg_o == NULL ? NULL : gen_send(op, arg_o);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return PyValue_FromResult(result);
 }
 
 PyDoc_STRVAR(close_doc,
@@ -756,66 +783,83 @@ throw_here:
 }
 
 
-static PyValue
+/* The span: the generator, the type, the value and the traceback */
+Py_GC_PRECISE static PyValue
 gen_throw(PyObject *op, const PyValue *args, Py_ssize_t nargs)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
     PyGenObject *gen = _PyGen_CAST(op);
     PyObject *typ;
     PyObject *tb = NULL;
     PyObject *val = NULL;
+    PyObject *result = NULL;
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)gen);
 
     if (!_PyArg_CheckPositional("throw", nargs, 1, 3)) {
-        return PyValue_NULL;
+        goto done;
     }
     if (nargs > 1) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
                             "the (type, exc, tb) signature of throw() is deprecated, "
                             "use the single-arg signature instead.",
                             1) < 0) {
-            return PyValue_NULL;
+            goto done;
         }
     }
     typ = PyValue_Object(args[0]);
     if (typ == NULL) {
-        return PyValue_NULL;
+        goto done;
+    }
+    _PyValueSpan_AppendObject(&span, typ);
+    if (nargs >= 2) {
+        val = PyValue_Object(args[1]);
+        if (val == NULL) {
+            goto done;
+        }
+        _PyValueSpan_AppendObject(&span, val);
     }
     if (nargs == 3) {
-        val = PyValue_Object(args[1]);
-        if (val == NULL) {
-            return PyValue_NULL;
-        }
         tb = PyValue_Object(args[2]);
         if (tb == NULL) {
-            return PyValue_NULL;
+            goto done;
         }
     }
-    else if (nargs == 2) {
-        val = PyValue_Object(args[1]);
-        if (val == NULL) {
-            return PyValue_NULL;
-        }
-    }
-    return PyValue_FromResult(_gen_throw(gen, 1, typ, val, tb));
+    result = _gen_throw(gen, 1, typ, val, tb);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return PyValue_FromResult(result);
 }
 
 
-static PyValue
+/* The span: the slot of the send's result */
+Py_GC_PRECISE static PyValue
 gen_iternext(PyObject *self)
 {
     assert(PyGen_CheckExact(self) || PyCoro_CheckExact(self));
     PyGenObject *gen = _PyGen_CAST(self);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_Append(&span, PyValue_NULL);
 
-    PyValue result;
-    if (gen_send_ex(gen, NULL, &result) == PYGEN_RETURN) {
+    PyValue result = PyValue_NULL;
+    if (gen_send_ex(gen, NULL, &slots[0]) == PYGEN_RETURN) {
         // StopIteration holds the returned value as an object.
-        if (!PyValue_Is(result, _PyValue_None)) {
-            PyObject *value = PyValue_Object(result);
+        if (!PyValue_Is(slots[0], _PyValue_None)) {
+            PyObject *value = PyValue_Object(slots[0]);
             if (value != NULL) {
                 _PyGen_SetStopIterationValue(value);
             }
         }
-        return PyValue_NULL;
     }
+    else {
+        result = slots[0];
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
@@ -825,7 +869,7 @@ gen_iternext(PyObject *self)
  *
  * Returns 0 if StopIteration is set and -1 if any other exception is set.
  */
-int
+Py_GC_PRECISE int
 _PyGen_SetStopIterationValue(PyObject *value)
 {
     assert(!PyErr_Occurred());
@@ -834,9 +878,21 @@ _PyGen_SetStopIterationValue(PyObject *value)
     // PyErr_SetObject(exc_type, value) has a fast path when 'value'
     // is a tuple, where the value of the StopIteration exception would be
     // set to 'value[0]' instead of 'value'.
-    PyObject *exc = value == NULL
-        ? PyObject_CallNoArgs(PyExc_StopIteration)
-        : PyObject_CallOneArg(PyExc_StopIteration, value);
+    // Precise, as the send path that inlines it: value is anchored in the
+    // frame's span across the exception's creation.
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    PyObject *exc;
+    if (value == NULL) {
+        exc = PyObject_CallNoArgs(PyExc_StopIteration);
+    }
+    else {
+        _PyValueSpan_AppendObject(&span, value);
+        exc = PyObject_CallOneArg(PyExc_StopIteration, value);
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
     if (exc == NULL) {
         return -1;
     }
@@ -1493,29 +1549,54 @@ coro_wrapper_dealloc(PyObject *self)
     PyObject_GC_Del(cw);
 }
 
-static PyValue
+/* The coroutine wrappers pass their coroutine on: each anchors it, which
+   cw_coroutine, an immutable strong edge, does only while the wrapper is
+   anchored (10a-2.md, rule 1). */
+Py_GC_PRECISE static PyValue
 coro_wrapper_iternext(PyObject *self)
 {
     PyCoroWrapper *cw = _PyCoroWrapper_CAST(self);
-    return gen_iternext((PyObject *)cw->cw_coroutine);
+    PyObject *coro = (PyObject *)cw->cw_coroutine;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, coro);
+    PyValue result = gen_iternext(coro);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return result;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 coro_wrapper_send(PyObject *self, PyValue arg_value)
 {
-    PyObject *arg = PyValue_Object(arg_value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     PyCoroWrapper *cw = _PyCoroWrapper_CAST(self);
-    return PyValue_FromResult(gen_send((PyObject *)cw->cw_coroutine, arg));
+    PyObject *coro = (PyObject *)cw->cw_coroutine;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, coro);
+    PyObject *arg = PyValue_Object(arg_value);
+    _PyValueSpan_AppendObject(&span, arg);
+    PyObject *result = arg == NULL ? NULL : gen_send(coro, arg);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return PyValue_FromResult(result);
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 coro_wrapper_throw(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
     PyCoroWrapper *cw = _PyCoroWrapper_CAST(self);
-    return gen_throw((PyObject*)cw->cw_coroutine, args, nargs);
+    PyObject *coro = (PyObject *)cw->cw_coroutine;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, coro);
+    PyValue result = gen_throw(coro, args, nargs);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return result;
 }
 
 static PyObject *

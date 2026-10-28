@@ -36,6 +36,7 @@ import root_check_c  # noqa: E402
 
 SECTION = "py_gc_precise"
 CORE_DIRS = ("Objects", "Python", "Modules", "Parser")
+HEADER_DIR = "Include/internal"
 CLONE = re.compile(r"^(.*?)\.(cold|isra|constprop|part|lto_priv)(\.\d+)*$")
 DIE = re.compile(r"^\s*<(\d+)><([0-9a-f]+)>: Abbrev Number: (\d+)(?: \((\w+)\))?")
 ATTR = re.compile(r"^\s*<[0-9a-f]+>\s+(DW_AT_\w+)\s*:\s*(.*)$")
@@ -173,9 +174,12 @@ def name_of(d: Die, subprograms: dict[int, Die]) -> str | None:
 
 
 def marked_sources() -> list[Path]:
+    """The core .c files and internal headers that use the marker: a static
+    inline function marked in a header is precise wherever it is inlined."""
     files = []
-    for d in CORE_DIRS:
-        for p in sorted((ROOT / d).rglob("*.c")):
+    dirs = [(d, "*.c") for d in CORE_DIRS] + [(HEADER_DIR, "*.h")]
+    for d, pattern in dirs:
+        for p in sorted((ROOT / d).rglob(pattern)):
             try:
                 if re.search(r"\bPy_GC_PRECISE\b", p.read_text(errors="replace")):
                     files.append(p)

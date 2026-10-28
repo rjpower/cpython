@@ -1411,6 +1411,51 @@ Py_GC_PRECISE static void f(Py_GC_SLOTS PyValue *slots) {
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(root_check_c.main([path]), 0)
 
+    def test_marked_header_definition_is_checked(self):
+        # The build's check runs over internal headers too (Makefile.pre.in,
+        # Python/gc_precise.stamp); a marked inline helper there is checked
+        # as a marked function of a .c file is.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "pycore_helper.h")
+            with open(path, "w") as f:
+                f.write("#ifndef HELPER_H\n#define HELPER_H\n" + self.PRELUDE
+                        + self.NEGATIVE["no_span"][0].replace(
+                            "static void", "static inline void")
+                        + "#endif\n")
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(root_check_c.main([path]), 1)
+            self.assertIn("is held only in a C local", out.getvalue())
+
+    def test_variadic_cannot_be_precise(self):
+        src = """
+Py_GC_PRECISE static int f(int n, ...) {
+    va_list ap;
+    va_start(ap, n);
+    va_end(ap);
+    return n;
+}
+"""
+        errors = self.check(src)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("'f' is variadic", errors[0])
+
+    def test_mem_domain_does_not_collect(self):
+        # A value held across PyMem_Malloc() needs no anchor; one held
+        # across PyObject_Malloc() does.
+        src = """
+Py_GC_PRECISE static void f(void) {
+    PyObject *x = PyLong_FromLong(1);
+    void *p = PyMem_Malloc(8);
+    use(x);
+    PyMem_Free(p);
+    use(x);
+}
+"""
+        self.assertEqual(self.check(src), [])
+        errors = self.check(src.replace("PyMem_Malloc", "PyObject_Malloc"))
+        self.assertTrue(any("'x' is held only in a C local" in e
+                            for e in errors), errors)
+
     def test_unknown_function_fails(self):
         errors = root_check_c.check_source(self.PRELUDE, function="missing")
         self.assertEqual(len(errors), 1)

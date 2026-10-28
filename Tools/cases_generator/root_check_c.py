@@ -90,6 +90,15 @@ NON_COLLECTING = {
     "_PyThreadState_PushValueRoot", "_PyThreadState_PopValueRoot",
     "_PyThreadState_PushValueSpan", "_PyValueSpan_Append",
     "_PyValueSpan_Rebase",
+    # The mem domain counts its bytes for the trigger but never collects
+    # (Objects/obmalloc.c, gc_count_alloc()): its callers do not expect a
+    # collection.
+    "PyMem_Malloc", "PyMem_Calloc", "PyMem_Realloc", "PyMem_Free",
+    "PyMem_New", "PyMem_Resize", "PyMem_Del",
+    "PyMem_RawMalloc", "PyMem_RawCalloc", "PyMem_RawRealloc", "PyMem_RawFree",
+    # variable arguments: reads of the va_list, which holds no object of
+    # its own
+    "va_start", "va_copy", "va_arg", "va_end",
     # statistics
     "CALL_STAT_INC", "EVAL_CALL_STAT_INC", "EVAL_CALL_STAT_INC_IF_FUNCTION",
     "OBJECT_STAT_INC", "VALUE_BOX_STAT_INC",
@@ -118,8 +127,7 @@ ALLOCATING = {
     "PyTuple_GET_ITEM", "PyList_GET_ITEM", "PyCell_GET",
     "PyTuple_GetItem", "PyList_GetItem", "PySequence_Fast_GET_ITEM",
     "PyType_GenericAlloc", "_PyType_AllocNoTrack", "PyObject_Malloc",
-    "PyObject_Calloc", "PyObject_Realloc", "PyMem_Malloc", "PyMem_Calloc",
-    "PyMem_Realloc", "PyMem_New", "PyMem_Resize", "PyObject_New",
+    "PyObject_Calloc", "PyObject_Realloc", "PyObject_New",
     "PyObject_NewVar", "PyObject_GC_New", "PyObject_GC_NewVar",
     "_PyObject_GC_New", "_PyObject_GC_NewVar",
     "PyUnicode_FromString", "PyUnicode_FromStringAndSize",
@@ -1184,6 +1192,7 @@ class Function:
     precise: bool
     args_anchored: bool
     static: bool
+    variadic: bool
     params: list[Param]
     body_toks: list[Tok]
     returns_object: bool
@@ -1397,6 +1406,7 @@ def function_of(head: list[Tok], body: list[Tok]) -> Function | None:
         precise=PRECISE in texts or ARGS_ANCHORED in texts,
         args_anchored=ARGS_ANCHORED in texts,
         static="static" in texts or "Py_LOCAL_INLINE" in texts,
+        variadic=any(t.text == "..." for t in params),
         params=parse_params(params), body_toks=body,
         returns_object=returns_object_of(before))
 
@@ -2676,6 +2686,13 @@ def check_source(src: str, function: str | None = None, check_all: bool = False,
         if function is not None and fn.name != function:
             continue
         if function is None and not check_all and not fn.precise:
+            continue
+        if fn.precise and fn.variadic:
+            # Its unread arguments are in its own frame's register save
+            # area until va_arg() reads them, and a precise frame is not
+            # scanned (10a-2.md).
+            errors.append(Error(fn.line, f"'{fn.name}' is variadic and "
+                                f"cannot be {PRECISE}"))
             continue
         if fn.args_anchored and not fn.static:
             errors.append(Error(fn.line, f"'{fn.name}' is {ARGS_ANCHORED} "

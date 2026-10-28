@@ -104,6 +104,12 @@ class InlineAuditTests(unittest.TestCase):
         self.assertIn("'lost' is in section py_gc_precise but has no DWARF",
                       errors[0])
 
+    def test_marked_headers_are_sources(self):
+        # A static inline function marked in an internal header is precise
+        # where it is inlined, so the audit reads the header's markers.
+        sources = gc_inline_audit.marked_sources()
+        self.assertIn("pycore_gc_walk.h", [p.name for p in sources])
+
     def test_cli_exit_status(self):
         obj, c = self.build("cli", GOOD + BAD, "-g", "-O2")
         with support.captured_stdout() as out:

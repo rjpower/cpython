@@ -379,7 +379,7 @@ slot typedefs
 |                             |    const char *             |                      |
 |                             |    :c:type:`PyObject` *     |                      |
 +-----------------------------+-----------------------------+----------------------+
-| :c:type:`getattrofunc`      | .. line-block::             | :c:type:`PyObject` * |
+| :c:type:`getattrofunc`      | .. line-block::             | PyValue              |
 |                             |                             |                      |
 |                             |    :c:type:`PyObject` *     |                      |
 |                             |    :c:type:`PyObject` *     |                      |
@@ -388,9 +388,9 @@ slot typedefs
 |                             |                             |                      |
 |                             |    :c:type:`PyObject` *     |                      |
 |                             |    :c:type:`PyObject` *     |                      |
-|                             |    :c:type:`PyObject` *     |                      |
+|                             |    PyValue                  |                      |
 +-----------------------------+-----------------------------+----------------------+
-| :c:type:`descrgetfunc`      | .. line-block::             | :c:type:`PyObject` * |
+| :c:type:`descrgetfunc`      | .. line-block::             | PyValue              |
 |                             |                             |                      |
 |                             |    :c:type:`PyObject` *     |                      |
 |                             |    :c:type:`PyObject` *     |                      |
@@ -400,7 +400,7 @@ slot typedefs
 |                             |                             |                      |
 |                             |    :c:type:`PyObject` *     |                      |
 |                             |    :c:type:`PyObject` *     |                      |
-|                             |    :c:type:`PyObject` *     |                      |
+|                             |    PyValue                  |                      |
 +-----------------------------+-----------------------------+----------------------+
 | :c:type:`hashfunc`          | :c:type:`PyObject` *        | Py_hash_t            |
 +-----------------------------+-----------------------------+----------------------+
@@ -1079,9 +1079,15 @@ and :c:data:`PyType_Type` effectively act as defaults.)
 
    An optional pointer to the get-attribute function.
 
-   The signature is the same as for :c:func:`PyObject_GetAttr`::
+   The signature is::
 
-      PyObject *tp_getattro(PyObject *self, PyObject *attr);
+      PyValue tp_getattro(PyObject *self, PyObject *attr);
+
+   The attribute is returned as a value, so an int or float held inline is
+   not boxed; ``PyValue_NULL`` is returned with an exception set on failure.
+   *self* is an object, never an inline value: an int or float uses the
+   generic function.  :c:func:`PyObject_GetAttr` returns the result as an
+   object.
 
    It is usually convenient to set this field to :c:func:`PyObject_GenericGetAttr`,
    which implements the normal way of looking for object attributes.
@@ -1105,12 +1111,15 @@ and :c:data:`PyType_Type` effectively act as defaults.)
 
    An optional pointer to the function for setting and deleting attributes.
 
-   The signature is the same as for :c:func:`PyObject_SetAttr`::
+   The signature is::
 
-      int tp_setattro(PyObject *self, PyObject *attr, PyObject *value);
+      int tp_setattro(PyObject *self, PyObject *attr, PyValue value);
 
-   In addition, setting *value* to ``NULL`` to delete an attribute must be
-   supported.  It is usually convenient to set this field to
+   The value to store is passed as a value.  In addition, *value* set to
+   ``PyValue_NULL`` deletes the attribute, which must be supported; a value
+   of ``None`` is stored like any other.  A function that keeps the value
+   in a :c:expr:`PyObject *` field boxes it with :c:func:`!PyValue_Object`.
+   It is usually convenient to set this field to
    :c:func:`PyObject_GenericSetAttr`, which implements the normal
    way of setting object attributes.
 
@@ -2037,7 +2046,11 @@ and :c:data:`PyType_Type` effectively act as defaults.)
 
    The function signature is::
 
-      PyObject * tp_descr_get(PyObject *self, PyObject *obj, PyObject *type);
+      PyValue tp_descr_get(PyObject *self, PyObject *obj, PyObject *type);
+
+   The result is a value, or ``PyValue_NULL`` with an exception set.  *obj*
+   is an object (``NULL`` for a lookup on the class): the caller boxes an
+   inline int or float to bind it.
 
    .. XXX explain more?
 
@@ -2055,9 +2068,9 @@ and :c:data:`PyType_Type` effectively act as defaults.)
 
    The function signature is::
 
-      int tp_descr_set(PyObject *self, PyObject *obj, PyObject *value);
+      int tp_descr_set(PyObject *self, PyObject *obj, PyValue value);
 
-   The *value* argument is set to ``NULL`` to delete the value.
+   The *value* argument is ``PyValue_NULL`` to delete the value.
 
    .. XXX explain more?
 
@@ -3211,24 +3224,24 @@ Slot Type typedefs
    Set the value of the named attribute for the object.
    The value argument is set to ``NULL`` to delete the attribute.
 
-.. c:type:: PyObject *(*getattrofunc)(PyObject *self, PyObject *attr)
+.. c:type:: PyValue (*getattrofunc)(PyObject *self, PyObject *attr)
 
    Return the value of the named attribute for the object.
 
    See :c:member:`~PyTypeObject.tp_getattro`.
 
-.. c:type:: int (*setattrofunc)(PyObject *self, PyObject *attr, PyObject *value)
+.. c:type:: int (*setattrofunc)(PyObject *self, PyObject *attr, PyValue value)
 
    Set the value of the named attribute for the object.
-   The value argument is set to ``NULL`` to delete the attribute.
+   The value argument is ``PyValue_NULL`` to delete the attribute.
 
    See :c:member:`~PyTypeObject.tp_setattro`.
 
-.. c:type:: PyObject *(*descrgetfunc)(PyObject *, PyObject *, PyObject *)
+.. c:type:: PyValue (*descrgetfunc)(PyObject *, PyObject *, PyObject *)
 
    See :c:member:`~PyTypeObject.tp_descr_get`.
 
-.. c:type:: int (*descrsetfunc)(PyObject *, PyObject *, PyObject *)
+.. c:type:: int (*descrsetfunc)(PyObject *, PyObject *, PyValue)
 
    See :c:member:`~PyTypeObject.tp_descr_set`.
 

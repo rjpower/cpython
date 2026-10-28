@@ -727,6 +727,25 @@ class CAPITest(unittest.TestCase):
         del obj.value
         self.assertEqual(obj.pvalue, 0)
 
+    def test_heaptype_with_setattro_conversions(self):
+        # The setter takes int() of the value, then a C long.
+        class Index:
+            def __int__(self):
+                return 14
+        obj = _testcapi.HeapCTypeSetattr()
+        for value, expected in ((100001, 100001), (2.7, 2), ("13", 13),
+                                (Index(), 14), (True, 1)):
+            with self.subTest(value=value):
+                obj.value = value
+                self.assertEqual(obj.pvalue, expected)
+        for value, exc in (("x", ValueError), (2**70, OverflowError),
+                           (None, TypeError)):
+            with self.subTest(value=value):
+                obj.value = 7
+                with self.assertRaises(exc):
+                    obj.value = value
+                self.assertEqual(obj.pvalue, 7)
+
     def test_heaptype_with_custom_metaclass(self):
         metaclass = _testcapi.HeapCTypeMetaclass
         self.assertIsSubclass(metaclass, type)

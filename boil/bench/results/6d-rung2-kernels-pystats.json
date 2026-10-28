@@ -1,0 +1,1084 @@
+{
+ "schema": "boil-bench/1",
+ "build": {
+  "label": "6d-rung2-pystats",
+  "path": "/home/power/code/cpython/.worktrees/boil-6d/build/pystats/python",
+  "version": "3.16.0a1+dev (heads/boil/6d-dirty:23845749a80, Oct 28 2026, 03:14:20) [GCC 15.2.0]",
+  "git": [
+   "CPython",
+   "heads/boil/6d-dirty",
+   "23845749a80"
+  ],
+  "hash_seed": 0
+ },
+ "machine": {
+  "hostname": "bento-cat",
+  "kernel": "7.0.0-29-generic",
+  "cpus": 16,
+  "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+  "memory": "65726156 kB"
+ },
+ "results": {
+  "boxes": {
+   "richards": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 9.0,
+    "int_boxes": 9.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 9.0
+    },
+    "by_instruction": {},
+    "dispatches": 5745478.5,
+    "allocations": 2387.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     9.0
+    ],
+    "loops": [
+     2,
+     6
+    ],
+    "runs": 1
+   },
+   "go": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 30609.0,
+    "int_boxes": 16644.0,
+    "float_boxes": 13965.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 200.0,
+     "return to C": 0.0,
+     "other": 30409.0
+    },
+    "by_instruction": {},
+    "dispatches": 17936360.0,
+    "allocations": 217059.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     30609.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "nbody": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 1.0,
+    "int_boxes": 1.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 1.0
+    },
+    "by_instruction": {},
+    "dispatches": 17600848.0,
+    "allocations": 4.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     1.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "float": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 2.0,
+    "int_boxes": 2.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 2.0
+    },
+    "by_instruction": {},
+    "dispatches": 7799931.5,
+    "allocations": 100011.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     2.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "spectral_norm": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 42.0,
+    "int_boxes": 42.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 42.0
+    },
+    "by_instruction": {},
+    "dispatches": 16335441.5,
+    "allocations": 691942.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     42.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "raytrace": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 110104.0,
+    "int_boxes": 110104.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 40000.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 70104.0
+    },
+    "by_instruction": {},
+    "dispatches": 30728307.5,
+    "allocations": 804107.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     110104.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "deltablue": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 809.0,
+    "int_boxes": 809.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 809.0
+    },
+    "by_instruction": {},
+    "dispatches": 548668.5666666667,
+    "allocations": 6987.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     809.0
+    ],
+    "loops": [
+     30,
+     90
+    ],
+    "runs": 1
+   },
+   "chaos": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 145290.0,
+    "int_boxes": 145290.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 10000.0,
+     "return to C": 0.0,
+     "other": 135290.0
+    },
+    "by_instruction": {},
+    "dispatches": 7051897.5,
+    "allocations": 251037.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     145290.0
+    ],
+    "loops": [
+     2,
+     6
+    ],
+    "runs": 1
+   },
+   "nqueens": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 40332.0,
+    "int_boxes": 40332.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 40332.0
+    },
+    "by_instruction": {},
+    "dispatches": 12004769.0,
+    "allocations": 1030256.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     40332.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "fannkuch": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 4.0,
+    "int_boxes": 4.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 4.0
+    },
+    "by_instruction": {},
+    "dispatches": 47838301.5,
+    "allocations": 5768309.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     4.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "generators": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 6508572.5,
+    "allocations": 100000.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.0
+    ],
+    "loops": [
+     2,
+     6
+    ],
+    "runs": 1
+   },
+   "comprehensions": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 2431.5053333333335,
+    "allocations": 85.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.0
+    ],
+    "loops": [
+     6000,
+     18000
+    ],
+    "runs": 1
+   },
+   "coroutines": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 2.0,
+    "int_boxes": 2.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 2.0
+    },
+    "by_instruction": {},
+    "dispatches": 4005960.0,
+    "allocations": 242790.5,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     2.0
+    ],
+    "loops": [
+     4,
+     12
+    ],
+    "runs": 1
+   },
+   "unpack_sequence": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 9604.0,
+    "allocations": 0.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.0
+    ],
+    "loops": [
+     4000,
+     12000
+    ],
+    "runs": 1
+   },
+   "deepcopy": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 4.0,
+    "int_boxes": 4.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 4.0
+    },
+    "by_instruction": {},
+    "dispatches": 27986.15166666667,
+    "allocations": 3098.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 30.0
+    },
+    "values": [
+     4.0
+    ],
+    "loops": [
+     300,
+     900
+    ],
+    "runs": 1
+   },
+   "deepcopy_reduce": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 265.000875,
+    "allocations": 36.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 1.0
+    },
+    "values": [
+     0.0
+    ],
+    "loops": [
+     20000,
+     60000
+    ],
+    "runs": 1
+   },
+   "deepcopy_memo": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 4661.0465,
+    "allocations": 149.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.0
+    ],
+    "loops": [
+     4000,
+     12000
+    ],
+    "runs": 1
+   },
+   "json_dumps": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 9000.0,
+    "int_boxes": 9000.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 9000.0
+    },
+    "by_instruction": {},
+    "dispatches": 316128.0,
+    "allocations": 58016.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     9000.0
+    ],
+    "loops": [
+     10,
+     30
+    ],
+    "runs": 1
+   },
+   "json_loads": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 4098.0075,
+    "allocations": 7240.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.0
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1
+   },
+   "pickle": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 400.0,
+    "int_boxes": 400.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 400.0
+    },
+    "by_instruction": {},
+    "dispatches": 372.0,
+    "allocations": 800.0025,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     400.0
+    ],
+    "loops": [
+     400,
+     1200
+    ],
+    "runs": 1
+   },
+   "unpickle": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 312.0,
+    "allocations": 4660.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.0
+    ],
+    "loops": [
+     300,
+     900
+    ],
+    "runs": 1
+   },
+   "regex_compile": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 992469.0,
+    "int_boxes": 992469.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 348916.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 643553.0
+    },
+    "by_instruction": {},
+    "dispatches": 17412525.5,
+    "allocations": 1193839.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     992469.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "logging_format": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 20.0,
+    "int_boxes": 10.0,
+    "float_boxes": 10.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 20.0
+    },
+    "by_instruction": {},
+    "dispatches": 5782.4145,
+    "allocations": 330.001,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 10.0
+    },
+    "values": [
+     20.0
+    ],
+    "loops": [
+     1000,
+     3000
+    ],
+    "runs": 1
+   },
+   "logging_silent": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 162.00000833333334,
+    "allocations": 10.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     0.0
+    ],
+    "loops": [
+     60000,
+     180000
+    ],
+    "runs": 1
+   },
+   "logging_simple": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 20.0,
+    "int_boxes": 10.0,
+    "float_boxes": 10.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 20.0
+    },
+    "by_instruction": {},
+    "dispatches": 5552.414,
+    "allocations": 310.001,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 10.0
+    },
+    "values": [
+     20.0
+    ],
+    "loops": [
+     1000,
+     3000
+    ],
+    "runs": 1
+   },
+   "xml_etree_generate": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 101731.0,
+    "int_boxes": 101731.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 101731.0
+    },
+    "by_instruction": {},
+    "dispatches": 6927957.0,
+    "allocations": 925536.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     101731.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "xml_etree_iterparse": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 341.0,
+    "int_boxes": 341.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 341.0
+    },
+    "by_instruction": {},
+    "dispatches": 5115455.0,
+    "allocations": 728409.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     341.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "xml_etree_parse": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 343.0,
+    "int_boxes": 343.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 343.0
+    },
+    "by_instruction": {},
+    "dispatches": 1194019.5,
+    "allocations": 1065361.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     343.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "xml_etree_process": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 140.0,
+    "int_boxes": 140.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 140.0
+    },
+    "by_instruction": {},
+    "dispatches": 6137520.5,
+    "allocations": 510838.0,
+    "dict_mode": {
+     "str name": 0.0,
+     "capacity": 0.0,
+     "shape limit": 0.0,
+     "class assigned": 0.0,
+     "dict assigned": 0.0,
+     "dict deleted": 0.0,
+     "on request": 0.0
+    },
+    "values": [
+     140.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   }
+  }
+ },
+ "runs": {
+  "boxes": {
+   "timestamp": "2026-10-28T03:18:16-07:00",
+   "commit": {
+    "sha": "23845749a806a2f1fd7f84d0a7c529d72f57adc3",
+    "dirty": true
+   },
+   "load_1min": {
+    "max": 7.728515625,
+    "samples": [
+     7.59130859375,
+     7.59130859375,
+     7.59130859375,
+     7.59130859375,
+     7.59130859375,
+     7.59130859375,
+     7.70458984375,
+     7.70458984375,
+     7.70458984375,
+     7.70458984375,
+     7.728515625,
+     7.728515625,
+     7.669921875,
+     7.669921875,
+     7.669921875,
+     7.669921875,
+     7.669921875,
+     7.6162109375,
+     7.6162109375,
+     7.6162109375,
+     7.6162109375,
+     7.56640625,
+     7.56640625,
+     7.56640625,
+     7.56640625,
+     7.56640625,
+     7.681640625,
+     7.681640625,
+     7.681640625,
+     7.681640625
+    ]
+   }
+  }
+ }
+}

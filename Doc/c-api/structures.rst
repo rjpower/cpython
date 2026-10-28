@@ -723,6 +723,19 @@ Accessing attributes of extension types
       ``PyMember_SetOne`` is always available.
       Previously, it required including ``"structmember.h"``.
 
+.. c:function:: PyValue PyMember_GetOneValue(const char *obj_addr, struct PyMemberDef *m)
+
+   :c:func:`PyMember_GetOne` returning a value: a number field that fits
+   reads as an inline int or float, without a box.  Returns
+   ``PyValue_NULL`` with an exception set on error.
+
+.. c:function:: int PyMember_SetOneValue(char *obj_addr, struct PyMemberDef *m, PyValue v)
+
+   :c:func:`PyMember_SetOne` taking a value: an inline int or float is
+   stored in a number field without a box.  ``PyValue_NULL`` deletes the
+   attribute.  Returns ``0`` if successful and ``-1`` with an exception set
+   on failure.
+
 .. _PyMemberDef-flags:
 
 Member flags

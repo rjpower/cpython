@@ -474,16 +474,19 @@ C mode rejects, so a 6d change to one is checked in its commit.
 | `_PyObject_CallValue` (was `_PyObject_Call`), `PyObject_Call` | value form and wrapper | precise; the body keeps `_PyObject_Call`'s anchors; the wrapper boxes after the last use of its arguments | 10a rung 2; 6d moves the marks with the body |
 | `_PyObject_Call_PrependValue`, `_PyObject_Call_Prepend` | value form and wrapper | precise, as above | the same |
 | `PyVectorcall_Call`, `_PyVectorcall_Call`, `cfunction_call`, `wrapperdescr_call`, `classmethoddescr_call` | return values | precise | 10a rung 2 |
-| `slot_tp_getattro`, `_Py_slot_tp_getattr_hook`, `call_attribute`, `slot_tp_setattro`, `slot_tp_descr_get`, `slot_tp_descr_set`, `slot_tp_call`, `call_method`, `vectorcall_method_value` | rewritten on values | written to the C mode's subset (a parameter used after a collecting call is covered by a span on entry, no address escapes), `root_check_c.py --function` run on each and recorded in the work doc; left opaque | 10a rung 1b (open question 3) |
+| `slot_tp_getattro`, `_Py_slot_tp_getattr_hook`, `call_attribute`, `slot_tp_setattro`, `slot_tp_descr_get`, `slot_tp_descr_set`, `slot_tp_call`, `call_method`, `vectorcall_method_value` | rewritten on values | `root_check_c.py --function` run on each and recorded in the work doc (work/6d-2.md, "C mode: hand-off to 10a"); left opaque. The spans over their parameters and the clean results are 10a's deliverable, with the marks | 10a rung 1b (open question 3) |
 | `wrap_*`, `wrapper_call`, `wrapperdescr_raw_call` | return values | opaque (not in note 11's row) | 10b |
 | object.c's executor, `PyObject_GetAttrValue`, `PyObject_SetAttrValue`, `PyObject_GetOptionalAttrValue` | value owner | opaque; their roots stay, since a box made for a descriptor call must outlive it | 10b |
 | descriptor gets and sets, getters and setters, `PyMember_*Value`, `type_getattro`, `type_setattro`, module, super | value forms | opaque | 10b |
 | `STORE_ATTR_SHAPE_POLY`, `LOAD_ATTR_METHOD_LAZY_DICT` | new handlers | generated, precise, checked by root_check | already |
 
 `_PyValue_CheckSlotResult` is a static inline function that reads a type
-and calls nothing but `Py_FatalError`, which does not return and joins
-the C mode's non-collecting list with a reviewed comment; the inline
-audit accepts it in a precise caller.
+and, on a non-canonical box, writes to stderr with stdio and calls
+`abort()`; `Py_FatalError` is not used, since it can run Python code.
+The C mode checks the function clean, but classes its stdio and `abort`
+calls as collecting, so a precise caller sees it as a collecting call
+until 10a adds them to call_effects.py's non-collecting list with a
+reviewed comment.
 
 **Files shared with 10a.** call.c, descrobject.c, methodobject.c,
 classobject.c and typeobject.c are 10a's too. Rung 1 touches none of

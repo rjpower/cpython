@@ -1848,7 +1848,7 @@ pysqlite_connection_set_isolation_level(PyObject *op,
 }
 
 static PyObject *
-pysqlite_connection_call(PyObject *op, PyObject *args, PyObject *kwargs)
+pysqlite_connection_call_object(PyObject *op, PyObject *args, PyObject *kwargs)
 {
     PyObject* sql;
     pysqlite_Statement* statement;
@@ -1870,6 +1870,12 @@ pysqlite_connection_call(PyObject *op, PyObject *args, PyObject *kwargs)
     }
 
     return (PyObject*)statement;
+}
+
+static PyValue
+pysqlite_connection_call(PyObject *op, PyObject *args, PyObject *kwargs)
+{
+    return PyValue_FromResult(pysqlite_connection_call_object(op, args, kwargs));
 }
 
 /*[clinic input]

@@ -363,6 +363,12 @@ typedef PyValue (*vectorcallfunc)(PyValue callable, const PyValue *args,
                                   size_t nargsf, PyObject *kwnames);
 #endif
 
+/* tp_call: callable is the object whose type holds the slot, args the
+   tuple of positional arguments and kwargs a dict or NULL.  The result is
+   a value, or PyValue_NULL with an exception set. */
+typedef PyValue (*callfunc)(PyObject *callable, PyObject *args,
+                            PyObject *kwargs);
+
 typedef struct{
     int slot;    /* slot id, see below */
     void *pfunc; /* function pointer */

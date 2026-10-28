@@ -721,7 +721,17 @@ proxy_getattr(PyObject *proxy, PyObject *name)
 }
 
 WRAP_UNARY(proxy_str, PyObject_Str)
-WRAP_TERNARY(proxy_call, PyObject_Call)
+static PyValue
+proxy_call(PyObject *proxy, PyObject *args, PyObject *kwargs)
+{
+    PyObject *obj = proxy_unwrap(proxy);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyValue res = PyObject_CallValue(PyValue_FromObject(obj), args, kwargs);
+    Py_DECREF(obj);
+    return res;
+}
 
 static PyObject *
 proxy_repr(PyObject *proxy)

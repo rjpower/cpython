@@ -26,6 +26,25 @@ _PyWasm_TrampolineCall(PyCFunctionWithKeywords func,
     return NULL;
 }
 
+typedef PyValue (*value_three_arg)(PyObject*, PyObject*, PyObject*);
+typedef PyValue (*value_two_arg)(PyObject*, PyObject*);
+typedef PyValue (*value_one_arg)(PyObject*);
+typedef PyValue (*value_zero_arg)(void);
+
+PyValue
+_PyWasm_TrampolineCallValue(callfunc func,
+                            PyObject* self,
+                            PyObject* args,
+                            PyObject* kw)
+{
+    RETCALL_IF_SIG_MATCHES(value_three_arg, self, args, kw);
+    RETCALL_IF_SIG_MATCHES(value_two_arg, self, args);
+    RETCALL_IF_SIG_MATCHES(value_one_arg, self);
+    RETCALL_IF_SIG_MATCHES(value_zero_arg);
+    PyErr_SetString(PyExc_SystemError, "Handler has incorrect signature");
+    return PyValue_NULL;
+}
+
 typedef int (*setter_three_arg)(PyObject*, PyObject*, void*);
 typedef int (*setter_two_arg)(PyObject*, PyObject*);
 typedef int (*setter_one_arg)(PyObject*);

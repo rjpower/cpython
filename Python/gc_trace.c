@@ -2673,7 +2673,7 @@ trap_setattro(PyObject *op, PyObject *name, PyValue value)
     _PyGC_TrapUse(op, "tp_setattro");
 }
 
-static PyObject *
+static PyValue
 trap_call(PyObject *op, PyObject *args, PyObject *kwargs)
 {
     _PyGC_TrapUse(op, "tp_call");

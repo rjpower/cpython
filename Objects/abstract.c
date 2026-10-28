@@ -100,7 +100,7 @@ _PyObject_HasLen(PyObject *o) {
 Py_ssize_t
 PyObject_LengthHint(PyObject *o, Py_ssize_t defaultvalue)
 {
-    PyObject *hint, *result;
+    PyObject *hint;
     Py_ssize_t res;
     if (_PyObject_HasLen(o)) {
         res = PyObject_Length(o);
@@ -123,29 +123,28 @@ PyObject_LengthHint(PyObject *o, Py_ssize_t defaultvalue)
         }
         return defaultvalue;
     }
-    result = _PyObject_CallNoArgs(hint);
+    // The hint's result is read as a value, so an inline int is not boxed.
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue result = _PyObject_VectorcallValueTstate(
+        tstate, PyValue_FromObject(hint), NULL, 0, NULL);
     Py_DECREF(hint);
-    if (result == NULL) {
-        PyThreadState *tstate = _PyThreadState_GET();
+    if (PyValue_IsNull(result)) {
         if (_PyErr_ExceptionMatches(tstate, PyExc_TypeError)) {
             _PyErr_Clear(tstate);
             return defaultvalue;
         }
         return -1;
     }
-    else if (result == Py_NotImplemented) {
-        Py_DECREF(result);
+    else if (PyValue_Is(result, PyValue_FromObject(Py_NotImplemented))) {
         return defaultvalue;
     }
-    if (!PyLong_Check(result)) {
+    if (!PyType_FastSubclass(PyValue_Type(result), Py_TPFLAGS_LONG_SUBCLASS)) {
         PyErr_Format(PyExc_TypeError,
-                     "%T.__length_hint__() must return an int, not %T",
-                     o, result);
-        Py_DECREF(result);
+                     "%T.__length_hint__() must return an int, not %N",
+                     o, PyValue_Type(result));
         return -1;
     }
-    res = PyLong_AsSsize_t(result);
-    Py_DECREF(result);
+    res = PyLong_AsSsize_tValue(result);
     if (res < 0 && PyErr_Occurred()) {
         return -1;
     }

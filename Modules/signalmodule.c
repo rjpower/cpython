@@ -4,7 +4,7 @@
 /* XXX Signals should be recorded per thread, now we have thread state. */
 
 #include "Python.h"
-#include "pycore_call.h"          // _PyObject_Call()
+#include "pycore_call.h"          // _PyObject_CallValue()
 #include "pycore_ceval.h"         // _PyEval_SignalReceived()
 #include "pycore_emscripten_signal.h"  // _Py_CHECK_EMSCRIPTEN_SIGNALS
 #include "pycore_fileutils.h"     // _Py_BEGIN_SUPPRESS_IPH
@@ -1874,21 +1874,20 @@ _PyErr_CheckSignalsTstate(PyThreadState *tstate)
                 arglist = Py_BuildValue("(iO)", i, f);
             }
         }
-        PyObject *result;
+        PyValue result;
         if (arglist) {
-            result = _PyObject_Call(tstate, func, arglist, NULL);
+            result = _PyObject_CallValue(tstate, PyValue_FromObject(func),
+                                         arglist, NULL);
             Py_DECREF(arglist);
         }
         else {
-            result = NULL;
+            result = PyValue_NULL;
         }
-        if (!result) {
+        if (PyValue_IsNull(result)) {
             /* On error, re-schedule a call to _PyErr_CheckSignalsTstate() */
             _Py_atomic_store_int(&is_tripped, 1);
             return -1;
         }
-
-        Py_DECREF(result);
     }
 
     return 0;

@@ -534,7 +534,7 @@ method_vectorcall_O(
    This is just an excuse to say that this doesn't need to be optimized:
    we implement this simply by calling __get__ and then calling the result.
 */
-static PyObject *
+static PyValue
 classmethoddescr_call(PyObject *_descr, PyObject *args,
                       PyObject *kwds)
 {
@@ -546,26 +546,26 @@ classmethoddescr_call(PyObject *_descr, PyObject *args,
                      "object needs an argument",
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *self = PyTuple_GET_ITEM(args, 0);
-    PyValue bound_v = classmethod_get((PyObject *)descr, NULL, self);
-    _PyValue_CheckSlotResult(bound_v, Py_TYPE(descr), "tp_descr_get");
-    if (PyValue_IsNull(bound_v)) {
-        return NULL;
+    PyThreadState *tstate = _PyThreadState_GET();
+    // The bound method, held in a root for the call.
+    _PyValueRoot bound;
+    _PyThreadState_PushValueRoot(tstate, &bound);
+    bound.value = classmethod_get((PyObject *)descr, NULL, self);
+    _PyValue_CheckSlotResult(bound.value, Py_TYPE(descr), "tp_descr_get");
+    PyValue res = PyValue_NULL;
+    if (!PyValue_IsNull(bound.value)) {
+        // The caller's tuple owns the argument array.
+        res = _PyObject_VectorcallDictValueTstate(
+            tstate, bound.value, _PyTuple_ITEMS(args) + 1, argc - 1, kwds);
     }
-    // A bound method, never inline.
-    PyObject *bound = PyValue_ObjectBorrow(bound_v);
-    PyObject *const *items = _PyTuple_Objects(args);
-    if (items == NULL) {
-        return NULL;
-    }
-    PyObject *res = PyObject_VectorcallDict(bound, items + 1, argc - 1, kwds);
-    Py_DECREF(bound);
+    _PyThreadState_PopValueRoot(tstate, &bound);
     return res;
 }
 
-Py_LOCAL_INLINE(PyObject *)
+Py_LOCAL_INLINE(PyValue)
 wrapperdescr_raw_call(PyWrapperDescrObject *descr, PyObject *self,
                       PyObject *args, PyObject *kwds)
 {
@@ -580,17 +580,16 @@ wrapperdescr_raw_call(PyWrapperDescrObject *descr, PyObject *self,
         PyErr_Format(PyExc_TypeError,
                      "wrapper %s() takes no keyword arguments",
                      descr->d_base->name);
-        return NULL;
+        return PyValue_NULL;
     }
     return (*wrapper)(self, args, descr->d_wrapped);
 }
 
-static PyObject *
+static PyValue
 wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
 {
     PyWrapperDescrObject *descr = (PyWrapperDescrObject *)_descr;
     Py_ssize_t argc;
-    PyObject *self, *result;
 
     /* Make sure that the first argument is acceptable as 'self' */
     assert(PyTuple_Check(args));
@@ -601,9 +600,28 @@ wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
                      "object needs an argument",
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
-    self = PyTuple_GET_ITEM(args, 0);
+    /* A wrapper's self is an object: an inline receiver (int.__add__(5, 3))
+       is boxed, and the frame's span holds the box and the sliced tuple. */
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    PyValue result = PyValue_NULL;
+    PyValue self_v = PyTuple_GET_VALUE(args, 0);
+    PyObject *self;
+    if (PyValue_IsInline(self_v)) {
+        self = _PyValue_BoxInline(self_v);
+        if (self == NULL) {
+            goto done;
+        }
+        _PyValueSpan_AppendObject(&span, self);
+        _PyGC_INJECT(tstate, _PyGC_SITE_RECEIVER_BOX);
+    }
+    else {
+        self = PyValue_ObjectBorrow(self_v);
+    }
     if (!_PyObject_RealIsSubclass((PyObject *)Py_TYPE(self),
                                   (PyObject *)PyDescr_TYPE(descr))) {
         PyErr_Format(PyExc_TypeError,
@@ -613,15 +631,17 @@ wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name,
                      Py_TYPE(self)->tp_name);
-        return NULL;
+        goto done;
     }
 
-    args = PyTuple_GetSlice(args, 1, argc);
-    if (args == NULL) {
-        return NULL;
+    PyObject *rest = PyTuple_GetSlice(args, 1, argc);
+    if (rest == NULL) {
+        goto done;
     }
-    result = wrapperdescr_raw_call(descr, self, args, kwds);
-    Py_DECREF(args);
+    _PyValueSpan_AppendObject(&span, rest);
+    result = wrapperdescr_raw_call(descr, self, rest, kwds);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
@@ -1506,7 +1526,7 @@ static PyGetSetDef wrapper_getsets[] = {
     {0}
 };
 
-static PyObject *
+static PyValue
 wrapper_call(PyObject *self, PyObject *args, PyObject *kwds)
 {
     wrapperobject *wp = (wrapperobject *)self;

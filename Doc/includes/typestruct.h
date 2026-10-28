@@ -22,7 +22,7 @@ typedef struct _typeobject {
     /* More standard operations (here for binary compatibility) */
 
     hashfunc tp_hash;
-    ternaryfunc tp_call;
+    callfunc tp_call;
     reprfunc tp_str;
     getattrofunc tp_getattro;
     setattrofunc tp_setattro;

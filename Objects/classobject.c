@@ -421,10 +421,11 @@ instancemethod_traverse(PyObject *self, visitproc visit, void *arg) {
     return 0;
 }
 
-static PyObject *
+static PyValue
 instancemethod_call(PyObject *self, PyObject *arg, PyObject *kw)
 {
-    return PyObject_Call(PyInstanceMethod_GET_FUNCTION(self), arg, kw);
+    return PyObject_CallValue(
+        PyValue_FromObject(PyInstanceMethod_GET_FUNCTION(self)), arg, kw);
 }
 
 static PyValue

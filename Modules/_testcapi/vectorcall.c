@@ -149,12 +149,12 @@ _testcapi_pyvectorcall_call_impl(PyObject *module, PyObject *func,
         return NULL;
     }
 
-    return PyVectorcall_Call(func, argstuple, kwargs);
+    return PyValue_Object(PyVectorcall_Call(func, argstuple, kwargs));
 }
 
-PyObject *
+PyValue
 VectorCallClass_tpcall(PyObject *self, PyObject *args, PyObject *kwargs) {
-    return PyUnicode_FromString("tp_call");
+    return PyValue_FromResult(PyUnicode_FromString("tp_call"));
 }
 
 PyValue
@@ -317,10 +317,10 @@ nop_descr_get(PyObject *func, PyObject *obj, PyObject *type)
     return PyValue_FromObject(func);
 }
 
-static PyObject *
+static PyValue
 call_return_args(PyObject *self, PyObject *args, PyObject *kwargs)
 {
-    return Py_NewRef(args);
+    return PyValue_FromObject(args);
 }
 
 static PyTypeObject MethodDescriptorBase_Type = {

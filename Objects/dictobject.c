@@ -1633,6 +1633,21 @@ _PyDict_GetItemRef_KnownHash(PyDictObject *op, PyObject *key, Py_hash_t hash, Py
     return dict_getitem_result(op, key, hash, result);
 }
 
+/* _PyDict_GetItemRef_KnownHash() on values, so that no box is made: the key
+   is a canonical value; 1 and the item, 0 and PyValue_NULL if the key is
+   missing, or -1 and PyValue_NULL with an exception set. */
+int
+_PyDict_GetItemValue_KnownHash(PyDictObject *op, PyValue key, Py_hash_t hash,
+                               PyValue *result)
+{
+    Py_ssize_t ix = _Py_dict_lookup(op, key, hash, result);
+    if (ix == DKIX_ERROR) {
+        *result = PyValue_NULL;
+        return -1;
+    }
+    return !PyValue_IsNull(*result);
+}
+
 /* PyDict_GetItemRef() on values, so that no box is made: 1 and the item,
    0 and PyValue_NULL if the key is missing, or -1 and PyValue_NULL with an
    exception set. */
@@ -1920,6 +1935,34 @@ _PyDict_SetItem_KnownHash(PyObject *op, PyObject *key, PyObject *value,
     int res;
     Py_BEGIN_CRITICAL_SECTION(op);
     res = _PyDict_SetItem_KnownHash_LockHeld((PyDictObject *)op, key, value, hash);
+    Py_END_CRITICAL_SECTION();
+    return res;
+}
+
+/* _PyDict_SetItem_KnownHash() for a canonical key and value, which are
+   stored without a box. */
+int
+_PyDict_SetItemValue_KnownHash(PyObject *op, PyValue key, PyValue value,
+                               Py_hash_t hash)
+{
+    assert(!PyValue_IsNull(key));
+    assert(!PyValue_IsNull(value));
+    assert(hash != -1);
+
+    if (!PyDict_Check(op)) {
+        if (PyFrozenDict_Check(op)) {
+            frozendict_does_not_support("assignment");
+        }
+        else {
+            PyErr_BadInternalCall();
+        }
+        return -1;
+    }
+
+    int res;
+    Py_BEGIN_CRITICAL_SECTION(op);
+    res = setitem_value_lock_held_known_hash((PyDictObject *)op, key, value,
+                                             hash);
     Py_END_CRITICAL_SECTION();
     return res;
 }

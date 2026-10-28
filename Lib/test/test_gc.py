@@ -1932,6 +1932,10 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertEqual(fired(RECEIVER_BOX, lambda: n.bit_length()), 17)
         self.assertEqual(fired(RECEIVER_BOX, lambda: x.hex()),
                          float.hex(250002.5))
+        # 6d rung 3: wrapperdescr_call() boxes an inline receiver.
+        self.assertEqual(fired(RECEIVER_BOX, lambda: int.__add__(n, 1)),
+                         100002)
+        self.assertEqual(fired(RECEIVER_BOX, lambda: float.__neg__(x)), -x)
         with self.assertRaises(ValueError):
             collect_at(99)
 
@@ -2049,6 +2053,189 @@ class TracingCollectorTests(unittest.TestCase):
     def test_allocation_safepoints(self):
         env = {"PYTHON_GCVERIFY": "kill"} if support.Py_DEBUG else {}
         rc, out, err = assert_python_ok("-c", self.ALLOCATION_SAFEPOINTS, **env)
+        self.assertEqual(out.strip(), b"ok")
+
+    # 6d rung 3, note 12 section 9: a tp_call result, the prepended argument
+    # array and the merged arguments of partial live across collections.
+    # Each scenario runs in its own process.  The callee collects before it
+    # reads its arguments, and the caller collects before it reads a result.
+    CALL_LIFETIMES = {
+        # A callable instance returning an uncached int, a float and a
+        # fresh object, through _PyObject_MakeTpCall and through the
+        # wrapper.
+        "result": textwrap.dedent("""
+            import gc
+            one = int("1")
+            class C:
+                def __call__(self, n):
+                    gc.collect()
+                    return self.make(n)
+            for make in (lambda n: 100000 * one + n,
+                         lambda n: 2.5 * (n + one),
+                         lambda n: [n, str(n)]):
+                C.make = staticmethod(make)
+                c = C()
+                for i in range(100):
+                    r = c(i)
+                    gc.collect()
+                    assert r == make(i), r
+                    r = type(c).__call__(c, i)
+                    gc.collect()
+                    assert r == make(i), r
+            print("ok")
+        """),
+        # slot_tp_call() prepends self to more arguments than its small
+        # stack holds, and to keyword arguments.
+        "prepend": textwrap.dedent("""
+            import gc
+            one = int("1")
+            def make_args(i):
+                return [[j, i] if j % 3 == 0 else
+                        100000 * one + j if j % 3 == 1 else
+                        2.5 * (j + i) for j in range(40)]
+            def make_kwargs(i):
+                return {"a": [i], "b": 100000 * one + i, "c": 2.5 * i}
+            class M:
+                def __call__(self, i, *args, **kwargs):
+                    gc.collect()
+                    assert list(args) == make_args(i), args
+                    assert kwargs == make_kwargs(i) or not kwargs, kwargs
+                    return [i, list(args), kwargs]
+            m = M()
+            for i in range(50):
+                r = m(i, *make_args(i))
+                gc.collect()
+                assert r == [i, make_args(i), {}], r
+                r = m(i, *make_args(i), **make_kwargs(i))
+                gc.collect()
+                assert r == [i, make_args(i), make_kwargs(i)], r
+            print("ok")
+        """),
+        # partial merges its own arguments with the call's, positional and
+        # keyword, through its vectorcall and through tp_call.
+        "partial": textwrap.dedent("""
+            import functools, gc
+            one = int("1")
+            class K:
+                def __call__(self, *args, **kwargs):
+                    gc.collect()
+                    i = args[1][0]
+                    assert args == ([1], [i], 100000 * one + i, 2.5 * i), args
+                    assert kwargs.pop("k") == [2], kwargs
+                    assert kwargs in ({}, {"j": [i]}), kwargs
+                    return [list(args), kwargs]
+            p = functools.partial(K(), [1], k=[2])
+            for i in range(200):
+                args = ([i], 100000 * one + i, 2.5 * i)
+                r = p(*args, j=[i])
+                gc.collect()
+                assert r == [[[1], *args], {"j": [i]}], r
+                r = type(p).__call__(p, *args)
+                gc.collect()
+                assert r == [[[1], *args], {}], r
+            print("ok")
+        """),
+        # An allocation failure in the prepended array.  The callee takes
+        # its arguments by name, so that calling it allocates nothing.
+        "nomemory": textwrap.dedent("""
+            import _testcapi
+            seen = [False]
+            def callee(n):
+                ns = {"seen": seen}
+                params = ", ".join(f"a{j}" for j in range(n))
+                exec(f"def f(self, {params}):\\n    seen[0] = True\\n", ns)
+                return type("M", (), {"__call__": ns["f"]})()
+            m, m2 = callee(40), callee(2)
+            args = [[j] for j in range(40)]
+            assert m(*args) is None and m2(*args[:2]) is None
+            # Every allocation fails: with fewer arguments than the small
+            # stack, the call still reaches the callee, so the path makes
+            # no allocation apart from the prepended array.
+            seen[0] = False
+            _testcapi.call_with_nomemory(0, 0, m2, *args[:2])
+            assert seen[0]
+            # Every allocation but the first fails: the 40-argument call
+            # makes exactly one allocation before the callee, the array.
+            seen[0] = False
+            _testcapi.call_with_nomemory(1, 0, m, *args)
+            assert seen[0]
+            # That allocation fails: MemoryError, before the callee runs.
+            seen[0] = False
+            try:
+                _testcapi.call_with_nomemory(0, 1, m, *args)
+            except MemoryError:
+                pass
+            else:
+                raise AssertionError("no MemoryError")
+            assert not seen[0]
+            # The allocator restored, the call succeeds.
+            assert m(*args) is None and seen[0]
+            print("ok")
+        """),
+    }
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    def test_call_lifetimes(self):
+        for name, code in self.CALL_LIFETIMES.items():
+            with self.subTest(name):
+                env = {"PYTHON_GCSTRESS": "100"}
+                if support.Py_DEBUG:
+                    env["PYTHON_GCVERIFY"] = "kill"
+                rc, out, err = assert_python_ok("-c", code, **env)
+                self.assertEqual(out.strip(), b"ok")
+
+    # 6d rung 3: CALL_FUNCTION_EX holds a monitored C call's result in a
+    # root across the C_RETURN callback, which can collect.
+    MONITORED_STARRED_CALL = textwrap.dedent("""
+        import gc, sys
+        E = sys.monitoring.events
+        TOOL = 4
+        sys.monitoring.use_tool_id(TOOL, "test")
+        class C:
+            def __call__(self, *args, **kwargs):
+                return [len(args), sorted(kwargs)]
+        c = C()
+        raise_in_return = False
+        def on_return(code, offset, callable, arg0):
+            gc.collect()
+            if raise_in_return and callable is c:
+                raise RuntimeError("from C_RETURN")
+        sys.monitoring.register_callback(TOOL, E.C_RETURN, on_return)
+        sys.monitoring.register_callback(TOOL, E.C_RAISE,
+                                         lambda *args: gc.collect())
+        sys.monitoring.register_callback(TOOL, E.CALL, lambda *args: None)
+        sys.monitoring.set_events(TOOL, E.CALL | E.C_RETURN | E.C_RAISE)
+        a, k = [1, 2], {"k": 3}
+        for i in range(50):
+            assert c(*a) == [2, []]
+            assert c(*a, **k) == [2, ["k"]]
+        raise_in_return = True
+        for i in range(5):
+            try:
+                c(*a, **k)
+            except RuntimeError as e:
+                assert str(e) == "from C_RETURN"
+            else:
+                raise AssertionError("no error")
+        raise_in_return = False
+        def boom(*args):
+            raise KeyError(args)
+        class B:
+            __call__ = boom
+        for i in range(5):
+            try:
+                B()(*a)
+            except KeyError:
+                pass
+        sys.monitoring.set_events(TOOL, 0)
+        sys.monitoring.free_tool_id(TOOL)
+        print("ok")
+    """)
+
+    def test_monitored_starred_call(self):
+        env = {"PYTHON_GCVERIFY": "kill"} if support.Py_DEBUG else {}
+        rc, out, err = assert_python_ok("-c", self.MONITORED_STARRED_CALL,
+                                        **env)
         self.assertEqual(out.strip(), b"ok")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")

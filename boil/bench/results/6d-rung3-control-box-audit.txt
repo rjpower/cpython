@@ -1,0 +1,74 @@
+box audit of /home/power/code/cpython/.worktrees/boil-6d-base/build/pystats/python at a3206a397d9
+built: 3.16.0a1+dev (remotes/origin/boil/6d-rung2-3-ga3206a397d9:a3206a397d9, Oct 28 2026, 08:37:02) [GCC 15.2.0]
+ok       binary int               int 0.004/iter, float 0/iter
+ok       binary float             int 0.004/iter, float 0/iter
+ok       binary mixed             int 0.004/iter, float 0/iter
+ok       binary overflow          int 0.004/iter, float 0/iter
+ok       inplace                  int 0.004/iter, float 0/iter
+ok       subscr list/tuple/str    int 0.004/iter, float 0/iter
+ok       subscr dict              int 0.004/iter, float 0/iter
+ok       subscr slice             int 0.004/iter, float 0/iter
+ok       store subscr             int 0.004/iter, float 0/iter
+ok       delete subscr            int 0.004/iter, float 0/iter
+ok       compare                  int 0.004/iter, float 0/iter
+ok       contains                 int 0.004/iter, float 0/iter
+ok       is                       int 0.004/iter, float 0/iter
+ok       unary                    int 0.004/iter, float 0/iter
+ok       to_bool                  int 0.004/iter, float 0/iter
+ok       for iter                 int 0.004/iter, float 0/iter
+ok       attributes               int 0.004/iter, float 0/iter
+ok       build                    int 0.004/iter, float 0/iter
+BOXES    unpack                   int 1.004/iter, float 0/iter
+ok       comprehensions           int 0.004/iter, float 0/iter
+ok       generator                int 0.004/iter, float 0/iter
+ok       format                   int 0.004/iter, float 0/iter
+residue  format int spec          int 1.004/iter, float 0/iter
+ok       names                    int 0.004/iter, float 0/iter
+ok       property (getattr)       boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       property float (getattr) boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       property store           boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       __getattribute__ hook    boxes 0.004/iter, allocations 0.002/iter (budget 0 and 0)
+ok       __getattr__ hook         boxes 0.004/iter, allocations 0.002/iter (budget 0 and 0)
+ok       __setattr__ hook         boxes 0.004/iter, allocations 0.002/iter (budget 0 and 0)
+ok       __get__ descr            boxes 0.004/iter, allocations 0.002/iter (budget 0 and 0)
+ok       __set__ descr            boxes 0.004/iter, allocations 0.002/iter (budget 0 and 0)
+ok       getattr default          boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       hasattr                  boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       hasattr inline miss      boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       getattr inline miss      boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       slots member store       boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       class attr store         boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       proxy read               boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       proxy store              boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       local read               boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       module __getattr__       boxes 0.004/iter, allocations 3.001/iter (budget 0 and 3)
+ok       alias read               boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       pickler store            boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       getattr inline method    boxes 1.004/iter, allocations 2.001/iter (budget 1 and 2)
+ok       pickler persistent_id    boxes 1.004/iter, allocations 1.001/iter (budget 1 and 1)
+residue  getset int.real          boxes 1.004/iter, allocations 1.001/iter
+BOXES    object.__getattribute__  boxes 1.004/iter, allocations 2.001/iter (budget 0 and 2)
+residue  super inline receiver    boxes 1.004/iter, allocations 2.001/iter
+BOXES    call instance            boxes 1.004/iter, allocations 2.001/iter (budget 0 and 1)
+BOXES    call instance float      boxes 1.004/iter, allocations 2.001/iter (budget 0 and 1)
+BOXES    starred call             boxes 1.004/iter, allocations 2.001/iter (budget 0 and 1)
+ok       int.__add__              boxes 2.004/iter, allocations 4.976/iter (budget 2 and 5)
+BOXES    partial (tp_call)        boxes 1.004/iter, allocations 4.001/iter (budget 0 and 3)
+BOXES    itemgetter (tp_call)     boxes 1.004/iter, allocations 3.976/iter (budget 0 and 3)
+BOXES    attrgetter (tp_call)     boxes 1.004/iter, allocations 2.001/iter (budget 0 and 2)
+BOXES    partial float (tp_call)  boxes 1.004/iter, allocations 4.001/iter (budget 0 and 3)
+BOXES    itemgetter float (tp_call) boxes 1.004/iter, allocations 4.001/iter (budget 0 and 3)
+BOXES    attrgetter float (tp_call) boxes 1.004/iter, allocations 3.001/iter (budget 0 and 2)
+BOXES    lru_cache 0              boxes 1.004/iter, allocations 2.001/iter (budget 0 and 1)
+BOXES    lru_cache None hit       boxes 2.004/iter, allocations 2.001/iter (budget 0 and 1)
+BOXES    lru_cache None miss      boxes 2.004/iter, allocations 3.976/iter (budget 0 and 2)
+BOXES    lru_cache 128 hit        boxes 1.004/iter, allocations 1.001/iter (budget 0 and 1)
+ok       lru_cache 128 miss       boxes 2.004/iter, allocations 4.976/iter (budget 2 and 5)
+BOXES    lru_cache 0 float        boxes 1.004/iter, allocations 2.001/iter (budget 0 and 1)
+BOXES    lru_cache None hit float boxes 2.004/iter, allocations 3.001/iter (budget 0 and 1)
+BOXES    lru_cache None miss float boxes 2.004/iter, allocations 4.001/iter (budget 0 and 2)
+BOXES    lru_cache 128 hit float  boxes 1.004/iter, allocations 2.001/iter (budget 0 and 1)
+BOXES    lru_cache 128 miss float boxes 2.004/iter, allocations 5.001/iter (budget 1 and 4)
+BOXES    generic alias of int     boxes 3.004/iter, allocations 5.926/iter (budget 0 and 0)
+residue  starred inline callee    boxes 2.004/iter, allocations 7.001/iter
+21 case(s) box: unpack, object.__getattribute__, call instance, call instance float, starred call, partial (tp_call), itemgetter (tp_call), attrgetter (tp_call), partial float (tp_call), itemgetter float (tp_call), attrgetter float (tp_call), lru_cache 0, lru_cache None hit, lru_cache None miss, lru_cache 128 hit, lru_cache 0 float, lru_cache None hit float, lru_cache None miss float, lru_cache 128 hit float, lru_cache 128 miss float, generic alias of int

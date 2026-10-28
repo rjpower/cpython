@@ -142,7 +142,7 @@ typedef struct {
 
 static void partial_setvectorcall(partialobject *pto);
 static struct PyModuleDef _functools_module;
-static PyObject *
+static PyValue
 partial_call(PyObject *pto, PyObject *args, PyObject *kwargs);
 
 static inline _functools_state *
@@ -586,7 +586,7 @@ partial_setvectorcall(partialobject *pto)
 
 
 // Not converted to argument clinic, because of `*args, **kwargs` arguments.
-static PyObject *
+static PyValue
 partial_call(PyObject *self, PyObject *args, PyObject *kwargs)
 {
     partialobject *pto = partialobject_CAST(self);
@@ -600,7 +600,7 @@ partial_call(PyObject *self, PyObject *args, PyObject *kwargs)
         PyErr_Format(PyExc_TypeError,
                      "missing positional arguments in 'partial' call; "
                      "expected at least %zd, got %zd", pto_phcount, nargs);
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Merge keywords */
@@ -615,13 +615,13 @@ partial_call(PyObject *self, PyObject *args, PyObject *kwargs)
            dictionary. */
         tot_kw = PyDict_Copy(pto->kw);
         if (tot_kw == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
 
         if (kwargs != NULL) {
             if (PyDict_Merge(tot_kw, kwargs, 1) != 0) {
                 Py_DECREF(tot_kw);
-                return NULL;
+                return PyValue_NULL;
             }
         }
     }
@@ -635,7 +635,7 @@ partial_call(PyObject *self, PyObject *args, PyObject *kwargs)
         tot_args = PyTuple_New(tot_nargs);
         if (tot_args == NULL) {
             Py_XDECREF(tot_kw);
-            return NULL;
+            return PyValue_NULL;
         }
         PyObject *pto_args = pto->args;
         PyValue item;
@@ -659,11 +659,12 @@ partial_call(PyObject *self, PyObject *args, PyObject *kwargs)
         tot_args = PySequence_Concat(pto->args, args);
         if (tot_args == NULL) {
             Py_XDECREF(tot_kw);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
-    PyObject *res = PyObject_Call(pto->fn, tot_args, tot_kw);
+    PyValue res = PyObject_CallValue(PyValue_FromObject(pto->fn), tot_args,
+                                     tot_kw);
     Py_DECREF(tot_args);
     Py_XDECREF(tot_kw);
     return res;
@@ -955,7 +956,7 @@ static PyGetSetDef keyobject_getset[] = {
     {NULL}
 };
 
-static PyObject *
+static PyValue
 keyobject_call(PyObject *ko, PyObject *args, PyObject *kwds);
 
 static PyObject *
@@ -982,7 +983,7 @@ static PyType_Spec keyobject_type_spec = {
 };
 
 static PyObject *
-keyobject_call(PyObject *self, PyObject *args, PyObject *kwds)
+keyobject_call_object(PyObject *self, PyObject *args, PyObject *kwds)
 {
     PyObject *object;
     keyobject *result;
@@ -1000,6 +1001,12 @@ keyobject_call(PyObject *self, PyObject *args, PyObject *kwds)
     result->object = Py_NewRef(object);
     PyObject_GC_Track(result);
     return (PyObject *)result;
+}
+
+static PyValue
+keyobject_call(PyObject *self, PyObject *args, PyObject *kwds)
+{
+    return PyValue_FromResult(keyobject_call_object(self, args, kwds));
 }
 
 static PyObject *
@@ -1200,7 +1207,7 @@ static PyType_Spec lru_list_elem_type_spec = {
 };
 
 
-typedef PyObject *(*lru_cache_ternaryfunc)(struct lru_cache_object *, PyObject *, PyObject *);
+typedef PyValue (*lru_cache_ternaryfunc)(struct lru_cache_object *, PyObject *, PyObject *);
 
 typedef struct lru_cache_object {
     lru_list_elem root;  /* includes PyObject_HEAD */
@@ -1220,7 +1227,9 @@ typedef struct lru_cache_object {
 
 #define lru_cache_object_CAST(op)   ((lru_cache_object *)(op))
 
-static PyObject *
+/* The cache key, as a value: an int argument is the key as it is, without a
+   box.  PyValue_NULL with an exception set on error. */
+static PyValue
 lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
                    PyObject *kwds, int typed)
 {
@@ -1233,14 +1242,15 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
     /* short path, key will match args anyway, which is a tuple */
     if (!typed && !kwds_size) {
         if (PyTuple_GET_SIZE(args) == 1) {
-            key = PyTuple_GET_ITEM(args, 0);
-            if (PyUnicode_CheckExact(key) || PyLong_CheckExact(key)) {
+            PyValue item = PyTuple_GET_VALUE(args, 0);
+            PyTypeObject *tp = PyValue_Type(item);
+            if (tp == &PyUnicode_Type || tp == &PyLong_Type) {
                 /* For common scalar keys, save space by
                    dropping the enclosing args tuple  */
-                return Py_NewRef(key);
+                return item;
             }
         }
-        return Py_NewRef(args);
+        return PyValue_FromObject(args);
     }
 
     key_size = PyTuple_GET_SIZE(args);
@@ -1251,7 +1261,7 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
 
     key = PyTuple_New(key_size);
     if (key == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     key_pos = 0;
     for (pos = 0; pos < PyTuple_GET_SIZE(args); ++pos) {
@@ -1278,56 +1288,47 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
         }
     }
     assert(key_pos == key_size);
-    return key;
+    return PyValue_FromObject(key);
 }
 
-static PyObject *
+static PyValue
 uncached_lru_cache_wrapper(lru_cache_object *self, PyObject *args, PyObject *kwds)
 {
-    PyObject *result;
-
     FT_ATOMIC_ADD_SSIZE(self->misses, 1);
-    result = PyObject_Call(self->func, args, kwds);
-    if (!result)
-        return NULL;
-    return result;
+    return PyObject_CallValue(PyValue_FromObject(self->func), args, kwds);
 }
 
-static PyObject *
+/* The unbounded cache keeps its keys and results as values, so that an int
+   or float is boxed neither on a miss nor on a hit. */
+static PyValue
 infinite_lru_cache_wrapper(lru_cache_object *self, PyObject *args, PyObject *kwds)
 {
-    PyObject *result;
+    PyValue result;
     Py_hash_t hash;
-    PyObject *key = lru_cache_make_key(self->kwd_mark, args, kwds, self->typed);
-    if (!key)
-        return NULL;
-    hash = PyObject_Hash(key);
+    PyValue key = lru_cache_make_key(self->kwd_mark, args, kwds, self->typed);
+    if (PyValue_IsNull(key))
+        return PyValue_NULL;
+    hash = PyObject_HashValue(key);
     if (hash == -1) {
-        Py_DECREF(key);
-        return NULL;
+        return PyValue_NULL;
     }
-    int res = _PyDict_GetItemRef_KnownHash((PyDictObject *)self->cache, key, hash, &result);
+    int res = _PyDict_GetItemValue_KnownHash((PyDictObject *)self->cache, key,
+                                             hash, &result);
     if (res > 0) {
         FT_ATOMIC_ADD_SSIZE(self->hits, 1);
-        Py_DECREF(key);
         return result;
     }
     if (res < 0) {
-        Py_DECREF(key);
-        return NULL;
+        return PyValue_NULL;
     }
     FT_ATOMIC_ADD_SSIZE(self->misses, 1);
-    result = PyObject_Call(self->func, args, kwds);
-    if (!result) {
-        Py_DECREF(key);
-        return NULL;
+    result = PyObject_CallValue(PyValue_FromObject(self->func), args, kwds);
+    if (PyValue_IsNull(result)) {
+        return PyValue_NULL;
     }
-    if (_PyDict_SetItem_KnownHash(self->cache, key, result, hash) < 0) {
-        Py_DECREF(result);
-        Py_DECREF(key);
-        return NULL;
+    if (_PyDict_SetItemValue_KnownHash(self->cache, key, result, hash) < 0) {
+        return PyValue_NULL;
     }
-    Py_DECREF(key);
     return result;
 }
 
@@ -1398,28 +1399,35 @@ bounded_lru_cache_get_lock_held(lru_cache_object *self, PyObject *args, PyObject
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(self);
     lru_list_elem *link;
 
-    PyObject *key_ = *key = lru_cache_make_key(self->kwd_mark, args, kwds, self->typed);
-    if (!key_)
+    PyValue key_v = lru_cache_make_key(self->kwd_mark, args, kwds,
+                                       self->typed);
+    if (PyValue_IsNull(key_v))
         return -1;
-    Py_hash_t hash_ = *hash = PyObject_Hash(key_);
+    Py_hash_t hash_ = *hash = PyObject_HashValue(key_v);
     if (hash_ == -1) {
-        Py_DECREF(key_);  /* dead reference left in *key, is not used */
         return -1;
     }
-    int res = _PyDict_GetItemRef_KnownHash_LockHeld((PyDictObject *)self->cache, key_, hash_,
-                                                    (PyObject **)&link);
+    /* The lookup takes the key as a value; the cache's values are links. */
+    PyValue link_v;
+    int res = _PyDict_GetItemValue_KnownHash((PyDictObject *)self->cache,
+                                             key_v, hash_, &link_v);
     if (res > 0) {
+        link = (lru_list_elem *)PyValue_ObjectBorrow(link_v);
         lru_cache_extract_link(link);
         lru_cache_append_link(self, link);
         *result = link->result;
         FT_ATOMIC_ADD_SSIZE(self->hits, 1);
         Py_INCREF(link->result);
         Py_DECREF(link);
-        Py_DECREF(key_);
         return 1;
     }
     if (res < 0) {
-        Py_DECREF(key_);
+        return -1;
+    }
+    /* A miss: link->key is an object, so an inline key is boxed for the
+       link that the update makes. */
+    *key = PyValue_Object(key_v);
+    if (*key == NULL) {
         return -1;
     }
     FT_ATOMIC_ADD_SSIZE(self->misses, 1);
@@ -1572,7 +1580,7 @@ bounded_lru_cache_update_lock_held(lru_cache_object *self,
     return result;
 }
 
-static PyObject *
+static PyValue
 bounded_lru_cache_wrapper(lru_cache_object *self, PyObject *args, PyObject *kwds)
 {
     PyObject *key, *result;
@@ -1583,11 +1591,13 @@ bounded_lru_cache_wrapper(lru_cache_object *self, PyObject *args, PyObject *kwds
     res = bounded_lru_cache_get_lock_held(self, args, kwds, &result, &key, &hash);
     Py_END_CRITICAL_SECTION();
 
+    /* link->result is an object, so the bounded cache boxes an inline
+       result once, when it is computed. */
     if (res < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (res > 0) {
-        return result;
+        return PyValue_FromResult(result);
     }
 
     result = PyObject_Call(self->func, args, kwds);
@@ -1600,7 +1610,7 @@ bounded_lru_cache_wrapper(lru_cache_object *self, PyObject *args, PyObject *kwds
     result = bounded_lru_cache_update_lock_held(self, result, key, hash);
     Py_END_CRITICAL_SECTION();
 
-    return result;
+    return PyValue_FromResult(result);
 }
 
 static PyObject *
@@ -1610,7 +1620,7 @@ lru_cache_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     int typed;
     lru_cache_object *obj;
     Py_ssize_t maxsize;
-    PyObject *(*wrapper)(lru_cache_object *, PyObject *, PyObject *);
+    lru_cache_ternaryfunc wrapper;
     _functools_state *state;
     static char *keywords[] = {"user_function", "maxsize", "typed",
                                "cache_info_type", NULL};
@@ -1727,13 +1737,11 @@ lru_cache_dealloc(PyObject *op)
     Py_DECREF(tp);
 }
 
-static PyObject *
+static PyValue
 lru_cache_call(PyObject *op, PyObject *args, PyObject *kwds)
 {
     lru_cache_object *self = lru_cache_object_CAST(op);
-    PyObject *result;
-    result = self->wrapper(self, args, kwds);
-    return result;
+    return self->wrapper(self, args, kwds);
 }
 
 static PyValue

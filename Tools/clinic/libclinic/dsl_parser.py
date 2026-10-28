@@ -255,6 +255,7 @@ class DSLParser:
     parameter_continuation: str
     preserve_output: bool
     critical_section: bool
+    gc_precise: bool
     target_critical_section: list[str]
     disable_fastcall: bool
     slot: SlotSpec | None
@@ -302,6 +303,7 @@ class DSLParser:
         self.parameter_continuation = ''
         self.preserve_output = False
         self.critical_section = False
+        self.gc_precise = False
         self.target_critical_section = []
         self.disable_fastcall = False
         self.vectorcall: bool = False
@@ -436,6 +438,9 @@ class DSLParser:
             fail("Up to 2 critical section variables are supported")
         self.target_critical_section.extend(args)
         self.critical_section = True
+
+    def at_gc_precise(self) -> None:
+        self.gc_precise = True
 
     def at_disable(self, *args: str) -> None:
         if self.kind is not CALLABLE:
@@ -783,6 +788,7 @@ class DSLParser:
             kind=self.kind,
             coexist=self.coexist,
             critical_section=self.critical_section,
+            gc_precise=self.gc_precise,
             disable_fastcall=self.disable_fastcall,
             target_critical_section=self.target_critical_section,
             forced_text_signature=self.forced_text_signature,

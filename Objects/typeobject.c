@@ -10,6 +10,7 @@
 #include "pycore_dict.h"          // _PyDict_KeysSize()
 #include "pycore_function.h"      // _PyFunction_GetVersionForCurrentState()
 #include "pycore_gc_trace.h"      // _PyGC_TraceRegisterStaticType()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_interpframe.h"   // _PyInterpreterFrame
 #include "pycore_long.h"          // _PyLong_IsNegative(), _PyLong_GetOne()
 #include "pycore_memoryobject.h"  // _PyMemoryView_FromBufferProc()
@@ -2310,9 +2311,13 @@ type_call(PyObject *self, PyObject *args, PyObject *kwds)
     return obj;
 }
 
-PyObject *
+Py_GC_PRECISE PyObject *
 _PyType_AllocNoTrack(PyTypeObject *type, Py_ssize_t nitems)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot type_root;
+    _PyThreadState_PushValueRoot(tstate, &type_root);
+    type_root.object = (PyObject *)type;
     PyObject *obj;
     /* The +1 on nitems is needed for most types but not all. We could save a
      * bit of space by allocating one less item in certain cases, depending on
@@ -2327,6 +2332,7 @@ _PyType_AllocNoTrack(PyTypeObject *type, Py_ssize_t nitems)
     size += _PyType_AllocSlotsSize(type);
     obj = (PyObject *)_PyObject_MallocWithType(type, size);
     if (obj == NULL) {
+        _PyThreadState_PopValueRoot(tstate, &type_root);
         return PyErr_NoMemory();
     }
     // Zero out the object after the PyObject header. The header fields are
@@ -2339,10 +2345,11 @@ _PyType_AllocNoTrack(PyTypeObject *type, Py_ssize_t nitems)
     else {
         _PyObject_InitVar((PyVarObject *)obj, type, nitems);
     }
+    _PyThreadState_PopValueRoot(tstate, &type_root);
     return obj;
 }
 
-PyObject *
+Py_GC_PRECISE PyObject *
 PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
 {
     PyObject *obj = _PyType_AllocNoTrack(type, nitems);
@@ -2350,7 +2357,8 @@ PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
         return NULL;
     }
 
-    if (_PyType_IS_GC(type)) {
+    // The object's type, which it anchors, rather than the parameter.
+    if (_PyType_IS_GC(Py_TYPE(obj))) {
         _PyObject_GC_TRACK(obj);
     }
     return obj;

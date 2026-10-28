@@ -10,6 +10,7 @@
 #include "Python.h"
 #include "pycore_dict.h"          // _PyDict_SetItemValue()
 #include "pycore_gc_trace.h"      // _PyGC_LiveCollectHere()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_object.h"        // _PyObject_ComputedDictPointer()
 #include "pycore_pymem.h"         // _PyMem_SizeClass()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -522,9 +523,9 @@ slots_match_shape(PyObject *obj)
 #endif
 
 /* A new dict of OBJ's fields in slot order, without the holes; NULL with an
-   exception. */
-static PyObject *
-dict_from_slots(PyObject *obj)
+   exception.  The caller anchors OBJ. */
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static PyObject *
+dict_from_slots(PyThreadState *tstate, PyObject *obj)
 {
     _PyShape *shape = _PyObject_SHAPE(obj);
     assert(!_PyShape_IsDictMode(shape));
@@ -535,6 +536,9 @@ dict_from_slots(PyObject *obj)
     if (dict == NULL) {
         return NULL;
     }
+    _PyValueRoot dict_root;
+    _PyThreadState_PushValueRoot(tstate, &dict_root);
+    dict_root.object = dict;
 #ifndef NDEBUG
     // The table is made at most once: here, or at the first insertion when
     // the dict starts with the shared empty table.
@@ -547,7 +551,8 @@ dict_from_slots(PyObject *obj)
         }
         if (_PyDict_SetItemValue((PyDictObject *)dict,
                                  PyValue_FromObject(name), slots[i]) < 0) {
-            return NULL;
+            dict = NULL;
+            break;
         }
 #ifndef NDEBUG
         if (keys == NULL) {
@@ -556,7 +561,9 @@ dict_from_slots(PyObject *obj)
         assert(((PyDictObject *)dict)->ma_keys == keys);
 #endif
     }
-    assert(keys == NULL || (DK_IS_UNICODE(keys) && keys->dk_usable > 0));
+    _PyThreadState_PopValueRoot(tstate, &dict_root);
+    assert(dict == NULL || keys == NULL
+           || (DK_IS_UNICODE(keys) && keys->dk_usable > 0));
     return dict;
 }
 
@@ -586,24 +593,27 @@ publish_dict(PyObject *obj, PyDictObject *dict, _PyDictModeReason reason)
 /* Convert OBJ, in shape mode, to dictionary mode.  If NAME is not NULL the
    store of VALUE to NAME (a delete if VALUE is NULL) is applied to the
    provisional dict first.  The incoming value and the provisional dict are
-   rooted until publication; the fields are held by OBJ until then.  On a
-   failure OBJ is unchanged.  0, or -1 with an exception. */
-static int
+   rooted until publication, with OBJ and NAME; the fields are held by OBJ
+   until then.  On a failure OBJ is unchanged.  0, or -1 with an
+   exception. */
+Py_GC_PRECISE static int
 convert_to_dict(PyObject *obj, PyObject *name, PyValue value,
                 _PyDictModeReason reason)
 {
     assert(!_PyShape_IsDictMode(_PyObject_SHAPE(obj)));
     PyThreadState *tstate = _PyThreadState_GET();
-    _PyValueRoot value_root, dict_root;
-    _PyThreadState_PushValueRoot(tstate, &value_root);
-    value_root.value = value;
-    _PyThreadState_PushValueRoot(tstate, &dict_root);
+    PyValue held[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, held);
+    _PyValueSpan_Append(&span, value);
+    _PyValueSpan_AppendObject(&span, obj);
+    _PyValueSpan_AppendObject(&span, name);
     int res = -1;
-    PyObject *dict = dict_from_slots(obj);
+    PyObject *dict = dict_from_slots(tstate, obj);
     if (dict == NULL) {
         goto done;
     }
-    dict_root.value = PyValue_FromObject(dict);
+    _PyValueSpan_AppendObject(&span, dict);
     if (name != NULL) {
         int rc;
         if (PyValue_IsNull(value)) {
@@ -632,8 +642,7 @@ convert_to_dict(PyObject *obj, PyObject *name, PyValue value,
     publish_dict(obj, (PyDictObject *)dict, reason);
     res = 0;
   done:
-    _PyThreadState_PopValueRoot(tstate, &dict_root);
-    _PyThreadState_PopValueRoot(tstate, &value_root);
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 

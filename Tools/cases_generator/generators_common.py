@@ -285,8 +285,9 @@ class Emitter:
         value, and PyValue_ObjectBorrow(NAME) in the body reads that.  The
         input and its slot keep the inline value, so that every value in a
         slot stays canonical.  The test is marked unlikely, so the boxing code
-        goes out of line.  Across each escaping call in the body a value root
-        holds the box (emit_SimpleStmt()).  See "Inline values" in
+        goes out of line.  Across each collecting call in the body a value
+        root holds the box (emit_SimpleStmt()), and so it does while a later
+        input is boxed, which may collect.  See "Inline values" in
         interpreter_definition.md.
         """
         self.boxes = []
@@ -325,11 +326,22 @@ class Emitter:
         self, var: Local, uop: Uop, storage: Storage, inst: Instruction | None
     ) -> None:
         name = var.name
+        # A box is held in a C local, so it needs a root across each
+        # collecting call of the body ...
+        body_roots = bool(uop.properties.collecting_calls) and not self.cannot_escape
         self.emit(f"PyObject *{name}_object;\n")
-        if uop.properties.escaping_calls and not self.cannot_escape:
+        if body_roots:
             self.emit(f"_PyValueRoot {name}_root;\n")
         self.emit(f"if (Py_UNLIKELY(PyValue_IsInline({name}))) {{\n")
+        # ... and while a later input is boxed, which allocates.  Without
+        # collecting calls those roots are needed only here.
+        earlier = list(self.boxes) if not self.cannot_escape else []
+        if not body_roots:
+            for other in earlier:
+                self.emit(f"_PyValueRoot {other}_root;\n")
+        self.emit_box_roots(earlier, push=True)
         self.emit(f"{name}_object = _PyValue_BoxInline({name});\n")
+        self.emit_box_roots(earlier, push=False)
         # Every input is still live: leave them to exception_unwind.
         self.emit(f"if ({name}_object == NULL) {{\n")
         storage.stack.copy().flush(self.out)
@@ -639,14 +651,15 @@ class Emitter:
         reachable = True
         tkn = stmt.contents[-1]
         try:
-            escaping = stmt in uop.properties.escaping_calls and not self.cannot_escape
-            rooted = list(self.boxes) if escaping else []
-            if escaping:
-                storage.stack.escaping = True
+            collecting = (stmt in uop.properties.collecting_calls
+                          and not self.cannot_escape)
+            rooted = list(self.boxes) if collecting else []
+            if collecting:
+                storage.stack.collecting = True
                 try:
                     self.emit_save(storage)
                 finally:
-                    storage.stack.escaping = False
+                    storage.stack.collecting = False
                 self.emit_box_roots(rooted, push=True)
             tkn_iter = TokenIterator(stmt.contents)
             for tkn in tkn_iter:
@@ -667,7 +680,7 @@ class Emitter:
                         if tkn in local_stores:
                             if tkn.text in rooted:
                                 raise analysis_error(
-                                    f"an escaping call assigns to {tkn.text}, which is boxed", tkn)
+                                    f"a collecting call assigns to {tkn.text}, which is boxed", tkn)
                             if tkn.text in self.boxes:
                                 self.boxes.remove(tkn.text)
                             for var in storage.inputs:
@@ -690,7 +703,7 @@ class Emitter:
                 else:
                     self.out.emit(tkn)
             self.note_pointer_assignment(stmt, storage)
-            if escaping:
+            if collecting:
                 self.emit_box_roots(rooted, push=False)
                 self.emit_reload(storage)
             return reachable, None, storage
@@ -701,7 +714,7 @@ class Emitter:
     def emit_box_roots(self, names: list[str], push: bool) -> None:
         """Push, or pop, the value root of each box among names: the collector
         does not scan the eval loop's frame (_PyEvalActivation), where the
-        box is, during an escaping call."""
+        box is, during a collecting call."""
         for name in (names if push else reversed(names)):
             self.out.start_line()
             self.emit(f"if (Py_UNLIKELY(PyValue_IsInline({name}))) {{\n")

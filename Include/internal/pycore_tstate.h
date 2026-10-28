@@ -107,6 +107,9 @@ typedef struct _PyThreadStateImpl {
         int64_t injected;
         // Allocations since the last PYTHON_GCSTRESS collection
         int stress_count;
+        // A reference tracer is running (_PyReftracerTrack()): no
+        // collection starts, so a tracer cannot collect.
+        int in_tracer;
     } gc_trace;
 
 
@@ -122,7 +125,13 @@ typedef struct _PyThreadStateImpl {
                                       the frame is initialized */
 #define _PyGC_SITE_SPAN_REBASE  3  /* _PyValueSpan_Rebase(), after it */
 #define _PyGC_SITE_MKSTACK      4  /* do_mkstack(), after each value */
-#define _PyGC_SITE_COUNT        5
+#define _PyGC_SITE_INIT_LOCALS  5  /* initialize_locals(), after *args and
+                                      **kwargs are stored */
+#define _PyGC_SITE_RETURN       6  /* _RETURN_VALUE, after the caller's slot
+                                      takes the value, before the clear */
+#define _PyGC_SITE_TAKE_OWNERSHIP 7  /* take_ownership(), before the
+                                        frame object of the caller is made */
+#define _PyGC_SITE_COUNT        8
 
 PyAPI_FUNC(void) _PyGC_InjectCollect(PyThreadState *tstate);
 // PYTHON_GCSTRESS=every from now on; 0 turns it off

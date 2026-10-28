@@ -68,6 +68,7 @@ gc_isenabled_impl(PyObject *module)
 }
 
 /*[clinic input]
+@gc_precise
 gc.collect -> Py_ssize_t
 
     generation: int(c_default="NUM_GENERATIONS - 1") = 2
@@ -81,9 +82,9 @@ is raised if the generation number is invalid.
 The number of unreachable objects is returned.
 [clinic start generated code]*/
 
-static Py_ssize_t
+Py_GC_PRECISE static Py_ssize_t
 gc_collect_impl(PyObject *module, int generation)
-/*[clinic end generated code: output=b697e633043233c7 input=40720128b682d879]*/
+/*[clinic end generated code: output=19c10754ec95e0b6 input=5522594227122a88]*/
 {
     PyThreadState *tstate = _PyThreadState_GET();
 

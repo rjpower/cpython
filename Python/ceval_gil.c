@@ -1,7 +1,7 @@
 #include "Python.h"
 #include "pycore_ceval.h"         // _PyEval_SignalReceived()
 #include "pycore_gc.h"            // _Py_RunGC()
-#include "pycore_gc_walk.h"       // _PyGC_RecordDetach()
+#include "pycore_gc_walk.h"       // _PyGC_RecordDetach(), Py_GC_PRECISE
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_pyatomic_ft_wrappers.h" // FT_MUTEX_LOCK()
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
@@ -1238,7 +1238,7 @@ int _PyRunRemoteDebugger(PyThreadState *tstate)
 * while avoiding code that might trigger the eval breaker
 * until so desired.
 */
-int
+Py_GC_PRECISE int
 _Py_HandlePending(PyThreadState *tstate)
 {
     uintptr_t breaker = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker);

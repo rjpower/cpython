@@ -235,6 +235,7 @@ annotations = {
     "inline_ok",
     "window",
     "returns",
+    "stores_early",
     "ir_only",
 }
 

@@ -359,6 +359,15 @@ struct _gc_trace_state {
     Py_ssize_t nholes;
     Py_ssize_t last_result;
     Py_ssize_t count;     // the verifications that ran
+    // PYTHON_GCSTACKHITS=1: each object that a live mark reaches first
+    // from a conservatively scanned stack or register word, with the word
+    // and the frame the walk gives it to (_PyGC_TraceStackHits())
+    int stack_hits_on;
+    int64_t stack_hits_collection;
+    _PyGCStackHit *stack_hits;
+    size_t nstack_hits;
+    size_t stack_hits_cap;
+    int64_t stack_hits_dropped;
 };
 
 typedef struct {
@@ -432,7 +441,12 @@ typedef struct {
     int verify_ex;
     int phase_b;
     int frame_core;       // the walk is in a core opaque frame
-    uintptr_t frame_pc;   // and its pc
+    uintptr_t frame_pc;   // and the frame's pc, sp and cfa
+    uintptr_t frame_sp;
+    uintptr_t frame_cfa;
+    // The stack or register word being marked from, for the stack hits
+    uintptr_t hit_word;
+    uintptr_t hit_value;
     int in_queue;         // scan_queued() is draining
     verify_rec rec;       // B's root word
     struct { uintptr_t word, value, pc; int kind; } *deferred;
@@ -1112,6 +1126,8 @@ walk_frame(void *arg, uintptr_t pc, uintptr_t sp, uintptr_t cfa, int cls)
     trace_t *t = arg;
     t->frame_core = (t->verify_ex & VERIFY_EX_PYMEM) && cls == _PyGC_FRAME_CORE;
     t->frame_pc = pc;
+    t->frame_sp = sp;
+    t->frame_cfa = cfa;
 }
 
 /* The words of a precise frame, which A leaves out */
@@ -1382,7 +1398,11 @@ visit_chunk_frames(_PyStackChunk *chunk, PyObject **limit, visitproc visit,
 /* p's interpreter frames (note 11 section 4.4): every frame on its data
    stack, from push to pop, linked into the chain or not, and then the
    chain's frames that are not on the data stack, the running generator
-   and coroutine frames among them. */
+   and coroutine frames among them.  Of a frame the interpreter owns (an
+   entry frame of the eval loop, in its C frame, or the thread's base
+   frame) only the return slot is visited: what a returning or yielding
+   frame stores there and INTERPRETER_EXIT returns (4.3).  Its other fields
+   are poisoned in debug builds. */
 int
 _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
 {
@@ -1401,9 +1421,11 @@ _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
         }
     }
     for (_PyInterpreterFrame *f = p->current_frame; f != NULL; f = f->previous) {
-        if (f->owner == FRAME_OWNED_BY_THREAD
-            || f->owner >= FRAME_OWNED_BY_INTERPRETER)
-        {
+        if (f->owner == FRAME_OWNED_BY_THREAD) {
+            continue;
+        }
+        if (f->owner >= FRAME_OWNED_BY_INTERPRETER) {
+            _Py_VISIT_VALUE(f->base[f->return_slot]);
             continue;
         }
         int err = visit_frame(f, visit, arg);
@@ -1780,6 +1802,43 @@ live_safe_to_traverse(PyObject *op)
     return (op->ob_flags & _Py_GC_TRACKED_FLAG) || PyTuple_Check(op);
 }
 
+/* The stack hits keep at most this many records between reads */
+#define STACK_HITS_MAX (1 << 18)
+
+/* List op, which the mark reaches first from the stack or register word
+   being scanned */
+static void
+stack_hit(trace_t *t, PyObject *op)
+{
+    struct _gc_trace_state *ts = t->ts;
+    if (ts->nstack_hits == ts->stack_hits_cap) {
+        size_t cap = ts->stack_hits_cap ? 2 * ts->stack_hits_cap : 1024;
+        void *h = cap <= STACK_HITS_MAX
+                  ? realloc(ts->stack_hits, cap * sizeof(*ts->stack_hits))
+                  : NULL;
+        if (h == NULL) {
+            ts->stack_hits_dropped++;
+            return;
+        }
+        ts->stack_hits = h;
+        ts->stack_hits_cap = cap;
+    }
+    _PyGCStackHit *e = &ts->stack_hits[ts->nstack_hits++];
+    *e = (_PyGCStackHit){
+        .op = (uintptr_t)op,
+        .word = t->scan_class == _PyGC_SCAN_STACK ? t->hit_word : 0,
+        .value = t->hit_value,
+        .pc = t->frame_pc,
+        .sp = t->frame_sp,
+        .cfa = t->frame_cfa,
+        .scan_class = t->scan_class,
+        .collection = ts->stack_hits_collection,
+    };
+    // The type may die with the object, so its name is copied
+    PyOS_snprintf(e->type_name, sizeof(e->type_name), "%s",
+                  Py_TYPE(op)->tp_name);
+}
+
 static inline void
 live_mark(trace_t *t, PyObject *op, int conservative)
 {
@@ -1798,6 +1857,9 @@ live_mark(trace_t *t, PyObject *op, int conservative)
     t->nmarked++;
     if (t->phase_b) {
         verify_list(t, op);
+    }
+    if (t->hit_value != 0) {
+        stack_hit(t, op);
     }
     if (conservative && !live_safe_to_traverse(op)) {
         op->ob_flags = flags | _Py_GC_MARKED_FLAG | _Py_GC_SHALLOW_FLAG;
@@ -1887,6 +1949,11 @@ live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop)
 {
     _PyGCRootStats *stats = t->stats;
     int cls = t->scan_class;
+    // What the words reach is attributed to them.  The blocks they queue
+    // are scanned later, without attribution.
+    int hits = t->ts != NULL && t->ts->stack_hits_on && !t->in_queue
+               && !t->phase_b
+               && (cls == _PyGC_SCAN_STACK || cls == _PyGC_SCAN_REGS);
     if (stats != NULL && stop > start) {
         stats->words[cls] += (int64_t)((stop - start) / sizeof(uintptr_t));
     }
@@ -1902,8 +1969,13 @@ live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop)
             if (t->phase_b && !t->in_queue) {
                 t->rec.word = (uintptr_t)p;
             }
+            if (hits) {
+                t->hit_word = (uintptr_t)p;
+                t->hit_value = w;
+            }
             live_mark(t, op, 1);
             live_drain(t);
+            t->hit_word = t->hit_value = 0;
         }
         else if (t->scan_mem && w >= t->mem_lo && w < t->mem_hi) {
             if (t->frame_core && !t->phase_b) {
@@ -2688,6 +2760,9 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
         HEAD_UNLOCK(&_PyRuntime);
         goto done;
     }
+    if (ts != NULL && ts->stack_hits_on) {
+        ts->stack_hits_collection++;
+    }
     live_mark_roots(&t, tstate);
     if (t.verify) {
         verify_mark_b(&t, tstate);
@@ -2728,6 +2803,52 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
 done:
     live_fini(&t);
     return rc;
+}
+
+const _PyGCStackHit *
+_PyGC_TraceStackHits(PyInterpreterState *interp, size_t *n, int64_t *dropped)
+{
+    struct _gc_trace_state *ts = interp->gc.trace;
+    if (ts == NULL || !ts->stack_hits_on) {
+        *n = 0;
+        *dropped = 0;
+        return NULL;
+    }
+    *n = ts->nstack_hits;
+    *dropped = ts->stack_hits_dropped;
+    return ts->stack_hits;
+}
+
+void
+_PyGC_TraceClearStackHits(PyInterpreterState *interp)
+{
+    struct _gc_trace_state *ts = interp->gc.trace;
+    if (ts != NULL) {
+        ts->nstack_hits = 0;
+        ts->stack_hits_dropped = 0;
+    }
+}
+
+void
+_PyGC_TraceOwnerOf(uintptr_t pc, char *buf, size_t size)
+{
+#ifdef HAVE_DLFCN_H
+    Dl_info info;
+    if (pc != 0 && dladdr((void *)pc, &info) && info.dli_fname != NULL) {
+        if (info.dli_sname != NULL) {
+            PyOS_snprintf(buf, size, "%s+%#lx (%s+%#lx)", info.dli_fname,
+                          (unsigned long)(pc - (uintptr_t)info.dli_fbase),
+                          info.dli_sname,
+                          (unsigned long)(pc - (uintptr_t)info.dli_saddr));
+        }
+        else {
+            PyOS_snprintf(buf, size, "%s+%#lx", info.dli_fname,
+                          (unsigned long)(pc - (uintptr_t)info.dli_fbase));
+        }
+        return;
+    }
+#endif
+    PyOS_snprintf(buf, size, pc == 0 ? "no frame" : "heap");
 }
 
 /* For tests of the segment map: the object that the mark finds at addr, or
@@ -3702,6 +3823,16 @@ _PyGC_TraceInit(PyInterpreterState *interp)
         ts->live_verify = live_verify;
         ts->live_verify_ex = live_verify_ex;
     }
+    if (config->use_environment) {
+        const char *env = getenv("PYTHON_GCSTACKHITS");
+        if (env != NULL && *env != '\0' && strcmp(env, "0") != 0) {
+            struct _gc_trace_state *ts = get_trace_state(interp);
+            if (ts == NULL) {
+                return _PyStatus_NO_MEMORY();
+            }
+            ts->stack_hits_on = 1;
+        }
+    }
     return _PyStatus_OK();
 }
 
@@ -3721,6 +3852,7 @@ _PyGC_TraceFini(PyInterpreterState *interp)
     free(ts->static_types);
     addrset_fini(&ts->static_type_set);
     free(ts->holes);
+    free(ts->stack_hits);
     free(ts);
 }
 

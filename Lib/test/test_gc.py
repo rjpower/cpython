@@ -1615,6 +1615,45 @@ class TracingCollectorTests(unittest.TestCase):
                          and "of a core frame" in line]
                 self.assertEqual(len(found), want, err)
 
+    STACK_HITS = textwrap.dedent("""
+        import gc, _testinternalcapi
+        class Probe:
+            pass
+        def func(addr):
+            gc.collect()
+            return _testinternalcapi.gc_stack_hits(addr)
+        hits, dropped = _testinternalcapi.call_with_c_local(Probe, func)
+        print(dropped, len(hits))
+        for h in hits:
+            print(*h, sep="|")
+    """)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_stack_hits(self):
+        # PYTHON_GCSTACKHITS=1 (work/10a-1.md, next to retain mode): an
+        # object held only in an opaque C frame across a collection is
+        # listed with the word that reached it and the word's frame.
+        rc, out, err = assert_python_ok("-c", self.STACK_HITS,
+                                        PYTHON_GCSTACKHITS="1")
+        lines = out.decode().splitlines()
+        dropped, n = map(int, lines[0].split())
+        self.assertEqual(dropped, 0)
+        self.assertGreater(n, 0, out)
+        for line in lines[1:]:
+            (op, type_name, word, value, owner, offset, size, kind,
+             collection) = line.split("|")
+            self.assertEqual(type_name, "Probe")
+            self.assertIn(kind, ("stack", "regs"))
+            self.assertGreater(int(collection), 0)
+            self.assertNotEqual(owner, "")
+            if kind == "stack":
+                self.assertNotEqual(int(word), 0)
+                if owner != "no frame":
+                    self.assertTrue(0 <= int(offset) < int(size), line)
+        # Off by default
+        rc, out, err = assert_python_ok("-c", self.STACK_HITS)
+        self.assertEqual(out.decode().split(), ["0", "0"])
+
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_verify_kill(self):
         # PYTHON_GCVERIFY=kill:pymem (debug builds): what only the
@@ -1694,6 +1733,7 @@ class TracingCollectorTests(unittest.TestCase):
         # collection at a transition that allocation intervals do not hit;
         # what the transition holds survives it.
         DETACH, PUSH_FRAME, SPAN_REBASE, MKSTACK = 1, 2, 3, 4
+        INIT_LOCALS, RETURN, TAKE_OWNERSHIP = 5, 6, 7
         collect_at = _testinternalcapi.gc_collect_at
 
         def fired(site, action):
@@ -1716,8 +1756,122 @@ class TracingCollectorTests(unittest.TestCase):
             fired(MKSTACK, lambda: _testinternalcapi.gc_call_built(
                 lambda *a: a)),
             ("first", "second", 3))
+        def star(*args, **kwargs):
+            return args, kwargs
+        self.assertEqual(fired(INIT_LOCALS, lambda: star([1], [2], k=[3])),
+                         (([1], [2]), {"k": [3]}))
+        def returns_fresh():
+            sys._getframe()     # a frame object, so the clear takes it
+            return [object(), "fresh"]
+        self.assertEqual(fired(RETURN, returns_fresh)[1], "fresh")
+        self.assertEqual(fired(TAKE_OWNERSHIP, returns_fresh)[1], "fresh")
+        # The callback's result lands in the entry frame of the eval loop
+        # that map() runs it in (note 11 section 4.3).
+        self.assertEqual(
+            fired(RETURN, lambda: list(map(lambda x: [x, "entry"], [1]))),
+            [[1, "entry"]])
         with self.assertRaises(ValueError):
             collect_at(99)
+
+    # Note 11 section 4.4: a returning or yielding frame stores the value in
+    # its destination before it is unlinked and cleared.  The children run
+    # under stress, and under kill in debug builds, where a value held only
+    # in the eval loop's C frame across the clear would be killed.
+    RETURN_ORDER = textwrap.dedent("""
+        import _testinternalcapi
+        RETURN = 6
+        collect_at = _testinternalcapi.gc_collect_at
+        def gen(n):
+            for i in range(n):
+                yield [i]
+            collect_at(RETURN)
+            return ["done"]
+        def loop():
+            # The last value yielded is not the value returned: the loop
+            # variable keeps the one and FOR_ITER's exit drops the other.
+            for x in gen(3):
+                pass
+            return x
+        for _ in range(200):
+            assert loop() == [2], loop()
+        def outer():
+            r = yield from gen(2)
+            return r + ["outer"]
+        def drive(g):
+            got = []
+            try:
+                while True:
+                    got.append(next(g))
+            except StopIteration as e:
+                return got, e.value
+        assert drive(outer()) == ([[0], [1]], ["done", "outer"])
+        def adder():
+            total = [0]
+            while True:
+                total = [total[0] + (yield total)]
+        g = adder()
+        next(g)
+        for i in range(1, 50):
+            assert g.send(i) == [i * (i + 1) // 2]
+        async def coro():
+            return [1, "coro"]
+        c = coro()
+        try:
+            c.send(None)
+        except StopIteration as e:
+            assert e.value == [1, "coro"]
+        fired = collect_at(0)
+        assert fired == 201, fired      # one per loop() and one for outer()
+        print("ok")
+    """)
+
+    # 10a-1b.md item 2: an allocation may collect, so a handler holds no
+    # object only in a C local across one.  _ALLOCATE_OBJECT's __init__
+    # comes from the type's untraced cache; a generic operation on two
+    # inline floats boxes both, and the second box may collect the first.
+    ALLOCATION_SAFEPOINTS = textwrap.dedent("""
+        import _testinternalcapi
+        class Base:
+            def __init__(self, x):
+                self.x = [x]
+        class Derived(Base):
+            pass
+        # A collection at every allocation from here
+        _testinternalcapi.gc_set_stress(1)
+        for i in range(100):
+            assert Derived(i).x == [i]
+        def ops(a, b):
+            return a ** b, a < b, divmod(a, b), a % b
+        for i in range(1, 40):
+            a, b = i + 0.5, 1.25
+            assert ops(a, b) == (a ** b, a < b, divmod(a, b), a % b)
+        _testinternalcapi.gc_set_stress(0)
+        print("ok")
+    """)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_allocation_safepoints(self):
+        env = {"PYTHON_GCVERIFY": "kill"} if support.Py_DEBUG else {}
+        rc, out, err = assert_python_ok("-c", self.ALLOCATION_SAFEPOINTS, **env)
+        self.assertEqual(out.strip(), b"ok")
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_return_order(self):
+        env = {"PYTHON_GCSTRESS": "50"}
+        if support.Py_DEBUG:
+            env["PYTHON_GCVERIFY"] = "kill"
+        rc, out, err = assert_python_ok("-c", self.RETURN_ORDER, **env)
+        self.assertEqual(out.strip(), b"ok")
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_no_collection_inside_reftracer(self):
+        # A reference tracer runs with collection deferred: one that
+        # allocates under stress sees no collection inside it, and the
+        # allocations around it still collect.
+        events, inside, total = _testinternalcapi.gc_alloc_in_reftracer(200)
+        self.assertGreaterEqual(events, 200)
+        self.assertEqual(inside, 0)
+        self.assertGreater(total, 0)
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_stress(self):

@@ -901,6 +901,50 @@ class ClinicWholeFileTest(TestCase):
         for text in "METHODDEF", "PyDoc_", "#ifndef":
             self.assertNotIn(text, generated)
 
+    def test_gc_precise(self):
+        block = """
+            /*[clinic input]
+            output everything block
+            module m
+            [clinic start generated code]*/
+            /*[clinic input]
+            @gc_precise
+            m.f
+
+                a: object = None
+            [clinic start generated code]*/
+        """
+        generated = self.clinic.parse(dedent(block))
+        # The parser and the impl are both precise, and the parser anchors
+        # self in a span from entry to its one exit.
+        self.assertIn("Py_GC_PRECISE static PyValue\nm_f(", generated)
+        self.assertIn("Py_GC_PRECISE static PyObject *\nm_f_impl(", generated)
+        self.assertIn(
+            "    _PyThreadState_PushValueSpan(_PyThreadState_GET(), "
+            "&_gc_span, _gc_slots);\n"
+            "    _PyValueSpan_AppendObject(&_gc_span, (PyObject *)module);\n"
+            "\n"
+            "    args = _PyArg_UnpackKeywords(", generated)
+        self.assertIn(
+            "exit:\n"
+            "    _PyThreadState_PopValueRoot(_PyThreadState_GET(), &_gc_span);\n"
+            "\n"
+            "    return return_value;\n", generated)
+
+    def test_gc_precise_needs_cleanup_block(self):
+        # A parser with no arguments returns the impl's result directly.
+        block = """
+            /*[clinic input]
+            module m
+            [clinic start generated code]*/
+            /*[clinic input]
+            @gc_precise
+            m.f
+            [clinic start generated code]*/
+        """
+        self.expect_failure(block, "@gc_precise needs a parser that returns "
+                            "through its cleanup block")
+
     def test_slot_with_parameters_and_return_type(self):
         # Check the machinery with slots which take arguments or return
         # something else than an object.

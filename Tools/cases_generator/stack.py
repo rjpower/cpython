@@ -236,8 +236,8 @@ class Stack:
         self.logical_sp = PointerOffset.zero()
         self.variables: list[Local] = []
         self.check_stack_bounds = check_stack_bounds
-        # Set while the values are saved before an escaping call
-        self.escaping = False
+        # Set while the values are saved before a collecting call
+        self.collecting = False
 
     def drop(self, var: StackItem, check_liveness: bool) -> None:
         self.logical_sp = self.logical_sp.pop(var)

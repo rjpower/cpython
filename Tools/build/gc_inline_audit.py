@@ -178,7 +178,8 @@ def marked_sources() -> list[Path]:
     """The core .c files and internal headers that use the marker: a static
     inline function marked in a header is precise wherever it is inlined."""
     files = []
-    dirs = [(d, "*.c") for d in CORE_DIRS] + [(HEADER_DIR, "*.h")]
+    dirs = ([(d, "*.c") for d in CORE_DIRS] + [(d, "*.c.h") for d in CORE_DIRS]
+            + [(HEADER_DIR, "*.h")])
     for d, pattern in dirs:
         for p in sorted((ROOT / d).rglob(pattern)):
             try:

@@ -1964,3 +1964,24 @@ callback ran under a trace function installed after its object died
 and monitoring setters. Recorded, not fixed: shared-heap subinterpreters
 run the main interpreter's callbacks (step 7; note 08 section 3, note 11
 question 18); the compiler's units and `PyBytesWriter` (rung 3's sites).
+
+## 2026-10-27 23:25 PDT: 6c complete; 10a rung 1 landed; gate of the merged head
+
+Step 6c closed with rung 5 (f70da2cad2a counters, 2b0c0a2a9f2 write-up;
+note 06 section 20 has the decisions, measurements and the hand-off list
+by owner). boil/10a's rung 1 (the precise-roots tooling: C mode and inline
+audit, the attributed stack walk with pinned and unpinned detach records,
+the data-stack frame visit, retain and kill modes, injection and stress,
+the callback-queue fixes for signals and tracing hooks) and rung 2's
+vectorcall core landed as the merge 3c2f253232c; the only conflict was the
+worklog, both sides kept. Gate run here on a detached checkout of
+6086cccc9c2 (the merge plus a gate.sh rename) with fresh builds: gate 2
+on default 556/564 files, 50,931 tests, SUCCESS, 52,216 collections, 0
+walk fallbacks, 881 unpinned detaches; gate 3 on debug 50,931 tests,
+SUCCESS, 53,094 collections, 0 fallbacks, -u cpu test_cext 16 tests,
+regen and the traverse audit clean. The test_io.test_signals hang that
+failed 6c's rung 3 and rung 5 debug gates did not recur with 10a's
+callback-queue fix in the tree. Eval-loop file ban on 10a lifted; 10a
+finishes rung 2's call layer, then rung 1b promotes the eval loop. The 6d
+design agent (object slots on values, note 12) launched in its own
+worktree.

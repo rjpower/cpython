@@ -310,17 +310,6 @@ basic_type_error:
 
 /* An inline int or float is never callable: the error names its type
    without a box. */
-/* The debug check of a tp_call result, as a function of the result: a
-   precise caller passes the result in and takes it back, rather than hold it
-   in a local across the check, whose stdio callers count as collecting
-   (6d-2.md, C mode). */
-static inline PyValue
-checked_tp_call_result(PyValue res, PyObject *callable)
-{
-    _PyValue_CheckSlotResult(res, Py_TYPE(callable), "tp_call");
-    return res;
-}
-
 static void
 inline_is_not_callable(PyThreadState *tstate, PyValue callable)
 {
@@ -388,7 +377,7 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyValue callable,
     {
         res = _PyCallFunc_TrampolineCall(call, callable_o, argstuple, kwdict);
         _Py_LeaveRecursiveCallTstate(tstate);
-        res = checked_tp_call_result(res, callable_o);
+        _PyValue_CheckSlotResult(res, Py_TYPE(callable_o), "tp_call");
     }
 
     res = _Py_CheckFunctionResultValue(tstate, callable_o, res, NULL);
@@ -546,7 +535,7 @@ _PyObject_CallValue(PyThreadState *tstate, PyValue callable,
     result = (*call)(callable_o, args, kwargs);
 
     _Py_LeaveRecursiveCallTstate(tstate);
-    result = checked_tp_call_result(result, callable_o);
+    _PyValue_CheckSlotResult(result, Py_TYPE(callable_o), "tp_call");
 
     result = _Py_CheckFunctionResultValue(tstate, callable_o, result, NULL);
     _PyThreadState_PopValueRoot(tstate, &span);

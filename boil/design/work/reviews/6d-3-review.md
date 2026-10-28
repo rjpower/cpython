@@ -1,54 +1,45 @@
 ## Summary
 
-The in-place slot conversion fits the architecture.
-The plan has a collector lifetime hole, conflicting API signatures, and incomplete conversions.
-Revise before implementation; this review is based on source inspection.
+The in-place slot conversion and monitored-result root fit the architecture.  
+Two paths still retain internal boxing without a clear retirement plan.  
+This assessment is based on the proposal, context documents, and source inspection.
 
 ## Blocking issues
 
-1. **The monitored call result needs an explicit root.**  
-   **Where:** §E and Tests 6; [Python/bytecodes.c](/home/power/code/cpython/.worktrees/boil-6d/Python/bytecodes.c:5191).  
-   **Problem:** `_DO_CALL_FUNCTION_EX` keeps the result across the `C_RETURN` callback. That callback can collect before the result reaches its output slot. Interpreter frames are precise, so conservative C-stack scanning does not protect the local; reference counting provides no protection either. Changing the call and NULL tests does not establish a root.  
-   **Fix:** Hold the returned `PyValue` in a pushed value root through instrumentation, then publish it to the output. Pop on success and callback failure. Add a deterministic test returning a fresh, otherwise unreachable heap object while `C_RETURN` collects, plus a callback that raises. Run both under kill mode.
+1. **§E’s limited edit leaves callable boxing before value dispatch.**
 
-2. **The public value-call signature contradicts the specification.**  
-   **Where:** §B versus note 12 §2.3.  
-   **Problem:** This document declares `PyObject_CallValue(PyObject *callable, ...)`; note 12 requires `PyValue callable`, matching `PyObject_VectorcallValue`. The prepend form likewise specifies only `obj` becoming a value, leaving its callable contract unresolved. This makes the new API require an object conversion before it can reject an inline non-callable.  
-   **Fix:** Use `PyValue callable` consistently in the public and internal value forms and prepend helper. Canonicalise at object compatibility entries. Specify the inline rejection path before pointer access, and test inline ints and floats through both APIs.
+   **Where:** §§B/E; [`_MAKE_CALLARGS_A_TUPLE` and `_DO_CALL_FUNCTION_EX`]( /home/power/code/cpython/.worktrees/boil-6d/Python/bytecodes.c:5145); [generated handler](/home/power/code/cpython/.worktrees/boil-6d/Python/generated_ir_cases.c.h:5264).
 
-3. **The conversion inventory omits affected callers and a public declaration.**  
-   **Where:** §§B–C and Commit 1.  
-   **Problem:** `call_method` has another caller: [`slot_tp_init`](/home/power/code/cpython/.worktrees/boil-6d/Objects/typeobject.c:10985). `_PyObject_Call` also serves [`PyObject_CallObject`](/home/power/code/cpython/.worktrees/boil-6d/Objects/call.c:636). Neither conversion is specified. `PyVectorcall_Call` is declared in [`Include/abstract.h`](/home/power/code/cpython/.worktrees/boil-6d/Include/abstract.h:283), which the change list omits. Following the listed edits leaves unresolved calls or incompatible declarations.  
-   **Fix:** Add every affected usage. Let `slot_tp_init` inspect the value result directly, preserving the “must return None” check and naming an inline result’s type without boxing. Keep `PyObject_CallObject` as an object compatibility entry. Update the existing `PyVectorcall_Call` declaration in place.
+   **Problem:** Changing the three calls does not remove the existing `PyValue_ObjectBorrow(func)` conversions. The generator treats these as object inputs and inserts boxes, including in `_MAKE_CALLARGS_A_TUPLE` before it checks whether argument conversion is needed. Thus an inline callable still allocates before §B rejects it; allocation failure can produce `MemoryError` first. The generated code protects these boxes, so this is not an unchecked-pointer crash.
 
-4. **The module recipe retains boxes where value implementations already exist.**  
-   **Where:** §D and Tests 8; [Modules/_operator.c](/home/power/code/cpython/.worktrees/boil-6d/Modules/_operator.c:1113).  
-   **Problem:** The description of `itemgetter_call` is stale: it already calls the value-returning `itemgetter_call_impl`, then boxes its result. `attrgetter_call` has the same structure. Wrapping those object results in `PyValue_FromResult` preserves a needless box. Canonicalisation allocates nothing, but the preceding adapter does. Ordinary calls use vectorcall and can conceal this omission.  
-   **Fix:** Return the existing value helpers directly. Add direct `tp_call` coverage and box budgets for both getters, using uncached int and float results. Audit the other module adapters by their actual return expressions.
+   **Fix:** Extend §E to remove unnecessary callable object inputs. `_Py_Check_ArgsIterable` does not use its callable parameter; remove that parameter and update its callers. Use value predicates for callable type checks. Confine any boxes required by monitoring to that branch and root them raw. Test inline int and float callees through cold and warmed starred calls, with zero callable boxes on the unmonitored path.
 
-5. **The commit boundaries leave incompatible intermediate interfaces.**  
-   **Where:** Commits 1–3 and §§C–D.  
-   **Problem:** Commit 1 converts `call_method`, while its object-returning `slot_tp_call` remains until Commit 2. Commit 2 converts `wrapper_call` and `wrapperdescr_call`, while `wrapperdescr_raw_call` and `wrapperfunc` remain object forms until Commit 3. Conversely, `wrap_call` must consume the new `callfunc` result while still satisfying the old wrapper signature. The stated final bodies cannot simply land in that order.  
-   **Fix:** Combine the dependent conversions, or specify each temporary boundary conversion and its removal commit. Put focused regression tests in the commits that introduce the behavior; deferring all new tests to Commit 5 weakens the earlier gate claims.
+2. **The `lru_cache_call` recipe preserves an avoidable object-result layer.**
+
+   **Where:** §D, Tests 9 and Measurements; [`uncached_lru_cache_wrapper`](/home/power/code/cpython/.worktrees/boil-6d/Modules/_functoolsmodule.c:1284), [`infinite_lru_cache_wrapper`](/home/power/code/cpython/.worktrees/boil-6d/Modules/_functoolsmodule.c:1296), and [`lru_cache_call`](/home/power/code/cpython/.worktrees/boil-6d/Modules/_functoolsmodule.c:1731).
+
+   **Problem:** `PyValue_FromResult(self->wrapper(...))` canonicalises after boxing. With `maxsize=0`, the helper calls `PyObject_Call` and boxes every inline result despite storing nothing. With `maxsize=None`, misses box through `PyObject_Call`, and hits box through the object dictionary accessor. The bounded cache’s native `link->result` field explains a kept box; these other paths have no such requirement. Neither appears in the residue list.
+
+   **Fix:** Convert the internal wrapper interface and uncached/unbounded paths to values, boxing only where a native field requires it. Alternatively, explicitly retain these paths as measured residues with a named retirement step. Add separate allocation and box budgets for `maxsize=0`, unbounded hits/misses, and bounded hits/misses.
 
 ## Non-blocking issues
 
-- **Specify the fpcast conversion beyond changing casts.** In [Modules/_testcapi/fpcast.c](/home/power/code/cpython/.worktrees/boil-6d/Modules/_testcapi/fpcast.c:15), `zero` through `four` are shared by methods, getsets, and call-slot fixtures. The call fixtures need separate value-returning functions while the other consumers retain their current conventions. The wasm value trampoline must test value-returning signatures at every supported arity. A pointer-shaped result passing the canonicality check does not establish C calling-convention compatibility.
+- **Test 3 contradicts the chosen API.** `PyVectorcall_Call` retains `PyObject *callable`; it cannot accept an inline `PyValue`. Test inline rejection through `PyObject_CallValue` and `PyObject_VectorcallValue`. Test `PyVectorcall_Call` with a real vectorcall-capable object and verify its value result.
 
-- **Clarify `classmethoddescr_call`.** §D says its check-then-borrow goes because “its result is returned as it is.” [`classmethod_get`](/home/power/code/cpython/.worktrees/boil-6d/Objects/descrobject.c:551) returns the bound callable, which must then be invoked. State which value helper invokes it with the remaining tuple items and keyword dict; remove `_PyTuple_Objects` if that helper accepts values.
+- **The receiver allocation-failure test needs a reliable trigger.** Tests 4 proposes `set_nomemory`, but `6d-2.md`’s round-4 record already explains that number freelists can bypass it. Specify how the new test reaches `_PyValue_BoxInline`’s failure branch, or record inspection as the validation limit.
 
-- **Make the lifetime ladder concrete.** Tests 6 names suites and stress settings, not the promised cases. Carry forward note 12 §9’s large prepend array, keyword arguments, and allocation-failure cases. The receiver test should assert that the injection fired and cover failed boxing before any `Py_TYPE(self)` access.
+- **§H underspecifies length-hint semantics.** In [Objects/abstract.c](/home/power/code/cpython/.worktrees/boil-6d/Objects/abstract.c:101), preserve acceptance of bools and int subclasses, `NotImplemented`, suppressed call-time `TypeError`, negative-result errors, and `Py_ssize_t` overflow. Name these cases and add `test_iterlen` to the targeted ladder.
 
-- **Complete the documentation changes.** §G should also update `call.rst`’s `tp_call` prototype and `typeobj.rst`’s assertion that its signature matches `PyObject_Call`.
+- **Measurements need allocation counts and merge attribution.** Zero conversion boxes can conceal number objects created immediately before canonicalisation. Record allocations for the new call/wrapper rows, and compare against a baseline containing the same 10a changes; rung 2 already demonstrated that those merges materially affect instruction counts.
 
 ## Questions
 
-- Which step now owns super’s receiver box, `_PyObject_LookupSpecial`’s object bridge, and the `__length_hint__` box? Work doc 6d-2 §§C/F and `box_audit.py` assign them to rung 3; this document leaves super as a possible residue and omits the others. Record the revised owners and retirement steps.
+- Is `ga_call`’s numeric-result box intentionally retained? [Its call and `set_orig_class` helper](/home/power/code/cpython/.worktrees/boil-6d/Objects/genericaliasobject.c:648) still require an object result, as does `ga_vectorcall`. Specify a shared value implementation or name the residue’s owner.
 
-- Which 10a merge supplies the descriptor-call spans and non-collecting classification of `_PyValue_CheckSlotResult`? Record the final frame classification and checks for the changed functions; “no new error” in `call.c` alone does not cover that integration.
+- Which 10a merge supplies the descriptor-call spans and check classification required by the final tree? Record that dependency and the resulting frame classes before claiming the lifetime tests prove the precise paths.
 
 ## Verdict
 
 revise
 ---
-Reviewer: codex, 2026-10-28 04:36 PDT
+Reviewer: codex, 2026-10-28 04:49 PDT

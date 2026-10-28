@@ -584,7 +584,7 @@ cfunction_vectorcall_O(
 }
 
 
-static PyValue
+Py_GC_PRECISE static PyValue
 cfunction_call(PyObject *func, PyObject *args, PyObject *kwargs)
 {
     assert(kwargs == NULL || PyDict_Check(kwargs));
@@ -602,7 +602,20 @@ cfunction_call(PyObject *func, PyObject *args, PyObject *kwargs)
      * is NULL. This is intentional, since vectorcall would be slower. */
     PyCFunction meth = PyCFunction_GET_FUNCTION(func);
     PyObject *self = PyCFunction_GET_SELF(func);
-
+    if (!(flags & METH_KEYWORDS)
+        && kwargs != NULL && PyDict_GET_SIZE(kwargs) != 0)
+    {
+        _PyErr_Format(tstate, PyExc_TypeError,
+                      "%.200s() takes no keyword arguments",
+                      ((PyCFunctionObject*)func)->m_ml->ml_name);
+        return PyValue_NULL;
+    }
+    /* The result check reads func after the call: the frame's span
+       anchors it. */
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, func);
     PyObject *result;
     if (flags & METH_KEYWORDS) {
         result = _PyCFunctionWithKeywords_TrampolineCall(
@@ -610,15 +623,10 @@ cfunction_call(PyObject *func, PyObject *args, PyObject *kwargs)
             self, args, kwargs);
     }
     else {
-        if (kwargs != NULL && PyDict_GET_SIZE(kwargs) != 0) {
-            _PyErr_Format(tstate, PyExc_TypeError,
-                          "%.200s() takes no keyword arguments",
-                          ((PyCFunctionObject*)func)->m_ml->ml_name);
-            return PyValue_NULL;
-        }
         result = _PyCFunction_TrampolineCall(meth, self, args);
     }
     // A METH_VARARGS function returns an object.
-    return PyValue_FromResult(
-        _Py_CheckFunctionResult(tstate, func, result, NULL));
+    result = _Py_CheckFunctionResult(tstate, func, result, NULL);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return PyValue_FromResult(result);
 }

@@ -66,12 +66,24 @@ PyAPI_FUNC(void) _Py_NO_RETURN _Py_FatalRefcountErrorFunc(
 #define _Py_FatalRefcountError(message) \
     _Py_FatalRefcountErrorFunc(__func__, (message))
 
+/* The tracer runs with the thread's in_tracer count raised, under which no
+   collection starts (Python/gc_live.c, can_collect()): a call to a tracer
+   is non-collecting by construction.  That it changes no existing edge is
+   its documented contract. */
 #define _PyReftracerTrack(obj, operation) \
     do { \
         struct _reftracer_runtime_state *tracer = &_PyRuntime.ref_tracer; \
         if (tracer->tracer_func != NULL) { \
             void *data = tracer->tracer_data; \
+            _PyThreadStateImpl *tracer_ts = \
+                (_PyThreadStateImpl *)_PyThreadState_GET(); \
+            if (tracer_ts != NULL) { \
+                tracer_ts->gc_trace.in_tracer++; \
+            } \
             tracer->tracer_func((obj), (operation), data); \
+            if (tracer_ts != NULL) { \
+                tracer_ts->gc_trace.in_tracer--; \
+            } \
         } \
     } while(0)
 

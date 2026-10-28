@@ -433,28 +433,14 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 /* How much scratch space to give PyValue to PyObject* conversion. */
 #define MAX_VALUE_SCRATCH 10
 
-/* The collector scans the C stack conservatively, which includes the eval
-   loop's frame: a C array of object pointers there keeps its last objects
-   alive until another instruction reuses the slots.  Such an array is
-   cleared after the call that needed it; the barrier keeps the stores,
-   which are dead to the compiler. */
-#define _PyGC_CLEAR_ARRAY(ARR) \
-    do { \
-        memset((ARR), 0, sizeof(ARR)); \
-        __asm__ volatile("" : : "r"(ARR) : "memory"); \
-    } while (0)
-
-/* The unused slots of the scratch array are cleared too, or the words that
-   earlier calls left in that stack memory would keep their objects alive. */
 #define VALUES_TO_OBJECTS(ARGS, ARG_COUNT, NAME) \
     /* +1 because vectorcall might use -1 to write self */ \
-    PyObject *NAME##_temp[MAX_VALUE_SCRATCH+1] = {0}; \
+    PyObject *NAME##_temp[MAX_VALUE_SCRATCH+1]; \
     PyObject **NAME = _PyObjectArray_FromValues(ARGS, ARG_COUNT, NAME##_temp);
 
 #define VALUES_TO_OBJECTS_CLEANUP(NAME) \
     /* +1 because we +1 previously */ \
-    _PyObjectArray_Free(NAME - 1, NAME##_temp); \
-    _PyGC_CLEAR_ARRAY(NAME##_temp);
+    _PyObjectArray_Free(NAME - 1, NAME##_temp);
 
 #define CONVERSION_FAILED(NAME) ((NAME) == NULL)
 
@@ -657,6 +643,11 @@ _PyValue_Truth(PyValue ref)
 /* After a frame switch, V goes to the slot of the frame that control came
  * back to (frame->return_slot). */
 #define IR_STORE_RETURN(V) _PyFrame_SetReturnValue(frame, (V))
+
+/* A `stores_early` handler's store of V in the slot that CALLER named for
+ * it, made before the handler unlinks or clears the frame that held V, so
+ * that a collection there finds V in a frame (note 11 section 4.4). */
+#define IR_RETURN_EARLY(CALLER, V) _PyFrame_SetReturnValue((CALLER), (V))
 
 /* The oparg and feedback entry of another instruction of the frame. */
 #define _PyIR_Oparg(FRAME, INSTR) \

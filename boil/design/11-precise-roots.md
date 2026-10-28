@@ -597,6 +597,36 @@ reports the root word's owner (function by `dladdr()`, class, offset),
 names the function to promote. An extension owner keeps the skip, named in
 its comment, and the row moves to 10b with that evidence.
 
+Known exclusions, which are not 10a's:
+
+- Under stress (`PYTHON_GCSTRESS=1000`), test_capi.test_misc as a whole.
+  B class: shared-heap subinterpreter creation (finding B, question 18,
+  owner step 7). A collection during a shared-heap interpreter's start-up
+  runs a main-interpreter weakref callback or finalizer there, and its
+  unraisable report dies. The creators in test_capi, for step 7 to
+  re-enable:
+  - test_misc: `SubinterpreterTest` (eight tests, among them
+    `test_configured_settings`, which died), `TestThreadState.test_gilstate_matches_current`
+    (died, through `_testcapi.test_current_tstate_matches`),
+    `InterpreterConfigTests`, `InterpreterIDTests` and
+    `TestPendingCalls.test_isolated_subinterpreter`;
+  - test_misc's `Test_testcapi`, which runs every `_testcapi.test_*`
+    function: six call `Py_NewInterpreter()` (`test_atexit`,
+    `test_interpreter_guards`, `test_thread_state_ensure_crossinterp`,
+    `test_thread_state_ensure_view`, `test_interp_view_after_shutdown`,
+    `test_interp_guard_countdown`). They did not die in 1b's runs, by
+    chance: the exclusion of test_misc covers them only since the third
+    run;
+  - test_getargs `test_gh_119213`: its interpreter has its own obmalloc,
+    so it is outside the class; it stays in the stress run.
+
+  Also excluded under stress: test_capi.test_bytes's `*test_resize*`, the
+  writer row of 6.2, owner rung 3.
+- Under ASan, test_capi `test_mem.AddressSanitizerTests.test_buffer_overflow`.
+  The test sets `PYTHONMALLOC=malloc` so that ASan sees the overflow. The
+  fork's mem domain does not honour the variable, so mimalloc's check fires
+  first. Note 08's hack register has the row, owner 10a rung 2.
+
 ### 8.3 The verifier
 
 In debug builds each collection marks twice before it frees anything:
@@ -953,6 +983,15 @@ subset, the functions whose frames held the only root of a live object;
     safepoint, needs an ownership attribution the collector does not
     have, and step 7, which decides domains, owns it (note 08 section 3;
     test_gc `test_stress_shared_heap_callbacks` skips until then).
+    Rung 1b's stress run found it three times in test_capi.test_misc
+    (10a-1b.md, end gates). A main-interpreter `_ModuleLock`'s weakref
+    callback (`importlib._bootstrap._get_module_lock.<locals>.cb`) and a
+    main-interpreter `__del__` were run on the new interpreter during
+    `pycore_init_types`. With `use_main_obmalloc`, any collection during
+    a subinterpreter's initialization can run another interpreter's
+    callbacks on an interpreter whose unraisable hook is not ready, and
+    the process dies. Stress is not needed to reach it, only to make it
+    frequent. 10a has no stopgap for it.
 
 ## 14. Sources
 

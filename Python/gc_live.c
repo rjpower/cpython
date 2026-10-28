@@ -51,6 +51,7 @@
 #include "pycore_moduleobject.h"  // _PyModule_FreeState()
 #include "pycore_object.h"
 #include "pycore_gc_trace.h"      // _PyGC_TraceLiveMark()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_object_alloc.h"  // _PyObject_MallocWithType()
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -104,7 +105,7 @@ struct _gc_live_state {
     // The thread states that finalization unlinked (_PyGC_LiveKeepThreads()).
     PyThreadState *kept_threads;
     // The exception that was set when the collection started.  The stack
-    // below the collection's entry is not scanned (collect_and_run_queue()).
+    // below the collection's entry is not scanned (collect_from_entry()).
     PyObject *exc;
     // Totals for gc.get_stats()
     Py_ssize_t bytes_freed;
@@ -1320,9 +1321,8 @@ collect_pass(PyThreadState *tstate, _PyGC_Reason reason, int *nfinalized)
    here up, with the registers as they are here: the frames below are the
    collector's own, over stale words that earlier, deeper calls left, which
    would keep garbage alive.  Not inlined, so that the callers' frames are
-   above, and kept small, since its own frame is scanned too: the work is in
-   collect_pass(). */
-static Py_NO_INLINE Py_ssize_t
+   above.  Precise, so the walk does not scan its own frame. */
+Py_GC_PRECISE static Py_NO_INLINE Py_ssize_t
 collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
@@ -1356,31 +1356,6 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
     return n;
 }
 
-#define CLEAR_STACK_MAX (16 * 1024)
-
-/* The fallback of _PyGC_ClearStackBelow(): the top of the buffer is
-   nearest the caller's frame. */
-Py_NO_INLINE void
-_PyGC_ClearStackBuffer(size_t nbytes)
-{
-    char buf[CLEAR_STACK_MAX];
-    assert(nbytes <= sizeof(buf));
-    memset(buf + sizeof(buf) - nbytes, 0, nbytes);
-    // Keep the stores, which are dead to the compiler.
-    __asm__ volatile("" : : "r"(buf) : "memory");
-}
-
-/* Inlined, so that the frame of collect_from_entry() is made in the cleared
-   stack. */
-static inline Py_ssize_t
-collect_and_run_queue(PyThreadState *tstate, _PyGC_Reason reason)
-{
-    _PyGC_LiveClearStack();
-    Py_ssize_t n = collect_from_entry(tstate, reason);
-    // The collector's frames held what it marked, some of it soon garbage.
-    _PyGC_LiveClearStack();
-    return n;
-}
 
 /* Can an automatic collection run now?  If not, it is tried again after
    RETRY_BYTES more. */
@@ -1393,6 +1368,7 @@ can_collect(PyThreadState *tstate)
         && !gc->collecting && !gc->sweeping
         && tstate->state == _Py_THREAD_ATTACHED
         && ((_PyThreadStateImpl *)tstate)->mimalloc.current_object_heap != NULL
+        && ((_PyThreadStateImpl *)tstate)->gc_trace.in_tracer == 0
         && _PyInterpreterState_GetFinalizing(interp) == NULL
         && _PyRuntimeState_GetFinalizing(&_PyRuntime) == NULL;
     if (ok) {
@@ -1418,7 +1394,7 @@ _PyGC_LiveSetStress(PyInterpreterState *interp, int every)
     gc->alloc_limit = every > 0 ? 0 : gc->alloc_bytes + gc->alloc_threshold;
 }
 
-void
+Py_GC_PRECISE void
 _PyGC_InjectCollect(PyThreadState *tstate)
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
@@ -1428,7 +1404,7 @@ _PyGC_InjectCollect(PyThreadState *tstate)
     }
 }
 
-void
+Py_GC_PRECISE void
 _PyGC_LiveOnThreshold(PyThreadState *tstate)
 {
     GCState *gc = &tstate->interp->gc;
@@ -1453,7 +1429,7 @@ _PyGC_LiveOnThreshold(PyThreadState *tstate)
     (void)_PyGC_LiveCollectHere(tstate);
 }
 
-int
+Py_GC_PRECISE int
 _PyGC_LiveCollectHere(PyThreadState *tstate)
 {
     if (!can_collect(tstate)) {
@@ -1461,12 +1437,7 @@ _PyGC_LiveCollectHere(PyThreadState *tstate)
     }
     struct _gc_live_state *ls = get_live(tstate->interp);
     ls->no_python = 1;
-    // A handler may hold what it allocated only in a C local.
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
-    int scan_activations = ts->gc_trace.scan_activations;
-    ts->gc_trace.scan_activations = 1;
-    (void)collect_and_run_queue(tstate, _Py_GC_REASON_HEAP);
-    ts->gc_trace.scan_activations = scan_activations;
+    (void)collect_from_entry(tstate, _Py_GC_REASON_HEAP);
     ls->no_python = 0;
     if (ls->qhead < ls->qtail) {
         _Py_ScheduleGC(tstate);
@@ -1592,7 +1563,7 @@ _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 static PyObject **
 snapshot(PyThreadState *tstate, Py_ssize_t *n)
 {
-    (void)collect_and_run_queue(tstate, _Py_GC_REASON_MANUAL);
+    (void)collect_from_entry(tstate, _Py_GC_REASON_MANUAL);
     Py_ssize_t nobjs;
     PyObject **objs = _PyGC_TraceLiveHeapObjects(tstate->interp, &nobjs);
     if (objs == NULL) {
@@ -1747,19 +1718,19 @@ PyGC_Collect(void)
     if (!tstate->interp->gc.enabled) {
         return 0;
     }
-    return collect_and_run_queue(tstate, _Py_GC_REASON_MANUAL);
+    return collect_from_entry(tstate, _Py_GC_REASON_MANUAL);
 }
 
-Py_ssize_t
+Py_GC_PRECISE Py_ssize_t
 _PyGC_Collect(PyThreadState *tstate, int generation, _PyGC_Reason reason)
 {
-    return collect_and_run_queue(tstate, reason);
+    return collect_from_entry(tstate, reason);
 }
 
-void
+Py_GC_PRECISE void
 _PyGC_CollectNoFail(PyThreadState *tstate)
 {
-    (void)collect_and_run_queue(tstate, _Py_GC_REASON_SHUTDOWN);
+    (void)collect_from_entry(tstate, _Py_GC_REASON_SHUTDOWN);
 }
 
 void
@@ -1862,7 +1833,7 @@ _PyGC_LiveRunQueue(PyThreadState *tstate)
 }
 
 /* The eval breaker's call, scheduled by _PyGC_LiveOnThreshold(). */
-void
+Py_GC_PRECISE void
 _Py_RunGC(PyThreadState *tstate)
 {
     GCState *gc = &tstate->interp->gc;
@@ -1872,11 +1843,11 @@ _Py_RunGC(PyThreadState *tstate)
         return;
     }
     if (can_collect(tstate)) {
-        (void)collect_and_run_queue(tstate, _Py_GC_REASON_HEAP);
+        (void)collect_from_entry(tstate, _Py_GC_REASON_HEAP);
     }
 }
 
-static PyObject *
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static PyObject *
 gc_alloc(PyTypeObject *tp, size_t basicsize)
 {
     PyThreadState *tstate = _PyThreadState_GET();
@@ -1890,52 +1861,67 @@ gc_alloc(PyTypeObject *tp, size_t basicsize)
     return (PyObject *)mem;
 }
 
-PyObject *
+Py_GC_PRECISE PyObject *
 _PyObject_GC_New(PyTypeObject *tp)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot type_root;
+    _PyThreadState_PushValueRoot(tstate, &type_root);
+    type_root.object = (PyObject *)tp;
     size_t size = _PyObject_SIZE(tp);
     size_t slots = _PyType_AllocSlotsSize(tp);
     PyObject *op = gc_alloc(tp, size + slots);
-    if (op == NULL) {
-        return NULL;
+    if (op != NULL) {
+        // The shape slots start empty (pycore_shape.h).
+        memset((char *)op + size, 0, slots);
+        _PyObject_Init(op, tp);
     }
-    // The shape slots start empty (pycore_shape.h).
-    memset((char *)op + size, 0, slots);
-    _PyObject_Init(op, tp);
+    _PyThreadState_PopValueRoot(tstate, &type_root);
     return op;
 }
 
-PyVarObject *
+Py_GC_PRECISE PyVarObject *
 _PyObject_GC_NewVar(PyTypeObject *tp, Py_ssize_t nitems)
 {
     if (nitems < 0) {
         PyErr_BadInternalCall();
         return NULL;
     }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot type_root;
+    _PyThreadState_PushValueRoot(tstate, &type_root);
+    type_root.object = (PyObject *)tp;
     size_t size = _PyObject_VAR_SIZE(tp, nitems);
     PyVarObject *op = (PyVarObject *)gc_alloc(tp, size);
-    if (op == NULL) {
-        return NULL;
+    if (op != NULL) {
+        _PyObject_InitVar(op, tp, nitems);
+        if (tp->tp_dictoffset != 0
+            && !(tp->tp_flags & Py_TPFLAGS_MANAGED_DICT))
+        {
+            // The dict word of a variable-size type with a managed dict
+            // (type_ready_managed_dict), which its C code may not
+            // initialise.
+            *_PyObject_ComputedDictPointer((PyObject *)op) = NULL;
+        }
     }
-    _PyObject_InitVar(op, tp, nitems);
-    if (tp->tp_dictoffset != 0 && !(tp->tp_flags & Py_TPFLAGS_MANAGED_DICT)) {
-        // The dict word of a variable-size type with a managed dict
-        // (type_ready_managed_dict), which its C code may not initialise.
-        *_PyObject_ComputedDictPointer((PyObject *)op) = NULL;
-    }
+    _PyThreadState_PopValueRoot(tstate, &type_root);
     return op;
 }
 
-PyObject *
+Py_GC_PRECISE PyObject *
 PyUnstable_Object_GC_NewWithExtraData(PyTypeObject *tp, size_t extra_size)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot type_root;
+    _PyThreadState_PushValueRoot(tstate, &type_root);
+    type_root.object = (PyObject *)tp;
     size_t size = _PyObject_SIZE(tp) + extra_size;
     PyObject *op = gc_alloc(tp, size);
-    if (op == NULL) {
-        return NULL;
+    if (op != NULL) {
+        memset((char *)op + sizeof(PyObject), 0, size - sizeof(PyObject));
+        _PyObject_Init(op, tp);
     }
-    memset((char *)op + sizeof(PyObject), 0, size - sizeof(PyObject));
-    _PyObject_Init(op, tp);
+    _PyThreadState_PopValueRoot(tstate, &type_root);
     return op;
 }
 

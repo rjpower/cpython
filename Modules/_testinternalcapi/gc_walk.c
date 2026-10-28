@@ -25,7 +25,9 @@ struct owners {
     int fell_back;
 };
 
-static void
+/* Reads the walked frames' words, redzones included, as the collector's
+   scan does: not instrumented under ASan (Python/gc_trace.c) */
+static void _Py_NO_SANITIZE_ADDRESS
 owners_scan(void *arg, uintptr_t start, uintptr_t end)
 {
     struct owners *o = arg;
@@ -54,7 +56,6 @@ walk_from_here(void)
         .scan = owners_scan,
         .arg = current_owners,
         .top = ts->c_stack_top,
-        .activations = ts->gc_trace.activation,
     };
     // Not in this frame, whose words the walk scans
     static _Py_thread_local _PyGCContext ctx;
@@ -383,9 +384,18 @@ gc_walk_detach_holding(PyObject *self, PyValue arg)
      "field"      the list's ob_size, read after the collection;
      "interior"   its first item, read through ob_item cached before;
      "finalizer"  make()'s object, whose finalizer runs, read by its type;
+     "slot_call"  make()'s object, repr'd;
+     "late"       make()'s object, repr'd after a second collection;
+     "store"      make()'s object, appended to keep, which is repr'd;
      "weakref"    make()'s object, which keep holds a weak reference to:
                   the counterexample, which kill clears and retain hands
-                  back, a candidate that is no missed root. */
+                  back, a candidate that is no missed root;
+     "release"    a list whose item array has a page of its own, collected
+                  past the quarantine's horizon with the frame still holding
+                  the array's address, so that the release that frees the
+                  page and B's lookup of that word meet in one collection.
+   In a debug build kill gives the dead object the trap type, so each use
+   by its type aborts with the object's record. */
 static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
 PyObject *
 missed_root(const char *kind, PyObject *make, PyObject *collect,
@@ -406,7 +416,21 @@ missed_root(const char *kind, PyObject *make, PyObject *collect,
     PyObject *wr = NULL;
     int field = strcmp(kind, "field") == 0;
     int interior = strcmp(kind, "interior") == 0;
-    if (field || interior) {
+    int release = strcmp(kind, "release") == 0;
+    if (release) {
+        /* 32 MiB of items: past mimalloc's large size, so the array has a
+           segment of its own, which its free releases at once */
+        PyObject *one = PyList_New(0);
+        if (one == NULL || PyList_Append(one, Py_None) < 0) {
+            goto done;
+        }
+        obj = PySequence_Repeat(one, (Py_ssize_t)1 << 22);
+        if (obj == NULL) {
+            goto done;
+        }
+        items = ((PyListObject *)obj)->ob_item;
+    }
+    else if (field || interior) {
         obj = PyList_New(0);
         PyObject *item = PyLong_FromLong(123456789);
         if (obj == NULL || item == NULL || PyList_Append(obj, item) < 0) {
@@ -430,11 +454,36 @@ missed_root(const char *kind, PyObject *make, PyObject *collect,
     if (r == NULL) {
         goto done;
     }
+    if (strcmp(kind, "late") == 0) {
+        r = PyObject_CallNoArgs(collect);
+        if (r == NULL) {
+            goto done;
+        }
+    }
+    // Past the quarantine's 16 collections
+    for (int i = 0; release && i < 20; i++) {
+        r = PyObject_CallNoArgs(collect);
+        if (r == NULL) {
+            goto done;
+        }
+    }
     if (field) {
         result = PyLong_FromSsize_t(Py_SIZE(obj));
     }
+    else if (strcmp(kind, "slot_call") == 0 || strcmp(kind, "late") == 0) {
+        result = PyObject_Repr(obj);
+    }
+    else if (strcmp(kind, "store") == 0) {
+        if (PyList_Append(keep, obj) == 0) {
+            result = PyObject_Repr(keep);
+        }
+    }
     else if (interior) {
         result = PyLong_FromVoidPtr((void *)items[0].bits);
+    }
+    else if (release) {
+        // The address only: the block is gone
+        result = PyLong_FromVoidPtr((void *)items);
     }
     else if (wr != NULL) {
         PyObject *ref;

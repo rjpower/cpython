@@ -25,12 +25,21 @@ extern "C" {
  *
  * Py_GC_SLOTS on a PyValue * parameter: it points into a frame's slots,
  * which the collector visits, so a load through it is anchored until a
- * store through any PyValue *. */
+ * store through any PyValue *.
+ *
+ * Py_GC_PRECISE_PRESERVE_NONE: a precise function of the preserve_none
+ * convention, the tail-call interpreter's handlers, which root_check checks.
+ * It saves no callee-saved register, so a value pending in one when it
+ * calls is its own: the walk gives such registers to the frame, as it does
+ * for a registered range with _PyGC_RANGE_PRESERVES_NOTHING. */
 
 #if defined(__ELF__) && (defined(__GNUC__) || defined(__clang__))
 #  define Py_GC_PRECISE __attribute__((section("py_gc_precise")))
+#  define Py_GC_PRECISE_PRESERVE_NONE \
+       __attribute__((section("py_gc_precise_pn")))
 #else
 #  define Py_GC_PRECISE
+#  define Py_GC_PRECISE_PRESERVE_NONE
 #endif
 #define Py_GC_ARGS_ANCHORED
 #define Py_GC_SLOTS
@@ -148,7 +157,6 @@ PyAPI_FUNC(int) _PyGC_DecodeDescriptor(uintptr_t lookup_pc,
  * -1 where the walk is not built. */
 extern int _PyGC_FramePointerDescriptor(_PyGCFrameDesc *out);
 
-struct _PyEvalActivation;
 struct _PyGCRootStats;
 
 /* One walk of a stack.  The walk calls scan for each range of words it
@@ -164,11 +172,6 @@ typedef struct {
     void *arg;
     _PyGCWalkCache *cache;
     uintptr_t top;              /* the stack base, exclusive */
-    /* Until the eval loop is marked: a frame inside an activation's range
-       is precise, except where the activations are scanned (an inline
-       collection on its own thread). */
-    struct _PyEvalActivation *activations;
-    int activations_opaque;
     struct _PyGCRootStats *stats;
     int64_t test_fallbacks;     /* fallbacks at a pc in a test range */
 } _PyGCWalk;
@@ -177,6 +180,12 @@ typedef struct {
  * reached the stack base or the outermost frame, 1 if it fell back to a
  * conservative scan of the rest. */
 PyAPI_FUNC(int) _PyGC_WalkStack(_PyGCWalk *w, const _PyGCContext *ctx);
+
+/* The bounds of the preserve_none handlers' section
+ * (Py_GC_PRECISE_PRESERVE_NONE): 0 if the image has none.  Export for
+ * _testinternalcapi. */
+PyAPI_FUNC(int) _PyGC_PreservesNothingSection(uintptr_t *start,
+                                              uintptr_t *stop);
 
 /* Flush the cache if the loader generation or the range table changed: in
  * each root phase, which counts the flushes since the last into stats, and

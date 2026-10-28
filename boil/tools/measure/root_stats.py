@@ -59,8 +59,7 @@ def report(total, lines):
     print()
     print("| counter | total | per collection |")
     print("|---|---:|---:|")
-    for key in ("threads", "activations_skipped", "eval_words_skipped",
-                "frames_walked", "cache_hits", "cache_misses",
+    for key in ("threads", "frames_walked", "cache_hits", "cache_misses",
                 "cache_flushes", "fallbacks", "unpinned", "verify_q",
                 "verify_candidates"):
         v = total[key]

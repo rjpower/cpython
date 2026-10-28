@@ -8,8 +8,8 @@
  * [sp, CFA) holds it; a save slot, and a register's value, is owned by the
  * first frame outward that saves that register (3.1).  A word is scanned,
  * conservatively, if and only if its owner is opaque; a precise frame
- * (section py_gc_precise, a registered range, or for now an eval loop
- * activation) anchors what it holds where the collector sees it.  A frame
+ * (sections py_gc_precise and py_gc_precise_pn, or a registered range)
+ * anchors what it holds where the collector sees it.  A frame
  * the walk cannot decode or validate ends it: the rest of the stack is
  * scanned conservatively, and counted (3.4).
  */
@@ -19,7 +19,7 @@
 #include "pycore_gc_walk.h"
 #include "pycore_lock.h"          // PyMutex
 #include "pycore_pystate.h"       // _PyThreadState_GET()
-#include "pycore_tstate.h"        // _PyEvalActivation
+#include "pycore_tstate.h"        // _PyThreadStateImpl
 
 #include <string.h>
 
@@ -767,16 +767,15 @@ find_desc(_PyGCWalk *w, uintptr_t lookup_pc, _PyGCFrameDesc *scratch)
 // The section's bounds, from the linker; absent while nothing is marked
 extern char __start_py_gc_precise[] __attribute__((weak, visibility("hidden")));
 extern char __stop_py_gc_precise[] __attribute__((weak, visibility("hidden")));
+// The preserve_none functions' section (Py_GC_PRECISE_PRESERVE_NONE)
+extern char __start_py_gc_precise_pn[] __attribute__((weak, visibility("hidden")));
+extern char __stop_py_gc_precise_pn[] __attribute__((weak, visibility("hidden")));
 
-/* The frame's class.  *lo is where its precise words begin: sp, except
-   for an eval loop activation, whose words below the activation's lo, the
-   arguments it passes on the stack, are scanned as today. */
+/* The frame's class, and the flags of its range */
 static int
-frame_class(_PyGCWalk *w, const _PyGCFrameDesc *d, uintptr_t pc,
-            uintptr_t sp, uintptr_t cfa, int *flags, uintptr_t *lo)
+frame_class(const _PyGCFrameDesc *d, uintptr_t pc, int *flags)
 {
     *flags = 0;
-    *lo = sp;
     int cls = range_class(pc, flags);
     if (cls != 0) {
         return cls;
@@ -787,20 +786,25 @@ frame_class(_PyGCWalk *w, const _PyGCFrameDesc *d, uintptr_t pc,
     {
         return _PyGC_FRAME_PRECISE;
     }
-    if (!w->activations_opaque) {
-        for (_PyEvalActivation *a = w->activations; a != NULL; a = a->prev) {
-            if (a->lo != 0 && a->lo < cfa && cfa <= a->hi) {
-                *lo = Py_MAX(sp, a->lo);
-                if (w->stats != NULL) {
-                    w->stats->activations_skipped++;
-                    w->stats->eval_words_skipped +=
-                        (int64_t)((cfa - *lo) / sizeof(uintptr_t));
-                }
-                return _PyGC_FRAME_PRECISE;
-            }
-        }
+    if (!d->extension && __start_py_gc_precise_pn != NULL
+        && (uintptr_t)__start_py_gc_precise_pn <= pc
+        && pc < (uintptr_t)__stop_py_gc_precise_pn)
+    {
+        *flags |= _PyGC_RANGE_PRESERVES_NOTHING;
+        return _PyGC_FRAME_PRECISE;
     }
     return d->extension ? _PyGC_FRAME_EXTENSION : _PyGC_FRAME_CORE;
+}
+
+int
+_PyGC_PreservesNothingSection(uintptr_t *start, uintptr_t *stop)
+{
+    if (__start_py_gc_precise_pn == NULL) {
+        return 0;
+    }
+    *start = (uintptr_t)__start_py_gc_precise_pn;
+    *stop = (uintptr_t)__stop_py_gc_precise_pn;
+    return 1;
 }
 
 static void
@@ -925,15 +929,11 @@ _PyGC_WalkStack(_PyGCWalk *w, const _PyGCContext *ctx)
             return 1;
         }
         int flags;
-        uintptr_t precise_lo;
-        int cls = frame_class(w, d, pc, sp, cfa, &flags, &precise_lo);
+        int cls = frame_class(d, pc, &flags);
         int opaque = cls != _PyGC_FRAME_PRECISE;
         // Before any of the frame's words, which the scans after it own
         if (w->frame != NULL) {
             w->frame(w->arg, pc, sp, cfa, cls);
-        }
-        if (!opaque && precise_lo > sp) {
-            w->scan(w->arg, sp, precise_lo);
         }
         if (w->stats != NULL) {
             w->stats->frames_walked++;
@@ -1022,6 +1022,12 @@ _PyGC_WalkCacheCheck(_PyGCWalkCache *cache, struct _PyGCRootStats *stats)
 void
 _PyGC_WalkCacheFini(_PyGCWalkCache *cache)
 {
+}
+
+int
+_PyGC_PreservesNothingSection(uintptr_t *start, uintptr_t *stop)
+{
+    return 0;
 }
 
 int

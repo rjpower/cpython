@@ -58,6 +58,7 @@
 #include "pycore_gc_trace.h"
 #include "pycore_initconfig.h"    // _PyStatus_ERR()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
+#include "pycore_shape.h"         // _PyShape_InitRoot()
 
 #if defined(WITH_MIMALLOC)
 
@@ -308,8 +309,8 @@ typedef struct {
    scans (rung 1's claim), and with pymem and structs also the PyMem blocks
    that words of core opaque frames point to and the struct scan (rung 3's,
    note 11 decision 5).  An object B reached comes from a word of a precise
-   frame (or an eval loop activation), a word of a PyMem block that a core
-   opaque frame points to, or a word of a thread or interpreter struct. */
+   frame, a word of a PyMem block that a core opaque frame points to, or a
+   word of a thread or interpreter struct. */
 #define VERIFY_OFF      0
 #define VERIFY_RETAIN   1
 #define VERIFY_KILL     2
@@ -331,6 +332,14 @@ typedef struct {
     verify_rec rec;
 } verify_entry;
 
+/* What kill keeps of an object it killed, for the trap's report: the
+   object's type name is copied, since the type may die with it. */
+typedef struct {
+    PyObject *op;
+    verify_rec rec;
+    char type[48];
+} verify_killed;
+
 struct _gc_trace_state {
     // The live verifier: its mode, the live collections it has seen, and
     // the objects that only the roots outside A reached, which retain
@@ -340,9 +349,19 @@ struct _gc_trace_state {
     int64_t live_collections;
     verify_entry *q;
     size_t nq;
+    // The objects that the last collection's kill killed, sorted by
+    // address, with their records
+    verify_killed *killed;
+    size_t nkilled;
     // Kill's quarantine: blocks freed for the objects it killed, and the
-    // collection that killed them
-    struct { void *block; int64_t collection; } *quarantine;
+    // collection that killed them.  An object's own block keeps the
+    // object's record until it is freed.
+    struct {
+        void *block;
+        int64_t collection;
+        int has_rec;
+        verify_killed rec;
+    } *quarantine;
     size_t nquarantine;
     size_t quarantine_cap;
     // The static types passed to PyType_Ready() in this interpreter.
@@ -359,6 +378,15 @@ struct _gc_trace_state {
     Py_ssize_t nholes;
     Py_ssize_t last_result;
     Py_ssize_t count;     // the verifications that ran
+    // PYTHON_GCSTACKHITS=1: each object that a live mark reaches first
+    // from a conservatively scanned stack or register word, with the word
+    // and the frame the walk gives it to (_PyGC_TraceStackHits())
+    int stack_hits_on;
+    int64_t stack_hits_collection;
+    _PyGCStackHit *stack_hits;
+    size_t nstack_hits;
+    size_t stack_hits_cap;
+    int64_t stack_hits_dropped;
 };
 
 typedef struct {
@@ -432,7 +460,12 @@ typedef struct {
     int verify_ex;
     int phase_b;
     int frame_core;       // the walk is in a core opaque frame
-    uintptr_t frame_pc;   // and its pc
+    uintptr_t frame_pc;   // and the frame's pc, sp and cfa
+    uintptr_t frame_sp;
+    uintptr_t frame_cfa;
+    // The stack or register word being marked from, for the stack hits
+    uintptr_t hit_word;
+    uintptr_t hit_value;
     int in_queue;         // scan_queued() is draining
     verify_rec rec;       // B's root word
     struct { uintptr_t word, value, pc; int kind; } *deferred;
@@ -1051,48 +1084,16 @@ stack_top(PyThreadState *p)
     return ts->c_stack_top;
 }
 
-/* Scan [start, top) of p's C stack, except the eval loop's own frames
-   (_PyEvalActivation): the values a handler holds across an escaping call
-   or the eval breaker are in frame slots, and what else those frames hold
-   is copies or stale words, which would keep garbage.  The registers that
-   each activation saved are scanned with the record, which is above it.  A
-   collection that an allocation runs at once may find a handler between
-   escaping calls, holding a value only in a C local: it scans its own
-   thread's activations too. */
+/* Scan [start, top) of a C stack conservatively: the stack of a thread
+   that the walk does not read, or of a platform without the walk (note 11
+   section 3.4). */
 static void
-scan_stack(trace_t *t, PyThreadState *p, uintptr_t start, uintptr_t top)
+scan_stack(trace_t *t, uintptr_t start, uintptr_t top)
 {
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)p;
-    _PyEvalActivation *act = ts->gc_trace.activation;
-    if (p == _PyThreadState_GET() && ts->gc_trace.scan_activations) {
-        act = NULL;
-    }
     if (t->stats != NULL) {
         t->stats->threads++;
     }
     t->scan_class = _PyGC_SCAN_STACK;
-    // Innermost first, so at increasing addresses
-    for (; act != NULL && start < top; act = act->prev) {
-        if (act->lo == 0 || act->hi <= start) {
-            continue;
-        }
-        if (act->lo > start) {
-            scan_range(t, start, Py_MIN(act->lo, top));
-        }
-        if (t->verify) {
-            t->frame_pc = 0;
-            verify_defer_range(t, Py_MAX(act->lo, start), Py_MIN(act->hi, top),
-                               VERIFY_FROM_PRECISE);
-        }
-        if (t->stats != NULL) {
-            uintptr_t lo = Py_MAX(act->lo, start);
-            uintptr_t hi = Py_MIN(act->hi, top);
-            t->stats->activations_skipped++;
-            t->stats->eval_words_skipped +=
-                hi > lo ? (int64_t)((hi - lo) / sizeof(uintptr_t)) : 0;
-        }
-        start = act->hi;
-    }
     if (top > start) {
         scan_range(t, start, top);
     }
@@ -1112,6 +1113,8 @@ walk_frame(void *arg, uintptr_t pc, uintptr_t sp, uintptr_t cfa, int cls)
     trace_t *t = arg;
     t->frame_core = (t->verify_ex & VERIFY_EX_PYMEM) && cls == _PyGC_FRAME_CORE;
     t->frame_pc = pc;
+    t->frame_sp = sp;
+    t->frame_cfa = cfa;
 }
 
 /* The words of a precise frame, which A leaves out */
@@ -1136,14 +1139,11 @@ scan_regs(trace_t *t, const _PyGCContext *ctx)
 
 /* Scan p's stack outward from ctx up to top: walked where the walk is on
    (Python/gc_walk.c), so that only what opaque frames own is scanned;
-   elsewhere the registers and the whole stack conservatively, the eval
-   loop's activations excepted. */
+   elsewhere the registers and the whole stack conservatively. */
 static void
-scan_from(trace_t *t, PyThreadState *p, const _PyGCContext *ctx,
-          uintptr_t top)
+scan_from(trace_t *t, const _PyGCContext *ctx, uintptr_t top)
 {
 #ifdef _PyGC_WALK
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)p;
     if (t->stats != NULL) {
         t->stats->threads++;
     }
@@ -1155,16 +1155,13 @@ scan_from(trace_t *t, PyThreadState *p, const _PyGCContext *ctx,
         .arg = t,
         .cache = t->walk_cache,
         .top = top,
-        .activations = ts->gc_trace.activation,
-        .activations_opaque = p == _PyThreadState_GET()
-                              && ts->gc_trace.scan_activations,
         .stats = t->stats,
     };
     (void)_PyGC_WalkStack(&w, ctx);
     t->frame_core = 0;
 #else
     scan_regs(t, ctx);
-    scan_stack(t, p, ctx->sp, top);
+    scan_stack(t, ctx->sp, top);
 #endif
 }
 
@@ -1192,7 +1189,7 @@ scan_current_thread(trace_t *t, PyThreadState *tstate)
         }
     }
 #endif
-    scan_from(t, tstate, &ctx, top);
+    scan_from(t, &ctx, top);
 }
 
 /* C code keeps references in PyMem memory that only its stack frame
@@ -1232,7 +1229,7 @@ scan_other_thread(trace_t *t, PyThreadState *p, int alive)
         && (t->readable.n == 0
             || is_readable(t, rec->cap.sp, top - rec->cap.sp)))
     {
-        scan_from(t, p, &rec->cap, top);
+        scan_from(t, &rec->cap, top);
         return;
     }
 #endif
@@ -1240,7 +1237,7 @@ scan_other_thread(trace_t *t, PyThreadState *p, int alive)
         t->stats->unpinned++;
     }
     scan_regs(t, &rec->cap);
-    scan_stack(t, p, rec->cap.sp, top);
+    scan_stack(t, rec->cap.sp, top);
 }
 
 /* The thread states that finalization unlinked, whose daemon threads may
@@ -1382,7 +1379,11 @@ visit_chunk_frames(_PyStackChunk *chunk, PyObject **limit, visitproc visit,
 /* p's interpreter frames (note 11 section 4.4): every frame on its data
    stack, from push to pop, linked into the chain or not, and then the
    chain's frames that are not on the data stack, the running generator
-   and coroutine frames among them. */
+   and coroutine frames among them.  Of a frame the interpreter owns (an
+   entry frame of the eval loop, in its C frame, or the thread's base
+   frame) only the return slot is visited: what a returning or yielding
+   frame stores there and INTERPRETER_EXIT returns (4.3).  Its other fields
+   are poisoned in debug builds. */
 int
 _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
 {
@@ -1401,9 +1402,11 @@ _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
         }
     }
     for (_PyInterpreterFrame *f = p->current_frame; f != NULL; f = f->previous) {
-        if (f->owner == FRAME_OWNED_BY_THREAD
-            || f->owner >= FRAME_OWNED_BY_INTERPRETER)
-        {
+        if (f->owner == FRAME_OWNED_BY_THREAD) {
+            continue;
+        }
+        if (f->owner >= FRAME_OWNED_BY_INTERPRETER) {
+            _Py_VISIT_VALUE(f->base[f->return_slot]);
             continue;
         }
         int err = visit_frame(f, visit, arg);
@@ -1780,6 +1783,43 @@ live_safe_to_traverse(PyObject *op)
     return (op->ob_flags & _Py_GC_TRACKED_FLAG) || PyTuple_Check(op);
 }
 
+/* The stack hits keep at most this many records between reads */
+#define STACK_HITS_MAX (1 << 18)
+
+/* List op, which the mark reaches first from the stack or register word
+   being scanned */
+static void
+stack_hit(trace_t *t, PyObject *op)
+{
+    struct _gc_trace_state *ts = t->ts;
+    if (ts->nstack_hits == ts->stack_hits_cap) {
+        size_t cap = ts->stack_hits_cap ? 2 * ts->stack_hits_cap : 1024;
+        void *h = cap <= STACK_HITS_MAX
+                  ? realloc(ts->stack_hits, cap * sizeof(*ts->stack_hits))
+                  : NULL;
+        if (h == NULL) {
+            ts->stack_hits_dropped++;
+            return;
+        }
+        ts->stack_hits = h;
+        ts->stack_hits_cap = cap;
+    }
+    _PyGCStackHit *e = &ts->stack_hits[ts->nstack_hits++];
+    *e = (_PyGCStackHit){
+        .op = (uintptr_t)op,
+        .word = t->scan_class == _PyGC_SCAN_STACK ? t->hit_word : 0,
+        .value = t->hit_value,
+        .pc = t->frame_pc,
+        .sp = t->frame_sp,
+        .cfa = t->frame_cfa,
+        .scan_class = t->scan_class,
+        .collection = ts->stack_hits_collection,
+    };
+    // The type may die with the object, so its name is copied
+    PyOS_snprintf(e->type_name, sizeof(e->type_name), "%s",
+                  Py_TYPE(op)->tp_name);
+}
+
 static inline void
 live_mark(trace_t *t, PyObject *op, int conservative)
 {
@@ -1798,6 +1838,9 @@ live_mark(trace_t *t, PyObject *op, int conservative)
     t->nmarked++;
     if (t->phase_b) {
         verify_list(t, op);
+    }
+    if (t->hit_value != 0) {
+        stack_hit(t, op);
     }
     if (conservative && !live_safe_to_traverse(op)) {
         op->ob_flags = flags | _Py_GC_MARKED_FLAG | _Py_GC_SHALLOW_FLAG;
@@ -1887,6 +1930,11 @@ live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop)
 {
     _PyGCRootStats *stats = t->stats;
     int cls = t->scan_class;
+    // What the words reach is attributed to them.  The blocks they queue
+    // are scanned later, without attribution.
+    int hits = t->ts != NULL && t->ts->stack_hits_on && !t->in_queue
+               && !t->phase_b
+               && (cls == _PyGC_SCAN_STACK || cls == _PyGC_SCAN_REGS);
     if (stats != NULL && stop > start) {
         stats->words[cls] += (int64_t)((stop - start) / sizeof(uintptr_t));
     }
@@ -1902,8 +1950,13 @@ live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop)
             if (t->phase_b && !t->in_queue) {
                 t->rec.word = (uintptr_t)p;
             }
+            if (hits) {
+                t->hit_word = (uintptr_t)p;
+                t->hit_value = w;
+            }
             live_mark(t, op, 1);
             live_drain(t);
+            t->hit_word = t->hit_value = 0;
         }
         else if (t->scan_mem && w >= t->mem_lo && w < t->mem_hi) {
             if (t->frame_core && !t->phase_b) {
@@ -2234,7 +2287,7 @@ live_mark_roots(trace_t *t, PyThreadState *tstate)
         t->scan_mem = 1;
         _PyThreadStateImpl *cur = (_PyThreadStateImpl *)tstate;
         if (cur->gc_trace.entry.sp != 0) {
-            scan_from(t, tstate, &cur->gc_trace.entry, stack_top(tstate));
+            scan_from(t, &cur->gc_trace.entry, stack_top(tstate));
         }
         else {
             scan_current_thread(t, tstate);
@@ -2410,36 +2463,38 @@ verify_owner(char *buf, size_t size, uintptr_t addr)
     PyOS_snprintf(buf, size, "heap");
 }
 
+/* Where the record's word was, for a report */
 static void
-verify_report_to(FILE *out, const verify_entry *e, int64_t now)
+verify_where(char *where, size_t size, const verify_rec *r)
 {
-    char where[600];
-    const verify_rec *r = &e->rec;
-    if (r->kind == VERIFY_FROM_PRECISE && r->owner == 0) {
-        PyOS_snprintf(where, sizeof(where),
-                      "the word at %p of an eval loop activation",
-                      (void *)r->word);
-    }
-    else if (r->kind == VERIFY_FROM_PRECISE) {
+    if (r->kind == VERIFY_FROM_PRECISE) {
         char owner[512];
         verify_owner(owner, sizeof(owner), r->owner);
-        PyOS_snprintf(where, sizeof(where),
+        PyOS_snprintf(where, size,
                       "the word at %p of a precise frame at %s",
                       (void *)r->word, owner);
     }
     else if (r->kind == VERIFY_FROM_CORE_MEM) {
         char owner[512];
         verify_owner(owner, sizeof(owner), r->owner);
-        PyOS_snprintf(where, sizeof(where),
+        PyOS_snprintf(where, size,
                       "a PyMem block that the word at %p of a core frame "
                       "at %s points to", (void *)r->word, owner);
     }
     else {
         char owner[512];
         verify_owner(owner, sizeof(owner), r->word);
-        PyOS_snprintf(where, sizeof(where), "the struct word at %p (%s)",
+        PyOS_snprintf(where, size, "the struct word at %p (%s)",
                       (void *)r->word, owner);
     }
+}
+
+static void
+verify_report_to(FILE *out, const verify_entry *e, int64_t now)
+{
+    char where[600];
+    const verify_rec *r = &e->rec;
+    verify_where(where, sizeof(where), r);
     fprintf(out, "gc verify retain: candidate %s at %p: collection %lld "
             "reached it only through %s; collection %lld reached it from "
             "the roots\n", Py_TYPE(e->op)->tp_name, (void *)e->op,
@@ -2468,11 +2523,36 @@ verify_report(const verify_entry *e, int64_t now)
 
 _Py_thread_local PyThreadState *_PyGC_quarantine_tstate = NULL;
 
+/* The record of the object kill killed in the block [block, block + size),
+   or NULL.  The object need not start the block: the debug allocator's
+   hooks put their header before it. */
+static const verify_killed *
+killed_record(struct _gc_trace_state *ts, const void *block, size_t size)
+{
+    size_t lo = 0, hi = ts->nkilled;
+    while (lo < hi) {
+        size_t mid = lo + (hi - lo) / 2;
+        if ((uintptr_t)ts->killed[mid].op < (uintptr_t)block) {
+            lo = mid + 1;
+        }
+        else {
+            hi = mid;
+        }
+    }
+    if (lo < ts->nkilled
+        && (uintptr_t)ts->killed[lo].op < (uintptr_t)block + size)
+    {
+        return &ts->killed[lo];
+    }
+    return NULL;
+}
+
 void
 _PyGC_Quarantine(void *ptr)
 {
     struct _gc_trace_state *ts = _PyGC_quarantine_tstate->interp->gc.trace;
     size_t size = mi_usable_size(ptr);
+    const verify_killed *rec = killed_record(ts, ptr, size);
     if (ts->nquarantine == ts->quarantine_cap) {
         size_t cap = ts->quarantine_cap ? 2 * ts->quarantine_cap : 256;
         void *q = realloc(ts->quarantine, cap * sizeof(*ts->quarantine));
@@ -2484,13 +2564,122 @@ _PyGC_Quarantine(void *ptr)
         ts->quarantine_cap = cap;
     }
     memset(ptr, PYMEM_DEADBYTE, size);
+    if (rec != NULL) {
+        // An object's block: its header names the trap type, whose slots
+        // and Py_TYPE() abort with the record.
+        _PyShape *trap = _Py_TYPE_ROOT_SHAPE(&_PyGC_TrapType);
+        if (trap->type == NULL) {
+            _PyShape_InitRoot(&_PyGC_TrapType);
+        }
+        rec->op->ob_header = (uintptr_t)trap;
+    }
 #ifdef _Py_ADDRESS_SANITIZER
     ASAN_POISON_MEMORY_REGION(ptr, size);
 #endif
     ts->quarantine[ts->nquarantine].block = ptr;
     ts->quarantine[ts->nquarantine].collection = ts->live_collections;
+    ts->quarantine[ts->nquarantine].has_rec = rec != NULL;
+    if (rec != NULL) {
+        ts->quarantine[ts->nquarantine].rec = *rec;
+    }
     ts->nquarantine++;
 }
+
+void
+_PyGC_TrapUse(PyObject *op, const char *use)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyInterpreterState *interp = tstate != NULL ? tstate->interp
+                                                : _PyInterpreterState_Main();
+    struct _gc_trace_state *ts = interp->gc.trace;
+    for (size_t i = ts != NULL ? ts->nquarantine : 0; i-- > 0;) {
+        if (!ts->quarantine[i].has_rec || ts->quarantine[i].rec.op != op) {
+            continue;
+        }
+        const verify_killed *k = &ts->quarantine[i].rec;
+        char where[600];
+        verify_where(where, sizeof(where), &k->rec);
+        fprintf(stderr, "gc verify kill: %s of the %s at %p, which "
+                "collection %lld killed: it was reached only through %s; "
+                "the last collection was %lld\n", use, k->type, (void *)op,
+                (long long)k->rec.collection, where,
+                (long long)ts->live_collections);
+        fflush(stderr);
+        break;
+    }
+    Py_FatalError("gc verify kill: use of a killed object");
+}
+
+/* The slots of the trap type, which a quarantined object's header names */
+static PyObject *
+trap_repr(PyObject *op)
+{
+    _PyGC_TrapUse(op, "tp_repr");
+}
+
+static PyObject *
+trap_getattro(PyObject *op, PyObject *name)
+{
+    _PyGC_TrapUse(op, "tp_getattro");
+}
+
+static int
+trap_setattro(PyObject *op, PyObject *name, PyObject *value)
+{
+    _PyGC_TrapUse(op, "tp_setattro");
+}
+
+static PyObject *
+trap_call(PyObject *op, PyObject *args, PyObject *kwargs)
+{
+    _PyGC_TrapUse(op, "tp_call");
+}
+
+static Py_hash_t
+trap_hash(PyObject *op)
+{
+    _PyGC_TrapUse(op, "tp_hash");
+}
+
+static PyObject *
+trap_richcompare(PyObject *op, PyObject *other, int cmp)
+{
+    _PyGC_TrapUse(op, "tp_richcompare");
+}
+
+static int
+trap_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    _PyGC_TrapUse(op, "tp_traverse");
+}
+
+static void
+trap_dealloc(PyObject *op)
+{
+    _PyGC_TrapUse(op, "tp_dealloc");
+}
+
+static PyObject *
+trap_iter(PyObject *op)
+{
+    _PyGC_TrapUse(op, "tp_iter");
+}
+
+PyTypeObject _PyGC_TrapType = {
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
+    .tp_name = "gc_verify_trap",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_repr = trap_repr,
+    .tp_getattro = trap_getattro,
+    .tp_setattro = trap_setattro,
+    .tp_call = trap_call,
+    .tp_hash = trap_hash,
+    .tp_richcompare = trap_richcompare,
+    .tp_traverse = trap_traverse,
+    .tp_dealloc = trap_dealloc,
+    .tp_iter = trap_iter,
+};
 
 /* Free the blocks quarantined in collection upto or before */
 static void
@@ -2521,9 +2710,9 @@ verify_mark_b(trace_t *t, PyThreadState *tstate)
     struct _gc_trace_state *ts = t->ts;
     int64_t now = ++ts->live_collections;
     _PyGCRootStats *stats = t->stats;
-#ifdef Py_DEBUG
-    quarantine_release(ts, now - QUARANTINE_COLLECTIONS);
-#endif
+    free(ts->killed);
+    ts->killed = NULL;
+    ts->nkilled = 0;
     size_t kept = 0;
     for (size_t i = 0; i < ts->nq; i++) {
         verify_entry *e = &ts->q[i];
@@ -2589,6 +2778,21 @@ verify_mark_b(trace_t *t, PyThreadState *tstate)
                 return;
             }
         }
+        // The records, for the trap's report when a killed object is used
+        // (the quarantine copies each when it takes the object's block).
+        // Without memory for them, the trap reports no record.
+        qsort(t->newq, t->nnewq, sizeof(verify_entry), verify_entry_cmp);
+        ts->killed = malloc(t->nnewq * sizeof(verify_killed) + 1);
+        if (ts->killed != NULL) {
+            for (size_t i = 0; i < t->nnewq; i++) {
+                verify_killed *k = &ts->killed[i];
+                k->op = t->newq[i].op;
+                k->rec = t->newq[i].rec;
+                PyOS_snprintf(k->type, sizeof(k->type), "%s",
+                              Py_TYPE(k->op)->tp_name);
+            }
+            ts->nkilled = t->nnewq;
+        }
         return;
     }
     /* The list is what B marked now, with the older record of an object
@@ -2624,8 +2828,9 @@ make_list_in(PyObject **slot)
     return 0;
 }
 
-/* Overwrite the stack below the caller, where make_list_in() left copies */
-static Py_NO_INLINE void
+/* Overwrite the stack below the caller, where make_list_in() left copies.
+   Not instrumented under ASan, whose redzones around buf would keep them. */
+static Py_NO_INLINE void _Py_NO_SANITIZE_ADDRESS
 scrub_stack(void)
 {
     volatile char buf[16384];
@@ -2681,12 +2886,24 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
         goto done;
     }
     HEAD_LOCK(&_PyRuntime);
+#ifdef Py_DEBUG
+    /* Before the page lists are built: a release can free a whole page,
+       and B's lookups would read it through a stale range.  The blocks of
+       the collection QUARANTINE_COLLECTIONS before this one go. */
+    if (verify == VERIFY_KILL) {
+        quarantine_release(ts, ts->live_collections + 1
+                               - QUARANTINE_COLLECTIONS);
+    }
+#endif
     if (live_domain(&t, tstate->interp) < 0
         || live_build_pages(&t) < 0
         || (live_other_threads(&t, tstate) && read_mappings(&t) < 0))
     {
         HEAD_UNLOCK(&_PyRuntime);
         goto done;
+    }
+    if (ts != NULL && ts->stack_hits_on) {
+        ts->stack_hits_collection++;
     }
     live_mark_roots(&t, tstate);
     if (t.verify) {
@@ -2728,6 +2945,52 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
 done:
     live_fini(&t);
     return rc;
+}
+
+const _PyGCStackHit *
+_PyGC_TraceStackHits(PyInterpreterState *interp, size_t *n, int64_t *dropped)
+{
+    struct _gc_trace_state *ts = interp->gc.trace;
+    if (ts == NULL || !ts->stack_hits_on) {
+        *n = 0;
+        *dropped = 0;
+        return NULL;
+    }
+    *n = ts->nstack_hits;
+    *dropped = ts->stack_hits_dropped;
+    return ts->stack_hits;
+}
+
+void
+_PyGC_TraceClearStackHits(PyInterpreterState *interp)
+{
+    struct _gc_trace_state *ts = interp->gc.trace;
+    if (ts != NULL) {
+        ts->nstack_hits = 0;
+        ts->stack_hits_dropped = 0;
+    }
+}
+
+void
+_PyGC_TraceOwnerOf(uintptr_t pc, char *buf, size_t size)
+{
+#ifdef HAVE_DLFCN_H
+    Dl_info info;
+    if (pc != 0 && dladdr((void *)pc, &info) && info.dli_fname != NULL) {
+        if (info.dli_sname != NULL) {
+            PyOS_snprintf(buf, size, "%s+%#lx (%s+%#lx)", info.dli_fname,
+                          (unsigned long)(pc - (uintptr_t)info.dli_fbase),
+                          info.dli_sname,
+                          (unsigned long)(pc - (uintptr_t)info.dli_saddr));
+        }
+        else {
+            PyOS_snprintf(buf, size, "%s+%#lx", info.dli_fname,
+                          (unsigned long)(pc - (uintptr_t)info.dli_fbase));
+        }
+        return;
+    }
+#endif
+    PyOS_snprintf(buf, size, pc == 0 ? "no frame" : "heap");
 }
 
 /* For tests of the segment map: the object that the mark finds at addr, or
@@ -3702,6 +3965,16 @@ _PyGC_TraceInit(PyInterpreterState *interp)
         ts->live_verify = live_verify;
         ts->live_verify_ex = live_verify_ex;
     }
+    if (config->use_environment) {
+        const char *env = getenv("PYTHON_GCSTACKHITS");
+        if (env != NULL && *env != '\0' && strcmp(env, "0") != 0) {
+            struct _gc_trace_state *ts = get_trace_state(interp);
+            if (ts == NULL) {
+                return _PyStatus_NO_MEMORY();
+            }
+            ts->stack_hits_on = 1;
+        }
+    }
     return _PyStatus_OK();
 }
 
@@ -3714,6 +3987,7 @@ _PyGC_TraceFini(PyInterpreterState *interp)
     }
     interp->gc.trace = NULL;
     free(ts->q);
+    free(ts->killed);
 #ifdef Py_DEBUG
     quarantine_release(ts, INT64_MAX);
     free(ts->quarantine);
@@ -3721,6 +3995,7 @@ _PyGC_TraceFini(PyInterpreterState *interp)
     free(ts->static_types);
     addrset_fini(&ts->static_type_set);
     free(ts->holes);
+    free(ts->stack_hits);
     free(ts);
 }
 

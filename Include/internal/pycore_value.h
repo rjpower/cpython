@@ -366,20 +366,16 @@ _PyValueSpan_Rebase(_PyValueRoot *root, PyValue *base)
     _PyGC_INJECT(PyThreadState_GetUnchecked(), _PyGC_SITE_SPAN_REBASE);
 }
 
-/* The collector scans most C frames conservatively, so a popped value left
-   in its root would keep the object alive until the stack memory is reused.
-   The barrier keeps the store, which is dead to the compiler.  Returns the
-   value the root held. */
+/* Returns the value the root held.  The root keeps it: a precise frame is
+   not scanned, and in an opaque frame a stale value is retention until the
+   frame's memory is reused, as for any other dead local there. */
 static inline PyValue
 _PyThreadState_PopValueRoot(PyThreadState *tstate, _PyValueRoot *root)
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
     assert(ts->gc_trace.value_roots == root);
-    PyValue res = root->value;
     ts->gc_trace.value_roots = root->next;
-    root->value = PyValue_NULL;
-    __asm__ volatile("" : : "r"(root) : "memory");
-    return res;
+    return root->value;
 }
 
 

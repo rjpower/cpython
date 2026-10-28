@@ -3575,6 +3575,10 @@ gc_frame_descriptor(PyObject *self, PyValue arg)
 struct walk_record {
     PyObject *frames;
     int failed;
+    // gc_walk_precise_regs(): the register words given to precise frames,
+    // as the index of the frame, and that frame's extent
+    PyObject *regs;
+    uintptr_t sp, cfa;
 };
 
 static void
@@ -3597,6 +3601,66 @@ walk_record_frame(void *arg, uintptr_t pc, uintptr_t sp, uintptr_t cfa,
         r->failed = 1;
     }
     Py_XDECREF(item);
+    r->sp = sp;
+    r->cfa = cfa;
+}
+
+/* A precise frame's words: those outside its extent are registers pending
+   when it called, which the walk gives to it. */
+static void
+walk_record_precise(void *arg, uintptr_t start, uintptr_t end)
+{
+    struct walk_record *r = arg;
+    if (r->failed || (r->sp <= start && start < r->cfa)) {
+        return;
+    }
+    PyObject *index = PyLong_FromSsize_t(PyList_GET_SIZE(r->frames) - 1);
+    if (index == NULL || PyList_Append(r->regs, index) < 0) {
+        r->failed = 1;
+    }
+    Py_XDECREF(index);
+}
+
+/* Walk this thread's stack from here: the frames as gc_walk_here() gives
+   them; the frame index of each register word given to a precise frame;
+   and the bounds of the preserve_none handlers' section, or None. */
+static PyObject *
+gc_walk_precise_regs(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    struct walk_record r = {PyList_New(0), 0, PyList_New(0), 0, 0};
+    if (r.frames == NULL || r.regs == NULL) {
+        Py_XDECREF(r.frames);
+        Py_XDECREF(r.regs);
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    _PyGCWalk w = {
+        .scan = walk_record_scan,
+        .precise = walk_record_precise,
+        .frame = walk_record_frame,
+        .arg = &r,
+        .top = ts->c_stack_top,
+    };
+    _PyGCContext ctx;
+    _PyGC_CaptureCaller(&ctx);
+    (void)_PyGC_WalkStack(&w, &ctx);
+    if (r.failed) {
+        Py_DECREF(r.frames);
+        Py_DECREF(r.regs);
+        return NULL;
+    }
+    uintptr_t start, stop;
+    PyObject *section = _PyGC_PreservesNothingSection(&start, &stop)
+        ? Py_BuildValue("(NN)", PyLong_FromVoidPtr((void *)start),
+                        PyLong_FromVoidPtr((void *)stop))
+        : Py_NewRef(Py_None);
+    if (section == NULL) {
+        Py_DECREF(r.frames);
+        Py_DECREF(r.regs);
+        return NULL;
+    }
+    return Py_BuildValue("(NNN)", r.frames, r.regs, section);
 }
 
 /* Walk this thread's stack from here: a list of (pc, sp, cfa, class) and
@@ -3615,7 +3679,6 @@ gc_walk_here(PyObject *self, PyObject *Py_UNUSED(ignored))
         .frame = walk_record_frame,
         .arg = &r,
         .top = ts->c_stack_top,
-        .activations = ts->gc_trace.activation,
     };
     _PyGCContext ctx;
     _PyGC_CaptureCaller(&ctx);
@@ -3624,23 +3687,7 @@ gc_walk_here(PyObject *self, PyObject *Py_UNUSED(ignored))
         Py_DECREF(r.frames);
         return NULL;
     }
-    PyObject *acts = PyList_New(0);
-    if (acts == NULL) {
-        Py_DECREF(r.frames);
-        return NULL;
-    }
-    for (_PyEvalActivation *a = ts->gc_trace.activation; a; a = a->prev) {
-        PyObject *item = Py_BuildValue("(NN)", PyLong_FromVoidPtr((void *)a->lo),
-                                       PyLong_FromVoidPtr((void *)a->hi));
-        if (item == NULL || PyList_Append(acts, item) < 0) {
-            Py_XDECREF(item);
-            Py_DECREF(acts);
-            Py_DECREF(r.frames);
-            return NULL;
-        }
-        Py_DECREF(item);
-    }
-    return Py_BuildValue("(NiN)", r.frames, fell_back, acts);
+    return Py_BuildValue("(Ni)", r.frames, fell_back);
 }
 
 /* Arm one collection at site (_PyGC_SITE_*) on this thread; 0 disarms.
@@ -3693,6 +3740,73 @@ gc_collect_inline_then(PyObject *self, PyObject *args)
         return NULL;
     }
     return PyObject_CallOneArg(callable, arg);
+}
+
+/* A reference tracer that, against its contract, allocates on each
+   creation event, run over n allocations under PYTHON_GCSTRESS=1: no
+   collection may start inside it (10a-1b.md item 3).  Returns (events,
+   collections inside the tracer, collections in all). */
+static struct {
+    int depth;
+    int64_t events;
+    int64_t inside;
+} alloc_tracer_state;
+
+static int
+alloc_tracer(PyObject *obj, PyRefTracerEvent event, void *data)
+{
+    if (event != PyRefTracer_CREATE || alloc_tracer_state.depth) {
+        return 0;
+    }
+    alloc_tracer_state.depth = 1;
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    _PyGCRootStats before, after, last;
+    _PyGC_LiveGetRootStats(interp, &before, &last);
+    PyObject *junk = PyBytes_FromStringAndSize(NULL, 64);
+    if (junk == NULL) {
+        PyErr_Clear();
+    }
+    _PyGC_LiveGetRootStats(interp, &after, &last);
+    alloc_tracer_state.events++;
+    alloc_tracer_state.inside += after.collections - before.collections;
+    alloc_tracer_state.depth = 0;
+    return 0;
+}
+
+static PyValue
+gc_alloc_in_reftracer(PyObject *self, PyValue arg)
+{
+    if (!PyValue_IsInlineInt(arg) || PyValue_Int32(arg) < 0) {
+        PyErr_SetString(PyExc_ValueError, "a count of allocations");
+        return PyValue_NULL;
+    }
+    int32_t n = PyValue_Int32(arg);
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    void *old_data;
+    PyRefTracer old = PyRefTracer_GetTracer(&old_data);
+    memset(&alloc_tracer_state, 0, sizeof(alloc_tracer_state));
+    _PyGCRootStats before, after, last;
+    _PyGC_LiveGetRootStats(interp, &before, &last);
+    if (PyRefTracer_SetTracer(alloc_tracer, NULL) < 0) {
+        return PyValue_NULL;
+    }
+    _PyGC_LiveSetStress(interp, 1);
+    for (int32_t i = 0; i < n; i++) {
+        PyObject *item = PyList_New(0);
+        if (item == NULL) {
+            break;
+        }
+    }
+    _PyGC_LiveSetStress(interp, 0);
+    (void)PyRefTracer_SetTracer(old, old_data);
+    if (PyErr_Occurred()) {
+        return PyValue_NULL;
+    }
+    _PyGC_LiveGetRootStats(interp, &after, &last);
+    return PyValue_FromResult(Py_BuildValue(
+        "(LLL)", (long long)alloc_tracer_state.events,
+        (long long)alloc_tracer_state.inside,
+        (long long)(after.collections - before.collections)));
 }
 
 /* PYTHON_GCSTRESS=every from now on; 0 turns it off */
@@ -3904,6 +4018,65 @@ gc_live_roots_of(PyObject *self, PyValue arg)
         _PyGC_TraceLiveRootsOf(_PyThreadState_GET(), (uintptr_t)p)));
 }
 
+/* gc_stack_hits([addr]) -> (hits, dropped): the stack hits listed since
+   the last call (PYTHON_GCSTACKHITS=1), those of the object at addr if it
+   is given, and clears them.  Each hit is (object address, type name, word
+   address or 0 for a register, word value, frame owner, the word's offset
+   from the frame's sp, the frame's size, "stack" or "regs", collection). */
+static PyObject *
+gc_stack_hits(PyObject *self, PyObject *args)
+{
+    PyObject *addr_obj = NULL;
+    if (!PyArg_ParseTuple(args, "|O", &addr_obj)) {
+        return NULL;
+    }
+    uintptr_t addr = 0;
+    if (addr_obj != NULL) {
+        addr = (uintptr_t)PyLong_AsVoidPtr(addr_obj);
+        if (addr == 0 && PyErr_Occurred()) {
+            return NULL;
+        }
+    }
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    size_t n;
+    int64_t dropped;
+    const _PyGCStackHit *hits = _PyGC_TraceStackHits(interp, &n, &dropped);
+    PyObject *list = PyList_New(0);
+    if (list == NULL) {
+        return NULL;
+    }
+    // Building the list allocates, so a collection may list more hits and
+    // move the array: each hit is copied first, the array read again, and
+    // the hits listed meanwhile are not reported.
+    size_t count = n;
+    for (size_t i = 0; i < count; i++) {
+        _PyGCStackHit h = hits[i];
+        if (addr != 0 && h.op != addr) {
+            continue;
+        }
+        char owner[600];
+        _PyGC_TraceOwnerOf(h.pc, owner, sizeof(owner));
+        long long offset = h.word != 0 && h.pc != 0
+                           ? (long long)(h.word - h.sp) : -1;
+        long long size = h.pc != 0 ? (long long)(h.cfa - h.sp) : -1;
+        PyObject *item = Py_BuildValue(
+            "(KsKKsLLsL)", (unsigned long long)h.op, h.type_name,
+            (unsigned long long)h.word, (unsigned long long)h.value,
+            owner, offset, size,
+            h.scan_class == _PyGC_SCAN_STACK ? "stack" : "regs",
+            (long long)h.collection);
+        if (item == NULL || PyList_Append(list, item) < 0) {
+            Py_XDECREF(item);
+            Py_DECREF(list);
+            return NULL;
+        }
+        Py_DECREF(item);
+        hits = _PyGC_TraceStackHits(interp, &n, &dropped);
+    }
+    _PyGC_TraceClearStackHits(interp);
+    return Py_BuildValue("(NL)", list, (long long)dropped);
+}
+
 /* The address of the object that the live mark finds at an address, or 0. */
 static PyObject *
 gc_live_lookup(PyObject *self, PyObject *args)
@@ -4091,9 +4264,11 @@ static PyMethodDef module_functions[] = {
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
     {"gc_verify_count", gc_verify_count, METH_NOARGS},
     {"gc_live_roots_of", _PyCFunction_CAST(gc_live_roots_of), METH_O},
+    {"gc_stack_hits", gc_stack_hits, METH_VARARGS},
     {"test_value_spans", test_value_spans, METH_NOARGS},
     {"gc_frame_descriptor", _PyCFunction_CAST(gc_frame_descriptor), METH_O},
     {"gc_walk_here", gc_walk_here, METH_NOARGS},
+    {"gc_walk_precise_regs", gc_walk_precise_regs, METH_NOARGS},
     {"gc_root_stats", gc_root_stats, METH_NOARGS},
     {"gc_collect_with_signal", _PyCFunction_CAST(gc_collect_with_signal), METH_O},
     {"gc_frames_off_chain", gc_frames_off_chain, METH_VARARGS},
@@ -4101,6 +4276,7 @@ static PyMethodDef module_functions[] = {
     {"gc_collect_at", _PyCFunction_CAST(gc_collect_at), METH_O},
     {"gc_call_built", _PyCFunction_CAST(gc_call_built), METH_O},
     {"gc_set_stress", _PyCFunction_CAST(gc_set_stress), METH_O},
+    {"gc_alloc_in_reftracer", _PyCFunction_CAST(gc_alloc_in_reftracer), METH_O},
     {"gc_collect_inline_then", gc_collect_inline_then, METH_VARARGS},
     {"gc_ready_static_type", gc_ready_static_type, METH_NOARGS},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},

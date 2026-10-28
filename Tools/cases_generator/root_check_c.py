@@ -37,112 +37,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Iterator
 
+import call_effects
 import lexer
 
 
 # --- tables ------------------------------------------------------------------
-
-# Calls that neither allocate an object nor run Python code.  Object-
-# returning item and cell readers are not here: they box an inline value
-# (note 11 question 12).
-NON_COLLECTING = {
-    # reference counting is gone (step 5c): these are no-ops or stores
-    "Py_INCREF", "Py_DECREF", "Py_XINCREF", "Py_XDECREF", "Py_CLEAR",
-    "Py_SETREF", "Py_XSETREF", "Py_NewRef", "Py_XNewRef",
-    # header and type predicates
-    "Py_TYPE", "Py_SIZE", "Py_IS_TYPE", "Py_SET_TYPE", "Py_SET_SIZE",
-    "Py_Is", "Py_IsNone", "Py_IsTrue", "Py_IsFalse",
-    "PyType_HasFeature", "_PyType_HasFeature", "PyType_IsSubtype",
-    "PyObject_TypeCheck", "PyType_GetFlags",
-    # values
-    "PyValue_IsNull", "PyValue_IsObject", "PyValue_IsInline", "PyValue_Is",
-    "PyValue_ObjectBorrow", "PyValue_FromObject", "PyValue_Type",
-    "PyValue_IsInt", "PyValue_IsFloat", "PyValue_Bits",
-    "PyTuple_GET_VALUE", "PyList_GET_VALUE", "PyCell_GET_VALUE",
-    # an empty asm that hides a pointer's origin from the optimizer
-    "_PyValue_HIDE_ORIGIN",
-    # the value of an exact int that is not compact: PyLong_AsLongAndOverflow()
-    # on an exact int calls no __index__ and allocates nothing
-    # (Python/pyvalue.c)
-    "_PyValue_FromLongObject",
-    "_PyDict_NextValue",
-    "PyTuple_SET_ITEM", "PyList_SET_ITEM", "PyTuple_SET_VALUE",
-    "PyList_SET_VALUE", "_PyTuple_ITEMS", "_PyList_ITEMS",
-    "PyFunction_GET_CODE", "PyFunction_GET_GLOBALS",
-    "PyFunction_GET_BUILTINS", "PyMethod_GET_FUNCTION", "PyMethod_GET_SELF",
-    "PyCFunction_GET_FUNCTION", "PyCFunction_GET_SELF",
-    "PyCFunction_GET_FLAGS",
-    # casts
-    "_PyObject_CAST", "_PyType_CAST", "_PyVarObject_CAST", "_Py_CAST",
-    "_PyCFunction_CAST", "_PyFunction_CAST", "_PyTuple_CAST", "_PyList_CAST",
-    # statics
-    "_Py_ID", "_Py_STR", "_Py_LATIN1_CHR", "_PyLong_GetZero",
-    "_PyLong_GetOne",
-    # thread state and errors that only read
-    "_PyThreadState_GET", "PyThreadState_Get", "_PyInterpreterState_GET",
-    "PyInterpreterState_Get", "PyErr_Occurred", "_PyErr_Occurred",
-    "PyErr_Clear", "_PyErr_Clear",
-    # the frame's fields
-    "_PyFrame_GetCode", "_PyFrame_GetFunction", "_PyFrame_GetGlobals",
-    "_PyFrame_GetBuiltins", "_PyFrame_GetLocalsArray",
-    # assertions and libc
-    "assert", "Py_UNREACHABLE", "Py_FatalError", "Py_UNUSED",
-    "Py_ARRAY_LENGTH", "Py_MIN", "Py_MAX", "Py_ABS", "memcpy", "memmove",
-    "memset", "memcmp", "strlen", "strcmp", "strncmp", "strchr", "isnan",
-    # reads the stack pointer, with an intrinsic or an asm
-    "_Py_get_machine_stack_pointer",
-    "_Py_EnsureTstateNotNULL", "Py_BEGIN_CRITICAL_SECTION",
-    "Py_END_CRITICAL_SECTION", "Py_BEGIN_CRITICAL_SECTION2",
-    "Py_END_CRITICAL_SECTION2",
-    # value roots and spans
-    "_PyThreadState_PushValueRoot", "_PyThreadState_PopValueRoot",
-    "_PyThreadState_PushValueSpan", "_PyValueSpan_Append",
-    "_PyValueSpan_AppendObject", "_PyValueSpan_Rebase",
-    # The mem domain counts its bytes for the trigger but never collects
-    # (Objects/obmalloc.c, gc_count_alloc()): its callers do not expect a
-    # collection.
-    "PyMem_Malloc", "PyMem_Calloc", "PyMem_Realloc", "PyMem_Free",
-    "PyMem_New", "PyMem_Resize", "PyMem_Del",
-    "PyMem_RawMalloc", "PyMem_RawCalloc", "PyMem_RawRealloc", "PyMem_RawFree",
-    # variable arguments: reads of the va_list, which holds no object of
-    # its own
-    "va_start", "va_copy", "va_arg", "va_end",
-    # statistics
-    "CALL_STAT_INC", "EVAL_CALL_STAT_INC", "EVAL_CALL_STAT_INC_IF_FUNCTION",
-    "OBJECT_STAT_INC", "VALUE_BOX_STAT_INC",
-}
-NON_COLLECTING_PATTERNS = (
-    re.compile(r"^_?Py\w*_Check(Exact)?$"),
-    re.compile(r"^_?Py\w*_CHECK\w*$"),
-    re.compile(r"^_?Py\w*_GET_(SIZE|LENGTH)$"),
-    re.compile(r"^_?Py\w*_AS_\w+$"),
-    re.compile(r"^_?Py_atomic_\w+$"),
-    re.compile(r"^FT_ATOMIC_\w+$"),
-    re.compile(r"^_Py_hashtable_\w+$"),
-)
-
-# Calls that allocate and run no Python code: collecting, not reentrant.
-ALLOCATING = {
-    "PyLong_FromLong", "PyLong_FromSsize_t", "PyLong_FromSize_t",
-    "PyLong_FromLongLong", "PyLong_FromUnsignedLong",
-    "PyLong_FromUnsignedLongLong", "PyLong_FromDouble", "PyFloat_FromDouble",
-    "PyBool_FromLong", "PyTuple_New", "PyList_New", "PyDict_New",
-    "PySet_New", "PyFrozenSet_New", "PyCell_New", "PyMethod_New",
-    "_PyTuple_FromValues", "_PyTuple_FromArray", "_PyTuple_FromArraySteal",
-    "_PyList_FromArraySteal", "PyTuple_Pack", "PyValue_Object",
-    "_PyValue_BoxInline", "PyValue_ObjectNew", "_PyValueRoot_Object",
-    "_PyValueRoot_PushObject", "_PyValue_ObjectRooted",
-    "PyTuple_GET_ITEM", "PyList_GET_ITEM", "PyCell_GET",
-    "PyTuple_GetItem", "PyList_GetItem", "PySequence_Fast_GET_ITEM",
-    "PyType_GenericAlloc", "_PyType_AllocNoTrack", "PyObject_Malloc",
-    "PyObject_Calloc", "PyObject_Realloc", "PyObject_New",
-    "PyObject_NewVar", "PyObject_GC_New", "PyObject_GC_NewVar",
-    "_PyObject_GC_New", "_PyObject_GC_NewVar",
-    "PyUnicode_FromString", "PyUnicode_FromStringAndSize",
-    "PyBytes_FromStringAndSize",
-    "_Py_EnterRecursiveCallTstate", "_Py_EnterRecursiveCall",
-    "_PyErr_NoMemory", "PyErr_NoMemory",
-}
 
 # Calls whose result is a borrow out of their first argument: the source is
 # field(arg, FIELD).
@@ -204,11 +103,17 @@ STRONG_FIELDS = {
 OUT_PARAMS = {"_PyDict_NextValue": "dict_entries"}
 
 # Calls that fill an array (argument index dst) with the canonical values of
-# the elements of an array they are given (argument index src).  When src
-# is an array the function received, the copies are anchored as the
-# originals are, by the received array's creator (10a-2.md, rule 3): an
-# object's canonical value is the object, and a box's is an immediate.
-COPIES_RECEIVED = {"values_of": (0, 2)}
+# the elements of an array they are given (argument index src), when the
+# arguments at the null indices are NULL.  When src is an array the
+# function received, the copies are anchored as the originals are, by the
+# received array's creator (10a-2.md, rule 3): an object's canonical value
+# is the object, and a box's is an immediate.  _PyArg_UnpackKeywords()
+# with no kwargs dict copies the positional and keyword values of the
+# vectorcall array into buf (Argument Clinic's argsbuf).
+COPIES_RECEIVED = {
+    "values_of": (0, 2, ()),
+    "_PyArg_UnpackKeywords": (0, 9, (2,)),
+}
 
 # Calls that write memory they are given: a slot or field anchor through
 # it ends.
@@ -247,6 +152,16 @@ SPAN_POP = {"_PyThreadState_PopValueRoot"}
 # pair is a scope, which the root anchors.
 SPAN_PUSH_OBJECT = {"_PyValueRoot_PushObject": 1, "_PyValue_ObjectRooted": 2}
 SPAN_POP_OBJECT = {"_PyValue_UnrootObject": 2}
+# The C mode models these calls, so the inline audit does not check their
+# bodies as precise functions' (a root pushed on one path is their design).
+SPAN_PRIMITIVES = frozenset(SPAN_PUSH | SPAN_POP | SPAN_PUSH_OBJECT.keys()
+                            | SPAN_POP_OBJECT.keys())
+
+# A pushed frame's slots past its arguments hold garbage until
+# _PyFrame_Initialize() sets them to NULL, so nothing between the two may
+# collect (10a-1b.md item 1).
+FRAME_PUSH = {"_PyThreadState_PushFrame", "_PyThreadState_PushFrameUnchecked"}
+FRAME_INIT = "_PyFrame_Initialize"
 
 # Statement macros without a semicolon of their own, and their meaning.
 DETACH_MACROS = {"Py_BEGIN_ALLOW_THREADS", "Py_BLOCK_THREADS"}
@@ -257,6 +172,15 @@ RETURN_MACROS = {"Py_RETURN_NONE", "Py_RETURN_TRUE", "Py_RETURN_FALSE",
 # Declarations that mark functions and parameters.
 PRECISE = "Py_GC_PRECISE"
 ARGS_ANCHORED = "Py_GC_ARGS_ANCHORED"
+# The eval loop's generated handlers, included in its body (Region), and
+# the headers it includes there that only declare a static table of label
+# addresses.
+GENERATED_REGION = "generated_ir_cases.c.h"
+LABEL_TABLES = frozenset({"ir_targets.h"})
+REGION_CALL = "_PyEval_GeneratedHandlers"
+# The tests that a value is an immediate, which holds no object
+INLINE_TESTS = frozenset({"PyValue_IsInline", "PyValue_IsInlineInt",
+                          "PyValue_IsInlineFloat"})
 # The first argument position passed on the stack: x86-64 SysV passes six
 # integer-class arguments in registers (AArch64 passes eight; counting from
 # seven there checks a superset).  Variadic arguments count the same way.
@@ -861,6 +785,14 @@ class Detach(Stmt):
     attach: bool
 
 
+@dataclass(eq=False)
+class Region(Stmt):
+    """The eval loop's generated handlers (#include of GENERATED_REGION),
+    which root_check checks handler by handler.  Here they are one
+    reentrant call, entered by every goto to a label that the hand-written
+    part does not define, that falls through or returns."""
+
+
 def var_kind(type_toks: list[str], stars: int, array: bool) -> str:
     base = [t for t in type_toks if t not in QUALIFIERS]
     if not base:
@@ -946,6 +878,11 @@ class StmtParser:
 
     def skip_pp(self) -> list[Stmt]:
         t = self.next()
+        m = re.match(r'#\s*include\s*"([^"]+)"', t.text)
+        if m and m.group(1) == GENERATED_REGION:
+            return [Region(t.line)]
+        if m and m.group(1) in LABEL_TABLES:
+            return []
         if re.match(r"#\s*include", t.text):
             raise CheckError(f"line {t.line}: #include in a function body "
                              "(the eval loop's generated region is not "
@@ -983,6 +920,12 @@ class StmtParser:
             return self.block()
         if x == ";":
             self.next()
+            return Block(line, [])
+        if x == "static":
+            # A static local is in the data segment, not the frame, and its
+            # initializer is a constant (Argument Clinic's _kwtuple and
+            # _parser): nothing for the frame's analysis
+            self.until(";")
             return Block(line, [])
         if x == "if":
             self.next()
@@ -1456,6 +1399,7 @@ class CFG:
         self.nodes: list[Node] = []
         self.labels: dict[str, Node] = {}
         self.gotos: list[tuple[Node, str]] = []
+        self.regions: list[Node] = []
         self.entry = self.new(0)
         self.exit = self.new(0)
         self.exit.is_exit = True
@@ -1620,6 +1564,14 @@ def build_cfg(body: Block) -> CFG:
                 g.link(c, n)
             g.gotos.append((n, s.label))
             return []
+        if isinstance(s, Region):
+            n = g.new(s.line)
+            n.exprs = [Call(s.line, Name(s.line, REGION_CALL), [])]
+            for c in cur:
+                g.link(c, n)
+            g.link(n, g.exit)
+            g.regions.append(n)
+            return [n]
         if isinstance(s, Return):
             n = g.new(s.line)
             n.is_return = True
@@ -1648,9 +1600,13 @@ def build_cfg(body: Block) -> CFG:
     for c in outs:
         g.link(c, g.exit)
     for n, label in g.gotos:
-        if label not in g.labels:
+        if label in g.labels:
+            g.link(n, g.labels[label])
+        elif g.regions:
+            # A handler's label
+            g.link(n, g.regions[0])
+        else:
             raise CheckError(f"line {n.line}: goto to unknown label '{label}'")
-        g.link(n, g.labels[label])
     return g
 
 
@@ -1672,10 +1628,10 @@ class Classifier:
             return "reentrant"  # a call through a pointer
         if name in self.memo:
             return self.memo[name]
-        if name in ALLOCATING:
-            k = "alloc"
-        elif name in NON_COLLECTING or name in self.extra or any(
-                p.match(name) for p in NON_COLLECTING_PATTERNS):
+        listed = call_effects.kind(name)
+        if listed is not None:
+            k = listed
+        elif name in self.extra:
             k = "none"
         elif name in self.inline_bodies:
             self.memo[name] = "reentrant"  # a cycle counts as collecting
@@ -1715,10 +1671,15 @@ class State:
     stored: dict[str, frozenset]            # object var -> anchors holding it
     slots: dict[str, bool]                  # PyValue * var -> slot provenance
     spans: tuple[str, ...]                  # pushed spans, innermost last
+    # (pointer, span): a borrowed args[-1] slot whose value is in the span
+    saved: frozenset = frozenset()
+    loads: dict[str, str] = field(default_factory=dict)  # var -> pointer it read
+    # (var, line): a frame pushed into var and not yet initialized
+    pushed: frozenset = frozenset()
 
     def copy(self) -> "State":
         return State(dict(self.sources), dict(self.stored), dict(self.slots),
-                     self.spans)
+                     self.spans, self.saved, dict(self.loads), self.pushed)
 
 
 @dataclass
@@ -1760,7 +1721,9 @@ def merge(a: State | None, b: State) -> tuple[State, list[str]]:
     if a.spans != b.spans:
         problems.append(f"spans {list(a.spans)} and {list(b.spans)} meet")
     spans = a.spans if len(a.spans) <= len(b.spans) else b.spans
-    return State(sources, stored, slots, spans), problems
+    loads = {k: v for k, v in a.loads.items() if b.loads.get(k) == v}
+    return State(sources, stored, slots, spans, a.saved & b.saved,
+                 loads, a.pushed | b.pushed), problems
 
 
 class FunctionChecker:
@@ -1775,6 +1738,7 @@ class FunctionChecker:
         self.args_anchored_names = args_anchored_names
         self.errors: list[Error] = []
         self.kinds: dict[str, str] = {}
+        self.borrowed: set[str] = set()
         for p in fn.params:
             self.kinds[p.name] = p.kind
 
@@ -1797,10 +1761,49 @@ class FunctionChecker:
 
     def collect_kinds(self, s: Stmt) -> None:
         if isinstance(s, Decl):
-            for name, kind, _ in s.vars:
+            for name, kind, init in s.vars:
                 self.kinds[name] = kind
+                if init is not None and self.is_slot_before(init):
+                    self.borrowed.add(name)
         for c in stmt_children(s):
             self.collect_kinds(c)
+
+    def is_slot_before(self, e: Expr) -> bool:
+        """Is e `(T *)args - 1`, a pointer to the slot before a received
+        array, which PY_VECTORCALL_ARGUMENTS_OFFSET lends the callee?"""
+        while isinstance(e, Cast):
+            e = e.operand
+        return isinstance(e, Binary) and e.op == "-" and \
+            isinstance(e.right, Const) and e.right.text == "1" and \
+            self.base_name(e.left) in self.received_arrays()
+
+    def borrowed_slot(self, e: Expr) -> str | None:
+        """The pointer whose borrowed slot e is: `p[0]` or `*p` for a p
+        from is_slot_before(), or `args[-1]`."""
+        if isinstance(e, Index) and isinstance(e.base, Name):
+            i = e.index
+            if e.base.id in self.borrowed and isinstance(i, Const) and i.text == "0":
+                return e.base.id
+            if e.base.id in self.received_arrays() and isinstance(i, Unary) \
+                    and i.op == "-" and isinstance(i.operand, Const) \
+                    and i.operand.text == "1":
+                return e.base.id
+        if isinstance(e, Unary) and e.op == "*" and isinstance(e.operand, Name) \
+                and e.operand.id in self.borrowed:
+            return e.operand.id
+        return None
+
+    def note_load(self, name: str, value: Expr, st: State) -> None:
+        while isinstance(value, Cast):
+            value = value.operand
+        ptr = self.borrowed_slot(value)
+        if ptr is not None:
+            st.loads[name] = ptr
+        else:
+            st.loads.pop(name, None)
+        st.pushed = frozenset(p for p in st.pushed if p[0] != name)
+        if isinstance(value, Call) and value.name in FRAME_PUSH:
+            st.pushed = st.pushed | {(name, value.line)}
 
     def is_obj(self, name: str) -> bool:
         return self.kinds.get(name) in ("object", "array")
@@ -1898,6 +1901,13 @@ class FunctionChecker:
         def note(name: str, value: Expr) -> None:
             if self.kinds.get(name) not in ("pointer", "values"):
                 return
+            while isinstance(value, Cast):
+                value = value.operand
+            if isinstance(value, Call) and value.name in COPIES_RECEIVED:
+                # It returns its source or its destination array
+                src_i, dst_i, _ = COPIES_RECEIVED[value.name]
+                value = Comma(value.line, [a for i, a in enumerate(value.args)
+                                           if i in (src_i, dst_i)])
             names = {x.id for x in walk_expr(value) if isinstance(x, Name)}
             direct.setdefault(name, set()).update(names)
 
@@ -2036,6 +2046,10 @@ class FunctionChecker:
                     var, is_null = n.edge_null[k]
                     if is_null and var in out.sources:
                         out.sources[var] = frozenset([("const",)])
+                    if is_null:
+                        # The push failed: no frame
+                        out.pushed = frozenset(
+                            p for p in out.pushed if p[0] != var)
                 old = states.get(id(s))
                 new, problems = merge(old, out)
                 if problems and id(s) not in reported_merge and old is not None:
@@ -2064,6 +2078,7 @@ class FunctionChecker:
         for name, kind, init in n.decls:
             if init is not None:
                 srcs = self.eval(init, st, n, live_after, [])
+                self.note_load(name, init, st)
                 if kind in ("object", "array"):
                     self.assign_var(name, srcs, st)
                     self.copy_anchors(name, init, st)
@@ -2260,6 +2275,7 @@ class FunctionChecker:
         while isinstance(t, Cast):
             t = t.operand
         if isinstance(t, Name):
+            self.note_load(t.id, e.value, st)
             if self.is_obj(t.id) and e.op == "=":
                 self.assign_var(t.id, srcs, st)
                 self.copy_anchors(t.id, e.value, st)
@@ -2291,6 +2307,14 @@ class FunctionChecker:
             self.invalidate_field(t.field, st)
             return srcs
         if isinstance(t, (Index, Unary)):
+            lent = self.borrowed_slot(t)
+            if lent is not None and self.checking and not any(
+                    (lent, r) in st.saved for r in st.spans):
+                # Its creator's anchor of the old value ends with the store
+                # (10a-2.md, rule 4).
+                self.error(e.line, "a slot that PY_VECTORCALL_ARGUMENTS_OFFSET "
+                           f"lends (through '{lent}') is overwritten while "
+                           "no pushed span holds its value")
             ptr = t.base if isinstance(t, Index) else t.operand
             if isinstance(t, Index):
                 self.eval(t.index, st, n, live_after, held)
@@ -2321,6 +2345,16 @@ class FunctionChecker:
     def eval_call(self, e: Call, st: State, n: Node, live_after: set[str],
                   held: list[tuple[str, int]]) -> frozenset:
         name = e.name
+        # A value asserted inline holds no object from the assertion on.
+        # The assertion vanishes in release builds; the fact does not.
+        if name == "assert" and len(e.args) == 1:
+            test = e.args[0]
+            if isinstance(test, Call) and test.name in INLINE_TESTS \
+                    and len(test.args) == 1 and isinstance(test.args[0], Name) \
+                    and self.is_obj(test.args[0].id):
+                st.sources[test.args[0].id] = frozenset([("const",)])
+                st.stored.pop(test.args[0].id, None)
+                return frozenset([("const",)])
         # Span scopes
         if name in SPAN_PUSH or name in SPAN_PUSH_OBJECT:
             root = self.span_arg(e, 1 if name in SPAN_PUSH else SPAN_PUSH_OBJECT[name])
@@ -2353,6 +2387,7 @@ class FunctionChecker:
                     else:
                         self.error(e.line, f"span '{root}' is popped but not pushed")
                 st.spans = tuple(s for s in st.spans if s != root)
+                st.saved = frozenset(x for x in st.saved if x[1] != root)
                 for k, v in list(st.stored.items()):
                     st.stored[k] = frozenset(a for a in v if a != ("span", root))
                 for k, v in list(st.sources.items()):
@@ -2392,6 +2427,12 @@ class FunctionChecker:
                 var = None  # the canonical value, not the object (10a-2.md, 0d)
             else:
                 var = self.base_name(stored)
+            if root is not None and root in st.spans:
+                lent = self.borrowed_slot(stored)
+                if lent is None and isinstance(stored, Name):
+                    lent = st.loads.get(stored.id)
+                if lent is not None:
+                    st.saved = st.saved | {(lent, root)}
             if root is None or root not in st.spans:
                 self.error(e.line, f"an append to span '{root}', which is not "
                            "pushed")
@@ -2413,8 +2454,10 @@ class FunctionChecker:
                 st.sources[b] = frozenset([("span", root)])
             return frozenset([("const",)])
         if name in COPIES_RECEIVED:
-            src_i, dst_i = COPIES_RECEIVED[name]
-            if len(e.args) > max(src_i, dst_i):
+            src_i, dst_i, null_i = COPIES_RECEIVED[name]
+            if len(e.args) > max(src_i, dst_i) and all(
+                    isinstance(e.args[i], Name) and e.args[i].id == "NULL"
+                    for i in null_i):
                 src = self.base_name(e.args[src_i])
                 dst = self.base_name(e.args[dst_i])
                 if dst is not None and self.kinds.get(dst) == "array" \
@@ -2428,7 +2471,8 @@ class FunctionChecker:
                 continue
             # A call that cannot collect and is not listed as writing its
             # arguments (Py_ARRAY_LENGTH, a predicate) stores nothing.
-            if name in NON_COLLECTING and name not in MUTATING:
+            if name is not None and call_effects.kind(name) == "none" \
+                    and name not in MUTATING:
                 continue
             if b is not None and self.kinds.get(b) == "array" \
                     and not self.span_backed(b, st):
@@ -2447,6 +2491,9 @@ class FunctionChecker:
                 for i, (a, s) in enumerate(zip(e.args, arg_srcs)):
                     if i + 1 >= FIRST_STACK_ARG:
                         self.check_arg_anchored(e, a, s, st, i + 1)
+        if name == FRAME_INIT and len(e.args) > 1:
+            f = self.base_name(e.args[1])
+            st.pushed = frozenset(p for p in st.pushed if p[0] != f)
         if name in OUT_PARAMS:
             base = self.base_name(e.args[0]) if e.args else None
             for a in e.args[1:]:
@@ -2581,6 +2628,10 @@ class FunctionChecker:
         for callee, tline in held:
             self.error(line, f"the result of '{callee}' (line {tline}) is a "
                        f"temporary held across the collecting call to '{what}'")
+        for frame_var, pline in sorted(st.pushed):
+            self.error(line, f"the collecting call to '{what}' comes between "
+                       f"the push of frame '{frame_var}' (line {pline}) and "
+                       f"its {FRAME_INIT}()")
 
     def check_arg_anchored(self, call: Call, a: Expr, srcs: frozenset,
                            st: State, stack_position: int = 0) -> None:
@@ -2682,7 +2733,8 @@ def header_typedefs(include_dirs: Iterable[Path]) -> set[str]:
         return _TYPEDEF_CACHE[key]
     names: set[str] = set()
     for d in include_dirs:
-        for path in sorted(Path(d).rglob("*.h")):
+        paths = [Path(d)] if Path(d).is_file() else sorted(Path(d).rglob("*.h"))
+        for path in paths:
             if "mimalloc" in path.parts:
                 continue
             try:
@@ -2758,7 +2810,9 @@ def _parse_headers(include_dirs: Iterable[Path]) -> tuple[
     returns: dict[str, str] = {}
     functions: dict[str, Function] = {}
     for d in include_dirs:
-        for path in sorted(Path(d).rglob("*.h")):
+        # A directory's headers, or one header
+        paths = [Path(d)] if Path(d).is_file() else sorted(Path(d).rglob("*.h"))
+        for path in paths:
             if "mimalloc" in path.parts:
                 continue
             try:

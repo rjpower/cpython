@@ -11,6 +11,7 @@
 #include "pycore_pystate.h"       // _PyInterpreterState_GET
 #include "pycore_stats.h"         // OBJECT_STAT_INC_COND()
 #include "pycore_gc_trace.h"      // _PyGC_LiveOnThreshold()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_weakref.h"       // _PyWeakref_DropList()
 
 #include <stdlib.h>               // malloc()
@@ -1606,7 +1607,7 @@ _PyMem_FiniDelayed(PyInterpreterState *interp)
 /* the "object" allocator */
 /**************************/
 
-void *
+Py_GC_PRECISE void *
 PyObject_Malloc(size_t size)
 {
     /* see PyMem_RawMalloc() */

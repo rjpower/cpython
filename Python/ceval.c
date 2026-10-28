@@ -289,8 +289,9 @@ PyUnstable_ThreadState_ResetStackProtection(PyThreadState *tstate)
 
 
 /* The function _Py_EnterRecursiveCallTstate() only calls _Py_CheckRecursiveCall()
-   if the stack pointer is beyond c_stack_soft_limit. */
-int
+   if the stack pointer is beyond c_stack_soft_limit.  Not inlined: a cold
+   error path, opaque to the precise eval loop. */
+Py_NO_INLINE int
 _Py_CheckRecursiveCall(PyThreadState *tstate, const char *where)
 {
     _PyThreadStateImpl *_tstate = (_PyThreadStateImpl *)tstate;
@@ -702,7 +703,7 @@ PyEval_EvalFrameEx(PyFrameObject *f, int throwflag)
 /* WITH_EXCEPT_START's call of an __exit__ or __aexit__ with the type, the
  * value and the traceback of the exception val.  The traceback may be held
  * only by the argument array, which is in this frame: not inlined, so that
- * the frame is outside the eval loop's (_PyEvalActivation). */
+ * the frame is outside the precise eval loop's, and scanned. */
 Py_NO_INLINE PyObject *
 _PyEval_CallExitWithException(PyObject *exit_func, PyObject *exit_self,
                               PyObject *val)
@@ -718,18 +719,18 @@ _PyEval_CallExitWithException(PyObject *exit_func, PyObject *exit_self,
     PyObject *res = PyObject_Vectorcall(exit_func, stack + 2 - has_self,
                                         (3 + has_self) | PY_VECTORCALL_ARGUMENTS_OFFSET,
                                         NULL);
-    _PyGC_CLEAR_ARRAY(stack);
     return res;
 }
 
 /* Helper functions to keep the size of the largest uops down.
  *
  * The helpers that handlers call and that may run code are Py_NO_INLINE,
- * here and in ceval.h.  The collector does not scan the eval loop's own C
- * frame (_PyEvalActivation), and the cases generator checks only the
- * handlers' bodies: inlined, a helper's locals, which may hold the only
- * reference to what it made, as an argument array (VALUES_TO_OBJECTS)
- * holds the boxes of inline values, would be in that frame. */
+ * here and in ceval.h.  The eval loop's frame is precise, which the inline
+ * audit checks for every function inlined into it: inlined, a helper's
+ * locals, which may hold the only reference to what it made, as an argument
+ * array (VALUES_TO_OBJECTS) holds the boxes of inline values, would be in
+ * that frame.  Out of line, each is opaque and scanned until rung 2 makes
+ * it precise. */
 
 Py_NO_INLINE PyValue
 _Py_VectorCall_Values(
@@ -756,7 +757,11 @@ _Py_VectorCall_Values(
     return res;
 }
 
-Py_NO_INLINE PyValue
+/* Precise (note 11 section 4.1): its span holds the callable, the result
+ * and the boxes for the monitoring callbacks, so its frame is not scanned.
+ * An opaque frame here kept the stale words of earlier calls as roots
+ * (10a-1b.md, item 2's record). */
+Py_GC_PRECISE Py_NO_INLINE PyValue
 _Py_VectorCallInstrumentation_Values(
     PyValue callable,
     PyValue* arguments,
@@ -767,6 +772,10 @@ _Py_VectorCallInstrumentation_Values(
     _PyInstr* this_instr,
     PyThreadState* tstate)
 {
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_Append(&span, callable);
     PyObject* kwnames_o = PyValue_ObjectBorrow(kwnames);
     int positional_args = total_args;
     if (kwnames_o != NULL) {
@@ -777,11 +786,18 @@ _Py_VectorCallInstrumentation_Values(
         positional_args | PY_VECTORCALL_ARGUMENTS_OFFSET,
         kwnames_o);
     if (call_instrumentation) {
+        _PyValueSpan_Append(&span, res);
         // Boxes of an inline callable or first argument, for the monitoring
-        // callbacks, which this frame holds.
+        // callbacks: the span holds their pointers.
         PyObject *callable_o = PyValue_Object(callable);
+        if (callable_o != NULL) {
+            _PyValueSpan_AppendObject(&span, callable_o);
+        }
         PyObject *arg = total_args == 0 ? &_PyInstrumentation_MISSING
                                         : PyValue_Object(arguments[0]);
+        if (arg != NULL) {
+            _PyValueSpan_AppendObject(&span, arg);
+        }
         if (callable_o == NULL || arg == NULL) {
             res = PyValue_NULL;
         }
@@ -805,6 +821,7 @@ _Py_VectorCallInstrumentation_Values(
     for (int i = total_args - 1; i >= 0; i--) {
         arguments[i] = PyValue_NULL;
     }
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
@@ -1196,41 +1213,10 @@ dtrace_function_return(_PyInterpreterFrame *frame)
 }
 #endif
 
-/* The entry records the eval loop's activation, whose C frame the
- * collector does not scan (_PyEvalActivation): the registers as they are
- * here, which may hold the caller's references and which the eval loop
- * saves in its frame, and the stack pointer, above which the eval loop's
- * frame begins.  _PyEval_EvalFrameDefault() records where its frame ends;
- * entered otherwise, through a PEP 523 hook, it records nothing and its
- * frame is scanned. */
-Py_NO_INLINE PyValue
-_PyEval_EvalFrameEntry(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                       int throwflag)
-{
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
-    _PyEvalActivation act;
-    _PyGC_CaptureRegisters(act.regs);
-    act.lo = 0;
-    act.hi = _PyGC_StackAddress();
-    act.prev = ts->gc_trace.activation;
-    ts->gc_trace.activation = &act;
-    PyValue res = _PyEval_EvalFrameDefault(tstate, frame, throwflag);
-    ts->gc_trace.activation = act.prev;
-    return res;
-}
-
-Py_NO_INLINE PyValue _Py_HOT_FUNCTION DONT_SLP_VECTORIZE
+Py_GC_PRECISE Py_NO_INLINE PyValue _Py_HOT_FUNCTION DONT_SLP_VECTORIZE
 _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     _Py_EnsureTstateNotNULL(tstate);
-    {
-        // The stack pointer is fixed in the body: below it are callees
-        _PyEvalActivation *act =
-            ((_PyThreadStateImpl *)tstate)->gc_trace.activation;
-        if (act != NULL && act->lo == 0) {
-            act->lo = _PyGC_StackAddress();
-        }
-    }
     check_invalid_reentrancy();
     CALL_STAT_INC(pyeval_calls);
     _PyGC_CHECK_NOT_SWEEPING(tstate, "runs Python code");
@@ -1681,6 +1667,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func,
         for (j = n; j < argcount; j++) {
         }
     }
+    _PyGC_INJECT(tstate, _PyGC_SITE_INIT_LOCALS);
 
     /* Handle keyword arguments */
     if (kwnames != NULL) {
@@ -1887,6 +1874,10 @@ clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
 {
     assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
     PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
+    // Unlinked, the frame no longer leads the collector to its generator.
+    _PyValueRoot gen_root;
+    _PyThreadState_PushValueRoot(tstate, &gen_root);
+    gen_root.object = (PyObject *)gen;
     FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_CLEARED);
     assert(tstate->exc_info == &gen->gi_exc_state);
     tstate->exc_info = gen->gi_exc_state.previous_item;
@@ -1897,6 +1888,7 @@ clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
     _PyFrame_ClearExceptCode(frame);
     Py_END_CRITICAL_SECTION();
     _PyErr_ClearExcState(&gen->gi_exc_state);
+    _PyThreadState_PopValueRoot(tstate, &gen_root);
     // gh-143939: There must not be any escaping calls between setting
     // the generator return kind and returning from _PyEval_EvalFrame.
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
@@ -1978,8 +1970,9 @@ fail:
 
 /* Same as _PyEvalFramePushAndInit but takes an args tuple and kwargs dict.
    Steals references to func, callargs and kwargs.
-*/
-_PyInterpreterFrame *
+   Opaque, and so scanned, until _PyStack_UnpackDict() returns its names in
+   a span, like vectorcall_call_dict() in Objects/call.c (10a-2.md). */
+Py_NO_INLINE _PyInterpreterFrame *
 _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
     PyObject *locals, Py_ssize_t nargs, PyObject *callargs, PyObject *kwargs, _PyInterpreterFrame *previous)
 {

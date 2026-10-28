@@ -291,8 +291,7 @@ typedef struct {
     {"stack", "regs", "mem", "shallow", "data", "structs"}
 
 #define _PyGC_ROOT_STATS_FIELDS(X) \
-    X(collections) X(threads) X(activations_skipped) X(eval_words_skipped) \
-    X(frames_walked) X(cache_hits) X(cache_misses) X(cache_flushes) \
+    X(collections) X(threads) X(frames_walked) X(cache_hits) X(cache_misses) X(cache_flushes) \
     X(fallbacks) X(unpinned) X(verify_q) X(verify_candidates) X(precise_ns) \
     X(stack_ns) X(data_ns) X(structs_ns) X(roots_ns)
 
@@ -350,6 +349,32 @@ PyAPI_FUNC(int) _PyGC_TraceLiveRootsOf(PyThreadState *tstate, uintptr_t addr);
  * the caller's stack need not hold its address. */
 PyAPI_FUNC(int) _PyGC_TraceLiveRootsOfHidden(
     PyThreadState *tstate, const volatile uintptr_t *hidden, uintptr_t mask);
+
+/* PYTHON_GCSTACKHITS=1 (work/10a-1.md, next to retain mode): which frame
+ * holds an object.  Each live mark lists every object that it reaches first
+ * from a conservatively scanned C stack or register word, the word's
+ * object first and then what the mark reaches through it, with the word
+ * and the frame that the stack walk gives the word to.  What a word reaches
+ * through a PyMem block it points to is scanned later and not listed. */
+typedef struct {
+    uintptr_t op;           // the object
+    uintptr_t word;         // the root word's address, or 0 for a register
+    uintptr_t value;        // the word: op, or the object op was reached from
+    uintptr_t pc, sp, cfa;  // the word's frame, by the walk; pc 0 if none
+    int scan_class;         // _PyGC_SCAN_STACK or _PyGC_SCAN_REGS
+    int64_t collection;     // the live mark's number, from 1
+    char type_name[48];     // op's type when it was listed
+} _PyGCStackHit;
+
+/* The hits listed since the last clear, and the number dropped for want
+ * of memory; NULL and 0 unless PYTHON_GCSTACKHITS is set.  Export for
+ * _testinternalcapi. */
+PyAPI_FUNC(const _PyGCStackHit *) _PyGC_TraceStackHits(
+    PyInterpreterState *interp, size_t *n, int64_t *dropped);
+PyAPI_FUNC(void) _PyGC_TraceClearStackHits(PyInterpreterState *interp);
+/* "image+offset (function+offset)" for pc, through dladdr(), the function
+ * where the image exports it.  Export for _testinternalcapi. */
+PyAPI_FUNC(void) _PyGC_TraceOwnerOf(uintptr_t pc, char *buf, size_t size);
 
 /* For tests of the segment map that the live mark looks objects up in: the
  * object found at addr (or containing it, if interior is set), or 0; four
@@ -424,49 +449,6 @@ extern PyThreadState *_PyGC_LiveKeptThreads(PyInterpreterState *interp);
 /* Free the block of a dead object that the sweep has deallocated
  * (PyObject_Free() without looking the block up). */
 extern void _PyGC_FreeDeadBlock(PyObject *op, void *block);
-
-/* Zero nbytes of the C stack below the caller's frame, where the frames
- * of its next callees go.  Their padding, and spill slots that a call
- * writes only on some paths, would otherwise keep the stale words that
- * earlier calls left there, which the scan takes for roots.  On x86-64 the
- * stores are inline assembly below the caller's stack pointer, so that they
- * reach the top of the region: a clearing function's own frame would cover
- * it, and the next callee's padding would land on the words that frame
- * left (test_asyncio.test_futures2, test_gc).  The caller makes calls, so
- * nothing of its own lives below its stack pointer. */
-extern void _PyGC_ClearStackBuffer(size_t nbytes);
-
-static inline void
-_PyGC_ClearStackBelow(size_t nbytes)
-{
-#if defined(__x86_64__) && defined(__GNUC__)
-    void *dst;
-    unsigned long count;
-    __asm__ volatile("mov %%rsp, %0\n\t"
-                     "sub %2, %0\n\t"
-                     "xor %%eax, %%eax\n\t"
-                     "rep stosq"
-                     : "=&D"(dst), "=&c"(count)
-                     : "r"(nbytes), "1"(nbytes / 8)
-                     : "rax", "memory");
-#else
-    _PyGC_ClearStackBuffer(nbytes);
-#endif
-}
-
-/* Before a collection: the collector's entry frames go below the caller. */
-static inline void
-_PyGC_LiveClearStack(void)
-{
-    _PyGC_ClearStackBelow(16 * 1024);
-}
-
-/* At the eval loop's entry, for its frame and the entry's. */
-static inline void
-_PyGC_LiveClearEvalStack(void)
-{
-    _PyGC_ClearStackBelow(1024);
-}
 
 /* The root phase's counters, summed over the collections of interp, and
  * those of its last collection.  Export for _testinternalcapi. */

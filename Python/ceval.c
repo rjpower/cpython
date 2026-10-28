@@ -2065,7 +2065,9 @@ fail:
    complicated for inlining).
 */
 
-Py_NO_INLINE int
+/* Precise.  The span's layout: exc_value, match_type, then the wrapping
+   group, or split()'s pair and its first item. */
+Py_GC_PRECISE Py_NO_INLINE int
 _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
                             PyObject *match_type, PyObject **match, PyObject **rest)
 {
@@ -2075,6 +2077,13 @@ _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
         return 0;
     }
     assert(PyExceptionInstance_Check(exc_value));
+    PyThreadState *tstate = _PyThreadState_GET();
+    int res = -1;
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, exc_value);
+    _PyValueSpan_AppendObject(&span, match_type);
 
     if (PyErr_GivenExceptionMatches(exc_value, match_type)) {
         /* Full match of exc itself */
@@ -2086,23 +2095,22 @@ _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
             /* naked exception - wrap it */
             PyObject *excs = PyTuple_Pack(1, exc_value);
             if (excs == NULL) {
-                return -1;
+                goto done;
             }
             PyObject *wrapped = _PyExc_CreateExceptionGroup("", excs);
             Py_DECREF(excs);
             if (wrapped == NULL) {
-                return -1;
+                goto done;
             }
+            _PyValueSpan_AppendObject(&span, wrapped);
             PyFrameObject *f = _PyFrame_GetFrameObject(frame);
             if (f == NULL) {
-                Py_DECREF(wrapped);
-                return -1;
+                goto done;
             }
 
             PyObject *tb = _PyTraceBack_FromFrame(NULL, f);
             if (tb == NULL) {
-                Py_DECREF(wrapped);
-                return -1;
+                goto done;
             }
             PyException_SetTraceback(wrapped, tb);
             Py_DECREF(tb);
@@ -2110,7 +2118,8 @@ _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
             *match = wrapped;
         }
         *rest = Py_NewRef(Py_None);
-        return 0;
+        res = 0;
+        goto done;
     }
 
     /* exc_value does not match match_type.
@@ -2120,15 +2129,15 @@ _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
         PyObject *pair = PyObject_CallMethod(exc_value, "split", "(O)",
                                              match_type);
         if (pair == NULL) {
-            return -1;
+            goto done;
         }
+        _PyValueSpan_AppendObject(&span, pair);
 
         if (!PyTuple_CheckExact(pair)) {
             PyErr_Format(PyExc_TypeError,
                          "%.200s.split must return a tuple, not %.200s",
                          Py_TYPE(exc_value)->tp_name, Py_TYPE(pair)->tp_name);
-            Py_DECREF(pair);
-            return -1;
+            goto done;
         }
 
         // allow tuples of length > 2 for backwards compatibility
@@ -2137,19 +2146,25 @@ _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
                          "%.200s.split must return a 2-tuple, "
                          "got tuple of size %zd",
                          Py_TYPE(exc_value)->tp_name, PyTuple_GET_SIZE(pair));
-            Py_DECREF(pair);
-            return -1;
+            goto done;
         }
 
-        *match = Py_NewRef(PyTuple_GET_ITEM(pair, 0));
+        // An inline item is boxed, so the first is in the span while the
+        // second is read
+        PyObject *m = PyTuple_GET_ITEM(pair, 0);
+        _PyValueSpan_AppendObject(&span, m);
         *rest = Py_NewRef(PyTuple_GET_ITEM(pair, 1));
-        Py_DECREF(pair);
-        return 0;
+        *match = Py_NewRef(m);
+        res = 0;
+        goto done;
     }
     /* no match */
     *match = Py_NewRef(Py_None);
     *rest = Py_NewRef(exc_value);
-    return 0;
+    res = 0;
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 /* Iterate v argcnt times and store the results on the stack (via decreasing
@@ -2159,7 +2174,9 @@ _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
    with a variable target.
 */
 
-Py_NO_INLINE int
+/* Precise.  The span's layout: v, it, and the slot that each item is read
+   into before it moves to the stack. */
+Py_GC_PRECISE Py_NO_INLINE int
 _PyEval_UnpackIterableValues(PyThreadState *tstate, PyObject *v,
                        int argcnt, int argcntafter, PyValue *sp)
 {
@@ -2168,6 +2185,11 @@ _PyEval_UnpackIterableValues(PyThreadState *tstate, PyObject *v,
     PyObject *it;  /* iter(v) */
     PyObject *l = NULL; /* variable list */
     assert(v != NULL);
+    int res = 0;
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, v);
 
     it = PyObject_GetIter(v);
     if (it == NULL) {
@@ -2178,12 +2200,13 @@ _PyEval_UnpackIterableValues(PyThreadState *tstate, PyObject *v,
                           "cannot unpack non-iterable %.200s object",
                           Py_TYPE(v)->tp_name);
         }
-        return 0;
+        goto done;
     }
+    _PyValueSpan_AppendObject(&span, it);
+    _PyValueSpan_Append(&span, PyValue_NULL);
 
     for (; i < argcnt; i++) {
-        PyValue item;
-        if (PyIter_NextValue(PyValue_FromObject(it), &item) <= 0) {
+        if (PyIter_NextValue(PyValue_FromObject(it), &slots[2]) <= 0) {
             /* Iterator done, via error or exhaustion. */
             if (!_PyErr_Occurred(tstate)) {
                 if (argcntafter == -1) {
@@ -2201,18 +2224,18 @@ _PyEval_UnpackIterableValues(PyThreadState *tstate, PyObject *v,
             }
             goto Error;
         }
-        *--sp = item;
+        *--sp = slots[2];
     }
 
     if (argcntafter == -1) {
         /* We better have exhausted the iterator now. */
-        PyValue w;
-        int status = PyIter_NextValue(PyValue_FromObject(it), &w);
+        int status = PyIter_NextValue(PyValue_FromObject(it), &slots[2]);
         if (status < 0) {
             goto Error;
         }
         if (status == 0) {
-            return 1;
+            res = 1;
+            goto done;
         }
 
         if (PyList_CheckExact(v) || PyTuple_CheckExact(v)
@@ -2251,8 +2274,8 @@ _PyEval_UnpackIterableValues(PyThreadState *tstate, PyObject *v,
     }
     /* Resize the list. */
     Py_SET_SIZE(l, ll - argcntafter);
-    Py_DECREF(it);
-    return 1;
+    res = 1;
+    goto done;
 
 Error:
     /* The slots that the values went to are temporaries, which hold NULL
@@ -2260,8 +2283,9 @@ Error:
     for (; i > 0; i--, sp++) {
         *sp = PyValue_NULL;
     }
-    Py_XDECREF(it);
-    return 0;
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 
@@ -2847,44 +2871,37 @@ inline_slice_bounds(PyValue start, PyValue stop,
     return true;
 }
 
-/* Store in *box a new box if ref holds an inline value, else NULL. Return a
-   borrowed reference to the object ref holds or to the box, or NULL with an
-   exception set if boxing fails. */
-static PyObject *
-borrow_or_box(PyValue ref, PyObject **box)
-{
-    if (PyValue_IsInline(ref)) {
-        *box = PyValue_Object(ref);
-        return *box;
-    }
-    *box = NULL;
-    return PyValue_ObjectBorrow(ref);
-}
-
 // container[start:stop] for a list, tuple or str whose bounds are not both
-// inline ints or None, which these helpers take as objects.
-static PyObject *
+// inline ints or None, which these helpers take as objects.  Precise: the
+// span's layout is the container, the two bounds and the start's box,
+// which is held while the stop is boxed.
+Py_GC_PRECISE static PyObject *
 binary_slice_boxed(PyObject *(*slice)(PyObject *, PyObject *, PyObject *),
                    PyObject *container, PyValue start_st, PyValue stop_st)
 {
-    PyObject *start_box, *stop_box = NULL, *res = NULL;
-    PyObject *start_o = borrow_or_box(start_st, &start_box);
-    if (start_o == NULL) {
-        goto done;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, container);
+    _PyValueSpan_Append(&span, start_st);
+    _PyValueSpan_Append(&span, stop_st);
+    PyObject *res = NULL;
+    PyObject *start_o = PyValue_Object(start_st);
+    if (start_o != NULL) {
+        _PyValueSpan_AppendObject(&span, start_o);
+        PyObject *stop_o = PyValue_Object(stop_st);
+        if (stop_o != NULL) {
+            res = slice(container, start_o, stop_o);
+        }
     }
-    PyObject *stop_o = borrow_or_box(stop_st, &stop_box);
-    if (stop_o == NULL) {
-        goto done;
-    }
-    res = slice(container, start_o, stop_o);
-done:
-    Py_XDECREF(start_box);
-    Py_XDECREF(stop_box);
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-// container[start:stop], for BINARY_SLICE.
-Py_NO_INLINE PyObject *
+// container[start:stop], for BINARY_SLICE.  Precise: the slow path's span
+// holds the container while the slice is made.
+Py_GC_PRECISE Py_NO_INLINE PyObject *
 _PyEval_BinarySlice(PyValue container_st, PyValue start_st, PyValue stop_st)
 {
     Py_ssize_t start, stop;
@@ -2920,8 +2937,14 @@ _PyEval_BinarySlice(PyValue container_st, PyValue start_st, PyValue stop_st)
                                       start_st, stop_st);
         }
     }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_Append(&span, container_st);
     // A slice holds values, so its bounds are not boxed.
     PyObject *slice = _PySlice_FromValues(start_st, stop_st, PyValue_NULL);
+    _PyThreadState_PopValueRoot(tstate, &span);
     if (slice == NULL) {
         return NULL;
     }
@@ -2932,7 +2955,9 @@ _PyEval_BinarySlice(PyValue container_st, PyValue start_st, PyValue stop_st)
 
 // container[start:stop] = v, for STORE_SLICE. Return 0, or -1 with an
 // exception set.
-Py_NO_INLINE int
+/* Precise: the slow path's span holds v and the container while the slice
+   is made. */
+Py_GC_PRECISE Py_NO_INLINE int
 _PyEval_StoreSlice(PyValue v_st, PyValue container_st,
                    PyValue start_st, PyValue stop_st)
 {
@@ -2944,8 +2969,15 @@ _PyEval_StoreSlice(PyValue v_st, PyValue container_st,
         return _PyList_StoreSlice(PyValue_ObjectBorrow(container_st), start, stop,
                                   PyValue_ObjectBorrow(v_st));
     }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_Append(&span, v_st);
+    _PyValueSpan_Append(&span, container_st);
     // A slice holds values, so its bounds are not boxed.
     PyObject *slice = _PySlice_FromValues(start_st, stop_st, PyValue_NULL);
+    _PyThreadState_PopValueRoot(tstate, &span);
     if (slice == NULL) {
         return -1;
     }
@@ -2957,7 +2989,9 @@ _PyEval_StoreSlice(PyValue v_st, PyValue container_st,
    An int or float has no __class__ of its own, so against an exact type, or
    a tuple of them, the answer is that of PyObject_IsInstance(), whose
    object_isinstance() then tests the subtype relation alone. */
-Py_NO_INLINE int
+/* Precise: the slow path's span holds the class and the instance, boxed if
+   it is inline, while the class is boxed. */
+Py_GC_PRECISE Py_NO_INLINE int
 _PyEval_IsInstanceValue(PyValue inst_st, PyValue cls_st)
 {
     if (PyValue_IsInline(inst_st) && _PyValue_IsPointerSpace(cls_st)) {
@@ -2967,10 +3001,19 @@ _PyEval_IsInstanceValue(PyValue inst_st, PyValue cls_st)
             return PyType_IsSubtype(type, (PyTypeObject *)cls);
         }
         if (PyTuple_CheckExact(cls)) {
+            // The items as values: an inline item is no type, and is not
+            // boxed.
             Py_ssize_t n = PyTuple_GET_SIZE(cls);
             Py_ssize_t i = 0;
-            for (; i < n && PyType_CheckExact(PyTuple_GET_ITEM(cls, i)); i++) {
-                if (PyType_IsSubtype(type, (PyTypeObject *)PyTuple_GET_ITEM(cls, i))) {
+            for (; i < n; i++) {
+                PyValue item = PyTuple_GET_VALUE(cls, i);
+                if (!_PyValue_IsPointerSpace(item)
+                    || !PyType_CheckExact(PyValue_ObjectBorrow(item)))
+                {
+                    break;
+                }
+                if (PyType_IsSubtype(type,
+                                     (PyTypeObject *)PyValue_ObjectBorrow(item))) {
                     return 1;
                 }
             }
@@ -2979,17 +3022,21 @@ _PyEval_IsInstanceValue(PyValue inst_st, PyValue cls_st)
             }
         }
     }
-    PyObject *inst_box, *cls_box = NULL;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_Append(&span, cls_st);
     int res = -1;
-    PyObject *inst = borrow_or_box(inst_st, &inst_box);
+    PyObject *inst = PyValue_Object(inst_st);
     if (inst != NULL) {
-        PyObject *cls = borrow_or_box(cls_st, &cls_box);
+        _PyValueSpan_AppendObject(&span, inst);
+        PyObject *cls = PyValue_Object(cls_st);
         if (cls != NULL) {
             res = PyObject_IsInstance(inst, cls);
         }
     }
-    Py_XDECREF(inst_box);
-    Py_XDECREF(cls_box);
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
@@ -3332,15 +3379,18 @@ done:
 #define CANNOT_EXCEPT_STAR_EG "catching ExceptionGroup with except* "\
                               "is not allowed. Use except instead."
 
-Py_NO_INLINE int
+/* Precise: the items are read as values, so none is boxed, and the only
+   collecting call is the last. */
+Py_GC_PRECISE Py_NO_INLINE int
 _PyEval_CheckExceptTypeValid(PyThreadState *tstate, PyObject* right)
 {
     if (PyTuple_Check(right)) {
         Py_ssize_t i, length;
         length = PyTuple_GET_SIZE(right);
         for (i = 0; i < length; i++) {
-            PyObject *exc = PyTuple_GET_ITEM(right, i);
-            if (!PyExceptionClass_Check(exc)) {
+            PyValue exc = PyTuple_GET_VALUE(right, i);
+            if (!_PyValue_IsPointerSpace(exc)
+                || !PyExceptionClass_Check(PyValue_ObjectBorrow(exc))) {
                 _PyErr_SetString(tstate, PyExc_TypeError,
                     CANNOT_CATCH_MSG);
                 return -1;
@@ -3357,34 +3407,37 @@ _PyEval_CheckExceptTypeValid(PyThreadState *tstate, PyObject* right)
     return 0;
 }
 
-Py_NO_INLINE int
+/* Precise: the span holds right while its items are checked.  The check
+   above leaves only exception classes in a tuple, so its items are objects,
+   which are not boxed. */
+Py_GC_PRECISE Py_NO_INLINE int
 _PyEval_CheckExceptStarTypeValid(PyThreadState *tstate, PyObject* right)
 {
-    if (_PyEval_CheckExceptTypeValid(tstate, right) < 0) {
-        return -1;
-    }
-
-    /* reject except *ExceptionGroup */
-
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, right);
     int is_subclass = 0;
-    if (PyTuple_Check(right)) {
+    if (_PyEval_CheckExceptTypeValid(tstate, right) < 0) {
+        is_subclass = -1;
+    }
+    /* reject except *ExceptionGroup */
+    else if (PyTuple_Check(right)) {
         Py_ssize_t length = PyTuple_GET_SIZE(right);
         for (Py_ssize_t i = 0; i < length; i++) {
-            PyObject *exc = PyTuple_GET_ITEM(right, i);
+            PyObject *exc = PyValue_ObjectBorrow(PyTuple_GET_VALUE(right, i));
             is_subclass = PyObject_IsSubclass(exc, PyExc_BaseExceptionGroup);
-            if (is_subclass < 0) {
-                return -1;
-            }
-            if (is_subclass) {
+            if (is_subclass != 0) {
                 break;
             }
         }
     }
     else {
         is_subclass = PyObject_IsSubclass(right, PyExc_BaseExceptionGroup);
-        if (is_subclass < 0) {
-            return -1;
-        }
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
+    if (is_subclass < 0) {
+        return -1;
     }
     if (is_subclass) {
         _PyErr_SetString(tstate, PyExc_TypeError,
@@ -3745,22 +3798,34 @@ type_has_special_method(PyTypeObject *cls, PyObject *name)
     return r != NULL && Py_TYPE(r)->tp_descr_get != NULL;
 }
 
-Py_NO_INLINE int
+/* Precise: the span holds self's type, which a lookup's code can replace
+   by assigning to __class__. */
+Py_GC_PRECISE Py_NO_INLINE int
 _PyEval_SpecialMethodCanSuggest(PyObject *self, int oparg)
 {
     PyTypeObject *type = Py_TYPE(self);
+    PyObject *first, *second;
     switch (oparg) {
         case SPECIAL___ENTER__:
-        case SPECIAL___EXIT__: {
-            return type_has_special_method(type, &_Py_ID(__aenter__))
-                   && type_has_special_method(type, &_Py_ID(__aexit__));
-        }
+        case SPECIAL___EXIT__:
+            first = &_Py_ID(__aenter__);
+            second = &_Py_ID(__aexit__);
+            break;
         case SPECIAL___AENTER__:
-        case SPECIAL___AEXIT__: {
-            return type_has_special_method(type, &_Py_ID(__enter__))
-                   && type_has_special_method(type, &_Py_ID(__exit__));
-        }
+        case SPECIAL___AEXIT__:
+            first = &_Py_ID(__enter__);
+            second = &_Py_ID(__exit__);
+            break;
         default:
             Py_FatalError("unsupported special method");
     }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)type);
+    int res = type_has_special_method(type, first)
+              && type_has_special_method(type, second);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }

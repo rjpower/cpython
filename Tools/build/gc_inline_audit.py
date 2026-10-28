@@ -58,7 +58,8 @@ OUTLINED_OPAQUE = {
     "collect":
         "the collection, which runs below the collector's entry: the walk "
         "of the collecting thread's stack starts above it "
-        "(collect_from_entry())",
+        "(collect_from_entry()); Py_NO_INLINE, so that no build folds it "
+        "into collect_pass()'s precise frame",
     "set_update_local":
         "Py_NO_INLINE: its static callees, the merges, the resize and the "
         "entry adds, are not precise, so it is opaque in every build",

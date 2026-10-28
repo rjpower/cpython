@@ -1176,7 +1176,11 @@ record_stats(GCState *gc, const struct gc_generation_stats *cur)
    limit stays at 0, so that each allocation reaches the count. */
 static int stress_every = 0;
 
-static Py_ssize_t
+/* Not inlined: its frame is below the collector's entry, so the walk never
+   scans it, and it stays opaque (OUTLINED_OPAQUE in gc_inline_audit.py).
+   Inlined, its body would be part of collect_pass()'s precise frame, which
+   a collection from the queue's code walks. */
+static Py_NO_INLINE Py_ssize_t
 collect(PyThreadState *tstate, _PyGC_Reason reason)
 {
     PyInterpreterState *interp = tstate->interp;

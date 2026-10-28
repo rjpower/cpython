@@ -193,7 +193,7 @@ _PyObject_CallNoArgsTstate(PyThreadState *tstate, PyObject *func) {
 
 
 // Private static inline function variant of public PyObject_CallNoArgs()
-static inline PyObject *
+Py_GC_PRECISE static inline PyObject *
 _PyObject_CallNoArgs(PyObject *func) {
     EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API, func);
     PyThreadState *tstate = _PyThreadState_GET();

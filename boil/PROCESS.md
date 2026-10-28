@@ -81,10 +81,12 @@ quick-test. Each rung goes through all of it.
    with the commit it was produced at, the measurements against the
    before records, the hazards found and how each was traced, the
    hand-off list with an owner per item.
-4. **Landing review.** The coordinator runs `boil/tools/review.sh` on the
-   as-built record with the diff of the rung (`git diff <base>..<head>`)
-   and the gate lines as context, and writes
-   `boil/design/work/reviews/<step>-<rung>-landing.md`. The reviewer
+4. **Landing review.** The coordinator runs `boil/tools/landing_review.sh
+   CHECKOUT BASE HEAD WORKDOC` on a detached checkout of the landing
+   branch's head; the reviewer reads the as-built record, the gate lines
+   and the diff against the integration head, and the script writes
+   `boil/design/work/reviews/<step>-<rung>-landing.md`, committed on the
+   landing branch. The reviewer
    reads what was built, not the design: deviations without reasons,
    gate lines produced before a code change, hazards dismissed rather
    than traced, deleted invariants, tests that assert less than the
@@ -214,13 +216,19 @@ calling it unrelated.
 
 Tracing order for a retention or refcycle failure (an object alive that
 the test expects dead): `PYTHON_GCSTACKHITS=1` with
-`_testinternalcapi.gc_stack_hits()` first, which names the frame and
-offset of the conservative word that holds it; then `PYTHON_GCVERIFY=
+`_testinternalcapi.gc_stack_hits(addr)` first, called with the address
+of the retained object (the no-argument form lists nothing), which names
+the owning frame and offset of the conservative word that holds it; then `PYTHON_GCVERIFY=
 retain` to show the object is retained rather than freed; then the fix,
 which is a span over the parameter and `@gc_precise` or `Py_GC_PRECISE`
 on the frame, proven by the same tool showing no hit (2026-10-28,
 test_taskgroups: one stale word in the `gc.get_referrers` wrapper's
-frame, fixed by a one-slot span and the directive). For a crash under
+frame, fixed by a one-slot span and the directive; 2026-10-28,
+test_inline_collection_skips_eval_loop at the 10a landing: a stale word
+in the opaque frame of `_PyList_FromValues`, exposed by the merge's stack
+layout, fixed by making the allocator entry precise). A probe's result
+depends on the stack layout under the frames it exercises, so a landing
+can re-expose one that passed on both branches. For a crash under
 kill or stress: the trap type's record names the owner and the killing
 collection; a death in `PyErr_FormatUnraisable` during another
 interpreter's init is finding B (step 7a), identified by the C stack and

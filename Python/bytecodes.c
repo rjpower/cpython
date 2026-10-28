@@ -1920,6 +1920,7 @@ dummy_func(
             STORE_ATTR_WITH_HINT,
             STORE_ATTR_SHAPE,
             STORE_ATTR_SHAPE_TRANSITION,
+            STORE_ATTR_SHAPE_POLY,
         };
 
         specializing op(_SPECIALIZE_STORE_ATTR, (v, owner -- v, owner)) {
@@ -2559,9 +2560,8 @@ dummy_func(
             LOAD_ATTR_PROPERTY,
             LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN,
             LOAD_ATTR_METHOD_SHAPE,
-            LOAD_ATTR_METHOD_NO_DICT,
+            LOAD_ATTR_METHOD_LAZY_DICT,
             LOAD_ATTR_NONDESCRIPTOR_SHAPE,
-            LOAD_ATTR_NONDESCRIPTOR_NO_DICT,
             LOAD_ATTR_SHAPE,
             LOAD_ATTR_SHAPE_POLY,
         };
@@ -2907,6 +2907,47 @@ dummy_func(
             _GUARD_SHAPE_VERSION +
             _GUARD_SLOT_KIND +
             _STORE_ATTR_SHAPE_TRANSITION +
+            POP_TOP;
+
+        /* A store at two to four shapes, of one type or several, each a row
+         * of the site's poly table found by _GUARD_SHAPE_POLY (note 12
+         * section 6.1).  A STORE_ATTR_SHAPE row holds the field's offset in
+         * index; a STORE_ATTR_SHAPE_TRANSITION row also holds the shape
+         * after the store in descr, a shape of the row's live type.  Each
+         * holds the field's kind.  A row's kind may be narrower than its
+         * field's after a generalisation that renewed only an ADD row's
+         * target; kinds only widen, so the row admits fewer values, all of
+         * which the field takes.  Nothing here allocates. */
+        op(_STORE_ATTR_SHAPE_POLY, (value, owner -- o)) {
+            PyObject *owner_o = PyValue_ObjectBorrow(owner);
+            _PyFbPoly *poly = _PyFrame_FbPoly(frame, FB_COUNTER());
+            int row = _PyFb_ShapeRow(poly, _PyObject_SHAPE(owner_o));
+            assert(row >= 0);
+            EXIT_IF(!_PyValue_FitsKind(value, poly->slot_kind[row]));
+            PyValue *value_ptr = (PyValue *)((char *)owner_o + poly->index[row]);
+            STAT_INC(STORE_ATTR, hit);
+            if (poly->handler[row] == STORE_ATTR_SHAPE) {
+                assert(!PyValue_IsNull(*value_ptr));
+                *value_ptr = value;
+            }
+            else {
+                // The new field's slot, then the header, as in
+                // _STORE_ATTR_SHAPE_TRANSITION.
+                assert(poly->handler[row] == STORE_ATTR_SHAPE_TRANSITION);
+                assert(PyValue_IsNull(*value_ptr));
+                *value_ptr = value;
+                _PyObject_SetShape(owner_o, (_PyShape *)poly->descr[row]);
+            }
+            DEAD(value);
+            o = owner;
+            DEAD(owner);
+        }
+
+        macro(STORE_ATTR_SHAPE_POLY) =
+            unused/1 +
+            _GUARD_SHAPE_POLY +
+            unused/3 +
+            _STORE_ATTR_SHAPE_POLY +
             POP_TOP;
 
         op(_STORE_ATTR_WITH_HINT, (dictoffset/0, hint/1, value, owner -- o)) {
@@ -3840,22 +3881,21 @@ dummy_func(
             unused/2 +
             _LOAD_ATTR_METHOD_SHAPE;
 
-        op(_LOAD_ATTR_METHOD_NO_DICT, (descr/4, owner -- attr, self)) {
-            assert(oparg & 1);
-            assert(Py_TYPE(PyValue_ObjectBorrow(owner))->tp_dictoffset == 0);
-            STAT_INC(LOAD_ATTR, hit);
-            assert(descr != NULL);
-            assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-            attr = PyValue_FromObject(descr);
-            self = owner;
-            DEAD(owner);
+        // The method of an object whose instance dict is not made yet: the
+        // NULL dict word proves that no instance attribute shadows it (note
+        // 12 section 6.2).
+        op(_CHECK_DICT_WORD_NULL, (dictoffset/0, owner -- owner)) {
+            PyObject *owner_o = PyValue_ObjectBorrow(owner);
+            EXIT_IF(_PyObject_DictAt(owner_o, (int32_t)dictoffset) != NULL);
         }
 
-        macro(LOAD_ATTR_METHOD_NO_DICT) =
+        macro(LOAD_ATTR_METHOD_LAZY_DICT) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
+            _GUARD_SHAPE +
+            _GUARD_SHAPE_VERSION +
+            _CHECK_DICT_WORD_NULL +
             unused/2 +
-            _LOAD_ATTR_METHOD_NO_DICT;
+            _LOAD_ATTR_METHOD_SHAPE;
 
         op(_LOAD_ATTR_NONDESCRIPTOR_SHAPE, (attr_value/4, owner -- attr)) {
             assert((oparg & 1) == 0);
@@ -3872,20 +3912,6 @@ dummy_func(
             unused/2 +
             _LOAD_ATTR_NONDESCRIPTOR_SHAPE;
 
-        op(_LOAD_ATTR_NONDESCRIPTOR_NO_DICT, (attr_value/4, owner -- attr)) {
-            assert((oparg & 1) == 0);
-            assert(PyValue_Type(owner)->tp_dictoffset == 0);
-            STAT_INC(LOAD_ATTR, hit);
-            assert(!PyValue_IsNull(attr_value));
-            DEAD(owner);
-            attr = attr_value;
-        }
-
-        macro(LOAD_ATTR_NONDESCRIPTOR_NO_DICT) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            unused/2 +
-            _LOAD_ATTR_NONDESCRIPTOR_NO_DICT;
 
         // Feedback: func_version
         // CALL_INTRINSIC_1/2, CALL_KW, and CALL_FUNCTION_EX aren't members!

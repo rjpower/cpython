@@ -2002,6 +2002,310 @@ class ShapePolyTests(unittest.TestCase):
             gc.collect()
         self.assertEqual([r() for r in refs], [None] * len(refs))
 
+    def test_method_rows_of_types_without_a_dict(self):
+        # Their objects have the root shape, so their method rows are shape
+        # rows (note 12 section 6.1).
+        @reset_code
+        def call(o):
+            return o.__len__()
+        objects = [[1], collections.deque([1, 2]), (1, 2, 3), "abcd"]
+        self.warm(call, objects, [1, 2, 3, 4])
+        self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(call))
+
+    def test_class_value_on_a_type_without_a_dict(self):
+        class S:
+            __slots__ = ()
+            m = lambda self: "method"
+            v = "class"
+        @reset_code
+        def call(o):
+            return o.m()
+        @reset_code
+        def get(o):
+            return o.v
+        self.warm(call, [S()], ["method"])
+        self.warm(get, [S()], ["class"])
+        self.assertIn("LOAD_ATTR_METHOD_SHAPE", opnames(call))
+        self.assertIn("LOAD_ATTR_NONDESCRIPTOR_SHAPE", opnames(get))
+        S.v = "new"
+        S.m = lambda self: "new method"
+        self.assertEqual((call(S()), get(S())), ("new method", "new"))
+
+
+def stored(classes):
+    """Factories of fresh objects of each class, the first with x already,
+    the others without: a REPLACE row, then ADD rows."""
+    def made(cls, i):
+        def make():
+            o = cls()
+            if i == 0:
+                o.x = 0
+            return o
+        return make
+    return [made(cls, i) for i, cls in enumerate(classes)]
+
+
+def store_classes(n):
+    return [type(f"P{i}", (), {}) for i in range(n)]
+
+
+@cpython_only
+@requires_specialization
+class StorePolyTests(unittest.TestCase):
+    """STORE_ATTR_SHAPE_POLY: a store at two to four shapes, of one type or
+    several, each a REPLACE or an ADD (note 12 section 6.1)."""
+
+    def warm(self, put, factories, values, rounds=2 * COOLDOWN):
+        out = []
+        for _ in range(rounds):
+            out = []
+            for make, v in zip(factories, values):
+                o = make()
+                put(o, v)
+                self.assertEqual(o.x, v)
+                out.append(o)
+        return out
+
+    def test_replace_rows(self):
+        for n in (2, 3, 4):
+            with self.subTest(shapes=n):
+                @reset_code
+                def put(o, v):
+                    o.x = v
+                P, objects = shaped(n)
+                for _ in range(2 * COOLDOWN):
+                    for i, o in enumerate(objects):
+                        put(o, i + 10)
+                        self.assertEqual(o.x, i + 10)
+                self.assertIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+
+    def test_add_rows(self):
+        for n in (2, 4):
+            with self.subTest(shapes=n):
+                @reset_code
+                def put(o, v):
+                    o.x = v
+                classes = store_classes(n)
+                factories = [lambda c=c: c() for c in classes]
+                objects = self.warm(put, factories, range(n))
+                self.assertIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+                for i, o in enumerate(objects):
+                    self.assertIsNotNone(shape_of(o))
+                    self.assertEqual(vars(o), {"x": i})
+
+    def test_mixed_rows(self):
+        @reset_code
+        def put(o, v):
+            o.x = v
+        factories = stored(store_classes(3))
+        self.warm(put, factories, [1, 2.5, "s"])
+        self.assertIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+
+    def test_five_shapes_are_megamorphic(self):
+        @reset_code
+        def put(o, v):
+            o.x = v
+        factories = stored(store_classes(5))
+        self.warm(put, factories, range(5), rounds=8 * COOLDOWN)
+        self.assertNotIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+        self.assertNotIn("STORE_ATTR_SHAPE", opnames(put))
+        self.assertNotIn("STORE_ATTR_SHAPE_TRANSITION", opnames(put))
+
+    def test_kind_misfit(self):
+        @reset_code
+        def put(o, v):
+            o.x = v
+        classes = store_classes(3)
+        factories = stored(classes)
+        self.warm(put, factories, [1, 2, 3])
+        self.assertIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+        # An I32 field takes a str: the site exits, the generic store
+        # generalises, and the site specialises again.
+        o = factories[1]()
+        before = generalisations()
+        put(o, "s")
+        self.assertEqual(o.x, "s")
+        self.assertEqual(kinds(o), (BOXED,))
+        self.assertGreater(generalisations(), before)
+        self.warm(put, factories, ["a", "b", "c"])
+        self.assertIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+
+    def test_target_only_generalisation(self):
+        # Generalising the field an ADD row adds renews its target, not the
+        # row's shape: the row's kind is narrower than the field's, and
+        # admits only values the field takes.
+        @reset_code
+        def put(o, v):
+            o.x = v
+        classes = store_classes(2)
+        factories = [lambda c=c: c() for c in classes]
+        self.warm(put, factories, [1, 2])
+        self.assertIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+        o = classes[0]()
+        o.x = 1
+        o.x = "s"
+        self.assertEqual(kinds(o), (BOXED,))
+        p = classes[0]()
+        put(p, 5)
+        self.assertEqual((p.x, kinds(p)), (5, (BOXED,)))
+        q = classes[0]()
+        put(q, "t")
+        self.assertEqual((q.x, kinds(q)), ("t", (BOXED,)))
+
+    def test_one_row_renewed(self):
+        @reset_code
+        def put(o, v):
+            o.x = v
+        classes = store_classes(3)
+        factories = stored(classes)
+        self.warm(put, factories, [1, 2, 3])
+        classes[1].y = "class"
+        objects = self.warm(put, factories, [4, 5, 6], rounds=1)
+        self.assertEqual([o.x for o in objects], [4, 5, 6])
+
+    def test_data_descriptor_installed(self):
+        @reset_code
+        def put(o, v):
+            o.x = v
+        classes = store_classes(3)
+        factories = stored(classes)
+        self.warm(put, factories, [1, 2, 3])
+        seen = []
+        classes[2].x = property(lambda self: "prop",
+                                lambda self, v: seen.append(v))
+        o = classes[2]()
+        put(o, 7)
+        self.assertEqual((seen, o.x), ([7], "prop"))
+        p = factories[0]()
+        put(p, 8)
+        self.assertEqual(p.x, 8)
+
+    def test_setattr_added(self):
+        @reset_code
+        def put(o, v):
+            o.x = v
+        classes = store_classes(3)
+        factories = stored(classes)
+        self.warm(put, factories, [1, 2, 3])
+        seen = []
+        def setattr_hook(self, name, v):
+            seen.append((name, v))
+            object.__setattr__(self, name, v * 2)
+        classes[1].__setattr__ = setattr_hook
+        o = classes[1]()
+        put(o, 4)
+        self.assertEqual((seen, o.x), ([("x", 4)], 8))
+
+    def test_dead_row_types(self):
+        # Rows borrow shapes; a dead type's shapes may be reused at the same
+        # addresses by new types, whose versions differ.
+        @reset_code
+        def put(o, v):
+            o.x = v
+        refs = []
+        for round in range(10):
+            classes = store_classes(2)
+            factories = stored(classes)
+            self.warm(put, factories, [round, -round], rounds=THRESHOLD + 1)
+            refs.extend(weakref.ref(c) for c in classes)
+            del classes, factories
+            gc.collect()
+        self.assertEqual([r() for r in refs], [None] * len(refs))
+
+    def test_collector_sees_stored_values(self):
+        class V:
+            pass
+        @reset_code
+        def put(o, v):
+            o.x = v
+        classes = store_classes(3)
+        factories = stored(classes)
+        self.warm(put, factories, [V(), V(), V()])
+        self.assertIn("STORE_ATTR_SHAPE_POLY", opnames(put))
+        replace = factories[0]()
+        old = V()
+        put(replace, old)
+        dead = weakref.ref(old)
+        del old
+        added = factories[1]()
+        put(added, V())
+        put(replace, V())
+        values = [weakref.ref(replace.x), weakref.ref(added.x)]
+        gc.collect()
+        self.assertIsNone(dead())
+        self.assertIsInstance(replace.x, V)
+        self.assertIsInstance(added.x, V)
+        self.assertEqual([r() is not None for r in values], [True, True])
+
+
+@cpython_only
+@requires_specialization
+class LazyDictMethodTests(unittest.TestCase):
+    """LOAD_ATTR_METHOD_LAZY_DICT: a method of an object whose instance dict
+    is not made yet (note 12 section 6.2)."""
+
+    def receivers(self):
+        class E(Exception):
+            def m(self):
+                return "method"
+        class I(int):
+            def m(self):
+                return "method"
+        class T(tuple):
+            def m(self):
+                return "method"
+        return [E(), I(5), I(2**100), T(), T(range(10))]
+
+    def warm(self, call, o):
+        for _ in range(4 * (THRESHOLD + COOLDOWN)):
+            self.assertEqual(call(o), "method")
+
+    def check(self, make_dict, expected):
+        for o in self.receivers():
+            with self.subTest(receiver=type(o).__mro__[1], o=o):
+                @reset_code
+                def call(o):
+                    return o.m()
+                self.warm(call, o)
+                self.assertIn("LOAD_ATTR_METHOD_LAZY_DICT", opnames(call))
+                make_dict(o)
+                self.assertEqual(call(o), expected)
+                # Another object of the type, still without a dict
+                self.assertEqual(call(type(o)()), "method")
+
+    def test_empty_dict(self):
+        self.check(lambda o: o.__dict__, "method")
+
+    def test_unrelated_attribute(self):
+        def make(o):
+            o.other = 1
+        self.check(make, "method")
+
+    def test_shadowing_attribute(self):
+        def make(o):
+            o.m = lambda: "instance"
+        self.check(make, "instance")
+
+    def test_dict_assigned(self):
+        def make(o):
+            o.__dict__ = {"m": lambda: "assigned"}
+        self.check(make, "assigned")
+
+    def test_dict_from_the_c_api(self):
+        setattr_c = import_module("_testlimitedcapi").object_setattr
+        def make(o):
+            setattr_c(o, "m", lambda: "c api")
+        self.check(make, "c api")
+
+    def test_attribute_read_does_not_specialise(self):
+        @reset_code
+        def get(o):
+            return o.m
+        o = self.receivers()[0]
+        for _ in range(4 * (THRESHOLD + COOLDOWN)):
+            get(o)
+        self.assertNotIn("LOAD_ATTR_METHOD_LAZY_DICT", opnames(get))
+
 
 @cpython_only
 class DebugAllocatorTests(unittest.TestCase):
@@ -2018,6 +2322,8 @@ class DebugAllocatorTests(unittest.TestCase):
             "test.test_shapes.NonExactNameTests",
             "test.test_shapes.InstanceLayoutSpecializationTests",
             "test.test_shapes.ShapePolyTests",
+            "test.test_shapes.StorePolyTests",
+            "test.test_shapes.LazyDictMethodTests",
             PYTHONMALLOC="mimalloc_debug")
 
 

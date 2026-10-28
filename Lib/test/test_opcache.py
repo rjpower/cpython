@@ -920,7 +920,7 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 type(item).m = lambda self: None
 
-        opname = "LOAD_ATTR_METHOD_NO_DICT"
+        opname = "LOAD_ATTR_METHOD_SHAPE"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization

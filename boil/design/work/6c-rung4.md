@@ -314,3 +314,42 @@ Non-blocking:
 - **The extra failure tests.** Added to A7.
 - **A4.3.** Fixed by ruling 4.
 - **Tier wording.** It now says "interpreter".
+
+## As built
+
+Commits:
+
+- ee167b42a18: the `str +=` ruling. Adds `micro/str_concat_loop`
+  (1000 appends onto a 10,000-character local: 2.4 ms per loop, against
+  0.52 ms for `str_concat`, on dev-default) and the note 08 register row.
+- 0c0ae6f6fcb: shape and type versions paired by consumer (A4), plus the
+  replacement of a poly row of the same shape. Magic 3725.
+- e35552a3343: slot kinds, generalisation, the resolver's GENERALISE
+  outcome, `_GUARD_SLOT_KIND`, and kinds in feedback. Magic 3726.
+
+Decisions made in the code:
+
+- **No per-kind handlers.** `_PyValue_FitsKind()` reads an `extern`
+  range table (`_PySlotKind_Ranges`) rather than branching on the kind,
+  so the guard is one form for every kind.
+- **Generalisation is a preparation step.** `_PyShape_Generalise()`
+  walks the owner's subtree iteratively, through the `children` and
+  `sibling` links, and takes the version from
+  `_PyType_NewShapeVersion()` under the type lock.
+- **A specialiser that sees a misfit declines.** It does not
+  specialise and fail its own guard; the generic store generalises,
+  and the next attempt finds BOXED.
+- **The generator.** `_PyValue_FitsKind` joins its non-escaping list.
+- **Test helpers.** `_testinternalcapi.set_next_type_version()` takes a
+  PyValue: METH_O passes the value, and a small int is inline.
+
+### Hand-off
+
+- **Members alternate across a generalisation.** `LOAD_ATTR_SLOT` and
+  `STORE_ATTR_SLOT` guard only the live shape's version. On a type with
+  both `__slots__` members and generalised inline fields, a member site
+  alternates between shapes of the type. This is correct and rare;
+  guarding the type's version would cost every member site a load.
+  Recorded for rung 5's measurements.
+- **The BOXED store pays a vacuous compare.** Its cost is measured in
+  rung 5 (`attr_store`, `attr_store_poly`).

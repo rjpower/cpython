@@ -380,8 +380,11 @@ benchmark measures it; a micro row does (section 10).
 
 ### 6.3 The dictionary conversion (item 2)
 
-`dict_from_slots` allocates with `_PyDict_NewPresized(nslots + 1)`, the
-named slots plus the triggering store, so a conversion resizes no table.
+`dict_from_slots` allocates with `_PyDict_NewPresizedUnicode(nslots + 1)`,
+the named slots plus the triggering store, so a conversion resizes no
+table. The table holds str keys, which the `WITH_HINT` handlers take;
+`_PyDict_NewPresized` gives the general kind above five entries
+(boil/design/work/6d-1.md, section G).
 Whether a read of `__dict__` must convert at all stays note 09's open
 re-shaping question. `convert_to_dict` was 9.0% of logging_simple's
 instructions and `dictresize` 3% within it; logging_simple and
@@ -391,9 +394,11 @@ logging_format record the change.
 
 Rule: `capacity = min(30, (good(B + 8w) - B) / 8)`, where `B` is the
 type's `tp_basicsize`, `w` is `S + 2` if `S > 0` and 6 if `S` is 0, and
-`good(n)` is `mi_good_size(n)`, the block mimalloc gives a request of
-`n` bytes, a pure function of `n`, so the capacity does not depend on
-`PYTHONMALLOC`. For a plain class (`B` = 8):
+`good(n)` is `_PyMem_SizeClass(n)`, the block mimalloc gives a request
+of `n` bytes on a release build, a pure function of `n`, so the capacity
+depends on neither `PYTHONMALLOC` nor the build. `mi_good_size()` would
+count the padding of debug builds (boil/design/work/6d-1.md, section
+D). For a plain class (`B` = 8):
 
 | S | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 | 10 | 14 |
 |---|---|---|---|---|---|---|---|---|---|---|

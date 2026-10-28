@@ -1,56 +1,41 @@
 ## Summary
 
-The handler consolidation and separate class and shape versions fit the architecture.  
-Three issues block implementation: ABI ordering, allocator padding, and dictionary key layout.  
-Reviewed the design, required context, and relevant source paths; no tests run.
+The guard consolidation, class-version mirror, and polymorphic stores fit the architecture.  
+Two boundary cases remain blocking: large-object sizing and the small-dictionary assertion.  
+Static review against source at `ecd7485b9e2`; no tests run.
 
 ## Blocking issues
 
-1. **The ABI mark lands after the ABI break.**
+1. **The proposed size-class helper returns a sentinel for large objects.**
 
-   **Where:** §E, §F, and “Order of commits”: E is first, F is last, and every commit is pushed.
+   **Where:** [§D](/home/power/code/cpython/.worktrees/boil-6d/boil/design/work/6d-1.md:140), [mi_bin()](/home/power/code/cpython/.worktrees/boil-6d/Objects/mimalloc/page-queue.c:60), and [the huge queue initializer](/home/power/code/cpython/.worktrees/boil-6d/Objects/mimalloc/init.c:45).
 
-   **Problem:** Adding `class_version` changes `PyTypeObject` and subsequent `PyHeapTypeObject` offsets while intermediate commits still accept conventionally named value-v1 extensions. Note 12 §2.1 requires isolation from the first layout change.
+   **Problem:** Above `MI_MEDIUM_OBJ_SIZE_MAX`—65,536 bytes on this target—`mi_bin()` returns `MI_BIN_HUGE`. Its queue’s `block_size` is 65,544, not the allocation size. For `B=65544, S=0`, the proposed helper therefore turns a 65,592-byte request into **capacity zero**. A class with 8,192 declared slots plus `__dict__` can reach this case. It violates `_PyShape_InitTypeShapes()`’s positive-capacity assertion and dictionary mode’s requirement for slot 0.
 
-   **Fix:** Commit E and F together, including suffix tests and SDK metadata. Include E’s regeneration and magic bump there: E changes the member macros and specialiser output, which also falls under `boil/PROCESS.md` §3’s rule.
+   **Fix:** Implement the unpadded equivalent of the complete `mi_good_size()` calculation, including its large-request branch and overflow limits. Cap `w` at 30 before constructing the request. Update `capacity_rule.py` accordingly, and test requests around 65,536 plus a large-slotted class that supports an instance dictionary.
 
-2. **The capacity formula counts allocator padding as available object storage.**
+2. **The no-resize assertion fails on ordinary small conversions.**
 
-   **Where:** [§D]( /home/power/code/cpython/.worktrees/boil-6d/boil/design/work/6d-1.md:133), [mi_good_size()](/home/power/code/cpython/.worktrees/boil-6d/Objects/mimalloc/page-queue.c:109), and [pycore_mimalloc.h](/home/power/code/cpython/.worktrees/boil-6d/Include/internal/pycore_mimalloc.h:34).
+   **Where:** [§G](/home/power/code/cpython/.worktrees/boil-6d/boil/design/work/6d-1.md:291), [dict_new_presized()](/home/power/code/cpython/.worktrees/boil-6d/Objects/dictobject.c:1391), and `dict_from_slots()` in [Objects/shapeobject.c](/home/power/code/cpython/.worktrees/boil-6d/Objects/shapeobject.c).
 
-   **Problem:** `mi_good_size(n)` rounds **`n + MI_PADDING_SIZE`**. Debug builds enable eight bytes of mimalloc padding. For `B=8, S=1`, the proposed capacity is therefore five on debug and three on release. Allocating the enlarged payload applies padding again, invalidating the claim that blocks never grow. CPython’s debug allocation hooks add further overhead. The measurement script models unpadded classes, so it also disagrees with this implementation.
+   **Problem:** `dict_new_presized(minused, true)` returns `PyDict_New()` when `minused <= 5`. For conversions with one through four slots, the first insertion replaces `Py_EMPTY_KEYS`. Consequently, the proposed assertion that the keys pointer remains unchanged fails, although no `dictresize()` occurred. The seven-attribute regression misses this branch.
 
-   **Fix:** Define the policy using unpadded size classes through one allocator helper, and validate `capacity_rule.py` against it. Alternatively, explicitly adopt a build-dependent rule and revise its sizing proof and measurements. Test the chosen behavior on release, debug, and ASan, including size-class boundaries.
-
-3. **Presizing changes converted dictionaries to the representation rejected by the attribute fast paths.**
-
-   **Where:** §G; [dict_from_slots()](/home/power/code/cpython/.worktrees/boil-6d/Objects/shapeobject.c:509), [_PyDict_NewPresized()](/home/power/code/cpython/.worktrees/boil-6d/Objects/dictobject.c:1390), and [_LOAD_ATTR_WITH_HINT](/home/power/code/cpython/.worktrees/boil-6d/Python/bytecodes.c:2722).
-
-   **Problem:** Above five requested entries, `_PyDict_NewPresized()` allocates a `DICT_KEYS_GENERAL` table. Existing conversion starts with an empty dictionary and produces a Unicode-key table for exact attribute names. Both `WITH_HINT` handlers reject general-key tables. The proposed optimization would therefore disable subsequent load/store specialization for these converted objects and enlarge their entries.
-
-   **Fix:** Expose the existing Unicode-aware presizing mechanism for conversion. Add a regression with at least six exact-string attributes that checks the converted key kind and warms both `WITH_HINT` handlers. Make the no-resize proof mandatory; logging’s aggregate instruction count cannot establish it.
+   **Fix:** Distinguish initial table allocation from subsequent growth. Keep pointer equality for eagerly presized tables; for initially empty dictionaries, verify that filling uses only the minimum table and leaves room for the triggering store. Cover zero, one, four, five, and seven slots, including holes and an actual conversion-triggering store.
 
 ## Non-blocking issues
 
-- **Correct the layout accounting in §E.** [_PyShape](/home/power/code/cpython/.worktrees/boil-6d/Include/object.h:162) is currently **64 bytes** on this target and becomes **72**, rather than 24→32. `PyTypeObject` grows by eight bytes. Update the static-type, heap-type, shape-table, and populated-shape expectations in [test_sys.py](/home/power/code/cpython/.worktrees/boil-6d/Lib/test/test_sys.py:1909), beyond the instance-size cases named in §D.
+- **Sampling does not count conversion events.** §D says dictionary-mode samples reveal types pushed into dictionary mode, but [occupancy_types.py](/home/power/code/cpython/.worktrees/boil-6d/boil/tools/measure/occupancy_types.py) can miss every short-lived converted instance. Note 12 §6.4 explicitly requires kernel conversion counts because sampling misses transient peaks. Record start/end dictionary-mode counter deltas per kernel; retain sampled rows for type attribution.
 
-- **Extend §B’s invalidation tests.** Renewing one row’s version does not cover installing a data descriptor over the stored name, changing `__setattr__`, or collecting a row’s type while the code object survives. Adapt the existing load-side dead-type and mutation tests for stores. Also test target-only generalisation: an ADD target can generalise without renewing its parent’s version. A stale narrow kind remains safe because kinds only widen; state that invariant explicitly.
+- **The committed baseline omits allocation counts.** Note 12 §10 requires `Object allocations`, but [measure_boxes()](/home/power/code/cpython/.worktrees/boil-6d/boil/bench/run.py:373) does not serialize that counter, and `6d-before-pystats.json` contains no allocation measurements. This matters for getters such as `complex.real`, whose temporary numeric allocation already reports zero inline boxes. Add allocation counts and capture the before values before converting those getters.
 
-- **Test collector visibility after polymorphic stores.** Store fresh heap values through ADD and REPLACE rows, drop the other references, collect, and read them back. Verify the replaced value can die. The allocation-free handler needs no new root span, but correctness still depends on publishing the slot before the shape and on traversal seeing the resulting layout.
-
-- **Strengthen §C’s shadowing tests.** “Then with the dict made” should include an empty dict, an unrelated attribute, and an actual method-name shadow. Cover dictionary creation through the C API and negative offsets on differently sized int/tuple subclasses.
-
-- **Complete the measurement plan.** Note 12 §11 assigns rung 1 the new micro rows and their before values; this document omits them. After the capacity change, sampling only shape-mode objects cannot reveal objects already forced into dictionary mode. Preserve the before histograms and record per-kernel conversion counts alongside RSS and instruction attribution.
-
-- **Fix §F’s audit arithmetic.** The list contains four `descr_get` entries and four function names. With that correction, the category totals equal the claimed 38.
+- **Update the governing specification.** [Note 12 §6.3–6.4](/home/power/code/cpython/.worktrees/boil-6d/boil/design/12-object-slots-on-values.md:381) still specifies `_PyDict_NewPresized()` and padded `mi_good_size()`, contradicting this revision’s Unicode helper and unpadded rule. `boil/PROCESS.md` makes the step-level note the specification; reconcile both documents.
 
 ## Questions
 
-- If the suite exceeds 53,084 capacity conversions, does landing wait for the coordinator’s fallback decision? Name the decision point and the fallback commit’s required remeasurement.
-- Should member sites specialise when the shape version is zero but the class version remains valid? §E describes class-only guards, while both current specialisers reject `plan.type_version == 0` before reaching the member branch. Specify whether those early checks move.
+- Which comparison commits and after-result files will establish rung 1’s instruction attribution? §D names the before records, while “Risks” requires merging 10a at every commit boundary. Specify how those concurrent changes will be separated in the measurements.
 
 ## Verdict
 
 revise
 ---
-Reviewer: codex, 2026-10-28 00:32 PDT
+Reviewer: codex, 2026-10-28 00:48 PDT

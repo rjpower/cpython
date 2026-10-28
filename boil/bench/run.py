@@ -392,7 +392,10 @@ def measure_boxes(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
              "int_boxes": per(BOX_TOTALS[0]), "float_boxes": per(BOX_TOTALS[1]),
              "array_boxes": per(BOX_TOTALS[2]), "by_class": by_class,
              "by_instruction": dict(sorted(by_op.items(), key=lambda kv: -kv[1])),
-             "dispatches": dispatches, "values": [sum(per(k) for k in BOX_TOTALS)],
+             "dispatches": dispatches, "allocations": per("Object allocations"),
+             "dict_mode": {k[len("Object materialize dict ("):-1]: per(k) for k in b
+                           if k.startswith("Object materialize dict (")},
+             "values": [sum(per(k) for k in BOX_TOTALS)],
              "loops": [lo, hi], "runs": 1}
     if bench.inner > 1:
         entry["inner"] = bench.inner

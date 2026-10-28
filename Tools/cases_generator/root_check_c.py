@@ -1851,6 +1851,20 @@ class FunctionChecker:
                                 self.error(x.line, f"the address of object local "
                                            f"'{a.operand.id}' escapes to "
                                            f"'{x.name or 'a call'}'")
+                # Any other address of an object local, kept in a pointer
+                # (PyObject **p = &local), lets a callee store into the
+                # local where the check does not see it: a load through the
+                # pointer reads as fresh after the collecting call that the
+                # object was held across.
+                args = {id(a) for x in walk_expr(e) if isinstance(x, Call)
+                        for a in x.args}
+                for x in walk_expr(e):
+                    if isinstance(x, Unary) and x.op == "&" and \
+                            isinstance(x.operand, Name) and \
+                            self.is_obj(x.operand.id) and id(x) not in args:
+                        self.error(x.line, f"the address of object local "
+                                   f"'{x.operand.id}' is kept, outside a "
+                                   "call's argument")
 
     @staticmethod
     def is_callee(x: Name, e: Expr) -> bool:

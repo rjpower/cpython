@@ -1421,6 +1421,18 @@ Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *o) {
     _PyThreadState_PopValueRoot(tstate, &r);
 }
 """, "the address of object local 'x' escapes to 'get_out'"),
+        # The address kept in a pointer, as a control that stores the
+        # receiver in a C local does: the load through it reads as fresh.
+        "object_slot_kept_address": ("""
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *o) {
+    PyObject *x = NULL;
+    PyObject **xp = &x;
+    if (get_out(o, xp) > 0) {
+        collect();
+        use(*xp);
+    }
+}
+""", "the address of object local 'x' is kept, outside a call's argument"),
         "object_slot_after_pop": ("""
 Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *o) {
     PyValue buf[2];

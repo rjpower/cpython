@@ -50,6 +50,12 @@ static inline Py_ssize_t PyDict_GET_SIZE(PyObject *op) {
 
 PyAPI_FUNC(int) PyDict_ContainsString(PyObject *mp, const char *key);
 
+/* PyDict_GetItemRef() with the item as a value, so that an inline item is
+   not boxed: 1 and the item if KEY is present, 0 and PyValue_NULL if it is
+   missing, or -1 and PyValue_NULL with an exception set. */
+PyAPI_FUNC(int) PyDict_GetItemRefValue(PyObject *mp, PyObject *key,
+                                       PyValue *result);
+
 PyAPI_FUNC(PyObject *) _PyDict_NewPresized(Py_ssize_t minused);
 
 PyAPI_FUNC(int) PyDict_Pop(PyObject *dict, PyObject *key, PyObject **result);

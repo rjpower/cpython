@@ -2678,40 +2678,38 @@ tuplegetter_new_impl(PyTypeObject *type, Py_ssize_t index, PyObject *doc)
     return (PyObject *)self;
 }
 
-static PyObject *
+/* The tuple's item as a value: an inline item is not boxed. */
+static PyValue
 tuplegetter_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     Py_ssize_t index = tuplegetterobject_CAST(self)->index;
-    PyObject *result;
-
     if (obj == NULL) {
-        return Py_NewRef(self);
+        return PyValue_FromObject(self);
     }
     if (!PyTuple_Check(obj)) {
         if (obj == Py_None) {
-            return Py_NewRef(self);
+            return PyValue_FromObject(self);
         }
         PyErr_Format(PyExc_TypeError,
                      "descriptor for index '%zd' for tuple subclasses "
                      "doesn't apply to '%s' object",
                      index,
                      Py_TYPE(obj)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (!valid_index(index, PyTuple_GET_SIZE(obj))) {
         PyErr_SetString(PyExc_IndexError, "tuple index out of range");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    result = PyTuple_GET_ITEM(obj, index);
-    return Py_NewRef(result);
+    return PyTuple_GET_VALUE(obj, index);
 }
 
 static int
-tuplegetter_descr_set(PyObject *self, PyObject *obj, PyObject *value)
+tuplegetter_descr_set(PyObject *self, PyObject *obj, PyValue value)
 {
-    if (value == NULL) {
+    if (PyValue_IsNull(value)) {
         PyErr_SetString(PyExc_AttributeError, "can't delete attribute");
     } else {
         PyErr_SetString(PyExc_AttributeError, "can't set attribute");

@@ -1317,7 +1317,7 @@ heapctypesetattr_dealloc(PyObject *op)
 }
 
 static int
-heapctypesetattr_setattro(PyObject *op, PyObject *attr, PyObject *value)
+heapctypesetattr_setattro(PyObject *op, PyObject *attr, PyValue value)
 {
     HeapCTypeSetattrObject *self = (HeapCTypeSetattrObject*)op;
     PyObject *svalue = PyUnicode_FromString("value");
@@ -1330,15 +1330,16 @@ heapctypesetattr_setattro(PyObject *op, PyObject *attr, PyObject *value)
     if (!eq) {
         return PyObject_GenericSetAttr((PyObject*) self, attr, value);
     }
-    if (value == NULL) {
+    if (PyValue_IsNull(value)) {
         self->value = 0;
         return 0;
     }
-    PyObject *ivalue = PyNumber_Long(value);
-    if (ivalue == NULL)
+    // int() of the value, then a C long, as before: an inline int passes
+    // through int() with no box.
+    PyValue ivalue = PyNumber_LongValue(value);
+    if (PyValue_IsNull(ivalue))
         return -1;
-    long v = PyLong_AsLong(ivalue);
-    Py_DECREF(ivalue);
+    long v = PyLong_AsLongValue(ivalue);
     if (v == -1 && PyErr_Occurred())
         return -1;
     self->value = v;

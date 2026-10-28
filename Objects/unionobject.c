@@ -417,7 +417,7 @@ static const char* const cls_attrs[] = {
         NULL,
 };
 
-static PyObject *
+static PyValue
 union_getattro(PyObject *self, PyObject *name)
 {
     unionobject *alias = (unionobject *)self;
@@ -427,7 +427,8 @@ union_getattro(PyObject *self, PyObject *name)
                 break;
             }
             if (_PyUnicode_EqualToASCIIString(name, *p)) {
-                return PyObject_GetAttr((PyObject *) Py_TYPE(alias), name);
+                return PyObject_GetAttrValue(
+                    PyValue_FromObject((PyObject *)Py_TYPE(alias)), name);
             }
         }
     }

@@ -164,17 +164,16 @@ Xxo_dealloc(PyObject *self)
 /* Xxo attribute handling */
 
 // Get an attribute.
-static PyObject *
+static PyValue
 Xxo_getattro(PyObject *op, PyObject *name)
 {
     XxoObject *self = XxoObject_CAST(op);
     if (self->x_attr != NULL) {
-        PyObject *v = PyDict_GetItemWithError(self->x_attr, name);
-        if (v != NULL) {
-            return Py_NewRef(v);
-        }
-        else if (PyErr_Occurred()) {
-            return NULL;
+        // An inline item is returned as it is, with no box.
+        PyValue v;
+        if (PyDict_GetItemRefValue(self->x_attr, name, &v) != 0) {
+            // found, or an error and PyValue_NULL
+            return v;
         }
     }
     // Fall back to generic implementation (this handles special attributes,
@@ -184,7 +183,7 @@ Xxo_getattro(PyObject *op, PyObject *name)
 
 // Set or delete an attribute.
 static int
-Xxo_setattro(PyObject *op, PyObject *name, PyObject *v)
+Xxo_setattro(PyObject *op, PyObject *name, PyValue v)
 {
     XxoObject *self = XxoObject_CAST(op);
     if (self->x_attr == NULL) {
@@ -194,9 +193,10 @@ Xxo_setattro(PyObject *op, PyObject *name, PyObject *v)
             return -1;
         }
     }
-    if (v == NULL) {
+    if (PyValue_IsNull(v)) {
         // delete an attribute
-        int rv = PyDict_DelItem(self->x_attr, name);
+        int rv = PyObject_DelItemValue(PyValue_FromObject(self->x_attr),
+                                       PyValue_FromObject(name));
         if (rv < 0 && PyErr_ExceptionMatches(PyExc_KeyError)) {
             PyErr_SetString(PyExc_AttributeError,
                 "delete non-existing Xxo attribute");
@@ -206,7 +206,8 @@ Xxo_setattro(PyObject *op, PyObject *name, PyObject *v)
     }
     else {
         // set an attribute
-        return PyDict_SetItem(self->x_attr, name, v);
+        return PyObject_SetItemValue(PyValue_FromObject(self->x_attr),
+                                     PyValue_FromObject(name), v);
     }
 }
 

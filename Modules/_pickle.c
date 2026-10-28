@@ -5094,7 +5094,7 @@ persistent_id(PyObject *self, PyValue obj)
     return PyValue_FromObject(Py_None);
 }
 
-static PyObject *Pickler_getattr(PyObject *self, PyObject *name);
+static PyValue Pickler_getattr(PyObject *self, PyObject *name);
 
 /* Like PyObject_GetOptionalAttr(), but avoids creating an AttributeError
    for a missing attribute.  Must not be used for "persistent_id". */
@@ -5103,11 +5103,13 @@ pickler_get_optional_attr(PicklerObject *self, PyObject *name,
                           PyObject **result)
 {
     if (Py_TYPE(self)->tp_getattro == Pickler_getattr) {
-        *result = _PyObject_GenericGetAttrWithDict((PyObject *)self, name,
-                                                   NULL, 1);
-        if (*result != NULL) {
-            return 1;
+        PyValue v = _PyObject_GenericGetAttrWithDict((PyObject *)self, name,
+                                                     NULL, 1);
+        if (!PyValue_IsNull(v)) {
+            *result = PyValue_Object(v);
+            return *result != NULL ? 1 : -1;
         }
+        *result = NULL;
         return PyErr_Occurred() ? -1 : 0;
     }
     return PyObject_GetOptionalAttr((PyObject *)self, name, result);
@@ -5679,7 +5681,7 @@ Pickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
     return -1;
 }
 
-static PyObject *
+static PyValue
 Pickler_getattr(PyObject *self, PyObject *name)
 {
     PicklerObject *po = PicklerObject_CAST(self);
@@ -5687,21 +5689,29 @@ Pickler_getattr(PyObject *self, PyObject *name)
         && PyUnicode_EqualToUTF8(name, "persistent_id")
         && po->persistent_id_attr)
     {
-        return Py_NewRef(po->persistent_id_attr);
+        return PyValue_FromObject(po->persistent_id_attr);
     }
 
     return PyObject_GenericGetAttr(self, name);
 }
 
 static int
-Pickler_setattr(PyObject *self, PyObject *name, PyObject *value)
+Pickler_setattr(PyObject *self, PyObject *name, PyValue value)
 {
     if (PyUnicode_Check(name)
         && PyUnicode_EqualToUTF8(name, "persistent_id"))
     {
         PicklerObject *po = PicklerObject_CAST(self);
-        Py_XINCREF(value);
-        Py_XSETREF(po->persistent_id_attr, value);
+        // The field keeps an object: an inline value is boxed, and stored
+        // with no call between.
+        PyObject *v = NULL;
+        if (!PyValue_IsNull(value)) {
+            v = PyValue_Object(value);
+            if (v == NULL) {
+                return -1;
+            }
+        }
+        Py_XSETREF(po->persistent_id_attr, v);
         return 0;
     }
 
@@ -8239,7 +8249,7 @@ Unpickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
     return -1;
 }
 
-static PyObject *
+static PyValue
 Unpickler_getattr(PyObject *self, PyObject *name)
 {
     UnpicklerObject *obj = UnpicklerObject_CAST(self);
@@ -8247,21 +8257,29 @@ Unpickler_getattr(PyObject *self, PyObject *name)
         && PyUnicode_EqualToUTF8(name, "persistent_load")
         && obj->persistent_load_attr)
     {
-        return Py_NewRef(obj->persistent_load_attr);
+        return PyValue_FromObject(obj->persistent_load_attr);
     }
 
     return PyObject_GenericGetAttr(self, name);
 }
 
 static int
-Unpickler_setattr(PyObject *self, PyObject *name, PyObject *value)
+Unpickler_setattr(PyObject *self, PyObject *name, PyValue value)
 {
     if (PyUnicode_Check(name)
         && PyUnicode_EqualToUTF8(name, "persistent_load"))
     {
         UnpicklerObject *obj = UnpicklerObject_CAST(self);
-        Py_XINCREF(value);
-        Py_XSETREF(obj->persistent_load_attr, value);
+        // The field keeps an object: an inline value is boxed, and stored
+        // with no call between.
+        PyObject *v = NULL;
+        if (!PyValue_IsNull(value)) {
+            v = PyValue_Object(value);
+            if (v == NULL) {
+                return -1;
+            }
+        }
+        Py_XSETREF(obj->persistent_load_attr, v);
         return 0;
     }
 

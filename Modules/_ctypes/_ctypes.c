@@ -1150,13 +1150,31 @@ CType_Type_repeat(PyObject *self, Py_ssize_t length)
 }
 
 static int
-_structunion_setattro(PyObject *self, PyObject *key, PyObject *value, int is_struct)
+_structunion_setattro(PyObject *self, PyObject *key, PyValue value, int is_struct)
 {
     /* XXX Should we disallow deleting _fields_? */
     if (PyUnicode_Check(key)
             && _PyUnicode_EqualToASCIIString(key, "_fields_"))
     {
-        if (PyCStructUnionType_update_stginfo(self, value, is_struct) < 0) {
+        // update_stginfo is an object form, which rejects an inline value:
+        // the box is made for its error, and anchored while it runs.
+        // Deletion passes NULL, as before.
+        PyObject *fields = NULL;
+        PyValue held[1];
+        _PyValueRoot span;
+        PyThreadState *tstate = _PyThreadState_GET();
+        _PyThreadState_PushValueSpan(tstate, &span, held);
+        if (!PyValue_IsNull(value)) {
+            fields = PyValue_Object(value);
+            if (fields == NULL) {
+                _PyThreadState_PopValueRoot(tstate, &span);
+                return -1;
+            }
+            _PyValueSpan_AppendObject(&span, fields);
+        }
+        int rc = PyCStructUnionType_update_stginfo(self, fields, is_struct);
+        _PyThreadState_PopValueRoot(tstate, &span);
+        if (rc < 0) {
             return -1;
         }
     }
@@ -1165,13 +1183,13 @@ _structunion_setattro(PyObject *self, PyObject *key, PyObject *value, int is_str
 }
 
 static int
-PyCStructType_setattro(PyObject *self, PyObject *key, PyObject *value)
+PyCStructType_setattro(PyObject *self, PyObject *key, PyValue value)
 {
     return _structunion_setattro(self, key, value, 1);
 }
 
 static int
-UnionType_setattro(PyObject *self, PyObject *key, PyObject *value)
+UnionType_setattro(PyObject *self, PyObject *key, PyValue value)
 {
     return _structunion_setattro(self, key, value, 0);
 }

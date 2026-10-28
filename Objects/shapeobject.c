@@ -623,7 +623,7 @@ convert_to_dict(PyObject *obj, PyObject *name, PyValue value,
                 PyErr_Format(PyExc_AttributeError,
                              "'%.100s' object has no attribute '%U'",
                              Py_TYPE(obj)->tp_name, name);
-                _PyObject_SetAttributeErrorContext(obj, name);
+                _PyObject_SetAttributeErrorContext(PyValue_FromObject(obj), name);
             }
         }
         else {
@@ -652,7 +652,7 @@ set_no_attribute_error(PyObject *obj, PyObject *name)
     PyErr_Format(PyExc_AttributeError,
                  "'%.100s' object has no attribute '%U'",
                  Py_TYPE(obj)->tp_name, name);
-    _PyObject_SetAttributeErrorContext(obj, name);
+    _PyObject_SetAttributeErrorContext(PyValue_FromObject(obj), name);
 }
 
 /* A store to NAME (a delete if VALUE is NULL) in the dict in slot 0, which

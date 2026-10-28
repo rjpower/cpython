@@ -2493,10 +2493,10 @@ dummy_func(
             INPUTS_DEAD();
             ERROR_IF(super == NULL);
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-            PyObject *attr_o = PyObject_GetAttr(super, name);
+            PyValue attr_v = PyObject_GetAttrValue(PyValue_FromObject(super), name);
             Py_DECREF(super);
-            ERROR_IF(attr_o == NULL);
-            attr = PyValue_FromObject(attr_o);
+            ERROR_IF(PyValue_IsNull(attr_v));
+            attr = attr_v;
         }
 
         macro(LOAD_SUPER_ATTR) =
@@ -2514,10 +2514,10 @@ dummy_func(
             EXIT_IF(!PyType_Check(class));
             STAT_INC(LOAD_SUPER_ATTR, hit);
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-            PyObject *attr = _PySuper_Lookup((PyTypeObject *)class, self, name, NULL);
+            PyValue attr = _PySuper_Lookup((PyTypeObject *)class, self, name, NULL);
             INPUTS_DEAD();
-            ERROR_IF(attr == NULL);
-            attr_st = PyValue_FromObject(attr);
+            ERROR_IF(PyValue_IsNull(attr));
+            attr_st = attr;
         }
 
         macro(LOAD_SUPER_ATTR_METHOD) =
@@ -2541,14 +2541,14 @@ dummy_func(
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyTypeObject *cls = (PyTypeObject *)class;
             int method_found = 0;
-            PyObject *attr_o;
+            PyValue attr_v;
             {
                 // scope to tell MSVC that method_found_ptr is not escaping
                 int *method_found_ptr = &method_found;
-                attr_o = _PySuper_Lookup(cls, self, name,
+                attr_v = _PySuper_Lookup(cls, self, name,
                     Py_TYPE(self)->tp_getattro == PyObject_GenericGetAttr ? method_found_ptr : NULL);
             }
-            if (attr_o == NULL) {
+            if (PyValue_IsNull(attr_v)) {
                 ERROR_NO_POP();
             }
             if (method_found) {
@@ -2560,7 +2560,7 @@ dummy_func(
             }
             INPUTS_DEAD();
 
-            attr = PyValue_FromObject(attr_o);
+            attr = attr_v;
         }
 
         family(LOAD_ATTR, INLINE_CACHE_ENTRIES_LOAD_ATTR) = {

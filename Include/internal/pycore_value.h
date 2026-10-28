@@ -10,7 +10,6 @@ extern "C" {
 
 #include "pycore_long.h"          // _PyLong_CheckExactAndCompact()
 #include "pycore_object.h"
-#include "pycore_pyerrors.h"      // _Py_FatalErrorFormat()
 #include "pycore_stats.h"         // OBJECT_STAT_INC()
 #include "pycore_tstate.h"        // _PyThreadStateImpl
 
@@ -100,7 +99,9 @@ _PyObject_ValueIdentity(PyObject *op)
    the canonical form forbids: an exact int that fits in int32 or an exact
    float other than NaN.  Such a result comes from a slot written to the
    PyObject * form and cast to the PyValue one.  It runs at the dispatch,
-   before anything converts the result (6d-2.md F). */
+   before anything converts the result (6d-2.md F).  The report is written
+   with stdio and the process aborts: nothing here runs Python code or
+   allocates, so nothing collects. */
 static inline void
 _PyValue_CheckSlotResult(PyValue v, PyTypeObject *tp, const char *slot)
 {
@@ -108,10 +109,11 @@ _PyValue_CheckSlotResult(PyValue v, PyTypeObject *tp, const char *slot)
     if (PyValue_IsObject(v)
         && _PyObject_ValueIdentity(PyValue_ObjectBorrow(v)) != v.bits)
     {
-        // It does not return and runs no Python code.
-        _Py_FatalErrorFormat(__func__, "%s of type '%.100s' returned a "
-                             "non-canonical %s box", slot, tp->tp_name,
-                             Py_TYPE(PyValue_ObjectBorrow(v))->tp_name);
+        fprintf(stderr, "Fatal Python error: %s of type '%.100s' returned "
+                "a non-canonical %s box\n", slot, tp->tp_name,
+                Py_TYPE(PyValue_ObjectBorrow(v))->tp_name);
+        fflush(stderr);
+        abort();
     }
 #else
     (void)v; (void)tp; (void)slot;

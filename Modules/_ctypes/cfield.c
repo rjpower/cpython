@@ -266,29 +266,50 @@ PyCField_set_lock_held(PyObject *op, PyObject *inst, PyObject *value)
                        self->index, _pack_legacy_size(self), ptr);
 }
 
+/* The converters (setfunc, getfunc) are object forms until rung 4
+   converts them with the getsets.  An inline value is boxed for the setter
+   and anchored while it runs; a failed box returns at once. */
 static int
-PyCField_set(PyObject *op, PyObject *inst, PyObject *value)
+PyCField_set(PyObject *op, PyObject *inst, PyValue value)
 {
     int res;
+    if (!PyValue_IsInline(value)) {
+        PyObject *obj = PyValue_IsNull(value) ? NULL
+                                              : PyValue_ObjectBorrow(value);
+        Py_BEGIN_CRITICAL_SECTION(inst);
+        res = PyCField_set_lock_held(op, inst, obj);
+        Py_END_CRITICAL_SECTION();
+        return res;
+    }
+    PyObject *box = _PyValue_BoxInline(value);
+    if (box == NULL) {
+        return -1;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue held[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, held);
+    _PyValueSpan_AppendObject(&span, box);
     Py_BEGIN_CRITICAL_SECTION(inst);
-    res = PyCField_set_lock_held(op, inst, value);
+    res = PyCField_set_lock_held(op, inst, box);
     Py_END_CRITICAL_SECTION();
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-static PyObject *
+static PyValue
 PyCField_get(PyObject *op, PyObject *inst, PyObject *type)
 {
     CDataObject *src;
     CFieldObject *self = _CFieldObject_CAST(op);
     if (inst == NULL) {
-        return Py_NewRef(self);
+        return PyValue_FromObject((PyObject *)self);
     }
     ctypes_state *st = get_module_state_by_class(Py_TYPE(self));
     if (!CDataObject_Check(st, inst)) {
         PyErr_SetString(PyExc_TypeError,
                         "not a ctype instance");
-        return NULL;
+        return PyValue_NULL;
     }
     src = _CDataObject_CAST(inst);
     PyObject *res;
@@ -297,7 +318,7 @@ PyCField_get(PyObject *op, PyObject *inst, PyObject *type)
                        self->index, _pack_legacy_size(self),
                        src->b_ptr + self->byte_offset);
     Py_END_CRITICAL_SECTION();
-    return res;
+    return PyValue_FromResult(res);
 }
 
 static PyObject *

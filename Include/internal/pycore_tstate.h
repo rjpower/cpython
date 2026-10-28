@@ -131,7 +131,11 @@ typedef struct _PyThreadStateImpl {
                                       takes the value, before the clear */
 #define _PyGC_SITE_TAKE_OWNERSHIP 7  /* take_ownership(), before the
                                         frame object of the caller is made */
-#define _PyGC_SITE_COUNT        8
+#define _PyGC_SITE_SLOT_BOX     8  /* box_owner_for_descr(), after an inline
+                                      owner's box is in the caller's span */
+#define _PyGC_SITE_RECEIVER_BOX 9  /* method_check_args(), after an inline
+                                      receiver's box is made */
+#define _PyGC_SITE_COUNT        10
 
 PyAPI_FUNC(void) _PyGC_InjectCollect(PyThreadState *tstate);
 // PYTHON_GCSTRESS=every from now on; 0 turns it off

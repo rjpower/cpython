@@ -129,8 +129,11 @@ sys_profile_call_or_return(
         if (self_arg == &_PyInstrumentation_MISSING) {
             return PyValue_FromObject(Py_None);
         }
-        PyObject *meth = Py_TYPE(callable)->tp_descr_get(
+        PyValue meth_v = Py_TYPE(callable)->tp_descr_get(
             callable, self_arg, (PyObject*)Py_TYPE(self_arg));
+        _PyValue_CheckSlotResult(meth_v, Py_TYPE(callable), "tp_descr_get");
+        // A method descriptor's binding: a builtin method, never inline.
+        PyObject *meth = PyValue_Object(meth_v);
         if (meth == NULL) {
             return PyValue_NULL;
         }

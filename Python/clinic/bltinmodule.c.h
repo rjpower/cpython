@@ -966,23 +966,20 @@ PyDoc_STRVAR(builtin_hasattr__doc__,
     {"hasattr", _PyCFunction_CAST(builtin_hasattr), METH_FASTCALL, builtin_hasattr__doc__},
 
 static PyObject *
-builtin_hasattr_impl(PyObject *module, PyObject *obj, PyObject *name);
+builtin_hasattr_impl(PyObject *module, PyValue obj, PyObject *name);
 
 static PyValue
 builtin_hasattr(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
     PyValue return_value = PyValue_NULL;
-    PyObject *obj;
+    PyValue obj;
     PyObject *name;
     PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("hasattr", nargs, 2, 2)) {
         goto exit;
     }
-    obj = PyValue_Object(args[0]);
-    if (obj == NULL) {
-        goto exit;
-    }
+    obj = args[0];
     name = PyValue_Object(args[1]);
     if (name == NULL) {
         goto exit;
@@ -1900,4 +1897,4 @@ builtin_issubclass(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=16fc7e021344fcab input=a9049054013a1b77]*/
+/*[clinic end generated code: output=83d68a8018ddfe24 input=a9049054013a1b77]*/

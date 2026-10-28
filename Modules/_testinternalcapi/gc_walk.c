@@ -25,7 +25,9 @@ struct owners {
     int fell_back;
 };
 
-static void
+/* Reads the walked frames' words, redzones included, as the collector's
+   scan does: not instrumented under ASan (Python/gc_trace.c) */
+static void _Py_NO_SANITIZE_ADDRESS
 owners_scan(void *arg, uintptr_t start, uintptr_t end)
 {
     struct owners *o = arg;

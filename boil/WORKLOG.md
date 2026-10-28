@@ -1985,3 +1985,28 @@ callback-queue fix in the tree. Eval-loop file ban on 10a lifted; 10a
 finishes rung 2's call layer, then rung 1b promotes the eval loop. The 6d
 design agent (object slots on values, note 12) launched in its own
 worktree.
+
+## 2026-10-28 00:20 PDT: 6d design adopted (note 12)
+
+Note 12, object slots on values, landed as the merge of boil/6d after two
+codex review rounds (revise, revise; the second's request for a new ABI
+mark per rung was rebutted: no binary is built against an intermediate
+rung). Decisions: five slot types change in place to values (getattro,
+setattro, descr get and set, a callfunc for tp_call) with getset and
+wrapperfunc, no object-form twins; self stays PyObject*; the object-form
+protocol functions are the compatibility layer; three catches for
+unconverted code (a debug canonical-form check on slot results, a tracer
+check for inline values in PyObject* fields, the SOABI mark boil2);
+Python descriptors call the raw __get__ unbound; STORE_ATTR_SHAPE_POLY and
+LOAD_ATTR_METHOD_LAZY_DICT take the opcodes freed by folding the _NO_DICT
+loads; the block-filling capacity rule (block bytes -24.1% over 21
+kernels, -4.5% without generators; no block grows); class_version on
+shapes; the dictionary conversion presizes. Coordinator rulings on its
+open questions: inline int and float receivers go to a new step 6e with
+the remaining slot families (plan row added); 6d rung 1 may start beside
+10a's rung 1b, rungs 2 to 4 from the integration commit that holds 10a's
+rung 2; 10a's rung 1b marks the typeobject.c bridges 6d writes to the C
+mode's subset; the handler-space cleanup goes to step 8's design (row
+updated); the capacity rule is accepted with the stated fallback;
+tp_getattr and tp_setattr stay object slots until phase P. The design
+agent continues as 6d's implementation agent in its worktree.

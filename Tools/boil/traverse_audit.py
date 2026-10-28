@@ -51,7 +51,9 @@ TYPE_FIELDS = [
     "tp_vectorcall_offset", "tp_getattr", "tp_setattr", "tp_as_async",
     "tp_repr", "tp_as_number", "tp_as_sequence", "tp_as_mapping", "tp_hash",
     "tp_call", "tp_str", "tp_getattro", "tp_setattro", "tp_as_buffer",
-    "tp_flags", "tp_doc", "tp_traverse", "tp_clear",
+    "tp_flags", "tp_doc", "tp_traverse", "tp_clear", "tp_richcompare",
+    "tp_weaklistoffset", "tp_iter", "tp_iternext", "tp_methods", "tp_members",
+    "tp_getset", "tp_base",
 ]
 
 RELEASE_RE = re.compile(
@@ -445,8 +447,36 @@ def add_type(types, path, text, m, var, fields) -> None:
         dealloc=func_name(fields.get("tp_dealloc")),
         clear=func_name(fields.get("tp_clear")),
         gc="HAVE_GC" in fields.get("tp_flags", ""),
-        base=func_name(fields.get("tp_base")),
+        base=func_name(fields.get("tp_base")) or runtime_base(text, var),
     ))
+
+
+FROM_SPEC_RE = re.compile(r"\bPyType_From(?:SpecWithBases|ModuleAndSpec|Metaclass)\s*\(")
+
+
+def runtime_base(text: str, var: str) -> str | None:
+    """The base a module's init gives a type: "var.tp_base = base", or the
+    bases argument of PyType_FromSpecWithBases() and its relatives."""
+    m = re.search(rf"\b{var}\s*\.\s*tp_base\s*=\s*([^;]+);", text)
+    if m:
+        return func_name(m.group(1))
+    for m in FROM_SPEC_RE.finditer(text):
+        args = [a.strip() for a in split_top(brace_body_paren(text, m.end()), ",")]
+        for i, a in enumerate(args[:-1]):
+            if re.fullmatch(rf"&\s*{var}", a):
+                return func_name(args[i + 1])
+    return None
+
+
+def brace_body_paren(text: str, start: int) -> str:
+    depth, i = 1, start
+    while i < len(text) and depth:
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+        i += 1
+    return text[start:i - 1]
 
 
 def functions(text: str) -> dict[str, str]:
@@ -539,8 +569,13 @@ def main() -> int:
     inherited = []
     partial = []
     # A type without tp_traverse that has a base, or whose struct another
-    # type with a tp_traverse uses, most likely inherits one.
-    traversed_structs = {t.struct for t in types if t.traverse}
+    # type with a tp_traverse uses, most likely inherits one.  A struct
+    # defined in a .c file is shared only within it: several example modules
+    # define their own XxoObject.
+    traversed_here = {(t.struct, t.path) for t in types if t.traverse}
+    traversed_structs = {t.struct for t in types if t.traverse
+                         and t.struct in structs
+                         and structs[t.struct].path.suffix == ".h"}
     for t in types:
         if t.struct is None:
             continue
@@ -548,7 +583,8 @@ def main() -> int:
         if not refs:
             continue
         if t.traverse is None:
-            if t.struct in traversed_structs or t.base:
+            if t.struct in traversed_structs or t.base \
+                    or (t.struct, t.path) in traversed_here:
                 inherited.append((t, refs))
             else:
                 missing.append((t, refs))

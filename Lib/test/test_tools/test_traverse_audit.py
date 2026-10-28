@@ -19,6 +19,11 @@ typedef struct {
     PyObject *obj;
     Py_ssize_t len;
 } Py_buffer;
+
+typedef struct {
+    PyObject_HEAD
+    Py_ssize_t ma_used;
+} PyDictObject;
 """
 
 # The shape of _testbuffer's ndarray: the object reaches a PyMem-allocated
@@ -172,6 +177,48 @@ static PyTypeObject Helper_Type = {
     .tp_traverse = helper_traverse,
 };
 
+/* Bases given at run time. */
+typedef struct {
+    PyDictObject dict;
+    PyObject *extra;
+} SubDictObject;
+
+static PyTypeObject SubDict_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "fixture.subdict",
+    sizeof(SubDictObject),
+};
+
+typedef struct {
+    PyObject_HEAD
+    PyObject *args;
+} ErrorObject;
+
+static PyType_Spec error_spec = {
+    .name = "fixture.error",
+    .basicsize = sizeof(ErrorObject),
+};
+
+/* A struct of the same name in another file, which that file traverses. */
+typedef struct {
+    PyObject_HEAD
+    PyObject *x_attr;
+} XxoObject;
+
+static PyTypeObject Xxo_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "fixture.xxo",
+    sizeof(XxoObject),
+};
+
+static int
+fixture_exec(PyObject *m)
+{
+    SubDict_Type.tp_base = &PyDict_Type;
+    PyObject *error = PyType_FromSpecWithBases(&error_spec, PyExc_Exception);
+    return error == NULL ? -1 : 0;
+}
+
 /* A pointer to an object struct is a reference already, not a struct to
    follow. */
 typedef struct {
@@ -191,6 +238,27 @@ static PyTypeObject Owner_Type = {
     .tp_name = "fixture.owner",
     .tp_basicsize = sizeof(OwnerObject),
     .tp_traverse = owner_traverse,
+};
+"""
+
+OTHER = """\
+typedef struct {
+    PyObject_HEAD
+    PyObject *x_attr;
+} XxoObject;
+
+static int
+xxo_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(((XxoObject *)op)->x_attr);
+    return 0;
+}
+
+static PyTypeObject Xxo_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "other.xxo",
+    .tp_basicsize = sizeof(XxoObject),
+    .tp_traverse = xxo_traverse,
 };
 """
 
@@ -219,9 +287,11 @@ class TraverseAuditTests(unittest.TestCase):
                 f.write(textwrap.dedent(HEADER))
             with open(os.path.join(root, "Modules", "fixture.c"), "w") as f:
                 f.write(textwrap.dedent(SOURCE))
+            with open(os.path.join(root, "Modules", "other.c"), "w") as f:
+                f.write(textwrap.dedent(OTHER))
             cls.output = run_audit(root)
         missing, _, partial = cls.output.partition("misses members")
-        cls.missing = missing
+        cls.missing, _, cls.inherited = missing.partition("probably inherited")
         cls.partial = partial
 
     def test_pointer_to_struct_is_followed(self):
@@ -253,6 +323,18 @@ class TraverseAuditTests(unittest.TestCase):
         line = report_line(self.partial, "fixture.helper")
         self.assertIsNotNone(line, self.output)
         self.assertTrue(line.endswith(": other"), line)
+
+    def test_runtime_bases(self):
+        for name in ("fixture.subdict", "fixture.error"):
+            with self.subTest(name=name):
+                self.assertIsNone(report_line(self.missing, name), self.output)
+                self.assertIsNotNone(report_line(self.inherited, name),
+                                     self.output)
+
+    def test_struct_shared_only_within_a_file(self):
+        line = report_line(self.missing, "fixture.xxo")
+        self.assertIsNotNone(line, self.output)
+        self.assertTrue(line.endswith(": x_attr"), line)
 
     def test_pointer_to_object_struct(self):
         self.assertIsNone(report_line(self.output, "fixture.owner"),

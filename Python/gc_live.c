@@ -1848,6 +1848,17 @@ _Py_ScheduleGC(PyThreadState *tstate)
     }
 }
 
+/* sys.settrace(), sys.setprofile() and sys.monitoring call this before they
+   install a hook, so that the callbacks and finalizers of objects that died
+   before tracing began run untraced, as they would have run under reference
+   counting.  An inline collection leaves them queued for the eval breaker,
+   which could otherwise run them inside the first traced step. */
+void
+_PyGC_LiveRunQueue(PyThreadState *tstate)
+{
+    (void)run_queue(tstate);
+}
+
 /* The eval breaker's call, scheduled by _PyGC_LiveOnThreshold(). */
 void
 _Py_RunGC(PyThreadState *tstate)

@@ -5,6 +5,7 @@
 #include "pycore_code.h"          // _PyCode_InitAddressRange()
 #include "pycore_critical_section.h" // _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED()
 #include "pycore_frame.h"         // PyFrameObject
+#include "pycore_gc.h"            // _PyGC_LiveRunQueue()
 #include "pycore_interpframe.h"   // _PyFrame_GetBytecode()
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_modsupport.h"    // _PyModule_CreateInitialized()
@@ -2372,6 +2373,10 @@ monitoring_set_events_impl(PyObject *module, int tool_id, int event_set)
         event_set &= ~(1 << PY_MONITORING_EVENT_BRANCH);
         event_set |= (1 << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1 << PY_MONITORING_EVENT_BRANCH_LEFT);
     }
+    if (event_set != 0) {
+        // As sys.settrace() does (legacy_tracing.c)
+        _PyGC_LiveRunQueue(_PyThreadState_GET());
+    }
     PyInterpreterState *interp = _PyInterpreterState_GET();
     _PyEval_StopTheWorld(interp);
     int err = _PyMonitoring_SetEvents(tool_id, event_set);
@@ -2457,6 +2462,9 @@ monitoring_set_local_events_impl(PyObject *module, int tool_id,
         return NULL;
     }
 
+    if (event_set != 0) {
+        _PyGC_LiveRunQueue(_PyThreadState_GET());
+    }
     PyInterpreterState *interp = _PyInterpreterState_GET();
     _PyEval_StopTheWorld(interp);
     int err = _PyMonitoring_SetLocalEvents((PyCodeObject*)code, tool_id, event_set);

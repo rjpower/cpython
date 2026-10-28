@@ -1758,6 +1758,46 @@ class TracingCollectorTests(unittest.TestCase):
         assert_python_ok("-c", code, PYTHON_GCSTRESS="1000")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_settrace_runs_queued_callbacks_first(self):
+        # An inline collection queues weak reference callbacks for the eval
+        # breaker.  sys.settrace() runs the queue before it installs the
+        # trace function, so the callback of an object that died before
+        # tracing began is not traced, as under reference counting.  In a
+        # child: an audit hook such as regrtest's would run the queue first.
+        code = textwrap.dedent("""
+            import gc, sys, weakref, _testinternalcapi
+            gc.enable()
+            ran = []
+            def cb(ref):
+                ran.append(ref)
+            class A:
+                pass
+            def make():
+                return [weakref.ref(A(), cb) for _ in range(100)]
+            traced = []
+            def tracer(frame, event, arg):
+                traced.append(frame.f_code)
+                return tracer
+            def work():
+                return 1
+            for _ in range(5):
+                refs = make()
+                if ran:
+                    continue  # a collection ran the callbacks already
+                try:
+                    _testinternalcapi.gc_collect_inline_then(sys.settrace,
+                                                             tracer)
+                    work()
+                finally:
+                    sys.settrace(None)
+                if ran:
+                    break
+            print(bool(ran), work.__code__ in traced, cb.__code__ in traced)
+        """)
+        rc, out, err = assert_python_ok("-c", code)
+        self.assertEqual(out.split(), [b"True", b"True", b"False"])
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_stress_static_type_ready(self):
         # PyType_Ready() registers a static type as a root before it sets
         # the type's ob_type, and allocates in between; a collection there

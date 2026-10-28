@@ -6,6 +6,7 @@
 #include "pycore_audit.h"         // _PySys_Audit()
 #include "pycore_ceval.h"         // export _PyEval_SetProfile()
 #include "pycore_frame.h"         // PyFrameObject members
+#include "pycore_gc.h"            // _PyGC_LiveRunQueue()
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
 
 #include "opcode.h"
@@ -554,6 +555,9 @@ _PyEval_SetProfile(PyThreadState *tstate, Py_tracefunc func, PyObject *arg)
     if (_PySys_Audit(current_tstate, "sys.setprofile", NULL) < 0) {
         return -1;
     }
+    if (func != NULL) {
+        _PyGC_LiveRunQueue(current_tstate);
+    }
 
     PyInterpreterState *interp = tstate->interp;
     if (_PyOnceFlag_CallOnce(&interp->sys_profile_once_flag,
@@ -578,6 +582,9 @@ _PyEval_SetProfileAllThreads(PyInterpreterState *interp, Py_tracefunc func, PyOb
 
     if (_PySys_Audit(current_tstate, "sys.setprofile", NULL) < 0) {
         return -1;
+    }
+    if (func != NULL) {
+        _PyGC_LiveRunQueue(current_tstate);
     }
 
     if (_PyOnceFlag_CallOnce(&interp->sys_profile_once_flag,
@@ -719,6 +726,9 @@ _PyEval_SetTrace(PyThreadState *tstate, Py_tracefunc func, PyObject *arg)
     if (_PySys_Audit(current_tstate, "sys.settrace", NULL) < 0) {
         return -1;
     }
+    if (func != NULL) {
+        _PyGC_LiveRunQueue(current_tstate);
+    }
 
     PyInterpreterState *interp = tstate->interp;
     if (_PyOnceFlag_CallOnce(&interp->sys_trace_once_flag,
@@ -751,6 +761,9 @@ _PyEval_SetTraceAllThreads(PyInterpreterState *interp, Py_tracefunc func, PyObje
 
     if (_PySys_Audit(current_tstate, "sys.settrace", NULL) < 0) {
         return -1;
+    }
+    if (func != NULL) {
+        _PyGC_LiveRunQueue(current_tstate);
     }
 
     if (_PyOnceFlag_CallOnce(&interp->sys_trace_once_flag,

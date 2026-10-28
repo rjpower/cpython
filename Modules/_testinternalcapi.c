@@ -3675,6 +3675,26 @@ gc_call_built(PyObject *self, PyValue arg)
         PyObject_CallFunction(callable, "ssi", "first", "second", 3));
 }
 
+/* Collect through the inline path, which queues callbacks for the eval
+   breaker, then return callable(arg) without reaching the eval loop in
+   between. */
+static PyObject *
+gc_collect_inline_then(PyObject *self, PyObject *args)
+{
+    PyObject *callable, *arg;
+    if (!PyArg_ParseTuple(args, "OO", &callable, &arg)) {
+        return NULL;
+    }
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
+    int64_t before = ts->gc_trace.injected;
+    _PyGC_InjectCollect((PyThreadState *)ts);
+    if (ts->gc_trace.injected == before) {
+        PyErr_SetString(PyExc_RuntimeError, "the collector cannot run here");
+        return NULL;
+    }
+    return PyObject_CallOneArg(callable, arg);
+}
+
 /* PYTHON_GCSTRESS=every from now on; 0 turns it off */
 static PyValue
 gc_set_stress(PyObject *self, PyValue arg)
@@ -4081,6 +4101,7 @@ static PyMethodDef module_functions[] = {
     {"gc_collect_at", _PyCFunction_CAST(gc_collect_at), METH_O},
     {"gc_call_built", _PyCFunction_CAST(gc_call_built), METH_O},
     {"gc_set_stress", _PyCFunction_CAST(gc_set_stress), METH_O},
+    {"gc_collect_inline_then", gc_collect_inline_then, METH_VARARGS},
     {"gc_ready_static_type", gc_ready_static_type, METH_NOARGS},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
     {"gc_raw_block_is_object", _PyCFunction_CAST(gc_raw_block_is_object), METH_O},

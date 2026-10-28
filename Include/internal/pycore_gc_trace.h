@@ -312,6 +312,12 @@ typedef struct {
     Py_ssize_t nmarked;
     Py_ssize_t nshallow;
     _PyGCRootStats roots;     // this collection's root phase
+    /* Step 7a: the domain the mark covered, with its mimalloc
+       sub-processes, pinned (GCState.queue_pins) until the collection
+       has routed its calls (note 13 section 3.2). */
+    int ndomain;
+    PyInterpreterState *domain[64];
+    void *subproc[64];
 } _PyGCMarkResult;
 
 /* Mark everything reachable from the roots of the interpreters that share
@@ -319,6 +325,11 @@ typedef struct {
  * an unmarked one gets _Py_GC_DEAD_FLAG and is listed.  Returns -1, with
  * nothing listed or flagged, if the collector's own memory ran out. */
 extern int _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res);
+
+/* Step 7a: the interpreter of res's domain whose heap holds op's block,
+ * or NULL if op is in none of them (a static object). */
+extern PyInterpreterState *_PyGC_LiveOwner(const _PyGCMarkResult *res,
+                                           PyObject *op);
 
 /* The interpreter's descriptor cache for the stack walk (Python/gc_walk.c),
  * or NULL if the collector's state cannot be allocated. */

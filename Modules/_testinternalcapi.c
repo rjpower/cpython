@@ -4279,6 +4279,170 @@ gc_queue_info(PyObject *self, PyObject *args)
     return _PyGC_LiveQueueInfo(interp);
 }
 
+/* gc_queue_never_open_for_test(isolated[, referent, callback]): create an
+   interpreter whose initialisation fails just before its queue would open,
+   with one call queued (note 13 test 9.5 b).  An isolated interpreter's is
+   a finalizer call on one of its objects, discarded at its close; a
+   legacy one's is a weak reference callback, callback(ref) for a weak
+   reference to referent, which runs on the main interpreter. */
+static PyObject *
+gc_queue_never_open_for_test(PyObject *self, PyObject *args)
+{
+    int isolated;
+    PyObject *referent = NULL, *callback = NULL;
+    if (!PyArg_ParseTuple(args, "p|OO", &isolated, &referent, &callback)) {
+        return NULL;
+    }
+    if (!isolated && (referent == NULL || callback == NULL)) {
+        PyErr_SetString(PyExc_TypeError, "a legacy interpreter's call needs "
+                        "a referent and a callback");
+        return NULL;
+    }
+    PyInterpreterConfig config = isolated
+        ? (PyInterpreterConfig)_PyInterpreterConfig_INIT
+        : (PyInterpreterConfig)_PyInterpreterConfig_LEGACY_INIT;
+    _PyGC_LiveFailOpenForTest(isolated ? NULL : referent,
+                              isolated ? NULL : callback);
+    PyThreadState *save = PyThreadState_Get();
+    PyThreadState *sub = NULL;
+    PyStatus status = Py_NewInterpreterFromConfig(&sub, &config);
+    if (PyThreadState_Get() != save) {
+        Py_FatalError("gc_queue_never_open_for_test: lost the thread state");
+    }
+    if (!PyStatus_Exception(status) || sub != NULL) {
+        PyErr_SetString(PyExc_AssertionError,
+                        "the interpreter's initialisation did not fail");
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+/* check_signals_loop(n[, code]) -> list: run code in a legacy
+   subinterpreter, if given, and return to this interpreter, then call
+   PyErr_CheckSignals() n times without releasing the GIL; returns this
+   interpreter's queue length before the first call and after each
+   (note 13 test 9.12). */
+static PyObject *
+check_signals_loop(PyObject *self, PyObject *args)
+{
+    int n;
+    const char *code = NULL;
+    if (!PyArg_ParseTuple(args, "i|s", &n, &code)) {
+        return NULL;
+    }
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    if (code != NULL) {
+        PyThreadState *save = PyThreadState_Get();
+        PyThreadState *sub = Py_NewInterpreter();
+        if (sub == NULL) {
+            PyThreadState_Swap(save);
+            PyErr_SetString(PyExc_RuntimeError, "Py_NewInterpreter failed");
+            return NULL;
+        }
+        int r = PyRun_SimpleString(code);
+        Py_EndInterpreter(sub);
+        PyThreadState_Swap(save);
+        if (r < 0) {
+            PyErr_SetString(PyExc_RuntimeError, "the code raised");
+            return NULL;
+        }
+    }
+    PyObject *lengths = PyList_New(0);
+    if (lengths == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i <= n; i++) {
+        if (i > 0 && PyErr_CheckSignals() < 0) {
+            Py_DECREF(lengths);
+            return NULL;
+        }
+        PyObject *info = _PyGC_LiveQueueInfo(interp);
+        if (info == NULL) {
+            Py_DECREF(lengths);
+            return NULL;
+        }
+        PyObject *len = PyDict_GetItemString(info, "length");
+        int rc = len == NULL ? -1 : PyList_Append(lengths, len);
+        Py_DECREF(info);
+        if (rc < 0) {
+            Py_DECREF(lengths);
+            return NULL;
+        }
+    }
+    return lengths;
+}
+
+/* gc_pause_after_mark(ms): the main interpreter's collections pause ms
+   between their mark and the routing of their calls (note 13 test 9.16);
+   0 turns it off.  gc_queue_info()["pin_waits"] counts the pauses at whose
+   end a deletion was waiting. */
+static PyObject *
+gc_pause_after_mark(PyObject *self, PyObject *args)
+{
+    int ms;
+    if (!PyArg_ParseTuple(args, "i", &ms)) {
+        return NULL;
+    }
+    _PyGC_LivePauseAfterMark(ms);
+    Py_RETURN_NONE;
+}
+
+/* gc_hold_on_stack(factory, func) -> func(): call factory(), hold its result
+   in a C local only, call func(), then drop it (note 13 test 9.17). */
+static Py_NO_INLINE PyObject *
+gc_hold_on_stack(PyObject *self, PyObject *args)
+{
+    PyObject *factory, *func;
+    if (!PyArg_ParseTuple(args, "OO", &factory, &func)) {
+        return NULL;
+    }
+    PyObject *volatile held = PyObject_CallNoArgs(factory);
+    if (held == NULL) {
+        return NULL;
+    }
+    PyObject *r = PyObject_CallNoArgs(func);
+    // The local is read after the call, so it stays in this frame.
+    if (Py_TYPE(held) == NULL) {
+        Py_FatalError("unreachable");
+    }
+    held = NULL;
+    return r;
+}
+
+/* stash_set(obj), stash_get() -> obj: one object in a C static, a root
+   registered by the first stash_set(), which must run on the main
+   interpreter; legacy subinterpreters share it (note 13 test 9.17). */
+static PyObject *stash_obj = NULL;
+static int stash_rooted = 0;
+
+static PyObject *
+stash_set(PyObject *self, PyObject *args)
+{
+    PyObject *obj;
+    if (!PyArg_ParseTuple(args, "O", &obj)) {
+        return NULL;
+    }
+    if (!stash_rooted) {
+        if (!_Py_IsMainInterpreter(_PyInterpreterState_GET())) {
+            PyErr_SetString(PyExc_RuntimeError, "the first stash_set() "
+                            "must run on the main interpreter");
+            return NULL;
+        }
+        if (PyGC_AddRoot(&stash_obj) < 0) {
+            return NULL;
+        }
+        stash_rooted = 1;
+    }
+    stash_obj = obj;
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+stash_get(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    return Py_NewRef(stash_obj != NULL ? stash_obj : Py_None);
+}
+
 /* gc_queue_fail_alloc(n): the nth queue node allocation from now fails. */
 static PyObject *
 gc_queue_fail_alloc(PyObject *self, PyObject *args)
@@ -4295,6 +4459,12 @@ static PyMethodDef module_functions[] = {
     {"get_configs", get_configs, METH_NOARGS},
     {"gc_queue_info", gc_queue_info, METH_VARARGS},
     {"gc_queue_fail_alloc", gc_queue_fail_alloc, METH_VARARGS},
+    {"gc_queue_never_open_for_test", gc_queue_never_open_for_test, METH_VARARGS},
+    {"check_signals_loop", check_signals_loop, METH_VARARGS},
+    {"gc_pause_after_mark", gc_pause_after_mark, METH_VARARGS},
+    {"gc_hold_on_stack", gc_hold_on_stack, METH_VARARGS},
+    {"stash_set", stash_set, METH_VARARGS},
+    {"stash_get", stash_get, METH_NOARGS},
     {"gc_verify", gc_verify, METH_NOARGS},
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
     {"gc_verify_count", gc_verify_count, METH_NOARGS},

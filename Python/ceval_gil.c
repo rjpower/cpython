@@ -87,6 +87,12 @@ update_eval_breaker_for_thread(PyInterpreterState *interp, PyThreadState *tstate
         }
     }
 
+    // Another interpreter's collection queued calls for this one (step 7a,
+    // note 13 section 4): they run where the breaker runs the collector.
+    if (_Py_atomic_load_int_relaxed(&interp->gc.queue_ready)) {
+        _Py_set_eval_breaker_bit(tstate, _PY_GC_SCHEDULED_BIT);
+    }
+
     // _PY_CALLS_TO_DO_BIT was derived from other state above, so the only bits
     // we copy from our interpreter's state are the instrumentation version.
     copy_eval_breaker_bits(&interp->ceval.instrumentation_version,

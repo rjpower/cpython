@@ -2773,6 +2773,554 @@ class PythonFinalizationTests(unittest.TestCase):
         assert_python_ok("-c", code)
 
 
+# --- step 7a: callbacks and finalizers run on their owner (note 13) -------
+
+def _queue_child(code, **env):
+    """Run code in a child after a common prelude; return its stdout."""
+    prelude = textwrap.dedent("""
+        import gc, os, sys, weakref, _interpreters, _testinternalcapi
+        def where():
+            return _interpreters.get_current()[0]
+        def drain_pipe(r):
+            os.set_blocking(r, False)
+            out = b""
+            while True:
+                try:
+                    chunk = os.read(r, 65536)
+                except BlockingIOError:
+                    break
+                if not chunk:
+                    break
+                out += chunk
+            return out.decode().split()
+    """)
+    rc, out, err = assert_python_ok("-c", prelude + textwrap.dedent(code),
+                                    **env)
+    return out.decode()
+
+
+@unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+@unittest.skipIf(_testcapi is None, "requires _testcapi")
+class InterpreterQueueTests(unittest.TestCase):
+    """Note 13 section 9: a weak reference callback runs on the weak
+    reference's owner, a finalizer, legacy tp_del or destroy call on its
+    object's owner, the interpreter whose heap holds the block, and only
+    while that interpreter's queue is open."""
+
+    def test_creator_paths_under_stress(self):
+        # 9.1: the B class of note 11 section 8.2.
+        _queue_child("""
+            import _testcapi
+            for i in range(5):
+                _testcapi.run_in_subinterp("x = 1")
+        """, PYTHON_GCSTRESS="1000")
+
+    def check_main_garbage_while_subinterpreters_start(self, **env):
+        out = _queue_child("""
+            import _testcapi
+            gc.disable()
+            ran = []
+            class D:
+                def __del__(self):
+                    ran.append(("del", where()))
+            refs = []
+            for i in range(200):
+                d = D()
+                d.self = d
+                refs.append(weakref.ref(d, lambda r: ran.append(("cb", where()))))
+            del d
+            for i in range(20):
+                _testcapi.run_in_subinterp("x = 1")
+            gc.collect()
+            print(sum(k == "cb" for k, _ in ran), sum(k == "del" for k, _ in ran),
+                  sorted(set(i for _, i in ran)))
+        """, **env)
+        self.assertEqual(out.split(), ["200", "200", "[0]"])
+
+    def test_main_garbage_while_subinterpreters_start(self):
+        # 9.2
+        self.check_main_garbage_while_subinterpreters_start(
+            PYTHON_GCSTRESS="1000")
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    def test_main_garbage_while_subinterpreters_start_kill(self):
+        self.check_main_garbage_while_subinterpreters_start(
+            PYTHON_GCSTRESS="1000", PYTHON_GCVERIFY="kill")
+
+    def test_collect_in_subinterpreter(self):
+        # 9.3: the subinterpreter's gc.collect() runs its own callback and
+        # none of the main interpreter's, which run on the main interpreter
+        # after it returns; the mirror for a persistent one.
+        out = _queue_child("""
+            import _testcapi
+            gc.disable()
+            ran = []
+            class A:
+                pass
+            refs = []
+            for i in range(50):
+                a = A()
+                a.self = a
+                refs.append(weakref.ref(a, lambda r: ran.append(where())))
+            del a
+            r, w = os.pipe()
+            _testcapi.run_in_subinterp(f'''if 1:
+                import gc, os, weakref, _interpreters
+                class B:
+                    pass
+                b = B()
+                b.self = b
+                mine = []
+                ref = weakref.ref(b, lambda r: mine.append(1))
+                del b
+                gc.collect()
+                os.write({w}, f"{{len(mine)}} ".encode())
+            ''')
+            seen_in_sub = drain_pipe(r)
+            pass
+            print(seen_in_sub, len(ran), sorted(set(ran)))
+
+            # The mirror: a persistent legacy interpreter's garbage, found by
+            # the main interpreter's collection, waits for its owner.
+            r, w = os.pipe()
+            sub = _interpreters.create("legacy")
+            _interpreters.exec(sub, f'''if 1:
+                import os, weakref, _interpreters
+                class C:
+                    def __del__(self):
+                        os.write({w}, f"{{_interpreters.get_current()[0]}} ".encode())
+                c = C()
+                c.self = c
+                del c
+            ''')
+            gc.collect()
+            gc.collect()
+            print(drain_pipe(r))
+            _interpreters.exec(sub, "pass")
+            print(drain_pipe(r) == [str(sub)])
+            _interpreters.destroy(sub)
+        """)
+        self.assertEqual(out.splitlines(), ["['1'] 50 [0]", "[]", "True"])
+
+    def test_teardown_with_nonempty_queue(self):
+        # 9.4
+        out = _queue_child("""
+            r, w = os.pipe()
+            sub = _interpreters.create("legacy")
+            _interpreters.exec(sub, f'''if 1:
+                import os, _interpreters
+                class C:
+                    def __del__(self):
+                        os.write({w}, f"{{_interpreters.get_current()[0]}} ".encode())
+                c = C()
+                c.self = c
+                del c
+            ''')
+            gc.collect()
+            gc.collect()
+            print(drain_pipe(r), _testinternalcapi.gc_queue_info(sub)["length"] > 0)
+            _interpreters.destroy(sub)
+            print(drain_pipe(r) == [str(sub)])
+        """)
+        self.assertEqual(out.split(), ["[]", "True", "True"])
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    def test_teardown_with_nonempty_queue_kill(self):
+        _queue_child("""
+            r, w = os.pipe()
+            sub = _interpreters.create("legacy")
+            _interpreters.exec(sub, f'''if 1:
+                import os
+                class C:
+                    def __del__(self):
+                        os.write({w}, b"x")
+                cs = []
+                for i in range(100):
+                    c = C()
+                    c.self = c
+                    cs.append(c)
+                del c, cs
+            ''')
+            for i in range(5):
+                gc.collect()
+            _interpreters.destroy(sub)
+            assert drain_pipe(r) == ["x" * 100], "lost a finalizer"
+        """, PYTHON_GCVERIFY="kill")
+
+    def test_close_drains_calls_routed_after_the_last_collection(self):
+        # 9.5 (a): a shutdown finalizer of the closing interpreter releases
+        # the GIL while a main-interpreter thread collects the closing
+        # interpreter's garbage; those calls run on the closing interpreter.
+        out = _queue_child("""
+            import threading, time
+            r, w = os.pipe()
+            sub = _interpreters.create("legacy")
+            _interpreters.exec(sub, f'''if 1:
+                import os, time, _interpreters
+                class Slow:
+                    def __del__(self):
+                        # Releases the GIL to the collecting main thread.
+                        for i in range(20):
+                            time.sleep(0.005)
+                class C:
+                    def __del__(self):
+                        os.write({w}, f"{{_interpreters.get_current()[0]}} ".encode())
+                slow = Slow()
+                slow.self = slow
+                junk = []
+                for i in range(50):
+                    c = C()
+                    c.self = c
+                    junk.append(c)
+                del c
+            ''')
+            stop = False
+            def collector():
+                while not stop:
+                    gc.collect()
+                    time.sleep(0.001)
+            t = threading.Thread(target=collector)
+            t.start()
+            _interpreters.exec(sub, "del junk, slow")
+            _interpreters.destroy(sub)
+            stop = True
+            t.join()
+            got = drain_pipe(r)
+            print(len(got), sorted(set(got)) == [str(sub)])
+        """)
+        self.assertEqual(out.split(), ["50", "True"])
+
+    def test_never_opened(self):
+        # 9.5 (b)
+        out = _queue_child("""
+            info = _testinternalcapi.gc_queue_info
+            before = info()["discarded"]["finalize"]
+            _testinternalcapi.gc_queue_never_open_for_test(True)
+            print(info()["discarded"]["finalize"] - before)
+            ran = []
+            class R:
+                pass
+            referent = R()
+            _testinternalcapi.gc_queue_never_open_for_test(
+                False, referent, lambda ref: ran.append(where()))
+            for i in range(3):
+                pass
+            print(ran)
+        """)
+        self.assertEqual(out.split(), ["1", "[0]"])
+
+    def test_reentrancy(self):
+        # 9.6
+        out = _queue_child("""
+            import _testcapi
+            gc.disable()
+            ran = []
+            class A:
+                pass
+            def make(i):
+                a = A()
+                a.self = a
+                def cb(ref):
+                    ran.append(where())
+                    if i % 2:
+                        _testcapi.run_in_subinterp("x = 1")
+                    else:
+                        gc.collect()
+                return a, weakref.ref(a, cb)
+            refs = []
+            for i in range(20):
+                a, ref = make(i)
+                refs.append(ref)
+            del a
+            gc.collect()
+            gc.collect()
+            print(len(ran), sorted(set(ran)))
+        """, PYTHON_GCSTRESS="1000")
+        self.assertEqual(out.split(), ["20", "[0]"])
+
+    def test_allocation_failure(self):
+        # 9.11: a failure at each node allocation of a collection whose
+        # calls have three owners.
+        out = _queue_child("""
+            r, w = os.pipe()
+            subs = [_interpreters.create("legacy") for _ in range(2)]
+            make = f'''if 1:
+                import os, weakref, _interpreters
+                me = _interpreters.get_current()[0]
+                class C:
+                    def __del__(self):
+                        os.write({w}, f"del:{{me}} ".encode())
+                def cb(ref):
+                    os.write({w}, f"cb:{{me}} ".encode())
+                refs = []
+                for i in range(3):
+                    c = C()
+                    c.self = c
+                    refs.append(weakref.ref(c, cb))
+                del c
+            '''
+            failures = []
+            for n in range(1, 13):
+                exec(make)
+                for sub in subs:
+                    _interpreters.exec(sub, make)
+                _testinternalcapi.gc_queue_fail_alloc(n)
+                for k in range(3):
+                    gc.collect()
+                    for sub in subs:
+                        _interpreters.exec(sub, "pass")
+                _testinternalcapi.gc_queue_fail_alloc(0)
+                got = sorted(drain_pipe(r))
+                want = sorted(f"{k}:{i}" for i in [0, *subs]
+                              for k in ("cb", "del") for _ in range(3))
+                if got != want:
+                    failures.append((n, got))
+            for sub in subs:
+                _interpreters.destroy(sub)
+            print(failures)
+        """)
+        self.assertEqual(out.split(), ["[]"])
+
+    def test_progress_without_collection(self):
+        # 9.12: calls spliced to the main interpreter run at its next breaker
+        # and in a C loop of PyErr_CheckSignals(), with collection off.
+        out = _queue_child("""
+            ran = []
+            class A:
+                pass
+            def garbage():
+                refs = []
+                for i in range(20):
+                    a = A()
+                    a.self = a
+                    refs.append(weakref.ref(a, lambda r: ran.append(where())))
+                return refs
+            gc.disable()
+            refs = garbage()
+            lengths = _testinternalcapi.check_signals_loop(
+                2, "import gc; gc.collect()")
+            print(lengths[0] > 0, lengths[1], len(ran))
+            gc.enable()
+            gc.set_threshold(0)
+            ran.clear()
+            refs = garbage()
+            lengths = _testinternalcapi.check_signals_loop(
+                1, "import gc; gc.collect()")
+            print(lengths[-1], len(ran), sorted(set(ran)))
+        """)
+        self.assertEqual(out.split(), ["True", "0", "20", "0", "20", "[0]"])
+
+    def test_progress_during_finalization(self):
+        # 9.12, during the main interpreter's finalisation.
+        out = _queue_child("""
+            import atexit, _testcapi
+            class A:
+                pass
+            def at_exit():
+                gc.disable()
+                refs = []
+                for i in range(20):
+                    a = A()
+                    a.self = a
+                    refs.append(weakref.ref(a, lambda r: print("cb", where())))
+                del a
+                _testcapi.run_in_subinterp("import gc; gc.collect()")
+                for i in range(3):
+                    pass
+            atexit.register(at_exit)
+        """)
+        self.assertEqual(out.split(), ["cb", "0"] * 20)
+
+    def test_legacy_delivery_marker(self):
+        # 9.15: a legacy tp_del waiting in an idle queue runs once.
+        out = _queue_child("""
+            r, w = os.pipe()
+            sub = _interpreters.create("legacy")
+            _interpreters.exec(sub, f'''if 1:
+                import os, _testcapi
+                @_testcapi.with_tp_del
+                class L:
+                    def __tp_del__(self):
+                        os.write({w}, b"x")
+                obj = L()
+                del obj
+            ''')
+            for i in range(5):
+                gc.collect()
+            _interpreters.exec(sub, "pass")
+            for i in range(5):
+                gc.collect()
+            _interpreters.exec(sub, "import gc; gc.collect()")
+            print(drain_pipe(r))
+            _interpreters.destroy(sub)
+        """)
+        self.assertEqual(out.split(), ["['x']"])
+
+    def test_pin(self):
+        # 9.16: a deletion waits for a collection between its mark and its
+        # routing that names the interpreter being deleted.
+        out = _queue_child("""
+            import threading
+            ran = []
+            waits = 0
+            for attempt in range(20):
+                sub = _interpreters.create("legacy")
+                _interpreters.exec(sub, '''if 1:
+                    class C:
+                        pass
+                    junk = []
+                    for i in range(100):
+                        c = C()
+                        c.self = c
+                        junk.append(c)
+                    del c, junk
+                ''')
+                stop = False
+                def collector():
+                    while not stop:
+                        gc.collect()
+                _testinternalcapi.gc_pause_after_mark(20)
+                t = threading.Thread(target=collector)
+                t.start()
+                _interpreters.destroy(sub)
+                stop = True
+                t.join()
+                _testinternalcapi.gc_pause_after_mark(0)
+                gc.collect()
+                waits = _testinternalcapi.gc_queue_info()["pin_waits"]
+                if waits:
+                    break
+            print(waits > 0)
+        """)
+        self.assertEqual(out.split(), ["True"])
+
+    def test_every_kind_routed(self):
+        # 9.17: each kind of call, in each direction, runs once on its
+        # owner; a weak reference owned by one interpreter to an object of
+        # another delivers its callback on the weak reference's owner.
+        out = _queue_child("""
+            r, w = os.pipe()
+            sub = _interpreters.create("legacy")
+            make = f'''if 1:
+                import os, sys, types, weakref, _interpreters, _testcapi
+                me = _interpreters.get_current()[0]
+                def rec(tag):
+                    os.write({w}, f"{{tag}}:{{me}} ".encode())
+                class Fin:
+                    def __del__(self):
+                        rec("fin")
+                @_testcapi.with_tp_del
+                class Leg:
+                    def __tp_del__(self):
+                        rec("legacy")
+                class Exporter(bytearray):
+                    def __buffer__(self, flags):
+                        return super().__buffer__(flags)
+                    def __release_buffer__(self, view):
+                        rec("release")
+                        super().__release_buffer__(view)
+                class Target:
+                    pass
+                target = Target()
+                target.self = target
+                ref = weakref.ref(target, lambda r: rec("cb"))
+                f = Fin()
+                f.self = f
+                l = Leg()
+                # The capsule does not traverse its callable.
+                keep_alive = lambda: rec("capsule")
+                cap = _testcapi.capsule_calling(keep_alive)
+                v = memoryview(Exporter(b"abc"))
+                del target, f, l, cap, v
+            '''
+            exec(make)
+            _interpreters.exec(sub, make)
+            # Main's collection finds the subinterpreter's garbage, and the
+            # subinterpreter's collection finds the main interpreter's.
+            gc.collect()
+            _interpreters.exec(sub, "import gc; gc.collect()")
+            for i in range(3):
+                gc.collect()
+                _interpreters.exec(sub, "import gc; gc.collect()")
+            got = drain_pipe(r)
+            print(sorted(got))
+            print(sub)
+            _interpreters.destroy(sub)
+        """)
+        got, sub = out.splitlines()
+        got = eval(got)
+        for owner in ("0", sub.strip()):
+            for tag in ("cb", "fin", "legacy", "capsule", "release"):
+                self.assertEqual(got.count(f"{tag}:{owner}"), 1, (tag, owner, got))
+
+    def test_weakref_owner_runs_callback(self):
+        # 9.17: a weak reference owned by the main interpreter to an object
+        # owned by a legacy subinterpreter, and the reverse: the callback
+        # runs on the weak reference's owner, whichever collection finds it.
+        out = _queue_child("""
+            r, w = os.pipe()
+            _testinternalcapi.stash_set(None)
+            sub = _interpreters.create("legacy")
+            # The subinterpreter's object, the main interpreter's reference.
+            _interpreters.exec(sub, '''if 1:
+                import _testinternalcapi
+                class Target:
+                    pass
+                t = Target()
+                t.self = t
+                _testinternalcapi.stash_set(t)
+                del t
+            ''')
+            ran = []
+            ref = weakref.ref(_testinternalcapi.stash_get(),
+                              lambda r: ran.append(where()))
+            _testinternalcapi.stash_set(None)
+            _interpreters.exec(sub, "import gc; gc.collect()")
+            print(ran)
+            # The main interpreter's object, the subinterpreter's reference.
+            class Target:
+                pass
+            t = Target()
+            t.self = t
+            _testinternalcapi.stash_set(t)
+            del t
+            _interpreters.exec(sub, f'''if 1:
+                import os, weakref, _interpreters, _testinternalcapi
+                me = _interpreters.get_current()[0]
+                ref2 = weakref.ref(_testinternalcapi.stash_get(),
+                    lambda r: os.write({w}, f"{{me}} ".encode()))
+            ''')
+            _testinternalcapi.stash_set(None)
+            gc.collect()
+            print(drain_pipe(r))
+            _interpreters.exec(sub, "pass")
+            print(drain_pipe(r) == [str(sub)])
+            _interpreters.destroy(sub)
+        """)
+        self.assertEqual(out.splitlines(), ["[0]", "[]", "True"])
+
+    def test_held_by_a_c_stack_word(self):
+        # 9.17: a conservative C-stack word keeps the object for one
+        # collection; then it dies and its call runs once, on its owner.
+        out = _queue_child("""
+            ran = []
+            class Fin:
+                def __del__(self):
+                    ran.append(where())
+            def factory():
+                f = Fin()
+                f.self = f
+                return f
+            def collect():
+                gc.collect()
+                return len(ran)
+            during = _testinternalcapi.gc_hold_on_stack(factory, collect)
+            gc.collect()
+            print(during, ran)
+        """)
+        self.assertEqual(out.split(), ["0", "[0]"])
+
+
 def setUpModule():
     global enabled, debug
     enabled = gc.isenabled()

@@ -191,7 +191,17 @@ extern void _PyGC_LiveRunQueue(PyThreadState *tstate);
 PyAPI_FUNC(PyObject *) _PyGC_LiveQueueInfo(PyInterpreterState *interp);
 /* The interpreter can run Python code: its queue opens (end of
    pycore_interp_init()). */
-extern void _PyGC_LiveOpenQueue(PyInterpreterState *interp);
+extern PyStatus _PyGC_LiveOpenQueue(PyInterpreterState *interp);
+/* With the head lock held: wait, releasing it, until no collection pins
+   interp (PyInterpreterState_Delete()). */
+extern void _PyGC_LiveWaitUnpinned(PyInterpreterState *interp);
+/* Test hook: the main interpreter's collections pause ms after the mark. */
+PyAPI_FUNC(void) _PyGC_LivePauseAfterMark(int ms);
+/* Test hook: the next interpreter's initialisation fails where its queue
+   would open, with one call queued: a weak reference callback for
+   referent if given, else a finalizer call on a fresh object. */
+PyAPI_FUNC(void) _PyGC_LiveFailOpenForTest(PyObject *referent,
+                                           PyObject *callback);
 PyAPI_FUNC(void) _PyGC_LiveFailAlloc(int n);
 
 struct PyValue;

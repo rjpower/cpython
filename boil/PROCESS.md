@@ -26,8 +26,8 @@ record and is updated at every landing.
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; hand-offs: FOR_ITER_RANGE spill and nbody +5.3% to step 8, `str +=` to step 9 |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots (note 11): the attributed DWARF walk, the C-mode checker, kill and retain verification, the stack-hits tool | rungs 0, 1, 1b landed (29a358b492d, 4bb672e0bf4; gated clean), the kill record keeps every word (de6f193f905); rung 2b in progress: items 1a (generator send path; its hazard, a stale word in the opaque PyGen_am_send frame after its callees became precise, fixed with the async-gen family), 1b and 3 (UnpackDict in value form) committed and gated, items 5, 6 and 4b start from de1533e8b1a now that 6d rung 4 has landed; rung 3 (PyMem spans, the writer row, the Py_buffer release skipped in the sweep for a Python exporter, the symtable roots, kill with pymem and structs) and rung 4 (gate 4, the platform matrix, write-up) open; hard stop 2026-11-02 15:30 PDT |
-| 7a | the per-interpreter callback and finalizer queue (note 13; finding B of note 08; note 11 question 18): a call runs on the interpreter that owns the object, never while that interpreter cannot run Python code; a shared-heap interpreter's heap passes to the main interpreter at its close; one GIL per domain | rung 1 implemented 2026-10-28 (four commits on boil/7a at ae73621efff: node queue and batch, open and close, owner routing with the pin and queue_ready, OWN_GIL with a shared heap refused); gate 2 passed, gate 3 and the verification set running; landing branch boil/7a-rung1 next. Moved up from step 7 on 2026-10-28; design adopted 2026-10-28 10:50 PDT after two review rounds, with three rulings (no fallback forms, section 0.2's two compatibility breaks, two rungs): rung 1 (node queue, owner routing, the pin, delivery at execution, the opening and close, one GIL per domain) due 2026-10-29 13:00 PDT; rung 2 (order across owners, metadata by owner and the registration refusal, retirement, adoption and absorption, the fork child, the latency tool) gate 3 by 2026-10-30 12:00 PDT, hard stop 2026-10-30 18:00 PDT |
+| 10a | precise roots (note 11): the attributed DWARF walk, the C-mode checker, kill and retain verification, the stack-hits tool | rungs 0, 1, 1b landed (29a358b492d, 4bb672e0bf4; gated clean), the kill record keeps every word (de6f193f905); rung 2b at a43efa83112 (boil/10a): items 1a (generator send path; its hazard, a stale word in the opaque PyGen_am_send frame after its callees became precise, fixed with the async-gen family), 1b, 3 (UnpackDict in value form), 5 (slot functions, site 13), 6 and 4b (attribute protocol and dict entry points precise) and 7 (13 skips removed) committed; end gates running since 15:36 PDT (gate 0 on three builds and gate 2 default passed, 51,073 tests, 0 fallbacks); before the landing branch, the two checker holes of review 2 (section 0.1: argument order, the hashtable family) are fixed in the same rung; rung 3 (PyMem spans, the writer row, the Py_buffer release skipped in the sweep for a Python exporter, the symtable roots, kill with pymem and structs) and rung 4 (gate 4, the platform matrix, write-up) open; hard stop 2026-11-02 15:30 PDT |
+| 7a | the per-interpreter callback and finalizer queue (note 13; finding B of note 08; note 11 question 18): a call runs on the interpreter that owns the object, never while that interpreter cannot run Python code; a shared-heap interpreter's heap passes to the main interpreter at its close; one GIL per domain | rung 1 implemented 2026-10-28 (four commits on boil/7a: node queue and batch, open and close, owner routing with the pin and queue_ready, OWN_GIL with a shared heap refused); landing review returned fix first (two defects: queue_ready unset on a local splice, a NULL dereference after the close; three weak oracles) and the fixes are 3db9ff26c4b and 75840fe4b9e on boil/7a-rung1; the full ladder is running at 75840fe4b9e and the new landing head is due 2026-10-29 09:00 PDT. Rung 2 takes three items from review 2 (section 0.1): the sweep-order fallback, finalizer completion order, debug output between mark and sweep. Moved up from step 7 on 2026-10-28; design adopted 2026-10-28 10:50 PDT after two review rounds, with three rulings (no fallback forms, section 0.2's two compatibility breaks, two rungs): rung 1 (node queue, owner routing, the pin, delivery at execution, the opening and close, one GIL per domain) due 2026-10-29 13:00 PDT; rung 2 (order across owners, metadata by owner and the registration refusal, retirement, adoption and absorption, the fork child, the latency tool) gate 3 by 2026-10-30 12:00 PDT, hard stop 2026-10-30 18:00 PDT |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | the remaining slot families on values; inline int and float receivers | open, after 6d |
 | 7 | generational collection over the precise root set | open; decides header flag bits and side bitmaps |
@@ -46,11 +46,16 @@ test_ssl, `_decimal`, `_uuid` and `_sqlite3` do not build on this machine
 and gdb is absent (user action); `PYTHONMALLOC=malloc` is not honoured
 (hack register, owner 10a rung 2); test_perf_profiler's tearDown deletes every /tmp/perf-*.map it did not see at setUp, so two suites running at once on this machine can fail each other's test_pre_fork_compile (seen once at de1533e8b1a's gate 2 under load 35, passed 4 of 4 alone; a cross-run artefact of the shared /tmp, rerun rather than excluded); the rung 1 fork-child hang of 6d-1.md's hazard record has not recurred and is owned by 7a rung 2 with the fork path (evidence required on recurrence: the hung child's native and Python stacks).
 
-### 0.1 Cleanup inputs from the 2026-10-28 architecture review
+### 0.1 Cleanup inputs from the architecture reviews
 
 `boil/ARCHITECTURE_REVIEW.md` (a source and architecture review of the
-branch at 4bb672e0bf4, no builds run) and its shortlist `boil/CLEANUP.md`
-are inputs to the plan, not gates. Owners, as of 2026-10-28:
+branch at 4bb672e0bf4, no builds run), its shortlist `boil/CLEANUP.md`,
+and `boil/ARCHITECTURE_REVIEW_2.md` (the whole-project review of
+5f74a991472 on 2026-10-28, "review 2" below; its prompt is in
+`boil/design/reviews/`) are inputs to the plan, not gates. A review's
+confirmed finding becomes a row here with an owner and a time; a
+suspected hazard becomes a probe owned by the rung nearest the code.
+Owners, as of 2026-10-28:
 
 | Item | Owner | When |
 |---|---|---|
@@ -61,6 +66,15 @@ are inputs to the plan, not gates. Owners, as of 2026-10-28:
 | compatibility accessors that allocate and abort on failure (`_PyValue_ObjectOrAbort`): migrate core callers, document the residual contract | 6e | with the remaining slot families |
 | documentation: `boil/PR.md` marked historical, note 06's opening reconciled with its as-built record, the 4,095-slot limit documented, wall-time, RSS and pause measurements against upstream | coordinator at each step end; the measurements at 10a rung 4 and step 7 | ongoing |
 | 7a ahead of further collector features; `str +=` linear path with its own acceptance criterion (step 9); handle discipline before movement (10b) | as planned | as planned |
+| review 2 §5.1, confirmed and reproduced (`f` returns 2 on the fork, 1 upstream): `_PyRegPass_CopyProp` folds a local's load into a reader past a call on the same line, so a call that rebinds the local through `frame.f_locals` changes an operand already evaluated | coordinator, a bounded compiler-fix agent (`boil/compiler-copyprop`) from integration 40cfac6fe3a: a pending load does not survive an op that can run Python code; same-line tests for calls, descriptors and instrumentation; the folding counts recorded before and after | started 2026-10-28; lands before 7a rung 2, independent of both running rungs (compiler files only) |
+| review 2 §5.2, confirmed: `order_dead_first()` returns NULL when its table fails to allocate and `sweep()` then frees in heap order, abandoning the referent-reading order | 7a rung 2, its first commit (same file as the queue; same rule as its node table: one failure path, undo the dead, free nothing); test fails the ordering allocation and then collects | 2026-10-29 |
+| review 2 §5.4 and §5.5, confirmed checker holes: argument evaluation order assumed left to right (`FunctionChecker.eval`); `_Py_hashtable_\w+` exempted as a family though `foreach`, destruction and lookup run callbacks | 10a rung 2b before its landing branch; negative fixtures for both textual orders and for a collecting foreach callback; any precise function the rules now reject fixed in the same series | 2026-10-29 |
+| review 2 §5.7: gate 3's regen check compared status, not content; `root_stats.py check` passed on a missing file | coordinator | done 2026-10-28 (this commit); the manifest row above carries the rest |
+| review 2 S1 (several threads of one owner drain the queue; a referrer's finalizer that releases the GIL can be overtaken by its referent's) and S3 (`debug_write()` runs a Python writer between mark and sweep; the pin covers interpreter storage, not the dead set) | 7a rung 2: probe each as the review describes; the completion rule for dependent calls goes into the cross-owner order; no Python call while a dead snapshot is held | with rung 2's design, before its code |
+| review 2 S2: type and shape versions are allocated per interpreter while objects, shapes and executing code can be shared across the domain | step 7's domain design, before tiers 0 and 1 trust the guards; probe with the native stash fixture | step 7 |
+| review 2 §4: the traverse audit credits a member that is merely mentioned (`MEMBER_RE.findall`); a null check is not a visit | coordinator, audit-3 (the 0.3 row widened) | after 7a rung 2 |
+| review 2 §4: dead verifier residue in `gc_trace.c` (`remove_garbage`, `find_holes`, the `(void)` casts in `verify()`); stale header prose at `Include/object.h` line 19 and `Include/refcount.h` line 76; `_uuid`'s weaklist field and `tp_weaklist` | coordinator, one cleanup commit after the 7a rung 1 landing (no gate runs from integration then) | 2026-10-29 |
+| review 2 §6: the whole-workload record (6d over the upstream baseline: kernels 1.161, micro 0.693, memory 1.699 instructions) stands as the honest position; wall time, RSS and pause distributions against upstream at step 7's start | coordinator, with the documentation row | step 7 |
 
 ### 0.2 Intentional compatibility breaks
 
@@ -84,16 +98,20 @@ day travelled through messages and work-doc paragraphs.
 |---|---|---|---|
 | Py_buffer consumers (PickleBuffer, _pickle.Unpickler, SRE scanner, _struct.unpack_iterator, _testbuffer.ndarray) release in the sweep, so a Python exporter's `__release_buffer__` is skipped or runs in the sweep | audit-2 review | 10a rung 3, after 7a rung 2 (the release runs Python code, so it is a queued call on the owner) | a test shows exactly-once release per consumer with a retained exporter and an allocating and a collecting callback, on both builds and under kill |
 | the symtable entry's PyMem roots | audit-2 | 10a rung 3 | the span lands and the allow entry goes |
-| the traverse audit's remaining limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) | audit-2 | coordinator, audit-3 after 7a rung 2 | audit-3 lands |
+| the traverse audit's remaining limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values, a mention credited as a visit) | audit-2, review 2 | coordinator, audit-3 after 7a rung 2 | audit-3 lands |
 | the rung 1 fork-child hang (6d-1.md's hazard record: where the parent waited, not why the child hung) | 6d | 7a rung 2 (the fork path) | on recurrence, the hung child's native and Python stacks; otherwise carried as not recurred |
 | test_gc's test_verify_kill under stress: the compiler unit's u_metadata dicts held only through a PyMem_Calloc block (kill:pymem finds the holder by design; the live collector is unaffected) | 7a | 10a rung 3 | the compiler unit's metadata has a root or a span; the stress exclusion row goes |
 | the bytes and unicode writer buffers under stress (`*test_resize*`, `*WriterTest*`) | 10a rung 1 (note 11 6.2), counts from 7a | 10a rung 3 | the writer buffers are rooted; the exclusion goes |
-| a conservative word under a thread state detached by `PyThreadState_Swap()` in `new_interpreter()` (an unpinned record; the walk attributes the main thread's frames to `_start`); seen as a stale argument tuple in `_PyObject_MakeTpCall`'s frame retaining one object | 7a rung 1 review | 10a rung 2b or 3 | test_progress_during_finalization gives 20 of 20 at its first check on ASan; the swap path pins the C frame extent as a detach does |
+| a conservative word under a thread state detached by `PyThreadState_Swap()` in `new_interpreter()` (an unpinned record; the walk attributes the main thread's frames to `_start`); seen as a stale argument tuple in `_PyObject_MakeTpCall`'s frame retaining one object | 7a rung 1 review | 10a rung 3 (ruled 2026-10-28: the fix is in pystate.c's swap path, 7a's file; the effect is retention, which the conservative scan keeps safe) | test_progress_during_finalization gives 20 of 20 at its first check on ASan; the swap path pins the C frame extent as a detach does |
 | test_stress_shared_heap_callbacks skipped (the B class) | 7a design | 10a rung 2b item 7, after 7a rung 1 lands | the skip is removed with the manifest and the test passes under stress |
 | the SLOT macro family (`slot_mp_ass_subscript`, `slot_nb_power`, `slot_nb_bool`, `slot_nb_inplace_power`, `slot_tp_repr`, `slot_tp_hash`) the C mode cannot parse; `slot_inherited` with `update_one_slot` | 10a item 5 | 10a rung 3 | the checker parses the family or the functions are written out, and they are precise |
 | the C mode's block-local false positive (an object local declared in one branch reported as held across the sibling branch's call when results go to a frame pointer); expected failure test_block_local_beside_frame_result | 10a item 3 | 10a rung 3 | the expected failure passes |
 | comprehensions +2.19% instructions at 7a rung 1, unexplained | 7a | step 8 | attributed or absorbed by tier 0 |
-| the Py_NO_INLINE boundaries of 10a item 6 (the dict insertion core under `_PyDict_FromItems`, `update_slot_after_setattr`, `object_set_class_world_stopped`) | 10a rung 2b | 10a rung 3 | the callees are precise and the boundaries go |
+| the Py_NO_INLINE boundaries of 10a item 6 (the dict insertion core under `_PyDict_FromItems`, `update_slot_after_setattr`, `object_set_class_world_stopped`, `PyType_Ready`, `_PyType_Modified_Unlocked`) | 10a rung 2b | 10a rung 3 | the callees are precise and the boundaries go |
+| a saved exception surviving a collecting `__del__` has no test (Python code cannot leave one pending; a C fixture is needed) | 10a rung 2b test reread | 10a rung 3 | the fixture lands |
+| the sweep-order fallback on allocation failure (review 2 §5.2); finalizer completion order across threads (S1); Python output between mark and sweep (S3) | review 2 | 7a rung 2 | §5.2: the single failure path and its test; S1 and S3: a probe each, and a fix or a written negative result in the record |
+| the checker's argument-order and hashtable-family holes (review 2 §5.4, §5.5) | review 2 | 10a rung 2b | both negative fixtures fail before the fix and pass after; the hazard list names the commits |
+| copy propagation across a reentrant call (review 2 §5.1) | review 2 | coordinator's compiler-fix agent | the probe returns 1; same-line tests land; the record shows the folds lost |
 
 ## 1. The loop
 
@@ -136,7 +154,13 @@ quick-test. Each rung goes through all of it.
    event (the interpreter a callback runs on, the allocation that
    failed, the order two things happened in), not at setup, and asserts
    the invariant, not a symptom of the mechanism (7a rung 1's landing
-   review found three tests that passed on the wrong behaviour).
+   review found three tests that passed on the wrong behaviour). Every
+   safety test names its negative control in the record (the span left
+   out, the allocation made to fail, the traverse edge removed, the
+   callback routed to the wrong owner) and the record shows the control
+   failing; a safety test without a control is a gap, not a pass
+   (review 2 §7: the checkers and the tests agreed on the same mistake
+   three times).
 4. **Landing review.** The coordinator runs `boil/tools/landing_review.sh
    CHECKOUT BASE HEAD WORKDOC` on a detached checkout of the landing
    branch's head; the reviewer reads the as-built record, the gate lines
@@ -148,7 +172,11 @@ quick-test. Each rung goes through all of it.
    than traced, deleted invariants, tests that assert less than the
    design promised or that would pass on the wrong behaviour. Blocking findings go back to the agent as new commits
    on the rung's landing branch; the rung lands when the review has no
-   open blocking finding or the coordinator has ruled on each.
+   open blocking finding or the coordinator has ruled on each. Each
+   round's review file is kept (`-landing.md`, `-landing-2.md`), never
+   overwritten, and the record closes with a disposition table: every
+   blocking finding against its fixing commit, its written rebuttal or
+   its hand-off row in section 0.3.
 5. **Commit and integrate.** The coordinator merges the rung's landing
    branch (section 2) into the integration branch with a merge commit,
    resolving conflicts by regenerating generated files and keeping both
@@ -166,6 +194,16 @@ quick-test. Each rung goes through all of it.
    layout, and at least once a day. The integration branch is pushed when
    the quick-test passes. A failure is a fixup commit on the step's
    branch, merged again; the merge commit is never amended.
+7. **Whole-branch review at a step's end.** When a step completes (not
+   each rung), the coordinator runs the whole-project review of
+   `boil/design/reviews/architecture-review-2-prompt.txt`, updated to the
+   head, on a detached checkout (codex at xhigh, read-only, a 2.5-hour
+   ceiling, in the background) and files it as a loom artifact and under
+   `boil/`. Rung-local review reads a diff; the two reviews so far found
+   defects a diff cannot show (the copy-propagation fold across a call,
+   the sweep's heap-order fallback, the checker's evaluation-order
+   assumption). Its confirmed findings become section 0.1 rows the same
+   day.
 
 ## 2. Worktrees and branches
 

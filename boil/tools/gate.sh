@@ -92,9 +92,11 @@ case $level in
     run "$py" -m test -q --timeout 1200 -j"$J" -i "$IGNORE"
     roots
     run "$py" -m test -q -u cpu test_cext
-    before=$(git -C "$REPO" status --porcelain)
+    # Status and content: a generated file already modified before the
+    # regen keeps the same status line when the regen changes it again.
+    before=$(git -C "$REPO" status --porcelain; git -C "$REPO" diff HEAD | sha256sum)
     run make -C "$build" -s regen-cases clinic
-    after=$(git -C "$REPO" status --porcelain)
+    after=$(git -C "$REPO" status --porcelain; git -C "$REPO" diff HEAD | sha256sum)
     [ "$before" = "$after" ] || { echo "regen changed the tree:"; git -C "$REPO" status --short; exit 1; }
     [ ! -f "$REPO/Tools/boil/traverse_audit.py" ] || python3 "$REPO/Tools/boil/traverse_audit.py" --check ;;
 4)

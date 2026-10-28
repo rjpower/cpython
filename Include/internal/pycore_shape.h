@@ -39,8 +39,10 @@ extern "C" {
 #define _Py_SHAPE_MAX_PER_TYPE 64
 // The most slots a type has: the shared-keys limit it replaces.
 #define _Py_SHAPE_MAX_SLOTS 30
-// Capacity is min(_Py_SHAPE_MAX_SLOTS, max(_Py_SHAPE_MIN_SLOTS, S + 2)),
-// for S the distinct names of __static_attributes__ over the MRO.
+// The slots a type wants are w = S + 2, for S > 0 the distinct names of
+// __static_attributes__ over the MRO, else _Py_SHAPE_MIN_SLOTS.  Its
+// capacity is every slot that fits in the size class of B + 8w bytes, for
+// B the basic size, up to _Py_SHAPE_MAX_SLOTS (note 12 section 6.4).
 #define _Py_SHAPE_MIN_SLOTS 6
 
 /* Slot kinds (note 09 section 5): a promise about the values a field

@@ -7613,7 +7613,7 @@ case $ac_sys_system in #(
     SOABI_PLATFORM=$PLATFORM_TRIPLET
  ;;
 esac
-SOABI_PLATFORM=`echo "$SOABI_PLATFORM" | sed 's/-/-boil-/'`
+SOABI_PLATFORM=`echo "$SOABI_PLATFORM" | sed 's/-/-boil2-/'`
 
 if test x$SOABI_PLATFORM != x; then
 

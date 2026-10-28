@@ -1964,3 +1964,122 @@ callback ran under a trace function installed after its object died
 and monitoring setters. Recorded, not fixed: shared-heap subinterpreters
 run the main interpreter's callbacks (step 7; note 08 section 3, note 11
 question 18); the compiler's units and `PyBytesWriter` (rung 3's sites).
+
+## 2026-10-27 23:25 PDT: 6c complete; 10a rung 1 landed; gate of the merged head
+
+Step 6c closed with rung 5 (f70da2cad2a counters, 2b0c0a2a9f2 write-up;
+note 06 section 20 has the decisions, measurements and the hand-off list
+by owner). boil/10a's rung 1 (the precise-roots tooling: C mode and inline
+audit, the attributed stack walk with pinned and unpinned detach records,
+the data-stack frame visit, retain and kill modes, injection and stress,
+the callback-queue fixes for signals and tracing hooks) and rung 2's
+vectorcall core landed as the merge 3c2f253232c; the only conflict was the
+worklog, both sides kept. Gate run here on a detached checkout of
+6086cccc9c2 (the merge plus a gate.sh rename) with fresh builds: gate 2
+on default 556/564 files, 50,931 tests, SUCCESS, 52,216 collections, 0
+walk fallbacks, 881 unpinned detaches; gate 3 on debug 50,931 tests,
+SUCCESS, 53,094 collections, 0 fallbacks, -u cpu test_cext 16 tests,
+regen and the traverse audit clean. The test_io.test_signals hang that
+failed 6c's rung 3 and rung 5 debug gates did not recur with 10a's
+callback-queue fix in the tree. Eval-loop file ban on 10a lifted; 10a
+finishes rung 2's call layer, then rung 1b promotes the eval loop. The 6d
+design agent (object slots on values, note 12) launched in its own
+worktree.
+
+## 2026-10-28 00:20 PDT: 6d design adopted (note 12)
+
+Note 12, object slots on values, landed as the merge of boil/6d after two
+codex review rounds (revise, revise; the second's request for a new ABI
+mark per rung was rebutted: no binary is built against an intermediate
+rung). Decisions: five slot types change in place to values (getattro,
+setattro, descr get and set, a callfunc for tp_call) with getset and
+wrapperfunc, no object-form twins; self stays PyObject*; the object-form
+protocol functions are the compatibility layer; three catches for
+unconverted code (a debug canonical-form check on slot results, a tracer
+check for inline values in PyObject* fields, the SOABI mark boil2);
+Python descriptors call the raw __get__ unbound; STORE_ATTR_SHAPE_POLY and
+LOAD_ATTR_METHOD_LAZY_DICT take the opcodes freed by folding the _NO_DICT
+loads; the block-filling capacity rule (block bytes -24.1% over 21
+kernels, -4.5% without generators; no block grows); class_version on
+shapes; the dictionary conversion presizes. Coordinator rulings on its
+open questions: inline int and float receivers go to a new step 6e with
+the remaining slot families (plan row added); 6d rung 1 may start beside
+10a's rung 1b, rungs 2 to 4 from the integration commit that holds 10a's
+rung 2; 10a's rung 1b marks the typeobject.c bridges 6d writes to the C
+mode's subset; the handler-space cleanup goes to step 8's design (row
+updated); the capacity rule is accepted with the stated fallback;
+tp_getattr and tp_setattr stay object slots until phase P. The design
+agent continues as 6d's implementation agent in its worktree.
+
+## 2026-10-28 02:40 PDT: 6d rung 1 gate (the hand-offs and the boil2 mark)
+
+Rung 1 of 6d landed as the merge fc926ebe3aa of 6b5d93bc95b (commits
+92ce784a6a4 class_version on shapes and the member-site guard, SOABI
+boil2, magic 3727; 42406f734b5 capacity by unpadded size class and the
+presized conversion; 73e5daa8b28 the _NO_DICT loads folded into the shape
+handlers, STORE_ATTR_SHAPE_POLY and LOAD_ATTR_METHOD_LAZY_DICT on the
+freed opcodes, magic 3728; c0e0607ee35 test_frozenmain.h regenerated;
+6b5d93bc95b "As built"). The agent's gates: gate 2 on default 50,957
+tests, 0 fallbacks; gate 3 on debug 50,957 tests, SUCCESS. Gate run here
+on a detached checkout of fc926ebe3aa with fresh builds: gate 2 on default
+556/564 files, 50,957 tests, SUCCESS, 52,249 collections, 0 fallbacks;
+gate 3 on debug 50,957 tests, SUCCESS, 53,128 collections, 0 fallbacks,
+-u cpu test_cext 16 tests, regen and the traverse audit clean. Recorded by
+the agent against the rung's before records: attr_store_poly 0.306,
+method_lazy_dict 0.516, go 0.863 (441k poly stores per loop), richards
+0.941, logging 0.95, kernel geomean 0.989; boxes unchanged; logging
+allocations -30 per loop from the presize; capacity dictionary-mode
+entries over the Py_STATS suite 26,080 against the fallback threshold of
+53,084, so the size-class capacity rule stands. One hazard recorded: a
+first-run hang in test_concurrent_futures test_shutdown_deadlock_pickle
+(the forked child never exited; 3/3 passes alone under load). 6d's branch
+now contains boil/10a through item 4, so its later rungs land after 10a's
+rung 1b.
+
+## 2026-10-28 05:12 PDT: 10a rung 1b (the eval loop precise) closed
+
+Branch boil/10a at 3d90f6ac9af; the record is boil/design/work/10a-1b.md.
+All six items landed:
+- the return order, with the entry frame's visitor and injection sites;
+- allocations as safepoints in the handlers;
+- the entry paths precise;
+- the eval loop marked, with the tail-call handlers;
+- the deletions: the eval loop's activations, its stack clears and the
+  value-root clear;
+- the trap type, which turns a use of a killed object into an abort that
+  names the word and the collection that killed it.
+
+The eval loop's frame is no longer a root: test_gc's probe frees a dead
+super() receiver 20 times in 20 on both builds, where the unmarked loop
+kept it.
+
+The first end gates, at d5d83aad9f7, failed three lines:
+- the kill suite: a verifier ordering defect exposed by the eval loop
+  going precise, not a collector defect. The quarantine was released
+  after the page lists were built. Fixed in 349cd951673, with a
+  regression test proven against the old order in 70ac80bf3f3. The other
+  kill-suite failure, test_manager's barrier timeout, was load-induced at
+  a load average of about 20.
+- ASan: two test helpers whose redzones the scan or the scrub must not
+  see, and the verify tests' ASan branches;
+- stress: finding B, a shared-heap subinterpreter running main-interpreter
+  callbacks and finalizers during its own start-up. It is step 7's, and
+  test_capi.test_misc is excluded from stress until then.
+
+Reruns at 349cd951673:
+- gate 3 debug: 55,179 collections, 0 fallbacks;
+- the suite under kill: 556 files, 0 fallbacks;
+- ASan test_gc;
+- stress test_capi.
+
+All pass, as does gate 1 test_gc under kill at 70ac80bf3f3.
+
+Measured, not gated:
+- kernels: instructions geomean 1.014, memory 1.017;
+- the allocation fast path: +3.0% and +4.5%;
+- stack words per collection: 204 down to 150;
+- micro geomean: 1.043.
+
+The micro regression bisects to item 2's handler changes, which the
+benchmarks do not run. The reading is code generation in the single
+eval-loop function.

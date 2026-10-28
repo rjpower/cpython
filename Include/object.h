@@ -149,11 +149,15 @@ _Py_ANONYMOUS struct _object {
  * its root shape, which is embedded in the type object (tp_root_shape), so
  * that the header of a static object is an address constant.
  *
- * Every field but type_version and flags is fixed when the shape is made.
- * type_version mirrors type->tp_version_tag: the type writes it into each of
- * its shapes whenever its version changes, so that an attribute guard is
- * "the header is this shape" and "the shape's type_version is this
- * version".  flags is a copy of type->tp_flags, rewritten whenever the type's
+ * Every field but type_version, class_version and flags is fixed when the
+ * shape is made.  type_version mirrors type->tp_version_tag: the type writes
+ * it into each of its shapes whenever its version changes, so that an
+ * attribute guard is "the header is this shape" and "the shape's
+ * type_version is this version".  A generalisation renews the type_version
+ * of the shapes it widens, so it can differ from the type's.  class_version
+ * is always type->tp_version_tag; a guard on the class alone (a member, a
+ * property, a method) reads it from the header without loading the type
+ * (boil/design/12-object-slots-on-values.md section 6.5).  flags is a copy of type->tp_flags, rewritten whenever the type's
  * flags change; the Check macros read it, and only for bits fixed when the
  * type is readied (the *_SUBCLASS bits and Py_TPFLAGS_HAVE_GC).  The fields
  * after them are the shape tree, which only the core reads
@@ -162,7 +166,8 @@ typedef struct _PyShapeSlot _PyShapeSlot;
 struct _PyShape {
     PyTypeObject *type;             // the owner: Py_TYPE() of every object with this shape
     unsigned long flags;            // a copy of type->tp_flags
-    uint32_t type_version;          // type->tp_version_tag
+    uint32_t type_version;          // type->tp_version_tag, or renewed by a generalisation
+    uint32_t class_version;         // type->tp_version_tag, always
     uint16_t nslots;                // slots in use, holes included
     uint8_t shape_kind;             // _PyShapeKind (pycore_shape.h)
     uint8_t edge_slot;              // the slot the edge from parent filled

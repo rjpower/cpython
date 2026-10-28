@@ -8,7 +8,9 @@ step is gated on them until the ports phase after step 10b. On
 cpython-3.16-value-v1, six, attrs, pycparser, markupsafe, cython, pyyaml
 and cffi pass; numpy fails at the API surface, since its C is not converted
 to the value calling conventions. The cython and cffi patches are the record
-of the C API's surface at value-v1.
+of the C API's surface at value-v1. The interpreter is at value-v2 since
+step 6d (the shape's class_version, note 12 section 2.1); the frozen record
+was not rebuilt.
 
 Run from the repository root:
 

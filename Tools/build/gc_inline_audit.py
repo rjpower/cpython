@@ -6,7 +6,8 @@ scan; root_check's C mode checks its source.  If the compiler inlines an
 unchecked function into it, the inlined function's locals live in that
 frame unchecked.  This audit reads the DWARF of a linked image (or an
 object file) and fails unless every function inlined into a function in
-section py_gc_precise is itself marked precise, is non-collecting by the
+section py_gc_precise (or py_gc_precise_pn, the preserve_none handlers of
+the tail-call interpreter) is itself marked precise, is non-collecting by the
 C mode's classification, or has a body that the C mode passes as a precise
 function's.  The classification consults the tables and the bodies of the
 static inline functions in Include/ and of the functions in the marked
@@ -36,6 +37,8 @@ sys.path.insert(0, str(ROOT / "Tools" / "cases_generator"))
 import root_check_c  # noqa: E402
 
 SECTION = "py_gc_precise"
+# The precise sections: the second is Py_GC_PRECISE_PRESERVE_NONE's
+SECTIONS = (SECTION, "py_gc_precise_pn")
 CORE_DIRS = ("Objects", "Python", "Modules", "Parser")
 HEADER_DIR = "Include/internal"
 CLONE = re.compile(r"^(.*?)\.(cold|isra|constprop|part|lto_priv)(\.\d+)*$")
@@ -57,8 +60,8 @@ class Die:
 class Image:
     relocatable: bool
     has_debug_info: bool
-    section: tuple[int, int] | None          # [start, end) in the image
-    section_index: int | None
+    # The precise sections' [start, end) in the image, by section index
+    sections: dict[int, tuple[int, int]]
     symbols: dict[str, list[tuple[int, int]]] = field(default_factory=dict)
     # name -> [(value, section index)]
 
@@ -73,7 +76,7 @@ def read_image(path: str) -> Image:
     relocatable = re.search(r"Type:\s+REL\b", header) is not None
     sections = run(["readelf", "-SW", path])
     has_debug = False
-    section = index = None
+    precise: dict[int, tuple[int, int]] = {}
     for line in sections.splitlines():
         m = re.match(r"\s*\[\s*(\d+)\]\s+(\S+)\s+\S+\s+([0-9a-f]+)\s+[0-9a-f]+"
                      r"\s+([0-9a-f]+)", line)
@@ -81,11 +84,10 @@ def read_image(path: str) -> Image:
             continue
         if m.group(2) == ".debug_info":
             has_debug = True
-        if m.group(2) == SECTION:
-            index = int(m.group(1))
+        if m.group(2) in SECTIONS:
             start = int(m.group(3), 16)
-            section = (start, start + int(m.group(4), 16))
-    img = Image(relocatable, has_debug, section, index)
+            precise[int(m.group(1))] = (start, start + int(m.group(4), 16))
+    img = Image(relocatable, has_debug, precise)
     for line in run(["readelf", "-sW", path]).splitlines():
         parts = line.split()
         if len(parts) < 8 or parts[3] != "FUNC" or not parts[6].isdigit():
@@ -152,6 +154,9 @@ def read_dwarf(path: str, img: Image) -> tuple[dict[int, Die],
             if r and current.origin is None:
                 current.origin = int(r.group(1), 16)
         elif key == "DW_AT_low_pc":
+            # DWARF 5 (clang) gives an index into .debug_addr, then the value
+            if val.startswith("("):
+                val = val.rsplit("): ", 1)[-1]
             r = re.match(r"(0x[0-9a-f]+|\d+)", val)
             if r:
                 current.low_pc = int(r.group(1), 0)
@@ -261,7 +266,7 @@ def audit(path: str, sources: list[Path]) -> list[str]:
     tables = source_tables(sources)
     precise_src = tables.precise
     in_section = {name for name, syms in img.symbols.items()
-                  if any(idx == img.section_index for _, idx in syms)}
+                  if any(idx in img.sections for _, idx in syms)}
     errors: list[str] = []
     # Parts and clones of precise functions
     for name, syms in img.symbols.items():
@@ -274,20 +279,20 @@ def audit(path: str, sources: list[Path]) -> list[str]:
         if m.group(2) == "cold":
             errors.append(f"{path}: '{name}' is a cold part split out of "
                           f"precise '{base}'")
-        elif not any(idx == img.section_index for _, idx in syms):
+        elif not any(idx in img.sections for _, idx in syms):
             errors.append(f"{path}: '{name}', a clone of precise '{base}', is "
                           f"outside section {SECTION}")
-    if img.section is None:
+    if not img.sections:
         return errors
     subprograms, candidates = read_dwarf(path, img)
-    start, end = img.section
     found: set[str] = set()
     for d, inlines in candidates:
         name = name_of(d, subprograms)
         if img.relocatable or d.low_pc is None or (d.low_pc == 0 and d.ranges):
             is_precise = name in in_section
         else:
-            is_precise = start <= d.low_pc < end
+            is_precise = any(start <= d.low_pc < end
+                             for start, end in img.sections.values())
         if not is_precise:
             continue
         found.add(name or "")

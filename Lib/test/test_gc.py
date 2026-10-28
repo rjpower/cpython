@@ -2188,6 +2188,49 @@ class StackWalkTests(unittest.TestCase):
         # No fallback; one trampoline, whose frame is core opaque
         self.assertEqual(out.decode().split(), ["0", "1", "[2]"])
 
+    def test_tail_call_handlers_precise(self):
+        # In the tail-call interpreter the handlers, labels included, are
+        # precise and preserve no register: the walk gives the registers
+        # pending at their calls to them, as their own.
+        def walk(results):
+            results.append(_testinternalcapi.gc_walk_precise_regs())
+
+        def check(frames, regs, section):
+            lo, hi = section
+            handlers = [i for i, f in enumerate(frames) if lo <= f[0] < hi]
+            self.assertTrue(handlers)
+            for i in handlers:
+                self.assertEqual(frames[i][3], 1)    # _PyGC_FRAME_PRECISE
+                # Every callee-saved register pending at the call, where
+                # the C convention would give the handler only the frame
+                # pointer it saves and the rest to its caller.
+                self.assertGreater(regs.count(i), 1, (i, regs))
+
+        results = []
+        walk(results)
+        frames, regs, section = results[0]
+        if section is None:
+            self.skipTest("requires the tail-call interpreter")
+        check(frames, regs, section)
+        # From the error label, which reports the raise to sys.monitoring
+        mon = sys.monitoring
+        tool = mon.DEBUGGER_ID
+        mon.use_tool_id(tool, "test_gc")
+        try:
+            mon.register_callback(tool, mon.events.RAISE,
+                                  lambda *args: walk(results))
+            mon.set_events(tool, mon.events.RAISE)
+            try:
+                {}[1]
+            except KeyError:
+                pass
+        finally:
+            mon.set_events(tool, 0)
+            mon.register_callback(tool, mon.events.RAISE, None)
+            mon.free_tool_id(tool)
+        self.assertEqual(len(results), 2)
+        check(*results[1])
+
     def test_stale_record_not_a_root(self):
         # The main thread's state is in _PyRuntime, which the data scan and
         # the main interpreter's struct scan read; its detach record, stale

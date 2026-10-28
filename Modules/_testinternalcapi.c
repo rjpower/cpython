@@ -3575,6 +3575,10 @@ gc_frame_descriptor(PyObject *self, PyValue arg)
 struct walk_record {
     PyObject *frames;
     int failed;
+    // gc_walk_precise_regs(): the register words given to precise frames,
+    // as the index of the frame, and that frame's extent
+    PyObject *regs;
+    uintptr_t sp, cfa;
 };
 
 static void
@@ -3597,6 +3601,67 @@ walk_record_frame(void *arg, uintptr_t pc, uintptr_t sp, uintptr_t cfa,
         r->failed = 1;
     }
     Py_XDECREF(item);
+    r->sp = sp;
+    r->cfa = cfa;
+}
+
+/* A precise frame's words: those outside its extent are registers pending
+   when it called, which the walk gives to it. */
+static void
+walk_record_precise(void *arg, uintptr_t start, uintptr_t end)
+{
+    struct walk_record *r = arg;
+    if (r->failed || (r->sp <= start && start < r->cfa)) {
+        return;
+    }
+    PyObject *index = PyLong_FromSsize_t(PyList_GET_SIZE(r->frames) - 1);
+    if (index == NULL || PyList_Append(r->regs, index) < 0) {
+        r->failed = 1;
+    }
+    Py_XDECREF(index);
+}
+
+/* Walk this thread's stack from here: the frames as gc_walk_here() gives
+   them; the frame index of each register word given to a precise frame;
+   and the bounds of the preserve_none handlers' section, or None. */
+static PyObject *
+gc_walk_precise_regs(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    struct walk_record r = {PyList_New(0), 0, PyList_New(0), 0, 0};
+    if (r.frames == NULL || r.regs == NULL) {
+        Py_XDECREF(r.frames);
+        Py_XDECREF(r.regs);
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    _PyGCWalk w = {
+        .scan = walk_record_scan,
+        .precise = walk_record_precise,
+        .frame = walk_record_frame,
+        .arg = &r,
+        .top = ts->c_stack_top,
+        .activations = ts->gc_trace.activation,
+    };
+    _PyGCContext ctx;
+    _PyGC_CaptureCaller(&ctx);
+    (void)_PyGC_WalkStack(&w, &ctx);
+    if (r.failed) {
+        Py_DECREF(r.frames);
+        Py_DECREF(r.regs);
+        return NULL;
+    }
+    uintptr_t start, stop;
+    PyObject *section = _PyGC_PreservesNothingSection(&start, &stop)
+        ? Py_BuildValue("(NN)", PyLong_FromVoidPtr((void *)start),
+                        PyLong_FromVoidPtr((void *)stop))
+        : Py_NewRef(Py_None);
+    if (section == NULL) {
+        Py_DECREF(r.frames);
+        Py_DECREF(r.regs);
+        return NULL;
+    }
+    return Py_BuildValue("(NNN)", r.frames, r.regs, section);
 }
 
 /* Walk this thread's stack from here: a list of (pc, sp, cfa, class) and
@@ -4221,6 +4286,7 @@ static PyMethodDef module_functions[] = {
     {"test_value_spans", test_value_spans, METH_NOARGS},
     {"gc_frame_descriptor", _PyCFunction_CAST(gc_frame_descriptor), METH_O},
     {"gc_walk_here", gc_walk_here, METH_NOARGS},
+    {"gc_walk_precise_regs", gc_walk_precise_regs, METH_NOARGS},
     {"gc_root_stats", gc_root_stats, METH_NOARGS},
     {"gc_collect_with_signal", _PyCFunction_CAST(gc_collect_with_signal), METH_O},
     {"gc_frames_off_chain", gc_frames_off_chain, METH_VARARGS},

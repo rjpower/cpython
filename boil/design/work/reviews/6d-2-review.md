@@ -1,54 +1,44 @@
 ## Summary
 
-The in-place slot conversion fits the architecture and gives the main compatibility bridges retirement steps.  
-Dispatch coverage, remaining forwarding paths, and the root-test proof still need correction.  
-Reviewed revision `ea58963eed4`; concurrent implementation edits were excluded.
+The in-place conversion fits the architecture and names retirement steps for its temporary bridges.  
+Two correctness gaps remain: retained ctypes boxes and changed heap-setter semantics.  
+Reviewed `27d98492f7f`, excluding concurrent edits; runtime probes were blocked by the read-only uv cache.
 
 ## Blocking issues
 
-1. **The dispatch inventory skips a real call, and §F omits its check.**
+1. **The ctypes plan protects retained boxes only during the setter call.**
 
-   **Where:** §§A/B/F. [slot_inventory.py:62](/home/power/code/cpython/.worktrees/boil-6d/boil/tools/measure/slot_inventory.py:62) treats every line beginning with `*` as a comment. This excludes [the optional-attribute dispatch](/home/power/code/cpython/.worktrees/boil-6d/Objects/object.c:1137):
-   ```c
-   *result = (*tp->tp_getattro)(v, name);
-   ```
-   §B carries that dispatch into `PyObject_GetOptionalAttrValue`, but §F lists only `getattr_object_value`. A malformed slot can therefore escape the promised immediate check through optional lookup, including `getattr` with a default and `hasattr`.
+   **Where:** §D, ctypes fields; Tests 5/6. [`O_set`](/home/power/code/cpython/.worktrees/boil-6d/Modules/_ctypes/cfield.c:1035) stores a raw `PyObject *` in native memory. For a structure’s `py_object` field, [`KeepRef_lock_held`](/home/power/code/cpython/.worktrees/boil-6d/Modules/_ctypes/_ctypes.c:2968) saves that object through `PyDict_SetItem`, which canonicalises a numeric box into an immediate. [`PyCData_traverse`](/home/power/code/cpython/.worktrees/boil-6d/Modules/_ctypes/_ctypes.c:3014) visits the keep-reference tree, not the native cell.
 
-   **Fix:** distinguish comment continuations from dereference assignments, regenerate the inventory, and explicitly check this dispatch before conversion or suppression. Extend the malformed-getattro subprocess cases to both optional APIs and both builtins.
+   Once §D’s span is popped, nothing necessarily traces the box whose pointer remains in the field. Conservative stack copies can conceal this existing lifetime hole; reference counting provides no protection.
 
-2. **§C’s blanket conversion rule preserves boxes in remaining forwarding slots.**
+   **Fix:** retain the exact box through a traced holder in ctypes’ keep-reference tree, or trace the native object cells correctly. Keep the span through publication of that retaining edge. Add a test storing uncached ints and floats into a `Structure`’s `py_object` field, returning from the setter, removing incidental stack roots, collecting, and reading the field under stress and kill mode.
 
-   **Where:** §C’s final bullet and Tests 9/11. [Example_getattro](/home/power/code/cpython/.worktrees/boil-6d/Modules/_testmultiphase.c:79) and the `Xxo_getattro` implementations read through `PyDict_GetItemWithError`; they do not merely return objects they build. Wrapping those results in `PyValue_FromResult` preserves the temporary numeric boxes.
+2. **The heap-type setter conversion changes accepted inputs.**
 
-   Similarly, boxing at the top of [Pickler_setattr](/home/power/code/cpython/.worktrees/boil-6d/Modules/_pickle.c:5697) also boxes ordinary attributes forwarded to the generic setter. The native field requires boxing only in the `persistent_id` branch.
+   **Where:** §C specifies `PyLong_AsLongValue` for `heapctypesetattr_setattro`. The current [`heaptype.c`](/home/power/code/cpython/.worktrees/boil-6d/Modules/_testcapi/heaptype.c:1337) first calls `PyNumber_Long`, then `PyLong_AsLong`.
 
-   **Fix:** specify value dictionary reads and writes for these implementations. Box inside branches that actually retain a `PyObject *`. Explicitly convert [proxy_setattr](/home/power/code/cpython/.worktrees/boil-6d/Objects/weakrefobject.c:734) to value forwarding too. Add enforcing cases for these dictionary and generic-fallback paths; the current forwarding test list misses them.
+   The proposed replacement rejects floats, numeric strings, and objects implementing only `__int__`, which the existing setter accepts. The current targeted test exercises only an integer and deletion.
 
-3. **The lifetime fixture’s stated fallback assertion does not observe test-range fallbacks.**
-
-   **Where:** Test 5. [gc_walk.c’s fallback handler](/home/power/code/cpython/.worktrees/boil-6d/Python/gc_walk.c:845) increments `w->test_fallbacks` for `_PyGC_RANGE_TEST`, rather than the normal statistics counter. [scan_from](/home/power/code/cpython/.worktrees/boil-6d/Python/gc_trace.c:1179) discards both the walk’s return status and this separate counter.
-
-   Thus “zero fallbacks from the walk’s statistics” does not establish that the registered fixture escaped conservative scanning. Separate positive and negative functions can have different unwind behaviour.
-
-   **Fix:** expose and assert test-range fallbacks, or otherwise observe the actual collection walk through each fixture. Require precise classification and no fallback for both controls, alongside raw-box survival and canonical-control death.
+   **Fix:** preserve the two stages with `PyNumber_LongValue`, check its result, then call `PyLong_AsLongValue`. Add float, string, `__int__`, conversion-error, and overflow cases; failed conversion must leave the field unchanged.
 
 ## Non-blocking issues
 
-- **Two proposed object bridges already have value outputs.** §F groups `_PyObject_LookupSpecialMethod` and `lookup_method_ex` with `_PyObject_LookupSpecial`. The first two already write `PyValue` outputs in [typeobject.c](/home/power/code/cpython/.worktrees/boil-6d/Objects/typeobject.c:2744). Assign checked descriptor results directly into those outputs. Keep boxing at consumers that actually require objects.
+- **Allocation budgets contradict required boxes.** Test 11 assigns one allocation to `getattr(100000, "bit_length")`, but this requires an uncached receiver box and a bound-method object: two allocations. Likewise, Test 9’s `Pickler.persistent_id = 12345` requires the native-field box described in §C, despite Test 11’s blanket zero for forwarding stores. Give these branches explicit budgets.
 
-- **The fatal-error classification is inaccurate.** §F calls the fatal reporter non-collecting. [fatal_error](/home/power/code/cpython/.worktrees/boil-6d/Python/pylifecycle.c:3588) can display exceptions and flush Python streams, invoking Python and collection. Use a reporter that cannot invoke Python, or a checked opaque reporting path; a reviewed comment does not establish this effect.
+- **The ctypes metaclass setters have another object boundary.** §C describes forwarding to `PyType_Type.tp_setattro`, but [`_structunion_setattro`](/home/power/code/cpython/.worktrees/boil-6d/Modules/_ctypes/_ctypes.c:1153) first passes `_fields_` to the object-form `PyCStructUnionType_update_stginfo`. Specify that branch’s conversion and rooting, including invalid numeric input and deletion.
 
-- **Specify allocation assertions.** Tests 9/11 promise enforced allocation counts, but [box_audit.py](/home/power/code/cpython/.worktrees/boil-6d/boil/tools/measure/box_audit.py:198) currently gates only boxing counters. Define expected allocations per case, including intentional bound-method allocations and rung-4 residue.
+- **State the failed-box/deletion distinction in §D’s bridges.** `getset_set` and `PyCField_set` must return immediately when boxing a non-NULL value fails. Passing that NULL onward can turn allocation failure into deletion; `func_set_defaults`, for example, accepts NULL as deletion. Add failure tests asserting both `MemoryError` and unchanged state.
 
-- **Isolate audit statistics.** Passing an interpreter path does not fix `box_audit.py`’s shared `/tmp/py_stats` directory and deletion of newly discovered files. Use a task-owned `PYTHON_STATS_DIR`, as `slot_boxes.py` already does.
+- **Reconcile the debug-check specification.** §F initially says `Py_FatalError`, then explicitly forbids it. Note 12 §7 retains the old description. Update both and record the C checker’s classification of the actual stdio/`abort` helper.
 
 ## Questions
 
-- At the named base, `method_vectorcall_*` and `classmethoddescr_call` are still unmarked, despite note 12 §7’s precision claims. Who owns their promotion, and will `method_check_args` append its receiver box to a caller-owned span or rely on conservative scanning until that promotion?
-- Which step retires the inline `super` receiver box? §C assigns it to open question 1, whose proposed method-receiver conversion does not change `superobject.obj`’s `PyObject *` storage.
+- What is the exact signature and failure contract of the new public `PyDict_GetItemRefValue`? Its declaration, documentation, tests, and commit placement are absent from §§G/Commits.
+- When will §C’s promised per-function C-mode results be recorded? No “C mode” section is present. Which integration commit will also verify the receiver span after 10a promotes `method_vectorcall_*`?
 
 ## Verdict
 
 revise
 ---
-Reviewer: codex, 2026-10-28 02:15 PDT
+Reviewer: codex, 2026-10-28 02:28 PDT

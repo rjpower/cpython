@@ -239,6 +239,13 @@ record), 2026-10-28:
   ten times: 10/10.
 - `Tools/boil/traverse_audit.py --check`: exit 0.
 - test_tools at 0b4153d8f37 on both builds: 110 tests, 1 skipped.
+- After the landing review began (11:06), the scanner test's comment
+  gained a pointer to hand-off 1: the exporter is to gain a
+  `__release_buffer__` when 10a rung 3 lands. The change is a comment in
+  test_re only. Gate 1 on test_re reran at that commit: build/default 171
+  tests, 4 skipped; build/debug 171, 3 skipped; build/debug under kill
+  171, 3 skipped; 0 failures. The other lines stand, since no code
+  changed.
 
 Not run: gates 2 and 3 (the coordinator's quick-test at landing); the
 change touches two traverse functions and tooling, not the collector,

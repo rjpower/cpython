@@ -1965,7 +1965,9 @@ class ReTests(unittest.TestCase):
         # frees what no traverse visits.
         # No __release_buffer__: the scanner releases its buffer in its
         # dealloc, in the sweep, where Python code may not run (audit-2
-        # hand-off 1).
+        # hand-off 1, boil/design/work/audit-2.md, owned by 10a rung 3).
+        # When that lands, give the exporter a __release_buffer__ and
+        # check that it is called once the scanner is collected.
         class Exporter:
             def __init__(self, data):
                 self.data = bytearray(data)

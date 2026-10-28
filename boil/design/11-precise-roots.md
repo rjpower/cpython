@@ -500,7 +500,7 @@ core C for PyMem arrays of `PyObject *` or `PyValue`, and the review:
 | `partial_vectorcall()` | `stack`, and its realloc | two spans, the keyword suffix and the positional prefix, each over what is written, rebased after realloc |
 | `mro_implementation_unlocked()` | `to_merge` | `[0, n)` |
 | `_Py_VaBuildStack()` and `do_mkstack()` (Python/modsupport.c), with their callers in Objects/call.c (`PyObject_CallFunction`, `PyObject_CallMethod` and the `_SizeT` forms) | the built argument stack | `[0, i)` in `do_mkstack()` as values are built; the caller's span over `[0, n)` through the call and cleanup |
-| `PyUnicodeWriter`, `PyBytesWriter` | their buffer objects | `_PyGCRoot`, creation to finish or discard |
+| `PyUnicodeWriter`, `PyBytesWriter` | their buffer objects | `_PyGCRoot`, creation to finish or discard (found by rung 1's stress mode: `PYTHON_GCSTRESS=10 ./build/default/python -m test test_capi.test_bytes -m test_resize` crashes in `finish()` after a resize, the buffer object freed while the writer held it) |
 | the compiler's units (`struct compiler_unit` and its `u_metadata` dicts, held in PyMem across collections by Python/compile.c, Python/flowgraph.c and Python/assemble.c) | the unit's dicts and lists | `_PyGCRoot` per unit, from its creation to its free (rung 3's first core site; found by the verifier's kill mode, 10a rung 1: `PYTHON_GCVERIFY=kill:pymem` crashes at start-up in `dict_keys_inorder()`, assemble.c) |
 
 Heap-owned arrays (a list's `ob_item`, the unpickler's `data`) are visited
@@ -940,6 +940,19 @@ subset, the functions whose frames held the only root of a live object;
     arenas, 64 KiB each (2,048 trampolines), and the walk tests. A fallback
     blocks a landing (section 10), so the gate prints the suite's
     `fallbacks` and fails when it is not zero.
+18. **Callbacks in a shared heap (for step 7).** The interpreters that
+    share the main interpreter's allocator are collected as one domain,
+    but the queue of weak reference callbacks and finalizers is the
+    collecting interpreter's, so a legacy subinterpreter runs the main
+    interpreter's callbacks, even inside its own start-up, where the
+    unraisable hook's type is not ready and the error path crashes. Found
+    by rung 1's stress mode: `PYTHON_GCSTRESS=1000 ./python -c 'import
+    _testcapi; _testcapi.run_in_subinterp("x = 1")'`. Latent without
+    stress. Ruling (coordinator, 2026-10-27): not a root and not 10a's; a
+    queue per owning interpreter, drained at that interpreter's own
+    safepoint, needs an ownership attribution the collector does not
+    have, and step 7, which decides domains, owns it (note 08 section 3;
+    test_gc `test_stress_shared_heap_callbacks` skips until then).
 
 ## 14. Sources
 

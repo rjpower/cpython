@@ -109,12 +109,17 @@ once against the settled API. What an unconverted C type meets:
   at the next collection (section 9). One that ignores it is harmless.
   The tree is closed by the audit below, binaries by the suffix.
 - **A binary built for value-v1** has today's suffix and would load.
-  Rung 2's first slot-type commit changes `SOABI`'s platform mark
+  6d's first ABI change, rung 1's `class_version` (it grows `_PyShape`,
+  embedded in `PyTypeObject`), changes `SOABI`'s platform mark
   (configure.ac; note 08's ABI row) from `boil` to `boil2`, giving
   `.cpython-316-x86_64-boil2-linux-gnu.so`; a value-v1 binary, like an
   upstream one since 6c, is then not found (`ModuleNotFoundError`). The
-  ports SDK's abi_id becomes `cpython-3.16-value-v2`; the frozen ports
-  stay unbuilt until phase P (note 10).
+  ports SDK's abi_id becomes `cpython-3.16-value-v2`. The mark versions
+  the step, not the rung: in-tree extensions build with the interpreter,
+  and the ports, the only other binaries, are frozen until phase P and
+  rebuilt only at a landed step's end. The suffix keeps out
+  conventionally named binaries only; an untagged `.so` or an explicit
+  loader bypasses it.
 
 Removing the tree's 101 `(getter)`, 99 `(setter)` and 9 slot-type
 casts makes the compiler check every static initialiser. `PyType_Slot`
@@ -136,7 +141,11 @@ ten slot-identity tests meaningful. The same holds for
 `PyObject_GenericSetAttr`, `PyVectorcall_Call` and the internal
 `_PyObject_GenericGetAttrWithDict` and `_PyObject_GenericSetAttrWithDict`.
 Note 06 section 3.5's rule that "functions that take `PyObject *` keep
-taking it" is about the API; these are slot implementations first.
+taking it" is about the API; these are slot implementations first. In
+rung 4 the rule takes `PyObject_GenericGetDict` and
+`PyObject_GenericSetDict`, which getset tables name: they change with
+`getter` and `setter`, keeping dict identity, the conversion's failure
+and the refusal of a non-dict or a deletion.
 
 ### 2.3 The compatibility layer
 
@@ -173,7 +182,8 @@ object.c's executor and typeobject.c (`super_getattro`, `type_getattro`),
 the direct callers are classobject.c's `method_getattro` and
 `instancemethod_getattro`, which return the slot's value, and
 `legacy_tracing.c` and `_lsprof.c`, which box it where they need an
-object. `PyObject_GenericGetDict` and the `__dict__` paths are unchanged.
+object. `getattr(o, name, default)` and `hasattr` call
+`PyObject_GetOptionalAttrValue` and join the box audit.
 
 ### 2.4 `self` stays an object
 
@@ -195,15 +205,18 @@ outside int and float receives an inline receiver:
 - `getter`, `setter`: the same closed set (`int.real`, `float.imag`,
   `numerator`, `__class__`).
 
-An explicit descriptor call escapes the argument:
-`property(f).__get__(3, int)`, `d.__set__(3, v)` and `d.__delete__(3)`
-reach any descriptor through `wrap_descr_get`, `wrap_descr_set` and
-`wrap_descr_delete`. These read `obj` from the argument tuple's items
-and box it when it is inline (`None` still passes as NULL to `__get__`),
-anchoring the box as an object for the slot call. They are boxes of the
-slot-wrapper row (open question 2). test_descr makes the three calls
-with an inline int and float on a property, a Python descriptor and a
-member, checks the results, and counts one box per call.
+An explicit wrapper call escapes the argument: `property(f).__get__(3,
+int)`, `d.__get__(None, 3)`, `d.__set__(3, v)`, `d.__delete__(3)` and
+`object.__getattribute__(o, 3)` pass inline values where the slot takes
+`PyObject *`. Every wrapper boxes an inline argument bound for a
+`PyObject *` parameter (`obj`, `type`, `name`), anchors the box raw for
+the slot call, and validates after boxing where the slot did (a numeric
+name still raises the `TypeError` naming int); only the attribute value
+passes as a value. These are the slot-wrapper row's boxes (open question
+2). test_descr makes these calls with inline ints and floats on a
+property, a Python descriptor (which sees the number as `type`) and a
+member, checks results and errors, counts one box per inline argument,
+and fails the box with `set_nomemory`.
 
 Through lookup, the inline-receiver box is thus confined to int's and
 float's C methods and getsets (chaos: 20,000 per loop, from
@@ -214,12 +227,10 @@ would hold the immediate and leave the box collectable.
 
 ### 2.5 `tp_getattr` and `tp_setattr`
 
-The `char *` slots stay object slots, called only from the getattr and
-setattr dispatch, which canonicalises the result and boxes the stored
-value there, as today. Only the example modules `xx`, `xxlimited_35` and
-`_testmultiphase` fill `tp_setattr`; nothing fills `tp_getattr`. Note
-08's register lists them with the ports phase as owner, which decides
-whether the legacy slots survive.
+The `char *` slots stay object slots; the dispatch canonicalises and
+boxes around them, as today. Only `xx`, `xxlimited_35` and
+`_testmultiphase` fill `tp_setattr`, nothing `tp_getattr`; note 08's
+register gives them to the ports phase.
 
 ## 3. The attribute protocol on values
 
@@ -227,9 +238,8 @@ whether the legacy slots survive.
 `PyValue_Type(v)->tp_getattro`. If it is `PyObject_GenericGetAttr`, it
 runs the plan executor on the value; otherwise it calls the slot on the
 object (`v` is then never inline, by 2.4). Today's three-way dispatch
-and the box of an inline receiver before it go; `type_getattro` is an
-ordinary value slot. `PyObject_SetAttrValue` is the same with
-`tp_setattro`, and passes the value through.
+and its receiver box go. `PyObject_SetAttrValue` is the same with
+`tp_setattro`, passing the value through.
 
 **The executor takes the owner as a value.**
 `generic_getattr_value(PyValue owner, name, dict, suppress)` reads the
@@ -237,11 +247,8 @@ owner's shape with `_PyValue_Shape()` (note 09 section 3). SLOT and DICT
 plans are impossible on an inline owner's shape; CLASS_VALUE and ABSENT
 need nothing of the owner; METHOD, DESCR, DATA_DESCR and PROPERTY box an
 inline owner once, at the descriptor call (2.4). `generic_setattr_value`
-takes the owner as an object, since an inline owner has only the
-NO_STORAGE and DATA_DESCR outcomes, which box for the error or the
-refusing descriptor. `PyObject_GenericGetAttr(obj, name)` is the slot
-entry: it calls the executor with `PyValue_FromObject(obj)`, a type
-compare for an object.
+takes the owner as an object: an inline owner reaches only NO_STORAGE
+and DATA_DESCR, which box for the error or the refusing descriptor.
 
 **Hooks.** `_Py_slot_tp_getattro` calls `__getattribute__` through
 `vectorcall_method_value`. `_Py_slot_tp_getattr_hook` runs the executor
@@ -259,12 +266,10 @@ the iterator's value, retiring 19.11's `wrap_next` row. So
 `object.__getattribute__(self, n)` and a frozen dataclass's
 `object.__setattr__(self, n, v)` move values without a box.
 
-**Types, modules, super.** `type_getattro` and `type_setattro` read and
-write the class dict by value (today `C.x = i` boxes the new value and
-the old one it reads). `module_getattro`, `super_getattro`,
-`proxy_getattr` and the `_ctypes`, `_pickle` and `_decimal` slots
-convert; each returns `PyValue_FromResult` of what it builds, or passes
-a value it read.
+**Types, modules, super.** `type_getattro` and `type_setattro` use the
+class dict by value (today `C.x = i` boxes the new and old values).
+`module_getattro`, `super_getattro`, `proxy_getattr` and the `_ctypes`,
+`_pickle` and `_decimal` slots return what they build or read.
 
 ## 4. Descriptors on values
 
@@ -320,9 +325,10 @@ a value it read.
   `attrgetter`, `methodcaller`, `ctypes`' function pointers, `_asyncio`'s
   step wrapper, `sqlite3`'s connection) return values.
 - The wasm trampolines (pycore_wasm_trampoline.h, wasm_trampoline.c)
-  gain `_PyWasm_TrampolineCallValue` for `tp_call` dispatch and
-  `descr_get_trampoline_call`, and `_PyWasm_TrampolineCallSetter` takes a
-  `PyValue`. No gate builds wasm; the work doc says so.
+  gain `_PyWasm_TrampolineCallValue` for `tp_call` dispatch (rung 3);
+  `descr_get_trampoline_call` and the setter trampoline change with the
+  getset types (rung 4). No gate builds wasm; each work doc lists its
+  trampolines as unbuilt.
 
 ## 6. The 6c hand-offs
 
@@ -405,22 +411,20 @@ The measurement: a per-type sample of every live object with inline
 slots, every 200,000 call events, over 21 kernels at their record loop
 counts (`boil/tools/measure/occupancy_types.py`; the sums are
 `capacity_rule.py` over its output). No sampled object holds more than
-`S + 1` slots; those over S are `ModuleSpec` (S 8, 17,066 of 18,614
-samples), go's `Square` (S 10) and `UCTNode` (S 6), `logging.Logger`
-and `re._parser.State`. Of the S = 0 classes, enum members reach four
-slots and the rest none. Block bytes summed over the samples (a time
-integral, so the ratio counts) fall from 111,068 KiB to 84,289 (-24.1%),
-or from 4,818 to 4,602 (-4.5%) without generators' tree, with no object
-over capacity; `S + 0` (`--spare 0`) would put 13 sampled objects, all
-`re._parser.State`, into dictionary mode. Predicted: generators' 100,000
-tree nodes (S 3) from 64 to 48 bytes, 1.6 MB of its 66.5 MB peak;
-raytrace's `Vector` and `Point`, chaos's `GVector` and deltablue's
-`Strength` likewise; instances_1m (S 4) unchanged, its control. Measured
-at the rung: the memory group's and kernels' RSS, `occupancy.py`'s
-unused share, dictionary-mode entries by reason over the suite on a
-Py_STATS gate 2 (6c: `capacity` 26,542, `shape_limit` 3,148), and
-`sys.getsizeof` of instances, whose tests in test_sys and test_shapes
-change. The dataclass recomputation (20.3) uses the same function.
+`S + 1` slots (`ModuleSpec`, go's `Square` and `UCTNode`,
+`logging.Logger`, `re._parser.State`); S = 0 classes reach four (enum
+members). Block bytes summed over the samples (a time integral, so the
+ratio counts) fall from 111,068 KiB to 84,289 (-24.1%), or from 4,818 to
+4,602 (-4.5%) without generators' tree, with no object over capacity;
+`--spare 0` would put 13 `re._parser.State` samples into dictionary
+mode. Predicted: generators' 100,000 tree nodes (S 3) from 64 to 48
+bytes, 1.6 MB of its 66.5 MB peak, and raytrace's, chaos's and
+deltablue's small classes likewise; instances_1m (S 4), the control,
+unchanged. Measured at the rung: RSS of the memory group and kernels;
+dictionary-mode entries by reason over the suite on a Py_STATS gate 2
+(6c: `capacity` 26,542, `shape_limit` 3,148) and per kernel and type,
+since sampling misses transient peaks; `sys.getsizeof` of instances,
+whose tests change. The dataclass recomputation (20.3) uses the rule.
 
 ### 6.5 Members across a generalisation (item 5)
 
@@ -454,12 +458,10 @@ last never specialising.
 
 ## 7. Precise roots (10a)
 
-10a's rung 2 has marked call.c's vectorcall core, the `tp_call` path and
-the prepend forms, `cfunction_*`, `method_vectorcall_*`,
-`wrapperdescr_call` and `classmethoddescr_call` (10a-2.md); typeobject.c's
-`slot_*` and `vectorcall_method` family wait for its rung 1b. The stamp
-rule fails a `Py_GC_PRECISE` function the C mode rejects, so a 6d change
-to a marked function is checked in the commit that makes it.
+10a's rung 2 marks call.c's vectorcall core, the `tp_call` path, the
+prepend forms and the C call functions (10a-2.md); typeobject.c's
+bridges wait for its rung 1b. The stamp rule fails a marked function the
+C mode rejects, so a 6d change to one is checked in its commit.
 
 | Function | 6d change | Class | Marked by |
 |---|---|---|---|
@@ -520,13 +522,9 @@ value-v3 (open question 2).
 - **Identity as the canonical-form test.** An inline int's identity is
   its encoding, so `self.assertIs(o.attr, 12345)` fails if a slot
   returned a box. test_descr and test_class gain, for each path of
-  sections 3 to 5 (property generic and specialised, Python `__get__`,
-  `__getattribute__`, `__getattr__`, `object.__getattribute__`, member,
-  `_tuplegetter`, structseq, callable instance, `CALL_FUNCTION_EX`),
-  results of int32 bounds, int32 + 1, -0.0, inf, NaN (boxed, so
-  `assertIsNot` another NaN box), `True` and an int subclass instance,
-  and stores of the same through `__setattr__`, `__set__`, property
-  setters, `object.__setattr__`, members and class attributes, read back
+  sections 3 to 5, results of int32 bounds, int32 + 1, -0.0, inf, NaN
+  (boxed, so `assertIsNot` another NaN box), `True` and an int subclass
+  instance, and stores of the same through every store path, read back
   by identity.
 - **test_capi**: a heap type and a static type whose getattro, setattro,
   descr get and set, call and a getset return and take inline values,
@@ -544,10 +542,14 @@ value-v3 (open question 2).
 - **Lifetimes.** Identity proves a canonical result, not that a box, a
   fresh heap result or an argument array survives a collection. The slot
   tests run in debug subprocesses under `PYTHON_GCSTRESS=1` and kill mode
-  (`PYTHON_GCVERIFY=kill`), with these cases: a C getter and method on an
-  inline receiver (`float.real`, `(7).bit_length()`) under
-  `_testinternalcapi.gc_set_stress(1)`, so a collection falls between
-  box and read; a property returning a fresh `2**40` or str at a
+  (`PYTHON_GCVERIFY=kill`), with these cases: C methods reading an
+  uncached inline receiver (`(100000).bit_length()`, `(2.5).hex()`) with
+  a collection injected at a new site, `_PyGC_SITE_SLOT_BOX`, after a
+  boundary box is anchored and before the call that reads it
+  (`gc_collect_at`, its count asserted); a `_testinternalcapi` fixture
+  whose span is a box's only root, holding it raw or, as the negative
+  control, canonical, where kill mode passes the first and traps the
+  second; a property returning a fresh `2**40` or str at a
   `CALL_FUNCTION_EX` site whose `sys.monitoring` callback collects; a
   `__get__` that deletes itself from its class, and a getter that
   replaces its property's `fget`, each collecting before returning; a
@@ -555,20 +557,17 @@ value-v3 (open question 2).
   `_PY_FASTCALL_SMALL_STACK` and with `**kwargs`; and allocation failure
   (`_testcapi.set_nomemory`) at the box of each object form of 2.3 and of
   `wrap_descr_get`, checking the `MemoryError` and the unwound roots
-  (`_PyThreadState_PopValueRoot`'s assertion). These fail if a root
-  holds a box's canonical value instead of the box (2.4).
+  (`_PyThreadState_PopValueRoot`'s assertion).
 - **The box audit** (`box_audit.py`) takes `slot_boxes.py`'s slot cases,
   which must make no box: the hack row's proof. The inline-receiver and
   explicit-descriptor cases are listed as residue with their reason.
 - **test_shapes and test_opcache**: `STORE_ATTR_SHAPE_POLY` over two to
-  four shapes with REPLACE, ADD and mixed rows, a kind misfit in one row
-  (it exits and the generic store generalises), a fifth shape (stays
-  generic), version renewal of one row's type; the lazy-dict handler on
-  an exception, a function and an int subclass, with the dict
-  materialised later (it exits); METHOD and CLASS_VALUE on a no-storage
-  type picking the shape handlers; the member tests of 6.5; capacities
-  by S, including `B` other than 8 (a list subclass) and the dataclass
-  recomputation; a conversion's dict needing no resize.
+  four shapes with REPLACE, ADD and mixed rows, a kind misfit (exits), a
+  fifth shape (generic), one row's version renewed; the lazy-dict
+  handler on an exception, a function and an int subclass, then with
+  the dict made (exits); the shape handlers on a no-storage type; 6.5's
+  tests; capacities by S, `B` other than 8, the dataclass recomputation;
+  a conversion with no resize.
 - **Gates**: each rung's gate 1 runs its ladder (section 11); gate 3 runs
   the debug suite, test_cext, regen, the traverse audit and the lifetime
   set, with `make clinic` leaving the tree unchanged after rung 4.
@@ -593,18 +592,12 @@ iteration of 1,000, from `boil/tools/measure/slot_boxes.py`:
 | specialised property and `__getattribute__` sites, `__slots__` members, staticmethod | 0 | 0 | |
 | classmethod call, a bound method taken as a value | 0 | 1 each | binding |
 
-The kernels' boxes (raytrace 110,104, chaos 155,290, nqueens 40,332,
-regex_compile 986,325 per loop at 6c) come from range arguments,
-`array`, subscript stores and chaos's 20,000 inline receivers, none from
-a slot call: the kernels are the regression record, and the micro set
-carries the slot boundary. It gains `getattr_property`,
-`getattribute_hook`, `getattr_hook`, `setattr_hook`, `descr_get_py`,
-`descr_set_py`, `property_store`, `call_instance`, `namedtuple_field`,
-`member_double` (`complex.real`), `object_setattr` and
-`class_attr_store`, over int and float where the value matters, and
-`method_lazy_dict` (6.2). The `boxes` metric also records `Object
-allocations` per iteration, so a transient number object shows where
-the box counter cannot see it.
+The kernels' boxes (chaos 155,290 per loop at 6c, regex_compile
+986,325) come from range arguments, `array`, subscript stores and
+chaos's inline receivers, none from a slot call, so the micro set
+carries the slot boundary. It gains a row per case above (int and float
+where the value matters) and `method_lazy_dict` (6.2); the `boxes` metric
+also records `Object allocations`, which sees transient number objects.
 
 **Recorded at gate 4** (label `6d`), against `6c.json` and
 `6c-pystats.json`: boxes and allocations per loop over the kernels and
@@ -626,10 +619,10 @@ work doc (`boil/design/work/6d-<n>.md`) and ends at gate level 3.
 
 | Rung | Days | Work | Ladder (smallest first) |
 |---|---|---|---|
-| 1 | 0.5 | The hand-offs: `class_version` and the member guard (6.5); presize (6.3); the capacity rule (6.4); the `_NO_DICT` fold, `STORE_ATTR_SHAPE_POLY` and `LOAD_ATTR_METHOD_LAZY_DICT` (6.1, 6.2), magic bump; the micro rows of section 10 with their before values. Touches no file of 10a's | `python -c pass`; a two-shape store site in a script; test_shapes, test_opcache, test_dis; test_class, test_descr, test_sys, test_dataclasses, test_capi; both suites; the Py_STATS suite for 6.4's counts |
-| 2 | 0.75 | Attribute and descriptor slots: the four typedefs; the generic functions in place; the executor on a value owner; `PyObject_GetOptionalAttrValue`; the hooks and `slot_tp_descr_*`; type, module, super, `method_getattro`, `instancemethod_getattro` and the custom slots, with 2.1's `PyType_Slot` list; the descriptors of section 4 and `PyMember_*Value` with the native-field boxes; `getset_get` and `getset_set` canonicalising and boxing around the object-form getters and setters; the `SOABI` mark and abi_id; both debug checks; docs (typeobj.rst, object.rst). `wrapperfunc` stays an object form, since its consumers are `tp_call` functions: `wrap_getattro` (new) and `wrap_descr_get` box their slot's value at return, a box rung 3 removes; `wrap_setattr`, `wrap_delattr`, `wrap_descr_set` and `wrap_descr_delete` read the tuple's items as values | one property and one `__getattribute__` case by identity; the suffix test; test_descr, test_class, test_property, test_module, test_super, test_structseq, test_collections, test_sysconfig, test_capi; test_pickle, test_decimal, test_ctypes, test_typing, test_dataclasses; the attribute lifetime cases under stress; box audit; both suites |
+| 1 | 0.5 | The hand-offs: `class_version` and the member guard (6.5); presize (6.3); the capacity rule (6.4); the `_NO_DICT` fold, `STORE_ATTR_SHAPE_POLY` and `LOAD_ATTR_METHOD_LAZY_DICT` (6.1, 6.2), magic bump; the `SOABI` mark and abi_id (2.1); the micro rows of section 10 with their before values. Touches no file of 10a's | `python -c pass`; a two-shape store site in a script; the suffix test; test_sysconfig, test_shapes, test_opcache, test_dis; test_class, test_descr, test_sys, test_dataclasses, test_capi; both suites; the Py_STATS suite for 6.4's counts |
+| 2 | 0.75 | Attribute and descriptor slots: the four typedefs; the generic functions in place; the executor on a value owner; `PyObject_GetOptionalAttrValue`; the hooks and `slot_tp_descr_*`; type, module, super, `method_getattro`, `instancemethod_getattro` and the custom slots, with 2.1's `PyType_Slot` list; the descriptors of section 4 and `PyMember_*Value` with the native-field boxes; `getset_get` and `getset_set` canonicalising and boxing around the object-form getters and setters; both debug checks and `_PyGC_SITE_SLOT_BOX`; docs (typeobj.rst, object.rst). `wrapperfunc` stays an object form, since its consumers are `tp_call` functions: `wrap_getattro` (new) and `wrap_descr_get` box their slot's value at return, a box rung 3 removes; `wrap_setattr`, `wrap_delattr`, `wrap_descr_set` and `wrap_descr_delete` read the tuple's items as values | one property and one `__getattribute__` case by identity; test_descr, test_class, test_property, test_module, test_super, test_structseq, test_collections, test_capi; test_pickle, test_decimal, test_ctypes, test_typing, test_dataclasses; the attribute lifetime cases under stress; box audit; both suites |
 | 3 | 0.5 | Calls and wrappers, one dependency: `callfunc`; `wrapperfunc` and `wrapperfunc_kwds` with every `wrap_*` (rung 2's boxes go), `wrapperdescr_raw_call`, `wrapperdescr_call`, `wrapper_call`; `slot_tp_call`; the call layer of section 5 with the C mode clean; `CALL_FUNCTION_EX`; the module types' `tp_call`; the wasm trampolines | a callable instance and `object.__getattribute__` by identity; the C mode on call.c and descrobject.c; test_call, test_descr, test_functools, test_capi, test_ctypes, test_asyncio, test_sqlite3, test_monitoring; the call lifetime cases under stress and kill mode; box audit; both suites |
-| 4 | 0.25 | Getsets: `getter` and `setter`, Clinic's `@getter` and `@setter`, the 388 entries (mechanical, by subagent, reviewed and committed by the step agent; number-returning getters return values; setters read values with the value accessors or box at their top, or at a kept field as section 4 says); rung 2's getset conversions go; docs (structures.rst); gate 4 and the write-up (note 06 section 21, note 08's register, note 09's handler table) | a `complex.real`-style getset by identity; test_clinic; test_capi, test_datetime, test_memoryview, test_re, test_io, test_descr; `make clinic` clean; both suites; gate 4 |
+| 4 | 0.25 | Getsets: `getter` and `setter`, Clinic's `@getter` and `@setter`, the 388 entries (mechanical, by subagent, reviewed and committed by the step agent; number-returning getters return values; setters read values with the value accessors or box at their top, or at a kept field as section 4 says); `PyObject_GenericGetDict` and `PyObject_GenericSetDict` (2.2); rung 2's getset conversions go; docs (structures.rst); gate 4 and the write-up (note 06 section 21, note 08's register, note 09's handler table) | a `complex.real`-style getset by identity; test_clinic; test_capi, test_datetime, test_memoryview, test_re, test_io, test_descr; `make clinic` clean; both suites; gate 4 |
 
 **Each rung's tree** builds and passes level 3 alone: each changes its
 typedefs with every function of their types, and is pushed whole.
@@ -656,7 +649,8 @@ note 06 section 21, report.
    ones, ruled with chaos's numbers.
 2. **The remaining slot families on values**, with the wrappers'
    argument boxes. Recommendation: step 6e after 10a, scoped by a
-   measurement of 19.11's slot-wrapper row; it would take rung 4 if cut.
+   measurement of 19.11's slot-wrapper row; it would take rung 4 if cut,
+   and the coordinator adds it to note 06's table at 6d's write-up.
 3. **Order with 10a.** Section 7's order: rung 1 at once; rungs 2 to 4
    from the integration commit holding 10a's rung 2; 10a's rung 1b marks
    the bridges 6d rewrites. Confirm, or move the marks to 6d.
@@ -665,35 +659,40 @@ note 06 section 21, report.
 5. **Capacity acceptance.** The rule lands as written, untuned. Recorded:
    the suite's dictionary-mode entries by reason (6c: `capacity` 26,542)
    and `capacity_rule.py`'s over-capacity objects per kernel, type and S.
-   The coordinator rules; the alternative, if `capacity` entries more
-   than double, is six slots for S from 1 to 3.
+   A coordinator decision, not an automatic rule: if the suite's
+   `capacity` entries on the same gate more than double 6c's, the
+   alternative is six slots for S from 1 to 3.
 6. **`tp_getattr` and `tp_setattr`.** Recommendation: object slots until
    the ports phase decides.
 
 ## Review
 
-Round 1 (boil/design/reviews/12-object-slots-on-values-review.md, codex),
-verdict revise. Each blocking issue was taken as a change:
+Round 1 (codex, verdict revise), each blocking issue a change:
+`slot_tp_descr_get` calls `__get__` unbound (4); native `PyObject *`
+fields box, with member semantics (4, 8); explicit wrapper calls box
+their pointer arguments (2.4); the claim that every mismatch is loud is
+withdrawn for the `PyType_Slot` audit, the suffix mark and the tracer's
+check (2.1, 9); `wrapperfunc` moves to rung 3 with `tp_call` (11);
+stress, kill-mode and allocation-failure cases (9). The non-blocking
+points were taken (6.5's writers, exact signatures, the probes
+committed, go's store cost at about 10%).
 
-1. *`slot_tp_descr_get` cannot bind.* It keeps the raw, unbound lookup
-   and calls it with three values (4); tests with a staticmethod and a
-   callable instance as `__get__`.
-2. *Native object-member stores.* Boxing at `PyObject *` fields, its
-   rooting and failure, member semantics per type, both APIs tested (4);
-   the boundary in section 8.
-3. *Explicit descriptor calls.* The closed set is limited to lookup;
-   `wrap_descr_*` box an inline instance, with an owner and tests (2.4).
-4. *The ABI failure claim.* Withdrawn; the `PyType_Slot` audit, the
-   `boil2` suffix mark and the tracer's debug check replace it (2.1, 9).
-5. *Rung 2 could not build.* `wrapperfunc` moves with `tp_call` to rung
-   3; rung 2 boxes in `wrap_getattro` and `wrap_descr_get` until then
-   (11).
-6. *Lifetimes unproven.* Stress and kill-mode cases, raw-object anchoring
-   of boxes (2.4, 9).
+Round 2 (boil/design/reviews/12-object-slots-on-values-review.md, codex),
+verdict revise; the last round, each blocking issue a change:
 
-Non-blocking, all taken: `class_version`'s writers, invariant and
-invalidation tests (6.5); the inventory (2.3, 5); exact signatures and
-linkage (2.3); the probes committed (`slot_boxes.py`,
-`occupancy_types.py`, `capacity_rule.py`), go's store cost corrected to
-about 10% (10). The questions are answered in section 7 and open
-questions 2, 3 and 5.
+1. *Wrappers' other pointer arguments.* Every inline argument bound for
+   a `PyObject *` parameter is boxed and anchored raw, validated after,
+   with `__get__(None, 3)` and numeric names tested (2.4).
+2. *The dict accessors are getters.* `PyObject_GenericGetDict` and
+   `PyObject_GenericSetDict` change in rung 4 (2.2).
+3. *ABI isolation started late.* The mark moves to rung 1, whose
+   `class_version` grows `PyTypeObject`. Rebutted in part: the mark
+   versions the step, since no binary is built against an intermediate
+   rung (2.1).
+4. *Receiver tests did not force a collection.* Uncached receivers, an
+   injection site with its count asserted, and a kill-mode fixture with a
+   canonical-root negative control (9).
+
+Non-blocking, taken: `getattr` with a default and `hasattr` (2.3), the
+suffix's limit (2.1), capacity conversions per kernel (6.4), trampolines
+per rung (5). The questions are open questions 2, 3 and 5.

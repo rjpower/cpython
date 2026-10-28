@@ -13,10 +13,19 @@ instance owns.  This tool parses the C sources and reports:
 The parse is heuristic: struct definitions that begin with PyObject_HEAD,
 PyObject_VAR_HEAD, another object struct or a macro that expands to one;
 static PyTypeObject initializers (positional or designated) and PyType_Spec
-definitions, matched to structs by sizeof() in the basic size.  Report 2
-reads member names from Py_DECREF/Py_XDECREF/Py_CLEAR/Py_XSETREF/Py_SETREF in
-the dealloc and clear functions and from Py_VISIT in the traverse function,
-so a traverse that delegates to a helper is listed and needs a look.
+definitions, matched to structs by sizeof() in the basic size.  A member that
+is a plain struct (not an object) contributes that struct's references as
+"member.field"; a member that points to one, such as the head of a malloc'd
+list of nodes, contributes them as "member->field", through at most
+MAX_POINTER_DEPTH pointers.  A struct's pointers to its own type (the links
+of a list) add nothing, as the nodes they reach have the same members, and
+pointers to module, thread and interpreter states are taken as borrowed.
+Report 2 reads member names from Py_DECREF/Py_XDECREF/Py_CLEAR/Py_XSETREF/
+Py_SETREF (and a Py_buffer's obj from PyBuffer_Release) in the dealloc and
+clear functions, and the members the traverse function names, each with the
+functions and function-like macros of the same file that it calls, two calls
+deep; a traverse that delegates to a helper in another file is listed and
+needs a look.
 
 Usage: python Tools/boil/traverse_audit.py [--root DIR] [--missing-only]
 """
@@ -54,12 +63,21 @@ VISIT_RE = re.compile(
     r"[A-Za-z_][\w]*(?:\s*(?:->|\.)\s*[A-Za-z_]\w*)*\s*(?:->|\.)\s*([A-Za-z_]\w*)\s*[,)]")
 
 
+# How many pointers to plain structs a reference may go through.
+MAX_POINTER_DEPTH = 2
+
+# Plain structs that an object points to without owning them: module,
+# thread, interpreter and runtime states.
+BORROWED_RE = re.compile(r"(?i)state$")
+
+
 @dataclass
 class Struct:
     name: str
     path: Path
     line: int
     base: str | None            # the struct it starts with, if any
+    members: list[str]          # declarations after the base
     refs: list[str] = field(default_factory=list)
 
 
@@ -191,43 +209,86 @@ def split_top(body: str, sep: str) -> list[str]:
     return parts
 
 
-OBJ_PTR_RE = re.compile(r"^(?:const\s+)?(?:struct\s+)?([A-Za-z_]\w*)\s*(\*+)\s*([A-Za-z_]\w*)\s*(\[[^\]]*\])?$")
+DECL_RE = re.compile(r"^(?:(?:const|volatile|struct|union|enum)\s+)*([A-Za-z_]\w*)\s*(.*)$")
+DECLARATOR_RE = re.compile(
+    r"^((?:\*\s*(?:const\s*)?)*)([A-Za-z_]\w*)\s*((?:\[[^\]]*\]\s*)*)(?::\s*\w+)?$")
 
 
-def member_refs(members: list[str], structs: dict[str, Struct],
-                plain: dict[str, list[str]]) -> list[str]:
+@dataclass
+class Plain:
+    """The structs that are not objects, by struct tag and typedef name,
+    and the typedefs that rename them."""
+    members: dict[str, list[str]] = field(default_factory=dict)
+    aliases: dict[str, str] = field(default_factory=dict)
+
+    def resolve(self, typ: str) -> str:
+        for _ in range(5):
+            if typ in self.members or typ not in self.aliases:
+                break
+            typ = self.aliases[typ]
+        return typ
+
+
+def member_refs(members: list[str], structs: dict[str, Struct], plain: Plain,
+                depth: int = MAX_POINTER_DEPTH,
+                within: frozenset[int] = frozenset()) -> list[str]:
     """The object references among a struct's members.  A member that is a
-    plain struct (not an object) contributes that struct's references, as
-    "member.field"."""
+    plain struct contributes that struct's references as "member.field", and
+    a member that points to one contributes them as "member->field", to
+    depth pointers.  within holds the plain structs that the path to here
+    went through (by the identity of their member lists, which a struct tag
+    and its typedef share), so that a list's links are not followed."""
     refs = []
     for mem in members:
         mem = re.sub(r"\s+", " ", mem.replace("\n", " ")).strip()
-        if "(" in mem:      # function pointers, macros
+        if "(" in mem or "{" in mem:    # function pointers, macros, unions
             continue
-        decl = mem.split(",")
-        em = re.match(r"^(?:struct\s+)?([A-Za-z_]\w*)\s+([A-Za-z_]\w*)$", mem)
-        if em and plain.get(em.group(1)):
-            refs.extend(f"{em.group(2)}.{r}" for r in plain[em.group(1)])
+        dm = DECL_RE.match(mem)
+        if not dm:
             continue
-        mm = OBJ_PTR_RE.match(decl[0].strip())
-        if not mm:
+        typ = dm.group(1)
+        obj = is_object_type(typ, structs)
+        target = None if obj else plain.resolve(typ)
+        if target is not None and target not in plain.members:
             continue
-        typ, stars = mm.group(1), mm.group(2)
-        if not is_object_type(typ, structs):
-            continue
-        refs.append(mm.group(3) + ("[]" if mm.group(4) or len(stars) > 1 else ""))
-        for d in decl[1:]:
-            dm = re.match(r"\s*(\*+)\s*([A-Za-z_]\w*)\s*(\[[^\]]*\])?\s*$", d)
-            if dm:
-                refs.append(dm.group(2) + ("[]" if dm.group(3) or len(dm.group(1)) > 1 else ""))
+        borrowed = target is not None and (BORROWED_RE.search(typ)
+                                           or BORROWED_RE.search(target))
+        for d in dm.group(2).split(","):
+            m = DECLARATOR_RE.match(d.strip())
+            if not m:
+                continue
+            stars = m.group(1).count("*")
+            name, array = m.group(2), bool(m.group(3))
+            if obj:
+                if stars:
+                    refs.append(name + ("[]" if array or stars > 1 else ""))
+                continue
+            key = id(plain.members[target])
+            if key in within:
+                continue
+            if stars == 0:
+                prefix = name + ("[]" if array else "") + "."
+                sub = member_refs(plain.members[target], structs, plain,
+                                  depth, within | {key})
+            elif depth > 0 and not borrowed:
+                prefix = name + ("[]" if array or stars > 1 else "") + "->"
+                sub = member_refs(plain.members[target], structs, plain,
+                                  depth - 1, within | {key})
+            else:
+                continue
+            refs.extend(prefix + r for r in sub)
     return refs
 
 
 def parse_structs(path: Path, text: str, macros: dict[str, str],
-                  structs: dict[str, Struct],
-                  plain: dict[str, list[str]]) -> None:
-    """Record object structs in structs, and the object references of plain
-    structs, which objects can embed, in plain."""
+                  structs: dict[str, Struct], plain: Plain) -> None:
+    """Record object structs in structs, and the members of plain structs,
+    which objects can embed or point to, and the typedefs that name them,
+    in plain."""
+    for m in re.finditer(r"\btypedef\s+(?:struct\s+)?([A-Za-z_]\w*)\s+([A-Za-z_]\w*)\s*;",
+                         text):
+        if m.group(1) != m.group(2):
+            plain.aliases[m.group(2)] = m.group(1)
     pat = re.compile(r"\b(typedef\s+)?struct\s*([A-Za-z_]\w*)?\s*\{")
     for m in pat.finditer(text):
         start = m.end()
@@ -275,16 +336,14 @@ def parse_structs(path: Path, text: str, macros: dict[str, str],
             else:
                 base = None
         if base is None:
-            refs = member_refs(members, structs, plain)
             for n in names:
                 if n not in structs:
-                    plain[n] = refs
+                    plain.members[n] = members
             continue
-        refs = member_refs(members[1:] if first is not None else members,
-                           structs, plain)
         line = text.count("\n", 0, m.start()) + 1
         for n in names:
-            structs[n] = Struct(n, path, line, base, refs)
+            structs[n] = Struct(n, path, line, base,
+                                members[1:] if first is not None else members)
 
 
 def is_object_type(typ: str, structs: dict[str, Struct]) -> bool:
@@ -391,7 +450,10 @@ def add_type(types, path, text, m, var, fields) -> None:
 
 
 def functions(text: str) -> dict[str, str]:
+    """The bodies of a file's functions and function-like macros."""
     out = {}
+    for m in re.finditer(r"^#define\s+([A-Za-z_]\w*)\([^)]*\)(.*)$", text, flags=re.M):
+        out[m.group(1)] = m.group(2)
     for m in re.finditer(r"^([A-Za-z_]\w*)\s*\([^;{]*\)\s*\{", text, flags=re.M):
         out[m.group(1)] = brace_body(text, m.end())
     return out
@@ -410,6 +472,29 @@ def all_refs(name: str, structs: dict[str, Struct]) -> list[str]:
         refs = [r for r in s.refs if not NOT_OWNED_RE.search(r)] + refs
         name = s.base or ""
     return refs
+
+
+CALL_RE = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
+
+
+def with_callees(name: str, fs: dict[str, str], depth: int = 2) -> str:
+    """The body of the function name and of the functions in the same file
+    that it calls, to depth calls."""
+    bodies, seen, todo = [], set(), [(name, 0)]
+    while todo:
+        f, d = todo.pop()
+        if f in seen or f not in fs:
+            continue
+        seen.add(f)
+        bodies.append(fs[f])
+        if d < depth:
+            todo.extend((c, d + 1) for c in CALL_RE.findall(fs[f]))
+    return "\n".join(bodies)
+
+
+def last_member(ref: str) -> str:
+    """The member a path such as "head->base.obj" ends in."""
+    return re.split(r"->|\.", ref.rstrip("[]"))[-1].rstrip("[]")
 
 
 def main() -> int:
@@ -435,11 +520,13 @@ def main() -> int:
 
     macros = head_macros(list(texts.values()))
     structs: dict[str, Struct] = {}
-    plain: dict[str, list[str]] = {}
+    plain = Plain()
     # Two passes, so that a struct can start with one defined later.
     for _ in range(2):
         for p, t in texts.items():
             parse_structs(p, t, macros, structs, plain)
+    for s in structs.values():
+        s.refs = member_refs(s.members, structs, plain)
     types: list[TypeDef] = []
     funcs: dict[Path, dict[str, str]] = {}
     for p, t in texts.items():
@@ -476,15 +563,21 @@ def main() -> int:
             continue
         if body is None:
             continue
-        # Any member the traverse function names counts as visited, which
-        # also covers casts and helper functions taking the member.
-        visited = set(MEMBER_RE.findall(body))
+        # Any member the traverse function, or a function in the same file
+        # that it calls, names counts as visited, which also covers casts
+        # and helper functions taking the member.  Releases are read the
+        # same way, as a list's nodes are often freed by a helper.
+        visited = set(MEMBER_RE.findall(with_callees(t.traverse, fs)))
         released = set()
         for f in (t.dealloc, t.clear):
-            if f and f in fs:
-                released |= set(RELEASE_RE.findall(fs[f]))
-        names = {r.rstrip("[]") for r in refs}
-        miss = sorted((released & names) - visited)
+            if f:
+                code = with_callees(f, fs)
+                released |= set(RELEASE_RE.findall(code))
+                # Releasing a Py_buffer releases its obj.
+                if re.search(r"\bPyBuffer_Release\s*\(", code):
+                    released.add("obj")
+        miss = sorted(r.rstrip("[]") for r in refs
+                      if last_member(r) in released - visited)
         if miss:
             partial.append((t, miss))
 

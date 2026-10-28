@@ -3704,6 +3704,19 @@ gc_walk_here(PyObject *self, PyObject *Py_UNUSED(ignored))
     return Py_BuildValue("(NiN)", r.frames, fell_back, acts);
 }
 
+/* Call callable while a core frame holds [None] only in a PyMem block, and
+   return the list if give_back is set (_PyGC_TestHoldInCoreMem()). */
+static PyObject *
+gc_hold_in_core_mem(PyObject *self, PyObject *args)
+{
+    PyObject *callable;
+    int give_back;
+    if (!PyArg_ParseTuple(args, "Op", &callable, &give_back)) {
+        return NULL;
+    }
+    return _PyGC_TestHoldInCoreMem(callable, give_back);
+}
+
 /* Push a frame for func that is never linked into the chain, with [None]
    in its first slot, and report whether the frame roots reach the list,
    with the frame holding it and with the slot cleared.  With cross, frames
@@ -4062,6 +4075,7 @@ static PyMethodDef module_functions[] = {
     {"gc_root_stats", gc_root_stats, METH_NOARGS},
     {"gc_collect_with_signal", _PyCFunction_CAST(gc_collect_with_signal), METH_O},
     {"gc_frames_off_chain", gc_frames_off_chain, METH_VARARGS},
+    {"gc_hold_in_core_mem", gc_hold_in_core_mem, METH_VARARGS},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
     {"gc_raw_block_is_object", _PyCFunction_CAST(gc_raw_block_is_object), METH_O},
     {"gc_segment_of", _PyCFunction_CAST(gc_segment_of), METH_O},

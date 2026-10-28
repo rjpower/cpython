@@ -78,6 +78,9 @@
 
 #include <setjmp.h>
 #include <stdio.h>
+#ifdef HAVE_DLFCN_H
+#  include <dlfcn.h>              // dladdr()
+#endif
 #include <stdlib.h>
 #include <string.h>
 #ifdef HAVE_DL_ITERATE_PHDR
@@ -296,7 +299,35 @@ typedef struct {
     size_t block_size;
 } trace_hole;
 
+/* The live verifier's modes (PYTHON_GCVERIFY=retain|kill), and where the
+   roots outside A reached an object: a word of a PyMem block that a core
+   opaque frame points to, or a word of a thread or interpreter struct. */
+#define VERIFY_OFF      0
+#define VERIFY_RETAIN   1
+#define VERIFY_KILL     2
+#define VERIFY_FROM_CORE_MEM  1
+#define VERIFY_FROM_STRUCT    2
+
+typedef struct {
+    uintptr_t word;       // the root word's address
+    uintptr_t owner;      // a core frame's pc, or 0 for a struct word
+    int kind;             // VERIFY_FROM_*
+    int64_t collection;   // the live collection that listed it
+} verify_rec;
+
+typedef struct {
+    PyObject *op;
+    verify_rec rec;
+} verify_entry;
+
 struct _gc_trace_state {
+    // The live verifier: its mode, the live collections it has seen, and
+    // the objects that only the roots outside A reached, which retain
+    // keeps (sorted by address).
+    int live_verify;
+    int64_t live_collections;
+    verify_entry *q;
+    size_t nq;
     // The static types passed to PyType_Ready() in this interpreter.
     PyTypeObject **static_types;
     Py_ssize_t n_static_types;
@@ -376,11 +407,29 @@ typedef struct {
     uintptr_t skip_lo[256];
     uintptr_t skip_hi[256];
     int nskip;
+    /* The live verifier (work/10a-1.md item 7).  A, the mark from the
+       roots, leaves out the struct scan and the PyMem blocks that words of
+       core opaque frames point to, which it lists in deferred; B marks from
+       them after A, and lists each object it marks in newq. */
+    int verify;
+    int phase_b;
+    int frame_core;       // the walk is in a core opaque frame
+    uintptr_t frame_pc;   // and its pc
+    int in_queue;         // scan_queued() is draining
+    verify_rec rec;       // B's root word
+    struct { uintptr_t word, value, pc; } *deferred;
+    size_t ndeferred;
+    size_t deferred_cap;
+    verify_entry *newq;
+    size_t nnewq;
+    size_t newq_cap;
 } trace_t;
 
 static int mark_visit(PyObject *op, void *arg);
 static int live_visit(PyObject *op, void *arg);
 static void live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop);
+static void verify_list(trace_t *t, PyObject *op);
+static void verify_defer(trace_t *t, uintptr_t word, uintptr_t value);
 static void scan_threads_only(trace_t *t, PyThreadState *current);
 
 
@@ -960,12 +1009,14 @@ scan_queued(trace_t *t)
     int scan_mem = t->scan_mem;
     int scan_class = t->scan_class;
     t->scan_mem = 1;
+    t->in_queue++;
     while (t->mem_sp > 0 && !t->oom) {
         t->scan_class = (int)t->mem_stack[--t->mem_sp];
         uintptr_t end = t->mem_stack[--t->mem_sp];
         uintptr_t start = t->mem_stack[--t->mem_sp];
         scan_range(t, start, end);
     }
+    t->in_queue--;
     t->scan_mem = scan_mem;
     t->scan_class = scan_class;
 }
@@ -1027,6 +1078,15 @@ walk_scan(void *arg, uintptr_t start, uintptr_t end)
 {
     scan_range((trace_t *)arg, start, end);
 }
+
+/* The frame whose words the walk scans next, for the live verifier */
+static void
+walk_frame(void *arg, uintptr_t pc, uintptr_t sp, uintptr_t cfa, int cls)
+{
+    trace_t *t = arg;
+    t->frame_core = t->verify && cls == _PyGC_FRAME_CORE;
+    t->frame_pc = pc;
+}
 #endif
 
 /* The registers that ctx captured, conservatively.  Scans a copy: the
@@ -1057,6 +1117,7 @@ scan_from(trace_t *t, PyThreadState *p, const _PyGCContext *ctx,
     t->scan_class = _PyGC_SCAN_STACK;
     _PyGCWalk w = {
         .scan = walk_scan,
+        .frame = walk_frame,
         .arg = t,
         .cache = t->walk_cache,
         .top = top,
@@ -1066,6 +1127,7 @@ scan_from(trace_t *t, PyThreadState *p, const _PyGCContext *ctx,
         .stats = t->stats,
     };
     (void)_PyGC_WalkStack(&w, ctx);
+    t->frame_core = 0;
 #else
     scan_regs(t, ctx);
     scan_stack(t, p, ctx->sp, top);
@@ -1702,6 +1764,9 @@ live_mark(trace_t *t, PyObject *op, int conservative)
         return;
     }
     t->nmarked++;
+    if (t->phase_b) {
+        verify_list(t, op);
+    }
     if (conservative && !live_safe_to_traverse(op)) {
         op->ob_flags = flags | _Py_GC_MARKED_FLAG | _Py_GC_SHALLOW_FLAG;
         t->nshallow++;
@@ -1801,11 +1866,19 @@ live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop)
             if (stats != NULL) {
                 stats->hits[cls]++;
             }
+            if (t->phase_b && !t->in_queue) {
+                t->rec.word = (uintptr_t)p;
+            }
             live_mark(t, op, 1);
             live_drain(t);
         }
         else if (t->scan_mem && w >= t->mem_lo && w < t->mem_hi) {
-            queue_mem_block(t, w);
+            if (t->frame_core && !t->phase_b) {
+                verify_defer(t, (uintptr_t)p, w);
+            }
+            else {
+                queue_mem_block(t, w);
+            }
         }
     }
 }
@@ -2178,6 +2251,8 @@ live_mark_roots(trace_t *t, PyThreadState *tstate)
 static void
 live_fini(trace_t *t)
 {
+    free(t->deferred);
+    free(t->newq);
     addrset_fini(&t->mem_scanned);
     free(t->mem_stack);
     rangelist_fini(&t->pages);
@@ -2219,17 +2294,239 @@ live_clear_weak_caches(trace_t *t)
     }
 }
 
+/* --- the live verifier: retain (work/10a-1.md item 7) --------------------- */
+
+/* A lists a word of a core opaque frame that points into a PyMem block, for
+   B, instead of following it. */
+static void
+verify_defer(trace_t *t, uintptr_t word, uintptr_t value)
+{
+    if (t->ndeferred == t->deferred_cap) {
+        size_t cap = t->deferred_cap ? 2 * t->deferred_cap : 64;
+        void *d = realloc(t->deferred, cap * sizeof(*t->deferred));
+        if (d == NULL) {
+            t->oom = 1;
+            return;
+        }
+        t->deferred = d;
+        t->deferred_cap = cap;
+    }
+    t->deferred[t->ndeferred].word = word;
+    t->deferred[t->ndeferred].value = value;
+    t->deferred[t->ndeferred].pc = t->frame_pc;
+    t->ndeferred++;
+}
+
+/* B marks op, which A did not reach */
+static void
+verify_list(trace_t *t, PyObject *op)
+{
+    if (t->nnewq == t->newq_cap) {
+        size_t cap = t->newq_cap ? 2 * t->newq_cap : 256;
+        void *q = realloc(t->newq, cap * sizeof(*t->newq));
+        if (q == NULL) {
+            t->oom = 1;
+            return;
+        }
+        t->newq = q;
+        t->newq_cap = cap;
+    }
+    t->newq[t->nnewq].op = op;
+    t->newq[t->nnewq].rec = t->rec;
+    t->nnewq++;
+}
+
+static int
+verify_entry_cmp(const void *a, const void *b)
+{
+    uintptr_t x = (uintptr_t)((const verify_entry *)a)->op;
+    uintptr_t y = (uintptr_t)((const verify_entry *)b)->op;
+    return x < y ? -1 : x > y;
+}
+
+/* The image and offset of addr, or "heap" */
+static void
+verify_owner(char *buf, size_t size, uintptr_t addr)
+{
+#ifdef HAVE_DLFCN_H
+    Dl_info info;
+    if (addr != 0 && dladdr((void *)addr, &info) && info.dli_fname != NULL) {
+        PyOS_snprintf(buf, size, "%s+%#lx", info.dli_fname,
+                      (unsigned long)(addr - (uintptr_t)info.dli_fbase));
+        return;
+    }
+#endif
+    PyOS_snprintf(buf, size, "heap");
+}
+
+static void
+verify_report_to(FILE *out, const verify_entry *e, int64_t now)
+{
+    char where[600];
+    const verify_rec *r = &e->rec;
+    if (r->kind == VERIFY_FROM_CORE_MEM) {
+        char owner[512];
+        verify_owner(owner, sizeof(owner), r->owner);
+        PyOS_snprintf(where, sizeof(where),
+                      "a PyMem block that the word at %p of a core frame "
+                      "at %s points to", (void *)r->word, owner);
+    }
+    else {
+        char owner[512];
+        verify_owner(owner, sizeof(owner), r->word);
+        PyOS_snprintf(where, sizeof(where), "the struct word at %p (%s)",
+                      (void *)r->word, owner);
+    }
+    fprintf(out, "gc verify retain: candidate %s at %p: collection %lld "
+            "reached it only through %s; collection %lld reached it from "
+            "the roots\n", Py_TYPE(e->op)->tp_name, (void *)e->op,
+            (long long)r->collection, where, (long long)now);
+}
+
+static void
+verify_report(const verify_entry *e, int64_t now)
+{
+    verify_report_to(stderr, e, now);
+    const char *path = getenv("PYTHON_GCVERIFY_LOG");
+    if (path == NULL || *path == '\0') {
+        return;
+    }
+    FILE *log = fopen(path, "a");
+    if (log != NULL) {
+        fprintf(log, "== pid %ld\n", (long)getpid());
+        verify_report_to(log, e, now);
+        fclose(log);
+    }
+}
+
+/* After A: report the listed objects that A reached, mark B from what A
+   left out, and list what B marked, keeping each object's first record. */
+static void
+verify_mark_b(trace_t *t, PyThreadState *tstate)
+{
+    struct _gc_trace_state *ts = t->ts;
+    int64_t now = ++ts->live_collections;
+    _PyGCRootStats *stats = t->stats;
+    size_t kept = 0;
+    for (size_t i = 0; i < ts->nq; i++) {
+        verify_entry *e = &ts->q[i];
+        if (e->op->ob_flags & _Py_GC_MARKED_FLAG) {
+            verify_report(e, now);
+            if (stats != NULL) {
+                stats->verify_candidates++;
+            }
+        }
+        else {
+            ts->q[kept++] = *e;
+        }
+    }
+    ts->nq = kept;
+
+    t->phase_b = 1;
+    t->rec = (verify_rec){.kind = VERIFY_FROM_CORE_MEM, .collection = now};
+    for (size_t i = 0; i < t->ndeferred && !t->oom; i++) {
+        t->rec.word = t->deferred[i].word;
+        t->rec.owner = t->deferred[i].pc;
+        queue_mem_block(t, t->deferred[i].value);
+        scan_queued(t);
+    }
+    t->rec = (verify_rec){.kind = VERIFY_FROM_STRUCT, .collection = now};
+    for (int d = 0; d < t->ndomain && !t->oom; d++) {
+        t->interp = t->domain[d];
+        t->scan_class = _PyGC_SCAN_STRUCTS;
+        scan_structs(t);
+        scan_queued(t);
+    }
+    t->interp = tstate->interp;
+    t->phase_b = 0;
+    if (stats != NULL) {
+        stats->verify_q += (int64_t)t->nnewq;
+    }
+
+    /* The list is what B marked now, with the older record of an object
+       that an earlier collection listed.  What neither marked dies, and
+       drops out. */
+    if (t->oom) {
+        return;
+    }
+    qsort(t->newq, t->nnewq, sizeof(verify_entry), verify_entry_cmp);
+    size_t j = 0;
+    for (size_t i = 0; i < t->nnewq; i++) {
+        while (j < ts->nq && ts->q[j].op < t->newq[i].op) {
+            j++;
+        }
+        if (j < ts->nq && ts->q[j].op == t->newq[i].op) {
+            t->newq[i].rec = ts->q[j].rec;
+        }
+    }
+    free(ts->q);
+    ts->q = t->newq;
+    ts->nq = t->nnewq;
+    t->newq = NULL;
+    t->nnewq = t->newq_cap = 0;
+}
+
+/* Not inlined, so that the list's address is in no register or stack slot
+   of the caller */
+static Py_NO_INLINE int
+make_list_in(PyObject **slot)
+{
+    PyObject *list = PyList_New(0);
+    if (list == NULL || PyList_Append(list, Py_None) < 0) {
+        return -1;
+    }
+    *slot = list;
+    return 0;
+}
+
+/* Overwrite the stack below the caller, where make_list_in() left copies */
+static Py_NO_INLINE void
+scrub_stack(void)
+{
+    volatile char buf[16384];
+    for (size_t i = 0; i < sizeof(buf); i++) {
+        buf[i] = 0;
+    }
+}
+
+Py_NO_INLINE PyObject *
+_PyGC_TestHoldInCoreMem(PyObject *callable, int give_back)
+{
+    PyObject **block = PyMem_Calloc(4, sizeof(PyObject *));
+    if (block == NULL) {
+        return PyErr_NoMemory();
+    }
+    if (make_list_in(&block[1]) < 0) {
+        PyMem_Free(block);
+        return NULL;
+    }
+    scrub_stack();
+    PyObject *r = PyObject_CallNoArgs(callable);
+    PyObject *list = block[1];
+    PyMem_Free(block);
+    if (r == NULL) {
+        return NULL;
+    }
+    return give_back ? list : Py_None;
+}
+
 int
 _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
 {
     *res = (_PyGCMarkResult){0};
+    struct _gc_trace_state *ts = tstate->interp->gc.trace;
+    int verify = ts != NULL ? ts->live_verify : VERIFY_OFF;
     trace_t t = {
         .interp = tstate->interp,
+        .ts = ts,
         .live = 1,
-        .roots = _PyGC_TRACE_ROOT_ALL,
+        // The struct scan is B's under the verifier
+        .roots = verify ? _PyGC_TRACE_ROOT_ALL & ~_PyGC_TRACE_ROOT_STRUCTS
+                        : _PyGC_TRACE_ROOT_ALL,
         .debug_offset = _PyMem_DebugEnabled() ? 2 * sizeof(size_t) : 0,
         .stats = &res->roots,
         .walk_cache = _PyGC_LiveWalkCache(tstate->interp),
+        .verify = verify,
     };
     int rc = -1;
     if (addrset_init(&t.mem_scanned, 256) < 0) {
@@ -2244,6 +2541,9 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
         goto done;
     }
     live_mark_roots(&t, tstate);
+    if (t.verify) {
+        verify_mark_b(&t, tstate);
+    }
     /* The walk clears every mark, also after a failure, when it lists
        nothing. */
     struct live_walk w = {.t = &t, .res = res, .failed = t.oom};
@@ -3160,9 +3460,13 @@ _PyGC_TraceInit(PyInterpreterState *interp)
 #endif
     int requested = 0;
     const PyConfig *config = &interp->config;
+    int live_verify = VERIFY_OFF;
     if (config->use_environment) {
         const char *env = getenv("PYTHON_GCVERIFY");
-        if (env != NULL && *env != '\0') {
+        if (env != NULL && strcmp(env, "retain") == 0) {
+            live_verify = VERIFY_RETAIN;
+        }
+        else if (env != NULL && *env != '\0') {
             mode = strcmp(env, "auto") == 0 ? _PyGC_TRACE_AUTO
                  : strcmp(env, "0") == 0 ? _PyGC_TRACE_OFF
                  : _PyGC_TRACE_EXPLICIT;
@@ -3190,6 +3494,13 @@ _PyGC_TraceInit(PyInterpreterState *interp)
         mode = _PyGC_TRACE_OFF;
     }
     interp->gc.trace_mode = mode;
+    if (live_verify != VERIFY_OFF) {
+        struct _gc_trace_state *ts = get_trace_state(interp);
+        if (ts == NULL) {
+            return _PyStatus_NO_MEMORY();
+        }
+        ts->live_verify = live_verify;
+    }
     return _PyStatus_OK();
 }
 
@@ -3201,6 +3512,7 @@ _PyGC_TraceFini(PyInterpreterState *interp)
         return;
     }
     interp->gc.trace = NULL;
+    free(ts->q);
     free(ts->static_types);
     addrset_fini(&ts->static_type_set);
     free(ts->holes);

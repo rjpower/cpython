@@ -152,7 +152,8 @@ struct _PyEvalActivation;
 struct _PyGCRootStats;
 
 /* One walk of a stack.  The walk calls scan for each range of words it
- * finds opaque, conservatively; frame, if set, for each frame. */
+ * finds opaque, conservatively; frame, if set, for each frame, before the
+ * scans of the words the frame owns. */
 typedef struct {
     void (*scan)(void *arg, uintptr_t start, uintptr_t end);
     void (*frame)(void *arg, uintptr_t pc, uintptr_t sp, uintptr_t cfa,

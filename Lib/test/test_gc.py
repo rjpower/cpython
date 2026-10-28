@@ -1577,6 +1577,37 @@ class TracingCollectorTests(unittest.TestCase):
                 self.assertEqual(crossed, cross)
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_verify_retain(self):
+        # PYTHON_GCVERIFY=retain (work/10a-1.md item 7): a core frame holds
+        # a list only in a PyMem block while it collects, which only the
+        # verifier's second mark reaches; a later collection that reaches
+        # the list from the roots reports it as a candidate missed root.
+        code = textwrap.dedent("""
+            import gc, sys, _testinternalcapi
+            obj = _testinternalcapi.gc_hold_in_core_mem(
+                gc.collect, sys.argv[1] == "1")
+            gc.collect()
+            print(type(obj).__name__,
+                  _testinternalcapi.gc_root_stats()["total"]["verify_q"])
+        """)
+        for give_back in (True, False):
+            with self.subTest(give_back=give_back):
+                rc, out, err = assert_python_ok(
+                    "-c", code, str(int(give_back)),
+                    PYTHON_GCVERIFY="retain")
+                name, nq = out.decode().split()
+                self.assertGreater(int(nq), 0)
+                found = [line for line in err.decode().splitlines()
+                         if "candidate list at" in line
+                         and "of a core frame" in line]
+                if give_back:
+                    self.assertEqual(name, "list")
+                    self.assertEqual(len(found), 1, err)
+                else:
+                    self.assertEqual(name, "NoneType")
+                    self.assertEqual(found, [])
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_root_stats(self):
         # The root phase's counters: one schema for the total and the last
         # collection, which a collection moves.

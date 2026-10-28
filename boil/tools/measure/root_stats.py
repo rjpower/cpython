@@ -61,7 +61,8 @@ def report(total, lines):
     print("|---|---:|---:|")
     for key in ("threads", "activations_skipped", "eval_words_skipped",
                 "frames_walked", "cache_hits", "cache_misses",
-                "cache_flushes", "fallbacks", "unpinned"):
+                "cache_flushes", "fallbacks", "unpinned", "verify_q",
+                "verify_candidates"):
         v = total[key]
         print(f"| {key} | {v:,} | {v / n if n else 0:,.1f} |")
     for key in ("precise_ns", "stack_ns", "data_ns", "structs_ns", "roots_ns"):

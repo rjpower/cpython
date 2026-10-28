@@ -927,11 +927,12 @@ _PyGC_WalkStack(_PyGCWalk *w, const _PyGCContext *ctx)
         uintptr_t precise_lo;
         int cls = frame_class(w, d, pc, sp, cfa, &flags, &precise_lo);
         int opaque = cls != _PyGC_FRAME_PRECISE;
-        if (!opaque && precise_lo > sp) {
-            w->scan(w->arg, sp, precise_lo);
-        }
+        // Before any of the frame's words, which the scans after it own
         if (w->frame != NULL) {
             w->frame(w->arg, pc, sp, cfa, cls);
+        }
+        if (!opaque && precise_lo > sp) {
+            w->scan(w->arg, sp, precise_lo);
         }
         if (w->stats != NULL) {
             w->stats->frames_walked++;

@@ -265,7 +265,10 @@ typedef struct {
  * walk's counters (frames, descriptor cache, fallbacks) are zero until the
  * walk exists, so that every build reports one schema.  unpinned counts the
  * other threads visited with an unpinned detach record, whose stacks are
- * scanned conservatively (note 11 question 16). */
+ * scanned conservatively (note 11 question 16).  Under PYTHON_GCVERIFY=retain
+ * or kill, verify_q counts the objects that only the roots outside A reach
+ * and verify_candidates the objects that such a collection listed and a
+ * later one reached from A (work/10a-1.md item 7). */
 #define _PyGC_SCAN_STACK    0  /* C stacks */
 #define _PyGC_SCAN_REGS     1  /* captured register arrays */
 #define _PyGC_SCAN_MEM      2  /* PyMem blocks the scans lead to */
@@ -279,8 +282,8 @@ typedef struct {
 #define _PyGC_ROOT_STATS_FIELDS(X) \
     X(collections) X(threads) X(activations_skipped) X(eval_words_skipped) \
     X(frames_walked) X(cache_hits) X(cache_misses) X(cache_flushes) \
-    X(fallbacks) X(unpinned) X(precise_ns) X(stack_ns) X(data_ns) X(structs_ns) \
-    X(roots_ns)
+    X(fallbacks) X(unpinned) X(verify_q) X(verify_candidates) X(precise_ns) \
+    X(stack_ns) X(data_ns) X(structs_ns) X(roots_ns)
 
 typedef struct _PyGCRootStats {
 #define _PyGC_ROOT_STATS_FIELD(name) int64_t name;
@@ -310,6 +313,12 @@ extern int _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res);
 /* The interpreter's descriptor cache for the stack walk (Python/gc_walk.c),
  * or NULL if the collector's state cannot be allocated. */
 extern struct _PyGCWalkCache *_PyGC_LiveWalkCache(PyInterpreterState *interp);
+
+/* For the test of the verifier's retain mode: create [None], hold it only in
+ * a PyMem block that this core frame points to, call callable, and return
+ * the list if give_back is set, else None. */
+PyAPI_FUNC(PyObject *) _PyGC_TestHoldInCoreMem(PyObject *callable,
+                                               int give_back);
 
 /* The classes of roots (_PyGC_TRACE_ROOT_*) that each alone reach the object
  * at addr, or -1.  For debugging; export for _testinternalcapi. */

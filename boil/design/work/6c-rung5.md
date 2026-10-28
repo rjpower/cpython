@@ -249,3 +249,44 @@ Questions:
   apart.
 - **Rung 3's results.** `6c-rung3.json` is kept; the new baseline is a
   separate file with its revision recorded.
+
+## As built
+
+Commits:
+
+- f70da2cad2a: the counters, `PYTHON_STATS_DIR`, the two micro
+  benchmarks and the measurement scripts.
+- The write-up: note 06 section 20, notes 08 and 09, the results files
+  `6c-rung3-end.json`, `6c.json` and `6c-pystats.json`, and this
+  section.
+
+The measurements and their attribution are in note 06 section 20.8, and
+the hand-off with owners is in 20.9. Where the work differs from the plan
+above:
+
+- **Gates at f70da2cad2a.** Gate 1 passed on the ladder (dev-default
+  and dev-debug, 10,304 tests each) and on dev-pystats (test_shapes and
+  test_sys). Gate 2 passed (50,884 tests). Gate 3 failed on
+  test_io.test_signals, which timed out: it is 10a's known hazard, whose
+  fix lands with the 10a merge. gate.sh exits at a failed command, so
+  test_cext with `-u cpu`, the regen check and the traverse audit were
+  run by hand, and passed. Gate 4 passed (`results/6c.json`).
+- **The new micro benchmarks' handlers** were checked on the rung 3 end
+  build after warming: `attr_load_poly5`'s site is generic `LOAD_ATTR`,
+  and `attr_store_boxed`'s is `STORE_ATTR_SHAPE`. On the current build,
+  `attr_store_boxed` costs what `attr_store` costs (52 instructions per
+  store), which the generic store (283) would not.
+- **Attribution used exact counts where sampling could not.** perf
+  throttles at 20,000 samples a second, so the store profiles sample
+  every 2M instructions. Specialised-store counts come from Py_STATS
+  execution counts, multiplied by the guard's eight instructions as
+  disassembled.
+- **The rung 3 RSS items.** Rerunning showed tuples_10m and
+  collector_live512 to be bimodal within one build, so they are retired
+  rather than handed on.
+- **The occupancy tool** counts the import system's objects too, so it
+  reports the kernel's own classes separately.
+- **Wall time** was not measured, because gates ran on the machine
+  throughout.
+- **The coordinator's addition**, the capacity floor, is in note 09's
+  recorded list and in note 06 section 20.9, item 4.

@@ -1968,6 +1968,7 @@ mbstreamwriter_traverse(PyObject *op, visitproc visit, void *arg)
         Py_VISIT(self->errors);
     Py_VISIT(self->stream);
     Py_VISIT(self->codec_owner);
+    Py_VISIT(self->pending);
     return 0;
 }
 
@@ -1980,6 +1981,7 @@ mbstreamwriter_dealloc(PyObject *op)
     ERROR_DECREF(self->errors);
     Py_XDECREF(self->stream);
     Py_XDECREF(self->codec_owner);
+    Py_CLEAR(self->pending);
     tp->tp_free(self);
     Py_DECREF(tp);
 }

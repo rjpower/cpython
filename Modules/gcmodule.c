@@ -211,6 +211,7 @@ gc_get_count_impl(PyObject *module)
 }
 
 /*[clinic input]
+@gc_precise
 gc.get_referrers
 
     *objs: tuple
@@ -218,16 +219,25 @@ gc.get_referrers
 Return the list of objects that directly refer to any of 'objs'.
 [clinic start generated code]*/
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 gc_get_referrers_impl(PyObject *module, PyObject *objs)
-/*[clinic end generated code: output=929d6dff26f609b9 input=9102be7ebee69ee3]*/
+/*[clinic end generated code: output=7cf1564ff8e75c27 input=d98c07b7b8dcbd85]*/
 {
-    if (PySys_Audit("gc.get_referrers", "(O)", objs) < 0) {
-        return NULL;
-    }
+    /* This frame is precise, so that a stale word in it cannot keep an
+       object that the snapshot's collection should free; objs is held in
+       a span across the audit hook and the collection. */
+    PyValue slots[1];
+    _PyValueRoot span;
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, objs);
 
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    return _PyGC_GetReferrers(interp, objs);
+    PyObject *result = NULL;
+    if (PySys_Audit("gc.get_referrers", "(O)", objs) >= 0) {
+        result = _PyGC_GetReferrers(tstate->interp, objs);
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return result;
 }
 
 /* Append obj to list; return true if error (out of memory), false if OK. */

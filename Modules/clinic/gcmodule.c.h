@@ -328,12 +328,16 @@ PyDoc_STRVAR(gc_get_referrers__doc__,
 static PyObject *
 gc_get_referrers_impl(PyObject *module, PyObject *objs);
 
-static PyValue
+Py_GC_PRECISE static PyValue
 gc_get_referrers(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
     PyValue return_value = PyValue_NULL;
+    PyValue _gc_slots[1];
+    _PyValueRoot _gc_span;
     PyObject *objs = NULL;
     PyObject *_return_value;
+    _PyThreadState_PushValueSpan(_PyThreadState_GET(), &_gc_span, _gc_slots);
+    _PyValueSpan_AppendObject(&_gc_span, (PyObject *)module);
 
     objs = _PyTuple_FromValues(args, nargs);
     if (objs == NULL) {
@@ -345,6 +349,7 @@ gc_get_referrers(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 exit:
     /* Cleanup for objs */
     Py_XDECREF(objs);
+    _PyThreadState_PopValueRoot(_PyThreadState_GET(), &_gc_span);
 
     return return_value;
 }
@@ -616,4 +621,4 @@ gc_get_freeze_count(PyObject *module, PyObject *Py_UNUSED(ignored))
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=49492ba25dd7c973 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0d40044bf7269a5c input=a9049054013a1b77]*/

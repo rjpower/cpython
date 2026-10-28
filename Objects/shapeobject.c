@@ -23,6 +23,16 @@
    one point where a missing root would lose a value. */
 int _PyShape_ConversionCollect = 0;
 
+const _PySlotKindRange _PySlotKind_Ranges[_Py_SLOT_NKINDS] = {
+    [_Py_SLOT_BOXED] = {0, UINT64_MAX},
+    [_Py_SLOT_I32] = {_PyValue_INT_BASE, UINT32_MAX},
+    [_Py_SLOT_F64] = {_PyValue_DOUBLE_OFFSET,
+                      _PyValue_INT_BASE - _PyValue_DOUBLE_OFFSET - 1},
+};
+
+static uint64_t generalisations;
+static uint64_t shapes_reversioned;
+
 void
 _PyShape_InitRoot(PyTypeObject *type)
 {
@@ -278,10 +288,11 @@ find_edge(_PyShape *from, int kind, PyObject *name)
 }
 
 /* A new child of FROM by an edge of KIND for NAME at slot IX, with NSLOTS
-   slots, entered in the table; NULL with MemoryError set. */
+   slots, entered in the table; an ADD edge's field has FIELD_KIND.  NULL
+   with MemoryError set. */
 static _PyShape *
 new_shape(_PyTypeShapes *shapes, _PyShape *from, int kind, PyObject *name,
-          Py_ssize_t ix, uint16_t nslots)
+          Py_ssize_t ix, uint16_t nslots, uint8_t field_kind)
 {
     _PyShape *shape = PyMem_Malloc(sizeof(_PyShape)
                                    + nslots * sizeof(_PyShapeSlot));
@@ -294,8 +305,10 @@ new_shape(_PyTypeShapes *shapes, _PyShape *from, int kind, PyObject *name,
         slots[i] = i < from->nslots ? from->slots[i]
                                     : (_PyShapeSlot){NULL, _Py_SLOT_BOXED};
     }
-    slots[ix] = (_PyShapeSlot){kind == _Py_SHAPE_ADD ? name : NULL,
-                               _Py_SLOT_BOXED};
+    // Kinds are copied from the parent, so a field has its kind in every
+    // shape below its owner.
+    slots[ix] = kind == _Py_SHAPE_ADD ? (_PyShapeSlot){name, field_kind}
+                                      : (_PyShapeSlot){NULL, _Py_SLOT_BOXED};
     *shape = (_PyShape){
         .type = from->type,
         .flags = from->flags,
@@ -341,7 +354,8 @@ _PyShape_FindDelete(_PyShape *from, Py_ssize_t ix)
 }
 
 _PyShapePrepare
-_PyShape_PrepareAdd(_PyShape *from, PyObject *name, _PyShape **to)
+_PyShape_PrepareAdd(_PyShape *from, PyObject *name, uint8_t kind,
+                    _PyShape **to)
 {
     // Edges are compared by identity, so the name must be interned.
     assert(PyUnicode_CheckExact(name) && PyUnicode_CHECK_INTERNED(name));
@@ -359,7 +373,7 @@ _PyShape_PrepareAdd(_PyShape *from, PyObject *name, _PyShape **to)
         return _Py_SHAPE_PREPARE_LIMIT;
     }
     *to = new_shape(shapes, from, _Py_SHAPE_ADD, name, from->nslots,
-                    from->nslots + 1);
+                    from->nslots + 1, kind);
     return *to != NULL ? _Py_SHAPE_PREPARE_OK : _Py_SHAPE_PREPARE_NOMEMORY;
 }
 
@@ -383,8 +397,54 @@ _PyShape_PrepareDelete(_PyShape *from, Py_ssize_t ix, _PyShape **to)
     if (shapes->nshapes == _Py_SHAPE_MAX_PER_TYPE) {
         return _Py_SHAPE_PREPARE_LIMIT;
     }
-    *to = new_shape(shapes, from, _Py_SHAPE_DELETE, name, ix, from->nslots);
+    *to = new_shape(shapes, from, _Py_SHAPE_DELETE, name, ix, from->nslots,
+                    _Py_SLOT_BOXED);
     return *to != NULL ? _Py_SHAPE_PREPARE_OK : _Py_SHAPE_PREPARE_NOMEMORY;
+}
+
+void
+_PyShape_Generalise(_PyShape *shape, Py_ssize_t ix)
+{
+    assert(!_PyShape_IsDictMode(shape));
+    assert(0 <= ix && ix < shape->nslots && shape->slots[ix].name != NULL);
+    assert(shape->slots[ix].kind != _Py_SLOT_BOXED);
+    // The field's owner is the shape its ADD edge leads to.  A DELETE edge
+    // also records its slot, so the edge kind is tested.
+    _PyShape *owner = shape;
+    while (!(owner->shape_kind == _Py_SHAPE_ADD && owner->edge_slot == ix)) {
+        owner = owner->parent;
+        assert(owner != NULL && ix < owner->nslots);
+    }
+    // One fresh version for the subtree: a version is compared only with
+    // a shape pointer or with the type, and this one is unique to these
+    // shapes.  Every shape below the owner extends it, so it has slot IX,
+    // the field or a hole after a delete, whose kind is BOXED already.
+    uint32_t version = _PyType_NewShapeVersion(shape->type);
+    generalisations++;
+    _PyShape *s = owner;
+    for (;;) {
+        s->slots[ix].kind = _Py_SLOT_BOXED;
+        FT_ATOMIC_STORE_UINT32_RELAXED(s->type_version, version);
+        shapes_reversioned++;
+        if (s->children != NULL) {
+            s = s->children;
+            continue;
+        }
+        while (s != owner && s->sibling == NULL) {
+            s = s->parent;
+        }
+        if (s == owner) {
+            break;
+        }
+        s = s->sibling;
+    }
+}
+
+void
+_PyShape_GeneraliseCounts(uint64_t *n, uint64_t *reversioned)
+{
+    *n = generalisations;
+    *reversioned = shapes_reversioned;
 }
 
 int
@@ -470,7 +530,9 @@ dict_from_slots(PyObject *obj)
 
 /* Make DICT (or NULL) OBJ's instance dict.  From shape mode the fields are
    cleared first; then slot 0 is written, then the header.  Plain stores
-   only: no call and no allocation. */
+   only: no call and no allocation.  Slot 0 may be an I32 or F64 field
+   until the header changes; nothing runs in between, and the dictionary-
+   mode shape has no kinds, so no field is generalised. */
 static void
 publish_dict(PyObject *obj, PyDictObject *dict)
 {
@@ -610,6 +672,9 @@ _PyObject_ShapeStoreAttr(PyObject *obj, PyObject *name, PyValue value)
     }
     else {
         if (ix >= 0) {
+            if (!_PyValue_FitsKind(value, shape->slots[ix].kind)) {
+                _PyShape_Generalise(shape, ix);
+            }
             slots[ix] = value;
             return 0;
         }
@@ -621,8 +686,12 @@ _PyObject_ShapeStoreAttr(PyObject *obj, PyObject *name, PyValue value)
             PyErr_NoMemory();
             return -1;
         }
-        prep = _PyShape_PrepareAdd(shape, key, &to);
+        prep = _PyShape_PrepareAdd(shape, key, _PyValue_SlotKind(value), &to);
         if (prep == _Py_SHAPE_PREPARE_OK) {
+            // An existing edge's field may have another kind.
+            if (!_PyValue_FitsKind(value, to->slots[shape->nslots].kind)) {
+                _PyShape_Generalise(to, shape->nslots);
+            }
             slots[shape->nslots] = value;
             _PyObject_SetShape(obj, to);
             assert(slots_match_shape(obj));

@@ -199,7 +199,8 @@ PyAPI_FUNC(void) _Py_Specialize_LoadSuperAttr(PyValue global_super, PyValue cls,
                                          _PyInstr *instr, int load_method);
 PyAPI_FUNC(void) _Py_Specialize_LoadAttr(PyValue owner, _PyInstr *instr,
                                     PyObject *name);
-PyAPI_FUNC(void) _Py_Specialize_StoreAttr(PyValue owner, _PyInstr *instr,
+PyAPI_FUNC(void) _Py_Specialize_StoreAttr(PyValue owner, PyValue value,
+                                          _PyInstr *instr,
                                      PyObject *name);
 PyAPI_FUNC(void) _Py_Specialize_LoadGlobal(PyObject *globals, PyObject *builtins,
                                       _PyInstr *instr, PyObject *name);

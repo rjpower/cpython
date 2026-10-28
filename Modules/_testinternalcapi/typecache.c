@@ -132,28 +132,33 @@ lookup_plan(PyObject *Py_UNUSED(self), PyObject *args)
                          (unsigned long)plan.offset, value);
 }
 
-// lookup_store_plan(obj, name, delete=False) -> (outcome, cacheable, member,
-//                                               offset, has_shape_to)
+// lookup_store_plan(obj, name, delete=False[, value]) -> (outcome, cacheable,
+//     member, offset, has_shape_to, slot_kind), for a store of VALUE's kind
+//     (BOXED if omitted)
 static PyObject *
 lookup_store_plan(PyObject *Py_UNUSED(self), PyObject *args)
 {
-    PyObject *obj, *name;
+    PyObject *obj, *name, *value = NULL;
     int delete = 0;
-    if (!PyArg_ParseTuple(args, "OO|p", &obj, &name, &delete)
+    if (!PyArg_ParseTuple(args, "OO|pO", &obj, &name, &delete, &value)
         || ready_name(obj, &name) < 0)
     {
         return NULL;
     }
+    uint8_t value_kind = value == NULL ? _Py_SLOT_BOXED
+                         : _PyValue_SlotKind(PyValue_FromObject(value));
     _PyStorePlan plan;
     _PyShape_LookupStorePlan(_PyObject_SHAPE(obj), name,
-                             delete ? _Py_STORE_DELETE : _Py_STORE_SET, &plan);
+                             delete ? _Py_STORE_DELETE : _Py_STORE_SET,
+                             value_kind, &plan);
     Py_DECREF(name);
-    return Py_BuildValue("(siiki)",
+    return Py_BuildValue("(siikii)",
                          _PyLookup_OutcomeName(plan.outcome),
                          (plan.flags & _Py_LOOKUP_CACHEABLE) != 0,
                          (plan.flags & _Py_LOOKUP_MEMBER) != 0,
                          (unsigned long)plan.offset,
-                         plan.shape_to != NULL);
+                         plan.shape_to != NULL,
+                         (int)plan.slot_kind);
 }
 
 // shape(obj) -> (type, index_or_None, ((name, kind), ...)); holes are None
@@ -194,6 +199,36 @@ static PyObject *
 shape_version(PyObject *Py_UNUSED(self), PyObject *obj)
 {
     return PyLong_FromUnsignedLong(_PyObject_SHAPE(obj)->type_version);
+}
+
+// shape_generalisations() -> (generalisations, shapes re-versioned)
+static PyObject *
+shape_generalisations(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(args))
+{
+    uint64_t n, reversioned;
+    _PyShape_GeneraliseCounts(&n, &reversioned);
+    return Py_BuildValue("(KK)", (unsigned long long)n,
+                         (unsigned long long)reversioned);
+}
+
+// set_next_type_version(tag) -> the interpreter's next heap-type tag, then
+// sets it; 0 means the tags are exhausted
+static PyValue
+set_next_type_version(PyObject *Py_UNUSED(self), PyValue arg)
+{
+    // METH_O passes the value: a small int is inline.
+    PyObject *arg_o = PyValue_Object(arg);
+    if (arg_o == NULL) {
+        return PyValue_NULL;
+    }
+    unsigned long tag = PyLong_AsUnsignedLong(arg_o);
+    if (tag == (unsigned long)-1 && PyErr_Occurred()) {
+        return PyValue_NULL;
+    }
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    unsigned int old = interp->types.next_version_tag;
+    interp->types.next_version_tag = (unsigned int)tag;
+    return PyValue_FromResult(PyLong_FromUnsignedLong(old));
 }
 
 // type_slot_capacity(type) -> the slots of each instance, or None for a type
@@ -283,6 +318,8 @@ static PyMethodDef test_methods[] = {
     {"shape", shape, METH_O},
     {"shape_address", shape_address, METH_O},
     {"shape_version", shape_version, METH_O},
+    {"shape_generalisations", shape_generalisations, METH_NOARGS},
+    {"set_next_type_version", _PyCFunction_CAST(set_next_type_version), METH_O},
     {"type_cache_size", type_cache_size, METH_O},
     {"type_slot_capacity", type_slot_capacity, METH_O},
     {"object_slots", object_slots, METH_O},

@@ -1756,6 +1756,8 @@ generic_setattr_value(PyObject *obj, PyObject *name, PyValue value,
     _PyStorePlan plan;
     _PyShape_ResolveStore(_PyObject_SHAPE(obj), name, cref.value, 0,
                           PyValue_IsNull(value) ? _Py_STORE_DELETE : _Py_STORE_SET,
+                          PyValue_IsNull(value) ? _Py_SLOT_BOXED
+                                                : _PyValue_SlotKind(value),
                           &plan);
 
     if (plan.outcome == _Py_STORE_DATA_DESCR) {
@@ -1788,6 +1790,11 @@ generic_setattr_value(PyObject *obj, PyObject *name, PyValue value,
 
     PyObject **dictptr;
     switch (plan.outcome) {
+        case _Py_STORE_GENERALISE:
+            // The field's kind does not fit the value: generalise it in
+            // place, then write the slot (note 09 section 5).
+            _PyShape_Generalise(_PyObject_SHAPE(obj), plan.slot);
+            _Py_FALLTHROUGH;
         case _Py_STORE_REPLACE:
             // A shape-mode object: the field's slot.
             *(PyValue *)((char *)obj + plan.offset) = value;

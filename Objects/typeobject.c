@@ -6030,13 +6030,28 @@ _PyShape_LookupPlan(_PyShape *shape, PyObject *name, _PyLookupPlan *plan)
 
 void
 _PyShape_LookupStorePlan(_PyShape *shape, PyObject *name, _PyStoreOp op,
-                         _PyStorePlan *plan)
+                         uint8_t value_kind, _PyStorePlan *plan)
 {
     assert(_PyType_IsReady(shape->type));
     int cacheable;
     unsigned int version;
     PyValue descr = lookup_plan_facts(shape, name, &cacheable, &version);
-    _PyShape_ResolveStore(shape, name, descr, cacheable, op, plan);
+    _PyShape_ResolveStore(shape, name, descr, cacheable, op, value_kind, plan);
+}
+
+uint32_t
+_PyType_NewShapeVersion(PyTypeObject *type)
+{
+    // Heap-type tags: unique within the interpreter, never reused.
+    assert(type->tp_flags & Py_TPFLAGS_HEAPTYPE);
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    uint32_t version = 0;
+    BEGIN_TYPE_LOCK();
+    if (type->tp_version_tag != 0 && NEXT_VERSION_TAG(interp) != 0) {
+        version = NEXT_VERSION_TAG(interp)++;
+    }
+    END_TYPE_LOCK();
+    return version;
 }
 
 /* Internal API to look for a name through the MRO.

@@ -30,20 +30,23 @@ MIN_SLOTS = _testinternalcapi.SHAPE_MIN_SLOTS
 MAX_SLOTS = _testinternalcapi.SHAPE_MAX_SLOTS
 capacity = _testinternalcapi.type_slot_capacity
 slots_of = _testinternalcapi.object_slots
+BOXED = _testinternalcapi.SLOT_BOXED
+I32 = _testinternalcapi.SLOT_I32
+F64 = _testinternalcapi.SLOT_F64
 
 
 Plan = collections.namedtuple(
     "Plan", "kind fallback slot_kind cacheable member type_version offset value")
 StorePlan = collections.namedtuple(
-    "StorePlan", "outcome cacheable member offset has_shape_to")
+    "StorePlan", "outcome cacheable member offset has_shape_to slot_kind")
 
 
 def plan(o, name):
     return Plan(*_testinternalcapi.lookup_plan(o, name))
 
 
-def store_plan(o, name, delete=False):
-    return StorePlan(*_testinternalcapi.lookup_store_plan(o, name, delete))
+def store_plan(o, name, delete=False, *value):
+    return StorePlan(*_testinternalcapi.lookup_store_plan(o, name, delete, *value))
 
 
 def opnames(f):
@@ -110,9 +113,10 @@ class TransitionTests(unittest.TestCase):
         a.x, a.y, a.z = 1, 2, 3
         b.x, b.y, b.z = 1, 2, 3
         del a.y
-        # A hole shape: the slots keep their positions.
+        # A hole shape: the slots keep their positions, and the fields
+        # their kinds.
         hole = _testinternalcapi.shape(a)[2]
-        self.assertEqual(hole, (("x", 0), None, ("z", 0)))
+        self.assertEqual(hole, (("x", I32), None, ("z", I32)))
         self.assertEqual(slots_of(a)[:3], (1, None, 3))
         # The same delete follows the same edge.
         del b.y
@@ -782,7 +786,7 @@ class LookupPlanTests(unittest.TestCase):
         self.assertLoads(o, "y", "missing")
         object.__setattr__(o, "z", 1)
         self.assertLoads(o, "z", 1)
-        self.assertEqual(store_plan(o, "x").outcome, "REPLACE")
+        self.assertEqual(store_plan(o, "x", False, 3).outcome, "REPLACE")
 
     def test_str_subclass_name(self):
         class P:
@@ -859,7 +863,7 @@ class LookupPlanTests(unittest.TestCase):
     def test_store_plans(self):
         C = make_class()
         o = C()
-        sp = store_plan(o, "x")
+        sp = store_plan(o, "x", False, 3)
         self.assertEqual(sp.outcome, "REPLACE")
         self.assertEqual(sp.offset, plan(o, "x").offset)
         self.assertEqual(store_plan(o, "z").outcome, "ADD")
@@ -1761,6 +1765,404 @@ class DebugAllocatorTests(unittest.TestCase):
             "test.test_shapes.InstanceLayoutSpecializationTests",
             "test.test_shapes.ShapePolyTests",
             PYTHONMALLOC="mimalloc_debug")
+
+
+shape_version = _testinternalcapi.shape_version
+generalisations = _testinternalcapi.shape_generalisations
+
+
+def kinds(o):
+    """The kind of each slot of o's shape, None for a hole."""
+    return tuple(None if s is None else s[1]
+                 for s in _testinternalcapi.shape(o)[2])
+
+
+class IntSub(int):
+    pass
+
+
+class FloatSub(float):
+    pass
+
+
+# Values of each kind, and values of no inline kind (note 09 section 5).
+INT_VALUES = [0, 1, -1, 2**31 - 1, -2**31]
+FLOAT_VALUES = [1.5, 0.0, -0.0, math.inf, -math.inf]
+BOXED_VALUES = [2**31, -2**31 - 1, 2**100, math.nan, True, False,
+                IntSub(1), FloatSub(1.0), "s", None, [1]]
+
+
+@cpython_only
+class SlotKindTests(unittest.TestCase):
+    """Slot kinds as promises (note 09 section 5)."""
+
+    def test_first_store_picks_the_kind(self):
+        for values, kind in ((INT_VALUES, I32), (FLOAT_VALUES, F64),
+                             (BOXED_VALUES, BOXED)):
+            for v in values:
+                with self.subTest(v=v):
+                    class C:
+                        pass
+                    o = C()
+                    o.a = v
+                    self.assertEqual(kinds(o), (kind,))
+                    self.assertIs(type(o.a), type(v))
+                    if v == v:
+                        self.assertEqual(o.a, v)
+
+    def test_values_of_the_kind_keep_it(self):
+        class C:
+            pass
+        o = C()
+        o.i = 1
+        o.f = 1.5
+        for v in INT_VALUES:
+            o.i = v
+        for v in FLOAT_VALUES:
+            o.f = v
+        self.assertEqual(kinds(o), (I32, F64))
+        self.assertEqual(o.f, -math.inf)
+
+    def test_generalise_in_place(self):
+        class C:
+            pass
+        a = C(); a.x = 1; a.y = 2.5          # root -> x -> xy
+        b = C(); b.x = 3; b.y = 4.5          # the same shapes
+        c = C(); c.x = 5                     # x, the owner of x
+        d = C(); d.y = 6                     # root -> y, another subtree
+        e = C()                              # root
+        before = {n: shape_version(o) for n, o in zip("acde", (a, c, d, e))}
+        count, reversioned = generalisations()
+        a.x = "s"
+        self.assertEqual(kinds(a), (BOXED, F64))
+        self.assertEqual(kinds(b), (BOXED, F64))
+        self.assertEqual(kinds(c), (BOXED,))
+        self.assertEqual(kinds(d), (I32,))
+        # The owner and its subtree share one fresh version; nothing else
+        # changes.
+        self.assertNotEqual(shape_version(a), before["a"])
+        self.assertEqual(shape_version(a), shape_version(c))
+        self.assertGreater(shape_version(a), before["a"])
+        self.assertEqual(shape_version(d), before["d"])
+        self.assertEqual(shape_version(e), before["e"])
+        self.assertEqual(generalisations(), (count + 1, reversioned + 2))
+        # No value moved.
+        self.assertEqual((a.x, a.y, b.x, b.y, c.x, d.y), ("s", 2.5, 3, 4.5, 5, 6))
+        # A new object along the same edges finds the field BOXED.
+        f = C(); f.x = 7; f.y = 8.5
+        self.assertEqual(kinds(f), (BOXED, F64))
+        self.assertEqual(shape_version(f), shape_version(a))
+        # BOXED takes every value without generalising again.
+        f.x = 1.5
+        self.assertEqual(generalisations()[0], count + 1)
+
+    def test_int_and_float_alternate(self):
+        class C:
+            pass
+        objects = []
+        for i in range(20):
+            o = C()
+            o.v = i if i % 2 == 0 else i + 0.5
+            o.w = 1
+            objects.append(o)
+        self.assertEqual(kinds(objects[0]), (BOXED, I32))
+        for i, o in enumerate(objects):
+            self.assertEqual(o.v, i if i % 2 == 0 else i + 0.5)
+            self.assertIs(type(o.v), int if i % 2 == 0 else float)
+
+    def test_generalise_then_add_and_delete(self):
+        class C:
+            pass
+        # Note 09's example: the delete returns to a shape whose x is BOXED.
+        o = C(); o.x = 1; o.y = 2; o.x = "s"
+        del o.y
+        self.assertEqual(kinds(o), (BOXED,))
+        self.assertEqual(o.x, "s")
+        o.y = 3                                  # the existing edge
+        self.assertEqual(kinds(o), (BOXED, I32))
+        o.z = 4.5                                # a new edge below
+        self.assertEqual(kinds(o), (BOXED, I32, F64))
+        # Delete-last back to the parent, then re-add.
+        del o.z
+        o.z = 5.5
+        self.assertEqual(kinds(o), (BOXED, I32, F64))
+        # A hole: the field generalised, then another deleted.
+        p = C(); p.x = 1; p.y = 2; p.z = 3.5
+        p.y = None
+        self.assertEqual(kinds(p), (BOXED, BOXED, F64))
+        del p.x
+        self.assertEqual(kinds(p), (None, BOXED, F64))
+        self.assertEqual((p.y, p.z), (None, 3.5))
+        p.w = 7
+        self.assertEqual(kinds(p), (None, BOXED, F64, I32))
+        q = C(); q.x = 1; q.y = 2
+        self.assertEqual(kinds(q), (BOXED, BOXED))
+
+    def test_store_plans(self):
+        class C:
+            pass
+        o = C(); o.x = 1
+        self.assertEqual(store_plan(o, "x", False, 2).outcome, "REPLACE")
+        self.assertEqual(store_plan(o, "x", False, 2).slot_kind, I32)
+        self.assertEqual(store_plan(o, "x", False, 2.5).outcome, "GENERALISE")
+        self.assertEqual(store_plan(o, "x", False, "s").outcome, "GENERALISE")
+        self.assertEqual(store_plan(o, "y", False, 2.5).slot_kind, F64)
+        p = C(); p.x = 1; p.y = 2.5
+        self.assertEqual(store_plan(o, "y", False, "s").slot_kind, F64)
+        self.assertEqual(plan(p, "y").slot_kind, F64)
+        self.assertEqual(plan(p, "x").slot_kind, I32)
+
+    def test_identity_after_generalising(self):
+        class C:
+            pass
+        big = 2**40
+        s = "".join(["a", "b"])
+        o = C(); o.x = 1
+        o.x = big
+        self.assertIs(o.x, big)
+        o.x = s
+        self.assertIs(o.x, s)
+        o.x = 1.5
+        self.assertIs(o.x, 1.5)
+
+    def test_dictionary_mode_copies_values(self):
+        class C:
+            pass
+        o = C(); o.i = 1; o.f = 2.5; o.n = math.nan; o.b = True
+        d = o.__dict__
+        self.assertEqual(list(d), ["i", "f", "n", "b"])
+        self.assertIs(type(d["i"]), int)
+        self.assertIs(type(d["f"]), float)
+        self.assertTrue(math.isnan(d["n"]))
+        self.assertIs(d["b"], True)
+
+    def test_members_are_not_kinded(self):
+        class S:
+            __slots__ = ("a",)
+        class T(S):
+            pass
+        t = T()
+        t.a = 1
+        t.b = 1
+        self.assertEqual(kinds(t), (I32,))
+        self.assertEqual(plan(t, "a").kind, "DATA_DESCR")
+        self.assertEqual(plan(t, "a").slot_kind, BOXED)
+        t.a = "s"
+        self.assertEqual(kinds(t), (I32,))
+
+    def test_stores_through_every_api(self):
+        setattr_value = _testcapi.pyvalue.SetAttrValue
+        object_setattr = import_module("_testlimitedcapi").object_setattr
+        stores = [
+            lambda o, v: setattr(o, "x", v),
+            lambda o, v: object.__setattr__(o, "x", v),
+            lambda o, v: setattr_value(o, "x", v),
+            lambda o, v: object_setattr(o, "x", v),
+        ]
+        for store in stores:
+            with self.subTest(store=store):
+                class C:
+                    pass
+                o = C()
+                store(o, 1)
+                self.assertEqual(kinds(o), (I32,))
+                store(o, [1, 2])
+                self.assertEqual(kinds(o), (BOXED,))
+                # The list is held by the slot alone.
+                gc.collect()
+                self.assertEqual(o.x, [1, 2])
+
+    def test_type_without_version(self):
+        type_get_version = _testcapi.type_get_version
+        type_assign_version = _testcapi.type_assign_version
+        class C:
+            pass
+        o = C(); o.x = 1
+        # Too many versions: the class gets no more.
+        for i in range(1001):
+            C.v = i
+            type_assign_version(C)
+        self.assertEqual(type_get_version(C), 0)
+        o.x = "s"
+        self.assertEqual(kinds(o), (BOXED,))
+        self.assertEqual(shape_version(o), 0)
+        self.assertEqual(o.x, "s")
+
+    def test_tags_exhausted(self):
+        class C:
+            pass
+        o = C(); o.x = 1; o.x                    # C has a version
+        self.assertNotEqual(shape_version(o), 0)
+        old = _testinternalcapi.set_next_type_version(0)
+        try:
+            o.x = "s"
+        finally:
+            _testinternalcapi.set_next_type_version(old)
+        self.assertEqual(shape_version(o), 0)
+        self.assertEqual(kinds(o), (BOXED,))
+        self.assertEqual(o.x, "s")
+
+    def test_class_change_after_generalising(self):
+        type_get_version = _testcapi.type_get_version
+        class C:
+            pass
+        o = C(); o.x = 1; o.x = "s"
+        C.y = 5
+        self.assertEqual(o.y, 5)
+        # The type's new version reaches every shape again.
+        self.assertEqual(shape_version(o), type_get_version(C))
+        self.assertEqual(kinds(o), (BOXED,))
+
+
+@cpython_only
+@requires_specialization
+class SlotKindSpecializationTests(unittest.TestCase):
+
+    def warm(self, f, *args):
+        for _ in range(4 * (THRESHOLD + COOLDOWN)):
+            f(*args)
+
+    def check_replace_site(self, first, bad, kind):
+        class C:
+            pass
+        @reset_code
+        def put(o, v):
+            o.x = v
+        o = C()
+        o.x = first
+        self.warm(put, o, first)
+        self.assertIn("STORE_ATTR_SHAPE", opnames(put))
+        self.assertEqual(kinds(o), (kind,))
+        put(o, bad)
+        self.assertIs(o.x, bad)
+        self.assertEqual(kinds(o), (BOXED,))
+        # The site specialises again, over the BOXED field.
+        self.warm(put, o, bad)
+        self.assertIn("STORE_ATTR_SHAPE", opnames(put))
+        put(o, first)
+        self.assertEqual(o.x, first)
+
+    def check_transition_site(self, first, bad, kind):
+        class C:
+            pass
+        @reset_code
+        def make(v):
+            o = C()
+            o.x = v
+            return o
+        self.warm(make, first)
+        self.assertIn("STORE_ATTR_SHAPE_TRANSITION", opnames(make))
+        self.assertEqual(kinds(make(first)), (kind,))
+        o = make(bad)
+        self.assertIs(o.x, bad)
+        self.assertEqual(kinds(o), (BOXED,))
+        self.warm(make, bad)
+        self.assertIn("STORE_ATTR_SHAPE_TRANSITION", opnames(make))
+        self.assertEqual(make(first).x, first)
+
+    def test_warmed_int_sites(self):
+        for bad in (2**31, -2**31 - 1, 1.5, math.nan, True, IntSub(1), "s"):
+            with self.subTest(bad=bad):
+                self.check_replace_site(7, bad, I32)
+                self.check_transition_site(7, bad, I32)
+
+    def test_warmed_float_sites(self):
+        for bad in (math.nan, 1, True, FloatSub(1.5), 2**40, None):
+            with self.subTest(bad=bad):
+                self.check_replace_site(2.5, bad, F64)
+                self.check_transition_site(2.5, bad, F64)
+
+    def test_float_site_takes_infinities_and_zeros(self):
+        class C:
+            pass
+        @reset_code
+        def put(o, v):
+            o.x = v
+        o = C(); o.x = 1.0
+        self.warm(put, o, 2.0)
+        count = generalisations()[0]
+        for v in (math.inf, -math.inf, 0.0, -0.0):
+            put(o, v)
+            self.assertIs(o.x, v)
+        self.assertEqual(generalisations()[0], count)
+        self.assertEqual(kinds(o), (F64,))
+
+    def test_specialised_edge_takes_the_value_kind(self):
+        # The specialiser prepares a new edge for the first store through
+        # it, with the value's kind.
+        class C:
+            pass
+        @reset_code
+        def make(v):
+            o = C()
+            o.f = v
+            return o
+        self.warm(make, 2.5)
+        self.assertEqual(kinds(make(1.5)), (F64,))
+        class D:
+            pass
+        @reset_code
+        def make_d():
+            o = D()
+            o.i = 3
+            return o
+        self.warm(make_d)
+        self.assertEqual(kinds(make_d()), (I32,))
+
+    def test_property_load_on_generalised_shape(self):
+        class C:
+            @property
+            def p(self):
+                return self.x
+        o = C(); o.x = 1; o.x = "s"
+        self.assertNotEqual(shape_version(o),
+                            _testcapi.type_get_version(C))
+        @reset_code
+        def get(o):
+            return o.p
+        self.warm(get, o)
+        self.assertIn("LOAD_ATTR_PROPERTY", opnames(get))
+        self.assertEqual(get(o), "s")
+
+    def test_slot_load_on_generalised_shape(self):
+        class C:
+            pass
+        a = C(); a.x = 1; a.y = 2
+        b = C(); b.y = 3; b.x = 4
+        a.x = "s"
+        @reset_code
+        def get(o):
+            return o.x
+        for _ in range(4 * (THRESHOLD + COOLDOWN)):
+            self.assertEqual(get(a), "s")
+            self.assertEqual(get(b), 4)
+        self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(get))
+        @reset_code
+        def get_one(o):
+            return o.x
+        self.warm(get_one, a)
+        self.assertIn("LOAD_ATTR_SHAPE", opnames(get_one))
+
+    def test_poly_site_across_generalisations(self):
+        # Each generalisation renews the shapes' version; the rows of the
+        # old versions are replaced, so the site stays polymorphic.
+        class C:
+            pass
+        a = C(); a.x = 1; a.f0 = 0; a.f1 = 0; a.f2 = 0; a.f3 = 0; a.f4 = 0
+        b = C(); b.y = 1; b.x = 2
+        @reset_code
+        def get(o):
+            return o.x
+        def warm():
+            for _ in range(4 * (THRESHOLD + COOLDOWN)):
+                self.assertEqual(get(a), 1)
+                self.assertEqual(get(b), 2)
+        warm()
+        self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(get))
+        for i in range(5):
+            setattr(a, f"f{i}", "s")
+            warm()
+            self.assertIn("LOAD_ATTR_SHAPE_POLY", opnames(get))
 
 
 if __name__ == "__main__":

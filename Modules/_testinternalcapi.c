@@ -3837,6 +3837,12 @@ module_exec(PyObject *module)
         return 1;
     }
 
+    if (PyModule_Add(module, "SLOT_BOXED", PyLong_FromLong(_Py_SLOT_BOXED)) < 0
+        || PyModule_Add(module, "SLOT_I32", PyLong_FromLong(_Py_SLOT_I32)) < 0
+        || PyModule_Add(module, "SLOT_F64", PyLong_FromLong(_Py_SLOT_F64)) < 0)
+    {
+        return 1;
+    }
     if (PyModule_Add(module, "SHAPE_MIN_SLOTS",
                         PyLong_FromLong(_Py_SHAPE_MIN_SLOTS)) < 0) {
         return 1;

@@ -337,6 +337,7 @@ typedef struct {
     uint32_t type_version;
     uint32_t aux;
     uint32_t index;
+    uint8_t slot_kind;
     const void *descr;
     _PyShape *shape;
 } fb_row;
@@ -369,6 +370,7 @@ fb_row_of(_PyFbHeader *h)
             row.index = ((_PyFbAttr *)h)->index;
             row.descr = ((_PyFbAttr *)h)->descr;
             row.shape = ((_PyFbAttr *)h)->shape;
+            row.slot_kind = (uint8_t)((_PyFbAttr *)h)->slot_kind;
             break;
         case FB_CALL:
             row.type_version = ((_PyFbCall *)h)->func_version;
@@ -389,6 +391,12 @@ fb_put_row(_PyFbPoly *poly, int i, fb_row row, int opcode)
     poly->descr[i] = row.descr;
     poly->shape[i] = row.shape;
     poly->handler[i] = (uint16_t)opcode;
+    // slot_kind shares its entry field with dictoffset, so other rows
+    // record 0.
+    poly->slot_kind[i] = (opcode == LOAD_ATTR_SHAPE
+                          || opcode == STORE_ATTR_SHAPE
+                          || opcode == STORE_ATTR_SHAPE_TRANSITION)
+                         ? row.slot_kind : _Py_SLOT_BOXED;
 }
 
 /* Save the observation of a specialised MONO site in a new poly table.
@@ -963,6 +971,9 @@ specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name)
     // Instance storage first, then the class (precedence steps 2 to 5).
     if (plan.kind == _Py_LOOKUP_SLOT) {
         fb->offset = plan.offset;
+        // What the load returns, for a compiler: the shape is not read
+        // once the entry borrows it.
+        fb->slot_kind = plan.slot_kind;
         switch (set_shape_guard(owner, instr, fb, tp_version, LOAD_ATTR,
                                 LOAD_ATTR_SHAPE)) {
             case SHAPE_GUARD_DECLINED:
@@ -1062,7 +1073,8 @@ _Py_Specialize_LoadAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
 }
 
 Py_NO_INLINE void
-_Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
+_Py_Specialize_StoreAttr(PyValue owner_st, PyValue value, _PyInstr *instr,
+                         PyObject *name)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[STORE_ATTR] == INLINE_CACHE_ENTRIES_STORE_ATTR);
@@ -1090,7 +1102,8 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
         goto fail;
     }
     _PyStorePlan plan;
-    _PyShape_LookupStorePlan(_PyObject_SHAPE(owner), name, _Py_STORE_SET, &plan);
+    _PyShape_LookupStorePlan(_PyObject_SHAPE(owner), name, _Py_STORE_SET,
+                             _PyValue_SlotKind(value), &plan);
     unsigned int tp_version = plan.type_version;
     if (tp_version == 0) {
         goto fail;
@@ -1126,8 +1139,14 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
         goto fail;
     }
     switch (plan.outcome) {
+        case _Py_STORE_GENERALISE:
+            // The generic store generalises the field, which renews the
+            // shape's version; the next attempt finds it BOXED.
+            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
+            goto fail;
         case _Py_STORE_REPLACE:
             fb->offset = plan.offset;
+            fb->slot_kind = plan.slot_kind;
             if (set_shape_guard(owner, instr, fb, tp_version, STORE_ATTR,
                                 STORE_ATTR_SHAPE) != SHAPE_GUARD_SET) {
                 goto fail;
@@ -1150,7 +1169,8 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
                 PyObject *key = name;
                 _PyUnicode_InternMortal(_PyInterpreterState_GET(), &key);
                 _PyShapePrepare prep = PyUnicode_CHECK_INTERNED(key)
-                    ? _PyShape_PrepareAdd(_PyObject_SHAPE(owner), key, &shape_to)
+                    ? _PyShape_PrepareAdd(_PyObject_SHAPE(owner), key,
+                                          _PyValue_SlotKind(value), &shape_to)
                     : _Py_SHAPE_PREPARE_LIMIT;
                 if (prep != _Py_SHAPE_PREPARE_OK) {
                     if (prep == _Py_SHAPE_PREPARE_NOMEMORY) {
@@ -1160,6 +1180,14 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
                     goto fail;
                 }
             }
+            // An existing edge's field may have another kind; the generic
+            // store generalises it.
+            uint8_t kind = shape_to->slots[plan.slot].kind;
+            if (!_PyValue_FitsKind(value, kind)) {
+                SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
+                goto fail;
+            }
+            fb->slot_kind = kind;
             fb->shape_to = shape_to;
             specialize(instr, STORE_ATTR_SHAPE_TRANSITION);
             goto success;

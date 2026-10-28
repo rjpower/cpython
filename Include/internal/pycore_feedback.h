@@ -125,9 +125,15 @@ typedef struct {
         uint32_t offset;
         uint32_t hint;
     };
-    // LOAD_ATTR_WITH_HINT, STORE_ATTR_WITH_HINT: where the dict word is, as
-    // _PyObject_DictAt() takes it
-    int32_t dictoffset;
+    union {
+        // LOAD_ATTR_WITH_HINT, STORE_ATTR_WITH_HINT: where the dict word
+        // is, as _PyObject_DictAt() takes it
+        int32_t dictoffset;
+        // LOAD_ATTR_SHAPE, STORE_ATTR_SHAPE, STORE_ATTR_SHAPE_TRANSITION:
+        // the field's _PySlotKind, which the stores guard (note 09
+        // section 5); valid while the shape's version matches
+        uint32_t slot_kind;
+    };
     union {                         // borrowed; valid while the versions match
         PyObject *descr;            // LOAD_ATTR_PROPERTY: the property
         // LOAD_ATTR_CLASS, LOAD_ATTR_NONDESCRIPTOR_*: the class attribute,
@@ -171,6 +177,9 @@ typedef struct {
     uint16_t handler[FB_POLY_SIZE];
     const void *descr[FB_POLY_SIZE];    // borrowed, as in the entry
     _PyShape *shape[FB_POLY_SIZE];      // ATTR: the entry's shape, borrowed
+    // The field kind of a shape slot handler's row, 0 for other rows: a
+    // row's shape is never read (_PyFb_ShapeRow()), so its kind is kept.
+    uint8_t slot_kind[FB_POLY_SIZE];
 } _PyFbPoly;
 
 typedef struct _PyFbBlock {

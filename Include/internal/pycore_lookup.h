@@ -52,6 +52,7 @@ typedef struct {
 
 typedef enum {
     _Py_STORE_REPLACE = 1,      // the name is in the slot at `offset`
+    _Py_STORE_GENERALISE,       // REPLACE, but the field's kind does not fit
     _Py_STORE_ADD,              // a new name in instance storage
     _Py_STORE_REMOVE,           // DELETE of a slot name
     _Py_STORE_DICT,             // the instance dict (or this rung's adapter)
@@ -68,8 +69,9 @@ typedef enum {
 typedef struct {
     uint8_t outcome;            // _PyStoreOutcome
     uint8_t flags;              // CACHEABLE, MEMBER
-    uint8_t slot;               // REPLACE, REMOVE: the field's slot; ADD: nslots
-    uint8_t _pad;
+    uint8_t slot;               // REPLACE, GENERALISE, REMOVE: the field's slot; ADD: nslots
+    uint8_t slot_kind;          // REPLACE, GENERALISE: the field's kind; ADD: shape_to's
+                                // field's kind, or the value's if there is no edge yet
     uint32_t type_version;
     uint32_t offset;            // REPLACE, ADD, MEMBER: bytes from the object start
     _PyShape *shape_to;         // ADD, REMOVE: the next shape if its edge exists, or NULL
@@ -86,9 +88,11 @@ extern int _PyLookup_ClassifyLoad(PyValue descr, int *mutable);
 extern void _PyShape_ResolveLoad(_PyShape *shape, PyObject *name,
                                  PyValue descr, int cacheable,
                                  _PyLookupPlan *plan);
+// VALUE_KIND is the kind of the value a SET stores (_PyValue_SlotKind()).
 extern void _PyShape_ResolveStore(_PyShape *shape, PyObject *name,
                                   PyValue descr, int cacheable,
-                                  _PyStoreOp op, _PyStorePlan *plan);
+                                  _PyStoreOp op, uint8_t value_kind,
+                                  _PyStorePlan *plan);
 
 // Phases 1 and 2 with the type's (shape, name) cache; exported for
 // _testinternalcapi.  NAME is a str;
@@ -97,7 +101,8 @@ extern void _PyShape_ResolveStore(_PyShape *shape, PyObject *name,
 PyAPI_FUNC(void) _PyShape_LookupPlan(_PyShape *shape, PyObject *name,
                                 _PyLookupPlan *plan);
 PyAPI_FUNC(void) _PyShape_LookupStorePlan(_PyShape *shape, PyObject *name,
-                                     _PyStoreOp op, _PyStorePlan *plan);
+                                     _PyStoreOp op, uint8_t value_kind,
+                                     _PyStorePlan *plan);
 
 // The name of a kind or outcome, for _testinternalcapi and stats.
 PyAPI_FUNC(const char *) _PyLookup_KindName(int kind);

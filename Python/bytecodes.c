@@ -5145,7 +5145,7 @@ dummy_func(
         op(_MAKE_CALLARGS_A_TUPLE, (func, unused, callargs, kwargs -- func, unused, callargs, kwargs)) {
             PyObject *callargs_o = PyValue_ObjectBorrow(callargs);
             if (!PyTuple_CheckExact(callargs_o)) {
-                int err = _Py_Check_ArgsIterable(tstate, PyValue_ObjectBorrow(func), callargs_o);
+                int err = _Py_Check_ArgsIterable(tstate, callargs_o);
                 if (err < 0) {
                     ERROR_NO_POP();
                 }

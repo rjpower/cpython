@@ -2116,8 +2116,69 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertEqual(fired(RECEIVER_BOX, lambda: n.bit_length()), 17)
         self.assertEqual(fired(RECEIVER_BOX, lambda: x.hex()),
                          float.hex(250002.5))
+        # 10a rung 2b: a class pattern's __match_args__, which only
+        # _PyEval_MatchClass()'s span holds.
+        MATCH_ARGS = 10
+        class Point:
+            __match_args__ = ("x", "y")
+            def __init__(self):
+                self.x, self.y = 1, 2
+        def match(p):
+            match p:
+                case Point(a, b):
+                    return a, b
+        self.assertEqual(fired(MATCH_ARGS, lambda: match(Point())), (1, 2))
         with self.assertRaises(ValueError):
             collect_at(99)
+
+    MATCH_ARGS = textwrap.dedent("""
+        import sys, _testinternalcapi
+        MATCH_ARGS = 10
+        collect_at = _testinternalcapi.gc_collect_at
+        case = sys.argv[1]
+        class Meta(type):
+            @property
+            def __match_args__(cls):
+                if case == "raising":
+                    raise ValueError("no __match_args__")
+                # Made at run time, so that only the span holds the tuple
+                # and its strings.
+                return tuple("".join(["x", s]) for s in ("1", "2"))
+        class P(metaclass=Meta):
+            def __init__(self):
+                self.x1, self.x2 = [1], [2]
+        def match():
+            if case == "missing":
+                match int("7"):
+                    case int(v):
+                        return v
+            match P():
+                case P(a, b):
+                    return a, b
+        before = collect_at(MATCH_ARGS)
+        try:
+            print(match())
+        except ValueError as e:
+            print(e)
+        finally:
+            print(collect_at(0) - before)
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_match_args_in_span(self):
+        # A class pattern's __match_args__ comes back through an object
+        # slot of _PyEval_MatchClass()'s span, and a collection right after
+        # the lookup, under kill, finds it only there.  The lookup's three
+        # outcomes: found, missing (int matches itself) and raising.
+        cases = {"found": "([1], [2])", "missing": "7",
+                 "raising": "no __match_args__"}
+        for case, want in cases.items():
+            with self.subTest(case=case):
+                rc, out, err = assert_python_ok(
+                    "-X", "faulthandler", "-c", self.MATCH_ARGS, case,
+                    PYTHON_GCVERIFY="kill")
+                self.assertEqual(out.decode().split("\n")[:2], [want, "1"])
 
     SPAN_BOX = textwrap.dedent("""
         import gc, sys, _testinternalcapi

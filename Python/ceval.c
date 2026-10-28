@@ -403,7 +403,12 @@ const size_t _Py_FunctionAttributeOffsets[] = {
 
 // Return a tuple of values corresponding to keys, with error checks for
 // duplicate/missing keys.
-Py_NO_INLINE PyObject *
+/* Precise: one span holds keys (the parameter rule); the mapping and its
+   get method, which _PyObject_GetMethodValue() stores in place; seen,
+   dummy and the values tuple (the result rule); and the call's argument
+   array (the creator rule), whose key slot each iteration stores in
+   place. */
+Py_GC_PRECISE Py_NO_INLINE PyObject *
 _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
 {
     assert(PyTuple_CheckExact(keys));
@@ -415,15 +420,19 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
     PyObject *seen = NULL;
     PyObject *dummy = NULL;
     PyObject *values = NULL;
+    PyValue slots[9];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, keys);
     // We use the two argument form of map.get(key, default) for two reasons:
     // - Atomically check for a key and get its value without error handling.
     // - Don't cause key creation or resizing in dict subclasses like
     //   collections.defaultdict that define __missing__ (or similar).
-    _PyValueRoot self, method;
-    _PyThreadState_PushValueRoot(tstate, &self);
-    _PyThreadState_PushValueRoot(tstate, &method);
-    self.value = PyValue_FromObject(map);
-    int res = _PyObject_GetMethodValue(tstate, &self.value, &_Py_ID(get), &method.value);
+    // slots[1] is the method's self, or NULL; slots[2] is the method.
+    _PyValueSpan_Append(&span, PyValue_FromObject(map));
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    int res = _PyObject_GetMethodValue(tstate, &slots[1], &_Py_ID(get),
+                                       &slots[2]);
     if (res < 0) {
         goto fail;
     }
@@ -431,15 +440,23 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
     if (seen == NULL) {
         goto fail;
     }
+    _PyValueSpan_AppendObject(&span, seen);
     // dummy = object()
     dummy = _PyObject_CallNoArgs((PyObject *)&PyBaseObject_Type);
     if (dummy == NULL) {
         goto fail;
     }
+    _PyValueSpan_AppendObject(&span, dummy);
     values = PyTuple_New(nkeys);
     if (values == NULL) {
         goto fail;
     }
+    _PyValueSpan_AppendObject(&span, values);
+    // slots[6..8]: the arguments self, key and dummy
+    PyValue *args = &slots[6];
+    _PyValueSpan_Append(&span, slots[1]);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    _PyValueSpan_Append(&span, PyValue_FromObject(dummy));
     for (Py_ssize_t i = 0; i < nkeys; i++) {
         PyValue key = PyTuple_GET_VALUE(keys, i);
         if (_PySet_ContainsValue((PySetObject *)seen, key) ||
@@ -456,13 +473,13 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
             }
             goto fail;
         }
-        PyValue args[] = { self.value, key, PyValue_FromObject(dummy) };
+        args[1] = key;
         PyValue value;
-        if (!PyValue_IsNull(self.value)) {
-            value = PyObject_VectorcallValue(method.value, args, 3, NULL);
+        if (!PyValue_IsNull(args[0])) {
+            value = PyObject_VectorcallValue(slots[2], args, 3, NULL);
         }
         else {
-            value = PyObject_VectorcallValue(method.value, &args[1], 2, NULL);
+            value = PyObject_VectorcallValue(slots[2], &args[1], 2, NULL);
         }
         if (PyValue_IsNull(value)) {
             goto fail;
@@ -478,14 +495,12 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
     }
     // Success:
 done:
-    _PyThreadState_PopValueRoot(tstate, &method);
-    _PyThreadState_PopValueRoot(tstate, &self);
+    _PyThreadState_PopValueRoot(tstate, &span);
     Py_DECREF(seen);
     Py_DECREF(dummy);
     return values;
 fail:
-    _PyThreadState_PopValueRoot(tstate, &method);
-    _PyThreadState_PopValueRoot(tstate, &self);
+    _PyThreadState_PopValueRoot(tstate, &span);
     Py_XDECREF(seen);
     Py_XDECREF(dummy);
     Py_XDECREF(values);
@@ -495,11 +510,22 @@ fail:
 // Extract a named attribute from the subject, with additional bookkeeping to
 // raise TypeErrors for repeated lookups. On failure, return NULL (with no
 // error set). Use _PyErr_Occurred(tstate) to disambiguate.
-static PyObject *
+/* Precise: the span holds the parameters, which the lookup and the error
+   read after the set's calls (the parameter rule), and its last slot is
+   the lookup's object out-parameter. */
+Py_GC_PRECISE static PyObject *
 match_class_attr(PyThreadState *tstate, PyObject *subject, PyObject *type,
                  PyObject *name, PyObject *seen)
 {
     assert(PyUnicode_CheckExact(name));
+    PyValue slots[5];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, subject);
+    _PyValueSpan_AppendObject(&span, type);
+    _PyValueSpan_AppendObject(&span, name);
+    _PyValueSpan_AppendObject(&span, seen);
+    PyObject **attr = _PyValueSpan_ObjectSlot(&span);
     // Only check for duplicates if seen is not NULL.
     if (seen != NULL) {
         assert(PySet_CheckExact(seen));
@@ -510,17 +536,22 @@ match_class_attr(PyThreadState *tstate, PyObject *subject, PyObject *type,
                             "%s() got multiple sub-patterns for attribute %R",
                             ((PyTypeObject*)type)->tp_name, name);
             }
-            return NULL;
+            goto done;
         }
     }
-    PyObject *attr;
-    (void)PyObject_GetOptionalAttr(subject, name, &attr);
-    return attr;
+    (void)PyObject_GetOptionalAttr(subject, name, attr);
+done:;
+    PyObject *res = *attr;
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 // On success (match), return a tuple of extracted attributes. On failure (no
 // match), return NULL. Use _PyErr_Occurred(tstate) to disambiguate.
-Py_NO_INLINE PyObject*
+/* Precise: one span holds subject, type and kwargs, which the lookups read
+   after collecting calls (the parameter rule), seen and attrs (the result
+   rule), and the object out-parameter of __match_args__. */
+Py_GC_PRECISE Py_NO_INLINE PyObject*
 _PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type,
                    Py_ssize_t nargs, PyObject *kwargs)
 {
@@ -530,40 +561,56 @@ _PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type,
         return NULL;
     }
     assert(PyTuple_CheckExact(kwargs));
+    PyValue slots[6];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, subject);
+    _PyValueSpan_AppendObject(&span, type);
+    _PyValueSpan_AppendObject(&span, kwargs);
+    PyObject *seen = NULL;
+    PyObject *attrs = NULL;
+    PyObject *match_args = NULL;
     // First, an isinstance check:
     if (PyObject_IsInstance(subject, type) <= 0) {
-        return NULL;
+        goto fail;
     }
     // Short circuit if there aren't any arguments:
     Py_ssize_t nkwargs = PyTuple_GET_SIZE(kwargs);
     Py_ssize_t nattrs = nargs + nkwargs;
     if (!nattrs) {
-        return PyTuple_New(0);
+        attrs = PyTuple_New(0);
+        goto done;
     }
     // So far so good:
-    PyObject *seen = NULL;
     // Only check for duplicates if there is at least one positional attribute
     // and two or more attributes in total. Duplicate keyword attributes are
     // detected during the compile stage and raise a SyntaxError.
     if (nargs > 0 && nattrs > 1) {
         seen = PySet_New(NULL);
         if (seen == NULL) {
-            return NULL;
+            goto fail;
         }
     }
-    PyObject *attrs = PyTuple_New(nattrs);
+    _PyValueSpan_AppendObject(&span, seen);
+    attrs = PyTuple_New(nattrs);
     if (attrs == NULL) {
-        Py_XDECREF(seen);
-        return NULL;
+        goto fail;
     }
+    _PyValueSpan_AppendObject(&span, attrs);
     // NOTE: From this point on, goto fail on failure:
-    PyObject *match_args = NULL;
     // First, the positional subpatterns:
     if (nargs) {
         int match_self = 0;
-        if (PyObject_GetOptionalAttr(type, &_Py_ID(__match_args__), &match_args) < 0) {
+        PyObject **match_argsp = _PyValueSpan_ObjectSlot(&span);
+        int found = PyObject_GetOptionalAttr(type, &_Py_ID(__match_args__),
+                                             match_argsp);
+        // A collection here, after each of the lookup's outcomes, finds
+        // __match_args__ only in the span.
+        _PyGC_INJECT(tstate, _PyGC_SITE_MATCH_ARGS);
+        if (found < 0) {
             goto fail;
         }
+        match_args = *match_argsp;
         if (match_args) {
             if (!PyTuple_CheckExact(match_args)) {
                 const char *e = "%s.__match_args__ must be a tuple (got %s)";
@@ -578,7 +625,8 @@ _PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type,
             // define __match_args__. This is natural behavior for subclasses:
             // it's as if __match_args__ is some "magic" value that is lost as
             // soon as they redefine it.
-            match_args = PyTuple_New(0);
+            *match_argsp = PyTuple_New(0);
+            match_args = *match_argsp;
             match_self = PyType_HasFeature((PyTypeObject*)type,
                                             _Py_TPFLAGS_MATCH_SELF);
         }
@@ -594,24 +642,29 @@ _PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type,
         }
         if (match_self) {
             // Easy. Copy the subject itself, and move on to kwargs.
-            assert(PyTuple_GET_ITEM(attrs, 0) == NULL);
+            assert(PyValue_IsNull(PyTuple_GET_VALUE(attrs, 0)));
             PyTuple_SET_ITEM(attrs, 0, Py_NewRef(subject));
         }
         else {
             for (Py_ssize_t i = 0; i < nargs; i++) {
-                PyObject *name = PyTuple_GET_ITEM(match_args, i);
-                if (!PyUnicode_CheckExact(name)) {
+                // The item as a value: an inline item is no string, and is
+                // not boxed.
+                PyValue item = PyTuple_GET_VALUE(match_args, i);
+                if (!_PyValue_IsPointerSpace(item)
+                    || !PyUnicode_CheckExact(PyValue_ObjectBorrow(item)))
+                {
                     _PyErr_Format(tstate, PyExc_TypeError,
                                   "__match_args__ elements must be strings "
-                                  "(got %s)", Py_TYPE(name)->tp_name);
+                                  "(got %s)", PyValue_Type(item)->tp_name);
                     goto fail;
                 }
+                PyObject *name = PyValue_ObjectBorrow(item);
                 PyObject *attr = match_class_attr(tstate, subject, type, name,
                                                   seen);
                 if (attr == NULL) {
                     goto fail;
                 }
-                assert(PyTuple_GET_ITEM(attrs, i) == NULL);
+                assert(PyValue_IsNull(PyTuple_GET_VALUE(attrs, i)));
                 PyTuple_SET_ITEM(attrs, i, attr);
             }
         }
@@ -619,22 +672,28 @@ _PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type,
     }
     // Finally, the keyword subpatterns:
     for (Py_ssize_t i = 0; i < nkwargs; i++) {
-        PyObject *name = PyTuple_GET_ITEM(kwargs, i);
+        // The compiler's keyword names are strings.
+        PyValue item = PyTuple_GET_VALUE(kwargs, i);
+        assert(_PyValue_IsPointerSpace(item));
+        PyObject *name = PyValue_ObjectBorrow(item);
         PyObject *attr = match_class_attr(tstate, subject, type, name, seen);
         if (attr == NULL) {
             goto fail;
         }
-        assert(PyTuple_GET_ITEM(attrs, nargs + i) == NULL);
+        assert(PyValue_IsNull(PyTuple_GET_VALUE(attrs, nargs + i)));
         PyTuple_SET_ITEM(attrs, nargs + i, attr);
     }
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     Py_XDECREF(seen);
     return attrs;
 fail:
     // We really don't care whether an error was raised or not... that's our
     // caller's problem. All we know is that the match failed.
+    _PyThreadState_PopValueRoot(tstate, &span);
     Py_XDECREF(match_args);
     Py_XDECREF(seen);
-    Py_DECREF(attrs);
+    Py_XDECREF(attrs);
     return NULL;
 }
 
@@ -3530,7 +3589,7 @@ _PyEval_CheckExceptStarTypeValid(PyThreadState *tstate, PyObject* right)
 }
 
 Py_GC_PRECISE Py_NO_INLINE int
-_Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args)
+_Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *args)
 {
     if (Py_TYPE(args)->tp_iter == NULL && !PySequence_Check(args)) {
         _PyErr_Format(tstate, PyExc_TypeError,
@@ -3541,9 +3600,17 @@ _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args)
     return 0;
 }
 
-Py_NO_INLINE void
+/* Precise: the span holds kwargs and dupkey, which the messages read after
+   collecting calls (the parameter rule), and the raised AttributeError,
+   which is chained after the test (the result rule). */
+Py_GC_PRECISE Py_NO_INLINE void
 _PyEval_FormatKwargsError(PyThreadState *tstate, PyObject *func, PyObject *kwargs, PyObject *dupkey)
 {
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, kwargs);
+    _PyValueSpan_AppendObject(&span, dupkey);
     if (dupkey != NULL) {
         PyObject *funcstr = _PyObject_FunctionStr(func);
         _PyErr_Format(
@@ -3551,7 +3618,7 @@ _PyEval_FormatKwargsError(PyThreadState *tstate, PyObject *func, PyObject *kwarg
             "%V got multiple values for keyword argument '%S'",
             funcstr, "function", dupkey);
         Py_XDECREF(funcstr);
-        return;
+        goto done;
     }
     /* _PyDict_MergeUniq raises attribute
      * error (percolated from an attempt
@@ -3561,6 +3628,7 @@ _PyEval_FormatKwargsError(PyThreadState *tstate, PyObject *func, PyObject *kwarg
      */
     if (_PyErr_ExceptionMatches(tstate, PyExc_AttributeError)) {
         PyObject *exc = _PyErr_GetRaisedException(tstate);
+        _PyValueSpan_AppendObject(&span, exc);
         int has_keys = PyObject_HasAttrWithError(kwargs, &_Py_ID(keys));
         if (has_keys == 0) {
             _PyErr_Format(
@@ -3573,9 +3641,14 @@ _PyEval_FormatKwargsError(PyThreadState *tstate, PyObject *func, PyObject *kwarg
             _PyErr_ChainExceptions1Tstate(tstate, exc);
         }
     }
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
 }
 
-Py_NO_INLINE void
+/* Precise: the span holds exc and obj, which the message and the name's
+   store read after collecting calls (the parameter rule), and the raised
+   NameError, which is restored after the store (the result rule). */
+Py_GC_PRECISE Py_NO_INLINE void
 _PyEval_FormatExcCheckArg(PyThreadState *tstate, PyObject *exc,
                           const char *format_str, PyObject *obj)
 {
@@ -3584,15 +3657,21 @@ _PyEval_FormatExcCheckArg(PyThreadState *tstate, PyObject *exc,
     if (!obj)
         return;
 
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, exc);
+    _PyValueSpan_AppendObject(&span, obj);
     obj_str = PyUnicode_AsUTF8(obj);
     if (!obj_str)
-        return;
+        goto done;
 
     _PyErr_Format(tstate, exc, format_str, obj_str);
 
     if (exc == PyExc_NameError) {
         // Include the name in the NameError exceptions to offer suggestions later.
         PyObject *exc = PyErr_GetRaisedException();
+        _PyValueSpan_AppendObject(&span, exc);
         if (PyErr_GivenExceptionMatches(exc, PyExc_NameError)) {
             if (((PyNameErrorObject*)exc)->name == NULL) {
                 // We do not care if this fails because we are going to restore the
@@ -3602,16 +3681,22 @@ _PyEval_FormatExcCheckArg(PyThreadState *tstate, PyObject *exc,
         }
         PyErr_SetRaisedException(exc);
     }
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
 }
 
-Py_NO_INLINE void
+/* Precise: it holds nothing across a collecting call; the names are
+   strings, read without a box. */
+Py_GC_PRECISE Py_NO_INLINE void
 _PyEval_FormatExcUnbound(PyThreadState *tstate, PyCodeObject *co, int oparg)
 {
     PyObject *name;
     /* Don't stomp existing exception */
     if (_PyErr_Occurred(tstate))
         return;
-    name = PyTuple_GET_ITEM(co->co_localsplusnames, oparg);
+    PyValue item = PyTuple_GET_VALUE(co->co_localsplusnames, oparg);
+    assert(_PyValue_IsPointerSpace(item));
+    name = PyValue_ObjectBorrow(item);
     if (oparg < PyUnstable_Code_GetFirstFree(co)) {
         _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
                                   UNBOUNDLOCAL_ERROR_MSG, name);

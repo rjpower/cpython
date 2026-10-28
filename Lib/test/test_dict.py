@@ -1012,8 +1012,8 @@ class DictTest(unittest.TestCase):
 
     @support.cpython_only
     def test_splittable_setdefault(self):
-        """split table must keep correct insertion
-        order when attributes are adding using setdefault()"""
+        """instance dicts of one class must keep their own insertion
+        order when attributes are added using setdefault()"""
         a, b = self.make_shared_key_dict(2)
 
         a['a'] = 1
@@ -1028,12 +1028,12 @@ class DictTest(unittest.TestCase):
 
     @support.cpython_only
     def test_splittable_del(self):
-        """split table must be combined when del d[k]"""
+        """del d[k] on one instance dict must not affect another"""
         a, b = self.make_shared_key_dict(2)
 
         orig_size = sys.getsizeof(a)
 
-        del a['y']  # split table is combined
+        del a['y']
         with self.assertRaises(KeyError):
             del a['y']
 
@@ -1063,7 +1063,7 @@ class DictTest(unittest.TestCase):
 
     @support.cpython_only
     def test_splittable_pop_pending(self):
-        """pop a pending key in a split table should not crash"""
+        """pop a key that only another instance dict has should not crash"""
         a, b = self.make_shared_key_dict(2)
 
         a['a'] = 4
@@ -1072,7 +1072,7 @@ class DictTest(unittest.TestCase):
 
     @support.cpython_only
     def test_splittable_popitem(self):
-        """split table must be combined when d.popitem()"""
+        """d.popitem() on one instance dict must not affect another"""
         a, b = self.make_shared_key_dict(2)
 
         item = a.popitem()
@@ -1102,14 +1102,14 @@ class DictTest(unittest.TestCase):
 
     @support.cpython_only
     def test_splittable_to_generic_combinedtable(self):
-        """split table must be correctly resized and converted to generic combined table"""
+        """an instance dict must be correctly resized and converted to a generic table"""
         class C:
             pass
 
         a = C()
         a.x = 1
         d = a.__dict__
-        d[2] = 2 # split table is resized to a generic combined table
+        d[2] = 2 # the table is resized to a generic table
 
         self.assertEqual(list(d), ['x', 2])
 
@@ -1791,8 +1791,8 @@ class DictTest(unittest.TestCase):
         d.clear()
 
     def test_clear_reentrant_force_combined(self):
-        # gh-130555: dict.clear() must be safe when a destructor forces the
-        # dict from embedded/split to combined (setting ma_values to NULL).
+        # gh-130555: dict.clear() must be safe when a destructor converts
+        # the dict to a generic table.
         class MyObj: pass
         class ForceConvert:
             def __del__(self):

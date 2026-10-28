@@ -203,7 +203,6 @@ typedef struct _Py_DebugOffsets {
     struct _dict_object {
         uint64_t size;
         uint64_t ma_keys;
-        uint64_t ma_values;
     } dict_object;
 
     // PyFloat object offset;
@@ -378,7 +377,6 @@ typedef struct _Py_DebugOffsets {
     .dict_object = { \
         .size = sizeof(PyDictObject), \
         .ma_keys = offsetof(PyDictObject, ma_keys), \
-        .ma_values = offsetof(PyDictObject, ma_values), \
     }, \
     .float_object = { \
         .size = sizeof(PyFloatObject), \

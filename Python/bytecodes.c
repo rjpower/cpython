@@ -2903,8 +2903,6 @@ dummy_func(
             DEOPT_IF(!LOCK_OBJECT(dict));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyDictKeysObject *dk = dict->ma_keys;
-            // Split keys are shared with other dicts, which append to them
-            // under the keys lock rather than this dict's lock.
             if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries) ||
                     dk->dk_kind == DICT_KEYS_GENERAL) {
                 UNLOCK_OBJECT(dict);
@@ -2915,17 +2913,13 @@ dummy_func(
                 UNLOCK_OBJECT(dict);
                 DEOPT_IF(true);
             }
-            // A split table keeps its values, such as an object's inline
-            // values, apart from its keys.
-            PyValue *value_ptr = dict->ma_values == NULL ?
-                &ep->me_value : &dict->ma_values->values[hint];
-            if (PyValue_IsNull(*value_ptr)) {
+            if (PyValue_IsNull(ep->me_value)) {
                 UNLOCK_OBJECT(dict);
                 DEOPT_IF(true);
             }
             _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, dict,
                                 PyValue_FromObject(name), value);
-            *value_ptr = value;
+            ep->me_value = value;
             DEAD(value);
             UNLOCK_OBJECT(dict);
             STAT_INC(STORE_ATTR, hit);

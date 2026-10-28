@@ -7,7 +7,6 @@
 
 #include "Python.h"
 #include "pycore_descrobject.h"   // PyMemberDescrObject
-#include "pycore_dict.h"          // _PyDictKeys_StringLookupSplit()
 #include "pycore_lookup.h"
 #include "pycore_object.h"        // _PyObject_InlineValues()
 

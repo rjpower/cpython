@@ -3,11 +3,7 @@
 #endif
 
 typedef struct _dictkeysobject PyDictKeysObject;
-typedef struct _dictvalues PyDictValues;
 
-/* The ma_values pointer is NULL for a combined table
- * or points to an array of PyObject* for a split table
- */
 typedef struct {
     PyObject_HEAD
 
@@ -22,14 +18,8 @@ typedef struct {
      */
     uint64_t _ma_watcher_tag;
 
+    /* The keys and the values */
     PyDictKeysObject *ma_keys;
-
-    /* If ma_values is NULL, the table is "combined": keys and values
-       are stored in ma_keys.
-
-       If ma_values is not NULL, the table is split:
-       keys are stored in ma_keys and values are stored in ma_values */
-    PyDictValues *ma_values;
 } PyDictObject;
 
 // frozendict

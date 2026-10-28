@@ -783,15 +783,6 @@ class PyCodeObjectPtr(PyObjectPtr):
         assert False, "Unreachable"
 
 
-def items_from_keys_and_values(keys, values):
-    entries, nentries = PyDictObjectPtr._get_entries(keys)
-    for i in safe_range(nentries):
-        ep = entries[i]
-        pyop_value = PyObjectPtr.from_pyobject_ptr(values[i])
-        if not pyop_value.is_null():
-            pyop_key = PyObjectPtr.from_pyobject_ptr(ep['me_key'])
-            yield (pyop_key, pyop_value)
-
 class PyShapeSlots:
     '''An object's slots, named by its shape: slot i holds the attribute
     that the shape names at i, and a hole has no name'''
@@ -831,14 +822,6 @@ class PyDictObjectPtr(PyObjectPtr):
         analogous to dict.iteritems()
         '''
         keys = self.field('ma_keys')
-        values = self.field('ma_values')
-        has_values = int(values)
-        if has_values:
-            values = values['values']
-        if has_values:
-            for item in items_from_keys_and_values(keys, values):
-                yield item
-            return
         entries, nentries = self._get_entries(keys)
         for i in safe_range(nentries):
             ep = entries[i]

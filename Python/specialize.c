@@ -96,7 +96,6 @@ do { \
 #define SPEC_FAIL_ATTR_CLASS_ATTR_DESCRIPTOR 32
 #define SPEC_FAIL_ATTR_BUILTIN_CLASS_METHOD_OBJ 33
 #define SPEC_FAIL_ATTR_METACLASS_OVERRIDDEN 34
-#define SPEC_FAIL_ATTR_SPLIT_DICT 35
 #define SPEC_FAIL_ATTR_DESCR_NOT_DEFERRED 36
 #define SPEC_FAIL_ATTR_SLOT_AFTER_ITEMS 37
 
@@ -794,20 +793,14 @@ specialize_dict_hint(PyObject *owner, _PyInstr *instr, PyObject *name,
     }
     int res;
     Py_BEGIN_CRITICAL_SECTION(dict);
-    if (_PyDict_HasSplitTable(dict)) {
-        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_SPLIT_DICT);
-        res = -1;
+    PyValue value;
+    Py_ssize_t index = _PyDict_LookupIndexAndValue(dict, name, &value);
+    if (index < 0 || PyValue_IsNull(value)) {
+        res = 0;
     }
     else {
-        PyValue value;
-        Py_ssize_t index = _PyDict_LookupIndexAndValue(dict, name, &value);
-        if (index < 0 || PyValue_IsNull(value)) {
-            res = 0;
-        }
-        else {
-            fb->hint = (uint32_t)index;
-            res = 1;
-        }
+        fb->hint = (uint32_t)index;
+        res = 1;
     }
     Py_END_CRITICAL_SECTION();
     if (res <= 0) {

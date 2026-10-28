@@ -4953,7 +4953,6 @@
                 else {
                     kwargs_st_object = PyValue_ObjectBorrow(kwargs_st);
                 }
-                PyObject *func = PyValue_ObjectBorrow(func_st);
                 PyObject *callargs = callargs_st_object;
                 (void)null;
                 assert(PyTuple_CheckExact(callargs));
@@ -4968,21 +4967,22 @@
                     _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
                     kwargs_st_root.object = kwargs_st_object;
                 }
-                PyObject *result_o = PyObject_Call(func, callargs, kwargs);
+                PyValue result_v = _PyObject_CallValue(tstate, func_st, callargs,
+                    kwargs);
                 if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
                     _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
                 }
                 if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
                     _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
                 }
-                if (result_o == NULL) {
+                if (PyValue_IsNull(result_v)) {
                     window[0] = PyValue_NULL;
                     window[1] = PyValue_NULL;
                     window[2] = PyValue_NULL;
                     window[3] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
-                result = PyValue_FromObject(result_o);
+                result = result_v;
             }
             // _CHECK_PERIODIC_AT_END
             {
@@ -5400,11 +5400,13 @@
                     kwargs_st_object = PyValue_ObjectBorrow(kwargs_st);
                 }
                 (void)null;
-                PyObject *func = func_st_object;
-                EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_FUNCTION_EX, func);
-                PyObject *result_o;
+                if (PyValue_Type(func_st) == &PyFunction_Type) {
+                    EVAL_CALL_STAT_INC(EVAL_CALL_FUNCTION_EX);
+                }
+                PyValue result_v;
                 assert(!_PyErr_Occurred(tstate));
                 if (opcode == INSTRUMENTED_CALL_FUNCTION_EX) {
+                    PyObject *func = func_st_object;
                     PyObject *callargs = callargs_st_object;
                     PyObject *kwargs = kwargs_st_object;
                     assert(kwargs == NULL || PyDict_CheckExact(kwargs));
@@ -5467,6 +5469,8 @@
                         _PyThreadState_PopValueRoot(tstate, &arg0_root);
                         JUMP_TO_LABEL(error);
                     }
+                    _PyValueRoot result_root;
+                    _PyThreadState_PushValueRoot(tstate, &result_root);
                     if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
                         _PyThreadState_PushValueRoot(tstate, &func_st_root);
                         func_st_root.object = func_st_object;
@@ -5479,7 +5483,8 @@
                         _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
                         kwargs_st_root.object = kwargs_st_object;
                     }
-                    result_o = PyObject_Call(func, callargs, kwargs);
+                    result_root.value = _PyObject_CallValue(tstate, func_st,
+                        callargs, kwargs);
                     if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
                         _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
                     }
@@ -5490,7 +5495,7 @@
                         _PyThreadState_PopValueRoot(tstate, &func_st_root);
                     }
                     if (!PyFunction_Check(func) && !PyMethod_Check(func)) {
-                        if (result_o == NULL) {
+                        if (PyValue_IsNull(result_root.value)) {
                             if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
                                 _PyThreadState_PushValueRoot(tstate, &func_st_root);
                                 func_st_root.object = func_st_object;
@@ -5542,16 +5547,19 @@
                                 _PyThreadState_PopValueRoot(tstate, &func_st_root);
                             }
                             if (err < 0) {
-                                Py_CLEAR(result_o);
+                                result_root.value = PyValue_NULL;
                             }
                         }
                     }
+                    result_v = result_root.value;
+                    _PyThreadState_PopValueRoot(tstate, &result_root);
                     _PyThreadState_PopValueRoot(tstate, &arg0_root);
                 }
                 else {
-                    if (Py_TYPE(func) == &PyFunction_Type &&
+                    if (PyValue_Type(func_st) == &PyFunction_Type &&
                         !IS_PEP523_HOOKED(tstate) &&
-                        ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
+                        ((PyFunctionObject *)PyValue_ObjectBorrow(func_st))->vectorcall == _PyFunction_Vectorcall) {
+                        PyObject *func = func_st_object;
                         PyObject *callargs = callargs_st_object;
                         assert(PyTuple_CheckExact(callargs));
                         PyObject *kwargs = PyValue_IsNull(kwargs_st) ? NULL : kwargs_st_object;
@@ -5611,7 +5619,7 @@
                         _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
                         kwargs_st_root.object = kwargs_st_object;
                     }
-                    result_o = PyObject_Call(func, callargs, kwargs);
+                    result_v = _PyObject_CallValue(tstate, func_st, callargs, kwargs);
                     if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
                         _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
                     }
@@ -5622,14 +5630,14 @@
                         _PyThreadState_PopValueRoot(tstate, &func_st_root);
                     }
                 }
-                if (result_o == NULL) {
+                if (PyValue_IsNull(result_v)) {
                     window[0] = PyValue_NULL;
                     window[1] = PyValue_NULL;
                     window[2] = PyValue_NULL;
                     window[3] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
-                result = PyValue_FromObject(result_o);
+                result = result_v;
             }
             // _CHECK_PERIODIC_AT_END
             {
@@ -10352,11 +10360,13 @@
                     kwargs_st_object = PyValue_ObjectBorrow(kwargs_st);
                 }
                 (void)null;
-                PyObject *func = func_st_object;
-                EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_FUNCTION_EX, func);
-                PyObject *result_o;
+                if (PyValue_Type(func_st) == &PyFunction_Type) {
+                    EVAL_CALL_STAT_INC(EVAL_CALL_FUNCTION_EX);
+                }
+                PyValue result_v;
                 assert(!_PyErr_Occurred(tstate));
                 if (opcode == INSTRUMENTED_CALL_FUNCTION_EX) {
+                    PyObject *func = func_st_object;
                     PyObject *callargs = callargs_st_object;
                     PyObject *kwargs = kwargs_st_object;
                     assert(kwargs == NULL || PyDict_CheckExact(kwargs));
@@ -10419,6 +10429,8 @@
                         _PyThreadState_PopValueRoot(tstate, &arg0_root);
                         JUMP_TO_LABEL(error);
                     }
+                    _PyValueRoot result_root;
+                    _PyThreadState_PushValueRoot(tstate, &result_root);
                     if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
                         _PyThreadState_PushValueRoot(tstate, &func_st_root);
                         func_st_root.object = func_st_object;
@@ -10431,7 +10443,8 @@
                         _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
                         kwargs_st_root.object = kwargs_st_object;
                     }
-                    result_o = PyObject_Call(func, callargs, kwargs);
+                    result_root.value = _PyObject_CallValue(tstate, func_st,
+                        callargs, kwargs);
                     if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
                         _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
                     }
@@ -10442,7 +10455,7 @@
                         _PyThreadState_PopValueRoot(tstate, &func_st_root);
                     }
                     if (!PyFunction_Check(func) && !PyMethod_Check(func)) {
-                        if (result_o == NULL) {
+                        if (PyValue_IsNull(result_root.value)) {
                             if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
                                 _PyThreadState_PushValueRoot(tstate, &func_st_root);
                                 func_st_root.object = func_st_object;
@@ -10494,16 +10507,19 @@
                                 _PyThreadState_PopValueRoot(tstate, &func_st_root);
                             }
                             if (err < 0) {
-                                Py_CLEAR(result_o);
+                                result_root.value = PyValue_NULL;
                             }
                         }
                     }
+                    result_v = result_root.value;
+                    _PyThreadState_PopValueRoot(tstate, &result_root);
                     _PyThreadState_PopValueRoot(tstate, &arg0_root);
                 }
                 else {
-                    if (Py_TYPE(func) == &PyFunction_Type &&
+                    if (PyValue_Type(func_st) == &PyFunction_Type &&
                         !IS_PEP523_HOOKED(tstate) &&
-                        ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
+                        ((PyFunctionObject *)PyValue_ObjectBorrow(func_st))->vectorcall == _PyFunction_Vectorcall) {
+                        PyObject *func = func_st_object;
                         PyObject *callargs = callargs_st_object;
                         assert(PyTuple_CheckExact(callargs));
                         PyObject *kwargs = PyValue_IsNull(kwargs_st) ? NULL : kwargs_st_object;
@@ -10563,7 +10579,7 @@
                         _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
                         kwargs_st_root.object = kwargs_st_object;
                     }
-                    result_o = PyObject_Call(func, callargs, kwargs);
+                    result_v = _PyObject_CallValue(tstate, func_st, callargs, kwargs);
                     if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
                         _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
                     }
@@ -10574,14 +10590,14 @@
                         _PyThreadState_PopValueRoot(tstate, &func_st_root);
                     }
                 }
-                if (result_o == NULL) {
+                if (PyValue_IsNull(result_v)) {
                     window[0] = PyValue_NULL;
                     window[1] = PyValue_NULL;
                     window[2] = PyValue_NULL;
                     window[3] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
-                result = PyValue_FromObject(result_o);
+                result = result_v;
             }
             // _CHECK_PERIODIC_AT_END
             {

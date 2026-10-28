@@ -6695,6 +6695,31 @@ class ValueCallTests(unittest.TestCase):
         self.assertIs([7 * one].__getitem__(0), 7)
         self.assertIs(divmod(7, 2)[0], 3)
 
+    def test_starred_calls(self):
+        # CALL_FUNCTION_EX passes the callee to the call as a value: a
+        # result comes back the same, and an inline callee is not callable,
+        # cold and after the call site specialises.
+        n = 100000 + int("1")
+        def calls(f, a, k):
+            return f(*a), f(*a, **k), f(*list(a))
+        for v in _values():
+            with self.subTest(v=v):
+                class C:
+                    def __call__(self, *args, **kwargs):
+                        return v
+                for _ in range(20):
+                    self.assertEqual([r is v for r in calls(C(), (1,), {"k": 2})],
+                                     [True] * 3)
+        forms = [lambda f: f(*(1,)), lambda f: f(*(1,), **{"k": 2}),
+                 lambda f: f(*[1])]
+        for callee in (n, 2.5 * n):
+            message = f"'{type(callee).__name__}' object is not callable"
+            for form in forms:
+                with self.subTest(callee=callee, form=forms.index(form)):
+                    for _ in range(20):
+                        with self.assertRaisesRegex(TypeError, message):
+                            form(callee)
+
     def test_init_result(self):
         for v in (5, 2.5, "s"):
             with self.subTest(v=v):

@@ -2057,6 +2057,60 @@ class TracingCollectorTests(unittest.TestCase):
         rc, out, err = assert_python_ok("-c", self.CALL_LIFETIMES, **env)
         self.assertEqual(out.strip(), b"ok")
 
+    # 6d rung 3: CALL_FUNCTION_EX holds a monitored C call's result in a
+    # root across the C_RETURN callback, which can collect.
+    MONITORED_STARRED_CALL = textwrap.dedent("""
+        import gc, sys
+        E = sys.monitoring.events
+        TOOL = 4
+        sys.monitoring.use_tool_id(TOOL, "test")
+        class C:
+            def __call__(self, *args, **kwargs):
+                return [len(args), sorted(kwargs)]
+        c = C()
+        raise_in_return = False
+        def on_return(code, offset, callable, arg0):
+            gc.collect()
+            if raise_in_return and callable is c:
+                raise RuntimeError("from C_RETURN")
+        sys.monitoring.register_callback(TOOL, E.C_RETURN, on_return)
+        sys.monitoring.register_callback(TOOL, E.C_RAISE,
+                                         lambda *args: gc.collect())
+        sys.monitoring.register_callback(TOOL, E.CALL, lambda *args: None)
+        sys.monitoring.set_events(TOOL, E.CALL | E.C_RETURN | E.C_RAISE)
+        a, k = [1, 2], {"k": 3}
+        for i in range(50):
+            assert c(*a) == [2, []]
+            assert c(*a, **k) == [2, ["k"]]
+        raise_in_return = True
+        for i in range(5):
+            try:
+                c(*a, **k)
+            except RuntimeError as e:
+                assert str(e) == "from C_RETURN"
+            else:
+                raise AssertionError("no error")
+        raise_in_return = False
+        def boom(*args):
+            raise KeyError(args)
+        class B:
+            __call__ = boom
+        for i in range(5):
+            try:
+                B()(*a)
+            except KeyError:
+                pass
+        sys.monitoring.set_events(TOOL, 0)
+        sys.monitoring.free_tool_id(TOOL)
+        print("ok")
+    """)
+
+    def test_monitored_starred_call(self):
+        env = {"PYTHON_GCVERIFY": "kill"} if support.Py_DEBUG else {}
+        rc, out, err = assert_python_ok("-c", self.MONITORED_STARRED_CALL,
+                                        **env)
+        self.assertEqual(out.strip(), b"ok")
+
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_return_order(self):
         env = {"PYTHON_GCSTRESS": "50"}

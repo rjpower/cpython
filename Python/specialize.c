@@ -784,6 +784,29 @@ set_shape_guard(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
     return SHAPE_GUARD_DECLINED;
 }
 
+/* Whether looking a name up on TYPE runs no Python code.  A specializer
+ * runs none (specialize_dict_hint()); a lookup that misses the type cache,
+ * as after any change to the type, compares the keys of every dict on the
+ * MRO, and a class namespace may hold a str subclass key whose __eq__ runs.
+ * Every dict on the MRO must have only exact str keys. */
+static int
+type_lookup_runs_no_code(PyTypeObject *type)
+{
+    PyObject *mro = type->tp_mro;
+    if (mro == NULL) {
+        return 0;
+    }
+    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(mro); i++) {
+        PyObject *dict = _PyType_GetDict((PyTypeObject *)PyTuple_GET_ITEM(mro, i));
+        if (dict == NULL || !PyDict_CheckExact(dict)
+            || ((PyDictObject *)dict)->ma_keys->dk_kind != DICT_KEYS_UNICODE)
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 /* A DICT plan: WITH_HINT if OWNER's instance dict holds NAME.  1 if
  * specialised; 0 if the dict lacks NAME, so that the class attribute
  * (steps 3 to 5) is the result; -1 to fail. */
@@ -1101,6 +1124,13 @@ _Py_Specialize_LoadAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OTHER);
         fail = true;
     }
+    else if (!type_lookup_runs_no_code(type)
+             || (PyType_Check(owner)
+                 && !type_lookup_runs_no_code((PyTypeObject *)owner)))
+    {
+        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NON_STRING);
+        fail = true;
+    }
     else if (PyModule_CheckExact(owner)) {
         fail = specialize_module_load_attr(owner, instr, name);
     }
@@ -1135,6 +1165,13 @@ _Py_Specialize_StoreAttr(PyValue owner_st, PyValue value, _PyInstr *instr,
         // PyObject_GenericSetAttr and friends... and this way we still do the
         // right thing if someone forgets to call PyType_Ready(type):
         SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
+        goto fail;
+    }
+    if (!type_lookup_runs_no_code(type)
+        || (PyType_Check(owner)
+            && !type_lookup_runs_no_code((PyTypeObject *)owner)))
+    {
+        SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_NON_STRING);
         goto fail;
     }
     if (PyModule_CheckExact(owner)) {
@@ -1647,6 +1684,9 @@ store_subscr_fail_kind(PyObject *container, PyValue sub)
         }
         return SPEC_FAIL_OTHER;
     }
+    if (!type_lookup_runs_no_code(container_type)) {
+        return SPEC_FAIL_OTHER;
+    }
     PyObject *descriptor = _PyType_Lookup(container_type, &_Py_ID(__setitem__));
     if (descriptor && Py_TYPE(descriptor) == &PyFunction_Type) {
         PyFunctionObject *func = (PyFunctionObject *)descriptor;
@@ -1724,6 +1764,10 @@ get_init_for_simple_managed_python_class(PyTypeObject *tp, unsigned int *tp_vers
     if (!(tp_flags & Py_TPFLAGS_HEAPTYPE)) {
         /* Is this possible? */
         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_EXPECTED_ERROR);
+        return NULL;
+    }
+    if (!type_lookup_runs_no_code(tp)) {
+        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OTHER);
         return NULL;
     }
     PyObject *init = _PyType_LookupRefAndVersion(tp, &_Py_ID(__init__), tp_version);
@@ -2145,6 +2189,9 @@ binary_op_fail_kind(int oparg, PyValue lhs_st, PyValue rhs_st)
             }
             unsigned int tp_version;
             PyTypeObject *container_type = lhs_type;
+            if (!type_lookup_runs_no_code(container_type)) {
+                return SPEC_FAIL_OTHER;
+            }
             PyObject *descriptor = _PyType_LookupRefAndVersion(container_type, &_Py_ID(__getitem__), &tp_version);
             if (descriptor && Py_TYPE(descriptor) == &PyFunction_Type) {
                 if (!(container_type->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
@@ -2484,6 +2531,9 @@ specialize_binary_op(PyValue lhs_st, PyValue rhs_st,
             }
             unsigned int tp_version;
             PyTypeObject *container_type = lhs_type;
+            if (!type_lookup_runs_no_code(container_type)) {
+                break;
+            }
             PyObject *descriptor = _PyType_LookupRefAndVersion(container_type, &_Py_ID(__getitem__), &tp_version);
             if (descriptor && Py_TYPE(descriptor) == &PyFunction_Type &&
                 container_type->tp_flags & Py_TPFLAGS_HEAPTYPE)

@@ -7,6 +7,7 @@ import sys
 import textwrap
 import types
 import unittest
+import warnings
 try:
     import _testinternalcapi
 except ImportError:
@@ -1451,6 +1452,54 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
         self.assertEqual(other.a, "other")
         # The lookups compared the colliding key while both functions ran
         self.assertEqual(set(witnessed), {"load", "store"})
+
+    def test_specializer_type_lookup_runs_no_code(self):
+        # A specializer's lookup on a type misses the type cache after any
+        # change to the type, and then compares the keys of the dicts on the
+        # MRO; a class namespace may hold a str subclass key whose __eq__
+        # rebinds x.  The type is changed before every call, so that the
+        # specializing execution misses.
+        def check(target, namespace, owner, f, other):
+            hits = []
+            class Key(str):
+                def __hash__(self):
+                    return hash(target)
+                def __eq__(self, name):
+                    caller = sys._getframe(1)
+                    if name == target and caller.f_code is f.__code__:
+                        hits.append(caller.f_code.co_name)
+                        caller.f_locals["x"] = other
+                    return False
+            with warnings.catch_warnings():
+                # non-string key in the __dict__ of class C
+                warnings.simplefilter("ignore", RuntimeWarning)
+                C = type("C", (), {Key("k"): 0, **namespace})
+            receiver = owner(C)
+            results = set()
+            for i in range(300):
+                C.version = i
+                results.add(f(receiver))
+            self.assertEqual(results, {"orig"}, target)
+            # The lookups compared the colliding key while f ran
+            self.assertTrue(hits, target)
+
+        def f_attr(o):
+            x = o
+            return x.a
+        check("a", {"a": "orig"}, lambda C: C, f_attr,
+              types.SimpleNamespace(a="other"))
+        check("a", {"a": "orig"}, lambda C: C(), f_attr,
+              types.SimpleNamespace(a="other"))
+        def f_hook(o):
+            x = o
+            return x.missing
+        check("__getattr__", {"__getattr__": lambda self, name: "orig"},
+              lambda C: C(), f_hook, types.SimpleNamespace(missing="other"))
+        def f_subscript(o):
+            x = o
+            return x[0]
+        check("__getitem__", {"__getitem__": lambda self, i: "orig"},
+              lambda C: C(), f_subscript, ["other"])
 
     def test_folded_operand_outlives_rebinding(self):
         # The reader's own callee rebinds the folded local and collects;

@@ -3,7 +3,8 @@
 
 #include "Python.h"
 #include "pycore_call.h"          // _Py_CheckFunctionResult()
-#include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
+#include "pycore_ceval.h"         // _Py_ReachedRecursionLimit()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_object.h"
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -391,144 +392,192 @@ PyTypeObject PyCMethod_Type = {
  * except for METH_VARARGS (possibly combined with METH_KEYWORDS) which
  * doesn't use vectorcall.
  *
+ * The vectorcall functions are precise (10a-2.md, rule 1).  Their common
+ * path makes no collecting call before the final one, so it anchors
+ * nothing: the keyword test and the recursion limit test collect nothing.
+ * Only the recursion check's slow path, which may raise, anchors func in
+ * the frame's span, and the error paths are opaque functions called last.
+ *
  * First, common helpers
  */
 
-static inline int
-cfunction_check_kwargs(PyThreadState *tstate, PyObject *func, PyObject *kwnames)
+static Py_NO_INLINE PyValue
+cfunction_kwargs_error(PyThreadState *tstate, PyObject *func)
 {
-    assert(!_PyErr_Occurred(tstate));
-    assert(PyCFunction_Check(func));
-    if (kwnames && PyTuple_GET_SIZE(kwnames)) {
-        PyObject *funcstr = _PyObject_FunctionStr(func);
-        if (funcstr != NULL) {
-            _PyErr_Format(tstate, PyExc_TypeError,
-                         "%U takes no keyword arguments", funcstr);
-            Py_DECREF(funcstr);
-        }
-        return -1;
+    PyObject *funcstr = _PyObject_FunctionStr(func);
+    if (funcstr != NULL) {
+        _PyErr_Format(tstate, PyExc_TypeError,
+                     "%U takes no keyword arguments", funcstr);
+        Py_DECREF(funcstr);
     }
-    return 0;
+    return PyValue_NULL;
 }
+
+static Py_NO_INLINE PyValue
+cfunction_nargs_error(PyThreadState *tstate, PyObject *func,
+                      const char *format, Py_ssize_t nargs)
+{
+    PyObject *funcstr = _PyObject_FunctionStr(func);
+    if (funcstr != NULL) {
+        _PyErr_Format(tstate, PyExc_TypeError, format, funcstr, nargs);
+        Py_DECREF(funcstr);
+    }
+    return PyValue_NULL;
+}
+
+#define HAS_KWARGS(kwnames) ((kwnames) != NULL && PyTuple_GET_SIZE(kwnames))
+#define RECURSION_WHERE " while calling a Python object"
 
 typedef void (*funcptr)(void);
 
-static inline funcptr
-cfunction_enter_call(PyThreadState *tstate, PyObject *func)
-{
-    if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object")) {
-        return NULL;
-    }
-    return (funcptr)PyCFunction_GET_FUNCTION(func);
-}
-
 /* Now the actual vectorcall functions */
-static PyValue
+Py_GC_PRECISE static PyValue
 cfunction_vectorcall_FASTCALL(
     PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     PyObject *func = PyValue_ObjectBorrow(func_v);
     PyThreadState *tstate = _PyThreadState_GET();
-    if (cfunction_check_kwargs(tstate, func, kwnames)) {
-        return PyValue_NULL;
+    assert(!_PyErr_Occurred(tstate));
+    assert(PyCFunction_Check(func));
+    if (HAS_KWARGS(kwnames)) {
+        return cfunction_kwargs_error(tstate, func);
     }
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    PyCFunctionFast meth = (PyCFunctionFast)
-                            cfunction_enter_call(tstate, func);
-    if (meth == NULL) {
-        return PyValue_NULL;
+    if (_Py_ReachedRecursionLimit(tstate)) {
+        PyValue slots[1];
+        _PyValueRoot span;
+        _PyThreadState_PushValueSpan(tstate, &span, slots);
+        _PyValueSpan_AppendObject(&span, func);
+        int err = _Py_CheckRecursiveCall(tstate, RECURSION_WHERE);
+        _PyThreadState_PopValueRoot(tstate, &span);
+        if (err) {
+            return PyValue_NULL;
+        }
     }
+    PyCFunctionFast meth = (PyCFunctionFast)
+                            (funcptr)PyCFunction_GET_FUNCTION(func);
     PyValue result = meth(PyCFunction_GET_SELF(func), args, nargs);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 cfunction_vectorcall_FASTCALL_KEYWORDS(
     PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     PyObject *func = PyValue_ObjectBorrow(func_v);
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    PyCFunctionFastWithKeywords meth = (PyCFunctionFastWithKeywords)
-                                        cfunction_enter_call(tstate, func);
-    if (meth == NULL) {
-        return PyValue_NULL;
+    if (_Py_ReachedRecursionLimit(tstate)) {
+        PyValue slots[2];
+        _PyValueRoot span;
+        _PyThreadState_PushValueSpan(tstate, &span, slots);
+        _PyValueSpan_AppendObject(&span, func);
+        _PyValueSpan_AppendObject(&span, kwnames);
+        int err = _Py_CheckRecursiveCall(tstate, RECURSION_WHERE);
+        _PyThreadState_PopValueRoot(tstate, &span);
+        if (err) {
+            return PyValue_NULL;
+        }
     }
+    PyCFunctionFastWithKeywords meth = (PyCFunctionFastWithKeywords)
+        (funcptr)PyCFunction_GET_FUNCTION(func);
     PyValue result = meth(PyCFunction_GET_SELF(func), args, nargs, kwnames);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 cfunction_vectorcall_FASTCALL_KEYWORDS_METHOD(
     PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     PyObject *func = PyValue_ObjectBorrow(func_v);
     PyThreadState *tstate = _PyThreadState_GET();
-    PyTypeObject *cls = PyCFunction_GET_CLASS(func);
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    PyCMethod meth = (PyCMethod)cfunction_enter_call(tstate, func);
-    if (meth == NULL) {
-        return PyValue_NULL;
+    if (_Py_ReachedRecursionLimit(tstate)) {
+        PyValue slots[2];
+        _PyValueRoot span;
+        _PyThreadState_PushValueSpan(tstate, &span, slots);
+        _PyValueSpan_AppendObject(&span, func);
+        _PyValueSpan_AppendObject(&span, kwnames);
+        int err = _Py_CheckRecursiveCall(tstate, RECURSION_WHERE);
+        _PyThreadState_PopValueRoot(tstate, &span);
+        if (err) {
+            return PyValue_NULL;
+        }
     }
+    PyTypeObject *cls = PyCFunction_GET_CLASS(func);
+    PyCMethod meth = (PyCMethod)(funcptr)PyCFunction_GET_FUNCTION(func);
     PyValue result = meth(PyCFunction_GET_SELF(func), cls, args, nargs, kwnames);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 cfunction_vectorcall_NOARGS(
     PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     PyObject *func = PyValue_ObjectBorrow(func_v);
     PyThreadState *tstate = _PyThreadState_GET();
-    if (cfunction_check_kwargs(tstate, func, kwnames)) {
-        return PyValue_NULL;
+    assert(!_PyErr_Occurred(tstate));
+    assert(PyCFunction_Check(func));
+    if (HAS_KWARGS(kwnames)) {
+        return cfunction_kwargs_error(tstate, func);
     }
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (nargs != 0) {
-        PyObject *funcstr = _PyObject_FunctionStr(func);
-        if (funcstr != NULL) {
-            _PyErr_Format(tstate, PyExc_TypeError,
-                "%U takes no arguments (%zd given)", funcstr, nargs);
-            Py_DECREF(funcstr);
+        return cfunction_nargs_error(tstate, func,
+                                     "%U takes no arguments (%zd given)",
+                                     nargs);
+    }
+    if (_Py_ReachedRecursionLimit(tstate)) {
+        PyValue slots[1];
+        _PyValueRoot span;
+        _PyThreadState_PushValueSpan(tstate, &span, slots);
+        _PyValueSpan_AppendObject(&span, func);
+        int err = _Py_CheckRecursiveCall(tstate, RECURSION_WHERE);
+        _PyThreadState_PopValueRoot(tstate, &span);
+        if (err) {
+            return PyValue_NULL;
         }
-        return PyValue_NULL;
     }
-    PyCFunction meth = (PyCFunction)cfunction_enter_call(tstate, func);
-    if (meth == NULL) {
-        return PyValue_NULL;
-    }
+    PyCFunction meth = PyCFunction_GET_FUNCTION(func);
     PyObject *result = _PyCFunction_TrampolineCall(
         meth, PyCFunction_GET_SELF(func), NULL);
     _Py_LeaveRecursiveCallTstate(tstate);
     return PyValue_FromResult(result);
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 cfunction_vectorcall_O(
     PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     PyObject *func = PyValue_ObjectBorrow(func_v);
     PyThreadState *tstate = _PyThreadState_GET();
-    if (cfunction_check_kwargs(tstate, func, kwnames)) {
-        return PyValue_NULL;
+    assert(!_PyErr_Occurred(tstate));
+    assert(PyCFunction_Check(func));
+    if (HAS_KWARGS(kwnames)) {
+        return cfunction_kwargs_error(tstate, func);
     }
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (nargs != 1) {
-        PyObject *funcstr = _PyObject_FunctionStr(func);
-        if (funcstr != NULL) {
-            _PyErr_Format(tstate, PyExc_TypeError,
-                "%U takes exactly one argument (%zd given)", funcstr, nargs);
-            Py_DECREF(funcstr);
+        return cfunction_nargs_error(tstate, func,
+                                     "%U takes exactly one argument "
+                                     "(%zd given)", nargs);
+    }
+    if (_Py_ReachedRecursionLimit(tstate)) {
+        PyValue slots[1];
+        _PyValueRoot span;
+        _PyThreadState_PushValueSpan(tstate, &span, slots);
+        _PyValueSpan_AppendObject(&span, func);
+        int err = _Py_CheckRecursiveCall(tstate, RECURSION_WHERE);
+        _PyThreadState_PopValueRoot(tstate, &span);
+        if (err) {
+            return PyValue_NULL;
         }
-        return PyValue_NULL;
     }
-    PyCFunctionO meth = (PyCFunctionO)cfunction_enter_call(tstate, func);
-    if (meth == NULL) {
-        return PyValue_NULL;
-    }
+    PyCFunctionO meth = (PyCFunctionO)
+                         (funcptr)PyCFunction_GET_FUNCTION(func);
     PyValue result = meth(PyCFunction_GET_SELF(func), args[0]);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;

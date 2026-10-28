@@ -1,6 +1,7 @@
 # Audit 2: members that neither the traverse nor a release names
 
-Status: design, for review. Branch `boil/audit2` from 72bed4aa822.
+Status: done; as-built record below. Branch `boil/audit2` from
+72bed4aa822, head 518e342d255 plus this record.
 Trigger: 6d rung 4's gate 3 found the CJK stream writer's `pending`
 freed under the live writer (fixed on boil/6d at 46bd95ee72c). Report 3
 of `Tools/boil/traverse_audit.py` (72bed4aa822) lists the class: a member
@@ -119,21 +120,6 @@ other found in C, with its test file (`Lib/test/test_re.py`,
 `Lib/test/test_multibytecodec.py`, 6d's test verbatim). No getset functions (6d rung 4)
 and no precise-marking directives (10a) are touched.
 
-## Hand-off (first draft)
-
-1. **Buffer consumers release in the sweep: hand-off to the collector
-   owner (coordinator to assign).** `PickleBuffer`, `_pickle.Unpickler`,
-   the SRE scanner, `_struct.unpack_iterator` and `_testbuffer.ndarray`
-   keep a `Py_buffer` and release it in their dealloc; for a Python
-   exporter the release either runs `__release_buffer__` in the sweep
-   or, when the wrapper is swept first, skips it. The managed buffer's
-   pre-sweep destroy hook is the model. Probe: `/tmp`-free form in the
-   as-built record.
-2. **Symtable's PyMem roots: 10a rung 3.** `struct symtable`'s
-   references are held from the C stack through the transitive PyMem
-   scan; the entry must not visit them (they dangle after
-   `_PySymtable_Free`).
-
 ## Review
 
 Round 1: codex, 10:45 (`reviews/audit-2-review.md`), verdict revise.
@@ -157,7 +143,7 @@ Round 1: codex, 10:45 (`reviews/audit-2-review.md`), verdict revise.
    Only the managed buffer and memoryview have the pre-sweep destroy
    hook (`live_destroy_hook_of`, gc_trace.c). Extending it to every
    buffer consumer is a collector change outside this audit's files;
-   handed off (hand-off 1), with the probe. Visiting the buffer's owner
+   handed to 10a rung 3 by the coordinator (hand-off 1), with the probe. Visiting the buffer's owner
    does not make this worse: before the fix the wrapper is freed under
    the live scanner, and the scanner's release reads freed memory.
 3. **Delegation credits layout, not traversal.** Accepted. The credit is
@@ -184,3 +170,128 @@ visits `fail_after_exc`, which `_fail_after()` can replace on the
 pattern. Carried: header lookup by directory then Include/ takes the
 last definition of a duplicated name (no conflict on the tree);
 symtable's PyMem roots are 10a rung 3's (hand-off 2).
+
+## As built
+
+Commits on `boil/audit2`:
+
+| Commit | What |
+|---|---|
+| efac733ac30 | this work doc |
+| 6ab5283f07f | tool B1 to B5: `const` in a name, functions after a return-type macro, header callees, visit callbacks, delegation |
+| 0b4153d8f37 | review round 1: allow entries by exact member path, report 3 and unresolved traverses in `--check`, delegation by what the delegate visits, `PyValue` members; the nine allow entries |
+| 3e96c4e46a7 | `mbstreamwriter_traverse` visits `pending` (6d's 46bd95ee72c verbatim, with its test) |
+| 518e342d255 | `scanner_traverse` visits `state.string`, `state.buffer.obj`, `state.fail_after_exc`; test_re's `test_scanner_keeps_its_string` |
+
+Deviations from the design, each with its reason: the allow-entry format
+became `path variable member...: reason` (review point 4; the
+coordinator accepted it at 11:00); the stream writer is fixed here, not
+allow-listed (coordinator, 10:40); the scanner test's Python exporter
+has no `__release_buffer__`, because a release that runs Python is
+hand-off 1's defect and is not what this test measures (with one, the
+test under kill on the unfixed build died with `_PyGC_LiveSweepViolation:
+the dealloc of a _sre.SRE_Scanner object ... runs Python code during the
+sweep`, the freed wrapper having been released from the sweep).
+
+### Final disposition of the 16 entries
+
+| # | Type | Disposition | Evidence |
+|---|---|---|---|
+| 1, 2 | deque iterators | allow (`b->data`, borrowed) | `b` is a block of `it->deque`, visited; `deque_traverse` visits the blocks' items; `b` is read only after the `deque->state` check |
+| 3 | defaultdict | tool (B5) | credited `ma_keys` from `dict_traverse`, called on `op` |
+| 4 | COMError | tool (B5) | credited from `BaseException_traverse`, called on `self` |
+| 5 | Element | allow (`extra->_children`, alias) | the traverse visits `children[0..length)`, which is `_children` while `children == _children` |
+| 6 | partial | allow (`placeholder`, borrowed) | the module state's singleton; type, `ht_module`, module traverse |
+| 7, 8 | lru link, lru wrapper | allow (`next prev`, `prev`, borrowed) | the wrapper's traverse walks the list by `next`; the cache dict holds each link |
+| 9 | Profiler | tool (B4) | `visit_entry` visits every entry's `userObj`; `ctxEntry` points into the tree |
+| 10 | sqlite3 Connection | allow (ten classes, borrowed) | "Borrowed refs" from the module state; type, `ht_module`, module traverse |
+| 11 | SRE scanner | real, fixed (518e342d255) | the test fails before the fix on all three kinds, on build/default (no match) and under kill on build/debug (wrong `m.string`, no match); `gc.get_referents()` lists only the type and the pattern |
+| 12 | MultibyteStreamWriter | real, fixed (3e96c4e46a7) | 6d's test and record |
+| 13 | instancemethod | tool (B3) | `PyInstanceMethod_GET_FUNCTION` read from Include/cpython/classobject.h |
+| 14 | enumerate | allow (`one`, static) | `_PyLong_GetOne()` is `_PyLong_SMALL_INTS[...]` in `_PyRuntime` |
+| 15 | TypeVar | tool (B1) | `constraints` visited by `typevar_traverse` |
+| 16 | symtable entry | allow (`ste_parent`, seven `ste_table->` paths, borrowed) | `ste_table` dangles after `_PySymtable_Free`; `ste_parent` held by `st_blocks` while read |
+
+After the fixes the tool reports, at 518e342d255: 5 types with no
+traverse (audit-1's allow entries), 6 probably inherited, 0 partial, 9
+silent (all allow-listed), 0 unresolved; `--check` exits 0. The tool's
+own fixtures fail on the previous tool: the five B fixtures and both
+`--check` cases at 72bed4aa822's tool; the delegation and value
+fixtures at 6ab5283f07f's.
+
+### Gates
+
+All at the tree of 518e342d255 (the commits after it change only this
+record), 2026-10-28:
+
+- Gate 1, build/default: test_tools, test_re, test_functools,
+  test_collections, test_xml_etree, test_ctypes, test_sqlite3,
+  test_profiling, test_profile, test_typing, test_symtable,
+  test_enumerate, test_class, test_multibytecodec,
+  test_codecencodings_jp: 3,249 tests, 69 skipped, test_sqlite3 skipped
+  as a file (not built), 0 failures. (test_cprofile does not exist on
+  this tree; the cProfile tests are test_profiling's.)
+- Gate 1, build/debug, the same set: 3,249 tests, 66 skipped, 0
+  failures.
+- Gate 1 under `PYTHON_GCVERIFY=kill`, build/debug: test_re,
+  test_multibytecodec, test_codecencodings_jp, test_tools: 458 tests, 5
+  skipped, 0 failures; `test_scanner_keeps_its_string` alone under kill
+  ten times: 10/10.
+- `Tools/boil/traverse_audit.py --check`: exit 0.
+- test_tools at 0b4153d8f37 on both builds: 110 tests, 1 skipped.
+
+Not run: gates 2 and 3 (the coordinator's quick-test at landing); the
+change touches two traverse functions and tooling, not the collector,
+roots or layout.
+
+### Hazards
+
+- `scanner_traverse` reads `state` from the first collection after
+  `PyObject_GC_New`. `state_init` zeroes it before its first allocation
+  and nothing allocates between, so the traverse never reads
+  uninitialised words; its error path leaves `buffer.obj` NULL and
+  `string` unset (NULL).
+- The tool's name matching stays by last component for members named
+  directly (a derived `side->value` is credited by a visited `value`);
+  delegation alone is by exact path. Header lookup takes the last
+  definition of a duplicated name (none on the tree), and the call depth
+  stays 2 with no report of a cut-off. Carried, not fixed.
+
+## Hand-off
+
+1. **Buffer consumers skip or misplace `__release_buffer__`: hand-off to
+   10a rung 3** (coordinator's ruling, 11:00; it runs on the owner
+   through 7a's queue once 7a rung 2 lands). `PickleBuffer`,
+   `_pickle.Unpickler`, the SRE scanner, `_struct.unpack_iterator` and
+   `_testbuffer.ndarray` keep a `Py_buffer` and release it in their
+   dealloc, in the sweep; for a Python exporter (a `_PyBufferWrapper`)
+   the release either runs `__release_buffer__` in the sweep or, when the
+   wrapper was swept first, is skipped. The managed buffer's pre-sweep
+   destroy hook (`live_destroy_hook_of`, gc_trace.c) is the model. The
+   reproducer, at 72bed4aa822 on build/debug, prints `released 0`:
+
+   ```python
+   import gc, pickle, struct
+   calls = []
+   class Exporter:
+       def __init__(self): self.data = bytearray(b"abcdefgh")
+       def __buffer__(self, flags): return memoryview(self.data)
+       def __release_buffer__(self, view):
+           calls.append(object())
+           view.release()
+   def f():
+       pickle.PickleBuffer(Exporter())
+       it = struct.iter_unpack("b", Exporter())
+   f()
+   gc.collect(); gc.collect()
+   print("released", len(calls))
+   ```
+
+2. **Symtable's PyMem roots: 10a rung 3.** `struct symtable`'s
+   references are held from the C stack through the transitive PyMem
+   scan; the entry must not visit them (they dangle after
+   `_PySymtable_Free`).
+3. **Tool coverage limits (owner: whoever next extends the audit).**
+   Name matching by last component for direct visits; references in
+   `_Py_hashtable_t` keys and values (audit-1 hand-off 2); call depth 2
+   without a cut-off report.

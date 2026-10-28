@@ -55,6 +55,8 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -532,17 +534,58 @@ def definitions(text: str):
             yield m.group(1), text[m.end():end - 1], brace_body(text, b.end())
 
 
-def receivers(params: str, body: str) -> set[str]:
-    """The names a traverse function has for the object it visits: its
-    first parameter and the locals initialised from it."""
+# A cast to a pointer type: "(PyObject *)", "(const struct foo **)".
+CAST_RE = re.compile(r"\(\s*(?:(?:const|volatile|struct)\s+)*[A-Za-z_]\w*(?:\s*\*)+\s*\)")
+# An assignment to a local; a member store ("self->x = ...") is not one.
+ASSIGN_RE = re.compile(r"(?<![\w.>])([A-Za-z_]\w*)\s*=(?!=)\s*([^;]*);")
+
+
+def wraps(expr: str) -> bool:
+    """Whether expr is one parenthesised expression."""
+    return expr.startswith("(") and paren_end(expr, 1) == len(expr)
+
+
+def unwrap(expr: str, is_cast: Callable[[str], bool]) -> str:
+    """expr without its pointer casts, parentheses and calls of cast macros
+    (_Py_CAST(T, x), and macros such as _PyObject_CAST(op) that is_cast
+    accepts), which leave the object the same."""
+    prev = None
+    expr = expr.strip()
+    while expr != prev:
+        prev = expr
+        if wraps(expr):
+            expr = expr[1:-1].strip()
+            continue
+        m = CAST_RE.match(expr)
+        if m:
+            expr = expr[m.end():].strip()
+            continue
+        m = re.match(r"([A-Za-z_]\w*)\s*\(", expr)
+        if m and paren_end(expr, m.end()) == len(expr):
+            args = split_top(expr[m.end():-1], ",")
+            if m.group(1) == "_Py_CAST" and len(args) == 2:
+                expr = args[1].strip()
+            elif len(args) == 1 and is_cast(m.group(1)):
+                expr = args[0].strip()
+    return expr
+
+
+def receivers_at(params: str, body: str, pos: int,
+                 is_cast: Callable[[str], bool]) -> set[str]:
+    """The names a traverse function has, at offset pos of its body, for the
+    object it visits: its first parameter and the locals assigned a cast of
+    one of those names, until they are assigned anything else.  The body is
+    read as straight-line code."""
     first = split_top(params, ",")[:1]
     m = re.search(r"([A-Za-z_]\w*)\s*$", first[0]) if first else None
     if not m:
         return set()
     names = {m.group(1)}
-    for d in re.finditer(r"\b([A-Za-z_]\w*)\s*=\s*([^;=]*);", body):
-        if re.search(rf"\b{m.group(1)}\b", d.group(2)):
-            names.add(d.group(1))
+    for a in ASSIGN_RE.finditer(body, 0, pos):
+        if unwrap(a.group(2), is_cast) in names:
+            names.add(a.group(1))
+        else:
+            names.discard(a.group(1))
     return names
 
 
@@ -587,20 +630,21 @@ def with_callees(name: str, fs: dict[str, str],
     function of the same file that the body names without calling it, such
     as a visit callback handed to an enumerator, is read as a callee."""
     scopes = (fs, *headers)
-    bodies, seen, todo = [], set(), [(name, 0)]
+    # Breadth first, so that each function is reached at its least depth
+    # and the result does not depend on the order of the callees.
+    bodies, seen, todo = [], {name}, deque([(name, 0)])
     while todo:
-        f, d = todo.pop()
-        if f in seen:
-            continue
+        f, d = todo.popleft()
         body = next((s[f] for s in scopes if f in s), None)
         if body is None:
             continue
-        seen.add(f)
         bodies.append(body)
         if d < depth:
             callees = set(CALL_RE.findall(body))
             callees |= {w for w in IDENT_RE.findall(body) if w in fs}
-            todo.extend((c, d + 1) for c in callees)
+            for c in sorted(callees - seen):
+                seen.add(c)
+                todo.append((c, d + 1))
     return "\n".join(bodies)
 
 
@@ -613,15 +657,33 @@ DELEGATE_RE = re.compile(
 
 @dataclass
 class Sources:
-    """The functions of the parsed files, by file and by header directory."""
+    """The functions of the parsed files, by file and by header directory,
+    with their parameter lists."""
     funcs: dict[Path, dict[str, str]]
     params: dict[Path, dict[str, str]]
     headers: dict[Path, dict[str, str]]
+    header_params: dict[Path, dict[str, str]]
     include: Path
 
     def scopes(self, path: Path) -> tuple[dict[str, str], ...]:
         return (self.headers.get(path.parent, {}),
                 self.headers.get(self.include, {}))
+
+    def is_cast(self, path: Path, name: str, depth: int = 3) -> bool:
+        """Whether name is a function-like macro or function, seen from
+        path, that returns its one parameter cast (such as
+        _ScannerObject_CAST(op), or _PyObject_CAST(op) through _Py_CAST)."""
+        for funcs, params in ((self.funcs, self.params),
+                              (self.headers, self.header_params)):
+            for key in (path, path.parent, self.include):
+                if name in funcs.get(key, {}):
+                    body = funcs[key][name].strip()
+                    body = re.sub(r"^\{?\s*return\b|;?\s*\}?$", "", body)
+                    args = split_top(params[key][name], ",")
+                    m = re.search(r"([A-Za-z_]\w*)\s*$", args[0]) if len(args) == 1 else None
+                    return bool(m) and depth > 0 and unwrap(
+                        body, lambda n: self.is_cast(path, n, depth - 1)) == m.group(1)
+        return False
 
 
 def traverse_names(t: TypeDef, src: Sources, by_var: dict[str, TypeDef],
@@ -650,12 +712,16 @@ def delegated_paths(t: TypeDef, code: str, src: Sources,
     while name in structs and name not in chain:
         chain.add(name)
         name = structs[name].base or ""
-    own = receivers(src.params.get(t.path, {}).get(t.traverse, ""),
-                    src.funcs.get(t.path, {}).get(t.traverse, ""))
+    params = src.params.get(t.path, {}).get(t.traverse, "")
+    body = src.funcs.get(t.path, {}).get(t.traverse, "")
+    is_cast = lambda n: src.is_cast(t.path, n)
     out = set()
-    for x, arg in DELEGATE_RE.findall(code):
-        arg = re.sub(r"\(\s*\w+[\s*]*\)", "", arg).strip("() \t\n")
-        if arg not in own:
+    # Only calls in the traverse function itself, whose receiver can be
+    # followed; a delegation in a helper credits nothing.
+    for m in DELEGATE_RE.finditer(body):
+        x, arg = m.group(1), m.group(2)
+        if unwrap(arg, is_cast) not in receivers_at(params, body, m.start(),
+                                                     is_cast):
             continue
         if x == "tp_base":
             x = t.base or ""
@@ -718,7 +784,7 @@ def main() -> int:
     types: list[TypeDef] = []
     # The functions of the .c files, and of the headers by directory, with
     # Include/'s as one.
-    src = Sources({}, {}, {}, args.root / "Include")
+    src = Sources({}, {}, {}, {}, args.root / "Include")
     for p, t in texts.items():
         defs = list(definitions(t))
         if p.suffix == ".c":
@@ -729,6 +795,8 @@ def main() -> int:
             key = src.include if src.include in p.parents else p.parent
             src.headers.setdefault(key, {}).update(
                 (name, body) for name, _, body in defs)
+            src.header_params.setdefault(key, {}).update(
+                (name, params) for name, params, _ in defs)
     by_var = {t.var: t for t in types}
 
     rel = lambda p: p.relative_to(args.root)

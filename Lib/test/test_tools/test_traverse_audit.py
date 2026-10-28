@@ -14,6 +14,9 @@ skip_if_missing("boil")
 SCRIPT = os.path.join(toolsdir, "boil", "traverse_audit.py")
 
 HEADER = """\
+#define _Py_CAST(type, expr) ((type)(expr))
+#define _PyObject_CAST(op) _Py_CAST(PyObject*, (op))
+
 typedef struct {
     void *buf;
     PyObject *obj;
@@ -521,6 +524,108 @@ static PyTypeObject Elsewhere_Type = {
     .tp_traverse = elsewhere_traverse,
 };
 
+/* A receiver must be the object itself: a cast of the parameter, kept
+   only until it is assigned something else. */
+#define SIDE_CAST(op) ((SideDictObject *)(op))
+
+static int
+castdict_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    SideDictObject *self = SIDE_CAST(op);
+    return PyDict_Type.tp_traverse(_PyObject_CAST(self), visit, arg);
+}
+
+static PyTypeObject CastDict_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.castdict",
+    .tp_basicsize = sizeof(SideDictObject),
+    .tp_traverse = castdict_traverse,
+};
+
+static int
+aliasdict_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PyObject *other = ((SideDictObject *)op)->other;
+    return PyDict_Type.tp_traverse(other, visit, arg);
+}
+
+static PyTypeObject AliasDict_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.aliasdict",
+    .tp_basicsize = sizeof(SideDictObject),
+    .tp_traverse = aliasdict_traverse,
+};
+
+static int
+resultdict_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PyObject *d = get_dict(op);
+    return PyDict_Type.tp_traverse(d, visit, arg);
+}
+
+static PyTypeObject ResultDict_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.resultdict",
+    .tp_basicsize = sizeof(SideDictObject),
+    .tp_traverse = resultdict_traverse,
+};
+
+static int
+reassigndict_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PyObject *d = op;
+    d = get_dict(op);
+    return PyDict_Type.tp_traverse(d, visit, arg);
+}
+
+static PyTypeObject ReassignDict_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.reassigndict",
+    .tp_basicsize = sizeof(SideDictObject),
+    .tp_traverse = reassigndict_traverse,
+};
+
+/* A diamond of helpers: leaf is two calls from the traverse through h,
+   and three through a. */
+typedef struct {
+    PyObject_HEAD
+    PyObject *deep;
+} DiamondObject;
+
+static int
+d_leaf(DiamondObject *self, visitproc visit, void *arg)
+{
+    Py_VISIT(self->deep);
+    return 0;
+}
+
+static int
+d_h(DiamondObject *self, visitproc visit, void *arg)
+{
+    return d_leaf(self, visit, arg);
+}
+
+static int
+d_a(DiamondObject *self, visitproc visit, void *arg)
+{
+    return d_h(self, visit, arg);
+}
+
+static int
+diamond_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    DiamondObject *self = (DiamondObject *)op;
+    int err = d_a(self, visit, arg);
+    return err ? err : d_h(self, visit, arg);
+}
+
+static PyTypeObject Diamond_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fixture.diamond",
+    .tp_basicsize = sizeof(DiamondObject),
+    .tp_traverse = diamond_traverse,
+};
+
 /* Values hold references; a traverse defined in no parsed file. */
 typedef struct {
     PyObject_HEAD
@@ -576,9 +681,10 @@ static PyTypeObject Xxo_Type = {
 """
 
 
-def run_audit(root, *args, check=True):
+def run_audit(root, *args, check=True, env=None):
     proc = subprocess.run([sys.executable, SCRIPT, "--root", root, *args],
-                          capture_output=True, text=True, check=check)
+                          capture_output=True, text=True, check=check,
+                          env=env)
     return proc
 
 
@@ -684,6 +790,12 @@ class TraverseAuditTests(unittest.TestCase):
         "Modules/fixture.c PartDerived_Type b: reason",
         "Modules/fixture.c SideDict_Type other side->ma_keys: reason",
         "Modules/fixture.c Elsewhere_Type ma_keys side->ma_keys: reason",
+        "Modules/fixture.c CastDict_Type other side->ma_keys: reason",
+        "Modules/fixture.c AliasDict_Type ma_keys side->ma_keys: reason",
+        "Modules/fixture.c ResultDict_Type ma_keys other side->ma_keys: "
+        "reason",
+        "Modules/fixture.c ReassignDict_Type ma_keys other side->ma_keys: "
+        "reason",
         "Modules/fixture.c Value_Type items: reason",
         "Modules/fixture.c extern_spec items slot: reason",
     ]
@@ -773,6 +885,36 @@ class TraverseAuditTests(unittest.TestCase):
         line = report_line(self.unvisited, "fixture.elsewhere")
         self.assertIsNotNone(line, self.output)
         self.assertTrue(line.endswith(": ma_keys, side->ma_keys"), line)
+
+    def test_receiver_is_the_object_itself(self):
+        # A cast macro and _PyObject_CAST keep the object.
+        line = report_line(self.unvisited, "fixture.castdict")
+        self.assertIsNotNone(line, self.output)
+        self.assertTrue(line.endswith(": other, side->ma_keys"), line)
+        # A member, a function's result, a reassigned alias do not.
+        for name in ("aliasdict", "resultdict", "reassigndict"):
+            with self.subTest(name=name):
+                line = report_line(self.unvisited, f"fixture.{name}")
+                self.assertIsNotNone(line, self.output)
+                self.assertIn(": ma_keys,", line)
+        listed = [e for e in self.LISTED if "AliasDict_Type" not in e]
+        proc = self.check(*listed, "Modules/fixture.c AliasDict_Type "
+                          "side->ma_keys: reason")
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("fixture.aliasdict has a tp_traverse that names "
+                      "neither these members nor their release and "
+                      "allow.txt does not list: ma_keys", proc.stdout)
+
+    def test_helper_depth_does_not_depend_on_order(self):
+        # leaf is within two calls through h whichever helper is read
+        # first, under any hash seed.
+        self.assertIsNone(report_line(self.output, "fixture.diamond"),
+                          self.output)
+        outputs = set()
+        for seed in ("0", "1", "2", "3", "4", "5"):
+            env = dict(os.environ, PYTHONHASHSEED=seed)
+            outputs.add(run_audit(self.root, env=env).stdout)
+        self.assertEqual(outputs, {self.output})
 
     def test_values_and_unresolved_traverse(self):
         line = report_line(self.unvisited, "fixture.value")

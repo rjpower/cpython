@@ -2179,3 +2179,31 @@ it is code generation in the single eval-loop function (step 8's input;
 receiver box (minimum), object.__getattribute__'s box and the
 __length_hint__ box (rung 3, done in 04ffa14a62b), the C-mode spans for
 the slot bridges (10a rung 2b, hand-off table in 6d-2.md).
+
+## 2026-10-28 08:05 PDT: the kill record keeps every word (10a tooling fix found by 6d rung 3's landing)
+
+Landed as de6f193f905, the merge of boil/10a-record at 44b9107ad1e (one
+commit on a3206a397d9). 6d rung 3 commit 4, which removes the
+hand-through helper in call.c, moved a stale copy of the killed object
+into gc_collect's Clinic wrapper frame, and the kill record named only
+the first word it found, so test_verify_missed_root's three subtests
+failed on debug while the collector behaved correctly. The record now
+keeps up to eight words that reached the object with address, owner pc
+and kind (gc_trace.c verify_other_words; note 11 section 8.3), the
+retain and kill reports name them all, and the test asserts that
+missed_root's precise frame is among them. The 10a agent's gates on the
+branch: gate 0 and gate 1 test_gc on both builds, test_gc under kill on
+debug, ASan test_gc under kill with detect_stack_use_after_return=0.
+Quick-test here on a detached checkout of de6f193f905: gate 0 and gate 1
+(test_gc, test_call, test_descr) on both builds, test_gc and test_call
+under kill on debug, all SUCCESS. The full gate 2 and 3 run with 6d
+rung 3's landing, which carries this merge.
+
+Two findings from the same gates, recorded in note 11 8.2 by the 10a
+agent: ASan's fake stacks (detect_stack_use_after_return) hide escaped
+locals from the conservative scan, so the ASan line of record sets the
+option to 0 and 10a rung 3 decides between scanning fake frames and
+keeping the option; and test_import's SinglephaseInitTests is finding B's
+second creator path (a shared-queue weakref callback drained in a legacy
+subinterpreter's half-initialised thread state), with a new tool,
+boil/tools/cstack.sh, for a C stack without gdb.

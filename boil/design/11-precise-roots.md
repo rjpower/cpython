@@ -636,9 +636,12 @@ In debug builds each collection marks twice before it frees anything:
   struct scan, and PyMem blocks that core opaque frames point to.
 
 Q, the objects in B but not A, were reached only through skipped words. A
-side table records each with the word's address, its owner (function,
-class) and the collection number. Two modes use Q, one for retention and
-one for detection.
+side table records each with the words that reached it: the one B marked
+it from, then every other skipped word whose value is the object, up to
+eight (the rest counted). Each has its address, its owner (function,
+class) and the collection number. A report names them all, since which
+word B meets first depends on the stack's layout. Two modes use Q, one
+for retention and one for detection.
 
 - **`PYTHON_GCVERIFY=retain`**, a diagnostic. B decides: Q is kept
   intact, header and referents untouched, its weakrefs not cleared and its

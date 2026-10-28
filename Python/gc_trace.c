@@ -327,16 +327,28 @@ typedef struct {
     int64_t collection;   // the live collection that listed it
 } verify_rec;
 
+/* The words kept for an object that B listed: B's first, the one it
+   marked the object from, then each other left-out word whose value is the
+   object, in the order A listed them.  Which word comes first depends on
+   the stack's layout, so a report names them all. */
+#define VERIFY_RECS 8
+
+typedef struct {
+    int n;                // the words kept, at most VERIFY_RECS
+    int more;             // the words past VERIFY_RECS, counted
+    verify_rec rec[VERIFY_RECS];
+} verify_recs;
+
 typedef struct {
     PyObject *op;
-    verify_rec rec;
+    verify_recs recs;
 } verify_entry;
 
 /* What kill keeps of an object it killed, for the trap's report: the
    object's type name is copied, since the type may die with it. */
 typedef struct {
     PyObject *op;
-    verify_rec rec;
+    verify_recs recs;
     char type[48];
 } verify_killed;
 
@@ -2449,7 +2461,7 @@ verify_list(trace_t *t, PyObject *op)
         t->newq_cap = cap;
     }
     t->newq[t->nnewq].op = op;
-    t->newq[t->nnewq].rec = t->rec;
+    t->newq[t->nnewq].recs = (verify_recs){.n = 1, .rec = {t->rec}};
     t->nnewq++;
 }
 
@@ -2478,7 +2490,7 @@ verify_owner(char *buf, size_t size, uintptr_t addr)
 
 /* Where the record's word was, for a report */
 static void
-verify_where(char *where, size_t size, const verify_rec *r)
+verify_where1(char *where, size_t size, const verify_rec *r)
 {
     if (r->kind == VERIFY_FROM_PRECISE) {
         char owner[512];
@@ -2502,16 +2514,35 @@ verify_where(char *where, size_t size, const verify_rec *r)
     }
 }
 
+/* Where each kept word was, for a report: "W1, and through W2, ..." */
+#define VERIFY_WHERE_SIZE (VERIFY_RECS * 600 + 64)
+static void
+verify_where(char *where, size_t size, const verify_recs *recs)
+{
+    size_t len = 0;
+    where[0] = '\0';
+    for (int i = 0; i < recs->n && len < size; i++) {
+        char one[600];
+        verify_where1(one, sizeof(one), &recs->rec[i]);
+        PyOS_snprintf(where + len, size - len, "%s%s",
+                      i == 0 ? "" : ", and through ", one);
+        len = strlen(where);
+    }
+    if (recs->more > 0 && len < size) {
+        PyOS_snprintf(where + len, size - len, ", and %d more words",
+                      recs->more);
+    }
+}
+
 static void
 verify_report_to(FILE *out, const verify_entry *e, int64_t now)
 {
-    char where[600];
-    const verify_rec *r = &e->rec;
-    verify_where(where, sizeof(where), r);
+    char where[VERIFY_WHERE_SIZE];
+    verify_where(where, sizeof(where), &e->recs);
     fprintf(out, "gc verify retain: candidate %s at %p: collection %lld "
             "reached it only through %s; collection %lld reached it from "
             "the roots\n", Py_TYPE(e->op)->tp_name, (void *)e->op,
-            (long long)r->collection, where, (long long)now);
+            (long long)e->recs.rec[0].collection, where, (long long)now);
 }
 
 static void
@@ -2610,12 +2641,12 @@ _PyGC_TrapUse(PyObject *op, const char *use)
             continue;
         }
         const verify_killed *k = &ts->quarantine[i].rec;
-        char where[600];
-        verify_where(where, sizeof(where), &k->rec);
+        static char where[VERIFY_WHERE_SIZE];  // not on a deep stack
+        verify_where(where, sizeof(where), &k->recs);
         fprintf(stderr, "gc verify kill: %s of the %s at %p, which "
                 "collection %lld killed: it was reached only through %s; "
                 "the last collection was %lld\n", use, k->type, (void *)op,
-                (long long)k->rec.collection, where,
+                (long long)k->recs.rec[0].collection, where,
                 (long long)ts->live_collections);
         fflush(stderr);
         break;
@@ -2715,8 +2746,45 @@ quarantine_release(struct _gc_trace_state *ts, int64_t upto)
 }
 #endif
 
+/* After B: sort what B listed, and give each object, after the word B
+   marked it from, every other left-out word whose value is the object. */
+static void
+verify_other_words(trace_t *t)
+{
+    qsort(t->newq, t->nnewq, sizeof(verify_entry), verify_entry_cmp);
+    for (size_t i = 0; i < t->ndeferred; i++) {
+        PyObject *op = live_lookup(t, t->deferred[i].value, 1);
+        if (op == NULL) {
+            continue;
+        }
+        verify_entry key = {.op = op};
+        verify_entry *e = bsearch(&key, t->newq, t->nnewq,
+                                  sizeof(verify_entry), verify_entry_cmp);
+        if (e == NULL) {
+            continue;
+        }
+        verify_recs *r = &e->recs;
+        int seen = 0;
+        for (int j = 0; j < r->n && !seen; j++) {
+            seen = r->rec[j].word == t->deferred[i].word;
+        }
+        if (seen) {
+            continue;
+        }
+        if (r->n == VERIFY_RECS) {
+            r->more++;
+            continue;
+        }
+        r->rec[r->n++] = (verify_rec){.word = t->deferred[i].word,
+                                      .owner = t->deferred[i].pc,
+                                      .kind = t->deferred[i].kind,
+                                      .collection = r->rec[0].collection};
+    }
+}
+
 /* After A: report the listed objects that A reached, mark B from what A
-   left out, and list what B marked, keeping each object's first record. */
+   left out, and list what B marked, keeping for each object the words
+   that reached it (verify_other_words()). */
 static void
 verify_mark_b(trace_t *t, PyThreadState *tstate)
 {
@@ -2776,6 +2844,7 @@ verify_mark_b(trace_t *t, PyThreadState *tstate)
     if (t->oom) {
         return;
     }
+    verify_other_words(t);
     if (t->verify == VERIFY_KILL) {
         /* What B alone marked dies, as it would with A for the roots; the
            walk tells the sweep which, so that its frees are quarantined. */
@@ -2794,13 +2863,12 @@ verify_mark_b(trace_t *t, PyThreadState *tstate)
         // The records, for the trap's report when a killed object is used
         // (the quarantine copies each when it takes the object's block).
         // Without memory for them, the trap reports no record.
-        qsort(t->newq, t->nnewq, sizeof(verify_entry), verify_entry_cmp);
         ts->killed = malloc(t->nnewq * sizeof(verify_killed) + 1);
         if (ts->killed != NULL) {
             for (size_t i = 0; i < t->nnewq; i++) {
                 verify_killed *k = &ts->killed[i];
                 k->op = t->newq[i].op;
-                k->rec = t->newq[i].rec;
+                k->recs = t->newq[i].recs;
                 PyOS_snprintf(k->type, sizeof(k->type), "%s",
                               Py_TYPE(k->op)->tp_name);
             }
@@ -2811,14 +2879,13 @@ verify_mark_b(trace_t *t, PyThreadState *tstate)
     /* The list is what B marked now, with the older record of an object
        that an earlier collection listed.  What neither marked dies, and
        drops out. */
-    qsort(t->newq, t->nnewq, sizeof(verify_entry), verify_entry_cmp);
     size_t j = 0;
     for (size_t i = 0; i < t->nnewq; i++) {
         while (j < ts->nq && ts->q[j].op < t->newq[i].op) {
             j++;
         }
         if (j < ts->nq && ts->q[j].op == t->newq[i].op) {
-            t->newq[i].rec = ts->q[j].rec;
+            t->newq[i].recs = ts->q[j].recs;
         }
     }
     free(ts->q);

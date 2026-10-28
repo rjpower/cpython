@@ -11,6 +11,7 @@ extern "C" {
 #include "pycore_interpframe_structs.h"  // _PyInterpreterFrame
 #include "pycore_mimalloc.h"        // struct _mimalloc_thread_state
 #include "pycore_qsbr.h"            // struct qsbr
+#include "pycore_gc_walk.h"         // _PyGCDetachRecord
 #include "pycore_structs.h"
 
 
@@ -80,18 +81,16 @@ typedef struct _PyThreadStateImpl {
     struct _mimalloc_thread_state mimalloc;
 #endif
 
-    // The callee-saved registers and stack pointer of the thread when it
-    // last released the GIL, for the tracing verifier's scan of its C stack
-    // (Python/gc_trace.c).  "valid" is cleared when the thread attaches.
+    // The collector's records of this thread's C stack (Python/gc_trace.c,
+    // Python/gc_walk.c).
     struct {
-        uintptr_t regs[24];
-        uintptr_t sp;
-        int valid;
-        // The same, recorded where the live collector was entered, for the
-        // scan of the collecting thread's own stack; entry_sp is 0 outside
-        // a collection.
-        uintptr_t entry_regs[24];
-        uintptr_t entry_sp;
+        // Where the thread last detached (_PyGC_RecordDetach()); "valid"
+        // is cleared when it attaches.
+        _PyGCDetachRecord detach;
+        // Where the live collector was entered, for the walk of the
+        // collecting thread's own stack; entry.sp is 0 outside a
+        // collection.
+        _PyGCContext entry;
         // This thread is running the live collector's queue.
         int running_queue;
         // The innermost eval loop activation, NULL outside the eval loop.

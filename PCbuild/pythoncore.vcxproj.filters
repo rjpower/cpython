@@ -1478,6 +1478,9 @@
     <ClCompile Include="..\Python\gc_trace.c">
       <Filter>Python</Filter>
     </ClCompile>
+    <ClCompile Include="..\Python\gc_walk.c">
+      <Filter>Python</Filter>
+    </ClCompile>
     <ClCompile Include="..\Python\getargs.c">
       <Filter>Python</Filter>
     </ClCompile>

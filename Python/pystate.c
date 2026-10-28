@@ -10,7 +10,7 @@
 #include "pycore_codecs.h"        // _PyCodec_Fini()
 #include "pycore_critical_section.h" // _PyCriticalSection_Resume()
 #include "pycore_dtoa.h"          // _dtoa_state_INIT()
-#include "pycore_gc_trace.h"      // _PyGC_TRACE_CAPTURE_THREAD()
+#include "pycore_gc_walk.h"       // _PyGC_RecordDetach()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interpframe.h"   // _PyThreadState_HasStackSpace()
 #include "pycore_object.h"        // _PyObject_FiniState()
@@ -2097,11 +2097,8 @@ _PyThreadState_Attach(PyThreadState *tstate)
         break;
     }
 
-    // The registers recorded at the last detach are stale now.
-    ((_PyThreadStateImpl *)tstate)->gc_trace.valid = 0;
-    // The conservative scan of the thread state would take them for roots.
-    memset(((_PyThreadStateImpl *)tstate)->gc_trace.regs, 0,
-           sizeof(((_PyThreadStateImpl *)tstate)->gc_trace.regs));
+    // The record of the last detach is stale now.
+    ((_PyThreadStateImpl *)tstate)->gc_trace.detach.valid = 0;
 
     // Resume previous critical section. This acquires the lock(s) from the
     // top-most critical section.
@@ -2124,10 +2121,10 @@ detach_thread(PyThreadState *tstate, int detached_state)
     // XXX assert(tstate_is_alive(tstate) && tstate_is_bound(tstate));
     assert(_Py_atomic_load_int_relaxed(&tstate->state) == _Py_THREAD_ATTACHED);
     assert(tstate == current_fast_get());
-    if (!((_PyThreadStateImpl *)tstate)->gc_trace.valid) {
-        // Not detached through PyEval_SaveThread(), which records the
-        // registers before it changes any.
-        _PyGC_TRACE_CAPTURE_THREAD();
+    if (!((_PyThreadStateImpl *)tstate)->gc_trace.detach.valid) {
+        // Not detached through PyEval_SaveThread() or
+        // PyEval_ReleaseThread(), which record it further out.
+        _PyGC_RecordDetach();
     }
     if (tstate->critical_section != 0) {
         _PyCriticalSection_SuspendAll(tstate);

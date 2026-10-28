@@ -40,6 +40,7 @@
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
 #include "pycore_unicodeobject.h" // _PyUnicode_TransformDecimalAndSpaceToASCII()
 #include "pycore_value.h"         // _PyThreadState_PushValueSpan()
+#include "pycore_gc_walk.h"       // _PyGC_WalkStack()
 
 #include "clinic/_testinternalcapi.c.h"
 
@@ -3568,6 +3569,122 @@ gc_root_stats(PyObject *self, PyObject *Py_UNUSED(args))
     return Py_BuildValue("{sNsN}", "total", t, "last", l);
 }
 
+/* The stack walk's descriptor for a lookup pc (an int), or None. */
+static PyObject *
+frame_descriptor(PyObject *arg)
+{
+    uintptr_t pc = (uintptr_t)PyLong_AsVoidPtr(arg);
+    if (pc == 0 && PyErr_Occurred()) {
+        return NULL;
+    }
+    _PyGCFrameDesc d;
+    if (_PyGC_DecodeDescriptor(pc, &d) < 0) {
+        Py_RETURN_NONE;
+    }
+    PyObject *rules = PyList_New(_PyGC_NSAVED);
+    if (rules == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i < _PyGC_NSAVED; i++) {
+        PyObject *r = d.rule[i] == _PyGC_RULE_OFFSET
+            ? PyLong_FromLong(d.off[i])
+            : PyUnicode_FromString(d.rule[i] == _PyGC_RULE_SAME
+                                   ? "same" : "undefined");
+        if (r == NULL) {
+            Py_DECREF(rules);
+            return NULL;
+        }
+        PyList_SET_ITEM(rules, i, r);
+    }
+    return Py_BuildValue("{sNsNsisisisNsi}",
+                         "start", PyLong_FromVoidPtr((void *)d.func_start),
+                         "end", PyLong_FromVoidPtr((void *)d.func_end),
+                         "cfa_reg", d.cfa_reg, "cfa_off", d.cfa_off,
+                         "ra_off", d.ra_off, "saved", rules,
+                         "extension", d.extension);
+}
+
+static PyValue
+gc_frame_descriptor(PyObject *self, PyValue arg)
+{
+    PyObject *op = PyValue_Object(arg);
+    if (op == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(frame_descriptor(op));
+}
+
+struct walk_record {
+    PyObject *frames;
+    int failed;
+};
+
+static void
+walk_record_scan(void *arg, uintptr_t start, uintptr_t end)
+{
+}
+
+static void
+walk_record_frame(void *arg, uintptr_t pc, uintptr_t sp, uintptr_t cfa,
+                  int cls)
+{
+    struct walk_record *r = arg;
+    if (r->failed) {
+        return;
+    }
+    PyObject *item = Py_BuildValue("(NNNi)", PyLong_FromVoidPtr((void *)pc),
+                                   PyLong_FromVoidPtr((void *)sp),
+                                   PyLong_FromVoidPtr((void *)cfa), cls);
+    if (item == NULL || PyList_Append(r->frames, item) < 0) {
+        r->failed = 1;
+    }
+    Py_XDECREF(item);
+}
+
+/* Walk this thread's stack from here: a list of (pc, sp, cfa, class) and
+   whether the walk fell back. */
+static PyObject *
+gc_walk_here(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    struct walk_record r = {PyList_New(0), 0};
+    if (r.frames == NULL) {
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    _PyGCWalk w = {
+        .scan = walk_record_scan,
+        .frame = walk_record_frame,
+        .arg = &r,
+        .top = ts->c_stack_top,
+        .activations = ts->gc_trace.activation,
+    };
+    _PyGCContext ctx;
+    _PyGC_CaptureCaller(&ctx);
+    int fell_back = _PyGC_WalkStack(&w, &ctx);
+    if (r.failed) {
+        Py_DECREF(r.frames);
+        return NULL;
+    }
+    PyObject *acts = PyList_New(0);
+    if (acts == NULL) {
+        Py_DECREF(r.frames);
+        return NULL;
+    }
+    for (_PyEvalActivation *a = ts->gc_trace.activation; a; a = a->prev) {
+        PyObject *item = Py_BuildValue("(NN)", PyLong_FromVoidPtr((void *)a->lo),
+                                       PyLong_FromVoidPtr((void *)a->hi));
+        if (item == NULL || PyList_Append(acts, item) < 0) {
+            Py_XDECREF(item);
+            Py_DECREF(acts);
+            Py_DECREF(r.frames);
+            return NULL;
+        }
+        Py_DECREF(item);
+    }
+    return Py_BuildValue("(NiN)", r.frames, fell_back, acts);
+}
+
 /* Is op reached from the thread states' roots, which hold the value
    roots and spans?  -1 on error. */
 static int
@@ -3862,6 +3979,8 @@ static PyMethodDef module_functions[] = {
     {"gc_verify_count", gc_verify_count, METH_NOARGS},
     {"gc_live_roots_of", _PyCFunction_CAST(gc_live_roots_of), METH_O},
     {"test_value_spans", test_value_spans, METH_NOARGS},
+    {"gc_frame_descriptor", _PyCFunction_CAST(gc_frame_descriptor), METH_O},
+    {"gc_walk_here", gc_walk_here, METH_NOARGS},
     {"gc_root_stats", gc_root_stats, METH_NOARGS},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
     {"gc_raw_block_is_object", _PyCFunction_CAST(gc_raw_block_is_object), METH_O},
@@ -4015,6 +4134,9 @@ module_exec(PyObject *module)
         return 1;
     }
     if (_PyTestInternalCapi_Init_Tuple(module) < 0) {
+        return 1;
+    }
+    if (_PyTestInternalCapi_Init_GCWalk(module) < 0) {
         return 1;
     }
     if (_PyTestInternalCapi_Init_TypeCache(module) < 0) {

@@ -280,7 +280,7 @@ typedef struct {
     X(fallbacks) X(precise_ns) X(stack_ns) X(data_ns) X(structs_ns) \
     X(roots_ns)
 
-typedef struct {
+typedef struct _PyGCRootStats {
 #define _PyGC_ROOT_STATS_FIELD(name) int64_t name;
     _PyGC_ROOT_STATS_FIELDS(_PyGC_ROOT_STATS_FIELD)
 #undef _PyGC_ROOT_STATS_FIELD
@@ -305,11 +305,9 @@ typedef struct {
  * nothing listed or flagged, if the collector's own memory ran out. */
 extern int _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res);
 
-/* Record the caller's callee-saved registers and stack pointer as the place
- * the collection was entered: the mark scans the calling thread's stack from
- * there up, not from its own frame, below which lie stale words.  Call it
- * first; reset gc_trace.entry_sp to the value it had before when done. */
-extern void _PyGC_TraceCaptureEntry(void);
+/* The interpreter's descriptor cache for the stack walk (Python/gc_walk.c),
+ * or NULL if the collector's state cannot be allocated. */
+extern struct _PyGCWalkCache *_PyGC_LiveWalkCache(PyInterpreterState *interp);
 
 /* The classes of roots (_PyGC_TRACE_ROOT_*) that each alone reach the object
  * at addr, or -1.  For debugging; export for _testinternalcapi. */
@@ -445,16 +443,6 @@ extern void _PyGC_LiveGetStats(PyInterpreterState *interp,
                                double *pause_max);
 
 
-/* Record the calling thread's callee-saved registers and stack pointer in
- * its thread state, before it releases the GIL, so that a collection in
- * another thread can scan them.  It must be called before the caller
- * changes any callee-saved register, so call it first. */
-#if defined(WITH_MIMALLOC)
-PyAPI_FUNC(void) _PyGC_TraceCaptureThread(void);
-#  define _PyGC_TRACE_CAPTURE_THREAD() _PyGC_TraceCaptureThread()
-#else
-#  define _PyGC_TRACE_CAPTURE_THREAD() ((void)0)
-#endif
 
 #ifdef __cplusplus
 }

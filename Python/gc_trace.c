@@ -338,6 +338,7 @@ typedef struct {
     int scan_mem;         // follow words into mem heap blocks
     int scan_class;       // _PyGC_SCAN_* of the words being scanned
     _PyGCRootStats *stats;  // the live mark's counters, or NULL
+    _PyGCWalkCache *walk_cache;  // the stack walk's descriptors, or NULL
     addrset mem_scanned;  // mem blocks queued for scanning
     uintptr_t *mem_stack; // (start, end, class) of blocks to scan
     size_t mem_sp;
@@ -969,36 +970,6 @@ scan_queued(trace_t *t)
     t->scan_class = scan_class;
 }
 
-/* --- register capture ---------------------------------------------------- */
-
-Py_NO_INLINE void
-_PyGC_TraceCaptureThread(void)
-{
-    uintptr_t regs[24] = {0};
-    _PyGC_CaptureRegisters(regs);
-    PyThreadState *tstate = _PyThreadState_GET();
-    if (tstate == NULL) {
-        return;
-    }
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
-    memcpy(ts->gc_trace.regs, regs, sizeof(regs));
-    // This frame and the ones above it are live while the thread is
-    // detached; scanning from here also covers the caller's spills.
-    ts->gc_trace.sp = (uintptr_t)__builtin_frame_address(0);
-    ts->gc_trace.valid = 1;
-}
-
-Py_NO_INLINE void
-_PyGC_TraceCaptureEntry(void)
-{
-    uintptr_t regs[24] = {0};
-    _PyGC_CaptureRegisters(regs);
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
-    memcpy(ts->gc_trace.entry_regs, regs, sizeof(regs));
-    ts->gc_trace.entry_sp = (uintptr_t)__builtin_frame_address(0);
-}
-
-
 /* --- conservative roots ----------------------------------------------------- */
 
 static uintptr_t
@@ -1050,17 +1021,58 @@ scan_stack(trace_t *t, PyThreadState *p, uintptr_t start, uintptr_t top)
     }
 }
 
+#ifdef _PyGC_WALK
+static void
+walk_scan(void *arg, uintptr_t start, uintptr_t end)
+{
+    scan_range((trace_t *)arg, start, end);
+}
+#endif
+
+/* Scan p's stack outward from ctx up to top: walked where the walk is on
+   (Python/gc_walk.c), so that only what opaque frames own is scanned;
+   elsewhere the registers and the whole stack conservatively, the eval
+   loop's activations excepted. */
+static void
+scan_from(trace_t *t, PyThreadState *p, const _PyGCContext *ctx,
+          uintptr_t top)
+{
+#ifdef _PyGC_WALK
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)p;
+    if (t->stats != NULL) {
+        t->stats->threads++;
+    }
+    t->scan_class = _PyGC_SCAN_STACK;
+    _PyGCWalk w = {
+        .scan = walk_scan,
+        .arg = t,
+        .cache = t->walk_cache,
+        .top = top,
+        .activations = ts->gc_trace.activation,
+        .activations_opaque = p == _PyThreadState_GET()
+                              && ts->gc_trace.scan_activations,
+        .stats = t->stats,
+    };
+    (void)_PyGC_WalkStack(&w, ctx);
+#else
+    t->scan_class = _PyGC_SCAN_REGS;
+    scan_range(t, (uintptr_t)ctx->regs,
+               (uintptr_t)(ctx->regs + _PyGC_NSAVED));
+    scan_stack(t, p, ctx->sp, top);
+#endif
+}
+
 /* This thread's stack and registers.  Not inlined, so that its frame and
    everything below the caller's are on the stack it scans. */
 static Py_NO_INLINE void
 scan_current_thread(trace_t *t, PyThreadState *tstate)
 {
-    uintptr_t regs[24] = {0};
-    _PyGC_CaptureRegisters(regs);
-    t->scan_class = _PyGC_SCAN_REGS;
-    scan_range(t, (uintptr_t)regs, (uintptr_t)(regs + 24));
+    // Not in this frame, which is opaque: its words are scanned, and the
+    // context holds the values of registers that precise frames own.
+    static _Py_thread_local _PyGCContext ctx;
+    _PyGC_CaptureCaller(&ctx);
     uintptr_t top = stack_top(tstate);
-    uintptr_t here = (uintptr_t)__builtin_frame_address(0);
+    uintptr_t here = ctx.sp;
 #if defined(HAVE_PTHREAD_GETATTR_NP) && defined(__GLIBC__)
     if (top == 0 || top < here) {
         pthread_attr_t attr;
@@ -1074,7 +1086,7 @@ scan_current_thread(trace_t *t, PyThreadState *tstate)
         }
     }
 #endif
-    scan_stack(t, tstate, here, top);
+    scan_from(t, tstate, &ctx, top);
 }
 
 /* C code keeps references in PyMem memory that only its stack frame
@@ -1093,18 +1105,34 @@ scan_threads(trace_t *t, PyThreadState *current)
 }
 
 /* The stack and registers of another thread, as it recorded them when it
-   released the GIL. */
+   detached (_PyGC_RecordDetach()): the capture's registers and the stack
+   up to its innermost precise frame P conservatively, then the walk from
+   P.  The stack of a thread that has exited, or of one with no P, is
+   scanned conservatively, clipped to the readable mappings. */
 static void
-scan_other_thread(trace_t *t, PyThreadState *p)
+scan_other_thread(trace_t *t, PyThreadState *p, int alive)
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)p;
-    if (!ts->gc_trace.valid) {
+    _PyGCDetachRecord *rec = &ts->gc_trace.detach;
+    if (!rec->valid) {
         return;  // never attached
     }
+    uintptr_t top = stack_top(p);
     t->scan_class = _PyGC_SCAN_REGS;
-    scan_range(t, (uintptr_t)ts->gc_trace.regs,
-               (uintptr_t)(ts->gc_trace.regs + 24));
-    scan_stack(t, p, ts->gc_trace.sp, stack_top(p));
+    scan_range(t, (uintptr_t)rec->cap.regs,
+               (uintptr_t)(rec->cap.regs + _PyGC_NSAVED));
+#ifdef _PyGC_WALK
+    if (alive && rec->has_p && rec->cap.sp <= rec->p.sp && rec->p.sp < top
+        && (t->readable.n == 0
+            || is_readable(t, rec->cap.sp, top - rec->cap.sp)))
+    {
+        t->scan_class = _PyGC_SCAN_STACK;
+        scan_range(t, rec->cap.sp, rec->p.sp);
+        scan_from(t, p, &rec->p, top);
+        return;
+    }
+#endif
+    scan_stack(t, p, rec->cap.sp, top);
 }
 
 /* The thread states that finalization unlinked, whose daemon threads may
@@ -1121,7 +1149,7 @@ scan_threads_only(trace_t *t, PyThreadState *current)
     scan_current_thread(t, current);
     _Py_FOR_EACH_TSTATE_UNLOCKED(t->interp, p) {
         if (p != current) {
-            scan_other_thread(t, p);
+            scan_other_thread(t, p, 1);
         }
     }
 }
@@ -1164,8 +1192,17 @@ scan_struct_except(trace_t *t, void *p, size_t size, struct llist_node *head)
 static void
 scan_thread_struct(trace_t *t, PyThreadState *p)
 {
-    scan_struct_except(t, p, sizeof(_PyThreadStateImpl),
-                       &((_PyThreadStateImpl *)p)->asyncio_tasks_head);
+    /* Not the walk's records: the copies of registers that precise frames
+       own would be taken for roots. */
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)p;
+    uintptr_t skip_lo = (uintptr_t)&ts->gc_trace.detach;
+    uintptr_t skip_hi = (uintptr_t)(&ts->gc_trace.entry + 1);
+    uintptr_t head = (uintptr_t)&ts->asyncio_tasks_head;
+    uintptr_t head_end = head + sizeof(ts->asyncio_tasks_head);
+    assert(head_end <= skip_lo);
+    scan_range(t, (uintptr_t)p, head);
+    scan_range(t, head_end, skip_lo);
+    scan_range(t, skip_hi, (uintptr_t)p + sizeof(_PyThreadStateImpl));
     /* The data stack.  A frame that is returning is unlinked from
      * current_frame before its slots are cleared, and a finalizer that
      * clearing a slot triggers can collect while the later slots still
@@ -1944,7 +1981,8 @@ live_other_threads(trace_t *t, PyThreadState *current)
 {
     for (int d = 0; d < t->ndomain; d++) {
         _Py_FOR_EACH_TSTATE_UNLOCKED(t->domain[d], p) {
-            if (p != current && ((_PyThreadStateImpl *)p)->gc_trace.valid) {
+            if (p != current
+                && ((_PyThreadStateImpl *)p)->gc_trace.detach.valid) {
                 return 1;
             }
         }
@@ -2016,13 +2054,13 @@ live_mark_roots(trace_t *t, PyThreadState *tstate)
        registers: the others when they released the GIL, this one where the
        collection was entered (_PyGC_TraceCaptureEntry()). */
     if (roots & _PyGC_TRACE_ROOT_STACKS) {
+        if (t->walk_cache != NULL) {
+            _PyGC_WalkCacheCheck(t->walk_cache, stats);
+        }
         t->scan_mem = 1;
         _PyThreadStateImpl *cur = (_PyThreadStateImpl *)tstate;
-        if (cur->gc_trace.entry_sp != 0) {
-            t->scan_class = _PyGC_SCAN_REGS;
-            scan_range(t, (uintptr_t)cur->gc_trace.entry_regs,
-                       (uintptr_t)(cur->gc_trace.entry_regs + 24));
-            scan_stack(t, tstate, cur->gc_trace.entry_sp, stack_top(tstate));
+        if (cur->gc_trace.entry.sp != 0) {
+            scan_from(t, tstate, &cur->gc_trace.entry, stack_top(tstate));
         }
         else {
             scan_current_thread(t, tstate);
@@ -2031,11 +2069,11 @@ live_mark_roots(trace_t *t, PyThreadState *tstate)
             t->interp = t->domain[d];
             _Py_FOR_EACH_TSTATE_UNLOCKED(t->interp, p) {
                 if (p != tstate) {
-                    scan_other_thread(t, p);
+                    scan_other_thread(t, p, 1);
                 }
             }
             for (PyThreadState *p = kept_threads(t->interp); p; p = p->next) {
-                scan_other_thread(t, p);
+                scan_other_thread(t, p, 0);
             }
         }
         t->scan_mem = 0;
@@ -2122,6 +2160,7 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
         .roots = _PyGC_TRACE_ROOT_ALL,
         .debug_offset = _PyMem_DebugEnabled() ? 2 * sizeof(size_t) : 0,
         .stats = &res->roots,
+        .walk_cache = _PyGC_LiveWalkCache(tstate->interp),
     };
     int rc = -1;
     if (addrset_init(&t.mem_scanned, 256) < 0) {
@@ -2242,6 +2281,7 @@ _PyGC_TraceLiveRootsOf(PyThreadState *tstate, uintptr_t addr)
             .live = 1,
             .roots = 1u << bit,
             .debug_offset = _PyMem_DebugEnabled() ? 2 * sizeof(size_t) : 0,
+            .walk_cache = _PyGC_LiveWalkCache(tstate->interp),
         };
         if (addrset_init(&t.mem_scanned, 256) < 0) {
             return -1;

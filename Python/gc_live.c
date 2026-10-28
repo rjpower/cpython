@@ -115,6 +115,8 @@ struct _gc_live_state {
     _PyGCRootStats root_total;
     _PyGCRootStats root_last;
     long root_pid;
+    // The stack walk's frame descriptors (Python/gc_walk.c)
+    _PyGCWalkCache walk_cache;
 };
 
 static long
@@ -137,6 +139,14 @@ get_live(PyInterpreterState *interp)
         }
     }
     return interp->gc.live;
+}
+
+/* The interpreter's descriptor cache for the stack walk, or NULL. */
+_PyGCWalkCache *
+_PyGC_LiveWalkCache(PyInterpreterState *interp)
+{
+    struct _gc_live_state *ls = get_live(interp);
+    return ls == NULL ? NULL : &ls->walk_cache;
 }
 
 /* Count one mark's root phase: each mark is charged once, to the
@@ -1259,7 +1269,7 @@ collect_pass(PyThreadState *tstate, _PyGC_Reason reason, int *nfinalized)
     }
     Py_ssize_t n = collect(tstate, reason);
     // A collection that the queue's code triggers records its own entry.
-    ts->gc_trace.entry_sp = 0;
+    ts->gc_trace.entry.sp = 0;
     *nfinalized = get_live(tstate->interp)->no_python ? 0 : run_queue(tstate);
     if (heap != NULL) {
         m->current_object_heap = heap;
@@ -1279,9 +1289,9 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
     // Called again from a gc callback, inside a collection: the outer entry
     // stays, since the mark that may follow is the outer collection's.
-    uintptr_t outer_entry = ts->gc_trace.entry_sp;
-    if (outer_entry == 0) {
-        _PyGC_TraceCaptureEntry();
+    _PyGCContext outer_entry = ts->gc_trace.entry;
+    if (outer_entry.sp == 0) {
+        _PyGC_CaptureCaller(&ts->gc_trace.entry);
     }
     int nfinalized;
     Py_ssize_t n = collect_pass(tstate, reason, &nfinalized);
@@ -1295,20 +1305,15 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
     int later_follows = _PyInterpreterState_GetFinalizing(interp) != NULL
                         && interp->imports.modules != NULL;
     if (nfinalized > 0 && reason != _Py_GC_REASON_HEAP && !later_follows
-        && outer_entry == 0)
+        && outer_entry.sp == 0)
     {
         struct _gc_live_state *ls = get_live(tstate->interp);
-        _PyGC_TraceCaptureEntry();
+        _PyGC_CaptureCaller(&ts->gc_trace.entry);
         ls->skip_verify = 1;
         n += collect_pass(tstate, reason, &nfinalized);
         ls->skip_verify = 0;
     }
-    ts->gc_trace.entry_sp = outer_entry;
-    if (outer_entry == 0) {
-        // The conservative scan of the thread state would take them for
-        // roots.
-        memset(ts->gc_trace.entry_regs, 0, sizeof(ts->gc_trace.entry_regs));
-    }
+    ts->gc_trace.entry = outer_entry;
     return n;
 }
 
@@ -1473,6 +1478,7 @@ _PyGC_Fini(PyInterpreterState *interp)
     struct _gc_live_state *ls = gcstate->live;
     if (ls != NULL) {
         dump_root_stats(interp, ls);
+        _PyGC_WalkCacheFini(&ls->walk_cache);
         gcstate->live = NULL;
         free(ls->immortal);
         free(ls->queue);

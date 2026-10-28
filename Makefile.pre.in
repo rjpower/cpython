@@ -467,6 +467,8 @@ PYTHON_OBJS=	\
 		Python/future.o \
 		Python/gc_live.o \
 		Python/gc_trace.o \
+		Python/gc_walk.o \
+		Python/gc_capture.o \
 		Python/getargs.o \
 		Python/getcompiler.o \
 		Python/getcopyright.o \
@@ -3148,6 +3150,9 @@ config.status:	$(srcdir)/configure
 	$(srcdir)/configure $(CONFIG_ARGS)
 
 .PRECIOUS: config.status $(BUILDPYTHON) Makefile Makefile.pre
+
+Python/gc_capture.o: $(srcdir)/Python/gc_capture.S
+	$(CC) -c $(PY_CORE_CFLAGS) -o $@ $<
 
 Python/asm_trampoline_x86_64.o: $(srcdir)/Python/asm_trampoline_x86_64.S
 	$(CC) -c $(PY_CORE_CFLAGS) -o $@ $<

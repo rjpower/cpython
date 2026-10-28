@@ -1592,6 +1592,104 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertLess(forked["collections"], 20)
 
 
+@unittest.skipUnless(_testinternalcapi is not None
+                     and hasattr(_testinternalcapi, "gc_walk_owners"),
+                     "requires the stack walk (x86-64 ELF, glibc 2.35)")
+class StackWalkTests(unittest.TestCase):
+    # Note 11 section 3: the walk scans what opaque frames own and nothing
+    # that precise frames own.  The fixtures are in
+    # Modules/_testinternalcapi/gc_walk.c.
+
+    ROOT_STACKS = 1 << 5
+
+    def test_fixture_cfi(self):
+        # The fixtures save the registers they keep their values in: the
+        # walk's results below rely on it.
+        import re
+        import shutil
+        import subprocess
+        if shutil.which("readelf") is None or shutil.which("nm") is None:
+            self.skipTest("requires readelf and nm")
+        path = getattr(_testinternalcapi, "__file__", sys.executable)
+        syms = {}
+        for line in subprocess.run(["nm", path], capture_output=True,
+                                   text=True, check=True).stdout.splitlines():
+            parts = line.split()
+            if len(parts) == 3 and re.fullmatch(r"level[0-4]", parts[2]):
+                syms[int(parts[0], 16)] = parts[2]
+        frames = subprocess.run(["readelf", "--debug-dump=frames-interp", path],
+                                capture_output=True, text=True,
+                                check=True).stdout
+        regs = {"level0": "rbx", "level1": "r12", "level2": "r13",
+                "level3": "r14", "level4": "r15"}
+        found = set()
+        for fde in re.split(r"\n(?=[0-9a-f]+ [0-9a-f]+ [0-9a-f]+ FDE)", frames):
+            m = re.search(r"FDE cie=[0-9a-f]+ pc=([0-9a-f]+)\.\.", fde)
+            if not m or int(m.group(1), 16) not in syms:
+                continue
+            name = syms[int(m.group(1), 16)]
+            lines = fde.splitlines()
+            header = next(l for l in lines if l.strip().startswith("LOC"))
+            cols = header.split()
+            self.assertIn(regs[name], cols, name)
+            col = cols.index(regs[name])
+            saved = [l.split()[col] for l in lines[lines.index(header) + 1:]
+                     if len(l.split()) == len(cols)]
+            self.assertTrue(any(v.startswith("c-") for v in saved), name)
+            found.add(name)
+        self.assertEqual(found, set(regs))
+
+    def test_owners(self):
+        # A chain of five frames, each with a sentinel in a different
+        # callee-saved register across the call to the next; the walk scans
+        # a frame's sentinel if and only if the frame is opaque.
+        for precise in ("00000", "01010", "10101", "11111"):
+            with self.subTest(precise=precise):
+                got = _testinternalcapi.gc_walk_owners(precise)
+                self.assertEqual(got[:5], tuple(c == "0" for c in precise))
+                self.assertFalse(got[5])  # no fallback
+
+    def test_fallback(self):
+        # A frame with no unwind information ends the walk: the rest of
+        # the stack and the pending registers are scanned conservatively,
+        # and the fallback counts against the test's range.
+        fell_back, test_fallbacks, found = _testinternalcapi.gc_walk_fallback()
+        self.assertTrue(fell_back)
+        self.assertEqual(test_fallbacks, 1)
+        self.assertTrue(found)
+
+    @threading_helper.requires_working_threading()
+    def test_detached_register(self):
+        # A thread that detaches with an object only in a callee-saved
+        # register: through Py_BEGIN_ALLOW_THREADS, through a helper that
+        # detaches and returns before the thread blocks, and through a swap
+        # to NULL in a function built -O0.  The capture and the stack up to
+        # the innermost precise frame are scanned conservatively.
+        for mode in (0, 1, 2):
+            with self.subTest(mode=mode):
+                _testinternalcapi.gc_walk_reset()
+                result = []
+                t = threading.Thread(target=lambda: result.append(
+                    _testinternalcapi.gc_walk_hold_detached(mode)))
+                t.start()
+                try:
+                    roots, valid, has_p = (
+                        _testinternalcapi.gc_walk_detached_roots())
+                finally:
+                    _testinternalcapi.gc_walk_release()
+                    t.join()
+                self.assertTrue(valid)
+                self.assertTrue(has_p)  # the eval loop's frame, for now
+                self.assertTrue(roots & self.ROOT_STACKS, roots)
+                self.assertEqual(result, [[None]])
+
+    def test_counters(self):
+        gc.collect()
+        last = _testinternalcapi.gc_root_stats()["last"]
+        self.assertGreater(last["frames_walked"], 0)
+        self.assertEqual(last["fallbacks"], 0)
+
+
 class PythonFinalizationTests(unittest.TestCase):
     def test_ast_fini(self):
         # bpo-44184: Regression test for subtype_dealloc() when deallocating

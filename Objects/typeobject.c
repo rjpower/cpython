@@ -984,7 +984,8 @@ set_version_unlocked(PyTypeObject *tp, unsigned int version)
 }
 
 /* Opaque, and Py_NO_INLINE so that no precise caller takes it in: the walk
-   over the subclasses and the watchers' callbacks are not precise. */
+   over the subclasses and the watchers' callbacks are not precise.
+   Removal: rung 3's conversion list. */
 Py_NO_INLINE void
 _PyType_Modified_Unlocked(PyTypeObject *type)
 {
@@ -2886,6 +2887,7 @@ lookup_method_ex(PyObject *self, PyObject *attr, PyValue *Py_GC_SLOTS out,
     _PyValueSpan_AppendObject(&span, (PyObject *)tp);
     int rc = -1;
     _PyType_LookupValueAndVersion(tp, attr, out);
+    _PyGC_INJECT(tstate, _PyGC_SITE_SLOT_LOOKUP);
     if (PyValue_IsNull(*out)) {
         if (raise_attribute_error) {
             PyErr_SetObject(PyExc_AttributeError, attr);
@@ -2933,7 +2935,7 @@ lookup_method(PyObject *self, PyObject *attr, PyValue *Py_GC_SLOTS out)
 }
 
 
-static inline PyObject*
+Py_GC_PRECISE static inline PyObject*
 vectorcall_unbound(PyThreadState *tstate, int unbound, PyObject *func,
                    PyObject *const *args, Py_ssize_t nargs)
 {
@@ -2948,7 +2950,7 @@ vectorcall_unbound(PyThreadState *tstate, int unbound, PyObject *func,
     return _PyObject_VectorcallTstate(tstate, func, args, nargsf, NULL);
 }
 
-static PyObject*
+Py_GC_PRECISE static PyObject*
 call_unbound_noarg(int unbound, PyObject *func, PyObject *self)
 {
     if (unbound) {
@@ -2961,42 +2963,55 @@ call_unbound_noarg(int unbound, PyObject *func, PyObject *self)
 
 // Call the method with the name `attr` on `self`. Returns NULL with an
 // exception set if the method is missing or an error occurs.
-static PyObject *
+Py_GC_PRECISE static PyObject *
 call_method_noarg(PyObject *self, PyObject *attr)
 {
+    // The span: the lookup's value, self and the method's object.
     PyThreadState *tstate = _PyThreadState_GET();
-    _PyValueRoot cref;
-    _PyThreadState_PushValueRoot(tstate, &cref);
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    _PyValueSpan_AppendObject(&span, self);
+    PyObject **funcp = _PyValueSpan_ObjectSlot(&span);
     PyObject *res = NULL;
-    int unbound = lookup_method(self, attr, &cref.value);
+    int unbound = lookup_method(self, attr, &slots[0]);
     if (unbound >= 0) {
-        PyObject *func = _PyValueRoot_Object(&cref);
-        res = call_unbound_noarg(unbound, func, self);
+        *funcp = PyValue_Object(slots[0]);
+        if (*funcp != NULL) {
+            res = call_unbound_noarg(unbound, *funcp, self);
+        }
     }
-    _PyThreadState_PopValueRoot(tstate, &cref);
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
 /* Call the method attr of self's type with the tuple args and the dict
    kwds, and return the result as a value. */
-static PyValue
+Py_GC_PRECISE static PyValue
 call_method_value(PyObject *self, PyObject *attr, PyObject *args,
                   PyObject *kwds)
 {
+    // The span: the lookup's value, then self, args and kwds.
     PyThreadState *tstate = _PyThreadState_GET();
-    _PyValueRoot cref;
-    _PyThreadState_PushValueRoot(tstate, &cref);
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    _PyValueSpan_AppendObject(&span, self);
+    _PyValueSpan_AppendObject(&span, args);
+    _PyValueSpan_AppendObject(&span, kwds);
     PyValue res = PyValue_NULL;
-    int unbound = lookup_method(self, attr, &cref.value);
+    int unbound = lookup_method(self, attr, &slots[0]);
     if (unbound > 0) {
-        res = _PyObject_Call_PrependValue(tstate, cref.value,
+        res = _PyObject_Call_PrependValue(tstate, slots[0],
                                           PyValue_FromObject(self),
                                           args, kwds);
     }
     else if (unbound == 0) {
-        res = _PyObject_CallValue(tstate, cref.value, args, kwds);
+        res = _PyObject_CallValue(tstate, slots[0], args, kwds);
     }
-    _PyThreadState_PopValueRoot(tstate, &cref);
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
@@ -3005,7 +3020,7 @@ call_method_value(PyObject *self, PyObject *attr, PyObject *args,
 
    args is an argument vector of length nargs. The first element in this
    vector is the special object "self" which is used for the method lookup */
-static PyObject *
+Py_GC_PRECISE static PyObject *
 vectorcall_method(PyObject *name, PyObject *const *args, Py_ssize_t nargs)
 {
     assert(nargs >= 1);
@@ -3057,7 +3072,7 @@ vectorcall_method_value(PyObject *name, const PyValue *args, Py_ssize_t nargs)
 
 /* Clone of vectorcall_method() that returns NotImplemented
  * when the lookup fails. */
-static PyObject *
+Py_GC_PRECISE static PyObject *
 vectorcall_maybe(PyThreadState *tstate, PyObject *name,
                  PyObject *const *args, Py_ssize_t nargs)
 {
@@ -3084,55 +3099,67 @@ vectorcall_maybe(PyThreadState *tstate, PyObject *name,
    method is missing or an error occurs.  No exception is set if
    the method is missing. If attr_is_none is not NULL, it is set to 1 if
    the attribute was found and was None, or 0 if it was not found. */
-static PyObject *
+Py_GC_PRECISE static PyObject *
 maybe_call_special_no_args(PyObject *self, PyObject *attr, int *attr_is_none)
 {
+    // The span: the lookup's value, self and the method's object.
     PyThreadState *tstate = _PyThreadState_GET();
-    _PyValueRoot cref;
-    _PyThreadState_PushValueRoot(tstate, &cref);
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    _PyValueSpan_AppendObject(&span, self);
+    PyObject **funcp = _PyValueSpan_ObjectSlot(&span);
 
     PyObject *res = NULL;
-    int unbound = lookup_maybe_method(self, attr, &cref.value);
-    PyObject *func = _PyValueRoot_Object(&cref);
+    int unbound = lookup_maybe_method(self, attr, &slots[0]);
+    *funcp = PyValue_Object(slots[0]);
     if (attr_is_none != NULL) {
-        *attr_is_none = (func == Py_None);
+        *attr_is_none = (*funcp == Py_None);
     }
-    if (func != NULL && (func != Py_None || attr_is_none == NULL)) {
-        res = call_unbound_noarg(unbound, func, self);
+    if (*funcp != NULL && (*funcp != Py_None || attr_is_none == NULL)) {
+        res = call_unbound_noarg(unbound, *funcp, self);
     }
-    _PyThreadState_PopValueRoot(tstate, &cref);
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 maybe_call_special_one_arg(PyObject *self, PyObject *attr, PyObject *arg,
                            int *attr_is_none)
 {
+    // The span: the lookup's value, the argument array (self and arg) and
+    // the method's object.
     PyThreadState *tstate = _PyThreadState_GET();
-    _PyValueRoot cref;
-    _PyThreadState_PushValueRoot(tstate, &cref);
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    _PyValueSpan_AppendObject(&span, self);
+    _PyValueSpan_AppendObject(&span, arg);
+    PyObject **funcp = _PyValueSpan_ObjectSlot(&span);
 
     PyObject *res = NULL;
-    int unbound = lookup_maybe_method(self, attr, &cref.value);
-    PyObject *func = _PyValueRoot_Object(&cref);
+    int unbound = lookup_maybe_method(self, attr, &slots[0]);
+    *funcp = PyValue_Object(slots[0]);
     if (attr_is_none != NULL) {
-        *attr_is_none = (func == Py_None);
+        *attr_is_none = (*funcp == Py_None);
     }
-    if (func != NULL && (func != Py_None || attr_is_none == NULL)) {
-        PyObject *args[] = { self, arg };
-        res = vectorcall_unbound(tstate, unbound, func, args, 2);
+    if (*funcp != NULL && (*funcp != Py_None || attr_is_none == NULL)) {
+        res = vectorcall_unbound(tstate, unbound, *funcp,
+                                 (PyObject *const *)&slots[1], 2);
     }
-    _PyThreadState_PopValueRoot(tstate, &cref);
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-PyObject *
+Py_GC_PRECISE PyObject *
 _PyObject_MaybeCallSpecialNoArgs(PyObject *self, PyObject *attr)
 {
     return maybe_call_special_no_args(self, attr, NULL);
 }
 
-PyObject *
+Py_GC_PRECISE PyObject *
 _PyObject_MaybeCallSpecialOneArg(PyObject *self, PyObject *attr, PyObject *arg)
 {
     return maybe_call_special_one_arg(self, attr, arg, NULL);
@@ -6547,7 +6574,7 @@ type_update_dict(PyTypeObject *type, PyDictObject *dict, PyObject *name,
 /* Opaque, and Py_NO_INLINE so that type_setattro()'s precise frame does not
    take it in: the walk over the subclasses (update_subclasses() and its
    callback) is not precise.  The caller's span holds the type and the
-   name. */
+   name.  Removal: rung 3's conversion list. */
 Py_NO_INLINE static int
 update_slot_after_setattr(PyTypeObject *type, PyObject *name)
 {
@@ -7532,7 +7559,8 @@ differs:
 /* Opaque, and Py_NO_INLINE so that object_set_class()'s precise frame does
    not take it in: the layout checks (compatible_for_assignment() and
    same_slots_added()) and the entry into dict mode are not precise.  The
-   caller's span holds the object and both classes. */
+   caller's span holds the object and both classes.  Removal: rung 3's
+   conversion list. */
 Py_NO_INLINE static int
 object_set_class_world_stopped(PyObject *self, PyTypeObject *newto)
 {
@@ -9514,7 +9542,7 @@ type_ready_publish(PyTypeObject *type, int fix_slots)
 
 /* Opaque, and Py_NO_INLINE so that no precise caller takes it in: a type's
    readiness (type_ready(): the slot inheritance and the dict's fill) is not
-   precise.  It runs once per type. */
+   precise.  It runs once per type.  Removal: rung 3's conversion list. */
 Py_NO_INLINE int
 PyType_Ready(PyTypeObject *type)
 {
@@ -10622,7 +10650,7 @@ FUNCNAME(PyObject *self, PyObject *other) \
 #define SLOT1BIN(FUNCNAME, SLOTNAME, DUNDER, RDUNDER) \
     SLOT1BINFULL(FUNCNAME, FUNCNAME, SLOTNAME, DUNDER, RDUNDER)
 
-static Py_ssize_t
+Py_GC_PRECISE static Py_ssize_t
 slot_sq_length(PyObject *self)
 {
     PyValue stack[1] = {PyValue_FromObject(self)};
@@ -10651,49 +10679,74 @@ slot_sq_length(PyObject *self)
     return len;
 }
 
-static PyObject *
+/* The span is the argument array: self, and the index, which may be a heap
+   int (past int32) that only the array holds. */
+Py_GC_PRECISE static PyObject *
 slot_sq_item(PyObject *self, Py_ssize_t i)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue stack[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, stack);
+    _PyValueSpan_AppendObject(&span, self);
+    PyObject *res = NULL;
     PyValue ival = PyValue_FromLongLong(i);
-    if (PyValue_IsNull(ival)) {
-        return NULL;
+    _PyValueSpan_Append(&span, ival);
+    if (!PyValue_IsNull(ival)) {
+        res = PyValue_Object(
+            vectorcall_method_value(&_Py_ID(__getitem__), stack, 2));
     }
-    PyValue stack[2] = {PyValue_FromObject(self), ival};
-    return PyValue_Object(
-        vectorcall_method_value(&_Py_ID(__getitem__), stack, 2));
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
-static int
+/* The span: the value, then the argument array (self, the index and the
+   value), as slot_sq_item()'s is.  The first slot holds the value while
+   the index is made. */
+Py_GC_PRECISE static int
 slot_sq_ass_item(PyObject *self, Py_ssize_t index, PyObject *value)
 {
-    PyValue stack[3];
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, value);
+    _PyValueSpan_AppendObject(&span, self);
+    const PyValue *stack = &slots[1];
+    int rc = -1;
     PyValue res;
-    PyValue index_value;
-
-    index_value = PyValue_FromLongLong(index);
+    PyValue index_value = PyValue_FromLongLong(index);
+    _PyValueSpan_Append(&span, index_value);
+    _PyValueSpan_AppendObject(&span, value);
     if (PyValue_IsNull(index_value)) {
-        return -1;
+        goto done;
     }
 
-    stack[0] = PyValue_FromObject(self);
-    stack[1] = index_value;
     if (value == NULL) {
         res = vectorcall_method_value(&_Py_ID(__delitem__), stack, 2);
     }
     else {
-        stack[2] = PyValue_FromObject(value);
         res = vectorcall_method_value(&_Py_ID(__setitem__), stack, 3);
     }
 
-    if (PyValue_IsNull(res)) {
-        return -1;
+    if (!PyValue_IsNull(res)) {
+        rc = 0;
     }
-    return 0;
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return rc;
 }
 
-static int
+Py_GC_PRECISE static int
 slot_sq_contains(PyObject *self, PyObject *value)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
+    _PyValueSpan_AppendObject(&span, value);
+    int result = -1;
     int attr_is_none = 0;
     PyObject *res = maybe_call_special_one_arg(self, &_Py_ID(__contains__), value,
                                                &attr_is_none);
@@ -10701,16 +10754,15 @@ slot_sq_contains(PyObject *self, PyObject *value)
         PyErr_Format(PyExc_TypeError,
             "'%.200s' object is not a container",
             Py_TYPE(self)->tp_name);
-        return -1;
     }
-    else if (res == NULL && PyErr_Occurred()) {
-        return -1;
+    else if (res != NULL) {
+        result = PyObject_IsTrue(res);
     }
-    else if (res == NULL) {
-        return (int)_PySequence_IterSearch(self, value, PY_ITERSEARCH_CONTAINS);
+    else if (!PyErr_Occurred()) {
+        result = (int)_PySequence_IterSearch(self, value,
+                                             PY_ITERSEARCH_CONTAINS);
     }
-    int result = PyObject_IsTrue(res);
-    Py_DECREF(res);
+    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
@@ -10848,7 +10900,7 @@ slot_nb_bool(PyObject *self)
 }
 
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 slot_nb_index(PyObject *self)
 {
     PyObject *stack[1] = {self};
@@ -10942,7 +10994,7 @@ slot_tp_hash(PyObject *self)
     return h;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 slot_tp_call(PyObject *self, PyObject *args, PyObject *kwds)
 {
     return call_method_value(self, &_Py_ID(__call__), args, kwds);
@@ -11089,7 +11141,7 @@ static PyObject *name_op[] = {
     &_Py_ID(__ge__),
 };
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 slot_tp_richcompare(PyObject *self, PyObject *other, int op)
 {
     PyObject *res = _PyObject_MaybeCallSpecialOneArg(self, name_op[op], other);
@@ -11102,7 +11154,7 @@ slot_tp_richcompare(PyObject *self, PyObject *other, int op)
     return res;
 }
 
-static int
+Py_GC_PRECISE static int
 has_dunder_getitem(PyObject *self)
 {
     PyThreadState *tstate = _PyThreadState_GET();
@@ -11114,28 +11166,35 @@ has_dunder_getitem(PyObject *self)
     return has_dunder_getitem;
 }
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 slot_tp_iter(PyObject *self)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
     int attr_is_none = 0;
     PyObject *res = maybe_call_special_no_args(self, &_Py_ID(__iter__),
                                                &attr_is_none);
-    if (res != NULL) {
+    if (res != NULL || PyErr_Occurred()) {
+        _PyThreadState_PopValueRoot(tstate, &span);
         return res;
     }
-    else if (PyErr_Occurred()) {
-        return NULL;
-    }
-    else if (attr_is_none || !has_dunder_getitem(self)) {
+    PyObject *iter = NULL;
+    if (attr_is_none || !has_dunder_getitem(self)) {
         PyErr_Format(PyExc_TypeError,
             "'%.200s' object is not iterable",
             Py_TYPE(self)->tp_name);
-        return NULL;
     }
-    return PySeqIter_New(self);
+    else {
+        iter = PySeqIter_New(self);
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return iter;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 slot_tp_iternext(PyObject *self)
 {
     PyValue stack[1] = {PyValue_FromObject(self)};
@@ -11197,7 +11256,7 @@ slot_tp_descr_set(PyObject *self, PyObject *target, PyValue value)
     return PyValue_IsNull(res) ? -1 : 0;
 }
 
-static int
+Py_GC_PRECISE static int
 slot_tp_init(PyObject *self, PyObject *args, PyObject *kwds)
 {
     PyValue res = call_method_value(self, &_Py_ID(__init__), args, kwds);
@@ -11213,56 +11272,64 @@ slot_tp_init(PyObject *self, PyObject *args, PyObject *kwds)
     return 0;
 }
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
+    // The span: the type, args, kwds and __new__.
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *result;
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)type);
+    _PyValueSpan_AppendObject(&span, args);
+    _PyValueSpan_AppendObject(&span, kwds);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    PyObject *result = NULL;
 
-    _PyValueRoot func_ref;
-    _PyThreadState_PushValueRoot(tstate, &func_ref);
-    func_ref.value = PyObject_GetAttrValue(PyValue_FromObject(type), &_Py_ID(__new__));
-    if (PyValue_IsNull(func_ref.value)) {
-        _PyThreadState_PopValueRoot(tstate, &func_ref);
-        return NULL;
+    slots[3] = PyObject_GetAttrValue(PyValue_FromObject((PyObject *)type),
+                                     &_Py_ID(__new__));
+    if (!PyValue_IsNull(slots[3])) {
+        // tp_new returns an object: an inline result of __new__ is boxed.
+        result = PyValue_Object(_PyObject_Call_PrependValue(
+            tstate, slots[3], PyValue_FromObject((PyObject *)type),
+            args, kwds));
     }
-
-    // tp_new returns an object: an inline result of __new__ is boxed.
-    result = PyValue_Object(_PyObject_Call_PrependValue(
-        tstate, func_ref.value, PyValue_FromObject((PyObject *)type),
-        args, kwds));
-    _PyThreadState_PopValueRoot(tstate, &func_ref);
+    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
-static void
+/* The span: the lookup's value, self, the saved exception and __del__'s
+   object. */
+Py_GC_PRECISE static void
 slot_tp_finalize(PyObject *self)
 {
-    /* Save the current exception, if any. */
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *exc = _PyErr_GetRaisedException(tstate);
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    _PyValueSpan_AppendObject(&span, self);
+    PyObject **excp = _PyValueSpan_ObjectSlot(&span);
+    PyObject **delp = _PyValueSpan_ObjectSlot(&span);
 
-    _PyValueRoot cref;
-    _PyThreadState_PushValueRoot(tstate, &cref);
+    /* Save the current exception, if any. */
+    *excp = _PyErr_GetRaisedException(tstate);
 
     /* Execute __del__ method, if any. */
-    int unbound = lookup_maybe_method(self, &_Py_ID(__del__), &cref.value);
+    int unbound = lookup_maybe_method(self, &_Py_ID(__del__), &slots[0]);
     if (unbound >= 0) {
-        PyObject *del = _PyValueRoot_Object(&cref);
-        PyObject *res = call_unbound_noarg(unbound, del, self);
+        *delp = PyValue_Object(slots[0]);
+        PyObject *res = *delp == NULL ? NULL
+                        : call_unbound_noarg(unbound, *delp, self);
         if (res == NULL) {
             PyErr_FormatUnraisable("Exception ignored while "
-                                   "calling deallocator %R", del);
-        }
-        else {
-            Py_DECREF(res);
+                                   "calling deallocator %R", *delp);
         }
     }
 
-    _PyThreadState_PopValueRoot(tstate, &cref);
-
     /* Restore the saved exception. */
-    _PyErr_SetRaisedException(tstate, exc);
+    _PyErr_SetRaisedException(tstate, *excp);
+    _PyThreadState_PopValueRoot(tstate, &span);
 }
 
 typedef struct _PyBufferWrapper {
@@ -11346,53 +11413,59 @@ PyTypeObject _PyBufferWrapper_Type = {
     .tp_as_buffer = &bufferwrapper_as_buffer,
 };
 
-static int
+/* The span: the argument array (self and the flags as an int), then the
+   memoryview __buffer__ returns. */
+Py_GC_PRECISE static int
 slot_bf_getbuffer(PyObject *self, Py_buffer *buffer, int flags)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
     PyObject *flags_obj = PyLong_FromLong(flags);
+    _PyValueSpan_AppendObject(&span, flags_obj);
+    PyObject **retp = _PyValueSpan_ObjectSlot(&span);
+    int rc = -1;
     if (flags_obj == NULL) {
-        return -1;
+        goto done;
     }
-    PyBufferWrapper *wrapper = NULL;
-    PyObject *stack[2] = {self, flags_obj};
-    PyObject *ret = vectorcall_method(&_Py_ID(__buffer__), stack, 2);
-    if (ret == NULL) {
-        goto fail;
+    *retp = vectorcall_method(&_Py_ID(__buffer__),
+                              (PyObject *const *)&slots[0], 2);
+    if (*retp == NULL) {
+        goto done;
     }
-    if (!PyMemoryView_Check(ret)) {
+    if (!PyMemoryView_Check(*retp)) {
         PyErr_Format(PyExc_TypeError,
                      "%T.__buffer__() must return a memoryview, not %T",
-                     self, ret);
-        goto fail;
+                     self, *retp);
+        goto done;
     }
 
-    if (PyObject_GetBuffer(ret, buffer, flags) < 0) {
-        goto fail;
+    if (PyObject_GetBuffer(*retp, buffer, flags) < 0) {
+        goto done;
     }
-    assert(buffer->obj == ret);
+    assert(buffer->obj == *retp);
 
-    wrapper = PyObject_GC_New(PyBufferWrapper, &_PyBufferWrapper_Type);
+    PyBufferWrapper *wrapper = PyObject_GC_New(PyBufferWrapper,
+                                               &_PyBufferWrapper_Type);
     if (wrapper == NULL) {
         PyBuffer_Release(buffer);
-        goto fail;
+        goto done;
     }
-    wrapper->mv = ret;
+    wrapper->mv = *retp;
     wrapper->obj = Py_NewRef(self);
     _PyObject_GC_TRACK(wrapper);
 
     buffer->obj = (PyObject *)wrapper;
-    Py_DECREF(ret);
-    Py_DECREF(flags_obj);
-    return 0;
-
-fail:
-    Py_XDECREF(wrapper);
-    Py_XDECREF(ret);
-    Py_DECREF(flags_obj);
-    return -1;
+    rc = 0;
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return rc;
 }
 
-static releasebufferproc
+/* The callers anchor self. */
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static releasebufferproc
 releasebuffer_maybe_call_super_unlocked(PyObject *self, Py_buffer *buffer)
 {
     PyTypeObject *self_type = Py_TYPE(self);
@@ -11406,8 +11479,10 @@ releasebuffer_maybe_call_super_unlocked(PyObject *self, Py_buffer *buffer)
     Py_ssize_t i;
 
     /* No need to check the last one: it's gonna be skipped anyway.  */
+    // An MRO holds only types, so its items are read unboxed.
     for (i = 0;  i < n -1; i++) {
-        if ((PyObject *)(self_type) == PyTuple_GET_ITEM(mro, i))
+        if ((PyObject *)(self_type)
+            == PyValue_ObjectBorrow(PyTuple_GET_VALUE(mro, i)))
             break;
     }
     i++;  /* skip self_type */
@@ -11415,7 +11490,7 @@ releasebuffer_maybe_call_super_unlocked(PyObject *self, Py_buffer *buffer)
         return NULL;
 
     for (; i < n; i++) {
-        PyObject *obj = PyTuple_GET_ITEM(mro, i);
+        PyObject *obj = PyValue_ObjectBorrow(PyTuple_GET_VALUE(mro, i));
         if (!PyType_Check(obj)) {
             continue;
         }
@@ -11430,7 +11505,8 @@ releasebuffer_maybe_call_super_unlocked(PyObject *self, Py_buffer *buffer)
     return NULL;
 }
 
-static void
+/* The caller, slot_bf_releasebuffer(), anchors self. */
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static void
 releasebuffer_maybe_call_super(PyObject *self, Py_buffer *buffer)
 {
     releasebufferproc base_releasebuffer;
@@ -11444,16 +11520,24 @@ releasebuffer_maybe_call_super(PyObject *self, Py_buffer *buffer)
     }
 }
 
-static void
+/* The span: the saved exception, then the argument array (self and the
+   memoryview). */
+Py_GC_PRECISE static void
 releasebuffer_call_python(PyObject *self, Py_buffer *buffer)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    PyObject **excp = _PyValueSpan_ObjectSlot(&span);
+    _PyValueSpan_AppendObject(&span, self);
+    PyObject **mvp = _PyValueSpan_ObjectSlot(&span);
     // bf_releasebuffer may be called while an exception is already active.
     // We have no way to report additional errors up the stack, because
     // this slot returns void, so we simply stash away the active exception
     // and restore it after the call to Python returns.
-    PyObject *exc = PyErr_GetRaisedException();
+    *excp = PyErr_GetRaisedException();
 
-    PyObject *mv;
     bool is_buffer_wrapper = Py_TYPE(buffer->obj) == &_PyBufferWrapper_Type;
     if (is_buffer_wrapper) {
         // Make sure we pass the same memoryview to
@@ -11462,13 +11546,13 @@ releasebuffer_call_python(PyObject *self, Py_buffer *buffer)
         if (bw->mv == NULL) {
             goto end;
         }
-        mv = Py_NewRef(bw->mv);
+        *mvp = bw->mv;
     }
     else {
         // This means we are not dealing with a memoryview returned
         // from a Python __buffer__ function.
-        mv = PyMemoryView_FromBuffer(buffer);
-        if (mv == NULL) {
+        *mvp = PyMemoryView_FromBuffer(buffer);
+        if (*mvp == NULL) {
             PyErr_FormatUnraisable("Exception ignored in bf_releasebuffer of %s", Py_TYPE(self)->tp_name);
             goto end;
         }
@@ -11477,30 +11561,26 @@ releasebuffer_call_python(PyObject *self, Py_buffer *buffer)
         // (e.g., by doing .cast()). This is necessary to ensure
         // no Python code retains a reference to the to-be-released
         // buffer.
-        ((PyMemoryViewObject *)mv)->flags |= _Py_MEMORYVIEW_RESTRICTED;
+        ((PyMemoryViewObject *)*mvp)->flags |= _Py_MEMORYVIEW_RESTRICTED;
     }
-    PyObject *stack[2] = {self, mv};
-    PyObject *ret = vectorcall_method(&_Py_ID(__release_buffer__), stack, 2);
+    PyObject *ret = vectorcall_method(&_Py_ID(__release_buffer__),
+                                      (PyObject *const *)&slots[1], 2);
     if (ret == NULL) {
         PyErr_FormatUnraisable("Exception ignored in __release_buffer__ of %s", Py_TYPE(self)->tp_name);
     }
-    else {
-        Py_DECREF(ret);
-    }
     if (!is_buffer_wrapper) {
-        PyObject *res = PyObject_CallMethodNoArgs(mv, &_Py_ID(release));
+        // The argument array is the memoryview's slot.
+        PyObject *res = PyObject_VectorcallMethod(
+            &_Py_ID(release), (PyObject *const *)&slots[2], 1, NULL);
         if (res == NULL) {
             PyErr_FormatUnraisable("Exception ignored in bf_releasebuffer of %s", Py_TYPE(self)->tp_name);
         }
-        else {
-            Py_DECREF(res);
-        }
     }
-    Py_DECREF(mv);
 end:
     assert(!PyErr_Occurred());
 
-    PyErr_SetRaisedException(exc);
+    PyErr_SetRaisedException(*excp);
+    _PyThreadState_PopValueRoot(tstate, &span);
 }
 
 /*
@@ -11514,38 +11594,53 @@ end:
  * wrap_releasebuffer(), which doesn't call the bf_releasebuffer slot
  * directly but instead simply releases the associated memoryview.
  */
-static void
+Py_GC_PRECISE static void
 slot_bf_releasebuffer(PyObject *self, Py_buffer *buffer)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
     releasebuffer_call_python(self, buffer);
     releasebuffer_maybe_call_super(self, buffer);
+    _PyThreadState_PopValueRoot(tstate, &span);
 }
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 slot_am_generic(PyObject *self, PyObject *name)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
+    _PyValueSpan_AppendObject(&span, name);
     PyObject *res = _PyObject_MaybeCallSpecialNoArgs(self, name);
-    if (res == NULL && !PyErr_Occurred()) {
-        PyErr_Format(PyExc_AttributeError,
-            "object %.50s does not have %U method",
-            Py_TYPE(self)->tp_name, name);
+    if (res != NULL || PyErr_Occurred()) {
+        _PyThreadState_PopValueRoot(tstate, &span);
+        return res;
     }
-    return res;
+    PyErr_Format(PyExc_AttributeError,
+        "object %.50s does not have %U method",
+        Py_TYPE(self)->tp_name, name);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return NULL;
 }
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 slot_am_await(PyObject *self)
 {
     return slot_am_generic(self, &_Py_ID(__await__));
 }
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 slot_am_aiter(PyObject *self)
 {
     return slot_am_generic(self, &_Py_ID(__aiter__));
 }
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 slot_am_anext(PyObject *self)
 {
     return slot_am_generic(self, &_Py_ID(__anext__));

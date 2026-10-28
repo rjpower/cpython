@@ -79,14 +79,15 @@ OUTLINED_OPAQUE = {
         "(finding B, note 11 section 8.2)",
     "update_slot_after_setattr":
         "Py_NO_INLINE: the slot update's walk over the subclasses, "
-        "update_subclasses() and its callback, is not precise",
+        "update_subclasses() and its callback, is not precise; removal: "
+        "rung 3's conversion list",
     "object_set_class_world_stopped":
         "Py_NO_INLINE: __class__ assignment's layout checks and its entry "
-        "into dict mode are not precise",
+        "into dict mode are not precise; removal: rung 3's conversion list",
     "fromitems_setitem":
         "Py_NO_INLINE: the dict's insertion core, setitem_value_lock_held() "
         "with the key's hash and insertdict(), is not precise "
-        "(Objects/dictobject.c)",
+        "(Objects/dictobject.c); removal: rung 3's conversion list",
     "vectorcall_call_dict":
         "opaque until _PyStack_UnpackDict() returns its names in a span "
         "(Objects/call.c)",

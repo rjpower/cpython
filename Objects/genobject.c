@@ -1112,17 +1112,25 @@ gen_getstate(PyObject *self, void *Py_UNUSED(ignored))
     return PyValue_FromResult(state_strings[frame_state]);
 }
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 _gen_getframe(PyGenObject *gen, const char *const name)
 {
+    // The span holds the generator, whose frame is read after the audit
+    // hook runs.
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)gen);
+    PyObject *frame = NULL;
     if (PySys_Audit("object.__getattr__", "Os", gen, name) < 0) {
-        return NULL;
+        goto done;
     }
     int8_t frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
     if (FRAME_STATE_FINISHED(frame_state)) {
-        Py_RETURN_NONE;
+        frame = Py_None;
+        goto done;
     }
-    PyObject *frame = NULL;
     Py_BEGIN_CRITICAL_SECTION(gen);
     frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
     if (FRAME_STATE_FINISHED(frame_state)) {
@@ -1132,10 +1140,12 @@ _gen_getframe(PyGenObject *gen, const char *const name)
         frame = _Py_XNewRef((PyObject *)_PyFrame_GetFrameObject(&gen->gi_iframe));
     }
     Py_END_CRITICAL_SECTION();
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return frame;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 gen_getframe(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
@@ -1475,7 +1485,7 @@ coro_await(PyObject *coro)
     return (PyObject *)cw;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 cr_getframe(PyObject *coro, void *Py_UNUSED(ignored))
 {
     return PyValue_FromResult(_gen_getframe(_PyGen_CAST(coro), "cr_frame"));
@@ -2012,7 +2022,7 @@ done:
     return result;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 ag_getframe(PyObject *ag, void *Py_UNUSED(ignored))
 {
     return PyValue_FromResult(_gen_getframe((PyGenObject *)ag, "ag_frame"));

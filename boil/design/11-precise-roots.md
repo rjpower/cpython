@@ -789,6 +789,7 @@ sites (`_PyGC_SITE_*`, Include/internal/pycore_tstate.h; 0 is none, and
 | 10 | SETTER_BOX | `_testinternalcapi`'s `SetterBox` setter, between its box and the store |
 | 11 | MATCH_ARGS | `_PyEval_MatchClass()`, after the `__match_args__` lookup |
 | 12 | UNPACK_DICT | `_PyStack_KwNames()`, after the names' allocation |
+| 13 | SLOT_LOOKUP | `lookup_method_ex()`, after a slot function's method lookup (10a rung 2b item 5) |
 
 ### 8.4 New tests
 
@@ -863,7 +864,7 @@ reviewed work doc (`boil/design/work/10a-<n>.md`) and ends at gate level 3
 | 1 | 2.5 | The C mode (2.1) and its negative tests, first; the walk (3.1 to 3.4), the capture stub and detach unwind, classification, the loader generation; the data-stack and chain visits, the entry visitor and the return order (4.3, 4.4); the inline audit; kill and retain modes, injection and stress; then `Py_GC_PRECISE` on the eval loop, the handlers and the entry paths, each passing the C mode; allocations as safepoints; activations, clears, `_PyGC_CLEAR_ARRAY` and the inline full scan deleted | the negative tests; the C mode on the eval loop's hand-written parts; the inline audit; the compiled-stack walk tests; the injection tests; the probe; test_gc; test_weakref, test_generators, test_coroutines, test_asyncgen, test_capi, test_ctypes; the loader test; both suites; stress on the rung's set |
 | 2 | 1 | The ceval.c helpers and the call layer precise, with spans and `Py_GC_ARGS_ANCHORED`; the 8.2 skips removed | the C mode on call.c alone; the borrowing test; the probe's call-layer cases; test_call, test_capi, test_descr, test_context, test_asyncgen, test_weakref, multiprocessing; both suites; 8.2 at 20/20 |
 | 3 | 1 | PyMem: the spans of 6.2, `_PyList_AsTupleAndClear` reordered, the writers' `_PyGCRoot`, the PyMem mode; kill mode and its demonstration; transitive scan off for core frames once the mode is clean; `-ftrivial-auto-var-init=zero` removed; the struct scan deleted; the raw-buffer owners (the bytes constructors' `const char *`, 10a-2b.md 2b); the stack scan follows words into ASan's fake frames (`__asan_addr_is_in_fake_stack`) and scans them, or `detect_stack_use_after_return=0` stays the recorded condition of ASan runs (8.2), decided in the rung's work doc | test_sort, test_functools, test_descr's mro tests, test_json, test_unicode; the demonstration; both suites; the verifier gate; 8.2 at 20/20 without the flag |
-| 4 | 0.5 | Gate level 4: `step10a` recorded, note 06 section 20 with measurements and attribution, the hack register updated | `boil/bench/run.py --set all --metric instr,rss` and the memory group's time on an idle machine |
+| 4 | 0.5 | Gate level 4: `step10a` recorded, note 06 section 20 with measurements and attribution, the hack register updated; the platform matrix, which records that a `DEBUG_PYDICT` build is outside the precise-roots contract (its `ASSERT_CONSISTENT` hashes keys, which call_effects.py takes for non-collecting) | `boil/bench/run.py --set all --metric instr,rss` and the memory group's time on an idle machine |
 
 **What blocks a rung from landing**, at any time and at the hard stop: a
 trap in kill mode, a walk fallback in the suite, a C-mode

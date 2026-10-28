@@ -1430,7 +1430,7 @@ _PyDict_NewPresizedUnicode(Py_ssize_t minused)
 /* Opaque, and Py_NO_INLINE so that _PyDict_FromItems()'s precise frame does
    not take in the insertion core (the key's hash, insertdict() and the
    resize), which is not precise.  The caller anchors the dict, the key and
-   the value. */
+   the value.  Removal: rung 3's conversion list, with the insertion core. */
 Py_NO_INLINE static int
 fromitems_setitem(PyDictObject *mp, PyValue key, PyValue value)
 {

@@ -69,7 +69,9 @@ NON_COLLECTING = frozenset({
     # test, and the address of a dict pointer (its assertions abort)
     "PyDescr_IsData", "_PyObject_ComputedDictPointer",
     # the dict's assertion (Objects/dictobject.c), which only reads the
-    # dict; its hash check runs only under DEBUG_PYDICT, which no gate builds
+    # dict.  Not true under DEBUG_PYDICT, where it hashes the keys and may
+    # run Python code: a DEBUG_PYDICT build is outside the precise-roots
+    # contract (note 11's platform matrix)
     "ASSERT_CONSISTENT",
     # an unpacked call's size, and its fill, which only stores into the
     # caller's span (Include/internal/pycore_call.h, 10a-2b.md section 1)

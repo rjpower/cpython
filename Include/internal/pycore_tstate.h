@@ -119,7 +119,9 @@ typedef struct _PyThreadStateImpl {
                                       __match_args__ lookup */
 #define _PyGC_SITE_UNPACK_DICT  12 /* _PyStack_KwNames(), after the names'
                                       allocation */
-#define _PyGC_SITE_COUNT        13
+#define _PyGC_SITE_SLOT_LOOKUP  13 /* lookup_method_ex(), after a slot
+                                      function's method lookup */
+#define _PyGC_SITE_COUNT        14
 
 PyAPI_FUNC(void) _PyGC_InjectCollect(PyThreadState *tstate);
 // PYTHON_GCSTRESS=every from now on; 0 turns it off

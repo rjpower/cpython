@@ -2160,6 +2160,13 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertEqual(
             fired(UNPACK_DICT, lambda: from_bytes(
                 int, bytes([1, int("2")]), **{"byteorder": "big"})), 258)
+        # 10a rung 2b item 5: a slot function's method lookup; the index
+        # past int32 that slot_sq_item() makes is held by its span alone.
+        SLOT_LOOKUP = 13
+        class Seq:
+            def __getitem__(self, i):
+                return i - 2**40
+        self.assertEqual(fired(SLOT_LOOKUP, lambda: Seq()[2**40 + 3]), 3)
         with self.assertRaises(ValueError):
             collect_at(99)
 
@@ -2211,6 +2218,69 @@ class TracingCollectorTests(unittest.TestCase):
                     "-X", "faulthandler", "-c", self.MATCH_ARGS, case,
                     PYTHON_GCVERIFY="kill")
                 self.assertEqual(out.decode().split("\n")[:2], [want, "1"])
+
+    SLOT_INDEX = textwrap.dedent("""
+        import _testinternalcapi, _testlimitedcapi
+        SLOT_LOOKUP = 13
+        collect_at = _testinternalcapi.gc_collect_at
+        BIG = 2**40
+        class S:
+            def __getitem__(self, i):
+                return i - BIG
+            def __setitem__(self, i, v):
+                self.set = (i - BIG, v)
+            def __delitem__(self, i):
+                self.deleted = i - BIG
+        s = S()
+        # The C calls pass a Py_ssize_t: the slot function makes the int,
+        # past int32, that only its span holds across the lookup.
+        calls = [
+            lambda: _testlimitedcapi.sequence_getitem(s, BIG + 1),
+            lambda: _testlimitedcapi.sequence_setitem(s, BIG + 2, [2]) or s.set,
+            lambda: _testlimitedcapi.sequence_delitem(s, BIG + 3) or s.deleted,
+        ]
+        for call in calls:
+            before = collect_at(SLOT_LOOKUP)
+            print(call(), collect_at(0) - before)
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_slot_index_in_span(self):
+        # 10a rung 2b item 5: sq_item and sq_ass_item of a Python class,
+        # called from C with an index past int32, under kill, with a
+        # collection right after the method's lookup.
+        rc, out, err = assert_python_ok(
+            "-X", "faulthandler", "-c", self.SLOT_INDEX,
+            PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.decode().splitlines(),
+                         ["1 1", "(2, [2]) 1", "3 1"])
+
+    FINALIZE_RAISES = textwrap.dedent("""
+        import gc, sys
+        class D:
+            def __del__(self):
+                gc.collect()
+                raise KeyError("in __del__")
+        sys.unraisablehook = lambda u: print(type(u.exc_value).__name__,
+                                             u.exc_value)
+        d = D()
+        d.cycle = d
+        del d
+        gc.collect()
+        print("done")
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    def test_finalize_collects_and_raises(self):
+        # 10a rung 2b item 5: slot_tp_finalize's span holds __del__ and the
+        # saved exception while __del__ collects, under kill, and raises;
+        # the raise is reported as unraisable.
+        rc, out, err = assert_python_ok(
+            "-X", "faulthandler", "-c", self.FINALIZE_RAISES,
+            PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.decode().splitlines(),
+                         ["KeyError 'in __del__'", "done"])
 
     RECEIVER_BOX = textwrap.dedent("""
         import _testinternalcapi

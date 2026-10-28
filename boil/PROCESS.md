@@ -18,7 +18,11 @@ branch.
    gpt-6.1-sol at xhigh reasoning, read-only sandbox over the repository)
    and writes `boil/design/work/reviews/<step>-<rung>-review.md`. The
    agent addresses every blocking issue in the doc (a change or a
-   written rebuttal under a "Review" heading) before writing code.
+   written rebuttal under a "Review" heading) before writing code. The
+   codex run has a 40-minute ceiling; past it, or on any failure, the
+   script sends the same prompt to a cold claude session (Opus, xhigh
+   effort, read-only tools) and the review file names its reviewer. Run
+   the review in the background, never under a foreground tool timeout.
    Non-blocking issues are addressed or carried to the hand-off list. The
    review is advisory; the coordinator rules on disagreements.
 3. **Implement.** Small commits on the step branch, messages starting
@@ -51,6 +55,13 @@ branch.
   stash`), the mimalloc and uv caches, and the machine. A test run and a
   rebuild of the same build directory never overlap: `gate.sh` holds a
   lock per build directory.
+- Every gate command runs under `timeout` in its own process group with a
+  ceiling per level (`GATE_LIMIT` overrides), so test workers die with
+  the run even when the shell that started it is killed. Run gates 2 and
+  3 in the background and poll; a foreground tool timeout that kills the
+  shell is how workers were orphaned before. Never run the suite by hand
+  outside `gate.sh`; if you must, wrap it in `timeout`. Edit nothing
+  under `Lib` or `Tools` while a gate runs from the same tree.
 - `worktree.sh drop <step>` removes the worktree and branch after the step
   has landed.
 

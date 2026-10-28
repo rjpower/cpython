@@ -8,23 +8,46 @@
 #   3  full suite (debug build), -u cpu test_cext, regen leaves the tree unchanged
 #   4  internal benchmark set recorded as boil/bench/results/$GATE_LABEL.json
 # Environment: GATE_JOBS (default 16), GATE_NO_BUILD=1 (level 0 skips make),
-# GATE_LABEL (level 4).  A lock per build directory serialises builds and
-# test runs on it.  A fresh pyc cache prefix is used for every run.
+# GATE_LABEL (level 4), GATE_LIMIT (seconds; the ceiling for one command of
+# the level, default by level below).  A lock per build directory serialises
+# builds and test runs on it.  A fresh pyc cache prefix is used for every run.
+#
+# Every command runs under `timeout` in its own process group, so the test
+# workers die with the run: at the ceiling, when this script is signalled,
+# and when the shell that started this script is killed (the timeout process
+# survives it and fires at the ceiling).  Orphaned regrtest workers held
+# build directories for hours before this.
 set -eu
 level=$1; build=$2; shift 2
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 build=$(cd "$build" && pwd)
 py="$build/python"
 J=${GATE_JOBS:-16}
+case $level in 0) LIMIT=1200 ;; 1) LIMIT=2400 ;; 2) LIMIT=3600 ;; 3) LIMIT=5400 ;; *) LIMIT=7200 ;; esac
+LIMIT=${GATE_LIMIT:-$LIMIT}
 tmp=$(mktemp -d /tmp/boilgate-XXXXXX)
-trap 'rm -rf "$tmp"' EXIT
+child=
+cleanup() { [ -n "$child" ] && kill -TERM -- -"$child" 2>/dev/null; rm -rf "$tmp"; }
+trap cleanup EXIT
+trap 'cleanup; exit 143' INT TERM HUP
 export PYTHONPYCACHEPREFIX="$tmp/pyc"
 lock="$build/.gate.lock"
 # test_sys's remote-exec test times out on this machine on every build since
 # before the fork (a machine-local failure); it is ignored unless GATE_IGNORE
 # overrides it.
 IGNORE=${GATE_IGNORE:-test_remote_exec_deleted_static_executable}
-run() { flock "$lock" "$@"; }
+# timeout makes itself the leader of a new process group and signals the
+# whole group at the ceiling; gate_run.sh takes the lock, runs the command
+# and sweeps the build's python processes afterwards (regrtest's workers
+# live in their own sessions and would survive the group signal).
+run() {
+    timeout -k 30 "$LIMIT" "$REPO/boil/tools/gate_run.sh" "$lock" "$py" "$@" &
+    child=$!
+    wait "$child"; rc=$?
+    child=
+    [ "$rc" -ne 124 ] || echo "gate $level: ceiling of ${LIMIT}s reached" >&2
+    return "$rc"
+}
 case $level in
 0)
     [ "${GATE_NO_BUILD:-0}" = 1 ] || run make -C "$build" -s -j"$J"

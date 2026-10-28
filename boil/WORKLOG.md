@@ -2083,3 +2083,53 @@ Measured, not gated:
 The micro regression bisects to item 2's handler changes, which the
 benchmarks do not run. The reading is code generation in the single
 eval-loop function.
+
+## 2026-10-28 06:15 PDT: 10a rung 1b landed; gate of the merged head
+
+Landed as two merges: 29a358b492d (boil/10a at 3d90f6ac9af, the six
+items, the end-gate fixes, the regression test and the call_effects
+hand-off) and 4bb672e0bf4 (boil/10a-rung1b at 4bd1cf172e0, one fix found
+by the landing gate). The first merge's conflicts: shapeobject.c's
+dict_from_slots (the rooted dict plus 6d rung 1's debug keys assertion,
+the form 6d had used at b05bb9fe068), ir_targets.h and
+generated_ir_cases.c.h regenerated, the worklog with both sides kept.
+Handler numbering unchanged apart from the precise attribute, so no
+magic bump.
+
+Gate run here on a detached checkout of 29a358b492d with fresh builds:
+gate 2 on default FAILED one test, test_gc's
+test_inline_collection_skips_eval_loop (2 of 20 receivers freed; 3 of 3
+alone; debug passes). Traced by the 10a agent with the by-address
+stack-hits tool: a stale copy of the receiver in the opaque frame of
+_PyList_FromValues, BUILD_LIST's allocator, exposed by the merge's stack
+layout under that frame (both branches passed alone, and so did the
+tree with 6d rung 2 on top). Fixed by promotion: PyList_New and
+_PyList_FromValues precise (4bd1cf172e0; probe 20 of 20 runs, gate 0 and
+1 on both builds, kill on test_gc and test_list). Gate run again on a
+detached checkout of 4bb672e0bf4: gate 2 on default 556/564 files,
+50,978 tests, SUCCESS, 54,257 collections, 0 fallbacks; gate 3 on debug
+50,978 tests, SUCCESS, 55,255 collections, 0 fallbacks, -u cpu test_cext
+16 tests, regen and the traverse audit clean.
+
+Hack-register rows retired by this rung (note 08 section 3; the 10a agent
+marks them with the commits in its next record): the 16 KB and 1 KB stack
+clears, _PyGC_CLEAR_ARRAY and the zeroed scratch arrays, the popped
+_PyValueRoot clear and the saved-register clears, and the eval-loop
+activation ranges with Py_NO_INLINE on the helpers. The eval loop's frame
+is a mapped frame, not an excluded range. Still open on the register for
+10a: -ftrivial-auto-var-init=zero (rung 3), the release-build test skips
+and the C-local PyMem arrays (rung 3), the inline-fallback scan.
+
+Also landed on the integration branch today: PROCESS.md rewritten on the
+user's direction (0af778a77ca, df0bb37edff): the plan and the position in
+section 0; the loop is design, review, implement and test, landing
+review, commit, integrate, quick-test; one branching point; a landing
+branch per rung; file ownership per work doc; kill, ASan and stress as
+standing gate 3 items for rungs touching the collector, roots, layout or
+eval loop; the rerun rule; the tracing order. boil/tools/landing_review.sh
+(8c923667245) runs the landing review; its first use, 6d rung 2 on
+e03ab939a4a, returned "fix first" with four findings (reviews/
+6d-2-landing.md on boil/6d-rung2), being fixed. Step 7a (the
+per-interpreter callback and finalizer queue) moved up from step 7 after
+finding B killed the process under stress in a shared-obmalloc
+subinterpreter's start-up.

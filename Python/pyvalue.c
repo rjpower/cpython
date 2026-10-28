@@ -35,7 +35,7 @@ count_box_site(uintptr_t pc)
 }
 #endif
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 box(PyValue v)
 {
     if (PyValue_IsInlineInt(v)) {
@@ -74,7 +74,7 @@ box_after_failure(PyValue v)
     return box(v);
 }
 
-static inline PyObject *
+Py_GC_PRECISE static inline PyObject *
 box_collecting(PyValue v)
 {
     assert(PyValue_IsInline(v));

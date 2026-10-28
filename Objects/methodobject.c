@@ -401,7 +401,7 @@ PyTypeObject PyCMethod_Type = {
  * First, common helpers
  */
 
-static Py_NO_INLINE PyValue
+Py_GC_PRECISE static Py_NO_INLINE PyValue
 cfunction_kwargs_error(PyThreadState *tstate, PyObject *func)
 {
     PyObject *funcstr = _PyObject_FunctionStr(func);
@@ -413,7 +413,7 @@ cfunction_kwargs_error(PyThreadState *tstate, PyObject *func)
     return PyValue_NULL;
 }
 
-static Py_NO_INLINE PyValue
+Py_GC_PRECISE static Py_NO_INLINE PyValue
 cfunction_nargs_error(PyThreadState *tstate, PyObject *func,
                       const char *format, Py_ssize_t nargs)
 {

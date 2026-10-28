@@ -199,7 +199,7 @@ lltrace_resume_frame(_PyInterpreterFrame *frame)
     PyErr_SetRaisedException(exc);
 }
 
-static int
+Py_GC_PRECISE static int
 maybe_lltrace_resume_frame(_PyInterpreterFrame *frame, PyObject *globals)
 {
     if (globals == NULL) {
@@ -259,7 +259,7 @@ typedef struct {
 
 /* The span holds the exception while the tools run, so that this checks
    clean where a precise helper (_PyEval_MonitorRaise) inlines it. */
-static int
+Py_GC_PRECISE static int
 do_monitor_exc(PyThreadState *tstate, _PyInterpreterFrame *frame,
                _PyInstr *instr, int event)
 {
@@ -304,7 +304,7 @@ no_tools_for_local_event(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     }
 }
 
-static Py_NO_INLINE int
+Py_GC_PRECISE static Py_NO_INLINE int
 monitor_handled(PyThreadState *tstate,
                 _PyInterpreterFrame *frame,
                 _PyInstr *instr, PyObject *exc)
@@ -315,7 +315,7 @@ monitor_handled(PyThreadState *tstate,
     return _Py_call_instrumentation_arg(tstate, PY_MONITORING_EVENT_EXCEPTION_HANDLED, frame, instr, exc);
 }
 
-static Py_NO_INLINE void
+Py_GC_PRECISE static Py_NO_INLINE void
 monitor_throw(PyThreadState *tstate,
               _PyInterpreterFrame *frame,
               _PyInstr *instr)
@@ -326,7 +326,7 @@ monitor_throw(PyThreadState *tstate,
     do_monitor_exc(tstate, frame, instr, PY_MONITORING_EVENT_PY_THROW);
 }
 
-static Py_NO_INLINE void
+Py_GC_PRECISE static Py_NO_INLINE void
 monitor_reraise(PyThreadState *tstate, _PyInterpreterFrame *frame,
               _PyInstr *instr)
 {
@@ -336,7 +336,7 @@ monitor_reraise(PyThreadState *tstate, _PyInterpreterFrame *frame,
     do_monitor_exc(tstate, frame, instr, PY_MONITORING_EVENT_RERAISE);
 }
 
-static Py_NO_INLINE int
+Py_GC_PRECISE static Py_NO_INLINE int
 monitor_stop_iteration(PyThreadState *tstate, _PyInterpreterFrame *frame,
                        _PyInstr *instr, PyObject *value)
 {
@@ -353,7 +353,7 @@ monitor_stop_iteration(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return 0;
 }
 
-static Py_NO_INLINE void
+Py_GC_PRECISE static Py_NO_INLINE void
 monitor_unwind(PyThreadState *tstate,
                _PyInterpreterFrame *frame,
                _PyInstr *instr)
@@ -434,11 +434,20 @@ get_exception_handler(PyCodeObject *code, int index, int *exc_slot, int *handler
 
 
 /* Logic for the raise statement (too complicated for inlining).
-   This *consumes* a reference count to each of its arguments. */
-static Py_NO_INLINE int
+   This *consumes* a reference count to each of its arguments.
+   Precise: the span holds exc and cause, which the messages and the cause's
+   test read after the calls that make instances (the parameter rule), and
+   the instance or the class, and the cause made (the result rule). */
+Py_GC_PRECISE static Py_NO_INLINE int
 do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
 {
     PyObject *type = NULL, *value = NULL;
+    int res = 0;
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, exc);
+    _PyValueSpan_AppendObject(&span, cause);
 
     if (exc == NULL) {
         /* Reraise */
@@ -447,12 +456,13 @@ do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
         if (Py_IsNone(exc) || exc == NULL) {
             _PyErr_SetString(tstate, PyExc_RuntimeError,
                              "No active exception to reraise");
-            return 0;
+            goto done;
         }
         Py_INCREF(exc);
         assert(PyExceptionInstance_Check(exc));
         _PyErr_SetRaisedException(tstate, exc);
-        return 1;
+        res = 1;
+        goto done;
     }
 
     /* We support the following forms of raise:
@@ -465,6 +475,7 @@ do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
         value = _PyObject_CallNoArgs(exc);
         if (value == NULL)
             goto raise_error;
+        _PyValueSpan_AppendObject(&span, value);
         if (!PyExceptionInstance_Check(value)) {
             _PyErr_Format(tstate, PyExc_TypeError,
                           "calling %R should have returned an instance of "
@@ -476,6 +487,7 @@ do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
     else if (PyExceptionInstance_Check(exc)) {
         value = exc;
         type = PyExceptionInstance_Class(exc);
+        _PyValueSpan_AppendObject(&span, type);
         Py_INCREF(type);
     }
     else {
@@ -496,6 +508,7 @@ do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
             fixed_cause = _PyObject_CallNoArgs(cause);
             if (fixed_cause == NULL)
                 goto raise_error;
+            _PyValueSpan_AppendObject(&span, fixed_cause);
             if (!PyExceptionInstance_Check(fixed_cause)) {
                 _PyErr_Format(tstate, PyExc_TypeError,
                               "calling %R should have returned an instance of "
@@ -526,13 +539,15 @@ do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
     /* _PyErr_SetObject incref's its arguments */
     Py_DECREF(value);
     Py_DECREF(type);
-    return 0;
+    goto done;
 
 raise_error:
     Py_XDECREF(value);
     Py_XDECREF(type);
     Py_XDECREF(cause);
-    return 0;
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 /* Disable unused label warnings.  They are handy for debugging, even

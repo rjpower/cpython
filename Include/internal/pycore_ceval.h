@@ -114,7 +114,7 @@ extern void _PyPerfJit_WriteNamedCode(const void *code_addr,
                                       const char *filename);
 #endif
 
-static inline PyValue
+Py_GC_PRECISE static inline PyValue
 _PyEval_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     EVAL_CALL_STAT_INC(EVAL_CALL_TOTAL);
@@ -167,7 +167,7 @@ PyAPI_FUNC(int) _Py_CheckRecursiveCall(
 PyAPI_FUNC(int) _Py_CheckRecursiveCallPy(
     PyThreadState *tstate);
 
-static inline int _Py_EnterRecursiveCallTstate(PyThreadState *tstate,
+Py_GC_PRECISE static inline int _Py_EnterRecursiveCallTstate(PyThreadState *tstate,
                                                const char *where) {
     return (_Py_ReachedRecursionLimit(tstate) && _Py_CheckRecursiveCall(tstate, where));
 }

@@ -3977,7 +3977,7 @@ PyValue _PyForIter_VirtualIteratorNext(PyThreadState* tstate, _PyInterpreterFram
 }
 
 /* Check if a 'cls' provides the given special method. */
-static inline int
+Py_GC_PRECISE static inline int
 type_has_special_method(PyTypeObject *cls, PyObject *name)
 {
     // _PyType_Lookup() does not set an exception and returns a borrowed ref

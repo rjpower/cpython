@@ -832,7 +832,7 @@ Py_AddPendingCall(_Py_pending_call_func func, void *arg)
     }
 }
 
-static int
+Py_GC_PRECISE static int
 handle_signals(PyThreadState *tstate)
 {
     assert(_PyThreadState_CheckConsistency(tstate));
@@ -848,7 +848,7 @@ handle_signals(PyThreadState *tstate)
     return 0;
 }
 
-static int
+Py_GC_PRECISE static int
 _make_pending_calls(struct _pending_calls *pending, int32_t *p_npending)
 {
     int res = 0;
@@ -916,7 +916,7 @@ clear_pending_handling_thread(struct _pending_calls *pending)
     FT_MUTEX_UNLOCK(&pending->mutex);
 }
 
-static int
+Py_GC_PRECISE static int
 make_pending_calls(PyThreadState *tstate)
 {
     PyInterpreterState *interp = tstate->interp;

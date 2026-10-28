@@ -34,7 +34,7 @@ _PyObject_GetAllocationHeap(_PyThreadStateImpl *tstate, PyTypeObject *tp)
 // _mimalloc_thread_state. Without mimalloc, this simply calls
 // PyObject_Malloc().  In the default build a thread state may not have bound
 // its heaps yet; the allocation then takes the default path.
-static inline void *
+Py_GC_PRECISE static inline void *
 _PyObject_MallocWithType(PyTypeObject *tp, size_t size)
 {
 #ifdef WITH_MIMALLOC

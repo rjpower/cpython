@@ -33,7 +33,7 @@ result_agrees(PyThreadState *tstate, int failed)
 /* Report a call's result that disagrees with the error indicator: a
    SystemError replaces the result, and the return is -1.  Out of line and
    opaque: it is the error path, and its frame is scanned. */
-static Py_NO_INLINE int
+Py_GC_PRECISE static Py_NO_INLINE int
 check_function_result(PyThreadState *tstate, PyObject *callable,
                       int failed, const char *where)
 {
@@ -269,12 +269,16 @@ PyObject_VectorcallDict(PyObject *callable, PyObject *const *args,
     return _PyObject_VectorcallDictTstate(tstate, callable, args, nargsf, kwargs);
 }
 
-/* Out of line and opaque: it is the error path, and its frame is scanned.
-   PyObject_GetOptionalAttr() returns through an object pointer, which a
-   precise frame could not hold (10a-2.md, rule 6). */
-static Py_NO_INLINE void
+/* Out of line: it is the error path.  Precise: the span holds callable,
+   which the messages read after the lookups (the parameter rule), the
+   module's name and the lookup's object out-parameter. */
+Py_GC_PRECISE static Py_NO_INLINE void
 object_is_not_callable(PyThreadState *tstate, PyObject *callable)
 {
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, callable);
     if (Py_IS_TYPE(callable, &PyModule_Type)) {
         // >>> import pprint
         // >>> pprint(thing)
@@ -286,8 +290,10 @@ object_is_not_callable(PyThreadState *tstate, PyObject *callable)
             _PyErr_Clear(tstate);
             goto basic_type_error;
         }
-        PyObject *attr;
-        int res = PyObject_GetOptionalAttr(callable, name, &attr);
+        _PyValueSpan_AppendObject(&span, name);
+        PyObject **attrp = _PyValueSpan_ObjectSlot(&span);
+        int res = PyObject_GetOptionalAttr(callable, name, attrp);
+        PyObject *attr = *attrp;
         if (res < 0) {
             _PyErr_Clear(tstate);
         }
@@ -298,7 +304,7 @@ object_is_not_callable(PyThreadState *tstate, PyObject *callable)
                           Py_TYPE(callable)->tp_name, name, name);
             Py_DECREF(attr);
             Py_DECREF(name);
-            return;
+            goto done;
         }
         Py_XDECREF(attr);
         Py_DECREF(name);
@@ -306,6 +312,8 @@ object_is_not_callable(PyThreadState *tstate, PyObject *callable)
 basic_type_error:
     _PyErr_Format(tstate, PyExc_TypeError, "'%.200s' object is not callable",
                   Py_TYPE(callable)->tp_name);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
 }
 
 

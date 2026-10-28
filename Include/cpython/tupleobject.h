@@ -41,7 +41,7 @@ PyTuple_GET_VALUE(PyObject *op, Py_ssize_t index) {
 /* The object of item index: a new box if the item is an inline int or
    float (PyValue_Object()), so that two calls may return different
    objects.  It cannot report an error, so it aborts if boxing fails. */
-static inline PyObject *
+Py_GC_PRECISE static inline PyObject *
 PyTuple_GET_ITEM(PyObject *op, Py_ssize_t index) {
     return _PyValue_ObjectOrAbort(PyTuple_GET_VALUE(op, index),
                                   "PyTuple_GET_ITEM");

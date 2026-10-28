@@ -1109,8 +1109,11 @@ set_update_lock_held(PySetObject *so, PyObject *other)
     return set_update_iterable_lock_held(so, other);
 }
 
-// set_update for a `so` that is only visible to the current thread
-static int
+// set_update for a `so` that is only visible to the current thread.
+// Out of line and opaque: its static callees (the merges, the resize and
+// the entry adds) are not precise, so its frame is scanned in every build
+// (Tools/build/gc_inline_audit.py, OUTLINED_OPAQUE).
+static Py_NO_INLINE int
 set_update_local(PySetObject *so, PyObject *other)
 {
     if (PyAnySet_Check(other)) {
@@ -1241,7 +1244,7 @@ make_new_set_untracked(PyTypeObject *type, PyObject *iterable)
     return (PyObject *)so;
 }
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 make_new_set(PyTypeObject *type, PyObject *iterable)
 {
     PyObject *so = make_new_set_untracked(type, iterable);

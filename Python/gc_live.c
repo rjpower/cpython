@@ -120,7 +120,7 @@ struct _gc_live_state {
     _PyGCWalkCache walk_cache;
 };
 
-static long
+Py_GC_PRECISE static long
 current_pid(void)
 {
 #ifdef HAVE_GETPID
@@ -130,7 +130,7 @@ current_pid(void)
 #endif
 }
 
-static struct _gc_live_state *
+Py_GC_PRECISE static struct _gc_live_state *
 get_live(PyInterpreterState *interp)
 {
     if (interp->gc.live == NULL) {
@@ -1298,7 +1298,7 @@ done:
    the allocation that triggered it had selected
    (_PyObject_MallocWithType()).  Returns the number of finalizers and
    tp_dels that ran in *nfinalized. */
-static Py_NO_INLINE Py_ssize_t
+Py_GC_PRECISE static Py_NO_INLINE Py_ssize_t
 collect_pass(PyThreadState *tstate, _PyGC_Reason reason, int *nfinalized)
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
@@ -1359,7 +1359,7 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
 
 /* Can an automatic collection run now?  If not, it is tried again after
    RETRY_BYTES more. */
-static int
+Py_GC_PRECISE static int
 can_collect(PyThreadState *tstate)
 {
     PyInterpreterState *interp = tstate->interp;

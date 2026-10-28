@@ -69,7 +69,7 @@ NON_COLLECTING = frozenset({
     # (Python/import.c)
     "_PyImport_IsDefaultImportFunc", "_PyImport_IsDefaultLazyImportFunc",
     # stdio cannot reach the collector, and abort() does not return
-    "fprintf", "fflush", "snprintf", "abort",
+    "fprintf", "fflush", "snprintf", "printf", "abort",
     # the value of an exact int that is not compact: PyLong_AsLongAndOverflow()
     # on an exact int calls no __index__ and allocates nothing
     # (Python/pyvalue.c)

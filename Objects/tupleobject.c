@@ -30,7 +30,7 @@ class tuple "PyTupleObject *" "&PyTuple_Type"
    this function must not be called with size == 0 (unless from PyTuple_New()
    which wraps this function).
 */
-static PyTupleObject *
+Py_GC_PRECISE static PyTupleObject *
 tuple_alloc(Py_ssize_t size)
 {
     if (size < 0) {

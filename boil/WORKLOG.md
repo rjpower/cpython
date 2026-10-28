@@ -1009,7 +1009,6 @@ agent's measurement scripts (per-loop differencing, Py_STATS mix, slot
 distribution, compile-time) move from /tmp into boil/tools/measure/ so the
 next steps reuse them. Step 5 waits on step 4 (verifier), still running in
 its worktree.
-||||||| parent of 9641b189f38 (boil: worklog entries for step 4 milestones 1 and 2 and milestone 3 so far)
 
 ### 2026-10-25 18:30 — step 4, milestone 1: mimalloc default, precise roots, first hole count
 

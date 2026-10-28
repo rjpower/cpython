@@ -4,6 +4,7 @@
 Usage:
   python3 boil/tools/measure/root_stats.py run OUT.jsonl -- CMD [ARGS...]
   python3 boil/tools/measure/root_stats.py sum OUT.jsonl [...]
+  python3 boil/tools/measure/root_stats.py check OUT.jsonl
 
 A build since 10a's rung 0 appends its main interpreter's counters
 (_testinternalcapi.gc_root_stats()["total"]) to $PYTHON_GCROOTSTATS at
@@ -14,7 +15,10 @@ of lines is printed beside the sum.
 
 The sum is printed as a markdown table: per class, the words scanned and
 the words that hit an object; then the other counters, and the times in
-milliseconds.
+milliseconds.  ``check`` prints one line, the stack walk's fallbacks
+and the unpinned detach records visited, and exits 1 on a fallback, which
+blocks a landing (boil/design/11-precise-roots.md, section 10); gate.sh
+runs it after the suite at levels 2 and 3.
 """
 
 import json
@@ -57,7 +61,7 @@ def report(total, lines):
     print("|---|---:|---:|")
     for key in ("threads", "activations_skipped", "eval_words_skipped",
                 "frames_walked", "cache_hits", "cache_misses",
-                "cache_flushes", "fallbacks"):
+                "cache_flushes", "fallbacks", "unpinned"):
         v = total[key]
         print(f"| {key} | {v:,} | {v / n if n else 0:,.1f} |")
     for key in ("precise_ns", "stack_ns", "data_ns", "structs_ns", "roots_ns"):
@@ -74,6 +78,16 @@ def main(argv):
         rc = subprocess.call(argv[4:], env=env)
         report(*load([out]))
         return rc
+    if len(argv) == 3 and argv[1] == "check":
+        total, lines = load(argv[2:]) if os.path.exists(argv[2]) else (Counter(), 0)
+        n = total["collections"]
+        print(f"roots: {lines} processes, {n:,} collections, "
+              f"fallbacks {total['fallbacks']:,}, unpinned {total['unpinned']:,}"
+              f" ({total['unpinned'] / n if n else 0:.2f} per collection)")
+        if total["fallbacks"]:
+            print("roots: a stack-walk fallback blocks a landing", file=sys.stderr)
+            return 1
+        return 0
     if len(argv) >= 3 and argv[1] == "sum":
         report(*load(argv[2:]))
         return 0

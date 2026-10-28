@@ -263,10 +263,10 @@ static PyTypeObject Xxo_Type = {
 """
 
 
-def run_audit(root):
-    proc = subprocess.run([sys.executable, SCRIPT, "--root", root],
-                          capture_output=True, text=True, check=True)
-    return proc.stdout
+def run_audit(root, *args, check=True):
+    proc = subprocess.run([sys.executable, SCRIPT, "--root", root, *args],
+                          capture_output=True, text=True, check=check)
+    return proc
 
 
 def report_line(output, name):
@@ -280,16 +280,18 @@ class TraverseAuditTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        with tempfile.TemporaryDirectory() as root:
-            os.mkdir(os.path.join(root, "Include"))
-            os.mkdir(os.path.join(root, "Modules"))
-            with open(os.path.join(root, "Include", "pybuffer.h"), "w") as f:
-                f.write(textwrap.dedent(HEADER))
-            with open(os.path.join(root, "Modules", "fixture.c"), "w") as f:
-                f.write(textwrap.dedent(SOURCE))
-            with open(os.path.join(root, "Modules", "other.c"), "w") as f:
-                f.write(textwrap.dedent(OTHER))
-            cls.output = run_audit(root)
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls.tmp.cleanup)
+        root = cls.root = cls.tmp.name
+        os.mkdir(os.path.join(root, "Include"))
+        os.mkdir(os.path.join(root, "Modules"))
+        with open(os.path.join(root, "Include", "pybuffer.h"), "w") as f:
+            f.write(textwrap.dedent(HEADER))
+        with open(os.path.join(root, "Modules", "fixture.c"), "w") as f:
+            f.write(textwrap.dedent(SOURCE))
+        with open(os.path.join(root, "Modules", "other.c"), "w") as f:
+            f.write(textwrap.dedent(OTHER))
+        cls.output = run_audit(root).stdout
         missing, _, partial = cls.output.partition("misses members")
         cls.missing, _, cls.inherited = missing.partition("probably inherited")
         cls.partial = partial
@@ -335,6 +337,42 @@ class TraverseAuditTests(unittest.TestCase):
         line = report_line(self.missing, "fixture.xxo")
         self.assertIsNotNone(line, self.output)
         self.assertTrue(line.endswith(": x_attr"), line)
+
+    def check(self, *entries):
+        allow = os.path.join(self.root, "allow.txt")
+        with open(allow, "w") as f:
+            f.write("# comment\n" + "".join(e + "\n" for e in entries))
+        return run_audit(self.root, "--check", "--allow", allow, check=False)
+
+    # Every type the fixture reports with no traverse or a partial one.
+    LISTED = [
+        "Modules/fixture.c NDArray_Type: reason",
+        "Modules/fixture.c Table_Type: reason",
+        "Modules/fixture.c Chain_Type: reason",
+        "Modules/fixture.c Helper_Type: reason",
+        "Modules/fixture.c Xxo_Type: reason",
+    ]
+
+    def test_check_passes_when_all_listed(self):
+        proc = self.check(*self.LISTED)
+        self.assertEqual(proc.returncode, 0, proc.stdout)
+        self.assertEqual(proc.stdout, "")
+
+    def test_check_fails_on_unlisted(self):
+        proc = self.check(*self.LISTED[1:])
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("fixture.ndarray has no tp_traverse", proc.stdout)
+        proc = self.check(*self.LISTED[:2], *self.LISTED[3:])
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("fixture.chain has a partial tp_traverse", proc.stdout)
+
+    def test_check_fails_on_stale_or_malformed_entry(self):
+        proc = self.check(*self.LISTED, "Modules/fixture.c Owner_Type: reason")
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("Owner_Type is not reported any more", proc.stdout)
+        proc = self.check(*self.LISTED, "Modules/fixture.c Owner_Type")
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("not \"path variable: reason\"", proc.stdout)
 
     def test_pointer_to_object_struct(self):
         self.assertIsNone(report_line(self.output, "fixture.owner"),

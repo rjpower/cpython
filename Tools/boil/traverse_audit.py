@@ -27,7 +27,15 @@ functions and function-like macros of the same file that it calls, two calls
 deep; a traverse that delegates to a helper in another file is listed and
 needs a look.
 
+With --check the tool is a gate (boil/tools/gate.sh, level 3): it prints
+nothing else and exits 1 when a type with references and no traverse, or
+with a partial traverse, is not in the allowlist (Tools/boil/
+traverse_allow.txt), or when an allowlist entry no longer matches a
+reported type.  An entry is "path variable: reason", where variable is the
+type's PyTypeObject or PyType_Spec.
+
 Usage: python Tools/boil/traverse_audit.py [--root DIR] [--missing-only]
+       python Tools/boil/traverse_audit.py --check [--root DIR] [--allow FILE]
 """
 
 from __future__ import annotations
@@ -532,7 +540,15 @@ def main() -> int:
     ap.add_argument("--root", default=Path(__file__).resolve().parents[2], type=Path)
     ap.add_argument("--missing-only", action="store_true",
                     help="only report types with references and no tp_traverse")
+    ap.add_argument("--check", action="store_true",
+                    help="exit 1 on a missing or partial traverse that the "
+                         "allowlist does not name")
+    ap.add_argument("--allow", type=Path,
+                    default=Path(__file__).with_name("traverse_allow.txt"),
+                    help="the allowlist for --check")
     args = ap.parse_args()
+    if args.check:
+        args.missing_only = False
 
     files = []
     for d in SOURCE_DIRS:
@@ -617,6 +633,8 @@ def main() -> int:
         if miss:
             partial.append((t, miss))
 
+    if args.check:
+        return check(args.allow, rel, missing, partial)
     print(f"{len(missing)} types with object references and no tp_traverse:")
     for t, refs in sorted(missing, key=lambda x: (str(x[0].path), x[0].line)):
         print(f"  {rel(t.path)}:{t.line}: {t.name} ({t.struct}): {', '.join(refs)}")
@@ -629,6 +647,44 @@ def main() -> int:
               f"dealloc or clear releases:")
         for t, miss in sorted(partial, key=lambda x: (str(x[0].path), x[0].line)):
             print(f"  {rel(t.path)}:{t.line}: {t.name} ({t.traverse}): {', '.join(miss)}")
+    return 0
+
+
+def read_allowlist(path: Path) -> tuple[dict[str, str], list[str]]:
+    """The allowlist's entries, by "path variable", and its malformed
+    lines."""
+    allowed, bad = {}, []
+    for n, line in enumerate(path.read_text().splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = re.match(r"(\S+)\s+([A-Za-z_]\w*)\s*:\s*(\S.*)$", line)
+        if m:
+            allowed[f"{m.group(1)} {m.group(2)}"] = m.group(3)
+        else:
+            bad.append(f"{path.name}:{n}: not \"path variable: reason\": {line}")
+    return allowed, bad
+
+
+def check(allow: Path, rel, missing, partial) -> int:
+    allowed, errors = read_allowlist(allow) if allow.exists() else ({}, [])
+    seen = set()
+    for what, found in (("no tp_traverse", missing),
+                        ("a partial tp_traverse", partial)):
+        for t, refs in sorted(found, key=lambda x: (str(x[0].path), x[0].line)):
+            key = f"{rel(t.path)} {t.var}"
+            seen.add(key)
+            if key not in allowed:
+                errors.append(f"{rel(t.path)}:{t.line}: {t.name} has {what} "
+                              f"and is not in {allow.name}: {', '.join(refs)}")
+    for key in sorted(set(allowed) - seen):
+        errors.append(f"{allow.name}: {key} is not reported any more; "
+                      f"remove the entry")
+    for e in errors:
+        print(e)
+    if errors:
+        print(f"traverse_audit --check: {len(errors)} problems")
+        return 1
     return 0
 
 

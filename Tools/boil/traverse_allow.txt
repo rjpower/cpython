@@ -1,0 +1,8 @@
+# Types that traverse_audit.py --check accepts with no tp_traverse or a
+# partial one.  One line each: "path variable: reason", where variable is
+# the type's PyTypeObject or PyType_Spec.  Triage: boil/design/work/audit-1.md.
+Modules/_interpretersmodule.c XIBufferViewType_spec: runtime-managed: the exporting interpreter roots shared->view.obj with PyGC_AddRoot(); the receiver must not trace it
+Modules/_testcapi/heaptype.c HeapCTypeWithDict_spec: handed to 6c: the collector is to visit the dict word at tp_dictoffset generically
+Modules/_testcapi/heaptype.c HeapCTypeWithDict2_spec: handed to 6c: the collector is to visit the dict word at tp_dictoffset generically
+Modules/_testcapi/heaptype.c HeapCTypeWithNegativeDict_spec: handed to 6c: the collector is to visit the dict word at tp_dictoffset generically
+Objects/moduleobject.c PyModuleDef_Type: static data: module defs are static, and the data-segment scan reads m_base.m_copy

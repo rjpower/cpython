@@ -93,3 +93,12 @@ hand-off list, and reports. The coordinator verifies claims against
 `git log` and the gate output, re-runs the level-3 gate on a detached
 checkout of the rung's last commit when it lands, writes the gate entry
 in `boil/WORKLOG.md`, and keeps the hourly check.
+
+A test that fails once and passes on rerun is traced, not dismissed. Under
+the live collector a collection can land anywhere, so a timing-dependent
+failure is usually a missing root, a missing traverse or a callback run
+at the wrong moment; on 2026-10-27 three such "flakes" were real bugs
+(test_buffer: a missing traverse; test_io and test_bdb: the callback
+queue). Record the test, the assertion and the rate in the work doc's
+hazards, run it alone ten times, and read the code it exercises before
+calling it unrelated.

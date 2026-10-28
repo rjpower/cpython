@@ -1880,7 +1880,7 @@ async_gen_repr(PyObject *self)
 }
 
 
-static int
+Py_GC_PRECISE static int
 async_gen_init_hooks(PyAsyncGenObject *o)
 {
     PyThreadState *tstate;
@@ -1917,58 +1917,91 @@ async_gen_init_hooks(PyAsyncGenObject *o)
 }
 
 
-static PyObject *
+/* The span: the generator, which the hooks' call may outlive */
+Py_GC_PRECISE static PyObject *
 async_gen_anext(PyObject *self)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
     PyAsyncGenObject *ag = _PyAsyncGenObject_CAST(self);
-    if (async_gen_init_hooks(ag)) {
-        return NULL;
+    PyObject *result = NULL;
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)ag);
+    if (!async_gen_init_hooks(ag)) {
+        result = async_gen_asend_new(ag, NULL);
     }
-    return async_gen_asend_new(ag, NULL);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return result;
 }
 
 
-static PyValue
+/* The span: the generator and the argument's box, which the release
+   builds make in this frame (as gen_send_method()'s). */
+Py_GC_PRECISE static PyValue
 async_gen_asend(PyObject *op, PyValue arg_value)
 {
-    PyObject *arg = PyValue_Object(arg_value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
+    PyThreadState *tstate = _PyThreadState_GET();
     PyAsyncGenObject *o = (PyAsyncGenObject*)op;
-    if (async_gen_init_hooks(o)) {
-        return PyValue_NULL;
+    PyObject *result = NULL;
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)o);
+    PyObject *arg = PyValue_Object(arg_value);
+    _PyValueSpan_AppendObject(&span, arg);
+    if (arg != NULL && !async_gen_init_hooks(o)) {
+        result = async_gen_asend_new(o, arg);
     }
-    return PyValue_FromResult(async_gen_asend_new(o, arg));
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return PyValue_FromResult(result);
 }
 
 
-static PyObject *
+/* The span: the generator */
+Py_GC_PRECISE static PyObject *
 async_gen_aclose(PyObject *op, PyObject *arg)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
     PyAsyncGenObject *o = (PyAsyncGenObject*)op;
-    if (async_gen_init_hooks(o)) {
-        return NULL;
+    PyObject *result = NULL;
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)o);
+    if (!async_gen_init_hooks(o)) {
+        result = async_gen_athrow_new(o, NULL);
     }
-    return async_gen_athrow_new(o, NULL);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return result;
 }
 
-static PyObject *
+/* The span: the generator and the argument tuple */
+Py_GC_PRECISE static PyObject *
 async_gen_athrow(PyObject *op, PyObject *args)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
     PyAsyncGenObject *o = (PyAsyncGenObject*)op;
+    PyObject *result = NULL;
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)o);
+    _PyValueSpan_AppendObject(&span, args);
     if (PyTuple_GET_SIZE(args) > 1) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
                             "the (type, exc, tb) signature of athrow() is deprecated, "
                             "use the single-arg signature instead.",
                             1) < 0) {
-            return NULL;
+            goto done;
         }
     }
-    if (async_gen_init_hooks(o)) {
-        return NULL;
+    if (!async_gen_init_hooks(o)) {
+        result = async_gen_athrow_new(o, args);
     }
-    return async_gen_athrow_new(o, args);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return result;
 }
 
 static PyObject *
@@ -2478,7 +2511,8 @@ PyTypeObject _PyAsyncGenASend_Type = {
 };
 
 
-static PyObject *
+/* Its callers anchor the generator and the value to send */
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static PyObject *
 async_gen_asend_new(PyAsyncGenObject *gen, PyObject *sendval)
 {
     PyAsyncGenASend *ags = PyObject_GC_New(PyAsyncGenASend, &_PyAsyncGenASend_Type);
@@ -2980,13 +3014,13 @@ PyTypeObject _PyAsyncGenAThrow_Type = {
 };
 
 
-static PyObject *
+/* Its callers anchor the generator and the argument tuple.  The tuple's
+   items are read after the allocation, from the tuple. */
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static PyObject *
 async_gen_athrow_new(PyAsyncGenObject *gen, PyObject *args)
 {
-    PyObject *typ = NULL;
-    PyObject *tb = NULL;
-    PyObject *val = NULL;
-    if (args && !PyArg_UnpackTuple(args, "athrow", 1, 3, &typ, &val, &tb)) {
+    Py_ssize_t nargs = args ? PyTuple_GET_SIZE(args) : 0;
+    if (args && !_PyArg_CheckPositional("athrow", nargs, 1, 3)) {
         return NULL;
     }
 
@@ -2996,9 +3030,9 @@ async_gen_athrow_new(PyAsyncGenObject *gen, PyObject *args)
         return NULL;
     }
     o->agt_gen = (PyAsyncGenObject*)Py_NewRef(gen);
-    o->agt_typ = Py_XNewRef(typ);
-    o->agt_tb = Py_XNewRef(tb);
-    o->agt_val = Py_XNewRef(val);
+    o->agt_typ = nargs > 0 ? Py_NewRef(PyTuple_GET_ITEM(args, 0)) : NULL;
+    o->agt_val = nargs > 1 ? Py_NewRef(PyTuple_GET_ITEM(args, 1)) : NULL;
+    o->agt_tb = nargs > 2 ? Py_NewRef(PyTuple_GET_ITEM(args, 2)) : NULL;
 
     o->agt_state = AWAITABLE_STATE_INIT;
     _PyObject_GC_TRACK((PyObject*)o);

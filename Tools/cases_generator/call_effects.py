@@ -62,8 +62,8 @@ NON_COLLECTING = frozenset({
     "_PyReftracerTrack", "_Py_NewReference", "_Py_NewReferenceNoTotal",
     "_PyGC_ObjectMapSet", "_PyGC_ObjectMapChunk", "_PyShape_InitRoot",
     "_PyObject_CheckObjectHeap",
-    # a compiler intrinsic
-    "__builtin_return_address",
+    # a compiler intrinsic, and inline assembly that reads the stack pointer
+    "__builtin_return_address", "_PyGC_StackAddress",
     # the value of an exact int that is not compact: PyLong_AsLongAndOverflow()
     # on an exact int calls no __index__ and allocates nothing
     # (Python/pyvalue.c)

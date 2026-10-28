@@ -1597,6 +1597,20 @@ Py_GC_PRECISE static void f(PyObject *const *args, Py_ssize_t n) {
     use_v(small[0]);
 }
 """,
+        # The eval loop's generated handlers are one region, entered by a
+        # goto to a handler's label, which falls through or returns
+        "generated_region": """
+Py_GC_PRECISE static int f(PyThreadState *tstate, int c) {
+    if (c) {
+        goto early_exit;
+    }
+    goto start_frame;
+#include "generated_ir_cases.c.h"
+early_exit:
+    collect();
+    return -1;
+}
+""",
         # A value asserted inline holds no object, in release builds too
         "asserted_immediate": """
 Py_GC_PRECISE static void f(PyValue v) {
@@ -1658,6 +1672,16 @@ Py_GC_PRECISE static void f(PyHeapTypeObject *cls) {
     use(o);
 }
 """, "'init' is held only in a C local across the collecting call to 'PyType_GenericAlloc'"),
+        # The region collects
+        "held_across_generated_region": ("""
+Py_GC_PRECISE static int f(void) {
+    PyObject *x = PyLong_FromLong(1);
+    goto start_frame;
+#include "generated_ir_cases.c.h"
+    use(x);
+    return 0;
+}
+""", "'x' is held only in a C local across the collecting call to '_PyEval_GeneratedHandlers'"),
         # Only an inline test makes a value an immediate
         "asserted_object": ("""
 Py_GC_PRECISE static void f(PyValue v) {

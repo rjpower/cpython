@@ -3571,9 +3571,12 @@ _PyCData_set(ctypes_state *st,
     if (err == -1)
         return NULL;
     if (err) {
+        /* The keep first: a failure must not leave the copy unkept. */
         Py_BEGIN_CRITICAL_SECTION(src);
-        memcpy(ptr, src->b_ptr, size);
         value = GetKeepedObjects(src);
+        if (value != NULL) {
+            memcpy(ptr, src->b_ptr, size);
+        }
         Py_END_CRITICAL_SECTION();
         if (value == NULL)
             return NULL;
@@ -3603,9 +3606,10 @@ _PyCData_set(ctypes_state *st,
             return NULL;
         }
         Py_BEGIN_CRITICAL_SECTION(src);
-        *(void **)ptr = src->b_ptr;
-
         keep = GetKeepedObjects(src);
+        if (keep != NULL) {
+            *(void **)ptr = src->b_ptr;
+        }
         Py_END_CRITICAL_SECTION();
         if (keep == NULL)
             return NULL;
@@ -3627,14 +3631,69 @@ _PyCData_set(ctypes_state *st,
     return NULL;
 }
 
+/* The NBYTES at PTR before a store, so that a failure to keep what the new
+   bytes refer to can put the previous bytes back.  The previous bytes' objects
+   are still kept under the same key; the new bytes' objects (a box made for
+   the store, say) are kept by nothing once the storing frame returns, and a
+   later collection would free them under the native pointer. */
+typedef struct {
+    char *ptr;
+    Py_ssize_t nbytes;
+    char *saved;
+    char small[64];
+} SavedBytes;
+
+static int
+save_bytes(SavedBytes *s, char *ptr, Py_ssize_t nbytes)
+{
+    s->ptr = ptr;
+    s->nbytes = nbytes;
+    s->saved = s->small;
+    if (nbytes > (Py_ssize_t)sizeof(s->small)) {
+        s->saved = PyMem_Malloc(nbytes);
+        if (s->saved == NULL) {
+            PyErr_NoMemory();
+            return -1;
+        }
+    }
+    memcpy(s->saved, ptr, nbytes);
+    return 0;
+}
+
+/* Keep RESULT, what a store returned, for the contents at INDEX of TARGET,
+   and on failure put SAVED back.  RESULT is consumed, as by KeepRef.  A NULL
+   RESULT is a failed store, which changed nothing (and Python code it ran
+   may have stored and kept since SAVED was taken), so nothing is put back. */
+static int
+keep_or_restore(ctypes_state *st, CDataObject *target, Py_ssize_t index,
+                PyObject *result, SavedBytes *saved)
+{
+    int res = -1;
+    if (result != NULL) {
+        result = keep_exact(st, result);
+        if (result != NULL) {
+            res = KeepRef(target, index, result);
+        }
+        if (res < 0) {
+            memcpy(saved->ptr, saved->saved, saved->nbytes);
+        }
+    }
+    if (saved->saved != saved->small) {
+        PyMem_Free(saved->saved);
+    }
+    return res;
+}
+
 /*
  * Set a slice in object 'dst', which has the type 'type',
- * to the value 'value'.
+ * to the value 'value'.  'size' is what the setfunc takes (the legacy packed
+ * form for a bit field); 'nbytes' is the number of bytes at 'ptr' the store
+ * may change.
  */
 int
 PyCData_set(ctypes_state *st,
           PyObject *dst, PyObject *type, SETFUNC setfunc, PyObject *value,
-          Py_ssize_t index, Py_ssize_t size, char *ptr)
+          Py_ssize_t index, Py_ssize_t size, Py_ssize_t nbytes, char *ptr)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(dst);
 
@@ -3647,18 +3706,14 @@ PyCData_set(ctypes_state *st,
         return -1;
     }
 
+    SavedBytes saved;
+    if (save_bytes(&saved, ptr, nbytes) < 0) {
+        return -1;
+    }
+    /* _PyCData_set fails only before it stores. */
     result = _PyCData_set(st, mem, type, setfunc, value,
                         size, ptr);
-    if (result == NULL)
-        return -1;
-    result = keep_exact(st, result);
-    if (result == NULL)
-        return -1;
-
-    /* KeepRef steals a refcount from it's last argument */
-    /* If KeepRef fails, we are stumped.  The dst memory block has already
-       been changed */
-    return KeepRef(mem, index, result);
+    return keep_or_restore(st, mem, index, result, &saved);
 }
 
 
@@ -5324,7 +5379,7 @@ Array_ass_item_impl(PyObject *myself, Py_ssize_t index, PyObject *value)
     ptr = self->b_ptr + offset;
 
     return PyCData_set(st, myself, stginfo->proto, stginfo->setfunc, value,
-                       index, size, ptr);
+                       index, size, size, ptr);
 }
 
 /*[clinic input]
@@ -5528,15 +5583,12 @@ _ctypes_Simple_value_set_impl(CDataObject *self, PyObject *value)
     assert(info); /* Cannot be NULL for CDataObject instances */
     assert(info->setfunc);
 
+    SavedBytes saved;
+    if (save_bytes(&saved, self->b_ptr, info->size) < 0) {
+        return -1;
+    }
     result = info->setfunc(self->b_ptr, value, info->size);
-    if (!result)
-        return -1;
-    result = keep_exact(st, result);
-    if (!result)
-        return -1;
-
-    /* consumes the refcount the setfunc returns */
-    return KeepRef(self, 0, result);
+    return keep_or_restore(st, self, 0, result, &saved);
 }
 
 
@@ -5775,7 +5827,7 @@ Pointer_ass_item_impl(PyObject *myself, Py_ssize_t index, PyObject *value)
     offset = index * iteminfo->size;
 
     return PyCData_set(st, myself, proto, stginfo->setfunc, value,
-                       index, size, ((char *)deref + offset));
+                       index, size, size, ((char *)deref + offset));
 }
 
 static PyObject *

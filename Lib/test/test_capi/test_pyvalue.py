@@ -9,6 +9,7 @@ wrapper raises AssertionError if the result is not canonical.
 
 import collections
 import fractions
+import gc
 import math
 import operator
 import sys
@@ -631,6 +632,34 @@ class MemberTests(ValueTestCase):
         self.assertTrue(math.isnan(self.ts.T_DOUBLE))
         self.assertEqual(pv.MemberGetOneValue(self.ts, 'T_DOUBLE')[1],
                          'object')
+
+    def test_collecting_conversions(self):
+        # Test 2: an __index__ and a __float__ that collect before they
+        # return a value made there, stored through the value form and
+        # through the attribute store.  The converted object is held only
+        # by the store.
+        class Index:
+            def __index__(self):
+                gc.collect()
+                return 100000 + len('ab')
+        class Float:
+            def __float__(self):
+                gc.collect()
+                return 2.5 * len('ab')
+        for name in ('T_INT', 'T_UINT', 'T_LONG', 'T_LONGLONG'):
+            with self.subTest(name=name):
+                pv.MemberSetOneValue(self.ts, name, Index())
+                self.assertEqual(getattr(self.ts, name), 100002)
+                setattr(self.ts, name, 0)
+                setattr(self.ts, name, Index())
+                self.assertEqual(getattr(self.ts, name), 100002)
+        for name in ('T_DOUBLE', 'T_FLOAT'):
+            with self.subTest(name=name):
+                pv.MemberSetOneValue(self.ts, name, Float())
+                self.assertEqual(getattr(self.ts, name), 5.0)
+                setattr(self.ts, name, 0.0)
+                setattr(self.ts, name, Float())
+                self.assertEqual(getattr(self.ts, name), 5.0)
 
     def test_type_errors(self):
         for name in ('T_INT', 'T_UINT', 'T_LONGLONG', 'T_ULONGLONG'):

@@ -1760,9 +1760,14 @@ class TracingCollectorTests(unittest.TestCase):
         rc, out, err = assert_python_failure("-X", "faulthandler", "-c", code,
                                              "1", PYTHON_GCVERIFY="kill:pymem")
         self.assertEqual(out, b"")
-        self.assertIn(b"gc verify kill: Py_TYPE of the list at ", err)
-        self.assertIn(b"reached only through a PyMem block that the word at ",
-                      err)
+        if support.check_sanitizer(address=True):
+            # ASan stops the read of the poisoned header before the trap
+            self.assertIn(b"AddressSanitizer: use-after-poison", err)
+            self.assertIn(b"in _Py_TYPE_impl", err)
+        else:
+            self.assertIn(b"gc verify kill: Py_TYPE of the list at ", err)
+            self.assertIn(b"reached only through a PyMem block that the "
+                          b"word at ", err)
 
     MISSED_ROOT = textwrap.dedent("""
         import gc, sys, _testinternalcapi
@@ -1795,12 +1800,26 @@ class TracingCollectorTests(unittest.TestCase):
             check = assert_python_ok if ok else assert_python_failure
             return check("-X", "faulthandler", "-c", self.MISSED_ROOT, kind,
                          PYTHON_GCVERIFY=mode)
+        # Under ASan the held blocks are poisoned too, so each use stops at
+        # its first read: the header in _Py_TYPE_impl, or the cached item
+        # in missed_root().
+        asan = support.check_sanitizer(address=True)
+        poisoned = b"AddressSanitizer: use-after-poison"
         rc, out, err = run("field", "kill", ok=False)
         self.assertEqual(out, b"")
-        rc, out, err = run("interior", "kill")
-        self.assertEqual(out.split(), [b"interior", dead])
+        if asan:
+            self.assertIn(poisoned, err)
+            self.assertIn(b"in _Py_TYPE_impl", err)
+            rc, out, err = run("interior", "kill", ok=False)
+            self.assertIn(poisoned, err)
+            self.assertIn(b"in missed_root", err)
+        else:
+            rc, out, err = run("interior", "kill")
+            self.assertEqual(out.split(), [b"interior", dead])
         rc, out, err = run("finalizer", "kill", ok=False)
         self.assertEqual(out.split(), [b"finalized"])
+        if asan:
+            self.assertIn(poisoned, err)
         rc, out, err = run("weakref", "kill")
         self.assertEqual(out.split(), [b"weakref", b"NoneType"])
         self.assertNotIn(b"candidate", err)
@@ -1812,6 +1831,12 @@ class TracingCollectorTests(unittest.TestCase):
             with self.subTest(kind=kind):
                 rc, out, err = run(kind, "kill", ok=False)
                 self.assertEqual(out, b"")
+                if asan:
+                    # ASan stops the read of the poisoned header before
+                    # the trap can report
+                    self.assertIn(poisoned, err)
+                    self.assertIn(b"in _Py_TYPE_impl", err)
+                    continue
                 m = re.search(rb"gc verify kill: Py_TYPE of the W at 0x\w+, "
                               rb"which collection (\d+) killed: it was "
                               rb"reached only through the word at 0x\w+ of "
@@ -1820,8 +1845,9 @@ class TracingCollectorTests(unittest.TestCase):
                 self.assertIsNotNone(m, err)
                 since[kind] = int(m[2]) - int(m[1])
                 self.assertIn(b"use of a killed object", err)
-        self.assertEqual(since["store"], since["slot_call"])
-        self.assertGreater(since["late"], since["slot_call"])
+        if not asan:
+            self.assertEqual(since["store"], since["slot_call"])
+            self.assertGreater(since["late"], since["slot_call"])
 
         rc, out, err = run("field", "retain")
         self.assertEqual(out.split(), [b"field", b"0x1"])
@@ -1832,6 +1858,19 @@ class TracingCollectorTests(unittest.TestCase):
         rc, out, err = run("store", "retain")
         self.assertEqual(out.split(), [b"store", b"str"])
         self.assertIn(b"candidate W at", err)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_verify_kill_release(self):
+        # A list killed with its item array, whose page holds nothing
+        # else, collected past the quarantine's horizon while the precise
+        # frame still holds the array's address.  The collection that
+        # frees the page also looks that word up in B, so the release must
+        # come before the collection builds its page lists; released after,
+        # B read the freed page and mimalloc's assertion fired.
+        rc, out, err = assert_python_ok("-c", self.MISSED_ROOT, "release",
+                                        PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.split()[0], b"release")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_injection_sites(self):
@@ -1921,6 +1960,11 @@ class TracingCollectorTests(unittest.TestCase):
         rc, out, err = assert_python_failure("-c", self.SPAN_BOX, "canonical",
                                              PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split(), [b"True", b"False", b"0"])
+        if support.check_sanitizer(address=True):
+            # ASan stops the read of the poisoned header before the trap
+            self.assertIn(b"AddressSanitizer: use-after-poison", err)
+            self.assertIn(b"in _Py_TYPE_impl", err)
+            return
         self.assertIn(b"gc verify kill: Py_TYPE of the int", err)
         self.assertIn(b"of a precise frame", err)
         self.assertIn(b"use of a killed object", err)

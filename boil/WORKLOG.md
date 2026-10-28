@@ -2035,3 +2035,147 @@ first-run hang in test_concurrent_futures test_shutdown_deadlock_pickle
 (the forked child never exited; 3/3 passes alone under load). 6d's branch
 now contains boil/10a through item 4, so its later rungs land after 10a's
 rung 1b.
+
+## 2026-10-28 05:12 PDT: 10a rung 1b (the eval loop precise) closed
+
+Branch boil/10a at 3d90f6ac9af; the record is boil/design/work/10a-1b.md.
+All six items landed:
+- the return order, with the entry frame's visitor and injection sites;
+- allocations as safepoints in the handlers;
+- the entry paths precise;
+- the eval loop marked, with the tail-call handlers;
+- the deletions: the eval loop's activations, its stack clears and the
+  value-root clear;
+- the trap type, which turns a use of a killed object into an abort that
+  names the word and the collection that killed it.
+
+The eval loop's frame is no longer a root: test_gc's probe frees a dead
+super() receiver 20 times in 20 on both builds, where the unmarked loop
+kept it.
+
+The first end gates, at d5d83aad9f7, failed three lines:
+- the kill suite: a verifier ordering defect exposed by the eval loop
+  going precise, not a collector defect. The quarantine was released
+  after the page lists were built. Fixed in 349cd951673, with a
+  regression test proven against the old order in 70ac80bf3f3. The other
+  kill-suite failure, test_manager's barrier timeout, was load-induced at
+  a load average of about 20.
+- ASan: two test helpers whose redzones the scan or the scrub must not
+  see, and the verify tests' ASan branches;
+- stress: finding B, a shared-heap subinterpreter running main-interpreter
+  callbacks and finalizers during its own start-up. It is step 7's, and
+  test_capi.test_misc is excluded from stress until then.
+
+Reruns at 349cd951673:
+- gate 3 debug: 55,179 collections, 0 fallbacks;
+- the suite under kill: 556 files, 0 fallbacks;
+- ASan test_gc;
+- stress test_capi.
+
+All pass, as does gate 1 test_gc under kill at 70ac80bf3f3.
+
+Measured, not gated:
+- kernels: instructions geomean 1.014, memory 1.017;
+- the allocation fast path: +3.0% and +4.5%;
+- stack words per collection: 204 down to 150;
+- micro geomean: 1.043.
+
+The micro regression bisects to item 2's handler changes, which the
+benchmarks do not run. The reading is code generation in the single
+eval-loop function.
+
+## 2026-10-28 06:15 PDT: 10a rung 1b landed; gate of the merged head
+
+Landed as two merges: 29a358b492d (boil/10a at 3d90f6ac9af, the six
+items, the end-gate fixes, the regression test and the call_effects
+hand-off) and 4bb672e0bf4 (boil/10a-rung1b at 4bd1cf172e0, one fix found
+by the landing gate). The first merge's conflicts: shapeobject.c's
+dict_from_slots (the rooted dict plus 6d rung 1's debug keys assertion,
+the form 6d had used at b05bb9fe068), ir_targets.h and
+generated_ir_cases.c.h regenerated, the worklog with both sides kept.
+Handler numbering unchanged apart from the precise attribute, so no
+magic bump.
+
+Gate run here on a detached checkout of 29a358b492d with fresh builds:
+gate 2 on default FAILED one test, test_gc's
+test_inline_collection_skips_eval_loop (2 of 20 receivers freed; 3 of 3
+alone; debug passes). Traced by the 10a agent with the by-address
+stack-hits tool: a stale copy of the receiver in the opaque frame of
+_PyList_FromValues, BUILD_LIST's allocator, exposed by the merge's stack
+layout under that frame (both branches passed alone, and so did the
+tree with 6d rung 2 on top). Fixed by promotion: PyList_New and
+_PyList_FromValues precise (4bd1cf172e0; probe 20 of 20 runs, gate 0 and
+1 on both builds, kill on test_gc and test_list). Gate run again on a
+detached checkout of 4bb672e0bf4: gate 2 on default 556/564 files,
+50,978 tests, SUCCESS, 54,257 collections, 0 fallbacks; gate 3 on debug
+50,978 tests, SUCCESS, 55,255 collections, 0 fallbacks, -u cpu test_cext
+16 tests, regen and the traverse audit clean.
+
+Hack-register rows retired by this rung (note 08 section 3; the 10a agent
+marks them with the commits in its next record): the 16 KB and 1 KB stack
+clears, _PyGC_CLEAR_ARRAY and the zeroed scratch arrays, the popped
+_PyValueRoot clear and the saved-register clears, and the eval-loop
+activation ranges with Py_NO_INLINE on the helpers. The eval loop's frame
+is a mapped frame, not an excluded range. Still open on the register for
+10a: -ftrivial-auto-var-init=zero (rung 3), the release-build test skips
+and the C-local PyMem arrays (rung 3), the inline-fallback scan.
+
+Also landed on the integration branch today: PROCESS.md rewritten on the
+user's direction (0af778a77ca, df0bb37edff): the plan and the position in
+section 0; the loop is design, review, implement and test, landing
+review, commit, integrate, quick-test; one branching point; a landing
+branch per rung; file ownership per work doc; kill, ASan and stress as
+standing gate 3 items for rungs touching the collector, roots, layout or
+eval loop; the rerun rule; the tracing order. boil/tools/landing_review.sh
+(8c923667245) runs the landing review; its first use, 6d rung 2 on
+e03ab939a4a, returned "fix first" with four findings (reviews/
+6d-2-landing.md on boil/6d-rung2), being fixed. Step 7a (the
+per-interpreter callback and finalizer queue) moved up from step 7 after
+finding B killed the process under stress in a shared-obmalloc
+subinterpreter's start-up.
+
+Correction (06:30 PDT, from the 10a agent's register commit 6124ebafd70):
+the saved-register clears were retired in 10a rung 1 (ce81b2828cd), not
+1b; Py_NO_INLINE stays on the helpers by design, since the inline audit
+relies on it; and the "inline-fallback collection scans everything" row
+was also retired in a3c01b61e52. The release-build test skips go to 10a
+rung 2b item 7, or rung 3 where a PyMem or struct root holds the object.
+
+## 2026-10-28 06:58 PDT: 6d rung 2 landed (attribute and descriptor slots on values); gate of the merged head
+
+Landed as c66c69d55cf, the merge of boil/6d-rung2 at cc81ca59f1e: rung 2's
+five commits (tp_getattro, tp_setattro, tp_descr_get and tp_descr_set take
+and return PyValue; PyMember_GetOneValue/SetOneValue; the object-form
+protocol functions as the compatibility layer; gc.get_referrers precise
+after the test_taskgroups trace), then the first landing review of the
+new procedure (reviews/6d-2-landing.md, codex: fix first, four findings)
+and its fixes: ctypes stores save the previous native bytes and restore
+them when keeping the new value fails (upstream leaks there; we would
+have read freed memory), with a deterministic allocation-failure test
+over a struct field, an array item and py_object.value; the promised
+collecting-conversion and descriptor-mutation tests and failure
+injection at four boxes; measurements redone on clean source at
+bb59ea53031 with the integration head f89d8e9c4d3 as the control, build
+lines in the JSON; every gate line with its commit.
+
+The agent's quick-test at e03ab939a4a and bb59ea53031: gate 0 both
+builds, gate 1 on 31 files, 8,794 tests on each build. Gate run here on
+a detached checkout of c66c69d55cf with rebuilt trees: gate 0 both
+builds; gate 1 on test_gc, test_asyncio.test_taskgroups, test_descr,
+test_capi and test_ctypes, 2,363 tests on each build; gate 2 on default
+556/564 files, 51,013 tests, SUCCESS, 54,366 collections, 0 fallbacks;
+gate 3 on debug 51,013 tests, SUCCESS, 56,185 collections, 0 fallbacks,
+-u cpu test_cext 16 tests, regen and the traverse audit clean.
+
+Measured against the control (the landing's own base): every micro row
+lower, boxes per iteration 1 to 0 on the getattr, setattr, descriptor and
+property rows, kernels geomean 0.944 with no kernel above +0.3%; against
+rung 1 1.017, against the 6d before records 1.006. One attribution
+recorded, not acted on: the control spends 9 more instructions per
+empty-loop iteration than the branch with identical loop source; the eval
+function is 161,349 bytes on the control and 143,577 with the rung, so
+it is code generation in the single eval-loop function (step 8's input;
+10a's rung 4 write-up cites it). Residues with owners: the super
+receiver box (minimum), object.__getattribute__'s box and the
+__length_hint__ box (rung 3, done in 04ffa14a62b), the C-mode spans for
+the slot bridges (10a rung 2b, hand-off table in 6d-2.md).

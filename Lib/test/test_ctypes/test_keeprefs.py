@@ -1,6 +1,7 @@
 import unittest
 from ctypes import (Structure, POINTER, pointer, c_char_p, c_int, py_object)
 from test import support
+from test.support import import_helper
 from test.support.script_helper import assert_python_ok
 
 
@@ -157,6 +158,74 @@ class PyObjectFieldBoxes(unittest.TestCase):
         x = py_object()
         x.value = 100000 + len("ab")
         self.assertEqual(x.value, 100002)
+
+    # A store that fails after writing native memory (at the keeper of a
+    # box, or at the keep-reference update) puts the previous contents back:
+    # the new contents' box is kept by nothing once the storing frame
+    # returns.  Every allocation of each store fails in turn, so the keeper's
+    # among them; the previous value must read back at once and after a
+    # collection.
+    NOMEMORY = """if 1:
+        import gc
+        import _testcapi
+        from ctypes import Structure, py_object
+        class S(Structure):
+            _fields_ = [("o", py_object)]
+        A = py_object * 2
+
+        def field(target, v):
+            target.o = v
+        def item(target, v):
+            target[1] = v
+        def value(target, v):
+            target.value = v
+        def read(store, target):
+            if store is field:
+                return target.o
+            if store is item:
+                return target[1]
+            return target.value
+
+        def attempt(store, target, n, k):
+            # Made here, so that only the store's roots hold the box.
+            v = 200000 + k
+            _testcapi.set_nomemory(n, 0)
+            try:
+                store(target, v)
+            except MemoryError:
+                return False
+            finally:
+                _testcapi.remove_mem_hooks()
+            return True
+
+        for store, target in ((field, S()), (item, A()), (value, py_object())):
+            store(target, 100000 + len("ab"))
+            for n in range(1, 100):
+                if attempt(store, target, n, n):
+                    break
+                assert read(store, target) == 100002, (store, n)
+                gc.collect()
+                assert read(store, target) == 100002, (store, n)
+            else:
+                raise AssertionError("store never succeeded", store)
+            assert n > 1, store     # the keeper's allocation, at least
+            assert read(store, target) == 200000 + n
+        gc.collect()
+        print("ok")
+    """
+
+    def check_nomemory(self, **env):
+        rc, out, err = assert_python_ok("-c", self.NOMEMORY, **env)
+        self.assertEqual(out.strip(), b"ok")
+
+    def test_nomemory(self):
+        import_helper.import_module("_testcapi")
+        self.check_nomemory()
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    def test_nomemory_kill(self):
+        import_helper.import_module("_testcapi")
+        self.check_nomemory(PYTHON_GCVERIFY="kill")
 
 
 if __name__ == "__main__":

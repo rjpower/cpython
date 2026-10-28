@@ -1,14 +1,41 @@
 # Object layout
 
-## Common header
+## This tree
 
-Each Python object starts with two fields:
+An object starts with one word, `ob_header`. Its low 48 bits point to the
+object's shape (`struct _PyShape`, Include/object.h), whose `type` field is
+the class; the high bits belong to the collector. There is no reference
+count and no pre-header: the object's address is its allocation's address.
+Weak references live in a table (Objects/weakrefobject.c).
 
-* ob_refcnt
-* ob_type
+A class with `Py_TPFLAGS_INLINE_VALUES` gives each instance a fixed number
+of attribute slots, each a `PyValue`, at `tp_basicsize`:
 
-which form the header common to all Python objects, for all versions,
-and hold the reference count and class of the object, respectively.
+* ob_header
+* the native base's fields and any `__slots__` members
+* slot 0
+* slot 1
+* ...
+
+The number of slots is fixed when the class is readied, from the names in
+`__static_attributes__` along the MRO (between 6 and 30). The object has one
+of two modes:
+
+* In shape mode, the shape names the attribute in each slot; a slot the
+  shape does not name, a hole left by a deletion or a slot past the end, is
+  NULL. Shapes form a tree per class: adding an attribute follows an edge to
+  the shape with one more slot (Objects/shapeobject.c).
+* In dictionary mode, slot 0 holds the instance dict, or NULL, and the other
+  slots are unused. An object enters dictionary mode when its `__dict__` is
+  needed or when a store does not fit in a shape, and never leaves it.
+
+A subclass of a variable-size class (`int`, `tuple`, `bytes`) has no slots.
+It keeps its dict in a word of its own at `tp_dictoffset`: after the items,
+found from the end of the object, or before the items for a base with
+`Py_TPFLAGS_ITEMS_AT_END`.
+
+The sections below describe upstream CPython's layouts, which this tree
+replaces.
 
 ## Pre-header
 

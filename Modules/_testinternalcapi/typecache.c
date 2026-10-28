@@ -182,6 +182,74 @@ shape(PyObject *Py_UNUSED(self), PyObject *obj)
     return Py_BuildValue("(OiN)", (PyObject *)sh->type, index, slots);
 }
 
+// type_slot_capacity(type) -> the slots of each instance, or None for a type
+// without inline values
+static PyObject *
+type_slot_capacity(PyObject *Py_UNUSED(self), PyObject *type)
+{
+    if (require_type(type) < 0) {
+        return NULL;
+    }
+    PyTypeObject *tp = (PyTypeObject *)type;
+    if (!(tp->tp_flags & Py_TPFLAGS_INLINE_VALUES)) {
+        Py_RETURN_NONE;
+    }
+    return PyLong_FromLong(_PyType_Shapes(tp)->capacity);
+}
+
+// object_slots(obj) -> the values of obj's attribute slots, NULL as None:
+// all of them in shape mode, slot 0 alone in dictionary mode, whose other
+// slots may lie outside the object after a __class__ assignment
+static PyObject *
+object_slots(PyObject *Py_UNUSED(self), PyObject *obj)
+{
+    PyTypeObject *tp = Py_TYPE(obj);
+    if (!(tp->tp_flags & Py_TPFLAGS_INLINE_VALUES)) {
+        PyErr_SetString(PyExc_TypeError, "no attribute slots");
+        return NULL;
+    }
+    int n = _PyShape_IsDictMode(_PyObject_SHAPE(obj))
+            ? 1 : _PyType_Shapes(tp)->capacity;
+    PyValue *slots = _PyObject_Slots(obj);
+    PyObject *res = PyTuple_New(n);
+    if (res == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i < n; i++) {
+        PyValue v = PyValue_IsNull(slots[i]) ? PyValue_FromObject(Py_None)
+                                             : slots[i];
+        PyTuple_SET_VALUE(res, i, v);
+    }
+    return res;
+}
+
+// object_dict_ptr(obj) -> (has_pointer, dict_or_None, error_pending):
+// _PyObject_GetDictPtr(), which sets no exception
+static PyObject *
+object_dict_ptr(PyObject *Py_UNUSED(self), PyObject *obj)
+{
+    PyObject **dictptr = _PyObject_GetDictPtr(obj);
+    int pending = PyErr_Occurred() != NULL;
+    PyErr_Clear();
+    PyObject *dict = dictptr != NULL && *dictptr != NULL ? *dictptr : Py_None;
+    return Py_BuildValue("(OOO)", dictptr != NULL ? Py_True : Py_False,
+                         dict, pending ? Py_True : Py_False);
+}
+
+// set_conversion_collect(flag) -> the old flag: whether conversion to
+// dictionary mode collects just before it publishes the dict
+static PyObject *
+set_conversion_collect(PyObject *Py_UNUSED(self), PyObject *flag)
+{
+    int value = PyObject_IsTrue(flag);
+    if (value < 0) {
+        return NULL;
+    }
+    int old = _PyShape_ConversionCollect;
+    _PyShape_ConversionCollect = value;
+    return PyBool_FromLong(old);
+}
+
 // type_cache_size(type) -> bytes of the type's cache table
 static PyObject *
 type_cache_size(PyObject *Py_UNUSED(self), PyObject *type)
@@ -200,6 +268,10 @@ static PyMethodDef test_methods[] = {
     {"lookup_store_plan", lookup_store_plan, METH_VARARGS},
     {"shape", shape, METH_O},
     {"type_cache_size", type_cache_size, METH_O},
+    {"type_slot_capacity", type_slot_capacity, METH_O},
+    {"object_slots", object_slots, METH_O},
+    {"set_conversion_collect", set_conversion_collect, METH_O},
+    {"object_dict_ptr", object_dict_ptr, METH_O},
     {NULL},
 };
 

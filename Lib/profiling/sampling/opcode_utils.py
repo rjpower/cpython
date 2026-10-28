@@ -18,7 +18,7 @@ if hasattr(opcode, "_specialized_opmap"):
 # Build deopt mapping: specialized opcode number -> base opcode number
 # Python 3.11+ uses adaptive specialization where generic opcodes like
 # LOAD_ATTR can be replaced at runtime with specialized variants like
-# LOAD_ATTR_INSTANCE_VALUE. This mapping lets us show both forms.
+# LOAD_ATTR_SHAPE. This mapping lets us show both forms.
 _DEOPT_MAP = {}
 if hasattr(opcode, "_specializations") and hasattr(
     opcode, "_specialized_opmap"
@@ -40,7 +40,7 @@ def get_opcode_info(opcode_num):
 
     Returns:
         A dict with keys:
-        - 'opname': The opcode name (e.g., 'LOAD_ATTR_INSTANCE_VALUE')
+        - 'opname': The opcode name (e.g., 'LOAD_ATTR_SHAPE')
         - 'base_opname': The base opcode name (e.g., 'LOAD_ATTR')
         - 'is_specialized': True if this is a specialized instruction
     """
@@ -75,7 +75,7 @@ def format_opcode(opcode_num):
         opcode_num: The opcode number (0-255 or higher for specialized)
 
     Returns:
-        A formatted string like 'LOAD_ATTR' or 'LOAD_ATTR_INSTANCE_VALUE (LOAD_ATTR)'
+        A formatted string like 'LOAD_ATTR' or 'LOAD_ATTR_SHAPE (LOAD_ATTR)'
     """
     info = get_opcode_info(opcode_num)
     if info["is_specialized"]:

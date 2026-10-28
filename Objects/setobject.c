@@ -32,6 +32,7 @@
 */
 
 #include "Python.h"
+#include "pycore_shape.h"         // _PyObject_InstanceSize()
 #include "pycore_ceval.h"               // _PyEval_GetBuiltin()
 #include "pycore_critical_section.h"    // Py_BEGIN_CRITICAL_SECTION, Py_END_CRITICAL_SECTION
 #include "pycore_dict.h"                // _PyDict_Contains_KnownHash()
@@ -2602,7 +2603,7 @@ static PyObject *
 set___sizeof___impl(PySetObject *so)
 /*[clinic end generated code: output=4bfa3df7bd38ed88 input=09e1a09f168eaa23]*/
 {
-    size_t res = _PyObject_SIZE(Py_TYPE(so));
+    size_t res = _PyObject_InstanceSize((PyObject *)so);
     if (so->table != so->smalltable) {
         res += ((size_t)so->mask + 1) * sizeof(setentry);
     }

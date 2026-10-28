@@ -626,7 +626,8 @@ Object Protocol
 
 .. c:function:: int PyObject_VisitManagedDict(PyObject *obj, visitproc visit, void *arg)
 
-   Visit the managed dictionary of *obj*.
+   Visit the managed dictionary of *obj*: the attribute slots, or the
+   dictionary if it exists.
 
    This function must only be called in a traverse function of the type which
    has the :c:macro:`Py_TPFLAGS_MANAGED_DICT` flag set.
@@ -635,7 +636,8 @@ Object Protocol
 
 .. c:function:: void PyObject_ClearManagedDict(PyObject *obj)
 
-   Clear the managed dictionary of *obj*.
+   Clear the managed dictionary of *obj*: the attribute slots, or the
+   dictionary if it exists.  Afterwards *obj* has no attributes.
 
    This function must only be called in a clear function of the type which
    has the :c:macro:`Py_TPFLAGS_MANAGED_DICT` flag set.

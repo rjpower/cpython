@@ -47,8 +47,7 @@ BORROWING = {
     "PyMethod_GET_FUNCTION",
     "PyMethod_GET_SELF",
     "_PyType_GetDict",
-    "_PyObject_InlineValues",
-    "_PyObject_GetManagedDict",
+    "_PyObject_DictAt",
     "PyExceptionInstance_Class",
 }
 

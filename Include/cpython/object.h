@@ -285,7 +285,6 @@ typedef struct _heaptypeobject {
                                       see add_operators() in typeobject.c . */
     PyBufferProcs as_buffer;
     PyObject *ht_name, *ht_slots, *ht_qualname;
-    struct _dictkeysobject *ht_cached_keys;
     struct _PyTypeShapes *ht_shapes; // the shapes after the root, if any
     PyObject *ht_module;
     char *_ht_tpname;  // Storage for "tp_name"; see PyType_FromModuleAndSpec

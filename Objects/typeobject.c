@@ -2311,21 +2311,6 @@ type_call(PyObject *self, PyObject *args, PyObject *kwds)
 }
 
 PyObject *
-_PyType_NewManagedObject(PyTypeObject *type)
-{
-    assert(type->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-    assert(_PyType_IS_GC(type));
-    assert(type->tp_new == PyBaseObject_Type.tp_new);
-    assert(type->tp_alloc == PyType_GenericAlloc);
-    assert(type->tp_itemsize == 0);
-    PyObject *obj = PyType_GenericAlloc(type, 0);
-    if (obj == NULL) {
-        return PyErr_NoMemory();
-    }
-    return obj;
-}
-
-PyObject *
 _PyType_AllocNoTrack(PyTypeObject *type, Py_ssize_t nitems)
 {
     PyObject *obj;
@@ -2337,19 +2322,12 @@ _PyType_AllocNoTrack(PyTypeObject *type, Py_ssize_t nitems)
      * tuple. See GH-100659 and GH-81381. */
     size_t size = _PyObject_VAR_SIZE(type, nitems+1);
 
-    const size_t presize = _PyType_PreHeaderSize(type);
-    if (type->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-        assert(type->tp_itemsize == 0);
-        size += _PyInlineValuesSize(type);
-    }
-    char *alloc = _PyObject_MallocWithType(type, size + presize);
-    if (alloc  == NULL) {
+    // The attribute slots follow at tp_basicsize; zeroed, they are NULL.
+    assert(type->tp_itemsize == 0 || _PyType_SlotsSize(type) == 0);
+    size += _PyType_SlotsSize(type);
+    obj = (PyObject *)_PyObject_MallocWithType(type, size);
+    if (obj == NULL) {
         return PyErr_NoMemory();
-    }
-    obj = (PyObject *)(alloc + presize);
-    if (presize) {
-        ((PyObject **)alloc)[0] = NULL;
-        ((PyObject **)alloc)[1] = NULL;
     }
     // Zero out the object after the PyObject header. The header fields are
     // initialized by _PyObject_Init[Var]().
@@ -2360,9 +2338,6 @@ _PyType_AllocNoTrack(PyTypeObject *type, Py_ssize_t nitems)
     }
     else {
         _PyObject_InitVar((PyVarObject *)obj, type, nitems);
-    }
-    if (type->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-        _PyObject_InitInlineValues(obj, type);
     }
     return obj;
 }
@@ -3705,8 +3680,12 @@ _PyObject_SetDict(PyObject *obj, PyObject *value)
                      "not a '%.200s'", Py_TYPE(value)->tp_name);
         return -1;
     }
-    if (Py_TYPE(obj)->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
-        return _PyObject_SetManagedDict(obj, value);
+    if (Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
+        // The old attributes are discarded, not copied.
+        Py_BEGIN_CRITICAL_SECTION(obj);
+        _PyObject_SetSlotDict(obj, (PyDictObject *)value);
+        Py_END_CRITICAL_SECTION();
+        return 0;
     }
     PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
     if (dictptr == NULL) {
@@ -4363,8 +4342,23 @@ type_new_descriptors(const type_new_ctx *ctx, PyTypeObject *type, PyObject *dict
     }
     if (ctx->add_dict) {
         assert((type->tp_flags & Py_TPFLAGS_MANAGED_DICT) == 0);
-        type_add_flags(type, Py_TPFLAGS_MANAGED_DICT);
-        type->tp_dictoffset = -1;
+        if (ctx->base->tp_itemsize == 0) {
+            // The attributes live in shape slots (type_ready_managed_dict).
+            type_add_flags(type, Py_TPFLAGS_MANAGED_DICT);
+            type->tp_dictoffset = -1;
+        }
+        else if (ctx->base->tp_flags & Py_TPFLAGS_ITEMS_AT_END) {
+            // The items follow tp_basicsize, so the dict word goes before
+            // them.
+            type->tp_dictoffset = slotoffset;
+            slotoffset += sizeof(PyObject *);
+        }
+        else {
+            // The items are at a fixed offset in the base: the dict word
+            // follows them, found from the end of the object.
+            type->tp_dictoffset = -(Py_ssize_t)sizeof(PyObject *);
+            slotoffset += sizeof(PyObject *);
+        }
     }
 
     type->tp_basicsize = slotoffset;
@@ -6635,9 +6629,6 @@ type_dealloc(PyObject *self)
     Py_XDECREF(et->ht_name);
     Py_XDECREF(et->ht_qualname);
     Py_XDECREF(et->ht_slots);
-    if (et->ht_cached_keys) {
-        _PyDict_RemoveKeysForClass(et);
-    }
     _PyShape_FreeTypeShapes(et);
     Py_XDECREF(et->ht_module);
     PyMem_Free(et->_ht_tpname);
@@ -6766,8 +6757,6 @@ type___sizeof___impl(PyTypeObject *self)
     if (self->tp_flags & Py_TPFLAGS_HEAPTYPE) {
         PyHeapTypeObject* et = (PyHeapTypeObject*)self;
         size = sizeof(PyHeapTypeObject);
-        if (et->ht_cached_keys)
-            size += _PyDict_KeysSize(et->ht_cached_keys);
         size += _PyShape_TypeShapesSize(et);
     }
     else {
@@ -6821,16 +6810,12 @@ type_traverse(PyObject *self, visitproc visit, void *arg)
     /* The rest cannot be involved in cycles, but the tracing collector
        must see every reference the type owns: tp_subclasses is a dict of
        weak references, ht_slots is a tuple of strings, ht_*name are
-       strings, and the shared keys hold strings. */
+       strings, and the shapes hold their slot names. */
     Py_VISIT(type->tp_subclasses);
     _Py_VISIT_ATOMIC(ht->ht_name);
     _Py_VISIT_ATOMIC(ht->ht_qualname);
     Py_VISIT(ht->ht_slots);
-    int err = _PyShape_TraverseTypeShapes(ht, visit, arg);
-    if (err) {
-        return err;
-    }
-    return _PyDict_TraverseKeysForClass(ht, visit, arg);
+    return _PyShape_TraverseTypeShapes(ht, visit, arg);
 }
 
 /* Visit what a static type refers to, for the tracing verifier.  A static
@@ -7271,7 +7256,7 @@ compatible_for_assignment(PyTypeObject *origto, PyTypeObject *newto,
     if (!compatible_flags(setclass, origto, newto,
                           Py_TPFLAGS_HAVE_GC |
                           Py_TPFLAGS_INLINE_VALUES |
-                          Py_TPFLAGS_PREHEADER))
+                          Py_TPFLAGS_MANAGED_DICT))
     {
         goto differs;
     }
@@ -7389,38 +7374,25 @@ object_set_class_world_stopped(PyObject *self, PyTypeObject *newto)
     }
 
     if (compatible_for_assignment(oldto, newto, "__class__", 1)) {
-        /* Changing the class will change the implicit dict keys,
-         * so we must materialize the dictionary first. */
+        /* The new type's shapes do not describe the object's slots, so the
+         * attributes move to the dict first.  The object keeps its old
+         * type's capacity, which may differ from the new type's: in
+         * dictionary mode, which is terminal, only slot 0 is used. */
         if (oldto->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-            PyDictObject *dict = _PyObject_GetManagedDict(self);
-            if (dict == NULL) {
-                dict = _PyObject_MaterializeManagedDict_LockHeld(self);
-                if (dict == NULL) {
-                    return -1;
-                }
-            }
-
-            assert(_PyObject_GetManagedDict(self) == dict);
-
-            int err;
-            Py_BEGIN_CRITICAL_SECTION(dict);
-            err = _PyDict_DetachFromObject(dict, self);
-            Py_END_CRITICAL_SECTION();
-            if (err < 0) {
+            assert(newto->tp_flags & Py_TPFLAGS_INLINE_VALUES);
+            if (_PyObject_EnterDictMode(self) == NULL) {
                 return -1;
             }
-
         }
         if (newto->tp_flags & Py_TPFLAGS_HEAPTYPE) {
             Py_INCREF(newto);
         }
 
+        // The world is stopped, so no thread sees the root shape between
+        // the two writes.
         Py_SET_TYPE(self, newto);
         if (newto->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-            // The inline values were detached above: the attributes are
-            // in the dict.
-            assert(oldto->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-            _PyObject_SetDictModeShape(self);
+            _PyObject_SetShape(self, _PyType_DictModeShape(newto));
         }
 
         return 0;
@@ -8108,7 +8080,7 @@ object___sizeof___impl(PyObject *self)
          which isn't true for PyLongObject. */
         res = _PyVarObject_CAST(self)->ob_size * isize;
     }
-    res += Py_TYPE(self)->tp_basicsize;
+    res += _PyObject_InstanceSize(self);
 
     return PyLong_FromSsize_t(res);
 }
@@ -8384,7 +8356,7 @@ inherit_special(PyTypeObject *type, PyTypeObject *base)
         if (type->tp_clear == NULL)
             type->tp_clear = base->tp_clear;
     }
-    type_add_flags(type, base->tp_flags & (Py_TPFLAGS_PREHEADER
+    type_add_flags(type, base->tp_flags & (Py_TPFLAGS_MANAGED_DICT
                                            | Py_TPFLAGS_MANAGED_WEAKREF
                                            | Py_TPFLAGS_DEALLOC_READS_REFERENTS));
 
@@ -8836,7 +8808,7 @@ type_ready_fill_dict(PyTypeObject *type)
 }
 
 static int
-type_ready_preheader(PyTypeObject *type)
+type_ready_managed_offsets(PyTypeObject *type)
 {
     if (type->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
         if (type->tp_dictoffset > 0 || type->tp_dictoffset < -1) {
@@ -9104,19 +9076,31 @@ type_ready_managed_dict(PyTypeObject *type)
         return -1;
     }
     PyHeapTypeObject* et = (PyHeapTypeObject*)type;
-    if (et->ht_cached_keys == NULL) {
-        et->ht_cached_keys = _PyDict_NewKeysForClass(et);
-        if (et->ht_cached_keys == NULL) {
-            PyErr_NoMemory();
-            return -1;
+    if (type->tp_itemsize != 0) {
+        /* A variable-size C type that asks for a managed dict gets a dict
+           word of its own instead, placed as type_new_descriptors places
+           one for a Python subclass of a variable-size type.  No instance
+           exists yet. */
+        type_clear_flags(type, Py_TPFLAGS_MANAGED_DICT);
+        if (type->tp_flags & Py_TPFLAGS_ITEMS_AT_END) {
+            type->tp_dictoffset = type->tp_basicsize;
         }
+        else {
+            type->tp_dictoffset = -(Py_ssize_t)sizeof(PyObject *);
+        }
+        type->tp_basicsize += sizeof(PyObject *);
+        return 0;
     }
-    if (type->tp_itemsize == 0) {
-        type_add_flags(type, Py_TPFLAGS_INLINE_VALUES);
-        if (et->ht_shapes == NULL && _PyShape_InitTypeShapes(et) < 0) {
-            PyErr_NoMemory();
-            return -1;
-        }
+    // The instances' attributes live in `capacity` shape slots after
+    // tp_basicsize; the managed dict is slot 0 in dictionary mode.
+    int capacity = _PyType_SlotCapacity(type);
+    if (capacity < 0) {
+        return -1;
+    }
+    type_add_flags(type, Py_TPFLAGS_INLINE_VALUES);
+    if (et->ht_shapes == NULL && _PyShape_InitTypeShapes(et, capacity) < 0) {
+        PyErr_NoMemory();
+        return -1;
     }
     return 0;
 }
@@ -9220,7 +9204,7 @@ type_ready(PyTypeObject *type, int initial, int add_subclasses)
         if (type_ready_inherit(type) < 0) {
             goto error;
         }
-        if (type_ready_preheader(type) < 0) {
+        if (type_ready_managed_offsets(type) < 0) {
             goto error;
         }
         type_ready_destroy_hook(type);

@@ -1294,6 +1294,15 @@ and :c:data:`PyType_Type` effectively act as defaults.)
       The type traverse function must call :c:func:`PyObject_VisitManagedDict`
       and its clear function must call :c:func:`PyObject_ClearManagedDict`.
 
+      .. impl-detail::
+
+         When the type also has :c:member:`~PyTypeObject.tp_itemsize` of
+         zero, the attributes are in the slots that
+         :c:macro:`Py_TPFLAGS_INLINE_VALUES` describes.  Otherwise
+         :c:func:`PyType_Ready` clears this flag and gives the instances a
+         dictionary pointer at a :c:member:`~PyTypeObject.tp_dictoffset` of
+         its own; the two functions above still visit and clear it.
+
       .. versionadded:: 3.12
 
       **Inheritance:**
@@ -1522,9 +1531,11 @@ and :c:data:`PyType_Type` effectively act as defaults.)
 
    .. c:macro:: Py_TPFLAGS_INLINE_VALUES
 
-      This bit indicates that instances of this type will have an "inline values"
-      array (containing the object's attributes) placed directly after the end
-      of the object.
+      This bit indicates that instances of this type have attribute slots
+      placed at :c:member:`~PyTypeObject.tp_basicsize`, as many as the type
+      fixes when it is readied.  The object's shape names the attribute in
+      each slot; once the object's ``__dict__`` exists, the first slot holds
+      it and the attributes are in it.
 
       This requires that :c:macro:`Py_TPFLAGS_HAVE_GC` is set.
 

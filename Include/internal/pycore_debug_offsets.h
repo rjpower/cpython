@@ -175,7 +175,6 @@ typedef struct _Py_DebugOffsets {
     // PyHeapTypeObject offset;
     struct _heap_type_object {
         uint64_t size;
-        uint64_t ht_cached_keys;
     } heap_type_object;
 
     // PyTuple object offset;
@@ -359,7 +358,6 @@ typedef struct _Py_DebugOffsets {
     }, \
     .heap_type_object = { \
         .size = sizeof(PyHeapTypeObject), \
-        .ht_cached_keys = offsetof(PyHeapTypeObject, ht_cached_keys), \
     }, \
     .tuple_object = { \
         .size = sizeof(PyTupleObject), \

@@ -857,7 +857,14 @@ class ClassTests(unittest.TestCase):
                 pass
 
 
-from _testinternalcapi import has_inline_values
+from _testinternalcapi import get_object_shape
+
+
+def has_shape(obj):
+    """Whether obj's attributes are in slots that its shape describes,
+    rather than in a dict."""
+    return get_object_shape(obj) is not None
+
 
 Py_TPFLAGS_INLINE_VALUES = (1 << 2)
 Py_TPFLAGS_MANAGED_DICT = (1 << 4)
@@ -889,7 +896,7 @@ class TestInlineValues(unittest.TestCase):
         flags = NoManagedDict.__flags__
         self.assertEqual(flags & Py_TPFLAGS_MANAGED_DICT, 0)
         self.assertEqual(flags & Py_TPFLAGS_INLINE_VALUES, 0)
-        self.assertFalse(has_inline_values(NoManagedDict()))
+        self.assertFalse(has_shape(NoManagedDict()))
 
     def test_both_flags_for_regular_class(self):
         for cls in (Plain, WithAttrs):
@@ -897,36 +904,40 @@ class TestInlineValues(unittest.TestCase):
                 flags = cls.__flags__
                 self.assertEqual(flags & Py_TPFLAGS_MANAGED_DICT, Py_TPFLAGS_MANAGED_DICT)
                 self.assertEqual(flags & Py_TPFLAGS_INLINE_VALUES, Py_TPFLAGS_INLINE_VALUES)
-                self.assertTrue(has_inline_values(cls()))
+                self.assertTrue(has_shape(cls()))
 
-    def test_managed_dict_only_for_varsized_subclass(self):
+    def test_dict_word_for_varsized_subclass(self):
+        # The dict follows the items, at a computed offset.
         flags = VarSizedSubclass.__flags__
-        self.assertEqual(flags & Py_TPFLAGS_MANAGED_DICT, Py_TPFLAGS_MANAGED_DICT)
+        self.assertEqual(flags & Py_TPFLAGS_MANAGED_DICT, 0)
         self.assertEqual(flags & Py_TPFLAGS_INLINE_VALUES, 0)
-        self.assertFalse(has_inline_values(VarSizedSubclass()))
+        self.assertNotEqual(VarSizedSubclass.__dictoffset__, 0)
+        self.assertFalse(has_shape(VarSizedSubclass()))
 
-    def test_has_inline_values(self):
+    def test_has_shape(self):
         c = Plain()
-        self.assertTrue(has_inline_values(c))
+        self.assertTrue(has_shape(c))
         del c.__dict__
-        self.assertFalse(has_inline_values(c))
+        self.assertFalse(has_shape(c))
 
     def test_instances(self):
-        self.assertTrue(has_inline_values(Plain()))
-        self.assertTrue(has_inline_values(WithAttrs()))
+        self.assertTrue(has_shape(Plain()))
+        self.assertTrue(has_shape(WithAttrs()))
 
     def test_inspect_dict(self):
+        # The dict replaces the slots: there is no view that aliases them.
         for cls in (Plain, WithAttrs):
             c = cls()
             c.__dict__
-            self.assertTrue(has_inline_values(c))
+            self.assertFalse(has_shape(c))
 
     def test_update_dict(self):
         d = { "e": 5, "f": 6 }
         for cls in (Plain, WithAttrs):
             c = cls()
             c.__dict__.update(d)
-            self.assertTrue(has_inline_values(c))
+            self.assertFalse(has_shape(c))
+            self.assertEqual(c.e, 5)
 
     @staticmethod
     def set_100(obj):
@@ -940,21 +951,22 @@ class TestInlineValues(unittest.TestCase):
     def test_many_attributes(self):
         class C: pass
         c = C()
-        self.assertTrue(has_inline_values(c))
+        self.assertTrue(has_shape(c))
         self.set_100(c)
-        self.assertFalse(has_inline_values(c))
+        self.assertFalse(has_shape(c))
         self.check_100(c)
         c = C()
-        self.assertTrue(has_inline_values(c))
+        self.assertTrue(has_shape(c))
 
     def test_many_attributes_with_dict(self):
         class C: pass
         c = C()
         d = c.__dict__
-        self.assertTrue(has_inline_values(c))
+        self.assertFalse(has_shape(c))
         self.set_100(c)
-        self.assertFalse(has_inline_values(c))
+        self.assertFalse(has_shape(c))
         self.check_100(c)
+        self.assertEqual(len(d), 100)
 
     def test_bug_117750(self):
         "Aborted on 3.13a6"

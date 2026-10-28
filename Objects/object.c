@@ -9,7 +9,7 @@
 #include "pycore_context.h"       // _PyContextTokenMissing_Type
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION
 #include "pycore_descrobject.h"   // _PyMethodWrapper_Type
-#include "pycore_dict.h"          // _PyObject_MaterializeManagedDict()
+#include "pycore_dict.h"          // _PyDict_GetItemValue()
 #include "pycore_function.h"      // _PyClassMethod_GetFunc()
 #include "pycore_gc_trace.h"     // _PyGC_LiveAddImmortal()
 #include "pycore_genobject.h"     // _PyAsyncGenAThrow_Type
@@ -1272,6 +1272,20 @@ PyObject_DelAttr(PyObject *v, PyObject *name)
     return PyObject_SetAttr(v, name, NULL);
 }
 
+/* The number of items of OBJ, a variable-size object, that its allocation
+   holds: |ob_size|, except for an int (subclass), whose ob_size is lv_tag;
+   long_subtype_new allocates its digit count, at least 1. */
+static Py_ssize_t
+var_item_count(PyObject *obj)
+{
+    if (PyLong_Check(obj)) {
+        Py_ssize_t n = _PyLong_DigitCount((PyLongObject *)obj);
+        return n ? n : 1;
+    }
+    Py_ssize_t n = Py_SIZE(obj);
+    return n < 0 ? -n : n;
+}
+
 PyObject **
 _PyObject_ComputedDictPointer(PyObject *obj)
 {
@@ -1286,11 +1300,7 @@ _PyObject_ComputedDictPointer(PyObject *obj)
     if (dictoffset < 0) {
         assert(dictoffset != -1);
 
-        Py_ssize_t tsize = Py_SIZE(obj);
-        if (tsize < 0) {
-            tsize = -tsize;
-        }
-        size_t size = _PyObject_VAR_SIZE(tp, tsize);
+        size_t size = _PyObject_VAR_SIZE(tp, var_item_count(obj));
         assert(size <= (size_t)PY_SSIZE_T_MAX);
         dictoffset += (Py_ssize_t)size;
 
@@ -1300,9 +1310,27 @@ _PyObject_ComputedDictPointer(PyObject *obj)
     return (PyObject **) ((char *)obj + dictoffset);
 }
 
+int
+_PyObject_IsInstanceDictEmpty(PyObject *obj)
+{
+    PyTypeObject *tp = Py_TYPE(obj);
+    if (tp->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
+        return _PyObject_ShapeIsEmpty(obj);
+    }
+    if (tp->tp_dictoffset == 0) {
+        return 1;
+    }
+    PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
+    PyObject *dict = dictptr != NULL ? *dictptr : NULL;
+    return dict == NULL || PyDict_GET_SIZE(dict) == 0;
+}
+
 /* Helper to get a pointer to an object's __dict__ slot, if any.
- * Creates the dict from inline attributes if necessary.
- * Does not set an exception.
+ * An object with shape slots enters dictionary mode, and the pointer is to
+ * slot 0, which holds the dict; a value that refers to an object is the
+ * object's pointer, so the slot can be read and written as a PyObject *.
+ * Does not set an exception: on a failure the object is unchanged and the
+ * result is NULL.
  *
  * Note that the tp_dictoffset docs used to recommend this function,
  * so it should be treated as part of the public API.
@@ -1310,18 +1338,14 @@ _PyObject_ComputedDictPointer(PyObject *obj)
 PyObject **
 _PyObject_GetDictPtr(PyObject *obj)
 {
-    if ((Py_TYPE(obj)->tp_flags & Py_TPFLAGS_MANAGED_DICT) == 0) {
+    if ((Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES) == 0) {
         return _PyObject_ComputedDictPointer(obj);
     }
-    PyDictObject *dict = _PyObject_GetManagedDict(obj);
-    if (dict == NULL && Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-        dict = _PyObject_MaterializeManagedDict(obj);
-        if (dict == NULL) {
-            PyErr_Clear();
-            return NULL;
-        }
+    if (_PyObject_EnterDictMode(obj) == NULL) {
+        PyErr_Clear();
+        return NULL;
     }
-    return (PyObject **)&_PyObject_ManagedDictPointer(obj)->dict;
+    return (PyObject **)&_PyObject_Slots(obj)[0];
 }
 
 PyObject *
@@ -1385,21 +1409,17 @@ load_from_storage(PyObject *obj, PyObject *name, const _PyLookupPlan *plan,
         if (plan->kind != _Py_LOOKUP_DICT) {
             return 0;
         }
-        /* The storage adapter of 6c rung 2 (boil/design/work/6c-rung2.md):
-           in dictionary mode the inline values may still be valid without a
-           dict, or a dict may alias them.  Rung 3 deletes it. */
         if (tp->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-            if (PyUnicode_CheckExact(name) &&
-                _PyObject_TryGetInstanceAttributeValue(obj, name, res)) {
-                return !PyValue_IsNull(*res);
+            if (!_PyShape_IsDictMode(_PyObject_SHAPE(obj))) {
+                /* DICT on a shape: the name is not an exact str, and only
+                   the dict compares it by its own __hash__ and __eq__. */
+                assert(!PyUnicode_CheckExact(name));
+                OBJECT_STAT_INC(dict_materialized_str_subclass);
+                if (_PyObject_EnterDictMode(obj) == NULL) {
+                    return -1;
+                }
             }
-            dict = (PyObject *)_PyObject_MaterializeManagedDict(obj);
-            if (dict == NULL) {
-                return -1;
-            }
-        }
-        else if (tp->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
-            dict = (PyObject *)_PyObject_GetManagedDict(obj);
+            dict = (PyObject *)_PyObject_SlotDict(obj);
         }
         else {
             PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
@@ -1769,7 +1789,7 @@ generic_setattr_value(PyObject *obj, PyObject *name, PyValue value,
     PyObject **dictptr;
     switch (plan.outcome) {
         case _Py_STORE_REPLACE:
-            // A shape-mode object: valid inline values and no dict.
+            // A shape-mode object: the field's slot.
             *(PyValue *)((char *)obj + plan.offset) = value;
             res = 0;
             goto done;
@@ -1778,20 +1798,16 @@ generic_setattr_value(PyObject *obj, PyObject *name, PyValue value,
             goto done;
         case _Py_STORE_ADD:
         case _Py_STORE_REMOVE:
-            res = _PyObject_StoreInstanceAttribute(obj, name, value);
-            goto error_check;
+            // Prepare the edge, then commit; a limit converts.
+            res = _PyObject_ShapeStoreAttr(obj, name, value);
+            goto done;
         case _Py_STORE_DICT:
             if (tp->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-                res = _PyObject_StoreInstanceAttribute(obj, name, value);
-                goto error_check;
+                // Slot 0's dict, or a non-exact name converting first.
+                res = _PyObject_ShapeStoreAttr(obj, name, value);
+                goto done;
             }
-            if (tp->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
-                PyManagedDictPointer *managed_dict = _PyObject_ManagedDictPointer(obj);
-                dictptr = (PyObject **)&managed_dict->dict;
-            }
-            else {
-                dictptr = _PyObject_ComputedDictPointer(obj);
-            }
+            dictptr = _PyObject_ComputedDictPointer(obj);
             if (dictptr != NULL) {
                 res = _PyObjectDict_SetItem(tp, obj, dictptr, name, value);
                 goto error_check;
@@ -2665,10 +2681,7 @@ _PyObject_AssertFailed(PyObject *obj, const char *expr, const char *msg,
         /* Display the traceback where the object has been allocated.
            Do it before dumping repr(obj), since repr() is more likely
            to crash than dumping the traceback. */
-        PyTypeObject *type = Py_TYPE(obj);
-        const size_t presize = _PyType_PreHeaderSize(type);
-        void *ptr = (void *)((char *)obj - presize);
-        _PyMem_DumpTraceback(fileno(stderr), ptr);
+        _PyMem_DumpTraceback(fileno(stderr), obj);
 
         /* This might succeed or fail, but we're about to abort, so at least
            try to provide any extra info we can: */

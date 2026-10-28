@@ -17,9 +17,15 @@ if check_impl_detail(cpython=False):
 
 _testinternalcapi = import_module("_testinternalcapi")
 
-# Instances with inline values and no __dict__ get the shape handlers.
+# Instances in shape mode get the shape handlers.
 LOAD_ATTR_INSTANCE = "LOAD_ATTR_SHAPE"
 STORE_ATTR_INSTANCE = "STORE_ATTR_SHAPE"
+
+
+def enter_dictionary_mode(obj):
+    """Store more attributes than any type has slots for."""
+    for i in range(_testinternalcapi.SHAPE_MAX_SLOTS + 1):
+        setattr(obj, f"_{i}", None)
 
 
 def have_dict_key_versions():
@@ -887,36 +893,6 @@ class TestRacesDoNotCrash(TestBase):
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
-    def test_load_attr_method_lazy_dict(self):
-        def get_items():
-            class C(Exception):
-                m = lambda self: None
-
-            items = []
-            for _ in range(self.ITEMS):
-                item = C()
-                items.append(item)
-            return items
-
-        def read(items):
-            for item in items:
-                try:
-                    item.m()
-                except AttributeError:
-                    pass
-
-        def write(items):
-            for item in items:
-                try:
-                    del item.m
-                except AttributeError:
-                    pass
-                type(item).m = lambda self: None
-
-        opname = "LOAD_ATTR_METHOD_LAZY_DICT"
-        self.assert_races_do_not_crash(opname, get_items, read, write)
-
-    @requires_specialization
     def test_load_attr_method_no_dict(self):
         def get_items():
             class C:
@@ -948,7 +924,7 @@ class TestRacesDoNotCrash(TestBase):
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
-    def test_load_attr_method_with_values(self):
+    def test_load_attr_method_shape(self):
         def get_items():
             class C:
                 m = lambda self: None
@@ -974,7 +950,7 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 type(item).m = lambda self: None
 
-        opname = "LOAD_ATTR_METHOD_WITH_VALUES"
+        opname = "LOAD_ATTR_METHOD_SHAPE"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1069,9 +1045,7 @@ class TestRacesDoNotCrash(TestBase):
             for _ in range(self.ITEMS):
                 item = C()
                 item.a = None
-                # Resize into a combined unicode dict:
-                for i in range(_testinternalcapi.SHARED_KEYS_MAX_SIZE - 1):
-                    setattr(item, f"_{i}", None)
+                enter_dictionary_mode(item)
                 items.append(item)
             return items
 
@@ -1111,7 +1085,7 @@ class TestRacesDoNotCrash(TestBase):
         )
 
     @requires_specialization
-    def test_store_attr_instance_value(self):
+    def test_store_attr_shape(self):
         def get_items():
             class C:
                 pass
@@ -1119,6 +1093,7 @@ class TestRacesDoNotCrash(TestBase):
             items = []
             for _ in range(self.ITEMS):
                 item = C()
+                item.a = 0
                 items.append(item)
             return items
 
@@ -1130,7 +1105,7 @@ class TestRacesDoNotCrash(TestBase):
             for item in items:
                 item.__dict__[None] = None
 
-        opname = "STORE_ATTR_INSTANCE_VALUE"
+        opname = "STORE_ATTR_SHAPE"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1142,9 +1117,7 @@ class TestRacesDoNotCrash(TestBase):
             items = []
             for _ in range(self.ITEMS):
                 item = C()
-                # Resize into a combined unicode dict:
-                for i in range(_testinternalcapi.SHARED_KEYS_MAX_SIZE - 1):
-                    setattr(item, f"_{i}", None)
+                enter_dictionary_mode(item)
                 items.append(item)
             return items
 
@@ -1169,7 +1142,7 @@ class TestRacesDoNotCrash(TestBase):
             for _ in range(self.ITEMS):
                 item = C()
                 item.a = None
-                # A split dict that shares the inline values:
+                # Dictionary mode with few attributes
                 vars(item)
                 items.append(item)
             return items
@@ -1248,10 +1221,8 @@ class TestInstanceDict(unittest.TestCase):
         c.a = 1
         C().b = 2
         c.c = 3
-        self.assertEqual(
-            _testinternalcapi.get_object_dict_values(c),
-            (1, '<NULL>', 3)
-        )
+        # Slots are positions in c's own shape, whatever other instances add.
+        self.assertEqual(_testinternalcapi.object_slots(c)[:3], (1, 3, None))
 
     def test_dict_materialization(self):
         c = C()
@@ -1260,17 +1231,15 @@ class TestInstanceDict(unittest.TestCase):
         c.__dict__
         self.assertEqual(c.__dict__, {"a":1, "b": 2})
 
-    def test_dict_dematerialization(self):
+    def test_dictionary_mode_is_terminal(self):
         c = C()
         c.a = 1
         c.b = 2
-        c.__dict__
+        d = c.__dict__
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             c.a
-        self.assertEqual(
-            _testinternalcapi.get_object_dict_values(c),
-            (1, 2, '<NULL>')
-        )
+        self.assertIsNone(_testinternalcapi.get_object_shape(c))
+        self.assertEqual(_testinternalcapi.object_slots(c), (d,))
 
     def test_dict_dematerialization_multiple_refs(self):
         c = C()
@@ -1289,23 +1258,13 @@ class TestInstanceDict(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             c.a
             c2.a
-        self.assertEqual(
-            _testinternalcapi.get_object_dict_values(c),
-            (1, 2, '<NULL>')
-        )
-        self.assertEqual(
-            _testinternalcapi.get_object_dict_values(c2),
-            (1, 2, '<NULL>')
-        )
+        self.assertEqual(vars(c), {"a": 1, "b": 2})
+        self.assertEqual(vars(c2), {"a": 1, "b": 2})
         c3 = copy.deepcopy(c)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             c.a
             c3.a
-        self.assertEqual(
-            _testinternalcapi.get_object_dict_values(c),
-            (1, 2, '<NULL>')
-        )
-        #NOTE -- c3.__dict__ does not de-materialize
+        self.assertEqual(vars(c3), {"a": 1, "b": 2})
 
     def test_dict_dematerialization_pickle(self):
         c = C()
@@ -1315,14 +1274,8 @@ class TestInstanceDict(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             c.a
             c2.a
-        self.assertEqual(
-            _testinternalcapi.get_object_dict_values(c),
-            (1, 2, '<NULL>')
-        )
-        self.assertEqual(
-            _testinternalcapi.get_object_dict_values(c2),
-            (1, 2, '<NULL>')
-        )
+        self.assertEqual(vars(c), {"a": 1, "b": 2})
+        self.assertEqual(vars(c2), {"a": 1, "b": 2})
 
     def test_dict_dematerialization_subclass(self):
         class D(dict): pass
@@ -1332,10 +1285,8 @@ class TestInstanceDict(unittest.TestCase):
         c.__dict__ = D(c.__dict__)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             c.a
-        self.assertIs(
-            _testinternalcapi.get_object_dict_values(c),
-            None
-        )
+        self.assertIsNone(_testinternalcapi.get_object_shape(c))
+        self.assertIs(type(c.__dict__), D)
         self.assertEqual(
             c.__dict__,
             {'a':1, 'b':2}
@@ -1363,13 +1314,12 @@ class TestInstanceDict(unittest.TestCase):
 
         class NoInlineAorB:
             pass
-        for i in range(ord('c'), ord('z')):
-            setattr(NoInlineAorB(), chr(i), i)
 
         c = NoInlineAorB()
         c.a = 0
         c.b = 1
-        self.assertFalse(_testinternalcapi.has_inline_values(c))
+        vars(c)
+        self.assertIsNone(_testinternalcapi.get_object_shape(c))
 
         def f(o, n):
             for i in range(n):
@@ -1788,8 +1738,7 @@ class TestSpecializer(TestBase):
             pass
 
         c = C()
-        for i in range(_testinternalcapi.SHARED_KEYS_MAX_SIZE - 1):
-            setattr(c, f"_{i}", None)
+        enter_dictionary_mode(c)
 
         @reset_code
         def set_value(n):
@@ -1815,7 +1764,7 @@ class TestSpecializer(TestBase):
 
         c = C()
         d = vars(c)
-        self.assertTrue(_testinternalcapi.has_inline_values(c))
+        self.assertIsNone(_testinternalcapi.get_object_shape(c))
 
         @reset_code
         def get_value(n):
@@ -1829,13 +1778,13 @@ class TestSpecializer(TestBase):
 
         n = _testinternalcapi.SPECIALIZATION_THRESHOLD
         get_value(n)
-        self.assert_specialized(get_value, "LOAD_ATTR_INSTANCE_VALUE")
+        self.assert_specialized(get_value, "LOAD_ATTR_WITH_HINT")
         self.assert_no_opcode(get_value, "LOAD_ATTR")
 
         set_value(n)
         self.assert_specialized(set_value, "STORE_ATTR_WITH_HINT")
         self.assert_no_opcode(set_value, "STORE_ATTR")
-        self.assertTrue(_testinternalcapi.has_inline_values(c))
+        self.assertIsNone(_testinternalcapi.get_object_shape(c))
         self.assertIs(vars(c), d)
         self.assertEqual(d, {"x": n - 1})
         d["x"] = "y"

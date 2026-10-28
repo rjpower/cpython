@@ -68,11 +68,11 @@ typedef enum {
 typedef struct {
     uint8_t outcome;            // _PyStoreOutcome
     uint8_t flags;              // CACHEABLE, MEMBER
-    uint8_t slot;               // ADD: the shared-keys index, if known
-    uint8_t known_slot;         // ADD: 1 if `slot` is the name's index
+    uint8_t slot;               // REPLACE, REMOVE: the field's slot; ADD: nslots
+    uint8_t _pad;
     uint32_t type_version;
-    uint32_t offset;            // REPLACE, MEMBER: bytes from the object start
-    _PyShape *shape_to;         // ADD, REMOVE: the next shape, or NULL
+    uint32_t offset;            // REPLACE, ADD, MEMBER: bytes from the object start
+    _PyShape *shape_to;         // ADD, REMOVE: the next shape if its edge exists, or NULL
     PyValue value;              // borrowed: the MRO result of the name
 } _PyStorePlan;
 

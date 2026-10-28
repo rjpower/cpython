@@ -484,8 +484,9 @@ given type object has a specified feature.
 /* Track types initialized using _PyStaticType_InitBuiltin(). */
 #define _Py_TPFLAGS_STATIC_BUILTIN (1 << 1)
 
-/* The values array is placed inline directly after the rest of
- * the object. Implies Py_TPFLAGS_HAVE_GC.
+/* Instances have the type's fixed number of attribute slots (PyValue),
+ * starting at tp_basicsize, which their shape describes
+ * (Include/internal/pycore_shape.h).  Implies Py_TPFLAGS_HAVE_GC.
  */
 #define Py_TPFLAGS_INLINE_VALUES (1 << 2)
 
@@ -495,16 +496,11 @@ given type object has a specified feature.
  */
 #define Py_TPFLAGS_MANAGED_WEAKREF (1 << 3)
 
-/* Placement of dict (and values) pointers are managed by the VM, not by the type.
- * The VM will automatically set tp_dictoffset. Implies Py_TPFLAGS_HAVE_GC.
+/* The VM, not the type, places the instance dict, and sets tp_dictoffset to
+ * -1.  Instances have attribute slots (Py_TPFLAGS_INLINE_VALUES); the dict,
+ * once an instance has one, is its slot 0.  Implies Py_TPFLAGS_HAVE_GC.
  */
 #define Py_TPFLAGS_MANAGED_DICT (1 << 4)
-
-/* Type has a dictionary pointer that is managed by the VM, which allocates
- * two words before the object: the pointer, and a word of padding that keeps
- * the object 16-byte aligned.
- */
-#define Py_TPFLAGS_PREHEADER Py_TPFLAGS_MANAGED_DICT
 
 /* Set if instances of the type object are treated as sequences for pattern matching */
 #define Py_TPFLAGS_SEQUENCE (1 << 5)

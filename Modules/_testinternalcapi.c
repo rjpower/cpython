@@ -2153,40 +2153,6 @@ test_pymem_getallocatorsname(PyObject *self, PyObject *args)
     return PyUnicode_FromString(name);
 }
 
-static PyValue
-get_object_dict_values(PyObject *self, PyValue arg)
-{
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
-    PyTypeObject *type = Py_TYPE(obj);
-    if (!_PyType_HasFeature(type, Py_TPFLAGS_INLINE_VALUES)) {
-        return PyValue_FromObject(Py_None);
-    }
-    PyDictValues *values = _PyObject_InlineValues(obj);
-    if (!values->valid) {
-        return PyValue_FromObject(Py_None);
-    }
-    PyDictKeysObject *keys = ((PyHeapTypeObject *)type)->ht_cached_keys;
-    assert(keys != NULL);
-    int size = (int)keys->dk_nentries;
-    assert(size >= 0);
-    PyObject *res = PyTuple_New(size);
-    if (res == NULL) {
-        return PyValue_NULL;
-    }
-    _Py_DECLARE_STR(anon_null, "<NULL>");
-    for(int i = 0; i < size; i++) {
-        PyValue item = values->values[i];
-        if (PyValue_IsNull(item)) {
-            item = PyValue_FromObject(&_Py_STR(anon_null));
-        }
-        PyTuple_SET_VALUE(res, i, item);
-    }
-    return PyValue_FromResult(res);
-}
-
 // The index of the shape of an object with inline values in its type's
 // table, or None in dictionary mode or for a type without inline values.
 static PyValue
@@ -2907,33 +2873,6 @@ reset_rare_event_counters(PyObject *self, PyObject *Py_UNUSED(type))
 }
 
 
-
-static PyValue
-has_inline_values(PyObject *self, PyValue arg)
-{
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
-    if ((Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES) &&
-        _PyObject_InlineValues(obj)->valid) {
-        return PyValue_FromObject(Py_True);
-    }
-    return PyValue_FromObject(Py_False);
-}
-
-static PyValue
-has_split_table(PyObject *self, PyValue arg)
-{
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
-    if (PyDict_Check(obj) && _PyDict_HasSplitTable((PyDictObject *)obj)) {
-        return PyValue_FromObject(Py_True);
-    }
-    return PyValue_FromObject(Py_False);
-}
 
 // Circumvents standard version assignment machinery - use with caution and only on
 // short-lived heap types
@@ -3789,7 +3728,6 @@ static PyMethodDef module_functions[] = {
     {"check_pyobject_uninitialized_is_freed",
                               check_pyobject_uninitialized_is_freed, METH_NOARGS},
     {"pymem_getallocatorsname", test_pymem_getallocatorsname, METH_NOARGS},
-    {"get_object_dict_values", _PyCFunction_CAST(get_object_dict_values), METH_O},
     {"get_object_shape", _PyCFunction_CAST(get_object_shape), METH_O},
     {"get_type_shape_count", _PyCFunction_CAST(get_type_shape_count), METH_O},
     {"hamt", new_hamt, METH_NOARGS},
@@ -3819,8 +3757,6 @@ static PyMethodDef module_functions[] = {
     _TESTINTERNALCAPI_TEST_LONG_NUMBITS_METHODDEF
     {"get_rare_event_counters", get_rare_event_counters, METH_NOARGS},
     {"reset_rare_event_counters", reset_rare_event_counters, METH_NOARGS},
-    {"has_inline_values", _PyCFunction_CAST(has_inline_values), METH_O},
-    {"has_split_table", _PyCFunction_CAST(has_split_table), METH_O},
     {"type_assign_specific_version_unsafe", type_assign_specific_version_unsafe, METH_VARARGS,
      PyDoc_STR("forcefully assign type->tp_version_tag")},
 
@@ -3881,11 +3817,6 @@ module_exec(PyObject *module)
         return 1;
     }
 
-    if (PyModule_Add(module, "SIZEOF_MANAGED_PRE_HEADER",
-                        PyLong_FromSsize_t(_PyObject_MANAGED_PRE_HEADER_SIZE)) < 0) {
-        return 1;
-    }
-
     if (PyModule_Add(module, "SIZEOF_PYOBJECT",
                         PyLong_FromSsize_t(sizeof(PyObject))) < 0) {
         return 1;
@@ -3906,8 +3837,12 @@ module_exec(PyObject *module)
         return 1;
     }
 
-    if (PyModule_Add(module, "SHARED_KEYS_MAX_SIZE",
-                        PyLong_FromLong(SHARED_KEYS_MAX_SIZE)) < 0) {
+    if (PyModule_Add(module, "SHAPE_MIN_SLOTS",
+                        PyLong_FromLong(_Py_SHAPE_MIN_SLOTS)) < 0) {
+        return 1;
+    }
+    if (PyModule_Add(module, "SHAPE_MAX_SLOTS",
+                        PyLong_FromLong(_Py_SHAPE_MAX_SLOTS)) < 0) {
         return 1;
     }
 

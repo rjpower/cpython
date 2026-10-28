@@ -124,16 +124,17 @@ typedef struct {
         uint32_t index;
         uint32_t offset;
         uint32_t hint;
-        uint32_t dictoffset;
     };
-    uint32_t _pad;
+    // LOAD_ATTR_WITH_HINT, STORE_ATTR_WITH_HINT: where the dict word is, as
+    // _PyObject_DictAt() takes it
+    int32_t dictoffset;
     union {                         // borrowed; valid while the versions match
         PyObject *descr;            // LOAD_ATTR_PROPERTY: the property
         // LOAD_ATTR_CLASS, LOAD_ATTR_NONDESCRIPTOR_*: the class attribute,
         // canonical, which may be an inline value
         PyValue attr_value;
         PyObject *getattribute;
-        _PyShape *shape_to;         // STORE_ATTR_SHAPE_ADD: the shape after the store
+        _PyShape *shape_to;         // STORE_ATTR_SHAPE_TRANSITION: the shape after the store
     };
     _PyShape *shape;                // the owner's shape, for the shape handlers
 } _PyFbAttr;

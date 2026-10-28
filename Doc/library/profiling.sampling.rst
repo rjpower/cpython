@@ -571,7 +571,7 @@ which Python bytecode instructions are executing at each sample::
 This feature provides visibility into Python's bytecode execution, including
 adaptive specialization optimizations. When a generic instruction like
 ``LOAD_ATTR`` is specialized at runtime into a more efficient variant like
-``LOAD_ATTR_INSTANCE_VALUE``, the profiler shows both the specialized name
+``LOAD_ATTR_SHAPE``, the profiler shows both the specialized name
 and the base instruction.
 
 Opcode information appears in several output formats:

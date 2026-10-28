@@ -244,19 +244,6 @@ _PyObject_HashDictKey(PyObject *op)
     return PyObject_Hash(op);
 }
 
-/* The managed-dict pre-header: the dict pointer, and one word of padding.
- * Objects keep the allocator's 16-byte alignment, which C types such as
- * ctypes' CDataObject (a long double member) rely on. */
-#define _PyObject_MANAGED_PRE_HEADER_SIZE (2 * sizeof(PyObject *))
-
-static inline size_t
-_PyType_PreHeaderSize(PyTypeObject *tp)
-{
-    return ((size_t)_PyType_HasFeature(tp, Py_TPFLAGS_PREHEADER) *
-            _PyObject_MANAGED_PRE_HEADER_SIZE);
-}
-
-
 // Usage: assert(_Py_CheckSlotResult(obj, "__getitem__", result != NULL));
 extern int _Py_CheckSlotResult(
     PyObject *obj,
@@ -270,7 +257,6 @@ static inline int _PyType_SUPPORTS_WEAKREFS(PyTypeObject *type) {
 
 // Export for 'array' shared extension.
 PyAPI_FUNC(PyObject*) _PyType_AllocNoTrack(PyTypeObject *type, Py_ssize_t nitems);
-PyAPI_FUNC(PyObject *) _PyType_NewManagedObject(PyTypeObject *type);
 
 extern PyTypeObject* _PyType_CalculateMetaclass(PyTypeObject *, PyObject *);
 extern PyObject* _PyType_GetDocFromInternalDoc(const char *, const char *);
@@ -278,17 +264,6 @@ extern PyObject* _PyType_GetTextSignatureFromInternalDoc(const char *, const cha
 // Exported for external JIT support
 PyAPI_FUNC(int) _PyObject_SetAttributeErrorContext(PyObject *v, PyObject* name);
 
-void _PyObject_InitInlineValues(PyObject *obj, PyTypeObject *tp);
-// Stores value, or deletes the attribute if value is PyValue_NULL.
-extern int _PyObject_StoreInstanceAttribute(PyObject *obj,
-                                            PyObject *name, PyValue value);
-extern bool _PyObject_TryGetInstanceAttribute(PyObject *obj, PyObject *name,
-                                              PyObject **attr);
-// As _PyObject_TryGetInstanceAttribute(), with the attribute as its value
-// (PyValue_NULL if missing), so that no box is made.
-extern bool _PyObject_TryGetInstanceAttributeValue(PyObject *obj,
-                                                   PyObject *name,
-                                                   PyValue *attr);
 // Exported for external JIT support
 PyAPI_FUNC(PyObject *) _PyType_LookupRefAndVersion(PyTypeObject *, PyObject *,
                                              unsigned int *);
@@ -316,39 +291,10 @@ PyAPI_FUNC(int) _PyType_CacheInitForSpecialization(PyHeapTypeObject *type,
                                               PyObject *init,
                                               unsigned int tp_version);
 
-#  define MANAGED_DICT_OFFSET    (((Py_ssize_t)sizeof(PyObject *))*-1)
 /* The tp_weaklistoffset of a Py_TPFLAGS_MANAGED_WEAKREF type: a marker
  * that names no storage, since weak references live in the weak reference
  * table (Objects/weakrefobject.c). */
 #  define MANAGED_WEAKREF_OFFSET (((Py_ssize_t)sizeof(PyObject *))*-4)
-
-typedef union {
-    PyDictObject *dict;
-} PyManagedDictPointer;
-
-static inline PyManagedDictPointer *
-_PyObject_ManagedDictPointer(PyObject *obj)
-{
-    assert(Py_TYPE(obj)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
-    return (PyManagedDictPointer *)((char *)obj + MANAGED_DICT_OFFSET);
-}
-
-static inline PyDictObject *
-_PyObject_GetManagedDict(PyObject *obj)
-{
-    PyManagedDictPointer *dorv = _PyObject_ManagedDictPointer(obj);
-    return (PyDictObject *)FT_ATOMIC_LOAD_PTR_ACQUIRE(dorv->dict);
-}
-
-static inline PyDictValues *
-_PyObject_InlineValues(PyObject *obj)
-{
-    PyTypeObject *tp = Py_TYPE(obj);
-    assert(tp->tp_basicsize > 0 && (size_t)tp->tp_basicsize % sizeof(PyObject *) == 0);
-    assert(Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-    assert(Py_TYPE(obj)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
-    return (PyDictValues *)((char *)obj + tp->tp_basicsize);
-}
 
 extern PyObject ** _PyObject_ComputedDictPointer(PyObject *);
 extern int _PyObject_IsInstanceDictEmpty(PyObject *);
@@ -393,7 +339,6 @@ enum _PyAnnotateFormat {
 };
 
 extern int _PyObject_SetDict(PyObject *obj, PyObject *value);
-extern int _PyObject_SetManagedDict(PyObject *obj, PyObject *new_dict);
 
 # define _Py_INCREF_MORTAL(op) Py_INCREF(op)
 

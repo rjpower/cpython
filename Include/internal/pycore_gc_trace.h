@@ -249,12 +249,11 @@ _PyGC_ObjectMapClear(PyObject *op)
                                           Python code: the collector does
                                           that before the sweep */
 
-/* An unreachable object found by the mark: its address, the size and
- * pre-header size of its block, and its _PyGC_DEAD_* kinds. */
+/* An unreachable object found by the mark: its address, the size of its
+ * block, and its _PyGC_DEAD_* kinds.  The object starts its block. */
 typedef struct {
     PyObject *op;
     uint32_t block_size;
-    uint16_t presize;
     uint16_t kinds;
 } _PyGCDeadObject;
 

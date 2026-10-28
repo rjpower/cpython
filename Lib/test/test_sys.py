@@ -1640,8 +1640,6 @@ class SizeofTest(unittest.TestCase):
     def setUp(self):
         self.P = struct.calcsize('P')
         self.longdigit = sys.int_info.sizeof_digit
-        _testinternalcapi = import_helper.import_module("_testinternalcapi")
-        self.managed_pre_header_size = _testinternalcapi.SIZEOF_MANAGED_PRE_HEADER
 
     check_sizeof = test.support.check_sizeof
 
@@ -1674,7 +1672,7 @@ class SizeofTest(unittest.TestCase):
             def __sizeof__(self):
                 return int(self)
         self.assertEqual(sys.getsizeof(OverflowSizeof(sys.maxsize)),
-                         sys.maxsize + self.managed_pre_header_size)
+                         sys.maxsize)
         with self.assertRaises(OverflowError):
             sys.getsizeof(OverflowSizeof(sys.maxsize + 1))
         with self.assertRaises(ValueError):
@@ -1921,31 +1919,26 @@ class SizeofTest(unittest.TestCase):
                   '3P'                  # PyMappingMethods
                   '10P'                 # PySequenceMethods
                   '2P'                  # PyBufferProcs
-                  '8P'
+                  '7P'
                   '1PIP'                # Specializer cache
                   + typeid              # heap type id (free-threaded only)
                   )
         class newstyleclass(object): pass
-        # Separate blocks for PyDictKeysObject with 8 keys and 5 entries and
-        # for the table of shapes, which has the dictionary-mode shape and
-        # room for 64
-        shapes = calcsize('B' + shape + '64P')
-        check(newstyleclass, s + calcsize(DICT_KEY_STRUCT_FORMAT) + 64
-              + 42*calcsize("2P") + shapes)
-        # dict with shared keys
-        [newstyleclass() for _ in range(100)]
-        check(newstyleclass().__dict__, size('nQ2P') + self.P)
+        # A separate block for the table of shapes, which has the capacity,
+        # the dictionary-mode shape and room for 64
+        shapes = calcsize('BB' + shape + '64P')
+        check(newstyleclass, s + shapes)
+        # An instance has its type's capacity of slots: no static
+        # attributes give the minimum, 6
+        check(newstyleclass(), size('6P'))
+        # The dict of a fresh instance is an ordinary empty dict
+        check(newstyleclass().__dict__, sys.getsizeof({}))
         o = newstyleclass()
         o.a = o.b = o.c = o.d = o.e = o.f = o.g = o.h = 1
-        # Separate block for PyDictKeysObject with 16 keys and 10 entries,
-        # and one more shape with a slot of (name, kind): after 100
-        # instances, o's inline values have room for one attribute, and
-        # the second sends it to dictionary mode
-        shapes += calcsize(shape) + calcsize('PB0P')
-        check(newstyleclass, s + calcsize(DICT_KEY_STRUCT_FORMAT) + 64
-              + 42*calcsize("2P") + shapes)
-        # dict with shared keys
-        check(newstyleclass().__dict__, size('nQ2P') + self.P)
+        # Six more shapes, with 1 to 6 slots of (name, kind); the seventh
+        # attribute sends o to dictionary mode
+        shapes += 6*calcsize(shape) + 21*calcsize('PB0P')
+        check(newstyleclass, s + shapes)
         # unicode
         # each tuple contains a string and its expected character size
         # don't put any static strings here, as they may contain

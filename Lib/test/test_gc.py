@@ -1936,8 +1936,42 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertEqual(fired(RECEIVER_BOX, lambda: int.__add__(n, 1)),
                          100002)
         self.assertEqual(fired(RECEIVER_BOX, lambda: float.__neg__(x)), -x)
+        # 6d rung 4: a setter storing into a PyObject * field boxes an
+        # inline value at its top, and its C local holds the box until the
+        # field does.
+        SETTER_BOX = 10
+        o = _testinternalcapi.SetterBox()
+        for v in (n, x):
+            fired(SETTER_BOX, lambda: setattr(o, "field", v))
+            gc.collect()
+            self.assertEqual(o.field, v)
         with self.assertRaises(ValueError):
             collect_at(99)
+
+    # 6d rung 4: the setter's box across collections, under stress and,
+    # on debug builds, kill.
+    SETTER_BOX = textwrap.dedent("""
+        import gc, _testinternalcapi
+        collect_at = _testinternalcapi.gc_collect_at
+        one = int("1")
+        o = _testinternalcapi.SetterBox()
+        for i in range(200):
+            for v in (100000 * one + i, 2.5 * (i + one)):
+                before = collect_at(10)
+                o.field = v
+                assert collect_at(0) == before + 1
+                gc.collect()
+                assert o.field == v, (o.field, v)
+        print("ok")
+    """)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_setter_box(self):
+        env = {"PYTHON_GCSTRESS": "100"}
+        if support.Py_DEBUG:
+            env["PYTHON_GCVERIFY"] = "kill"
+        rc, out, err = assert_python_ok("-c", self.SETTER_BOX, **env)
+        self.assertEqual(out.strip(), b"ok")
 
     SPAN_BOX = textwrap.dedent("""
         import gc, sys, _testinternalcapi

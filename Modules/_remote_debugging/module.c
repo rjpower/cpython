@@ -1994,22 +1994,22 @@ _remote_debugging_BinaryWriter_get_stats_impl(BinaryWriterObject *self)
     return binary_writer_get_stats(self->writer);
 }
 
-static PyObject *
+static PyValue
 BinaryWriter_get_total_samples(PyObject *op, void *closure)
 {
     BinaryWriterObject *self = BinaryWriter_CAST(op);
     if (!self->writer) {
         /* Use cached value after finalize/close */
-        return PyLong_FromUnsignedLongLong(self->cached_total_samples);
+        return PyValue_FromUnsignedLongLong(self->cached_total_samples);
     }
-    return PyLong_FromUnsignedLongLong(self->writer->total_samples);
+    return PyValue_FromUnsignedLongLong(self->writer->total_samples);
 }
 
-static PyObject *
+static PyValue
 BinaryWriter_get_limit_reached(PyObject *op, void *closure)
 {
     BinaryWriter *writer = BinaryWriter_CAST(op)->writer;
-    return PyBool_FromLong(writer && writer->state == BINARY_WRITER_LIMIT_REACHED);
+    return PyValue_FromObject((writer && writer->state == BINARY_WRITER_LIMIT_REACHED) ? Py_True : Py_False);
 }
 
 static PyGetSetDef BinaryWriter_getset[] = {
@@ -2257,27 +2257,29 @@ _remote_debugging_BinaryReader___exit___impl(BinaryReaderObject *self,
     Py_RETURN_FALSE;
 }
 
-static PyObject *
-BinaryReader_get_sample_count(BinaryReaderObject *self, void *closure)
+static PyValue
+BinaryReader_get_sample_count(PyObject *op, void *closure)
 {
+    BinaryReaderObject *self = BinaryReader_CAST(op);
     if (!self->reader) {
-        return PyLong_FromLong(0);
+        return PyValue_FromLongLong(0);
     }
-    return PyLong_FromUnsignedLongLong(self->reader->sample_count);
+    return PyValue_FromUnsignedLongLong(self->reader->sample_count);
 }
 
-static PyObject *
-BinaryReader_get_sample_interval_us(BinaryReaderObject *self, void *closure)
+static PyValue
+BinaryReader_get_sample_interval_us(PyObject *op, void *closure)
 {
+    BinaryReaderObject *self = BinaryReader_CAST(op);
     if (!self->reader) {
-        return PyLong_FromLong(0);
+        return PyValue_FromLongLong(0);
     }
-    return PyLong_FromUnsignedLongLong(self->reader->sample_interval_us);
+    return PyValue_FromUnsignedLongLong(self->reader->sample_interval_us);
 }
 
 static PyGetSetDef BinaryReader_getset[] = {
-    {"sample_count", (getter)BinaryReader_get_sample_count, NULL, "Number of samples in file", NULL},
-    {"sample_interval_us", (getter)BinaryReader_get_sample_interval_us, NULL, "Sample interval in microseconds", NULL},
+    {"sample_count", BinaryReader_get_sample_count, NULL, "Number of samples in file", NULL},
+    {"sample_interval_us", BinaryReader_get_sample_interval_us, NULL, "Sample interval in microseconds", NULL},
     {NULL}
 };
 

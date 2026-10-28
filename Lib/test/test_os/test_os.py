@@ -898,6 +898,22 @@ class StatAttributeTests(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, 'cannot unpack'):
             _, _ = result
 
+    @unittest.skipUnless(hasattr(os, 'statx'), 'test needs os.statx()')
+    def test_statx_result_repr(self):
+        # The repr reads each getter's value and leaves out a field that
+        # is None (not in the mask).
+        result = os.statx(self.fname, os.STATX_BASIC_STATS)
+        r = repr(result)
+        self.assertStartsWith(r, "os.statx_result(")
+        self.assertIn(f"stx_size={result.stx_size!r}", r)
+        self.assertIn(f"stx_mtime={result.stx_mtime!r}", r)
+        self.assertIn(f"stx_mtime_ns={result.stx_mtime_ns!r}", r)
+        result = os.statx(self.fname, os.STATX_SIZE)
+        r = repr(result)
+        for name in dir(result):
+            if name.startswith("stx_") and getattr(result, name) is None:
+                self.assertNotIn(f" {name}=", r)
+
     @unittest.skipUnless(hasattr(os, 'statvfs'), 'test needs os.statvfs()')
     def test_statvfs_attributes(self):
         result = os.statvfs(self.fname)

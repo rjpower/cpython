@@ -6139,22 +6139,26 @@ static int
 Test_settable_set_impl(TestObj *self, PyObject *value);
 
 static int
-Test_settable_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+Test_settable_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value = NULL;
 
-    if (arg != NULL) {
-        value = arg;
+    if (!PyValue_IsNull(arg)) {
+        value = PyValue_Object(arg);
+        if (value == NULL) {
+            goto exit;
+        }
     }
     return_value = Test_settable_set_impl((TestObj *)self, value);
 
+exit:
     return return_value;
 }
 
 static int
 Test_settable_set_impl(TestObj *self, PyObject *value)
-/*[clinic end generated code: output=46832806d93e5391 input=c5e1780ba116abdc]*/
+/*[clinic end generated code: output=997243810d58f9e9 input=c5e1780ba116abdc]*/
 
 /*[clinic input]
 @getter
@@ -6164,17 +6168,17 @@ Test.int_property -> int
 static int
 Test_int_property_get_impl(TestObj *self);
 
-static PyObject *
+static PyValue
 Test_int_property_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     _return_value = Test_int_property_get_impl((TestObj *)self);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -6182,7 +6186,7 @@ exit:
 
 static int
 Test_int_property_get_impl(TestObj *self)
-/*[clinic end generated code: output=0d0b1028eefad645 input=d9617980a2010b06]*/
+/*[clinic end generated code: output=b97fcf7101b5aa3e input=d9617980a2010b06]*/
 
 /*[clinic input]
 @setter
@@ -6194,18 +6198,18 @@ static int
 Test_int_property_set_impl(TestObj *self, int value);
 
 static int
-Test_int_property_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+Test_int_property_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     int value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute 'int_property' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = PyLong_AsInt(arg);
+    value = PyLong_AsIntValue(arg);
     if (value == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -6217,7 +6221,7 @@ exit:
 
 static int
 Test_int_property_set_impl(TestObj *self, int value)
-/*[clinic end generated code: output=75d998b3c5aabb83 input=3830ff9462d00c65]*/
+/*[clinic end generated code: output=81c3dac657b77e69 input=3830ff9462d00c65]*/
 
 /*[clinic input]
 @getter
@@ -6227,15 +6231,15 @@ Test.property
 static PyObject *
 Test_property_get_impl(TestObj *self);
 
-static PyObject *
+static PyValue
 Test_property_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return Test_property_get_impl((TestObj *)self);
+    return PyValue_FromResult(Test_property_get_impl((TestObj *)self));
 }
 
 static PyObject *
 Test_property_get_impl(TestObj *self)
-/*[clinic end generated code: output=2b6f95ae685a9efc input=2d92b3449fbc7d2b]*/
+/*[clinic end generated code: output=20db58b96e750a80 input=2d92b3449fbc7d2b]*/
 
 /*[clinic input]
 @setter
@@ -6246,26 +6250,30 @@ static int
 Test_property_set_impl(TestObj *self, PyObject *value);
 
 static int
-Test_property_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+Test_property_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute 'property' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = arg;
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
     return_value = Test_property_set_impl((TestObj *)self, value);
 
+exit:
     return return_value;
 }
 
 static int
 Test_property_set_impl(TestObj *self, PyObject *value)
-/*[clinic end generated code: output=b54a80ff88efca4c input=3bc3f46a23c83a88]*/
+/*[clinic end generated code: output=89b7063a7541fdb2 input=3bc3f46a23c83a88]*/
 
 /*[clinic input]
 @setter
@@ -6276,26 +6284,30 @@ static int
 Test_setter_first_with_docstr_set_impl(TestObj *self, PyObject *value);
 
 static int
-Test_setter_first_with_docstr_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+Test_setter_first_with_docstr_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute 'setter_first_with_docstr' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = arg;
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
     return_value = Test_setter_first_with_docstr_set_impl((TestObj *)self, value);
 
+exit:
     return return_value;
 }
 
 static int
 Test_setter_first_with_docstr_set_impl(TestObj *self, PyObject *value)
-/*[clinic end generated code: output=fdd579cfe3b261e4 input=31a045ce11bbe961]*/
+/*[clinic end generated code: output=7141d60c8f9d5bc6 input=31a045ce11bbe961]*/
 
 /*[clinic input]
 @getter
@@ -6310,28 +6322,111 @@ PyDoc_STRVAR(Test_setter_first_with_docstr__doc__,
 static PyObject *
 Test_setter_first_with_docstr_get_impl(TestObj *self);
 
-static PyObject *
+static PyValue
 Test_setter_first_with_docstr_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return Test_setter_first_with_docstr_get_impl((TestObj *)self);
+    return PyValue_FromResult(Test_setter_first_with_docstr_get_impl((TestObj *)self));
 }
 
 static PyObject *
 Test_setter_first_with_docstr_get_impl(TestObj *self)
-/*[clinic end generated code: output=e93e3e68b0473d74 input=10af4e43b3cb34dc]*/
+/*[clinic end generated code: output=6d77804629e1d6bf input=10af4e43b3cb34dc]*/
+
+/*[clinic input]
+@setter
+Test.uint_property
+    value: unsigned_int
+[clinic start generated code]*/
+
+static int
+Test_uint_property_set_impl(TestObj *self, unsigned int value);
+
+static int
+Test_uint_property_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
+{
+    int return_value = -1;
+    unsigned int value;
+
+    if (PyValue_IsNull(arg)) {
+        PyErr_Format(PyExc_AttributeError,
+                     "attribute 'uint_property' of '%.100s' objects cannot be deleted",
+                     Py_TYPE(self)->tp_name);
+        return -1;
+    }
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UnsignedInt_Converter(_arg, &value)) {
+            goto exit;
+        }
+    }
+    return_value = Test_uint_property_set_impl((TestObj *)self, value);
+
+exit:
+    return return_value;
+}
+
+static int
+Test_uint_property_set_impl(TestObj *self, unsigned int value)
+/*[clinic end generated code: output=c5556c698804edbb input=1a6c0bf36992563e]*/
+
+/*[clinic input]
+@setter
+@deleter
+Test.tuple_deletable
+    value: object(subclass_of='&PyTuple_Type') = NULL
+[clinic start generated code]*/
+
+static int
+Test_tuple_deletable_set_impl(TestObj *self, PyObject *value);
+
+static int
+Test_tuple_deletable_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
+{
+    int return_value = -1;
+    PyObject *value = NULL;
+
+    if (!PyValue_IsNull(arg)) {
+        {
+            PyObject *_arg = PyValue_Object(arg);
+            if (_arg == NULL) {
+                goto exit;
+            }
+            if (!PyTuple_Check(_arg)) {
+                PyErr_Format(PyExc_TypeError, "attribute 'tuple_deletable' must be tuple, not %T", _arg);
+                goto exit;
+            }
+            value = _arg;
+        }
+    }
+    return_value = Test_tuple_deletable_set_impl((TestObj *)self, value);
+
+exit:
+    return return_value;
+}
+
+static int
+Test_tuple_deletable_set_impl(TestObj *self, PyObject *value)
+/*[clinic end generated code: output=fe43c47ba155e905 input=0909ec9862d90ecd]*/
 
 /*[clinic input]
 dump buffer
 [clinic start generated code]*/
-#define TEST_SETTABLE_GETSETDEF {"settable", (getter)NULL, (setter)Test_settable_set, NULL},
+#define TEST_SETTABLE_GETSETDEF {"settable", NULL, Test_settable_set, NULL},
 
-#define TEST_INT_PROPERTY_GETSETDEF {"int_property", (getter)Test_int_property_get, (setter)Test_int_property_set, NULL},
+#define TEST_INT_PROPERTY_GETSETDEF {"int_property", Test_int_property_get, Test_int_property_set, NULL},
 
-#define TEST_PROPERTY_GETSETDEF {"property", (getter)Test_property_get, (setter)Test_property_set, NULL},
+#define TEST_PROPERTY_GETSETDEF {"property", Test_property_get, Test_property_set, NULL},
 
-#define TEST_SETTER_FIRST_WITH_DOCSTR_GETSETDEF {"setter_first_with_docstr", (getter)Test_setter_first_with_docstr_get, (setter)Test_setter_first_with_docstr_set, Test_setter_first_with_docstr__doc__},
+#define TEST_SETTER_FIRST_WITH_DOCSTR_GETSETDEF {"setter_first_with_docstr", Test_setter_first_with_docstr_get, Test_setter_first_with_docstr_set, Test_setter_first_with_docstr__doc__},
 
-/*[clinic end generated code: output=011497a4f5a2e835 input=524ce2e021e4eba6]*/
+#define TEST_UINT_PROPERTY_GETSETDEF {"uint_property", NULL, Test_uint_property_set, NULL},
+
+#define TEST_TUPLE_DELETABLE_GETSETDEF {"tuple_deletable", NULL, Test_tuple_deletable_set, NULL},
+
+/*[clinic end generated code: output=7eeefa701f54e2ce input=524ce2e021e4eba6]*/
 
 /*[clinic input]
 output push

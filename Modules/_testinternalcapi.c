@@ -3722,6 +3722,84 @@ gc_call_built(PyObject *self, PyValue arg)
         PyObject_CallFunction(callable, "ssi", "first", "second", 3));
 }
 
+/* 6d rung 4: a getset setter that stores into a PyObject * field boxes
+   the value at its top, as the hand-written setters do.  The box is held
+   by a C local, which the stack scan covers, until the field takes it;
+   _PyGC_SITE_SETTER_BOX collects in between. */
+typedef struct {
+    PyObject_HEAD
+    PyObject *field;
+} SetterBoxObject;
+
+static PyValue
+setterbox_get_field(PyObject *op, void *Py_UNUSED(closure))
+{
+    PyObject *field = ((SetterBoxObject *)op)->field;
+    return PyValue_FromObject(field != NULL ? field : Py_None);
+}
+
+static int
+setterbox_set_field(PyObject *op, PyValue value, void *Py_UNUSED(closure))
+{
+    if (PyValue_IsNull(value)) {
+        PyErr_SetString(PyExc_AttributeError, "cannot delete field");
+        return -1;
+    }
+    PyObject *box = PyValue_Object(value);
+    if (box == NULL) {
+        return -1;
+    }
+    _PyGC_INJECT(_PyThreadState_GET(), _PyGC_SITE_SETTER_BOX);
+    Py_XSETREF(((SetterBoxObject *)op)->field, Py_NewRef(box));
+    return 0;
+}
+
+static int
+setterbox_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(Py_TYPE(op));
+    Py_VISIT(((SetterBoxObject *)op)->field);
+    return 0;
+}
+
+static int
+setterbox_clear(PyObject *op)
+{
+    Py_CLEAR(((SetterBoxObject *)op)->field);
+    return 0;
+}
+
+static void
+setterbox_dealloc(PyObject *op)
+{
+    PyTypeObject *tp = Py_TYPE(op);
+    PyObject_GC_UnTrack(op);
+    (void)setterbox_clear(op);
+    tp->tp_free(op);
+    Py_DECREF(tp);
+}
+
+static PyGetSetDef setterbox_getset[] = {
+    {"field", setterbox_get_field, setterbox_set_field, NULL},
+    {NULL},
+};
+
+static PyType_Slot setterbox_slots[] = {
+    {Py_tp_new, PyType_GenericNew},
+    {Py_tp_getset, setterbox_getset},
+    {Py_tp_traverse, setterbox_traverse},
+    {Py_tp_clear, setterbox_clear},
+    {Py_tp_dealloc, setterbox_dealloc},
+    {0, NULL},
+};
+
+static PyType_Spec setterbox_spec = {
+    .name = "_testinternalcapi.SetterBox",
+    .basicsize = sizeof(SetterBoxObject),
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .slots = setterbox_slots,
+};
+
 /* Collect through the inline path, which queues callbacks for the eval
    breaker, then return callable(arg) without reaching the eval loop in
    between. */
@@ -4614,6 +4692,11 @@ static PyMethodDef module_functions[] = {
 static int
 module_exec(PyObject *module)
 {
+    PyObject *setterbox = PyType_FromModuleAndSpec(module, &setterbox_spec,
+                                                   NULL);
+    if (PyModule_Add(module, "SetterBox", setterbox) < 0) {
+        return 1;
+    }
     if (_PyTestInternalCapi_Init_Lock(module) < 0) {
         return 1;
     }

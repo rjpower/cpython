@@ -2015,99 +2015,99 @@ ssize_array_as_tuple(Py_ssize_t *array, Py_ssize_t len)
     return tuple;
 }
 
-static PyObject *
+static PyValue
 ndarray_get_flags(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
-    return PyLong_FromLong(self->head->flags);
+    return PyValue_FromLongLong(self->head->flags);
 }
 
-static PyObject *
+static PyValue
 ndarray_get_offset(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
     ndbuf_t *ndbuf = self->head;
-    return PyLong_FromSsize_t(ndbuf->offset);
+    return PyValue_FromLongLong(ndbuf->offset);
 }
 
-static PyObject *
+static PyValue
 ndarray_get_obj(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
     Py_buffer *base = &self->head->base;
 
     if (base->obj == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return Py_NewRef(base->obj);
+    return PyValue_FromObject(base->obj);
 }
 
-static PyObject *
+static PyValue
 ndarray_get_nbytes(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
     Py_buffer *base = &self->head->base;
-    return PyLong_FromSsize_t(base->len);
+    return PyValue_FromLongLong(base->len);
 }
 
-static PyObject *
+static PyValue
 ndarray_get_readonly(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
     Py_buffer *base = &self->head->base;
-    return PyBool_FromLong(base->readonly);
+    return PyValue_FromObject((base->readonly) ? Py_True : Py_False);
 }
 
-static PyObject *
+static PyValue
 ndarray_get_itemsize(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
     Py_buffer *base = &self->head->base;
-    return PyLong_FromSsize_t(base->itemsize);
+    return PyValue_FromLongLong(base->itemsize);
 }
 
-static PyObject *
+static PyValue
 ndarray_get_format(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
     Py_buffer *base = &self->head->base;
     const char *fmt = base->format ? base->format : "";
-    return PyUnicode_FromString(fmt);
+    return PyValue_FromResult(PyUnicode_FromString(fmt));
 }
 
-static PyObject *
+static PyValue
 ndarray_get_ndim(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
     Py_buffer *base = &self->head->base;
-    return PyLong_FromSsize_t(base->ndim);
+    return PyValue_FromLongLong(base->ndim);
 }
 
-static PyObject *
+static PyValue
 ndarray_get_shape(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
     Py_buffer *base = &self->head->base;
-    return ssize_array_as_tuple(base->shape, base->ndim);
+    return PyValue_FromResult(ssize_array_as_tuple(base->shape, base->ndim));
 }
 
-static PyObject *
+static PyValue
 ndarray_get_strides(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
     Py_buffer *base = &self->head->base;
-    return ssize_array_as_tuple(base->strides, base->ndim);
+    return PyValue_FromResult(ssize_array_as_tuple(base->strides, base->ndim));
 }
 
-static PyObject *
+static PyValue
 ndarray_get_suboffsets(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
     Py_buffer *base = &self->head->base;
-    return ssize_array_as_tuple(base->suboffsets, base->ndim);
+    return PyValue_FromResult(ssize_array_as_tuple(base->suboffsets, base->ndim));
 }
 
-static PyObject *
+static PyValue
 ndarray_c_contig(PyObject *self, void *dummy)
 {
     NDArrayObject *nd = (NDArrayObject *)self;
@@ -2116,12 +2116,12 @@ ndarray_c_contig(PyObject *self, void *dummy)
     if (ret != ND_C_CONTIGUOUS(nd->head->flags)) {
         PyErr_SetString(PyExc_RuntimeError,
             "results from PyBuffer_IsContiguous() and flags differ");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyBool_FromLong(ret);
+    return PyValue_FromObject((ret) ? Py_True : Py_False);
 }
 
-static PyObject *
+static PyValue
 ndarray_fortran_contig(PyObject *self, void *dummy)
 {
     NDArrayObject *nd = (NDArrayObject *)self;
@@ -2130,12 +2130,12 @@ ndarray_fortran_contig(PyObject *self, void *dummy)
     if (ret != ND_FORTRAN_CONTIGUOUS(nd->head->flags)) {
         PyErr_SetString(PyExc_RuntimeError,
             "results from PyBuffer_IsContiguous() and flags differ");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyBool_FromLong(ret);
+    return PyValue_FromObject((ret) ? Py_True : Py_False);
 }
 
-static PyObject *
+static PyValue
 ndarray_contig(PyObject *self, void *dummy)
 {
     NDArrayObject *nd = (NDArrayObject *)self;
@@ -2144,9 +2144,9 @@ ndarray_contig(PyObject *self, void *dummy)
     if (ret != ND_ANY_CONTIGUOUS(nd->head->flags)) {
         PyErr_SetString(PyExc_RuntimeError,
             "results from PyBuffer_IsContiguous() and flags differ");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyBool_FromLong(ret);
+    return PyValue_FromObject((ret) ? Py_True : Py_False);
 }
 
 

@@ -2405,22 +2405,22 @@ OSError_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
     return res;
 }
 
-static PyObject *
+static PyValue
 OSError_written_get(PyObject *op, void *context)
 {
     PyOSErrorObject *self = PyOSErrorObject_CAST(op);
     if (self->written == -1) {
         PyErr_SetString(PyExc_AttributeError, "characters_written");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromSsize_t(self->written);
+    return PyValue_FromLongLong(self->written);
 }
 
 static int
-OSError_written_set(PyObject *op, PyObject *arg, void *context)
+OSError_written_set(PyObject *op, PyValue arg, void *context)
 {
     PyOSErrorObject *self = PyOSErrorObject_CAST(op);
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         if (self->written == -1) {
             PyErr_SetString(PyExc_AttributeError, "characters_written");
             return -1;
@@ -2429,7 +2429,7 @@ OSError_written_set(PyObject *op, PyObject *arg, void *context)
         return 0;
     }
     Py_ssize_t n;
-    n = PyNumber_AsSsize_t(arg, PyExc_ValueError);
+    n = PyNumber_AsSsize_tValue(arg, PyExc_ValueError);
     if (n == -1 && PyErr_Occurred())
         return -1;
     self->written = n;

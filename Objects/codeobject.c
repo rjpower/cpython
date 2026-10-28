@@ -2606,69 +2606,69 @@ static PyMemberDef code_memberlist[] = {
 };
 
 
-static PyObject *
+static PyValue
 code_getvarnames(PyObject *self, void *closure)
 {
     PyCodeObject *code = _PyCodeObject_CAST(self);
-    return _PyCode_GetVarnames(code);
+    return PyValue_FromResult(_PyCode_GetVarnames(code));
 }
 
-static PyObject *
+static PyValue
 code_getcellvars(PyObject *self, void *closure)
 {
     PyCodeObject *code = _PyCodeObject_CAST(self);
-    return _PyCode_GetCellvars(code);
+    return PyValue_FromResult(_PyCode_GetCellvars(code));
 }
 
-static PyObject *
+static PyValue
 code_getfreevars(PyObject *self, void *closure)
 {
     PyCodeObject *code = _PyCodeObject_CAST(self);
-    return _PyCode_GetFreevars(code);
+    return PyValue_FromResult(_PyCode_GetFreevars(code));
 }
 
 /* The words of the executing copy, whose handlers specialisation and
  * instrumentation rewrite, or co_code before the first call. */
-static PyObject *
+static PyValue
 code_getcodeadaptive(PyObject *self, void *closure)
 {
     PyCodeObject *code = _PyCodeObject_CAST(self);
     _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
     if (exec == NULL) {
-        return _PyCode_GetCode(code);
+        return PyValue_FromResult(_PyCode_GetCode(code));
     }
-    return PyBytes_FromStringAndSize((const char *)exec->words,
-                                     exec->nwords * sizeof(_PyIRWord));
+    return PyValue_FromResult(PyBytes_FromStringAndSize((const char *)exec->words,
+                                     exec->nwords * sizeof(_PyIRWord)));
 }
 
 /* The feedback entries of the executing copy, FB_STRIDE bytes each and
  * entry 0 first, or None before the first call or without entries. */
-static PyObject *
+static PyValue
 code_getfeedback(PyObject *self, void *closure)
 {
     PyCodeObject *code = _PyCodeObject_CAST(self);
     _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
     if (exec == NULL || exec->entries == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return PyBytes_FromStringAndSize(exec->entries,
-                                     code->co_nfeedback * FB_STRIDE);
+    return PyValue_FromResult(PyBytes_FromStringAndSize(exec->entries,
+                                     code->co_nfeedback * FB_STRIDE));
 }
 
 /* The feedback table: per feedback entry, its kind and static operand */
-static PyObject *
+static PyValue
 code_getfbinit(PyObject *self, void *closure)
 {
     PyCodeObject *code = _PyCodeObject_CAST(self);
-    return PyBytes_FromStringAndSize((const char *)_PyCode_FBINIT(code),
-                                     code->co_nfeedback * sizeof(uint32_t));
+    return PyValue_FromResult(PyBytes_FromStringAndSize((const char *)_PyCode_FBINIT(code),
+                                     code->co_nfeedback * sizeof(uint32_t)));
 }
 
-static PyObject *
+static PyValue
 code_getcode(PyObject *self, void *closure)
 {
     PyCodeObject *code = _PyCodeObject_CAST(self);
-    return _PyCode_GetCode(code);
+    return PyValue_FromResult(_PyCode_GetCode(code));
 }
 
 static PyGetSetDef code_getsetlist[] = {

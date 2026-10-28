@@ -342,15 +342,15 @@ static PyMethodDef SHA3_methods[] = {
 };
 
 
-static PyObject *
+static PyValue
 SHA3_get_block_size(PyObject *op, void *Py_UNUSED(closure))
 {
     SHA3object *self = _SHA3object_CAST(op);
-    return PyLong_FromLong(self->block_size);
+    return PyValue_FromLongLong(self->block_size);
 }
 
 
-static PyObject *
+static PyValue
 SHA3_get_name(PyObject *self, void *Py_UNUSED(closure))
 {
     PyTypeObject *type = Py_TYPE(self);
@@ -359,56 +359,56 @@ SHA3_get_name(PyObject *self, void *Py_UNUSED(closure))
     assert(state != NULL);
 
     if (type == state->sha3_224_type) {
-        return PyUnicode_FromString("sha3_224");
+        return PyValue_FromResult(PyUnicode_FromString("sha3_224"));
     } else if (type == state->sha3_256_type) {
-        return PyUnicode_FromString("sha3_256");
+        return PyValue_FromResult(PyUnicode_FromString("sha3_256"));
     } else if (type == state->sha3_384_type) {
-        return PyUnicode_FromString("sha3_384");
+        return PyValue_FromResult(PyUnicode_FromString("sha3_384"));
     } else if (type == state->sha3_512_type) {
-        return PyUnicode_FromString("sha3_512");
+        return PyValue_FromResult(PyUnicode_FromString("sha3_512"));
     } else if (type == state->shake_128_type) {
-        return PyUnicode_FromString("shake_128");
+        return PyValue_FromResult(PyUnicode_FromString("shake_128"));
     } else if (type == state->shake_256_type) {
-        return PyUnicode_FromString("shake_256");
+        return PyValue_FromResult(PyUnicode_FromString("shake_256"));
     } else {
         PyErr_BadInternalCall();
-        return NULL;
+        return PyValue_NULL;
     }
 }
 
 
-static PyObject *
+static PyValue
 SHA3_get_digest_size(PyObject *op, void *Py_UNUSED(closure))
 {
     // Preserving previous behavior: variable-length algorithms return 0
     SHA3object *self = _SHA3object_CAST(op);
-    return PyLong_FromLong(self->digest_size);
+    return PyValue_FromLongLong(self->digest_size);
 }
 
 
-static PyObject *
+static PyValue
 SHA3_get_capacity_bits(PyObject *op, void *Py_UNUSED(closure))
 {
     SHA3object *self = _SHA3object_CAST(op);
     uint32_t rate = self->block_size * 8;
     assert(rate <= 1600);
     int capacity = 1600 - rate;
-    return PyLong_FromLong(capacity);
+    return PyValue_FromLongLong(capacity);
 }
 
 
-static PyObject *
+static PyValue
 SHA3_get_rate_bits(PyObject *op, void *Py_UNUSED(closure))
 {
     SHA3object *self = _SHA3object_CAST(op);
-    return PyLong_FromLong(self->block_size * 8);
+    return PyValue_FromLongLong(self->block_size * 8);
 }
 
-static PyObject *
+static PyValue
 SHA3_get_suffix(PyObject *Py_UNUSED(self), void *Py_UNUSED(closure))
 {
     unsigned char suffix[2] = {0x06, 0};
-    return PyBytes_FromStringAndSize((const char *)suffix, 1);
+    return PyValue_FromResult(PyBytes_FromStringAndSize((const char *)suffix, 1));
 }
 
 static PyGetSetDef SHA3_getseters[] = {
@@ -569,17 +569,17 @@ _sha3_shake_128_hexdigest_impl(SHA3object *self, Py_ssize_t length)
     return digest;
 }
 
-static PyObject *
+static PyValue
 SHAKE_get_digest_size(PyObject *Py_UNUSED(self), void *Py_UNUSED(closure))
 {
-    return PyLong_FromLong(0);
+    return PyValue_FromLongLong(0);
 }
 
-static PyObject *
+static PyValue
 SHAKE_get_suffix(PyObject *Py_UNUSED(self), void *Py_UNUSED(closure))
 {
     unsigned char suffix[2] = {0x1f, 0};
-    return PyBytes_FromStringAndSize((const char *)suffix, 1);
+    return PyValue_FromResult(PyBytes_FromStringAndSize((const char *)suffix, 1));
 }
 
 

@@ -34,7 +34,7 @@ random generator, unseeded upstream, is seeded with 1, so every run plays
 the same games. A loop is one pyperformance outer loop (for json_loads,
 pickle, logging and unpack_sequence that is 10 to 400 inner operations).
 
-**Object protocol and calls** (`internal/micro/`, 63 files). One statement
+**Object protocol and calls** (`internal/micro/`, 65 files). One statement
 in a loop of 1000 iterations; the file's docstring says what an iteration
 does. Note 10's list: attribute load and store, monomorphic and polymorphic
 over two shapes; method call; instance creation; `__slots__` load; property;

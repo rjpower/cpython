@@ -1904,9 +1904,9 @@ PyObject_GenericSetAttr(PyObject *obj, PyObject *name, PyValue value)
 }
 
 int
-PyObject_GenericSetDict(PyObject *obj, PyObject *value, void *context)
+PyObject_GenericSetDict(PyObject *obj, PyValue value, void *context)
 {
-    if (value == NULL) {
+    if (PyValue_IsNull(value)) {
         PyErr_SetString(PyExc_TypeError, "cannot delete __dict__");
         return -1;
     }

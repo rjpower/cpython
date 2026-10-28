@@ -157,7 +157,7 @@ tb_get_lineno(PyObject *op)
     return PyCode_Addr2Line(_PyFrame_GetCode(frame), tb->tb_lasti);
 }
 
-static PyObject *
+static PyValue
 tb_lineno_get(PyObject *op, void *Py_UNUSED(_))
 {
     PyTracebackObject *self = _PyTracebackObject_CAST(op);
@@ -165,10 +165,10 @@ tb_lineno_get(PyObject *op, void *Py_UNUSED(_))
     if (lineno == -1) {
         lineno = tb_get_lineno(op);
         if (lineno < 0) {
-            Py_RETURN_NONE;
+            return PyValue_FromObject(Py_None);
         }
     }
-    return PyLong_FromLong(lineno);
+    return PyValue_FromLongLong(lineno);
 }
 
 /*[clinic input]

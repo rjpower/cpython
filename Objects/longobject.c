@@ -5965,16 +5965,16 @@ int___getnewargs___impl(PyObject *self)
     return Py_BuildValue("(N)", _PyLong_Copy((PyLongObject *)self));
 }
 
-static PyObject *
+static PyValue
 long_get0(PyObject *Py_UNUSED(self), void *Py_UNUSED(context))
 {
-    return PyLong_FromLong(0L);
+    return PyValue_FromLongLong(0L);
 }
 
-static PyObject *
+static PyValue
 long_get1(PyObject *Py_UNUSED(self), void *Py_UNUSED(ignored))
 {
-    return PyLong_FromLong(1L);
+    return PyValue_FromLongLong(1L);
 }
 
 /*[clinic input]
@@ -6406,10 +6406,10 @@ long_long_meth(PyObject *self, PyObject *Py_UNUSED(ignored))
     return long_long(self);
 }
 
-static PyObject *
+static PyValue
 long_long_getter(PyObject *self, void *Py_UNUSED(ignored))
 {
-    return long_long(self);
+    return PyValue_FromResult(long_long(self));
 }
 
 /*[clinic input]

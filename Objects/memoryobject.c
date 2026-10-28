@@ -3498,105 +3498,105 @@ _IntTupleFromSsizet(int len, Py_ssize_t *vals)
     return intTuple;
 }
 
-static PyObject *
+static PyValue
 memory_obj_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
     Py_buffer *view = &self->view;
 
-    CHECK_RELEASED(self);
+    CHECK_RELEASED_VALUE(self);
     if (view->obj == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return Py_NewRef(view->obj);
+    return PyValue_FromObject(view->obj);
 }
 
-static PyObject *
+static PyValue
 memory_nbytes_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyLong_FromSsize_t(self->view.len);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromLongLong(self->view.len);
 }
 
-static PyObject *
+static PyValue
 memory_format_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyUnicode_FromString(self->view.format);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromResult(PyUnicode_FromString(self->view.format));
 }
 
-static PyObject *
+static PyValue
 memory_itemsize_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyLong_FromSsize_t(self->view.itemsize);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromLongLong(self->view.itemsize);
 }
 
-static PyObject *
+static PyValue
 memory_shape_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return _IntTupleFromSsizet(self->view.ndim, self->view.shape);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromResult(_IntTupleFromSsizet(self->view.ndim, self->view.shape));
 }
 
-static PyObject *
+static PyValue
 memory_strides_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return _IntTupleFromSsizet(self->view.ndim, self->view.strides);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromResult(_IntTupleFromSsizet(self->view.ndim, self->view.strides));
 }
 
-static PyObject *
+static PyValue
 memory_suboffsets_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return _IntTupleFromSsizet(self->view.ndim, self->view.suboffsets);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromResult(_IntTupleFromSsizet(self->view.ndim, self->view.suboffsets));
 }
 
-static PyObject *
+static PyValue
 memory_readonly_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyBool_FromLong(self->view.readonly);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromObject((self->view.readonly) ? Py_True : Py_False);
 }
 
-static PyObject *
+static PyValue
 memory_ndim_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyLong_FromLong(self->view.ndim);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromLongLong(self->view.ndim);
 }
 
-static PyObject *
+static PyValue
 memory_c_contiguous(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyBool_FromLong(MV_C_CONTIGUOUS(self->flags));
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromObject((MV_C_CONTIGUOUS(self->flags)) ? Py_True : Py_False);
 }
 
-static PyObject *
+static PyValue
 memory_f_contiguous(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyBool_FromLong(MV_F_CONTIGUOUS(self->flags));
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromObject((MV_F_CONTIGUOUS(self->flags)) ? Py_True : Py_False);
 }
 
-static PyObject *
+static PyValue
 memory_contiguous(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyBool_FromLong(MV_ANY_CONTIGUOUS(self->flags));
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromObject((MV_ANY_CONTIGUOUS(self->flags)) ? Py_True : Py_False);
 }
 
 PyDoc_STRVAR(memory_obj_doc,

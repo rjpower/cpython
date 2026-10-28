@@ -3376,15 +3376,15 @@ static PyMemberDef pystatx_result_members[] = {
 
 
 #define STATX_GET_UINT(ATTR, MASK) \
-    static PyObject* \
+    static PyValue \
     pystatx_result_get_##ATTR(PyObject *op, void *Py_UNUSED(context)) \
     { \
         Py_statx_result *self = Py_statx_result_CAST(op); \
         if (!(self->stx.stx_mask & MASK)) { \
-            Py_RETURN_NONE; \
+            return PyValue_FromObject(Py_None); \
         } \
         unsigned long value = self->stx.ATTR; \
-        return PyLong_FromUnsignedLong(value); \
+        return PyValue_FromUnsignedLongLong(value); \
     }
 
 STATX_GET_UINT(stx_uid, STATX_UID)
@@ -3407,27 +3407,27 @@ STATX_GET_UINT(stx_atomic_write_unit_max_opt, STATX_WRITE_ATOMIC)
 #endif
 
 
-static PyObject*
+static PyValue
 pystatx_result_get_stx_mode(PyObject *op, void *Py_UNUSED(context))
 {
     Py_statx_result *self = Py_statx_result_CAST(op);
     if (!(self->stx.stx_mask & (STATX_TYPE | STATX_MODE))) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return PyLong_FromUnsignedLong(self->stx.stx_mode);
+    return PyValue_FromUnsignedLongLong(self->stx.stx_mode);
 }
 
 
 #define STATX_GET_ULONGLONG(ATTR, MASK) \
-    static PyObject* \
+    static PyValue \
     pystatx_result_get_##ATTR(PyObject *op, void *Py_UNUSED(context)) \
     { \
         Py_statx_result *self = Py_statx_result_CAST(op); \
         if (!(self->stx.stx_mask & MASK)) { \
-            Py_RETURN_NONE; \
+            return PyValue_FromObject(Py_None); \
         } \
         unsigned long long value = self->stx.ATTR; \
-        return PyLong_FromUnsignedLongLong(value); \
+        return PyValue_FromUnsignedLongLong(value); \
     }
 
 STATX_GET_ULONGLONG(stx_blocks, STATX_BLOCKS)
@@ -3442,16 +3442,16 @@ STATX_GET_ULONGLONG(stx_subvol, STATX_SUBVOL)
 
 
 #define STATX_GET_DOUBLE(ATTR, MASK) \
-    static PyObject* \
+    static PyValue \
     pystatx_result_get_##ATTR(PyObject *op, void *Py_UNUSED(context)) \
     { \
         Py_statx_result *self = Py_statx_result_CAST(op); \
         if (!(self->stx.stx_mask & MASK)) { \
-            Py_RETURN_NONE; \
+            return PyValue_FromObject(Py_None); \
         } \
         struct statx_timestamp *ts = &self->stx.ATTR; \
         double sec = ((double)ts->tv_sec + ts->tv_nsec * 1e-9); \
-        return PyFloat_FromDouble(sec); \
+        return PyValue_FromDouble(sec); \
     }
 
 STATX_GET_DOUBLE(stx_atime, STATX_ATIME)
@@ -3460,17 +3460,18 @@ STATX_GET_DOUBLE(stx_ctime, STATX_CTIME)
 STATX_GET_DOUBLE(stx_mtime, STATX_MTIME)
 
 #define STATX_GET_NSEC(ATTR, MEMBER, MASK) \
-    static PyObject* \
+    static PyValue \
     pystatx_result_get_##ATTR(PyObject *op, void *context) \
     { \
         Py_statx_result *self = Py_statx_result_CAST(op); \
         if (!(self->stx.stx_mask & MASK)) { \
-            Py_RETURN_NONE; \
+            return PyValue_FromObject(Py_None); \
         } \
         struct statx_timestamp *ts = &self->stx.MEMBER; \
         _posixstate *state = PyType_GetModuleState(Py_TYPE(op)); \
         assert(state != NULL); \
-        return stat_nanosecond_timestamp(state, ts->tv_sec, ts->tv_nsec); \
+        return PyValue_FromResult( \
+            stat_nanosecond_timestamp(state, ts->tv_sec, ts->tv_nsec)); \
     }
 
 STATX_GET_NSEC(stx_atime_ns, stx_atime, STATX_ATIME)
@@ -3565,22 +3566,25 @@ pystatx_result_repr(PyObject *op)
 
     for (size_t i = 0; i < Py_ARRAY_LENGTH(pystatx_result_getset) - 1; ++i) {
         PyGetSetDef *d = &pystatx_result_getset[i];
-        PyObject *o = d->get(op, d->closure);
-        if (o == NULL) {
+        PyValue v = d->get(op, d->closure);
+        if (PyValue_IsNull(v)) {
             goto error;
         }
-        if (o == Py_None) {
+        if (PyValue_Is(v, PyValue_FromObject(Py_None))) {
             continue;
         }
 
         WRITE_ASCII(", ");
         WRITE_ASCII(d->name);
         WRITE_ASCII("=");
-        if (PyUnicodeWriter_WriteRepr(writer, o) < 0) {
-            Py_DECREF(o);
+        // The repr of the value, so that an inline number is not boxed.
+        PyValue repr = PyObject_ReprValue(v);
+        if (PyValue_IsNull(repr)) {
             goto error;
         }
-        Py_DECREF(o);
+        if (PyUnicodeWriter_WriteStr(writer, PyValue_ObjectBorrow(repr)) < 0) {
+            goto error;
+        }
     }
 
     WRITE_ASCII(")");

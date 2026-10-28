@@ -945,10 +945,10 @@ static PyMemberDef keyobject_members[] = {
     {NULL}
 };
 
-static PyObject *
+static PyValue
 keyobject_text_signature(PyObject *Py_UNUSED(self), void *Py_UNUSED(ignored))
 {
-    return PyUnicode_FromString("(obj)");
+    return PyValue_FromResult(PyUnicode_FromString("(obj)"));
 }
 
 static PyGetSetDef keyobject_getset[] = {

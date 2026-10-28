@@ -13,8 +13,7 @@ instance owns.  This tool parses the C sources and reports:
    nor, in dealloc or clear, its release (upstream leaked such members
    under reference counting; under the tracing collector they are freed
    under the object: the multibyte codec stream writer's pending, found
-   by 6d rung 4).  Report 3 is informational until its triage
-   (boil/design/work/audit-2.md) makes it part of --check.
+   by 6d rung 4; triage: boil/design/work/audit-2.md).
 
 The parse is heuristic: struct definitions that begin with PyObject_HEAD,
 PyObject_VAR_HEAD, another object struct or a macro that expands to one;
@@ -29,16 +28,23 @@ pointers to module, thread and interpreter states are taken as borrowed.
 Report 2 reads member names from Py_DECREF/Py_XDECREF/Py_CLEAR/Py_XSETREF/
 Py_SETREF (and a Py_buffer's obj from PyBuffer_Release) in the dealloc and
 clear functions, and the members the traverse function names, each with the
-functions and function-like macros of the same file that it calls, two calls
-deep; a traverse that delegates to a helper in another file is listed and
-needs a look.
+functions and function-like macros that it calls, two calls deep, looked up
+in the same file, then in the headers of its directory, then in Include/
+(accessors such as PyInstanceMethod_GET_FUNCTION); a function of the same
+file that the body names without calling it (a visit callback handed to an
+enumerator) is read as a callee.  A traverse that calls another type's
+tp_traverse (PyDict_Type.tp_traverse(op, ...)) visits that type's members
+when its struct is the type's own or a base; that traverse is audited as its
+own type's.  A traverse that delegates to a helper in another .c file is
+listed and needs a look.
 
 With --check the tool is a gate (boil/tools/gate.sh, level 3): it prints
-nothing else and exits 1 when a type with references and no traverse, or
-with a partial traverse, is not in the allowlist (Tools/boil/
-traverse_allow.txt), or when an allowlist entry no longer matches a
-reported type.  An entry is "path variable: reason", where variable is the
-type's PyTypeObject or PyType_Spec.
+nothing else and exits 1 when a type of the three reports, or one whose
+traverse function it cannot find, has a member path that the allowlist
+(Tools/boil/traverse_allow.txt) does not list for it, or when an entry
+lists a type or a path that is no longer reported.  An entry is "path
+variable member...: reason", where variable is the type's PyTypeObject or
+PyType_Spec and the members are the paths as the report prints them.
 
 Usage: python Tools/boil/traverse_audit.py [--root DIR] [--missing-only]
        python Tools/boil/traverse_audit.py --check [--root DIR] [--allow FILE]
@@ -49,6 +55,8 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -227,7 +235,7 @@ def split_top(body: str, sep: str) -> list[str]:
 
 DECL_RE = re.compile(r"^(?:(?:const|volatile|struct|union|enum)\s+)*([A-Za-z_]\w*)\s*(.*)$")
 DECLARATOR_RE = re.compile(
-    r"^((?:\*\s*(?:const\s*)?)*)([A-Za-z_]\w*)\s*((?:\[[^\]]*\]\s*)*)(?::\s*\w+)?$")
+    r"^((?:\*\s*(?:const\b\s*)?)*)([A-Za-z_]\w*)\s*((?:\[[^\]]*\]\s*)*)(?::\s*\w+)?$")
 
 
 @dataclass
@@ -275,6 +283,10 @@ def member_refs(members: list[str], structs: dict[str, Struct], plain: Plain,
                 continue
             stars = m.group(1).count("*")
             name, array = m.group(2), bool(m.group(3))
+            if typ == "PyValue":
+                # A value holds a reference unless it is an inline number.
+                refs.append(name + ("[]" if array or stars else ""))
+                continue
             if obj:
                 if stars:
                     refs.append(name + ("[]" if array or stars > 1 else ""))
@@ -363,7 +375,7 @@ def parse_structs(path: Path, text: str, macros: dict[str, str],
 
 
 def is_object_type(typ: str, structs: dict[str, Struct]) -> bool:
-    if typ in ("PyObject", "PyTypeObject", "PyVarObject"):
+    if typ in ("PyObject", "PyTypeObject", "PyVarObject", "PyValue"):
         return True
     if typ in structs:
         return True
@@ -400,7 +412,7 @@ def parse_types(path: Path, text: str, types: list[TypeDef]) -> None:
         body = brace_body(text, m.end())
         d = {}
         for s in re.finditer(r"\{\s*(Py_tp_\w+)\s*,\s*([^}]*)\}", body):
-            d[s.group(1)] = re.sub(r"^\(\w+\s*\)\s*", "", s.group(2).strip())
+            d[s.group(1)] = re.sub(r"^\(\s*\w+[\s*]*\)\s*", "", s.group(2).strip())
         slots[m.group(1)] = d
     for m in re.finditer(r"\bPyType_Spec\s+([A-Za-z_]\w*)\s*=\s*\{", text):
         body = brace_body(text, m.end())
@@ -442,7 +454,7 @@ def brace_body(text: str, start: int) -> str:
 def func_name(expr: str | None) -> str | None:
     if not expr:
         return None
-    expr = re.sub(r"\(\s*\w+\s*\)", "", expr).strip()
+    expr = re.sub(r"\(\s*\w+[\s*]*\)", "", expr).strip()
     if expr in ("0", "NULL", ""):
         return None
     m = re.match(r"([A-Za-z_]\w*)$", expr)
@@ -493,14 +505,100 @@ def brace_body_paren(text: str, start: int) -> str:
     return text[start:i - 1]
 
 
+# The start of a function definition at column 0: an optional macro such as
+# Py_LOCAL_INLINE(int), an optional return type on the same line, and the
+# name with its opening parenthesis.  Whether it is a definition is decided
+# by the brace after the balanced parameter list, so that a return-type
+# macro alone on the line before (LOCAL(void)) is not taken as the function.
+DEF_RE = re.compile(r"^(?:[A-Za-z_]\w*\([^()\n]*\)[ \t]+)?"
+                    r"(?:[A-Za-z_][\w \t*]*?[ \t*])?([A-Za-z_]\w*)\s*\(", re.M)
+KEYWORDS = {"if", "for", "while", "switch", "return", "sizeof", "do", "else"}
+
+
 def functions(text: str) -> dict[str, str]:
     """The bodies of a file's functions and function-like macros."""
-    out = {}
-    for m in re.finditer(r"^#define\s+([A-Za-z_]\w*)\([^)]*\)(.*)$", text, flags=re.M):
-        out[m.group(1)] = m.group(2)
-    for m in re.finditer(r"^([A-Za-z_]\w*)\s*\([^;{]*\)\s*\{", text, flags=re.M):
-        out[m.group(1)] = brace_body(text, m.end())
-    return out
+    return {name: body for name, _, body in definitions(text)}
+
+
+def definitions(text: str):
+    """(name, parameter list, body) of a file's functions and function-like
+    macros."""
+    for m in re.finditer(r"^#define\s+([A-Za-z_]\w*)\(([^)]*)\)(.*)$", text, flags=re.M):
+        yield m.group(1), m.group(2), m.group(3)
+    for m in DEF_RE.finditer(text):
+        if m.group(1) in KEYWORDS:
+            continue
+        end = paren_end(text, m.end())
+        b = re.compile(r"\s*\{").match(text, end)
+        if b:
+            yield m.group(1), text[m.end():end - 1], brace_body(text, b.end())
+
+
+# A cast to a pointer type: "(PyObject *)", "(const struct foo **)".
+CAST_RE = re.compile(r"\(\s*(?:(?:const|volatile|struct)\s+)*[A-Za-z_]\w*(?:\s*\*)+\s*\)")
+# An assignment to a local; a member store ("self->x = ...") is not one.
+ASSIGN_RE = re.compile(r"(?<![\w.>])([A-Za-z_]\w*)\s*=(?!=)\s*([^;]*);")
+
+
+def wraps(expr: str) -> bool:
+    """Whether expr is one parenthesised expression."""
+    return expr.startswith("(") and paren_end(expr, 1) == len(expr)
+
+
+def unwrap(expr: str, is_cast: Callable[[str], bool]) -> str:
+    """expr without its pointer casts, parentheses and calls of cast macros
+    (_Py_CAST(T, x), and macros such as _PyObject_CAST(op) that is_cast
+    accepts), which leave the object the same."""
+    prev = None
+    expr = expr.strip()
+    while expr != prev:
+        prev = expr
+        if wraps(expr):
+            expr = expr[1:-1].strip()
+            continue
+        m = CAST_RE.match(expr)
+        if m:
+            expr = expr[m.end():].strip()
+            continue
+        m = re.match(r"([A-Za-z_]\w*)\s*\(", expr)
+        if m and paren_end(expr, m.end()) == len(expr):
+            args = split_top(expr[m.end():-1], ",")
+            if m.group(1) == "_Py_CAST" and len(args) == 2:
+                expr = args[1].strip()
+            elif len(args) == 1 and is_cast(m.group(1)):
+                expr = args[0].strip()
+    return expr
+
+
+def receivers_at(params: str, body: str, pos: int,
+                 is_cast: Callable[[str], bool]) -> set[str]:
+    """The names a traverse function has, at offset pos of its body, for the
+    object it visits: its first parameter and the locals assigned a cast of
+    one of those names, until they are assigned anything else.  The body is
+    read as straight-line code."""
+    first = split_top(params, ",")[:1]
+    m = re.search(r"([A-Za-z_]\w*)\s*$", first[0]) if first else None
+    if not m:
+        return set()
+    names = {m.group(1)}
+    for a in ASSIGN_RE.finditer(body, 0, pos):
+        if unwrap(a.group(2), is_cast) in names:
+            names.add(a.group(1))
+        else:
+            names.discard(a.group(1))
+    return names
+
+
+def paren_end(text: str, start: int) -> int:
+    """The index after the parenthesis that closes the one before start."""
+    depth, i = 1, start
+    while i < len(text) and depth:
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+        i += 1
+    return i
 
 
 # Members that hold no reference: weak reference lists.
@@ -519,21 +617,125 @@ def all_refs(name: str, structs: dict[str, Struct]) -> list[str]:
 
 
 CALL_RE = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
+IDENT_RE = re.compile(r"\b([A-Za-z_]\w*)\b")
 
 
-def with_callees(name: str, fs: dict[str, str], depth: int = 2) -> str:
-    """The body of the function name and of the functions in the same file
-    that it calls, to depth calls."""
-    bodies, seen, todo = [], set(), [(name, 0)]
+def with_callees(name: str, fs: dict[str, str],
+                 headers: tuple[dict[str, str], ...] = (),
+                 depth: int = 2) -> str:
+    """The body of the function name and of the functions it calls, to
+    depth calls.  A callee is looked up in the same file, then in headers
+    (the file's directory, then Include/), which hold the accessors such as
+    PyInstanceMethod_GET_FUNCTION() and helpers such as sre_lib.h's.  A
+    function of the same file that the body names without calling it, such
+    as a visit callback handed to an enumerator, is read as a callee."""
+    scopes = (fs, *headers)
+    # Breadth first, so that each function is reached at its least depth
+    # and the result does not depend on the order of the callees.
+    bodies, seen, todo = [], {name}, deque([(name, 0)])
     while todo:
-        f, d = todo.pop()
-        if f in seen or f not in fs:
+        f, d = todo.popleft()
+        body = next((s[f] for s in scopes if f in s), None)
+        if body is None:
             continue
-        seen.add(f)
-        bodies.append(fs[f])
+        bodies.append(body)
         if d < depth:
-            todo.extend((c, d + 1) for c in CALL_RE.findall(fs[f]))
+            callees = set(CALL_RE.findall(body))
+            callees |= {w for w in IDENT_RE.findall(body) if w in fs}
+            for c in sorted(callees - seen):
+                seen.add(c)
+                todo.append((c, d + 1))
     return "\n".join(bodies)
+
+
+# A traverse that hands the object to another type's traverse:
+# "PyDict_Type.tp_traverse(op, ...)", "((PyTypeObject *)PyExc_BaseException)->
+# tp_traverse(self, ...)", "Py_TYPE(op)->tp_base->tp_traverse(op, ...)".
+DELEGATE_RE = re.compile(
+    r"\b([A-Za-z_]\w*)\s*\)?\s*(?:\.|->)\s*tp_traverse\s*\(\s*([^,]*),")
+
+
+@dataclass
+class Sources:
+    """The functions of the parsed files, by file and by header directory,
+    with their parameter lists."""
+    funcs: dict[Path, dict[str, str]]
+    params: dict[Path, dict[str, str]]
+    headers: dict[Path, dict[str, str]]
+    header_params: dict[Path, dict[str, str]]
+    include: Path
+
+    def scopes(self, path: Path) -> tuple[dict[str, str], ...]:
+        return (self.headers.get(path.parent, {}),
+                self.headers.get(self.include, {}))
+
+    def is_cast(self, path: Path, name: str, depth: int = 3) -> bool:
+        """Whether name is a function-like macro or function, seen from
+        path, that returns its one parameter cast (such as
+        _ScannerObject_CAST(op), or _PyObject_CAST(op) through _Py_CAST)."""
+        for funcs, params in ((self.funcs, self.params),
+                              (self.headers, self.header_params)):
+            for key in (path, path.parent, self.include):
+                if name in funcs.get(key, {}):
+                    body = funcs[key][name].strip()
+                    body = re.sub(r"^\{?\s*return\b|;?\s*\}?$", "", body)
+                    args = split_top(params[key][name], ",")
+                    m = re.search(r"([A-Za-z_]\w*)\s*$", args[0]) if len(args) == 1 else None
+                    return bool(m) and depth > 0 and unwrap(
+                        body, lambda n: self.is_cast(path, n, depth - 1)) == m.group(1)
+        return False
+
+
+def traverse_names(t: TypeDef, src: Sources, by_var: dict[str, TypeDef],
+                   structs: dict[str, Struct],
+                   seen: frozenset[str] = frozenset()) -> tuple[str, set[str]] | None:
+    """The code of t's traverse with its callees, and the exact member paths
+    that it visits by delegating to another type's traverse; None when the
+    traverse is not found."""
+    fs = src.funcs.get(t.path, {})
+    if t.traverse not in fs:
+        return None
+    code = with_callees(t.traverse, fs, src.scopes(t.path))
+    return code, delegated_paths(t, code, src, by_var, structs,
+                                 seen | {t.var})
+
+
+def delegated_paths(t: TypeDef, code: str, src: Sources,
+                    by_var: dict[str, TypeDef], structs: dict[str, Struct],
+                    seen: frozenset[str]) -> set[str]:
+    """The member paths visited by the traverse of another type that code
+    calls on t's own object, when that type's struct is t's struct or one of
+    its bases: the paths of the delegate's struct that the delegate's
+    traverse names (and those it delegates in turn).  A delegate that cannot
+    be resolved, or a call on another object, credits nothing."""
+    chain, name = set(), t.struct
+    while name in structs and name not in chain:
+        chain.add(name)
+        name = structs[name].base or ""
+    params = src.params.get(t.path, {}).get(t.traverse, "")
+    body = src.funcs.get(t.path, {}).get(t.traverse, "")
+    is_cast = lambda n: src.is_cast(t.path, n)
+    out = set()
+    # Only calls in the traverse function itself, whose receiver can be
+    # followed; a delegation in a helper credits nothing.
+    for m in DELEGATE_RE.finditer(body):
+        x, arg = m.group(1), m.group(2)
+        if unwrap(arg, is_cast) not in receivers_at(params, body, m.start(),
+                                                     is_cast):
+            continue
+        if x == "tp_base":
+            x = t.base or ""
+        d = by_var.get(x) or by_var.get("_" + x)
+        if d is None or d.var in seen or d.struct not in chain:
+            continue
+        found = traverse_names(d, src, by_var, structs, seen)
+        if found is None:
+            continue
+        dcode, dpaths = found
+        names = set(MEMBER_RE.findall(dcode))
+        out |= dpaths | {r.rstrip("[]") for r in all_refs(d.struct, structs)
+                         if last_member(r) in names}
+    return out
 
 
 def last_member(ref: str) -> str:
@@ -547,8 +749,8 @@ def main() -> int:
     ap.add_argument("--missing-only", action="store_true",
                     help="only report types with references and no tp_traverse")
     ap.add_argument("--check", action="store_true",
-                    help="exit 1 on a missing or partial traverse that the "
-                         "allowlist does not name")
+                    help="exit 1 on a missing, partial or silent traverse "
+                         "that the allowlist does not name")
     ap.add_argument("--allow", type=Path,
                     default=Path(__file__).with_name("traverse_allow.txt"),
                     help="the allowlist for --check")
@@ -580,17 +782,29 @@ def main() -> int:
     for s in structs.values():
         s.refs = member_refs(s.members, structs, plain)
     types: list[TypeDef] = []
-    funcs: dict[Path, dict[str, str]] = {}
+    # The functions of the .c files, and of the headers by directory, with
+    # Include/'s as one.
+    src = Sources({}, {}, {}, {}, args.root / "Include")
     for p, t in texts.items():
+        defs = list(definitions(t))
         if p.suffix == ".c":
             parse_types(p, t, types)
-            funcs[p] = functions(t)
+            src.funcs[p] = {name: body for name, _, body in defs}
+            src.params[p] = {name: params for name, params, _ in defs}
+        else:
+            key = src.include if src.include in p.parents else p.parent
+            src.headers.setdefault(key, {}).update(
+                (name, body) for name, _, body in defs)
+            src.header_params.setdefault(key, {}).update(
+                (name, params) for name, params, _ in defs)
+    by_var = {t.var: t for t in types}
 
     rel = lambda p: p.relative_to(args.root)
     missing = []
     inherited = []
     partial = []
     unvisited = []
+    unresolved = []
     # A type without tp_traverse that has a base, or whose struct another
     # type with a tp_traverse uses, most likely inherits one.  A struct
     # defined in a .c file is shared only within it: several example modules
@@ -614,27 +828,30 @@ def main() -> int:
             continue
         if args.missing_only:
             continue
-        fs = funcs.get(t.path, {})
-        body = fs.get(t.traverse)
         if t.traverse == "_PyObject_VisitType":
             # The generic traverse function visits only the type.
             partial.append((t, sorted(r.rstrip("[]") for r in refs)))
             continue
-        if body is None:
+        found = traverse_names(t, src, by_var, structs)
+        if found is None:
+            unresolved.append((t, sorted(r.rstrip("[]") for r in refs)))
             continue
-        # Any member the traverse function, or a function in the same file
-        # that it calls, names counts as visited, which also covers casts
-        # and helper functions taking the member.  Releases are read the
-        # same way, as a list's nodes are often freed by a helper.
-        visited = set(MEMBER_RE.findall(with_callees(t.traverse, fs)))
+        code, delegated = found
+        # Any member the traverse function, or a function that it calls,
+        # names counts as visited, which also covers casts and helper
+        # functions taking the member.  Releases are read the same way, as
+        # a list's nodes are often freed by a helper.
+        visited = set(MEMBER_RE.findall(code))
         released = set()
         for f in (t.dealloc, t.clear):
             if f:
-                code = with_callees(f, fs)
+                code = with_callees(f, src.funcs.get(t.path, {}),
+                                    src.scopes(t.path))
                 released |= set(RELEASE_RE.findall(code))
                 # Releasing a Py_buffer releases its obj.
                 if re.search(r"\bPyBuffer_Release\s*\(", code):
                     released.add("obj")
+        refs = [r for r in refs if r.rstrip("[]") not in delegated]
         miss = sorted(r.rstrip("[]") for r in refs
                       if last_member(r) in released - visited)
         if miss:
@@ -649,7 +866,7 @@ def main() -> int:
             unvisited.append((t, silent))
 
     if args.check:
-        return check(args.allow, rel, missing, partial)
+        return check(args.allow, rel, missing, partial, unvisited, unresolved)
     print(f"{len(missing)} types with object references and no tp_traverse:")
     for t, refs in sorted(missing, key=lambda x: (str(x[0].path), x[0].line)):
         print(f"  {rel(t.path)}:{t.line}: {t.name} ({t.struct}): {', '.join(refs)}")
@@ -666,39 +883,58 @@ def main() -> int:
               f"that holds references and that no release names either:")
         for t, miss in sorted(unvisited, key=lambda x: (str(x[0].path), x[0].line)):
             print(f"  {rel(t.path)}:{t.line}: {t.name} ({t.traverse}): {', '.join(miss)}")
+        print(f"\n{len(unresolved)} types whose tp_traverse the tool cannot find:")
+        for t, refs in sorted(unresolved, key=lambda x: (str(x[0].path), x[0].line)):
+            print(f"  {rel(t.path)}:{t.line}: {t.name} ({t.traverse}): {', '.join(refs)}")
     return 0
 
 
-def read_allowlist(path: Path) -> tuple[dict[str, str], list[str]]:
-    """The allowlist's entries, by "path variable", and its malformed
-    lines."""
+def read_allowlist(path: Path) -> tuple[dict[str, tuple[set[str], str]], list[str]]:
+    """The allowlist's entries, by "path variable", each with the member
+    paths it allows and its reason, and its malformed lines."""
     allowed, bad = {}, []
     for n, line in enumerate(path.read_text().splitlines(), 1):
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        m = re.match(r"(\S+)\s+([A-Za-z_]\w*)\s*:\s*(\S.*)$", line)
+        m = re.match(r"(\S+)\s+([A-Za-z_]\w*)((?:\s+[^\s:]+)+)\s*:\s*(\S.*)$", line)
         if m:
-            allowed[f"{m.group(1)} {m.group(2)}"] = m.group(3)
+            allowed[f"{m.group(1)} {m.group(2)}"] = (
+                {r.rstrip("[]") for r in m.group(3).split()}, m.group(4))
         else:
-            bad.append(f"{path.name}:{n}: not \"path variable: reason\": {line}")
+            bad.append(f"{path.name}:{n}: not \"path variable member...: "
+                       f"reason\": {line}")
     return allowed, bad
 
 
-def check(allow: Path, rel, missing, partial) -> int:
+def check(allow: Path, rel, missing, partial, unvisited, unresolved) -> int:
     allowed, errors = read_allowlist(allow) if allow.exists() else ({}, [])
-    seen = set()
+    reported: dict[str, set[str]] = {}
     for what, found in (("no tp_traverse", missing),
-                        ("a partial tp_traverse", partial)):
+                        ("a partial tp_traverse", partial),
+                        ("a tp_traverse that names neither these members "
+                         "nor their release", unvisited),
+                        ("a tp_traverse the tool cannot find", unresolved)):
         for t, refs in sorted(found, key=lambda x: (str(x[0].path), x[0].line)):
             key = f"{rel(t.path)} {t.var}"
-            seen.add(key)
-            if key not in allowed:
+            paths = [r.rstrip("[]") for r in refs]
+            reported.setdefault(key, set()).update(paths)
+            # An entry allows the member paths it lists, so that a member
+            # added to the type later is reported again.
+            listed = allowed[key][0] if key in allowed else set()
+            unlisted = [r for r in paths if r not in listed]
+            if unlisted:
                 errors.append(f"{rel(t.path)}:{t.line}: {t.name} has {what} "
-                              f"and is not in {allow.name}: {', '.join(refs)}")
-    for key in sorted(set(allowed) - seen):
-        errors.append(f"{allow.name}: {key} is not reported any more; "
-                      f"remove the entry")
+                              f"and {allow.name} does not list: "
+                              f"{', '.join(unlisted)}")
+    for key in sorted(allowed):
+        stale = sorted(allowed[key][0] - reported.get(key, set()))
+        if key not in reported:
+            errors.append(f"{allow.name}: {key} is not reported any more; "
+                          f"remove the entry")
+        elif stale:
+            errors.append(f"{allow.name}: {key}: {', '.join(stale)} not "
+                          f"reported any more; remove them from the entry")
     for e in errors:
         print(e)
     if errors:

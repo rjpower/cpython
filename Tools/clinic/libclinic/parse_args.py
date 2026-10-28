@@ -132,12 +132,12 @@ PARSER_PROTOTYPE_NOARGS: Final[str] = libclinic.normalize_snippet("""
     {c_basename}({self_type}{self_name}, PyObject *Py_UNUSED(ignored))
 """)
 PARSER_PROTOTYPE_GETTER: Final[str] = libclinic.normalize_snippet("""
-    static PyObject *
+    static PyValue
     {c_basename}({self_type}{self_name}, void *Py_UNUSED(context))
 """)
 PARSER_PROTOTYPE_SETTER: Final[str] = libclinic.normalize_snippet("""
     static int
-    {c_basename}({self_type}{self_name}, PyObject *arg, void *Py_UNUSED(context))
+    {c_basename}({self_type}{self_name}, PyValue arg, void *Py_UNUSED(context))
 """)
 PARSER_PROTOTYPE_SLOT: Final[str] = libclinic.normalize_snippet("""
     static {return_type}
@@ -189,7 +189,7 @@ GETTERDEF_PROTOTYPE_DEFINE: Final[str] = libclinic.normalize_snippet("""
     #define {getset_name}_GETTER {c_basename}
 """)
 SETTER_PREAMBLE: Final[str] = libclinic.normalize_snippet("""
-    if (arg == NULL) {{
+    if (PyValue_IsNull(arg)) {{
         PyErr_Format(PyExc_AttributeError,
                      "attribute '{name}' of '%.100s' objects cannot be deleted",
                      Py_TYPE({self_name})->tp_name);
@@ -206,7 +206,7 @@ METHODDEF_PROTOTYPE_IFNDEF: Final[str] = libclinic.normalize_snippet("""
 """)
 # The entry of an attribute whose accessors are all compiled unconditionally.
 GETSETDEF_PROTOTYPE_DEFINE: Final[str] = libclinic.normalize_snippet("""
-    #define {getset_name}_GETSETDEF {{"{name}", (getter){getter}, (setter){setter}, {docstr}}},
+    #define {getset_name}_GETSETDEF {{"{name}", {getter}, {setter}, {docstr}}},
 """)
 # Composes the PyGetSetDef entry of an attribute.  It must be rendered after
 # all accessors of that attribute, so it is written to the same destination as
@@ -222,7 +222,7 @@ GETSETDEF_PROTOTYPE_COMBINE: Final[str] = libclinic.normalize_snippet("""
     #  if !defined({getset_name}_DOCSTR)
     #    define {getset_name}_DOCSTR NULL
     #  endif
-    #  define {getset_name}_GETSETDEF {{"{name}", (getter){getset_name}_GETTER, (setter){getset_name}_SETTER, {getset_name}_DOCSTR}},
+    #  define {getset_name}_GETSETDEF {{"{name}", {getset_name}_GETTER, {getset_name}_SETTER, {getset_name}_DOCSTR}},
     #else
     #  define {getset_name}_GETSETDEF
     #endif
@@ -416,9 +416,12 @@ class ParseArgsCodeGen:
     def returns_value(self) -> bool:
         """Does the parser return a PyValue?
 
-        METH_O and METH_FASTCALL functions return a value, so that a
-        return converter builds an inline int or float without allocating.
+        METH_O and METH_FASTCALL functions and getters return a value, so
+        that a return converter builds an inline int or float without
+        allocating.
         """
+        if self.func.kind is GETTER:
+            return True
         if (self.limited_capi or self.is_new_or_init()
                 or self.func.kind in ACCESSORS or self.func.kind is SLOT):
             return False
@@ -522,20 +525,22 @@ class ParseArgsCodeGen:
         # The parser guarantees that the value is the only parameter.
         assert len(self.parameters) == 1
         p = self.parameters[0]
-        parsearg = p.converter.parse_arg('arg', p.get_displayname(0),
-                                         limited_capi=self.limited_capi)
+        # The value is a PyValue even with the limited C API, because the
+        # setter type is.
+        parsearg = p.converter.parse_value_arg('arg', p.get_displayname(0),
+                                               limited_capi=self.limited_capi)
         if parsearg is None:
             p.converter.use_converter()
-            parsearg = """
-                if (!PyArg_Parse(arg, "{format_units}:{name}", {parse_arguments})) {{
+            parsearg = box_value_arg('arg', """
+                if (!PyArg_Parse(_arg, "{format_units}:{name}", {parse_arguments})) {{
                     goto exit;
                 }}
-                """
+                """)
         if self.func.kind is not SETTER_AND_DELETER:
             return libclinic.normalize_snippet(parsearg, indent=4)
         # The value is only converted if the attribute is not deleted.
         return "\n".join([
-            libclinic.normalize_snippet("if (arg != NULL) {{", indent=4),
+            libclinic.normalize_snippet("if (!PyValue_IsNull(arg)) {{", indent=4),
             libclinic.normalize_snippet(parsearg, indent=8),
             libclinic.normalize_snippet("}}", indent=4),
         ])

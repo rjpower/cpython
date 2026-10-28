@@ -1859,3 +1859,38 @@ tests, no failures; one env-changed in test_inspect (an unraisable
 KeyError '__import__' while a coroutine was finalised), not seen before,
 to be watched in the next gates. OpenSSL headers are absent on this
 machine, so test_ssl runs in no gate.
+
+## 2026-10-27 21:10 PDT: 6c rung 3 gate (the instance layout)
+
+Rung 3 landed as eight commits ending at a9e02dccada (magic 3724). The
+agent's gate 3 passed on both of its builds (50,853 tests each, test_cext,
+regen and the traverse audit clean). The coordinator's gate on a detached
+checkout of a9e02dccada with fresh builds: gate 2 on default 556/564
+files, 50,853 tests, SUCCESS; gate 3 on debug FAILURE with two files.
+test_io.test_signals test_reentrant_write_buffered hung to the 20-minute
+timeout with the traceback showing the signal handler's RuntimeError
+raised inside a weakref callback (_weakrefset._remove) that the collector
+ran, the hazard 10a found and fixed on its branch (17060af2a4a, the
+callback queue defers to the eval breaker while a signal is pending); the
+fix reaches the integration branch when 10a lands. test_bdb
+test_next_command_in_generator_for_loop saw a 'line' event from a
+callback named cb (line 501) between its expected events: a deferred
+Python callback ran under sys.settrace during a traced step. It passed 5
+of 5 reruns alone on the same debug build; it fails under suite load.
+Both are the collector's callback-queue timing, present before rung 3,
+and neither touches rung 3's code; the rung is accepted on that basis and
+the test_bdb case is handed to 10a as a hazard to examine with its own
+gate 3. Rung 3 content: positional shape slots with dictionary mode in
+slot 0, no pre-header or values header, capacity as a type constant
+(recomputed from __static_attributes__ before the first instance, which
+dataclasses now set), LOAD_ATTR_SHAPE_POLY over two to four shapes, split
+tables and PyDictValues deleted (PyDictObject one word smaller), the
+collector marking every instance's attribute storage before tp_traverse,
+and dataclass and str_concat_loop micro benchmarks. Measurements against
+rung 2 (instructions): kernels 1.004, micro 1.012, memory 0.954; RSS
+kernels 0.997, memory 0.968; richards -31%, attr_load_poly -68%, go +24%
+(polymorphic stores generic, decision 4), +2 instructions per iteration
+on every micro (gcc spilling the register-file base in FOR_ITER_RANGE),
+logging +11 to +14% (dictionary-mode conversion). Wall time not measured
+(other agents' gates on the machine). gdb is not installed, so the
+libpython.py change is parse-checked only.

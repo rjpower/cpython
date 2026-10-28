@@ -258,6 +258,12 @@ struct _gc_runtime_state {
        nothing allocated. */
     struct _PyGCLiveCall *queue_head;
     struct _PyGCLiveCall *queue_tail;
+    /* Initialising, open or closed (gc_live.c); nothing runs from a queue
+       that is not open. */
+    int queue_phase;
+    /* The main interpreter's count, by call kind, of the calls of
+       never-opened isolated interpreters that their close discarded. */
+    Py_ssize_t queue_discarded[4];
 };
 
 /* No automatic collection until _PyGC_Init() has set alloc_limit. */

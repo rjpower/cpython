@@ -1008,6 +1008,9 @@ pycore_interp_init(PyThreadState *tstate)
         goto done;
     }
 
+    // Python code can run here from now on, so the collector's queue can.
+    _PyGC_LiveOpenQueue(interp);
+
 done:
     /* sys.modules['sys'] contains a strong reference to the module */
     Py_XDECREF(sysmod);

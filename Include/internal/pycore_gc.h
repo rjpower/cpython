@@ -189,6 +189,9 @@ extern void _PyGC_LiveRunQueue(PyThreadState *tstate);
    _PyGC_LiveFailAlloc(n) makes the nth queue node allocation from now
    fail, once. */
 PyAPI_FUNC(PyObject *) _PyGC_LiveQueueInfo(PyInterpreterState *interp);
+/* The interpreter can run Python code: its queue opens (end of
+   pycore_interp_init()). */
+extern void _PyGC_LiveOpenQueue(PyInterpreterState *interp);
 PyAPI_FUNC(void) _PyGC_LiveFailAlloc(int n);
 
 struct PyValue;

@@ -767,6 +767,9 @@ find_desc(_PyGCWalk *w, uintptr_t lookup_pc, _PyGCFrameDesc *scratch)
 // The section's bounds, from the linker; absent while nothing is marked
 extern char __start_py_gc_precise[] __attribute__((weak, visibility("hidden")));
 extern char __stop_py_gc_precise[] __attribute__((weak, visibility("hidden")));
+// The preserve_none functions' section (Py_GC_PRECISE_PRESERVE_NONE)
+extern char __start_py_gc_precise_pn[] __attribute__((weak, visibility("hidden")));
+extern char __stop_py_gc_precise_pn[] __attribute__((weak, visibility("hidden")));
 
 /* The frame's class.  *lo is where its precise words begin: sp, except
    for an eval loop activation, whose words below the activation's lo, the
@@ -787,6 +790,13 @@ frame_class(_PyGCWalk *w, const _PyGCFrameDesc *d, uintptr_t pc,
     {
         return _PyGC_FRAME_PRECISE;
     }
+    if (!d->extension && __start_py_gc_precise_pn != NULL
+        && (uintptr_t)__start_py_gc_precise_pn <= pc
+        && pc < (uintptr_t)__stop_py_gc_precise_pn)
+    {
+        *flags |= _PyGC_RANGE_PRESERVES_NOTHING;
+        return _PyGC_FRAME_PRECISE;
+    }
     if (!w->activations_opaque) {
         for (_PyEvalActivation *a = w->activations; a != NULL; a = a->prev) {
             if (a->lo != 0 && a->lo < cfa && cfa <= a->hi) {
@@ -801,6 +811,17 @@ frame_class(_PyGCWalk *w, const _PyGCFrameDesc *d, uintptr_t pc,
         }
     }
     return d->extension ? _PyGC_FRAME_EXTENSION : _PyGC_FRAME_CORE;
+}
+
+int
+_PyGC_PreservesNothingSection(uintptr_t *start, uintptr_t *stop)
+{
+    if (__start_py_gc_precise_pn == NULL) {
+        return 0;
+    }
+    *start = (uintptr_t)__start_py_gc_precise_pn;
+    *stop = (uintptr_t)__stop_py_gc_precise_pn;
+    return 1;
 }
 
 static void
@@ -1022,6 +1043,12 @@ _PyGC_WalkCacheCheck(_PyGCWalkCache *cache, struct _PyGCRootStats *stats)
 void
 _PyGC_WalkCacheFini(_PyGCWalkCache *cache)
 {
+}
+
+int
+_PyGC_PreservesNothingSection(uintptr_t *start, uintptr_t *stop)
+{
+    return 0;
 }
 
 int

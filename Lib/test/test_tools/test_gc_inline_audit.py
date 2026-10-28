@@ -120,6 +120,32 @@ class InlineAuditTests(unittest.TestCase):
         self.assertIn("'lost' is in section py_gc_precise but has no DWARF",
                       errors[0])
 
+    def test_preserve_none_section_is_audited(self):
+        # The tail-call handlers' section (Py_GC_PRECISE_PRESERVE_NONE)
+        src = GOOD + ('__attribute__((section("py_gc_precise_pn"))) '
+                      "int handler(int x) { return opaque(x); }\n")
+        obj, c = self.build("pn", src, "-g", "-O2")
+        errors = self.audit(obj, c)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("precise 'handler' inlines 'opaque'", errors[0])
+
+    @unittest.skipUnless(shutil.which("clang-21") or shutil.which("clang"),
+                         "requires clang")
+    def test_linked_image_with_indexed_addresses(self):
+        # clang's DWARF 5 gives a function's low_pc as an index into
+        # .debug_addr; in a linked image the audit places the function by
+        # it.
+        clang = shutil.which("clang-21") or shutil.which("clang")
+        c = os.path.join(self.tmp, "image.c")
+        with open(c, "w") as f:
+            f.write(PRELUDE + GOOD + BAD)
+        image = os.path.join(self.tmp, "image.so")
+        subprocess.run([clang, "-gdwarf-5", "-O2", "-fPIC", "-shared", c,
+                        "-o", image], check=True)
+        errors = self.audit(image, c)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("precise 'bad' inlines 'opaque'", errors[0])
+
     def test_marked_headers_are_sources(self):
         # A static inline function marked in an internal header is precise
         # where it is inlined, so the audit reads the header's markers.

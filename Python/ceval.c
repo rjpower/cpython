@@ -289,8 +289,9 @@ PyUnstable_ThreadState_ResetStackProtection(PyThreadState *tstate)
 
 
 /* The function _Py_EnterRecursiveCallTstate() only calls _Py_CheckRecursiveCall()
-   if the stack pointer is beyond c_stack_soft_limit. */
-int
+   if the stack pointer is beyond c_stack_soft_limit.  Not inlined: a cold
+   error path, opaque to the precise eval loop. */
+Py_NO_INLINE int
 _Py_CheckRecursiveCall(PyThreadState *tstate, const char *where)
 {
     _PyThreadStateImpl *_tstate = (_PyThreadStateImpl *)tstate;

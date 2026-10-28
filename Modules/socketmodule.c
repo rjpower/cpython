@@ -3343,16 +3343,16 @@ _socket_socket_settimeout_impl(PySocketSockObject *s, PyObject *arg)
 
 /* s.gettimeout() method.
    Returns the timeout associated with a socket. */
-static PyObject *
+static PyValue
 sock_gettimeout_impl(PyObject *self, void *Py_UNUSED(ignored))
 {
     PySocketSockObject *s = _PySocketSockObject_CAST(self);
     if (s->sock_timeout < 0) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
     else {
         double seconds = PyTime_AsSecondsDouble(s->sock_timeout);
-        return PyFloat_FromDouble(seconds);
+        return PyValue_FromDouble(seconds);
     }
 }
 
@@ -3369,10 +3369,11 @@ static PyObject *
 _socket_socket_gettimeout_impl(PySocketSockObject *self)
 /*[clinic end generated code: output=cd49b7758a504532 input=47e7c5bf80e26eaa]*/
 {
-    return sock_gettimeout_impl((PyObject *)self, NULL);
+    // An object function until the method step: the value is boxed here.
+    return PyValue_Object(sock_gettimeout_impl((PyObject *)self, NULL));
 }
 
-static inline PyObject *
+static inline PyValue
 sock_gettimeout_getter(PyObject *self, void *Py_UNUSED(closure))
 {
     return sock_gettimeout_impl(self, NULL);

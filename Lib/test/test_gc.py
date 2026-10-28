@@ -2120,9 +2120,18 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertEqual(fired(RECEIVER_BOX, lambda: int.__add__(n, 1)),
                          100002)
         self.assertEqual(fired(RECEIVER_BOX, lambda: float.__neg__(x)), -x)
+        # 6d rung 4: a setter storing into a PyObject * field boxes an
+        # inline value at its top, and its C local holds the box until the
+        # field does.
+        SETTER_BOX = 10
+        o = _testinternalcapi.SetterBox()
+        for v in (n, x):
+            fired(SETTER_BOX, lambda: setattr(o, "field", v))
+            gc.collect()
+            self.assertEqual(o.field, v)
         # 10a rung 2b: a class pattern's __match_args__, which only
         # _PyEval_MatchClass()'s span holds.
-        MATCH_ARGS = 10
+        MATCH_ARGS = 11
         class Point:
             __match_args__ = ("x", "y")
             def __init__(self):
@@ -2138,7 +2147,7 @@ class TracingCollectorTests(unittest.TestCase):
         # vectorcall callable, and the dict form under a classmethod
         # descriptor's call.  The positional arguments are made at run
         # time, so that only the call's tuple holds them.
-        UNPACK_DICT = 11
+        UNPACK_DICT = 12
         def names(*a, **k):
             return [type(x).__name__ for x in a], sorted(k)
         self.assertEqual(
@@ -2156,7 +2165,7 @@ class TracingCollectorTests(unittest.TestCase):
 
     MATCH_ARGS = textwrap.dedent("""
         import sys, _testinternalcapi
-        MATCH_ARGS = 10
+        MATCH_ARGS = 11
         collect_at = _testinternalcapi.gc_collect_at
         case = sys.argv[1]
         class Meta(type):
@@ -2344,6 +2353,31 @@ class TracingCollectorTests(unittest.TestCase):
                         self.assertEqual(depth(), before)
                     self.assertIsNone(nomem(allocations, allocations + 1,
                                             call, sink, a, k, dict_form))
+
+    # 6d rung 4: the setter's box across collections, under stress and,
+    # on debug builds, kill.
+    SETTER_BOX = textwrap.dedent("""
+        import gc, _testinternalcapi
+        collect_at = _testinternalcapi.gc_collect_at
+        one = int("1")
+        o = _testinternalcapi.SetterBox()
+        for i in range(200):
+            for v in (100000 * one + i, 2.5 * (i + one)):
+                before = collect_at(10)
+                o.field = v
+                assert collect_at(0) == before + 1
+                gc.collect()
+                assert o.field == v, (o.field, v)
+        print("ok")
+    """)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_setter_box(self):
+        env = {"PYTHON_GCSTRESS": "100"}
+        if support.Py_DEBUG:
+            env["PYTHON_GCVERIFY"] = "kill"
+        rc, out, err = assert_python_ok("-c", self.SETTER_BOX, **env)
+        self.assertEqual(out.strip(), b"ok")
 
     SPAN_BOX = textwrap.dedent("""
         import gc, sys, _testinternalcapi

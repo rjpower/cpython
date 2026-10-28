@@ -761,15 +761,16 @@ buffer_access_safe(textio *self)
     return Py_NewRef(self->buffer);
 }
 
-static PyObject *
+/* The buffer's attribute as a value, for the getters that forward it. */
+static PyValue
 buffer_getattr(textio *self, PyObject *attr_name)
 {
     PyObject *buffer = buffer_access_safe(self);
     if (buffer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *res = PyObject_GetAttr(buffer, attr_name);
+    PyValue res = PyObject_GetAttrValue(PyValue_FromObject(buffer), attr_name);
     Py_DECREF(buffer);
     return res;
 }
@@ -1572,23 +1573,22 @@ textiowrapper_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_closed_get_impl(textio *self);
 
 /* This macro takes some shortcuts to make the common case faster. */
 #define CHECK_CLOSED(self) \
     do { \
         int r; \
-        PyObject *_res; \
+        PyValue _res; \
         if (Py_IS_TYPE(self, self->state->PyTextIOWrapper_Type)) { \
             if (self->raw != NULL) \
                 r = _PyFileIO_closed(self->raw); \
             else { \
                 _res = _io_TextIOWrapper_closed_get_impl(self); \
-                if (_res == NULL) \
+                if (PyValue_IsNull(_res)) \
                     return NULL; \
-                r = PyObject_IsTrue(_res); \
-                Py_DECREF(_res); \
+                r = PyObject_IsTrueValue(_res); \
                 if (r < 0) \
                     return NULL; \
             } \
@@ -3278,11 +3278,10 @@ _io_TextIOWrapper_close_impl(textio *self)
     int r;
     CHECK_ATTACHED(self);
 
-    res = _io_TextIOWrapper_closed_get_impl(self);
-    if (res == NULL)
+    PyValue closed = _io_TextIOWrapper_closed_get_impl(self);
+    if (PyValue_IsNull(closed))
         return NULL;
-    r = PyObject_IsTrue(res);
-    Py_DECREF(res);
+    r = PyObject_IsTrueValue(closed);
     if (r < 0)
         return NULL;
 
@@ -3365,12 +3364,12 @@ textiowrapper_iternext_impl(textio *self)
 /*[clinic input]
 @critical_section
 @getter
-_io.TextIOWrapper.name
+_io.TextIOWrapper.name -> value
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_name_get_impl(textio *self)
-/*[clinic end generated code: output=8c2f1d6d8756af40 input=26ecec9b39e30e07]*/
+/*[clinic end generated code: output=c06c5f1d04533f18 input=8ad79c84a09a3cf8]*/
 {
     return buffer_getattr(self, &_Py_ID(name));
 }
@@ -3378,12 +3377,12 @@ _io_TextIOWrapper_name_get_impl(textio *self)
 /*[clinic input]
 @critical_section
 @getter
-_io.TextIOWrapper.closed
+_io.TextIOWrapper.closed -> value
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_closed_get_impl(textio *self)
-/*[clinic end generated code: output=b49b68f443a85e3c input=7dfcf43f63c7003d]*/
+/*[clinic end generated code: output=99d3489cda9d1e41 input=f8bce2615bc838a3]*/
 {
     /* If partially constructed or deconstructed, return that the underlying
        buffer is closed.
@@ -3392,7 +3391,7 @@ _io_TextIOWrapper_closed_get_impl(textio *self)
        attribute is often called in re-initalization, as part of repr in error
        cases, and when the I/O stack is garbage collected. */
     if (self->ok <= 0) {
-        Py_RETURN_TRUE;
+        return PyValue_FromObject(Py_True);
     }
 
     return buffer_getattr(self, &_Py_ID(closed));

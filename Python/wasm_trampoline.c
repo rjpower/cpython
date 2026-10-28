@@ -45,15 +45,31 @@ _PyWasm_TrampolineCallValue(callfunc func,
     return PyValue_NULL;
 }
 
-typedef int (*setter_three_arg)(PyObject*, PyObject*, void*);
-typedef int (*setter_two_arg)(PyObject*, PyObject*);
+typedef PyValue (*getter_two_arg)(PyObject*, void*);
+typedef PyValue (*getter_one_arg)(PyObject*);
+typedef PyValue (*getter_zero_arg)(void);
+
+PyValue
+_PyWasm_TrampolineCallGetter(getter func,
+                             PyObject* self,
+                             void* closure)
+{
+    RETCALL_IF_SIG_MATCHES(getter_two_arg, self, closure);
+    RETCALL_IF_SIG_MATCHES(getter_one_arg, self);
+    RETCALL_IF_SIG_MATCHES(getter_zero_arg);
+    PyErr_SetString(PyExc_SystemError, "Handler has incorrect signature");
+    return PyValue_NULL;
+}
+
+typedef int (*setter_three_arg)(PyObject*, PyValue, void*);
+typedef int (*setter_two_arg)(PyObject*, PyValue);
 typedef int (*setter_one_arg)(PyObject*);
 typedef int (*setter_zero_arg)(void);
 
 int
 _PyWasm_TrampolineCallSetter(setter func,
                              PyObject* self,
-                             PyObject* val,
+                             PyValue val,
                              void* closure)
 {
     RETCALL_IF_SIG_MATCHES(setter_three_arg, self, val, closure);

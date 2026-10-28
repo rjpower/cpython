@@ -139,11 +139,12 @@ static PyMemberDef method_memberlist[] = {
    The one exception is __doc__; there's a default __doc__ which
    should only be used for the class, not for instances */
 
-static PyObject *
+static PyValue
 method_get_doc(PyObject *self, void *context)
 {
     PyMethodObject *im = _PyMethodObject_CAST(self);
-    return PyObject_GetAttr(im->im_func, &_Py_ID(__doc__));
+    return PyObject_GetAttrValue(PyValue_FromObject(im->im_func),
+                                 &_Py_ID(__doc__));
 }
 
 static PyGetSetDef method_getset[] = {
@@ -371,11 +372,12 @@ static PyMemberDef instancemethod_memberlist[] = {
     {NULL}      /* Sentinel */
 };
 
-static PyObject *
+static PyValue
 instancemethod_get_doc(PyObject *self, void *context)
 {
-    return PyObject_GetAttr(PyInstanceMethod_GET_FUNCTION(self),
-                            &_Py_ID(__doc__));
+    return PyObject_GetAttrValue(
+        PyValue_FromObject(PyInstanceMethod_GET_FUNCTION(self)),
+        &_Py_ID(__doc__));
 }
 
 static PyGetSetDef instancemethod_getset[] = {

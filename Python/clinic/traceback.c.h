@@ -94,14 +94,16 @@ exit:
 static PyObject *
 traceback_tb_next_get_impl(PyTracebackObject *self);
 
-static PyObject *
+static PyValue
 traceback_tb_next_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = traceback_tb_next_get_impl((PyTracebackObject *)self);
+    _return_value = traceback_tb_next_get_impl((PyTracebackObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -110,24 +112,28 @@ static int
 traceback_tb_next_set_impl(PyTracebackObject *self, PyObject *value);
 
 static int
-traceback_tb_next_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+traceback_tb_next_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute 'tb_next' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = arg;
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = traceback_tb_next_set_impl((PyTracebackObject *)self, value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
-#define TRACEBACK_TB_NEXT_GETSETDEF {"tb_next", (getter)traceback_tb_next_get, (setter)traceback_tb_next_set, NULL},
+#define TRACEBACK_TB_NEXT_GETSETDEF {"tb_next", traceback_tb_next_get, traceback_tb_next_set, NULL},
 
-/*[clinic end generated code: output=cbb8167d029bd717 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e721d8278550267d input=a9049054013a1b77]*/

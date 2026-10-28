@@ -359,26 +359,26 @@ static PyMappingMethods union_as_mapping = {
     .mp_subscript = union_getitem,
 };
 
-static PyObject *
+static PyValue
 union_parameters(PyObject *self, void *Py_UNUSED(unused))
 {
     unionobject *alias = (unionobject *)self;
     if (union_init_parameters(alias) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_NewRef(alias->parameters);
+    return PyValue_FromObject(alias->parameters);
 }
 
-static PyObject *
+static PyValue
 union_name(PyObject *Py_UNUSED(self), void *Py_UNUSED(ignored))
 {
-    return PyUnicode_FromString("Union");
+    return PyValue_FromResult(PyUnicode_FromString("Union"));
 }
 
-static PyObject *
+static PyValue
 union_origin(PyObject *Py_UNUSED(self), void *Py_UNUSED(ignored))
 {
-    return Py_NewRef(&_PyUnion_Type);
+    return PyValue_FromObject(&_PyUnion_Type);
 }
 
 static PyGetSetDef union_properties[] = {

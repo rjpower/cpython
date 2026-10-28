@@ -5610,16 +5610,20 @@ PicklerMemoProxy_New(PicklerObject *pickler)
 
 /*****************************************************************************/
 
-static PyObject *
+static PyValue
 Pickler_get_memo(PyObject *op, void *Py_UNUSED(closure))
 {
     PicklerObject *self = PicklerObject_CAST(op);
-    return PicklerMemoProxy_New(self);
+    return PyValue_FromResult(PicklerMemoProxy_New(self));
 }
 
 static int
-Pickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
+Pickler_set_memo(PyObject *op, PyValue obj_v, void *Py_UNUSED(closure))
 {
+    PyObject *obj = PyValue_Object(obj_v);
+    if (obj == NULL && !PyValue_IsNull(obj_v)) {
+        return -1;
+    }
     PyMemoTable *new_memo = NULL;
     PicklerObject *self = PicklerObject_CAST(op);
 
@@ -8164,16 +8168,20 @@ UnpicklerMemoProxy_New(UnpicklerObject *unpickler)
 /*****************************************************************************/
 
 
-static PyObject *
+static PyValue
 Unpickler_get_memo(PyObject *op, void *Py_UNUSED(closure))
 {
     UnpicklerObject *self = UnpicklerObject_CAST(op);
-    return UnpicklerMemoProxy_New(self);
+    return PyValue_FromResult(UnpicklerMemoProxy_New(self));
 }
 
 static int
-Unpickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
+Unpickler_set_memo(PyObject *op, PyValue obj_v, void *Py_UNUSED(closure))
 {
+    PyObject *obj = PyValue_Object(obj_v);
+    if (obj == NULL && !PyValue_IsNull(obj_v)) {
+        return -1;
+    }
     PyObject **new_memo;
     UnpicklerObject *self = UnpicklerObject_CAST(op);
     size_t new_memo_size = 0;

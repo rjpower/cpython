@@ -3185,25 +3185,25 @@ look_up_delta(int days, int seconds, int microseconds, PyTypeObject *type)
 
 /* Accessor properties. */
 
-static PyObject *
+static PyValue
 date_year(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Date *self = PyDate_CAST(op);
-    return PyLong_FromLong(GET_YEAR(self));
+    return PyValue_FromLongLong(GET_YEAR(self));
 }
 
-static PyObject *
+static PyValue
 date_month(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Date *self = PyDate_CAST(op);
-    return PyLong_FromLong(GET_MONTH(self));
+    return PyValue_FromLongLong(GET_MONTH(self));
 }
 
-static PyObject *
+static PyValue
 date_day(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Date *self = PyDate_CAST(op);
-    return PyLong_FromLong(GET_DAY(self));
+    return PyValue_FromLongLong(GET_DAY(self));
 }
 
 static PyGetSetDef date_getset[] = {
@@ -3760,34 +3760,34 @@ iso_calendar_date_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
     return reduce_tuple;
 }
 
-static PyObject *
+static PyValue
 iso_calendar_date_year(PyObject *self, void *Py_UNUSED(closure))
 {
     PyObject *year = PyTuple_GetItem(self, 0);
     if (year == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_NewRef(year);
+    return PyValue_FromObject(year);
 }
 
-static PyObject *
+static PyValue
 iso_calendar_date_week(PyObject *self, void *Py_UNUSED(closure))
 {
     PyObject *week = PyTuple_GetItem(self, 1);
     if (week == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_NewRef(week);
+    return PyValue_FromObject(week);
 }
 
-static PyObject *
+static PyValue
 iso_calendar_date_weekday(PyObject *self, void *Py_UNUSED(closure))
 {
     PyObject *weekday = PyTuple_GetItem(self, 2);
     if (weekday == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_NewRef(weekday);
+    return PyValue_FromObject(weekday);
 }
 
 static PyGetSetDef iso_calendar_date_getset[] = {
@@ -4520,7 +4520,7 @@ timezone_utcoffset(PyObject *op, PyValue arg)
         return PyValue_NULL;
 
     PyDateTime_TimeZone *self = PyTimeZone_CAST(op);
-    return PyValue_FromResult(Py_NewRef(self->offset));
+    return PyValue_FromObject(self->offset);
 }
 
 static PyValue
@@ -4589,14 +4589,14 @@ static PyMethodDef timezone_methods[] = {
     {NULL, NULL}
 };
 
-static PyObject *
+static PyValue
 timezone_name(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_TimeZone *self = PyTimeZone_CAST(op);
     if (self->name == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return Py_NewRef(self->name);
+    return PyValue_FromObject(self->name);
 }
 
 static PyGetSetDef timezone_getset[] = {
@@ -4670,48 +4670,48 @@ look_up_timezone(PyObject *offset, PyObject *name)
 /* Accessor properties.
  */
 
-static PyObject *
+static PyValue
 time_hour(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Time *self = PyTime_CAST(op);
-    return PyLong_FromLong(TIME_GET_HOUR(self));
+    return PyValue_FromLongLong(TIME_GET_HOUR(self));
 }
 
-static PyObject *
+static PyValue
 time_minute(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Time *self = PyTime_CAST(op);
-    return PyLong_FromLong(TIME_GET_MINUTE(self));
+    return PyValue_FromLongLong(TIME_GET_MINUTE(self));
 }
 
 /* The name time_second conflicted with some platform header file. */
-static PyObject *
+static PyValue
 py_time_second(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Time *self = PyTime_CAST(op);
-    return PyLong_FromLong(TIME_GET_SECOND(self));
+    return PyValue_FromLongLong(TIME_GET_SECOND(self));
 }
 
-static PyObject *
+static PyValue
 time_microsecond(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Time *self = PyTime_CAST(op);
-    return PyLong_FromLong(TIME_GET_MICROSECOND(self));
+    return PyValue_FromLongLong(TIME_GET_MICROSECOND(self));
 }
 
-static PyObject *
+static PyValue
 time_tzinfo(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Time *self = PyTime_CAST(op);
     PyObject *result = HASTZINFO(self) ? self->tzinfo : Py_None;
-    return Py_NewRef(result);
+    return PyValue_FromObject(result);
 }
 
-static PyObject *
+static PyValue
 time_fold(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Time *self = PyTime_CAST(op);
-    return PyLong_FromLong(TIME_GET_FOLD(self));
+    return PyValue_FromLongLong(TIME_GET_FOLD(self));
 }
 
 static PyGetSetDef time_getset[] = {
@@ -5484,47 +5484,47 @@ static PyTypeObject PyDateTime_TimeType = {
  * from date.
  */
 
-static PyObject *
+static PyValue
 datetime_hour(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_DateTime *self = PyDateTime_CAST(op);
-    return PyLong_FromLong(DATE_GET_HOUR(self));
+    return PyValue_FromLongLong(DATE_GET_HOUR(self));
 }
 
-static PyObject *
+static PyValue
 datetime_minute(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_DateTime *self = PyDateTime_CAST(op);
-    return PyLong_FromLong(DATE_GET_MINUTE(self));
+    return PyValue_FromLongLong(DATE_GET_MINUTE(self));
 }
 
-static PyObject *
+static PyValue
 datetime_second(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_DateTime *self = PyDateTime_CAST(op);
-    return PyLong_FromLong(DATE_GET_SECOND(self));
+    return PyValue_FromLongLong(DATE_GET_SECOND(self));
 }
 
-static PyObject *
+static PyValue
 datetime_microsecond(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_DateTime *self = PyDateTime_CAST(op);
-    return PyLong_FromLong(DATE_GET_MICROSECOND(self));
+    return PyValue_FromLongLong(DATE_GET_MICROSECOND(self));
 }
 
-static PyObject *
+static PyValue
 datetime_tzinfo(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_DateTime *self = PyDateTime_CAST(op);
     PyObject *result = HASTZINFO(self) ? self->tzinfo : Py_None;
-    return Py_NewRef(result);
+    return PyValue_FromObject(result);
 }
 
-static PyObject *
+static PyValue
 datetime_fold(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_DateTime *self = PyDateTime_CAST(op);
-    return PyLong_FromLong(DATE_GET_FOLD(self));
+    return PyValue_FromLongLong(DATE_GET_FOLD(self));
 }
 
 static PyGetSetDef datetime_getset[] = {

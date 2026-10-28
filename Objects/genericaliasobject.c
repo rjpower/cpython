@@ -895,24 +895,24 @@ ga_parameters_lock_held(PyObject *self)
     return Py_NewRef(alias->parameters);
 }
 
-static PyObject *
+static PyValue
 ga_parameters(PyObject *self, void *unused)
 {
     PyObject *result;
     Py_BEGIN_CRITICAL_SECTION(self);
     result = ga_parameters_lock_held(self);
     Py_END_CRITICAL_SECTION();
-    return result;
+    return PyValue_FromResult(result);
 }
 
-static PyObject *
+static PyValue
 ga_unpacked_tuple_args(PyObject *self, void *unused)
 {
     gaobject *alias = (gaobject *)self;
     if (alias->starred && alias->origin == (PyObject *)&PyTuple_Type) {
-        return Py_NewRef(alias->args);
+        return PyValue_FromObject(alias->args);
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 static PyGetSetDef ga_properties[] = {

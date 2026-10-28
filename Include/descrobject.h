@@ -5,8 +5,11 @@
 extern "C" {
 #endif
 
-typedef PyObject *(*getter)(PyObject *, void *);
-typedef int (*setter)(PyObject *, PyObject *, void *);
+/* A getter returns the attribute as a value, or PyValue_NULL with an
+   exception set.  A setter takes the value, PyValue_NULL to delete the
+   attribute, and returns 0, or -1 with an exception set. */
+typedef PyValue (*getter)(PyObject *, void *);
+typedef int (*setter)(PyObject *, PyValue, void *);
 
 struct PyGetSetDef {
     const char *name;

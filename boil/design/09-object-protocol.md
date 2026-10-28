@@ -419,20 +419,32 @@ root shape's cached entry, and the transition from the shape tree.
 - Tier 0: the handler in the entry selects the template.
 - Tier 1: the plan gives the guard and the load, or the callee to inline.
 
-The handlers by plan, as built in 6c (note 06 section 20):
+The handlers by plan, as built in 6c (note 06 section 20) and changed by
+6d rung 1 (note 06 section 21.1):
 
 | Plan | Handler |
 |---|---|
 | SLOT, one shape at the site | `LOAD_ATTR_SHAPE` |
 | SLOT or METHOD, two to four shapes | `LOAD_ATTR_SHAPE_POLY` |
-| METHOD, call-pair, inline-values type | `LOAD_ATTR_METHOD_SHAPE` |
-| CLASS_VALUE, inline-values type | `LOAD_ATTR_NONDESCRIPTOR_SHAPE` |
-| METHOD, CLASS_VALUE, no dict storage | `LOAD_ATTR_METHOD_NO_DICT`, `LOAD_ATTR_NONDESCRIPTOR_NO_DICT` |
+| METHOD, call-pair, inline-values type or a type with no dict storage (its root shape) | `LOAD_ATTR_METHOD_SHAPE` |
+| METHOD, call-pair, a dict at `tp_dictoffset` not yet made (the DICT plan's METHOD fallback) | `LOAD_ATTR_METHOD_LAZY_DICT` |
+| CLASS_VALUE, inline-values type or a type with no dict storage | `LOAD_ATTR_NONDESCRIPTOR_SHAPE` |
 | DICT | `LOAD_ATTR_WITH_HINT`, `STORE_ATTR_WITH_HINT` |
-| MEMBER | `LOAD_ATTR_SLOT`, `STORE_ATTR_SLOT` |
+| MEMBER | `LOAD_ATTR_SLOT`, `STORE_ATTR_SLOT`, guarded by the class version (`_GUARD_TYPE_VERSION`) |
 | PROPERTY | `LOAD_ATTR_PROPERTY` |
 | REPLACE | `STORE_ATTR_SHAPE` |
 | ADD | `STORE_ATTR_SHAPE_TRANSITION` |
+| REPLACE or ADD, two to four shapes | `STORE_ATTR_SHAPE_POLY` |
+
+6d deletes `LOAD_ATTR_METHOD_NO_DICT` and `LOAD_ATTR_NONDESCRIPTOR_NO_DICT`:
+a type with no dict storage has only its root shape, so the shape guard
+proves the type and the root's version its class. Their two opcodes
+carry `STORE_ATTR_SHAPE_POLY` and `LOAD_ATTR_METHOD_LAZY_DICT`. Rungs 2
+to 4 add and remove no handler. Their bytecodes.c changes are inside
+`LOAD_SUPER_ATTR` (rung 2) and `CALL_FUNCTION_EX` (rung 3); the slots
+they put on values are reached from the generic paths, and
+`LOAD_ATTR_PROPERTY` and `LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN` push their
+frames as before.
 
 A site that sees more than four shapes stays generic.
 
@@ -505,7 +517,9 @@ records the one its guard reads:
 - the shape handlers (`_GUARD_SHAPE_VERSION`) and the poly rows record
   the shape's version;
 - the handlers guarded by `_GUARD_TYPE_VERSION`, such as
-  `LOAD_ATTR_PROPERTY`, record `tp_version_tag`;
+  `LOAD_ATTR_PROPERTY` and, since 6d, `LOAD_ATTR_SLOT` and
+  `STORE_ATTR_SLOT`, record `tp_version_tag`; since 6d the guard reads it
+  as the shape's `class_version`, which every shape of the type mirrors;
 - the plan cache caches a plan only when the version that resolution
   read is the live `tp_version_tag` and the shape's version is not zero,
   and inserts it only if both still hold.

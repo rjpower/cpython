@@ -2,6 +2,7 @@ from test.support import (gc_collect, bigmemtest, _2G,
                           cpython_only, captured_stdout,
                           check_disallow_instantiation, linked_to_musl,
                           SHORT_TIMEOUT, Stopwatch, requires_resource)
+import gc
 import locale
 import re
 import string
@@ -1957,6 +1958,57 @@ class ReTests(unittest.TestCase):
         self.assertEqual(scanner.search().span(), (1, 2))
         self.assertIsNone(scanner.search())
 
+    def test_scanner_keeps_its_string(self):
+        # The scanner holds the string it scans and, for a bytes-like
+        # object, the exporter of its buffer, until it is freed; here it is
+        # their only holder across a collection, and a tracing collector
+        # frees what no traverse visits.
+        # No __release_buffer__: the scanner releases its buffer in its
+        # dealloc, in the sweep, where Python code may not run (audit-2
+        # hand-off 1, boil/design/work/audit-2.md, owned by 10a rung 3).
+        # When that lands, give the exporter a __release_buffer__ and
+        # check that it is called once the scanner is collected.
+        class Exporter:
+            def __init__(self, data):
+                self.data = bytearray(data)
+            def __buffer__(self, flags):
+                return memoryview(self.data)
+
+        def text(first):
+            return "".join(chr(ord(first) + i % 10) for i in range(1000))
+
+        def contents(obj):
+            if isinstance(obj, Exporter):
+                return bytes(obj.data)
+            return obj if isinstance(obj, str) else bytes(obj)
+
+        cases = [
+            (r"X(\w+)", lambda t: t + "Xend"),
+            (rb"X(\w+)", lambda t: bytearray(t.encode() + b"Xend")),
+            # The buffer's exporter is a wrapper that only the view holds.
+            (rb"X(\w+)", lambda t: Exporter(t.encode() + b"Xend")),
+        ]
+        for pattern, make in cases:
+            kind = type(make("")).__name__
+            with self.subTest(kind=kind):
+                expected = contents(make(text("a")))
+                scanner = re.compile(pattern).scanner(make(text("a")))
+                held = [type(r).__name__ for r in gc.get_referents(scanner)]
+                self.assertIn(kind, held)
+                if kind == "Exporter":
+                    self.assertIn("_buffer_wrapper", held)
+                gc_collect()
+                # Reuse the memory a freed string would have left.
+                junk = [make(text("0")) for _ in range(200)]
+                m = scanner.search()
+                del junk
+                self.assertIsNotNone(m)
+                self.assertEqual(contents(m.group(1)), expected[-3:])
+                self.assertEqual(contents(m.string), expected)
+                # The scanner releases the buffer when it is freed.
+                del m, scanner
+                gc_collect()
+
     def test_bug_817234(self):
         iter = re.finditer(r".*", "asdf")
         self.assertEqual(next(iter).span(), (0, 4))
@@ -2955,6 +3007,27 @@ class ReTests(unittest.TestCase):
                 pass
             finally:
                 p._fail_after(-1, None)
+
+    @unittest.skipUnless(hasattr(re.Pattern, '_fail_after'), 'requires debug build')
+    def test_scanner_keeps_fail_after_exception(self):
+        # A scanner copies the pattern's _fail_after() exception without a
+        # reference.  Once the pattern holds another, only the scanner's
+        # traverse keeps the first alive across a collection.
+        p = re.compile(r"(a)+b")
+        def arm():
+            class Interrupt(Exception):
+                pass
+            p._fail_after(0, Interrupt)
+        arm()
+        scanner = p.scanner("aaab")
+        p._fail_after(-1, None)
+        gc_collect()
+        # Reuse the memory a freed class would have left.
+        junk = [type(f"Junk{i}", (Exception,), {}) for i in range(50)]
+        with self.assertRaises(Exception) as cm:
+            scanner.search()
+        del junk
+        self.assertEqual(type(cm.exception).__name__, "Interrupt")
 
     @unittest.skipUnless(hasattr(re.Pattern, '_fail_after'), 'requires debug build')
     def test_memory_leaks(self):

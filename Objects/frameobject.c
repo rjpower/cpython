@@ -2587,21 +2587,21 @@ PyObject*
 PyFrame_GetLocals(PyFrameObject *frame)
 {
     assert(!_PyFrame_IsIncomplete(frame->f_frame));
-    return frame_locals_get((PyObject *)frame, NULL);
+    return PyValue_Object(frame_locals_get((PyObject *)frame, NULL));
 }
 
 PyObject*
 PyFrame_GetGlobals(PyFrameObject *frame)
 {
     assert(!_PyFrame_IsIncomplete(frame->f_frame));
-    return frame_globals_get((PyObject *)frame, NULL);
+    return PyValue_Object(frame_globals_get((PyObject *)frame, NULL));
 }
 
 PyObject*
 PyFrame_GetBuiltins(PyFrameObject *frame)
 {
     assert(!_PyFrame_IsIncomplete(frame->f_frame));
-    return frame_builtins_get((PyObject *)frame, NULL);
+    return PyValue_Object(frame_builtins_get((PyObject *)frame, NULL));
 }
 
 int
@@ -2620,5 +2620,5 @@ PyObject *
 PyFrame_GetGenerator(PyFrameObject *frame)
 {
     assert(!_PyFrame_IsIncomplete(frame->f_frame));
-    return frame_generator_get((PyObject *)frame, NULL);
+    return PyValue_Object(frame_generator_get((PyObject *)frame, NULL));
 }

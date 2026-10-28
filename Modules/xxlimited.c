@@ -380,15 +380,15 @@ Xxo_demo(PyObject *self, PyTypeObject *defining_class,
 
     /* Test if the argument is "str" */
     if (PyUnicode_Check(o)) {
-        return PyValue_FromResult(Py_NewRef(o));
+        return PyValue_FromObject(o);
     }
 
     /* test if the argument is of the Xxo class */
     if (PyObject_TypeCheck(o, defining_class)) {
-        return PyValue_FromResult(Py_NewRef(o));
+        return PyValue_FromObject(o);
     }
 
-    return PyValue_FromResult(Py_NewRef(Py_None));
+    return PyValue_FromObject(Py_None);
 }
 
 static PyMethodDef Xxo_methods[] = {
@@ -432,12 +432,12 @@ Xxo_releasebuffer(PyObject *self, Py_buffer *Py_UNUSED(view))
     Py_END_CRITICAL_SECTION();
 }
 
-static PyObject *
+static PyValue
 Xxo_get_x_exports(PyObject *self, void *Py_UNUSED(closure))
 {
     XxoObject_Data *data = Xxo_get_data(self);
     if (data == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     Py_ssize_t result;
 
@@ -445,7 +445,7 @@ Xxo_get_x_exports(PyObject *self, void *Py_UNUSED(closure))
     result = data->x_exports;
     Py_END_CRITICAL_SECTION();
 
-    return PyLong_FromSsize_t(result);
+    return PyValue_FromLongLong(result);
 }
 
 /* Xxo type definition */

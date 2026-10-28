@@ -220,28 +220,28 @@ _hmac_HMAC_hexdigest(PyObject *self, PyObject *Py_UNUSED(ignored))
 static PyObject *
 _hmac_HMAC_name_get_impl(HMACObject *self);
 
-static PyObject *
+static PyValue
 _hmac_HMAC_name_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _hmac_HMAC_name_get_impl((HMACObject *)self);
+    return PyValue_FromResult(_hmac_HMAC_name_get_impl((HMACObject *)self));
 }
 
 static PyObject *
 _hmac_HMAC_block_size_get_impl(HMACObject *self);
 
-static PyObject *
+static PyValue
 _hmac_HMAC_block_size_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _hmac_HMAC_block_size_get_impl((HMACObject *)self);
+    return PyValue_FromResult(_hmac_HMAC_block_size_get_impl((HMACObject *)self));
 }
 
 static PyObject *
 _hmac_HMAC_digest_size_get_impl(HMACObject *self);
 
-static PyObject *
+static PyValue
 _hmac_HMAC_digest_size_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _hmac_HMAC_digest_size_get_impl((HMACObject *)self);
+    return PyValue_FromResult(_hmac_HMAC_digest_size_get_impl((HMACObject *)self));
 }
 
 PyDoc_STRVAR(_hmac_compute_digest__doc__,
@@ -759,10 +759,10 @@ _hmac_compute_blake2b_32(PyObject *module, const PyValue *args, Py_ssize_t nargs
 exit:
     return return_value;
 }
-#define _HMAC_HMAC_NAME_GETSETDEF {"name", (getter)_hmac_HMAC_name_get, (setter)NULL, NULL},
+#define _HMAC_HMAC_NAME_GETSETDEF {"name", _hmac_HMAC_name_get, NULL, NULL},
 
-#define _HMAC_HMAC_BLOCK_SIZE_GETSETDEF {"block_size", (getter)_hmac_HMAC_block_size_get, (setter)NULL, NULL},
+#define _HMAC_HMAC_BLOCK_SIZE_GETSETDEF {"block_size", _hmac_HMAC_block_size_get, NULL, NULL},
 
-#define _HMAC_HMAC_DIGEST_SIZE_GETSETDEF {"digest_size", (getter)_hmac_HMAC_digest_size_get, (setter)NULL, NULL},
+#define _HMAC_HMAC_DIGEST_SIZE_GETSETDEF {"digest_size", _hmac_HMAC_digest_size_get, NULL, NULL},
 
-/*[clinic end generated code: output=3a0d48fa8521a436 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=ba0e316a0517b9ba input=a9049054013a1b77]*/

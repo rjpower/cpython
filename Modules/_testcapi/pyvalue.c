@@ -629,6 +629,70 @@ static PyType_Spec oldform_call_spec = {
     .slots = oldform_call_slots,
 };
 
+/* Getters in the value form: numbers made without an object. */
+static PyValue
+valuegetset_int(PyObject *self, void *closure)
+{
+    return PyValue_FromLongLong(12345);
+}
+
+static PyValue
+valuegetset_float(PyObject *self, void *closure)
+{
+    return PyValue_FromDouble(2.5);
+}
+
+static PyValue
+valuegetset_below(PyObject *self, void *closure)
+{
+    return PyValue_FromLongLong((long long)INT32_MIN - 1);
+}
+
+static PyValue
+valuegetset_nan(PyObject *self, void *closure)
+{
+    return PyValue_FromDouble(Py_NAN);
+}
+
+static PyGetSetDef valuegetset_getset[] = {
+    {"int", valuegetset_int},
+    {"float", valuegetset_float},
+    {"below", valuegetset_below},
+    {"nan", valuegetset_nan},
+    {NULL},
+};
+
+static PyTypeObject ValueGetset_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testcapi.pyvalue.ValueGetset",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = PyType_GenericNew,
+    .tp_getset = valuegetset_getset,
+};
+
+/* A getter in the old form, returning a PyObject *, cast to getter: its
+   box of 5 arrives as a value whose encoding is not canonical. */
+static PyObject *
+oldform_getter(PyObject *self, void *closure)
+{
+    return PyLong_FromLong(5);
+}
+
+static PyGetSetDef oldform_getset[] = {
+    {"x", _Py_FUNC_CAST(getter, oldform_getter)},
+    {NULL},
+};
+
+static PyTypeObject OldFormGetter_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testcapi.pyvalue.OldFormGetter",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = PyType_GenericNew,
+    .tp_getset = oldform_getset,
+};
+
 static PyTypeObject BadDescrGet_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "_testcapi.pyvalue.BadDescrGet",
@@ -748,7 +812,8 @@ _PyTestCapi_Init_PyValue(PyObject *m)
         return -1;
     }
     PyTypeObject *types[] = {&ValueSlots_Type, &BadGetattro_Type,
-                             &BadDescrGet_Type, &RawKeep_Type};
+                             &BadDescrGet_Type, &RawKeep_Type,
+                             &ValueGetset_Type, &OldFormGetter_Type};
     for (size_t i = 0; i < Py_ARRAY_LENGTH(types); i++) {
         if (PyModule_AddType(mod, types[i]) < 0) {
             Py_DECREF(mod);

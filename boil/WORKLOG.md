@@ -2262,3 +2262,77 @@ with its included files, _hashopenssl, all nine _sqlite files including
 connection.c's tp_call adapter, _bz2, the four _zstd files and _uuid; 0
 errors, 0 warnings. Unchecked for want of headers: _tkinter, _dbm, _gdbm,
 readline. The tool lands with 6d rung 4's docs commit.
+
+## 2026-10-28 12:20 PDT: 6d rung 4 landed (getsets on values; step 6d complete) and audit-2 landed (the traverse audit's blind spots); gate of the merged head
+
+Landed as de1533e8b1a, the merge of boil/6d-rung4 at b551c275607, and
+9fe9241bf77, the merge of boil/audit2 at 8f9994d3633, gated together.
+
+6d rung 4: every getter and setter takes and returns a value (465
+entries, 425 getter and 108 setter functions; Argument Clinic's @getter
+and @setter emit the value signature; the typedefs lose their casts),
+with two new micro rows (getset_number 824 to 391 instructions per
+iteration, cell_contents 842 to 378), check_unbuilt.sh (the unbuilt
+modules type-checked against borrowed headers, now checking gcc's exit
+status too), and two defects found on the way: the CJK stream writer's
+traverse did not visit its pending text (upstream omits it too and
+leaks; here a collection between two writes freed it, test_codecencodings_jp
+segfaulted on debug), and test_descr's _fail_each_allocation never failed
+an action's first allocation (two rung 2 tests passed only because of
+it). Landing review (reviews/6d-4-landing.md, codex: fix first): the
+classmethod and staticmethod annotation accessors and
+type_abstractmethods still boxed around object-form dict helpers, one
+box per operation against the rung's own rule E.0 and unrecorded; fixed
+in 80eddd41953 with twenty box-audit cases at 0 boxes and 0 allocations
+(18 of them boxed once per iteration before). The boxes in
+type_set_module and type_set_doc stay: the audit event takes an object.
+Both families converted, so the cut to 6e was not needed; the Clinic
+numeric getters left for 6e are listed per module in note 06 section 21.
+
+audit-2: Tools/boil/traverse_audit.py report 3 (members that neither the
+traverse nor a release names) triaged: of 16 entries, 5 were tool
+defects (const stripped inside a name; LOCAL(void) return-type macros
+hiding a function; header accessors; visit callbacks; delegation to a
+base traverse), 2 were real (the stream writer above, and the SRE
+scanner's traverse did not visit the scanned string or its buffer's
+exporter: test_re's test_scanner_keeps_its_string failed 3 of 3 on
+both builds before the fix), 9 are borrowed or aliased with the path
+that keeps them alive in traverse_allow.txt (exact member paths; a
+listed path no longer reported is stale). Report 3 is part of --check.
+Landing review (reviews/audit-2-landing.md, codex: fix first): delegation
+credited an alias derived from a member (now only the object itself or a
+cast of it, until reassigned); the helper walk marked a function at its
+first depth so a diamond depended on set order (now breadth first, tested
+under six hash seeds); gates 2 and 3 run at the rung head (51,039 tests
+each, 0 fallbacks); the audit's runtime 4.4 to 5.0 s and 53 to 60 MB,
+attributed to the header index and the wider walk, not tuned.
+
+Gate run here on a detached checkout of 9fe9241bf77 with rebuilt trees:
+gate 0 both builds; gate 1 on fourteen files (the getset, codec, clinic,
+tools and re files of both rungs) run=4,389 tests on default and run=4,389 on
+debug; kill on test_re, test_multibytecodec, test_codecencodings_jp,
+test_tools and test_gc 562 tests; gate 2 on default 556/564 files,
+51,057 tests, SUCCESS, 59,926 collections, 0 fallbacks; gate 3 on debug
+51,057 tests, SUCCESS, 61,839 collections, 0 fallbacks, -u cpu test_cext
+16 tests, regen and the traverse audit (with report 3) clean.
+
+Traced at the first gate 2 run of de1533e8b1a alone:
+test_perf_profiler.test_pre_fork_compile asserted /tmp/perf-PID.map
+existed and it did not; the file passed four of four reruns alone. The
+test's tearDown unlinks every /tmp/perf-*.map that was not present at
+its setUp, and three other suites were running on this machine at the
+time (load average 35), so a concurrent copy of the test in another
+checkout deletes this run's maps. A machine-level cross-run artefact
+through the shared /tmp (perf requires that path); recorded in
+PROCESS.md's standing concerns, not excluded.
+
+Hand-offs made today: the Py_buffer release skipped for a Python
+exporter when the consumer dies in the sweep (audit-2's review; 10a rung
+3, acceptance: exactly-once __release_buffer__ with a retained exporter
+and an allocating callback); the symtable's PyMem roots (10a rung 3);
+the remaining checker limits (coordinator, an audit-3 pass after 7a
+rung 2); the rung 1 fork-child hang (6d-1.md's hazard record shows where
+the parent waited, not why the child hung; owner 7a rung 2 with the fork
+path, evidence required the hung child's native and Python stacks, on
+recurrence). The remote branches boil/6d-rung4 and boil/audit2 are left
+in place like the earlier landing branches.

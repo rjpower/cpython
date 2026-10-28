@@ -545,15 +545,16 @@ buffered_closed(buffered *self)
 /*[clinic input]
 @critical_section
 @getter
-_io._Buffered.closed
+_io._Buffered.closed -> value
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__Buffered_closed_get_impl(buffered *self)
-/*[clinic end generated code: output=f08ce57290703a1a input=18eddefdfe4a3d2f]*/
+/*[clinic end generated code: output=277d6363cc40e930 input=aa81212243c2cd94]*/
 {
-    CHECK_INITIALIZED(self)
-    return PyObject_GetAttr(self->raw, &_Py_ID(closed));
+    CHECK_INITIALIZED_VALUE(self)
+    return PyObject_GetAttrValue(PyValue_FromObject(self->raw),
+                                 &_Py_ID(closed));
 }
 
 /*[clinic input]
@@ -685,29 +686,31 @@ _io__Buffered_writable_impl(buffered *self)
 /*[clinic input]
 @critical_section
 @getter
-_io._Buffered.name
+_io._Buffered.name -> value
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__Buffered_name_get_impl(buffered *self)
-/*[clinic end generated code: output=d2adf384051d3d10 input=6b84a0e6126f545e]*/
+/*[clinic end generated code: output=a6c0bc5274633fd6 input=a78c96929bfa8454]*/
 {
-    CHECK_INITIALIZED(self)
-    return PyObject_GetAttr(self->raw, &_Py_ID(name));
+    CHECK_INITIALIZED_VALUE(self)
+    return PyObject_GetAttrValue(PyValue_FromObject(self->raw),
+                                 &_Py_ID(name));
 }
 
 /*[clinic input]
 @critical_section
 @getter
-_io._Buffered.mode
+_io._Buffered.mode -> value
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__Buffered_mode_get_impl(buffered *self)
-/*[clinic end generated code: output=0feb205748892fa4 input=0762d5e28542fd8c]*/
+/*[clinic end generated code: output=2cda39da6e788a64 input=9c2ae12931bf6bcd]*/
 {
-    CHECK_INITIALIZED(self)
-    return PyObject_GetAttr(self->raw, &_Py_ID(mode));
+    CHECK_INITIALIZED_VALUE(self)
+    return PyObject_GetAttrValue(PyValue_FromObject(self->raw),
+                                 &_Py_ID(mode));
 }
 
 /* Lower-level APIs */
@@ -2521,19 +2524,20 @@ _io_BufferedRWPair_isatty_impl(rwpair *self)
 
 /*[clinic input]
 @getter
-_io.BufferedRWPair.closed
+_io.BufferedRWPair.closed -> value
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io_BufferedRWPair_closed_get_impl(rwpair *self)
-/*[clinic end generated code: output=4117400c74766f21 input=8248430ac54e5b25]*/
+/*[clinic end generated code: output=9f2517a1e4c95b7e input=c317a5a6e61b0637]*/
 {
     if (self->writer == NULL) {
         PyErr_SetString(PyExc_RuntimeError,
                 "the BufferedRWPair object is being garbage-collected");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyObject_GetAttr((PyObject *) self->writer, &_Py_ID(closed));
+    return PyObject_GetAttrValue(PyValue_FromObject((PyObject *)self->writer),
+                                 &_Py_ID(closed));
 }
 
 

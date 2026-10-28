@@ -313,7 +313,7 @@ _PyTemplate_Concat(PyObject *self, PyObject *other)
     return NULL;
 }
 
-static PyObject *
+static PyValue
 template_values_get(PyObject *op, void *Py_UNUSED(data))
 {
     templateobject *self = templateobject_CAST(op);
@@ -321,7 +321,7 @@ template_values_get(PyObject *op, void *Py_UNUSED(data))
     Py_ssize_t len = PyTuple_GET_SIZE(self->interpolations);
     PyObject *values = PyTuple_New(PyTuple_GET_SIZE(self->interpolations));
     if (values == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     for (Py_ssize_t i = 0; i < len; i++) {
@@ -329,7 +329,7 @@ template_values_get(PyObject *op, void *Py_UNUSED(data))
         PyTuple_SET_ITEM(values, i, _PyInterpolation_GetValueRef(item));
     }
 
-    return values;
+    return PyValue_FromResult(values);
 }
 
 static PyMemberDef template_members[] = {

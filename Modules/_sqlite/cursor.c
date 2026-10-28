@@ -1415,16 +1415,20 @@ static struct PyMemberDef cursor_members[] =
     {NULL}
 };
 
-static PyObject *
+static PyValue
 cursor_get_row_factory(PyObject *op, void *Py_UNUSED(closure))
 {
     pysqlite_Cursor *self = _pysqlite_Cursor_CAST(op);
-    return Py_NewRef(self->row_factory);
+    return PyValue_FromObject(self->row_factory);
 }
 
 static int
-cursor_set_row_factory(PyObject *op, PyObject *value, void *Py_UNUSED(closure))
+cursor_set_row_factory(PyObject *op, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     pysqlite_Cursor *self = _pysqlite_Cursor_CAST(op);
     if (value == NULL) {
         PyErr_SetString(PyExc_AttributeError,

@@ -257,6 +257,8 @@ typedef struct {
     PyValue stack[1];
 } _PyEntryFrame;
 
+/* The span holds the exception while the tools run, so that this checks
+   clean where a precise helper (_PyEval_MonitorRaise) inlines it. */
 static int
 do_monitor_exc(PyThreadState *tstate, _PyInterpreterFrame *frame,
                _PyInstr *instr, int event)
@@ -267,6 +269,10 @@ do_monitor_exc(PyThreadState *tstate, _PyInterpreterFrame *frame,
     }
     PyObject *exc = PyErr_GetRaisedException();
     assert(exc != NULL);
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, exc);
     int err = _Py_call_instrumentation_arg(tstate, event, frame, instr, exc);
     if (err == 0) {
         PyErr_SetRaisedException(exc);
@@ -275,6 +281,7 @@ do_monitor_exc(PyThreadState *tstate, _PyInterpreterFrame *frame,
         assert(PyErr_Occurred());
         Py_DECREF(exc);
     }
+    _PyThreadState_PopValueRoot(tstate, &span);
     return err;
 }
 

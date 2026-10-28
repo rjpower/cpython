@@ -512,6 +512,45 @@ gc_verify_missed_root(PyObject *self, PyObject *args)
     return missed_root(kind, make, collect, keep);
 }
 
+/* An __exit__, as a staticmethod (exc_type, exc, tb), that clears the
+   exception's traceback, collects and then uses its tb argument.  Its frame
+   is registered precise while it runs and keeps no copy of tb, so only the
+   span of _PyEval_CallExitWithException, whose array args is, keeps the
+   traceback through the collection: without that span, kill traps at the
+   use.  Returns False, so that the exception propagates. */
+static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
+PyObject *
+gc_exit_clears_traceback(PyObject *self, PyObject *const *args,
+                         Py_ssize_t nargs)
+{
+    if (nargs != 3) {
+        PyErr_SetString(PyExc_TypeError, "takes 3 arguments");
+        return NULL;
+    }
+    _PyGCFrameDesc d;
+    if (_PyGC_DecodeDescriptor((uintptr_t)&gc_exit_clears_traceback, &d) < 0
+        || _PyGC_RegisterCodeRange(d.func_start, d.func_end,
+                                   _PyGC_FRAME_PRECISE, _PyGC_RANGE_TEST,
+                                   NULL) < 0)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "no stack walk");
+        return NULL;
+    }
+    PyObject *result = NULL;
+    if (PyException_SetTraceback(args[1], Py_None) < 0) {
+        goto done;
+    }
+    PyGC_Collect();
+    if (!PyTraceBack_Check(args[2])) {
+        PyErr_SetString(PyExc_AssertionError, "tb is not a traceback");
+        goto done;
+    }
+    result = Py_NewRef(Py_False);
+done:
+    _PyGC_UnregisterCodeRange(d.func_start);
+    return result;
+}
+
 static PyObject *
 gc_walk_release(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
@@ -534,6 +573,8 @@ static PyMethodDef test_methods[] = {
     {"gc_walk_fallback", gc_walk_fallback, METH_NOARGS},
     {"gc_walk_hold_detached", _PyCFunction_CAST(gc_walk_hold_detached), METH_O},
     {"gc_verify_missed_root", gc_verify_missed_root, METH_VARARGS},
+    {"gc_exit_clears_traceback", _PyCFunction_CAST(gc_exit_clears_traceback),
+     METH_FASTCALL},
     {"gc_walk_detached_roots", gc_walk_detached_roots, METH_NOARGS},
     {"gc_walk_detach_holding", _PyCFunction_CAST(gc_walk_detach_holding), METH_O},
     {"gc_walk_release", gc_walk_release, METH_NOARGS},

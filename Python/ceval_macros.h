@@ -430,19 +430,6 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 
 /* PyValue macros */
 
-/* How much scratch space to give PyValue to PyObject* conversion. */
-#define MAX_VALUE_SCRATCH 10
-
-#define VALUES_TO_OBJECTS(ARGS, ARG_COUNT, NAME) \
-    /* +1 because vectorcall might use -1 to write self */ \
-    PyObject *NAME##_temp[MAX_VALUE_SCRATCH+1]; \
-    PyObject **NAME = _PyObjectArray_FromValues(ARGS, ARG_COUNT, NAME##_temp);
-
-#define VALUES_TO_OBJECTS_CLEANUP(NAME) \
-    /* +1 because we +1 previously */ \
-    _PyObjectArray_Free(NAME - 1, NAME##_temp);
-
-#define CONVERSION_FAILED(NAME) ((NAME) == NULL)
 
 #define IS_PEP523_HOOKED(tstate) (tstate->interp->eval_frame != NULL)
 

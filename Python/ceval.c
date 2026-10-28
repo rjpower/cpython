@@ -290,29 +290,29 @@ PyUnstable_ThreadState_ResetStackProtection(PyThreadState *tstate)
 
 /* The function _Py_EnterRecursiveCallTstate() only calls _Py_CheckRecursiveCall()
    if the stack pointer is beyond c_stack_soft_limit.  Not inlined: a cold
-   error path, opaque to the precise eval loop. */
-Py_NO_INLINE int
+   error path. */
+Py_GC_PRECISE Py_NO_INLINE int
 _Py_CheckRecursiveCall(PyThreadState *tstate, const char *where)
 {
     _PyThreadStateImpl *_tstate = (_PyThreadStateImpl *)tstate;
     uintptr_t here_addr = _Py_get_machine_stack_pointer();
     assert(_tstate->c_stack_soft_limit != 0);
     assert(_tstate->c_stack_hard_limit != 0);
+    // Each #if branch balances its braces, which the C mode needs.
 #if _Py_STACK_GROWS_DOWN
-    if (here_addr < _tstate->c_stack_hard_limit) {
-        if (here_addr < _tstate->c_stack_hard_limit - _PyOS_STACK_MARGIN_BYTES) {
-            // Far out of bounds -- Assume stack switching has occurred
-            return 0;
-        }
-        int kbytes_used = (int)(_tstate->c_stack_top - here_addr)/1024;
+    int beyond_hard_limit = here_addr < _tstate->c_stack_hard_limit;
+    int far_out = here_addr < _tstate->c_stack_hard_limit - _PyOS_STACK_MARGIN_BYTES;
+    int kbytes_used = (int)(_tstate->c_stack_top - here_addr)/1024;
 #else
-    if (here_addr > _tstate->c_stack_hard_limit) {
-        if (here_addr > _tstate->c_stack_hard_limit + _PyOS_STACK_MARGIN_BYTES) {
+    int beyond_hard_limit = here_addr > _tstate->c_stack_hard_limit;
+    int far_out = here_addr > _tstate->c_stack_hard_limit + _PyOS_STACK_MARGIN_BYTES;
+    int kbytes_used = (int)(here_addr - _tstate->c_stack_top)/1024;
+#endif
+    if (beyond_hard_limit) {
+        if (far_out) {
             // Far out of bounds -- Assume stack switching has occurred
             return 0;
         }
-        int kbytes_used = (int)(here_addr - _tstate->c_stack_top)/1024;
-#endif
         /* Too much stack used to safely raise an exception. Give up. */
         char buffer[80];
         snprintf(buffer, 80, "Unrecoverable stack overflow (used %d kB)%s", kbytes_used, where);
@@ -322,11 +322,6 @@ _Py_CheckRecursiveCall(PyThreadState *tstate, const char *where)
         return 0;
     }
     else {
-#if _Py_STACK_GROWS_DOWN
-        int kbytes_used = (int)(_tstate->c_stack_top - here_addr)/1024;
-#else
-        int kbytes_used = (int)(here_addr - _tstate->c_stack_top)/1024;
-#endif
         tstate->recursion_headroom++;
         _PyErr_Format(tstate, PyExc_RecursionError,
                     "Stack overflow (used %d kB)%s",
@@ -702,23 +697,35 @@ PyEval_EvalFrameEx(PyFrameObject *f, int throwflag)
 
 /* WITH_EXCEPT_START's call of an __exit__ or __aexit__ with the type, the
  * value and the traceback of the exception val.  The traceback may be held
- * only by the argument array, which is in this frame: not inlined, so that
- * the frame is outside the precise eval loop's, and scanned. */
-Py_NO_INLINE PyObject *
+ * only by the argument array, which this function creates, so the array is
+ * the frame's span (rule 3): the free slot, self, the type, the value and
+ * the traceback, raw. */
+Py_GC_PRECISE Py_NO_INLINE PyObject *
 _PyEval_CallExitWithException(PyObject *exit_func, PyObject *exit_self,
                               PyObject *val)
 {
     assert(val && PyExceptionInstance_Check(val));
+    PyThreadState *tstate = _PyThreadState_GET();
     PyObject *exc = PyExceptionInstance_Class(val);
     PyObject *tb = PyException_GetTraceback(val);
     if (tb == NULL) {
         tb = Py_None;
     }
-    PyObject *stack[5] = {NULL, exit_self, exc, val, tb};
+    PyValue stack[5];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, stack);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    _PyValueSpan_AppendObject(&span, exit_self);
+    _PyValueSpan_AppendObject(&span, exc);
+    _PyValueSpan_AppendObject(&span, val);
+    _PyValueSpan_AppendObject(&span, tb);
     int has_self = exit_self != NULL;
-    PyObject *res = PyObject_Vectorcall(exit_func, stack + 2 - has_self,
-                                        (3 + has_self) | PY_VECTORCALL_ARGUMENTS_OFFSET,
-                                        NULL);
+    // Raw slots hold the objects' pointers, so the span's buffer is the
+    // object array the call takes.
+    PyObject *res = PyObject_Vectorcall(
+        exit_func, (PyObject *const *)(stack + 2 - has_self),
+        (3 + has_self) | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
@@ -728,11 +735,11 @@ _PyEval_CallExitWithException(PyObject *exit_func, PyObject *exit_self,
  * here and in ceval.h.  The eval loop's frame is precise, which the inline
  * audit checks for every function inlined into it: inlined, a helper's
  * locals, which may hold the only reference to what it made, as an argument
- * array (VALUES_TO_OBJECTS) holds the boxes of inline values, would be in
- * that frame.  Out of line, each is opaque and scanned until rung 2 makes
- * it precise. */
+ * array holds the objects it passes on, would be in that frame.  Out of
+ * line, each is opaque and scanned, or precise and holds what it uses
+ * after a collecting call in its span. */
 
-Py_NO_INLINE PyValue
+Py_GC_PRECISE Py_NO_INLINE PyValue
 _Py_VectorCall_Values(
     PyValue callable,
     PyValue *arguments,
@@ -825,7 +832,7 @@ _Py_VectorCallInstrumentation_Values(
     return res;
 }
 
-Py_NO_INLINE PyValue
+Py_GC_PRECISE Py_NO_INLINE PyValue
 _Py_BuiltinCallFast_Values(
     PyValue callable,
     PyValue *arguments,
@@ -842,7 +849,7 @@ _Py_BuiltinCallFast_Values(
     return res;
 }
 
-Py_NO_INLINE PyValue
+Py_GC_PRECISE Py_NO_INLINE PyValue
 _Py_BuiltinCallFastWithKeywords_Values(
     PyValue callable,
     PyValue *arguments,
@@ -858,7 +865,7 @@ _Py_BuiltinCallFastWithKeywords_Values(
 }
 
 /* self is an object: a method called on an inline value boxes it. */
-Py_NO_INLINE PyValue
+Py_GC_PRECISE Py_NO_INLINE PyValue
 _PyCallMethodDescriptorFast_Values(
     PyValue callable,
     PyCFunctionFast cfunc,
@@ -874,7 +881,7 @@ _PyCallMethodDescriptorFast_Values(
     return res;
 }
 
-Py_NO_INLINE PyValue
+Py_GC_PRECISE Py_NO_INLINE PyValue
 _PyCallMethodDescriptorFastWithKeywords_Values(
     PyValue callable,
     PyCFunctionFastWithKeywords cfunc,
@@ -890,7 +897,7 @@ _PyCallMethodDescriptorFastWithKeywords_Values(
     return res;
 }
 
-Py_NO_INLINE PyValue
+Py_GC_PRECISE Py_NO_INLINE PyValue
 _Py_CallBuiltinClass_Values(
     PyValue callable,
     PyValue *arguments,
@@ -904,21 +911,24 @@ _Py_CallBuiltinClass_Values(
     return res;
 }
 
-Py_NO_INLINE PyObject *
+/* Precise.  BUILD_STRING's operands are str objects (FORMAT_SIMPLE,
+ * FORMAT_WITH_SPEC, CONVERT_VALUE and str constants), never inline values,
+ * so the registers are the object array the join takes and nothing is
+ * boxed: the eval loop anchors them. */
+Py_GC_PRECISE Py_NO_INLINE PyObject *
 _Py_BuildString_Values(
     PyValue *arguments,
     int total_args)
 {
-    PyObject *res;
-    VALUES_TO_OBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        res = NULL;
-        goto cleanup;
+#ifndef NDEBUG
+    for (int i = 0; i < total_args; i++) {
+        assert(PyValue_IsObject(arguments[i]));
+        assert(PyUnicode_Check(PyValue_ObjectBorrow(arguments[i])));
     }
-    res = _PyUnicode_JoinArray(&_Py_STR(empty), args_o, total_args);
-    VALUES_TO_OBJECTS_CLEANUP(args_o);
+#endif
+    PyObject *res = _PyUnicode_JoinArray(
+        &_Py_STR(empty), (PyObject *const *)arguments, total_args);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-cleanup:
     // arguments is a pointer into the GC visible stack,
     // so we must NULL out values as we clear them.
     for (int i = total_args-1; i >= 0; i--) {
@@ -927,14 +937,20 @@ cleanup:
     return res;
 }
 
-Py_NO_INLINE PyObject *
+/* Precise: the span holds the dict while the keys are hashed. */
+Py_GC_PRECISE Py_NO_INLINE PyObject *
 _Py_BuildMap_Values(
     PyValue *arguments,
     int half_args)
 {
-    // The dict is in this frame, which the collector scans, while the
-    // keys are hashed.
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
     PyObject *res = _PyDict_NewPresized(half_args);
+    if (res != NULL) {
+        _PyValueSpan_AppendObject(&span, res);
+    }
     for (int i = 0; res != NULL && i < half_args; i++) {
         if (_PyDict_SetItemValue((PyDictObject *)res, arguments[2 * i],
                                  arguments[2 * i + 1]) < 0)
@@ -942,6 +958,7 @@ _Py_BuildMap_Values(
             res = NULL;
         }
     }
+    _PyThreadState_PopValueRoot(tstate, &span);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     // arguments is a pointer into the GC visible stack,
     // so we must NULL out values as we clear them.
@@ -951,7 +968,7 @@ _Py_BuildMap_Values(
     return res;
 }
 
-Py_NO_INLINE PyValue
+Py_GC_PRECISE Py_NO_INLINE PyValue
 _Py_LoadAttr_Values(
     PyThreadState *tstate, PyValue owner,
     PyObject *name, PyValue *self_or_null)
@@ -1019,53 +1036,6 @@ static const struct {
 const _PyInstr *_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR = (_PyInstr*)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
 
 
-/* The objects of input[0..nargs), in scratch or a new block, with a box of
-   each inline value.  The caller's frame (a Py_NO_INLINE helper, see
-   below), which the collector scans, holds the array, and the collector
-   scans a block that a scanned word points into: the boxes need no other
-   root.  Returns NULL with an exception set if boxing fails. */
-PyObject **
-_PyObjectArray_FromValues(PyValue *input, Py_ssize_t nargs, PyObject **scratch)
-{
-    PyObject **result;
-    if (nargs > MAX_VALUE_SCRATCH) {
-        // +1 in case PY_VECTORCALL_ARGUMENTS_OFFSET is set.
-        result = PyMem_Malloc((nargs + 1) * sizeof(PyObject *));
-        if (result == NULL) {
-            PyErr_NoMemory();
-            return NULL;
-        }
-    }
-    else {
-        result = scratch;
-    }
-    result++;
-    result[0] = NULL; /* Keep GCC happy */
-    for (int i = 0; i < nargs; i++) {
-        if (_PyValue_IsInlineAt(&input[i])) {
-            result[i] = _PyValue_BoxInline(input[i]);
-            if (result[i] == NULL) {
-                _PyObjectArray_Free(result - 1, scratch);
-                return NULL;
-            }
-            OBJECT_STAT_INC(inline_array_boxes);
-            VALUE_BOX_STAT_INC(_PY_BOX_CALL);
-        }
-        else {
-            result[i] = PyValue_ObjectBorrow(input[i]);
-        }
-    }
-    return result;
-}
-
-void
-_PyObjectArray_Free(PyObject **array, PyObject **scratch)
-{
-    if (array != scratch) {
-        PyMem_Free(array);
-    }
-}
-
 /* _PyEval_EvalFrameDefault is too large to optimize for speed with PGO on MSVC.
  */
 #if (defined(_MSC_VER) && \
@@ -1085,7 +1055,7 @@ _PyObjectArray_Free(PyObject **array, PyObject **scratch)
 #endif
 
 
-Py_NO_INLINE PyValue
+Py_GC_PRECISE Py_NO_INLINE PyValue
 _PyEval_GetIter(PyValue iterable, PyValue *index_or_null, int yield_from)
 {
     PyTypeObject *tp = PyValue_Type(iterable);
@@ -2296,7 +2266,7 @@ Error:
 
 
 
-Py_NO_INLINE void
+Py_GC_PRECISE Py_NO_INLINE void
 _PyEval_MonitorRaise(PyThreadState *tstate, _PyInterpreterFrame *frame,
               _PyInstr *instr)
 {
@@ -3424,7 +3394,7 @@ _PyEval_CheckExceptStarTypeValid(PyThreadState *tstate, PyObject* right)
     return 0;
 }
 
-Py_NO_INLINE int
+Py_GC_PRECISE Py_NO_INLINE int
 _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args)
 {
     if (Py_TYPE(args)->tp_iter == NULL && !PySequence_Check(args)) {
@@ -3569,33 +3539,30 @@ void Py_LeaveRecursiveCall(void)
     _Py_LeaveRecursiveCall();
 }
 
-Py_NO_INLINE PyObject *
+/* Precise: the span holds the __anext__ result while it is made awaitable. */
+Py_GC_PRECISE Py_NO_INLINE PyObject *
 _PyEval_GetANext(PyObject *aiter)
 {
-    unaryfunc getter = NULL;
-    PyObject *next_iter = NULL;
     PyTypeObject *type = Py_TYPE(aiter);
     if (PyAsyncGen_CheckExact(aiter)) {
         return type->tp_as_async->am_anext(aiter);
     }
-    if (type->tp_as_async != NULL){
-        getter = type->tp_as_async->am_anext;
-    }
-
-    if (getter != NULL) {
-        next_iter = (*getter)(aiter);
-        if (next_iter == NULL) {
-            return NULL;
-        }
-    }
-    else {
+    if (type->tp_as_async == NULL || type->tp_as_async->am_anext == NULL) {
         PyErr_Format(PyExc_TypeError,
                         "'async for' requires an iterator with "
                         "__anext__ method, got %.100s",
                         type->tp_name);
         return NULL;
     }
-
+    PyObject *next_iter = type->tp_as_async->am_anext(aiter);
+    if (next_iter == NULL) {
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, next_iter);
     PyObject *awaitable = _PyCoro_GetAwaitableIter(next_iter);
     if (awaitable == NULL) {
         _PyErr_FormatFromCause(
@@ -3604,6 +3571,7 @@ _PyEval_GetANext(PyObject *aiter)
             "from __anext__: %.100s",
             Py_TYPE(next_iter)->tp_name);
     }
+    _PyThreadState_PopValueRoot(tstate, &span);
     Py_DECREF(next_iter);
     return awaitable;
 }
@@ -3656,14 +3624,20 @@ _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name, P
     }
 }
 
-Py_NO_INLINE PyObject *
+/* Precise: the span holds iterable, whose type the error names
+   (the parameter rule). */
+Py_GC_PRECISE Py_NO_INLINE PyObject *
 _PyEval_GetAwaitable(PyObject *iterable, int oparg)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, iterable);
     PyObject *iter = _PyCoro_GetAwaitableIter(iterable);
 
     if (iter == NULL) {
-        _PyEval_FormatAwaitableError(PyThreadState_GET(),
-            Py_TYPE(iterable), oparg);
+        _PyEval_FormatAwaitableError(tstate, Py_TYPE(iterable), oparg);
     }
     else if (PyCoro_CheckExact(iter)) {
         PyCoroObject *coro = (PyCoroObject *)iter;
@@ -3673,10 +3647,11 @@ _PyEval_GetAwaitable(PyObject *iterable, int oparg)
         {
             /* `iter` is a coroutine object that is being awaited. */
             Py_CLEAR(iter);
-            _PyErr_SetString(PyThreadState_GET(), PyExc_RuntimeError,
+            _PyErr_SetString(tstate, PyExc_RuntimeError,
                              "coroutine is being awaited already");
         }
     }
+    _PyThreadState_PopValueRoot(tstate, &span);
     return iter;
 }
 

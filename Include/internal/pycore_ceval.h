@@ -260,9 +260,6 @@ PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterF
    FOR_ITER returns, the exit of that instruction; for a FOR_ITER, also
    points frame's return slot at the slot that END_FOR consumes. */
 PyAPI_FUNC(_PyInstr *) _PyEval_GeneratorReturnTarget(_PyInterpreterFrame *frame);
-PyAPI_FUNC(PyObject **) _PyObjectArray_FromValues(PyValue *input, Py_ssize_t nargs, PyObject **scratch);
-
-PyAPI_FUNC(void) _PyObjectArray_Free(PyObject **array, PyObject **scratch);
 
 PyAPI_FUNC(PyObject *) _PyEval_GetANext(PyObject *aiter);
 PyAPI_FUNC(void) _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name, PyValue *writeto);

@@ -1901,6 +1901,30 @@ class TracingCollectorTests(unittest.TestCase):
                                         PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split()[0], b"release")
 
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_exit_traceback_in_span(self):
+        # _PyEval_CallExitWithException's argument array is its frame's
+        # span (10a-2.md rule 3).  A C __exit__ clears the exception's
+        # traceback, which leaves the array the traceback's only holder,
+        # and uses it after a collection: under kill, a span left out traps.
+        code = textwrap.dedent("""
+            import _testinternalcapi
+            class CM:
+                def __enter__(self):
+                    return self
+                __exit__ = staticmethod(
+                    _testinternalcapi.gc_exit_clears_traceback)
+            try:
+                with CM():
+                    raise ValueError("raised")
+            except ValueError as e:
+                print(e, flush=True)
+        """)
+        rc, out, err = assert_python_ok("-X", "faulthandler", "-c", code,
+                                        PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.split(), [b"raised"])
+
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_injection_sites(self):
         # Note 11 section 8.3: _testinternalcapi.gc_collect_at() arms one

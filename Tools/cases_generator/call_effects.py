@@ -64,7 +64,7 @@ NON_COLLECTING = frozenset({
     # the verifier's trap in Py_TYPE() (debug builds): it reports and aborts
     "_PyGC_TrapUse",
     # stdio cannot reach the collector, and abort() does not return
-    "fprintf", "fflush", "abort",
+    "fprintf", "fflush", "snprintf", "abort",
     # the value of an exact int that is not compact: PyLong_AsLongAndOverflow()
     # on an exact int calls no __index__ and allocates nothing
     # (Python/pyvalue.c)

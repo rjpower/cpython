@@ -318,7 +318,7 @@ done:
 
 /* An inline int or float is never callable: the error names its type
    without a box. */
-static void
+Py_GC_PRECISE static void
 inline_is_not_callable(PyThreadState *tstate, PyValue callable)
 {
     _PyErr_Format(tstate, PyExc_TypeError, "'%.200s' object is not callable",

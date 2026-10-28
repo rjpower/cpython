@@ -182,6 +182,15 @@ oe = OSError()
 def fn(): pass
 class Dict: pass
 dobj = Dict()
+cmi, cmf = classmethod(add), classmethod(add)
+smi, smf = staticmethod(add), staticmethod(add)
+for o, v in ((cmi, big + 1), (cmf, 2.5 * big), (smi, big + 1), (smf, 2.5 * big)):
+    o.__annotations__ = v
+    o.__annotate__ = v
+class ACI: pass
+class ACF: pass
+ACI.__abstractmethods__ = big + 1
+ACF.__abstractmethods__ = 2.5 * big
 """
 
 SLOT_CASES = {
@@ -295,6 +304,31 @@ SLOT_CASES = {
     # four allocations are the error's.
     "__dict__ store refused": (
         "try: dobj.__dict__ = i\nexcept TypeError: pass", 0, 4, None),
+    # The dict-backed accessors of classmethod, staticmethod and
+    # __abstractmethods__ keep the attribute in a dict as a value
+    # (landing review): reads and stores of an uncached int or a float.
+    "classmethod __annotations__ int": ("r = cmi.__annotations__", 0, 0, None),
+    "classmethod __annotations__ float": ("r = cmf.__annotations__", 0, 0, None),
+    "classmethod __annotations__ store int": ("cmi.__annotations__ = i", 0, 0, None),
+    "classmethod __annotations__ store float": ("cmf.__annotations__ = i + 0.5", 0, 0, None),
+    "classmethod __annotate__ int": ("r = cmi.__annotate__", 0, 0, None),
+    "classmethod __annotate__ float": ("r = cmf.__annotate__", 0, 0, None),
+    "classmethod __annotate__ store int": ("cmi.__annotate__ = i", 0, 0, None),
+    "classmethod __annotate__ store float": ("cmf.__annotate__ = i + 0.5", 0, 0, None),
+    "staticmethod __annotations__ int": ("r = smi.__annotations__", 0, 0, None),
+    "staticmethod __annotations__ float": ("r = smf.__annotations__", 0, 0, None),
+    "staticmethod __annotations__ store int": ("smi.__annotations__ = i", 0, 0, None),
+    "staticmethod __annotations__ store float": ("smf.__annotations__ = i + 0.5", 0, 0, None),
+    "staticmethod __annotate__ int": ("r = smi.__annotate__", 0, 0, None),
+    "staticmethod __annotate__ float": ("r = smf.__annotate__", 0, 0, None),
+    "staticmethod __annotate__ store int": ("smi.__annotate__ = i", 0, 0, None),
+    "staticmethod __annotate__ store float": ("smf.__annotate__ = i + 0.5", 0, 0, None),
+    "__abstractmethods__ int": ("r = ACI.__abstractmethods__", 0, 0, None),
+    "__abstractmethods__ float": ("r = ACF.__abstractmethods__", 0, 0, None),
+    "__abstractmethods__ store int": ("ACI.__abstractmethods__ = i + 1", 0, 0,
+                                      None),
+    "__abstractmethods__ store float": ("ACF.__abstractmethods__ = i + 0.5",
+                                        0, 0, None),
     "starred inline callee": (
         "try: big(*(i,))\nexcept TypeError: pass", None, None,
         "the generator boxes the callee at the entry of _MAKE_CALLARGS_A_TUPLE "

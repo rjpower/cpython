@@ -1403,40 +1403,42 @@ functools_wraps(PyObject *wrapper, PyObject *wrapped)
 }
 
 // Used for wrapping __annotations__ and __annotate__ on classmethod
-// and staticmethod objects.
-static PyObject *
+// and staticmethod objects.  The attribute is kept in the descriptor's
+// dict as a value, so an inline int or float is never boxed.
+static PyValue
 descriptor_get_wrapped_attribute(PyObject *wrapped, PyObject *obj, PyObject *name)
 {
     PyValue dict_value = PyObject_GenericGetDict(obj, NULL);
     if (PyValue_IsNull(dict_value)) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *dict = PyValue_ObjectBorrow(dict_value);
-    PyObject *res;
-    if (PyDict_GetItemRef(dict, name, &res) < 0) {
+    PyValue res;
+    int found = PyDict_GetItemRefValue(dict, name, &res);
+    if (found < 0) {
         Py_DECREF(dict);
-        return NULL;
+        return PyValue_NULL;
     }
-    if (res != NULL) {
+    if (found) {
         Py_DECREF(dict);
         return res;
     }
-    res = PyObject_GetAttr(wrapped, name);
-    if (res == NULL) {
+    res = PyObject_GetAttrValue(PyValue_FromObject(wrapped), name);
+    if (PyValue_IsNull(res)) {
         Py_DECREF(dict);
-        return NULL;
+        return PyValue_NULL;
     }
-    if (PyDict_SetItem(dict, name, res) < 0) {
+    if (_PyDict_SetItemValue((PyDictObject *)dict, PyValue_FromObject(name),
+                             res) < 0) {
         Py_DECREF(dict);
-        Py_DECREF(res);
-        return NULL;
+        return PyValue_NULL;
     }
     Py_DECREF(dict);
     return res;
 }
 
 static int
-descriptor_set_wrapped_attribute(PyObject *oobj, PyObject *name, PyObject *value,
+descriptor_set_wrapped_attribute(PyObject *oobj, PyObject *name, PyValue value,
                                  char *type_name)
 {
     PyValue dict_value = PyObject_GenericGetDict(oobj, NULL);
@@ -1444,7 +1446,7 @@ descriptor_set_wrapped_attribute(PyObject *oobj, PyObject *name, PyObject *value
         return -1;
     }
     PyObject *dict = PyValue_ObjectBorrow(dict_value);
-    if (value == NULL) {
+    if (PyValue_IsNull(value)) {
         if (PyDict_DelItem(dict, name) < 0) {
             if (PyErr_ExceptionMatches(PyExc_KeyError)) {
                 PyErr_Clear();
@@ -1463,7 +1465,8 @@ descriptor_set_wrapped_attribute(PyObject *oobj, PyObject *name, PyObject *value
         return 0;
     }
     else {
-        int result = PyDict_SetItem(dict, name, value);
+        int result = _PyDict_SetItemValue((PyDictObject *)dict,
+                                          PyValue_FromObject(name), value);
         Py_DECREF(dict);
         return result;
     }
@@ -1613,16 +1616,12 @@ static PyValue
 cm_get___annotations__(PyObject *self, void *closure)
 {
     classmethod *cm = _PyClassMethod_CAST(self);
-    return PyValue_FromResult(descriptor_get_wrapped_attribute(cm->cm_callable, self, &_Py_ID(__annotations__)));
+    return descriptor_get_wrapped_attribute(cm->cm_callable, self, &_Py_ID(__annotations__));
 }
 
 static int
-cm_set___annotations__(PyObject *self, PyValue value_v, void *closure)
+cm_set___annotations__(PyObject *self, PyValue value, void *closure)
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     return descriptor_set_wrapped_attribute(self, &_Py_ID(__annotations__), value, "classmethod");
 }
 
@@ -1630,16 +1629,12 @@ static PyValue
 cm_get___annotate__(PyObject *self, void *closure)
 {
     classmethod *cm = _PyClassMethod_CAST(self);
-    return PyValue_FromResult(descriptor_get_wrapped_attribute(cm->cm_callable, self, &_Py_ID(__annotate__)));
+    return descriptor_get_wrapped_attribute(cm->cm_callable, self, &_Py_ID(__annotate__));
 }
 
 static int
-cm_set___annotate__(PyObject *self, PyValue value_v, void *closure)
+cm_set___annotate__(PyObject *self, PyValue value, void *closure)
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     return descriptor_set_wrapped_attribute(self, &_Py_ID(__annotate__), value, "classmethod");
 }
 
@@ -1891,16 +1886,12 @@ static PyValue
 sm_get___annotations__(PyObject *self, void *closure)
 {
     staticmethod *sm = _PyStaticMethod_CAST(self);
-    return PyValue_FromResult(descriptor_get_wrapped_attribute(sm->sm_callable, self, &_Py_ID(__annotations__)));
+    return descriptor_get_wrapped_attribute(sm->sm_callable, self, &_Py_ID(__annotations__));
 }
 
 static int
-sm_set___annotations__(PyObject *self, PyValue value_v, void *closure)
+sm_set___annotations__(PyObject *self, PyValue value, void *closure)
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     return descriptor_set_wrapped_attribute(self, &_Py_ID(__annotations__), value, "staticmethod");
 }
 
@@ -1908,16 +1899,12 @@ static PyValue
 sm_get___annotate__(PyObject *self, void *closure)
 {
     staticmethod *sm = _PyStaticMethod_CAST(self);
-    return PyValue_FromResult(descriptor_get_wrapped_attribute(sm->sm_callable, self, &_Py_ID(__annotate__)));
+    return descriptor_get_wrapped_attribute(sm->sm_callable, self, &_Py_ID(__annotate__));
 }
 
 static int
-sm_set___annotate__(PyObject *self, PyValue value_v, void *closure)
+sm_set___annotate__(PyObject *self, PyValue value, void *closure)
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     return descriptor_set_wrapped_attribute(self, &_Py_ID(__annotate__), value, "staticmethod");
 }
 

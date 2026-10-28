@@ -54,13 +54,15 @@ H
 status=0
 check() {  # file, then extra flags
     local f=$1; shift
-    local out
+    local out rc
     out=$(cd "$BUILD" && gcc -fsyntax-only -std=c11 -Wall \
           -I"$SRC/Include/internal" -I"$BUILD" -I"$SRC/Include" \
-          -DPy_BUILD_CORE_MODULE "$@" "$SRC/$f" 2>&1 \
-          | grep -E "error|warning:")
-    if [ -n "$out" ]; then
-        echo "FAIL $f $*"; echo "$out"; status=1
+          -DPy_BUILD_CORE_MODULE "$@" "$SRC/$f" 2>&1)
+    rc=$?
+    # A failed compile fails the check whatever it printed; a clean one
+    # still fails on any warning.
+    if [ $rc -ne 0 ] || printf '%s\n' "$out" | grep -qE "error|warning:"; then
+        echo "FAIL $f $* (gcc exit $rc)"; printf '%s\n' "$out"; status=1
     else
         echo "ok   $f$(printf " %s" "$@" | grep -o -- " -DEXTRA_FUNCTIONALITY")"
     fi

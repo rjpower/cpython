@@ -1523,7 +1523,7 @@ static PyValue
 type_abstractmethods(PyObject *tp, void *Py_UNUSED(closure))
 {
     PyTypeObject *type = PyTypeObject_CAST(tp);
-    PyObject *res = NULL;
+    PyValue res = PyValue_NULL;
     /* type itself has an __abstractmethods__ descriptor (this). Don't return
        that. */
     if (type == &PyType_Type) {
@@ -1531,11 +1531,11 @@ type_abstractmethods(PyObject *tp, void *Py_UNUSED(closure))
     }
     else {
         PyObject *dict = lookup_tp_dict(type);
-        if (PyDict_GetItemRef(dict, &_Py_ID(__abstractmethods__), &res) == 0) {
+        if (PyDict_GetItemRefValue(dict, &_Py_ID(__abstractmethods__), &res) == 0) {
             PyErr_SetObject(PyExc_AttributeError, &_Py_ID(__abstractmethods__));
         }
     }
-    return PyValue_FromResult(res);
+    return res;
 }
 
 static int

@@ -7069,6 +7069,36 @@ class ValueSetterTests(unittest.TestCase):
         m.__annotations__ = 2.5 * n
         self.assertIs(m.__annotations__, 2.5)
 
+    def test_wrapped_dict_entries(self):
+        # classmethod's and staticmethod's __annotations__ and __annotate__,
+        # and a type's __abstractmethods__, keep the value in a dict as it
+        # is; deleting a classmethod's entry falls back to the wrapped
+        # function's attribute, and deleting it twice raises.
+        n = int("1")
+        def f():
+            pass
+        f.__annotations__ = {"x": int}
+        for wrap in classmethod, staticmethod:
+            with self.subTest(wrap=wrap.__name__):
+                w = wrap(f)
+                w.__annotations__ = 100000 + n
+                self.assertIs(w.__annotations__, 100001)
+                w.__annotate__ = 2.5 * n
+                self.assertIs(w.__annotate__, 2.5)
+                del w.__annotations__
+                with self.assertRaises(AttributeError):
+                    del w.__annotations__
+                self.assertEqual(w.__annotations__, {"x": int})
+        class C:
+            pass
+        C.__abstractmethods__ = 100000 + n
+        self.assertIs(C.__abstractmethods__, 100001)
+        C.__abstractmethods__ = 2.5 * n
+        self.assertIs(C.__abstractmethods__, 2.5)
+        del C.__abstractmethods__
+        with self.assertRaises(AttributeError):
+            C.__abstractmethods__
+
     def test_dict_nomemory(self):
         # PyObject_GenericGetDict() fails to make the dict, in both layouts:
         # a managed dict (_PyObject_EnterDictMode) and a dict at

@@ -3040,28 +3040,44 @@ _PyEval_IsInstanceValue(PyValue inst_st, PyValue cls_st)
     return res;
 }
 
-Py_NO_INLINE PyObject *
+/* Precise: the span holds the arguments, which the call reads after the
+   lookup (the parameter rule), and its last slot is the lookup's object
+   out-parameter. */
+Py_GC_PRECISE Py_NO_INLINE PyObject *
 _PyEval_ImportName(PyThreadState *tstate, PyObject *builtins,
             PyObject *globals, PyObject *locals, PyObject *name,
             PyObject *fromlist, PyObject *level)
 {
-    PyObject *import_func;
+    PyValue slots[6];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, globals);
+    _PyValueSpan_AppendObject(&span, locals);
+    _PyValueSpan_AppendObject(&span, name);
+    _PyValueSpan_AppendObject(&span, fromlist);
+    _PyValueSpan_AppendObject(&span, level);
+    PyObject **import_func = _PyValueSpan_ObjectSlot(&span);
+    PyObject *res = NULL;
     if (PyMapping_GetOptionalItem(builtins, &_Py_ID(__import__),
-                                  &import_func) < 0) {
-        return NULL;
+                                  import_func) < 0) {
+        goto done;
     }
-    if (import_func == NULL) {
+    if (*import_func == NULL) {
         _PyErr_SetString(tstate, PyExc_ImportError, "__import__ not found");
-        return NULL;
+        goto done;
     }
 
-    PyObject *res = _PyEval_ImportNameWithImport(
-        tstate, import_func, globals, locals, name, fromlist, level);
-    Py_DECREF(import_func);
+    res = _PyEval_ImportNameWithImport(
+        tstate, *import_func, globals, locals, name, fromlist, level);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-PyObject *
+/* Precise: the span is the overloaded call's argument array (the creator
+   rule), and it holds the arguments that the default import reads after
+   the level's conversion (the parameter rule). */
+Py_GC_PRECISE PyObject *
 _PyEval_ImportNameWithImport(PyThreadState *tstate, PyObject *import_func,
                              PyObject *globals, PyObject *locals,
                              PyObject *name, PyObject *fromlist, PyObject *level)
@@ -3069,61 +3085,86 @@ _PyEval_ImportNameWithImport(PyThreadState *tstate, PyObject *import_func,
     if (locals == NULL) {
         locals = Py_None;
     }
+    PyValue args[5];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, args);
+    _PyValueSpan_AppendObject(&span, name);
+    _PyValueSpan_AppendObject(&span, globals);
+    _PyValueSpan_AppendObject(&span, locals);
+    _PyValueSpan_AppendObject(&span, fromlist);
+    _PyValueSpan_AppendObject(&span, level);
+    PyObject *res;
 
     /* Fast path for not overloaded __import__. */
     if (_PyImport_IsDefaultImportFunc(tstate->interp, import_func)) {
         int ilevel = PyLong_AsInt(level);
         if (ilevel == -1 && _PyErr_Occurred(tstate)) {
-            return NULL;
+            res = NULL;
         }
-        return PyImport_ImportModuleLevelObject(
-                        name,
-                        globals,
-                        locals,
-                        fromlist,
-                        ilevel);
+        else {
+            res = PyImport_ImportModuleLevelObject(
+                            name,
+                            globals,
+                            locals,
+                            fromlist,
+                            ilevel);
+        }
     }
-
-    PyObject *args[5] = {name, globals, locals, fromlist, level};
-    PyObject *res = PyObject_Vectorcall(import_func, args, 5, NULL);
+    else {
+        /* The span's raw slots are the objects' own pointers. */
+        res = PyObject_Vectorcall(import_func, (PyObject *const *)args, 5,
+                                  NULL);
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-static int
+/* Precise: the span holds the parameters, which the name's resolution
+   reads after the lookup (the parameter rule), the lookup's object
+   out-parameter, and the absolute name, which the containment test
+   reads. */
+Py_GC_PRECISE static int
 check_lazy_import_compatibility(PyThreadState *tstate, PyObject *globals,
                                PyObject *name, PyObject *level)
 {
      // Check if this module should be imported lazily due to
      // the compatibility mode support via __lazy_modules__.
-    PyObject *lazy_modules = NULL;
+    PyValue slots[5];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, globals);
+    _PyValueSpan_AppendObject(&span, name);
+    _PyValueSpan_AppendObject(&span, level);
+    PyObject **lazy_modules = _PyValueSpan_ObjectSlot(&span);
     PyObject *abs_name = NULL;
     int res = -1;
 
     if (globals != NULL &&
         PyMapping_GetOptionalItem(globals, &_Py_ID(__lazy_modules__),
-                                  &lazy_modules) < 0)
+                                  lazy_modules) < 0)
     {
-        return -1;
+        goto done;
     }
-    if (lazy_modules == NULL) {
+    if (*lazy_modules == NULL) {
         assert(!PyErr_Occurred());
-        return 0;
+        res = 0;
+        goto done;
     }
 
     int ilevel = PyLong_AsInt(level);
     if (ilevel == -1 && _PyErr_Occurred(tstate)) {
-        goto error;
+        goto done;
     }
 
     abs_name = _PyImport_GetAbsName(tstate, name, globals, ilevel);
     if (abs_name == NULL) {
-        goto error;
+        goto done;
     }
+    _PyValueSpan_AppendObject(&span, abs_name);
 
-    res = PySequence_Contains(lazy_modules, abs_name);
-error:
-    Py_XDECREF(abs_name);
-    Py_XDECREF(lazy_modules);
+    res = PySequence_Contains(*lazy_modules, abs_name);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
@@ -3134,12 +3175,31 @@ is_lazy_import_module_level(void)
     return frame != NULL && frame->f_globals == frame->f_locals;
 }
 
-Py_NO_INLINE PyObject *
+/* Precise: the span's first five slots are the overloaded call's argument
+   array (the creator rule); with builtins they are the parameters that
+   the calls read after the compatibility check and the lookup (the
+   parameter rule).  Its last slot is the lookup's object out-parameter. */
+Py_GC_PRECISE Py_NO_INLINE PyObject *
 _PyEval_LazyImportName(PyThreadState *tstate, PyObject *builtins,
                        PyObject *globals, PyObject *locals, PyObject *name,
                        PyObject *fromlist, PyObject *level, int lazy)
 {
     PyObject *res = NULL;
+    PyValue args[7];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, args);
+    // The eager import reads a NULL locals as None too.
+    if (locals == NULL) {
+        locals = Py_None;
+    }
+    _PyValueSpan_AppendObject(&span, name);
+    _PyValueSpan_AppendObject(&span, globals);
+    _PyValueSpan_AppendObject(&span, locals);
+    _PyValueSpan_AppendObject(&span, fromlist);
+    _PyValueSpan_AppendObject(&span, level);
+    _PyValueSpan_AppendObject(&span, builtins);
+    PyObject **lazy_import_func = _PyValueSpan_ObjectSlot(&span);
+
     // Check if global policy overrides the local syntax
     switch (PyImport_GetLazyImportsMode()) {
         case PyImport_LAZY_ALL:
@@ -3158,7 +3218,7 @@ _PyEval_LazyImportName(PyThreadState *tstate, PyObject *builtins,
         if (is_lazy_import_module_level()) {
             lazy = check_lazy_import_compatibility(tstate, globals, name, level);
             if (lazy < 0) {
-                return NULL;
+                goto done;
             }
         }
     }
@@ -3166,60 +3226,71 @@ _PyEval_LazyImportName(PyThreadState *tstate, PyObject *builtins,
     if (!lazy) {
         // Not a lazy import or lazy imports are disabled, fallback to the
         // regular import.
-        return _PyEval_ImportName(tstate, builtins, globals, locals,
-                                  name, fromlist, level);
+        res = _PyEval_ImportName(tstate, builtins, globals, locals,
+                                 name, fromlist, level);
+        goto done;
     }
 
-    PyObject *lazy_import_func;
     if (PyMapping_GetOptionalItem(builtins, &_Py_ID(__lazy_import__),
-                                  &lazy_import_func) < 0) {
-        goto error;
+                                  lazy_import_func) < 0) {
+        goto done;
     }
-    if (lazy_import_func == NULL) {
+    if (*lazy_import_func == NULL) {
         assert(!PyErr_Occurred());
         _PyErr_SetString(tstate, PyExc_ImportError,
                          "__lazy_import__ not found");
-        goto error;
+        goto done;
     }
 
-    if (locals == NULL) {
-        locals = Py_None;
-    }
-
-    if (_PyImport_IsDefaultLazyImportFunc(tstate->interp, lazy_import_func)) {
+    if (_PyImport_IsDefaultLazyImportFunc(tstate->interp, *lazy_import_func)) {
         int ilevel = PyLong_AsInt(level);
         if (ilevel == -1 && PyErr_Occurred()) {
-            goto error;
+            goto done;
         }
 
         res = _PyImport_LazyImportModuleLevelObject(
             tstate, name, builtins, globals, locals, fromlist, ilevel
         );
-        goto error;
+        goto done;
     }
 
-    PyObject *args[5] = {name, globals, locals, fromlist, level};
-    res = PyObject_Vectorcall(lazy_import_func, args, 5, NULL);
-error:
-    Py_XDECREF(lazy_import_func);
+    /* The span's raw slots are the objects' own pointers. */
+    res = PyObject_Vectorcall(*lazy_import_func, (PyObject *const *)args, 5,
+                              NULL);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-Py_NO_INLINE PyObject *
+/* Precise: the span holds v and name, which the fallback and the error
+   read after collecting calls (the parameter rule), then the object
+   out-parameters of the attribute, the module's name, its spec, its
+   origin and sys.stdlib_module_names, and the placeholder module name
+   (the result rule). */
+Py_GC_PRECISE Py_NO_INLINE PyObject *
 _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
 {
-    PyObject *x;
+    PyObject *x = NULL;
     PyObject *fullmodname, *mod_name, *origin, *mod_name_or_unknown, *errmsg, *spec;
+    PyValue slots[8];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, v);
+    _PyValueSpan_AppendObject(&span, name);
+    PyObject **xp = _PyValueSpan_ObjectSlot(&span);
 
-    if (PyObject_GetOptionalAttr(v, name, &x) != 0) {
-        return x;
+    if (PyObject_GetOptionalAttr(v, name, xp) != 0) {
+        x = *xp;
+        goto exit;
     }
     /* Issue #17636: in case this failed because of a circular relative
        import, try to fallback on reading the module directly from
        sys.modules. */
-    if (PyObject_GetOptionalAttr(v, &_Py_ID(__name__), &mod_name) < 0) {
-        return NULL;
+    PyObject **mod_namep = _PyValueSpan_ObjectSlot(&span);
+    if (PyObject_GetOptionalAttr(v, &_Py_ID(__name__), mod_namep) < 0) {
+        goto exit;
     }
+    mod_name = *mod_namep;
     if (mod_name == NULL || !PyUnicode_Check(mod_name)) {
         Py_CLEAR(mod_name);
         goto error;
@@ -3227,7 +3298,7 @@ _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
     fullmodname = PyUnicode_FromFormat("%U.%U", mod_name, name);
     if (fullmodname == NULL) {
         Py_DECREF(mod_name);
-        return NULL;
+        goto exit;
     }
     x = PyImport_GetModule(fullmodname);
     Py_DECREF(fullmodname);
@@ -3235,14 +3306,17 @@ _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
         goto error;
     }
     Py_DECREF(mod_name);
-    return x;
+    goto exit;
 
  error:
+    // Each path here failed to find x; the function returns NULL.
+    x = NULL;
     if (mod_name == NULL) {
         mod_name_or_unknown = PyUnicode_FromString("<unknown module name>");
         if (mod_name_or_unknown == NULL) {
-            return NULL;
+            goto exit;
         }
+        _PyValueSpan_AppendObject(&span, mod_name_or_unknown);
     } else {
         mod_name_or_unknown = mod_name;
     }
@@ -3250,11 +3324,14 @@ _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
     assert(mod_name_or_unknown);
     assert(mod_name == NULL || mod_name == mod_name_or_unknown);
 
+    PyObject **specp = _PyValueSpan_ObjectSlot(&span);
+    PyObject **originp = _PyValueSpan_ObjectSlot(&span);
     origin = NULL;
-    if (PyObject_GetOptionalAttr(v, &_Py_ID(__spec__), &spec) < 0) {
+    if (PyObject_GetOptionalAttr(v, &_Py_ID(__spec__), specp) < 0) {
         Py_DECREF(mod_name_or_unknown);
-        return NULL;
+        goto exit;
     }
+    spec = *specp;
     if (spec == NULL) {
         errmsg = PyUnicode_FromFormat(
             "cannot import name %R from %R (unknown location)",
@@ -3262,9 +3339,10 @@ _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
         );
         goto done_with_errmsg;
     }
-    if (_PyModuleSpec_GetFileOrigin(spec, &origin) < 0) {
+    if (_PyModuleSpec_GetFileOrigin(spec, originp) < 0) {
         goto done;
     }
+    origin = *originp;
 
     int is_possibly_shadowing = _PyModule_IsPossiblyShadowing(origin);
     if (is_possibly_shadowing < 0) {
@@ -3272,10 +3350,11 @@ _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
     }
     int is_possibly_shadowing_stdlib = 0;
     if (is_possibly_shadowing) {
-        PyObject *stdlib_modules;
-        if (PySys_GetOptionalAttrString("stdlib_module_names", &stdlib_modules) < 0) {
+        PyObject **stdlib_modulesp = _PyValueSpan_ObjectSlot(&span);
+        if (PySys_GetOptionalAttrString("stdlib_module_names", stdlib_modulesp) < 0) {
             goto done;
         }
+        PyObject *stdlib_modules = *stdlib_modulesp;
         if (stdlib_modules && PyAnySet_Check(stdlib_modules)) {
             is_possibly_shadowing_stdlib = PySet_Contains(stdlib_modules, mod_name_or_unknown);
             if (is_possibly_shadowing_stdlib < 0) {
@@ -3289,7 +3368,8 @@ _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
     if (origin == NULL && PyModule_Check(v)) {
         // Fall back to __file__ for diagnostics if we don't have
         // an origin that is a location
-        origin = PyModule_GetFilenameObject(v);
+        *originp = PyModule_GetFilenameObject(v);
+        origin = *originp;
         if (origin == NULL) {
             if (!PyErr_ExceptionMatches(PyExc_SystemError)) {
                 goto done;
@@ -3370,7 +3450,9 @@ done:
     Py_XDECREF(origin);
     Py_XDECREF(spec);
     Py_DECREF(mod_name_or_unknown);
-    return NULL;
+exit:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return x;
 }
 
 #define CANNOT_CATCH_MSG "catching classes that do not inherit from "\
@@ -3629,52 +3711,53 @@ _PyEval_GetANext(PyObject *aiter)
     return awaitable;
 }
 
-Py_NO_INLINE void
+/* Precise: the span holds name, which the error and the lazy import's
+   reification read after the lookups (the parameter rule), and globals and
+   builtins, which the slow path's lookups and the reification read.  Its
+   last slot is the slow path's object out-parameter. */
+Py_GC_PRECISE Py_NO_INLINE void
 _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name, PyValue *writeto)
 {
-    PyObject *namespace = globals;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, name);
+    _PyValueSpan_AppendObject(&span, globals);
+    _PyValueSpan_AppendObject(&span, builtins);
+    PyObject *namespace;
     if (PyAnyDict_CheckExact(globals) && PyAnyDict_CheckExact(builtins)) {
         namespace = _PyDict_LoadGlobalValue((PyDictObject *)globals,
                                              (PyDictObject *)builtins,
                                              name, writeto);
-        if (PyValue_IsNull(*writeto) && !PyErr_Occurred()) {
-            // A missing key does not set an exception in the dictionary helper.
-            _PyEval_FormatExcCheckArg(PyThreadState_GET(), PyExc_NameError,
-                                        NAME_ERROR_MSG, name);
-        }
     }
     else {
         /* Slow-path if globals or builtins is not a dict */
+        PyObject **res = _PyValueSpan_ObjectSlot(&span);
         /* namespace 1: globals */
-        PyObject *res;
-        if (PyMapping_GetOptionalItem(globals, name, &res) < 0) {
-            *writeto = PyValue_NULL;
-            return;
-        }
-        if (res == NULL) {
+        namespace = globals;
+        int found = PyMapping_GetOptionalItem(globals, name, res);
+        if (found == 0) {
             /* namespace 2: builtins */
             namespace = builtins;
-            if (PyMapping_GetOptionalItem(builtins, name, &res) < 0) {
-                *writeto = PyValue_NULL;
-                return;
-            }
-            if (res == NULL) {
-                _PyEval_FormatExcCheckArg(
-                            PyThreadState_GET(), PyExc_NameError,
-                            NAME_ERROR_MSG, name);
-                *writeto = PyValue_NULL;
-                return;
-            }
+            found = PyMapping_GetOptionalItem(builtins, name, res);
         }
-        *writeto = PyValue_FromObject(res);
+        *writeto = found > 0 ? PyValue_FromObject(*res) : PyValue_NULL;
     }
 
-    if (!PyValue_IsNull(*writeto) && PyValue_Type(*writeto) == &PyLazyImport_Type) {
+    if (PyValue_IsNull(*writeto)) {
+        if (!_PyErr_Occurred(tstate)) {
+            // A missing key does not set an exception in the lookups.
+            _PyEval_FormatExcCheckArg(tstate, PyExc_NameError,
+                                      NAME_ERROR_MSG, name);
+        }
+    }
+    else if (PyValue_Type(*writeto) == &PyLazyImport_Type) {
         PyObject *res_o = PyValue_ObjectBorrow(*writeto);
-        PyObject *l_v = _PyLazyImport_Reify(
-            PyThreadState_GET(), res_o, name, namespace);
+        PyObject *l_v = _PyLazyImport_Reify(tstate, res_o, name, namespace);
         *writeto = l_v == NULL ? PyValue_NULL : PyValue_FromObject(l_v);
     }
+    _PyThreadState_PopValueRoot(tstate, &span);
 }
 
 /* Precise: the span holds iterable, whose type the error names
@@ -3708,52 +3791,72 @@ _PyEval_GetAwaitable(PyObject *iterable, int oparg)
     return iter;
 }
 
-Py_NO_INLINE /* namespace[name] as a value: 1, 0 if it is missing, or -1 with an
-   exception set.  A dict gives the value with no box. */
-static int
+/* namespace[name] as a value: 1, 0 if it is missing, or -1 with an
+   exception set.  A dict gives the value with no box.  Precise: a mapping's
+   lookup returns its object through the span's object slot. */
+Py_GC_PRECISE Py_NO_INLINE static int
 namespace_lookup(PyObject *namespace, PyObject *name, PyValue *value)
 {
     if (PyDict_CheckExact(namespace)) {
         return _PyDict_GetItemValue(namespace, PyValue_FromObject(name), value);
     }
-    PyObject *value_o;
-    int found = PyMapping_GetOptionalItem(namespace, name, &value_o);
-    *value = found > 0 ? PyValue_FromObject(value_o) : PyValue_NULL;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    PyObject **value_o = _PyValueSpan_ObjectSlot(&span);
+    int found = PyMapping_GetOptionalItem(namespace, name, value_o);
+    *value = found > 0 ? PyValue_FromObject(*value_o) : PyValue_NULL;
+    _PyThreadState_PopValueRoot(tstate, &span);
     return found;
 }
 
-PyValue
+/* Precise: the span holds name, which the later lookups, the error and the
+   reification read (the parameter rule), the value found, which the lookups
+   store into and the reification reads (the result rule), and each
+   namespace in turn, which the reification reads; the frame's field may
+   change during a lookup. */
+Py_GC_PRECISE PyValue
 _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name)
 {
-    PyValue value;
     PyObject *namespace = frame->f_locals;
     if (namespace == NULL) {
         _PyErr_SetString(tstate, PyExc_SystemError,
                             "no locals found");
         return PyValue_NULL;
     }
-    int found = namespace_lookup(namespace, name, &value);
+    PyValue slots[5];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, name);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    _PyValueSpan_AppendObject(&span, namespace);
+    int found = namespace_lookup(namespace, name, &slots[1]);
     if (found == 0) {
         namespace = frame->f_globals;
-        found = _PyDict_GetItemValue(namespace, PyValue_FromObject(name), &value);
+        _PyValueSpan_AppendObject(&span, namespace);
+        found = _PyDict_GetItemValue(namespace, PyValue_FromObject(name),
+                                     &slots[1]);
     }
     if (found == 0) {
         namespace = frame->f_builtins;
-        found = namespace_lookup(namespace, name, &value);
+        _PyValueSpan_AppendObject(&span, namespace);
+        found = namespace_lookup(namespace, name, &slots[1]);
         if (found == 0) {
             _PyEval_FormatExcCheckArg(
                         tstate, PyExc_NameError,
                                 NAME_ERROR_MSG, name);
         }
     }
-    if (found <= 0) {
-        return PyValue_NULL;
-    }
-    if (PyValue_IsObject(value) && PyLazyImport_CheckExact(PyValue_ObjectBorrow(value))) {
+    PyValue value = found > 0 ? slots[1] : PyValue_NULL;
+    if (found > 0 && PyValue_IsObject(value)
+        && PyLazyImport_CheckExact(PyValue_ObjectBorrow(value)))
+    {
         PyObject *res = _PyLazyImport_Reify(tstate, PyValue_ObjectBorrow(value),
                                             name, namespace);
-        return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
+        value = res == NULL ? PyValue_NULL : PyValue_FromObject(res);
     }
+    _PyThreadState_PopValueRoot(tstate, &span);
     return value;
 }
 

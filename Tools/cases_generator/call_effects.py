@@ -65,6 +65,9 @@ NON_COLLECTING = frozenset({
     "_PyGC_TrapUse",
     # arithmetic on the indices it is given
     "PySlice_AdjustIndices",
+    # pointer comparisons with the interpreter's import functions
+    # (Python/import.c)
+    "_PyImport_IsDefaultImportFunc", "_PyImport_IsDefaultLazyImportFunc",
     # stdio cannot reach the collector, and abort() does not return
     "fprintf", "fflush", "snprintf", "abort",
     # the value of an exact int that is not compact: PyLong_AsLongAndOverflow()

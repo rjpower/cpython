@@ -91,12 +91,6 @@ typedef struct {
 #define _PyGC_RANGE_PRESERVES_NOTHING  1   /* saves no callee-saved register */
 #define _PyGC_RANGE_TEST               2   /* a test's: its fallbacks are its */
 
-/* Register [start, end) as code of class cls (process-wide; the JIT's
- * tiers and tests).  -1 with no exception set if the table is full. */
-PyAPI_FUNC(int) _PyGC_RegisterCodeRange(uintptr_t start, uintptr_t end,
-                                        int cls, int flags);
-PyAPI_FUNC(void) _PyGC_UnregisterCodeRange(uintptr_t start);
-
 /* A decoded frame descriptor, for the pc it was looked up with. */
 #define _PyGC_RULE_SAME       0   /* the register is the caller's */
 #define _PyGC_RULE_OFFSET     1   /* the caller's value is at CFA + off */
@@ -117,13 +111,23 @@ typedef struct {
     int32_t off[_PyGC_NSAVED];
 } _PyGCFrameDesc;
 
+/* Register [start, end) as code of class cls (process-wide; generated code
+ * and tests).  desc, if not NULL, describes the frame at every return
+ * address in the range, for code with no FDE; it is copied.  -1 with no
+ * exception set if the table is full. */
+PyAPI_FUNC(int) _PyGC_RegisterCodeRange(uintptr_t start, uintptr_t end,
+                                        int cls, int flags,
+                                        const _PyGCFrameDesc *desc);
+PyAPI_FUNC(void) _PyGC_UnregisterCodeRange(uintptr_t start);
+
 /* The descriptor cache, per interpreter, valid for one loader generation
- * (dl_iterate_phdr()'s dlpi_subs). */
+ * (dl_iterate_phdr()'s dlpi_subs) and one generation of the range table. */
 typedef struct _PyGCWalkCache {
     _PyGCFrameDesc *slots;
     size_t mask;
     size_t used;
     unsigned long long subs;
+    unsigned int ranges;        /* the range table's generation */
     int64_t flushes;            /* flushes not yet counted in a mark's stats */
 } _PyGCWalkCache;
 
@@ -131,6 +135,11 @@ typedef struct _PyGCWalkCache {
  * none (out->ok is 0 then too). */
 PyAPI_FUNC(int) _PyGC_DecodeDescriptor(uintptr_t lookup_pc,
                                        _PyGCFrameDesc *out);
+
+/* The descriptor of a frame that pushed the frame pointer, set it to the
+ * stack pointer and saves nothing else, as the perf trampoline's does.
+ * -1 where the walk is not built. */
+extern int _PyGC_FramePointerDescriptor(_PyGCFrameDesc *out);
 
 struct _PyEvalActivation;
 struct _PyGCRootStats;

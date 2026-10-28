@@ -1686,6 +1686,34 @@ class StackWalkTests(unittest.TestCase):
                 self.assertTrue(roots & self.ROOT_STACKS, roots)
                 self.assertEqual(result, [[None]])
 
+    @unittest.skipUnless(hasattr(sys, "activate_stack_trampoline"),
+                         "requires the perf trampoline")
+    def test_perf_trampoline(self):
+        # The perf trampolines have no unwind information; the walk reads
+        # their frames by the frame pointer, as registered code.
+        code = textwrap.dedent("""
+            import os, sys, _testinternalcapi
+            sys.activate_stack_trampoline("perf")
+            try:
+                def walk_through_trampoline():
+                    return _testinternalcapi.gc_walk_here()
+                frames, fell_back, _ = walk_through_trampoline()
+            finally:
+                sys.deactivate_stack_trampoline()
+            path = f"/tmp/perf-{os.getpid()}.map"
+            with open(path) as f:
+                entries = [l.split() for l in f]
+            os.unlink(path)
+            ours = [(int(a, 16), int(n, 16)) for a, n, name, *_ in entries
+                    if name.startswith("py::walk_through_trampoline:")]
+            hits = [f for f in frames
+                    if any(a <= f[0] < a + n for a, n in ours)]
+            print(fell_back, len(ours), [f[3] for f in hits])
+        """)
+        _, out, _ = assert_python_ok("-c", code)
+        # No fallback; one trampoline, whose frame is core opaque
+        self.assertEqual(out.decode().split(), ["0", "1", "[2]"])
+
     def test_stale_record_not_a_root(self):
         # The main thread's state is in _PyRuntime, which the data scan and
         # the main interpreter's struct scan read; its detach record, stale

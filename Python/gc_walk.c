@@ -36,11 +36,20 @@
 static struct {
     PyMutex mutex;
     int n;
-    struct { uintptr_t start, end; int cls, flags; } r[MAX_RANGES];
+    // Changed by each registration and removal: a cached descriptor for an
+    // address in a removed range is stale (_PyGC_WalkCacheCheck())
+    unsigned int generation;
+    struct {
+        uintptr_t start, end;
+        int cls, flags;
+        int has_desc;
+        _PyGCFrameDesc desc;
+    } r[MAX_RANGES];
 } ranges;
 
 int
-_PyGC_RegisterCodeRange(uintptr_t start, uintptr_t end, int cls, int flags)
+_PyGC_RegisterCodeRange(uintptr_t start, uintptr_t end, int cls, int flags,
+                        const _PyGCFrameDesc *desc)
 {
     PyMutex_Lock(&ranges.mutex);
     int rc = -1;
@@ -49,7 +58,12 @@ _PyGC_RegisterCodeRange(uintptr_t start, uintptr_t end, int cls, int flags)
         ranges.r[ranges.n].end = end;
         ranges.r[ranges.n].cls = cls;
         ranges.r[ranges.n].flags = flags;
+        ranges.r[ranges.n].has_desc = desc != NULL;
+        if (desc != NULL) {
+            ranges.r[ranges.n].desc = *desc;
+        }
         ranges.n++;
+        _Py_atomic_add_uint(&ranges.generation, 1);
         rc = 0;
     }
     PyMutex_Unlock(&ranges.mutex);
@@ -63,11 +77,38 @@ _PyGC_UnregisterCodeRange(uintptr_t start)
     for (int i = 0; i < ranges.n; i++) {
         if (ranges.r[i].start == start) {
             ranges.r[i] = ranges.r[--ranges.n];
+            _Py_atomic_add_uint(&ranges.generation, 1);
             break;
         }
     }
     PyMutex_Unlock(&ranges.mutex);
 }
+
+#ifdef _PyGC_WALK
+/* The registered descriptor for pc, if a range holding it has one. */
+static int
+range_desc(uintptr_t pc, _PyGCFrameDesc *out)
+{
+    int found = 0;
+    if (_Py_atomic_load_int_relaxed(&ranges.n) == 0) {
+        return 0;
+    }
+    PyMutex_Lock(&ranges.mutex);
+    for (int i = 0; i < ranges.n; i++) {
+        if (ranges.r[i].start <= pc && pc < ranges.r[i].end) {
+            if (ranges.r[i].has_desc) {
+                *out = ranges.r[i].desc;
+                out->func_start = ranges.r[i].start;
+                out->func_end = ranges.r[i].end;
+                found = 1;
+            }
+            break;
+        }
+    }
+    PyMutex_Unlock(&ranges.mutex);
+    return found;
+}
+#endif
 
 /* The class of a registered range holding pc, or 0. */
 static int
@@ -95,6 +136,7 @@ range_class(uintptr_t pc, int *flags)
 /* --- decoding .eh_frame ---------------------------------------------------- */
 
 // x86-64 DWARF register numbers
+#define DW_RBP   6
 #define DW_RSP   7
 #define DW_RA    16
 #define NREGS    17
@@ -504,6 +546,11 @@ int
 _PyGC_DecodeDescriptor(uintptr_t lookup_pc, _PyGCFrameDesc *out)
 {
     memset(out, 0, sizeof(*out));
+    if (range_desc(lookup_pc, out)) {
+        out->pc = lookup_pc;
+        out->ok = 1;
+        return 0;
+    }
     out->pc = lookup_pc;
     int extension = 0;
     const uint8_t *fde = find_fde(lookup_pc, &extension);
@@ -602,7 +649,8 @@ _PyGC_WalkCacheCheck(_PyGCWalkCache *cache, struct _PyGCRootStats *stats)
 {
     unsigned long long subs = 0;
     (void)dl_iterate_phdr(generation_cb, &subs);
-    if (subs != cache->subs) {
+    unsigned int gen = _Py_atomic_load_uint(&ranges.generation);
+    if (subs != cache->subs || gen != cache->ranges) {
         if (cache->used > 0) {
             cache->flushes++;
         }
@@ -611,6 +659,7 @@ _PyGC_WalkCacheCheck(_PyGCWalkCache *cache, struct _PyGCRootStats *stats)
         }
         cache->used = 0;
         cache->subs = subs;
+        cache->ranges = gen;
     }
     if (stats != NULL) {
         stats->cache_flushes += cache->flushes;
@@ -652,6 +701,21 @@ cache_grow(_PyGCWalkCache *cache)
     free(cache->slots);
     cache->slots = slots;
     cache->mask = n - 1;
+    return 0;
+}
+
+int
+_PyGC_FramePointerDescriptor(_PyGCFrameDesc *out)
+{
+    // push %rbp; mov %rsp, %rbp: the CFA is rbp + 16, the return address
+    // at CFA - 8 and the caller's rbp at CFA - 16
+    memset(out, 0, sizeof(*out));
+    out->cfa_reg = saved_index[DW_RBP];
+    out->cfa_off = 16;
+    out->ra_off = -8;
+    out->rule[saved_index[DW_RBP]] = _PyGC_RULE_OFFSET;
+    out->off[saved_index[DW_RBP]] = -16;
+    out->ok = 1;
     return 0;
 }
 
@@ -1009,6 +1073,13 @@ _PyGC_RecordDetach(void)
 }
 
 #else  /* !_PyGC_WALK */
+
+int
+_PyGC_FramePointerDescriptor(_PyGCFrameDesc *out)
+{
+    memset(out, 0, sizeof(*out));
+    return -1;
+}
 
 #ifndef _PyGC_CAPTURE_ASM
 void

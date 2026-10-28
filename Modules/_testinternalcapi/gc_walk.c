@@ -105,7 +105,8 @@ register_function(uintptr_t (*f)(void), int cls, int flags)
         PyErr_SetString(PyExc_RuntimeError, "no descriptor for a fixture");
         return -1;
     }
-    if (_PyGC_RegisterCodeRange(d.func_start, d.func_end, cls, flags) < 0) {
+    if (_PyGC_RegisterCodeRange(d.func_start, d.func_end, cls, flags,
+                                NULL) < 0) {
         PyErr_SetString(PyExc_RuntimeError, "the code range table is full");
         return -1;
     }
@@ -206,7 +207,8 @@ gc_walk_fallback(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     uintptr_t start = (uintptr_t)&_testgc_nocfi;
     if (_PyGC_RegisterCodeRange(start, (uintptr_t)_testgc_nocfi_end,
-                                _PyGC_FRAME_CORE, _PyGC_RANGE_TEST) < 0) {
+                                _PyGC_FRAME_CORE, _PyGC_RANGE_TEST,
+                                NULL) < 0) {
         PyErr_SetString(PyExc_RuntimeError, "the code range table is full");
         return NULL;
     }

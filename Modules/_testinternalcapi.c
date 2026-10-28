@@ -3641,7 +3641,6 @@ gc_walk_precise_regs(PyObject *self, PyObject *Py_UNUSED(ignored))
         .frame = walk_record_frame,
         .arg = &r,
         .top = ts->c_stack_top,
-        .activations = ts->gc_trace.activation,
     };
     _PyGCContext ctx;
     _PyGC_CaptureCaller(&ctx);
@@ -3680,7 +3679,6 @@ gc_walk_here(PyObject *self, PyObject *Py_UNUSED(ignored))
         .frame = walk_record_frame,
         .arg = &r,
         .top = ts->c_stack_top,
-        .activations = ts->gc_trace.activation,
     };
     _PyGCContext ctx;
     _PyGC_CaptureCaller(&ctx);
@@ -3689,23 +3687,7 @@ gc_walk_here(PyObject *self, PyObject *Py_UNUSED(ignored))
         Py_DECREF(r.frames);
         return NULL;
     }
-    PyObject *acts = PyList_New(0);
-    if (acts == NULL) {
-        Py_DECREF(r.frames);
-        return NULL;
-    }
-    for (_PyEvalActivation *a = ts->gc_trace.activation; a; a = a->prev) {
-        PyObject *item = Py_BuildValue("(NN)", PyLong_FromVoidPtr((void *)a->lo),
-                                       PyLong_FromVoidPtr((void *)a->hi));
-        if (item == NULL || PyList_Append(acts, item) < 0) {
-            Py_XDECREF(item);
-            Py_DECREF(acts);
-            Py_DECREF(r.frames);
-            return NULL;
-        }
-        Py_DECREF(item);
-    }
-    return Py_BuildValue("(NiN)", r.frames, fell_back, acts);
+    return Py_BuildValue("(Ni)", r.frames, fell_back);
 }
 
 /* Arm one collection at site (_PyGC_SITE_*) on this thread; 0 disarms.

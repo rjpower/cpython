@@ -1,7 +1,7 @@
 """Check that no handler holds a value only in a C local across a collecting call.
 
-The collector does not scan the eval loop's own C frame (_PyEvalActivation
-in Include/internal/pycore_tstate.h): everything a handler holds there must
+The eval loop's own C frame is precise (Py_GC_PRECISE, so the stack walk
+passes over it without scanning it): everything a handler holds there must
 be in a frame slot, which the mark visits precisely, at each call that may
 collect, an allocating call included (call_effects.py).  The stack items of
 a uop are in slots across a collecting call (the IR generator checks that

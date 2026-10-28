@@ -996,7 +996,8 @@ class IRStack(Stack):
                 return True
             # Before the end, dst gets the result only if it is a
             # temporary; a local gets it at the end.  Across a collecting
-            # call the result would be held only in C (_PyEvalActivation).
+            # call the result would be held only in a C local of the eval
+            # loop, whose frame is precise and so not scanned.
             if self.collecting:
                 raise StackError(
                     f"'{var.name}' is defined before a collecting call, and "
@@ -1019,8 +1020,8 @@ class IRStack(Stack):
         if self.final or self.error_exit:
             raise StackError(f"'{var.name}' has no slot at position {p}")
         if self.collecting:
-            # The collector does not scan the eval loop's C frame
-            # (_PyEvalActivation)
+            # The eval loop's C frame is precise: the collector does not
+            # scan it, so a value live across the call needs a slot.
             raise StackError(f"'{var.name}' has no slot across a collecting call")
         return False
 
@@ -1075,7 +1076,8 @@ class IRStack(Stack):
         above = may_be_positive(self.physical_sp - self.logical_sp)
         # Until the handler leaves, the slots that the stack gave up keep
         # their values: what the handler took from its dead inputs is held
-        # there across its collecting calls (_PyEvalActivation).
+        # there across its collecting calls, since the eval loop's C frame
+        # is precise and not scanned.
         leaving = self.final or self.error_exit or self.syncing
         if above and leaving:
             self.vacate(out, self.logical_sp, self.physical_sp)

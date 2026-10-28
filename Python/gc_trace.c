@@ -308,8 +308,8 @@ typedef struct {
    scans (rung 1's claim), and with pymem and structs also the PyMem blocks
    that words of core opaque frames point to and the struct scan (rung 3's,
    note 11 decision 5).  An object B reached comes from a word of a precise
-   frame (or an eval loop activation), a word of a PyMem block that a core
-   opaque frame points to, or a word of a thread or interpreter struct. */
+   frame, a word of a PyMem block that a core opaque frame points to, or a
+   word of a thread or interpreter struct. */
 #define VERIFY_OFF      0
 #define VERIFY_RETAIN   1
 #define VERIFY_KILL     2
@@ -1065,48 +1065,16 @@ stack_top(PyThreadState *p)
     return ts->c_stack_top;
 }
 
-/* Scan [start, top) of p's C stack, except the eval loop's own frames
-   (_PyEvalActivation): the values a handler holds across an escaping call
-   or the eval breaker are in frame slots, and what else those frames hold
-   is copies or stale words, which would keep garbage.  The registers that
-   each activation saved are scanned with the record, which is above it.  A
-   collection that an allocation runs at once may find a handler between
-   escaping calls, holding a value only in a C local: it scans its own
-   thread's activations too. */
+/* Scan [start, top) of a C stack conservatively: the stack of a thread
+   that the walk does not read, or of a platform without the walk (note 11
+   section 3.4). */
 static void
-scan_stack(trace_t *t, PyThreadState *p, uintptr_t start, uintptr_t top)
+scan_stack(trace_t *t, uintptr_t start, uintptr_t top)
 {
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)p;
-    _PyEvalActivation *act = ts->gc_trace.activation;
-    if (p == _PyThreadState_GET() && ts->gc_trace.scan_activations) {
-        act = NULL;
-    }
     if (t->stats != NULL) {
         t->stats->threads++;
     }
     t->scan_class = _PyGC_SCAN_STACK;
-    // Innermost first, so at increasing addresses
-    for (; act != NULL && start < top; act = act->prev) {
-        if (act->lo == 0 || act->hi <= start) {
-            continue;
-        }
-        if (act->lo > start) {
-            scan_range(t, start, Py_MIN(act->lo, top));
-        }
-        if (t->verify) {
-            t->frame_pc = 0;
-            verify_defer_range(t, Py_MAX(act->lo, start), Py_MIN(act->hi, top),
-                               VERIFY_FROM_PRECISE);
-        }
-        if (t->stats != NULL) {
-            uintptr_t lo = Py_MAX(act->lo, start);
-            uintptr_t hi = Py_MIN(act->hi, top);
-            t->stats->activations_skipped++;
-            t->stats->eval_words_skipped +=
-                hi > lo ? (int64_t)((hi - lo) / sizeof(uintptr_t)) : 0;
-        }
-        start = act->hi;
-    }
     if (top > start) {
         scan_range(t, start, top);
     }
@@ -1152,14 +1120,11 @@ scan_regs(trace_t *t, const _PyGCContext *ctx)
 
 /* Scan p's stack outward from ctx up to top: walked where the walk is on
    (Python/gc_walk.c), so that only what opaque frames own is scanned;
-   elsewhere the registers and the whole stack conservatively, the eval
-   loop's activations excepted. */
+   elsewhere the registers and the whole stack conservatively. */
 static void
-scan_from(trace_t *t, PyThreadState *p, const _PyGCContext *ctx,
-          uintptr_t top)
+scan_from(trace_t *t, const _PyGCContext *ctx, uintptr_t top)
 {
 #ifdef _PyGC_WALK
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)p;
     if (t->stats != NULL) {
         t->stats->threads++;
     }
@@ -1171,16 +1136,13 @@ scan_from(trace_t *t, PyThreadState *p, const _PyGCContext *ctx,
         .arg = t,
         .cache = t->walk_cache,
         .top = top,
-        .activations = ts->gc_trace.activation,
-        .activations_opaque = p == _PyThreadState_GET()
-                              && ts->gc_trace.scan_activations,
         .stats = t->stats,
     };
     (void)_PyGC_WalkStack(&w, ctx);
     t->frame_core = 0;
 #else
     scan_regs(t, ctx);
-    scan_stack(t, p, ctx->sp, top);
+    scan_stack(t, ctx->sp, top);
 #endif
 }
 
@@ -1208,7 +1170,7 @@ scan_current_thread(trace_t *t, PyThreadState *tstate)
         }
     }
 #endif
-    scan_from(t, tstate, &ctx, top);
+    scan_from(t, &ctx, top);
 }
 
 /* C code keeps references in PyMem memory that only its stack frame
@@ -1248,7 +1210,7 @@ scan_other_thread(trace_t *t, PyThreadState *p, int alive)
         && (t->readable.n == 0
             || is_readable(t, rec->cap.sp, top - rec->cap.sp)))
     {
-        scan_from(t, p, &rec->cap, top);
+        scan_from(t, &rec->cap, top);
         return;
     }
 #endif
@@ -1256,7 +1218,7 @@ scan_other_thread(trace_t *t, PyThreadState *p, int alive)
         t->stats->unpinned++;
     }
     scan_regs(t, &rec->cap);
-    scan_stack(t, p, rec->cap.sp, top);
+    scan_stack(t, rec->cap.sp, top);
 }
 
 /* The thread states that finalization unlinked, whose daemon threads may
@@ -2306,7 +2268,7 @@ live_mark_roots(trace_t *t, PyThreadState *tstate)
         t->scan_mem = 1;
         _PyThreadStateImpl *cur = (_PyThreadStateImpl *)tstate;
         if (cur->gc_trace.entry.sp != 0) {
-            scan_from(t, tstate, &cur->gc_trace.entry, stack_top(tstate));
+            scan_from(t, &cur->gc_trace.entry, stack_top(tstate));
         }
         else {
             scan_current_thread(t, tstate);
@@ -2487,12 +2449,7 @@ verify_report_to(FILE *out, const verify_entry *e, int64_t now)
 {
     char where[600];
     const verify_rec *r = &e->rec;
-    if (r->kind == VERIFY_FROM_PRECISE && r->owner == 0) {
-        PyOS_snprintf(where, sizeof(where),
-                      "the word at %p of an eval loop activation",
-                      (void *)r->word);
-    }
-    else if (r->kind == VERIFY_FROM_PRECISE) {
+    if (r->kind == VERIFY_FROM_PRECISE) {
         char owner[512];
         verify_owner(owner, sizeof(owner), r->owner);
         PyOS_snprintf(where, sizeof(where),

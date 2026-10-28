@@ -157,7 +157,6 @@ PyAPI_FUNC(int) _PyGC_DecodeDescriptor(uintptr_t lookup_pc,
  * -1 where the walk is not built. */
 extern int _PyGC_FramePointerDescriptor(_PyGCFrameDesc *out);
 
-struct _PyEvalActivation;
 struct _PyGCRootStats;
 
 /* One walk of a stack.  The walk calls scan for each range of words it
@@ -173,11 +172,6 @@ typedef struct {
     void *arg;
     _PyGCWalkCache *cache;
     uintptr_t top;              /* the stack base, exclusive */
-    /* Until the eval loop is marked: a frame inside an activation's range
-       is precise, except where the activations are scanned (an inline
-       collection on its own thread). */
-    struct _PyEvalActivation *activations;
-    int activations_opaque;
     struct _PyGCRootStats *stats;
     int64_t test_fallbacks;     /* fallbacks at a pc in a test range */
 } _PyGCWalk;

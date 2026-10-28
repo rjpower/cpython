@@ -713,7 +713,7 @@ class Emitter:
 
     def emit_box_roots(self, names: list[str], push: bool) -> None:
         """Push, or pop, the value root of each box among names: the collector
-        does not scan the eval loop's frame (_PyEvalActivation), where the
+        does not scan the eval loop's frame, which is precise and where the
         box is, during a collecting call."""
         for name in (names if push else reversed(names)):
             self.out.start_line()

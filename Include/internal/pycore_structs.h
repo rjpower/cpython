@@ -57,7 +57,7 @@ typedef struct {
 
 // Values that a C frame holds, linked into the thread state so that the
 // collector visits them: the way a function whose own C frame the collector
-// does not scan (_PyEvalActivation, Py_GC_PRECISE) holds values across a
+// does not scan (Py_GC_PRECISE) holds values across a
 // collecting call.  The collector visits base[0] to base[n - 1].  A
 // one-value root (_PyThreadState_PushValueRoot()) is a span of one over its
 // own value; a span (_PyThreadState_PushValueSpan()) is over a buffer of

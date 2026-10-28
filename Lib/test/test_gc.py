@@ -1319,8 +1319,22 @@ class TracingCollectorTests(unittest.TestCase):
         # The collector does not scan the eval loop's own C frames, whose
         # spill slots hold stale copies of values the frame no longer has,
         # so a dead local is freed at the first collection, every time.
+        # LOAD_SUPER_ATTR leaves its receiver in a scratch array of the
+        # eval loop's frame.
         class A:
-            pass
+            def f(self):
+                return 1
+        class B(A):
+            def f(self):
+                return super().f()
+        def dead_super():
+            b = B()
+            b.self = b
+            b.f()
+            ref = weakref.ref(b)
+            del b
+            gc.collect()
+            return ref() is None
         def dead_local():
             a = A()
             a.self = a
@@ -1334,9 +1348,76 @@ class TracingCollectorTests(unittest.TestCase):
             del items
             gc.collect()
             return ref() is None
-        for func in dead_local, dead_item:
+        for func in dead_super, dead_local, dead_item:
             with self.subTest(func=func.__name__):
                 self.assertEqual(sum(func() for _ in range(20)), 20)
+
+    def test_precise_frames_are_not_roots(self):
+        # The same dead objects, made in an eval loop entered from a C
+        # function's Python callback, so that an opaque frame (the sort's)
+        # lies between two eval loop frames.
+        class A:
+            def f(self):
+                return 1
+        class B(A):
+            def f(self):
+                return super().f()
+        def dead_super():
+            b = B()
+            b.self = b
+            b.f()
+            ref = weakref.ref(b)
+            del b
+            gc.collect()
+            return ref() is None
+        def dead_local():
+            a = A()
+            a.self = a
+            ref = weakref.ref(a)
+            del a
+            gc.collect()
+            return ref() is None
+        def dead_item():
+            items = [A()]
+            ref = weakref.ref(items[0])
+            del items
+            gc.collect()
+            return ref() is None
+        for func in dead_super, dead_local, dead_item:
+            with self.subTest(func=func.__name__):
+                freed = []
+                sorted(range(20), key=lambda i: freed.append(func()) or i)
+                self.assertEqual(freed, [True] * 20)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_inline_collection_skips_eval_loop(self):
+        # An allocation that collects inline, under stress at every
+        # allocation, does not scan the eval loop's C frame either: the
+        # receiver that LOAD_SUPER_ATTR left in the frame's scratch array
+        # is freed by the collection that BUILD_LIST's allocation makes.
+        code = textwrap.dedent("""
+            import weakref, _testinternalcapi
+            class A:
+                def f(self):
+                    return 1
+            class B(A):
+                def f(self):
+                    return super().f()
+            def dead_then_alloc():
+                b = B()
+                b.self = b
+                b.f()
+                ref = weakref.ref(b)
+                del b
+                x = [None]
+                return ref() is None
+            _testinternalcapi.gc_set_stress(1)
+            freed = [dead_then_alloc() for _ in range(20)]
+            _testinternalcapi.gc_set_stress(0)
+            print(freed.count(True))
+        """)
+        rc, out, err = assert_python_ok("-c", code)
+        self.assertEqual(out.strip(), b"20")
 
     def test_sweep_frees_exported_memoryview(self):
         # A struct iterator holds an export of its memoryview, and the sweep
@@ -2171,7 +2252,7 @@ class StackWalkTests(unittest.TestCase):
             try:
                 def walk_through_trampoline():
                     return _testinternalcapi.gc_walk_here()
-                frames, fell_back, _ = walk_through_trampoline()
+                frames, fell_back = walk_through_trampoline()
             finally:
                 sys.deactivate_stack_trampoline()
             path = f"/tmp/perf-{os.getpid()}.map"
@@ -2322,7 +2403,7 @@ class StackWalkTests(unittest.TestCase):
                        - first["stats"]["total"]["cache_flushes"])
             self.assertGreaterEqual(flushes, 1)
             self.assertEqual(second["stats"]["last"]["fallbacks"], 0)
-            frames, fell_back, _ = second["walk"]
+            frames, fell_back = second["walk"]
             self.assertFalse(fell_back)
             ours = [f for f in frames if lo2 <= f[0] < hi2]
             self.assertEqual(len(ours), 2)  # inner and call_cb

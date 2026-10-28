@@ -11411,7 +11411,6 @@
                     if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
                         _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
                     }
-                    _PyGC_CLEAR_ARRAY(stack);
                 }
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
@@ -11671,7 +11670,6 @@
                     if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
                         _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
                     }
-                    _PyGC_CLEAR_ARRAY(stack);
                 }
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
@@ -14440,7 +14438,6 @@
                     if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
                         _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
                     }
-                    _PyGC_CLEAR_ARRAY(stack);
                 }
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
@@ -14947,7 +14944,6 @@
                     if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
                         _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
                     }
-                    _PyGC_CLEAR_ARRAY(stack);
                 }
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;

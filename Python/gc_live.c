@@ -105,7 +105,7 @@ struct _gc_live_state {
     // The thread states that finalization unlinked (_PyGC_LiveKeepThreads()).
     PyThreadState *kept_threads;
     // The exception that was set when the collection started.  The stack
-    // below the collection's entry is not scanned (collect_and_run_queue()).
+    // below the collection's entry is not scanned (collect_from_entry()).
     PyObject *exc;
     // Totals for gc.get_stats()
     Py_ssize_t bytes_freed;
@@ -1356,31 +1356,6 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
     return n;
 }
 
-#define CLEAR_STACK_MAX (16 * 1024)
-
-/* The fallback of _PyGC_ClearStackBelow(): the top of the buffer is
-   nearest the caller's frame. */
-Py_NO_INLINE void
-_PyGC_ClearStackBuffer(size_t nbytes)
-{
-    char buf[CLEAR_STACK_MAX];
-    assert(nbytes <= sizeof(buf));
-    memset(buf + sizeof(buf) - nbytes, 0, nbytes);
-    // Keep the stores, which are dead to the compiler.
-    __asm__ volatile("" : : "r"(buf) : "memory");
-}
-
-/* Inlined, so that the frame of collect_from_entry() is made in the cleared
-   stack. */
-static inline Py_ssize_t
-collect_and_run_queue(PyThreadState *tstate, _PyGC_Reason reason)
-{
-    _PyGC_LiveClearStack();
-    Py_ssize_t n = collect_from_entry(tstate, reason);
-    // The collector's frames held what it marked, some of it soon garbage.
-    _PyGC_LiveClearStack();
-    return n;
-}
 
 /* Can an automatic collection run now?  If not, it is tried again after
    RETRY_BYTES more. */
@@ -1462,12 +1437,7 @@ _PyGC_LiveCollectHere(PyThreadState *tstate)
     }
     struct _gc_live_state *ls = get_live(tstate->interp);
     ls->no_python = 1;
-    // A handler may hold what it allocated only in a C local.
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
-    int scan_activations = ts->gc_trace.scan_activations;
-    ts->gc_trace.scan_activations = 1;
-    (void)collect_and_run_queue(tstate, _Py_GC_REASON_HEAP);
-    ts->gc_trace.scan_activations = scan_activations;
+    (void)collect_from_entry(tstate, _Py_GC_REASON_HEAP);
     ls->no_python = 0;
     if (ls->qhead < ls->qtail) {
         _Py_ScheduleGC(tstate);
@@ -1593,7 +1563,7 @@ _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 static PyObject **
 snapshot(PyThreadState *tstate, Py_ssize_t *n)
 {
-    (void)collect_and_run_queue(tstate, _Py_GC_REASON_MANUAL);
+    (void)collect_from_entry(tstate, _Py_GC_REASON_MANUAL);
     Py_ssize_t nobjs;
     PyObject **objs = _PyGC_TraceLiveHeapObjects(tstate->interp, &nobjs);
     if (objs == NULL) {
@@ -1748,19 +1718,19 @@ PyGC_Collect(void)
     if (!tstate->interp->gc.enabled) {
         return 0;
     }
-    return collect_and_run_queue(tstate, _Py_GC_REASON_MANUAL);
+    return collect_from_entry(tstate, _Py_GC_REASON_MANUAL);
 }
 
 Py_GC_PRECISE Py_ssize_t
 _PyGC_Collect(PyThreadState *tstate, int generation, _PyGC_Reason reason)
 {
-    return collect_and_run_queue(tstate, reason);
+    return collect_from_entry(tstate, reason);
 }
 
 Py_GC_PRECISE void
 _PyGC_CollectNoFail(PyThreadState *tstate)
 {
-    (void)collect_and_run_queue(tstate, _Py_GC_REASON_SHUTDOWN);
+    (void)collect_from_entry(tstate, _Py_GC_REASON_SHUTDOWN);
 }
 
 void
@@ -1873,7 +1843,7 @@ _Py_RunGC(PyThreadState *tstate)
         return;
     }
     if (can_collect(tstate)) {
-        (void)collect_and_run_queue(tstate, _Py_GC_REASON_HEAP);
+        (void)collect_from_entry(tstate, _Py_GC_REASON_HEAP);
     }
 }
 

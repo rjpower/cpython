@@ -703,7 +703,7 @@ PyEval_EvalFrameEx(PyFrameObject *f, int throwflag)
 /* WITH_EXCEPT_START's call of an __exit__ or __aexit__ with the type, the
  * value and the traceback of the exception val.  The traceback may be held
  * only by the argument array, which is in this frame: not inlined, so that
- * the frame is outside the eval loop's (_PyEvalActivation). */
+ * the frame is outside the precise eval loop's, and scanned. */
 Py_NO_INLINE PyObject *
 _PyEval_CallExitWithException(PyObject *exit_func, PyObject *exit_self,
                               PyObject *val)
@@ -719,18 +719,18 @@ _PyEval_CallExitWithException(PyObject *exit_func, PyObject *exit_self,
     PyObject *res = PyObject_Vectorcall(exit_func, stack + 2 - has_self,
                                         (3 + has_self) | PY_VECTORCALL_ARGUMENTS_OFFSET,
                                         NULL);
-    _PyGC_CLEAR_ARRAY(stack);
     return res;
 }
 
 /* Helper functions to keep the size of the largest uops down.
  *
  * The helpers that handlers call and that may run code are Py_NO_INLINE,
- * here and in ceval.h.  The collector does not scan the eval loop's own C
- * frame (_PyEvalActivation), and the cases generator checks only the
- * handlers' bodies: inlined, a helper's locals, which may hold the only
- * reference to what it made, as an argument array (VALUES_TO_OBJECTS)
- * holds the boxes of inline values, would be in that frame. */
+ * here and in ceval.h.  The eval loop's frame is precise, which the inline
+ * audit checks for every function inlined into it: inlined, a helper's
+ * locals, which may hold the only reference to what it made, as an argument
+ * array (VALUES_TO_OBJECTS) holds the boxes of inline values, would be in
+ * that frame.  Out of line, each is opaque and scanned until rung 2 makes
+ * it precise. */
 
 Py_NO_INLINE PyValue
 _Py_VectorCall_Values(
@@ -1213,41 +1213,10 @@ dtrace_function_return(_PyInterpreterFrame *frame)
 }
 #endif
 
-/* The entry records the eval loop's activation, whose C frame the
- * collector does not scan (_PyEvalActivation): the registers as they are
- * here, which may hold the caller's references and which the eval loop
- * saves in its frame, and the stack pointer, above which the eval loop's
- * frame begins.  _PyEval_EvalFrameDefault() records where its frame ends;
- * entered otherwise, through a PEP 523 hook, it records nothing and its
- * frame is scanned. */
-Py_NO_INLINE PyValue
-_PyEval_EvalFrameEntry(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                       int throwflag)
-{
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
-    _PyEvalActivation act;
-    _PyGC_CaptureRegisters(act.regs);
-    act.lo = 0;
-    act.hi = _PyGC_StackAddress();
-    act.prev = ts->gc_trace.activation;
-    ts->gc_trace.activation = &act;
-    PyValue res = _PyEval_EvalFrameDefault(tstate, frame, throwflag);
-    ts->gc_trace.activation = act.prev;
-    return res;
-}
-
 Py_GC_PRECISE Py_NO_INLINE PyValue _Py_HOT_FUNCTION DONT_SLP_VECTORIZE
 _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     _Py_EnsureTstateNotNULL(tstate);
-    {
-        // The stack pointer is fixed in the body: below it are callees
-        _PyEvalActivation *act =
-            ((_PyThreadStateImpl *)tstate)->gc_trace.activation;
-        if (act != NULL && act->lo == 0) {
-            act->lo = _PyGC_StackAddress();
-        }
-    }
     check_invalid_reentrancy();
     CALL_STAT_INC(pyeval_calls);
     _PyGC_CHECK_NOT_SWEEPING(tstate, "runs Python code");

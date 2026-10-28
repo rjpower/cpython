@@ -33,9 +33,11 @@ cleanup() { [ -n "$child" ] && kill -TERM -- -"$child" 2>/dev/null; rm -rf "$tmp
 trap cleanup EXIT
 trap 'cleanup; exit 143' INT TERM HUP
 export PYTHONPYCACHEPREFIX="$tmp/pyc"
-# The suite's root counters, one line per process (root_stats.py)
+# The suite's root counters, one line per process (root_stats.py), on the
+# branches that have the tool
+stats_tool="$REPO/boil/tools/measure/root_stats.py"
 export PYTHON_GCROOTSTATS="${PYTHON_GCROOTSTATS:-$tmp/roots.jsonl}"
-roots() { python3 "$REPO/boil/tools/measure/root_stats.py" check "$PYTHON_GCROOTSTATS"; }
+roots() { [ ! -f "$stats_tool" ] || python3 "$stats_tool" check "$PYTHON_GCROOTSTATS"; }
 lock="$build/.gate.lock"
 # test_sys's remote-exec test times out on this machine on every build since
 # before the fork (a machine-local failure); it is ignored unless GATE_IGNORE

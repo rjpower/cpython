@@ -4451,8 +4451,17 @@ record is work/6d-4.md, "As built" and "End gates".
   writes freed it: a crash on debug, `SystemError` on release, at the
   control too. Upstream omits the field as well, and leaks it.
 - **test_concurrent_futures.test_deadlock hung once** (rung 1, gate 2,
-  under load). A forked worker never exited. The test has not hung
-  again; the trace to follow if it does is in work/6d-1.md, "Hazards".
+  under load). A forked worker never exited. The record shows where the
+  parent waited, not why the child hung: no stack of the child was
+  taken, so whether the hang touched the collector, the roots or the
+  allocator is not known. It has not recurred in any gate 2 or kill
+  suite run of rungs 2 to 4. The owner, assigned at rung 4's landing,
+  needs the hung child's stacks (work/6d-4.md, "Landing review fixes",
+  4).
+- **Dict-backed accessors left boxing** (rung 4's landing review).
+  classmethod's and staticmethod's annotation accessors and
+  `__abstractmethods__` kept the object-form dict calls. The box audit
+  had no case for them. Fixed in 80eddd41953, with 20 audit cases.
 
 ### 21.6 Hand-off, by owner
 

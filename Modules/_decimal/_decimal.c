@@ -945,12 +945,12 @@ _decimal_Context_Etop_impl(PyObject *self)
 }
 
 static int
-context_setprec(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setprec(PyObject *self, PyValue value, void *Py_UNUSED(closure))
 {
     mpd_context_t *ctx;
     mpd_ssize_t x;
 
-    x = PyLong_AsSsize_t(value);
+    x = PyLong_AsSsize_tValue(value);
     if (x == -1 && PyErr_Occurred()) {
         return -1;
     }
@@ -965,12 +965,12 @@ context_setprec(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
 }
 
 static int
-context_setemin(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setemin(PyObject *self, PyValue value, void *Py_UNUSED(closure))
 {
     mpd_context_t *ctx;
     mpd_ssize_t x;
 
-    x = PyLong_AsSsize_t(value);
+    x = PyLong_AsSsize_tValue(value);
     if (x == -1 && PyErr_Occurred()) {
         return -1;
     }
@@ -985,12 +985,12 @@ context_setemin(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
 }
 
 static int
-context_setemax(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setemax(PyObject *self, PyValue value, void *Py_UNUSED(closure))
 {
     mpd_context_t *ctx;
     mpd_ssize_t x;
 
-    x = PyLong_AsSsize_t(value);
+    x = PyLong_AsSsize_tValue(value);
     if (x == -1 && PyErr_Occurred()) {
         return -1;
     }
@@ -1076,8 +1076,12 @@ _decimal_Context__unsafe_setemax_impl(PyObject *self, Py_ssize_t x)
 #endif
 
 static int
-context_setround(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setround(PyObject *self, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     mpd_context_t *ctx;
     int x;
 
@@ -1096,11 +1100,11 @@ context_setround(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
 }
 
 static int
-context_setcapitals(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setcapitals(PyObject *self, PyValue value, void *Py_UNUSED(closure))
 {
     mpd_ssize_t x;
 
-    x = PyLong_AsSsize_t(value);
+    x = PyLong_AsSsize_tValue(value);
     if (x == -1 && PyErr_Occurred()) {
         return -1;
     }
@@ -1116,8 +1120,12 @@ context_setcapitals(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
 
 #ifdef EXTRA_FUNCTIONALITY
 static int
-context_settraps(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_settraps(PyObject *self, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     mpd_context_t *ctx;
     uint32_t flags;
 
@@ -1181,8 +1189,12 @@ context_settraps_dict(PyObject *self, PyObject *value)
 
 #ifdef EXTRA_FUNCTIONALITY
 static int
-context_setstatus(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setstatus(PyObject *self, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     mpd_context_t *ctx;
     uint32_t flags;
 
@@ -1246,12 +1258,12 @@ context_setstatus_dict(PyObject *self, PyObject *value)
 }
 
 static int
-context_setclamp(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setclamp(PyObject *self, PyValue value, void *Py_UNUSED(closure))
 {
     mpd_context_t *ctx;
     mpd_ssize_t x;
 
-    x = PyLong_AsSsize_t(value);
+    x = PyLong_AsSsize_tValue(value);
     if (x == -1 && PyErr_Occurred()) {
         return -1;
     }
@@ -1267,12 +1279,12 @@ context_setclamp(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
 
 #ifdef EXTRA_FUNCTIONALITY
 static int
-context_setallcr(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setallcr(PyObject *self, PyValue value, void *Py_UNUSED(closure))
 {
     mpd_context_t *ctx;
     mpd_ssize_t x;
 
-    x = PyLong_AsSsize_t(value);
+    x = PyLong_AsSsize_tValue(value);
     if (x == -1 && PyErr_Occurred()) {
         return -1;
     }
@@ -1343,22 +1355,34 @@ context_setattrs(PyObject *self, PyObject *prec, PyObject *rounding,
                  PyObject *clamp, PyObject *status, PyObject *traps) {
 
     int ret;
-    if (prec != NULL && context_setprec(self, prec, NULL) < 0) {
+    if (prec != NULL
+        && context_setprec(self, PyValue_FromObject(prec), NULL) < 0)
+    {
         return -1;
     }
-    if (rounding != NULL && context_setround(self, rounding, NULL) < 0) {
+    if (rounding != NULL
+        && context_setround(self, PyValue_FromObject(rounding), NULL) < 0)
+    {
         return -1;
     }
-    if (emin != NULL && context_setemin(self, emin, NULL) < 0) {
+    if (emin != NULL
+        && context_setemin(self, PyValue_FromObject(emin), NULL) < 0)
+    {
         return -1;
     }
-    if (emax != NULL && context_setemax(self, emax, NULL) < 0) {
+    if (emax != NULL
+        && context_setemax(self, PyValue_FromObject(emax), NULL) < 0)
+    {
         return -1;
     }
-    if (capitals != NULL && context_setcapitals(self, capitals, NULL) < 0) {
+    if (capitals != NULL
+        && context_setcapitals(self, PyValue_FromObject(capitals), NULL) < 0)
+    {
         return -1;
     }
-    if (clamp != NULL && context_setclamp(self, clamp, NULL) < 0) {
+    if (clamp != NULL
+        && context_setclamp(self, PyValue_FromObject(clamp), NULL) < 0)
+    {
        return -1;
     }
 
@@ -1368,7 +1392,7 @@ context_setattrs(PyObject *self, PyObject *prec, PyObject *rounding,
         }
 #ifdef EXTRA_FUNCTIONALITY
         else if (PyLong_Check(traps)) {
-            ret = context_settraps(self, traps, NULL);
+            ret = context_settraps(self, PyValue_FromObject(traps), NULL);
         }
 #endif
         else {
@@ -1384,7 +1408,7 @@ context_setattrs(PyObject *self, PyObject *prec, PyObject *rounding,
         }
 #ifdef EXTRA_FUNCTIONALITY
         else if (PyLong_Check(status)) {
-            ret = context_setstatus(self, status, NULL);
+            ret = context_setstatus(self, PyValue_FromObject(status), NULL);
         }
 #endif
         else {

@@ -2020,8 +2020,12 @@ typealias_module(PyObject *self, void *Py_UNUSED(closure))
 }
 
 static int
-typealias_set_module(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+typealias_set_module(PyObject *self, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyObject *old;
     typealiasobject *ta = typealiasobject_CAST(self);
     Py_BEGIN_CRITICAL_SECTION(self);

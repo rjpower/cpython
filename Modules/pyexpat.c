@@ -1810,8 +1810,12 @@ xmlparse_handler_getter(PyObject *op, void *closure)
 }
 
 static int
-xmlparse_handler_setter(PyObject *op, PyObject *v, void *closure)
+xmlparse_handler_setter(PyObject *op, PyValue v_v, void *closure)
 {
+    PyObject *v = PyValue_Object(v_v);
+    if (v == NULL && !PyValue_IsNull(v_v)) {
+        return -1;
+    }
     xmlparseobject *self = xmlparseobject_CAST(op);
     struct HandlerInfo *hi = (struct HandlerInfo *)closure;
     assert((hi - handler_info) < (Py_ssize_t)Py_ARRAY_LENGTH(handler_info));
@@ -1882,14 +1886,14 @@ xmlparse_buffer_text_getter(PyObject *op, void *Py_UNUSED(closure))
 }
 
 static int
-xmlparse_buffer_text_setter(PyObject *op, PyObject *v, void *Py_UNUSED(closure))
+xmlparse_buffer_text_setter(PyObject *op, PyValue v, void *Py_UNUSED(closure))
 {
     xmlparseobject *self = xmlparseobject_CAST(op);
-    if (v == NULL) {
+    if (PyValue_IsNull(v)) {
         PyErr_SetString(PyExc_RuntimeError, "Cannot delete attribute");
         return -1;
     }
-    int b = PyObject_IsTrue(v);
+    int b = PyObject_IsTrueValue(v);
     if (b < 0) {
         return -1;
     }
@@ -1921,20 +1925,20 @@ xmlparse_buffer_size_getter(PyObject *op, void *Py_UNUSED(closure))
 }
 
 static int
-xmlparse_buffer_size_setter(PyObject *op, PyObject *v, void *Py_UNUSED(closure))
+xmlparse_buffer_size_setter(PyObject *op, PyValue v, void *Py_UNUSED(closure))
 {
     xmlparseobject *self = xmlparseobject_CAST(op);
-    if (v == NULL) {
+    if (PyValue_IsNull(v)) {
         PyErr_SetString(PyExc_RuntimeError, "Cannot delete attribute");
         return -1;
     }
     long new_buffer_size;
-    if (!PyLong_Check(v)) {
+    if (!PyType_FastSubclass(PyValue_Type(v), Py_TPFLAGS_LONG_SUBCLASS)) {
         PyErr_SetString(PyExc_TypeError, "buffer_size must be an integer");
         return -1;
     }
 
-    new_buffer_size = PyLong_AsLong(v);
+    new_buffer_size = PyLong_AsLongValue(v);
     if (new_buffer_size <= 0) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_ValueError, "buffer_size must be greater than zero");
@@ -1987,14 +1991,14 @@ xmlparse_namespace_prefixes_getter(PyObject *op, void *Py_UNUSED(closure))
 }
 
 static int
-xmlparse_namespace_prefixes_setter(PyObject *op, PyObject *v, void *Py_UNUSED(closure))
+xmlparse_namespace_prefixes_setter(PyObject *op, PyValue v, void *Py_UNUSED(closure))
 {
     xmlparseobject *self = xmlparseobject_CAST(op);
-    if (v == NULL) {
+    if (PyValue_IsNull(v)) {
         PyErr_SetString(PyExc_RuntimeError, "Cannot delete attribute");
         return -1;
     }
-    int b = PyObject_IsTrue(v);
+    int b = PyObject_IsTrueValue(v);
     if (b < 0) {
         return -1;
     }
@@ -2011,14 +2015,14 @@ xmlparse_ordered_attributes_getter(PyObject *op, void *Py_UNUSED(closure))
 }
 
 static int
-xmlparse_ordered_attributes_setter(PyObject *op, PyObject *v, void *Py_UNUSED(closure))
+xmlparse_ordered_attributes_setter(PyObject *op, PyValue v, void *Py_UNUSED(closure))
 {
     xmlparseobject *self = xmlparseobject_CAST(op);
-    if (v == NULL) {
+    if (PyValue_IsNull(v)) {
         PyErr_SetString(PyExc_RuntimeError, "Cannot delete attribute");
         return -1;
     }
-    int b = PyObject_IsTrue(v);
+    int b = PyObject_IsTrueValue(v);
     if (b < 0) {
         return -1;
     }
@@ -2034,14 +2038,14 @@ xmlparse_specified_attributes_getter(PyObject *op, void *Py_UNUSED(closure))
 }
 
 static int
-xmlparse_specified_attributes_setter(PyObject *op, PyObject *v, void *Py_UNUSED(closure))
+xmlparse_specified_attributes_setter(PyObject *op, PyValue v, void *Py_UNUSED(closure))
 {
     xmlparseobject *self = xmlparseobject_CAST(op);
-    if (v == NULL) {
+    if (PyValue_IsNull(v)) {
         PyErr_SetString(PyExc_RuntimeError, "Cannot delete attribute");
         return -1;
     }
-    int b = PyObject_IsTrue(v);
+    int b = PyObject_IsTrueValue(v);
     if (b < 0) {
         return -1;
     }

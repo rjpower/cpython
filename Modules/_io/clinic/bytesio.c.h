@@ -865,6 +865,6 @@ _io_BytesIO___sizeof__(PyObject *self, PyObject *Py_UNUSED(ignored))
 
     return return_value;
 }
-#define _IO_BYTESIO_CLOSED_GETSETDEF {"closed", _io_BytesIO_closed_get, (setter)NULL, _io_BytesIO_closed__doc__},
+#define _IO_BYTESIO_CLOSED_GETSETDEF {"closed", _io_BytesIO_closed_get, NULL, _io_BytesIO_closed__doc__},
 
-/*[clinic end generated code: output=83d7e5859c3f5053 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5d1c18c54c34ca6d input=a9049054013a1b77]*/

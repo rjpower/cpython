@@ -6411,7 +6411,8 @@ def _fail_each_allocation(_testcapi, action, check=None):
     # with the allocator restored.  Returns the number of allocations of the
     # passing run and the exceptions of the failed ones.
     errors = []
-    for n in range(1, 100):
+    # set_nomemory(n) fails the allocations after the first n.
+    for n in range(100):
         gc.collect()
         error = None
         _testcapi.set_nomemory(n, 0)
@@ -6422,7 +6423,7 @@ def _fail_each_allocation(_testcapi, action, check=None):
         finally:
             _testcapi.remove_mem_hooks()
         if error is None:
-            return n - 1, errors
+            return n, errors
         errors.append(error)
         if check is not None:
             check()
@@ -6566,12 +6567,10 @@ class ValueAttributeTests(unittest.TestCase):
         heap = 2**40 + int("1")
         count, errors = _fail_each_allocation(_testcapi,
                                               lambda: get(inline, int))
-        self.assertGreater(count, 0)
+        control, _ = _fail_each_allocation(_testcapi, lambda: get(heap, int))
+        self.assertGreater(count, control)
         for error in errors:
             self.assertIsInstance(error, MemoryError)
-        self.assertEqual(_fail_each_allocation(_testcapi,
-                                               lambda: get(heap, int)),
-                         (0, []))
         self.assertEqual(get(inline, int), inline)
 
     def test_nomemory_boxes(self):
@@ -6620,6 +6619,8 @@ class ValueAttributeTests(unittest.TestCase):
                         args = inline, heap
                     count, errors = _fail_each_allocation(
                         _testcapi, lambda: action(args[0]), check)
+                    if check is not None:
+                        exc.obj = "previous"
                     control, _ = _fail_each_allocation(
                         _testcapi, lambda: action(args[1]), check)
                     self.assertGreater(count, control)
@@ -6937,6 +6938,188 @@ class ValueGetsetTests(unittest.TestCase):
         def f():
             pass
         self.assertIs(f.__dict__, f.__dict__)
+
+
+class ValueSetterTests(unittest.TestCase):
+    """6d rung 4: a getset setter takes a value.  A number setter reads it
+    with the value form of today's conversion; a setter that keeps or
+    passes on an object boxes it at its top; deletion is PyValue_NULL."""
+
+    def test_number_setters(self):
+        # OSError's characters_written keeps PyNumber_AsSsize_t()'s protocol
+        # (__index__, overflow as ValueError) through its value form.
+        n = 100000 + int("1")
+        class Index:
+            def __index__(self):
+                return 7
+        e = OSError()
+        e.characters_written = n
+        self.assertIs(e.characters_written, n)
+        e.characters_written = Index()
+        self.assertEqual(e.characters_written, 7)
+        e.characters_written = True
+        self.assertEqual(e.characters_written, 1)
+        with self.assertRaises(ValueError):
+            e.characters_written = 2**70
+        with self.assertRaises(TypeError):
+            e.characters_written = 2.5
+        del e.characters_written
+        with self.assertRaises(AttributeError):
+            del e.characters_written
+        with self.assertRaises(AttributeError):
+            e.characters_written
+
+    def test_decimal_context(self):
+        # The context setters keep PyLong_AsSsize_t()'s protocol: an int
+        # only, no __index__, overflow as OverflowError; Context() passes
+        # its arguments to the same setters.
+        decimal = import_helper.import_module("_decimal")
+        n = 100000 + int("1")
+        class Index:
+            def __index__(self):
+                return 7
+        c = decimal.Context()
+        c.prec = n
+        self.assertEqual(c.prec, n)
+        c.prec = True
+        self.assertEqual(c.prec, 1)
+        with self.assertRaises(OverflowError):
+            c.prec = 2**70
+        with self.assertRaises(TypeError):
+            c.prec = 2.5
+        with self.assertRaises(TypeError):
+            c.prec = Index()
+        with self.assertRaises(AttributeError):
+            del c.prec
+        c = decimal.Context(prec=n, Emin=-n, Emax=n, capitals=0, clamp=1)
+        self.assertEqual((c.prec, c.Emin, c.Emax, c.capitals, c.clamp),
+                         (n, -n, n, 0, 1))
+
+    def test_object_setters(self):
+        # A setter that keeps an object boxes an inline value; its errors
+        # name the value's type.
+        def f():
+            pass
+        with self.assertRaises(TypeError):
+            f.__name__ = 5
+        with self.assertRaises(TypeError):
+            f.__qualname__ = 2.5
+        f.__doc__ = 100000 + int("1")
+        self.assertEqual(f.__doc__, 100001)
+        class C:
+            pass
+        for v, name in ((5, "int"), (2.5, "float")):
+            with self.subTest(v=v):
+                with self.assertRaisesRegex(TypeError,
+                                            f"not a '{name}'"):
+                    C().__dict__ = v
+
+    def test_cell(self):
+        # cell_contents stores the value: an inline one comes back the same.
+        n = int("1")
+        cell = types.CellType()
+        for v in (100000 + n, 2.5 * n, 2**31 * n, math.nan * n):
+            with self.subTest(v=v):
+                cell.cell_contents = v
+                self.assertIs(cell.cell_contents, v)
+        del cell.cell_contents
+        with self.assertRaises(ValueError):
+            cell.cell_contents
+
+    def test_deletion(self):
+        # Each setter that allows deletion receives it.
+        n = 100000 + int("1")
+        def f(a=1, *, b=2):
+            pass
+        del f.__defaults__
+        self.assertIsNone(f.__defaults__)
+        del f.__kwdefaults__
+        self.assertIsNone(f.__kwdefaults__)
+        f.__annotations__ = {"x": n}
+        del f.__annotations__
+        self.assertEqual(f.__annotations__, {})
+        class C:
+            pass
+        C.__annotations__ = {"x": n}
+        self.assertEqual(C.__annotations__, {"x": n})
+        del C.__annotations__
+        C.__abstractmethods__ = 2.5 * n
+        self.assertEqual(C.__abstractmethods__, 2.5 * n)
+        del C.__abstractmethods__
+        with self.assertRaises(AttributeError):
+            C.__abstractmethods__
+        m = types.ModuleType("m")
+        m.__annotations__ = {"x": n}
+        del m.__annotations__
+        with self.assertRaises(AttributeError):
+            del m.__annotations__
+        with self.assertRaises(TypeError):
+            del f.__name__
+
+    def test_dict_entries(self):
+        # The dict-backed setters store the value as it is.
+        n = int("1")
+        class C:
+            pass
+        C.__annotations__ = 100000 + n
+        self.assertIs(C.__annotations__, 100001)
+        C.__abstractmethods__ = 0
+        self.assertFalse(C.__flags__ & (1 << 20))
+        m = types.ModuleType("m")
+        m.__annotations__ = 2.5 * n
+        self.assertIs(m.__annotations__, 2.5)
+
+    def test_dict_nomemory(self):
+        # PyObject_GenericGetDict() fails to make the dict, in both layouts:
+        # a managed dict (_PyObject_EnterDictMode) and a dict at
+        # tp_dictoffset (ensure_nonmanaged_dict).  Each failure is a
+        # MemoryError, and the attributes stored before read back.
+        _testcapi = import_helper.import_module("_testcapi")
+        n = 100000 + int("1")
+        class C:
+            pass
+        o = C()
+        o.a = n
+        count, errors = _fail_each_allocation(
+            _testcapi, lambda: o.__dict__,
+            lambda: self.assertEqual(o.a, n))
+        self.assertGreater(len(errors), 0)
+        for error in errors:
+            self.assertIsInstance(error, MemoryError)
+        self.assertEqual(o.__dict__, {"a": n})
+        def f():
+            pass
+        count, errors = _fail_each_allocation(_testcapi, lambda: f.__dict__)
+        self.assertGreater(len(errors), 0)
+        for error in errors:
+            self.assertIsInstance(error, MemoryError)
+        self.assertEqual(f.__dict__, {})
+
+    def test_field_nomemory(self):
+        # A setter storing into a PyObject * field boxes an inline value at
+        # its top.  Each allocation fails in turn; the same store of a heap
+        # value is the control, so the inline store's extra allocation is
+        # its box.  Each failure is a MemoryError and leaves the field as
+        # it was.
+        _testcapi = import_helper.import_module("_testcapi")
+        _testinternalcapi = import_helper.import_module("_testinternalcapi")
+        n = 100000 + int("2")
+        heap = 2**40 + int("2")
+        o = _testinternalcapi.SetterBox()
+        def unchanged():
+            self.assertEqual(o.field, "previous")
+        for inline in (n, 2.5 * n):
+            with self.subTest(inline=inline):
+                o.field = "previous"
+                count, errors = _fail_each_allocation(
+                    _testcapi, lambda: setattr(o, "field", inline), unchanged)
+                self.assertEqual(o.field, inline)
+                o.field = "previous"
+                control, _ = _fail_each_allocation(
+                    _testcapi, lambda: setattr(o, "field", heap), unchanged)
+                self.assertGreater(count, control)
+                for error in errors:
+                    self.assertIsInstance(error, MemoryError)
 
 
 if __name__ == "__main__":

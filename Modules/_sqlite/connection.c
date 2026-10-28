@@ -570,8 +570,12 @@ connection_get_row_factory(PyObject *op, void *closure)
 }
 
 static int
-connection_set_row_factory(PyObject *op, PyObject *value, void *closure)
+connection_set_row_factory(PyObject *op, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     pysqlite_Connection *self = (pysqlite_Connection *)op;
     if (value == NULL) {
         PyErr_SetString(PyExc_AttributeError,
@@ -590,8 +594,12 @@ connection_get_text_factory(PyObject *op, void *closure)
 }
 
 static int
-connection_set_text_factory(PyObject *op, PyObject *value, void *closure)
+connection_set_text_factory(PyObject *op, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     pysqlite_Connection *self = (pysqlite_Connection *)op;
     if (value == NULL) {
         PyErr_SetString(PyExc_AttributeError,
@@ -1822,9 +1830,13 @@ pysqlite_connection_get_in_transaction(PyObject *op, void *Py_UNUSED(closure))
 
 static int
 pysqlite_connection_set_isolation_level(PyObject *op,
-                                        PyObject *isolation_level,
+                                        PyValue isolation_level_v,
                                         void *Py_UNUSED(ignored))
 {
+    PyObject *isolation_level = PyValue_Object(isolation_level_v);
+    if (isolation_level == NULL && !PyValue_IsNull(isolation_level_v)) {
+        return -1;
+    }
     pysqlite_Connection *self = _pysqlite_Connection_CAST(op);
     if (isolation_level == NULL) {
         PyErr_SetString(PyExc_AttributeError, "cannot delete attribute");
@@ -2628,8 +2640,12 @@ get_autocommit(PyObject *op, void *Py_UNUSED(closure))
 }
 
 static int
-set_autocommit(PyObject *op, PyObject *val, void *Py_UNUSED(closure))
+set_autocommit(PyObject *op, PyValue val_v, void *Py_UNUSED(closure))
 {
+    PyObject *val = PyValue_Object(val_v);
+    if (val == NULL && !PyValue_IsNull(val_v)) {
+        return -1;
+    }
     pysqlite_Connection *self = _pysqlite_Connection_CAST(op);
     if (val == NULL) {
         PyErr_SetString(PyExc_AttributeError,

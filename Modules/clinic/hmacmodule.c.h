@@ -759,10 +759,10 @@ _hmac_compute_blake2b_32(PyObject *module, const PyValue *args, Py_ssize_t nargs
 exit:
     return return_value;
 }
-#define _HMAC_HMAC_NAME_GETSETDEF {"name", _hmac_HMAC_name_get, (setter)NULL, NULL},
+#define _HMAC_HMAC_NAME_GETSETDEF {"name", _hmac_HMAC_name_get, NULL, NULL},
 
-#define _HMAC_HMAC_BLOCK_SIZE_GETSETDEF {"block_size", _hmac_HMAC_block_size_get, (setter)NULL, NULL},
+#define _HMAC_HMAC_BLOCK_SIZE_GETSETDEF {"block_size", _hmac_HMAC_block_size_get, NULL, NULL},
 
-#define _HMAC_HMAC_DIGEST_SIZE_GETSETDEF {"digest_size", _hmac_HMAC_digest_size_get, (setter)NULL, NULL},
+#define _HMAC_HMAC_DIGEST_SIZE_GETSETDEF {"digest_size", _hmac_HMAC_digest_size_get, NULL, NULL},
 
-/*[clinic end generated code: output=7029f25bfb0df984 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=ba0e316a0517b9ba input=a9049054013a1b77]*/

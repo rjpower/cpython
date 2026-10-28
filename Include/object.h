@@ -465,7 +465,7 @@ PyAPI_FUNC(PyObject *) PyObject_SelfIter(PyObject *);
 PyAPI_FUNC(PyValue) PyObject_GenericGetAttr(PyObject *, PyObject *);
 PyAPI_FUNC(int) PyObject_GenericSetAttr(PyObject *, PyObject *, PyValue);
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x03030000
-PyAPI_FUNC(int) PyObject_GenericSetDict(PyObject *, PyObject *, void *);
+PyAPI_FUNC(int) PyObject_GenericSetDict(PyObject *, PyValue, void *);
 #endif
 PyAPI_FUNC(Py_hash_t) PyObject_Hash(PyObject *);
 PyAPI_FUNC(Py_hash_t) PyObject_HashNotImplemented(PyObject *);

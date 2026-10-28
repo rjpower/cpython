@@ -643,8 +643,12 @@ func_get_code(PyObject *self, void *Py_UNUSED(ignored))
 }
 
 static int
-func_set_code(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+func_set_code(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyFunctionObject *op = _PyFunction_CAST(self);
 
     /* Not legal to del f.func_code or to set it to anything
@@ -705,8 +709,12 @@ func_get_name(PyObject *self, void *Py_UNUSED(ignored))
 }
 
 static int
-func_set_name(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+func_set_name(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyFunctionObject *op = _PyFunction_CAST(self);
     /* Not legal to del f.func_name or to set it to anything
      * other than a string object. */
@@ -730,8 +738,12 @@ func_get_qualname(PyObject *self, void *Py_UNUSED(ignored))
 }
 
 static int
-func_set_qualname(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+func_set_qualname(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyFunctionObject *op = _PyFunction_CAST(self);
     /* Not legal to del f.__qualname__ or to set it to anything
      * other than a string object. */
@@ -759,8 +771,12 @@ func_get_doc(PyObject *self, void *Py_UNUSED(ignored))
 }
 
 static int
-func_set_doc(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+func_set_doc(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     /* Legal to del f.__doc__ or to set it to any object. */
     PyFunctionObject *op = _PyFunction_CAST(self);
     Py_BEGIN_CRITICAL_SECTION(op);
@@ -781,8 +797,12 @@ func_get_module(PyObject *self, void *Py_UNUSED(ignored))
 }
 
 static int
-func_set_module(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+func_set_module(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     /* Legal to del f.__module__ or to set it to any object. */
     PyFunctionObject *op = _PyFunction_CAST(self);
     Py_BEGIN_CRITICAL_SECTION(op);
@@ -805,8 +825,12 @@ func_get_defaults(PyObject *self, void *Py_UNUSED(ignored))
 }
 
 static int
-func_set_defaults(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+func_set_defaults(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     /* Legal to del f.func_defaults.
      * Can only set func_defaults to NULL or a tuple. */
     PyFunctionObject *op = _PyFunction_CAST(self);
@@ -853,8 +877,12 @@ func_get_kwdefaults(PyObject *self, void *Py_UNUSED(ignored))
 }
 
 static int
-func_set_kwdefaults(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+func_set_kwdefaults(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyFunctionObject *op = _PyFunction_CAST(self);
     if (value == Py_None)
         value = NULL;
@@ -1589,8 +1617,12 @@ cm_get___annotations__(PyObject *self, void *closure)
 }
 
 static int
-cm_set___annotations__(PyObject *self, PyObject *value, void *closure)
+cm_set___annotations__(PyObject *self, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     return descriptor_set_wrapped_attribute(self, &_Py_ID(__annotations__), value, "classmethod");
 }
 
@@ -1602,8 +1634,12 @@ cm_get___annotate__(PyObject *self, void *closure)
 }
 
 static int
-cm_set___annotate__(PyObject *self, PyObject *value, void *closure)
+cm_set___annotate__(PyObject *self, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     return descriptor_set_wrapped_attribute(self, &_Py_ID(__annotate__), value, "classmethod");
 }
 
@@ -1859,8 +1895,12 @@ sm_get___annotations__(PyObject *self, void *closure)
 }
 
 static int
-sm_set___annotations__(PyObject *self, PyObject *value, void *closure)
+sm_set___annotations__(PyObject *self, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     return descriptor_set_wrapped_attribute(self, &_Py_ID(__annotations__), value, "staticmethod");
 }
 
@@ -1872,8 +1912,12 @@ sm_get___annotate__(PyObject *self, void *closure)
 }
 
 static int
-sm_set___annotate__(PyObject *self, PyObject *value, void *closure)
+sm_set___annotate__(PyObject *self, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     return descriptor_set_wrapped_attribute(self, &_Py_ID(__annotate__), value, "staticmethod");
 }
 

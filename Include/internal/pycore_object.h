@@ -350,7 +350,7 @@ enum _PyAnnotateFormat {
     _Py_ANNOTATE_FORMAT_STRING = 4,
 };
 
-extern int _PyObject_SetDict(PyObject *obj, PyObject *value);
+extern int _PyObject_SetDict(PyObject *obj, PyValue value);
 
 # define _Py_INCREF_MORTAL(op) Py_INCREF(op)
 

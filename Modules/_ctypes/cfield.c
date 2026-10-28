@@ -267,9 +267,11 @@ PyCField_set_lock_held(PyObject *op, PyObject *inst, PyObject *value)
                        self->byte_size, ptr);
 }
 
-/* The converters (setfunc, getfunc) are object forms until rung 4
-   converts them with the getsets.  An inline value is boxed for the setter
-   and anchored while it runs; a failed box returns at once. */
+/* The converters (setfunc, getfunc) are object forms and not getsets;
+   converting them is a ctypes change for the ports phase.  So the field
+   setter boxes an inline value at its top, as a setter that passes on an
+   object does, and anchors the box while the converter runs; a failed box
+   returns at once. */
 static int
 PyCField_set(PyObject *op, PyObject *inst, PyValue value)
 {

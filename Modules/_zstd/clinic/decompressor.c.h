@@ -218,6 +218,6 @@ exit:
 
     return return_value;
 }
-#define _ZSTD_ZSTDDECOMPRESSOR_UNUSED_DATA_GETSETDEF {"unused_data", _zstd_ZstdDecompressor_unused_data_get, (setter)NULL, _zstd_ZstdDecompressor_unused_data__doc__},
+#define _ZSTD_ZSTDDECOMPRESSOR_UNUSED_DATA_GETSETDEF {"unused_data", _zstd_ZstdDecompressor_unused_data_get, NULL, _zstd_ZstdDecompressor_unused_data__doc__},
 
-/*[clinic end generated code: output=4a5a6570341c7c4b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2d7bcd03aed10549 input=a9049054013a1b77]*/

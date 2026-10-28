@@ -290,8 +290,12 @@ obj_extra_data_get(PyObject *self, void *Py_UNUSED(ignored))
 }
 
 static int
-obj_extra_data_set(PyObject *self, PyObject *newval, void *Py_UNUSED(ignored))
+obj_extra_data_set(PyObject *self, PyValue newval_v, void *Py_UNUSED(ignored))
 {
+    PyObject *newval = PyValue_Object(newval_v);
+    if (newval == NULL && !PyValue_IsNull(newval_v)) {
+        return -1;
+    }
     PyObject **extra_storage = obj_extra_data_get_extra_storage(self);
     Py_CLEAR(*extra_storage);
     if (newval) {

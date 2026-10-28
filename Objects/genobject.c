@@ -888,8 +888,12 @@ gen_get_name(PyObject *self, void *Py_UNUSED(ignored))
 }
 
 static int
-gen_set_name(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+gen_set_name(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyGenObject *op = _PyGen_CAST(self);
     /* Not legal to del gen.gi_name or to set it to anything
      * other than a string object. */
@@ -915,8 +919,12 @@ gen_get_qualname(PyObject *self, void *Py_UNUSED(ignored))
 }
 
 static int
-gen_set_qualname(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+gen_set_qualname(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyGenObject *op = _PyGen_CAST(self);
     /* Not legal to del gen.__qualname__ or to set it to anything
      * other than a string object. */

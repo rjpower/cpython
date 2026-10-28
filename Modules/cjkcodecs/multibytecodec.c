@@ -169,8 +169,12 @@ codecctx_errors_get(PyObject *op, void *Py_UNUSED(closure))
 }
 
 static int
-codecctx_errors_set(PyObject *op, PyObject *value, void *Py_UNUSED(closure))
+codecctx_errors_set(PyObject *op, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyObject *cb;
     const char *str;
     MultibyteStatefulCodecContext *self = _MultibyteStatefulCodecContext_CAST(op);

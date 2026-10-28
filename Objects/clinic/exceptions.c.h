@@ -181,22 +181,26 @@ static int
 BaseException_args_set_impl(PyBaseExceptionObject *self, PyObject *value);
 
 static int
-BaseException_args_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+BaseException_args_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute 'args' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = arg;
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = BaseException_args_set_impl((PyBaseExceptionObject *)self, value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -222,22 +226,26 @@ BaseException___traceback___set_impl(PyBaseExceptionObject *self,
                                      PyObject *value);
 
 static int
-BaseException___traceback___set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+BaseException___traceback___set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute '__traceback__' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = arg;
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = BaseException___traceback___set_impl((PyBaseExceptionObject *)self, value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -263,22 +271,26 @@ BaseException___context___set_impl(PyBaseExceptionObject *self,
                                    PyObject *value);
 
 static int
-BaseException___context___set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+BaseException___context___set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute '__context__' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = arg;
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = BaseException___context___set_impl((PyBaseExceptionObject *)self, value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -304,22 +316,26 @@ BaseException___cause___set_impl(PyBaseExceptionObject *self,
                                  PyObject *value);
 
 static int
-BaseException___cause___set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+BaseException___cause___set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute '__cause__' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = arg;
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = BaseException___cause___set_impl((PyBaseExceptionObject *)self, value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -418,12 +434,12 @@ BaseExceptionGroup_subgroup(PyObject *self, PyValue arg)
 exit:
     return return_value;
 }
-#define BASEEXCEPTION_ARGS_GETSETDEF {"args", BaseException_args_get, (setter)BaseException_args_set, NULL},
+#define BASEEXCEPTION_ARGS_GETSETDEF {"args", BaseException_args_get, BaseException_args_set, NULL},
 
-#define BASEEXCEPTION___TRACEBACK___GETSETDEF {"__traceback__", BaseException___traceback___get, (setter)BaseException___traceback___set, NULL},
+#define BASEEXCEPTION___TRACEBACK___GETSETDEF {"__traceback__", BaseException___traceback___get, BaseException___traceback___set, NULL},
 
-#define BASEEXCEPTION___CONTEXT___GETSETDEF {"__context__", BaseException___context___get, (setter)BaseException___context___set, NULL},
+#define BASEEXCEPTION___CONTEXT___GETSETDEF {"__context__", BaseException___context___get, BaseException___context___set, NULL},
 
-#define BASEEXCEPTION___CAUSE___GETSETDEF {"__cause__", BaseException___cause___get, (setter)BaseException___cause___set, NULL},
+#define BASEEXCEPTION___CAUSE___GETSETDEF {"__cause__", BaseException___cause___get, BaseException___cause___set, NULL},
 
-/*[clinic end generated code: output=4bcebc0a500c3b29 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=73a6b5e94a528258 input=a9049054013a1b77]*/

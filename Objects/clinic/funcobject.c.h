@@ -33,22 +33,26 @@ static int
 function___annotate___set_impl(PyFunctionObject *self, PyObject *value);
 
 static int
-function___annotate___set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+function___annotate___set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute '__annotate__' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = arg;
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = function___annotate___set_impl((PyFunctionObject *)self, value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -76,18 +80,22 @@ static int
 function___annotations___set_impl(PyFunctionObject *self, PyObject *value);
 
 static int
-function___annotations___set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+function___annotations___set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value = NULL;
 
-    if (arg != NULL) {
-        value = arg;
+    if (!PyValue_IsNull(arg)) {
+        value = PyValue_Object(arg);
+        if (value == NULL) {
+            goto exit;
+        }
     }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = function___annotations___set_impl((PyFunctionObject *)self, value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -115,22 +123,28 @@ static int
 function___type_params___set_impl(PyFunctionObject *self, PyObject *value);
 
 static int
-function___type_params___set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+function___type_params___set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute '__type_params__' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    if (!PyTuple_Check(arg)) {
-        PyErr_Format(PyExc_TypeError, "attribute '__type_params__' must be tuple, not %T", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyTuple_Check(_arg)) {
+            PyErr_Format(PyExc_TypeError, "attribute '__type_params__' must be tuple, not %T", _arg);
+            goto exit;
+        }
+        value = _arg;
     }
-    value = arg;
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = function___type_params___set_impl((PyFunctionObject *)self, value);
     Py_END_CRITICAL_SECTION();
@@ -272,10 +286,10 @@ skip_optional_pos:
 exit:
     return return_value;
 }
-#define FUNCTION___ANNOTATE___GETSETDEF {"__annotate__", function___annotate___get, (setter)function___annotate___set, function___annotate____doc__},
+#define FUNCTION___ANNOTATE___GETSETDEF {"__annotate__", function___annotate___get, function___annotate___set, function___annotate____doc__},
 
-#define FUNCTION___ANNOTATIONS___GETSETDEF {"__annotations__", function___annotations___get, (setter)function___annotations___set, function___annotations____doc__},
+#define FUNCTION___ANNOTATIONS___GETSETDEF {"__annotations__", function___annotations___get, function___annotations___set, function___annotations____doc__},
 
-#define FUNCTION___TYPE_PARAMS___GETSETDEF {"__type_params__", function___type_params___get, (setter)function___type_params___set, function___type_params____doc__},
+#define FUNCTION___TYPE_PARAMS___GETSETDEF {"__type_params__", function___type_params___get, function___type_params___set, function___type_params____doc__},
 
-/*[clinic end generated code: output=129a111bb33d987a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=bcd8d23b348a0573 input=a9049054013a1b77]*/

@@ -101,7 +101,7 @@ get_four(PyObject *self, PyObject *a, PyObject *b, PyObject *c)
 }
 
 static int
-set_two(PyObject *self, PyObject *value)
+set_two(PyObject *self, PyValue value)
 {
     return 0;
 }
@@ -109,8 +109,12 @@ set_two(PyObject *self, PyObject *value)
 static PyObject *last_set_value = NULL;
 
 static int
-set_three(PyObject *self, PyObject *value, void *closure)
+set_three(PyObject *self, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     Py_XSETREF(last_set_value, Py_XNewRef(value));
     return 0;
 }

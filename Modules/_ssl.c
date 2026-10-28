@@ -1016,13 +1016,17 @@ newPySSLSocket(PySSLContext *sslctx, PySocketSockObject *sock,
         }
     }
     if (owner && owner != Py_None) {
-        if (_ssl__SSLSocket_owner_set((PyObject *)self, owner, NULL) < 0) {
+        if (_ssl__SSLSocket_owner_set((PyObject *)self,
+                                      PyValue_FromObject(owner), NULL) < 0)
+        {
             Py_DECREF(self);
             return NULL;
         }
     }
     if (session && session != Py_None) {
-        if (_ssl__SSLSocket_session_set((PyObject *)self, session, NULL) < 0) {
+        if (_ssl__SSLSocket_session_set((PyObject *)self,
+                                        PyValue_FromObject(session), NULL) < 0)
+        {
             Py_DECREF(self);
             return NULL;
         }
@@ -4413,14 +4417,14 @@ get_post_handshake_auth(PyObject *op, void *Py_UNUSED(closure))
 
 #if defined(PySSL_HAVE_POST_HS_AUTH)
 static int
-set_post_handshake_auth(PyObject *op, PyObject *arg, void *Py_UNUSED(closure))
+set_post_handshake_auth(PyObject *op, PyValue arg, void *Py_UNUSED(closure))
 {
     PySSLContext *self = PySSLContext_CAST(op);
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_SetString(PyExc_AttributeError, "cannot delete attribute");
         return -1;
     }
-    int pha = PyObject_IsTrue(arg);
+    int pha = PyObject_IsTrueValue(arg);
 
     if (pha == -1) {
         return -1;

@@ -146,9 +146,9 @@ cell_get_contents(PyObject *self, void *closure)
 }
 
 static int
-cell_set_contents(PyObject *self, PyObject *obj, void *Py_UNUSED(ignored))
+cell_set_contents(PyObject *self, PyValue value, void *Py_UNUSED(ignored))
 {
-    PyCell_SET(self, obj);
+    PyCell_SET_VALUE(self, value);
     return 0;
 }
 

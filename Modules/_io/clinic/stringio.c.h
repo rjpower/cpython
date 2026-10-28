@@ -593,10 +593,10 @@ _io_StringIO_newlines_get(PyObject *self, void *Py_UNUSED(context))
 
     return return_value;
 }
-#define _IO_STRINGIO_CLOSED_GETSETDEF {"closed", _io_StringIO_closed_get, (setter)NULL, NULL},
+#define _IO_STRINGIO_CLOSED_GETSETDEF {"closed", _io_StringIO_closed_get, NULL, NULL},
 
-#define _IO_STRINGIO_LINE_BUFFERING_GETSETDEF {"line_buffering", _io_StringIO_line_buffering_get, (setter)NULL, NULL},
+#define _IO_STRINGIO_LINE_BUFFERING_GETSETDEF {"line_buffering", _io_StringIO_line_buffering_get, NULL, NULL},
 
-#define _IO_STRINGIO_NEWLINES_GETSETDEF {"newlines", _io_StringIO_newlines_get, (setter)NULL, NULL},
+#define _IO_STRINGIO_NEWLINES_GETSETDEF {"newlines", _io_StringIO_newlines_get, NULL, NULL},
 
-/*[clinic end generated code: output=00e1af80ac6375bf input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6367d93e698eb984 input=a9049054013a1b77]*/

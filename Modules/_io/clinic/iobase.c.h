@@ -661,6 +661,6 @@ _io__RawIOBase_write(PyObject *self, PyValue arg)
 exit:
     return return_value;
 }
-#define _IO__IOBASE_CLOSED_GETSETDEF {"closed", _io__IOBase_closed_get, (setter)NULL, _io__IOBase_closed__doc__},
+#define _IO__IOBASE_CLOSED_GETSETDEF {"closed", _io__IOBase_closed_get, NULL, _io__IOBase_closed__doc__},
 
-/*[clinic end generated code: output=aa4709d50a9e1fc5 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=054e264f03d67d7d input=a9049054013a1b77]*/

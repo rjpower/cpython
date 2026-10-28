@@ -666,12 +666,12 @@ exit:
 #ifndef _IO_FILEIO_TRUNCATE_METHODDEF
     #define _IO_FILEIO_TRUNCATE_METHODDEF
 #endif /* !defined(_IO_FILEIO_TRUNCATE_METHODDEF) */
-#define _IO_FILEIO_CLOSED_GETSETDEF {"closed", _io_FileIO_closed_get, (setter)NULL, _io_FileIO_closed__doc__},
+#define _IO_FILEIO_CLOSED_GETSETDEF {"closed", _io_FileIO_closed_get, NULL, _io_FileIO_closed__doc__},
 
-#define _IO_FILEIO_CLOSEFD_GETSETDEF {"closefd", _io_FileIO_closefd_get, (setter)NULL, _io_FileIO_closefd__doc__},
+#define _IO_FILEIO_CLOSEFD_GETSETDEF {"closefd", _io_FileIO_closefd_get, NULL, _io_FileIO_closefd__doc__},
 
-#define _IO_FILEIO_MODE_GETSETDEF {"mode", _io_FileIO_mode_get, (setter)NULL, _io_FileIO_mode__doc__},
+#define _IO_FILEIO_MODE_GETSETDEF {"mode", _io_FileIO_mode_get, NULL, _io_FileIO_mode__doc__},
 
-#define _IO_FILEIO__BLKSIZE_GETSETDEF {"_blksize", _io_FileIO__blksize_get, (setter)NULL, _io_FileIO__blksize__doc__},
+#define _IO_FILEIO__BLKSIZE_GETSETDEF {"_blksize", _io_FileIO__blksize_get, NULL, _io_FileIO__blksize__doc__},
 
-/*[clinic end generated code: output=278feaf2a7fe8b77 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b47f08048d4f05e4 input=a9049054013a1b77]*/

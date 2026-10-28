@@ -1737,8 +1737,12 @@ WCharArray_set_value_lock_held(PyObject *op, PyObject *value)
 }
 
 static int
-WCharArray_set_value(PyObject *op, PyObject *value, void *Py_UNUSED(ignored))
+WCharArray_set_value(PyObject *op, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     int rc;
     Py_BEGIN_CRITICAL_SECTION(op);
     rc = WCharArray_set_value_lock_held(op, value);
@@ -5599,7 +5603,7 @@ Simple_init(PyObject *self, PyObject *args, PyObject *kw)
     if (!PyArg_UnpackTuple(args, "__init__", 0, 1, &value))
         return -1;
     if (value)
-        return _ctypes_Simple_value_set(self, value, NULL);
+        return _ctypes_Simple_value_set(self, PyValue_FromObject(value), NULL);
     return 0;
 }
 
@@ -5910,8 +5914,12 @@ Pointer_set_contents_lock_held(PyObject *op, PyObject *value, void *closure)
 }
 
 static int
-Pointer_set_contents(PyObject *op, PyObject *value, void *closure)
+Pointer_set_contents(PyObject *op, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     if (value == NULL) {
         PyErr_SetString(PyExc_TypeError,
                         "Pointer does not support item deletion");
@@ -5938,7 +5946,7 @@ Pointer_init(PyObject *self, PyObject *args, PyObject *kw)
         return -1;
     if (value == NULL)
         return 0;
-    return Pointer_set_contents(self, value, NULL);
+    return Pointer_set_contents(self, PyValue_FromObject(value), NULL);
 }
 
 static PyObject *

@@ -48,7 +48,7 @@ _PyWasm_TrampolineCallGetter(getter func,
 int
 _PyWasm_TrampolineCallSetter(setter func,
                              PyObject* self,
-                             PyObject* val,
+                             PyValue val,
                              void* closure);
 
 #define _PyCFunction_TrampolineCall(meth, self, args) \

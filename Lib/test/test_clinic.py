@@ -1063,7 +1063,7 @@ class ClinicWholeFileTest(TestCase):
                       generated)
         self.assertIn('#  define FOO_PROPERTY_GETSETDEF {"property", '
                       'FOO_PROPERTY_GETTER, '
-                      '(setter)FOO_PROPERTY_SETTER, FOO_PROPERTY_DOCSTR},',
+                      'FOO_PROPERTY_SETTER, FOO_PROPERTY_DOCSTR},',
                       generated)
 
     def test_getset_several_implementations(self):
@@ -1139,7 +1139,7 @@ class ClinicWholeFileTest(TestCase):
             [clinic start generated code]*/
         """
         generated = self.clinic.parse(dedent(block))
-        self.assertIn("if (arg == NULL) {", generated)
+        self.assertIn("if (PyValue_IsNull(arg)) {", generated)
         self.assertIn("\"attribute 'property' of '%.100s' objects "
                       "cannot be deleted\"", generated)
 
@@ -1159,7 +1159,43 @@ class ClinicWholeFileTest(TestCase):
             [clinic start generated code]*/
         """
         generated = self.clinic.parse(dedent(block))
-        self.assertNotIn("if (arg == NULL) {", generated)
+        self.assertNotIn("if (PyValue_IsNull(arg)) {", generated)
+        # The value is converted, boxing included, only if the attribute
+        # is not deleted, so a deletion reaches the impl as NULL.
+        self.assertIn("    if (!PyValue_IsNull(arg)) {\n"
+                      "        value = PyValue_Object(arg);\n", generated)
+
+    def test_setter_value(self):
+        # The setter takes a value.  A converter with a value form reads it
+        # without a box; any other converter boxes it once and converts
+        # the box as an object.
+        block = """
+            /*[clinic input]
+            output everything block
+            class Foo "FooObject *" "&Foo_Type"
+            [clinic start generated code]*/
+            /*[clinic input]
+            @setter
+            Foo.num
+                value: int
+            [clinic start generated code]*/
+            /*[clinic input]
+            @setter
+            Foo.flags
+                value: unsigned_int(bitwise=True)
+            [clinic start generated code]*/
+        """
+        generated = self.clinic.parse(dedent(block))
+        self.assertIn("Foo_num_set(PyObject *self, PyValue arg, "
+                      "void *Py_UNUSED(context))", generated)
+        self.assertIn("value = PyLong_AsIntValue(arg);", generated)
+        self.assertIn("Foo_flags_set(PyObject *self, PyValue arg, "
+                      "void *Py_UNUSED(context))", generated)
+        self.assertIn("        PyObject *_arg = PyValue_Object(arg);\n"
+                      "        if (_arg == NULL) {\n"
+                      "            goto exit;\n"
+                      "        }\n", generated)
+        self.assertEqual(generated.count("PyValue_Object("), 1)
 
     def test_getset_duplicate(self):
         # Only a setter defines the new value.
@@ -1211,7 +1247,7 @@ class ClinicWholeFileTest(TestCase):
         # C basename.
         generated = self.clinic.parse(dedent(block))
         self.assertIn('#define FOO_PROPERTY_GETSETDEF {"property", '
-                      'foo_get_get, (setter)foo_set_set, NULL},',
+                      'foo_get_get, foo_set_set, NULL},',
                       generated)
 
     def test_getter_returns_value(self):
@@ -1256,7 +1292,7 @@ class ClinicWholeFileTest(TestCase):
         self.assertIn("return_value = Foo_val_get_impl((FooObject *)self);",
                       generated)
         self.assertIn('#define FOO_OBJ_GETSETDEF {"obj", Foo_obj_get, '
-                      '(setter)NULL, NULL},', generated)
+                      'NULL, NULL},', generated)
 
 
 class ParseFileUnitTest(TestCase):

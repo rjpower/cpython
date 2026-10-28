@@ -397,25 +397,31 @@ static int
 _sqlite3_Cursor_arraysize_set_impl(pysqlite_Cursor *self, uint32_t value);
 
 static int
-_sqlite3_Cursor_arraysize_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+_sqlite3_Cursor_arraysize_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     uint32_t value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute 'arraysize' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    if (!_PyLong_UInt32_Converter(arg, &value)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UInt32_Converter(_arg, &value)) {
+            goto exit;
+        }
     }
     return_value = _sqlite3_Cursor_arraysize_set_impl((pysqlite_Cursor *)self, value);
 
 exit:
     return return_value;
 }
-#define _SQLITE3_CURSOR_ARRAYSIZE_GETSETDEF {"arraysize", _sqlite3_Cursor_arraysize_get, (setter)_sqlite3_Cursor_arraysize_set, NULL},
+#define _SQLITE3_CURSOR_ARRAYSIZE_GETSETDEF {"arraysize", _sqlite3_Cursor_arraysize_get, _sqlite3_Cursor_arraysize_set, NULL},
 
-/*[clinic end generated code: output=4c3d57dbb9edf51d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2a6448cad1831834 input=a9049054013a1b77]*/

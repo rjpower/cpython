@@ -2148,8 +2148,12 @@ element_attrib_getter(PyObject *op, void *closure)
     }
 
 static int
-element_tag_setter(PyObject *op, PyObject *value, void *closure)
+element_tag_setter(PyObject *op, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     _VALIDATE_ATTR_VALUE(value);
     ElementObject *self = _Element_CAST(op);
     Py_SETREF(self->tag, Py_NewRef(value));
@@ -2157,8 +2161,12 @@ element_tag_setter(PyObject *op, PyObject *value, void *closure)
 }
 
 static int
-element_text_setter(PyObject *op, PyObject *value, void *closure)
+element_text_setter(PyObject *op, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     _VALIDATE_ATTR_VALUE(value);
     ElementObject *self = _Element_CAST(op);
     _set_joined_ptr(&self->text, Py_NewRef(value));
@@ -2166,8 +2174,12 @@ element_text_setter(PyObject *op, PyObject *value, void *closure)
 }
 
 static int
-element_tail_setter(PyObject *op, PyObject *value, void *closure)
+element_tail_setter(PyObject *op, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     _VALIDATE_ATTR_VALUE(value);
     ElementObject *self = _Element_CAST(op);
     _set_joined_ptr(&self->tail, Py_NewRef(value));
@@ -2175,8 +2187,12 @@ element_tail_setter(PyObject *op, PyObject *value, void *closure)
 }
 
 static int
-element_attrib_setter(PyObject *op, PyObject *value, void *closure)
+element_attrib_setter(PyObject *op, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     _VALIDATE_ATTR_VALUE(value);
     if (!PyAnyDict_Check(value)) {
         PyErr_Format(PyExc_TypeError,

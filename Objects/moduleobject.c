@@ -1591,8 +1591,12 @@ module_get_annotate(PyObject *self, void *Py_UNUSED(ignored))
 }
 
 static int
-module_set_annotate(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+module_set_annotate(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyModuleObject *m = _PyModule_CAST(self);
     if (value == NULL) {
         PyErr_SetString(PyExc_TypeError, "cannot delete __annotate__ attribute");
@@ -1703,7 +1707,7 @@ module_get_annotations(PyObject *self, void *Py_UNUSED(ignored))
 }
 
 static int
-module_set_annotations(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+module_set_annotations(PyObject *self, PyValue value, void *Py_UNUSED(ignored))
 {
     PyModuleObject *m = _PyModule_CAST(self);
 
@@ -1713,9 +1717,10 @@ module_set_annotations(PyObject *self, PyObject *value, void *Py_UNUSED(ignored)
     }
 
     int ret = -1;
-    if (value != NULL) {
+    if (!PyValue_IsNull(value)) {
         /* set */
-        ret = PyDict_SetItem(dict, &_Py_ID(__annotations__), value);
+        ret = _PyDict_SetItemValue((PyDictObject *)dict,
+            PyValue_FromObject(&_Py_ID(__annotations__)), value);
     }
     else {
         /* delete */

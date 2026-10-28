@@ -1358,8 +1358,12 @@ type_qualname(PyObject *tp, void *Py_UNUSED(closure))
 }
 
 static int
-type_set_name(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
+type_set_name(PyObject *tp, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyTypeObject *type = PyTypeObject_CAST(tp);
     const char *tp_name;
     Py_ssize_t name_size;
@@ -1393,8 +1397,12 @@ type_set_name(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
 }
 
 static int
-type_set_qualname(PyObject *tp, PyObject *value, void *context)
+type_set_qualname(PyObject *tp, PyValue value_v, void *context)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyTypeObject *type = PyTypeObject_CAST(tp);
     PyHeapTypeObject* et;
 
@@ -1452,8 +1460,12 @@ type_get_module(PyObject *tp, void *Py_UNUSED(closure))
 }
 
 static int
-type_set_module(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
+type_set_module(PyObject *tp, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyTypeObject *type = PyTypeObject_CAST(tp);
     if (!check_set_special_type_attr(type, value, "__module__"))
         return -1;
@@ -1527,7 +1539,7 @@ type_abstractmethods(PyObject *tp, void *Py_UNUSED(closure))
 }
 
 static int
-type_set_abstractmethods(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
+type_set_abstractmethods(PyObject *tp, PyValue value, void *Py_UNUSED(closure))
 {
     PyTypeObject *type = PyTypeObject_CAST(tp);
     /* __abstractmethods__ should only be set once on a type, in
@@ -1536,11 +1548,12 @@ type_set_abstractmethods(PyObject *tp, PyObject *value, void *Py_UNUSED(closure)
     */
     int abstract, res;
     PyObject *dict = lookup_tp_dict(type);
-    if (value != NULL) {
-        abstract = PyObject_IsTrue(value);
+    if (!PyValue_IsNull(value)) {
+        abstract = PyObject_IsTrueValue(value);
         if (abstract < 0)
             return -1;
-        res = PyDict_SetItem(dict, &_Py_ID(__abstractmethods__), value);
+        res = _PyDict_SetItemValue((PyDictObject *)dict,
+            PyValue_FromObject(&_Py_ID(__abstractmethods__)), value);
     }
     else {
         abstract = 0;
@@ -1839,8 +1852,12 @@ type_set_bases_unlocked(PyTypeObject *type, PyObject *new_bases, PyTypeObject *b
 }
 
 static int
-type_set_bases(PyObject *tp, PyObject *new_bases, void *Py_UNUSED(closure))
+type_set_bases(PyObject *tp, PyValue new_bases_v, void *Py_UNUSED(closure))
 {
+    PyObject *new_bases = PyValue_Object(new_bases_v);
+    if (new_bases == NULL && !PyValue_IsNull(new_bases_v)) {
+        return -1;
+    }
     PyTypeObject *type = PyTypeObject_CAST(tp);
     PyTypeObject *best_base;
     int res;
@@ -1922,8 +1939,12 @@ type_get_text_signature(PyObject *tp, void *Py_UNUSED(closure))
 }
 
 static int
-type_set_doc(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
+type_set_doc(PyObject *tp, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyTypeObject *type = PyTypeObject_CAST(tp);
     if (!check_set_special_type_attr(type, value, "__doc__"))
         return -1;
@@ -1968,8 +1989,12 @@ type_get_annotate(PyObject *tp, void *Py_UNUSED(closure))
 }
 
 static int
-type_set_annotate(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
+type_set_annotate(PyObject *tp, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyTypeObject *type = PyTypeObject_CAST(tp);
     if (value == NULL) {
         PyErr_SetString(PyExc_TypeError, "cannot delete __annotate__ attribute");
@@ -2077,7 +2102,7 @@ type_get_annotations(PyObject *tp, void *Py_UNUSED(closure))
 }
 
 static int
-type_set_annotations(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
+type_set_annotations(PyObject *tp, PyValue value, void *Py_UNUSED(closure))
 {
     PyTypeObject *type = PyTypeObject_CAST(tp);
     if (_PyType_HasFeature(type, Py_TPFLAGS_IMMUTABLETYPE)) {
@@ -2095,8 +2120,9 @@ type_set_annotations(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     }
     if (result) {
         // If __annotations__ is currently in the dict, we update it,
-        if (value != NULL) {
-            result = PyDict_SetItem(dict, &_Py_ID(__annotations__), value);
+        if (!PyValue_IsNull(value)) {
+            result = _PyDict_SetItemValue((PyDictObject *)dict,
+                PyValue_FromObject(&_Py_ID(__annotations__)), value);
         } else {
             result = PyDict_Pop(dict, &_Py_ID(__annotations__), NULL);
             if (result == 0) {
@@ -2115,9 +2141,10 @@ type_set_annotations(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     }
     else {
         // Else we update only __annotations_cache__.
-        if (value != NULL) {
+        if (!PyValue_IsNull(value)) {
             /* set */
-            result = PyDict_SetItem(dict, &_Py_ID(__annotations_cache__), value);
+            result = _PyDict_SetItemValue((PyDictObject *)dict,
+                PyValue_FromObject(&_Py_ID(__annotations_cache__)), value);
         } else {
             /* delete */
             result = PyDict_Pop(dict, &_Py_ID(__annotations_cache__), NULL);
@@ -2164,8 +2191,12 @@ type_get_type_params(PyObject *tp, void *Py_UNUSED(closure))
 }
 
 static int
-type_set_type_params(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
+type_set_type_params(PyObject *tp, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyTypeObject *type = PyTypeObject_CAST(tp);
     if (!check_set_special_type_attr(type, value, "__type_params__")) {
         return -1;
@@ -3733,15 +3764,22 @@ subtype_dict(PyObject *obj, void *context)
     return PyObject_GenericGetDict(obj, context);
 }
 
+/* VALUE, a dict or PyValue_NULL, as OBJ's __dict__.  Any other value is
+   refused, an inline one by its type, without a box. */
 int
-_PyObject_SetDict(PyObject *obj, PyObject *value)
+_PyObject_SetDict(PyObject *obj, PyValue value_v)
 {
-    if (value != NULL && !PyDict_Check(value)) {
+    if (!PyValue_IsNull(value_v)
+        && !(PyValue_IsObject(value_v)
+             && PyDict_Check(PyValue_ObjectBorrow(value_v))))
+    {
         PyErr_Format(PyExc_TypeError,
                      "__dict__ must be set to a dictionary, "
-                     "not a '%.200s'", Py_TYPE(value)->tp_name);
+                     "not a '%.200s'", PyValue_Type(value_v)->tp_name);
         return -1;
     }
+    PyObject *value = PyValue_IsNull(value_v)
+                      ? NULL : PyValue_ObjectBorrow(value_v);
     if (Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
         // The old attributes are discarded, not copied.
         Py_BEGIN_CRITICAL_SECTION(obj);
@@ -3764,7 +3802,7 @@ _PyObject_SetDict(PyObject *obj, PyObject *value)
 }
 
 static int
-subtype_setdict(PyObject *obj, PyObject *value, void *context)
+subtype_setdict(PyObject *obj, PyValue value, void *context)
 {
     PyTypeObject *base;
 
@@ -3781,7 +3819,7 @@ subtype_setdict(PyObject *obj, PyObject *value, void *context)
             raise_dict_descr_error(obj);
             return -1;
         }
-        return func(descr, obj, PyValue_FromResult(value));
+        return func(descr, obj, value);
     }
     return _PyObject_SetDict(obj, value);
 }
@@ -7471,8 +7509,12 @@ object_set_class_world_stopped(PyObject *self, PyTypeObject *newto)
 }
 
 static int
-object_set_class(PyObject *self, PyObject *value, void *closure)
+object_set_class(PyObject *self, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
 
     if (value == NULL) {
         PyErr_SetString(PyExc_TypeError,

@@ -245,9 +245,6 @@ member_set(PyObject *self, PyObject *obj, PyValue value)
     return PyMember_SetOneValue((char *)obj, descr->d_member, value);
 }
 
-/* The setter is an object form until rung 4 converts the getsets: an inline
-   value is boxed and anchored while it runs.  A failed box returns at once,
-   since the setter takes NULL as a deletion. */
 static int
 getset_set(PyObject *self, PyObject *obj, PyValue value)
 {
@@ -256,25 +253,8 @@ getset_set(PyObject *self, PyObject *obj, PyValue value)
         return -1;
     }
     if (descr->d_getset->set != NULL) {
-        if (!PyValue_IsInline(value)) {
-            return descr_set_trampoline_call(
-                descr->d_getset->set, obj,
-                PyValue_IsNull(value) ? NULL : PyValue_ObjectBorrow(value),
-                descr->d_getset->closure);
-        }
-        PyObject *box = _PyValue_BoxInline(value);
-        if (box == NULL) {
-            return -1;
-        }
-        PyThreadState *tstate = _PyThreadState_GET();
-        PyValue held[1];
-        _PyValueRoot span;
-        _PyThreadState_PushValueSpan(tstate, &span, held);
-        _PyValueSpan_AppendObject(&span, box);
-        int res = descr_set_trampoline_call(
-            descr->d_getset->set, obj, box, descr->d_getset->closure);
-        _PyThreadState_PopValueRoot(tstate, &span);
-        return res;
+        return descr_set_trampoline_call(
+            descr->d_getset->set, obj, value, descr->d_getset->closure);
     }
     PyErr_Format(PyExc_AttributeError,
                  "attribute '%V' of '%.100s' objects is not writable",
@@ -2034,8 +2014,12 @@ property_get__name__(PyObject *op, void *Py_UNUSED(ignored))
 }
 
 static int
-property_set__name__(PyObject *op, PyObject *value, void *Py_UNUSED(ignored))
+property_set__name__(PyObject *op, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     propertyobject *prop = _propertyobject_CAST(op);
     Py_XSETREF(prop->prop_name, Py_XNewRef(value));
     return 0;

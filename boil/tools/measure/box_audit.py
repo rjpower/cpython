@@ -178,6 +178,10 @@ br = io.BufferedReader(Raw())
 tw = io.TextIOWrapper(br, encoding="ascii")
 sk = socket.socket()
 sk.settimeout(2.5 * big)
+oe = OSError()
+def fn(): pass
+class Dict: pass
+dobj = Dict()
 """
 
 SLOT_CASES = {
@@ -276,6 +280,20 @@ SLOT_CASES = {
     "getset memoryview.ndim": ("r = mv.ndim", 0, 0, None),
     "getset date.day": ("r = dt.day", 0, 0, None),
     "getset sha256.digest_size": ("r = sha.digest_size", 0, 0, None),
+    # The setters (6d rung 4) take values.  A cell stores the value; a
+    # number setter reads it with a value form.
+    "cell_contents store int": ("ci.cell_contents = i", 0, 0, None),
+    "cell_contents store float": ("cf.cell_contents = i + 0.5", 0, 0, None),
+    "OSError.characters_written store": ("oe.characters_written = i", 0, 0,
+                                         None),
+    "TextIOWrapper._CHUNK_SIZE store": ("tw._CHUNK_SIZE = i + 1", 0, 0,
+                                        None),
+    # A setter that stores into a PyObject * field keeps a box.
+    "function.__doc__ store": ("fn.__doc__ = i", 1, 1, None),
+    # __dict__ refuses an inline value by its type, without a box; the
+    # four allocations are the error's.
+    "__dict__ store refused": (
+        "try: dobj.__dict__ = i\nexcept TypeError: pass", 0, 4, None),
     "starred inline callee": (
         "try: big(*(i,))\nexcept TypeError: pass", None, None,
         "the generator boxes the callee at the entry of _MAKE_CALLARGS_A_TUPLE "

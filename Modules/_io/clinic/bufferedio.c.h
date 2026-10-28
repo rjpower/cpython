@@ -1577,12 +1577,12 @@ skip_optional_pos:
 exit:
     return return_value;
 }
-#define _IO__BUFFERED_CLOSED_GETSETDEF {"closed", _io__Buffered_closed_get, (setter)NULL, NULL},
+#define _IO__BUFFERED_CLOSED_GETSETDEF {"closed", _io__Buffered_closed_get, NULL, NULL},
 
-#define _IO__BUFFERED_NAME_GETSETDEF {"name", _io__Buffered_name_get, (setter)NULL, NULL},
+#define _IO__BUFFERED_NAME_GETSETDEF {"name", _io__Buffered_name_get, NULL, NULL},
 
-#define _IO__BUFFERED_MODE_GETSETDEF {"mode", _io__Buffered_mode_get, (setter)NULL, NULL},
+#define _IO__BUFFERED_MODE_GETSETDEF {"mode", _io__Buffered_mode_get, NULL, NULL},
 
-#define _IO_BUFFEREDRWPAIR_CLOSED_GETSETDEF {"closed", _io_BufferedRWPair_closed_get, (setter)NULL, NULL},
+#define _IO_BUFFEREDRWPAIR_CLOSED_GETSETDEF {"closed", _io_BufferedRWPair_closed_get, NULL, NULL},
 
-/*[clinic end generated code: output=93944160af58dfef input=a9049054013a1b77]*/
+/*[clinic end generated code: output=68ee8708b1a30832 input=a9049054013a1b77]*/

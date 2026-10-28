@@ -1391,6 +1391,6 @@ exit:
 #ifndef _THREAD_SET_NAME_METHODDEF
     #define _THREAD_SET_NAME_METHODDEF
 #endif /* !defined(_THREAD_SET_NAME_METHODDEF) */
-#define _THREAD__THREADHANDLE_IDENT_GETSETDEF {"ident", _thread__ThreadHandle_ident_get, (setter)NULL, NULL},
+#define _THREAD__THREADHANDLE_IDENT_GETSETDEF {"ident", _thread__ThreadHandle_ident_get, NULL, NULL},
 
-/*[clinic end generated code: output=4366e064273cc485 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f1bbcd7f2515fbe4 input=a9049054013a1b77]*/

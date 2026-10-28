@@ -1293,12 +1293,12 @@ static int
 _io_TextIOWrapper__CHUNK_SIZE_set_impl(textio *self, Py_ssize_t value);
 
 static int
-_io_TextIOWrapper__CHUNK_SIZE_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+_io_TextIOWrapper__CHUNK_SIZE_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     Py_ssize_t value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute '_CHUNK_SIZE' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
@@ -1306,10 +1306,9 @@ _io_TextIOWrapper__CHUNK_SIZE_set(PyObject *self, PyObject *arg, void *Py_UNUSED
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(arg);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(arg);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -1340,24 +1339,24 @@ _io_TextIOWrapper_buffer_get(PyObject *self, void *Py_UNUSED(context))
 
     return return_value;
 }
-#define _IO__TEXTIOBASE_ENCODING_GETSETDEF {"encoding", _io__TextIOBase_encoding_get, (setter)NULL, _io__TextIOBase_encoding__doc__},
+#define _IO__TEXTIOBASE_ENCODING_GETSETDEF {"encoding", _io__TextIOBase_encoding_get, NULL, _io__TextIOBase_encoding__doc__},
 
-#define _IO__TEXTIOBASE_NEWLINES_GETSETDEF {"newlines", _io__TextIOBase_newlines_get, (setter)NULL, _io__TextIOBase_newlines__doc__},
+#define _IO__TEXTIOBASE_NEWLINES_GETSETDEF {"newlines", _io__TextIOBase_newlines_get, NULL, _io__TextIOBase_newlines__doc__},
 
-#define _IO__TEXTIOBASE_ERRORS_GETSETDEF {"errors", _io__TextIOBase_errors_get, (setter)NULL, _io__TextIOBase_errors__doc__},
+#define _IO__TEXTIOBASE_ERRORS_GETSETDEF {"errors", _io__TextIOBase_errors_get, NULL, _io__TextIOBase_errors__doc__},
 
-#define _IO_INCREMENTALNEWLINEDECODER_NEWLINES_GETSETDEF {"newlines", _io_IncrementalNewlineDecoder_newlines_get, (setter)NULL, NULL},
+#define _IO_INCREMENTALNEWLINEDECODER_NEWLINES_GETSETDEF {"newlines", _io_IncrementalNewlineDecoder_newlines_get, NULL, NULL},
 
-#define _IO_TEXTIOWRAPPER_NAME_GETSETDEF {"name", _io_TextIOWrapper_name_get, (setter)NULL, NULL},
+#define _IO_TEXTIOWRAPPER_NAME_GETSETDEF {"name", _io_TextIOWrapper_name_get, NULL, NULL},
 
-#define _IO_TEXTIOWRAPPER_CLOSED_GETSETDEF {"closed", _io_TextIOWrapper_closed_get, (setter)NULL, NULL},
+#define _IO_TEXTIOWRAPPER_CLOSED_GETSETDEF {"closed", _io_TextIOWrapper_closed_get, NULL, NULL},
 
-#define _IO_TEXTIOWRAPPER_NEWLINES_GETSETDEF {"newlines", _io_TextIOWrapper_newlines_get, (setter)NULL, NULL},
+#define _IO_TEXTIOWRAPPER_NEWLINES_GETSETDEF {"newlines", _io_TextIOWrapper_newlines_get, NULL, NULL},
 
-#define _IO_TEXTIOWRAPPER_ERRORS_GETSETDEF {"errors", _io_TextIOWrapper_errors_get, (setter)NULL, NULL},
+#define _IO_TEXTIOWRAPPER_ERRORS_GETSETDEF {"errors", _io_TextIOWrapper_errors_get, NULL, NULL},
 
-#define _IO_TEXTIOWRAPPER__CHUNK_SIZE_GETSETDEF {"_CHUNK_SIZE", _io_TextIOWrapper__CHUNK_SIZE_get, (setter)_io_TextIOWrapper__CHUNK_SIZE_set, NULL},
+#define _IO_TEXTIOWRAPPER__CHUNK_SIZE_GETSETDEF {"_CHUNK_SIZE", _io_TextIOWrapper__CHUNK_SIZE_get, _io_TextIOWrapper__CHUNK_SIZE_set, NULL},
 
-#define _IO_TEXTIOWRAPPER_BUFFER_GETSETDEF {"buffer", _io_TextIOWrapper_buffer_get, (setter)NULL, NULL},
+#define _IO_TEXTIOWRAPPER_BUFFER_GETSETDEF {"buffer", _io_TextIOWrapper_buffer_get, NULL, NULL},
 
-/*[clinic end generated code: output=301ffa5f306ea2b2 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=cc092b774e443e17 input=a9049054013a1b77]*/

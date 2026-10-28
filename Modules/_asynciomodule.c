@@ -2067,8 +2067,7 @@ TaskStepMethWrapper_dealloc(PyObject *op)
 }
 
 static PyObject *
-TaskStepMethWrapper_call(PyObject *op,
-                         PyObject *args, PyObject *kwds)
+TaskStepMethWrapper_call_object(PyObject *op, PyObject *args, PyObject *kwds)
 {
     TaskStepMethWrapper *o = (TaskStepMethWrapper*)op;
     if (kwds != NULL && PyDict_GET_SIZE(kwds) != 0) {
@@ -2085,6 +2084,13 @@ TaskStepMethWrapper_call(PyObject *op,
     res = task_step(state, o->sw_task, o->sw_arg);
     Py_END_CRITICAL_SECTION();
     return res;
+}
+
+static PyValue
+TaskStepMethWrapper_call(PyObject *op,
+                         PyObject *args, PyObject *kwds)
+{
+    return PyValue_FromResult(TaskStepMethWrapper_call_object(op, args, kwds));
 }
 
 static int

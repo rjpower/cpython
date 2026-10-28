@@ -58,7 +58,7 @@ test_get_statictype_slots(PyObject *self, PyObject *Py_UNUSED(ignored))
         return NULL;
     }
 
-    ternaryfunc tp_call = PyType_GetSlot(&PyLong_Type, Py_tp_call);
+    callfunc tp_call = PyType_GetSlot(&PyLong_Type, Py_tp_call);
     if (tp_call != NULL) {
         PyErr_SetString(PyExc_AssertionError, "mismatch: tp_call of long");
         return NULL;

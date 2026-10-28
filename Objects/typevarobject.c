@@ -174,7 +174,7 @@ constevaluator_repr(PyObject *self)
 }
 
 static PyObject *
-constevaluator_call(PyObject *self, PyObject *args, PyObject *kwargs)
+constevaluator_call_object(PyObject *self, PyObject *args, PyObject *kwargs)
 {
     constevaluatorobject *ce = constevaluatorobject_CAST(self);
     if (!_PyArg_NoKeywords("constevaluator.__call__", kwargs)) {
@@ -222,6 +222,12 @@ constevaluator_call(PyObject *self, PyObject *args, PyObject *kwargs)
         return PyUnicodeWriter_Finish(writer);
     }
     return Py_NewRef(value);
+}
+
+static PyValue
+constevaluator_call(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    return PyValue_FromResult(constevaluator_call_object(self, args, kwargs));
 }
 
 static PyObject *

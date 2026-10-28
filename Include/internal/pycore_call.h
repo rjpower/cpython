@@ -46,10 +46,11 @@ PyAPI_FUNC(PyValue) _Py_CheckFunctionResultValue(
     PyValue result,
     const char *where);
 
-extern PyObject* _PyObject_Call_Prepend(
+// Call callable(self, *args, **kwargs) on values.
+extern PyValue _PyObject_Call_PrependValue(
     PyThreadState *tstate,
-    PyObject *callable,
-    PyObject *obj,
+    PyValue callable,
+    PyValue self,
     PyObject *args,
     PyObject *kwargs);
 
@@ -60,9 +61,10 @@ extern PyObject* _PyObject_VectorcallDictTstate(
     size_t nargsf,
     PyObject *kwargs);
 
-extern PyObject* _PyObject_Call(
+// PyObject_CallValue() on a thread state.  Exported for signalmodule.
+PyAPI_FUNC(PyValue) _PyObject_CallValue(
     PyThreadState *tstate,
-    PyObject *callable,
+    PyValue callable,
     PyObject *args,
     PyObject *kwargs);
 

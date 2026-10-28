@@ -662,12 +662,25 @@ set_orig_class(PyObject *obj, PyObject *self)
     return obj;
 }
 
-static PyObject *
+/* set_orig_class() on a call's value: an inline result is returned as it
+   is, since setting __orig_class__ on an int or float raises
+   AttributeError, which set_orig_class() ignores. */
+static PyValue
+set_orig_class_value(PyValue res, PyObject *self)
+{
+    if (PyValue_IsNull(res) || PyValue_IsInline(res)) {
+        return res;
+    }
+    return PyValue_FromResult(set_orig_class(PyValue_ObjectBorrow(res), self));
+}
+
+static PyValue
 ga_call(PyObject *self, PyObject *args, PyObject *kwds)
 {
     gaobject *alias = (gaobject *)self;
-    PyObject *obj = PyObject_Call(alias->origin, args, kwds);
-    return set_orig_class(obj, self);
+    PyValue res = PyObject_CallValue(PyValue_FromObject(alias->origin),
+                                     args, kwds);
+    return set_orig_class_value(res, self);
 }
 
 static PyValue
@@ -677,10 +690,7 @@ ga_vectorcall(PyValue self, const PyValue *args,
     gaobject *alias = (gaobject *)PyValue_ObjectBorrow(self);
     PyValue res = PyObject_VectorcallValue(PyValue_FromObject(alias->origin),
                                            args, nargsf, kwnames);
-    // set_orig_class() takes an object: the result of an alias of int or
-    // float can be inline.
-    return PyValue_FromResult(set_orig_class(PyValue_Object(res),
-                                             (PyObject *)alias));
+    return set_orig_class_value(res, (PyObject *)alias);
 }
 
 static const char* const attr_exceptions[] = {

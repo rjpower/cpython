@@ -516,7 +516,7 @@ _PySlot_heaptype_apply_field_slot(PyHeapTypeObject *ht, PySlot slot)
             ht->ht_type.tp_bases = slot.sl_ptr;
             break;
         case Py_tp_call:
-            ht->ht_type.tp_call = (ternaryfunc)slot.sl_func;
+            ht->ht_type.tp_call = (callfunc)slot.sl_func;
             break;
         case Py_tp_clear:
             ht->ht_type.tp_clear = (inquiry)slot.sl_func;

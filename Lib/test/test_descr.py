@@ -6608,5 +6608,105 @@ class ValueAttributeTests(unittest.TestCase):
         self.assertIs(pickler.attr, v)
 
 
+class ValueCallTests(unittest.TestCase):
+    """6d rung 3: tp_call returns a value, so a call's result passes
+    through each path unboxed, and comes back the same."""
+
+    def test_identity(self):
+        nan = math.nan * int("1")
+        for v in (12345, -0.0, nan):
+            with self.subTest(v=v):
+                class C:
+                    def __call__(self):
+                        return v
+                self.assertIs(C()(), v)
+        class P:
+            x = 12345
+        self.assertIs(object.__getattribute__(P(), "x"), 12345)
+        self.assertIs(int.__add__(5, 3), 8)
+
+    def test_paths(self):
+        import functools
+        import operator
+        for v in _values():
+            with self.subTest(v=v):
+                class C:
+                    def __call__(self, *args, **kwargs):
+                        return v
+                    def m(self, *args):
+                        return v
+                class N:
+                    def __new__(cls):
+                        return v
+                class O:
+                    a = v
+                c = C()
+                f = lambda *args, **kwargs: v
+                call = lambda o, *args: type(o).__call__(o, *args)
+                # _PyObject_MakeTpCall(), slot_tp_call() and wrap_call()
+                self.assertIs(c(), v)
+                self.assertIs(c(1, k=2), v)
+                self.assertIs(call(c), v)
+                self.assertIs(N(), v)
+                # PyObject_Call() and the module types' tp_call
+                p = functools.partial(c, 1)
+                self.assertIs(p(2, k=3), v)
+                self.assertIs(call(p, 2), v)
+                self.assertIs(call(functools.partial(f, k=1)), v)
+                mc = operator.methodcaller("m", 1)
+                self.assertIs(mc(c), v)
+                self.assertIs(call(mc, c), v)
+                self.assertIs(call(operator.itemgetter(0), [v]), v)
+                self.assertIs(call(operator.itemgetter(0), (v,)), v)
+                self.assertIs(call(operator.attrgetter("a"), O()), v)
+                self.assertEqual(call(operator.itemgetter(0, 1), [v, 1]),
+                                 (v, 1))
+                self.assertIs(staticmethod(f)(), v)
+                self.assertIs(call(staticmethod(f)), v)
+                self.assertIs(weakref.proxy(c)(), v)
+                alias = types.GenericAlias(f, (int,))
+                self.assertIs(alias(), v)
+                self.assertIs(call(alias), v)
+                for maxsize in (0, None, 128):
+                    cached = functools.lru_cache(maxsize=maxsize)(f)
+                    self.assertIs(cached(1), v)     # miss
+                    self.assertIs(cached(1), v)     # hit, or a miss at 0
+                    self.assertIs(call(cached, 1), v)
+                # The wrappers of the C slots
+                self.assertIs(iter([v]).__next__(), v)
+                self.assertIs(type(c).__dict__["m"].__get__(c, C)(), v)
+                self.assertIs(object.__getattribute__(O(), "a"), v)
+
+    def test_wrapper_results(self):
+        one = int("1")
+        top = 2**31 - one
+        self.assertIs(int.__add__(top - 1, 1), top)
+        self.assertEqual(int.__add__(top, 1), 2**31)
+        self.assertIs(int.__sub__(-top, 1), -2**31)
+        self.assertEqual(int.__sub__(-2**31, one), -2**31 - 1)
+        self.assertIs(int.__neg__(top), -top)
+        self.assertIs(float.__mul__(-0.0, one + 0.0), -0.0)
+        self.assertIs(float.__mul__(math.inf, 2.0), math.inf)
+        self.assertTrue(math.isnan(float.__sub__(math.inf, math.inf)))
+        self.assertIs([1, 2].__len__(), 2)
+        self.assertIs((12345 * one).__hash__(), 12345)
+        self.assertIs((5 * one).__lt__(6), True)
+        self.assertIs((5 * one).__eq__("5"), NotImplemented)
+        self.assertIs([7 * one].__getitem__(0), 7)
+        self.assertIs(divmod(7, 2)[0], 3)
+
+    def test_init_result(self):
+        for v in (5, 2.5, "s"):
+            with self.subTest(v=v):
+                class C:
+                    def __init__(self):
+                        return v
+                with self.assertRaisesRegex(
+                        TypeError,
+                        rf"__init__\(\) should return None, not "
+                        rf"'{type(v).__name__}'"):
+                    C()
+
+
 if __name__ == "__main__":
     unittest.main()

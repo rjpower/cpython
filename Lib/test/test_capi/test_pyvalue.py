@@ -779,6 +779,52 @@ class SlotTests(ValueTestCase):
 NULL = None
 
 
+class CallTests(ValueTestCase):
+    """6d rung 3: tp_call returns a value, and the call forms take the
+    callable as one."""
+
+    VALUES = [12345, 2.5, INT32_MAX, INT32_MIN, INT32_MAX + 1, INT32_MIN - 1,
+              -0.0, math.inf, math.nan, 'str']
+
+    def test_call_value(self):
+        for v in self.VALUES:
+            with self.subTest(v=v):
+                class C:
+                    def __call__(self, *args, **kwargs):
+                        return v
+                c = C()
+                self.assertValue(pv.CallValue(c, ()), v)
+                self.assertValue(pv.CallValue(c, (1, 2), {'k': 3}), v)
+                self.assertValue(pv.VectorcallValue(c, (1, 2.5)), v)
+                self.assertValue(pv.VectorcallCall(lambda *a, **k: v, (1,)), v)
+                self.assertValue(pv.VectorcallCall(lambda *a, **k: v, (1,),
+                                                   {'k': 2}), v)
+        self.assertValue(pv.CallValue(int.__add__, (5, 3)), 8)
+        self.assertValue(pv.CallValue(float, ('2.5',)), 2.5)
+
+    def test_inline_callable(self):
+        n = 100000 + int('1')
+        for callable_ in (n, 2.5 * n):
+            name = type(callable_).__name__
+            with self.subTest(callable=callable_):
+                with self.assertRaisesRegex(
+                        TypeError, f"'{name}' object is not callable"):
+                    pv.CallValue(callable_, ())
+                with self.assertRaisesRegex(
+                        TypeError, f"'{name}' object is not callable"):
+                    pv.VectorcallValue(callable_, (1,))
+
+    def test_errors(self):
+        def f(*args):
+            raise Boom
+        with self.assertRaises(Boom):
+            pv.CallValue(f, ())
+        with self.assertRaises(Boom):
+            pv.VectorcallCall(f, ())
+        with self.assertRaises(TypeError):
+            pv.CallValue(object(), ())
+
+
 @unittest.skipUnless(support.Py_DEBUG, "the checks are on debug builds")
 class DebugCheckTests(unittest.TestCase):
     """A slot result that is a non-canonical box, or a value's bits in a
@@ -817,6 +863,18 @@ class DebugCheckTests(unittest.TestCase):
                 # a special-method lookup
                 "class C:\n __enter__ = pv.BadDescrGet()\n"
                 " __exit__ = pv.BadDescrGet()\nwith C(): pass"]:
+            with self.subTest(code=code):
+                self.assertStops(code, message)
+
+    def test_tp_call(self):
+        # The three dispatches: _PyObject_MakeTpCall() from the eval loop,
+        # _PyObject_CallValue() from PyObject_Call(), and wrap_call().
+        message = ("Fatal Python error: tp_call of type "
+                   "'_testcapi.pyvalue.OldFormCall' returned a non-canonical "
+                   "int box")
+        for code in ["pv.OldFormCall()()",
+                     "pv.CallValue(pv.OldFormCall(), ())",
+                     "c = pv.OldFormCall()\ntype(c).__call__(c)"]:
             with self.subTest(code=code):
                 self.assertStops(code, message)
 

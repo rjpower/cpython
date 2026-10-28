@@ -48,6 +48,14 @@ PyAPI_FUNC(PyValue) PyObject_VectorcallValue(
     size_t nargsf,
     PyObject *kwnames);
 
+/* PyObject_Call() on values: callable is a value (an inline one raises
+   TypeError, not callable), and the result is a value, or PyValue_NULL
+   with an exception set. */
+PyAPI_FUNC(PyValue) PyObject_CallValue(
+    PyValue callable,
+    PyObject *args,
+    PyObject *kwargs);
+
 // Backwards compatibility aliases (PEP 590) for API that was provisional
 // in Python 3.8
 #define _PyObject_Vectorcall PyObject_Vectorcall

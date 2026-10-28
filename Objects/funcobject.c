@@ -1821,11 +1821,12 @@ sm_init(PyObject *self, PyObject *args, PyObject *kwds)
     return sm_set_callable(sm, callable);
 }
 
-static PyObject*
+static PyValue
 sm_call(PyObject *callable, PyObject *args, PyObject *kwargs)
 {
     staticmethod *sm = (staticmethod *)callable;
-    return PyObject_Call(sm->sm_callable, args, kwargs);
+    return PyObject_CallValue(PyValue_FromObject(sm->sm_callable), args,
+                              kwargs);
 }
 
 static PyMemberDef sm_memberlist[] = {

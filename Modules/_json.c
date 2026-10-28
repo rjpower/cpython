@@ -1212,7 +1212,7 @@ scan_once_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ssize_
 }
 
 static PyObject *
-scanner_call(PyObject *self, PyObject *args, PyObject *kwds)
+scanner_call_object(PyObject *self, PyObject *args, PyObject *kwds)
 {
     /* Python callable interface to scan_once_{str,unicode} */
     PyObject *pystr;
@@ -1243,6 +1243,12 @@ scanner_call(PyObject *self, PyObject *args, PyObject *kwds)
     if (PyValue_IsNull(items[1]))
         return NULL;
     return _PyTuple_FromValues(items, 2);
+}
+
+static PyValue
+scanner_call(PyObject *self, PyObject *args, PyObject *kwds)
+{
+    return PyValue_FromResult(scanner_call_object(self, args, kwds));
 }
 
 static PyObject *
@@ -1455,7 +1461,7 @@ write_newline_indent(PyUnicodeWriter *writer,
 
 
 static PyObject *
-encoder_call(PyObject *op, PyObject *args, PyObject *kwds)
+encoder_call_object(PyObject *op, PyObject *args, PyObject *kwds)
 {
     /* Python callable interface to encoder_listencode_obj */
     static char *kwlist[] = {"obj", "_current_indent_level", NULL};
@@ -1496,6 +1502,12 @@ encoder_call(PyObject *op, PyObject *args, PyObject *kwds)
     PyObject *result = PyTuple_Pack(1, str);
     Py_DECREF(str);
     return result;
+}
+
+static PyValue
+encoder_call(PyObject *op, PyObject *args, PyObject *kwds)
+{
+    return PyValue_FromResult(encoder_call_object(op, args, kwds));
 }
 
 static PyObject *

@@ -182,7 +182,7 @@ _DictRemover_dealloc(PyObject *myself)
 }
 
 static PyObject *
-_DictRemover_call(PyObject *myself, PyObject *args, PyObject *kw)
+_DictRemover_call_object(PyObject *myself, PyObject *args, PyObject *kw)
 {
     DictRemoverObject *self = _DictRemoverObject_CAST(myself);
     if (self->key && self->dict) {
@@ -194,6 +194,12 @@ _DictRemover_call(PyObject *myself, PyObject *args, PyObject *kw)
         Py_CLEAR(self->dict);
     }
     Py_RETURN_NONE;
+}
+
+static PyValue
+_DictRemover_call(PyObject *myself, PyObject *args, PyObject *kw)
+{
+    return PyValue_FromResult(_DictRemover_call_object(myself, args, kw));
 }
 
 PyDoc_STRVAR(dictremover_doc, "deletes a key from a dictionary");
@@ -4661,7 +4667,7 @@ _build_result(PyObject *result, PyObject *callargs,
 }
 
 static PyObject *
-PyCFuncPtr_call(PyObject *op, PyObject *inargs, PyObject *kwds)
+PyCFuncPtr_call_object(PyObject *op, PyObject *inargs, PyObject *kwds)
 {
     PyObject *result = NULL;
     PyObject *callargs = NULL;
@@ -4811,6 +4817,12 @@ finally:
     Py_XDECREF(argtypes);
     Py_XDECREF(errcheck);
     return ret;
+}
+
+static PyValue
+PyCFuncPtr_call(PyObject *op, PyObject *inargs, PyObject *kwds)
+{
+    return PyValue_FromResult(PyCFuncPtr_call_object(op, inargs, kwds));
 }
 
 static int

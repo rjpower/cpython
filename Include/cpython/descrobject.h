@@ -2,11 +2,14 @@
 #  error "this header file must not be included directly"
 #endif
 
-typedef PyObject *(*wrapperfunc)(PyObject *self, PyObject *args,
-                                 void *wrapped);
+/* A slot wrapper's function: self is an object (an inline receiver is boxed
+   by the caller) and the result is a value, or PyValue_NULL with an
+   exception set. */
+typedef PyValue (*wrapperfunc)(PyObject *self, PyObject *args,
+                               void *wrapped);
 
-typedef PyObject *(*wrapperfunc_kwds)(PyObject *self, PyObject *args,
-                                      void *wrapped, PyObject *kwds);
+typedef PyValue (*wrapperfunc_kwds)(PyObject *self, PyObject *args,
+                                    void *wrapped, PyObject *kwds);
 
 struct wrapperbase {
     const char *name;

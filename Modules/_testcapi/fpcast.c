@@ -41,6 +41,39 @@ four(PyObject *self, PyObject *a, PyObject *b, PyObject *c)
     Py_RETURN_NONE;
 }
 
+/* tp_call returns a value, so the callable fixtures are separate from the
+   PyCFunction and getter ones above. */
+static PyValue
+call_zero(void)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+static PyValue
+call_one(PyObject *self)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+static PyValue
+call_two(PyObject *self, PyObject *args)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+static PyValue
+call_three(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+// Using this as a handler should raise a SystemError.
+static PyValue
+call_four(PyObject *self, PyObject *a, PyObject *b, PyObject *c)
+{
+    return PyValue_FromObject(Py_None);
+}
+
 static int
 set_two(PyObject *self, PyObject *value)
 {
@@ -129,15 +162,15 @@ static PyTypeObject FpcastTestType = {
         .tp_name = "_testcapi.FpcastCallable" #N,               \
         .tp_basicsize = sizeof(PyObject),                       \
         .tp_flags = Py_TPFLAGS_DEFAULT,                         \
-        .tp_call = _Py_FUNC_CAST(ternaryfunc, FUNC),            \
+        .tp_call = _Py_FUNC_CAST(callfunc, FUNC),            \
         .tp_new = PyType_GenericNew,                            \
     };
 
-CALLABLE_TYPE(0, zero)
-CALLABLE_TYPE(1, one)
-CALLABLE_TYPE(2, two)
-CALLABLE_TYPE(3, three)
-CALLABLE_TYPE(4, four)
+CALLABLE_TYPE(0, call_zero)
+CALLABLE_TYPE(1, call_one)
+CALLABLE_TYPE(2, call_two)
+CALLABLE_TYPE(3, call_three)
+CALLABLE_TYPE(4, call_four)
 
 #undef CALLABLE_TYPE
 

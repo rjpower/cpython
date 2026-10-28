@@ -1889,6 +1889,10 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertEqual(fired(RECEIVER_BOX, lambda: n.bit_length()), 17)
         self.assertEqual(fired(RECEIVER_BOX, lambda: x.hex()),
                          float.hex(250002.5))
+        # 6d rung 3: wrapperdescr_call() boxes an inline receiver.
+        self.assertEqual(fired(RECEIVER_BOX, lambda: int.__add__(n, 1)),
+                         100002)
+        self.assertEqual(fired(RECEIVER_BOX, lambda: float.__neg__(x)), -x)
         with self.assertRaises(ValueError):
             collect_at(99)
 
@@ -2001,6 +2005,56 @@ class TracingCollectorTests(unittest.TestCase):
     def test_allocation_safepoints(self):
         env = {"PYTHON_GCVERIFY": "kill"} if support.Py_DEBUG else {}
         rc, out, err = assert_python_ok("-c", self.ALLOCATION_SAFEPOINTS, **env)
+        self.assertEqual(out.strip(), b"ok")
+
+    # 6d rung 3, note 12 section 9: a tp_call result, the prepended argument
+    # array and the merged arguments of partial live across collections.
+    CALL_LIFETIMES = textwrap.dedent("""
+        import functools, _testcapi
+        one = int("1")
+        class C:
+            def __call__(self, *args, **kwargs):
+                return self.make(len(args), kwargs)
+        for make in (lambda n, kw: 100000 * one + n,
+                     lambda n, kw: 2.5 * (n + one),
+                     lambda n, kw: [n, kw]):
+            C.make = staticmethod(make)
+            c = C()
+            for i in range(200):
+                r = c(i)
+                assert r == make(1, {}), r
+                assert type(c).__call__(c, i, k=i) == make(1, {"k": i})
+        class M:
+            def __call__(self, *args, **kwargs):
+                return [len(args), sorted(kwargs)]
+        # slot_tp_call() prepends self to more arguments than its small
+        # stack holds, and to keyword arguments
+        m = M()
+        args = [[i] for i in range(40)]
+        for i in range(50):
+            assert m(*args) == [40, []]
+            assert m(*args, a=1, b=[2]) == [40, ["a", "b"]]
+        p = functools.partial(m, [1], k=[2])
+        for i in range(200):
+            assert p([i], j=[i]) == [2, ["j", "k"]]
+            assert type(p).__call__(p, [i]) == [2, ["k"]]
+        # An allocation failure in the prepended array
+        _testcapi.set_nomemory(0, 1)
+        try:
+            m(*args)
+        except MemoryError:
+            pass
+        finally:
+            _testcapi.remove_mem_hooks()
+        print("ok")
+    """)
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    def test_call_lifetimes(self):
+        env = {"PYTHON_GCSTRESS": "100"}
+        if support.Py_DEBUG:
+            env["PYTHON_GCVERIFY"] = "kill"
+        rc, out, err = assert_python_ok("-c", self.CALL_LIFETIMES, **env)
         self.assertEqual(out.strip(), b"ok")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")

@@ -26,7 +26,7 @@ static PyValue cfunction_vectorcall_NOARGS(
     PyValue func, const PyValue *args, size_t nargsf, PyObject *kwnames);
 static PyValue cfunction_vectorcall_O(
     PyValue func, const PyValue *args, size_t nargsf, PyObject *kwnames);
-static PyObject * cfunction_call(
+static PyValue cfunction_call(
     PyObject *func, PyObject *args, PyObject *kwargs);
 
 
@@ -535,7 +535,7 @@ cfunction_vectorcall_O(
 }
 
 
-static PyObject *
+static PyValue
 cfunction_call(PyObject *func, PyObject *args, PyObject *kwargs)
 {
     assert(kwargs == NULL || PyDict_Check(kwargs));
@@ -565,9 +565,11 @@ cfunction_call(PyObject *func, PyObject *args, PyObject *kwargs)
             _PyErr_Format(tstate, PyExc_TypeError,
                           "%.200s() takes no keyword arguments",
                           ((PyCFunctionObject*)func)->m_ml->ml_name);
-            return NULL;
+            return PyValue_NULL;
         }
         result = _PyCFunction_TrampolineCall(meth, self, args);
     }
-    return _Py_CheckFunctionResult(tstate, func, result, NULL);
+    // A METH_VARARGS function returns an object.
+    return PyValue_FromResult(
+        _Py_CheckFunctionResult(tstate, func, result, NULL));
 }

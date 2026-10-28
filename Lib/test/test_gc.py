@@ -1601,6 +1601,8 @@ class StackWalkTests(unittest.TestCase):
     # Modules/_testinternalcapi/gc_walk.c.
 
     ROOT_STACKS = 1 << 5
+    ROOT_DATA = 1 << 6
+    ROOT_STRUCTS = 1 << 7
 
     def test_fixture_cfi(self):
         # The fixtures save the registers they keep their values in: the
@@ -1673,15 +1675,34 @@ class StackWalkTests(unittest.TestCase):
                     _testinternalcapi.gc_walk_hold_detached(mode)))
                 t.start()
                 try:
-                    roots, valid, has_p = (
+                    roots, valid, has_p, in_record = (
                         _testinternalcapi.gc_walk_detached_roots())
                 finally:
                     _testinternalcapi.gc_walk_release()
                     t.join()
                 self.assertTrue(valid)
+                self.assertFalse(in_record)
                 self.assertTrue(has_p)  # the eval loop's frame, for now
                 self.assertTrue(roots & self.ROOT_STACKS, roots)
                 self.assertEqual(result, [[None]])
+
+    def test_stale_record_not_a_root(self):
+        # The main thread's state is in _PyRuntime, which the data scan and
+        # the main interpreter's struct scan read; its detach record, stale
+        # once it attaches, holds an object only a register held.
+        if threading.current_thread() is not threading.main_thread():
+            self.skipTest("the initial thread state is the main thread's")
+        def garbage():
+            # An object that only the record holds once this returns (the
+            # struct scan reads the data stack's live slots).
+            obj = [None]
+            held = _testinternalcapi.gc_walk_detach_holding(obj)
+            return id(obj), held
+        addr, held = garbage()
+        self.assertTrue(held)
+        roots = _testinternalcapi.gc_live_roots_of(addr)
+        self.assertEqual(roots & (self.ROOT_DATA | self.ROOT_STRUCTS), 0,
+                         roots)
 
     def test_counters(self):
         gc.collect()

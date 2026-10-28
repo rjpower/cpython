@@ -912,9 +912,11 @@ no_scan(void *arg, uintptr_t start, uintptr_t end)
 }
 
 /* Unwind from the capture to the innermost precise frame, without
-   scanning, and record it with the values pending there. */
+   scanning, and record it with the values pending there.  The capture is
+   in _PyGC_RecordDetach()'s own frame, whose words are stale for its
+   caller: the first unwound context, its caller's, replaces it. */
 static int
-find_precise(_PyGCWalk *w, const _PyGCContext *ctx, _PyGCContext *p)
+find_precise(_PyGCWalk *w, _PyGCContext *ctx, _PyGCContext *p)
 {
     uintptr_t regs[_PyGC_NSAVED];
     memcpy(regs, ctx->regs, sizeof(regs));
@@ -923,6 +925,7 @@ find_precise(_PyGCWalk *w, const _PyGCContext *ctx, _PyGCContext *p)
         loc[i] = &regs[i];
     }
     uintptr_t pc = ctx->pc, sp = ctx->sp, prev_cfa = 0;
+    int first = 1;
     _PyGCFrameDesc scratch;
     while (sp < w->top && pc != 0) {
         const _PyGCFrameDesc *d = find_desc(w, pc - 1, &scratch);
@@ -961,6 +964,14 @@ find_precise(_PyGCWalk *w, const _PyGCContext *ctx, _PyGCContext *p)
         pc = *(uintptr_t *)(cfa + d->ra_off);
         prev_cfa = cfa;
         sp = cfa;
+        if (first) {
+            first = 0;
+            ctx->pc = pc;
+            ctx->sp = sp;
+            for (int i = 0; i < _PyGC_NSAVED; i++) {
+                ctx->regs[i] = loc[i] != NULL ? *loc[i] : 0;
+            }
+        }
     }
     return 0;
 }

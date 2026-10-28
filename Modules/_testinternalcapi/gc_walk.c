@@ -313,7 +313,45 @@ gc_walk_detached_roots(PyObject *self, PyObject *Py_UNUSED(ignored))
     int roots = _PyGC_TraceLiveRootsOf(_PyThreadState_GET(),
                                        (uintptr_t)(hidden_addr ^ HIDE));
     _PyGCDetachRecord *rec = &((_PyThreadStateImpl *)holder)->gc_trace.detach;
-    return Py_BuildValue("(iii)", roots, rec->valid, rec->has_p);
+    // The capture is the caller's of _PyGC_RecordDetach(), not its own
+    _PyGCFrameDesc d;
+    int in_record = _PyGC_DecodeDescriptor(rec->cap.pc - 1, &d) == 0
+        && d.func_start == (uintptr_t)&_PyGC_RecordDetach;
+    return Py_BuildValue("(iiii)", roots, rec->valid, rec->has_p, in_record);
+}
+
+/* Detach and reattach on this thread with obj only in a callee-saved
+   register, and return whether the detach record still holds it: the
+   record is stale once the thread attaches, and a scan that read it would
+   keep obj. */
+static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
+int
+detach_holding(PyObject *obj)
+{
+    register uintptr_t v __asm__("r14") = (uintptr_t)obj;
+    __asm__ volatile("" : "+r"(v));
+    Py_BEGIN_ALLOW_THREADS
+    __asm__ volatile("" : "+r"(v));
+    Py_END_ALLOW_THREADS
+    __asm__ volatile("" : "+r"(v));
+    _PyGCDetachRecord *rec =
+        &((_PyThreadStateImpl *)_PyThreadState_GET())->gc_trace.detach;
+    for (int i = 0; i < _PyGC_NSAVED; i++) {
+        if (rec->cap.regs[i] == v) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static PyValue
+gc_walk_detach_holding(PyObject *self, PyValue arg)
+{
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(PyBool_FromLong(detach_holding(obj)));
 }
 
 static PyObject *
@@ -338,6 +376,7 @@ static PyMethodDef test_methods[] = {
     {"gc_walk_fallback", gc_walk_fallback, METH_NOARGS},
     {"gc_walk_hold_detached", _PyCFunction_CAST(gc_walk_hold_detached), METH_O},
     {"gc_walk_detached_roots", gc_walk_detached_roots, METH_NOARGS},
+    {"gc_walk_detach_holding", _PyCFunction_CAST(gc_walk_detach_holding), METH_O},
     {"gc_walk_release", gc_walk_release, METH_NOARGS},
     {"gc_walk_reset", gc_walk_reset, METH_NOARGS},
     {NULL},

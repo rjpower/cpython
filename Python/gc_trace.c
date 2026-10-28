@@ -1447,9 +1447,12 @@ live_skip(trace_t *t, void *p, size_t size)
 
 /* The caches of borrowed references in an interpreter, and its lists of
    asyncio tasks, which the deallocs of their objects clear.  Scanning them
-   would keep the objects.  The main interpreter and its initial thread state
-   are in _PyRuntime, which the scan of the data segments reads; the struct
-   scan skips the lists of the other thread states. */
+   would keep the objects.  The initial thread state's walk records hold
+   registers that precise frames own, which would be taken for roots.  The
+   main interpreter and its initial thread state are in _PyRuntime, which the
+   scan of the data segments reads, and the struct scan of an interpreter
+   covers its initial thread state; the struct scan skips the lists and the
+   records of the other thread states. */
 static void
 live_skip_caches(trace_t *t)
 {
@@ -1463,6 +1466,9 @@ live_skip_caches(trace_t *t)
         live_skip(t, &interp->asyncio_tasks_head, sizeof(struct llist_node));
         live_skip(t, &interp->_initial_thread.asyncio_tasks_head,
                   sizeof(struct llist_node));
+        _PyThreadStateImpl *ts = &interp->_initial_thread;
+        live_skip(t, &ts->gc_trace.detach,
+                  (char *)(&ts->gc_trace.entry + 1) - (char *)&ts->gc_trace.detach);
     }
 }
 

@@ -3020,6 +3020,15 @@ scanner_traverse(PyObject *op, visitproc visit, void *arg)
     ScannerObject *self = _ScannerObject_CAST(op);
     Py_VISIT(Py_TYPE(self));
     Py_VISIT(self->pattern);
+    /* The scanned string and, for a bytes-like object, the exporter of the
+       buffer held until state_fini(): a tracing collector frees what no
+       traverse visits.  fail_after_exc is borrowed from the pattern, which
+       can replace it. */
+    Py_VISIT(self->state.string);
+    Py_VISIT(self->state.buffer.obj);
+#ifdef Py_DEBUG
+    Py_VISIT(self->state.fail_after_exc);
+#endif
     return 0;
 }
 

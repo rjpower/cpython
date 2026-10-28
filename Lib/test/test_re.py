@@ -2,6 +2,7 @@ from test.support import (gc_collect, bigmemtest, _2G,
                           cpython_only, captured_stdout,
                           check_disallow_instantiation, linked_to_musl,
                           SHORT_TIMEOUT, Stopwatch, requires_resource)
+import gc
 import locale
 import re
 import string
@@ -1956,6 +1957,55 @@ class ReTests(unittest.TestCase):
         scanner = re.compile(r"\s").scanner("a b")
         self.assertEqual(scanner.search().span(), (1, 2))
         self.assertIsNone(scanner.search())
+
+    def test_scanner_keeps_its_string(self):
+        # The scanner holds the string it scans and, for a bytes-like
+        # object, the exporter of its buffer, until it is freed; here it is
+        # their only holder across a collection, and a tracing collector
+        # frees what no traverse visits.
+        # No __release_buffer__: the scanner releases its buffer in its
+        # dealloc, in the sweep, where Python code may not run (audit-2
+        # hand-off 1).
+        class Exporter:
+            def __init__(self, data):
+                self.data = bytearray(data)
+            def __buffer__(self, flags):
+                return memoryview(self.data)
+
+        def text(first):
+            return "".join(chr(ord(first) + i % 10) for i in range(1000))
+
+        def contents(obj):
+            if isinstance(obj, Exporter):
+                return bytes(obj.data)
+            return obj if isinstance(obj, str) else bytes(obj)
+
+        cases = [
+            (r"X(\w+)", lambda t: t + "Xend"),
+            (rb"X(\w+)", lambda t: bytearray(t.encode() + b"Xend")),
+            # The buffer's exporter is a wrapper that only the view holds.
+            (rb"X(\w+)", lambda t: Exporter(t.encode() + b"Xend")),
+        ]
+        for pattern, make in cases:
+            kind = type(make("")).__name__
+            with self.subTest(kind=kind):
+                expected = contents(make(text("a")))
+                scanner = re.compile(pattern).scanner(make(text("a")))
+                held = [type(r).__name__ for r in gc.get_referents(scanner)]
+                self.assertIn(kind, held)
+                if kind == "Exporter":
+                    self.assertIn("_buffer_wrapper", held)
+                gc_collect()
+                # Reuse the memory a freed string would have left.
+                junk = [make(text("0")) for _ in range(200)]
+                m = scanner.search()
+                del junk
+                self.assertIsNotNone(m)
+                self.assertEqual(contents(m.group(1)), expected[-3:])
+                self.assertEqual(contents(m.string), expected)
+                # The scanner releases the buffer when it is freed.
+                del m, scanner
+                gc_collect()
 
     def test_bug_817234(self):
         iter = re.finditer(r".*", "asdf")

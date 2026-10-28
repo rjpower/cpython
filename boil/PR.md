@@ -1,5 +1,13 @@
 # Phase 1: a register IR interpreter with typed feedback and inline ints and floats; delete tier 2, the copy-and-patch JIT and the stack interpreter
 
+> Historical. Written 2026-10-24 for the Phase 1 branch; its present tense
+> describes that branch, not the current one. Since then the compiler
+> produces the IR directly (no runtime lowering), `_PyStackRef` became
+> `PyValue` everywhere, reference counting and the stack interpreter are
+> gone, and the ports tree is deferred until the API settles (note 10).
+> The results table below stands as the Phase 1 record. Start at
+> `boil/README.md`.
+
 This branch is the start of a performance fork of CPython 3.16 that owns its package set. The fork replaces the upstream tier-2 optimiser and copy-and-patch JIT with its own execution tiers, and it rebuilds a pinned set of third-party packages from source (the `ports/` tree) after every interpreter change. Those packages are the compatibility test for the interpreter's C ABI.
 
 Phase 1 has landed through the register IR. The branch deletes tier 2 and the JIT, replaces the per-opcode inline caches with typed feedback entries, changes `_PyStackRef` to a NaN-boxed layout, and produces inline int32 and float values on the evaluation stack. Every code object now runs as a register IR, lowered from its bytecode at the first call. The stack interpreter is deleted. Shapes and a tier 0 baseline JIT are built only with configure flags. Tier 1 has not landed. Each step was measured before it was kept; the results are below.

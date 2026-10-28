@@ -3,7 +3,8 @@
 Status: in force from 2026-10-27 (user ruling); revised 2026-10-28 on the
 user's direction (landing review, single branching point, standing
 verification gates, the rerun rule, file ownership). This file is the
-working record of the plan and the procedure. Note 06
+working record of the plan and the procedure; `boil/README.md` is the
+starting point for a successor and maps the documents. Note 06
 (`boil/design/06-architecture-v2.md`) holds the design and the per-step
 decision sections; the work docs under `boil/design/work/` hold each
 rung's design, review and as-built record; `boil/WORKLOG.md` holds the

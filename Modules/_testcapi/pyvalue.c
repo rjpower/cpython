@@ -143,6 +143,79 @@ object_setattr(PyObject *Py_UNUSED(module), PyObject *args)
     RETURN_INT(PyObject_SetAttrValue(PyValue_FromObject(o), name, value));
 }
 
+// (found, value or None, kind or None); an error propagates.
+static PyObject *
+object_getoptionalattr(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *o, *name;
+    if (!PyArg_ParseTuple(args, "OO", &o, &name)) {
+        return NULL;
+    }
+    PyValue result;
+    int rc = PyObject_GetOptionalAttrValue(PyValue_FromObject(o), name,
+                                           &result);
+    if (rc < 0) {
+        assert(PyValue_IsNull(result));
+        return NULL;
+    }
+    if (rc == 0) {
+        assert(PyValue_IsNull(result) && !PyErr_Occurred());
+        return Py_BuildValue("(iOO)", 0, Py_None, Py_None);
+    }
+    PyObject *pair = value_result(result);
+    if (pair == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("(iOO)", 1, PyTuple_GET_ITEM(pair, 0),
+                         PyTuple_GET_ITEM(pair, 1));
+}
+
+// The PyMemberDef of type(o) named name, or NULL with an exception.
+static PyMemberDef *
+find_member(PyObject *o, const char *name)
+{
+    for (PyMemberDef *m = Py_TYPE(o)->tp_members; m && m->name; m++) {
+        if (strcmp(m->name, name) == 0) {
+            return m;
+        }
+    }
+    PyErr_Format(PyExc_LookupError, "no member %s", name);
+    return NULL;
+}
+
+static PyObject *
+member_getonevalue(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *o;
+    const char *name;
+    if (!PyArg_ParseTuple(args, "Os", &o, &name)) {
+        return NULL;
+    }
+    PyMemberDef *m = find_member(o, name);
+    if (m == NULL) {
+        return NULL;
+    }
+    return value_result(PyMember_GetOneValue((const char *)o, m));
+}
+
+// v None deletes the member.
+static PyObject *
+member_setonevalue(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *o, *v;
+    const char *name;
+    if (!PyArg_ParseTuple(args, "OsO", &o, &name, &v)) {
+        return NULL;
+    }
+    PyMemberDef *m = find_member(o, name);
+    if (m == NULL) {
+        return NULL;
+    }
+    NULLABLE(v);
+    PyValue value = v == NULL ? PyValue_NULL : PyValue_FromObject(v);
+    RETURN_INT(PyMember_SetOneValue((char *)o, m, value));
+}
+
 static PyObject *
 object_richcompare(PyObject *Py_UNUSED(module), PyObject *args)
 {
@@ -339,6 +412,9 @@ static PyMethodDef test_methods[] = {
     {"FloatValue", _PyCFunction_CAST(Number_Float), METH_O},
     {"GetAttrValue", object_getattr, METH_VARARGS},
     {"SetAttrValue", object_setattr, METH_VARARGS},
+    {"GetOptionalAttrValue", object_getoptionalattr, METH_VARARGS},
+    {"MemberGetOneValue", member_getonevalue, METH_VARARGS},
+    {"MemberSetOneValue", member_setonevalue, METH_VARARGS},
     {"RichCompareValue", object_richcompare, METH_VARARGS},
     {"RichCompareBoolValue", object_richcomparebool, METH_VARARGS},
     {"IsTrueValue", _PyCFunction_CAST(object_istrue), METH_O},

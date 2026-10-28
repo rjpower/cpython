@@ -1160,6 +1160,40 @@ PyObject_GetOptionalAttr(PyObject *v, PyObject *name, PyObject **result)
 }
 
 int
+PyObject_GetOptionalAttrValue(PyValue v, PyObject *name, PyValue *result)
+{
+    *result = PyValue_NULL;
+    if (!PyUnicode_Check(name)) {
+        PyErr_Format(PyExc_TypeError,
+                     "attribute name must be string, not '%.200s'",
+                     Py_TYPE(name)->tp_name);
+        return -1;
+    }
+    if (PyValue_IsObject(v)
+        && Py_TYPE(PyValue_ObjectBorrow(v))->tp_getattro == PyObject_GenericGetAttr)
+    {
+        *result = generic_getattr_value(PyValue_ObjectBorrow(v), name, NULL, 1);
+        if (!PyValue_IsNull(*result)) {
+            return 1;
+        }
+        return PyErr_Occurred() ? -1 : 0;
+    }
+    // Other owners take the object form until the slots return values
+    // (6d rung 2's second commit).
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot root;
+    PyObject *v_o = _PyValueRoot_PushObject(tstate, &root, v, _PY_BOX_OTHER);
+    int rc = -1;
+    if (v_o != NULL) {
+        PyObject *res;
+        rc = PyObject_GetOptionalAttr(v_o, name, &res);
+        *result = PyValue_FromResult(res);
+    }
+    _PyThreadState_PopValueRoot(tstate, &root);
+    return rc;
+}
+
+int
 PyObject_GetOptionalAttrString(PyObject *obj, const char *name, PyObject **result)
 {
     if (Py_TYPE(obj)->tp_getattr == NULL) {

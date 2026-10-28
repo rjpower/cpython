@@ -13,6 +13,7 @@ import math
 import operator
 import sys
 import unittest
+import warnings
 
 from test.support import import_helper
 
@@ -239,6 +240,32 @@ class ObjectTests(ValueTestCase):
         with self.assertRaises(Boom):
             pv.GetAttrValue(type('C', (), {'__getattr__': Raising._raise})(),
                             'x')
+
+    def test_getoptionalattr(self):
+        class C:
+            x = 12345
+        class Missing:
+            def __getattr__(self, name):
+                raise AttributeError(name)
+        class Raises:
+            def __getattr__(self, name):
+                raise Boom
+        cases = [(5, 'real', 5), (2.5, 'imag', 0.0), (C(), 'x', 12345),
+                 (C, 'x', 12345), (math, 'pi', math.pi),
+                 (BIG, 'numerator', BIG)]
+        for o, name, expected in cases:
+            with self.subTest(o=o, name=name):
+                found, result, k = pv.GetOptionalAttrValue(o, name)
+                self.assertEqual(found, 1)
+                self.assertValue((result, k), expected)
+        for o in (5, 2.5, C(), C, math, Missing()):
+            with self.subTest(o=o):
+                self.assertEqual(pv.GetOptionalAttrValue(o, 'missing'),
+                                 (0, None, None))
+        with self.assertRaises(Boom):
+            pv.GetOptionalAttrValue(Raises(), 'x')
+        with self.assertRaises(TypeError):
+            pv.GetOptionalAttrValue(C(), 5)
 
     def test_setattr(self):
         class C:
@@ -525,6 +552,148 @@ class ConversionTests(unittest.TestCase):
         self.assertTrue(math.copysign(1, f(-0.0)) < 0)
         self.assertRaises(TypeError, f, 'a')
         self.assertRaises(OverflowError, f, 10**400)
+
+
+class MemberTests(ValueTestCase):
+    """PyMember_GetOneValue() and PyMember_SetOneValue(): numbers read
+    inline where they fit and store without a box, with the checks and
+    warnings of PyMember_GetOne() and PyMember_SetOne()."""
+
+    def setUp(self):
+        self.ts = _testcapi._test_structmembersType_NewAPI()
+
+    def roundtrip(self, o, name, value, expected=None):
+        expected = value if expected is None else expected
+        self.assertEqual(pv.MemberSetOneValue(o, name, value), 0)
+        self.assertValue(pv.MemberGetOneValue(o, name), expected)
+        self.assertEqual(getattr(o, name), expected)
+
+    def test_integers(self):
+        for name in ('T_BYTE', 'T_UBYTE', 'T_SHORT', 'T_USHORT', 'T_INT',
+                     'T_UINT', 'T_LONG', 'T_ULONG', 'T_PYSSIZET',
+                     'T_LONGLONG', 'T_ULONGLONG'):
+            with self.subTest(name=name):
+                self.roundtrip(self.ts, name, 0)
+                self.roundtrip(self.ts, name, 100)
+                self.roundtrip(self.ts, name, True, 1)
+        for name in ('T_INT', 'T_LONG', 'T_PYSSIZET', 'T_LONGLONG'):
+            with self.subTest(name=name):
+                self.roundtrip(self.ts, name, INT32_MAX)
+                self.roundtrip(self.ts, name, INT32_MIN)
+        for name in ('T_UINT', 'T_ULONG', 'T_ULONGLONG'):
+            with self.subTest(name=name):
+                self.roundtrip(self.ts, name, INT32_MAX + 1)
+                self.roundtrip(self.ts, name, Index(7), 7)
+        for name in ('T_LONG', 'T_PYSSIZET', 'T_LONGLONG', 'T_ULONGLONG'):
+            if name == 'T_LONG' and _testcapi.LONG_MAX < BIG:
+                continue
+            with self.subTest(name=name):
+                self.roundtrip(self.ts, name, BIG)
+        self.roundtrip(self.ts, 'T_LONGLONG', INT32_MIN - 1)
+
+    def test_unsigned_negative(self):
+        for name, mask in (('T_UINT', _testcapi.UINT_MAX),
+                           ('T_ULONG', _testcapi.ULONG_MAX),
+                           ('T_ULONGLONG', _testcapi.ULLONG_MAX)):
+            for value in (-1, INT32_MIN, INT32_MIN - 1):
+                with self.subTest(name=name, value=value):
+                    with self.assertWarns(RuntimeWarning):
+                        pv.MemberSetOneValue(self.ts, name, value)
+                    self.assertEqual(getattr(self.ts, name), value & mask)
+                    with warnings.catch_warnings():
+                        warnings.simplefilter('error')
+                        with self.assertRaises(RuntimeWarning):
+                            pv.MemberSetOneValue(self.ts, name, value)
+
+    def test_truncation(self):
+        with self.assertWarns(RuntimeWarning):
+            pv.MemberSetOneValue(self.ts, 'T_BYTE', 300)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            with self.assertRaises(RuntimeWarning):
+                pv.MemberSetOneValue(self.ts, 'T_SHORT', INT32_MAX)
+        with self.assertWarns(RuntimeWarning):
+            pv.MemberSetOneValue(self.ts, 'T_INT', BIG)
+        with self.assertRaises(OverflowError):
+            pv.MemberSetOneValue(self.ts, 'T_LONGLONG', 2**70)
+
+    def test_floats(self):
+        for value in (2.5, -0.0, math.inf, -math.inf):
+            with self.subTest(value=value):
+                self.roundtrip(self.ts, 'T_DOUBLE', value)
+                self.roundtrip(self.ts, 'T_FLOAT', value)
+        self.roundtrip(self.ts, 'T_DOUBLE', 7, 7.0)
+        self.roundtrip(self.ts, 'T_DOUBLE', BIG, float(BIG))
+        pv.MemberSetOneValue(self.ts, 'T_DOUBLE', math.nan)
+        self.assertTrue(math.isnan(self.ts.T_DOUBLE))
+        self.assertEqual(pv.MemberGetOneValue(self.ts, 'T_DOUBLE')[1],
+                         'object')
+
+    def test_type_errors(self):
+        for name in ('T_INT', 'T_UINT', 'T_LONGLONG', 'T_ULONGLONG'):
+            with self.subTest(name=name):
+                with self.assertRaises(TypeError):
+                    pv.MemberSetOneValue(self.ts, name, 2.5)
+                with self.assertRaises(TypeError):
+                    pv.MemberSetOneValue(self.ts, name, 'a')
+        with self.assertRaises(TypeError):
+            pv.MemberSetOneValue(self.ts, 'T_DOUBLE', 'a')
+        with self.assertRaises(Boom):
+            pv.MemberSetOneValue(self.ts, 'T_UINT', Raising())
+        for value in (1, 2.5):
+            with self.subTest(value=value):
+                with self.assertRaises(TypeError):
+                    pv.MemberSetOneValue(self.ts, 'T_BOOL', value)
+                with self.assertRaises(TypeError):
+                    pv.MemberSetOneValue(self.ts, 'T_CHAR', value)
+        self.roundtrip(self.ts, 'T_BOOL', True)
+        self.roundtrip(self.ts, 'T_CHAR', 'z')
+        with self.assertRaises(TypeError):
+            pv.MemberSetOneValue(self.ts, 'T_STRING_INPLACE', 'a')
+        # None stands for NULL: a number cannot be deleted.
+        with self.assertRaises(TypeError):
+            pv.MemberSetOneValue(self.ts, 'T_INT', None)
+
+    def test_object_fields(self):
+        # AttributeError.obj is _Py_T_OBJECT: the field holds a box of an
+        # inline value, which reads back as the inline value.
+        exc = AttributeError()
+        for value in (12345, 2.5, BIG, 'a'):
+            with self.subTest(value=value):
+                self.roundtrip(exc, 'obj', value)
+        self.assertEqual(pv.MemberSetOneValue(exc, 'obj', None), 0)
+        self.assertValue(pv.MemberGetOneValue(exc, 'obj'), None)
+        # A sentinel's __module__ is Py_T_OBJECT_EX.
+        s = sentinel('S')
+        self.roundtrip(s, '__module__', 12345)
+        self.assertEqual(pv.MemberSetOneValue(s, '__module__', None), 0)
+        with self.assertRaises(AttributeError):
+            pv.MemberGetOneValue(s, '__module__')
+        with self.assertRaises(AttributeError):
+            pv.MemberSetOneValue(s, '__module__', None)
+
+    def test_value_fields(self):
+        # A __slots__ field is read and stored as it is.
+        class S:
+            __slots__ = ('x',)
+        o = S()
+        for value in (12345, INT32_MIN, 2.5, -0.0, BIG, 'a'):
+            with self.subTest(value=value):
+                self.roundtrip(o, 'x', value)
+        nan = math.nan
+        pv.MemberSetOneValue(o, 'x', nan)
+        self.assertIs(pv.MemberGetOneValue(o, 'x')[0], nan)
+        self.assertIs(o.x, nan)
+        self.assertEqual(pv.MemberSetOneValue(o, 'x', None), 0)
+        with self.assertRaises(AttributeError):
+            pv.MemberGetOneValue(o, 'x')
+        with self.assertRaises(AttributeError):
+            pv.MemberSetOneValue(o, 'x', None)
+        # A slice's start is _Py_T_VALUE and read-only.
+        self.assertValue(pv.MemberGetOneValue(slice(12345, None), 'start'),
+                         12345)
+        with self.assertRaises(AttributeError):
+            pv.MemberSetOneValue(slice(1), 'start', 2)
 
 
 if __name__ == '__main__':

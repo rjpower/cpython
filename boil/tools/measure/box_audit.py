@@ -336,7 +336,16 @@ def main():
     sha = subprocess.run(["git", "-C", ROOT, "rev-parse", "--short=11",
                           "HEAD"], check=True, capture_output=True,
                          text=True).stdout.strip()
-    print(f"box audit of {python} at {sha}")
+    # The binary's own build line names the commit it was built from (and
+    # "-dirty" if the source was); the checkout's HEAD alone does not.
+    built = subprocess.run([python, "-c", "import sys; print(sys.version)"],
+                           check=True, capture_output=True,
+                           text=True).stdout.strip()
+    dirty = subprocess.run(["git", "-C", ROOT, "status", "--porcelain",
+                            "--untracked-files=no"], check=True,
+                           capture_output=True, text=True).stdout.strip()
+    print(f"box audit of {python} at {sha}{' (dirty)' if dirty else ''}")
+    print(f"built: {built}")
     failed = []
     with tempfile.TemporaryDirectory(prefix="box_audit-") as pyc, \
          tempfile.TemporaryDirectory(prefix="box_audit-stats-") as stats:

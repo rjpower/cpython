@@ -2875,6 +2875,8 @@ def check_source(src: str, function: str | None = None, check_all: bool = False,
         typedefs |= header_typedefs(include_dirs)
     if function is not None and all(fn.name != function for fn in funcs):
         errors.append(Error(1, f"no function '{function}' in the file"))
+    if function is None:
+        errors += unparsed_precise(toks, {fn.name for fn in funcs})
     for fn in funcs:
         if function is not None and fn.name != function:
             continue
@@ -2900,6 +2902,34 @@ def check_source(src: str, function: str | None = None, check_all: bool = False,
                 errors.append(Error(t.line, f"'{t.text}' is {ARGS_ANCHORED} "
                                     f"but called from '{fn.name}', which is "
                                     "not precise"))
+    return errors
+
+
+def unparsed_precise(toks: list[Tok], found: set[str]) -> list[Error]:
+    """An error for each definition marked Py_GC_PRECISE that
+    find_functions() did not find, so that a marked function the parser
+    loses (braces that do not balance within each #if branch) fails rather
+    than going unchecked."""
+    errors: list[Error] = []
+    for k, t in enumerate(toks):
+        if t.text != PRECISE:
+            continue
+        j = k + 1
+        while j < len(toks) and toks[j].text not in (";", "{"):
+            if toks[j].text == "(":
+                try:
+                    j = matching(toks, j)
+                except CheckError:
+                    break
+            j += 1
+        if j >= len(toks) or toks[j].text != "{":
+            continue  # a declaration
+        parts = head_parts(toks[k:j])
+        if parts is not None and parts[0] not in found:
+            errors.append(Error(t.line, f"'{parts[0]}' is {PRECISE} but "
+                                "outside the C mode's subset: its body was "
+                                "not found (are its braces balanced within "
+                                "each #if branch?)"))
     return errors
 
 

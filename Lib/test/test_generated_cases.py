@@ -2002,6 +2002,27 @@ Py_GC_PRECISE static void f(void) {
         self.assertEqual(len(errors), 1)
         self.assertIn("no function 'missing'", str(errors[0]))
 
+    def test_unparsed_precise_function_fails(self):
+        # Braces that balance only across #if branches lose the function
+        # to the parser; a marked one fails instead of going unchecked.
+        src = """
+Py_GC_PRECISE static int f(int n) {
+#if A
+    if (n < 0) {
+        n = -n;
+#else
+    if (n > 0) {
+        n = 0;
+#endif
+    }
+    return n;
+}
+"""
+        errors = self.check(src)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("'f' is Py_GC_PRECISE but outside the C mode's subset",
+                      errors[0])
+
     def test_cast_to_local_typedef(self):
         # A function pointer typedef of the file, and a struct typedef of
         # the headers, are types to the parser.

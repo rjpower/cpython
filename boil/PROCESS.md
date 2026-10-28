@@ -57,7 +57,7 @@ are inputs to the plan, not gates. Owners, as of 2026-10-28:
 | C identity agrees with value identity (`Py_Is`, the identity contract in `pyvalue.h`) | 6e | with the remaining slot families |
 | native ABI identity (wheel tags, untagged `.so` acceptance, an ABI-generation check at module init) | phase P's design, before the first port | after 10b |
 | the below-2^48 pointer bound enforced where addresses enter a value or header; the supported platform, compiler and unwind matrix published | 10a rung 4 (the matrix, with the precise/opaque/unsupported inventory); 6e (the bound) | this week |
-| one verification manifest (modes, exclusions, reasons, owners, removal conditions) that `gate.sh` executes, and landing summaries tied to commit and build | coordinator (`gate.sh`) with 10a rung 2b item 7 (the manifest's content from note 11 section 8.2) | after 10a rung 2b |
+| one verification manifest (modes, exclusions, reasons, owners, removal conditions) that `gate.sh` executes, and landing summaries tied to commit and build | coordinator, `boil/tools/verify.manifest` read by `gate.sh`, content from note 11 section 8.2 (10a rung 2b item 7 supplies the rows) | by 2026-10-30; moved up on 2026-10-28 because each agent re-derives its stress and ASan lists from prose and two landings today needed the lists restated |
 | compatibility accessors that allocate and abort on failure (`_PyValue_ObjectOrAbort`): migrate core callers, document the residual contract | 6e | with the remaining slot families |
 | documentation: `boil/PR.md` marked historical, note 06's opening reconciled with its as-built record, the 4,095-slot limit documented, wall-time, RSS and pause measurements against upstream | coordinator at each step end; the measurements at 10a rung 4 and step 7 | ongoing |
 | 7a ahead of further collector features; `str +=` linear path with its own acceptance criterion (step 9); handle discipline before movement (10b) | as planned | as planned |
@@ -72,6 +72,28 @@ C API or library reference by the rung that makes it.
 |---|---|---|---|
 | `PyInterpreterConfig` with `use_main_obmalloc` and `PyInterpreterConfig_OWN_GIL` is refused with `InterpreterError` (note 13 section 7.2) | 7a rung 1 | a shared heap is one collection domain; a domain with two GILs would need a stop-the-world across them, which belongs to step 7's collector policy, not to a queue fix | one GIL per domain by stopping the other GIL's threads at each mark (step 7's problem) |
 | `PyDict_Watch()`, `PyType_Watch()` and `PyUnstable_Code_SetExtra()` refuse an object another interpreter owns (`ValueError`, `ValueError`, `SystemError`); `PyUnstable_Code_GetExtra()` on a foreign code object reports no extra; the reserved dict watcher ids are exempt (note 13 section 3.4) | 7a rung 2 | a watcher bit or extra slot is an index into one interpreter's table; set by another interpreter, it names a different watcher or free function in the owner's table | the registering interpreter kept beside each bit or slot: a field per watched object, and no answer to which interpreter runs a foreign watcher when the object dies on its owner |
+
+### 0.3 Hand-off ledger
+
+Every item one step hands to another is a row here when the coordinator
+rules it, with the evidence that closes it; the closing landing removes
+the row into the worklog. Opened 2026-10-28 after eight hand-offs in one
+day travelled through messages and work-doc paragraphs.
+
+| Item | From | To | Closes when |
+|---|---|---|---|
+| Py_buffer consumers (PickleBuffer, _pickle.Unpickler, SRE scanner, _struct.unpack_iterator, _testbuffer.ndarray) release in the sweep, so a Python exporter's `__release_buffer__` is skipped or runs in the sweep | audit-2 review | 10a rung 3, after 7a rung 2 (the release runs Python code, so it is a queued call on the owner) | a test shows exactly-once release per consumer with a retained exporter and an allocating and a collecting callback, on both builds and under kill |
+| the symtable entry's PyMem roots | audit-2 | 10a rung 3 | the span lands and the allow entry goes |
+| the traverse audit's remaining limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) | audit-2 | coordinator, audit-3 after 7a rung 2 | audit-3 lands |
+| the rung 1 fork-child hang (6d-1.md's hazard record: where the parent waited, not why the child hung) | 6d | 7a rung 2 (the fork path) | on recurrence, the hung child's native and Python stacks; otherwise carried as not recurred |
+| test_gc's test_verify_kill under stress: the compiler unit's u_metadata dicts held only through a PyMem_Calloc block (kill:pymem finds the holder by design; the live collector is unaffected) | 7a | 10a rung 3 | the compiler unit's metadata has a root or a span; the stress exclusion row goes |
+| the bytes and unicode writer buffers under stress (`*test_resize*`, `*WriterTest*`) | 10a rung 1 (note 11 6.2), counts from 7a | 10a rung 3 | the writer buffers are rooted; the exclusion goes |
+| a conservative word under a thread state detached by `PyThreadState_Swap()` in `new_interpreter()` (an unpinned record; the walk attributes the main thread's frames to `_start`); seen as a stale argument tuple in `_PyObject_MakeTpCall`'s frame retaining one object | 7a rung 1 review | 10a rung 2b or 3 | test_progress_during_finalization gives 20 of 20 at its first check on ASan; the swap path pins the C frame extent as a detach does |
+| test_stress_shared_heap_callbacks skipped (the B class) | 7a design | 10a rung 2b item 7, after 7a rung 1 lands | the skip is removed with the manifest and the test passes under stress |
+| the SLOT macro family (`slot_mp_ass_subscript`, `slot_nb_power`, `slot_nb_bool`, `slot_nb_inplace_power`, `slot_tp_repr`, `slot_tp_hash`) the C mode cannot parse; `slot_inherited` with `update_one_slot` | 10a item 5 | 10a rung 3 | the checker parses the family or the functions are written out, and they are precise |
+| the C mode's block-local false positive (an object local declared in one branch reported as held across the sibling branch's call when results go to a frame pointer); expected failure test_block_local_beside_frame_result | 10a item 3 | 10a rung 3 | the expected failure passes |
+| comprehensions +2.19% instructions at 7a rung 1, unexplained | 7a | step 8 | attributed or absorbed by tier 0 |
+| the Py_NO_INLINE boundaries of 10a item 6 (the dict insertion core under `_PyDict_FromItems`, `update_slot_after_setattr`, `object_set_class_world_stopped`) | 10a rung 2b | 10a rung 3 | the callees are precise and the boundaries go |
 
 ## 1. The loop
 
@@ -108,7 +130,13 @@ quick-test. Each rung goes through all of it.
    was designed, every deviation with its reason, the gate lines each
    with the commit it was produced at, the measurements against the
    before records, the hazards found and how each was traced, the
-   hand-off list with an owner per item.
+   hand-off list with an owner per item. Before the landing branch the
+   agent rereads every new or changed test and writes in the record what
+   failure each would not detect; a test records its evidence at the
+   event (the interpreter a callback runs on, the allocation that
+   failed, the order two things happened in), not at setup, and asserts
+   the invariant, not a symptom of the mechanism (7a rung 1's landing
+   review found three tests that passed on the wrong behaviour).
 4. **Landing review.** The coordinator runs `boil/tools/landing_review.sh
    CHECKOUT BASE HEAD WORKDOC` on a detached checkout of the landing
    branch's head; the reviewer reads the as-built record, the gate lines
@@ -118,7 +146,7 @@ quick-test. Each rung goes through all of it.
    reads what was built, not the design: deviations without reasons,
    gate lines produced before a code change, hazards dismissed rather
    than traced, deleted invariants, tests that assert less than the
-   design promised. Blocking findings go back to the agent as new commits
+   design promised or that would pass on the wrong behaviour. Blocking findings go back to the agent as new commits
    on the rung's landing branch; the rung lands when the review has no
    open blocking finding or the coordinator has ruled on each.
 5. **Commit and integrate.** The coordinator merges the rung's landing

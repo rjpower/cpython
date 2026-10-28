@@ -549,7 +549,7 @@ entry; nothing lives on a prototype branch.
 | 6b | The `PyValue` C API (note 08 section 4). The core's protocols take and return `PyValue`: number (`PyNumber_*Value`), object (`PyObject_RichCompareValue`, `PyObject_GetAttrValue`, `PyObject_SetAttrValue`, `PyObject_IsTrueValue`, `PyObject_HashValue`), sequence and mapping, call (`PyObject_VectorcallValue` over a `PyValue` argument array), iteration; the generic `BINARY_OP`, `COMPARE_OP`, `CALL`, subscript and attribute handlers call them, so an inline operand is never boxed to reach a C implementation of the same operation. The `PyObject*` API is the compatibility layer: canonicalise in, box out, abort rule of 18.3 for accessors without an error channel; nothing in the core calls it. The stable ABI is gone: `.abi3` leaves the extension suffixes and `Py_LIMITED_API` is a compile error, so an incompatible wheel fails to import instead of crashing. `BINARY_OP_POWER_FLOAT` is removed once `PyNumber_PowerValue` makes the generic path box-free (note 08 section 5). Ports: the Cython port patched once at the generated-code idioms, pyyaml and numpy regenerated, cffi by hand. Done (section 19): the value protocols, calls and `tp_iternext` on values, the `PyObject*` API as the layer, no stable ABI, a release call as a keep-alive barrier, the slot limit as a `SyntaxError`, and a debug check for objects outside the object heaps; ports stopped at the 2026-10-27 ruling with the cython and cffi patches kept as the record of the API's surface. | `PyList_GET_ITEM` and family as the core's API; `BINARY_OP_POWER_FLOAT`; `LOAD_NAME`/`STORE_NAME` boxing | suite on both builds; the internal set and boxes per loop recorded (ports deferred by the 2026-10-27 ruling: six, attrs, pycparser, markupsafe, cython, pyyaml and cffi pass on value-v1; numpy recorded as failing at the API surface) | 5 days; took about 8 hours |
 | 6c | The object protocol (note 09): shape in the header, `Py_TYPE` through the shape, root shape per type; instance layout `header, slots`, dictionary mode as a shape, members as DATA_DESCR plans on `tp_members` (not shapes), the managed-dict pre-header gone; the lookup and store plans with the specialiser rewritten over them and typecache as the (shape, name) plan cache; `LOAD_ATTR_SHAPE`, `_SHAPE_POLY`, `_METHOD_SHAPE`, `STORE_ATTR_SHAPE`, `_SHAPE_TRANSITION`; slot kinds as promises; plan inspection in `_testinternalcapi` and `dis`. Done (section 20): the shape in the header, the lookup plan, the layout with split tables and `PyDictValues` deleted, kinds generalised in place with versions paired by consumer, and dictionary-mode counters; the costs it names are handed on with owners in 20.9. | `--with-shapes`, shared keys for instances, the `PyDictValues` header, `LOAD_ATTR_INSTANCE_VALUE`, `_METHOD_WITH_VALUES`, `_METHOD_LAZY_DICT`, `_NONDESCRIPTOR_WITH_VALUES`, `STORE_ATTR_INSTANCE_VALUE`; `LOAD_ATTR_SLOT` and `STORE_ATTR_SLOT` stay for members and both `_WITH_HINT` handlers for DICT plans (note 09 section 6) | suite on both builds; plan tests; per loop on richards, raytrace, deltablue, chaos, go, nbody and the `Py_TYPE` cost on json_loads recorded; RSS for 1M four-attribute instances recorded | 6 days |
 | 6d | The remaining object slots on values (note 12, adopted 2026-10-28): tp_getattro, tp_setattro, tp_descr_get, tp_descr_set, a `callfunc` for tp_call, getset getter/setter and wrapperfunc take and return PyValue in place, no object-form twins; self stays PyObject*; the PyObject* protocol functions are the compatibility layer (canonicalise in, box out); SOABI mark `boil2`; 6c's hand-offs taken: STORE_ATTR_SHAPE_POLY and LOAD_ATTR_METHOD_LAZY_DICT on the two opcodes freed by folding the `_NO_DICT` loads, the block-filling capacity rule (accepted with the fallback of note 12 question 5), `class_version` on shapes, the presized dictionary conversion. Four rungs: hand-offs and the mark; attribute and descriptor slots; calls and wrapperfunc; getsets. Rung 1 may start beside 10a's rung 1b; rungs 2 to 4 start from the integration commit that holds 10a's rung 2 call layer. | the slot-call boxes; the two `_NO_DICT` handlers | suite on both builds; boxes per loop on the micro set recorded; the Py_STATS gate's `capacity` dictionary-mode entries not more than double 6c's 26,542 | 2 days, hard stop at 3 |
-| 6e | The remaining slot families on values: number, sequence, mapping, comparison, hash and the rest, their wrappers' argument boxes, the getset conversion if 6d cuts it, and inline int and float receivers of their own C methods (a type flag plus a Clinic `self: value` converter, or tier 1 intrinsics for the hot ones; `x.bit_length()` boxes x 20,000 times per loop in chaos). tp_getattr and tp_setattr stay object slots until phase P. Designed after 10a lands. | the remaining slot boxes | suite on both builds; boxes per loop on the micro set recorded | 2 days |
+| 6e | The remaining slot families on values: number, sequence, mapping, comparison, hash and the rest, their wrappers' argument boxes, the getset conversion if 6d cuts it, and inline int and float receivers of their own C methods (a type flag plus a Clinic `self: value` converter, or tier 1 intrinsics for the hot ones; `x.bit_length()` boxes x 20,000 times per loop in chaos). tp_getattr and tp_setattr stay object slots until phase P. Designed after 10a lands. Inputs from 6d (section 21.6): the getsets were converted in 6d, and their Argument Clinic residue is 6e's. Clinic number getters without a return converter, whose impl builds a number object that the parser canonicalises: _hmac `HMAC.block_size`, `digest_size`; _ssl `_SSLContext.num_tickets`, `security_level`, `options`, `minimum_version`, `maximum_version`, `protocol`, `MemoryBIO.pending`, `SSLSession.time`, `timeout`, `ticket_lifetime_hint`; _sqlite3 `Cursor.arraysize`; _thread `_ThreadHandle.ident`; frame `f_lineno`, `f_lasti`. Clinic setters whose converter has no `parse_value_arg`, so the parser boxes the value once: _sqlite3 `Cursor.arraysize` (`uint32`); _ssl `_SSLContext.options` (`unsigned long long`), `verify_flags` (`unsigned long`), `_host_flags` (`unsigned int`). Object-typed Clinic setters that read a number in the impl: frame `f_lineno`, _ssl `_SSLContext.minimum_version` and `maximum_version`. | the remaining slot boxes | suite on both builds; boxes per loop on the micro set recorded | 2 days |
 | 10a | Precise roots (note 11, adopted 2026-10-27): an attributed DWARF stack walk classifies frames as precise or opaque; the eval loop, the handlers, the entry paths, the call layer and about 25 ceval helpers are precise, proved by root_check's C mode (time-boxed, note 11 question 10) and the kill-mode verifier; core C stays opaque and conservatively scanned; the hack-register rows of note 11 section 7 retired with their proofs. | `-ftrivial-auto-var-init=zero`, the stack clears, `_PyGC_CLEAR_ARRAY`, the activation-range exclusion, the inline-fallback full scan, the struct scan, the one-survivor test allowances | note 11 section 10: no trap in kill mode, no walk fallback, the C mode and inline audit clean, stale-root probe 100/100, the section 8.2 list 20/20 on both builds; internal set recorded | 5.5 days, hard stop at 6 |
 | 7 | Generational collection over the precise root set of 10a (note 11 section 11: the root set, the safepoint rule and the barrier placement are inherited, and the header flag bits of note 09 are decided here): sticky mark bits, remembered set, write barrier in the store macros, barrier verifier (full mark after each minor collection in debug builds). Kept only if pause and throughput both improve on the benchmark set. | nothing | verifier clean; the internal set's memory group (collector benchmark, RSS) and kernels recorded against step 6 | 5 days |
 | 8 | Tier 0 over the v2 IR (section 5), x86-64. Its design first frees the specialised-handler space (the opcode table is at 255; note 12 question 4) and takes 6c's hand-offs to step 8 (the FOR_ITER_RANGE register spill, the vacuous BOXED-store kind guard, nbody's unattributed +5.3%). | the Phase 1 `tier0.c` and `ceval_tier0.c.h` | suite with tier 0 on; internal kernels geomean below the deleted upstream JIT's 0.834 against the Phase 0 baseline | 8 days |
@@ -4305,3 +4305,206 @@ counter (20.8).
 Rung 3's other unattributed RSS items are retired by 20.8: tuples_10m
 and collector_live512 are bimodal within one build, and coroutines is
 within 2% of 6b.
+
+## 21. Step 6d decisions
+
+Step 6d puts the remaining object slots of note 12 on values:
+`tp_getattro`, `tp_setattro`, `tp_descr_get`, `tp_descr_set`, `tp_call`,
+`wrapperfunc` and the getset getter and setter take and return
+`PyValue` in place, with no object-form twins. `self` stays an object.
+The `PyObject *` protocol functions are the compatibility layer. Rung 1
+took 6c's hand-offs first. Each rung landed by its own merge into the
+integration branch, after a landing review. Outside `boil/` and
+`ports/`, the merges changed these files (lines added and deleted):
+
+| rung | landed | files | lines |
+|---|---|---:|---|
+| 1 | fc926ebe3aa | 25 | +1,008, −320 |
+| 2 | c66c69d55cf | 60 | +2,786, −839 |
+| 3 | 7ad194aa883 | 43 | +1,210, −425 |
+| 4 | boil/6d at 5db4aeaff81, against 3c4e421c83f | 104 | +2,854, −1,652 |
+
+The rulings, all of 2026-10-28 (the capacity rule's acceptance is a
+measurement, 21.1):
+
+- note 12 is adopted with four rungs; rung 1 may run beside 10a's rung
+  1b, and rungs 2 to 4 start from the integration commit holding 10a's
+  rung 2 call layer;
+- `gc.get_referrers` becomes precise in rung 2, in 10a's lines, to
+  retire a conservative-retention failure (21.2);
+- rung 3's hand-through helper for the `tp_call` result check, which
+  only satisfied the checker, is not kept; 10a's non-collecting list
+  takes `fprintf`, `fflush` and `abort` instead (21.3);
+- the starred inline callee's two boxes have two owners, 10a and step 8
+  (21.6);
+- Clinic's number getters without a return converter are 6e's, listed
+  in 6e's row (21.4).
+
+### 21.1 The 6c hand-offs and the mark (rung 1)
+
+| commit | what |
+|---|---|
+| 92ce784a6a4 | `class_version` on every shape, mirroring `tp_version_tag`; `_GUARD_TYPE_VERSION` reads it from the shape, and `LOAD_ATTR_SLOT` and `STORE_ATTR_SLOT` guard on it; `SOABI` mark `boil2` (`PyTypeObject` grew by 8 bytes); abi_id `cpython-3.16-value-v2`; magic 3727 |
+| 42406f734b5 | the capacity rule by mimalloc size class (`_PyMem_SizeClass()`); the dictionary conversion presized, with str keys |
+| 73e5daa8b28 | the `_NO_DICT` loads folded into the shape handlers; `STORE_ATTR_SHAPE_POLY` and `LOAD_ATTR_METHOD_LAZY_DICT` on their two opcodes; magic 3728 |
+| c0e0607ee35 | Programs/test_frozenmain.h regenerated for the new handler numbering |
+
+Note 09 section 4.8's table shows the handlers by plan. Conversions for
+capacity over the Py_STATS suite are 26,080, against 6c's 26,542, under
+the fallback's threshold of 53,084 (note 12 question 5). Instructions,
+after against before: `attr_store_poly` 0.306, `method_lazy_dict`
+0.516, go 0.863, richards 0.941, the logging kernels about 0.95; micro
+geomean 0.923, kernels 0.989. Kernel RSS falls by up to 4.2% (raytrace).
+The record is work/6d-1.md, "As built".
+
+### 21.2 Attribute and descriptor slots on values (rung 2)
+
+| commit | what |
+|---|---|
+| 985bc386623 | `PyMember_*Value`, `PyObject_GetOptionalAttrValue`, `_PyValue_CheckSlotResult` |
+| 92aa26563eb | the four attribute slot typedefs with every function of their types: the executor on a value owner, the hooks, type, module and super, the descriptors; the debug checks; `_PyGC_SITE_SLOT_BOX` and `_PyGC_SITE_RECEIVER_BOX` |
+| b9c88af59c0 | ctypes keeps the exact box a `py_object` field points to |
+| d2193424b7b | the tracer check, the slot tests, the span fixture, the box audit's slot cases |
+| 8543842849f | 10a's trap type takes the value forms |
+| bddc2ecdbc8 | docs (typeobj.rst, object.rst), the heap setter cases, results |
+| facf5bf1ed6 | `gc.get_referrers` precise |
+| 18f473cc8ca, b8b575d7c4c | landing fixes: ctypes stores put the previous native bytes back when keeping the new object fails; the promised lifetime and failure tests |
+
+The getset getter and setter stayed object functions in this rung,
+behind a box in `getset_get` and `getset_set`, which rung 4 removed.
+Boxes per iteration fall from 1 to 0 on every slot row of the micro set
+but `call_instance` (rung 3's). Against the landing's own base, every
+slot row's instructions fall, by up to 559 an iteration
+(`descr_get_py` 1,874 to 1,315). `empty_loop` and `slots_load` fall by 9
+and 10 instructions; that is the eval function's code generation moving
+on a merge, not this rung's work (21.6). The record is work/6d-2.md,
+"As built" and "Landing review fixes".
+
+### 21.3 Calls and wrappers on values (rung 3)
+
+| commit | what |
+|---|---|
+| f97c94c1cb8 | `tp_call` returns a value (`callfunc`); `wrapperfunc` and `wrapperfunc_kwds` with every `wrap_*`; the call layer; the module types' `tp_call`; the Wasm trampolines |
+| 72180e8c68d | `CALL_FUNCTION_EX` calls with the callable's value |
+| 04ffa14a62b | `PyObject_LengthHint` on values; `lru_cache` keys as values; docs; the box audit's call cases |
+| a725b9ab5f2 | the `tp_call` result check called in place; the hand-through helper goes |
+| 0457f2a3c2c | landing fixes: the call lifetime cases, each in its own process, compare what they were passed; the prepend allocation failure proven through `call_with_nomemory`; float rows in the box audit |
+
+`call_instance` falls from 1,568 to 1,476 instructions and from 1 box to
+0; partial, itemgetter, attrgetter and the `lru_cache` hits and
+unbounded misses fall to 0 boxes. The kernels' geomean is 1.002. pickle's
++3.3% is code generation: a dictobject.c addition stopped gcc inlining
+`_PyDict_NextValue` into `PyDict_Next` (21.6). The record is
+work/6d-3.md, "As built" and "Landing fixes".
+
+### 21.4 Getsets on values (rung 4)
+
+| commit | what |
+|---|---|
+| 04c7397b65d | `getter` returns `PyValue`: 325 hand-written getters and Clinic's `@getter`; number getters build inline values; values stored as values (`cell_contents`, the type's and module's dict-backed attributes) returned without a box; the forwarding getters (`_Buffered.name`, `TextIOWrapper.name`, `socket.timeout`) read values; `PyObject_GenericGetDict` returns a value; the `(getter)` casts go |
+| 649506ba537 | `_hashlib_HASH_repr` reads the name getter's value (found by the unbuilt-module check) |
+| 5db4aeaff81 | `setter` takes `PyValue`, deletion `PyValue_NULL`: 69 hand-written setters and Clinic's `@setter`; values stored as values; number setters keep their conversion's protocol through its value form; `PyObject_GenericSetDict` refuses an inline value by its type; rung 2's setter bridge goes; `_PyGC_SITE_SETTER_BOX` |
+| b3b30c90830 | the micro rows `getset_number` and `cell_contents` |
+
+The count is 459 getset entries at the rung's base, not note 12's 388
+(note 12 section 2.1 has the method). Both families were converted
+well inside the cut. `getset_number` falls from 824 to 391 instructions
+an iteration and `cell_contents` from 842 to 378. Every getset and setter
+case of the box audit is at 0 boxes and 0 allocations, apart from
+`function.__doc__`, a `PyObject *` field, and `int.real`, an inline
+owner. Other micro rows and the kernels are unchanged within 1%. The
+record is work/6d-4.md, "As built".
+
+### 21.5 Hazards found
+
+- **ctypes out of memory** (rung 2). `PyCData_set` stored into native
+  memory before it kept the reference. When the keeper's allocation
+  failed, the cell pointed at a box that nothing traced. Latent since
+  6a; upstream leaked the object. The stores now put the previous bytes
+  back.
+- **Conservative retention in test_taskgroups** (rung 2). A stale word in
+  `gc.get_referrers`'s Clinic wrapper frame kept an exception and a frame
+  alive, 10 of 10 runs of the file on release builds. It was traced with
+  `PYTHON_GCSTACKHITS` and retired by marking the wrapper precise, with
+  a span over `objs`.
+- **The kill record named one word** (rung 3). With the helper gone, the
+  word in `gc.collect`'s wrapper reached the object first, and the record
+  missed `missed_root`'s. 10a's record keeps every word now (0f518b81236).
+- **A prepend test that tested the wrong allocation** (rung 3's landing
+  review). The tuple built after `set_nomemory` took the failure. The
+  test now builds it first.
+- **A module the build does not compile** (rung 4). `_hashopenssl.c`
+  used a getter's result as an object after commit 1. The machine builds
+  neither `_hashlib` nor `_ssl`, `_decimal`, `_sqlite3`, `_bz2`, `_zstd`
+  or `_uuid`, so `boil/tools/check_unbuilt.sh` type-checks them against
+  borrowed headers. The check reports `_tkinter`, `_dbm`, `_gdbm` and
+  readline as unchecked.
+- **A test helper that never failed the first allocation** (rung 4).
+  test_descr's `_fail_each_allocation` began at one; two of rung 2's
+  tests depended on that, and now compare against their heap controls.
+- **A gate flag order** (rung 3's landing). `gate.sh 1` put `-i` before
+  the caller's `-m`, so the probe ran whole files; fixed in 8a52226ee12.
+- **test_concurrent_futures.test_deadlock hung once** (rung 1, gate 2,
+  under load). A forked worker never exited. The test has not hung
+  again; the trace to follow if it does is in work/6d-1.md, "Hazards".
+
+### 21.6 Hand-off, by owner
+
+**10a.**
+
+1. The C-mode errors of the unmarked functions that 6d rewrote: rung 2's
+   table, rung 3's (`call_method_value`, `wrapperdescr_call` and the
+   `wrap_*` functions; 61 functions appended at the landing), and rung
+   4's (`getset_get`, `getset_set`, the dict functions,
+   `object_set_class`, the dict-backed accessors, `PyCField_set`;
+   work/6d-4.md, "The C mode").
+2. `_Py_Check_ArgsIterable`'s unused callable (10a rung 2b item 4, as
+   ceval.c's owner): removing it retires the starred inline callee's box
+   at `_MAKE_CALLARGS_A_TUPLE`'s entry. Proof: the box audit's row from 2
+   boxes to 1.
+3. Fake-stack scanning under ASan (10a rung 3): the ASan line of record
+   runs with `detect_stack_use_after_return=0`.
+
+**10a and the coordinator, for step 8's inputs.**
+
+4. Code-generation sensitivity. The eval function moved by 9 to 10
+   instructions an iteration on a merge that did not touch the loop's
+   instructions (rung 2). pickle moved +3.3% when dictobject.c gained two
+   functions and gcc stopped inlining `_PyDict_NextValue` (rung 3).
+
+**Step 8.**
+
+5. The starred inline callee's other box, at `_DO_CALL_FUNCTION_EX`'s
+   entry. The generator boxes an input at op entry when the op converts
+   it anywhere. Proof: the row at 0.
+
+**6e.**
+
+6. The other slot families on values, with their wrappers' argument
+   boxes (note 12 open question 2), as 6e's row says.
+7. The Clinic residue of the getsets, listed per module in 6e's row.
+   The number getters without a return converter build an object for
+   the parser to canonicalise. The setters whose converter has no
+   `parse_value_arg` (the unsigned and fixed-width ones) box the value
+   once. Proof: their audit cases at 0 allocations.
+
+**Note 12 open question 1 (a step after 10a, or tier 1).**
+
+8. Inline receivers of int's and float's methods and getsets: `(5).real`,
+   `x.bit_length()` (chaos, 20,000 boxes a loop).
+
+**The ports phase.**
+
+9. ctypes's per-format converters (`setfunc`, `getfunc`) stay object
+   forms, so `PyCField_set` boxes at its top.
+10. `tp_getattr` and `tp_setattr` stay object slots.
+
+**No owner until measured.**
+
+11. Native `PyObject *` fields box an inline value (`function.__doc__`,
+    `_Py_T_OBJECT` members, the Pickler's `persistent_id`).
+12. The super inline receiver: the method-wrapper keeps the receiver in
+    its `self` field, so its box is the minimum.
+
+Note 08's register carries items 7 to 11 as rows. The "object slots box"
+row is retired, with the box audit as its proof.

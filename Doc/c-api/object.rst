@@ -309,7 +309,7 @@ Object Protocol
    used internally to create a key object for lookup.
 
 
-.. c:function:: PyObject* PyObject_GenericGetDict(PyObject *o, void *context)
+.. c:function:: PyValue PyObject_GenericGetDict(PyObject *o, void *context)
 
    A generic implementation for the getter of a ``__dict__`` descriptor. It
    creates the dictionary if necessary.
@@ -320,15 +320,17 @@ Object Protocol
    dictionary, it may be more efficient to call :c:func:`PyObject_GetAttr`
    when accessing an attribute on the object.
 
-   On failure, returns ``NULL`` with an exception set.
+   Returns the dictionary as a value; on failure, returns ``PyValue_NULL``
+   with an exception set.
 
    .. versionadded:: 3.3
 
 
-.. c:function:: int PyObject_GenericSetDict(PyObject *o, PyObject *value, void *context)
+.. c:function:: int PyObject_GenericSetDict(PyObject *o, PyValue value, void *context)
 
    A generic implementation for the setter of a ``__dict__`` descriptor. This
-   implementation does not allow the dictionary to be deleted.
+   implementation does not allow the dictionary to be deleted
+   (``PyValue_NULL``), and refuses a value that is not a dictionary.
 
    .. versionadded:: 3.3
 

@@ -214,7 +214,8 @@ SLOT_CASES = {
     "pickler persistent_id": ("pk.persistent_id = big", 1, 1, None),
     "getset int.real": (
         "r = getattr(big, 'real')", None, None,
-        "a getset of an inline owner: the binding box (rung 4)"),
+        "a getset of an inline owner boxes the owner, since self is an object "
+        "(note 12 open question 1)"),
     # The argument tuple and the sliced tuple of the wrapper call.
     "object.__getattribute__": ("r = object.__getattribute__(p, NAME)",
                                 0, 2, None),

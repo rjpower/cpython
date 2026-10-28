@@ -221,6 +221,9 @@ BENCHMARKS = [
     micro("object_setattr", "empty_loop"),
     micro("class_attr_store", "empty_loop"),
     micro("method_lazy_dict", "empty_loop"),
+    # The getsets (6d rung 4)
+    micro("getset_number", "empty_loop"),
+    micro("cell_contents", "empty_loop"),
 ]
 
 # The memory and collector group: fixed workloads, one loop each; each

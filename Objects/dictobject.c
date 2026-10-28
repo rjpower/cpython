@@ -6048,7 +6048,8 @@ PyObject_GenericGetDict(PyObject *obj, void *context)
     PyTypeObject *tp = Py_TYPE(obj);
     if (_PyType_HasFeature(tp, Py_TPFLAGS_INLINE_VALUES)) {
         // Reading __dict__ enters dictionary mode (note 09 section 6).
-        return Py_XNewRef((PyObject *)_PyObject_EnterDictMode(obj));
+        return Py_XNewRef((PyObject *)_PyObject_EnterDictMode(
+            obj, _Py_DICT_MODE_ON_REQUEST));
     }
     PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
     if (dictptr == NULL) {

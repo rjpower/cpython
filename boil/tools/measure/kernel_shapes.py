@@ -19,6 +19,8 @@ import _testinternalcapi
 def load(path):
     spec = importlib.util.spec_from_file_location("kernel", path)
     module = importlib.util.module_from_spec(spec)
+    # Registered, as driver.py does, so pickle and copy find its classes.
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 

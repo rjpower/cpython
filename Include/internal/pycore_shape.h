@@ -298,9 +298,25 @@ PyAPI_FUNC(int) _PyType_ShapeCount(PyTypeObject *type);
 // NO_STORAGE.  0, or -1 with an exception and OBJ unchanged.
 extern int _PyObject_ShapeStoreAttr(PyObject *obj, PyObject *name,
                                     PyValue value);
-// Enter dictionary mode, and return the instance dict (borrowed), made if
-// there is none; NULL with an exception, OBJ unchanged.
-extern PyDictObject *_PyObject_EnterDictMode(PyObject *obj);
+/* Why an object entered dictionary mode: the index into
+   object_stats.dict_mode, which counts each entry once, after it succeeds.
+   Callers pass the most specific reason; an ADD refused for both capacity
+   and the shape limit is CAPACITY. */
+typedef enum {
+    _Py_DICT_MODE_STR_NAME = 0,     // a store or load with a non-exact name
+    _Py_DICT_MODE_CAPACITY,         // an ADD with every slot taken
+    _Py_DICT_MODE_SHAPE_LIMIT,      // an ADD or REMOVE with 64 shapes
+    _Py_DICT_MODE_CLASS_ASSIGNED,   // __class__ assignment
+    _Py_DICT_MODE_DICT_ASSIGNED,    // __dict__ = d
+    _Py_DICT_MODE_DICT_DELETED,     // del __dict__
+    _Py_DICT_MODE_ON_REQUEST,       // __dict__, vars(), _PyObject_GetDictPtr()
+} _PyDictModeReason;
+#define _Py_DICT_MODE_NREASONS 7
+
+// Enter dictionary mode for REASON, and return the instance dict
+// (borrowed), made if there is none; NULL with an exception, OBJ unchanged.
+extern PyDictObject *_PyObject_EnterDictMode(PyObject *obj,
+                                             _PyDictModeReason reason);
 // Replace OBJ's attributes by DICT (NULL: none), in dictionary mode.
 extern void _PyObject_SetSlotDict(PyObject *obj, PyDictObject *dict);
 // 1 if OBJ has no instance attributes, else 0.

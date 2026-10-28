@@ -1167,6 +1167,135 @@ class DictionaryModeTests(unittest.TestCase):
             gc.collect()
 
 
+
+@cpython_only
+class DictionaryModeReasonTests(unittest.TestCase):
+    """Each entry into dictionary mode is counted once, for one reason,
+    after it succeeds (Py_STATS builds)."""
+
+    def setUp(self):
+        state = _testinternalcapi.dict_mode_counts()
+        if state is None:
+            self.skipTest("requires --enable-pystats")
+        if not state[0]:
+            sys._stats_on()
+            # Leave nothing for this process to dump at exit.
+            self.addCleanup(sys._stats_clear)
+            self.addCleanup(sys._stats_off)
+
+    def entries(self, operation, *args):
+        """The counters that OPERATION(*ARGS) changes, by how much."""
+        before = _testinternalcapi.dict_mode_counts()[1]
+        operation(*args)
+        after = _testinternalcapi.dict_mode_counts()[1]
+        return {k: after[k] - before[k] for k in after if after[k] != before[k]}
+
+    def assertEntersOnce(self, reason, o, operation, *args, again=None):
+        self.assertIsNotNone(shape_of(o))
+        self.assertEqual(self.entries(operation, o, *args), {reason: 1})
+        self.assertIsNone(shape_of(o))
+        # An object already in dictionary mode is not counted again.
+        self.assertEqual(self.entries(operation, o, *(again or args)), {})
+
+    def test_requests(self):
+        C = make_class()
+        for request in (lambda o: o.__dict__, vars,
+                        lambda o: o.__getstate__(),
+                        _testinternalcapi.object_dict_ptr):
+            with self.subTest(request=request):
+                self.assertEntersOnce("on_request", C(), request)
+
+    def test_str_name_store_and_load(self):
+        C = make_class()
+        self.assertEntersOnce("str_name", C(), setattr, StrName("z"), 3)
+        self.assertEntersOnce("str_name", C(), getattr, StrName("x"))
+
+    def test_capacity(self):
+        class C:
+            pass
+        o = C()
+        for i in range(MIN_SLOTS):
+            setattr(o, f"a{i}", i)
+        self.assertEntersOnce("capacity", o, setattr, "z", 0)
+
+    def exhaust_shapes(self, C):
+        for i in range(MAX_SHAPES + 1):
+            p = C()
+            setattr(p, f"n{i}", i)
+            if shape_of(p) is None:
+                break
+        self.assertEqual(shape_count(C), MAX_SHAPES)
+
+    def test_shape_limit(self):
+        class C:
+            pass
+        o = C()
+        o.a = 1
+        self.exhaust_shapes(C)
+        self.assertEntersOnce("shape_limit", o, setattr, "b", 2)
+
+    def test_full_object_and_shape_limit(self):
+        class C:
+            pass
+        full = []
+        for _ in range(2):
+            o = C()
+            for i in range(MIN_SLOTS):
+                setattr(o, f"a{i}", i)
+            full.append(o)
+        self.exhaust_shapes(C)
+        # An ADD refused on both counts is for capacity; a REMOVE needs
+        # no slot, so it is refused for the shape limit.
+        self.assertEntersOnce("capacity", full[0], setattr, "z", 0)
+        self.assertEntersOnce("shape_limit", full[1], delattr, "a1",
+                              again=("a2",))
+
+    def test_class_assignment(self):
+        C = make_class()
+        class D(C):
+            pass
+        def assign(o):
+            o.__class__ = D if type(o) is C else C
+        self.assertEntersOnce("class_assigned", C(), assign)
+
+    def test_dict_assignment_and_deletion(self):
+        C = make_class()
+        def assign(o):
+            o.__dict__ = {"a": 1}
+        def delete(o):
+            del o.__dict__
+        self.assertEntersOnce("dict_assigned", C(), assign)
+        self.assertEntersOnce("dict_deleted", C(), delete)
+        o = C()
+        self.assertEqual(self.entries(assign, o), {"dict_assigned": 1})
+        self.assertEqual(self.entries(delete, o), {})
+
+    def test_failed_conversions_are_not_counted(self):
+        C = make_class()
+        for request in (lambda o: o.__dict__, _testinternalcapi.object_dict_ptr):
+            failures = 0
+            for start in range(10):
+                o = C()
+                before = _testinternalcapi.dict_mode_counts()[1]
+                _testcapi.set_nomemory(start, start + 1)
+                try:
+                    res = request(o)
+                except MemoryError:
+                    res = None
+                finally:
+                    _testcapi.remove_mem_hooks()
+                after = _testinternalcapi.dict_mode_counts()[1]
+                if shape_of(o) is None:
+                    self.assertEqual(after["on_request"],
+                                     before["on_request"] + 1)
+                    continue
+                failures += 1
+                # _PyObject_GetDictPtr() fails with no exception.
+                if res is not None:
+                    self.assertEqual(res, (False, None, False))
+                self.assertEqual(after, before)
+            self.assertGreater(failures, 0)
+
 @cpython_only
 class VariableSizeTests(unittest.TestCase):
     """Subclasses of variable-size types keep a dict word of their own."""

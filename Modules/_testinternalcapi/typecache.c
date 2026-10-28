@@ -211,6 +211,45 @@ shape_generalisations(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(args))
                          (unsigned long long)reversioned);
 }
 
+// dict_mode_counts() -> None without Py_STATS, else (enabled, counts): whether
+// the interpreter collects statistics, and its entries into dictionary mode
+// by reason
+static PyObject *
+dict_mode_counts(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(args))
+{
+#ifdef Py_STATS
+    static const char *const names[_Py_DICT_MODE_NREASONS] = {
+        [_Py_DICT_MODE_STR_NAME] = "str_name",
+        [_Py_DICT_MODE_CAPACITY] = "capacity",
+        [_Py_DICT_MODE_SHAPE_LIMIT] = "shape_limit",
+        [_Py_DICT_MODE_CLASS_ASSIGNED] = "class_assigned",
+        [_Py_DICT_MODE_DICT_ASSIGNED] = "dict_assigned",
+        [_Py_DICT_MODE_DICT_DELETED] = "dict_deleted",
+        [_Py_DICT_MODE_ON_REQUEST] = "on_request",
+    };
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    PyStats *stats = interp->pystats_struct;
+    PyObject *counts = PyDict_New();
+    if (counts == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i < _Py_DICT_MODE_NREASONS; i++) {
+        uint64_t n = stats == NULL ? 0 : stats->object_stats.dict_mode[i];
+        PyObject *v = PyLong_FromUnsignedLongLong(n);
+        if (v == NULL || PyDict_SetItemString(counts, names[i], v) < 0) {
+            Py_XDECREF(v);
+            Py_DECREF(counts);
+            return NULL;
+        }
+        Py_DECREF(v);
+    }
+    return Py_BuildValue("(NN)", PyBool_FromLong(interp->pystats_enabled),
+                         counts);
+#else
+    Py_RETURN_NONE;
+#endif
+}
+
 // set_next_type_version(tag) -> the interpreter's next heap-type tag, then
 // sets it; 0 means the tags are exhausted
 static PyValue
@@ -319,6 +358,7 @@ static PyMethodDef test_methods[] = {
     {"shape_address", shape_address, METH_O},
     {"shape_version", shape_version, METH_O},
     {"shape_generalisations", shape_generalisations, METH_NOARGS},
+    {"dict_mode_counts", dict_mode_counts, METH_NOARGS},
     {"set_next_type_version", _PyCFunction_CAST(set_next_type_version), METH_O},
     {"type_cache_size", type_cache_size, METH_O},
     {"type_slot_capacity", type_slot_capacity, METH_O},

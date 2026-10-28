@@ -532,13 +532,15 @@ dict_from_slots(PyObject *obj)
    cleared first; then slot 0 is written, then the header.  Plain stores
    only: no call and no allocation.  Slot 0 may be an I32 or F64 field
    until the header changes; nothing runs in between, and the dictionary-
-   mode shape has no kinds, so no field is generalised. */
+   mode shape has no kinds, so no field is generalised.  An entry from
+   shape mode is counted for REASON once the header has changed. */
 static void
-publish_dict(PyObject *obj, PyDictObject *dict)
+publish_dict(PyObject *obj, PyDictObject *dict, _PyDictModeReason reason)
 {
     PyValue *slots = _PyObject_Slots(obj);
     _PyShape *shape = _PyObject_SHAPE(obj);
-    if (!_PyShape_IsDictMode(shape)) {
+    int entering = !_PyShape_IsDictMode(shape);
+    if (entering) {
         for (Py_ssize_t i = 1; i < shape->nslots; i++) {
             slots[i] = PyValue_NULL;
         }
@@ -546,6 +548,7 @@ publish_dict(PyObject *obj, PyDictObject *dict)
     slots[0] = dict == NULL ? PyValue_NULL
                             : PyValue_FromObject((PyObject *)dict);
     _PyObject_SetShape(obj, _PyType_DictModeShape(Py_TYPE(obj)));
+    OBJECT_STAT_INC_COND(dict_mode[reason], entering);
 }
 
 /* Convert OBJ, in shape mode, to dictionary mode.  If NAME is not NULL the
@@ -554,7 +557,8 @@ publish_dict(PyObject *obj, PyDictObject *dict)
    rooted until publication; the fields are held by OBJ until then.  On a
    failure OBJ is unchanged.  0, or -1 with an exception. */
 static int
-convert_to_dict(PyObject *obj, PyObject *name, PyValue value)
+convert_to_dict(PyObject *obj, PyObject *name, PyValue value,
+                _PyDictModeReason reason)
 {
     assert(!_PyShape_IsDictMode(_PyObject_SHAPE(obj)));
     PyThreadState *tstate = _PyThreadState_GET();
@@ -593,7 +597,7 @@ convert_to_dict(PyObject *obj, PyObject *name, PyValue value)
         // locals and runs no finalizer, so the object cannot change.
         (void)_PyGC_LiveCollectHere(tstate);
     }
-    publish_dict(obj, (PyDictObject *)dict);
+    publish_dict(obj, (PyDictObject *)dict, reason);
     res = 0;
   done:
     _PyThreadState_PopValueRoot(tstate, &dict_root);
@@ -650,8 +654,7 @@ _PyObject_ShapeStoreAttr(PyObject *obj, PyObject *name, PyValue value)
     }
     if (!PyUnicode_CheckExact(name)) {
         // Only exact str names take slots; the dict holds the others.
-        OBJECT_STAT_INC(dict_materialized_str_subclass);
-        return convert_to_dict(obj, name, value);
+        return convert_to_dict(obj, name, value, _Py_DICT_MODE_STR_NAME);
     }
     PyValue *slots = _PyObject_Slots(obj);
     Py_ssize_t ix = _PyShape_SlotOf(shape, name);
@@ -702,17 +705,22 @@ _PyObject_ShapeStoreAttr(PyObject *obj, PyObject *name, PyValue value)
         return -1;
     }
     assert(prep == _Py_SHAPE_PREPARE_LIMIT);
-    OBJECT_STAT_INC(dict_materialized_too_big);
-    return convert_to_dict(obj, name, value);
+    // A REMOVE needs no slot, so only an ADD can be refused for capacity.
+    _PyDictModeReason reason = _Py_DICT_MODE_SHAPE_LIMIT;
+    if (!PyValue_IsNull(value)
+        && shape->nslots >= type_shapes(shape->type)->capacity)
+    {
+        reason = _Py_DICT_MODE_CAPACITY;
+    }
+    return convert_to_dict(obj, name, value, reason);
 }
 
 PyDictObject *
-_PyObject_EnterDictMode(PyObject *obj)
+_PyObject_EnterDictMode(PyObject *obj, _PyDictModeReason reason)
 {
     assert(Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
     if (!_PyShape_IsDictMode(_PyObject_SHAPE(obj))) {
-        OBJECT_STAT_INC(dict_materialized_on_request);
-        if (convert_to_dict(obj, NULL, PyValue_NULL) < 0) {
+        if (convert_to_dict(obj, NULL, PyValue_NULL, reason) < 0) {
             return NULL;
         }
     }
@@ -731,7 +739,8 @@ void
 _PyObject_SetSlotDict(PyObject *obj, PyDictObject *dict)
 {
     assert(Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-    publish_dict(obj, dict);
+    publish_dict(obj, dict, dict == NULL ? _Py_DICT_MODE_DICT_DELETED
+                                         : _Py_DICT_MODE_DICT_ASSIGNED);
 }
 
 int

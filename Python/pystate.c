@@ -2147,6 +2147,7 @@ void
 _PyThreadState_DetachAt(PyThreadState *tstate, const _PyGCContext *ctx,
                         int pinned)
 {
+    _PyGC_INJECT(tstate, _PyGC_SITE_DETACH);
     _PyGC_RecordDetach(tstate, ctx, pinned);
     detach_thread(tstate, _Py_THREAD_DETACHED);
 }
@@ -2833,11 +2834,18 @@ _PyThreadState_PushFrame(PyThreadState *tstate, size_t size)
 {
     assert(size < INT_MAX/sizeof(PyObject *));
     assert(size >= (size_t)FRAME_SPECIALS_SIZE);
+    _PyInterpreterFrame *frame;
     if (_PyThreadState_HasStackSpace(tstate, (int)size)) {
-        return _PyThreadState_PushFrameUnchecked(
+        frame = _PyThreadState_PushFrameUnchecked(
             tstate, (int)size - FRAME_SPECIALS_SIZE);
     }
-    return push_chunk(tstate, (int)size - FRAME_SPECIALS_SIZE);
+    else {
+        frame = push_chunk(tstate, (int)size - FRAME_SPECIALS_SIZE);
+    }
+    if (frame != NULL) {
+        _PyGC_INJECT(tstate, _PyGC_SITE_PUSH_FRAME);
+    }
+    return frame;
 }
 
 void

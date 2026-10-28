@@ -591,6 +591,7 @@ _PyEval_ReleaseThreadAt(PyThreadState *tstate, const _PyGCContext *ctx,
                         int pinned)
 {
     assert(_PyThreadState_CheckConsistency(tstate));
+    _PyGC_INJECT(tstate, _PyGC_SITE_DETACH);
     _PyGC_RecordDetach(tstate, ctx, pinned);
     _PyThreadState_Detach(tstate);
 }
@@ -638,6 +639,7 @@ PyThreadState *
 _PyEval_SaveThreadAt(void *unused, const _PyGCContext *ctx, int pinned)
 {
     PyThreadState *tstate = _PyThreadState_GET();
+    _PyGC_INJECT(tstate, _PyGC_SITE_DETACH);
     _PyGC_RecordDetach(tstate, ctx, pinned);
     _PyThreadState_Detach(tstate);
     return tstate;

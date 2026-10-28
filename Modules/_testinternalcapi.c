@@ -3643,6 +3643,69 @@ gc_walk_here(PyObject *self, PyObject *Py_UNUSED(ignored))
     return Py_BuildValue("(NiN)", r.frames, fell_back, acts);
 }
 
+/* Arm one collection at site (_PyGC_SITE_*) on this thread; 0 disarms.
+   Returns the collections the sites have run on this thread. */
+static PyValue
+gc_collect_at(PyObject *self, PyValue arg)
+{
+    if (!PyValue_IsInlineInt(arg)) {
+        PyErr_SetString(PyExc_TypeError, "a site number");
+        return PyValue_NULL;
+    }
+    int site = PyValue_Int32(arg);
+    if (site < 0 || site >= _PyGC_SITE_COUNT) {
+        PyErr_SetString(PyExc_ValueError, "no such site");
+        return PyValue_NULL;
+    }
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
+    ts->gc_trace.inject_site = site;
+    return PyValue_FromResult(PyLong_FromLongLong(ts->gc_trace.injected));
+}
+
+/* callable("first", "second", 3), built by Py_VaBuildStack(), whose
+   do_mkstack() is an injection site */
+static PyValue
+gc_call_built(PyObject *self, PyValue arg)
+{
+    PyObject *callable = PyValue_Object(arg);
+    if (callable == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(
+        PyObject_CallFunction(callable, "ssi", "first", "second", 3));
+}
+
+/* PYTHON_GCSTRESS=every from now on; 0 turns it off */
+static PyValue
+gc_set_stress(PyObject *self, PyValue arg)
+{
+    if (!PyValue_IsInlineInt(arg) || PyValue_Int32(arg) < 0) {
+        PyErr_SetString(PyExc_ValueError, "a count of allocations");
+        return PyValue_NULL;
+    }
+    _PyGC_LiveSetStress(_PyInterpreterState_GET(), PyValue_Int32(arg));
+    return PyValue_FromObject(Py_None);
+}
+
+/* A static type that only gc_ready_static_type() readies, as an extension
+   module readies its static types: the header leaves ob_type to
+   PyType_Ready(), which allocates before it sets it. */
+static PyTypeObject LateStatic_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi.LateStatic",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+};
+
+static PyObject *
+gc_ready_static_type(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    if (PyType_Ready(&LateStatic_Type) < 0) {
+        return NULL;
+    }
+    return Py_NewRef(&LateStatic_Type);
+}
+
 /* Call callable while a core frame holds [None] only in a PyMem block, and
    return the list if give_back is set (_PyGC_TestHoldInCoreMem()). */
 static PyObject *
@@ -4015,6 +4078,10 @@ static PyMethodDef module_functions[] = {
     {"gc_collect_with_signal", _PyCFunction_CAST(gc_collect_with_signal), METH_O},
     {"gc_frames_off_chain", gc_frames_off_chain, METH_VARARGS},
     {"gc_hold_in_core_mem", gc_hold_in_core_mem, METH_VARARGS},
+    {"gc_collect_at", _PyCFunction_CAST(gc_collect_at), METH_O},
+    {"gc_call_built", _PyCFunction_CAST(gc_call_built), METH_O},
+    {"gc_set_stress", _PyCFunction_CAST(gc_set_stress), METH_O},
+    {"gc_ready_static_type", gc_ready_static_type, METH_NOARGS},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
     {"gc_raw_block_is_object", _PyCFunction_CAST(gc_raw_block_is_object), METH_O},
     {"gc_segment_of", _PyCFunction_CAST(gc_segment_of), METH_O},

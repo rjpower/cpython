@@ -10,6 +10,7 @@ from test.support.script_helper import (assert_python_ok,
 from test.support import threading_helper, gc_threshold
 
 import gc
+import os
 import sys
 import textwrap
 import threading
@@ -1207,6 +1208,8 @@ class TracingCollectorTests(unittest.TestCase):
         gc.enable()
         self.addCleanup(gc.disable)
 
+    @unittest.skipIf(os.environ.get("PYTHON_GCSTRESS"),
+                     "PYTHON_GCSTRESS replaces the byte trigger")
     def test_threshold_is_bytes(self):
         self.assertEqual(gc.get_threshold()[0], 32 * 1024 * 1024)
         gc.collect()
@@ -1270,6 +1273,8 @@ class TracingCollectorTests(unittest.TestCase):
             gc.callbacks.remove(callback)
         return starts
 
+    @unittest.skipIf(os.environ.get("PYTHON_GCSTRESS"),
+                     "PYTHON_GCSTRESS replaces the byte trigger")
     @gc_threshold(1024 * 1024)
     def test_allocation_triggers_collection(self):
         # The garbage keeps the live heap below the allocated bytes.
@@ -1682,6 +1687,72 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertEqual(out.split(), [b"weakref", b"W"])
         self.assertIn(b"candidate W at", err)
         self.assertIn(b"of a precise frame", err)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_injection_sites(self):
+        # Note 11 section 8.3: _testinternalcapi.gc_collect_at() arms one
+        # collection at a transition that allocation intervals do not hit;
+        # what the transition holds survives it.
+        DETACH, PUSH_FRAME, SPAN_REBASE, MKSTACK = 1, 2, 3, 4
+        collect_at = _testinternalcapi.gc_collect_at
+
+        def fired(site, action):
+            before = collect_at(site)
+            try:
+                result = action()
+            finally:
+                after = collect_at(0)
+            self.assertEqual(after, before + 1, f"site {site} did not run")
+            return result
+
+        fired(DETACH, lambda: time.sleep(0))
+        def f(a, b):
+            return [a, b]
+        args = (object(), object())
+        self.assertEqual(fired(PUSH_FRAME, lambda: list(map(f, *zip(args)))),
+                         [list(args)])
+        fired(SPAN_REBASE, _testinternalcapi.test_value_spans)
+        self.assertEqual(
+            fired(MKSTACK, lambda: _testinternalcapi.gc_call_built(
+                lambda *a: a)),
+            ("first", "second", 3))
+        with self.assertRaises(ValueError):
+            collect_at(99)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_stress(self):
+        # PYTHON_GCSTRESS=N collects at every Nth object allocation through
+        # the inline path.
+        code = textwrap.dedent("""
+            import gc, _testinternalcapi
+            before = _testinternalcapi.gc_root_stats()["total"]["collections"]
+            junk = [[i] for i in range(10_000)]
+            after = _testinternalcapi.gc_root_stats()["total"]["collections"]
+            print(after - before)
+        """)
+        rc, out, err = assert_python_ok("-c", code, PYTHON_GCSTRESS="1000")
+        self.assertGreaterEqual(int(out), 10)
+        rc, out, err = assert_python_ok("-c", code)
+        self.assertLess(int(out), 10)
+        rc, out, err = assert_python_failure("-c", "pass",
+                                             PYTHON_GCSTRESS="often")
+        self.assertIn(b"PYTHON_GCSTRESS must be a count", err)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_stress_static_type_ready(self):
+        # PyType_Ready() registers a static type as a root before it sets
+        # the type's ob_type, and allocates in between; a collection there
+        # traverses the type without reading it.  In a child, since a static
+        # type is readied once per process.
+        code = textwrap.dedent("""
+            import _testinternalcapi
+            _testinternalcapi.gc_set_stress(1)
+            t = _testinternalcapi.gc_ready_static_type()
+            _testinternalcapi.gc_set_stress(0)
+            print(t.__name__)
+        """)
+        rc, out, err = assert_python_ok("-c", code)
+        self.assertEqual(out.strip(), b"LateStatic")
 
     def test_verify_mode_syntax(self):
         for bad in ("retain:", "retain:pymem,", "kill:heap", "retainer"):

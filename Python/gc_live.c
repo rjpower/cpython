@@ -1168,6 +1168,11 @@ record_stats(GCState *gc, const struct gc_generation_stats *cur)
     _Py_atomic_store_uint32_release(&gs->update_seq, seq + 2);
 }
 
+/* PYTHON_GCSTRESS=N: every Nth object allocation of a thread collects
+   through the inline path, as an allocation past the threshold does.  The
+   limit stays at 0, so that each allocation reaches the count. */
+static int stress_every = 0;
+
 static Py_ssize_t
 collect(PyThreadState *tstate, _PyGC_Reason reason)
 {
@@ -1249,6 +1254,9 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
     gc->alloc_bytes = 0;
     gc->alloc_limit = gc->alloc_threshold > 0
         ? Py_MAX(gc->alloc_threshold, res.live_bytes) : PY_SSIZE_T_MAX;
+    if (stress_every > 0) {
+        gc->alloc_limit = 0;
+    }
     free(res.dead);
 
     if (gc->debug & _PyGC_DEBUG_STATS) {
@@ -1401,9 +1409,36 @@ can_collect(PyThreadState *tstate)
 }
 
 void
+_PyGC_LiveSetStress(PyInterpreterState *interp, int every)
+{
+    GCState *gc = &interp->gc;
+    stress_every = every;
+    gc->alloc_limit = every > 0 ? 0 : gc->alloc_bytes + gc->alloc_threshold;
+}
+
+void
+_PyGC_InjectCollect(PyThreadState *tstate)
+{
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    ts->gc_trace.inject_site = 0;
+    if (_PyGC_LiveCollectHere(tstate)) {
+        ts->gc_trace.injected++;
+    }
+}
+
+void
 _PyGC_LiveOnThreshold(PyThreadState *tstate)
 {
     GCState *gc = &tstate->interp->gc;
+    if (stress_every > 0) {
+        _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+        if (++ts->gc_trace.stress_count >= stress_every) {
+            ts->gc_trace.stress_count = 0;
+            (void)_PyGC_LiveCollectHere(tstate);
+        }
+        gc->alloc_limit = 0;
+        return;
+    }
     /* Finalizers, weak reference callbacks and gc.callbacks run Python code,
        which is safe only where the eval loop checks its breaker: the
        collection waits for that, as the cycle collector's does.  Code that
@@ -1491,6 +1526,21 @@ _PyGC_Init(PyInterpreterState *interp)
         return _PyStatus_NO_MEMORY();
     }
     gcstate->alloc_limit = gcstate->alloc_bytes + gcstate->alloc_threshold;
+    if (_Py_IsMainInterpreter(interp) && interp->config.use_environment) {
+        const char *env = getenv("PYTHON_GCSTRESS");
+        if (env != NULL && *env != '\0') {
+            char *end;
+            long n = strtol(env, &end, 10);
+            if (*end != '\0' || n < 0 || n > INT_MAX) {
+                return _PyStatus_ERR("PYTHON_GCSTRESS must be a count of "
+                                     "allocations");
+            }
+            stress_every = (int)n;
+        }
+    }
+    if (stress_every > 0) {
+        gcstate->alloc_limit = 0;
+    }
     return _PyStatus_OK();
 }
 

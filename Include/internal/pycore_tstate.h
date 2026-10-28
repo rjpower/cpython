@@ -101,11 +101,41 @@ typedef struct _PyThreadStateImpl {
         // handler may hold a value only in a C local: the scan of this
         // thread covers its eval loop activations too.
         int scan_activations;
+        // The site (_PyGC_SITE_*) armed for one collection, or 0, and the
+        // collections the sites have run (_PyGC_INJECT())
+        int inject_site;
+        int64_t injected;
+        // Allocations since the last PYTHON_GCSTRESS collection
+        int stress_count;
     } gc_trace;
 
 
 
 } _PyThreadStateImpl;
+
+/* The sites where _testinternalcapi.gc_collect_at() arms one collection
+ * (note 11 section 8.3, work/10a-1.md item 8): transitions that allocation
+ * intervals do not reliably hit.  _PyGC_INJECT() is a load and a compare
+ * in every build, so that the gated builds run the injection tests. */
+#define _PyGC_SITE_DETACH       1  /* a detach entry, before the record */
+#define _PyGC_SITE_PUSH_FRAME   2  /* _PyThreadState_PushFrame(), before
+                                      the frame is initialized */
+#define _PyGC_SITE_SPAN_REBASE  3  /* _PyValueSpan_Rebase(), after it */
+#define _PyGC_SITE_MKSTACK      4  /* do_mkstack(), after each value */
+#define _PyGC_SITE_COUNT        5
+
+PyAPI_FUNC(void) _PyGC_InjectCollect(PyThreadState *tstate);
+// PYTHON_GCSTRESS=every from now on; 0 turns it off
+PyAPI_FUNC(void) _PyGC_LiveSetStress(PyInterpreterState *interp, int every);
+
+#define _PyGC_INJECT(tstate, site) \
+    do { \
+        if (((_PyThreadStateImpl *)(tstate))->gc_trace.inject_site \
+            == (site)) \
+        { \
+            _PyGC_InjectCollect(tstate); \
+        } \
+    } while (0)
 
 #ifdef __cplusplus
 }

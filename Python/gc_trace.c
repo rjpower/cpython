@@ -1856,16 +1856,15 @@ live_drain(trace_t *t)
     t->current = NULL;
 }
 
-/* Traverse a root object that is not marked: a static type, or an immortal
-   heap object. */
-static int
-live_traverse_root(PyObject *op, void *arg)
+/* Traverse a static type, a root that is not marked.  type_ready()
+   registers a type before it sets the type's own type and allocates in
+   between, so this does not read ob_type. */
+static void
+live_traverse_static_type(PyTypeObject *type, trace_t *t)
 {
-    trace_t *t = arg;
-    t->current = op;
-    (void)_PyGC_TraceTraverse(op, live_visit, t);
+    t->current = (PyObject *)type;
+    (void)_PyType_TraverseStatic(type, live_visit, t);
     live_drain(t);
-    return 0;
 }
 
 static void _Py_NO_SANITIZE_ADDRESS
@@ -2199,7 +2198,7 @@ live_mark_roots(trace_t *t, PyThreadState *tstate)
             Py_ssize_t ntypes;
             PyTypeObject **types = _PyGC_TraceStaticTypes(interp, &ntypes);
             for (Py_ssize_t i = 0; i < ntypes; i++) {
-                (void)live_traverse_root((PyObject *)types[i], t);
+                live_traverse_static_type(types[i], t);
             }
         }
         if (roots & _PyGC_TRACE_ROOT_IMMORTAL) {

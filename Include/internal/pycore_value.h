@@ -352,6 +352,7 @@ static inline void
 _PyValueSpan_Rebase(_PyValueRoot *root, PyValue *base)
 {
     root->base = base;
+    _PyGC_INJECT(PyThreadState_GetUnchecked(), _PyGC_SITE_SPAN_REBASE);
 }
 
 /* The collector scans most C frames conservatively, so a popped value left

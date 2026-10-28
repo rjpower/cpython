@@ -599,6 +599,233 @@ Before is rung 2 (80ba2edf94c), after is the rung's last commit.
   test suite (Py_STATS).
 - **Slots allocated against slots used**, over the benchmark set.
 
+### Results
+
+Measured on 2026-10-27 with gate 4 (`boil/bench/run.py --set all
+--metric instr,rss`). Before is 80ba2edf94c (rung 2), built in a
+temporary worktree. After is dba354f43ec, the last commit before the
+storage-marking fixup. Both are default builds (`CC=gcc`). The files are
+`results/6c-rung2-before.json` and `results/6c-rung3.json`. Wall time
+was not measured (see "As built").
+
+| benchmark | before | after | change |
+|---|---:|---:|---:|
+| richards | 515.55M | 355.50M | -31.05% |
+| go | 1,086.84M | 1,349.97M | +24.21% |
+| raytrace | 2,748.03M | 2,698.66M | -1.80% |
+| deltablue | 41.80M | 42.33M | +1.27% |
+| chaos | 570.23M | 575.55M | +0.93% |
+| nbody | 687.72M | 723.87M | +5.26% |
+| json_loads | 7.750M | 7.641M | -1.41% |
+| deepcopy | 3.783M | 3.754M | -0.76% |
+| logging_format | 683.4K | 756.5K | +10.70% |
+| logging_simple | 617.8K | 706.7K | +14.40% |
+| logging_silent | 16.59K | 16.64K | +0.28% |
+| attr_load | 41.0 | 42.0 | +2.39% |
+| attr_load_poly | 185.9 | 60.0 | -67.74% |
+| attr_store | 44.0 | 44.1 | +0.17% |
+| attr_store_poly | 280.9 | 263.1 | -6.36% |
+| attr_load_after_dict | 44.0 | 78.1 | +77.60% |
+| attr_store_after_dict | 88.0 | 92.0 | +4.61% |
+| attr_load_dataclass | 41.0 | 42.0 | +2.53% |
+| attr_store_dataclass | 496.1 | 522.1 | +5.25% |
+| new_instance | 1,755.7 | 1,626.0 | -7.39% |
+| new_instance_empty | 1,457.1 | 1,339.1 | -8.10% |
+| empty_loop | 58.7 | 60.6 | +3.32% |
+
+Kernels are instructions per loop, and micro benchmarks instructions per
+iteration. Over the whole set the kernel geomean is 1.004 (29
+kernels), the micro geomean 1.012 (45) and the memory-set instruction
+geomean 0.954 (6).
+
+What causes the changes:
+
+- **richards, -31%, and attr_load_poly, -68%: `LOAD_ATTR_SHAPE_POLY`.**
+  Before, 52 `LOAD_ATTR_SHAPE` sites missed on their second shape and
+  took the generic path. After, 22 of them are POLY, and the generic
+  stores fall from 18 to 10.
+- **go, +24%: polymorphic stores are generic (decision 4).** Before,
+  22 store sites were `STORE_ATTR_INSTANCE_VALUE`, which wrote through a
+  shared-keys index and did not depend on the shape. Section 7 deletes
+  that handler. After, those sites are plain `STORE_ATTR`:
+  - `Square.move`: color, reference, ledges (five sites) and used;
+  - `Square.remove`: removestamp, ledges and color;
+  - `Square.find`: reference.
+
+  Squares have several live shapes: `Board.reset` gives every square
+  color and used, `move` adds reference and ledges on a square's first
+  move, and `Board.useful` adds temp_ledges. So each of these sites sees
+  more than one shape of `Square`. In the profile, the generic store
+  path (`generic_setattr_value`, `PyObject_SetAttrValue`,
+  `_PyShape_SlotOf`, `_PyShape_ResolveStore`,
+  `_PyType_LookupValueAndVersion`) accounts for about 10% of go's
+  instructions, against none before. Load sites are POLY (48) or SHAPE
+  (92); the 35 generic loads are in cold code (`Board.check`, `reset`,
+  `__repr__`). This is the cost the decision named, not a defect. A
+  store poly handler is the hand-off item.
+- **logging_simple, +14%, and logging_format, +11%: conversion to
+  dictionary mode.** The formatter reads `record.__dict__`, which
+  converts each new `LogRecord`. With call graphs, `convert_to_dict` is
+  9.0% of logging_simple's instructions, about 207M. Before, rung 2
+  materialised a split dict that shared the type's keys: 0.35%, about
+  7M. That is about 200M of the 240M increase. The copy is note 09's
+  design (`__dict__` does not alias, and dictionary mode is terminal).
+  Within it, `dict_from_slots` starts from an empty dict and resizes as
+  it inserts (`dictresize`, 3%); presizing is on the hand-off list.
+- **attr_load_after_dict, +34 instructions per load:
+  `LOAD_ATTR_WITH_HINT`.** Before, a read of `__dict__` left the values
+  inline and aliased, so the site stayed `LOAD_ATTR_INSTANCE_VALUE`.
+  After, the object is in dictionary mode, and the site is
+  `LOAD_ATTR_WITH_HINT`, as note 09 section 6 prescribes. Its checks
+  are all needed: slot 0 may be NULL or a dict subclass, and the hint
+  needs the keys kind, the length and the key. attr_store_after_dict is
+  +4 instructions, for the same reason.
+- **About +2 instructions per iteration on every micro benchmark: a
+  register spill in `_PyEval_EvalFrameDefault`.** empty_loop goes from
+  62.4 to 64.4 instructions per iteration (`perf stat`, 20M iterations).
+  The source of `FOR_ITER_RANGE`, `STORE_FAST` and `JUMP_BACKWARD` is
+  the same in both builds. In the compiled `FOR_ITER_RANGE`, rung 2
+  keeps the frame's register-file base in `%r13`. Rung 3 spills it to
+  `-0x398(%rbp)` and reloads it twice in the handler: `mov
+  -0x398(%rbp),%rcx` before the guard and again before the store of the
+  result. Otherwise the two handlers are the same, instruction for
+  instruction. The handler set changed (POLY added, the `_WITH_VALUES`
+  and `LAZY_DICT` handlers removed), and gcc allocates registers over
+  the whole function, so every handler that indexes the register file
+  pays the reload. This is not attributable to any one handler, and no
+  rung-3 source change can remove it without tuning the interpreter
+  loop. It is on the hand-off list.
+- **new_instance, -7%, and new_instance_empty, -8%:** there is no
+  pre-header, `PyDictValues` header or order bytes to initialise.
+- **nbody, +5% (36M instructions)** is not attributed. The register
+  spill is a candidate, but I have not verified it. It is on the
+  hand-off list.
+
+Memory:
+
+| measure | before | after | change |
+|---|---:|---:|---:|
+| instances_1m peak RSS | 127,536 KiB | 118,520 KiB | -7.07% |
+| dicts_200k peak RSS | 66,036 KiB | 62,764 KiB | -4.95% |
+| tuples_10m peak RSS | 859,420 KiB | 746,320 KiB | -13.16% |
+| startup peak RSS | 13,872 KiB | 13,744 KiB | -0.92% |
+| `sys.getsizeof` of a four-attribute instance | 24 | 56 | (see below) |
+| richards' 14 classes: shape tables | 6,528 B | 6,224 B | -4.7% |
+| richards' 14 classes: plan cache | 15,888 B | 15,888 B | 0 |
+| 10,000 transient classes with instances, RSS growth | 31,644 KiB | 33,944 KiB | +7.3% |
+
+The RSS geomean is 0.997 over the kernels and 0.968 over the memory set.
+Three runs per build agree within 0.3%, except one collector_live512
+run.
+
+- **instances_1m, -7%:** there is no 16-byte pre-header and no
+  `PyDictValues` header. The six fixed slots (capacity `S + 2`) take
+  the place of rung 2's decaying allocation.
+- **`sys.getsizeof`:** before, 24 did not count the inline values or
+  the pre-header. After, 56 is the whole object: the header word and
+  six slots.
+- **dicts_200k, -5%:** `PyDictObject` is 8 bytes smaller without
+  `ma_values`.
+- **Transient classes, +7%:** each class's shape table holds the
+  capacity and the shapes. This is not attributed further.
+- **Not attributed:** tuples_10m, -13% (113 MB, stable over three runs;
+  tuples are untouched by this rung, and the one allocator change is
+  that instances lost their separate pre-header heap); coroutines RSS
+  +9.4%; raytrace RSS +4.4%; collector_live512 +3.5%. These are on the
+  hand-off list.
+- **Dictionary-mode entries by reason and slots allocated against slots
+  used** were not measured (see "As built").
+
+## As built
+
+Where the code differs from the sections above, and why. The rung is
+eight commits:
+
+- f9685f65468, the storage;
+- bb5ff82e6e9, `LOAD_ATTR_SHAPE_POLY`;
+- 798977ee556, the review fixes;
+- e7adfa36b13, dataclass capacity;
+- 49580514d90, the `_testbuffer` traverse (under "Hazards found");
+- dba354f43ec, split tables;
+- 26d218d54a9, the collector marks attribute storage;
+- this one, the measurements and this section.
+
+- **A declined site records its row.** When `set_shape_guard` declines
+  because the site has seen another shape, it still records the new
+  shape's row in the poly table (`fb_record`). Without that record, a
+  site that alternates between two shapes lost the first one on every
+  re-specialisation and oscillated between them without reaching POLY.
+- **`LOAD_ATTR_SHAPE_POLY`** is `unused/1 + _GUARD_SHAPE_POLY + unused/8 +
+  _LOAD_ATTR_SHAPE_POLY`. The guard is its own op so that the generator
+  checks the owner in pointer space and does not box it.
+  `_PyFb_ShapeRow` matches the live shape and its `type_version` against
+  each row. A slot row reads `poly->index[row]`, and a method row pushes
+  the row's descriptor and the owner. A site becomes POLY when every row
+  is `LOAD_ATTR_SHAPE` or `LOAD_ATTR_METHOD_SHAPE`, and rows of
+  different types may mix. The megamorphic test warms for eight
+  cooldowns: the site reaches MEGA after about a hundred iterations.
+- **Members guard on the version only.** `LOAD_ATTR_SLOT` and
+  `STORE_ATTR_SLOT` use `_GUARD_SHAPE_VERSION` without `_GUARD_SHAPE`. A
+  member's offset is fixed by the type, so every shape of the type is
+  valid, and comparing the live shape's `type_version` checks the type
+  in two loads.
+- **The lazy-dict method path is lost.** With
+  `LOAD_ATTR_METHOD_LAZY_DICT` gone, method calls on objects whose dict
+  is reached through `tp_dictoffset` stay generic. That covers exception
+  instances, functions, int and tuple subclasses, and C types with a
+  computed dict word. It costs performance only. Note 09 has no handler
+  for it.
+- **Sibling layouts with a dict word.** Two variable-size subclasses
+  whose only difference is the computed dict word have the same layout
+  (`dict_word_added`, used in `shape_differs` and `same_slots_added`).
+  `_PyObject_GC_NewVar` zeroes the dict word, and `_PyObject_GC_Resize`
+  moves it with the items, for types without `MANAGED_DICT`.
+- **The shape hook collects with `_PyGC_LiveCollectHere`**, the
+  allocation-triggered collection that runs no Python code.
+- **Dataclass capacity** (note 09's capacity paragraph, amended
+  2026-10-27). A type that has never allocated an instance
+  (`_PyTypeShapes.allocated`, set by `_PyType_AllocSlotsSize`) and has
+  no subclasses recomputes its capacity when `__static_attributes__` is
+  assigned. dataclasses assigns the field names there before the class
+  can be instantiated, so an 8-field dataclass has 10 slots.
+- **Split tables went in this rung** (decision 3) as dba354f43ec. A dict
+  keeps its values in its keys object only.
+- **gdb is not installed** on the build machine, so test_gdb skips. The
+  printer changes (shape slots, dictionary mode, no `ma_values`) are
+  checked by a parse only.
+- **No wall-clock numbers.** Other agents ran gates on the machine during
+  the measurements, so only instructions and RSS were recorded (gate 4,
+  `--metric instr,rss`). Both are insensitive to load.
+- **Dictionary-mode entries by reason and slots allocated against slots
+  used** need counters that this rung does not add. Rung 5 records them,
+  as the Risks section says.
+- **Hazards.** test_buffer's failure in the fixup's gate 2 was a missing
+  traverse in `_testbuffer`, not a flake (see "Hazards found"). The
+  traverse audit found that `_testcapi.HeapCTypeWithDict` and its
+  variants never visit their dict. The coordinator ruled that the
+  collector marks an instance's attribute storage itself
+  (26d218d54a9; note 09 section 6, amendment of 2026-10-27).
+
+### Hand-off
+
+Each item is a measured cost that this rung records and does not tune.
+
+1. **A store poly handler.** go is +24% because the polymorphic store
+   sites of `Square` are generic (decision 4); about 10% of its
+   instructions are in the generic store path.
+2. **Presize the dict in `dict_from_slots`.** `dictresize` is 3% of
+   logging_simple, inside the conversion's 9%.
+3. **The register spill in `_PyEval_EvalFrameDefault`.** It costs
+   about +2 instructions per iteration on every micro benchmark: the
+   register-file base moves from `%r13` to `-0x398(%rbp)`.
+4. **Not attributed:**
+   - nbody, +5% of instructions;
+   - tuples_10m, -13% peak RSS;
+   - coroutines, +9.4% peak RSS;
+   - raytrace, +4.4% peak RSS;
+   - collector_live512, +3.5% peak RSS;
+   - 10,000 transient classes, +7.3% RSS growth.
+
 ## Review
 
 Reviewed by `boil/tools/review.sh` (codex, xhigh) against note 09, note 04

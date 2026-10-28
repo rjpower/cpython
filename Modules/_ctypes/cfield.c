@@ -263,7 +263,8 @@ PyCField_set_lock_held(PyObject *op, PyObject *inst, PyObject *value)
         return -1;
     }
     return PyCData_set(st, inst, self->proto, self->setfunc, value,
-                       self->index, _pack_legacy_size(self), ptr);
+                       self->index, _pack_legacy_size(self),
+                       self->byte_size, ptr);
 }
 
 /* The converters (setfunc, getfunc) are object forms until rung 4

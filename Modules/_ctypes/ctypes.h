@@ -524,7 +524,7 @@ PyCData_get(ctypes_state *st, PyObject *type, GETFUNC getfunc, PyObject *src,
 extern int
 PyCData_set(ctypes_state *st,
           PyObject *dst, PyObject *type, SETFUNC setfunc, PyObject *value,
-          Py_ssize_t index, Py_ssize_t size, char *ptr);
+          Py_ssize_t index, Py_ssize_t size, Py_ssize_t nbytes, char *ptr);
 
 extern void _ctypes_extend_error(PyObject *exc_class, const char *fmt, ...);
 

@@ -352,12 +352,6 @@ class TestJointOps:
         self.assertEqual(sum(elem.hash_count for elem in d), n)
         self.assertEqual(d3, dict.fromkeys(d, 123))
 
-    # In a debug build gc.collect()'s argument parser leaves an alignment
-    # slot of its frame unwritten; it keeps a stale pointer to the cycle,
-    # which the conservative stack scan takes for a root (note 08, the hack
-    # register).
-    @unittest.skipIf(support.Py_DEBUG,
-                     "a stale word in a C frame keeps the cycle alive")
     def test_container_iterator(self):
         # Bug #3680: tp_traverse was not implemented for set iterator object
         class C(object):

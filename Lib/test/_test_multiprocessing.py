@@ -3429,10 +3429,6 @@ class _TestPool(BaseTestCase):
         # check that we indeed waited for all jobs
         self.assertGreater(time.monotonic() - t_start, 0.9)
 
-    # A pool thread blocked in a C call keeps a stale word that points at the
-    # MapResult in that call's frame, and the conservative scan of the
-    # thread's stack keeps the tasks alive.
-    @unittest.skip("a blocked pool thread's C frame keeps the results alive")
     def test_release_task_refs(self):
         # Issue #29861: task arguments and results should not be kept
         # alive after we are done with them.
@@ -5368,11 +5364,6 @@ class _TestFinalize(BaseTestCase):
         conn.close()
         os._exit(0)
 
-    # In a release build a padding slot in a call's C frame can hold a stale
-    # copy of an earlier call's argument tuple, and the conservative stack
-    # scan keeps the dead object alive until a later collection.
-    @unittest.skipUnless(support.Py_DEBUG,
-                         "a stale word in a call's frame keeps a dead object alive")
     @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
     def test_finalize(self):
         conn, child_conn = self.Pipe()

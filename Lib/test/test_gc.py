@@ -1200,9 +1200,8 @@ class GCTogglingTests(unittest.TestCase):
 class TracingCollectorTests(unittest.TestCase):
     """The behaviour that the tracing collector adds."""
 
-    # The conservative scan of C stacks can keep one attempt's garbage alive;
-    # the tests that need garbage freed try again with new objects.
-    ATTEMPTS = 5
+    # The tests that need garbage freed try once (note 11 section 8.2).
+    ATTEMPTS = 1
 
     def setUp(self):
         gc.collect()

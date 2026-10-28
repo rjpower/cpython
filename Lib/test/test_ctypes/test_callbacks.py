@@ -119,9 +119,7 @@ class Callbacks(unittest.TestCase):
         gc.collect()
         live = [x for x in gc.get_objects()
                 if isinstance(x, X)]
-        # A stale word on the C stack, which the collector scans
-        # conservatively, can keep the last one alive; a leak keeps them all.
-        self.assertLessEqual(len(live), 1)
+        self.assertEqual(len(live), 0)
 
     def test_issue12483(self):
         class Nasty:

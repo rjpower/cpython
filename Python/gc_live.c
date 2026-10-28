@@ -297,10 +297,12 @@ _PyGC_LiveVisitRoots(PyInterpreterState *interp, visitproc visit, void *arg)
    now fails, once. */
 static int fail_alloc_countdown = 0;
 
-void
+int
 _PyGC_LiveFailAlloc(int n)
 {
+    int left = fail_alloc_countdown;
     fail_alloc_countdown = n;
+    return left;
 }
 
 static live_call *
@@ -1319,6 +1321,75 @@ record_stats(GCState *gc, const struct gc_generation_stats *cur)
     _Py_atomic_store_uint32_release(&gs->update_seq, seq + 2);
 }
 
+/* The deletion barrier of test 9.16 (_testinternalcapi.gc_delete_barrier()).
+   Armed, the next deletion of a subinterpreter stops at the start of its
+   pin wait, after its close, with the head lock released, until the main
+   interpreter's next collection whose domain names it has marked.  That
+   collection lets it go, waits until it blocks on the pin, then routes and
+   unpins.  The sequence numbers order the routing of a closed owner's
+   calls and the deletion's passing of its pin wait, which precedes the
+   unlink. */
+static struct {
+    int armed;
+    PyInterpreterState *deleting;  // stopped at the barrier
+    PyEvent go;
+    int pin_waited;   // the deletion was seen blocked on the pin
+    int64_t seq;
+    int64_t routed;   // the seq of the routing of a closed owner's calls
+    int64_t unpinned; // the seq of the deletion's passing of its pin wait
+    Py_ssize_t remapped;  // the calls routed from a closed owner to main
+} barrier;
+
+void
+_PyGC_LiveDeleteBarrierForTest(int on)
+{
+    memset(&barrier, 0, sizeof(barrier));
+    barrier.armed = on;
+}
+
+static void
+barrier_at_delete(PyInterpreterState *interp)
+{
+    if (!barrier.armed || _Py_IsMainInterpreter(interp)) {
+        return;
+    }
+    barrier.armed = 0;
+    _Py_atomic_store_ptr(&barrier.deleting, interp);
+    HEAD_UNLOCK(&_PyRuntime);
+    PyEvent_Wait(&barrier.go);
+    HEAD_LOCK(&_PyRuntime);
+}
+
+static void
+barrier_after_mark(PyThreadState *tstate, const _PyGCMarkResult *res)
+{
+    PyInterpreterState *deleting = _Py_atomic_load_ptr(&barrier.deleting);
+    if (deleting == NULL || _PyEvent_IsSet(&barrier.go)
+        || !_Py_IsMainInterpreter(tstate->interp))
+    {
+        return;
+    }
+    int named = 0;
+    for (int d = 0; d < res->ndomain; d++) {
+        named |= res->domain[d] == deleting;
+    }
+    if (!named) {
+        return;
+    }
+    _PyEvent_Notify(&barrier.go);
+    // The deletion is now in its pin wait or on its way there; this
+    // collection holds the pin, so it gets there.
+    for (;;) {
+        HEAD_LOCK(&_PyRuntime);
+        int waiting = deleting->gc.queue_unpinned != NULL;
+        HEAD_UNLOCK(&_PyRuntime);
+        if (waiting) {
+            barrier.pin_waited = 1;
+            return;
+        }
+    }
+}
+
 /* Splice each call of the batch onto its owner's queue, in batch order
    (note 13 section 3.2): the owner of a weak reference callback is the
    weak reference's, of every other call its object's; an object of a
@@ -1345,6 +1416,8 @@ route_calls(PyThreadState *tstate, const _PyGCMarkResult *res,
         }
         if (owner->gc.queue_phase == QUEUE_CLOSED) {
             owner = main;
+            barrier.remapped++;
+            barrier.routed = _Py_atomic_add_int64(&barrier.seq, 1) + 1;
         }
         call_batch one = {c, c};
         c->next = NULL;
@@ -1380,6 +1453,8 @@ unpin_domain(_PyGCMarkResult *res)
 void
 _PyGC_LiveWaitUnpinned(PyInterpreterState *interp)
 {
+    int stopped = barrier.armed;
+    barrier_at_delete(interp);
     while (interp->gc.queue_pins > 0) {
         PyEvent unpinned = {0};
         interp->gc.queue_unpinned = &unpinned;
@@ -1387,42 +1462,9 @@ _PyGC_LiveWaitUnpinned(PyInterpreterState *interp)
         PyEvent_Wait(&unpinned);
         HEAD_LOCK(&_PyRuntime);
     }
-}
-
-/* _testinternalcapi.gc_pause_after_mark(ms): the main interpreter's
-   collections sleep ms between the mark and the routing, holding the GIL,
-   and count the times a deletion was waiting on their pin at the end of
-   the sleep (note 13 test 9.16). */
-static int pause_after_mark_ms = 0;
-static Py_ssize_t pause_saw_waiter = 0;
-
-void
-_PyGC_LivePauseAfterMark(int ms)
-{
-    pause_after_mark_ms = ms;
-}
-
-static void
-pause_after_mark(PyThreadState *tstate, const _PyGCMarkResult *res)
-{
-    if (pause_after_mark_ms <= 0 || !_Py_IsMainInterpreter(tstate->interp)) {
-        return;
+    if (stopped && !barrier.armed) {
+        barrier.unpinned = _Py_atomic_add_int64(&barrier.seq, 1) + 1;
     }
-    PyTime_t until;
-    (void)PyTime_MonotonicRaw(&until);
-    until += (PyTime_t)pause_after_mark_ms * 1000 * 1000;
-    PyTime_t now;
-    do {
-        (void)PyTime_MonotonicRaw(&now);
-    } while (now < until);
-    HEAD_LOCK(&_PyRuntime);
-    for (int d = 0; d < res->ndomain; d++) {
-        if (res->domain[d]->gc.queue_unpinned != NULL) {
-            pause_saw_waiter++;
-            break;
-        }
-    }
-    HEAD_UNLOCK(&_PyRuntime);
 }
 
 /* PYTHON_GCSTRESS=N: every Nth object allocation of a thread collects
@@ -1464,7 +1506,7 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
                  || handle_finalizers(gc, &batch, &res, &garbage) < 0
                  || queue_destroy_hooks(&batch, &res) < 0;
     // Before the sweep; no Python code has run since the mark.
-    pause_after_mark(tstate, &res);
+    barrier_after_mark(tstate, &res);
     route_calls(tstate, &res, &batch);
     unpin_domain(&res);
     if (failed) {
@@ -2235,11 +2277,16 @@ _PyGC_LiveQueueInfo(PyInterpreterState *interp)
     }
     static const char *const phases[] = {"initialising", "open", "closed"};
     GCState *gc = &interp->gc;
-    return Py_BuildValue("{snsssisns{snsnsnsn}}",
+    return Py_BuildValue("{snsssis{sisisLsLsn}s{snsnsnsn}}",
         "length", length,
         "phase", phases[gc->queue_phase],
         "ready", _Py_atomic_load_int_relaxed(&gc->queue_ready),
-        "pin_waits", pause_saw_waiter,
+        "barrier",
+        "deleting", _Py_atomic_load_ptr(&barrier.deleting) != NULL,
+        "pin_waited", barrier.pin_waited,
+        "routed", (long long)barrier.routed,
+        "unpinned", (long long)barrier.unpinned,
+        "remapped", barrier.remapped,
         "discarded",
         "callback", gc->queue_discarded[CALL_CALLBACK],
         "finalize", gc->queue_discarded[CALL_FINALIZE],

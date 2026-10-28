@@ -3074,41 +3074,50 @@ class InterpreterQueueTests(unittest.TestCase):
 
     def test_allocation_failure(self):
         # 9.11: a failure at each node allocation of a collection whose
-        # calls have three owners.
+        # calls have three owners.  Three objects with a finalizer and a
+        # weak reference callback on each of three interpreters make 18
+        # nodes; each position fails once, in the first collection, and
+        # every call still runs once, on its owner.  The interpreter is
+        # read when the call runs.
         out = _queue_child("""
             r, w = os.pipe()
+            gc.disable()
             subs = [_interpreters.create("legacy") for _ in range(2)]
+            for sub in subs:
+                _interpreters.exec(sub, "import gc; gc.disable()")
             make = f'''if 1:
                 import os, weakref, _interpreters
-                me = _interpreters.get_current()[0]
+                def rec(tag):
+                    me = _interpreters.get_current()[0]
+                    os.write({w}, f"{{tag}}:{{me}} ".encode())
                 class C:
                     def __del__(self):
-                        os.write({w}, f"del:{{me}} ".encode())
-                def cb(ref):
-                    os.write({w}, f"cb:{{me}} ".encode())
+                        rec("del")
                 refs = []
-                for i in range(3):
-                    c = C()
-                    c.self = c
-                    refs.append(weakref.ref(c, cb))
-                del c
+                def build():
+                    for i in range(3):
+                        c = C()
+                        c.self = c
+                        refs.append(weakref.ref(c, lambda r: rec("cb")))
+                build()
             '''
             failures = []
-            for n in range(1, 13):
+            for n in range(1, 19):
                 exec(make)
                 for sub in subs:
                     _interpreters.exec(sub, make)
                 _testinternalcapi.gc_queue_fail_alloc(n)
+                gc.collect()
+                fired = _testinternalcapi.gc_queue_fail_alloc(0) == 0
                 for k in range(3):
                     gc.collect()
                     for sub in subs:
                         _interpreters.exec(sub, "pass")
-                _testinternalcapi.gc_queue_fail_alloc(0)
                 got = sorted(drain_pipe(r))
                 want = sorted(f"{k}:{i}" for i in [0, *subs]
                               for k in ("cb", "del") for _ in range(3))
-                if got != want:
-                    failures.append((n, got))
+                if not fired or got != want:
+                    failures.append((n, fired, got))
             for sub in subs:
                 _interpreters.destroy(sub)
             print(failures)
@@ -3155,9 +3164,6 @@ class InterpreterQueueTests(unittest.TestCase):
                     a = A()
                     a.self = a
                     refs.append(weakref.ref(a, lambda r: ran.append(where())))
-            def clobber(n):
-                # Overwrites the stack words a dead frame left behind.
-                return clobber(n - 1) if n else 0
             def at_exit():
                 gc.disable()
                 ran = []
@@ -3166,7 +3172,14 @@ class InterpreterQueueTests(unittest.TestCase):
                 _testcapi.run_in_subinterp("import gc; gc.collect()")
                 for i in range(3):
                     pass
-                # A conservative word can keep one alive; every one that
+                # A stale word can keep one alive past the subinterpreter's
+                # collection: on build/asan, an argument tuple left in
+                # _PyObject_MakeTpCall()'s frame on the main thread's stack
+                # by an earlier call at the same depth.  That frame is
+                # precise, but PyThreadState_Swap() in new_interpreter()
+                # detaches the main thread state with an unpinned record,
+                # which note 11 question 16 scans conservatively from the
+                # capture to the stack top (handed to 10a).  Every one that
                 # died has had its callback, on this interpreter.
                 dead = sum(r() is None for r in refs)
                 print(dead > 0, len(ran) == dead, sorted(set(ran)))
@@ -3178,7 +3191,6 @@ class InterpreterQueueTests(unittest.TestCase):
                 for i in range(10):
                     if len(ran) == len(refs):
                         break
-                    clobber(50)
                     gc.collect()
                 print(len(ran), sum(r() is None for r in refs))
             atexit.register(at_exit)
@@ -3274,53 +3286,81 @@ class InterpreterQueueTests(unittest.TestCase):
 
     def test_pin(self):
         # 9.16: a deletion waits for a collection between its mark and its
-        # routing that names the interpreter being deleted.
+        # routing that names the interpreter being deleted.  The closing
+        # interpreter's calls are in that collection's batch; the barrier
+        # stops the deletion after the close until the collection has
+        # marked, the collection waits until the deletion blocks on its
+        # pin, and the calls, remapped to the main interpreter (the owner
+        # is closed), are routed before the deletion passes its pin wait.
         out = _queue_child("""
             import threading
-            ran = []
-            waits = 0
-            for attempt in range(20):
-                sub = _interpreters.create("legacy")
-                _interpreters.exec(sub, '''if 1:
-                    class C:
-                        pass
-                    junk = []
-                    for i in range(100):
+            gc.disable()
+            log = []
+            _testinternalcapi.stash_set((log, where))
+            sub = _interpreters.create("legacy")
+            _interpreters.exec(sub, '''if 1:
+                import gc, weakref, _testinternalcapi
+                gc.disable()
+                log, where = _testinternalcapi.stash_get()
+                class C:
+                    def __del__(self):
+                        log.append(("del", where()))
+                def make():
+                    objs, refs = [], []
+                    for i in range(5):
                         c = C()
                         c.self = c
-                        junk.append(c)
-                    del c, junk
-                ''')
-                stop = False
-                def collector():
-                    while not stop:
-                        gc.collect()
-                _testinternalcapi.gc_pause_after_mark(20)
-                t = threading.Thread(target=collector)
-                t.start()
-                _interpreters.destroy(sub)
-                stop = True
-                t.join()
-                _testinternalcapi.gc_pause_after_mark(0)
-                gc.collect()
-                waits = _testinternalcapi.gc_queue_info()["pin_waits"]
-                if waits:
+                        objs.append(c)
+                        refs.append(weakref.ref(
+                            c, lambda r: log.append(("cb", where()))))
+                    return objs, refs
+                objs, refs = make()
+                # The main interpreter's root keeps them past the close.
+                _testinternalcapi.stash_set((log, where, refs, objs))
+                del objs
+            ''')
+            _testinternalcapi.gc_delete_barrier(True)
+            t = threading.Thread(target=_interpreters.destroy, args=(sub,))
+            t.start()
+            while not _testinternalcapi.gc_queue_info()["barrier"]["deleting"]:
+                pass
+            # The interpreter is closed and not yet unlinked: its objects
+            # die now, in the main interpreter's collection.
+            log, where, refs, objs = _testinternalcapi.stash_get()
+            _testinternalcapi.stash_set((log, where, refs, None))
+            del objs
+            gc.collect()
+            t.join()
+            for i in range(10):
+                if len(log) == 10:
                     break
-            print(waits > 0)
+                gc.collect()
+            b = _testinternalcapi.gc_queue_info()["barrier"]
+            _testinternalcapi.gc_delete_barrier(False)
+            print(b["pin_waited"], b["remapped"] == 10,
+                  0 < b["routed"] < b["unpinned"], sorted(log))
         """)
-        self.assertEqual(out.split(), ["True"])
+        self.assertEqual(
+            out.strip(),
+            "1 True True " + str(sorted([("cb", 0)] * 5 + [("del", 0)] * 5)))
 
     def test_every_kind_routed(self):
-        # 9.17: each kind of call, in each direction, runs once on its
-        # owner; a weak reference owned by one interpreter to an object of
-        # another delivers its callback on the weak reference's owner.
+        # 9.17: each kind of call, in each direction separately, waits for
+        # its owner and runs there once.  Each call records the interpreter
+        # it runs on.  Main's collection finds the subinterpreter's garbage
+        # and nothing of it runs before the subinterpreter does; then the
+        # subinterpreter's collection finds the main interpreter's garbage
+        # and nothing of it runs there.
         out = _queue_child("""
+            import time
             r, w = os.pipe()
+            gc.disable()
             sub = _interpreters.create("legacy")
             make = f'''if 1:
-                import os, sys, types, weakref, _interpreters, _testcapi
-                me = _interpreters.get_current()[0]
+                import gc, os, sys, types, weakref, _interpreters, _testcapi
+                gc.disable()
                 def rec(tag):
+                    me = _interpreters.get_current()[0]
                     os.write({w}, f"{{tag}}:{{me}} ".encode())
                 class Fin:
                     def __del__(self):
@@ -3337,37 +3377,53 @@ class InterpreterQueueTests(unittest.TestCase):
                         super().__release_buffer__(view)
                 class Target:
                     pass
-                target = Target()
-                target.self = target
-                ref = weakref.ref(target, lambda r: rec("cb"))
-                f = Fin()
-                f.self = f
-                l = Leg()
-                # The capsule does not traverse its callable.
+                # The capsule does not traverse its callable, which the
+                # module keeps.
                 keep_alive = lambda: rec("capsule")
-                cap = _testcapi.capsule_calling(keep_alive)
-                v = memoryview(Exporter(b"abc"))
-                del target, f, l, cap, v
+                def build():
+                    target = Target()
+                    target.self = target
+                    ref = weakref.ref(target, lambda r: rec("cb"))
+                    f = Fin()
+                    f.self = f
+                    l = Leg()
+                    cap = _testcapi.capsule_calling(keep_alive)
+                    v = memoryview(Exporter(b"abc"))
+                    return ref
+                ref = build()
             '''
-            exec(make)
+            tags = ("cb", "fin", "legacy", "capsule", "release")
+            # The subinterpreter's garbage, found by main's collections.
             _interpreters.exec(sub, make)
-            # Main's collection finds the subinterpreter's garbage, and the
-            # subinterpreter's collection finds the main interpreter's.
-            gc.collect()
-            _interpreters.exec(sub, "import gc; gc.collect()")
             for i in range(3):
                 gc.collect()
-                _interpreters.exec(sub, "import gc; gc.collect()")
+            print("pending", drain_pipe(r))
+            _interpreters.exec(sub, "pass")
+            print("owner", sorted(drain_pipe(r)))
+            # The main interpreter's garbage, found by the subinterpreter's.
+            exec(make)
+            _interpreters.exec(sub, f'''if 1:
+                import gc, os
+                for i in range(3):
+                    gc.collect()
+                os.write({w}, b"subdone ")
+            ''')
             got = drain_pipe(r)
-            print(sorted(got))
+            deadline = time.monotonic() + 10
+            while len(got) < 6 and time.monotonic() < deadline:
+                time.sleep(0.01)
+                got += drain_pipe(r)
+            print("reverse", got[0], sorted(got[1:]))
             print(sub)
             _interpreters.destroy(sub)
         """)
-        got, sub = out.splitlines()
-        got = eval(got)
-        for owner in ("0", sub.strip()):
-            for tag in ("cb", "fin", "legacy", "capsule", "release"):
-                self.assertEqual(got.count(f"{tag}:{owner}"), 1, (tag, owner, got))
+        lines = out.splitlines()
+        sub = lines[-1].strip()
+        self.assertEqual(lines[0], "pending []")
+        self.assertEqual(lines[1], "owner " + str(sorted(f"{t}:{sub}" for t in
+            ("cb", "fin", "legacy", "capsule", "release"))))
+        self.assertEqual(lines[2], "reverse subdone " + str(sorted(f"{t}:0" for t in
+            ("cb", "fin", "legacy", "capsule", "release"))))
 
     def test_weakref_owner_runs_callback(self):
         # 9.17: a weak reference owned by the main interpreter to an object
@@ -3402,9 +3458,10 @@ class InterpreterQueueTests(unittest.TestCase):
             del t
             _interpreters.exec(sub, f'''if 1:
                 import os, weakref, _interpreters, _testinternalcapi
-                me = _interpreters.get_current()[0]
-                ref2 = weakref.ref(_testinternalcapi.stash_get(),
-                    lambda r: os.write({w}, f"{{me}} ".encode()))
+                def rec(r):
+                    me = _interpreters.get_current()[0]
+                    os.write({w}, f"{{me}} ".encode())
+                ref2 = weakref.ref(_testinternalcapi.stash_get(), rec)
             ''')
             _testinternalcapi.stash_set(None)
             gc.collect()

@@ -4483,18 +4483,17 @@ check_signals_loop(PyObject *self, PyObject *args)
     return lengths;
 }
 
-/* gc_pause_after_mark(ms): the main interpreter's collections pause ms
-   between their mark and the routing of their calls (note 13 test 9.16);
-   0 turns it off.  gc_queue_info()["pin_waits"] counts the pauses at whose
-   end a deletion was waiting. */
+/* gc_delete_barrier(on): arm the deletion barrier of note 13 test 9.16
+   (_PyGC_LiveDeleteBarrierForTest()); gc_queue_info()["barrier"] reports
+   it. */
 static PyObject *
-gc_pause_after_mark(PyObject *self, PyObject *args)
+gc_delete_barrier(PyObject *self, PyObject *args)
 {
-    int ms;
-    if (!PyArg_ParseTuple(args, "i", &ms)) {
+    int on;
+    if (!PyArg_ParseTuple(args, "p", &on)) {
         return NULL;
     }
-    _PyGC_LivePauseAfterMark(ms);
+    _PyGC_LiveDeleteBarrierForTest(on);
     Py_RETURN_NONE;
 }
 
@@ -4554,7 +4553,9 @@ stash_get(PyObject *self, PyObject *Py_UNUSED(ignored))
     return Py_NewRef(stash_obj != NULL ? stash_obj : Py_None);
 }
 
-/* gc_queue_fail_alloc(n): the nth queue node allocation from now fails. */
+/* gc_queue_fail_alloc(n) -> int: the nth queue node allocation from now
+   fails; returns what was left of the previous countdown, 0 once its
+   failure has fired. */
 static PyObject *
 gc_queue_fail_alloc(PyObject *self, PyObject *args)
 {
@@ -4562,8 +4563,7 @@ gc_queue_fail_alloc(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "i", &n)) {
         return NULL;
     }
-    _PyGC_LiveFailAlloc(n);
-    Py_RETURN_NONE;
+    return PyLong_FromLong(_PyGC_LiveFailAlloc(n));
 }
 
 static PyMethodDef module_functions[] = {
@@ -4573,7 +4573,7 @@ static PyMethodDef module_functions[] = {
     {"gc_queue_never_open_for_test", gc_queue_never_open_for_test, METH_VARARGS},
     {"gc_collect_after_close", gc_collect_after_close, METH_VARARGS},
     {"check_signals_loop", check_signals_loop, METH_VARARGS},
-    {"gc_pause_after_mark", gc_pause_after_mark, METH_VARARGS},
+    {"gc_delete_barrier", gc_delete_barrier, METH_VARARGS},
     {"gc_hold_on_stack", gc_hold_on_stack, METH_VARARGS},
     {"stash_set", stash_set, METH_VARARGS},
     {"stash_get", stash_get, METH_NOARGS},

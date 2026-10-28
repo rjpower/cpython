@@ -195,14 +195,14 @@ extern PyStatus _PyGC_LiveOpenQueue(PyInterpreterState *interp);
 /* With the head lock held: wait, releasing it, until no collection pins
    interp (PyInterpreterState_Delete()). */
 extern void _PyGC_LiveWaitUnpinned(PyInterpreterState *interp);
-/* Test hook: the main interpreter's collections pause ms after the mark. */
-PyAPI_FUNC(void) _PyGC_LivePauseAfterMark(int ms);
+/* Test hook: the deletion barrier of test 9.16 (gc_live.c). */
+PyAPI_FUNC(void) _PyGC_LiveDeleteBarrierForTest(int on);
 /* Test hook: the next interpreter's initialisation fails where its queue
    would open, with one call queued: a weak reference callback for
    referent if given, else a finalizer call on a fresh object. */
 PyAPI_FUNC(void) _PyGC_LiveFailOpenForTest(PyObject *referent,
                                            PyObject *callback);
-PyAPI_FUNC(void) _PyGC_LiveFailAlloc(int n);
+PyAPI_FUNC(int) _PyGC_LiveFailAlloc(int n);
 /* Test hook: close tstate's interpreter as _PyGC_Fini() does, then enter
    the collector by each of its entries.  out[]: what _PyGC_Collect() and
    PyGC_Collect() returned, whether the inline entry collected, whether a

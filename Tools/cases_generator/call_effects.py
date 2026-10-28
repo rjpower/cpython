@@ -158,6 +158,15 @@ NON_COLLECTING = frozenset({
     # variable arguments: reads of the va_list, which holds no object of
     # its own
     "va_start", "va_copy", "va_arg", "va_end",
+    # _Py_hashtable (Python/hashtable.c), by function: these call no
+    # callback.  _Py_hashtable_new() allocates with the mem domain's
+    # PyMem_Malloc() and stores, without calling, the hash and compare
+    # functions it is given.  The rest of the family dispatches to the
+    # table's configured callbacks (hash, compare, the key and value
+    # destructors, the allocator) or to a caller's (foreach), so it is
+    # unlisted and collects.
+    "_Py_hashtable_hash_ptr", "_Py_hashtable_compare_direct",
+    "_Py_hashtable_size", "_Py_hashtable_len", "_Py_hashtable_new",
     # statistics
     "CALL_STAT_INC", "EVAL_CALL_STAT_INC", "EVAL_CALL_STAT_INC_IF_FUNCTION",
     "OBJECT_STAT_INC", "VALUE_BOX_STAT_INC", "_Py_GatherStats_GetIter",
@@ -172,7 +181,6 @@ NON_COLLECTING_PATTERNS = (
     re.compile(r"^_?Py\w*_AS_\w+$"),
     re.compile(r"^_?Py_atomic_\w+$"),
     re.compile(r"^FT_ATOMIC_\w+$"),
-    re.compile(r"^_Py_hashtable_\w+$"),
 )
 
 ALLOCATING = frozenset({

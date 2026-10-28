@@ -1295,6 +1295,54 @@ Py_GC_PRECISE static void f(void) {
     g(PyLong_FromLong(5), collect());
 }
 """, "is a temporary held across the collecting call to 'collect'"),
+        # C does not fix the order of argument evaluation (review 2,
+        # 5.4): each pair is rejected in both textual orders, and so is a
+        # temporary nested in another argument's call.
+        "argument_order_collecting_first": ("""
+int collect_int(void);
+void consume(int, PyObject *);
+Py_GC_PRECISE static void f(void) {
+    consume(collect_int(), PyList_New(1));
+}
+""", "the result of 'PyList_New' (line 8) in argument 2 of 'consume' may "
+     "be held across the collecting call to 'collect_int' in argument 1"),
+        "argument_order_collecting_second": ("""
+int collect_int(void);
+void consume2(PyObject *, int);
+Py_GC_PRECISE static void f(void) {
+    consume2(PyList_New(1), collect_int());
+}
+""", "is a temporary held across the collecting call to 'collect_int'"),
+        "argument_order_nested_first": ("""
+int collect_int(void);
+static inline int len_of(PyObject *o) { (void)o; return 0; }
+Py_GC_PRECISE static void f(void) {
+    g(len_of(PyList_New(1)), collect_int());
+}
+""", "the result of 'PyList_New' (line 8) in argument 1 of 'g' may be held "
+     "across the collecting call to 'collect_int' in argument 2"),
+        "argument_order_nested_second": ("""
+int collect_int(void);
+static inline int len_of(PyObject *o) { (void)o; return 0; }
+Py_GC_PRECISE static void f(void) {
+    g(collect_int(), len_of(PyList_New(1)));
+}
+""", "the result of 'PyList_New' (line 8) in argument 2 of 'g' may be held "
+     "across the collecting call to 'collect_int' in argument 1"),
+        # A foreach runs its caller's callback, which may collect (review
+        # 2, 5.5): the _Py_hashtable family is listed by function.
+        "hashtable_foreach_collects": ("""
+static int visit(void *ht, const void *k, const void *v, void *arg) {
+    (void)ht; (void)k; (void)v; (void)arg;
+    return collect();
+}
+Py_GC_PRECISE static void f(void *ht) {
+    PyObject *x = PyLong_FromLong(1);
+    _Py_hashtable_foreach(ht, visit, NULL);
+    use(x);
+}
+""", "'x' is held only in a C local across the collecting call to "
+     "'_Py_hashtable_foreach'"),
         "alias_store": ("""
 Py_GC_PRECISE static void f(Py_GC_SLOTS PyValue *slots) {
     PyValue *q = slots;
@@ -1490,6 +1538,23 @@ Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *o) {
     }
 
     POSITIVE = {
+        # One argument makes a temporary and none of the others collects.
+        "argument_order_one_collecting": """
+static inline int len_of(PyObject *o) { (void)o; return 0; }
+Py_GC_PRECISE static void f(void) {
+    g(len_of(NULL), PyList_New(1));
+    g(PyList_New(1), len_of(NULL));
+}
+""",
+        # These members of the _Py_hashtable family call no callback.
+        "hashtable_listed": """
+Py_GC_PRECISE static void f(void *ht) {
+    PyObject *x = PyLong_FromLong(1);
+    size_t n = _Py_hashtable_len(ht) + _Py_hashtable_size(ht);
+    use(x);
+    (void)n;
+}
+""",
         "object_slot": """
 Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *o) {
     PyValue buf[3];

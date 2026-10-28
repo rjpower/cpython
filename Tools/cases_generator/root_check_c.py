@@ -2471,6 +2471,7 @@ class FunctionChecker:
                 inner_held.append((self.callee_of(a), a.line))
         if not isinstance(e.func, Name):
             self.eval(e.func, st, n, live_after, held)
+        self.check_argument_order(e)
         if name in (SPAN_APPEND, SPAN_APPEND_OBJECT) and len(e.args) == 2:
             root = self.span_arg(e, 0)
             stored = e.args[1]
@@ -2645,6 +2646,55 @@ class FunctionChecker:
                 return a.id
         return None
 
+    def check_argument_order(self, e: Call) -> None:
+        """C leaves the order of a call's argument evaluations unspecified
+        (C11 6.5.2.2p10), and calls in different arguments may interleave:
+        in `g(h(PyList_New(1)), collect())` the list may be made, then
+        collect() run, then h().  eval() walks the arguments left to right
+        and so sees only one order.  The supported form: when one argument
+        makes an object temporary, no other argument (nor the called
+        expression) contains a collecting call.  A pair in which the
+        temporary is itself an earlier argument is the held list's, which
+        reports it already."""
+        if not self.checking:
+            return
+        parts = list(enumerate(e.args))
+        if not isinstance(e.func, Name):
+            parts.append((len(e.args), e.func))
+        collecting = {}
+        for j, a in parts:
+            c = self.first_collecting_call(a)
+            if c is not None:
+                collecting[j] = c
+        if not collecting:
+            return
+        what = e.name or "a function pointer"
+        for i, a in enumerate(e.args):
+            temps = [x for x in walk_expr(a)
+                     if isinstance(x, Call) and self.is_temporary(x)]
+            if not temps:
+                continue
+            top = self.is_temporary(a)
+            for j, c in collecting.items():
+                if j == i or (top and j > i):
+                    continue
+                t = temps[0]
+                where = (f"argument {j + 1}" if j < len(e.args)
+                         else "the called expression")
+                self.error(e.line, f"the result of '{self.callee_of(t)}' "
+                           f"(line {t.line}) in argument {i + 1} of '{what}' "
+                           f"may be held across the collecting call to "
+                           f"'{c.name or 'a function pointer'}' in {where}: "
+                           "C does not fix the order of argument evaluation")
+                break
+
+    def first_collecting_call(self, e: Expr) -> Call | None:
+        for x in walk_expr(e):
+            if isinstance(x, Call) and x.name not in RELEASES \
+                    and self.cls.kind(x.name) != "none":
+                return x
+        return None
+
     def is_temporary(self, a: Expr) -> bool:
         while isinstance(a, Cast):
             a = a.operand
@@ -2653,6 +2703,8 @@ class FunctionChecker:
         name = a.name
         if name in IDENTITY or name in BORROW_FIELD or name in CONSTANT_CALLS:
             return False
+        if name in SPAN_PUSH_OBJECT:
+            return False  # the root it pushes holds the box
         if name is None:
             return True
         r = self.returns.get(name)

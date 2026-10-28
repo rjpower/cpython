@@ -671,6 +671,17 @@ Known exclusions, which are not 10a's:
   reproduced both without its changes on 10a's build/debug at 288a274f57c:
   test_singletons 4 of 10, test_write_char 5 of 10. Both exclusions come
   off when rung 3 roots the writer buffers.
+
+  Also excluded under stress: test_gc's `*test_verify_kill*`, owner rung
+  3. Its `kill:pymem` child traps when a collection lands inside
+  `makecode`. The compiler unit's `u_metadata` dicts are held only
+  through a `PyMem_Calloc` block from `_PyAssemble_MakeCodeObject`'s
+  frame, and `kill:pymem` finds such a PyMem holder by design; the live
+  collector has not failed. Whether it traps depends on where the stress
+  interval lands: 5 of 5 at c91c4bdb282 with N = 1,000, and at N = 200
+  on 10a at ba897d05a0c (10a-2b.md, 7a's hand-off). A stress line that
+  depends on the interval is not a gate. The exclusion comes off when
+  the compiler unit's metadata has a root or a span.
 - ASan runs need `ASAN_OPTIONS=detect_stack_use_after_return=0`. With
   ASan's default, a local whose address escapes lives on ASan's
   heap-backed fake stack, which the conservative scan does not see, so

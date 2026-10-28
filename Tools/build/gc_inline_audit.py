@@ -55,6 +55,10 @@ OUTLINED_OPAQUE = {
     "_PyValue_ObjectRooted":
         "a span primitive: it pushes the root that its caller pops, and "
         "holds only the inline value across its box's allocation",
+    "_PyValueRoot_PushObject":
+        "a span primitive, as _PyValue_ObjectRooted() is: it pushes the root "
+        "that its caller pops, and holds only the inline value across its "
+        "box's allocation",
     "collect":
         "the collection, which runs below the collector's entry: the walk "
         "of the collecting thread's stack starts above it "

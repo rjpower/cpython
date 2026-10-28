@@ -152,6 +152,10 @@ SPAN_POP = {"_PyThreadState_PopValueRoot"}
 # pair is a scope, which the root anchors.
 SPAN_PUSH_OBJECT = {"_PyValueRoot_PushObject": 1, "_PyValue_ObjectRooted": 2}
 SPAN_POP_OBJECT = {"_PyValue_UnrootObject": 2}
+# The C mode models these calls, so the inline audit does not check their
+# bodies as precise functions' (a root pushed on one path is their design).
+SPAN_PRIMITIVES = frozenset(SPAN_PUSH | SPAN_POP | SPAN_PUSH_OBJECT.keys()
+                            | SPAN_POP_OBJECT.keys())
 
 # A pushed frame's slots past its arguments hold garbage until
 # _PyFrame_Initialize() sets them to NULL, so nothing between the two may
@@ -168,6 +172,12 @@ RETURN_MACROS = {"Py_RETURN_NONE", "Py_RETURN_TRUE", "Py_RETURN_FALSE",
 # Declarations that mark functions and parameters.
 PRECISE = "Py_GC_PRECISE"
 ARGS_ANCHORED = "Py_GC_ARGS_ANCHORED"
+# The eval loop's generated handlers, included in its body (Region), and
+# the headers it includes there that only declare a static table of label
+# addresses.
+GENERATED_REGION = "generated_ir_cases.c.h"
+LABEL_TABLES = frozenset({"ir_targets.h"})
+REGION_CALL = "_PyEval_GeneratedHandlers"
 # The tests that a value is an immediate, which holds no object
 INLINE_TESTS = frozenset({"PyValue_IsInline", "PyValue_IsInlineInt",
                           "PyValue_IsInlineFloat"})
@@ -775,6 +785,14 @@ class Detach(Stmt):
     attach: bool
 
 
+@dataclass(eq=False)
+class Region(Stmt):
+    """The eval loop's generated handlers (#include of GENERATED_REGION),
+    which root_check checks handler by handler.  Here they are one
+    reentrant call, entered by every goto to a label that the hand-written
+    part does not define, that falls through or returns."""
+
+
 def var_kind(type_toks: list[str], stars: int, array: bool) -> str:
     base = [t for t in type_toks if t not in QUALIFIERS]
     if not base:
@@ -860,6 +878,11 @@ class StmtParser:
 
     def skip_pp(self) -> list[Stmt]:
         t = self.next()
+        m = re.match(r'#\s*include\s*"([^"]+)"', t.text)
+        if m and m.group(1) == GENERATED_REGION:
+            return [Region(t.line)]
+        if m and m.group(1) in LABEL_TABLES:
+            return []
         if re.match(r"#\s*include", t.text):
             raise CheckError(f"line {t.line}: #include in a function body "
                              "(the eval loop's generated region is not "
@@ -1376,6 +1399,7 @@ class CFG:
         self.nodes: list[Node] = []
         self.labels: dict[str, Node] = {}
         self.gotos: list[tuple[Node, str]] = []
+        self.regions: list[Node] = []
         self.entry = self.new(0)
         self.exit = self.new(0)
         self.exit.is_exit = True
@@ -1540,6 +1564,14 @@ def build_cfg(body: Block) -> CFG:
                 g.link(c, n)
             g.gotos.append((n, s.label))
             return []
+        if isinstance(s, Region):
+            n = g.new(s.line)
+            n.exprs = [Call(s.line, Name(s.line, REGION_CALL), [])]
+            for c in cur:
+                g.link(c, n)
+            g.link(n, g.exit)
+            g.regions.append(n)
+            return [n]
         if isinstance(s, Return):
             n = g.new(s.line)
             n.is_return = True
@@ -1568,9 +1600,13 @@ def build_cfg(body: Block) -> CFG:
     for c in outs:
         g.link(c, g.exit)
     for n, label in g.gotos:
-        if label not in g.labels:
+        if label in g.labels:
+            g.link(n, g.labels[label])
+        elif g.regions:
+            # A handler's label
+            g.link(n, g.regions[0])
+        else:
             raise CheckError(f"line {n.line}: goto to unknown label '{label}'")
-        g.link(n, g.labels[label])
     return g
 
 
@@ -2697,7 +2733,8 @@ def header_typedefs(include_dirs: Iterable[Path]) -> set[str]:
         return _TYPEDEF_CACHE[key]
     names: set[str] = set()
     for d in include_dirs:
-        for path in sorted(Path(d).rglob("*.h")):
+        paths = [Path(d)] if Path(d).is_file() else sorted(Path(d).rglob("*.h"))
+        for path in paths:
             if "mimalloc" in path.parts:
                 continue
             try:
@@ -2773,7 +2810,9 @@ def _parse_headers(include_dirs: Iterable[Path]) -> tuple[
     returns: dict[str, str] = {}
     functions: dict[str, Function] = {}
     for d in include_dirs:
-        for path in sorted(Path(d).rglob("*.h")):
+        # A directory's headers, or one header
+        paths = [Path(d)] if Path(d).is_file() else sorted(Path(d).rglob("*.h"))
+        for path in paths:
             if "mimalloc" in path.parts:
                 continue
             try:

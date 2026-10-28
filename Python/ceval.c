@@ -1235,7 +1235,7 @@ _PyEval_EvalFrameEntry(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return res;
 }
 
-Py_NO_INLINE PyValue _Py_HOT_FUNCTION DONT_SLP_VECTORIZE
+Py_GC_PRECISE Py_NO_INLINE PyValue _Py_HOT_FUNCTION DONT_SLP_VECTORIZE
 _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     _Py_EnsureTstateNotNULL(tstate);
@@ -1904,6 +1904,10 @@ clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
 {
     assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
     PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
+    // Unlinked, the frame no longer leads the collector to its generator.
+    _PyValueRoot gen_root;
+    _PyThreadState_PushValueRoot(tstate, &gen_root);
+    gen_root.object = (PyObject *)gen;
     FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_CLEARED);
     assert(tstate->exc_info == &gen->gi_exc_state);
     tstate->exc_info = gen->gi_exc_state.previous_item;
@@ -1914,6 +1918,7 @@ clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
     _PyFrame_ClearExceptCode(frame);
     Py_END_CRITICAL_SECTION();
     _PyErr_ClearExcState(&gen->gi_exc_state);
+    _PyThreadState_PopValueRoot(tstate, &gen_root);
     // gh-143939: There must not be any escaping calls between setting
     // the generator return kind and returning from _PyEval_EvalFrame.
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
@@ -1995,8 +2000,9 @@ fail:
 
 /* Same as _PyEvalFramePushAndInit but takes an args tuple and kwargs dict.
    Steals references to func, callargs and kwargs.
-*/
-_PyInterpreterFrame *
+   Opaque, and so scanned, until _PyStack_UnpackDict() returns its names in
+   a span, like vectorcall_call_dict() in Objects/call.c (10a-2.md). */
+Py_NO_INLINE _PyInterpreterFrame *
 _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
     PyObject *locals, Py_ssize_t nargs, PyObject *callargs, PyObject *kwargs, _PyInterpreterFrame *previous)
 {

@@ -213,11 +213,26 @@ class Tables:
         return self.checked[name]
 
 
+def private_headers(sources: list[Path]) -> list[Path]:
+    """The headers beside the sources that they include, such as
+    Python/ceval_macros.h: their static inline functions are inlined into
+    precise ones too."""
+    found: set[Path] = set()
+    for p in sources:
+        text = p.read_text(errors="replace")
+        for m in re.finditer(r'^\s*#\s*include\s*"([^"]+)"', text, re.M):
+            name = m.group(1)
+            h = p.parent / name
+            if name.endswith(".h") and not name.endswith(".c.h") and h.is_file():
+                found.add(h)
+    return sorted(found)
+
+
 def source_tables(sources: list[Path]) -> Tables:
     """The functions marked precise in the sources, a classifier that knows
     the headers' inline bodies and the sources' functions, and what the C
     mode needs to check those bodies."""
-    inc = root_check_c.default_include_dirs()
+    inc = root_check_c.default_include_dirs() + private_headers(sources)
     bodies, header_returns = root_check_c.header_inline_bodies(inc)
     bodies = dict(bodies)
     functions = dict(root_check_c.header_inline_functions(inc))
@@ -286,6 +301,8 @@ def audit(path: str, sources: list[Path]) -> list[str]:
             if iname in precise_src or iname in in_section:
                 continue
             if tables.classifier.kind(iname) == "none":
+                continue
+            if iname in root_check_c.SPAN_PRIMITIVES:
                 continue
             # Its locals live in the precise frame: its body is checked as
             # a precise function's (10a-2.md, rule 6).

@@ -1868,7 +1868,7 @@ class SubinterpreterTest(unittest.TestCase):
 
         expected_to_fail = {
             (False, False, False, False, False, False, False),
-            # One GIL per heap domain (boil step 7a, note 13 section 7.2).
+            # One GIL per heap domain: boil/PROCESS.md section 0.2.
             (True, True, True, True, True, True, True),
         }
 
@@ -2276,7 +2276,7 @@ class InterpreterConfigTests(unittest.TestCase):
                 use_main_obmalloc=False,
                 check_multi_interp_extensions=False
             ),
-            # One GIL per heap domain (boil step 7a, note 13 section 7.2).
+            # One GIL per heap domain: boil/PROCESS.md section 0.2.
             dict(
                 gil='own',
                 use_main_obmalloc=True,

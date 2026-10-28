@@ -181,15 +181,19 @@ sub-processes only once the interpreter has no threads left.
 
 ### 3.1 What it holds
 
-Each interpreter's `struct _gc_live_state` holds a FIFO list of nodes,
+Each interpreter's GC state, `struct _gc_runtime_state` in the
+interpreter struct (as built in rung 1; the design first put it in the
+malloc'd `struct _gc_live_state`), holds a FIFO list of nodes,
 `live_call {next, op, callback, kind}`, with head and tail pointers,
-replacing today's array, and a list of waiting nodes (3.5), whose
+replacing the array, and a list of waiting nodes (3.5), whose
 nodes carry a count of the calls they wait for and the list of nodes
 that wait for them. A node comes from the C library's `malloc`
-when the call is queued, where `queue_push()` grows the array today, and
-is freed after the call runs. The owner is implied by the queue that
-holds the node. The state also gains `phase` (initialising, open,
-closed; section 5) and the counters of 5.4.
+when the call is queued, and is freed after the call runs. The owner is
+implied by the queue that holds the node. The same struct holds the
+phase (initialising, open, closed; section 5), the ready flag (section
+4), the pin count (3.2) and the counters of 5.4. The queue therefore
+exists for the interpreter's whole life, independent of the live state,
+and splicing onto it never allocates.
 
 Nodes rather than an array because routing moves calls between queues:
 a splice cannot fail and needs no compaction, so the memmove, the
@@ -487,8 +491,10 @@ sequence; each step finishes before the next starts:
 4. *Publish the close.* The phase becomes closed under the head lock.
    From here the owner lookup maps the interpreter's sub-process to the
    main interpreter (decision 5), so nothing more reaches the closed
-   queue. The live state is not freed and `get_live()` never recreates
-   one; it is adopted or freed at deletion (5.3, 5.4).
+   queue, which is in the interpreter struct (3.1). `get_live()` never
+   recreates a live state. Rung 1 frees the rest of the live state (the
+   immortal registry) here, as before 7a; rung 2 keeps it, to adopt or
+   free it at deletion (5.3, 5.4).
 
 Steps 1 and 3 can loop only as long as calls keep making garbage with
 calls, as any drain can.

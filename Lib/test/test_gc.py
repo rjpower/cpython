@@ -3116,20 +3116,40 @@ class InterpreterQueueTests(unittest.TestCase):
             import atexit, _testcapi
             class A:
                 pass
-            def at_exit():
-                gc.disable()
-                refs = []
+            def make(refs, ran):
                 for i in range(20):
                     a = A()
                     a.self = a
-                    refs.append(weakref.ref(a, lambda r: print("cb", where())))
-                del a
+                    refs.append(weakref.ref(a, lambda r: ran.append(where())))
+            def clobber(n):
+                # Overwrites the stack words a dead frame left behind.
+                return clobber(n - 1) if n else 0
+            def at_exit():
+                gc.disable()
+                ran = []
+                refs = []
+                make(refs, ran)
                 _testcapi.run_in_subinterp("import gc; gc.collect()")
                 for i in range(3):
                     pass
+                # A conservative word can keep one alive; every one that
+                # died has had its callback, on this interpreter.
+                dead = sum(r() is None for r in refs)
+                print(dead > 0, len(ran) == dead, sorted(set(ran)))
+                # The retained ones are not lost: once no stale word holds
+                # them, a later collection runs their callbacks too.  The
+                # close cannot show it: there the weakrefs become garbage
+                # with their referents, and a garbage weakref's callback
+                # does not run.
+                for i in range(10):
+                    if len(ran) == len(refs):
+                        break
+                    clobber(50)
+                    gc.collect()
+                print(len(ran), sum(r() is None for r in refs))
             atexit.register(at_exit)
         """)
-        self.assertEqual(out.split(), ["cb", "0"] * 20)
+        self.assertEqual(out.split(), ["True", "True", "[0]", "20", "20"])
 
     def test_legacy_delivery_marker(self):
         # 9.15: a legacy tp_del waiting in an idle queue runs once.

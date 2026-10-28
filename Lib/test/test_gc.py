@@ -1930,6 +1930,132 @@ class TracingCollectorTests(unittest.TestCase):
                                         PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split(), [b"raised"])
 
+    BORROW = textwrap.dedent("""
+        import sys, weakref, _testinternalcapi
+        class A:
+            pass
+        kind = int(sys.argv[1])
+        keep = [A()]
+        if kind & 1:
+            # a weak reference to an object that keep alone holds
+            container = weakref.ref(keep[0])
+        else:
+            container = [keep[0]]
+        def drop():
+            keep.clear()
+            if not kind & 1:
+                container.clear()
+        def collections():
+            return _testinternalcapi.gc_root_stats()["total"]["collections"]
+        before = collections()
+        name = _testinternalcapi.gc_borrow_across(container, drop, kind)
+        print(name, collections() > before, flush=True)
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_borrow_across_collection(self):
+        # 10a-2.md section 4 (note 11 8.4): a precise core function borrows
+        # list[0], or a weak reference's target read from wr_object, drops
+        # every other reference, collects, and uses it: its span keeps the
+        # object.  The counterpart without the span, a frame registered
+        # precise, has the object killed, and the use traps.
+        asan = support.check_sanitizer(address=True)
+        for weak in (0, 1):
+            with self.subTest(weak=weak):
+                rc, out, err = assert_python_ok(
+                    "-X", "faulthandler", "-c", self.BORROW, str(weak),
+                    PYTHON_GCVERIFY="kill")
+                self.assertEqual(out.split(), [b"A", b"True"])
+                rc, out, err = assert_python_failure(
+                    "-X", "faulthandler", "-c", self.BORROW, str(weak | 2),
+                    PYTHON_GCVERIFY="kill")
+                self.assertEqual(out, b"")
+                if asan:
+                    self.assertIn(b"AddressSanitizer: use-after-poison", err)
+                else:
+                    self.assertIn(b"use of a killed object", err)
+
+    VECTORCALL_METHOD = textwrap.dedent("""
+        import gc, sys, types, _testinternalcapi
+        class Obj:
+            pass
+        class Self1:
+            pass
+        class Self2:
+            pass
+        class Item:
+            pass
+        case = sys.argv[1]
+        def f(*args):
+            gc.collect()
+            if case == "raise":
+                raise ValueError(len(args))
+            return [type(a).__name__ for a in args]
+        holder = [Obj()] + [Item() for _ in range(6 if case == "heap" else 1)]
+        if case == "flat":
+            holder[0].meth = types.MethodType(f, Self1())
+        else:
+            # The outer prepend borrows the slot that holds the receiver;
+            # the inner one, called without the offset, copies.
+            holder[0].meth = types.MethodType(
+                types.MethodType(f, Self1()), Self2())
+        _testinternalcapi.gc_set_stress(1)
+        res, slot = _testinternalcapi.gc_vectorcall_method("meth", holder)
+        _testinternalcapi.gc_set_stress(0)
+        print(slot, res if isinstance(res, list) else type(res).__name__)
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_prepend_spans(self):
+        # 10a-2.md section 4, spans and slots.  PyObject_VectorcallMethod
+        # with the offset, from a frame registered precise that alone holds
+        # the arguments, to a bound method that prepends its self into the
+        # receiver's slot, collecting at every allocation and in the
+        # callee: the receiver, held then by the prepend's span alone,
+        # survives and is back in its slot, on success and on an exception;
+        # nested, the inner prepend's copy holds the items, also past the
+        # small buffer.
+        cases = {
+            "flat": "['Self1', 'Item']",
+            "nested": "['Self1', 'Self2', 'Item']",
+            "heap": "['Self1', 'Self2'" + ", 'Item'" * 6 + "]",
+            "raise": "ValueError",
+        }
+        for case, want in cases.items():
+            with self.subTest(case=case):
+                rc, out, err = assert_python_ok(
+                    "-X", "faulthandler", "-c", self.VECTORCALL_METHOD, case,
+                    PYTHON_GCVERIFY="kill")
+                slot, res = out.decode().strip().split(" ", 1)
+                self.assertEqual(slot, "Obj")
+                self.assertEqual(res, want)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_partial_merged_keywords(self):
+        # functools.partial with keywords of its own and of the call, which
+        # it merges, under kill, collecting at every allocation and in the
+        # callee: what only the merged arguments hold survives.
+        code = textwrap.dedent("""
+            import functools, gc, _testinternalcapi
+            class A:
+                pass
+            def f(*args, **kwargs):
+                gc.collect()
+                return sorted(type(v).__name__
+                              for v in args + tuple(kwargs.values()))
+            p = functools.partial(f, A(), k1=A())
+            _testinternalcapi.gc_set_stress(1)
+            res = p(A(), k2=A())
+            _testinternalcapi.gc_set_stress(0)
+            print(res)
+        """)
+        rc, out, err = assert_python_ok("-X", "faulthandler", "-c", code,
+                                        PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.strip(), b"['A', 'A', 'A', 'A']")
+
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_injection_sites(self):
         # Note 11 section 8.3: _testinternalcapi.gc_collect_at() arms one

@@ -672,6 +672,70 @@ gc_span_box(PyObject *self, PyObject *args)
     return span_box(raw, value, collect);
 }
 
+/* PyObject_VectorcallMethod(name, [obj, *items], with
+   PY_VECTORCALL_ARGUMENTS_OFFSET) from a frame registered precise.  holder
+   is [obj, *items]; it is cleared before the call, so the argument array is
+   the only holder of each.  The array is this frame's span, as its creator
+   anchors it (10a-2.md rule 3).  A bound method found on obj prepends its
+   self into the slot that holds obj, so while it runs the span holds the
+   self and what keeps obj is the prepend's own span (rule 4).  Returns
+   (the result, or the exception raised, and the name of the type of what
+   the slot holds after the call, which must be obj again). */
+static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
+PyObject *
+vectorcall_method_precise(PyObject *name, PyObject *holder)
+{
+    _PyGCFrameDesc d;
+    if (_PyGC_DecodeDescriptor((uintptr_t)&vectorcall_method_precise, &d) < 0
+        || _PyGC_RegisterCodeRange(d.func_start, d.func_end,
+                                   _PyGC_FRAME_PRECISE, _PyGC_RANGE_TEST,
+                                   NULL) < 0)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "no stack walk");
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue stack[16];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, stack);
+    Py_ssize_t n = PyList_GET_SIZE(holder);
+    for (Py_ssize_t i = 0; i < n; i++) {
+        // The items are objects: the tests pass instances
+        _PyValueSpan_AppendObject(&span, PyList_GET_ITEM(holder, i));
+    }
+    PyObject *res = NULL, *exc = NULL;
+    const char *slot_type = NULL;
+    if (PyList_SetSlice(holder, 0, n, NULL) == 0) {
+        res = PyObject_VectorcallMethod(
+            name, (PyObject *const *)stack,
+            n | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
+        exc = res == NULL ? PyErr_GetRaisedException() : NULL;
+        // Kill traps here if the slot's object was not kept
+        slot_type = Py_TYPE((PyObject *)stack[0].bits)->tp_name;
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
+    // Scanned again from here: res and exc are held while the tuple is made
+    _PyGC_UnregisterCodeRange(d.func_start);
+    if (slot_type == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("(Os)", res != NULL ? res : exc, slot_type);
+}
+
+static PyObject *
+gc_vectorcall_method(PyObject *self, PyObject *args)
+{
+    PyObject *name, *holder;
+    if (!PyArg_ParseTuple(args, "UO!", &name, &PyList_Type, &holder)) {
+        return NULL;
+    }
+    if (PyList_GET_SIZE(holder) < 1 || PyList_GET_SIZE(holder) > 16) {
+        PyErr_SetString(PyExc_ValueError, "holder has 1 to 16 items");
+        return NULL;
+    }
+    return vectorcall_method_precise(name, holder);
+}
+
 static PyObject *
 gc_walk_release(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
@@ -698,6 +762,7 @@ static PyMethodDef test_methods[] = {
      METH_FASTCALL},
     {"gc_span_box", gc_span_box, METH_VARARGS},
     {"gc_span_box_walk", gc_span_box_walk, METH_NOARGS},
+    {"gc_vectorcall_method", gc_vectorcall_method, METH_VARARGS},
     {"gc_walk_detached_roots", gc_walk_detached_roots, METH_NOARGS},
     {"gc_walk_detach_holding", _PyCFunction_CAST(gc_walk_detach_holding), METH_O},
     {"gc_walk_release", gc_walk_release, METH_NOARGS},

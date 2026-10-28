@@ -69,6 +69,7 @@
 #include "pycore_moduleobject.h"  // PyModuleObject
 #include "pycore_frame.h"         // _PyInterpreterFrame
 #include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE, _PyGC_RegisterCodeRange()
 #include "pycore_interp.h"        // _PyInterpreterState_GetFinalizing()
 #include "pycore_interpframe.h"   // _PyFrame_Traverse()
 #include "pycore_mimalloc.h"      // mi_heap_visit_blocks()
@@ -2871,6 +2872,69 @@ _PyGC_TestHoldInCoreMem(PyObject *callable, int give_back)
         return NULL;
     }
     return give_back ? list : Py_None;
+}
+
+/* The object that _PyGC_TestBorrowAcross() borrows: list[0], or the target
+   of a weak reference, read from wr_object as C code that borrows it does. */
+static inline PyObject *
+borrowed_item(PyObject *container, int weak)
+{
+    if (weak) {
+        return ((PyWeakReference *)container)->wr_object;
+    }
+    return PyList_GET_ITEM(container, 0);
+}
+
+/* The counterpart without the span: this frame registers itself precise
+   while it runs, so that nothing but the borrow holds the object, and the
+   C mode, which checks only marked functions, never sees it. */
+static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
+PyObject *
+borrow_across_bare(PyObject *container, PyObject *callback, int weak)
+{
+    _PyGCFrameDesc d;
+    if (_PyGC_DecodeDescriptor((uintptr_t)&borrow_across_bare, &d) < 0
+        || _PyGC_RegisterCodeRange(d.func_start, d.func_end,
+                                   _PyGC_FRAME_PRECISE, _PyGC_RANGE_TEST,
+                                   NULL) < 0)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "no stack walk");
+        return NULL;
+    }
+    PyObject *res = NULL;
+    PyObject *item = borrowed_item(container, weak);
+    PyObject *r = PyObject_CallNoArgs(callback);
+    if (r != NULL) {
+        PyGC_Collect();
+        res = PyUnicode_FromString(Py_TYPE(item)->tp_name);
+    }
+    _PyGC_UnregisterCodeRange(d.func_start);
+    return res;
+}
+
+Py_GC_PRECISE PyObject *
+_PyGC_TestBorrowAcross(PyObject *container, PyObject *callback, int kind)
+{
+    int weak = kind & _PyGC_BORROW_WEAK;
+    if (kind & _PyGC_BORROW_BARE) {
+        return borrow_across_bare(container, callback, weak);
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    // The span: callback, held while list[0] may be boxed, and the borrow
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, callback);
+    PyObject *item = borrowed_item(container, weak);
+    _PyValueSpan_AppendObject(&span, item);
+    PyObject *res = NULL;
+    PyObject *r = PyObject_CallNoArgs(callback);
+    if (r != NULL) {
+        PyGC_Collect();
+        res = PyUnicode_FromString(Py_TYPE(item)->tp_name);
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 int

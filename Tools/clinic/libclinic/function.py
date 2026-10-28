@@ -153,6 +153,9 @@ class Function:
     docstring_only: bool = False
     forced_text_signature: str | None = None
     critical_section: bool = False
+    # The wrapper is a precise frame (Py_GC_PRECISE, boil note 11): it must
+    # pass root_check_c.py's C mode
+    gc_precise: bool = False
     disable_fastcall: bool = False
     target_critical_section: list[str] = dc.field(default_factory=list)
     # Line of the file on which the function is declared.

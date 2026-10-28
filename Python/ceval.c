@@ -756,7 +756,11 @@ _Py_VectorCall_Values(
     return res;
 }
 
-Py_NO_INLINE PyValue
+/* Precise (note 11 section 4.1): its span holds the callable, the result
+ * and the boxes for the monitoring callbacks, so its frame is not scanned.
+ * An opaque frame here kept the stale words of earlier calls as roots
+ * (10a-1b.md, item 2's record). */
+Py_GC_PRECISE Py_NO_INLINE PyValue
 _Py_VectorCallInstrumentation_Values(
     PyValue callable,
     PyValue* arguments,
@@ -767,6 +771,10 @@ _Py_VectorCallInstrumentation_Values(
     _PyInstr* this_instr,
     PyThreadState* tstate)
 {
+    PyValue slots[4];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_Append(&span, callable);
     PyObject* kwnames_o = PyValue_ObjectBorrow(kwnames);
     int positional_args = total_args;
     if (kwnames_o != NULL) {
@@ -777,11 +785,18 @@ _Py_VectorCallInstrumentation_Values(
         positional_args | PY_VECTORCALL_ARGUMENTS_OFFSET,
         kwnames_o);
     if (call_instrumentation) {
+        _PyValueSpan_Append(&span, res);
         // Boxes of an inline callable or first argument, for the monitoring
-        // callbacks, which this frame holds.
+        // callbacks: the span holds their pointers.
         PyObject *callable_o = PyValue_Object(callable);
+        if (callable_o != NULL) {
+            _PyValueSpan_AppendObject(&span, callable_o);
+        }
         PyObject *arg = total_args == 0 ? &_PyInstrumentation_MISSING
                                         : PyValue_Object(arguments[0]);
+        if (arg != NULL) {
+            _PyValueSpan_AppendObject(&span, arg);
+        }
         if (callable_o == NULL || arg == NULL) {
             res = PyValue_NULL;
         }
@@ -805,6 +820,7 @@ _Py_VectorCallInstrumentation_Values(
     for (int i = total_args - 1; i >= 0; i--) {
         arguments[i] = PyValue_NULL;
     }
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 

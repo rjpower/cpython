@@ -1597,6 +1597,37 @@ Py_GC_PRECISE static void f(PyObject *const *args, Py_ssize_t n) {
     use_v(small[0]);
 }
 """,
+        # Argument Clinic's parsers keep their keyword tables in static
+        # locals, which hold no object of the frame's.
+        "static_locals": """
+Py_GC_PRECISE static void f(PyObject *p) {
+    static const char * const keywords[] = {"a", NULL};
+    static struct {
+        int n;
+        PyObject *ob_item[1];
+    } table = {
+        .n = 1,
+        .ob_item = { NULL, },
+    };
+    collect();
+    use_p(keywords[0]);
+}
+""",
+        # _PyArg_UnpackKeywords() with no dict returns the received array
+        # or a copy of it in buf: either holds what the caller anchors.
+        "unpacked_keywords": """
+Py_GC_PRECISE static void f(const PyValue *args, Py_ssize_t nargs,
+                            PyObject *kwnames, _PyArg_Parser *parser) {
+    PyValue buf[1];
+    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, parser,
+                                 0, 1, 0, 0, buf);
+    if (!args) {
+        return;
+    }
+    collect();
+    use_v(args[0]);
+}
+""",
     }
 
     NEGATIVE_MORE = {
@@ -1619,6 +1650,21 @@ Py_GC_PRECISE static void f(PyHeapTypeObject *cls) {
     use(o);
 }
 """, "'init' is held only in a C local across the collecting call to 'PyType_GenericAlloc'"),
+        # With a dict, the copy holds the dict's values, which no caller
+        # anchors.
+        "unpacked_keywords_dict": ("""
+Py_GC_PRECISE static void f(const PyValue *args, Py_ssize_t nargs,
+                            PyObject *kwargs, _PyArg_Parser *parser) {
+    PyValue buf[1];
+    args = _PyArg_UnpackKeywords(args, nargs, kwargs, NULL, parser,
+                                 0, 1, 0, 0, buf);
+    if (!args) {
+        return;
+    }
+    collect();
+    use_v(args[0]);
+}
+""", "'buf' is held only in a C local across the collecting call to 'collect'"),
         "copy_after_pop": ("""
 Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *p) {
     PyValue buf[1];

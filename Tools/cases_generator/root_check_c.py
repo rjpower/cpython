@@ -103,11 +103,17 @@ STRONG_FIELDS = {
 OUT_PARAMS = {"_PyDict_NextValue": "dict_entries"}
 
 # Calls that fill an array (argument index dst) with the canonical values of
-# the elements of an array they are given (argument index src).  When src
-# is an array the function received, the copies are anchored as the
-# originals are, by the received array's creator (10a-2.md, rule 3): an
-# object's canonical value is the object, and a box's is an immediate.
-COPIES_RECEIVED = {"values_of": (0, 2)}
+# the elements of an array they are given (argument index src), when the
+# arguments at the null indices are NULL.  When src is an array the
+# function received, the copies are anchored as the originals are, by the
+# received array's creator (10a-2.md, rule 3): an object's canonical value
+# is the object, and a box's is an immediate.  _PyArg_UnpackKeywords()
+# with no kwargs dict copies the positional and keyword values of the
+# vectorcall array into buf (Argument Clinic's argsbuf).
+COPIES_RECEIVED = {
+    "values_of": (0, 2, ()),
+    "_PyArg_UnpackKeywords": (0, 9, (2,)),
+}
 
 # Calls that write memory they are given: a slot or field anchor through
 # it ends.
@@ -888,6 +894,12 @@ class StmtParser:
             return self.block()
         if x == ";":
             self.next()
+            return Block(line, [])
+        if x == "static":
+            # A static local is in the data segment, not the frame, and its
+            # initializer is a constant (Argument Clinic's _kwtuple and
+            # _parser): nothing for the frame's analysis
+            self.until(";")
             return Block(line, [])
         if x == "if":
             self.next()
@@ -1850,6 +1862,13 @@ class FunctionChecker:
         def note(name: str, value: Expr) -> None:
             if self.kinds.get(name) not in ("pointer", "values"):
                 return
+            while isinstance(value, Cast):
+                value = value.operand
+            if isinstance(value, Call) and value.name in COPIES_RECEIVED:
+                # It returns its source or its destination array
+                src_i, dst_i, _ = COPIES_RECEIVED[value.name]
+                value = Comma(value.line, [a for i, a in enumerate(value.args)
+                                           if i in (src_i, dst_i)])
             names = {x.id for x in walk_expr(value) if isinstance(x, Name)}
             direct.setdefault(name, set()).update(names)
 
@@ -2386,8 +2405,10 @@ class FunctionChecker:
                 st.sources[b] = frozenset([("span", root)])
             return frozenset([("const",)])
         if name in COPIES_RECEIVED:
-            src_i, dst_i = COPIES_RECEIVED[name]
-            if len(e.args) > max(src_i, dst_i):
+            src_i, dst_i, null_i = COPIES_RECEIVED[name]
+            if len(e.args) > max(src_i, dst_i) and all(
+                    isinstance(e.args[i], Name) and e.args[i].id == "NULL"
+                    for i in null_i):
                 src = self.base_name(e.args[src_i])
                 dst = self.base_name(e.args[dst_i])
                 if dst is not None and self.kinds.get(dst) == "array" \

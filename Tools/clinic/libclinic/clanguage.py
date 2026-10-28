@@ -344,6 +344,16 @@ class CLanguage(Language):
             data.lock.append(lock)
             data.unlock.append(unlock)
 
+        if f.gc_precise:
+            # The frame is precise, so the collector does not scan it: a
+            # one-slot span anchors self from entry to the single exit.
+            data.declarations.append(
+                "PyValue _gc_slots[1];\n_PyValueRoot _gc_span;")
+            data.initializers.append(
+                "_PyThreadState_PushValueSpan(_PyThreadState_GET(), "
+                "&_gc_span, _gc_slots);\n"
+                "_PyValueSpan_AppendObject(&_gc_span, (PyObject *){self_name});")
+
         last_group = 0
         first_optional = len(selfless)
         positional = selfless and selfless[-1].is_positional_only()
@@ -460,6 +470,9 @@ class CLanguage(Language):
 
         template_dict['return_conversion'] = libclinic.format_escape("".join(data.return_conversion).rstrip())
         template_dict['post_parsing'] = libclinic.format_escape("".join(data.post_parsing).rstrip())
+        if f.gc_precise:
+            data.cleanup.append(
+                "_PyThreadState_PopValueRoot(_PyThreadState_GET(), &_gc_span);\n")
         template_dict['cleanup'] = libclinic.format_escape("".join(data.cleanup))
 
         template_dict['return_value'] = data.return_value

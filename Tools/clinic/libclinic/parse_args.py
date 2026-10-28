@@ -352,6 +352,12 @@ class ParseArgsCodeGen:
         if self.func.critical_section:
             self.codegen.add_include('pycore_critical_section.h',
                                      'Py_BEGIN_CRITICAL_SECTION()')
+        if self.func.gc_precise:
+            self.codegen.add_include('pycore_gc_walk.h', 'Py_GC_PRECISE')
+            self.codegen.add_include('pycore_pystate.h',
+                                     '_PyThreadState_GET()')
+            self.codegen.add_include('pycore_value.h',
+                                     '_PyThreadState_PushValueSpan()')
 
         # Use fastcall if not disabled, except if in a __new__ or
         # __init__ method, or if there is a **kwargs parameter.
@@ -1633,6 +1639,22 @@ class ParseArgsCodeGen:
         if self.parser_helper:
             self.parser_helper = self.parser_helper.replace(
                 "{return_value_declaration}", self.return_value_declaration)
+
+        if self.func.gc_precise and self.parser_definition:
+            # Both frames are precise: the attribute goes on the parser's
+            # definition and on the impl's, which is the one in the source
+            # file, so the C mode checks each where it is defined.
+            assert self.parser_definition.startswith("static "), \
+                self.parser_definition[:40]
+            assert self.impl_definition.startswith("static "), \
+                self.impl_definition[:40]
+            self.impl_definition = "Py_GC_PRECISE " + self.impl_definition
+            # The span is popped in the cleanup block, so every exit must
+            # pass through it.
+            if "{cleanup}" not in self.parser_definition:
+                fail(f"{self.func.full_name}: @gc_precise needs a parser "
+                     "that returns through its cleanup block")
+            self.parser_definition = "Py_GC_PRECISE " + self.parser_definition
 
         compiler_warning = clang.compiler_deprecated_warning(self.func, self.parameters)
         if compiler_warning:

@@ -52,6 +52,9 @@ NON_COLLECTING = frozenset({
     "_PyValue_FloatOperandValues", "_PyValue_UnrootObject",
     # an empty asm that hides a pointer's origin from the optimizer
     "_PyValue_HIDE_ORIGIN",
+    # zero the stack below the caller's frame: inline assembly that stores
+    # below the stack pointer and touches no object (pycore_gc_trace.h)
+    "_PyGC_ClearStackBelow", "_PyGC_ClearStackBuffer",
     # the value of an exact int that is not compact: PyLong_AsLongAndOverflow()
     # on an exact int calls no __index__ and allocates nothing
     # (Python/pyvalue.c)

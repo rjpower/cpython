@@ -6,8 +6,11 @@ preserve
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // _PyTuple_FromValues()
+#include "pycore_value.h"         // _PyThreadState_PushValueSpan()
 
 PyDoc_STRVAR(gc_enable__doc__,
 "enable($module, /)\n"
@@ -91,7 +94,7 @@ PyDoc_STRVAR(gc_collect__doc__,
 static Py_ssize_t
 gc_collect_impl(PyObject *module, int generation);
 
-static PyValue
+Py_GC_PRECISE static PyValue
 gc_collect(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     PyValue return_value = PyValue_NULL;
@@ -123,8 +126,12 @@ gc_collect(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     #undef KWTUPLE
     PyValue argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    PyValue _gc_slots[1];
+    _PyValueRoot _gc_span;
     int generation = NUM_GENERATIONS - 1;
     Py_ssize_t _return_value;
+    _PyThreadState_PushValueSpan(_PyThreadState_GET(), &_gc_span, _gc_slots);
+    _PyValueSpan_AppendObject(&_gc_span, (PyObject *)module);
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -146,6 +153,8 @@ skip_optional_pos:
     return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
+    _PyThreadState_PopValueRoot(_PyThreadState_GET(), &_gc_span);
+
     return return_value;
 }
 
@@ -607,4 +616,4 @@ gc_get_freeze_count(PyObject *module, PyObject *Py_UNUSED(ignored))
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=2018bfee6f5dbf19 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=49492ba25dd7c973 input=a9049054013a1b77]*/

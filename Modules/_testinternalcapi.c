@@ -3695,6 +3695,73 @@ gc_collect_inline_then(PyObject *self, PyObject *args)
     return PyObject_CallOneArg(callable, arg);
 }
 
+/* A reference tracer that, against its contract, allocates on each
+   creation event, run over n allocations under PYTHON_GCSTRESS=1: no
+   collection may start inside it (10a-1b.md item 3).  Returns (events,
+   collections inside the tracer, collections in all). */
+static struct {
+    int depth;
+    int64_t events;
+    int64_t inside;
+} alloc_tracer_state;
+
+static int
+alloc_tracer(PyObject *obj, PyRefTracerEvent event, void *data)
+{
+    if (event != PyRefTracer_CREATE || alloc_tracer_state.depth) {
+        return 0;
+    }
+    alloc_tracer_state.depth = 1;
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    _PyGCRootStats before, after, last;
+    _PyGC_LiveGetRootStats(interp, &before, &last);
+    PyObject *junk = PyBytes_FromStringAndSize(NULL, 64);
+    if (junk == NULL) {
+        PyErr_Clear();
+    }
+    _PyGC_LiveGetRootStats(interp, &after, &last);
+    alloc_tracer_state.events++;
+    alloc_tracer_state.inside += after.collections - before.collections;
+    alloc_tracer_state.depth = 0;
+    return 0;
+}
+
+static PyValue
+gc_alloc_in_reftracer(PyObject *self, PyValue arg)
+{
+    if (!PyValue_IsInlineInt(arg) || PyValue_Int32(arg) < 0) {
+        PyErr_SetString(PyExc_ValueError, "a count of allocations");
+        return PyValue_NULL;
+    }
+    int32_t n = PyValue_Int32(arg);
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    void *old_data;
+    PyRefTracer old = PyRefTracer_GetTracer(&old_data);
+    memset(&alloc_tracer_state, 0, sizeof(alloc_tracer_state));
+    _PyGCRootStats before, after, last;
+    _PyGC_LiveGetRootStats(interp, &before, &last);
+    if (PyRefTracer_SetTracer(alloc_tracer, NULL) < 0) {
+        return PyValue_NULL;
+    }
+    _PyGC_LiveSetStress(interp, 1);
+    for (int32_t i = 0; i < n; i++) {
+        PyObject *item = PyList_New(0);
+        if (item == NULL) {
+            break;
+        }
+    }
+    _PyGC_LiveSetStress(interp, 0);
+    (void)PyRefTracer_SetTracer(old, old_data);
+    if (PyErr_Occurred()) {
+        return PyValue_NULL;
+    }
+    _PyGC_LiveGetRootStats(interp, &after, &last);
+    return PyValue_FromResult(Py_BuildValue(
+        "(LLL)", (long long)alloc_tracer_state.events,
+        (long long)alloc_tracer_state.inside,
+        (long long)(after.collections - before.collections)));
+}
+
 /* PYTHON_GCSTRESS=every from now on; 0 turns it off */
 static PyValue
 gc_set_stress(PyObject *self, PyValue arg)
@@ -4161,6 +4228,7 @@ static PyMethodDef module_functions[] = {
     {"gc_collect_at", _PyCFunction_CAST(gc_collect_at), METH_O},
     {"gc_call_built", _PyCFunction_CAST(gc_call_built), METH_O},
     {"gc_set_stress", _PyCFunction_CAST(gc_set_stress), METH_O},
+    {"gc_alloc_in_reftracer", _PyCFunction_CAST(gc_alloc_in_reftracer), METH_O},
     {"gc_collect_inline_then", gc_collect_inline_then, METH_VARARGS},
     {"gc_ready_static_type", gc_ready_static_type, METH_NOARGS},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},

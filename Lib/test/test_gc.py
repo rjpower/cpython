@@ -1864,6 +1864,16 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertEqual(out.strip(), b"ok")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_no_collection_inside_reftracer(self):
+        # A reference tracer runs with collection deferred: one that
+        # allocates under stress sees no collection inside it, and the
+        # allocations around it still collect.
+        events, inside, total = _testinternalcapi.gc_alloc_in_reftracer(200)
+        self.assertGreaterEqual(events, 200)
+        self.assertEqual(inside, 0)
+        self.assertGreater(total, 0)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_stress(self):
         # PYTHON_GCSTRESS=N collects at every Nth object allocation through
         # the inline path.

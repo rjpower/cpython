@@ -107,6 +107,9 @@ typedef struct _PyThreadStateImpl {
         int64_t injected;
         // Allocations since the last PYTHON_GCSTRESS collection
         int stress_count;
+        // A reference tracer is running (_PyReftracerTrack()): no
+        // collection starts, so a tracer cannot collect.
+        int in_tracer;
     } gc_trace;
 
 

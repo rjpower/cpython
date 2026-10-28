@@ -55,6 +55,15 @@ NON_COLLECTING = frozenset({
     # zero the stack below the caller's frame: inline assembly that stores
     # below the stack pointer and touches no object (pycore_gc_trace.h)
     "_PyGC_ClearStackBelow", "_PyGC_ClearStackBuffer",
+    # A new object's header (10a-1b.md item 3).  The reference tracer runs
+    # with collection deferred (_PyReftracerTrack(), pycore_object.h); the
+    # object map's chunks are mapped with mmap(); the root shape's fields
+    # are plain stores; the debug heap check reads mimalloc's metadata.
+    "_PyReftracerTrack", "_Py_NewReference", "_Py_NewReferenceNoTotal",
+    "_PyGC_ObjectMapSet", "_PyGC_ObjectMapChunk", "_PyShape_InitRoot",
+    "_PyObject_CheckObjectHeap",
+    # a compiler intrinsic
+    "__builtin_return_address",
     # the value of an exact int that is not compact: PyLong_AsLongAndOverflow()
     # on an exact int calls no __index__ and allocates nothing
     # (Python/pyvalue.c)

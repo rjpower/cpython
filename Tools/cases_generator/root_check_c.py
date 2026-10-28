@@ -168,6 +168,9 @@ RETURN_MACROS = {"Py_RETURN_NONE", "Py_RETURN_TRUE", "Py_RETURN_FALSE",
 # Declarations that mark functions and parameters.
 PRECISE = "Py_GC_PRECISE"
 ARGS_ANCHORED = "Py_GC_ARGS_ANCHORED"
+# The tests that a value is an immediate, which holds no object
+INLINE_TESTS = frozenset({"PyValue_IsInline", "PyValue_IsInlineInt",
+                          "PyValue_IsInlineFloat"})
 # The first argument position passed on the stack: x86-64 SysV passes six
 # integer-class arguments in registers (AArch64 passes eight; counting from
 # seven there checks a superset).  Variadic arguments count the same way.
@@ -2306,6 +2309,16 @@ class FunctionChecker:
     def eval_call(self, e: Call, st: State, n: Node, live_after: set[str],
                   held: list[tuple[str, int]]) -> frozenset:
         name = e.name
+        # A value asserted inline holds no object from the assertion on.
+        # The assertion vanishes in release builds; the fact does not.
+        if name == "assert" and len(e.args) == 1:
+            test = e.args[0]
+            if isinstance(test, Call) and test.name in INLINE_TESTS \
+                    and len(test.args) == 1 and isinstance(test.args[0], Name) \
+                    and self.is_obj(test.args[0].id):
+                st.sources[test.args[0].id] = frozenset([("const",)])
+                st.stored.pop(test.args[0].id, None)
+                return frozenset([("const",)])
         # Span scopes
         if name in SPAN_PUSH or name in SPAN_PUSH_OBJECT:
             root = self.span_arg(e, 1 if name in SPAN_PUSH else SPAN_PUSH_OBJECT[name])

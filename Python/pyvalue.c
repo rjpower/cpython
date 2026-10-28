@@ -1,6 +1,7 @@
 #include "Python.h"
 
 #include "pycore_gc_trace.h"      // _PyGC_LiveCollectHere()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_long.h"          // _PyLong_IsCompact()
 #include "pycore_object.h"
 #include "pycore_pyerrors.h"      // _Py_FatalErrorFormat()
@@ -49,16 +50,25 @@ box(PyValue v)
    memory: a box is garbage soon, and so is much else, so the collector gets
    its chance before the caller sees the MemoryError.  Out of line, so that
    the first attempt stays a plain call. */
-static Py_NO_INLINE PyObject *
+Py_GC_PRECISE static Py_NO_INLINE PyObject *
 box_after_failure(PyValue v)
 {
+    assert(PyValue_IsInline(v));
     PyThreadState *tstate = _PyThreadState_GET();
     if (!_PyErr_ExceptionMatches(tstate, PyExc_MemoryError)) {
         return NULL;
     }
-    PyObject *exc = _PyErr_GetRaisedException(tstate);
-    if (!_PyGC_LiveCollectHere(tstate)) {
-        _PyErr_SetRaisedException(tstate, exc);
+    // The MemoryError is held across the collection and raised again if
+    // the collection cannot run.
+    _PyValueRoot exc;
+    _PyThreadState_PushValueRoot(tstate, &exc);
+    exc.object = _PyErr_GetRaisedException(tstate);
+    int collected = _PyGC_LiveCollectHere(tstate);
+    if (!collected) {
+        _PyErr_SetRaisedException(tstate, exc.object);
+    }
+    _PyThreadState_PopValueRoot(tstate, &exc);
+    if (!collected) {
         return NULL;
     }
     return box(v);
@@ -67,6 +77,7 @@ box_after_failure(PyValue v)
 static inline PyObject *
 box_collecting(PyValue v)
 {
+    assert(PyValue_IsInline(v));
     PyObject *op = box(v);
     if (op == NULL) {
         return box_after_failure(v);
@@ -75,7 +86,7 @@ box_collecting(PyValue v)
 }
 
 // Out of line, so that the test before each call is all that hot paths carry.
-Py_NO_INLINE PyObject *
+Py_GC_PRECISE Py_NO_INLINE PyObject *
 _PyValue_BoxInline(PyValue v)
 {
     assert(PyValue_IsInline(v));
@@ -89,7 +100,7 @@ _PyValue_BoxInline(PyValue v)
    error, such as PyTuple_GET_ITEM(): its callers take NULL for a missing
    item or never check, so a box that cannot be made aborts rather than
    pass for one. */
-Py_NO_INLINE PyObject *
+Py_GC_PRECISE Py_NO_INLINE PyObject *
 _PyValue_BoxOrAbort(PyValue v, const char *accessor)
 {
     assert(PyValue_IsInline(v));

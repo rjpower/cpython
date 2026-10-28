@@ -1597,6 +1597,14 @@ Py_GC_PRECISE static void f(PyObject *const *args, Py_ssize_t n) {
     use_v(small[0]);
 }
 """,
+        # A value asserted inline holds no object, in release builds too
+        "asserted_immediate": """
+Py_GC_PRECISE static void f(PyValue v) {
+    assert(PyValue_IsInline(v));
+    collect();
+    use_v(v);
+}
+""",
         # Argument Clinic's parsers keep their keyword tables in static
         # locals, which hold no object of the frame's.
         "static_locals": """
@@ -1650,6 +1658,14 @@ Py_GC_PRECISE static void f(PyHeapTypeObject *cls) {
     use(o);
 }
 """, "'init' is held only in a C local across the collecting call to 'PyType_GenericAlloc'"),
+        # Only an inline test makes a value an immediate
+        "asserted_object": ("""
+Py_GC_PRECISE static void f(PyValue v) {
+    assert(PyValue_IsObject(v));
+    collect();
+    use_v(v);
+}
+""", "'v' is held only in a C local across the collecting call to 'collect'"),
         # With a dict, the copy holds the dict's values, which no caller
         # anchors.
         "unpacked_keywords_dict": ("""

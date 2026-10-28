@@ -4,19 +4,28 @@ Each case runs a loop body over inline ints and floats under a Py_STATS
 build: once to warm (specialise) it, then N and 2N times with stats on;
 the difference is the boxes of N iterations, without those of the loop's
 setup.  A case passes when its iterations make no box of an inline int or
-float; a case listed as residue reports its boxes without failing.  Every
-case runs in a process of its own, since the stats are dumped to
-/tmp/py_stats.  -v resolves the boxing call sites with addr2line.
+float; a case listed as residue reports its boxes without failing.
 
-Usage: box_audit.py [--build dev-pystats] [-k SUBSTRING] [-v]
-Exit status 1 if a case that should not box does.
+The slot cases (6d rung 2, the attribute slots) also count object
+allocations per iteration, over the empty loop's, and fail over their
+budget; a slot case with a residue reports both without failing.
+
+Every case runs in a process of its own, with the stats dumped to a
+directory of the run's own (PYTHON_STATS_DIR).  The run prints the
+commit of the interpreter's tree.  -v resolves the boxing call sites with
+addr2line.
+
+Usage: box_audit.py PYSTATS_PYTHON [-k SUBSTRING] [-v]
+Exit status 1 if a case that should not box does, or allocates over its
+budget.
 """
 import argparse, collections, glob, os, re, subprocess, sys, tempfile, textwrap
 
-R = "/home/power/code/cpython/.worktrees/python-boil-the-ocean"
-STATS = "/tmp/py_stats"
+STATS = None    # the run's stats directory
+ROOT = None     # the interpreter's source tree
 WARM, N = 200, 1000
 LINE = re.compile(r"^Object inline (int|float) boxes: (\d+)$")
+ALLOC = re.compile(r"^Object allocations: (\d+)$")
 SITE = re.compile(r"^Object box site\[([^]]*)\]: (\d+)$")
 OPCODE = re.compile(r"^opcode\[(\w+)\]\.boxes : (\d+)$")
 
@@ -78,7 +87,10 @@ CASES = {
                        "r = obj.v + obj.w + sobj.v", None),
     "build": ("", "r = ([a, y], (a, y), {a, y}, {a: y}, {y: a}, "
                   "lst[a:b:1], [*lst], (*tup,), {**d})", None),
-    "unpack": ("", "p, q = a, y; p, q, *rest = lst; p, q = [a, y]", None),
+    "unpack": ("", "p, q = a, y; p, q, *rest = lst; p, q = [a, y]",
+               "the star target's list takes the iterator's __length_hint__, "
+               "whose int result _PyObject_CallNoArgs boxes (the call of a "
+               "looked-up special method, rung 3); seen at c4344d6bf46"),
     "comprehensions": ("", "r = ([v * 2 for v in tup], {v for v in tup},"
                            " {v: v for v in tup})", None),
     "generator": ("", "for v in (w for w in tup): pass\n"
@@ -91,6 +103,96 @@ CASES = {
     "names": ("", "exec(code, ns)", None),
 }
 
+# The attribute slots (6d rung 2): name: (body, boxes and allocations per
+# iteration, residue).  The bodies run with SLOT_SETUP's locals; i is an inline int,
+# and the setup must not bind n, the loop's count.
+SLOT_SETUP = """
+import io, pickle, threading, types, weakref
+big = 100000
+class P:
+    def __init__(self): self._x = 1; self._f = 2.5
+    @property
+    def x(self): return self._x
+    @property
+    def f(self): return self._f
+    @x.setter
+    def x(self, v): self._x = v
+class GA:
+    def __getattribute__(self, name): return 5
+class GH:
+    def __getattr__(self, name): return 5
+class SA:
+    def __setattr__(self, name, v): pass
+class D:
+    def __get__(self, o, t): return 5
+class DS:
+    def __get__(self, o, t): return 5
+    def __set__(self, o, v): pass
+class HD:
+    d = D(); ds = DS()
+class S:
+    __slots__ = ("a",)
+class Ann:
+    pass
+class W:
+    pass
+class G:
+    x = 12345
+    def __class_getitem__(cls, item): return types.GenericAlias(cls, item)
+class Pk(pickle.Pickler):
+    pass
+p, ga, gh, sa, hd, s, w = P(), GA(), GH(), SA(), HD(), S(), W()
+s.a = 1
+w.x = 12345
+proxy = weakref.proxy(w)
+local = threading.local()
+local.x = 12345
+mod = types.ModuleType("m")
+mod.__getattr__ = lambda name: 12345
+alias = G[int]
+pk = Pk(io.BytesIO())
+NAME = "x"
+"""
+
+SLOT_CASES = {
+    "property (getattr)": ("r = getattr(p, NAME)", 0, 0, None),
+    "property float (getattr)": ("r = getattr(p, 'f')", 0, 0, None),
+    "property store": ("p.x = i", 0, 0, None),
+    "__getattribute__ hook": ("r = ga.y", 0, 0, None),
+    "__getattr__ hook": ("r = gh.y", 0, 0, None),
+    "__setattr__ hook": ("sa.y = i", 0, 0, None),
+    "__get__ descr": ("r = hd.d", 0, 0, None),
+    "__set__ descr": ("hd.ds = i", 0, 0, None),
+    "getattr default": ("r = getattr(p, 'missing', i)", 0, 0, None),
+    "hasattr": ("r = hasattr(p, 'x')", 0, 0, None),
+    # A suppressed miss on an inline owner makes no error and no box.
+    "hasattr inline miss": ("r = hasattr(i, 'missing')", 0, 0, None),
+    "getattr inline miss": ("r = getattr(i, 'missing', None)", 0, 0, None),
+    "slots member store": ("s.a = i", 0, 0, None),
+    "class attr store": ("Ann.v = i", 0, 0, None),
+    "proxy read": ("r = proxy.x", 0, 0, None),
+    "proxy store": ("proxy.y = i", 0, 0, None),
+    "local read": ("r = local.x", 0, 0, None),
+    # The generic lookup raises its AttributeError and clears it before
+    # the module __getattr__ runs, as upstream: three objects, no box.
+    "module __getattr__": ("r = mod.missing", 0, 3, None),
+    "alias read": ("r = alias.x", 0, 0, None),
+    "pickler store": ("pk.attr = i", 0, 0, None),
+    # The binding box of the inline owner, and the bound method.
+    "getattr inline method": ("r = getattr(big, 'bit_length')", 1, 2, None),
+    # persistent_id is a PyObject * field, which keeps a box.
+    "pickler persistent_id": ("pk.persistent_id = big", 1, 1, None),
+    "getset int.real": (
+        "r = getattr(big, 'real')", None, None,
+        "a getset of an inline owner: the binding box (rung 4)"),
+    "object.__getattribute__": (
+        "r = object.__getattribute__(p, NAME)", None, None,
+        "the wrapper's result box (rung 3)"),
+    "super inline receiver": (
+        "r = super(int, big).__repr__", None, None,
+        "super's receiver box (rung 3)"),
+}
+
 # Module-level code for LOAD_NAME, STORE_NAME and DELETE_NAME.
 NAMES_SETUP = """
 code = compile("p = a\\nq = p + 1\\nz = 2.5\\nw = z * 2\\ndel p", "<names>", "exec")
@@ -99,7 +201,11 @@ ns = {"a": 7}
 
 
 def program(name):
-    setup, body, _ = CASES[name]
+    if name in SLOT_CASES or name == "empty":
+        setup = SLOT_SETUP
+        body = SLOT_CASES[name][0] if name != "empty" else "pass"
+    else:
+        setup, body, _ = CASES[name]
     if name == "names":
         setup = NAMES_SETUP
     return ("import os, sys\n"
@@ -127,11 +233,12 @@ def read_stats(paths):
         with open(path) as f:
             for line in f:
                 line = line.strip()
-                for pattern, key in ((LINE, "{}"), (OPCODE, "op {}"),
-                                     (SITE, "site {}")):
+                for pattern, key in ((LINE, "{}"), (ALLOC, "alloc"),
+                                     (OPCODE, "op {}"), (SITE, "site {}")):
                     m = pattern.match(line)
                     if m:
-                        counts[key.format(m.group(1))] += int(m.group(2))
+                        counts[key.format(*m.groups()[:-1])] += int(
+                            m.group(m.lastindex))
                         break
         os.remove(path)
     return counts
@@ -140,7 +247,7 @@ def read_stats(paths):
 def handler_at(line):
     """The instruction whose generated code holds line of
     generated_ir_cases.c.h."""
-    with open(f"{R}/Python/generated_ir_cases.c.h") as f:
+    with open(f"{ROOT}/Python/generated_ir_cases.c.h") as f:
         lines = f.readlines()[:line]
     for text in reversed(lines):
         m = re.search(r"TARGET\((\w+)\)", text)
@@ -170,7 +277,7 @@ def new_files(before):
 
 def measure(python, name, pyc):
     """The counts of N iterations of the case: those of 2N less those of N."""
-    env = dict(os.environ, PYTHONPYCACHEPREFIX=pyc)
+    env = dict(os.environ, PYTHONPYCACHEPREFIX=pyc, PYTHON_STATS_DIR=STATS)
     before = set(glob.glob(f"{STATS}/*.txt"))
     out = subprocess.run([python, "-c", program(name)], env=env, check=True,
                          capture_output=True, text=True).stdout.split("\n")
@@ -182,16 +289,67 @@ def measure(python, name, pyc):
     return counts
 
 
+def report_sites(counts):
+    sites = sorted(((n, k[5:]) for k, n in counts.items()
+                    if k.startswith("site ") and n > 0), reverse=True)
+    for n, site in sites[:6]:
+        print(f"         {n / N:g}/iter {resolve(site)}")
+
+
+def audit_slots(python, a, pyc, failed):
+    base = measure(python, "empty", pyc)["alloc"]
+    for name, (body, box_budget, budget, residue) in SLOT_CASES.items():
+        if a.k not in name:
+            continue
+        counts = measure(python, name, pyc)
+        boxes = counts["int"] + counts["float"]
+        allocs = (counts["alloc"] - base) / N
+        if residue:
+            state = "residue"
+        elif (abs(boxes / N - box_budget) >= 0.01
+              or allocs > budget + 0.01):
+            state = "BOXES"
+            failed.append(name)
+        else:
+            state = "ok"
+        print(f"{state:8} {name:24} boxes {boxes / N:g}/iter, "
+              f"allocations {allocs:g}/iter"
+              + (f" (budget {box_budget} and {budget})"
+                 if budget is not None else ""))
+        if residue and a.v:
+            print(f"         residue: {residue}")
+        if a.v and boxes:
+            report_sites(counts)
+
+
 def main():
+    global STATS, ROOT
     p = argparse.ArgumentParser()
-    p.add_argument("--build", default="dev-pystats")
+    p.add_argument("python", help="a Py_STATS build's interpreter")
     p.add_argument("-k", default="")
     p.add_argument("-v", action="store_true")
     a = p.parse_args()
-    python = f"{R}/build/{a.build}/python"
-    os.makedirs(STATS, exist_ok=True)
+    python = os.path.abspath(a.python)
+    ROOT = subprocess.run(["git", "-C", os.path.dirname(python), "rev-parse",
+                           "--show-toplevel"], check=True, capture_output=True,
+                          text=True).stdout.strip()
+    sha = subprocess.run(["git", "-C", ROOT, "rev-parse", "--short=11",
+                          "HEAD"], check=True, capture_output=True,
+                         text=True).stdout.strip()
+    # The binary's own build line names the commit it was built from (and
+    # "-dirty" if the source was); the checkout's HEAD alone does not.
+    built = subprocess.run([python, "-c", "import sys; print(sys.version)"],
+                           check=True, capture_output=True,
+                           text=True).stdout.strip()
+    dirty = subprocess.run(["git", "-C", ROOT, "status", "--porcelain",
+                            "--untracked-files=no"], check=True,
+                           capture_output=True, text=True).stdout.strip()
+    print(f"box audit of {python} at {sha}{' (dirty)' if dirty else ''}")
+    print(f"built: {built}")
     failed = []
-    with tempfile.TemporaryDirectory(prefix="box_audit-") as pyc:
+    with tempfile.TemporaryDirectory(prefix="box_audit-") as pyc, \
+         tempfile.TemporaryDirectory(prefix="box_audit-stats-") as stats:
+        STATS = stats
         for name, (_, _, residue) in CASES.items():
             if a.k not in name:
                 continue
@@ -217,11 +375,8 @@ def main():
             if residue and a.v:
                 print(f"         residue: {residue}")
             if a.v and total:
-                sites = sorted(((n, k[5:]) for k, n in counts.items()
-                                if k.startswith("site ") and n > 0),
-                               reverse=True)
-                for n, site in sites[:6]:
-                    print(f"         {n / N:g}/iter {resolve(site)}")
+                report_sites(counts)
+        audit_slots(python, a, pyc, failed)
     if failed:
         print(f"{len(failed)} case(s) box: {', '.join(failed)}")
         sys.exit(1)

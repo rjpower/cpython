@@ -1,0 +1,158 @@
+{
+ "schema": "boil-bench/1",
+ "build": {
+  "label": "10a-d348fd4b198",
+  "path": "/home/power/code/cpython/.worktrees/boil-6d-base/build/default/python",
+  "version": "3.16.0a1+dev (remotes/origin/weaver/python-boil-the-ocean-527-gd348fd4b198:d348fd4b198, Oct 28) [GCC 15.2.0]",
+  "git": [
+   "CPython",
+   "remotes/origin/weaver/python-boil-the-ocean-527-gd348fd4b198",
+   "d348fd4b198"
+  ],
+  "hash_seed": 0
+ },
+ "machine": {
+  "hostname": "bento-cat",
+  "kernel": "7.0.0-29-generic",
+  "cpus": 16,
+  "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+  "memory": "65726156 kB"
+ },
+ "results": {
+  "instr": {
+   "empty_loop": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 60.684565000000006,
+    "values": [
+     60.6760575,
+     60.67842,
+     60.69071,
+     60.694265
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000
+   },
+   "slots_load": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 42.002618749999996,
+    "values": [
+     102.6797675,
+     102.6902325,
+     102.7009,
+     102.684135
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 102.68718375,
+    "skeleton": "empty_loop"
+   },
+   "property_load": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 281.994495,
+    "values": [
+     342.6848025,
+     342.666815,
+     342.68975,
+     342.6733175
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 342.67906,
+    "skeleton": "empty_loop"
+   },
+   "method_call": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 305.99688625,
+    "values": [
+     366.682295,
+     366.6806075,
+     366.6852275,
+     366.668
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 366.68145125,
+    "skeleton": "empty_loop"
+   },
+   "call_instance": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 1583.1653099999999,
+    "values": [
+     1643.85052,
+     1643.8475575,
+     1643.84923,
+     1643.8637975
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 1643.8498749999999,
+    "skeleton": "empty_loop"
+   },
+   "method_lazy_dict": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 607.0512,
+    "values": [
+     667.7472625,
+     667.7355125,
+     667.7360175,
+     667.7315325
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 667.735765,
+    "skeleton": "empty_loop"
+   }
+  }
+ },
+ "runs": {
+  "instr": {
+   "timestamp": "2026-10-28T03:46:53-07:00",
+   "commit": {
+    "sha": "8543842849fa99fed1d5504519b04a1afa81eb92",
+    "dirty": true
+   },
+   "load_1min": {
+    "max": 23.6669921875,
+    "samples": [
+     23.6669921875,
+     23.6669921875,
+     23.6669921875,
+     23.6669921875,
+     23.6669921875,
+     22.572265625,
+     22.572265625
+    ]
+   }
+  }
+ }
+}

@@ -1915,8 +1915,55 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertEqual(
             fired(RETURN, lambda: list(map(lambda x: [x, "entry"], [1]))),
             [[1, "entry"]])
+        # 6d rung 2: the binding box of an inline owner, made by
+        # box_owner_for_descr() for the executor, and the receiver box of a
+        # method of int or float, made by method_check_args().  Values made
+        # at run time, so that no constant holds a box.
+        SLOT_BOX, RECEIVER_BOX = 8, 9
+        n = 100000 + int("1")
+        x = 2.5 * n
+        self.assertEqual(fired(SLOT_BOX, lambda: getattr(n, "bit_length")()),
+                         17)
+        self.assertEqual(fired(SLOT_BOX, lambda: getattr(x, "real")), x)
+        self.assertEqual(fired(RECEIVER_BOX, lambda: n.bit_length()), 17)
+        self.assertEqual(fired(RECEIVER_BOX, lambda: x.hex()),
+                         float.hex(250002.5))
         with self.assertRaises(ValueError):
             collect_at(99)
+
+    SPAN_BOX = textwrap.dedent("""
+        import gc, sys, _testinternalcapi
+        raw = sys.argv[1] == "raw"
+        def collect():
+            print(*_testinternalcapi.gc_span_box_walk(), flush=True)
+            gc.collect()
+        print(_testinternalcapi.gc_span_box(raw, 100003, collect)[0],
+              flush=True)
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipUnless(hasattr(_testinternalcapi, "gc_span_box"),
+                         "requires the stack walk")
+    def test_span_box(self):
+        # 6d rung 2: a box appended raw to a span, as box_owner_for_descr()
+        # does, is its only root in a frame registered precise, and survives
+        # kill; the control, the canonical (inline) value, holds no box, so
+        # the box dies and its use aborts with its record.  The fixture walks the stack at
+        # its collection point: its frame is precise, with no fallback.
+        rc, out, err = assert_python_ok("-c", self.SPAN_BOX, "raw",
+                                        PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.split(), [b"True", b"False", b"0", b"True"])
+        rc, out, err = assert_python_failure("-c", self.SPAN_BOX, "canonical",
+                                             PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.split(), [b"True", b"False", b"0"])
+        if support.check_sanitizer(address=True):
+            # ASan stops the read of the poisoned header before the trap
+            self.assertIn(b"AddressSanitizer: use-after-poison", err)
+            self.assertIn(b"in _Py_TYPE_impl", err)
+            return
+        self.assertIn(b"gc verify kill: Py_TYPE of the int", err)
+        self.assertIn(b"of a precise frame", err)
+        self.assertIn(b"use of a killed object", err)
 
     # Note 11 section 4.4: a returning or yielding frame stores the value in
     # its destination before it is unlinked and cleared.  The children run

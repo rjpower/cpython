@@ -352,13 +352,13 @@ partial_dealloc(PyObject *self)
     Py_DECREF(tp);
 }
 
-static PyObject *
+static PyValue
 partial_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     if (obj == Py_None || obj == NULL) {
-        return Py_NewRef(self);
+        return PyValue_FromObject(self);
     }
-    return PyMethod_New(self, obj);
+    return PyValue_FromResult(PyMethod_New(self, obj));
 }
 
 static PyValue
@@ -1736,13 +1736,13 @@ lru_cache_call(PyObject *op, PyObject *args, PyObject *kwds)
     return result;
 }
 
-static PyObject *
+static PyValue
 lru_cache_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     if (obj == Py_None || obj == NULL) {
-        return Py_NewRef(self);
+        return PyValue_FromObject(self);
     }
-    return PyMethod_New(self, obj);
+    return PyValue_FromResult(PyMethod_New(self, obj));
 }
 
 /*[clinic input]

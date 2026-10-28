@@ -121,25 +121,23 @@ _PyType_IsReady(PyTypeObject *type)
     return _PyType_GetDict(type) != NULL;
 }
 
-extern PyObject* _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
-                                        int *suppress_missing_attribute);
-extern PyObject* _Py_type_getattro(PyObject *type, PyObject *name);
-extern PyValue _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
-                                              int *suppress_missing_attribute);
+extern PyValue _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
+                                      int *suppress_missing_attribute);
+extern PyValue _Py_type_getattro(PyObject *type, PyObject *name);
 
 extern PyObject* _Py_BaseObject_RichCompare(PyObject* self, PyObject* other, int op);
 
-extern PyObject* _Py_slot_tp_getattro(PyObject *self, PyObject *name);
-extern PyObject* _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name);
+extern PyValue _Py_slot_tp_getattro(PyObject *self, PyObject *name);
+extern PyValue _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name);
 
 extern int _PyType_HasSlotTpIternext(PyTypeObject *type);
 
 extern PyTypeObject _PyBufferWrapper_Type;
 
-PyAPI_FUNC(PyObject*) _PySuper_Lookup(PyTypeObject *su_type, PyObject *su_obj,
-                                 PyObject *name, int *meth_found);
+PyAPI_FUNC(PyValue) _PySuper_Lookup(PyTypeObject *su_type, PyObject *su_obj,
+                                    PyObject *name, int *meth_found);
 
-extern PyObject *_PySuper_LookupDescr(PyTypeObject *su_type,
+extern PyValue _PySuper_LookupDescr(PyTypeObject *su_type,
                                      PyTypeObject *su_obj_type,
                                      PyObject *name);
 

@@ -703,7 +703,7 @@ static const char* const attr_blocked[] = {
     NULL,
 };
 
-static PyObject *
+static PyValue
 ga_getattro(PyObject *self, PyObject *name)
 {
     gaobject *alias = (gaobject *)self;
@@ -722,7 +722,8 @@ ga_getattro(PyObject *self, PyObject *name)
         // When we see own attrs, it has a priority over `__origin__`'s attr.
         for (const char * const *p = attr_exceptions; ; p++) {
             if (*p == NULL) {
-                return PyObject_GetAttr(alias->origin, name);
+                return PyObject_GetAttrValue(PyValue_FromObject(alias->origin),
+                                             name);
             }
             if (_PyUnicode_EqualToASCIIString(name, *p)) {
                 goto generic_getattr;

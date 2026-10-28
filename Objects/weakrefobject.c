@@ -706,7 +706,20 @@ proxy_unwrap(PyObject *obj)
 
 /* direct slots */
 
-WRAP_BINARY(proxy_getattr, PyObject_GetAttr)
+/* The referent's attribute as a value.  The name is a str: the dispatch
+   checked it. */
+static PyValue
+proxy_getattr(PyObject *proxy, PyObject *name)
+{
+    PyObject *obj = _PyWeakref_GET_REF(proxy);
+    if (!proxy_check_ref(obj)) {
+        return PyValue_NULL;
+    }
+    PyValue res = PyObject_GetAttrValue(PyValue_FromObject(obj), name);
+    Py_DECREF(obj);
+    return res;
+}
+
 WRAP_UNARY(proxy_str, PyObject_Str)
 WRAP_TERNARY(proxy_call, PyObject_Call)
 
@@ -731,13 +744,13 @@ proxy_repr(PyObject *proxy)
 
 
 static int
-proxy_setattr(PyObject *proxy, PyObject *name, PyObject *value)
+proxy_setattr(PyObject *proxy, PyObject *name, PyValue value)
 {
     PyObject *obj = _PyWeakref_GET_REF(proxy);
     if (!proxy_check_ref(obj)) {
         return -1;
     }
-    int res = PyObject_SetAttr(obj, name, value);
+    int res = PyObject_SetAttrValue(PyValue_FromObject(obj), name, value);
     Py_DECREF(obj);
     return res;
 }

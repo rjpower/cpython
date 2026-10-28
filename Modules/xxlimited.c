@@ -282,12 +282,12 @@ Xxo_dealloc(PyObject *self)
 /* Xxo attribute handling */
 
 // Get an attribute.
-static PyObject *
+static PyValue
 Xxo_getattro(PyObject *self, PyObject *name)
 {
     XxoObject_Data *data = Xxo_get_data(self);
     if (data == NULL) {
-        return 0;
+        return PyValue_NULL;
     }
 
     PyObject *x_attr;
@@ -296,12 +296,11 @@ Xxo_getattro(PyObject *self, PyObject *name)
     Py_END_CRITICAL_SECTION();
 
     if (x_attr != NULL) {
-        PyObject *v = PyDict_GetItemWithError(x_attr, name);
-        if (v != NULL) {
-            return Py_NewRef(v);
-        }
-        else if (PyErr_Occurred()) {
-            return NULL;
+        // An inline item is returned as it is, with no box.
+        PyValue v;
+        if (PyDict_GetItemRefValue(x_attr, name, &v) != 0) {
+            // found, or an error and PyValue_NULL
+            return v;
         }
     }
     // Fall back to generic implementation (this handles special attributes,
@@ -311,7 +310,7 @@ Xxo_getattro(PyObject *self, PyObject *name)
 
 // Set or delete an attribute.
 static int
-Xxo_setattro(PyObject *self, PyObject *name, PyObject *v)
+Xxo_setattro(PyObject *self, PyObject *name, PyValue v)
 {
     // filter a specific attribute name
     if (PyUnicode_Check(name) && PyUnicode_EqualToUTF8(name, "reserved")) {
@@ -339,9 +338,10 @@ Xxo_setattro(PyObject *self, PyObject *name, PyObject *v)
         return -1;
     }
 
-    if (v == NULL) {
+    if (PyValue_IsNull(v)) {
         // delete an attribute
-        int rv = PyDict_DelItem(x_attr, name);
+        int rv = PyObject_DelItemValue(PyValue_FromObject(x_attr),
+                                       PyValue_FromObject(name));
         if (rv < 0 && PyErr_ExceptionMatches(PyExc_KeyError)) {
             PyErr_SetString(PyExc_AttributeError,
                 "delete non-existing Xxo attribute");
@@ -351,7 +351,8 @@ Xxo_setattro(PyObject *self, PyObject *name, PyObject *v)
     }
     else {
         // set an attribute
-        return PyDict_SetItem(x_attr, name, v);
+        return PyObject_SetItemValue(PyValue_FromObject(x_attr),
+                                     PyValue_FromObject(name), v);
     }
 }
 

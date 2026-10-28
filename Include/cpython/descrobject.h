@@ -60,3 +60,9 @@ typedef struct {
 PyAPI_FUNC(PyObject *) PyDescr_NewWrapper(PyTypeObject *,
                                                 struct wrapperbase *, void *);
 PyAPI_FUNC(int) PyDescr_IsData(PyObject *);
+
+/* PyMember_GetOne() and PyMember_SetOne() on values: a number field reads
+   as an inline value where it fits and stores one without a box.  A
+   setter's PyValue_NULL deletes. */
+PyAPI_FUNC(PyValue) PyMember_GetOneValue(const char *, PyMemberDef *);
+PyAPI_FUNC(int) PyMember_SetOneValue(char *, PyMemberDef *, PyValue);

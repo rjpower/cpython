@@ -1311,7 +1311,8 @@ builtin_exec_impl(PyObject *module, PyObject *source, PyObject *globals,
 static PyValue
 builtin_getattr(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *v, *name, *result;
+    PyObject *name;
+    PyValue result;
 
     if (!_PyArg_CheckPositional("getattr", nargs, 2, 3))
         return PyValue_NULL;
@@ -1323,14 +1324,11 @@ builtin_getattr(PyObject *self, const PyValue *args, Py_ssize_t nargs)
     if (nargs == 2) {
         return PyObject_GetAttrValue(args[0], name);
     }
-    v = PyValue_Object(args[0]);
-    if (v == NULL) {
-        return PyValue_NULL;
-    }
-    if (PyObject_GetOptionalAttr(v, name, &result) == 0) {
+    int rc = PyObject_GetOptionalAttrValue(args[0], name, &result);
+    if (rc == 0) {
         return args[2];
     }
-    return PyValue_FromResult(result);
+    return result;
 }
 
 PyDoc_STRVAR(getattr_doc,
@@ -1377,7 +1375,7 @@ builtin_globals_impl(PyObject *module)
 /*[clinic input]
 hasattr as builtin_hasattr
 
-    obj: object
+    obj: value
     name: object
     /
 
@@ -1387,19 +1385,15 @@ This is done by calling getattr(obj, name) and catching AttributeError.
 [clinic start generated code]*/
 
 static PyObject *
-builtin_hasattr_impl(PyObject *module, PyObject *obj, PyObject *name)
-/*[clinic end generated code: output=a7aff2090a4151e5 input=0faec9787d979542]*/
+builtin_hasattr_impl(PyObject *module, PyValue obj, PyObject *name)
+/*[clinic end generated code: output=4fcfb6df26b3f77c input=f6717b4108d07049]*/
 {
-    PyObject *v;
-
-    if (PyObject_GetOptionalAttr(obj, name, &v) < 0) {
+    PyValue v;
+    int rc = PyObject_GetOptionalAttrValue(obj, name, &v);
+    if (rc < 0) {
         return NULL;
     }
-    if (v == NULL) {
-        Py_RETURN_FALSE;
-    }
-    Py_DECREF(v);
-    Py_RETURN_TRUE;
+    return PyBool_FromLong(rc);
 }
 
 

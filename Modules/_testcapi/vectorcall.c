@@ -302,19 +302,19 @@ MethodDescriptor_new(PyTypeObject* type, PyObject* args, PyObject *kw)
     return (PyObject *)op;
 }
 
-static PyObject *
+static PyValue
 func_descr_get(PyObject *func, PyObject *obj, PyObject *type)
 {
     if (obj == Py_None || obj == NULL) {
-        return Py_NewRef(func);
+        return PyValue_FromObject(func);
     }
-    return PyMethod_New(func, obj);
+    return PyValue_FromResult(PyMethod_New(func, obj));
 }
 
-static PyObject *
+static PyValue
 nop_descr_get(PyObject *func, PyObject *obj, PyObject *type)
 {
-    return Py_NewRef(func);
+    return PyValue_FromObject(func);
 }
 
 static PyObject *

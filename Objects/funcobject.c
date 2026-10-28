@@ -1231,13 +1231,13 @@ func_traverse(PyObject *self, visitproc visit, void *arg)
 }
 
 /* Bind a function to an object */
-static PyObject *
+static PyValue
 func_descr_get(PyObject *func, PyObject *obj, PyObject *type)
 {
     if (obj == Py_None || obj == NULL) {
-        return Py_NewRef(func);
+        return PyValue_FromObject(func);
     }
-    return PyMethod_New(func, obj);
+    return PyValue_FromResult(PyMethod_New(func, obj));
 }
 
 PyTypeObject PyFunction_Type = {
@@ -1499,13 +1499,13 @@ cm_clear(PyObject *self)
 }
 
 
-static PyObject *
+static PyValue
 cm_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     classmethod *cm = (classmethod *)self;
     if (type == NULL)
         type = (PyObject *)(Py_TYPE(obj));
-    return PyMethod_New(cm->cm_callable, type);
+    return PyValue_FromResult(PyMethod_New(cm->cm_callable, type));
 }
 
 static int
@@ -1763,11 +1763,11 @@ sm_clear(PyObject *self)
     return 0;
 }
 
-static PyObject *
+static PyValue
 sm_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     staticmethod *sm = (staticmethod *)self;
-    return Py_NewRef(sm->sm_callable);
+    return PyValue_FromObject(sm->sm_callable);
 }
 
 static int

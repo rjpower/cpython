@@ -1256,23 +1256,35 @@ module_get_resolved_dict_item(PyObject *dict, PyObject *name, PyObject **result)
     return value == NULL ? -1 : 1;
 }
 
-PyObject*
+/* The module's attribute as a value: an inline value in its dict is not
+   boxed, nor what a module __getattr__ returns. */
+PyValue
 _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress)
 {
     // When suppress=1, this function suppresses AttributeError.
-    PyObject *attr, *mod_name, *getattr;
-    attr = _PyObject_GenericGetAttrWithDict((PyObject *)m, name, NULL, suppress);
-    if (attr == NULL) {
+    PyObject *attr = NULL, *mod_name, *getattr;
+    PyValue found = _PyObject_GenericGetAttrWithDict((PyObject *)m, name, NULL,
+                                                     suppress);
+    if (!PyValue_IsNull(found)) {
+        // Anything but a lazy import is the attribute.
+        if (!PyValue_IsObject(found)
+            || !PyLazyImport_CheckExact(PyValue_ObjectBorrow(found)))
+        {
+            return found;
+        }
+        attr = PyValue_ObjectBorrow(found);
+    }
+    else {
         if (suppress == 1) {
             if (PyErr_Occurred()) {
                 // pass up non-AttributeError exception
-                return NULL;
+                return PyValue_NULL;
             }
         }
         else {
             if (!PyErr_ExceptionMatches(PyExc_AttributeError)) {
                 // pass up non-AttributeError exception
-                return NULL;
+                return PyValue_NULL;
             }
             PyErr_Clear();
         }
@@ -1281,7 +1293,7 @@ _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress)
         attr = _PyImport_TryLoadLazySubmodule((PyObject *)m, name, suppress,
                                              &recheck_dict);
         if (attr != NULL || PyErr_Occurred()) {
-            return attr;
+            return PyValue_FromResult(attr);
         }
         // A concurrent load may have bound the child and removed its pending
         // registration after our initial dictionary lookup.
@@ -1294,34 +1306,42 @@ _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress)
                     Py_DECREF(descr);
                 }
             }
-            if (recheck_dict &&
-                PyDict_GetItemRef(m->md_dict, name, &attr) < 0) {
-                return NULL;
+            if (recheck_dict) {
+                if (_PyDict_GetItemValue(m->md_dict, PyValue_FromObject(name),
+                                         &found) < 0) {
+                    return PyValue_NULL;
+                }
+                if (!PyValue_IsNull(found)) {
+                    if (!PyValue_IsObject(found)
+                        || !PyLazyImport_CheckExact(PyValue_ObjectBorrow(found)))
+                    {
+                        return found;
+                    }
+                    attr = PyValue_ObjectBorrow(found);
+                }
             }
         }
     }
     if (attr) {
-        if (PyLazyImport_CheckExact(attr)) {
-            PyThreadState *tstate = PyThreadState_GET();
-            if (suppress && _PyLazyImport_IsResolving(tstate, attr)) {
-                // Only direct reentry means this attribute is unavailable.
-                Py_DECREF(attr);
-                return NULL;
-            }
-            PyObject *new_value = _PyLazyImport_Reify(
-                tstate, attr, name, m->md_dict);
-            Py_DECREF(attr);
-            return new_value;
+        assert(PyLazyImport_CheckExact(attr));
+        PyThreadState *tstate = PyThreadState_GET();
+        if (suppress && _PyLazyImport_IsResolving(tstate, attr)) {
+            // Only direct reentry means this attribute is unavailable.
+            return PyValue_NULL;
         }
-        return attr;
+        return PyValue_FromResult(_PyLazyImport_Reify(
+            tstate, attr, name, m->md_dict));
     }
     if (module_get_resolved_dict_item(
             m->md_dict, &_Py_ID(__getattr__), &getattr) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (getattr) {
-        PyObject *result = PyObject_CallOneArg(getattr, name);
-        if (result == NULL && suppress == 1 && PyErr_ExceptionMatches(PyExc_AttributeError)) {
+        PyValue arg = PyValue_FromObject(name);
+        PyValue result = PyObject_VectorcallValue(PyValue_FromObject(getattr),
+                                                  &arg, 1, NULL);
+        if (PyValue_IsNull(result) && suppress == 1
+            && PyErr_ExceptionMatches(PyExc_AttributeError)) {
             // suppress AttributeError
             PyErr_Clear();
         }
@@ -1332,28 +1352,28 @@ _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress)
     // The attribute was not found.  We make a best effort attempt at a useful error message,
     // but only if we're not suppressing AttributeError.
     if (suppress == 1) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (PyDict_GetItemRef(m->md_dict, &_Py_ID(__name__), &mod_name) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (!mod_name || !PyUnicode_Check(mod_name)) {
         Py_XDECREF(mod_name);
         PyErr_Format(PyExc_AttributeError,
                     "module has no attribute '%U'", name);
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *spec;
     if (PyDict_GetItemRef(m->md_dict, &_Py_ID(__spec__), &spec) < 0) {
         Py_DECREF(mod_name);
-        return NULL;
+        return PyValue_NULL;
     }
     if (spec == NULL) {
         PyErr_Format(PyExc_AttributeError,
                      "module '%U' has no attribute '%U'",
                      mod_name, name);
         Py_DECREF(mod_name);
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *origin = NULL;
@@ -1442,11 +1462,11 @@ done:
     Py_XDECREF(origin);
     Py_DECREF(spec);
     Py_DECREF(mod_name);
-    return NULL;
+    return PyValue_NULL;
 }
 
 
-PyObject*
+PyValue
 _Py_module_getattro(PyObject *self, PyObject *name)
 {
     PyModuleObject *m = _PyModule_CAST(self);

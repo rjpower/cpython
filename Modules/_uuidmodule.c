@@ -1503,7 +1503,7 @@ Uuid_repr(PyObject *self)
 
 static int
 Uuid_setattr(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(name),
-             PyObject *Py_UNUSED(value))
+             PyValue Py_UNUSED(value))
 {
     PyErr_SetString(PyExc_TypeError, "UUID objects are immutable");
     return -1;

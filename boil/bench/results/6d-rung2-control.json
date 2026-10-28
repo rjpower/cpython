@@ -1,0 +1,496 @@
+{
+ "schema": "boil-bench/1",
+ "build": {
+  "label": "6d-rung2-control-f89d8e9c4d3",
+  "path": "/home/power/code/cpython/.worktrees/boil-6d-ctl/build/default/python",
+  "version": "3.16.0a1+dev (heads/boil/10a-rung1b-5-gf89d8e9c4d3:f89d8e9c4d3, Oct 28 2026, 06:21:35) [GCC 15.2.0]",
+  "git": [
+   "CPython",
+   "heads/boil/10a-rung1b-5-gf89d8e9c4d3",
+   "f89d8e9c4d3"
+  ],
+  "hash_seed": 0
+ },
+ "machine": {
+  "hostname": "bento-cat",
+  "kernel": "7.0.0-29-generic",
+  "cpus": 16,
+  "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+  "memory": "65726156 kB"
+ },
+ "results": {
+  "instr": {
+   "empty_loop": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 69.7212925,
+    "values": [
+     69.719545,
+     69.718275,
+     69.72304,
+     69.73458
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000
+   },
+   "empty_list_loop": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 65.17490624999999,
+    "values": [
+     65.1808575,
+     65.164085,
+     65.168955,
+     65.19407
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000
+   },
+   "attr_load_poly": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 68.99612250000001,
+    "values": [
+     134.1853275,
+     134.1628,
+     134.1645375,
+     134.17752
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 134.17102875,
+    "skeleton": "empty_list_loop"
+   },
+   "attr_store": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 59.990032499999984,
+    "values": [
+     129.713765,
+     129.7073225,
+     129.708885,
+     129.7155925
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 129.711325,
+    "skeleton": "empty_loop"
+   },
+   "attr_store_poly": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 99.99851875000002,
+    "values": [
+     165.17584,
+     165.1769625,
+     165.17101,
+     165.168875
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 165.173425,
+    "skeleton": "empty_list_loop"
+   },
+   "slots_load": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 51.986861250000004,
+    "values": [
+     121.7161225,
+     121.70072,
+     121.7155875,
+     121.7001275
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 121.70815375000001,
+    "skeleton": "empty_loop"
+   },
+   "property_load": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 341.98443375,
+    "values": [
+     411.7211175,
+     411.70186,
+     411.7095925,
+     411.688695
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 411.70572625,
+    "skeleton": "empty_loop"
+   },
+   "method_call": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 373.98493874999997,
+    "values": [
+     443.7024325,
+     443.710795,
+     443.7077125,
+     443.70475
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 443.70623125,
+    "skeleton": "empty_loop"
+   },
+   "getattr_property": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 1533.2038862499999,
+    "values": [
+     1611.2007725,
+     1611.1848275,
+     1594.664285,
+     1594.66553
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 1602.92517875,
+    "skeleton": "empty_loop"
+   },
+   "getattr_property_float": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 1495.7337737500002,
+    "values": [
+     1562.6838,
+     1562.7099725,
+     1568.203365,
+     1568.20016
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 1565.45506625,
+    "skeleton": "empty_loop"
+   },
+   "getattribute_hook": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 1516.9459725000002,
+    "values": [
+     1586.6841675,
+     1586.66365,
+     1586.6667575,
+     1586.6677725
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 1586.667265,
+    "skeleton": "empty_loop"
+   },
+   "getattr_hook": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 1691.1088725,
+    "values": [
+     1760.84802,
+     1760.8185925,
+     1760.8380775,
+     1760.8222525
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 1760.830165,
+    "skeleton": "empty_loop"
+   },
+   "setattr_hook": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 1038.00375875,
+    "values": [
+     1107.74591,
+     1107.7267425,
+     1107.72336,
+     1107.7227725
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 1107.72505125,
+    "skeleton": "empty_loop"
+   },
+   "descr_get_py": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 1874.0356837499999,
+    "values": [
+     1943.74604,
+     1943.76427,
+     1943.7526525,
+     1943.7613
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 1943.75697625,
+    "skeleton": "empty_loop"
+   },
+   "descr_set_py": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 1244.040805,
+    "values": [
+     1313.7486825,
+     1313.7792875,
+     1313.766185,
+     1313.75801
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 1313.7620975,
+    "skeleton": "empty_loop"
+   },
+   "property_store": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 1144.0550775000002,
+    "values": [
+     1213.801375,
+     1213.776855,
+     1213.775885,
+     1213.768675
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 1213.77637,
+    "skeleton": "empty_loop"
+   },
+   "property_store_float": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 1521.5641312500002,
+    "values": [
+     1591.2850225,
+     1591.2866275,
+     1591.285825,
+     1591.26393
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 1591.28542375,
+    "skeleton": "empty_loop"
+   },
+   "call_instance": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 1606.15747125,
+    "values": [
+     1675.875335,
+     1675.880475,
+     1675.8770525,
+     1675.9152775
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 1675.87876375,
+    "skeleton": "empty_loop"
+   },
+   "namedtuple_field": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 1000.9738025,
+    "values": [
+     1070.7021925,
+     1070.6879975,
+     1070.6776125,
+     1070.712745
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 1070.695095,
+    "skeleton": "empty_loop"
+   },
+   "member_double": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 790.5447499999999,
+    "values": [
+     860.26258,
+     860.2676925,
+     860.27761,
+     860.2643925
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 860.2660424999999,
+    "skeleton": "empty_loop"
+   },
+   "object_setattr": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 2066.922425,
+    "values": [
+     2136.647355,
+     2136.64008,
+     2136.59016,
+     2136.6473575
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 2136.6437175,
+    "skeleton": "empty_loop"
+   },
+   "class_attr_store": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 856.0151050000001,
+    "values": [
+     925.7485675,
+     925.733065,
+     925.734325,
+     925.73847
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 925.7363975000001,
+    "skeleton": "empty_loop"
+   },
+   "method_lazy_dict": {
+    "group": "micro",
+    "unit": "instructions:u per iteration",
+    "value": 377.9961675,
+    "values": [
+     447.7045425,
+     447.7078225,
+     447.7274075,
+     447.7270975
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 4,
+    "inner": 1000,
+    "raw": 447.71746,
+    "skeleton": "empty_loop"
+   }
+  }
+ },
+ "runs": {
+  "instr": {
+   "timestamp": "2026-10-28T06:21:57-07:00",
+   "commit": {
+    "sha": "f89d8e9c4d377751fd882d76b8857f4e2adf055e",
+    "dirty": false
+   },
+   "load_1min": {
+    "max": 12.58740234375,
+    "samples": [
+     12.58740234375,
+     11.8193359375,
+     11.8193359375,
+     11.8193359375,
+     11.8193359375,
+     11.8193359375,
+     11.8193359375,
+     11.8193359375,
+     11.8193359375,
+     11.8193359375,
+     11.8193359375,
+     11.8193359375,
+     11.11279296875,
+     11.11279296875,
+     11.11279296875,
+     11.11279296875,
+     11.11279296875,
+     11.11279296875,
+     10.3828125,
+     10.3828125,
+     10.3828125,
+     10.3828125,
+     10.3828125,
+     10.3828125
+    ]
+   }
+  }
+ }
+}

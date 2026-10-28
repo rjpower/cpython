@@ -1372,7 +1372,129 @@ Py_GC_PRECISE static void f(Py_GC_SLOTS PyValue *slots) {
     use_v(x);
 }
 """,
+        # x is an argument of the call, which anchors its parameters; its
+        # old value is dead once the call returns.
+        "reassign_from_call": """
+Py_GC_PRECISE static void f(void) {
+    PyObject *x = PyLong_FromLong(1);
+    x = collect_o(x);
+    use(x);
+}
+""",
+        "copy_shares_anchor": """
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *p) {
+    PyValue buf[1];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    _PyValueSpan_AppendObject(&r, p);
+    PyObject *q = p;
+    collect();
+    use(q);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""",
+        # Anchored by a different store on each path
+        "anchored_on_each_path": """
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *p, int c) {
+    PyValue buf[2];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    _PyValueSpan_AppendObject(&r, p);
+    PyObject *q;
+    if (c) {
+        q = p;
     }
+    else {
+        q = PyLong_FromLong(1);
+        _PyValueSpan_AppendObject(&r, q);
+    }
+    collect();
+    use(q);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""",
+        # A copy of a received array holds what the caller's array holds,
+        # which the array's creator anchors (10a-2.md, rule 3).
+        "copy_of_received_array": """
+Py_GC_PRECISE static void f(PyObject *const *args, Py_ssize_t n) {
+    PyValue small[4];
+    PyValue *values = values_of(args, n, small, Py_ARRAY_LENGTH(small));
+    collect();
+    use_v(values[0]);
+    use_v(small[0]);
+}
+""",
+    }
+
+    NEGATIVE_MORE = {
+        "copy_after_pop": ("""
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *p) {
+    PyValue buf[1];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    _PyValueSpan_AppendObject(&r, p);
+    PyObject *q = p;
+    _PyThreadState_PopValueRoot(tstate, &r);
+    collect();
+    use(q);
+}
+""", "'q' is held only in a C local across the collecting call to 'collect'"),
+        "anchored_on_one_path": ("""
+Py_GC_PRECISE static void f(PyThreadState *tstate, PyObject *p, int c) {
+    PyValue buf[1];
+    _PyValueRoot r;
+    _PyThreadState_PushValueSpan(tstate, &r, buf);
+    _PyValueSpan_AppendObject(&r, p);
+    PyObject *q;
+    if (c) {
+        q = p;
+    }
+    else {
+        q = PyLong_FromLong(1);
+    }
+    collect();
+    use(q);
+    _PyThreadState_PopValueRoot(tstate, &r);
+}
+""", "'q' is held only in a C local across the collecting call to 'collect'"),
+        "used_after_reassign_from_call": ("""
+Py_GC_PRECISE static void f(void) {
+    PyObject *x = PyLong_FromLong(1);
+    PyObject *y = PyLong_FromLong(2);
+    y = collect_o(x);
+    use(x);
+    use(y);
+}
+""", "'x' is held only in a C local across the collecting call to 'collect_o'"),
+        "copy_of_a_local_array": ("""
+Py_GC_PRECISE static void f(PyObject *const *args, Py_ssize_t n) {
+    PyValue small[4];
+    PyValue *values = copy_values(args, n, small, Py_ARRAY_LENGTH(small));
+    collect();
+    use_v(values[0]);
+    use_v(small[0]);
+}
+""", "'small' is held only in a C local across the collecting call to 'collect'"),
+    }
+
+    def test_negative_more(self):
+        for name, (src, want) in self.NEGATIVE_MORE.items():
+            with self.subTest(name):
+                errors = self.check(src)
+                self.assertTrue(any(want in e for e in errors),
+                                f"{want!r} not in {errors}")
+
+    def test_alias_macro_is_its_target(self):
+        toks = root_check_c.tokens_of(
+            "#define Alias_IsCompact _Target_IsCompact\n")
+        bodies = root_check_c.macro_bodies(toks)
+        bodies["_Target_IsCompact"] = root_check_c.tokens_of("{ return 1; }")
+        self.assertEqual(root_check_c.Classifier(bodies).kind("Alias_IsCompact"),
+                         "none")
+        bodies["_Target_IsCompact"] = root_check_c.tokens_of(
+            "{ return collect(); }")
+        self.assertEqual(root_check_c.Classifier(bodies).kind("Alias_IsCompact"),
+                         "reentrant")
 
     def check(self, src):
         return [str(e) for e in root_check_c.check_source(

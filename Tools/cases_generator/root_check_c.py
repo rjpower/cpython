@@ -59,6 +59,12 @@ NON_COLLECTING = {
     "PyValue_ObjectBorrow", "PyValue_FromObject", "PyValue_Type",
     "PyValue_IsInt", "PyValue_IsFloat", "PyValue_Bits",
     "PyTuple_GET_VALUE", "PyList_GET_VALUE", "PyCell_GET_VALUE",
+    # an empty asm that hides a pointer's origin from the optimizer
+    "_PyValue_HIDE_ORIGIN",
+    # the value of an exact int that is not compact: PyLong_AsLongAndOverflow()
+    # on an exact int calls no __index__ and allocates nothing
+    # (Python/pyvalue.c)
+    "_PyValue_FromLongObject",
     "_PyDict_NextValue",
     "PyTuple_SET_ITEM", "PyList_SET_ITEM", "PyTuple_SET_VALUE",
     "PyList_SET_VALUE", "_PyTuple_ITEMS", "_PyList_ITEMS",
@@ -82,7 +88,9 @@ NON_COLLECTING = {
     # assertions and libc
     "assert", "Py_UNREACHABLE", "Py_FatalError", "Py_UNUSED",
     "Py_ARRAY_LENGTH", "Py_MIN", "Py_MAX", "Py_ABS", "memcpy", "memmove",
-    "memset", "memcmp", "strlen", "strcmp", "strncmp", "strchr",
+    "memset", "memcmp", "strlen", "strcmp", "strncmp", "strchr", "isnan",
+    # reads the stack pointer, with an intrinsic or an asm
+    "_Py_get_machine_stack_pointer",
     "_Py_EnsureTstateNotNULL", "Py_BEGIN_CRITICAL_SECTION",
     "Py_END_CRITICAL_SECTION", "Py_BEGIN_CRITICAL_SECTION2",
     "Py_END_CRITICAL_SECTION2",
@@ -194,6 +202,13 @@ STRONG_FIELDS = {
 # _PyDict_Next() are not here: they box inline keys and values into their
 # object out-parameters, and a box is fresh.
 OUT_PARAMS = {"_PyDict_NextValue": "dict_entries"}
+
+# Calls that fill an array (argument index dst) with the canonical values of
+# the elements of an array they are given (argument index src).  When src
+# is an array the function received, the copies are anchored as the
+# originals are, by the received array's creator (10a-2.md, rule 3): an
+# object's canonical value is the object, and a box's is an immediate.
+COPIES_RECEIVED = {"values_of": (0, 2)}
 
 # Calls that write memory they are given: a slot or field anchor through
 # it ends.
@@ -1724,6 +1739,22 @@ def merge(a: State | None, b: State) -> tuple[State, list[str]]:
         sources[k] = sources.get(k, frozenset()) | v
     stored = {k: a.stored.get(k, frozenset()) & b.stored.get(k, frozenset())
               for k in set(a.stored) | set(b.stored)}
+    # A variable anchored by a store on one path only (`kwdict = keywords`
+    # with keywords in a span on one, a fresh dict appended to it on the
+    # other) is anchored there by that store, which is a source: an anchor
+    # and the source of the same name end together.
+    for k in stored:
+        if stored[k]:
+            continue
+        merged = frozenset()
+        for side in (a, b):
+            anchors = side.stored.get(k, frozenset())
+            if anchors:
+                merged |= {min(anchors, key=lambda x: (x[0] != "span", x))}
+            else:
+                merged |= side.sources.get(k, frozenset())
+        if merged:
+            sources[k] = merged
     slots = {k: a.slots.get(k, False) and b.slots.get(k, False)
              for k in set(a.slots) | set(b.slots)}
     if a.spans != b.spans:
@@ -1948,8 +1979,7 @@ class FunctionChecker:
                 visit(init)
             if kind in ("object", "array"):
                 defs.add(name)
-        # A name both used and defined in one node is used first
-        return uses, defs - uses
+        return uses, defs
 
     def liveness(self) -> None:
         self.live_in: dict[int, set[str]] = {id(n): set() for n in self.cfg.nodes}
@@ -2036,6 +2066,7 @@ class FunctionChecker:
                 srcs = self.eval(init, st, n, live_after, [])
                 if kind in ("object", "array"):
                     self.assign_var(name, srcs, st)
+                    self.copy_anchors(name, init, st)
                 elif kind in ("slots", "values"):
                     st.slots[name] = self.slot_provenance(init, st)
             elif kind in ("object", "array"):
@@ -2071,6 +2102,13 @@ class FunctionChecker:
                 st.sources[k] = frozenset(
                     ("fresh", f"a borrow from '{name}', reassigned")
                     if s[0] == "field" and s[1] == name else s for s in v)
+
+    def copy_anchors(self, name: str, value: Expr, st: State) -> None:
+        """A copy of a variable, `kwdict = keywords`, holds the same pointer,
+        so the stores that anchor the one anchor the other."""
+        src = self.base_name(value)
+        if src is not None and src != name and self.is_obj(src):
+            st.stored[name] = st.stored.get(src, frozenset())
 
     def invalidate_slots(self, ptr: str | None, st: State, keep: str | None) -> None:
         for k, v in list(st.sources.items()):
@@ -2109,7 +2147,7 @@ class FunctionChecker:
 
     def source_anchored(self, s: tuple, st: State, kind: str,
                         seen: frozenset) -> tuple[bool, str]:
-        if s[0] == "const":
+        if s[0] in ("const", "received"):
             return True, ""
         if s[0] == "fresh":
             return False, s[1]
@@ -2224,6 +2262,7 @@ class FunctionChecker:
         if isinstance(t, Name):
             if self.is_obj(t.id) and e.op == "=":
                 self.assign_var(t.id, srcs, st)
+                self.copy_anchors(t.id, e.value, st)
             elif t.id in st.slots and e.op == "=":
                 st.slots[t.id] = self.slot_provenance(e.value, st)
             return srcs
@@ -2373,8 +2412,24 @@ class FunctionChecker:
             if root is not None and b is not None and self.kinds.get(b) == "array":
                 st.sources[b] = frozenset([("span", root)])
             return frozenset([("const",)])
+        if name in COPIES_RECEIVED:
+            src_i, dst_i = COPIES_RECEIVED[name]
+            if len(e.args) > max(src_i, dst_i):
+                src = self.base_name(e.args[src_i])
+                dst = self.base_name(e.args[dst_i])
+                if dst is not None and self.kinds.get(dst) == "array" \
+                        and src in self.received_arrays():
+                    st.sources[dst] = frozenset([("received", src)])
         for a in e.args:
             b = self.base_name(a)
+            if name in COPIES_RECEIVED and b is not None \
+                    and st.sources.get(b) and all(
+                        s[0] == "received" for s in st.sources[b]):
+                continue
+            # A call that cannot collect and is not listed as writing its
+            # arguments (Py_ARRAY_LENGTH, a predicate) stores nothing.
+            if name in NON_COLLECTING and name not in MUTATING:
+                continue
             if b is not None and self.kinds.get(b) == "array" \
                     and not self.span_backed(b, st):
                 st.sources[b] = st.sources.get(b, frozenset()) | {
@@ -2429,6 +2484,10 @@ class FunctionChecker:
             if b is not None and st.slots.get(b, False):
                 return True
         return False
+
+    def received_arrays(self) -> set[str]:
+        """The parameters that point at an array of the caller's."""
+        return {p.name for p in self.fn.params if p.kind in ("pointer", "values")}
 
     def span_backed(self, buf: str, st: State) -> bool:
         """Is buf the buffer of a pushed span?  A callee's stores into it
@@ -2506,6 +2565,9 @@ class FunctionChecker:
                   held: list[tuple[str, int]]) -> None:
         if not self.checking:
             return
+        # The node's assignments kill: `x = f(x)` passes x to f, which
+        # anchors its parameters, and x's old value is dead after the call.
+        # A use outside the call's subtree is in outside.
         _, defs = self.uses_defs(n)
         live = (live_after - defs) | outside
         line = call.line if call is not None else n.line
@@ -2572,7 +2634,8 @@ StmtParser.block_from_body = _block_from_body  # type: ignore[attr-defined]
 
 # --- the static inline functions of the headers -----------------------------
 
-_INLINE_CACHE: dict[str, tuple[dict[str, list[Tok]], dict[str, str]]] = {}
+_INLINE_CACHE: dict[str, tuple[dict[str, list[Tok]], dict[str, str],
+                               dict[str, Function]]] = {}
 _TYPEDEF_CACHE: dict[str, set[str]] = {}
 
 
@@ -2631,14 +2694,21 @@ def header_typedefs(include_dirs: Iterable[Path]) -> set[str]:
 
 
 MACRO_DEF = re.compile(r"#\s*define\s+(\w+)\(([^)]*)\)\s*(.*)$", re.S)
+MACRO_ALIAS = re.compile(r"#\s*define\s+(\w+)\s+([A-Za-z_]\w*)\s*$")
 
 
 def macro_bodies(toks: list[Tok]) -> dict[str, list[Tok]]:
     """The bodies of the function-like macros defined in toks, which the
-    classifier summarizes as it does static inline functions."""
+    classifier summarizes as it does static inline functions.  An alias,
+    `#define PyUnstable_Long_IsCompact _PyLong_IsCompact`, has the body
+    `_PyLong_IsCompact()`: a call to it is a call to its target."""
     out: dict[str, list[Tok]] = {}
     for t in toks:
         if t.kind != "pp":
+            continue
+        a = MACRO_ALIAS.match(t.text)
+        if a is not None:
+            out.setdefault(a.group(1), tokens_of(f"{a.group(2)}()", t.line))
             continue
         m = MACRO_DEF.match(t.text)
         if m is None:
@@ -2669,11 +2739,24 @@ def macro_returns(macros: dict[str, list[Tok]], returns: dict[str, str]) -> None
 def header_inline_bodies(include_dirs: Iterable[Path]) -> tuple[dict[str, list[Tok]], dict[str, str]]:
     """The bodies of the static inline functions in the headers, and the
     return kind of every function they declare."""
+    bodies, returns, _ = _parse_headers(include_dirs)
+    return bodies, returns
+
+
+def header_inline_functions(include_dirs: Iterable[Path]) -> dict[str, Function]:
+    """The static inline functions of the headers."""
+    return _parse_headers(include_dirs)[2]
+
+
+def _parse_headers(include_dirs: Iterable[Path]) -> tuple[
+        dict[str, list[Tok]], dict[str, str], dict[str, Function]]:
+    include_dirs = list(include_dirs)
     key = "|".join(str(d) for d in include_dirs)
     if key in _INLINE_CACHE:
         return _INLINE_CACHE[key]
     bodies: dict[str, list[Tok]] = {}
     returns: dict[str, str] = {}
+    functions: dict[str, Function] = {}
     for d in include_dirs:
         for path in sorted(Path(d).rglob("*.h")):
             if "mimalloc" in path.parts:
@@ -2687,14 +2770,31 @@ def header_inline_bodies(include_dirs: Iterable[Path]) -> tuple[dict[str, list[T
             for fn in funcs:
                 if fn.static:
                     bodies.setdefault(fn.name, fn.body_toks)
+                    functions.setdefault(fn.name, fn)
             for name, body in macro_bodies(toks).items():
                 bodies.setdefault(name, body)
     macro_returns(bodies, returns)
-    _INLINE_CACHE[key] = (bodies, returns)
-    return bodies, returns
+    _INLINE_CACHE[key] = (bodies, returns, functions)
+    return _INLINE_CACHE[key]
 
 
 # --- entry points ------------------------------------------------------------
+
+def check_function(fn: Function, classifier: Classifier, typedefs: set[str],
+                   returns: dict[str, str], precise_names: set[str],
+                   args_anchored: set[str]) -> list[Error]:
+    """The errors in fn's body, checked as a precise function's."""
+    try:
+        checker = FunctionChecker(fn, classifier, typedefs, returns,
+                                  precise_names, args_anchored)
+        return [Error(err.line, f"in '{fn.name}': {err.message}")
+                for err in checker.run()]
+    except CheckError as exc:
+        return [Error(fn.line, f"in '{fn.name}': outside the C mode's "
+                      f"subset: {exc}")]
+    except RecursionError:
+        return [Error(fn.line, f"in '{fn.name}': expression too deep")]
+
 
 def check_source(src: str, function: str | None = None, check_all: bool = False,
                  include_dirs: Iterable[Path] = (),
@@ -2736,16 +2836,8 @@ def check_source(src: str, function: str | None = None, check_all: bool = False,
         if fn.args_anchored and not fn.static:
             errors.append(Error(fn.line, f"'{fn.name}' is {ARGS_ANCHORED} "
                                 "but not static"))
-        try:
-            checker = FunctionChecker(fn, classifier, typedefs, all_returns,
-                                      precise_names, args_anchored)
-            for err in checker.run():
-                errors.append(Error(err.line, f"in '{fn.name}': {err.message}"))
-        except CheckError as exc:
-            errors.append(Error(fn.line, f"in '{fn.name}': outside the C "
-                                f"mode's subset: {exc}"))
-        except RecursionError:
-            errors.append(Error(fn.line, f"in '{fn.name}': expression too deep"))
+        errors += check_function(fn, classifier, typedefs, all_returns,
+                                 precise_names, args_anchored)
     # A Py_GC_ARGS_ANCHORED function is called only from precise ones
     for fn in funcs if function is None else ():
         for i, t in enumerate(fn.body_toks[:-1]):

@@ -6,10 +6,11 @@ scan; root_check's C mode checks its source.  If the compiler inlines an
 unchecked function into it, the inlined function's locals live in that
 frame unchecked.  This audit reads the DWARF of a linked image (or an
 object file) and fails unless every function inlined into a function in
-section py_gc_precise is itself marked precise or is non-collecting by the
-C mode's classification, which consults the tables and the bodies of the
+section py_gc_precise is itself marked precise, is non-collecting by the
+C mode's classification, or has a body that the C mode passes as a precise
+function's.  The classification consults the tables and the bodies of the
 static inline functions in Include/ and of the functions in the marked
-sources.  It also fails on:
+sources; the bodies checked are theirs.  It also fails on:
 
 - an image without .debug_info;
 - a function symbol in the section with no DWARF entry;
@@ -188,28 +189,61 @@ def marked_sources() -> list[Path]:
     return files
 
 
-def source_tables(sources: list[Path]) -> tuple[set[str], root_check_c.Classifier]:
-    """The functions marked precise in the sources, and a classifier that
-    knows the headers' inline bodies and the sources' functions."""
-    bodies, _ = root_check_c.header_inline_bodies(
-        root_check_c.default_include_dirs())
+@dataclass
+class Tables:
+    precise: set[str]
+    classifier: root_check_c.Classifier
+    functions: dict[str, root_check_c.Function]
+    typedefs: set[str]
+    returns: dict[str, str]
+    args_anchored: set[str]
+    checked: dict[str, list[root_check_c.Error]] = field(default_factory=dict)
+
+    def check(self, name: str) -> list[root_check_c.Error] | None:
+        """The C mode's errors in name's body checked as precise, or None if
+        there is no body."""
+        if name not in self.checked:
+            fn = self.functions.get(name)
+            if fn is None:
+                return None
+            self.checked[name] = root_check_c.check_function(
+                fn, self.classifier, self.typedefs, self.returns,
+                self.precise, self.args_anchored)
+        return self.checked[name]
+
+
+def source_tables(sources: list[Path]) -> Tables:
+    """The functions marked precise in the sources, a classifier that knows
+    the headers' inline bodies and the sources' functions, and what the C
+    mode needs to check those bodies."""
+    inc = root_check_c.default_include_dirs()
+    bodies, header_returns = root_check_c.header_inline_bodies(inc)
     bodies = dict(bodies)
+    functions = dict(root_check_c.header_inline_functions(inc))
+    typedefs = set(root_check_c.header_typedefs(inc))
+    returns = dict(header_returns)
     precise: set[str] = set()
     for p in sources:
         toks = root_check_c.tokens_of(p.read_text(errors="replace"))
-        funcs, names, _ = root_check_c.find_functions(toks)
+        funcs, names, rets = root_check_c.find_functions(toks)
         precise |= names
+        returns.update(rets)
+        typedefs |= root_check_c.typedef_names(toks)
         for fn in funcs:
             bodies[fn.name] = fn.body_toks
+            functions[fn.name] = fn
         bodies.update(root_check_c.macro_bodies(toks))
-    return precise, root_check_c.Classifier(bodies)
+    args_anchored = {n for n, fn in functions.items() if fn.args_anchored}
+    return Tables(precise, root_check_c.Classifier(bodies), functions,
+                  typedefs, returns, args_anchored)
 
 
 def audit(path: str, sources: list[Path]) -> list[str]:
     img = read_image(path)
     if not img.has_debug_info:
         return [f"{path}: no .debug_info; the audit needs -g"]
-    precise_src, classifier = source_tables(sources)
+    tables = source_tables(sources)
+    precise_src = tables.precise
     in_section = {name for name, syms in img.symbols.items()
                   if any(idx == img.section_index for _, idx in syms)}
     errors: list[str] = []
@@ -250,10 +284,21 @@ def audit(path: str, sources: list[Path]) -> list[str]:
                 continue
             if iname in precise_src or iname in in_section:
                 continue
-            if classifier.kind(iname) == "none":
+            if tables.classifier.kind(iname) == "none":
                 continue
-            errors.append(f"{path}: precise '{name}' inlines '{iname}', which "
-                          "is neither precise nor non-collecting")
+            # Its locals live in the precise frame: its body is checked as
+            # a precise function's (10a-2.md, rule 6).
+            found_errors = tables.check(iname)
+            if found_errors == []:
+                continue
+            if found_errors is None:
+                errors.append(f"{path}: precise '{name}' inlines '{iname}', "
+                              "which is collecting and has no body the C "
+                              "mode can check")
+                continue
+            for e in found_errors:
+                errors.append(f"{path}: precise '{name}' inlines '{iname}', "
+                              f"whose body fails the C mode: {e.message}")
     for name in sorted(in_section - found):
         if not CLONE.match(name):
             errors.append(f"{path}: '{name}' is in section {SECTION} but has "

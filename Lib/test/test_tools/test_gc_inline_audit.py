@@ -23,9 +23,14 @@ CC = shlex.split(sysconfig.get_config_var("CC") or "")
 
 PRELUDE = """\
 #define Py_GC_PRECISE __attribute__((section("py_gc_precise")))
+typedef struct _object PyObject;
 extern void collect(void);
+extern PyObject *make(int x);
+extern int use(PyObject *o);
 static inline __attribute__((always_inline)) int
-opaque(int x) { collect(); return x + 1; }
+opaque(int x) { PyObject *o = make(x); collect(); return use(o); }
+static inline __attribute__((always_inline)) int
+unmarked(int x) { collect(); return x + 1; }
 static inline __attribute__((always_inline)) int
 pure(int x) { return x * 2; }
 Py_GC_PRECISE static inline __attribute__((always_inline)) int
@@ -68,7 +73,18 @@ class InlineAuditTests(unittest.TestCase):
                 obj, c = self.build("bad" + opt, GOOD + BAD, "-g", opt)
                 errors = self.audit(obj, c)
                 self.assertEqual(len(errors), 1, errors)
-                self.assertIn("precise 'bad' inlines 'opaque'", errors[0])
+                self.assertIn("precise 'bad' inlines 'opaque', whose body "
+                              "fails the C mode", errors[0])
+                self.assertIn("'o' is held only in a C local", errors[0])
+
+    def test_unmarked_inline_that_checks_clean_passes(self):
+        # Its locals live in the precise frame, and it holds none across
+        # its collection (10a-2.md, rule 6).
+        src = GOOD + "Py_GC_PRECISE int calls(int x) { return unmarked(x); }\n"
+        for opt in ("-O0", "-O3"):
+            with self.subTest(opt):
+                obj, c = self.build("unmarked" + opt, src, "-g", opt)
+                self.assertEqual(self.audit(obj, c), [])
 
     def test_no_debug_info_fails(self):
         obj, c = self.build("nog", GOOD, "-O2")

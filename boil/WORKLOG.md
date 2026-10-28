@@ -1864,8 +1864,6 @@ after merging the integration branch at 15:10's 6c rung 1 and rung 2
 (a6288f5e776, which brings 0a1d762a998's fix), build/debug runs 16, 7
 skipped, success, and gates 0 (1,898) and 1 (1,456) pass again. The rung 1 work doc and its review are
 887f403e01a; the C mode started 16:04 and has until 2026-10-28 16:04.
-||||||| c2ab4382dea
-||||||| f2066d55122
 
 ## 2026-10-27 20:05 PDT: traverse audit landed (boil/audit)
 
@@ -1889,3 +1887,26 @@ tests, no failures; one env-changed in test_inspect (an unraisable
 KeyError '__import__' while a coroutine was finalised), not seen before,
 to be watched in the next gates. OpenSSL headers are absent on this
 machine, so test_ssl runs in no gate.
+
+## 2026-10-27 21:55 PDT: 10a rung 1 (the tools of precise roots) closed
+
+Branch boil/10a at 88f96f19459; the record is boil/design/work/10a-1.md.
+All eight items landed: the C mode within its day, spans, the inline
+audit, the walk with question 16's pinned and unpinned detach records,
+the loader generation, the data-stack and chain visits, the verifier's
+retain and kill modes (rung 1's exclusions by default, `:pymem` and
+`:structs` for rung 3), and injection sites with `PYTHON_GCSTRESS`.
+Gates at 88f96f19459: 0 and 1 on both builds (test_bdb, the trace and
+monitoring tests, test_pdb, test_gc); gate 2 on build/default, 556 files,
+51,932 collections, 0 fallbacks; gate 3 on build/debug, 52,865
+collections, 0 fallbacks, 886 unpinned records visited (0.02 a
+collection); the suite under plain `PYTHON_GCVERIFY=kill` on build/debug,
+556 files, 52,926 collections, no failures. Found and fixed on the way:
+the collector read `ob_type` of a static type that `PyType_Ready()` was
+still readying (by stress); the kill mode's quarantine thread state was a
+global that own-GIL interpreters raced on (by the kill suite); a queued
+callback ran under a trace function installed after its object died
+(test_bdb on the integration branch), now drained by the trace, profile
+and monitoring setters. Recorded, not fixed: shared-heap subinterpreters
+run the main interpreter's callbacks (step 7; note 08 section 3, note 11
+question 18); the compiler's units and `PyBytesWriter` (rung 3's sites).

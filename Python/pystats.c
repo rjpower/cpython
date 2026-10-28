@@ -4,9 +4,11 @@
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pylifecycle.h"     // _PyOS_URandomNonblock()
 #include "pycore_tstate.h"
+#include "osdefs.h"                 // MAXPATHLEN
 #include "pycore_initconfig.h"      // _PyStatus_OK()
 #include "pycore_pystate.h"         // _PyThreadState_GET()
 #include "pycore_runtime.h"         // NUM_GENERATIONS
+#include "pycore_shape.h"           // _Py_DICT_MODE_NREASONS
 #include "pycore_stats.h"           // _PY_BOX_SITES
 
 #include <dlfcn.h>                 // dladdr()
@@ -214,10 +216,18 @@ print_object_stats(FILE *out, ObjectStats *stats)
     fprintf(out, "Object interpreter immortal decrefs: %" PRIu64 "\n", stats->interpreter_immortal_decrefs);
     fprintf(out, "Object immortal increfs: %" PRIu64 "\n", stats->immortal_increfs);
     fprintf(out, "Object immortal decrefs: %" PRIu64 "\n", stats->immortal_decrefs);
-    fprintf(out, "Object materialize dict (on request): %" PRIu64 "\n", stats->dict_materialized_on_request);
-    fprintf(out, "Object materialize dict (new key): %" PRIu64 "\n", stats->dict_materialized_new_key);
-    fprintf(out, "Object materialize dict (too big): %" PRIu64 "\n", stats->dict_materialized_too_big);
-    fprintf(out, "Object materialize dict (str subclass): %" PRIu64 "\n", stats->dict_materialized_str_subclass);
+    static const char *const dict_mode_reasons[] = {
+        "str name", "capacity", "shape limit", "class assigned",
+        "dict assigned", "dict deleted", "on request",
+    };
+    static_assert(Py_ARRAY_LENGTH(dict_mode_reasons) == _Py_DICT_MODE_NREASONS,
+                  "a name for each _PyDictModeReason");
+    static_assert(Py_ARRAY_LENGTH(stats->dict_mode) == _Py_DICT_MODE_NREASONS,
+                  "a counter for each _PyDictModeReason");
+    for (int i = 0; i < _Py_DICT_MODE_NREASONS; i++) {
+        fprintf(out, "Object materialize dict (%s): %" PRIu64 "\n",
+                dict_mode_reasons[i], stats->dict_mode[i]);
+    }
     fprintf(out, "Object method cache hits: %" PRIu64 "\n", stats->type_cache_hits);
     fprintf(out, "Object method cache misses: %" PRIu64 "\n", stats->type_cache_misses);
     fprintf(out, "Object method cache too big: %" PRIu64 "\n", stats->type_cache_too_big);
@@ -431,7 +441,12 @@ _Py_PrintSpecializationStats(int to_file)
 # ifdef MS_WINDOWS
         const char *dirname = "c:\\temp\\py_stats\\";
 # else
-        const char *dirname = "/tmp/py_stats/";
+        /* PYTHON_STATS_DIR names a directory for the files of one run, which
+           a process inherits even with -E; the default is shared. */
+        const char *dirname = getenv("PYTHON_STATS_DIR");
+        if (dirname == NULL || dirname[0] == '\0') {
+            dirname = "/tmp/py_stats";
+        }
 # endif
         /* Use random 160 bit number as file name,
         * to avoid both accidental collisions and
@@ -444,10 +459,16 @@ _Py_PrintSpecializationStats(int to_file)
             hex_name[2*i+1] = Py_hexdigits[(rand[i]>>4)&15];
         }
         hex_name[40] = '\0';
-        char buf[64];
-        assert(strlen(dirname) + 40 + strlen(".txt") < 64);
-        sprintf(buf, "%s%s.txt", dirname, hex_name);
-        FILE *fout = fopen(buf, "w");
+        char buf[MAXPATHLEN + 1];
+# ifdef MS_WINDOWS
+        int n = snprintf(buf, sizeof(buf), "%s%s.txt", dirname, hex_name);
+# else
+        int n = snprintf(buf, sizeof(buf), "%s/%s.txt", dirname, hex_name);
+# endif
+        FILE *fout = NULL;
+        if (0 < n && (size_t)n < sizeof(buf)) {
+            fout = fopen(buf, "w");
+        }
         if (fout) {
             out = fout;
         }

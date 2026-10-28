@@ -1341,7 +1341,7 @@ _PyObject_GetDictPtr(PyObject *obj)
     if ((Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES) == 0) {
         return _PyObject_ComputedDictPointer(obj);
     }
-    if (_PyObject_EnterDictMode(obj) == NULL) {
+    if (_PyObject_EnterDictMode(obj, _Py_DICT_MODE_ON_REQUEST) == NULL) {
         PyErr_Clear();
         return NULL;
     }
@@ -1414,8 +1414,9 @@ load_from_storage(PyObject *obj, PyObject *name, const _PyLookupPlan *plan,
                 /* DICT on a shape: the name is not an exact str, and only
                    the dict compares it by its own __hash__ and __eq__. */
                 assert(!PyUnicode_CheckExact(name));
-                OBJECT_STAT_INC(dict_materialized_str_subclass);
-                if (_PyObject_EnterDictMode(obj) == NULL) {
+                if (_PyObject_EnterDictMode(obj, _Py_DICT_MODE_STR_NAME)
+                    == NULL)
+                {
                     return -1;
                 }
             }

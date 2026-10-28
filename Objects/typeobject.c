@@ -7429,7 +7429,9 @@ object_set_class_world_stopped(PyObject *self, PyTypeObject *newto)
          * dictionary mode, which is terminal, only slot 0 is used. */
         if (oldto->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
             assert(newto->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-            if (_PyObject_EnterDictMode(self) == NULL) {
+            if (_PyObject_EnterDictMode(self, _Py_DICT_MODE_CLASS_ASSIGNED)
+                == NULL)
+            {
                 return -1;
             }
         }

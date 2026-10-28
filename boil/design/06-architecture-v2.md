@@ -354,10 +354,14 @@ and kinds. Attribute access compares the header with the cached shape and
 the shape's `type_version` with the cached version, then loads the slot.
 Every slot holds a `PyValue`; the slot kinds BOXED, I32 and F64 are
 promises recorded in the shape, not layouts: a store of a value of
-another kind transitions the shape, so a load from an F64 slot needs no
-tag test. Dictionary mode (a materialised `__dict__` mutated through the
-dict API) is a shape whose slot 0 holds the dict. `__slots__` classes are
-shapes that cannot transition. Weak references live in a side table keyed
+another kind generalises the field to BOXED in place, in the shape that
+added it and every shape after it, and renews their version, so code that
+read a kind as I32 or F64 and checked the version may rely on it (note 09
+section 5; section 20.4). Dictionary mode (entered by reading `__dict__`,
+by `__class__` assignment, or when a type's shapes or an object's slots
+run out) is a shape whose slot 0 holds the dict. `__slots__` members are
+not shape slots: they stay on `tp_members`, and a member is a DATA_DESCR
+plan whose executor is the slot load. Weak references live in a side table keyed
 by address, with the header flag saying whether to consult it, so there is
 no pre-header at all. Lookup is a pure function from (shape, name) to a
 plan that the generic getattr, the specialiser, tier 0 and tier 1 all
@@ -543,7 +547,7 @@ entry; nothing lives on a prototype branch.
 | 5 | Collector, live, in three sub-steps (5a flag build, 5b full suite and ports, 5c default on and refcount code deleted; the header shrink and the weakref side table move to 6a). `--with-gc` configure flag first, default later in the step. Eight-byte header; `Py_INCREF`/`Py_DECREF` to no-ops; sweep by heap visit; finaliser queue; weak reference side table; `tp_dealloc` audit and `OWNS_RESOURCES` flag; `sys.getrefcount` removed; stdlib audit for refcount timing; free-threaded build removed. Sub-gates: 5a flag build runs the smoke ladder; 5b full suite; 5c ports rebuild with patch counts recorded; 5d default on, refcount paths deleted. Done in three: 5a (section 15), 5b (16), 5c (17, which took 5d's default and deletions); sweep by block moved to 6a or later. | reference counting in `ob_refcnt` (the field goes with the header shrink in 6a), `Py_TAG_REFCNT`, `_PyStackRef` ownership, `IR_BORROW` remnants, the cycle collector (`gc.c`), free lists, the free-threaded build and `gc_free_threading.c`, `Py_STACKREF_DEBUG` | suite; ports; instructions per loop down on richards and go; RSS and pauses recorded (pyperformance dropped for 5c, 2026-10-26) | 10 days, in four sub-steps |
 | 6a | `PyValue` in the core: list, tuple, dict, set, instance slots, cells, globals hold `PyValue`; `_PyStackRef` renamed to `PyValue` and the duplicate helpers deleted; boxing only at the `PyObject*` conversion. Done (section 18), with the header shrink, the weak reference table and the removal of PyGC_Head that 5 handed on: the header is one word, a collected object has no header before it, and a 3-tuple is 48 bytes where it was 72. | `_PyStackRef`, `PyStackRef_*`, `Py_STACKREF_INLINE_VALUES`, the boxing at container stores, `ob_refcnt`, PyGC_Head, the per-object weaklist fields | suite; nbody, float, spectral_norm instructions per loop; RSS | 5 days; took about 9 hours |
 | 6b | The `PyValue` C API (note 08 section 4). The core's protocols take and return `PyValue`: number (`PyNumber_*Value`), object (`PyObject_RichCompareValue`, `PyObject_GetAttrValue`, `PyObject_SetAttrValue`, `PyObject_IsTrueValue`, `PyObject_HashValue`), sequence and mapping, call (`PyObject_VectorcallValue` over a `PyValue` argument array), iteration; the generic `BINARY_OP`, `COMPARE_OP`, `CALL`, subscript and attribute handlers call them, so an inline operand is never boxed to reach a C implementation of the same operation. The `PyObject*` API is the compatibility layer: canonicalise in, box out, abort rule of 18.3 for accessors without an error channel; nothing in the core calls it. The stable ABI is gone: `.abi3` leaves the extension suffixes and `Py_LIMITED_API` is a compile error, so an incompatible wheel fails to import instead of crashing. `BINARY_OP_POWER_FLOAT` is removed once `PyNumber_PowerValue` makes the generic path box-free (note 08 section 5). Ports: the Cython port patched once at the generated-code idioms, pyyaml and numpy regenerated, cffi by hand. Done (section 19): the value protocols, calls and `tp_iternext` on values, the `PyObject*` API as the layer, no stable ABI, a release call as a keep-alive barrier, the slot limit as a `SyntaxError`, and a debug check for objects outside the object heaps; ports stopped at the 2026-10-27 ruling with the cython and cffi patches kept as the record of the API's surface. | `PyList_GET_ITEM` and family as the core's API; `BINARY_OP_POWER_FLOAT`; `LOAD_NAME`/`STORE_NAME` boxing | suite on both builds; the internal set and boxes per loop recorded (ports deferred by the 2026-10-27 ruling: six, attrs, pycparser, markupsafe, cython, pyyaml and cffi pass on value-v1; numpy recorded as failing at the API surface) | 5 days; took about 8 hours |
-| 6c | The object protocol (note 09): shape in the header, `Py_TYPE` through the shape, root shape per type; instance layout `header, slots`, dictionary mode as a shape, `__slots__` as shapes, the managed-dict pre-header gone; the lookup and store plans with the specialiser rewritten over them and typecache as the (shape, name) plan cache; `LOAD_ATTR_SHAPE`, `_SHAPE_POLY`, `_METHOD_SHAPE`, `STORE_ATTR_SHAPE`, `_SHAPE_TRANSITION`; slot kinds as promises; plan inspection in `_testinternalcapi` and `dis`. | `--with-shapes`, shared keys for instances, the `PyDictValues` header, `LOAD_ATTR_INSTANCE_VALUE`, `_WITH_HINT`, `_SLOT`, `_METHOD_WITH_VALUES`, `_METHOD_LAZY_DICT`, `STORE_ATTR_INSTANCE_VALUE`, `_WITH_HINT` | suite on both builds; plan tests; per loop on richards, raytrace, deltablue, chaos, go, nbody and the `Py_TYPE` cost on json_loads recorded; RSS for 1M four-attribute instances recorded | 6 days |
+| 6c | The object protocol (note 09): shape in the header, `Py_TYPE` through the shape, root shape per type; instance layout `header, slots`, dictionary mode as a shape, members as DATA_DESCR plans on `tp_members` (not shapes), the managed-dict pre-header gone; the lookup and store plans with the specialiser rewritten over them and typecache as the (shape, name) plan cache; `LOAD_ATTR_SHAPE`, `_SHAPE_POLY`, `_METHOD_SHAPE`, `STORE_ATTR_SHAPE`, `_SHAPE_TRANSITION`; slot kinds as promises; plan inspection in `_testinternalcapi` and `dis`. Done (section 20): the shape in the header, the lookup plan, the layout with split tables and `PyDictValues` deleted, kinds generalised in place with versions paired by consumer, and dictionary-mode counters; the costs it names are handed on with owners in 20.9. | `--with-shapes`, shared keys for instances, the `PyDictValues` header, `LOAD_ATTR_INSTANCE_VALUE`, `_METHOD_WITH_VALUES`, `_METHOD_LAZY_DICT`, `_NONDESCRIPTOR_WITH_VALUES`, `STORE_ATTR_INSTANCE_VALUE`; `LOAD_ATTR_SLOT` and `STORE_ATTR_SLOT` stay for members and both `_WITH_HINT` handlers for DICT plans (note 09 section 6) | suite on both builds; plan tests; per loop on richards, raytrace, deltablue, chaos, go, nbody and the `Py_TYPE` cost on json_loads recorded; RSS for 1M four-attribute instances recorded | 6 days |
 | 6d | The remaining object slots on values: tp_getattro, tp_setattro, tp_descr_get, tp_descr_set, tp_call and the native descriptor calls take and return PyValue; the PyObject* slot forms become the compatibility entries. Named by the note 09 review as the boundary 6c leaves boxing. | the slot-call boxes | suite on both builds; boxes per loop on the micro set recorded | 2 days |
 | 10a | Precise roots (note 11, adopted 2026-10-27): an attributed DWARF stack walk classifies frames as precise or opaque; the eval loop, the handlers, the entry paths, the call layer and about 25 ceval helpers are precise, proved by root_check's C mode (time-boxed, note 11 question 10) and the kill-mode verifier; core C stays opaque and conservatively scanned; the hack-register rows of note 11 section 7 retired with their proofs. | `-ftrivial-auto-var-init=zero`, the stack clears, `_PyGC_CLEAR_ARRAY`, the activation-range exclusion, the inline-fallback full scan, the struct scan, the one-survivor test allowances | note 11 section 10: no trap in kill mode, no walk fallback, the C mode and inline audit clean, stale-root probe 100/100, the section 8.2 list 20/20 on both builds; internal set recorded | 5.5 days, hard stop at 6 |
 | 7 | Generational collection over the precise root set of 10a (note 11 section 11: the root set, the safepoint rule and the barrier placement are inherited, and the header flag bits of note 09 are decided here): sticky mark bits, remembered set, write barrier in the store macros, barrier verifier (full mark after each minor collection in debug builds). Kept only if pause and throughput both improve on the benchmark set. | nothing | verifier clean; the internal set's memory group (collector benchmark, RSS) and kernels recorded against step 6 | 5 days |
@@ -3878,3 +3882,425 @@ through the transitive scan (note 08):
 - `PyObject_Init()` on non-heap memory is checked only in debug builds.
 - The API gaps of 19.8.
 - `CYTHON_VECTORCALL_TPNEW`.
+
+## 20. Step 6c decisions
+
+Step 6c builds the object protocol of note 09. The shape is the header,
+and `Py_TYPE` reads through it. One lookup plan per (shape, name) serves
+the generic protocol, the specialiser and the plan cache. An instance is
+the header word and its type's slots, and dictionary mode is a shape.
+Slot kinds are promises, generalised in place. From the first rung
+(eb4249ad318) to the counters (f70da2cad2a), 13 commits of the step
+and 8 of the traverse audit that landed beside it changed 139 files
+outside `boil/` and `ports/`, with 7,534 insertions and 4,295
+deletions. The rulings, all of 2026-10-27:
+
+- note 09's header layout stays: flags in bits 48 to 63 beside the
+  shape, and one guard form, "masked header == immediate" (20.1);
+- split tables, `ma_values` and `PyDictValues` are deleted in 6c, not
+  handed on (20.3);
+- the collector marks an instance's attribute storage itself, whatever
+  its type's traverse does (20.3);
+- kinds generalise in place over the field owner's subtree; there is no
+  deprecation (20.4);
+- the shape version and `tp_version_tag` are paired by consumer, and a
+  borrowed shape is compared, never dereferenced (20.4);
+- kinds live in the feedback entry, with one guard uop (20.4);
+- `str +=` stays quadratic in 6c, and step 9 owns it (20.4);
+- the measured costs that the decisions name are recorded, not tuned;
+  20.9 lists them with their owners.
+
+### 20.1 The shape in the header (rung 1)
+
+| commit | what |
+|---|---|
+| eb4249ad318 | the shape in the header and `Py_TYPE` through it; a root shape embedded in every type (`tp_root_shape`); `shape->flags` a copy of `tp_flags`; `shape->type_version` a mirror of `tp_version_tag`, until rung 4 separates them (20.4); a heap type's shape table (root, at most 64 shapes, one dictionary-mode shape); `_Py_IS_ROOT_SHAPE` for the exact checks in Include/; `_Py_DebugOffsets`, `_remote_debugging` and gdb read the type through the shape |
+| 0a1d762a998 | test_cext's C++ virtual object gets its storage from the object allocator |
+
+A static type's root shape lives in the type, so the header of a static
+object is an address constant. Some core static types are never readied,
+so `_PyObject_Init` fills an empty root shape at the type's first object.
+`Py_TYPE()` is not NULL-safe: the four sites that asked whether a type
+was set yet test the shape instead.
+
+### 20.2 The lookup plan (rung 2)
+
+| commit | what |
+|---|---|
+| 80ba2edf94c | `pycore_lookup.h` and Objects/lookupplan.c: the load and store plans, the dispatch of note 09 section 4.1, `_PyShape_LookupPlan` and `_PyShape_LookupStorePlan`; the type cache becomes the (shape, name) plan cache; the specialiser takes the plan, writes the entry and picks the handler; `LOAD_ATTR_PROPERTY` reads the getter at execution; `_testinternalcapi.lookup_plan` and `lookup_store_plan` |
+
+There is no facts struct: the MRO result travels in `plan.value`, and the
+specialiser computes the hook facts from the root entries of
+`__getattribute__` and `__getattr__`.
+
+### 20.3 The instance layout (rung 3)
+
+| commit | what |
+|---|---|
+| f9685f65468 | positional shape slots keyed by name, with delete edges and the prepare and commit split; the layout `header, slots` and the pre-header deleted; dictionary mode as a shape, entered by reading `__dict__`; the handler set of note 09 section 4.8 |
+| bb5ff82e6e9 | `LOAD_ATTR_SHAPE_POLY` over a site's two to four shapes |
+| 798977ee556 | review fixes: sibling layouts with a dict word, and its initialisation |
+| e7adfa36b13 | dataclass capacity from `__static_attributes__` |
+| 49580514d90 | `_testbuffer`'s ndarray visits its exporter (20.6) |
+| dba354f43ec | split tables, `ma_values` and `PyDictValues` deleted |
+| 26d218d54a9 | the collector marks an instance's attribute storage whatever its traverse does |
+
+The decisions:
+
+- **Variable-size subclasses drop `Py_TPFLAGS_MANAGED_DICT`** and get a
+  computed dict word, so the flag has one layout.
+- **`LOAD_ATTR_NONDESCRIPTOR_SHAPE`** replaces
+  `NONDESCRIPTOR_WITH_VALUES`. It is `LOAD_ATTR_METHOD_SHAPE` pushing only
+  the value.
+- **Stores at polymorphic sites are generic.** No store poly handler was
+  added; go pays for it (20.8, 20.9).
+- **The managed-dict C API is reinterpreted, not deprecated:**
+  `PyObject_VisitManagedDict` and `PyObject_ClearManagedDict` act on the
+  instance's attribute storage: the shape slots, or slot 0 in dictionary
+  mode.
+- **Members guard on the version only.** A member's offset is fixed by
+  the type, so `LOAD_ATTR_SLOT` and `STORE_ATTR_SLOT` compare the live
+  shape's version without `_GUARD_SHAPE`.
+- **A declined site records its row**, so a site that alternates between
+  two shapes reaches POLY instead of oscillating.
+- **Capacity is a type constant**: `S + 2` slots for `S` static
+  attributes, at least six, at most 30. A type that has never allocated
+  an instance recomputes it when `__static_attributes__` is assigned, so
+  an 8-field dataclass has 10 slots.
+- **Dictionary mode is terminal**, and `__dict__` does not alias the
+  slots.
+
+### 20.4 Slot kinds as promises (rung 4)
+
+| commit | what |
+|---|---|
+| ee167b42a18 | the `str +=` ruling; `micro/str_concat_loop` and note 08's register row |
+| 0c0ae6f6fcb | shape and type versions paired by consumer; a poly row of the same shape is replaced (magic 3725) |
+| e35552a3343 | kinds BOXED, I32 and F64; the first store picks the kind; GENERALISE in the store plan; `_PyShape_Generalise` over the owner's subtree with one fresh version; `_GUARD_SLOT_KIND` on `STORE_ATTR_SHAPE` and `_TRANSITION`; kinds in the feedback entry and the poly rows (magic 3726) |
+
+- **The value test is one compare.** `_PyValue_FitsKind()` is an unsigned
+  range check against a table indexed by kind, so the guard has one form
+  for every kind and needs no per-kind handlers. The opcode space is
+  full, which ruled per-kind handlers out anyway.
+- **A specialiser that sees a misfit declines.** The generic store
+  generalises, and the next attempt finds BOXED.
+- **Versions by consumer** (note 09 section 5). Generalisation renews
+  shape versions, never `tp_version_tag`. Three consumers had read one
+  as the other: the plan cache's version check, `LOAD_ATTR_PROPERTY`'s
+  type guard, and `fb_saw_other_shape`, which identified a type by
+  version. Each now reads its own. A row's shape pointer is never
+  dereferenced: `fb_saw_other_shape` compares it with the live type's
+  own shapes (`_PyType_HasShapeAt`).
+- **`str +=`** copies on every step, as it has since 5c. A rope was
+  ruled out because `PyUnicode_DATA` cannot fail. Step 9's escape proof
+  owns it, with a compiler-emitted seal as the fallback (note 08).
+
+### 20.5 Counters and measurement tools (rung 5)
+
+| commit | what |
+|---|---|
+| f70da2cad2a | entries into dictionary mode by reason, counted once after success (Py_STATS); `PYTHON_STATS_DIR`; `_testinternalcapi.dict_mode_counts()`; `micro/attr_load_poly5` and `micro/attr_store_boxed`; `boil/tools/measure/occupancy.py` |
+
+The reasons are `str_name`, `capacity`, `shape_limit`,
+`class_assigned`, `dict_assigned`, `dict_deleted` and `on_request`.
+Every conversion publishes through one function, which counts the reason
+it is given after the header changes. An ADD refused on both counts is
+`capacity`; a REMOVE needs no slot, so it can only be `shape_limit`.
+
+On a Py_STATS build, `PYTHON_STATS_DIR` names the directory for the
+stats files. Without it, every process on the machine shares
+`/tmp/py_stats`, so a suite run cannot tell its own files apart.
+
+### 20.6 Hazards found
+
+- **test_buffer** failed on a release build because `_testbuffer`'s
+  ndarray had no `tp_traverse`. A view held its source only in its base
+  buffer, so a collection freed the source and the view read a freed
+  format string. It reproduced 200 times in 200 with a collection between
+  the slice and the read.
+- **The dict word.** `_testcapi`'s heap types with a dict never visited
+  it. Rather than audit every traverse, the collector marks attribute
+  storage itself (26d218d54a9; note 09 section 6).
+- **A gate's pyc prefix inside the build directory** made test_import and
+  test_compileall fail on debug builds, because a rename across
+  filesystems fails. gate.sh now keeps the prefix on TMPDIR's
+  filesystem (3ac12dd5a6e).
+
+### 20.7 Tests
+
+test_shapes holds the step's tests, 130 of them against 22 at the start
+of 6c. They cover the shape tree and its limits, plans and their cache,
+the layout and capacity, dictionary mode and its entries, the specialised
+handlers and their poly rows, kinds and generalisation, version pairing
+and address reuse, and the counters. They assert on `_testinternalcapi`'s
+view of shapes, plans and slots, and on behaviour. The counter tests run
+on a Py_STATS build only.
+
+The deliberate behaviour changes:
+
+- dictionary mode is terminal;
+- `__dict__` does not alias the slots;
+- `sys.getsizeof` of an instance counts its slots.
+
+Twenty other test files changed with them. The largest changes are
+test_opcache's handler names, test_type_cache's plan cache, test_class
+and test_descr for `__class__` assignment and dictionary mode,
+test_capi's managed-dict tests, test_sys sizes, test_dict without split
+tables, and test_dis.
+
+Gates at the counters commit: gate 2 on release ran 50,884 tests with no
+failures. Gate 3 on debug failed on one of 50,868 tests:
+test_io.test_signals timed out in a reentrant write after a weak
+reference callback ran in its signal handler. That is 10a's known hazard,
+the callback-queue timing, and its fix lands with the 10a merge; the gate
+is recorded as failed on it, not as passed. The failure stopped the gate
+before test_cext, regen and the traverse audit; run by hand, all three
+passed.
+
+### 20.8 Measurements
+
+User-mode instructions per loop, from gate 4 (`boil/bench/run.py --set
+all --metric instr,rss`), as in 19.10, gcc 15. Each column is a release
+build (`CC=gcc`) of that commit, with its own `Lib`. The files are
+`results/6b.json`, `6c-rung2-before.json`, `6c-rung3-end.json` and
+`6c.json`. `6c-rung3-end.json` was measured at the rung 3 end with the
+benchmark sources of f70da2cad2a; rung 3's own `6c-rung3.json`, taken
+before the storage-marking commit, is kept as it was.
+
+| per loop (M) | 6b end (3f44aa5bf3a) | rung 2 (80ba2edf94c) | rung 3 (a9e02dccada) | now (f70da2cad2a) |
+|---|---|---|---|---|
+| richards | 526.5 | 515.6 | 355.5 | 360.2 |
+| go | 1,071.9 | 1,086.8 | 1,349.7 | 1,366.4 |
+| nbody | 688.1 | 687.7 | 723.9 | 723.9 |
+| float | 470.2 | 479.4 | 485.8 | 485.8 |
+| spectral_norm | 1,084.5 | 1,097.6 | 1,114.9 | 1,114.2 |
+| raytrace | 2,694.5 | 2,748.0 | 2,699.1 | 2,711.9 |
+| deltablue | 41.1 | 41.8 | 42.3 | 42.5 |
+| chaos | 564.6 | 570.2 | 575.2 | 576.6 |
+| generators | 416.5 | 420.4 | 439.4 | 439.4 |
+| json_loads | 7.71 | 7.75 | 7.64 | 7.64 |
+| logging_simple | 0.604 | 0.618 | 0.708 | 0.708 |
+
+Rung 1, measured on its own, was richards 526.5 to 530.6M and go 1,071.9
+to 1,086.9M, the extra load of `Py_TYPE()` together with shape tracking,
+which until then had been off by default. Against 6b the step's
+instruction geomean is 1.019 over the 29 kernels and 1.027 over the
+micro benchmarks.
+
+Per iteration of the attribute micro benchmarks:
+
+| per iteration | 6b end | rung 2 | rung 3 | now |
+|---|---|---|---|---|
+| attr_load | 42.0 | 41.0 | 42.0 | 42.0 |
+| attr_load_poly (two shapes) | 205.8 | 185.9 | 60.0 | 60.1 |
+| attr_load_poly5 (five shapes) | | | 302.1 | 301.1 |
+| attr_store | 50.0 | 44.0 | 44.0 | 52.0 |
+| attr_store_boxed | | | 44.0 | 52.0 |
+| attr_store_poly | 259.8 | 280.9 | 263.1 | 283.0 |
+| attr_store_dataclass | | 496.1 | 522.1 | 550.1 |
+| attr_load_after_dict | 42.0 | 44.0 | 78.0 | 78.0 |
+| new_instance | 1,691.7 | 1,755.7 | 1,626.3 | 1,658.4 |
+| property_load | 271.0 | 281.0 | 281.0 | 281.0 |
+| empty_loop | 58.6 | 58.7 | 60.7 | 60.6 |
+
+Rungs 2 and 3 are attributed in their work docs; the large moves are:
+
+- **richards -31% and attr_load_poly -68%** come from
+  `LOAD_ATTR_SHAPE_POLY`;
+- **go +24%** comes from its polymorphic stores, which are generic
+  (20.9, item 1);
+- **logging +11 to 14%** is the conversion on `record.__dict__`
+  (item 2);
+- **attr_load_after_dict, +34 per load,** is `LOAD_ATTR_WITH_HINT` on a
+  dictionary-mode object, as note 09 prescribes;
+- **about 2 instructions on every micro benchmark** is a register spill
+  (item 7).
+
+Rungs 4 and 5 move no kernel by more than 1.4%: richards +1.3%, go +1.2%,
+the kernel geomean 1.001. The store micro benchmarks move by more,
+for two demonstrated causes:
+
+- **The kind guard, 8 instructions per specialised store.** A profile of
+  attr_store finds `_GUARD_SLOT_KIND` in `STORE_ATTR_SHAPE` as eight
+  instructions, from the load of the entry's kind to the exit branch.
+  attr_store and attr_store_boxed are both +8 (+18%), because a BOXED
+  field pays the same compare. new_instance is +32, which is four
+  transition stores. In richards, 372,587 specialised stores per loop
+  account for 3.0M of its 4.7M; in go, 335,384 account for 2.7M of
+  16.7M.
+- **The generic store's classification, about 30 instructions.**
+  `_PyShape_ResolveStore` now classifies the value's kind against the
+  field's, for REPLACE or GENERALISE. It grew from 185 to 214
+  instructions, and an unthrottled profile of attr_store_dataclass (a
+  store the specialiser refuses, because the class has a default) puts
+  +31 of the micro's +28 per store there. attr_store_poly is +20 for
+  the same reason. go's 441,162 generic stores per loop pay it; a
+  profile puts about 3.5M of go's 16.7M in `generic_setattr_value` and
+  the resolver. The remaining 10.5M (0.8%) is under the threshold and
+  not attributed.
+
+Loads did not move: attr_load, attr_load_poly and property_load are
+unchanged by rung 4, and attr_load_poly5, a megamorphic site, is 301 per
+load, against 60 for a two-shape POLY site.
+
+**Code shape.** `_PyEval_EvalFrameDefault` has 275 header masks
+(`movabs $0xffffffffffff`) now and at the rung 3 end, against 269 before
+rung 1 (b6fb7543511) and 278 after it. It has 27,987 instructions,
+against 27,970 at the rung 3 end and 28,245 before rung 1. The source has 1,802 `Py_TYPE(` and 194
+`Py_IS_TYPE(` sites in Objects/, Python/, Include/, Modules/ and Parser/,
+against 1,836 and 185 after rung 1.
+
+**Boxes per loop** (Py_STATS build, `results/6c-pystats.json`): richards
+9, go 30,809, nbody 1, float 2, spectral_norm 42 and generators 0, as at
+6b's end (19.10). Of the attribute micro benchmarks, only
+attr_store_dataclass boxes, once per iteration.
+
+**Dictionary-mode entries by reason.** Over the 29 kernels, differenced
+between L and 3L loops, every entry is `on_request`: deepcopy 30 per
+loop, deepcopy_reduce 1, logging_format and logging_simple 10 each (one
+per record's `__dict__`), and comprehensions 5 at start-up. No kernel
+enters dictionary mode for capacity, the shape limit, a str subclass name
+or `__class__` assignment. Over the suite (gate 2 on the Py_STATS build,
+with its own `PYTHON_STATS_DIR`, 2,566 processes), `on_request`
+79,096, `capacity` 26,542, `shape_limit` 3,148, `class_assigned` 245,
+`dict_assigned` 114, `str_name` 30 and `dict_deleted` 3. So the suite
+reaches the capacity and the shape limit, which no kernel does; which
+tests do so was not measured. One process that kept `PYTHONSTATS` and
+dropped `PYTHON_STATS_DIR` wrote to the shared directory; it is not
+counted. `Tools/scripts/summarize_stats.py` fails on this build's stats
+with `KeyError: 'boxes'`: its `DOCS` table has no entry for the boxes
+counter, so the reasons were summed from the files directly. With
+statistics on from start-up, six test files fail: test_pystats, which
+toggles them, test__opcode, test_gc, test_memoryview, test_struct and a
+timeout in test_concurrent_futures' test_deadlock. None uses the new
+counters.
+
+**Generalisation fan-out** during `run()`: raytrace 7 generalisations
+that re-versioned 13 shapes, deltablue 1 that re-versioned 6, go and
+chaos 1 each, and none elsewhere.
+
+**Occupancy of inline slots**, sampled every 200,000 call events over the
+live objects (`boil/tools/measure/occupancy.py`), the same at the rung 3
+end and now. Of the slots of the kernels' own instances, these are
+unused: raytrace 50.3%, generators 50.0%, deltablue 48.4%, chaos 47.6%,
+richards 37.1% and go 18.5%. The causes are the floor of six slots for a
+three-field class (raytrace's `Point` and `Vector`, generators' `Tree`)
+and deltablue's `OrderedCollection`, a list subclass with no attributes.
+Over all live objects, the import system's `ModuleSpec` included, about
+30% are unused. Holes are rare: 21 summed over all of xml_etree_generate's
+samples, and none in most kernels. Dictionary-mode objects are at most 60
+summed over a kernel's samples (comprehensions).
+20.9 item 4 hands the floor to 6d.
+
+**Memory.** Peak RSS in KiB, median of three:
+
+| workload | 6b end | rung 2 | rung 3 | now |
+|---|---|---|---|---|
+| startup | 13,668 | 13,872 | 13,748 | 13,576 |
+| imports | 18,204 | 18,552 | 18,128 | 18,324 |
+| instances_1m | 127,368 | 127,536 | 118,104 | 118,128 |
+| dicts_200k | 65,812 | 66,036 | 62,564 | 62,760 |
+| raytrace | 49,768 | 49,480 | 51,600 | 51,916 |
+| coroutines | 70,300 | 65,148 | 71,136 | 71,448 |
+
+- **instances_1m, -7%,** and **dicts_200k, -5%,** are rung 3's: there is
+  no pre-header or `PyDictValues` header, and `PyDictObject` has no
+  `ma_values`.
+- **tuples_10m and collector_live512 are bimodal within one build.** 6b's
+  three runs of tuples_10m were 745,612, 819,424 and 745,852 KiB, and
+  the rung 3 end's 746,672, 859,884 and 860,056; collector_live512 runs
+  at about 585,000 or 606,000 in the same build. So rung 3's
+  "tuples_10m -13%" and "collector_live512 +3.5%" were the median's
+  choice of mode, not changes.
+- **A small instance** is 56 bytes (`sys.getsizeof`): the header word and
+  six slots, in a 64-byte block (the commonest gap between the addresses
+  of 20,000 consecutive instances).
+- **Shape tables and plan caches.** richards' 14 classes hold 6,224 bytes
+  of shape tables and 15,888 of plan cache; go's 5 classes 4,528 and
+  12,880; raytrace's 9 classes 3,248 and 11,664. These are the same as at
+  the rung 3 end.
+- **Transient classes**, each with an instance, in three batches of
+  10,000, each in a fresh process, every class checked dead through a
+  weak reference after `gc.collect()`. Current RSS rose 35.4 MB in the
+  first batch, 4.0 MB in the second and 0.8 MB in the third, with no
+  class alive, the same as at the rung 3 end. The first batch is the
+  allocator's reservation; there is no retention.
+
+**Wall time** was not measured; the plan allowed it only if the load
+permitted. Gates ran on the machine throughout, so only instructions and RSS were recorded, and no claim is
+made here about the latency of the extra dependent load.
+
+### 20.9 Hand-off, by owner
+
+Each item is a measured cost or gap that 6c records and does not tune.
+The coordinator assigned items 1 to 4, 7 and 10 (2026-10-27). Item 6 is
+note 08's row. Items 5, 8 and 9 are proposed here.
+
+**6d, the object protocol's next step.**
+
+1. **Polymorphic stores.** go is +24.2% in instructions per loop
+   (1,086.8M at rung 2, 1,349.7M at the rung 3 end, 1,366.4M now). Its 26 store
+   sites on `Square` see several shapes and stay generic `STORE_ATTR`,
+   because 6c has no store poly handler. The generic store path is about
+   10% of go's instructions. The opcode space is full (125 to 127 are
+   free), so a store poly handler needs an opcode freed first.
+2. **Dictionary conversion on `__dict__`.** logging_simple is +14.4% and
+   logging_format +10.7% at rung 3. The formatter reads
+   `record.__dict__`, which converts each record, 10 per loop (20.8).
+   `convert_to_dict` is 9.0% of logging_simple's instructions, and
+   `dictresize` 3% within it, because `dict_from_slots` does not
+   presize. Whether a read of `__dict__` must convert at all is note 09's
+   open re-shaping question.
+3. **The lazy-dict method path.** With `LOAD_ATTR_METHOD_LAZY_DICT`
+   gone, a method call on an object whose dict is reached through
+   `tp_dictoffset` stays generic: exception instances, functions, int and
+   tuple subclasses, and C types with a computed dict word. No benchmark
+   in the set measures it.
+4. **The capacity floor.** `max(6, S + 2)` gives a three-field class six
+   slots. The unused share of the slots of the kernels' own instances is
+   50.3% in raytrace, 50.0% in generators (a three-field tree node),
+   48.4% in deltablue, whose list subclass names none of its six slots,
+   and 18.5% in go. The floor exists for classes with no static
+   attributes, and costs three empty slots, 24 bytes, in every instance
+   of a small class. The question is a lower floor when `S` is known,
+   measured on `instances_1m` and the kernels' RSS. raytrace's peak RSS
+   rose 4.4% at rung 3 (49.5 to 51.6 MB, stable since), which is not
+   attributed. Its own instances are three-field objects at the floor,
+   which is a hypothesis for that rise, not a demonstration.
+5. **Members across a generalisation.** `LOAD_ATTR_SLOT` and
+   `STORE_ATTR_SLOT` guard only the live shape's version, so on a type
+   with both members and a generalised field, a member site alternates
+   between shapes. It is correct and was not seen in the benchmark set.
+6. **The object slots box** (note 08): custom `tp_getattro` and
+   `tp_setattro`, descriptor slots and native descriptor calls keep
+   `PyObject *` signatures.
+
+**Step 8, tier 0.**
+
+7. **The register spill in `_PyEval_EvalFrameDefault`.** From rung 3 on,
+   gcc keeps the register-file base in a stack slot in `FOR_ITER_RANGE`
+   and the handlers that index the register file. The cost is about 2
+   instructions per iteration on every micro benchmark (empty_loop 62.4
+   to 64.4). Tier 0 takes hot loops out of the interpreter function.
+8. **The kind guard on every shape store.** `_GUARD_SLOT_KIND` is 8
+   instructions per `STORE_ATTR_SHAPE` and `_TRANSITION`, including
+   stores into BOXED fields, where the compare cannot fail (20.8).
+   Note 09 section 5 says a BOXED slot needs no test. Tier 0 reads the
+   kind from the entry as a constant, so it can omit the guard there.
+9. **nbody, +5.3% at rung 3** (687.7M to 723.9M), not attributed. The
+   spill is a candidate that has not been verified.
+
+**Step 9, tier 1.**
+
+10. **`str +=`** copies on every step: `micro/str_concat_loop`, 1000
+    appends onto a 10,000-character local, is 4,505.6 instructions per
+    append against `str_concat`'s 1,165.6. A trace proves the local
+    unaliased; the compiler-emitted seal is the fallback (note 08).
+
+**The next cleanup pass.** `Tools/scripts/summarize_stats.py` cannot
+read this build's stats: its `DOCS` table has no entry for the boxes
+counter (20.8).
+
+Rung 3's other unattributed RSS items are retired by 20.8: tuples_10m
+and collector_live512 are bimodal within one build, and coroutines is
+within 2% of 6b.

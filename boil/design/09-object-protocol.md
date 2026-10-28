@@ -419,6 +419,23 @@ root shape's cached entry, and the transition from the shape tree.
 - Tier 0: the handler in the entry selects the template.
 - Tier 1: the plan gives the guard and the load, or the callee to inline.
 
+The handlers by plan, as built in 6c (note 06 section 20):
+
+| Plan | Handler |
+|---|---|
+| SLOT, one shape at the site | `LOAD_ATTR_SHAPE` |
+| SLOT or METHOD, two to four shapes | `LOAD_ATTR_SHAPE_POLY` |
+| METHOD, call-pair, inline-values type | `LOAD_ATTR_METHOD_SHAPE` |
+| CLASS_VALUE, inline-values type | `LOAD_ATTR_NONDESCRIPTOR_SHAPE` |
+| METHOD, CLASS_VALUE, no dict storage | `LOAD_ATTR_METHOD_NO_DICT`, `LOAD_ATTR_NONDESCRIPTOR_NO_DICT` |
+| DICT | `LOAD_ATTR_WITH_HINT`, `STORE_ATTR_WITH_HINT` |
+| MEMBER | `LOAD_ATTR_SLOT`, `STORE_ATTR_SLOT` |
+| PROPERTY | `LOAD_ATTR_PROPERTY` |
+| REPLACE | `STORE_ATTR_SHAPE` |
+| ADD | `STORE_ATTR_SHAPE_TRANSITION` |
+
+A site that sees more than four shapes stays generic.
+
 `_testinternalcapi.lookup_plan(obj, name)` returns the plan as a tuple,
 `_testinternalcapi.shape(obj)` returns the shape's type, slots and kinds,
 and `dis` shows each attribute site's handler, shape and version. Tests
@@ -478,6 +495,28 @@ fields, and ours never does.
 
 `__slots__` members are BOXED in 6c. Dict code never sees a kind: a dict
 holds `PyValue`s, so dictionary conversion copies slots as they are.
+
+**Two versions, each with its consumers** (coordinator ruling,
+2026-10-27). Generalisation renews shape versions and leaves the type's
+`tp_version_tag` alone. The shape version covers what a shape's plans
+say; `tp_version_tag` covers the class's attributes. Each consumer
+records the one its guard reads:
+
+- the shape handlers (`_GUARD_SHAPE_VERSION`) and the poly rows record
+  the shape's version;
+- the handlers guarded by `_GUARD_TYPE_VERSION`, such as
+  `LOAD_ATTR_PROPERTY`, record `tp_version_tag`;
+- the plan cache caches a plan only when the version that resolution
+  read is the live `tp_version_tag` and the shape's version is not zero,
+  and inserts it only if both still hold.
+
+**A borrowed shape is compared, never dereferenced.** A feedback row
+holds a shape pointer that keeps nothing alive. It is compared in one of
+two ways: in a handler, with a live object's header and with the row's
+version against the live shape's; or in the specialiser, with the live
+type's own shapes (the root, the table and the dictionary-mode shape).
+Versions are never reused within an interpreter, and no row holds 0, so
+a reused address can cost a specialisation and never a wrong load.
 
 ## 6. Instance layout
 
@@ -740,9 +779,20 @@ memory per type; wall time beside instructions for the dependent-load
 cost; generalisation fan-out (shapes re-versioned per generalisation);
 fixed-capacity waste (slots allocated against slots used);
 `attr_load_after_dict` and `attr_store_after_dict`; a
-five-shape site (`attr_load_poly`); shape-cap exhaustion; transient-type
+five-shape site (`attr_load_poly5`); shape-cap exhaustion; transient-type
 churn; an allocation-heavy loop (`new_instance`); dictionary-mode entries
-by reason.
+by reason. Note 06 section 20.8 has the numbers.
+
+Handed to 6d from these measurements (coordinator, 2026-10-27; note 06
+section 20.9): **the capacity floor.** `max(6, S + 2)` gives a class with
+three static attributes six slots, and leaves half of them empty. The
+unused fraction of the slots of the kernels' own instances is 50.3% in
+raytrace, 50.0% in generators (a three-field tree node), 48.4% in
+deltablue (whose list subclass names none of its six slots) and 18.5% in
+go. The floor exists for classes with no static
+attributes, and costs three empty slots, 24 bytes, in every instance of
+a small class. The question for 6d is a lower floor when `S` is known,
+measured on `instances_1m` and the kernels' RSS. 6c keeps the constant.
 
 ## 10. Sources
 

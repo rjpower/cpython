@@ -23,11 +23,11 @@
    "raytrace": {
     "group": "kernels",
     "unit": "KiB peak RSS",
-    "value": 52232,
+    "value": 52132,
     "values": [
-     55388,
-     52152,
-     52232
+     55320,
+     52048,
+     52132
     ],
     "loops": 1,
     "runs": 3
@@ -35,11 +35,11 @@
    "deltablue": {
     "group": "kernels",
     "unit": "KiB peak RSS",
-    "value": 26472,
+    "value": 26396,
     "values": [
-     29124,
-     26472,
-     26276
+     28976,
+     26392,
+     26396
     ],
     "loops": 30,
     "runs": 3
@@ -47,11 +47,11 @@
    "chaos": {
     "group": "kernels",
     "unit": "KiB peak RSS",
-    "value": 52604,
+    "value": 52452,
     "values": [
-     44396,
-     53092,
-     52604
+     44280,
+     52452,
+     52996
     ],
     "loops": 2,
     "runs": 3
@@ -59,11 +59,11 @@
    "generators": {
     "group": "kernels",
     "unit": "KiB peak RSS",
-    "value": 66120,
+    "value": 66236,
     "values": [
-     66284,
-     66088,
-     66120
+     66484,
+     66236,
+     66188
     ],
     "loops": 2,
     "runs": 3
@@ -72,19 +72,19 @@
  },
  "runs": {
   "rss": {
-   "timestamp": "2026-10-28T01:16:07-07:00",
+   "timestamp": "2026-10-28T01:45:45-07:00",
    "commit": {
-    "sha": "73e5daa8b2838034eab6e5a9f6e800fadaba1787",
+    "sha": "ceb8782d615a7e63e4831dd02d5581d3d4c511ac",
     "dirty": true
    },
    "load_1min": {
-    "max": 14.59130859375,
+    "max": 6.2568359375,
     "samples": [
-     14.59130859375,
-     14.59130859375,
-     14.59130859375,
-     13.9833984375,
-     13.9833984375
+     6.2568359375,
+     6.2568359375,
+     6.2568359375,
+     6.2568359375,
+     6.2568359375
     ]
    }
   }

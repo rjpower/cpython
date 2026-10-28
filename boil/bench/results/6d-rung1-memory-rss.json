@@ -1,0 +1,144 @@
+{
+ "schema": "boil-bench/1",
+ "build": {
+  "label": "6d-rung1",
+  "path": "/home/power/code/cpython/.worktrees/boil-6d/build/default/python",
+  "version": "3.16.0a1+dev (heads/boil/6d-dirty:42406f734b5, Oct 28 2026, 01:02:28) [GCC 15.2.0]",
+  "git": [
+   "CPython",
+   "heads/boil/6d-dirty",
+   "42406f734b5"
+  ],
+  "hash_seed": 0
+ },
+ "machine": {
+  "hostname": "bento-cat",
+  "kernel": "7.0.0-29-generic",
+  "cpus": 16,
+  "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+  "memory": "65726156 kB"
+ },
+ "results": {
+  "rss": {
+   "startup": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 14284,
+    "values": [
+     17124,
+     13864,
+     14284
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "imports": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 18728,
+    "values": [
+     29516,
+     18668,
+     18728
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "tuples_10m": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 860104,
+    "values": [
+     860636,
+     860104,
+     860040
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "instances_1m": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 118880,
+    "values": [
+     118880,
+     118712,
+     119124
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "dicts_200k": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 63400,
+    "values": [
+     63512,
+     63400,
+     63320
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "collector_live16": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 57244,
+    "values": [
+     57244,
+     57048,
+     57304
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "collector_live128": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 160632,
+    "values": [
+     160632,
+     160228,
+     160844
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "collector_live512": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 586300,
+    "values": [
+     586232,
+     586412,
+     586300
+    ],
+    "loops": 1,
+    "runs": 3
+   }
+  }
+ },
+ "runs": {
+  "rss": {
+   "timestamp": "2026-10-28T01:45:48-07:00",
+   "commit": {
+    "sha": "ceb8782d615a7e63e4831dd02d5581d3d4c511ac",
+    "dirty": true
+   },
+   "load_1min": {
+    "max": 6.2568359375,
+    "samples": [
+     6.2568359375,
+     6.2568359375,
+     6.2568359375,
+     5.52783203125,
+     5.52783203125,
+     5.52783203125,
+     5.3251953125,
+     5.21875,
+     4.7236328125
+    ]
+   }
+  }
+ }
+}

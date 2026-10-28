@@ -184,6 +184,13 @@ extern void _Py_RunGC(PyThreadState *tstate);
    queued, without collecting (gc_live.c). */
 extern void _PyGC_LiveRunQueue(PyThreadState *tstate);
 
+/* Step 7a (note 13): the per-interpreter queue, for _testinternalcapi.
+   _PyGC_LiveQueueInfo() returns a new dict describing interp's queue;
+   _PyGC_LiveFailAlloc(n) makes the nth queue node allocation from now
+   fail, once. */
+PyAPI_FUNC(PyObject *) _PyGC_LiveQueueInfo(PyInterpreterState *interp);
+PyAPI_FUNC(void) _PyGC_LiveFailAlloc(int n);
+
 struct PyValue;
 
 // GC visit callback for tracked interpreter frames

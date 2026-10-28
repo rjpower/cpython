@@ -252,6 +252,12 @@ struct _gc_runtime_state {
     PyObject *sweep_op;
 #endif
     struct _gc_live_state *live;
+    /* The interpreter's queue of weak reference callbacks, finalizers and
+       destroy calls, run FIFO from the head (Python/gc_live.c, note 13).
+       In this struct, not in *live, so that splicing onto it needs
+       nothing allocated. */
+    struct _PyGCLiveCall *queue_head;
+    struct _PyGCLiveCall *queue_tail;
 };
 
 /* No automatic collection until _PyGC_Init() has set alloc_limit. */

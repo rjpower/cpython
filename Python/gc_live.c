@@ -76,11 +76,23 @@ enum live_call_kind {
     CALL_DESTROY,    // the destroy calls of op's dealloc (run_destroy_hook())
 };
 
-typedef struct {
+/* A queued call: a node of an interpreter's queue (GCState.queue_head)
+   or of a collection's batch.  Nodes come from the C library's malloc,
+   one per call, so that splicing a batch onto a queue allocates nothing. */
+struct _PyGCLiveCall {
+    struct _PyGCLiveCall *next;
     PyObject *op;
     PyObject *callback;
     enum live_call_kind kind;
-} live_call;
+};
+typedef struct _PyGCLiveCall live_call;
+
+/* A collection's calls, in the order they run, before they are spliced
+   onto a queue. */
+typedef struct {
+    live_call *head;
+    live_call *tail;
+} call_batch;
 
 /* The collector's own memory comes from the C library's malloc: the heap
    walks must not see it, and it must not trigger a collection. */
@@ -89,13 +101,6 @@ struct _gc_live_state {
     PyObject **immortal;
     size_t nimmortal;
     size_t immortal_cap;
-    // The queue, run FIFO from head.
-    live_call *queue;
-    size_t qhead;
-    size_t qtail;
-    size_t qcap;
-    // The number of threads in run_queue().
-    int running_queue;
     // The second pass of an explicit collection is not verified again.
     int skip_verify;
     // Set during a collection that an allocation runs, where Python code
@@ -250,6 +255,10 @@ _PyGC_LiveAddImmortal(PyObject *op)
 int
 _PyGC_LiveVisitRoots(PyInterpreterState *interp, visitproc visit, void *arg)
 {
+    for (live_call *c = interp->gc.queue_head; c != NULL; c = c->next) {
+        Py_VISIT(c->op);
+        Py_VISIT(c->callback);
+    }
     struct _gc_live_state *ls = interp->gc.live;
     if (ls == NULL) {
         return 0;
@@ -259,37 +268,80 @@ _PyGC_LiveVisitRoots(PyInterpreterState *interp, visitproc visit, void *arg)
         Py_VISIT(Py_TYPE(op));
         (void)_PyGC_TraceTraverse(op, visit, arg);
     }
-    for (size_t i = ls->qhead; i < ls->qtail; i++) {
-        Py_VISIT(ls->queue[i].op);
-        Py_VISIT(ls->queue[i].callback);
-    }
     Py_VISIT(ls->exc);
     return 0;
 }
 
+/* _testinternalcapi.gc_queue_fail_alloc(n): the nth node allocation from
+   now fails, once. */
+static int fail_alloc_countdown = 0;
+
+void
+_PyGC_LiveFailAlloc(int n)
+{
+    fail_alloc_countdown = n;
+}
+
+static live_call *
+call_new(PyObject *op, PyObject *callback, enum live_call_kind kind)
+{
+    if (fail_alloc_countdown > 0 && --fail_alloc_countdown == 0) {
+        return NULL;
+    }
+    live_call *c = malloc(sizeof(live_call));
+    if (c != NULL) {
+        *c = (live_call){NULL, op, callback, kind};
+    }
+    return c;
+}
+
+static void
+batch_append(call_batch *b, live_call *c)
+{
+    c->next = NULL;
+    if (b->tail == NULL) {
+        b->head = c;
+    }
+    else {
+        b->tail->next = c;
+    }
+    b->tail = c;
+}
+
+/* The first node appended after `last`, a tail saved earlier. */
+static inline live_call *
+batch_after(call_batch *b, live_call *last)
+{
+    return last == NULL ? b->head : last->next;
+}
+
 static int
-queue_push(struct _gc_live_state *ls, PyObject *op, PyObject *callback,
+queue_push(call_batch *b, PyObject *op, PyObject *callback,
            enum live_call_kind kind)
 {
-    if (ls->qtail == ls->qcap) {
-        if (ls->qhead > 0 && !ls->running_queue) {
-            memmove(ls->queue, ls->queue + ls->qhead,
-                    (ls->qtail - ls->qhead) * sizeof(live_call));
-            ls->qtail -= ls->qhead;
-            ls->qhead = 0;
-        }
-        if (ls->qtail == ls->qcap) {
-            size_t cap = ls->qcap ? ls->qcap * 2 : 256;
-            live_call *q = realloc(ls->queue, cap * sizeof(live_call));
-            if (q == NULL) {
-                return -1;
-            }
-            ls->queue = q;
-            ls->qcap = cap;
-        }
+    live_call *c = call_new(op, callback, kind);
+    if (c == NULL) {
+        return -1;
     }
-    ls->queue[ls->qtail++] = (live_call){op, callback, kind};
+    batch_append(b, c);
     return 0;
+}
+
+/* Move every node of b to the tail of gc's queue. */
+static void
+queue_splice(GCState *gc, call_batch *b)
+{
+    if (b->head == NULL) {
+        return;
+    }
+    if (gc->queue_tail == NULL) {
+        gc->queue_head = b->head;
+    }
+    else {
+        gc->queue_tail->next = b->head;
+    }
+    gc->queue_tail = b->tail;
+    b->head = b->tail = NULL;
 }
 
 /* What op's dealloc would call under reference counting, besides freeing:
@@ -348,9 +400,9 @@ run_destroy_hook(PyThreadState *tstate, PyObject *op)
 static int
 run_queue(PyThreadState *tstate)
 {
-    struct _gc_live_state *ls = tstate->interp->gc.live;
+    GCState *gc = &tstate->interp->gc;
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
-    if (ls == NULL || ts->gc_trace.running_queue || ls->qhead == ls->qtail) {
+    if (ts->gc_trace.running_queue || gc->queue_head == NULL) {
         return 0;
     }
     /* A signal that arrived while the collection marked is handled first,
@@ -368,11 +420,16 @@ run_queue(PyThreadState *tstate)
     }
     int nfinalized = 0;
     ts->gc_trace.running_queue = 1;
-    ls->running_queue++;
     PyObject *exc = _PyErr_GetRaisedException(tstate);
-    while (ls->qhead < ls->qtail) {
+    live_call *node;
+    while ((node = gc->queue_head) != NULL) {
+        gc->queue_head = node->next;
+        if (gc->queue_head == NULL) {
+            gc->queue_tail = NULL;
+        }
         // The call's objects stay reachable from this frame.
-        live_call call = ls->queue[ls->qhead++];
+        live_call call = *node;
+        free(node);
         if (call.callback != NULL) {
             PyObject *r = PyObject_CallOneArg(call.callback, call.op);
             if (r == NULL) {
@@ -409,8 +466,6 @@ run_queue(PyThreadState *tstate)
             }
         }
     }
-    ls->qhead = ls->qtail = 0;
-    ls->running_queue--;
     ts->gc_trace.running_queue = 0;
     _PyErr_SetRaisedException(tstate, exc);
     return nfinalized;
@@ -513,7 +568,7 @@ invoke_gc_callback(PyThreadState *tstate, const char *phase,
 /* Clear the weak references with callbacks to dead objects, and queue the
    callbacks of those that are live (gc.c's handle_weakref_callbacks()). */
 static int
-clear_callback_weakrefs(struct _gc_live_state *ls, _PyGCMarkResult *res)
+clear_callback_weakrefs(call_batch *b, _PyGCMarkResult *res)
 {
     if (!(res->kinds & _PyGC_DEAD_WEAKREFS)) {
         return 0;
@@ -534,13 +589,18 @@ clear_callback_weakrefs(struct _gc_live_state *ls, _PyGCMarkResult *res)
             if (callback == NULL) {
                 continue;
             }
-            _PyWeakref_ClearRef(wr);
-            if (((PyObject *)wr)->ob_flags & _Py_GC_DEAD_FLAG) {
-                continue;  // the weak reference is garbage too
-            }
-            if (queue_push(ls, (PyObject *)wr, callback, CALL_CALLBACK) < 0) {
+            // The node first: if it cannot be had, the weak reference
+            // keeps its callback.
+            live_call *c = call_new((PyObject *)wr, callback, CALL_CALLBACK);
+            if (c == NULL) {
                 return -1;
             }
+            _PyWeakref_ClearRef(wr);
+            if (((PyObject *)wr)->ob_flags & _Py_GC_DEAD_FLAG) {
+                free(c);
+                continue;  // the weak reference is garbage too
+            }
+            batch_append(b, c);
         }
     }
     return 0;
@@ -646,9 +706,9 @@ finalizer_order(_PyGCMarkResult *res, objstack *order)
 }
 
 static int
-queue_legacy(struct _gc_live_state *ls, PyObject *op)
+queue_legacy(call_batch *b, PyObject *op)
 {
-    if (queue_push(ls, op, NULL, CALL_LEGACY) < 0) {
+    if (queue_push(b, op, NULL, CALL_LEGACY) < 0) {
         return -1;
     }
     op->ob_flags |= _Py_GC_DEL_CALLED_FLAG;
@@ -661,7 +721,7 @@ queue_legacy(struct _gc_live_state *ls, PyObject *op)
    for gc.garbage, as is everything with DEBUG_SAVEALL.  A tp_del outside a
    cycle runs, as it does when its count drops to zero. */
 static int
-handle_finalizers(GCState *gc, struct _gc_live_state *ls,
+handle_finalizers(GCState *gc, call_batch *b,
                   _PyGCMarkResult *res, objstack *garbage)
 {
     int saveall = gc->debug & _PyGC_DEBUG_SAVEALL;
@@ -702,7 +762,7 @@ handle_finalizers(GCState *gc, struct _gc_live_state *ls,
     if (garbage->oom) {
         goto error;
     }
-    size_t first = ls->qtail;
+    live_call *last = b->tail;
     // Queue every finalizer first: a resurrected object needs its own.
     objstack order = {0};
     if (finalizer_order(res, &order) < 0) {
@@ -715,7 +775,7 @@ handle_finalizers(GCState *gc, struct _gc_live_state *ls,
             && !(op->ob_flags & _Py_GC_FINALIZED_FLAG)
             && !_PyGen_FinalizerIsNoop(op))
         {
-            if (queue_push(ls, op, NULL, CALL_FINALIZE) < 0) {
+            if (queue_push(b, op, NULL, CALL_FINALIZE) < 0) {
                 free(order.items);
                 goto error;
             }
@@ -737,13 +797,13 @@ handle_finalizers(GCState *gc, struct _gc_live_state *ls,
     // tp_del after tp_finalize, as subtype_dealloc() calls them
     for (size_t i = 0; i < legacy.n; i++) {
         if ((legacy.items[i]->ob_flags & _Py_GC_DEAD_FLAG)
-            && queue_legacy(ls, legacy.items[i]) < 0)
+            && queue_legacy(b, legacy.items[i]) < 0)
         {
             goto error;
         }
     }
-    for (size_t i = first; i < ls->qtail; i++) {
-        resurrect(&s, ls->queue[i].op);
+    for (live_call *c = batch_after(b, last); c != NULL; c = c->next) {
+        resurrect(&s, c->op);
     }
     for (size_t i = 0; i < garbage->n; i++) {
         resurrect(&s, garbage->items[i]);
@@ -771,12 +831,12 @@ error:
    weak references to a queued object are cleared with those of the dead
    (collect()): no Python code reaches it after m_free or a destructor. */
 static int
-queue_destroy_hooks(struct _gc_live_state *ls, _PyGCMarkResult *res)
+queue_destroy_hooks(call_batch *b, _PyGCMarkResult *res)
 {
     if (!(res->kinds & _PyGC_DEAD_HOOK)) {
         return 0;
     }
-    size_t first = ls->qtail;
+    live_call *last = b->tail;
     for (Py_ssize_t i = 0; i < res->ndead; i++) {
         _PyGCDeadObject *d = &res->dead[i];
         if (!(d->kinds & _PyGC_DEAD_HOOK)
@@ -785,15 +845,15 @@ queue_destroy_hooks(struct _gc_live_state *ls, _PyGCMarkResult *res)
             d->kinds &= ~_PyGC_DEAD_HOOK;
             continue;
         }
-        if (queue_push(ls, d->op, NULL, CALL_DESTROY) < 0) {
+        if (queue_push(b, d->op, NULL, CALL_DESTROY) < 0) {
             return -1;
         }
         d->op->ob_flags |= _Py_GC_NOTIFIED_FLAG;
     }
     // Queue every one first: resurrecting one can reach another.
     objstack s = {0};
-    for (size_t i = first; i < ls->qtail; i++) {
-        resurrect(&s, ls->queue[i].op);
+    for (live_call *c = batch_after(b, last); c != NULL; c = c->next) {
+        resurrect(&s, c->op);
     }
     free(s.items);
     return s.oom ? -1 : 0;
@@ -1204,10 +1264,13 @@ collect(PyThreadState *tstate, _PyGC_Reason reason)
         goto done;  // out of memory: nothing is freed
     }
     add_root_stats(ls, &res.roots);
-    if (clear_callback_weakrefs(ls, &res) < 0
-        || handle_finalizers(gc, ls, &res, &garbage) < 0
-        || queue_destroy_hooks(ls, &res) < 0)
-    {
+    call_batch batch = {NULL, NULL};
+    int failed = clear_callback_weakrefs(&batch, &res) < 0
+                 || handle_finalizers(gc, &batch, &res, &garbage) < 0
+                 || queue_destroy_hooks(&batch, &res) < 0;
+    // Before the sweep; no Python code has run since the mark.
+    queue_splice(gc, &batch);
+    if (failed) {
         // Out of memory: keep everything.  What was queued runs.
         undo_dead(&res);
         garbage.n = 0;
@@ -1439,7 +1502,7 @@ _PyGC_LiveCollectHere(PyThreadState *tstate)
     ls->no_python = 1;
     (void)collect_from_entry(tstate, _Py_GC_REASON_HEAP);
     ls->no_python = 0;
-    if (ls->qhead < ls->qtail) {
+    if (tstate->interp->gc.queue_head != NULL) {
         _Py_ScheduleGC(tstate);
     }
     return 1;
@@ -1527,13 +1590,18 @@ _PyGC_Fini(PyInterpreterState *interp)
     PyMem_RawFree(gcstate->generation_stats);
     gcstate->generation_stats = NULL;
     _PyGC_TraceFini(interp);
+    live_call *next;
+    for (live_call *c = gcstate->queue_head; c != NULL; c = next) {
+        next = c->next;
+        free(c);
+    }
+    gcstate->queue_head = gcstate->queue_tail = NULL;
     struct _gc_live_state *ls = gcstate->live;
     if (ls != NULL) {
         dump_root_stats(interp, ls);
         _PyGC_WalkCacheFini(&ls->walk_cache);
         gcstate->live = NULL;
         free(ls->immortal);
-        free(ls->queue);
         free(ls);
     }
 }
@@ -1819,6 +1887,16 @@ _Py_ScheduleGC(PyThreadState *tstate)
     if (!_Py_eval_breaker_bit_is_set(tstate, _PY_GC_SCHEDULED_BIT)) {
         _Py_set_eval_breaker_bit(tstate, _PY_GC_SCHEDULED_BIT);
     }
+}
+
+PyObject *
+_PyGC_LiveQueueInfo(PyInterpreterState *interp)
+{
+    Py_ssize_t length = 0;
+    for (live_call *c = interp->gc.queue_head; c != NULL; c = c->next) {
+        length++;
+    }
+    return Py_BuildValue("{sn}", "length", length);
 }
 
 /* sys.settrace(), sys.setprofile() and sys.monitoring call this before they

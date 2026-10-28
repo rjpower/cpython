@@ -4258,8 +4258,43 @@ gc_verify_with_pymem_array(PyObject *self, PyValue arg)
     return PyValue_FromResult(res);
 }
 
+/* --- step 7a: the per-interpreter callback queue (note 13) ------------ */
+
+/* gc_queue_info([interp_id]) -> dict: the queue of the given interpreter,
+   the current one by default. */
+static PyObject *
+gc_queue_info(PyObject *self, PyObject *args)
+{
+    PyObject *id = NULL;
+    if (!PyArg_ParseTuple(args, "|O", &id)) {
+        return NULL;
+    }
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    if (id != NULL) {
+        interp = _PyInterpreterState_LookUpIDObject(id);
+        if (interp == NULL) {
+            return NULL;
+        }
+    }
+    return _PyGC_LiveQueueInfo(interp);
+}
+
+/* gc_queue_fail_alloc(n): the nth queue node allocation from now fails. */
+static PyObject *
+gc_queue_fail_alloc(PyObject *self, PyObject *args)
+{
+    int n;
+    if (!PyArg_ParseTuple(args, "i", &n)) {
+        return NULL;
+    }
+    _PyGC_LiveFailAlloc(n);
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef module_functions[] = {
     {"get_configs", get_configs, METH_NOARGS},
+    {"gc_queue_info", gc_queue_info, METH_VARARGS},
+    {"gc_queue_fail_alloc", gc_queue_fail_alloc, METH_VARARGS},
     {"gc_verify", gc_verify, METH_NOARGS},
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
     {"gc_verify_count", gc_verify_count, METH_NOARGS},

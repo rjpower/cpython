@@ -1859,6 +1859,19 @@ class TracingCollectorTests(unittest.TestCase):
         self.assertEqual(out.split(), [b"store", b"str"])
         self.assertIn(b"candidate W at", err)
 
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_verify_kill_release(self):
+        # A list killed with its item array, whose page holds nothing
+        # else, collected past the quarantine's horizon while the precise
+        # frame still holds the array's address.  The collection that
+        # frees the page also looks that word up in B, so the release must
+        # come before the collection builds its page lists; released after,
+        # B read the freed page and mimalloc's assertion fired.
+        rc, out, err = assert_python_ok("-c", self.MISSED_ROOT, "release",
+                                        PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.split()[0], b"release")
+
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_injection_sites(self):
         # Note 11 section 8.3: _testinternalcapi.gc_collect_at() arms one

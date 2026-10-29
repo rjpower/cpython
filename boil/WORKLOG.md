@@ -2660,3 +2660,38 @@ consumers. ROOTS retains gc_trace/gc_live/test_gc/C-checker/shared CAPI
 ownership; H3 supplies its bounded scalar fixture as a handoff. Sampler
 transport, renumbering and new operations remain later stages. The roots
 matrix in0b130 and queue validation in5cc are untouched by this merge.
+
+### 07:55 PDT: H3 merge validated; final roots source scheduling
+
+Detached H3 integration at6c724c29408 passes release/Og debug gate0
+(1,924 each) and affected gate1 (790 each,3 skips). Regeneration/Clinic
+leave source unchanged; all seven product hashes equal the stage1 base.
+Commands/logs are build/coordinator-20261029/h3-stage1-*. The final
+regeneration was also replayed under an explicit1200s timeout. No full
+runtime-suite or wide-domain closure is claimed for this tooling stage.
+
+QUEUES5cc passes stress11:3,046 tests/65 skips in4m58s. Exactly11 worker
+PID pairs have start/end interval1000, verifier(0,0), exact selected names
+and matching frozen source/config hashes. All40 probes and subprocess
+371 three times pass. Evidence commit1f2a7ac7b88 and reconciliation5c4124ea9ff
+preserve all native sources and generated products; affected generator
+checks precede review. Historical normal/full-verification lines retain
+their original commits and scopes.
+
+ROOTS feedback iteration at0b130 takes541.745s:31 individual cases and
+11 full modules/2,018 module tests. Its lifetime assertions and85 actual
+process state pairs pass. It emitted no per-job root stats, so it cannot
+replace final matrix counter coverage. Two individual test_finalize cases
+(forkserver/spawn) return SUCCESS but emit a leaked-semaphore warning and
+SemLock cleanup FileNotFoundError. Registry clearing may lose a weakref
+callback before tracker shutdown; this remains a source-based hypothesis.
+ROOTS will trace it on queue-reconciled source before a cleanup fix.
+
+The remaining19 iterations are held for settled native source. The final
+harness may run whole modules concurrently in one -j8 driver, preserving
+each module's full internal order and separate individual cases, with all
+identity/count/mode/counter evidence. Measure it before projecting cost.
+Planned native landings: QUEUES1, ROOTS2b, H3 runtime stage2; parallel
+implementation continues. ROOTS reviewed H3's disjoint scalar C fixture;
+coordinator grants only that include/function/method-entry block, with GC
+fixtures remaining ROOTS-owned. No O1 adoption or matrix waiver is claimed.

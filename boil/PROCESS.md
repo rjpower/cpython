@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 07:41 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 07:55 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -57,7 +57,10 @@ origin first or supplemental on the same killed-object line. Further
 qualification exposed a list-to-tuple element-root lifetime bug; its
 minimal reorder passes ten fresh reproductions, with an original ten of
 ten failure control. Merged-head bounded checks pass; the first full
-reclamation iteration is being timed. No O1 adoption is claimed. The
+reclamation iteration took541.745s with all lifetime assertions passing.
+Forkserver/spawn test_finalize also report leaked semaphore/unlink cleanup
+errors; a causal trace on queue-reconciled source remains required. The
+remaining iterations wait for settled native source. No O1 adoption is claimed. The
 integration debug gate uses Og.
 
 Shared stress-state prerequisite02bcd2f6132 is integrated and validated:
@@ -157,6 +160,7 @@ day travelled through messages and work-doc paragraphs.
 | the checker's argument-order and hashtable-family holes (review 2 §5.4, §5.5) | review 2 | 10a rung 2b | both negative fixtures fail before the fix and pass after; the hazard list names the commits |
 | the contract "a specializer runs no Python code" (specialize_dict_hint() ran a colliding key's `__eq__` and the re-dispatched word reread a rebound local; the guard is the compiler fix's commit) enforced by the checker | compiler fix review | 10a tooling | a checker fixture with a reentrant `_Py_Specialize_*` callee fails; the specializers pass |
 | a reader's folded operand (a local read in place by the op) needs an anchor across the reader's own collecting calls once the eval loop frame is precise (`x + o` where `X.__add__` rebinds x, collects and returns NotImplemented; today the conservative C frame holds the original) | compiler fix review | 10a rung 3 | an oracle that injects a collection at a point where only the reader's precise frame holds the operand, and fails with that root omitted; the compiler fix's test 10 (`x + o`) is a semantic regression only, since `self` and the opaque C frames below hold the operand today |
+| standalone forkserver/spawn test_finalize returns SUCCESS but reports a leaked semaphore followed by SemLock._cleanup FileNotFoundError | coordinator/ROOTS feedback matrix1 logs08/10 at0b130 | ROOTS before final2b matrix | causal registry/tracker trace on queue-reconciled source, then a proved cleanup fix or evidence that the report is expected; no exclusion or clean-stderr claim |
 
 ### 0.4 Execution plan from the takeover
 
@@ -235,6 +239,36 @@ Stage1 may land independently as generator/tooling work because all seven
 generated products remain byte-identical. Its affected-tool gates do not
 establish runtime domain closure. Stages2–4 and their final verification
 remain required before H3-2 introduces an operation.
+
+H3 stage2 owns IR/domain/pristine construction, then monitoring, stats and
+inspection consumers. ROOTS retains the C checker, GC sources, test_gc and
+shared _testinternalcapi.c; a C scalar-boundary fixture is an explicit
+handoff. Bounded exception to whole-file ownership: H3 may edit separate
+HandlerDomain/metadata classes in Lib/test/test_generated_cases.py while
+ROOTS's checker fixtures are frozen on its own branch. H3 must leave those
+checker fixtures and imports unchanged. Integration preserves both blocks
+and reruns the affected module. No other shared-file exception is implied.
+
+Second bounded exception, reviewed by ROOTS: H3 may add only the proposed
+pycore_ir.h include, ir_scalar_boundary primitive fixture beside the
+specialization fixture, and its method-table entry in _testinternalcapi.c.
+ROOTS retains its GC fixtures/entries. The fixture lands with H3's checked
+production helpers and boundary controls, not as a cross-step merge.
+
+For the final reclamation matrix, each of31 selected cases still runs
+alone in a fresh process per iteration. The11 complete physical modules
+may run through one regrtest -j8 driver per iteration: each worker runs a
+whole module in its normal internal order. No parallel-threads or match
+narrowing. Retain exact scheduled/returned modules, case counts/skips,
+seed, driver/worker identities, actual-state witnesses and root counters.
+Measure this harness on settled source before projecting its remaining
+cost. The serial feedback iteration is not relabeled as this harness.
+
+Planned native landing order is QUEUES1, ROOTS2b, then H3 runtime stage2.
+H3 implementation proceeds independently in its worktree; integration
+holds its native changes while ROOTS's final matrix uses settled source,
+avoiding duplicate qualification. Tooling/docs with unchanged runtime
+sources and products use the explicit affected-level rerun rule.
 
 Hourly reporting: while work is active, approximately every hour the
 coordinator updates this state table and `README.md`, appends a dated

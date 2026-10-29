@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 07:45 PDT at integration merge 6c724c29408, shared
+revised 2026-10-29 07:55 PDT at integration merge 6c724c29408, shared
 tooling e02e177903f, verification registry fff4e0e9b08 and
 the three active step worktrees. This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
@@ -69,14 +69,14 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 07:45 PDT; evidence is from local commits and retained logs.
+2026-10-29 07:55 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
-| 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers | 7a rung 1 at 5cc31bacee1: normal suites pass 51,102 each at d43c8b4dd32; full debug kill passes 51,104 with zero fallback; ASan14 passes 3,589 with its exact exclusion; three subprocess runs pass 371 each; stress11/probes and review remain | 7a rung 2a safety/completion order, 2b owner metadata, 2c retirement/adoption/fork; design and probes only |
-| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b at 0b13048a633: provenance repair and list-transfer lifetime fix committed as 82165f8a2a9, integration reconciled; bounded O1 checks pass; first complete reclamation iteration running; final checks and review pending | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
+| 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers | 7a rung 1 candidate 5c4124ea9ff reconciles integration without native/product changes from tested 5cc31bacee1. Full kill 51,104, ASan14 3,589, stress11 3,046, subprocess 371 three times and 40 probes pass; final tool checks/review pending | 7a rung 2a safety/completion order, 2b owner metadata, 2c retirement/adoption/fork; design and probes only |
+| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b native source 0b13048a633, feedback record 96e610f6034: bounded O1 checks and first reclamation iteration pass lifetime assertions; two semaphore cleanup errors remain to trace. Final matrix waits for queue reconciliation | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
 | 6a, 6b: `PyValue` in the core and the value C API; compiler reentrancy fix merged as 99435658509 and integration-validated | | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
-| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 after independent clearance | H3 stage1 detached integration checks running; stage2 fixed-number runtime/monitoring/stats/inspection consumers beginning under explicit ownership | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
+| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2 fixed-number runtime/monitoring/stats/inspection consumers beginning under explicit ownership | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
 
 Shared validation prerequisite landed independently as `2155f16f45f`:
@@ -113,8 +113,13 @@ list before tuple allocation removes its element roots. A minimal reorder
 is committed in rung 2b, brought forward from rung 3a. All ten fresh
 reproductions pass after the fix; the original failed ten of ten.
 `-O1` has not been adopted. Integration
-debug validation still uses `-Og`. Release measurements and sanitizer
-coverage remain required.
+debug validation still uses `-Og`. The first O1 reclamation iteration took
+542 seconds: 31 separate cases and 11 complete modules. Two multiprocessing
+cases return SUCCESS but report semaphore cleanup errors; a causal trace
+on queue-reconciled source is required. The final matrix may run different
+complete modules concurrently while preserving each module's internal
+order and each individual case's separate process. Release measurements
+and sanitizer coverage remain required.
 
 Shared gate cleanup now holds the build lock until its sweep finishes;
 an interrupted waiter cannot sweep another run's workers. The controlled

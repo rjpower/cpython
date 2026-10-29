@@ -3411,3 +3411,23 @@ source only; final native union review/gates remain required. The owner may
 write stage2b3 raw-stats/handler-pair design only; sampler transport is separate,
 and no next H3 native work starts. H1 still waits for integrated generator/build
 handoff. Next hourly report remains11:45 PDT.
+
+
+### 11:31 PDT: frozen storage evidence clears; parking padding isolated
+
+Independent FROZEN_STORAGE_CHECKPOINT_CLEAR atffc548603b8 is recorded in the
+new H3 evidence-readiness review33169a5e2981. It reconciles240indexed artifacts,
+13changed/46unchanged source inputs,7generated products, both native/config/CAPI
+identities, actual-kill worker/main0 counters, all short controls and exact
+requested-byte accounting/restoration. Allocation failure sizes remain unmeasured;
+no RSS, high-canonical execution, full suite, ASan or merged-runtime claim follows.
+The coordinator reads the full record. No detached review tree is created while
+the native-union base remains unsettled. H3 proceeds only with raw-stats design.
+
+ROOTS disassembly isolates each direct survivor hit as uninitialized alignment
+padding at rsp0/rbp-a0 in a176-byte _PyParkingLot_Park frame. Timeout begins-a98
+and wait_entry-a80; no instruction uses the padding word. The owner audits all
+seven callers, callback arguments and producer-to-parked-consumer result
+anchoring before proposing a single-function precise classification. No pad
+zeroing, walkrange heuristic or blanket precision is approved. The compiler
+peer is assigned that forthcoming bounded design review. Next report11:45 PDT.

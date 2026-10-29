@@ -2760,3 +2760,21 @@ the actual-helper ordering regression and natural forkserver/spawn cases,
 without leaked semaphore or double-unlink diagnostics. Retained old-order
 control fails in both contexts. Its source record, reconciliation and
 parallel module-iteration measurement follow before the full matrix.
+
+
+### 08:31 PDT: bounded handler and roots repair reviews cleared
+
+Independent LAND_STAGE2A review of624c75f6455 confirms unchanged numeric
+IDs/base semantics, shared pristine admission and reference ownership,
+checked scalar construction/rewrite, recorded hashes and strict-kill
+counters. The bounded verdict is retained in reviews/H3-1-stage2a-landing.md.
+Native integration still follows ROOTS2b; monitoring/stats/inspection,
+transport, renumbering and final H3 gates remain open.
+
+Cleanup/queue-annotation repair172b406be0c also cleared bounded review;
+its four files are unchanged by tooling merge67477efa986. This is not
+ROOTS2b final clearance. The actual-helper regression directly checks
+child stderr. Earlier quiet natural-case passes do not prove clean
+successful stderr because -W hides worker output; visible-output reruns
+are in progress before any such claim. This limits the08:30 statement.
+Source/gate evidence remains with its original revision.

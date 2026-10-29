@@ -3878,6 +3878,7 @@ gc_alloc_in_reftracer(PyObject *self, PyValue arg)
     if (PyRefTracer_SetTracer(alloc_tracer, NULL) < 0) {
         return PyValue_NULL;
     }
+    int old_stress = _PyGC_LiveGetStress();
     _PyGC_LiveSetStress(interp, 1);
     for (int32_t i = 0; i < n; i++) {
         PyObject *item = PyList_New(0);
@@ -3885,7 +3886,7 @@ gc_alloc_in_reftracer(PyObject *self, PyValue arg)
             break;
         }
     }
-    _PyGC_LiveSetStress(interp, 0);
+    _PyGC_LiveSetStress(interp, old_stress);
     (void)PyRefTracer_SetTracer(old, old_data);
     if (PyErr_Occurred()) {
         return PyValue_NULL;
@@ -3895,6 +3896,13 @@ gc_alloc_in_reftracer(PyObject *self, PyValue arg)
         "(LLL)", (long long)alloc_tracer_state.events,
         (long long)alloc_tracer_state.inside,
         (long long)(after.collections - before.collections)));
+}
+
+/* The configured process-wide allocation interval, without changing it. */
+static PyObject *
+gc_get_stress(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    return PyLong_FromLong(_PyGC_LiveGetStress());
 }
 
 /* PYTHON_GCSTRESS=every from now on; 0 turns it off */
@@ -4409,6 +4417,7 @@ static PyMethodDef module_functions[] = {
     {"gc_hold_in_core_mem", gc_hold_in_core_mem, METH_VARARGS},
     {"gc_collect_at", _PyCFunction_CAST(gc_collect_at), METH_O},
     {"gc_call_built", _PyCFunction_CAST(gc_call_built), METH_O},
+    {"gc_get_stress", gc_get_stress, METH_NOARGS},
     {"gc_set_stress", _PyCFunction_CAST(gc_set_stress), METH_O},
     {"gc_alloc_in_reftracer", _PyCFunction_CAST(gc_alloc_in_reftracer), METH_O},
     {"gc_collect_inline_then", gc_collect_inline_then, METH_VARARGS},

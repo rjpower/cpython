@@ -1386,6 +1386,12 @@ can_collect(PyThreadState *tstate)
     return ok;
 }
 
+int
+_PyGC_LiveGetStress(void)
+{
+    return stress_every;
+}
+
 void
 _PyGC_LiveSetStress(PyInterpreterState *interp, int every)
 {

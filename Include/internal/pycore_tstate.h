@@ -116,6 +116,8 @@ typedef struct _PyThreadStateImpl {
 #define _PyGC_SITE_COUNT        11
 
 PyAPI_FUNC(void) _PyGC_InjectCollect(PyThreadState *tstate);
+// The configured process-wide allocation interval; 0 means stress is off.
+PyAPI_FUNC(int) _PyGC_LiveGetStress(void);
 // PYTHON_GCSTRESS=every from now on; 0 turns it off
 PyAPI_FUNC(void) _PyGC_LiveSetStress(PyInterpreterState *interp, int every);
 

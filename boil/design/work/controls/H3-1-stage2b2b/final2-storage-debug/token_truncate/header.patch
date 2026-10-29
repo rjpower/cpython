@@ -1,0 +1,11 @@
+--- a/header
++++ b/header
+@@ -129,7 +129,7 @@
+ _PyCode_SetOriginalOpcode(_PyCoLineInstrumentationData *line_data, int index,
+                           uint16_t opcode)
+ {
+-    line_data->original_opcodes[index] = opcode;
++    line_data->original_opcodes[index] = (uint8_t)opcode;
+ }
+ 
+ static inline void

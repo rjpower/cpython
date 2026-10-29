@@ -1,0 +1,16 @@
+Written build/lib.linux-x86_64-3.16/_sysconfigdata__linux_x86_64-linux-gnu.py
+Written build/lib.linux-x86_64-3.16/_sysconfig_vars__linux_x86_64-linux-gnu.json
+The following modules are *disabled* in configure script:
+_sqlite3                                                       
+
+The necessary bits to build these optional modules were not found:
+_bz2                  _dbm                  _decimal           
+_gdbm                 _hashlib              _ssl               
+_tkinter              _uuid                 _zstd              
+readline                                                       
+To find the necessary bits, look in configure.ac and config.log.
+
+Could not build the ssl module!
+Python requires a OpenSSL 1.1.1 or newer
+
+Checked 116 modules (37 built-in, 67 shared, 1 n/a on linux-x86_64, 1 disabled, 10 missing, 0 failed on import)

@@ -1,0 +1,14 @@
+actual mode: optimize=0 __debug__=True verifier=(0,0) stress=0
+Modules/clinic/gcmodule.c.h: 0 errors
+Modules/gcmodule.c: 0 errors
+Objects/call.c: 0 errors
+Objects/listobject.c: 0 errors
+Objects/obmalloc.c: 0 errors
+Objects/shapeobject.c: 0 errors
+Objects/typeobject.c: 0 errors
+Python/ceval.c: 0 errors
+Python/ceval_gil.c: 0 errors
+Python/gc_live.c: 0 errors
+Python/gc_walk.c: 0 errors
+Python/ir_targets.h: 0 errors
+Python/pyvalue.c: 0 errors

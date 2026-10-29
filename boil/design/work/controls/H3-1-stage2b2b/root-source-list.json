@@ -1,0 +1,15 @@
+[
+  "Modules/clinic/gcmodule.c.h",
+  "Modules/gcmodule.c",
+  "Objects/call.c",
+  "Objects/listobject.c",
+  "Objects/obmalloc.c",
+  "Objects/shapeobject.c",
+  "Objects/typeobject.c",
+  "Python/ceval.c",
+  "Python/ceval_gil.c",
+  "Python/gc_live.c",
+  "Python/gc_walk.c",
+  "Python/ir_targets.h",
+  "Python/pyvalue.c"
+]

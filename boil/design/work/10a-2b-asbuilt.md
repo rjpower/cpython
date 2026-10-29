@@ -1,11 +1,14 @@
 # 10a rung 2b: as-built evidence and remaining work
 
-Status, 2026-10-29: not landed. Native products are built from
-ce2ac8991eebb1bbb10698ff2d07a79bd4cba452. The enclosing successor changes
-only one test's two-line stress eligibility decorator and these records;
-it does not rebuild or change the native runtime. Six broad profiles
-qualified; the original full N100000 attempt remains FAILED. Tail Walk,
-gate 3 closure, independent landing and exact-merge integration are pending.
+Status, 2026-10-29: branch qualification complete under the explicit scoped
+2b exception; independent LAND and exact-merge integration remain due.
+Native products are built from ce2ac8991eebb1bbb10698ff2d07a79bd4cba452.
+The exact tail/closure source was c67954f336a90402bf320d2cd02fa30e4ca7d223,
+which adds only one test's two-line stress eligibility decorator and records.
+This enclosing handback changes records only. Six broad profiles, bounded
+tail support and gate 3 closure qualified; the original full N100000 attempt
+remains FAILED. HTTP/resource ordering and queue progress remain final
+GC/performance blockers.
 
 ## Implementation
 
@@ -76,8 +79,10 @@ Writer/PyMem/compiler debt remains open.
 
 Tail make froze its 286 expanded paths before checks. Its strict six-case
 stale100 passed at actual tail/off/N0:706 collections, zero fallback and
-zero unpinned. Complete tail Walk 11 has not run. Whole tail/retain 8.2 and
-step-end gate4 remain 10a4/H1 obligations, not extra 2b matrices.
+zero unpinned. Complete tail Walk passed 11/0 at source c679 with the same
+ce native tail products: 64 collections, zero fallback and one report-only
+unpinned event. Whole tail/retain 8.2 and step-end gate4 remain 10a4/H1
+obligations, not extra 2b matrices.
 
 ## Failed full stress and bounded diagnosis
 
@@ -138,17 +143,26 @@ The summaries bind their raw files/plans/helpers/source/native scopes:
 | interpreter-eligibility/two-check-summary.json |fee5f36c|off body and declared stress eligibility|
 | http-comparison/two-build-summary.json |6919760f|inherited HTTP exposure|
 | trashcan-comparison/two-build-summary.json |d17bcc22|inherited bounded lack of completion|
+| successor/completion-summary.json |0e0a8f3b|tail Walk and fixed gate 3 closure PASS|
 
-Independent review and the coordinator accepted a scoped2b exception,
+Independent review and the coordinator accepted a scoped 2b exception,
 retaining HTTP/resource ordering and queue progress as final GC/performance
-blockers. Original full stress is still FAILED. A concrete successor binding
-must be reviewed before tail Walk or gate 3 closure can launch. It must
-preserve the frozen a731/f91d helper
-bytes and actual old results, changing only the explicit prerequisite/source
-binding. Closure still owes sequential 16 cext tests with seven exact existing
-skips, unchanged case/clinic regeneration, traversal audit and 19 optional
-module syntax receipts with external headers/toolchain bound; four
-unsupported modules stay explicit. Current full100k is not green.
+blockers. Original full stress is still FAILED. The reviewed successor
+bridge (8685676c) binds exact c679 source and unchanged ce native/config/helper
+maps. It updates only source/head metadata and the exact eligibility test's
+inventory source hash, retaining original registry/roster bytes, parsers,
+serialization and child criteria. Its prerequisite explicitly checks six
+original PASS receipts plus the original red stress receipt/raw artifacts;
+none is relabeled. Original plans/helpers/results remain intact.
+
+The once-only remaining checks completed: tail Walk 11/0 (9d257c24),
+sequential cext 16 with seven exact existing skips (498be079; 557 collections,
+zero fallback/unpinned), unchanged case/clinic regeneration (9f26db19),
+traversal audit (baefd852), and exactly 19 optional-module syntax receipts
+with external headers/toolchain bound (26f48d83). Four unsupported modules
+stay explicit. Both outer commands returned zero with source/native/helper
+postguards intact. Completion summary 0e0a8f3b binds all actual results/raw
+hashes and the frozen manifest 62729151. Current full100k is not green.
 
 Global O1 adoption and independent LAND remain separate. After LAND, the
 exact detached merge still requires fresh gate 0 on both builds, current targeted/root

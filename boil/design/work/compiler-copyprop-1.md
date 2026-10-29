@@ -334,3 +334,253 @@ the last round, so the coordinator rules on what stays open):
 | The measurement split is lexical | Labelled as such in the record. The aggregate counts are exact. |
 | An immediate before/after benchmark | Gate 4 runs on the head and on 5ec05e7116b's build, which produces the same code as 41c716c5947; machine time permitting. |
 | Ledger rows and documentation | For the coordinator (PROCESS.md 0.3); the documentation awaits approval. |
+
+## As built
+
+The record of rung 1, 2026-10-28. Base: 41c716c5947. Head of
+`boil/compiler-copyprop`: the record commit on 1bf1f941c88.
+
+### Commits
+
+| Commit | What |
+|---|---|
+| 54958dcb119 | design and review round 1 |
+| 5ec05e7116b | `_PyIR_RUNS_CODE`, derived per family by the generator; the reader-side borrow condition; generator tests (12 to 14) |
+| 9b9bacc24fe | the pass kill; magic 3729; tests 1 to 8, 10 and 11 |
+| 9a0281115b1 | the reader-side analysis follows actual reads, an unused peek being no read (round 2, B2) |
+| e7cdcac58d0 | the tests witness the frame and the executing handler at each rebinding |
+| ecaa09f9267 | specializer contract, part 1: `specialize_dict_hint()` declines dicts whose keys are not all exact str (round 1, B1); test 9 |
+| 1f0f58d9f53 | review round 2; notes 06 and 07; `boil/tools/measure/fold_count.py` |
+| 4d6fd6e5196 | specializer contract, part 2: `type_lookup_runs_no_code()` runs before every specializer type lookup (round 2, B1); test 9b |
+| fbf27434b0c | the library documentation of the per-instruction break |
+| 1bf1f941c88 | test_ir's fold test asserts the rule (it pinned the old fold across a global and a call; gate 2 found it) |
+
+### Built against designed
+
+The rule, the derivation and the reader side are as designed. These
+changed, each for the reason given:
+
+1. **The specializer contract is enforced, not assumed.** The design took
+   it as an invariant that a specializer runs no Python code. Both review
+   rounds showed that it did not hold. An immediate reader, which no
+   compile-time kill reaches, then read a rebound local when its word was
+   dispatched again. Two guards in `Python/specialize.c` (ecaa09f9267,
+   4d6fd6e5196) make the contract true for every path found. The
+   coordinator ruled on each.
+   The MRO-lookup path (round 2, B1) was taken under option (a) and its
+   one-hour bound: a fixture reached it within the hour, by bumping the
+   type's version before every call so that the specializer's lookup
+   misses the type cache and compares a colliding str-subclass key in an
+   MRO dict. It gave wrong results on 25 of 2,000 calls over five paths at
+   ecaa09f9267, and none after 4d6fd6e5196. The fix is in this rung (test
+   9b), so it is not a 0.3 row. Only the checker that would enforce the
+   contract is handed to 10a tooling.
+2. **The reader-side analysis was wrong as first written.** It took a
+   stack effect for a read (9a0281115b1). The tables did not change, so
+   no build was affected.
+3. **`type_lookup_runs_no_code()` repeats `mro_dicts_unicode()`.** 10a
+   rung 2b owns `Objects/typeobject.c`, so the check could not be shared.
+   The copy is a recorded hand-off and goes after 10a lands.
+4. **The documentation of the break** was added on approval.
+
+### Gate lines
+
+All at 1bf1f941c88, 2026-10-28:
+
+| Gate | Build | Time (PDT) | Result |
+|---|---|---|---|
+| 0 | build/default | 17:00 to 17:01 | passed |
+| 0 | build/debug | 17:01 to 17:07 | passed |
+| 2 | build/default | 17:07 to 17:10 | passed, 51,079 tests |
+| 3 | build/debug | 17:10 to 17:23 | passed; roots 61,914 collections, 0 fallbacks |
+| 4 | build/default | 17:24 to 17:28 | passed (`boil/bench/results/copyprop.json`) |
+| 4 | 41c716c5947 build/default | ended 17:02 | passed (`boil/bench/results/copyprop-base.json`) |
+
+An earlier ladder at fbf27434b0c passed gates 0 on both builds and
+failed gate 2 on one test, test_ir's fold test, which 1bf1f941c88 fixes.
+The 19 copy-propagation tests also passed under `PYTHON_GCVERIFY=kill` on
+the debug build at 1bf1f941c88.
+
+Gate 1 ran before each code commit on the targeted set: test_compile,
+test_compiler_codegen, test_dis, test_sys_settrace, test_sys_setprofile,
+test_frame, test_scope, test_peepholer, test_grammar, test_generators,
+test_coroutines and test_generated_cases; test_ir from 1bf1f941c88. The specializer commits also ran
+test_opcache, test_descr and test_class.
+
+The verification set (kill, ASan and stress) was not run. This rung
+changes the compiler's output, the specializer and the format flags, but
+not the collector, the roots, the object layout or the handlers' code
+(PROCESS.md section 3). The new tests did run under `PYTHON_GCVERIFY=kill`
+on the debug build at 9b9bacc24fe, and all passed.
+
+### Negative controls
+
+Each control's failing output is in the session logs, condensed here.
+
+- **The pass without the kill** (a local edit, `runs_code = 0`, never
+  committed). This is equal to 41c716c5947's pass, and was also run on the
+  41c716c5947 build itself before the fix. Tests 1 to 8 fail with
+  `Tuples differ: (2, 2) != (1, 2)`, or with `((2, 2), (2, 2)) != ((1, 2),
+  (1, 2))` under tracing and monitoring. The two lost-fold tests fail
+  with `0 == 0`, because the reader names x's slot.
+- **A kill at every op** (a local edit). The four preserved-fold tests
+  fail: `3 != 0`, `1 != 0`, `2 != 0`, `3 != 0`. So does test 10's fold
+  assertion.
+- **Without the dict-hint guard** (the tree at 1f0f58d9f53 before
+  ecaa09f9267, built). Test 9 fails: `{'other'}` appears among the
+  results. The store probe left 6 of 300 receivers unstored and
+  overwrote `other.a`.
+- **Without the MRO guards** (the tree at ecaa09f9267, built). Test 9b
+  fails. The probe, per path out of 400 calls, gave wrong results:
+  class attribute 8, instance class attribute 4, subscript 8,
+  `__getattr__` 4, `__getattribute__` 1.
+- **Generator controls.**
+  - Dropping the instrumented clause fails tests 12 and 13
+    (`INSTRUMENTED_POP_ITER`).
+  - Dropping the late-read condition fails test 14 (`3 != 2`).
+  - Counting specializers fails test 14 (`2 != 3`).
+  - The previous analysis, which takes a stack effect for a read, fails
+    the peek case of test 14 (`2 != 0`).
+
+### Measurements
+
+**Folds.** `fold_count.py` over the Lib of 5ec05e7116b, extracted with
+`git archive` to a fixed directory. The before count is on 5ec05e7116b's
+build, whose code is that of 41c716c5947 (the flag only); the after count
+is on 9b9bacc24fe's build:
+
+| | before | after | change |
+|---|---|---|---|
+| `LOAD_FAST_BORROW` words | 223,631 | 233,133 | +9,502 (+4.25%) |
+| all words | 4,595,456 | 4,604,958 | +9,502 (+0.21%) |
+| temporaries (sum of `co_stacksize`) | 477,857 | 477,995 | +138 (+0.03%) |
+
+The newly unfolded loads, by the first op after the load that has the
+flag. This is a lexical diagnostic over the final words. It is not the
+pass's own record of what it rejected.
+
+| first op that runs code | change |
+|---|---|
+| LOAD_GLOBAL | +4,421 |
+| LOAD_ATTR | +2,775 |
+| BINARY_OP | +1,575 |
+| BUILD_SLICE | +224 |
+| BUILD_LIST | +186 |
+| CALL | +78 |
+| UNARY_NEGATIVE | +65 |
+| BUILD_SET, FORMAT_SIMPLE, BUILD_MAP, BINARY_SLICE, others | +188 together |
+
+**Instructions (gate 4).** 
+
+`compare.py copyprop-base.json copyprop.json 6d.json`.
+6d equals the base to within 0.4% on every instruction row, so the
+deltas against 6d are the same as those against the base.
+
+| group | geomean, head / base |
+|---|---|
+| kernels | 1.005 (29/29) |
+| micro | 1.001 (65/65) |
+| memory | 1.000 (6/6) |
+
+The kernel deltas, with the kernel's own newly unfolded loads
+(`LOAD_FAST_BORROW` words before and after, counted per file and
+classified by the first op after the load that has the flag; scratch
+script, not in the tree). A kernel that spends its time in Lib (regex_compile,
+deepcopy) is attributed to the Lib count above.
+
+| kernel | instructions | loads before -> after | first stopping op |
+|---|---|---|---|
+| nbody | +4.0% | 16 -> 33 | BINARY_OP +17 |
+| fannkuch | +1.9% | 7 -> 13 | BINARY_OP +5, BUILD_SLICE +1 |
+| go | +1.2% | 50 -> 81 | LOAD_ATTR +16, LOAD_GLOBAL +15 |
+| chaos | +1.2% | 39 -> 60 | LOAD_ATTR +12, BINARY_OP +9 |
+| float | +1.0% | 7 -> 10 | LOAD_ATTR +3 |
+| spectral_norm | +0.9% | 18 -> 22 | LOAD_GLOBAL +2, BINARY_OP +2 |
+| nqueens | +0.8% | 19 -> 26 | BINARY_OP +5, UNARY_NEGATIVE +2 |
+| regex_compile | +0.8% | 22 -> 25 | LOAD_GLOBAL +3; the rest is in `re` |
+| deepcopy_memo | +0.8% | 16 -> 17 | LOAD_ATTR +1; the rest is in `copy` |
+| xml_etree_generate | +0.4% | 71 -> 75 | LOAD_ATTR +2, LOAD_GLOBAL +2 |
+| raytrace | +0.3% | 49 -> 64 | LOAD_ATTR +7, LOAD_GLOBAL +4, BINARY_OP +4 |
+
+The others are within 0.3%. nbody's hot loop is arithmetic on locals,
+`dx * dx + dy * dy + dz * dz`. BINARY_OP's family shares one format, and
+its generic member may run Python code (an `__add__`), so each operand
+pending across a BINARY_OP is now its own load.
+
+Micro: class_attr_store +2.8%. `K.v = i` now loads `i` before the
+LOAD_GLOBAL of `K` (one more word per iteration, the `x + G` lost fold).
+getattr_property +0.8% and getattr_property_float +1.0%: the words of
+`run` and of the getter are the same on both builds, and 6d differs from
+the base by +1.0% on the float twin, so this is the benchmark's run-to-run
+spread, not this change. All other micro rows are within 0.2%.
+
+RSS: the kernel geomean is 0.993. coroutines' 0.797 is a single row in
+peak RSS with its instruction count unchanged; it is not attributed. On
+memory, the head equals 6d on every row (startup +2.1%, tuples_10m +5.0%,
+instances_1m +8.7% against the base run), so the difference is in the
+base worktree's run and not this change.
+
+Not tuned: the deltas are the cost of the rule, recorded as lost folds.
+
+### Hazards found, and how each was traced
+
+- **A generic `LOAD_GLOBAL` runs Python code.** Two reproducers, a dict
+  subclass's `__getitem__` and a colliding key's `__eq__`, at 12 against
+  11. This overturned the brief's "globals stay".
+- **A specializer that runs Python code, followed by a second dispatch
+  of the same word.** Found by review round 1, reproduced (4 of 200),
+  and fixed in two parts. Round 2 found the MRO path, which a fixture
+  reached by changing the type before every call to force the miss. Two
+  earlier probes had not reached it: a type-cache eviction by pressure,
+  and plain instance and hook loads.
+- **The suite pinned the defect.** test_ir's
+  `test_load_folds_under_a_global_and_a_call` asserted the fold across a
+  global and a call as the expected behaviour, so the suite was green on
+  the wrong semantics. This is review 2's pattern of checkers and tests
+  that agree on the same mistake. Gate 2 found it; the renamed test
+  (1bf1f941c88) asserts the rule both ways.
+- **The allocation bound.** A sweep's `PyBuffer_Release()` can reach
+  `__release_buffer__` (review 2 §5.3). This was not traced further here;
+  the claim is bounded on that row.
+- **Gate tooling.** Killing the shell loop that ran gate.sh, then gate.sh
+  itself with TERM, left gate_run.sh's `timeout` process group and its
+  test workers running, until the group was signalled directly
+  (`kill -TERM -- -PGID`). This is reported, not fixed; gate.sh is the
+  coordinator's.
+
+### Rereading the tests: what each would not detect
+
+| Test | Would not detect |
+|---|---|
+| 1 call | a lost heap operand (the saved value, 1, is inline); a defect in a call family member other than CALL and CALL_PY_EXACT_ARGS |
+| 2 property, getattr | a defect only in a C getset or a member descriptor |
+| 3 subscript | a defect only in a C mapping slot (it uses a Python `__getitem__`) |
+| 4 reflected | an operand lost across a collecting `NotImplemented` chain (test 10 covers one shape) |
+| 5 comparison | cleanup when the comparison raises |
+| 6 globals | other mapping protocols of globals, such as `__missing__` |
+| 7 settrace | a missing trace event other than the ones asserted (the call of `change`, the line of `attr`) |
+| 8 monitoring | events other than CALL, PY_START and LINE; the instrumented-twin clause, which no expression reaches today (test 13 covers it) |
+| 9 dict hint | specializer paths other than LOAD_ATTR and STORE_ATTR on an instance dict; it cannot show that the comparison happened in the specializer rather than the generic lookup |
+| 9b MRO | type lookups from specializer paths not listed (none known); a miss produced other than by a version change |
+| 10 heap operand | a missing reader anchor, because self and opaque C frames keep the operand alive; that is the 10a row's oracle |
+| 11 disassembly | runtime operand selection; folds in other shapes |
+| 12 synthetic | a native callee misclassified in `call_effects.py`, a return or yield member, a macro that hides a call |
+| 13 real handlers | an omission shared with `Properties.escapes` (any macro that hides an escaping call, as `INSTRUMENTED_JUMP` did) |
+| test_ir fold | a fold lost under other non-running ops (tests 11 cover four shapes) |
+| 14 reader order | a second dispatch after a specializer that runs code (covered by the contract and tests 9 and 9b); operand lifetime |
+
+The per-instruction break has no test. A test that pinned the documented
+behaviour would assert the break itself, and this rung leaves that to the
+0.2 row's owner.
+
+### Hand-offs
+
+| Item | To | Closes when |
+|---|---|---|
+| A checker for the specializer contract: classify the callees of `_Py_Specialize_*` | 10a tooling (0.3 row, added) | a checker fixture with a specializer callee that reenters fails |
+| An anchor for a reader's folded operand across the reader's own collecting calls | 10a rung 3 (0.3 row, added) | a collection injected where only the reader's precise frame holds the operand fails with that root omitted and passes with it; test 10 stays a semantic regression |
+| The allocation bound: no Python code under an op that only allocates | review 2 §5.3's row (10a rung 3; clause added) | that row's acceptance test |
+| The per-instruction compatibility break | coordinator (the 0.2 row) | the row; the documentation is committed (fbf27434b0c) |
+| `type_lookup_runs_no_code()` repeats `mro_dicts_unicode()` | coordinator or this agent, after 10a lands | typeobject.c exports the function and the copy in specialize.c goes |
+| `INSTRUMENTED_JUMP` hides an escaping call, so the instrumented jumps' `HAS_ESCAPES_FLAG` is wrong | the cases generator, at step 8 | tier 0 reads correct flags |
+| Gate tooling: a killed gate.sh can leave gate_run.sh's process group running | coordinator | gate.sh's cleanup kills the group on every signal path |

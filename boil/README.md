@@ -12,9 +12,9 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 07:55 PDT at integration merge 6c724c29408, shared
+revised 2026-10-29 08:25 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification registry fff4e0e9b08 and
-the three active step worktrees. This update separates implemented work
+the active step worktrees. This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 
 ## 1. The design in one page
@@ -53,7 +53,8 @@ and 3):
    referrer-first sweep for deallocators that read their referents;
    weak references in a side table; finalizers and destroy hooks queued
    and drained at permitted execution points. Owner-correct routing is
-   implemented on the unlanded 7a branch (note 13). Roots are precise
+   landed as 052d8342e56 (note 13); dependent-call completion remains open.
+   Roots are precise
    where frames
    are marked `Py_GC_PRECISE` and checked by the C-mode checker, and
    conservative elsewhere (an attributed DWARF stack walk, PyMem blocks,
@@ -69,21 +70,24 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 07:55 PDT; evidence is from local commits and retained logs.
+2026-10-29 08:25 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
-| 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers | 7a rung 1 candidate 5c4124ea9ff reconciles integration without native/product changes from tested 5cc31bacee1. Full kill 51,104, ASan14 3,589, stress11 3,046, subprocess 371 three times and 40 probes pass; final tool checks/review pending | 7a rung 2a safety/completion order, 2b owner metadata, 2c retirement/adoption/fork; design and probes only |
-| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b native source 0b13048a633, feedback record 96e610f6034: bounded O1 checks and first reclamation iteration pass lifetime assertions; two semaphore cleanup errors remain to trace. Final matrix waits for queue reconciliation | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
+| 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers; 7a rung 1 owner routing merged as 052d8342e56 and integration-validated | | 7a rung 2a safety/completion order: design/probe artifacts preserved, agent held by automatic classifier; 2b owner metadata, 2c retirement/adoption/fork |
+| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b reconciled queue landing as cb0b6c21b97. Bounded O1 checks pass; semaphore cleanup ordering is causally confirmed and its helper fix/regression is in progress. Final matrix waits for settled source | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
 | 6a, 6b: `PyValue` in the core and the value C API; compiler reentrancy fix merged as 99435658509 and integration-validated | | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
-| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2 fixed-number runtime/monitoring/stats/inspection consumers beginning under explicit ownership | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
+| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2a domain/pristine runtime changes pass bounded release/debug and actual-kill gates; frozen at 624c75f6455 under independent review. Monitoring/stats/inspection and transport closure follow | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
 
 Shared validation prerequisite landed independently as `2155f16f45f`:
 `_testinternalcapi.gc_verify_mode()` reads actual collector state.
 Integration's existing release/debug smoke sets passed 1,924 tests each,
-and its mode contract passed on both builds. The queue forwarding fix
-and roots final gates still belong to their unlanded lanes.
+and its mode contract passed on both builds. Queue rung 1 cleared independent
+review: full kill 51,104, ASan14 3,589, stress11 3,046, subprocess 371 three
+times and 40 probes pass at their recorded revisions. Its integration
+passed smoke 1,924 and queue tests 22 per build, actual-worker-kill 22 and
+unchanged regeneration. Roots final gates remain unlanded.
 
 Performance position, instructions on the internal benchmark set
 (`boil/bench/results/6d.json` over `baseline.json`; recorded, not tuned):
@@ -95,9 +99,12 @@ establish interpreter parity or better on the kernel set, with individual
 regressions reported and resolved or explicitly dispositioned. Micro
 instruction gains alone do not establish that result.
 
-The compiler correction is landed. Three independent agent lanes now
-close the queue landing, finish 10a rung 2b, and implement H3's handler
-domain. The coordinator owns integration, shared gate
+The compiler correction and queue rung 1 are landed. Active agents finish
+10a rung 2b and H3's handler domain, with independent review at each boundary.
+The queue rung 2 agent was stopped by an automatic cybersecurity classifier,
+including its read-only handoff; no native rung 2 fix was applied. Existing
+artifacts are preserved. This is not a missing user authorization.
+The coordinator owns integration, shared gate
 policy, dispatch/performance scope and hourly documentation/status.
 PROCESS §0.4 gives the dependencies and checkpoint rules. The `-O1`
 debug trial reduced smoke time from 3m41s to 2m37s, but qualification
@@ -115,8 +122,11 @@ reproductions pass after the fix; the original failed ten of ten.
 `-O1` has not been adopted. Integration
 debug validation still uses `-Og`. The first O1 reclamation iteration took
 542 seconds: 31 separate cases and 11 complete modules. Two multiprocessing
-cases return SUCCESS but report semaphore cleanup errors; a causal trace
-on queue-reconciled source is required. The final matrix may run different
+cases return SUCCESS but report semaphore cleanup errors. A causal trace
+on queue-reconciled source confirms that registry clearing loses the weakref
+cleanup, then tracker shutdown unlinks before late finalizers. The approved
+repair moves existing finalizers after forkserver stop and before tracker
+stop, with actual-helper and old-order controls. The final matrix may run different
 complete modules concurrently while preserving each module's internal
 order and each individual case's separate process. Release measurements
 and sanitizer coverage remain required.
@@ -132,7 +142,10 @@ state tests passed on both, and debug kill/stress checks passed. The
 verification registry, validator and plan display are landed as
 fff4e0e9b08: 15 profiles, seven safety-control groups and actual case
 inventory validation pass. Execution and numeric-gate integration remain
-unfinished; the roots agent is preparing a separate launcher checkpoint.
+unfinished. The frozen launcher component cleared independent review;
+its landing does not establish orchestration, complete coverage or source
+snapshot enforcement. A separate shared worker-launch correction preserves
+regrtest's temporary cwd and exit timeout by calling worker.main().
 
 Opcode categories will use explicit generated properties. H3 removes
 inherited numeric category cutoffs such as HAVE_ARGUMENT; instruction

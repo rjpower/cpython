@@ -23,19 +23,19 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 07:55 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 08:25 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; hand-offs: FOR_ITER_RANGE spill and nbody +5.3% to step 8, `str +=` to step 9 |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | rungs0,1,1b landed; rung2b remains unlanded at0b13048a633. Provenance/list-transfer repair committed82165f8a2a9 and integration reconciled. Original carrier helper fails eight origin subcases; zero-seed-sort control fails both orderings; old list transfer traps10/10, fixed passes10/10. Bounded O1 checks pass after merge; first31-case/11-module iteration running. Final gates/review and O1 adoption remain pending. Rung3a remaining writers/PyMem,3b checker/precision residue,3c queued releases/detached-state roots and rung4 measurements/support follow |
-| 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 remains unlanded at5cc31bacee1. Normal suites atd43c8b4dd32 pass51,102 each/0fallback; full debug kill at5cc passes51,104/65,601 collections/0fallback. ASan14 passes3,589 with exact AddressSanitizerTests exclusion; original unfiltered failure remains FAIL. Three subprocess checks pass371 each. Stress11/probes and review remain. Rung2a safety/order,2b owner metadata,2c retirement/adoption/fork remain design/probes; S1 completion concern confirmed, resource-case/S3 proof pending |
+| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | rungs0,1,1b landed; rung2b unlanded, queue integration reconciled as cb0b6c21b97. Provenance/list-transfer repair committed82165f8a2a9. Original carrier helper fails eight origin subcases; zero-seed-sort control fails both orderings; old list transfer traps10/10, fixed passes10/10. Bounded O1 checks pass; first31-case/11-module feedback iteration took541.745s. Semaphore cleanup cause confirmed; helper repair/regression in progress before settled-source matrix. Final gates/review and O1 adoption remain pending. Rung3a writers/PyMem,3b checker/precision residue,3c queued releases/detached-state roots and rung4 measurements/support follow |
+| 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 candidate6f416bc4582 cleared independent round3 review and landed as052d8342e56. Normal suites atd43c8b4dd32 pass51,102 each/0fallback; frozen5cc full debug kill passes51,104/65,601 collections/0fallback. ASan14 passes3,589 with exact AddressSanitizerTests exclusion; original unfiltered failure remains FAIL. Stress11 passes3,046, subprocess371 three times and40 probes pass. Integration smoke1,924 and queues22 per build, actual-kill22 and unchanged regeneration pass. Rung2a design/probes preserved but agent held by automatic classifier; no native fix applied. Owner metadata2b and retirement/adoption/fork2c remain open |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
-| H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | H1/H2 remain design, maps wait for10a rung3. H3-1 stage1 b203defe758 cleared independent rereview and merged as6c724c29408; detached integration checks running. Stage2 fixed-number runtime/monitor/stats/inspection consumers beginning; ROOTS retains shared CAPI ownership. Transport closure and final renumbering follow; typed float truth is separate |
+| H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | H1/H2 remain design, maps wait for10a rung3. H3-1 stage1 landed6c724c29408 and integration-validated. Stage2a domain/pristine changes pass smoke1,924 per build, affected974 per build and actual-kill974; frozen624c75f6455 under independent review. Shared worker.main correction3dff5879df8 isolated for integration. Monitoring/stats/inspection, transport closure and final renumbering follow; typed float truth is separate |
 | 7 | generational collection over the precise root set | open; decides header flag bits and side bitmaps |
 | 8 | tier 0 over the IR, x86-64; first frees the specialised-handler space | open |
 | 9 | tier 1 | open |
@@ -47,7 +47,8 @@ record and is updated at every landing.
 Shared prerequisite `2155f16f45f` is integrated and independently checked:
 actual verifier state is exposed through a test accessor. Default/debug
 smoke sets and the mode contract passed on integration. This does not
-land queue routing or root-lifetime changes. The roots lane's O1 debug
+land root-lifetime changes; queue routing has separately landed as052d8342e56.
+The roots lane's O1 debug
 trial passed checker, stack-walk, actual-worker-mode and 100/100 stale-root
 controls, but a focused PyMem-attribution assertion failed. B scans a
 PyMem carrier under a precise origin first, then deduplicates away its
@@ -59,7 +60,10 @@ minimal reorder passes ten fresh reproductions, with an original ten of
 ten failure control. Merged-head bounded checks pass; the first full
 reclamation iteration took541.745s with all lifetime assertions passing.
 Forkserver/spawn test_finalize also report leaked semaphore/unlink cleanup
-errors; a causal trace on queue-reconciled source remains required. The
+errors. Queue-reconciled tracing confirms registry clearing loses semaphore
+cleanup before tracker shutdown. Move existing finalizers after forkserver
+stop and before tracker stop, preserving other cleanup; prove the actual
+helper with old-order negative and forkserver/tempdir controls. The
 remaining iterations wait for settled native source. No O1 adoption is claimed. The
 integration debug gate uses Og.
 
@@ -77,9 +81,10 @@ using the 99435658509 binary. Committed refs are pushed; Loom/GitHub
 authorization is explicit. Registry/validator/plan display fff4e0e9b08
 is landed after independent safety-control and actual-inventory checks.
 The ASan filter names only the established failing AddressSanitizerTests
-case, retaining five passing same-named allocator tests. Profile execution
-and gate integration remain outstanding, split into a launcher checkpoint
-and orchestration/hook checkpoint in boil/tools/verification.md.
+case, retaining five passing same-named allocator tests. Launcher-only
+execution cleared independent review. Orchestration and gate integration
+remain outstanding in boil/tools/verification.md; supplied source provenance
+is not yet verified by complete before/after snapshots.
 
 Standing concerns, with owners: conservative-retention artefacts in tests
 until 10a rung 2 marks the C API entry paths (trace with the stack-hits
@@ -160,7 +165,7 @@ day travelled through messages and work-doc paragraphs.
 | the checker's argument-order and hashtable-family holes (review 2 §5.4, §5.5) | review 2 | 10a rung 2b | both negative fixtures fail before the fix and pass after; the hazard list names the commits |
 | the contract "a specializer runs no Python code" (specialize_dict_hint() ran a colliding key's `__eq__` and the re-dispatched word reread a rebound local; the guard is the compiler fix's commit) enforced by the checker | compiler fix review | 10a tooling | a checker fixture with a reentrant `_Py_Specialize_*` callee fails; the specializers pass |
 | a reader's folded operand (a local read in place by the op) needs an anchor across the reader's own collecting calls once the eval loop frame is precise (`x + o` where `X.__add__` rebinds x, collects and returns NotImplemented; today the conservative C frame holds the original) | compiler fix review | 10a rung 3 | an oracle that injects a collection at a point where only the reader's precise frame holds the operand, and fails with that root omitted; the compiler fix's test 10 (`x + o`) is a semantic regression only, since `self` and the opaque C frames below hold the operand today |
-| standalone forkserver/spawn test_finalize returns SUCCESS but reports a leaked semaphore followed by SemLock._cleanup FileNotFoundError | coordinator/ROOTS feedback matrix1 logs08/10 at0b130 | ROOTS before final2b matrix | causal registry/tracker trace on queue-reconciled source, then a proved cleanup fix or evidence that the report is expected; no exclusion or clean-stderr claim |
+| standalone forkserver/spawn test_finalize returns SUCCESS but reports a leaked semaphore followed by SemLock._cleanup FileNotFoundError | coordinator/ROOTS feedback matrix1 logs08/10 at0b130; cause confirmed after queue merge | ROOTS before final2b matrix | actual _cleanup_tests helper runs finalizers after forkserver stop and before tracker stop; deterministic old-order negative, active forkserver/tempdir control and clean standalone cases; no exclusion |
 
 ### 0.4 Execution plan from the takeover
 
@@ -173,8 +178,8 @@ The first wave resumes completed code rather than rebuilding it:
 
 | Lane | First assignment | Next boundary |
 |---|---|---|
-| compiler | Close the three findings in `work/reviews/compiler-copyprop-1-landing.md`; preserve existing semantic fix | Gated, reviewable fixups and corrected measurement/control record; coordinator lands before 7a rung 2 |
-| queues | Close the four findings in `work/reviews/7a-1-landing-round2.md`; preserve the dirty rung-2 designs | Rung-1 landing. Then 7a-2a safety/order (failed sweep-order allocation, S1 completion dependencies, S3 debug output); 7a-2b owner metadata; 7a-2c retirement/adoption/fork. Each gets a separate record and gate line |
+| compiler | Correctness/copyprop landed99435658509; reviewer now cleared manifest launcher component | Independent review of subsequent landing checkpoints |
+| queues | Rung1 landed052d8342e56; round3 review and integration checks complete | Rung2a design/probes held by automatic classifier, including read-only handoff; preserve artifacts, do not retry stopped work elsewhere. Then2b owner metadata and2c retirement/adoption/fork; each gets a separate record and gate line |
 | roots | Reconcile integration tooling, finish rung-2b evidence and missing checks, prepare its landing review | Rung-2b landing. Then 10a-3a writers/PyMem first; 3b checker/precision residue; 3c buffer-release and swap paths after the relevant 7a changes. Removing conservative mitigations is a final proved step, not an assumption |
 
 Before changing code each owner supplies a short file list, current

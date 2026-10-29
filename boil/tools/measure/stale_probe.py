@@ -7,14 +7,19 @@ Runs each case RUNS times (default 100) in one child of the interpreter
 under test, each inside a sorted(key=...) callback so that list.sort's
 opaque C frame lies between two eval-loop frames, and prints how many runs
 freed the dead object at the first collection.  A precise collector frees
-it every time.
+it every time.  The child asserts the parsed verifier mode against the
+requested environment before testing roots.
 """
 
+import os
 import subprocess
 import sys
 
 CHILD = r'''
-import contextvars, gc, sys, weakref
+import contextvars, gc, sys, weakref, _testinternalcapi
+expected_mode = int(sys.argv[2]), int(sys.argv[3])
+assert _testinternalcapi.gc_verify_mode() == expected_mode, (
+    _testinternalcapi.gc_verify_mode(), expected_mode)
 runs = int(sys.argv[1])
 class A:
     def f(self):
@@ -74,7 +79,12 @@ def main(argv):
         print(__doc__, file=sys.stderr)
         return 2
     runs = argv[2] if len(argv) > 2 else "100"
-    proc = subprocess.run([argv[1], "-c", CHILD, runs], text=True,
+    name, _, extra = os.environ.get("PYTHON_GCVERIFY", "").partition(":")
+    mode = {"": 0, "retain": 1, "kill": 2}[name]
+    extras = sum({"pymem": 1, "structs": 2}[part]
+                 for part in set(extra.split(",")) if part)
+    proc = subprocess.run([argv[1], "-c", CHILD, runs, str(mode),
+                           str(extras)], text=True,
                           capture_output=True)
     sys.stdout.write(proc.stdout)
     sys.stderr.write(proc.stderr)

@@ -36,6 +36,19 @@ try:
 except ImportError:
     _testinternalcapi = None
 
+
+def _gc_mode_checked(code, mode):
+    """Assert the collector's parsed mode in the child running the hazard."""
+    name, _, extra = mode.partition(":")
+    mode_number = {"retain": 1, "kill": 2}[name]
+    extra_bits = sum({"pymem": 1, "structs": 2}[part]
+                     for part in set(extra.split(",")) if part)
+    expected = mode_number, extra_bits
+    return ("import _testinternalcapi\n"
+            f"assert _testinternalcapi.gc_verify_mode() == {expected!r}, "
+            "_testinternalcapi.gc_verify_mode()\n" + code)
+
+
 ### Support code
 ###############################################################################
 
@@ -1697,6 +1710,15 @@ class TracingCollectorTests(unittest.TestCase):
                 self.assertFalse(cleared)
                 self.assertEqual(crossed, cross)
 
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_child_mode_assertion(self):
+        code = _gc_mode_checked("pass", "kill")
+        rc, out, err = assert_python_failure(
+            "-I", "-c", code, PYTHON_GCVERIFY="kill")
+        self.assertEqual(out, b"")
+        self.assertIn(b"AssertionError: (0, 0)", err)
+
     HOLD_IN_CORE_MEM = textwrap.dedent("""
         import gc, sys, _testinternalcapi
         obj = _testinternalcapi.gc_hold_in_core_mem(
@@ -1719,8 +1741,8 @@ class TracingCollectorTests(unittest.TestCase):
                                       ("retain", True, 0)):
             with self.subTest(mode=mode, give_back=give_back):
                 rc, out, err = assert_python_ok(
-                    "-c", self.HOLD_IN_CORE_MEM, str(int(give_back)),
-                    PYTHON_GCVERIFY=mode)
+                    "-c", _gc_mode_checked(self.HOLD_IN_CORE_MEM, mode),
+                    str(int(give_back)), PYTHON_GCVERIFY=mode)
                 name, nq = out.decode().split()
                 self.assertEqual(name, "list" if give_back else "NoneType")
                 if want:
@@ -1780,18 +1802,21 @@ class TracingCollectorTests(unittest.TestCase):
         # from core frames.
         code = self.HOLD_IN_CORE_MEM
         if not support.Py_DEBUG:
-            rc, out, err = assert_python_failure("-c", code, "0",
-                                                 PYTHON_GCVERIFY="kill")
+            rc, out, err = assert_python_failure(
+                "-c", _gc_mode_checked(code, "kill"), "0",
+                PYTHON_GCVERIFY="kill")
             self.assertIn(b"PYTHON_GCVERIFY=kill needs a debug build", err)
             return
-        rc, out, err = assert_python_ok("-c", code, "0",
-                                        PYTHON_GCVERIFY="kill:pymem")
+        rc, out, err = assert_python_ok(
+            "-c", _gc_mode_checked(code, "kill:pymem"), "0",
+            PYTHON_GCVERIFY="kill:pymem")
         self.assertEqual(out.split()[0], b"NoneType")
-        rc, out, err = assert_python_ok("-c", code, "1",
-                                        PYTHON_GCVERIFY="kill")
+        rc, out, err = assert_python_ok(
+            "-c", _gc_mode_checked(code, "kill"), "1", PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split()[0], b"list")
-        rc, out, err = assert_python_failure("-X", "faulthandler", "-c", code,
-                                             "1", PYTHON_GCVERIFY="kill:pymem")
+        rc, out, err = assert_python_failure(
+            "-X", "faulthandler", "-c", _gc_mode_checked(code, "kill:pymem"),
+            "1", PYTHON_GCVERIFY="kill:pymem")
         self.assertEqual(out, b"")
         if support.check_sanitizer(address=True):
             # ASan stops the read of the poisoned header before the trap
@@ -1831,8 +1856,10 @@ class TracingCollectorTests(unittest.TestCase):
         dead = hex(0xDDDDDDDDDDDDDDDD).encode()
         def run(kind, mode, ok=True):
             check = assert_python_ok if ok else assert_python_failure
-            return check("-X", "faulthandler", "-c", self.MISSED_ROOT, kind,
-                         PYTHON_GCVERIFY=mode)
+            return check(
+                "-X", "faulthandler", "-c",
+                _gc_mode_checked(self.MISSED_ROOT, mode), kind,
+                PYTHON_GCVERIFY=mode)
         # Under ASan the held blocks are poisoned too, so each use stops at
         # its first read: the header in _Py_TYPE_impl, or the cached item
         # in missed_root().
@@ -1905,8 +1932,9 @@ class TracingCollectorTests(unittest.TestCase):
         # frees the page also looks that word up in B, so the release must
         # come before the collection builds its page lists; released after,
         # B read the freed page and mimalloc's assertion fired.
-        rc, out, err = assert_python_ok("-c", self.MISSED_ROOT, "release",
-                                        PYTHON_GCVERIFY="kill")
+        rc, out, err = assert_python_ok(
+            "-c", _gc_mode_checked(self.MISSED_ROOT, "kill"), "release",
+            PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split()[0], b"release")
 
     @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
@@ -1929,8 +1957,9 @@ class TracingCollectorTests(unittest.TestCase):
             except ValueError as e:
                 print(e, flush=True)
         """)
-        rc, out, err = assert_python_ok("-X", "faulthandler", "-c", code,
-                                        PYTHON_GCVERIFY="kill")
+        rc, out, err = assert_python_ok(
+            "-X", "faulthandler", "-c", _gc_mode_checked(code, "kill"),
+            PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split(), [b"raised"])
 
     BORROW = textwrap.dedent("""
@@ -1967,11 +1996,13 @@ class TracingCollectorTests(unittest.TestCase):
         for weak in (0, 1):
             with self.subTest(weak=weak):
                 rc, out, err = assert_python_ok(
-                    "-X", "faulthandler", "-c", self.BORROW, str(weak),
+                    "-X", "faulthandler", "-c",
+                    _gc_mode_checked(self.BORROW, "kill"), str(weak),
                     PYTHON_GCVERIFY="kill")
                 self.assertEqual(out.split(), [b"A", b"True"])
                 rc, out, err = assert_python_failure(
-                    "-X", "faulthandler", "-c", self.BORROW, str(weak | 2),
+                    "-X", "faulthandler", "-c",
+                    _gc_mode_checked(self.BORROW, "kill"), str(weak | 2),
                     PYTHON_GCVERIFY="kill")
                 self.assertEqual(out, b"")
                 if asan:
@@ -2029,7 +2060,8 @@ class TracingCollectorTests(unittest.TestCase):
         for case, want in cases.items():
             with self.subTest(case=case):
                 rc, out, err = assert_python_ok(
-                    "-X", "faulthandler", "-c", self.VECTORCALL_METHOD, case,
+                    "-X", "faulthandler", "-c",
+                    _gc_mode_checked(self.VECTORCALL_METHOD, "kill"), case,
                     PYTHON_GCVERIFY="kill")
                 slot, res = out.decode().strip().split(" ", 1)
                 self.assertEqual(slot, "Obj")
@@ -2055,8 +2087,9 @@ class TracingCollectorTests(unittest.TestCase):
             _testinternalcapi.gc_set_stress(0)
             print(res)
         """)
-        rc, out, err = assert_python_ok("-X", "faulthandler", "-c", code,
-                                        PYTHON_GCVERIFY="kill")
+        rc, out, err = assert_python_ok(
+            "-X", "faulthandler", "-c", _gc_mode_checked(code, "kill"),
+            PYTHON_GCVERIFY="kill")
         self.assertEqual(out.strip(), b"['A', 'A', 'A', 'A']")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
@@ -2214,7 +2247,8 @@ class TracingCollectorTests(unittest.TestCase):
         for case, want in cases.items():
             with self.subTest(case=case):
                 rc, out, err = assert_python_ok(
-                    "-X", "faulthandler", "-c", self.MATCH_ARGS, case,
+                    "-X", "faulthandler", "-c",
+                    _gc_mode_checked(self.MATCH_ARGS, "kill"), case,
                     PYTHON_GCVERIFY="kill")
                 self.assertEqual(out.decode().split("\n")[:2], [want, "1"])
 
@@ -2250,8 +2284,8 @@ class TracingCollectorTests(unittest.TestCase):
         # called from C with an index past int32, under kill, with a
         # collection right after the method's lookup.
         rc, out, err = assert_python_ok(
-            "-X", "faulthandler", "-c", self.SLOT_INDEX,
-            PYTHON_GCVERIFY="kill")
+            "-X", "faulthandler", "-c",
+            _gc_mode_checked(self.SLOT_INDEX, "kill"), PYTHON_GCVERIFY="kill")
         self.assertEqual(out.decode().splitlines(),
                          ["1 1", "(2, [2]) 1", "3 1"])
 
@@ -2276,7 +2310,8 @@ class TracingCollectorTests(unittest.TestCase):
         # saved exception while __del__ collects, under kill, and raises;
         # the raise is reported as unraisable.
         rc, out, err = assert_python_ok(
-            "-X", "faulthandler", "-c", self.FINALIZE_RAISES,
+            "-X", "faulthandler", "-c",
+            _gc_mode_checked(self.FINALIZE_RAISES, "kill"),
             PYTHON_GCVERIFY="kill")
         self.assertEqual(out.decode().splitlines(),
                          ["KeyError 'in __del__'", "done"])
@@ -2309,7 +2344,8 @@ class TracingCollectorTests(unittest.TestCase):
         # box, under kill, finds it only there, and the method then reads
         # it.  One call per calling convention that the receivers have.
         rc, out, err = assert_python_ok(
-            "-X", "faulthandler", "-c", self.RECEIVER_BOX,
+            "-X", "faulthandler", "-c",
+            _gc_mode_checked(self.RECEIVER_BOX, "kill"),
             PYTHON_GCVERIFY="kill")
         x = 2.5 * 100001
         want = [f"{x.hex()!r} 1", f"{format(x, '.1f')!r} 1",
@@ -2341,7 +2377,8 @@ class TracingCollectorTests(unittest.TestCase):
         for form in ("call", "dict"):
             with self.subTest(form=form):
                 rc, out, err = assert_python_ok(
-                    "-X", "faulthandler", "-c", self.UNPACK_HAZARD, form,
+                    "-X", "faulthandler", "-c",
+                    _gc_mode_checked(self.UNPACK_HAZARD, "kill"), form,
                     PYTHON_GCVERIFY="kill")
                 self.assertEqual(out.split(), [b"A", b"True", b"False", b"0"])
 
@@ -2445,7 +2482,10 @@ class TracingCollectorTests(unittest.TestCase):
         env = {"PYTHON_GCSTRESS": "100"}
         if support.Py_DEBUG:
             env["PYTHON_GCVERIFY"] = "kill"
-        rc, out, err = assert_python_ok("-c", self.SETTER_BOX, **env)
+        code = self.SETTER_BOX
+        if support.Py_DEBUG:
+            code = _gc_mode_checked(code, "kill")
+        rc, out, err = assert_python_ok("-c", code, **env)
         self.assertEqual(out.strip(), b"ok")
 
     SPAN_BOX = textwrap.dedent("""
@@ -2467,11 +2507,13 @@ class TracingCollectorTests(unittest.TestCase):
         # kill; the control, the canonical (inline) value, holds no box, so
         # the box dies and its use aborts with its record.  The fixture walks the stack at
         # its collection point: its frame is precise, with no fallback.
-        rc, out, err = assert_python_ok("-c", self.SPAN_BOX, "raw",
-                                        PYTHON_GCVERIFY="kill")
+        rc, out, err = assert_python_ok(
+            "-c", _gc_mode_checked(self.SPAN_BOX, "kill"), "raw",
+            PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split(), [b"True", b"False", b"0", b"True"])
-        rc, out, err = assert_python_failure("-c", self.SPAN_BOX, "canonical",
-                                             PYTHON_GCVERIFY="kill")
+        rc, out, err = assert_python_failure(
+            "-c", _gc_mode_checked(self.SPAN_BOX, "kill"), "canonical",
+            PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split(), [b"True", b"False", b"0"])
         if support.check_sanitizer(address=True):
             # ASan stops the read of the poisoned header before the trap
@@ -2561,7 +2603,10 @@ class TracingCollectorTests(unittest.TestCase):
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_allocation_safepoints(self):
         env = {"PYTHON_GCVERIFY": "kill"} if support.Py_DEBUG else {}
-        rc, out, err = assert_python_ok("-c", self.ALLOCATION_SAFEPOINTS, **env)
+        code = self.ALLOCATION_SAFEPOINTS
+        if support.Py_DEBUG:
+            code = _gc_mode_checked(code, "kill")
+        rc, out, err = assert_python_ok("-c", code, **env)
         self.assertEqual(out.strip(), b"ok")
 
     # 6d rung 3, note 12 section 9: a tp_call result, the prepended argument
@@ -2690,6 +2735,7 @@ class TracingCollectorTests(unittest.TestCase):
                 env = {"PYTHON_GCSTRESS": "100"}
                 if support.Py_DEBUG:
                     env["PYTHON_GCVERIFY"] = "kill"
+                    code = _gc_mode_checked(code, "kill")
                 rc, out, err = assert_python_ok("-c", code, **env)
                 self.assertEqual(out.strip(), b"ok")
 
@@ -2743,7 +2789,10 @@ class TracingCollectorTests(unittest.TestCase):
 
     def test_monitored_starred_call(self):
         env = {"PYTHON_GCVERIFY": "kill"} if support.Py_DEBUG else {}
-        rc, out, err = assert_python_ok("-c", self.MONITORED_STARRED_CALL,
+        code = self.MONITORED_STARRED_CALL
+        if support.Py_DEBUG:
+            code = _gc_mode_checked(code, "kill")
+        rc, out, err = assert_python_ok("-c", code,
                                         **env)
         self.assertEqual(out.strip(), b"ok")
 
@@ -2752,7 +2801,10 @@ class TracingCollectorTests(unittest.TestCase):
         env = {"PYTHON_GCSTRESS": "50"}
         if support.Py_DEBUG:
             env["PYTHON_GCVERIFY"] = "kill"
-        rc, out, err = assert_python_ok("-c", self.RETURN_ORDER, **env)
+        code = self.RETURN_ORDER
+        if support.Py_DEBUG:
+            code = _gc_mode_checked(code, "kill")
+        rc, out, err = assert_python_ok("-c", code, **env)
         self.assertEqual(out.strip(), b"ok")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")

@@ -2452,3 +2452,28 @@ automatic approval review: recovered session history was not accepted as
 authorization to export repository contents. Explicit approval for the
 same GitHub destination and fast-forward payload is pending; committed
 local work and validation continue. No workaround push was attempted.
+
+### 06:37 PDT: cleanup lock and explicit service authorization
+
+The user confirmed Loom is the internal session server and explicitly
+authorized Loom use and GitHub pushes. README is now handover revision5;
+the committed integration/compiler/queue/roots refs pushed successfully
+to the existing repository. The prior export approval block is closed.
+
+QUEUES found a build-lock lifetime bug in gate_run.sh: command-form flock
+released the lock before sweep, allowing cleanup to kill the next run's
+workers. The coordinator keeps fd8 locked through sweep and only sweeps
+from a signal trap after acquiring the build lock. Slot-before-build
+ordering is unchanged; failure status is preserved. Three process-level
+checks cover cleanup ownership, a terminated waiter and nonzero command
+status, with a fake pkill so no real test worker is targeted. Five runs
+pass. The old runner fails the cleanup invariant; removing only the new
+ownership guard fails the waiter invariant. An initial harness attempt
+signaled before the flock child finished exec; synchronizing on its comm
+fixes that test race. Exact controls/logs are in build/coordinator-20261029.
+
+Detached compiler integration at99435658509 passed gate0 default/debug
+(1,924 each), gate1's16 modules (1,783 each), debug kill's20 copyprop
+tests with active mode assertion, and release gate2 (51,081 tests,
+60,014 collections,0 fallbacks). Og debug gate3 remains in progress.
+These runs use the prior runner; no queued same-build overlap occurred.

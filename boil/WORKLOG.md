@@ -3512,3 +3512,32 @@ old-form-parser failure/new-form success and the inactive-branch root negative,
 then full source and linked inline audits plus native builds/fixture tests.
 No runtime success or native Windows coverage follows from the proposal.
 Combined refreeze/peer review remains required before final qualification.
+
+
+### 11:59 PDT: Park source clear and first real old-fail/new-pass
+
+V3 six-file patch94d68f30d309 and mapb82a7c2a14a1 clear independent source
+review. The reviewer checks every current hash/diff, properPyValue fixture
+ABI, DWORD-positive/exact-root-negative controls and structured semaphore
+hunk. The36unique semantic combinations/72old-new observations agree on wait
+kind/count, clock/deadline, result/fatal and errno, including stale EIO success.
+Both native gate0s and linked audits now pass1,924tests (50release/20debugskips).
+
+The real Park fixture passes debug off and actual kill, checking the exact
+caller slot and pinned capture across unpark. All three unchanged thread-family
+reclamation selectors pass off; representative fork also passes actual kill.
+This is the first actual old-fail/new-pass after10/10old8cefork failures.
+The first off fork receipt records1test/0skip,77collections/zero fallback and
+unpinned. Ten-per-family off/kill repetitions remain in flight; no full/matrix
+launch is approved from these first successes alone.
+
+Independent CLEAR_CONTROL_SOURCE coverscf6d4740ae2e/plan686f9f4e: isolated
+process-local real-Park CORE override, exact typed ABI/FDE/origin, same positive
+fixture's class assertion failure, cleanup before unregister and restored
+positive classification. Prior wrapper's subtest-continuation issue was found
+before execution, not a native failure. Uniform failfast and explicit loaded
+CAPI membership close it; source/binaries stay unchanged. Normal planbdbddc1
+binds6,322source entries/271native paths per build and separate immutable helpers.
+The class control and restoration have not yet been credited as runtime PASS.
+Final source-qualified evidence and post-fix qualification policy remain open.
+Next hourly report stays12:45 PDT.

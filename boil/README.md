@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 11:48 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 11:59 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 11:48 PDT; evidence is from local commits and retained logs.
+2026-10-29 11:59 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
@@ -142,13 +142,13 @@ failure. A separate trace finds direct conservative hits for all three
 survivors in _PyParkingLot_Park. Disassembly identifies unused alignment padding.
 All seven caller contracts clear review; a bounded precise-Park fix is underway
 on primary-tooling merge d8be2e2c36d. Every caller keeps its current classification,
-with a new exact-slot/unpark fixture. V1's method-ABI correction and DWORD-only
-parser extension are authorized; focused results and a new freeze remain pending.
-The release inline-audit failure is retained, with no branch/effect waiver.
-After the DWORD controls pass, checking the full helper reveals a CPP-spanning
-else unsupported by the parser. Exact structured selection refactor688badc429a7
-is approved with old/new-body feature/timeout/error equivalence controls;
-refreeze, source/linked audits and native results remain pending.
+with a new exact-slot/unpark fixture. Six-file candidate94d68f30d309 clears
+source review after the fixture ABI, DWORD parser and structured semaphore
+corrections. All36 old/new branch-control combinations agree. Both gate0s pass
+1,924tests and linked audits. The real Park fixture passes debug off/kill; all
+three original thread families pass off and fork also passes kill. Ten-per-family
+repetitions and classification-negative/restoration controls remain in progress.
+Earlier release audit failures stay retained, with no branch/effect waiver.
 The narrower process-pool matrix does not cover this case. ASan14 plus
 separate sort/functools completion and fresh
 release/tailcall stale100 and compiled-walk controls pass. Debug full normal/kill,

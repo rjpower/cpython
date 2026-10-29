@@ -107,14 +107,26 @@ The timed-out worker prevents a qualified aggregate root-counter result.
 The [triage](10a-2b-stress100k-triage.md) separates threshold scheduling from
 actual collection/retention and HTTP lifecycle causes. No new exclusion or
 retry is introduced. Four reviewed once-only interpreter diagnostics now
-separate stress-trigger semantics from collection/retention; existing stress
-mode replaces byte thresholds, but no new exclusion is authorized. Finish
-diagnosis and any focused fix, then choose fresh
-qualification from the actual changed contract rather than repeating20.
-Tail StackWalk, cext, unchanged regeneration/traversal and declared optional
-header checks remain; none ran after the current failure.
+separate stress-trigger semantics from collection/retention. The resulting
+two-line threshold-test eligibility annotation passes its normal case and
+declared stress skip; the scheduler is unchanged. Existing public HTTP cases
+reproduce the closed-fp error on primary052 and ce, and the unchanged trashcan
+case times out on both at the bounded diagnostic deadline. These establish
+inherited exposure, not mechanism equality or absence of interactions.
+Independent review supports a scoped incremental-landing exception, accepted
+by the coordinator16:09. The failed full stays failed with no aggregate.
+HTTP/finalizer ordering and queue progress block final GC/performance
+qualification. A successor bound to the actual test/docs source and unchanged
+ce native bytes may now finish tail StackWalk, cext, unchanged regeneration/
+traversal and declared optional-header checks. Old frozen plans stay intact.
 
-An independent landing review and primary integration smoke follow. Full
+Exact candidate review and primary integration smoke follow. Bytes3a's
+registered owner-slot patch and focused positive/causal-negative/stress/ASan
+results clear coordinator review. Compose it with ROOTS2b into one detached
+candidate and run one fresh mandatory union ladder, including normal and kill
+fulls and applicable verification checks. Two consecutive near-identical
+integration ladders would add little attribution beyond the retained focused
+receipts and frozen parents. This changes scheduling, not coverage. Full
 suites serialize where shared host state requires it; independent bounded
 work can use the other normal machine slot. O1 keeps debug assertions and
 symbols and remains a candidate until its required normal/kill gates finish.
@@ -129,7 +141,7 @@ runtime ready for its performance checkpoint. The queue-completion lane has
 an existing automatic-classifier hold; do not route around that hold or
 describe it as missing user authorization.
 
-H3 integration and performance analysis can proceed after 2b while independent
+H3 integration and performance analysis can proceed after this checkpoint while independent
 GC fixes continue. H2's removal of clearing stores waits for the complete
 reader/span contract from rung 3. Generations and finalizer delivery must use
 the resulting stable root/lifecycle semantics. Moving collection and package

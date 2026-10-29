@@ -488,3 +488,103 @@ distinct from correctness qualification and preserve the full FAIL. A narrow
 test-eligibility adaptation requires its own reviewed source grant; no
 scheduler change, blanket filter or uncalibrated repeats follow. HTTP and
 trashcan liveness remain unresolved. No reviewer native command was executed.
+
+## Scoped incremental 2b exception: independently justified, landing still conditional
+
+2026-10-29 follow-up: **SCOPED_2B_EXCEPTION_JUSTIFIED**, subject to an explicit
+coordinator policy ruling and the remaining tail-WALK/extras, exact-candidate
+and integration obligations below. This resumes the accepted ce2ac source
+preflight and evidence review; it does not restart the 70-path review or issue
+a LAND verdict. No target, compiler, test, probe, source mutation or native
+retry was run by this reviewer. Only existing public-test evidence was read;
+the held C/Queue2 scope remains held.
+
+The new evidence was independently read and every receipt-referenced raw hash
+checked:
+
+- Eligibility summary fee5f36c binds plan9e5c13eb: the unchanged original body
+  passes off with one test/zero skips; positive stress records one declared
+  skip under the reviewed two-line byte-trigger eligibility annotation.
+  Native C/config/products remain ce2ac. The stress skip is not reclamation
+  coverage and does not repair or relabel the original full FAIL.
+- HTTP summary6919760f binds primary052 receiptc5d0f495 and ce2ac receiptc379cfa7.
+  Both execute the same four existing logging cases with zero skips, return
+  ENV_CHANGED/native3 and reproduce the closed-fp HTTPResponse unraisable.
+  Main/worker start and end witnesses are paired at off/extras0/stress100000.
+  Source-bound own-stdlib/config inputs and historical primary binary
+  attestation/optional-module limitations remain explicit; this establishes
+  exposure on the earlier fork, not upstream CPython or identical mechanisms.
+- Trashcan summaryd17bcc22 binds primary052 receipt7a3f13cf and current546efce5.
+  Both enter the same unchanged existing case, hit the automatic 60-second
+  deadline, return native2 and show main plus two producer threads in the
+  sleeper_gen/__del__/run_thread body pattern. Both workers lack end and
+  returned-JSON witnesses. There is no qualified counter aggregate, completed
+  test count or zero-fallback claim for either timeout. The primary adapter's
+  INVALID result remains intact; separate read-only supplement4dda6e89
+  explains the missing return path without rerunning or replacing it.
+
+The original full receipt64448666 remains nativeFAIL2/qualificationFAIL with
+no aggregate. These controls disposition its findings for an incremental
+landing decision: a stress-trigger test contract and independently inherited
+HTTP/finalizer-progress exposure. They do not establish a common HTTP/trashcan
+cause, mathematical deadlock, equal rates/severity, or absence of all 2b
+interactions with the inherited defect. The shortened diagnostic deadline is
+bounded lack-of-completion evidence, not a replacement for the original
+1,200-second timeout. No manual signal, added collection or custom finalizer
+was introduced by these two comparisons.
+
+The existing six accepted profiles, affected controls, source review and
+ce2ac native bridge support incremental acceptance of the root repair. A
+bounded source comparison additionally confirms that run_queue_ex's body is
+unchanged from052; surrounding queue/collector edits are the already-reviewed
+precision/outlined-frame changes. The root repair still has its actual causal
+controls and does not require rewriting queue semantics to establish this
+checkpoint. No concrete new 2b-specific correctness risk is demonstrated by
+these comparisons. The residual possibility of interaction remains a stated
+limit, not a reason to claim the inherited issue harmless.
+
+The exception must record HTTP resource/finalizer ordering and queue progress
+as unresolved GC correctness debt that blocks the final GC/performance
+checkpoint. It must not remove filters, retire that debt, claim seven passing
+profiles or make 2b's original full validator accept missing terminal state.
+No final parity, ~2x target or general collector-correctness qualification
+follows. Keep the failed full, six successful profiles, diagnostic failures
+and diagnostic eligibility skip as distinct artifacts with their true IDs.
+
+Before landing:
+
+1. The coordinator must explicitly accept this scoped exception. A reviewed
+   successor tail-WALK/extras plan may then depend on the six valid profiles,
+   the preserved failed profile and the named disposition evidence, rather
+   than falsely asserting the old all-seven-PASS prerequisite. Keep the old
+   held plan/receipts and full validator unchanged. Tail WALK, cext's16-test
+   contract/exact skips, regeneration/Clinic, traversal audit and optional
+   module evidence remain required at their actual source/build identities.
+2. Freeze the exact candidate including the two-line test-only successor and
+   docs difference. Bridge native ce2ac products only through their unchanged
+   native source/config bytes; do not relabel their compiled commit. Final
+   source/closure review must retain the report-only unpinned and optional
+   extension limits already recorded above.
+3. Perform source/composition review and every required fresh merged
+   default/debug(/kill according to existing policy) gate on the actual
+   integration candidate. Unexpected failures stop that candidate; no new
+   exclusion, automatic full retry or implicit waiver follows from this note.
+
+### Integration scheduling with separately reviewed bytes3a
+
+There is no identified technical dependency requiring a complete merged
+full-suite ladder for2b and then a second near-identical ladder for3a. Bytes3a
+was authored against the actual ce2ac root interfaces and uses an embedded
+registered owner node. Source/composition review plus one fresh merged ladder
+on the exact2b+3a union is a coherent, smaller validation schedule after the
+2b exception and required tail/extras. This changes scheduling, not coverage.
+
+This reviewer authored bytes3a and therefore does not approve its source or
+its integration union here. The coordinator/another independent reviewer
+owns its patch/result review and actual composition, including the private
+bytes header and additive CAPI hunk. Preserve both changes' own receipts and
+frozen2b parent products. If the union fails, those parents support a bounded
+selector comparison to attribute the new failure without automatically
+repeating a second full ladder. Do not merge inherited receipts into a fake
+new-source PASS. O1 lane qualification remains distinct from global adoption;
+primary's existing Og policy stays unless separately changed by the coordinator.

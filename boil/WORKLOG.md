@@ -4089,3 +4089,31 @@ test and five previously unexecuted generator/domain cases pass once. Earlier
 failed receipts and passing lifecycle scopes remain exact; native C/products
 stay atd462 while test-only source progresses. Private counter/lifecycle/
 predicted controls remain due; no primary runtime landing yet.
+
+### 16:09 PDT: scoped ROOTS ruling and bytes checkpoint clear
+
+Independent review supports the incremental ROOTS2b exception after public
+primary052/current controls reproduce HTTP resource errors and bounded
+trashcan noncompletion. Root accepts that exception, retaining both as final
+GC/performance-blocking debt. Six passing profiles and the failed full keep
+their exact identities. A minimal test/docs source bridge may finish successor
+tail-WALK/extras; the old conditional plan is untouched. The eligibility
+decorator changes test scope only and passes its normal/stress contract.
+
+Root independently reviews bytes3a source/results and verifies all seven check
+receipts, four build receipts and every check artifact hash against summary
+dc428e4b. The causal omission's two JUnit assertions match the intended missing
+INTERP-root condition. Focused positives/stress/ASan clear with their existing
+admission/config/leak-proof limits. One exact ROOTS2b+bytes3a candidate and one
+fresh mandatory merged ladder replace two duplicate integration ladders;
+coverage, failure handling and primary Og policy remain intact. No native
+integration has landed. The independent reviewer authored3a and explicitly
+reserves its approval to root; root's review is filed separately.
+
+H3 primitive control sources are frozen and granted under normal global
+admission. The first compile stops before target execution on a missing
+pycore_tstate.h prerequisite. A minimal header/include-path correction is
+granted, preserving that failed attempt. No counter-negative or sizeof credit
+follows until actual successful compilation and named numeric results.
+The performance owner now prepares shared-cost attribution using existing
+tools, separating setup from hot work; no new profiling campaign runs yet.

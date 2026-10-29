@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 15:45 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 16:09 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,14 +71,21 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 15:45 PDT; evidence is from local commits and retained logs.
+2026-10-29 16:09 PDT; evidence is from local commits and retained logs.
+
+The coordinator accepts the independently reviewed scoped ROOTS2b exception:
+the inherited HTTP/finalizer-progress failures stay explicit final GC and
+performance blockers. Finish the successor tail/extras binding, then compose
+ROOTS2b and the reviewed bytes-writer3a into one detached integration candidate
+with one fresh mandatory merged ladder. The original stress100k full remains
+failed; there is no all-seven-PASS claim. PROCESS records this scheduling ruling.
 
 | Done | In flight | Open |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers; 7a rung 1 owner routing merged as 052d8342e56 and integration-validated | | 7a rung 2a safety/completion order: design/probe artifacts preserved, agent held by automatic classifier; 2b owner metadata, 2c retirement/adoption/fork |
-| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b remains unlanded at ce2ac8991ee. The precise-Park repair and two raw-mutex classifications clear review and all three builds. Fresh affected24, three full normal/kill runs, both stress11 sets and ASan16 pass with zero fallback. Final stress100k fails with an interpreter assertion, GC timeout and HTTP unraisables; four focused diagnostics support trigger-dependent test eligibility. HTTP reproduces; its separate observer times out after identifying one creating testcase. Tail walk, extras, review and fresh merge gates remain | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
+| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b remains unlanded at ce2ac8991ee. The precise-Park repair and two raw-mutex classifications clear review and all three builds. Fresh affected24, three full normal/kill runs, both stress11 sets and ASan16 pass with zero fallback. Final stress100k fails with an interpreter assertion, GC timeout and HTTP unraisables; four focused diagnostics support trigger-dependent test eligibility. HTTP/trashcan public controls establish inherited exposure; scoped incremental exception accepted with final GC/perf debt retained. Successor tail/extras, exact review and one fresh ROOTS+bytes union ladder remain | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
 | 6a, 6b: `PyValue` in the core and the value C API; compiler reentrancy fix merged as 99435658509 and integration-validated | | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
-| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2a domain/pristine runtime changes pass bounded release/debug and actual-kill gates; frozen at 624c75f6455 and cleared for stage2a only; native landing follows ROOTS2b. Stage2b.1 names/inspection/NOFB frozen at c5cf6ba6d288 cleared independent review. Fixed-int/uint16 monitoring storage native76274/evidenceffc548603b8 is pushed and clears frozen-checkpoint review; actual primary union qualification follows ROOTS. Stats implementation is under independent source review in isolated boil-h3-stats from81417; actual union qualification remains due, with transport later | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
+| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2a domain/pristine runtime changes pass bounded release/debug and actual-kill gates; frozen at 624c75f6455 and cleared for stage2a only; native landing follows ROOTS2b. Stage2b.1 names/inspection/NOFB frozen at c5cf6ba6d288 cleared independent review. Fixed-int/uint16 monitoring storage native76274/evidenceffc548603b8 is pushed and clears frozen-checkpoint review; actual primary union qualification follows ROOTS. Stats implementation in isolated boil-h3-stats from81417 clears independent source review; owned build and bounded lifecycle/reader/generator checks pass, private controls active. Actual union qualification remains due, with transport later | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
 
 Shared validation prerequisite landed independently as `2155f16f45f`:
@@ -112,9 +119,12 @@ sets the measurement contract, GC landing path and structural performance work.
 The [writer readiness audit](design/work/pre-I-gc3a-writer-readiness.md)
 now has a bounded bytes-writer implementation on isolated branch
 boil/gc3a-bytes at f5e818b0454: the embedded owner root and lifecycle fixture
-clear coordinator source review. Release/O1-debug builds pass; the O1-debug
-actual-kill affected module passes52 tests/zero fallback. Release off is
-running, and the omitted-registration negative remains due. Unicode ownership
+clear coordinator source and actual-result review. Release52/10 declared skips,
+O1-debugkill52/zero skips, stress writer38 per build and ASan writer38 pass;
+both omitted-registration cases fail the intended root-class assertion.
+All completed positives report zero fallback. Integration remains due; earlier
+private admission and invalid releasekill limits stay in the linked review
+`design/work/reviews/gc3a-bytes-writer-1-checkpoint.md`. Unicode ownership
 stays separate. The [receiver audit](design/work/pre-I-inline-receiver-audit.md)
 separates immediate calls, getsets and bound-method storage; no new ABI is
 approved. H3's [owner checklist](design/work/H3-owner-readiness.md) is ready
@@ -162,20 +172,24 @@ branch results, not primary landing or performance results.
 interpreters' test_destroyed_by_gc, a20-minute test_gc.test_trashcan_threads
 timeout and ENV_CHANGED in httpservers with two HTTPResponse unraisables.
 Receipt64448666 retains native exit2 and50,722 reported tests; the timed-out
-worker prevents a qualified aggregate root-counter result. No retry/filter or
-tail-walk/extras launch follows. Source inspection
+worker prevents a qualified aggregate root-counter result. No new filter or
+automatic full retry follows. Source inspection
 and four once-only diagnostics support a threshold-trigger mismatch: original
 stress fails/off passes, copied stress charges no root phase/off charges one.
 The documented stress override stays unchanged; an exact test-eligibility
-annotation is reviewed but unapplied. This is not demonstrated post-collection
-retention. Unchanged HTTP103/8 reproduces two finalizer errors; the separate
+annotation passes its normal case and declared stress skip. This is not
+demonstrated post-collection retention. Unchanged HTTP103/8 reproduces two finalizer errors; the separate
 Python observer identifies a response created by the colorized logging error
 test, then times out. Its partial timeline does not establish the buffer
-closer or queue cause. HTTP and the trashcan timeout remain unresolved. The
-[triage record](design/work/10a-2b-stress100k-triage.md) gives the next controls.
-Tail walk/extras, independent landing review and fresh merged default/debug
-full gates remain. Fulls and perf-sensitive walks serialize because their
-perf-map cleanup interferes.
+closer or queue cause. Four unchanged HTTP cases reproduce the same error on
+primary052 and ce; the unchanged trashcan case times out on both at the bounded
+diagnostic deadline. They establish inherited exposure, not identical causes
+or absence of interaction. Independent review and the coordinator permit an
+incremental ROOTS landing while retaining both issues as final GC/performance
+debt. The [triage record](design/work/10a-2b-stress100k-triage.md) preserves
+all failures. Successor tail walk/extras, exact candidate review and the fresh
+merged default/debug/kill ladder remain. Fulls and perf-sensitive walks
+serialize because their perf-map cleanup interferes.
 
 The39 protected selectors and actual worker mode/stress/counter contracts stay
 in force. Detached-state unpinned hits remain report-only debt assigned to3c.

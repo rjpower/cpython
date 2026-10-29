@@ -3287,3 +3287,64 @@ build is started. The peer now inventories ROOTS landing receipts and remaining
 gates read-only, avoiding duplicate native runs. Queue2 remains held by the
 prior automatic classifier; no permission question is pending. Next hourly
 report remains11:45 PDT.
+
+
+### 11:09 PDT: debug matrix complete; first combined eligibility pass
+
+ROOTS frozen8ce debug completes620 individual selections and20 whole-module
+runs:640jobs/41,440tests/1,360allowedskips,374,245collections, zero fallback,
+65,072report-onlyunpinned. Summary81d65e028d1a and640-row results5a561e5b2ac6
+match the independently read hashes/counts. The completion marker contains only
+jobs/global plan17a8 and is byte-identical across builds by design; each build's
+summary/results/native bindings supply the distinct identity. Read-only debug
+main0 supplement07d7f4455aa3 passes all640jobs/1,480requiredPIDoccurrences.
+The unchanged guarded armer starts debug-full at11:08:13, then kill-full and
+stress11 only after native+audit success. O1 shared policy remains unchanged.
+
+Coordinator accepts a bounded ASan14 provenance deviation: its retained plan
+has actual worker source/Makefile/sys.version/origin/state but lacks pre/post
+native-byte inventory. The later2-module completion manifest's271 native paths
+match current bytes, and the peer checks file/alias/target ctime+mtime: latest
+15:56:27.980870UTC precedes ASan14 start16:07:58.320878UTC. Source stays8ce and
+there are no intervening build/config writes. This operational bridge supports
+existing bounded evidence without a redundant rerun; it is not retrospective
+cryptographic proof. Preserve the limitation, require stronger manifests for
+future runs, and reopen only on an identity conflict or source change.
+Repeated full rootfile PID/interpreter keys remain separate finalization events;
+no unsupported exact fixture attribution or lifetime deduplication is claimed.
+
+H3 first combined release probe passes at11:05. Coordinator reads both receipts:
+identical probe4dee9c0f235f and outere2333a581754; old7c child exits1 after2s
+watchdog, combineda6c child exits0. Before/after18old and19new inputs match and
+both log hashes verify. New binaryc96ddb788f3c records actual optimize0/debugTrue,
+verifier(0,0)/stress0. Suppressed/on-stack/generator paths complete without
+callbacks; ordinary code gets17 instruction sites and handled callback[0,6],
+while suppressed no-local-data state remainsNone. Broader gates remain pending.
+
+Gate4 is explicitly step-end under PROCESS section3; do not turn earlier
+'pending measurements' shorthand into a new full benchmark rung blocker.
+Retain rung-specific as-built attribution and later checkpoint-I obligations.
+No loaded-machine measurements start. Next hourly report remains11:45 PDT.
+
+
+### 11:12 PDT: debug full exposes thread-pool lifetime blocker
+
+Active debug-full reports fork and forkserver test_threads failures in
+WithThreadsTestPool.test_release_task_refs: three CountedObjects remain
+weakref-live at _test_multiprocessing.py3442. The test deletes its input list,
+waits for threaded cleanup and calls support.gc_collect before asserting task
+arguments/results are released. Native8ce/helpers remain unchanged. Preserve
+the unsignaled full run and let its armer stop on failure; no kill/stress launch,
+new exclusion, weaker oracle or optimization rollback is approved.
+
+ROOTS traces the actual lifetime read-only before proposing a bounded fix.
+Its640-job matrix remains valid for its selected process-pool cases; it does
+not establish thread-pool coverage. The independent landing inventory records
+NOT READY and the exact remaining gates, plus accepted ASan provenance limits
+and the step-end gate4 distinction. No runtime integration is approved.
+H3 progresses independently: combined release smoke1,924 and affected1,370 pass,
+with allocation/synthetic/request/global-OOM controls. Copied-helper compiler
+setup failed under default GNU23, not a semantic negative pass; the untouched
+failed logs/helper are retained. Its versioned successor matches production
+C11/assert context without changing copied bodies or native source. Final
+controls and debug/kill qualification continue. Next report remains11:45 PDT.

@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 11:04 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 11:12 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 11:04 PDT; evidence is from local commits and retained logs.
+2026-10-29 11:12 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
@@ -132,13 +132,18 @@ Its fresh full-v3 run passes native and audit:51,130tests/3,458outer skips,
 63,597collections and zero fallback. The earlier attempt remains unqualified;
 the repaired observer separates67 inner meta-test skips without a new filter.
 Release stress11 also passes3,061tests/100skips and44,828collections/zero
-fallback. At11:00, debug has18 complete repetitions and599 of640 jobs
-without validated failure/fallback. ASan14 plus
+fallback. Debug also completes640 jobs:41,440tests/1,360skips,374,245collections
+and zero fallback;65,072unpinned hits remain report-only. Its640-job main0
+supplement passes and full debug starts at11:08. That active full run exposes
+a blocker in two thread-pool release-task-reference tests; three objects remain
+weakref-live. The suite continues for evidence and its chain stops on failure.
+The narrower process-pool matrix does not cover this case. ASan14 plus
 separate sort/functools completion and fresh
 release/tailcall stale100 and compiled-walk controls pass. Debug full normal/kill,
-debug stress, once-only full stress100k, extras, measurements and landing
-review remain. Report-only detached-state
-unpinned counts stay assigned to3c. O1 is approved for this qualification,
+debug stress, once-only full stress100k, extras and landing review remain.
+The full gate4 benchmark is a step-end obligation, not a new rung blocker.
+Report-only detached-state unpinned counts stay assigned to3c.
+O1 is approved for this qualification,
 not adopted as shared policy; integration debug still uses Og.
 
 H3's monitoring storage design now uses fixed absolute int lines and uint16
@@ -154,8 +159,11 @@ That failed run is retained. An independently reviewed eligibility prerequisite
 guards the version-mismatch refresh, direct refresh and handled-exception
 callback paths. It does not acknowledge versions or write shared static code.
 The combined candidate is frozen at manifest a6c07b4ce7b2 for requalification;
-earlier evidence is not relabeled as final qualification. The H1 frame-passing
-design also clears
+earlier evidence is not relabeled as final qualification. The exact same
+watchdog probe fails on the old release candidate and passes on the combined
+candidate, with ordinary and suppressed callbacks distinguished; broader
+combined-candidate gates remain pending.
+The H1 frame-passing design clears
 [bounded readiness review](design/work/reviews/H1-1-design-readiness.md),
 with source/build handoff required before implementation.
 The private API/layout decision is recorded in PROCESS section0.2.

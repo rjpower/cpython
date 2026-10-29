@@ -23,19 +23,19 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 08:44 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 09:18 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | rungs0,1,1b landed; rung2b unlanded, queue integration reconciled as cb0b6c21b97. Provenance/list-transfer repair committed82165f8a2a9. Original carrier helper fails eight origin subcases; zero-seed-sort control fails both orderings; old list transfer traps10/10, fixed passes10/10. Bounded O1 checks pass; first31-case/11-module feedback iteration took541.745s. Cleanup repair172b406be0c and actual-helper regression cleared bounded review; tooling merged67477efa986. Settled O1 controls pass; whole11 timing109.008s/2041tests passes. Shared-heap callback unskip is being qualified20 times per build before final source/contract freeze and full matrix. Final gates/review and O1 adoption remain pending. Rung3a writers/PyMem,3b checker/precision residue,3c queued releases/detached-state roots and rung4 measurements/support follow |
+| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | rungs0,1,1b landed; rung2b unlanded, queue integration reconciled as cb0b6c21b97. Provenance/list-transfer repair committed82165f8a2a9. Original carrier helper fails eight origin subcases; zero-seed-sort control fails both orderings; old list transfer traps10/10, fixed passes10/10. Bounded O1 checks pass; first31-case/11-module feedback iteration took541.745s. Cleanup repair172b406be0c and actual-helper regression cleared bounded review; tooling merged67477efa986. Settled O1 controls pass; whole11 timing109.008s/2041tests passes. Shared-heap callback unskip passes20 selections per build, frozen8ce9c57c662. Final release/O1debug matrices are running with2,041-case whole-module contracts,68/83 intrinsic skips and32 protected selectors. ASan14 passes3,616/91skips with its exact accepted allocator exclusion; unfiltered ASan gate0 remains FAIL. Fresh release/tailcall stale100 and compiled-walk controls pass. Full gates/review and O1 adoption remain pending. Rung3a writers/PyMem,3b checker/precision residue,3c queued releases/detached-state roots and rung4 measurements/support follow |
 | 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 candidate6f416bc4582 cleared independent round3 review and landed as052d8342e56. Normal suites atd43c8b4dd32 pass51,102 each/0fallback; frozen5cc full debug kill passes51,104/65,601 collections/0fallback. ASan14 passes3,589 with exact AddressSanitizerTests exclusion; original unfiltered failure remains FAIL. Stress11 passes3,046, subprocess371 three times and40 probes pass. Integration smoke1,924 and queues22 per build, actual-kill22 and unchanged regeneration pass. Rung2a design/probes preserved but agent held by automatic classifier; no native fix applied. Owner metadata2b and retirement/adoption/fork2c remain open |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
-| H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | H1/H2 remain design, maps wait for10a rung3. H3-1 stage1 landed6c724c29408 and integration-validated. Stage2a domain/pristine changes pass smoke1,924 per build, affected974 per build and actual-kill974; frozen624c75f6455 cleared LAND_STAGE2A, native landing held behindROOTS2b. Shared worker.main correction3dff5879df8 isolated for integration. Stage2b.1 names/inspection/NOFB implementation active after design review; monitoring/stats, transport closure and final renumbering follow; typed float truth is separate |
+| H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | H1/H2 remain design, maps wait for10a rung3. H3-1 stage1 landed6c724c29408 and integration-validated. Stage2a domain/pristine changes pass smoke1,924 per build, affected974 per build and actual-kill974; frozen624c75f6455 cleared LAND_STAGE2A, native landing held behindROOTS2b. Shared worker.main correction3dff5879df8 isolated for integration. Stage2b.1 names/inspection/NOFB c5cf6ba6d288 cleared LAND_2B1. Immutable SafeAddr2Line prerequisite has independent design clearance; storage2b.2b still requires separate review/grants. H1 frame-passing design is commissioned. Monitoring/stats, transport closure and final renumbering follow; typed float truth is separate |
 | 7 | generational collection over the precise root set | open; decides header flag bits and side bitmaps |
 | 8 | tier 0 over the IR, x86-64; uses H3's generated handler domain | open, after checkpoint I |
 | 9 | tier 1 | open |
@@ -63,10 +63,11 @@ Forkserver/spawn test_finalize also report leaked semaphore/unlink cleanup
 errors. Queue-reconciled tracing confirms registry clearing loses semaphore
 cleanup before tracker shutdown. Repair172b406be0c moves existing finalizers after forkserver stop and before
 tracker stop. The actual-helper regression and old-order negative verify
-tracker and forkserver/tempdir dependencies. Natural-case stderr remains
-unqualified until visible-output reruns complete. The
-remaining iterations wait for settled native source. No O1 adoption is claimed. The
-integration debug gate uses Og.
+tracker and forkserver/tempdir dependencies. Visible natural-case off/kill
+reruns pass without the semaphore diagnostics.
+The final matrices are running on settled8ce with frozen source/helpers and
+exact module/case/skip contracts. No O1 adoption is claimed; integration
+debug uses Og.
 
 Shared stress-state prerequisite02bcd2f6132 is integrated and validated:
 default/debug smoke1,924 each, focused state tests3 each, debug kill2 and
@@ -84,10 +85,15 @@ is landed after independent safety-control and actual-inventory checks.
 The ASan filter names only the established failing AddressSanitizerTests
 case, retaining five passing same-named allocator tests. Launcher-only
 execution cleared independent review. Orchestration and gate integration
-remain outstanding in boil/tools/verification.md; supplied source provenance
-is not yet verified by complete before/after snapshots. The next design
-separates build-source root, actual loaded Lib/module origins, frozen tools
-and build receipts before adding orchestration or gate hooks.
+remain outstanding in
+boil/tools/verification.md. The v2 identity/result component is in progress:
+explicit build-source/runtime/tool roots, actual imported origins and complete
+source/output bindings. A controlled clean052 rebuild has a coordinator-
+qualified receipt, reviewed in work/reviews/verification-build-receipt.md.
+Its smoke passes1,924/20skips,1,314collections/zero fallback;226unpinned hits
+are report-only. No named/full profile coverage or current-ROOTS result is
+claimed. Final launcher controls and independent review precede component
+landing; run/gate hooks remain separate.
 
 Standing concerns, with owners: conservative-retention artefacts in tests
 until 10a rung 2 marks the C API entry paths (trace with the stack-hits
@@ -310,6 +316,22 @@ do not claim execution through the unfinished verify.py run/gate hook.
 O1 debug is approved for this qualification matrix with assertions and
 all required controls; adopting it as shared gate policy waits for the
 complete required evidence. Freeze every imported adapter/contract helper.
+For current ROOTS full gates, the coordinator permits the frozen build-owned
+actual-driver/worker adapter under existing gate_run locks, two test slots,
+timeouts and fresh caches. Review exact commands and bindings before running;
+preserve full gate2/3 suite semantics and perform cext, regeneration/content
+comparison and traversal audit separately. This is not execution through
+verify.py run or a new shared gate hook. No source or helper changes during
+the repeated matrix, and no overlapping full test_perf_profiler suites.
+
+H3 monitoring is split into an immutable SafeAddr2Line prerequisite2b.2a,
+then coherent uint16 storage/relations2b.2b. Independent2a design clearance
+confirms the active/data-stack frame->code->linetable root chain, including
+detached domain states. Immutable lookup does not fix emergency dead-frame
+heuristics. Direct synthetic-word lookup deliberately follows co_linetable;
+ordinary saved instruction positions must remain equivalent. Require exact
+shared-CAPI hunk approval before implementation; no storage change is covered
+by that grant. H1-1 is a separate bounded frame-passing prerequisite design.
 
 Planned native landing order is QUEUES1, ROOTS2b, then H3 runtime stage2.
 H3 implementation proceeds independently in its worktree; integration

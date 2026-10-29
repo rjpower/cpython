@@ -2890,3 +2890,58 @@ receipts, actual module origins and result/skip witnesses. Existing
 /tmp/boilgate at clean052 and integration-debug are reserved for a later
 reviewed bounded receipt rebuild; no source checkout/reconfiguration is
 authorized. Host controls and exact build plan review precede that step.
+
+
+### 09:18 PDT: frozen matrices active; handler checkpoint reviewed
+
+Primary native integration remains052d8342e56. ROOTS8ce9c57c662 is frozen:
+the shared-heap regression passes20 fresh stress selections per build, and
+final20-iteration release/O1debug qualification is running. First whole11
+pilots pass2,041 tests each,68 debug/83 release skips, with none of32 protected
+selectors skipped. Contracts bind exact scheduled/returned workers, state,
+configuration, seed and concrete skip IDs/reasons;11 rejection controls
+include protected subtests and zero collections. No completed matrix claim.
+
+Current8ce ASan14 passes3,616 tests/91skips, actual driver+14workers in
+kill mode(2,0), stress0:342 interpreter records/162physical PIDs,
+16,712collections/zero fallback/3,478 report-onlyunpinned. Its exact accepted
+allocator exclusion remains visible; unfiltered gate0 retains its original
+AddressSanitizerTests failure. Asyncgen/coroutine and file warnings remain
+in the evidence. Fresh release/tailcall stale100 controls pass all six cases,
+705collections/zero fallback/unpinned per build. Checker/compiled-walk29cases
+pass each, release1skip/tailcall0,296collections/zero fallback and one
+deliberate counter-test unpinned hit each. Two targeted harness failures
+(flag placement, uv PID indirection) remain recorded; corrected v3 passes.
+
+H3c5cf6ba6d288 clears independent LAND_2B1: full-domain names/properties,
+disassembly and exact NOFB restoration, including the inherited SUPER body
+CALL-event bug. Candidate smoke1,924 per build, affected889 per build and
+actual-kill889/nine workers pass;37root records/764collections/zero fallback
+or unpinned. All55 source and8 build-product hashes match. This is bounded
+checkpoint evidence, not final H3 closure, committed-head reruns or a native
+integration. Runtime landing remains after ROOTS2b.
+
+H3's next draft separates immutable safe-line lookup2b.2a from coherent
+monitoring storage2b.2b. Independent2a design review confirms the actual
+detached frame->code->linetable roots and requires explicit synthetic-word
+behavior, ordinary-position equivalence and exact shared-hook approval.
+No2b.2b implementation is authorized. A separate H1 frame-passing design
+is commissioned; no dispatch-count threshold is introduced.
+
+Coordinator independently qualifies the separate controlled052 build receipt
+for v2 component controls. Exact clean/build/startup/smoke commands pass;
+6,188 pre/post source inputs are identical and105 current build outputs match.
+Smoke1,924/20skips produces162 interpreter records across59physical PIDs,
+1,314collections/zero fallback/226 report-onlyunpinned. Actual source/runtime
+origins, GCC15.2/Py_DEBUG1/Og configuration and compiler/log hashes match.
+Ten optional missing modules remain explicit. Original unreviewed receipt
+is unchanged; qualified copy and coordinator review are separate. No full
+profile, O1 adoption or current-ROOTS evidence is inferred. ROOTS release
+matrix was paused only between gates for the receipt and has resumed.
+
+For remaining ROOTS full gates, use the frozen actual-driver/worker adapter
+under normal locks/slots/timeouts/freshcache after exact command review;
+preserve full gate2/3 semantics, with cext/regen/traversal separately. Shared
+verify.py orchestration/gate hooks remain unimplemented. Final v2 component
+controls/review remain. Queue2 classifier hold is unchanged; no stopped work
+is retried. Next hourly user/documentation checkpoint remains about09:45 PDT.

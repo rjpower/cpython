@@ -2643,3 +2643,20 @@ the active fork. This binding must be established before new parity
 measurements; historical records are preserved. Next hour: finish queue
 stress/probes and review, integrate H3 stage1, obtain ROOTS matrix cost,
 and qualify the manifest launcher. Next hourly update about 08:45 PDT.
+
+### 07:45 PDT: H3 generator stage1 merged
+
+Independent rereview of b203defe758 returned LAND_STAGE1: copied sources,
+actual driver/worker path/hash checks, bounded runner, preserved negative
+controls and unchanged live snapshots close the saved-runner finding.
+The verdict is retained in reviews/H3-1-stage1-landing-round2.md. Merge
+6c724c29408 integrates stage1; all seven generated products remain
+unchanged. Detached gate0/affected gate1 on both existing integration
+builds plus regeneration/product equality are now running from
+/tmp/boilgate. No final integration pass is claimed yet.
+
+H3 stage2 begins fixed-number runtime, monitoring, stats and inspection
+consumers. ROOTS retains gc_trace/gc_live/test_gc/C-checker/shared CAPI
+ownership; H3 supplies its bounded scalar fixture as a handoff. Sampler
+transport, renumbering and new operations remain later stages. The roots
+matrix in0b130 and queue validation in5cc are untouched by this merge.

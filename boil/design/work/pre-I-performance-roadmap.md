@@ -137,8 +137,11 @@ metadata where allocation, reentrancy, exceptions or aliasing need a stronger
 contract; a format/borrow mask alone is insufficient. Avoid parallel hand-written
 opcode classifications or a separate optimizer for each consumer.
 
-As soon as the upstream diagnostic/correctness environment and a stable fork
-candidate are ready, take a quiet release measurement window. Do not wait for
+Readiness includes the actual benchmark driver's setup/run import and native
+dependency closure in the [baseline plan](pre-I-baseline-postbuild-plan.md);
+the startup diagnostic and correctness suite alone do not establish it.
+As soon as that environment and a stable fork candidate are ready, take a
+quiet release measurement window. Do not wait for
 every proposed optimization before obtaining the first honest wall-time
 baseline. Rank recurring costs using elapsed profiles plus boxes/allocated
 bytes, GC root/mark/sweep time, survival, dispatch mix, spills and code size.
